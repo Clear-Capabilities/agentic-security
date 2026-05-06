@@ -69,6 +69,22 @@ test('named-pattern Stripe key detection (runtime-constructed temp fixture)', as
   }
 });
 
+test('FP-1: python-clean fixture (literals + parameterized queries) has 0 critical/high findings', async () => {
+  const { scan } = await runScan(FIX('python-clean'));
+  const findings = normalizeFindings(scan);
+  const critOrHigh = findings.filter(f => f.severity === 'critical' || f.severity === 'high');
+  assert.equal(critOrHigh.length, 0,
+    `expected 0 critical/high, got ${critOrHigh.length}: ${critOrHigh.map(f=>f.vuln).join(', ')}`);
+});
+
+test('FP-1: python-vulnerable fixture still surfaces SQL/Command/Code injection', async () => {
+  const { scan } = await runScan(FIX('python-vulnerable'));
+  const vulns = normalizeFindings(scan).map(f => f.vuln);
+  assert.ok(vulns.some(v => /SQL Injection/.test(v)), 'SQL Injection missing');
+  assert.ok(vulns.some(v => /Command Injection/.test(v)), 'Command Injection missing');
+  assert.ok(vulns.some(v => /Code Injection|eval/i.test(v)), 'Code Injection missing');
+});
+
 test('finding IDs are stable hashes', async () => {
   const a = await runScan(FIX('vulnerable-js'));
   const b = await runScan(FIX('vulnerable-js'));
