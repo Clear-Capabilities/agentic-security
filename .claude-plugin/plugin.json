@@ -5,7 +5,7 @@
   "author": { "name": "Ross Young" },
   "vendor": "Clear Capabilities Inc.",
   "homepage": "https://github.com/clearcapabilities/agentic-security",
-  "license": "MIT",
+  "license": "Elastic-2.0",
   "keywords": ["security", "sast", "sca", "secrets", "cve", "osv", "claude-code", "appsec"],
   "commands": "./commands",
   "agents": "./agents",

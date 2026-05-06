@@ -263,7 +263,7 @@ The browser HTML embeds the scanner as a single `<script type="text/babel">` blo
 - **Author:** Ross Young
 - **Vendor:** Clear Capabilities Inc.
 - **Marketplace listing:** `clearcapabilities/agentic-security` (or owner-of-record on the official Claude Code marketplace).
-- **License:** TBD by Clear Capabilities Inc. (recommend MIT or Apache-2.0 for plugin code; the rule corpus may be CC-BY-SA).
+- **License:** Elastic License 2.0 — permits free use, modification, and redistribution but prohibits offering the software as a hosted/managed service to third parties.
 - **`plugin.json` minimum:**
 
 ```json

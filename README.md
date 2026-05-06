@@ -4,7 +4,7 @@
 
 **Author:** Ross Young, [Clear Capabilities Inc.](https://clearcapabilities.com)
 **Status:** v0.1 — initial public release
-**License:** MIT
+**License:** [Elastic License 2.0](./LICENSE) — free use and modification, but you may not offer the software as a hosted/managed service to third parties.
 
 `agentic-security` is an official Claude Code plugin. It gives any Claude Code session first-class application-security analysis: run `/security-scan` to sweep the working tree for vulnerabilities, dependency CVEs, and leaked credentials, then dispatch the `security-fixer` subagent to patch them.
 
@@ -97,7 +97,13 @@ The scanner is a Node port of `attacksurface.html`, a 4,150-line analyzer with p
 
 ## License
 
-MIT — see `LICENSE`. The vulnerability-pattern corpus may carry CC-BY-SA terms for derivative rule sets.
+[Elastic License 2.0](./LICENSE). You may use, copy, modify, and redistribute the software for free — including inside commercial products and internal tooling. You may **not**:
+
+- Offer the software (or substantially the same functionality) as a hosted or managed service to third parties.
+- Move, change, disable, or circumvent any license-key functionality.
+- Remove, alter, or obscure copyright / license notices.
+
+If you want a different licensing arrangement (e.g. a SaaS exemption), contact ross@clearcapabilities.com.
 
 ## Author
 

@@ -31,5 +31,5 @@
     "smoke": "node bin/agentic-security.js scan test/fixtures/vulnerable-js"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
-  "license": "MIT"
+  "license": "SEE LICENSE IN LICENSE"
 }
