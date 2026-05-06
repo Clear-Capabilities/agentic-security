@@ -734,10 +734,12 @@ const STRUCTURAL_VULN_PATTERNS=[
   // ── Cryptographic Failures ────────────────────────────────────────────────
   {regex:/createHash\s*\(\s*['"](?:md5|sha1)['"]\s*\)\s*\.\s*update/g,
    type:"Weak Hash",vuln:"MD5/SHA1 Password Hashing",severity:"critical",cwe:"CWE-916",stride:"Information Disclosure",
-   fix:"Use bcrypt or argon2 for password storage, never MD5/SHA1"},
+   fix:"Use bcrypt or argon2 for password storage, never MD5/SHA1",
+   severityFn:_md5Sha1PasswordHashSeverity},
   {regex:/crypto\s*\.\s*createHash\s*\(\s*['"](?:md5|sha1)['"]/gi,
    type:"Weak Hash",vuln:"Weak Cryptographic Hash (MD5/SHA1)",severity:"high",cwe:"CWE-916",stride:"Information Disclosure",
-   fix:"Use SHA-256 minimum for non-password hashing; bcrypt/argon2 for passwords"},
+   fix:"Use SHA-256 minimum for non-password hashing; bcrypt/argon2 for passwords",
+   severityFn:_md5Sha1WeakHashSeverity},
   {regex:/(?:token|key|secret|nonce|salt|id)\s*=\s*Math\.random\s*\(\s*\)/gi,
    type:"Weak PRNG",vuln:"Cryptographically Weak PRNG (Math.random)",severity:"high",cwe:"CWE-338",stride:"Spoofing",
    fix:"Use crypto.randomBytes(32) or crypto.randomUUID() for security tokens"},
@@ -825,6 +827,32 @@ const STRUCTURAL_VULN_PATTERNS=[
    fix:"Return identical responses whether the token is valid or not. Apply rate limiting on the reset endpoint."},
 ];
 
+// FP-4: classify a weak-hash use site as 'security' (password/HMAC/token verify),
+// 'fingerprint' (cache key / ETag / content fingerprint), or 'unknown'.
+const _HASH_SECURITY_RE = /\b(?:password|passwd|pwd|passcode|secret(?!\s*(?:Hint|Description|Label))|token(?!\s*(?:Name|Label))|credential|hmac|signature|verifyToken|verifyPassword|verifyHash|comparePassword|authToken|sessionToken|csrfToken|jwtSign|jwtVerify|timingSafeEqual)\b/i;
+const _HASH_FINGERPRINT_RE = /\b(?:etag|e[-_]tag|cache[-_]?key|cacheKey|fingerprint|checksum|content[-_]?hash|contentHash|bundle[-_]?hash|chunk[-_]?hash|asset[-_]?hash|file[-_]?hash|dedup(?:e|ication)?|stable[-_]?id|short[-_]?id|hashForId|hash[-_]?for[-_]?id|integrity[-_]?hash|sri[-_]?hash)\b/i;
+function _classifyHashContext(_matchText, ctx){
+  const lines = ctx.lines || [];
+  const line = ctx.line || 0;
+  const surround = lines.slice(Math.max(0, line-5), Math.min(lines.length, line+5)).join('\n');
+  if (_HASH_SECURITY_RE.test(surround)) return 'security';
+  if (_HASH_FINGERPRINT_RE.test(surround)) return 'fingerprint';
+  return 'unknown';
+}
+// Severity functions for the MD5/SHA1 patterns. Return null to suppress entirely.
+function _md5Sha1PasswordHashSeverity(matchText, ctx){
+  const cls = _classifyHashContext(matchText, ctx);
+  if (cls === 'security')    return 'critical';
+  if (cls === 'fingerprint') return null;        // not a security issue here
+  return 'medium';                                // unknown context: still flag, just lower
+}
+function _md5Sha1WeakHashSeverity(matchText, ctx){
+  const cls = _classifyHashContext(matchText, ctx);
+  if (cls === 'security')    return 'high';
+  if (cls === 'fingerprint') return null;        // ETag / cache key / fingerprint — fine
+  return 'medium';
+}
+
 // FP-8: object-literal options parser. Returns a Map of key→raw-value-text
 // for the simple `{a: x, b: y}` shape. Returns null if the literal can't be
 // parsed (spread / dynamic / nested) — caller decides what to do with null.
@@ -907,18 +935,28 @@ function scanStructuralVulns(fp, raw) {
           continue;
         }
       }
+      // FP-4: severity classifier — return null to suppress, otherwise overrides pat.severity.
+      let effectiveSeverity = pat.severity;
+      if (typeof pat.severityFn === 'function') {
+        const s = pat.severityFn(m[0], { file: fp, line, snippet, lines });
+        if (s === null) {
+          _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'severity-fn:non-security-context'});
+          continue;
+        }
+        effectiveSeverity = s;
+      }
       const id = `struct:${fp}:${line}:${pat.vuln.replace(/\s/g, '_')}`;
       if (!findings.find(f => f.id === id)) {
         findings.push({
           id,
           source: { label: 'Structural Pattern', category: 'Static Analysis', inputType: 'structural', variable: '(pattern)', line, file: fp, snippet },
-          sink: { type: pat.type, severity: pat.severity, vuln: pat.vuln, cwe: pat.cwe, stride: pat.stride, line, snippet, args: snippet },
+          sink: { type: pat.type, severity: effectiveSeverity, vuln: pat.vuln, cwe: pat.cwe, stride: pat.stride, line, snippet, args: snippet },
           path: [
             { type: 'source', label: 'Structural Analysis: ' + pat.vuln, line, snippet },
             { type: 'sink', label: pat.type + ' at line ' + line, line, snippet }
           ],
           isSanitized: false, sanitizerType: null,
-          severity: pat.severity,
+          severity: effectiveSeverity,
           vuln: pat.vuln, cwe: pat.cwe, stride: pat.stride,
           file: fp, parser: 'STRUCTURAL'
         });

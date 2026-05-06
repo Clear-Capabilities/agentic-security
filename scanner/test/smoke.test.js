@@ -162,6 +162,33 @@ test('FP-8: cookie/CORS predicates fire only when actual config is unsafe', asyn
   }
 });
 
+test('FP-4: MD5/SHA1 context-aware classification (cache→suppressed, password→critical, unknown→medium)', async () => {
+  const expected = {
+    'cache-key.js':      { fire: false },
+    'etag.js':           { fire: false },
+    'password-hash.js':  { fire: true, sev: 'critical' },
+    'unknown.js':        { fire: true, sev: 'medium' },
+  };
+  for (const [fixture, want] of Object.entries(expected)) {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agsec-hash-'));
+    try {
+      await fs.cp(FIX('hash-context/' + fixture), path.join(tmpDir, fixture));
+      const { scan } = await runScan(tmpDir);
+      const wh = normalizeFindings(scan).filter(f => /MD5|SHA1|Weak Hash|Weak Cryptograph/.test(f.vuln));
+      if (!want.fire) {
+        assert.equal(wh.length, 0, `${fixture}: expected 0 weak-hash findings, got ${wh.length} (severities: ${wh.map(f=>f.severity).join(', ')})`);
+      } else {
+        assert.ok(wh.length >= 1, `${fixture}: expected ≥1 weak-hash finding`);
+        // At least one finding at the expected severity tier
+        assert.ok(wh.some(f => f.severity === want.sev),
+          `${fixture}: expected at least one weak-hash finding with severity '${want.sev}', got: ${wh.map(f=>f.severity).join(', ')}`);
+      }
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+});
+
 test('finding IDs are stable hashes', async () => {
   const a = await runScan(FIX('vulnerable-js'));
   const b = await runScan(FIX('vulnerable-js'));
