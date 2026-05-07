@@ -28,7 +28,7 @@ function readStdinJSON() {
   const blPath = path.join(cwd, '.agentic-security', 'baseline.json');
   if (!fs.existsSync(blPath)) process.exit(0);
 
-  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.join(__dirname, '..');
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.join(__dirname, '..', '..');
   const bundle = path.join(pluginRoot, 'scanner', 'dist', 'agentic-security.mjs');
   if (!fs.existsSync(bundle)) process.exit(0);
 

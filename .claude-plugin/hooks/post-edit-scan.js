@@ -13,7 +13,7 @@ const THROTTLE_MS = 5000;
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const stateDir = path.join(cwd, '.agentic-security');
 const throttlePath = path.join(stateDir, 'hook-throttle.json');
-const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.join(__dirname, '..');
+const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.join(__dirname, '..', '..');
 const bundle = path.join(pluginRoot, 'scanner', 'dist', 'agentic-security.mjs');
 
 function readStdinJSON() {
