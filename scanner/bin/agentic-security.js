@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
-import { toJSON, toMarkdown, toSARIF, toCLI, exitCodeFor, normalizeFindings } from '../src/report/index.js';
+import { toJSON, toMarkdown, toSARIF, toCLI, toHTML, exitCodeFor, normalizeFindings } from '../src/report/index.js';
 
 const USAGE = `agentic-security <command> [options]
 
@@ -50,6 +50,7 @@ async function cmdScan(args) {
   if (noNet) process.env.AGENTIC_SECURITY_OFFLINE = '1';
 
   const { scan, meta } = await runScan(target, {
+    changedSince: args.flags['changed-since'] || null,
     onProgress: (p) => {
       if (process.stderr.isTTY) process.stderr.write(`\r[${p.phase}] ${p.current}/${p.total} ${p.file}     `);
     },
@@ -68,6 +69,7 @@ async function cmdScan(args) {
   if (format === 'json') body = JSON.stringify(toJSON(scan, meta, { includeSuppressed }), null, 2);
   else if (format === 'md' || format === 'markdown') body = toMarkdown(scan, meta);
   else if (format === 'sarif') body = JSON.stringify(toSARIF(scan, meta), null, 2);
+  else if (format === 'html') body = toHTML(scan, meta);
   else body = toCLI(scan, { verbose });
 
   if (output) await fsp.writeFile(output, body);

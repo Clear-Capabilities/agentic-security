@@ -1,0 +1,57 @@
+{
+  "name": "agentic-security-vscode",
+  "displayName": "Agentic Security",
+  "description": "SAST + SCA + Secret scanning surfaced as VS Code diagnostics. Powered by the agentic-security CLI.",
+  "version": "0.1.0",
+  "publisher": "clearcapabilities",
+  "repository": "https://github.com/clearcapabilities/agentic-security",
+  "license": "Elastic-2.0",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Linters", "Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:python",
+    "onLanguage:dockerfile",
+    "onCommand:agenticSecurity.scanWorkspace",
+    "workspaceContains:**/.agentic-security/last-scan.json"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "agenticSecurity.scanWorkspace", "title": "Agentic Security: Scan workspace" },
+      { "command": "agenticSecurity.scanCurrentFile", "title": "Agentic Security: Scan current file" }
+    ],
+    "configuration": {
+      "title": "Agentic Security",
+      "properties": {
+        "agenticSecurity.scannerPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to agentic-security.mjs. Leave empty to use the bundled copy."
+        },
+        "agenticSecurity.scanOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Re-scan the file each time it's saved (debounced 500ms)."
+        },
+        "agenticSecurity.minSeverity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "info"],
+          "default": "medium",
+          "description": "Minimum severity to surface as a VS Code diagnostic."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.21.0",
+    "vsce": "^2.15.0"
+  }
+}

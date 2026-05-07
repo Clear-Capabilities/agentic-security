@@ -1,0 +1,16 @@
+name: Example consumer of agentic-security scan
+
+# Drop this file into another repo as `.github/workflows/security.yml`
+# and you get PR-comment + SARIF-upload + severity-gating for free.
+
+on:
+  pull_request: {}
+  push: { branches: [main] }
+
+jobs:
+  security:
+    uses: clearcapabilities/agentic-security/.github/workflows/scan.yml@main
+    with:
+      fail-on: critical
+      baseline: ${{ github.event.pull_request.base.sha || 'HEAD~1' }}
+      output-sarif: 'true'

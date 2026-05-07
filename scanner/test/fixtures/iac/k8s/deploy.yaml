@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad
+spec:
+  template:
+    spec:
+      hostNetwork: true
+      containers:
+      - name: app
+        image: app:latest
+        securityContext:
+          privileged: true
+          runAsNonRoot: false

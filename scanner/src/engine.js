@@ -7,6 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as crypto from 'node:crypto';
+import * as yaml from 'js-yaml';
 
 // Disk-backed cache replacing browser sessionStorage. One JSON blob per key under ~/.claude/agentic-security/osv-cache/.
 const _CACHE_DIR = path.join(os.homedir(), '.claude', 'agentic-security', 'osv-cache');
@@ -24,13 +25,28 @@ function classifyEndpoint(fields){const c=new Set();for(const f of fields)for(co
 function stripNoise(code){let c=code.replace(/\/\*[\s\S]*?\*\//g,m=>m.replace(/[^\n]/g,' '));c=c.replace(/\/\/[^\n]*/g,m=>' '.repeat(m.length));return c;}
 function detectMiddlewareAuth(content){const a=[];const re=/(?:app|router)\s*\.\s*use\s*\(\s*(?:['"]\/[^'"]*['"]\s*,\s*)?(?:authenticate|auth|isAuthenticated|requireAuth|passport\.authenticate|verifyToken|authMiddleware|checkAuth|protect|jwt)/gi;let m;while((m=re.exec(content)))a.push({line:content.substring(0,m.index).split("\n").length,scope:m[0].includes("/")?m[0].match(/['"]([^'"]+)['"]/)?.[1]||"/":"/"});return a;}
 function buildImportGraph(fc){const g={},ex={};for(const[fp,content]of Object.entries(fc)){g[fp]=[];ex[fp]=[];let m;const rr=/(?:const|let|var)\s*(?:\{([^}]+)\}|(\w+))\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;while((m=rr.exec(content)))g[fp].push({source:m[3],names:m[1]?m[1].split(",").map(s=>s.trim().split(/\s+as\s+/).pop().trim()):m[2]?[m[2]]:[]});const ir=/import\s+(?:\{([^}]+)\}|(\w+))\s+from\s+['"]([^'"]+)['"]/g;while((m=ir.exec(content)))g[fp].push({source:m[3],names:m[1]?m[1].split(",").map(s=>s.trim().split(/\s+as\s+/).pop().trim()):m[2]?[m[2]]:[]});}return{graph:g,exports:ex};}
-function resolveImport(from,imp,all){if(imp.startsWith(".")){const dir=from.split("/").slice(0,-1).join("/");let r=dir+"/"+imp.replace(/^\.\//,"");for(const e of ["",".js",".ts",".jsx",".tsx","/index.js"])if(all.includes(r+e))return r+e;}return null;}
+function resolveImport(from,imp,all){
+  if(!imp.startsWith("."))return null;
+  const dir=from.split("/").slice(0,-1).join("/");
+  // Feat-3 fix: when `from` is top-level, dir is "" — joining with "/" produces
+  // "/lib.js" while the fileContents key is "lib.js". Skip the leading slash
+  // and resolve `..` / `.` segments cleanly.
+  const base=imp.replace(/^\.\//,"");
+  let r=dir?(dir+"/"+base):base;
+  const parts=r.split("/").filter(Boolean);
+  const out=[];
+  for(const p of parts){if(p==="..")out.pop();else if(p!==".")out.push(p);}
+  r=out.join("/");
+  for(const e of ["",".js",".ts",".jsx",".tsx","/index.js"])if(all.includes(r+e))return r+e;
+  return null;
+}
 function crossFileTaint(pfr,fc,ii){
-  // Fix 8: Multi-hop BFS cross-file taint (up to 2 levels deep)
-  // Catches chains like: routes/login.ts → lib/insecurity.ts → models/user.ts
+  // Feat-3: deepened cross-file BFS (up to 5 hops, was 3) with explicit
+  // `chain` field on each finding showing the full file:line propagation path.
+  // Catches chains like: routes/A → lib/B → lib/C → lib/D → models/E.
   const{graph}=ii;const all=Object.keys(fc);const cf=[];
   function traceHop(srcFile,srcInfo,visitedFiles,hopPath){
-    if(visitedFiles.size>=3)return; // cap at 3-file chains
+    if(visitedFiles.size>=5)return;
     const imports=graph[srcFile]||[];
     for(const imp of imports){
       const pF=resolveImport(srcFile,imp.source,all);
@@ -47,11 +63,16 @@ function crossFileTaint(pfr,fc,ii){
           // Record findings for sinks in the imported file
           for(const sink of pr.sinks){
             const id="xf:"+srcFile+":"+srcInfo.line+":"+pF+":"+sink.line;
-            if(!cf.find(f=>f.id===id))
+            if(!cf.find(f=>f.id===id)){
+              const fullPath=[...hopPath,hopStep,{type:"sink",label:sink.type+" in "+pF.split("/").pop()+":"+sink.line,line:sink.line,snippet:sink.snippet}];
+              const chain=fullPath.map(s=>({type:s.type,file:s.label||'',line:s.line||0,snippet:s.snippet||''}));
               cf.push({id,source:srcInfo,sink,
-                path:[...hopPath,hopStep,{type:"sink",label:sink.type+" in "+pF.split("/").pop()+":"+sink.line,line:sink.line,snippet:sink.snippet}],
+                path:fullPath,
+                chain,
+                hopCount:visitedFiles.size,
                 isSanitized:false,severity:sink.severity,vuln:sink.vuln,cwe:sink.cwe,stride:sink.stride,
                 file:srcFile+" -> "+pF,isCrossFile:true,parser:pr.parser});
+            }
           }
           // Recurse: follow the call chain deeper into pF's own imports
           const newVisited=new Set(visitedFiles);newVisited.add(pF);
@@ -151,9 +172,23 @@ const SANITIZER_PATTERNS=[{regex:/(?:escape|escapeHtml|htmlspecialchars|encodeUR
 const ROUTE_PATTERNS=[{regex:/(?:app|router)\s*\.\s*(get|post|put|patch|delete|all|options|head)\s*\(\s*['"`]([^'"`]+)['"`]/g,fw:"Express",mI:1,pI:2},{regex:/@(?:app|blueprint|bp)\s*\.\s*route\s*\(\s*['"]([^'"]+)['"]\s*(?:,\s*methods\s*=\s*\[([^\]]+)\])?/g,fw:"Flask",pI:1,mtI:2},{regex:/path\s*\(\s*['"]([^'"]+)['"]/g,fw:"Django",pI:1},{regex:/@(?:app|router)\s*\.\s*(get|post|put|patch|delete)\s*\(\s*['"]([^'"]+)['"]/g,fw:"FastAPI",mI:1,pI:2},{regex:/Route\s*::\s*(get|post|put|patch|delete|any)\s*\(\s*['"]([^'"]+)['"]/g,fw:"Laravel",mI:1,pI:2},{regex:/router\s*\.\s*(get|post|put|patch|delete)\s*\(\s*['"]([^'"]+)['"]/g,fw:"Koa/Express",mI:1,pI:2},{regex:/\[Http(Get|Post|Put|Delete|Patch)\s*\(\s*["']?([^"'\]]*)/g,fw:"ASP.NET",mI:1,pI:2},{regex:/['"`](\/api\/[a-zA-Z0-9\/:_\-{}]+)['"`]/g,fw:"API",pI:1}];
 const AUTH_PATTERNS=[/(?:authenticate|isAuthenticated|requireAuth|passport\.authenticate|jwt\.verify|verifyToken|authMiddleware|checkAuth|protect|authorize)\s*[\(,]/gi,/(?:middleware|use)\s*\(\s*(?:auth|jwt|token|session)/gi,/(?:isAuthorized|expressJwt|security\.isAuthorized|denyAll)\s*[\(]/gi,/passport\.(?:authenticate|initialize|session)\s*\(/gi];
 const IGNORE_DIRS=new Set(["node_modules",".git","__pycache__","vendor","dist","build",".next","venv","env",".venv","target","bin","obj",".cache","coverage","bower_components","tests","test","__tests__","spec","mocks"]);
-const CODE_EXTS=new Set(["js","jsx","ts","tsx","mjs","cjs","py","rb","php","java","go","cs","rs","vue","svelte","html","htm","ejs","hbs","pug","erb","twig","graphql","gql","kt","scala","swift","dart","ex","exs"]);
+const CODE_EXTS=new Set(["js","jsx","ts","tsx","mjs","cjs","py","rb","php","java","go","cs","rs","vue","svelte","html","htm","ejs","hbs","pug","erb","twig","graphql","gql","kt","scala","swift","dart","ex","exs","tf","tfvars","dockerfile"]);
+// Feat-2: IaC manifest filenames that aren't extension-based.
+const IAC_FILENAMES = new Set(['Dockerfile', 'Containerfile', 'docker-compose.yml', 'docker-compose.yaml', 'Chart.yaml']);
+function _isIaCFile(p){
+  const base = p.split('/').pop() || p;
+  if (IAC_FILENAMES.has(base)) return true;
+  if (/\.dockerfile$/i.test(base)) return true;
+  if (/\.tf$|\.tfvars$/i.test(base)) return true;
+  // K8s YAML heuristic: under k8s/ or contains "kind:" — caller checks content
+  if (/(?:^|\/)k8s(?:\/|$)/.test(p) && /\.ya?ml$/i.test(base)) return true;
+  if (/(?:^|\/)\.github\/workflows\/.*\.ya?ml$/.test(p)) return true;
+  if (/(?:^|\/)\.gitlab-ci\.ya?ml$/.test(p)) return true;
+  if (/(?:^|\/)values\.ya?ml$/.test(p)) return true;
+  return false;
+}
 function getExt(n){const p=n.split(".");return p.length>1?p.pop().toLowerCase():"";}
-function shouldScan(p){if(/\.(test|spec|mock)\./i.test(p))return false;if(/\.min\.[mc]?js$/i.test(p))return false;for(const x of p.split("/"))if(IGNORE_DIRS.has(x))return false;return CODE_EXTS.has(getExt(p));}
+function shouldScan(p){if(/\.(test|spec|mock)\./i.test(p))return false;if(/\.min\.[mc]?js$/i.test(p))return false;for(const x of p.split("/"))if(IGNORE_DIRS.has(x))return false;return CODE_EXTS.has(getExt(p)) || _isIaCFile(p);}
 function lineAt(c,i){return c.substring(0,i).split("\n").length;}
 
 
@@ -577,8 +612,92 @@ function _detectSafeSinkShape(vuln, args){
   return null;
 }
 
+// Feat-1: Python in-file helper-taint pass. When a tainted variable flows into
+// a locally-defined `def helper(param)` call, mark the helper's parameter as
+// a synthetic source within the helper's body. Findings inside the helper get
+// attributed back to the original HTTP/request source.
+//
+// This is single-file inter-procedural taint via regex. Full tree-sitter AST
+// for Python is deferred (requires WASM bundling) — tracked in #11 for
+// follow-up. This implementation closes the most common Python FN class:
+// `cursor.execute(...)` inside a helper called with `request.args.get(...)`.
+function _augmentPythonSources(fp, raw, baseSources){
+  if (!/\.py$/i.test(fp)) return baseSources;
+  const lines = raw.split('\n');
+  const augmented = [...baseSources];
+  // Build a map of locally-defined functions: name → {paramNames, bodyStart, bodyEnd}
+  const fnDefs = new Map();
+  const fnRe = /^(\s*)def\s+(\w+)\s*\(([^)]*)\)\s*:/gm;
+  let m;
+  while ((m = fnRe.exec(raw))) {
+    const [, indent, name, paramList] = m;
+    const params = paramList.split(',').map(s => s.trim().split(/[:\s=]/)[0]).filter(p => p && p !== 'self' && p !== 'cls');
+    const startLine = raw.substring(0, m.index).split('\n').length;
+    // Body extends until next def/class at same-or-shallower indent, or EOF
+    let endLine = lines.length;
+    const indentLen = indent.length;
+    for (let i = startLine; i < lines.length; i++) {
+      const ln = lines[i];
+      if (/^\s*$/.test(ln)) continue;
+      const lnIndent = ln.match(/^\s*/)[0].length;
+      if (lnIndent <= indentLen && /^\s*(?:def|class)\s/.test(ln)) { endLine = i; break; }
+    }
+    fnDefs.set(name, { params, bodyStart: startLine + 1, bodyEnd: endLine });
+  }
+  if (fnDefs.size === 0) return augmented;
+  // Find call sites where any tainted variable is passed to a tracked function.
+  // For each call, mark the corresponding parameter as a synthetic source within
+  // the function body's line range.
+  const taintedVars = new Set(baseSources.map(s => s.variable).filter(Boolean));
+  // Also include single-pass intra-line propagation: `x = request.args.get(...)`
+  // already gives x as a source. Catch one-step assignments: `y = x` where x is tainted.
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    const am = ln.match(/^\s*(\w+)\s*=\s*(\w+)\s*(?:\.|\[|$)/);
+    if (am && taintedVars.has(am[2])) taintedVars.add(am[1]);
+  }
+  // Pass tainted vars into helper functions
+  for (const [fnName, def] of fnDefs) {
+    const callRe = new RegExp(`\\b${fnName}\\s*\\(([^)]*)\\)`, 'g');
+    let cm;
+    while ((cm = callRe.exec(raw))) {
+      const callLine = raw.substring(0, cm.index).split('\n').length;
+      // Skip the def line itself
+      const defLine = lines[callLine - 1] || '';
+      if (/^\s*def\s+/.test(defLine)) continue;
+      const argList = cm[1].split(',').map(s => s.trim());
+      for (let pIdx = 0; pIdx < def.params.length && pIdx < argList.length; pIdx++) {
+        const arg = argList[pIdx];
+        // Crude check: arg is exactly a tainted variable name OR contains one as a token
+        const argTainted = [...taintedVars].some(v => new RegExp(`\\b${v}\\b`).test(arg));
+        if (!argTainted) continue;
+        // Mark this parameter as a synthetic source within the helper's body
+        const param = def.params[pIdx];
+        augmented.push({
+          label: `param ${param} (tainted via ${fnName}() call)`,
+          category: 'Python In-File Helper Param',
+          inputType: 'helper-param',
+          variable: param,
+          line: def.bodyStart,
+          file: fp,
+          snippet: lines[def.bodyStart - 1]?.trim() || '',
+          _bodyStart: def.bodyStart,
+          _bodyEnd: def.bodyEnd,
+        });
+      }
+    }
+  }
+  return augmented;
+}
+
 function performRegexAnalysis(fp,raw){const cleaned=stripNoise(raw);const lines=raw.split("\n");const findings=[],sources=[],sinks=[],sanitizers=[];
   for(const sp of SOURCE_PATTERNS){const re=new RegExp(sp.regex.source,sp.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const lt=lines[line-1]||"";const am=lt.match(/(?:const|let|var|)\s*(\w+)\s*=/)||lt.match(/(\w+)\s*=/);sources.push({label:sp.getLabel(m),category:sp.category,inputType:sp.inputType(m),variable:am?am[1]:null,line,file:fp,snippet:lt.trim()});}}
+  // Feat-1: in-file Python helper-taint propagation. Pushes synthetic sources
+  // for function parameters that are tainted via call-site argument flow.
+  if (/\.py$/i.test(fp)) {
+    const augmented = _augmentPythonSources(fp, raw, sources);
+    for (let i = sources.length; i < augmented.length; i++) sources.push(augmented[i]);
+  }
   for(const sp of SINK_PATTERNS){
     // FP-7: per-pattern language scoping — skip patterns that only apply to certain extensions
     if(sp.langScope && !sp.langScope.test(fp))continue;
@@ -977,6 +1096,82 @@ function scanStructuralVulns(fp, raw) {
 }
 
 
+// Feat-2: IaC / container security patterns. Each entry has a `match`
+// (regex or fileTypes filter) and produces a finding with kind:'iac'.
+const IAC_PATTERNS = [
+  // Dockerfile / Containerfile
+  { match: /^\s*RUN\s.*?(?:curl|wget)\b[^|\n]*\|\s*(?:sh|bash)/im,
+    fileTypes: /Dockerfile|Containerfile|\.dockerfile$/i,
+    severity: 'high', cwe: 'CWE-829', vuln: 'Dockerfile: RUN curl|sh — remote-code execution at build time',
+    fix: 'Download to a file, verify checksum, then execute. Never pipe network output to a shell.' },
+  { match: /^\s*USER\s+root\s*$/im,
+    fileTypes: /Dockerfile|Containerfile|\.dockerfile$/i,
+    severity: 'medium', cwe: 'CWE-250', vuln: 'Dockerfile: USER root — container runs as root',
+    fix: 'Add a non-root USER directive after package installation: USER nonroot' },
+  { match: /:\s*latest\s*$/im,
+    fileTypes: /Dockerfile|Containerfile|\.dockerfile$/i,
+    severity: 'low', cwe: 'CWE-829', vuln: 'Dockerfile: image uses :latest tag',
+    fix: 'Pin to a specific version or digest (image@sha256:...) for reproducible builds.' },
+  // docker-compose
+  { match: /privileged:\s*true/i,
+    fileTypes: /docker-compose\.ya?ml$/i,
+    severity: 'critical', cwe: 'CWE-250', vuln: 'docker-compose: privileged container',
+    fix: 'Remove privileged:true. Use specific capabilities (cap_add) only as needed.' },
+  // Kubernetes
+  { match: /privileged:\s*true/i,
+    fileTypes: /(?:^|\/)k8s\/.*\.ya?ml$/i,
+    severity: 'critical', cwe: 'CWE-250', vuln: 'K8s: securityContext.privileged: true',
+    fix: 'Remove privileged:true. Set runAsNonRoot:true and drop ALL capabilities.' },
+  { match: /hostNetwork:\s*true/i,
+    fileTypes: /(?:^|\/)k8s\/.*\.ya?ml$/i,
+    severity: 'high', cwe: 'CWE-250', vuln: 'K8s: hostNetwork mounted',
+    fix: 'Remove hostNetwork:true. Use a Service/Ingress for external traffic.' },
+  { match: /runAsNonRoot:\s*false/i,
+    fileTypes: /(?:^|\/)k8s\/.*\.ya?ml$/i,
+    severity: 'medium', cwe: 'CWE-250', vuln: 'K8s: runAsNonRoot:false',
+    fix: 'Set runAsNonRoot:true and a non-zero runAsUser.' },
+  // Terraform
+  { match: /acl\s*=\s*"public-read"/i,
+    fileTypes: /\.tf$/i,
+    severity: 'high', cwe: 'CWE-200', vuln: 'Terraform: S3 bucket ACL = public-read',
+    fix: 'Use private ACL + explicit IAM policies for any sharing. Never publish data unintentionally.' },
+  { match: /Action\s*=\s*"\*"|Action\s*=\s*\[\s*"\*"\s*\]/i,
+    fileTypes: /\.tf$/i,
+    severity: 'high', cwe: 'CWE-732', vuln: 'Terraform: IAM Action = "*" (wildcard)',
+    fix: 'Specify the exact IAM actions required. Wildcards grant excessive privilege.' },
+  { match: /encrypted\s*=\s*false|encryption\s*=\s*"none"/i,
+    fileTypes: /\.tf$/i,
+    severity: 'medium', cwe: 'CWE-311', vuln: 'Terraform: encryption disabled at rest',
+    fix: 'Enable encryption at rest (encrypted = true; or kms_key_id = ...).' },
+  // GitHub Actions
+  { match: /\$\{\{\s*github\.event\.(?:issue|pull_request)\.title|\$\{\{\s*github\.event\.comment\.body/i,
+    fileTypes: /\.github\/workflows\/.*\.ya?ml$/i,
+    severity: 'high', cwe: 'CWE-78', vuln: 'GitHub Actions: untrusted github.event input interpolated into shell',
+    fix: 'Pass user-controlled fields via env vars and reference them as $VARNAME in the script body, not via ${{ }} interpolation.' },
+];
+
+function scanIaC(fp, raw){
+  if (!_isIaCFile(fp)) return [];
+  const findings = [];
+  const lines = raw.split('\n');
+  for (const p of IAC_PATTERNS) {
+    if (!p.fileTypes.test(fp)) continue;
+    const re = new RegExp(p.match.source, p.match.flags.replace(/g/g, '') + 'g');
+    let m;
+    while ((m = re.exec(raw))) {
+      const line = raw.substring(0, m.index).split('\n').length;
+      findings.push({
+        id: `iac:${fp}:${line}:${p.vuln.replace(/\s/g, '_').slice(0, 60)}`,
+        kind: 'iac', severity: p.severity, vuln: p.vuln,
+        cwe: p.cwe, stride: 'Elevation of Privilege',
+        file: fp, line, snippet: lines[line - 1]?.trim() || '',
+        fix: p.fix,
+      });
+    }
+  }
+  return findings;
+}
+
 // FP-2: layered filter pipeline for credential-shaped findings.
 // Returns { skip: bool, reason?: string } — when `skip` is true, the caller
 // records the suppression and does not emit a finding.
@@ -1012,6 +1207,114 @@ function _isFalsePositiveCredential(fp, snippet, fullMatch){
 const _suppressionLog = [];
 function _resetSuppressions(){ _suppressionLog.length = 0; }
 function _getSuppressions(){ return [..._suppressionLog]; }
+
+// FP-9 / Feat-4: custom rules loaded from .agentic-security/rules.{yml,yaml,json}
+// at scan root. Mutates SOURCE/SINK/SANITIZER pattern arrays in place when active;
+// snapshot lengths from the first call so subsequent scans can restore baseline.
+let _customSuppressions = [];
+let _baselineLengths = null;   // {sources, sinks, sanitizers}
+let _customAdded = { sources: 0, sinks: 0, sanitizers: 0, suppressions: 0 };
+
+function _resetCustomRules(){
+  if (_baselineLengths) {
+    SOURCE_PATTERNS.length = _baselineLengths.sources;
+    SINK_PATTERNS.length = _baselineLengths.sinks;
+    SANITIZER_PATTERNS.length = _baselineLengths.sanitizers;
+  } else {
+    _baselineLengths = {
+      sources: SOURCE_PATTERNS.length,
+      sinks: SINK_PATTERNS.length,
+      sanitizers: SANITIZER_PATTERNS.length,
+    };
+  }
+  _customSuppressions = [];
+  _customAdded = { sources: 0, sinks: 0, sanitizers: 0, suppressions: 0 };
+}
+
+async function _loadCustomRules(scanRoot){
+  _resetCustomRules();
+  if (!scanRoot) return null;
+  _customAdded = { sources: 0, sinks: 0, sanitizers: 0, suppressions: 0 };
+  _customSuppressions = [];
+  let raw = null, parsedObj = null;
+  for (const ext of ['rules.yml', 'rules.yaml', 'rules.json']) {
+    const p = path.join(scanRoot, '.agentic-security', ext);
+    try { raw = fs.readFileSync(p, 'utf8'); } catch { continue; }
+    try {
+      if (ext.endsWith('.json')) parsedObj = JSON.parse(raw);
+      else parsedObj = yaml.load(raw);
+      break;
+    } catch (e) {
+      console.error(`agentic-security: failed to parse ${ext}: ${e.message}`);
+      return null;
+    }
+  }
+  if (!parsedObj || typeof parsedObj !== 'object') return null;
+
+  // Sources
+  for (const s of (parsedObj.sources || [])) {
+    if (!s.pattern) continue;
+    try {
+      SOURCE_PATTERNS.push({
+        regex: new RegExp(s.pattern, 'g'),
+        category: s.category || 'Custom Source',
+        getLabel: () => s.label || 'custom-source',
+        inputType: () => s.inputType || 'http',
+      });
+      _customAdded.sources++;
+    } catch {}
+  }
+  // Sinks
+  for (const s of (parsedObj.sinks || [])) {
+    if (!s.pattern) continue;
+    try {
+      SINK_PATTERNS.push({
+        regex: new RegExp(s.pattern, 'g'),
+        type: s.type || 'Custom Sink',
+        severity: s.severity || 'high',
+        vuln: s.vuln || 'Custom Vulnerability',
+        cwe: s.cwe || '',
+        stride: s.stride || '',
+      });
+      _customAdded.sinks++;
+    } catch {}
+  }
+  // Sanitizers
+  for (const s of (parsedObj.sanitizers || [])) {
+    if (!s.pattern) continue;
+    try {
+      SANITIZER_PATTERNS.push({
+        regex: new RegExp(s.pattern, 'gi'),
+        type: s.type || 'Custom Sanitizer',
+      });
+      _customAdded.sanitizers++;
+    } catch {}
+  }
+  // Suppressions
+  for (const sup of (parsedObj.suppressions || [])) {
+    if (!sup.rule) continue;
+    _customSuppressions.push({
+      rule: sup.rule,
+      files: Array.isArray(sup.files) ? sup.files : (sup.files ? [sup.files] : ['**']),
+      reason: sup.reason || 'custom-suppression',
+    });
+    _customAdded.suppressions++;
+  }
+  return _customAdded;
+}
+
+// Apply custom suppressions to a finding's vuln+file. Returns true if suppressed.
+function _isCustomSuppressed(vuln, file){
+  for (const sup of _customSuppressions) {
+    if (sup.rule !== vuln) continue;
+    for (const fp of sup.files) {
+      // Simple glob support: ** matches anything; file ends with the literal path
+      if (fp === '**') return sup;
+      if (file === fp || file.endsWith('/' + fp) || file === fp.replace(/^\.\//, '')) return sup;
+    }
+  }
+  return null;
+}
 
 // FP-6: project-level index built once per scan, used by logic-pattern gates
 // to confirm operational context before emitting findings.
@@ -2118,6 +2421,51 @@ function scanCredentials(fp,raw){
 function _osvCacheGet(key){try{const r=sessionStorage.getItem('osv_'+key);return r?JSON.parse(r):null;}catch(_){return null;}}
 function _osvCacheSet(key,val){try{sessionStorage.setItem('osv_'+key,JSON.stringify(val));}catch(_){}}
 
+// Feat-9: EPSS (Exploit Prediction Scoring System) overlay. Fetches probability
+// of exploitation in the next 30 days per CVE; caches on disk. When offline or
+// the API errors, falls back to null fields — never blocks the scan.
+async function _fetchEPSS(cveId){
+  if (!cveId || !/^CVE-\d{4}-\d+$/i.test(cveId)) return null;
+  if (process.env.AGENTIC_SECURITY_OFFLINE === '1') return null;
+  const cached = _osvCacheGet('epss:'+cveId);
+  if (cached !== null) return cached;
+  try {
+    const res = await fetch(`https://api.first.org/data/v1/epss?cve=${encodeURIComponent(cveId)}`, {
+      headers: { 'User-Agent': 'agentic-security/0.1' },
+    });
+    if (!res.ok) { _osvCacheSet('epss:'+cveId, false); return null; }
+    const j = await res.json();
+    const row = j.data?.[0];
+    const out = row ? { score: parseFloat(row.epss), percentile: parseFloat(row.percentile) } : null;
+    _osvCacheSet('epss:'+cveId, out || false);
+    return out;
+  } catch { return null; }
+}
+
+async function _enrichWithEPSS(supplyChainResults){
+  const out = supplyChainResults;
+  const cves = new Set();
+  for (const r of out) for (const a of (r.cveAliases || [])) if (/^CVE-/.test(a)) cves.add(a);
+  // Fetch in parallel, deduped per CVE
+  const epssByCve = new Map();
+  await Promise.all([...cves].map(async (cve) => {
+    const epss = await _fetchEPSS(cve);
+    if (epss) epssByCve.set(cve, epss);
+  }));
+  for (const r of out) {
+    const cve = (r.cveAliases || []).find(a => /^CVE-/.test(a));
+    const epss = cve ? epssByCve.get(cve) : null;
+    if (epss) {
+      r.epssScore = epss.score;
+      r.epssPercentile = epss.percentile;
+    } else {
+      r.epssScore = null;
+      r.epssPercentile = null;
+    }
+  }
+  return out;
+}
+
 function _makePurl(ecosystem,name,version,group){
   const t={npm:'npm',pypi:'pypi'}[ecosystem]||ecosystem;
   if(!t)return'';
@@ -2661,7 +3009,7 @@ async function queryRegistries(components){
 
 // Node port: takes { fileContents, depFileContents } maps directly instead of a JSZip object.
 // fileContents = code files keyed by relative path; depFileContents = manifest/lockfiles keyed by relative path.
-async function runFullScan({fileContents={}, depFileContents={}}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);const files=Object.keys(fileContents).filter(f=>shouldScan(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];let i=0;for(const p of files){i++;setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});try{const c=fileContents[p];if(!c||c.length>500000)continue;const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000)continue;fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aLogic.push(...scanReDoS(p,c));aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));}catch(_){}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);const files=Object.keys(fileContents).filter(f=>shouldScan(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];let i=0;for(const p of files){i++;setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});try{const c=fileContents[p];if(!c||c.length>500000)continue;const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000)continue;fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aLogic.push(...scanReDoS(p,c));aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));aF.push(...scanIaC(p,c));}catch(_){}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
   setProgress({current:i,total:files.length,file:"Cross-file...",phase:"Linking"});const ii=buildImportGraph(fc);const cf=crossFileTaint(pfr,fc,ii);aF.push(...cf);
   setProgress({current:i,total:files.length,file:"Stored taint...",phase:"Linking"});const storedRegistry=buildStoredTaintRegistry(fc);const stf=crossStoredTaint(fc,storedRegistry);aF.push(...stf);
   setProgress({current:i,total:files.length,file:"Session taint...",phase:"Linking"});const sess=crossSessionTaint(fc);aF.push(...sess);
@@ -2678,6 +3026,8 @@ async function runFullScan({fileContents={}, depFileContents={}}, setProgress=()
   const reachabilitySet=reach.imported;
   components.forEach(c=>{c.reachable=reachabilitySet.has(c.name.toLowerCase())||(c.ecosystem==='pypi'&&reachabilitySet.has(c.name.replace(/-/g,'_').toLowerCase()));});
   let supplyChain=[];try{supplyChain=await queryOSV(components,allFileContents);}catch(_){supplyChain=[];}
+  // Feat-9: enrich SCA findings with EPSS exploit-probability scores
+  try{supplyChain=await _enrichWithEPSS(supplyChain);}catch(_){}
   try{markUsedVulnFunctions(supplyChain,fc);}catch(_){}
   setProgress({current:i,total:files.length,file:"Registry metadata...",phase:"SCA"});
   let registryInfo=new Map();try{registryInfo=await queryRegistries(components);}catch(_){}
@@ -3107,6 +3457,8 @@ export {
   markUsedVulnFunctions, dedupeFindingsWithEvidence, scoreExploitability,
   classifyOrphans, classifyField, classifyEndpoint, shouldScan,
   _isFalsePositiveCredential, _detectSafeSinkShape,
+  _loadCustomRules, _isCustomSuppressed,
+  scanIaC, IAC_PATTERNS, _isIaCFile,
   payloadsForFinding, buildProofObligation,
   DATA_CLASSES, SOURCE_PATTERNS, SINK_PATTERNS, SANITIZER_PATTERNS,
   ROUTE_PATTERNS, AUTH_PATTERNS, IGNORE_DIRS, CODE_EXTS,

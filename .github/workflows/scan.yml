@@ -1,0 +1,124 @@
+name: agentic-security scan
+
+# Reusable workflow. Consumers reference it via:
+#
+#   jobs:
+#     security:
+#       uses: clearcapabilities/agentic-security/.github/workflows/scan.yml@main
+#       with:
+#         fail-on: critical
+#         baseline: main
+
+on:
+  workflow_call:
+    inputs:
+      fail-on:
+        description: 'Fail the job at this severity or above (critical|high|medium|low|none)'
+        required: false
+        default: 'critical'
+        type: string
+      baseline:
+        description: 'Git ref to diff against; only NEW findings since this ref count'
+        required: false
+        default: ''
+        type: string
+      paths-ignore:
+        description: 'Newline-separated glob list to ignore'
+        required: false
+        default: ''
+        type: string
+      output-sarif:
+        description: 'Whether to upload findings as SARIF to GitHub Security tab'
+        required: false
+        default: 'true'
+        type: string
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # required for SARIF upload
+      pull-requests: write     # required for the PR-comment step
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need history to diff against baseline
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Download bundled scanner
+        run: |
+          curl -sSL -o /tmp/agentic-security.mjs \
+            https://raw.githubusercontent.com/clearcapabilities/agentic-security/main/scanner/dist/agentic-security.mjs
+          chmod +x /tmp/agentic-security.mjs
+
+      - name: Run scan
+        id: scan
+        env:
+          BASELINE: ${{ inputs.baseline }}
+          FAIL_ON: ${{ inputs.fail-on }}
+        run: |
+          set +e
+          if [ -n "$BASELINE" ]; then
+            node /tmp/agentic-security.mjs scan . --changed-since "$BASELINE" --format sarif --output /tmp/security.sarif
+          else
+            node /tmp/agentic-security.mjs scan . --format sarif --output /tmp/security.sarif
+          fi
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          # Also dump JSON for the PR-comment step
+          if [ -n "$BASELINE" ]; then
+            node /tmp/agentic-security.mjs scan . --changed-since "$BASELINE" --format json --output /tmp/security.json
+          else
+            node /tmp/agentic-security.mjs scan . --format json --output /tmp/security.json
+          fi
+
+      - name: Upload SARIF
+        if: ${{ inputs.output-sarif == 'true' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: /tmp/security.sarif
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const r = JSON.parse(fs.readFileSync('/tmp/security.json', 'utf8'));
+            const sev = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+            for (const f of r.findings) sev[f.severity] = (sev[f.severity]||0)+1;
+            const top = r.findings.filter(f=>['critical','high'].includes(f.severity)).slice(0,10);
+            const body = [
+              '## agentic-security scan',
+              '',
+              '| Critical | High | Medium | Low | Info |',
+              '|---:|---:|---:|---:|---:|',
+              `| ${sev.critical} | ${sev.high} | ${sev.medium} | ${sev.low} | ${sev.info} |`,
+              '',
+              top.length ? '### Top critical/high findings' : '_No critical or high findings._',
+              '',
+              ...top.map(f => `- **[${f.severity.toUpperCase()}]** \`${f.file}:${f.line}\` — ${f.vuln}${f.cwe ? ` (${f.cwe})` : ''}`),
+            ].join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: Enforce severity threshold
+        env:
+          FAIL_ON: ${{ inputs.fail-on }}
+          EC: ${{ steps.scan.outputs.exit_code }}
+        run: |
+          # Exit codes: 0=clean 1=low/medium 2=high 3=critical 4=error
+          case "$FAIL_ON" in
+            critical) [ "$EC" -ge 3 ] && exit 1 || exit 0 ;;
+            high)     [ "$EC" -ge 2 ] && exit 1 || exit 0 ;;
+            medium)   [ "$EC" -ge 1 ] && exit 1 || exit 0 ;;
+            low)      [ "$EC" -ge 1 ] && exit 1 || exit 0 ;;
+            none)     exit 0 ;;
+            *)        echo "Unknown fail-on: $FAIL_ON"; exit 1 ;;
+          esac

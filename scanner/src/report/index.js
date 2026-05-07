@@ -1,5 +1,6 @@
 // Report writers — JSON / Markdown / SARIF.
 import * as crypto from 'node:crypto';
+import { _isCustomSuppressed } from '../engine.js';
 
 const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const SEV_TO_SARIF = { critical: 'error', high: 'error', medium: 'warning', low: 'note', info: 'none' };
@@ -11,7 +12,19 @@ function fingerprint(f){
 
 export function normalizeFindings(scan){
   const out = [];
+  // Feat-4: filter findings via custom suppressions, recording the suppression
+  // in scan.suppressions so it shows up under --include-suppressed.
+  const suppress = (vuln, file, line, snippet) => {
+    const sup = _isCustomSuppressed(vuln, file || '');
+    if (!sup) return false;
+    (scan.suppressions = scan.suppressions || []).push({
+      vuln, file, line, snippet: snippet || '',
+      reason: 'custom-rule:' + (sup.reason || 'rule.yml suppression'),
+    });
+    return true;
+  };
   for (const f of (scan.findings||[])) {
+    if (suppress(f.vuln || f.type, f.file, f.line || f.source?.line || 0, f.snippet)) continue;
     out.push({
       id: f.id || fingerprint(f),
       kind: f.isCrossFile ? 'sast' : (f.kind || 'sast'),
@@ -29,6 +42,7 @@ export function normalizeFindings(scan){
     });
   }
   for (const s of (scan.secrets||[])) {
+    if (suppress(s.vuln || 'Hardcoded Secret', s.file, s.line, s.snippet)) continue;
     out.push({
       id: s.id || fingerprint(s),
       kind: 'secret',
@@ -42,6 +56,7 @@ export function normalizeFindings(scan){
     });
   }
   for (const lv of (scan.logicVulns||[])) {
+    if (suppress(lv.vuln, lv.file, lv.line, lv.snippet)) continue;
     out.push({
       id: lv.id || fingerprint(lv),
       kind: 'logic',
@@ -70,18 +85,86 @@ export function normalizeFindings(scan){
       osvId: sc.osvId || null,
       advisory: sc.advisory || sc.description || '',
       fixedIn: sc.range || null,
+      // Feat-9: real-world exploit signals
+      epssScore: sc.epssScore ?? null,
+      epssPercentile: sc.epssPercentile ?? null,
+      cvssVector: sc.cvssVector || null,
     });
   }
-  return out.sort((a,b)=> (SEV_RANK[a.severity]??9) - (SEV_RANK[b.severity]??9));
+  // Sort by severity tier, then within a tier by EPSS percentile (desc) so that
+  // CVEs with active in-the-wild exploitation float above theoretical CVEs.
+  return out.sort((a, b) => {
+    const sevDiff = (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9);
+    if (sevDiff !== 0) return sevDiff;
+    const ae = a.epssPercentile ?? -1;
+    const be = b.epssPercentile ?? -1;
+    return be - ae;
+  });
+}
+
+// Feat-5: group findings that share a likely root cause so the fixer subagent
+// can patch the helper once instead of N call sites. Heuristic: same vuln type,
+// same sink "type" (Database Query, OS Command, etc.), and ≥80% overlap of
+// usedVars across the group.
+export function bundleFindingsByRootCause(findings){
+  const bundles = [];
+  const remaining = [];
+  // Bucket by (vuln, sinkType)
+  const buckets = new Map();
+  for (const f of findings) {
+    const sinkType = f.sink?.type || f.kind || 'unknown';
+    const key = `${f.vuln}::${sinkType}`;
+    (buckets.get(key) || buckets.set(key, []).get(key)).push(f);
+  }
+  for (const [key, group] of buckets) {
+    if (group.length < 3) { remaining.push(...group); continue; }
+    // Need actual usedVars to compare — only the SAST sink path has these
+    const withVars = group.filter(f => Array.isArray(f.sink?.usedVars) && f.sink.usedVars.length);
+    if (withVars.length < 3) { remaining.push(...group); continue; }
+    // Use the most common var across the group as the bundle key
+    const tally = new Map();
+    for (const f of withVars) for (const v of f.sink.usedVars) tally.set(v, (tally.get(v) || 0) + 1);
+    let bestVar = null, bestCount = 0;
+    for (const [v, c] of tally) if (c > bestCount && c >= Math.ceil(withVars.length * 0.8)) { bestVar = v; bestCount = c; }
+    if (!bestVar) { remaining.push(...group); continue; }
+    const children = withVars.filter(f => f.sink.usedVars.includes(bestVar));
+    if (children.length < 3) { remaining.push(...group); continue; }
+    const [vuln, sinkType] = key.split('::');
+    const bundleId = `bundle:${bestVar}:${vuln.replace(/\s/g, '_')}`;
+    for (const c of children) c.bundleId = bundleId;
+    bundles.push({
+      bundleId, vuln, sinkType,
+      sharedHelper: bestVar,
+      childCount: children.length,
+      childIds: children.map(c => c.id || `${c.file}:${c.line || c.source?.line || 0}`),
+      severity: children[0].severity,
+      cwe: children[0].cwe,
+      summary: `${children.length} ${vuln} findings share \`${bestVar}\`. Refactor at the helper for one patch, ${children.length} resolutions.`,
+    });
+    // Keep all children in the remaining list too — they still appear individually
+    // with bundleId set, but the bundle entry surfaces the root-cause story.
+    remaining.push(...group);
+  }
+  return { bundles, findings: remaining };
 }
 
 export function toJSON(scan, meta={}, opts={}){
+  const findings = normalizeFindings(scan);
+  // Feat-5: surface root-cause bundles alongside individual findings.
+  // Each child finding now has bundleId set so the fixer subagent can
+  // detect "this is one of N findings that share a helper".
+  const { bundles } = bundleFindingsByRootCause(findings.map(f => {
+    // Pull sink.usedVars off the original raw finding (lost during normalize)
+    const raw = (scan.findings || []).find(r => (r.id || '') === f.id);
+    return raw?.sink ? { ...f, sink: raw.sink } : f;
+  }));
   const out = {
     scanId: meta.scanId || crypto.randomUUID(),
     startedAt: meta.startedAt || new Date().toISOString(),
     durationMs: meta.durationMs || 0,
     scanned: { files: scan.filesScanned||0, lines: scan.linesScanned||0 },
-    findings: normalizeFindings(scan),
+    findings,
+    bundles,
     routes: scan.routes || [],
     components: (scan.components||[]).map(c=>({
       ecosystem: c.ecosystem, name: c.name, version: c.version,
@@ -141,6 +224,126 @@ export function toSARIF(scan, meta={}){
       })),
     }],
   };
+}
+
+// Feat-8: Interactive HTML report — single self-contained file with no external
+// resources (no CDN, no Google Fonts, no remote JS). Filterable by severity / kind
+// / CWE; per-finding code snippet panel; STRIDE heatmap; hotspot file ranking.
+function _esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+export function toHTML(scan, meta = {}) {
+  const findings = normalizeFindings(scan);
+  const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
+  const stride = {};
+  for (const f of findings) if (f.stride) stride[f.stride] = (stride[f.stride] || 0) + 1;
+  const byFile = {};
+  for (const f of findings) byFile[f.file] = (byFile[f.file] || 0) + 1;
+  const hotspots = Object.entries(byFile).sort((a,b)=>b[1]-a[1]).slice(0, 10);
+  const data = JSON.stringify(findings).replace(/</g, '\\u003c');
+  const generatedAt = new Date().toISOString();
+  const SEV_HEX = { critical: '#ff2d55', high: '#ff6b35', medium: '#ffb800', low: '#34d058', info: '#82aaff' };
+  const sevBars = Object.entries(counts).map(([k, v]) =>
+    `<div class="sev-row"><span class="sev-tag" style="background:${SEV_HEX[k]}22;color:${SEV_HEX[k]}">${k}</span><span class="sev-bar" style="width:${Math.min(100, v * 4)}%;background:${SEV_HEX[k]}"></span><span class="sev-num">${v}</span></div>`
+  ).join('');
+  const strideRows = ['Spoofing','Tampering','Repudiation','Information Disclosure','Denial of Service','Elevation of Privilege']
+    .map(s => `<tr><td>${_esc(s)}</td><td class="num">${stride[s] || 0}</td></tr>`).join('');
+  const hotRows = hotspots.map(([f, n]) => `<tr><td><code>${_esc(f)}</code></td><td class="num">${n}</td></tr>`).join('');
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>agentic-security — scan report</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:0;font:14px/1.5 -apple-system,system-ui,sans-serif;background:#0b1020;color:#e2e8f4}
+  header{padding:24px 32px;border-bottom:1px solid #1e293b;background:#0f172a}
+  h1{margin:0 0 4px 0;font-size:22px;font-weight:600}
+  .meta{color:#64748b;font-size:13px}
+  main{padding:24px 32px}
+  .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-bottom:24px}
+  .card{background:#0f172a;border:1px solid #1e293b;border-radius:6px;padding:16px}
+  .card h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;margin:0 0 12px 0}
+  .sev-row{display:flex;align-items:center;gap:12px;margin-bottom:6px;font-size:12px}
+  .sev-tag{padding:2px 8px;border-radius:3px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;min-width:64px;text-align:center}
+  .sev-bar{height:6px;border-radius:3px;flex:1}
+  .sev-num{min-width:32px;text-align:right;color:#94a3b8;font-variant-numeric:tabular-nums}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  table td{padding:6px 8px;border-bottom:1px solid #1e293b}
+  table .num{text-align:right;color:#94a3b8;font-variant-numeric:tabular-nums}
+  table code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;color:#e2e8f4}
+  .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .filters input,.filters select{padding:6px 10px;background:#0f172a;border:1px solid #1e293b;border-radius:4px;color:#e2e8f4;font:13px/1 -apple-system,system-ui,sans-serif}
+  .findings{display:flex;flex-direction:column;gap:8px}
+  .f{background:#0f172a;border:1px solid #1e293b;border-radius:6px;padding:12px 16px;cursor:pointer}
+  .f.expanded{border-color:#38bdf8}
+  .f-head{display:flex;align-items:center;gap:12px;font-size:13px}
+  .f-loc{color:#94a3b8;font-family:ui-monospace,monospace;font-size:11px}
+  .f-vuln{font-weight:600;flex:1}
+  .f-cwe{color:#64748b;font-size:11px;font-family:ui-monospace,monospace}
+  .f-body{display:none;margin-top:12px;padding-top:12px;border-top:1px solid #1e293b;font-size:12px}
+  .f.expanded .f-body{display:block}
+  .f-body pre{background:#020617;padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;line-height:1.5}
+  .f-fix{background:#0d1f3d;border-left:3px solid #38bdf8;padding:8px 12px;margin-top:8px;border-radius:0 4px 4px 0}
+</style></head>
+<body>
+<header>
+  <h1>agentic-security &mdash; scan report</h1>
+  <div class="meta">${_esc(findings.length)} findings &middot; ${_esc(scan.filesScanned||0)} files scanned &middot; generated ${_esc(generatedAt)}</div>
+</header>
+<main>
+  <div class="grid">
+    <div class="card"><h2>By severity</h2>${sevBars}</div>
+    <div class="card"><h2>STRIDE coverage</h2><table><tbody>${strideRows}</tbody></table></div>
+    <div class="card"><h2>Top files</h2><table><tbody>${hotRows}</tbody></table></div>
+  </div>
+  <div class="filters">
+    <input id="q" placeholder="Filter by file, vuln, CWE&hellip;" />
+    <select id="sev"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+    <select id="kind"><option value="">All kinds</option><option>sast</option><option>sca</option><option>secret</option><option>logic</option><option>iac</option></select>
+  </div>
+  <div id="findings" class="findings"></div>
+</main>
+<script>
+const FINDINGS = ${data};
+const SEV_HEX = ${JSON.stringify(SEV_HEX)};
+const root = document.getElementById('findings');
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
+function render() {
+  const q = document.getElementById('q').value.toLowerCase();
+  const sev = document.getElementById('sev').value;
+  const kind = document.getElementById('kind').value;
+  root.innerHTML = '';
+  for (const f of FINDINGS) {
+    if (sev && f.severity !== sev) continue;
+    if (kind && f.kind !== kind) continue;
+    if (q && !((f.file||'') + (f.vuln||'') + (f.cwe||'')).toLowerCase().includes(q)) continue;
+    const div = document.createElement('div');
+    div.className = 'f';
+    const hex = SEV_HEX[f.severity] || '#888';
+    div.innerHTML =
+      '<div class="f-head">' +
+        '<span class="sev-tag" style="background:' + hex + '22;color:' + hex + '">' + esc(f.severity) + '</span>' +
+        '<span class="f-loc">' + esc(f.file) + ':' + esc(f.line) + '</span>' +
+        '<span class="f-vuln">' + esc(f.vuln) + '</span>' +
+        '<span class="f-cwe">' + esc(f.cwe||'') + '</span>' +
+      '</div>' +
+      '<div class="f-body">' +
+        (f.snippet ? '<pre>' + esc(f.snippet) + '</pre>' : '') +
+        (f.fix && f.fix.description ? '<div class="f-fix"><b>Fix:</b> ' + esc(f.fix.description) + (f.fix.code ? '<pre>' + esc(f.fix.code) + '</pre>' : '') + '</div>' : '') +
+      '</div>';
+    div.addEventListener('click', () => div.classList.toggle('expanded'));
+    root.appendChild(div);
+  }
+}
+document.getElementById('q').addEventListener('input', render);
+document.getElementById('sev').addEventListener('change', render);
+document.getElementById('kind').addEventListener('change', render);
+render();
+</script>
+</body></html>`;
 }
 
 const SEV_COLOR = { critical: '\x1b[91m', high: '\x1b[31m', medium: '\x1b[33m', low: '\x1b[32m', info: '\x1b[36m' };
