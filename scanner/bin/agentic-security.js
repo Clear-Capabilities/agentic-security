@@ -10,13 +10,14 @@ const USAGE = `agentic-security <command> [options]
 
 Commands:
   scan [path]                  Full SAST + SCA + Secrets sweep (default: cwd)
-  fix --finding <id> [--apply] Apply fix for a single finding (stub in v0.1)
+  fix --finding <id> [--apply] Apply fix for a single finding
   baseline save|diff [path]    Manage finding baselines
+  setup [project-dir]          Install /security-* shortcut commands into a project
   version                      Print version
 
 Options:
   --only sast|sca|secrets      Limit scan to one pillar
-  --format json|md|sarif|cli   Report format (default: cli)
+  --format json|md|sarif|cli|html  Report format (default: cli)
   --no-network                 Skip OSV/registry queries (offline mode)
   --verbose                    Include fix bodies in CLI output
   --output <file>              Write report to file instead of stdout
@@ -128,6 +129,87 @@ async function cmdBaseline(args) {
   console.error('baseline subcommand: save | diff'); return 4;
 }
 
+async function cmdSetup(args) {
+  const projectDir = path.resolve(args._[1] || '.');
+  const commandsDir = path.join(projectDir, '.claude', 'commands');
+  await fsp.mkdir(commandsDir, { recursive: true });
+  const bundle = path.resolve(process.argv[1]);
+
+  const commands = {
+    'security-scan-all.md': `---
+description: Run a full security scan (SAST + SCA + Secrets) on this project or a given path.
+argument-hint: "[path]"
+---
+\`\`\`bash
+node ${bundle} scan \${1:-.} --format cli --verbose
+\`\`\`
+After the scan, findings are saved to \`.agentic-security/last-scan.json\`.
+If you see critical findings, run \`/security-fix-all --severity critical\` to remediate.
+`,
+    'security-fix.md': `---
+description: Apply a remediation patch for a single finding from the last scan.
+argument-hint: "<finding-id>"
+---
+\`\`\`bash
+node ${bundle} fix --finding \${1}
+\`\`\`
+Hand the finding to the security-fixer subagent: read the file, apply the fix template adapted to the surrounding code, and run the project's test command. Do not declare done until the finding no longer reproduces on re-scan.
+`,
+    'security-fix-all.md': `---
+description: Remediate every finding at or above a severity threshold (default: critical).
+argument-hint: "[--severity critical|high|medium]"
+---
+Read \`.agentic-security/last-scan.json\`. For every finding at or above \`\${1:-critical}\` severity, dispatch the security-fixer subagent in sequence — not in parallel, as each fix may change subsequent findings. After each batch, re-run \`/security-scan-all\` to confirm. Stop and report if any test fails.
+`,
+    'security-baseline.md': `---
+description: Save current findings as a baseline, or diff the current scan against the saved baseline.
+argument-hint: "save|diff [path]"
+---
+\`\`\`bash
+node ${bundle} baseline \${1} \${2:-.}
+\`\`\`
+- \`save\` — lock current findings as baseline; future scans only show NEW problems
+- \`diff\` — re-scan and report regressions (added findings) and fixes (removed findings)
+`,
+    'security-report.md': `---
+description: Generate an HTML security report (or JSON / Markdown / SARIF).
+argument-hint: "[--format html|json|md|sarif] [--output <file>]"
+---
+\`\`\`bash
+node ${bundle} scan . --format \${1:-html} --output \${2:-security-report.html}
+\`\`\`
+Default produces \`security-report.html\` — a self-contained interactive page with severity charts and filterable findings. Open with \`open security-report.html\`.
+`,
+    'security-sca.md': `---
+description: Run a dependency vulnerability scan (SCA only) against this project.
+argument-hint: "[path]"
+---
+\`\`\`bash
+node ${bundle} scan \${1:-.} --only sca --format cli
+\`\`\`
+`,
+    'security-secrets.md': `---
+description: Scan for leaked credentials and hardcoded secrets.
+argument-hint: "[path]"
+---
+\`\`\`bash
+node ${bundle} scan \${1:-.} --only secrets --format cli
+\`\`\`
+`,
+  };
+
+  for (const [name, content] of Object.entries(commands)) {
+    await fsp.writeFile(path.join(commandsDir, name), content);
+  }
+
+  const names = Object.keys(commands).map(f => '/' + f.replace('.md', '')).join(', ');
+  console.log(`✓ Installed ${Object.keys(commands).length} command shortcuts in ${commandsDir}`);
+  console.log(`  ${names}`);
+  console.log('');
+  console.log('These work in this project only. Re-run in other projects as needed.');
+  return 0;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
@@ -136,7 +218,8 @@ async function main() {
       case 'scan':     process.exit(await cmdScan(args));
       case 'fix':      process.exit(await cmdFix(args));
       case 'baseline': process.exit(await cmdBaseline(args));
-      case 'version':  console.log('agentic-security 0.1.0'); process.exit(0);
+      case 'setup':    process.exit(await cmdSetup(args));
+      case 'version':  console.log('agentic-security 0.2.3'); process.exit(0);
       case 'help': case '--help': case '-h': case undefined:
         console.log(USAGE); process.exit(cmd ? 0 : 1);
       default:

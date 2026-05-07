@@ -49,15 +49,15 @@ If you use **Claude Code**:
 /plugin install agentic-security@clearcapabilities
 ```
 
-That's it. Now run one more command **in the project you want to protect** to unlock the short command names:
+That installs the plugin. Now run this once **in each project you want to protect** to install the short command names:
 
+```bash
+node $(find ~/.claude/plugins -name "agentic-security.mjs" | sort | tail -1) setup
 ```
-/agentic-security:security-setup
-```
 
-This creates project-level shortcuts so you can type `/security-scan` instead of `/agentic-security:security-scan`. Run it once per project — it takes about a second and just writes a few files into `.claude/commands/`.
+This writes shortcut command files into `.claude/commands/` so you can type `/security-scan-all`, `/security-fix-all`, etc. directly. Takes about a second. Re-run it in each new project.
 
-> **Why the extra step?** Claude Code mounts plugin commands under a namespace (`/agentic-security:...`). The setup command installs plain shortcut files at the project level so the short names work. This is a one-time thing per project.
+> **Why the extra step?** Claude Code mounts plugin commands under a namespace prefix. The `setup` subcommand bakes the shortcuts directly into your project so short names work without any prefix.
 
 If you want to run it from the terminal (CI, pre-commit, scripts):
 
@@ -370,9 +370,9 @@ Yes — that's actually where it shines. Run a scan, save a baseline, fix the ea
 
 ## Troubleshooting
 
-**"Unknown command: /security-scan"** — you haven't run the setup step yet. In the project where you're seeing the error, run:
-```
-/agentic-security:security-setup
+**"Unknown command: /security-scan-all"** — you haven't run the setup step yet. In the project where you're seeing the error, run:
+```bash
+node $(find ~/.claude/plugins -name "agentic-security.mjs" | sort | tail -1) setup
 ```
 This installs the short-form shortcuts. You only need to do it once per project.
 

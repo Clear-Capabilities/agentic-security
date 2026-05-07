@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Clear Capabilities security plugins for Claude Code.",
-    "version": "0.2.3"
+    "version": "0.2.4"
   },
   "plugins": [
     {
       "name": "agentic-security",
       "source": "./",
       "description": "Defensive AppSec for Claude Code: SAST + SCA + Secret scanning with auto-remediation. 50+ vulnerability sinks, 60+ secret patterns, OSV-backed CVE lookup, STRIDE/CWE mapping.",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "author": {
         "name": "Ross Young",
         "email": "ross@clearcapabilities.com"
