@@ -50,6 +50,6 @@ function readStdinJSON() {
 
   const lines = newCritical.slice(0, 10).map(f => `  [CRITICAL] ${f.cwe || ''} ${f.vuln} (${f.file}:${f.line})`).join('\n');
   const more = newCritical.length > 10 ? `\n  ...and ${newCritical.length - 10} more` : '';
-  console.error(`agentic-security: ${newCritical.length} NEW critical finding(s) since baseline; commit blocked.\n${lines}${more}\n\nResolve via /security-fix-all --severity critical, or set AGENTIC_SECURITY_BYPASS=1 to override.`);
+  console.error(`agentic-security: ${newCritical.length} NEW critical finding(s) since baseline; commit blocked.\n${lines}${more}\n\nResolve via /agentic-security:security-fix-all --severity critical, or set AGENTIC_SECURITY_BYPASS=1 to override.`);
   process.exit(2);
 })();

@@ -17,12 +17,12 @@ The `agentic-security` plugin ships an AST + regex SAST engine covering 50+ vuln
 ## How to invoke
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/bin/agentic-security.js scan <path> --only sast --format cli
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan <path> --only sast --format cli
 ```
 
 For a single file's worth of context:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/bin/agentic-security.js scan <dir-containing-file> --only sast --format json | jq '.findings[] | select(.file=="<file>")'
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan <dir-containing-file> --only sast --format json | jq '.findings[] | select(.file=="<file>")'
 ```
 
 ## Key behaviors

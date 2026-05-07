@@ -68,6 +68,6 @@ function writeThrottle(t) { try { fs.mkdirSync(stateDir, { recursive: true }); f
 
   const top = fresh.slice(0, 5).map(f => `  [${f.severity.toUpperCase()}] ${f.cwe || ''} ${f.vuln} (${f.file}:${f.line})`).join('\n');
   const more = fresh.length > 5 ? `\n  ...and ${fresh.length - 5} more` : '';
-  console.error(`agentic-security: ${fresh.length} new high/critical finding(s) from this edit:\n${top}${more}\n→ Run \`/security-fix-all --severity high\` to remediate.`);
+  console.error(`agentic-security: ${fresh.length} new high/critical finding(s) from this edit:\n${top}${more}\n→ Run \`/agentic-security:security-fix-all --severity high\` to remediate.`);
   process.exit(0);
 })();

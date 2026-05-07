@@ -8,6 +8,6 @@ const path = require('path');
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const blPath = path.join(cwd, '.agentic-security', 'baseline.json');
 if (!fs.existsSync(blPath)) {
-  console.log('agentic-security: no baseline. Run /security-scan then /security-baseline save to enable commit gating.');
+  console.log('agentic-security: no baseline. Run /agentic-security:security-scan then /agentic-security:security-baseline save to enable commit gating.');
 }
 process.exit(0);

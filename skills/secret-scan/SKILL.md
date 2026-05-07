@@ -17,12 +17,12 @@ description: Use when the user asks about leaked credentials, hardcoded API keys
 ## How to invoke
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/bin/agentic-security.js scan <path> --only secrets --format cli
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan <path> --only secrets --format cli
 ```
 
 For machine-readable output:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/bin/agentic-security.js scan <path> --only secrets --format json | jq '.findings[] | select(.kind=="secret")'
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan <path> --only secrets --format json | jq '.findings[] | select(.kind=="secret")'
 ```
 
 ## What gets detected

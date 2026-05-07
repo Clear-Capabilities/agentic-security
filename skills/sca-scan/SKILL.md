@@ -18,12 +18,12 @@ The plugin parses 20 manifest formats and queries `api.osv.dev` for known vulner
 ## How to invoke
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/bin/agentic-security.js scan <path> --only sca --format cli
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan <path> --only sca --format cli
 ```
 
 For a JSON list of vulnerable components:
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/bin/agentic-security.js scan <path> --only sca --format json | jq '.findings[] | select(.kind=="sca")'
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan <path> --only sca --format json | jq '.findings[] | select(.kind=="sca")'
 ```
 
 ## What the engine does

@@ -3,7 +3,7 @@ description: Save current findings as a baseline, or diff the current scan again
 argument-hint: "save|diff [path]"
 ---
 
-Manage the security baseline so /security-scan can highlight only NEW findings.
+Manage the security baseline so /agentic-security:security-scan can highlight only NEW findings.
 
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs baseline ${1} ${2:-.}
