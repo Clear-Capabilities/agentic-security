@@ -1,15 +1,27 @@
 {
-  "name": "agentic-security",
-  "displayName": "Agentic Security",
-  "publisher": "clearcapabilities",
-  "version": "0.1.0",
-  "description": "Defensive AppSec for Claude Code: SAST, SCA, and Secret scanning with auto-remediation. Built on a proven analyzer with 50+ vulnerability sinks, 60+ secret patterns, OSV-backed CVE lookup, and STRIDE/CWE mapping.",
-  "longDescription": "Agentic Security gives any Claude Code session first-class application-security analysis. Run `/security-scan` for a full SAST + SCA + Secret sweep, or let the included PostToolUse hook surface new high/critical findings the moment Claude edits a file. A `security-fixer` subagent turns findings into remediation patches.\n\nFeatures:\n- SAST with AST-based taint tracking (JS/TS) and regex fallback for Python/PHP/Ruby/Java/Go/Laravel\n- SCA across 20 manifest formats with OSV.dev CVE lookup and vulnerable-call-depth filtering\n- 60+ provider secret patterns, entropy detection, and TODO-near-security flagging\n- STRIDE coverage view, SARIF/JSON/Markdown output, baseline + diff",
-  "author": { "name": "Ross Young", "email": "ross@clearcapabilities.com" },
-  "vendor": "Clear Capabilities Inc.",
-  "homepage": "https://github.com/clearcapabilities/agentic-security",
-  "repository": "https://github.com/clearcapabilities/agentic-security",
-  "license": "Elastic-2.0",
-  "keywords": ["security", "sast", "sca", "secrets", "cve", "osv", "claude-code", "appsec", "vulnerability"],
-  "categories": ["security", "code-quality", "testing"]
+  "name": "clearcapabilities",
+  "owner": {
+    "name": "Clear Capabilities Inc.",
+    "email": "ross@clearcapabilities.com"
+  },
+  "metadata": {
+    "description": "Clear Capabilities security plugins for Claude Code.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "agentic-security",
+      "source": "./",
+      "description": "Defensive AppSec for Claude Code: SAST + SCA + Secret scanning with auto-remediation. 50+ vulnerability sinks, 60+ secret patterns, OSV-backed CVE lookup, STRIDE/CWE mapping.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Ross Young",
+        "email": "ross@clearcapabilities.com"
+      },
+      "homepage": "https://github.com/clearcapabilities/agentic-security",
+      "license": "Elastic-2.0",
+      "keywords": ["security", "sast", "sca", "secrets", "cve", "osv", "appsec", "vulnerability"],
+      "category": "security"
+    }
+  ]
 }
