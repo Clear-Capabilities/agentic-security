@@ -743,12 +743,12 @@ function scanRoutes(fp,raw){const cleaned=stripNoise(raw);const lines=raw.split(
 
 const LOGIC_PATTERNS=[
   {regex:/Math\.random\s*\(\s*\)/g,vuln:"Weak Randomness",severity:"medium",cwe:"CWE-330",stride:"Spoofing",fix:"Use crypto.randomBytes or crypto.randomUUID for security-sensitive values.",code:"// BEFORE\nconst token = Math.random().toString(36);\n\n// AFTER\nconst token = crypto.randomBytes(32).toString('hex');"},
-  {regex:/(?:password|secret|api_?key|token|auth)\s*[:=]\s*['"][^'"]{3,}['"]/gi,vuln:"Hardcoded Secret",severity:"critical",cwe:"CWE-798",stride:"Information Disclosure",fix:"Use environment variables or a secrets manager.",code:"// BEFORE\nconst apiKey = 'sk-abc123';\n\n// AFTER\nconst apiKey = process.env.API_KEY;"},
-  {regex:/===?\s*['"](?:admin|root|password|123456|test|default)['"]/gi,vuln:"Hardcoded Credential Check",severity:"high",cwe:"CWE-798",stride:"Spoofing",fix:"Use hashed password verification, never hardcoded strings.",code:"// BEFORE\nif (password === 'admin') grant();\n\n// AFTER\nconst valid = await bcrypt.compare(password, user.hashedPassword);"},
+  {regex:/(?:password|secret|api_?key|token|auth)\s*[:=]\s*['"][^'"]{3,}['"]/gi,vuln:"Hardcoded Secret",severity:"critical",cwe:"CWE-798",stride:"Information Disclosure",kind:"secret",fix:"Use environment variables or a secrets manager.",code:"// BEFORE\nconst apiKey = 'sk-abc123';\n\n// AFTER\nconst apiKey = process.env.API_KEY;"},
+  {regex:/===?\s*['"](?:admin|root|password|123456|test|default)['"]/gi,vuln:"Hardcoded Credential Check",severity:"high",cwe:"CWE-798",stride:"Spoofing",kind:"secret",fix:"Use hashed password verification, never hardcoded strings.",code:"// BEFORE\nif (password === 'admin') grant();\n\n// AFTER\nconst valid = await bcrypt.compare(password, user.hashedPassword);"},
   {regex:/if\s*\(\s*(?:fs\.existsSync|fs\.access|stat)\s*\([^)]+\)\s*\)[^{]*(?:readFile|writeFile|unlink|rename)/g,vuln:"Race Condition (TOCTOU)",severity:"medium",cwe:"CWE-367",stride:"Tampering",fix:"Use atomic operations instead of check-then-act patterns.",code:"// BEFORE\nif (fs.existsSync(p)) fs.unlinkSync(p);\n\n// AFTER\ntry { fs.unlinkSync(p); } catch(e) { if(e.code!=='ENOENT') throw e; }"},
   {regex:/\.(?:isAdmin|isRole|role)\s*(?:===?\s*(?:true|['"]admin['"])|\)\s*\{)/g,vuln:"Inline Privilege Check",severity:"medium",cwe:"CWE-863",stride:"Elevation of Privilege",fix:"Use middleware-based RBAC instead of inline role checks.",code:"// BEFORE\nif (user.isAdmin) deleteAll();\n\n// AFTER\nrouter.delete('/all', requireRole('admin'), handler);"},
-  {regex:/(?:privateKey|secretKey|signingKey|jwtSecret)\s*[=:]\s*['"`][-]{5}BEGIN/gi,vuln:"Exposed Private Key",severity:"critical",cwe:"CWE-321",stride:"Information Disclosure",fix:"Never hardcode private keys. Load from environment variables or a secrets manager.",code:"// BEFORE\nconst privateKey = '-----BEGIN RSA PRIVATE KEY-----...';"+"\n\n// AFTER\nconst privateKey = process.env.RSA_PRIVATE_KEY;"},
-  {regex:/createHmac\s*\(\s*['"][^'"]+['"]\s*,\s*['"][^'"]{8,}['"]/g,vuln:"Hardcoded HMAC Secret",severity:"critical",cwe:"CWE-321",stride:"Information Disclosure",fix:"Use environment variables for HMAC signing secrets.",code:"// BEFORE\ncrypto.createHmac('sha256', 'hardcoded_secret');"+"\n\n// AFTER\ncrypto.createHmac('sha256', process.env.HMAC_SECRET);"},
+  {regex:/(?:privateKey|secretKey|signingKey|jwtSecret)\s*[=:]\s*['"`][-]{5}BEGIN/gi,vuln:"Exposed Private Key",severity:"critical",cwe:"CWE-321",stride:"Information Disclosure",kind:"secret",fix:"Never hardcode private keys. Load from environment variables or a secrets manager.",code:"// BEFORE\nconst privateKey = '-----BEGIN RSA PRIVATE KEY-----...';"+"\n\n// AFTER\nconst privateKey = process.env.RSA_PRIVATE_KEY;"},
+  {regex:/createHmac\s*\(\s*['"][^'"]+['"]\s*,\s*['"][^'"]{8,}['"]/g,vuln:"Hardcoded HMAC Secret",severity:"critical",cwe:"CWE-321",stride:"Information Disclosure",kind:"secret",fix:"Use environment variables for HMAC signing secrets.",code:"// BEFORE\ncrypto.createHmac('sha256', 'hardcoded_secret');"+"\n\n// AFTER\ncrypto.createHmac('sha256', process.env.HMAC_SECRET);"},
   {regex:/(?:quantity|amount|price|total)\s*(?:<|>|<=|>=|!==?|===?)\s*0/g,vuln:"Missing Unsigned Numeric Validation",severity:"medium",cwe:"CWE-20",stride:"Tampering",fix:"Validate that numeric inputs are positive integers server-side before processing.",code:"// BEFORE\nawait BasketItem.update({ quantity: req.body.quantity });"+"\n\n// AFTER\nif (!Number.isInteger(req.body.quantity) || req.body.quantity < 1)\n  return res.status(400).json({ error: 'Invalid quantity' });"},
   // Juice Shop: feedback/review without purchase check
   {regex:/(?:Feedback|Review|Comment)\.create\s*\(/g,vuln:"Feedback Without Purchase Verification",severity:"medium",cwe:"CWE-840",stride:"Tampering",fix:"Verify user has purchased the product before allowing reviews.",code:"const order = await Order.findOne({ userId: req.user.id, ProductId: req.body.ProductId });\nif (!order) return res.status(403).json({ error: 'Not purchased' });"},
@@ -905,7 +905,7 @@ const STRUCTURAL_VULN_PATTERNS=[
    type:"File Upload",vuln:"File Upload Handler (Verify MIME/Extension/Size)",severity:"medium",cwe:"CWE-434",stride:"Elevation of Privilege",
    fix:"Validate file type, extension, size; store outside webroot; randomize filenames"},
   {regex:/session\s*\(\s*\{[^}]*secret\s*:\s*['"][^'"]{1,20}['"][^}]*\}/g,
-   type:"Session Config",vuln:"Weak/Hardcoded Session Secret",severity:"high",cwe:"CWE-798",stride:"Spoofing",
+   type:"Session Config",vuln:"Weak/Hardcoded Session Secret",severity:"high",cwe:"CWE-798",stride:"Spoofing",kind:"secret",
    fix:"Use a cryptographically random secret loaded from environment variables"},
   // ── Prototype Pollution ───────────────────────────────────────────────────
   {regex:/(?:req\.body|request\.body)\s*(?:\[[\w.'"]+\]){1,3}\s*=/g,
@@ -1086,7 +1086,7 @@ function scanStructuralVulns(fp, raw) {
           ],
           isSanitized: false, sanitizerType: null,
           severity: effectiveSeverity,
-          vuln: pat.vuln, cwe: pat.cwe, stride: pat.stride,
+          vuln: pat.vuln, cwe: pat.cwe, stride: pat.stride, kind: pat.kind,
           file: fp, parser: 'STRUCTURAL'
         });
       }
@@ -1382,7 +1382,7 @@ function scanLogicVulns(fp,raw){
           continue;
         }
       }
-      results.push({vuln:pat.vuln,severity:pat.severity,cwe:pat.cwe,stride:pat.stride,fix:pat.fix,code:pat.code,file:fp,line,snippet});
+      results.push({vuln:pat.vuln,severity:pat.severity,cwe:pat.cwe,stride:pat.stride,kind:pat.kind,fix:pat.fix,code:pat.code,file:fp,line,snippet});
     }
   }
   const routeRe=/(?:app|router)\s*\.\s*(?:get|post|all)\s*\(\s*['"`](\/(?:debug|admin|test|internal|__)[^'"`]*)/gi;let rm;

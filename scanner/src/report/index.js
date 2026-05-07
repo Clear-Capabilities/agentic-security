@@ -59,7 +59,7 @@ export function normalizeFindings(scan){
     if (suppress(lv.vuln, lv.file, lv.line, lv.snippet)) continue;
     out.push({
       id: lv.id || fingerprint(lv),
-      kind: 'logic',
+      kind: lv.kind || 'logic',
       severity: lv.severity || 'medium',
       vuln: lv.vuln,
       cwe: lv.cwe || null,
