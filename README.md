@@ -49,7 +49,15 @@ If you use **Claude Code**:
 /plugin install agentic-security@clearcapabilities
 ```
 
-That's it. Eight slash commands are now available in any Claude Code session.
+That's it. Now run one more command **in the project you want to protect** to unlock the short command names:
+
+```
+/agentic-security:security-setup
+```
+
+This creates project-level shortcuts so you can type `/security-scan` instead of `/agentic-security:security-scan`. Run it once per project — it takes about a second and just writes a few files into `.claude/commands/`.
+
+> **Why the extra step?** Claude Code mounts plugin commands under a namespace (`/agentic-security:...`). The setup command installs plain shortcut files at the project level so the short names work. This is a one-time thing per project.
 
 If you want to run it from the terminal (CI, pre-commit, scripts):
 
@@ -362,7 +370,13 @@ Yes — that's actually where it shines. Run a scan, save a baseline, fix the ea
 
 ## Troubleshooting
 
-**"Cannot find package 'fast-glob'"** — your plugin install is from before v0.1.1. Update:
+**"Unknown command: /security-scan"** — you haven't run the setup step yet. In the project where you're seeing the error, run:
+```
+/agentic-security:security-setup
+```
+This installs the short-form shortcuts. You only need to do it once per project.
+
+**"Cannot find package 'fast-glob'"** — your plugin install is from before v0.2.0. Update:
 ```
 /plugin marketplace update clearcapabilities
 /plugin install agentic-security@clearcapabilities
