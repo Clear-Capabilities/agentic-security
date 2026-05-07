@@ -1,5 +1,5 @@
 ---
-description: Install short-form /security-* command shortcuts into this project so you can type /security-scan instead of /agentic-security:security-scan.
+description: Install short-form /security-* command shortcuts into this project so you can type /security-scan-all instead of /agentic-security:security-scan-all.
 ---
 
 Install project-level command shortcuts for agentic-security so the short forms work in this project.
@@ -17,7 +17,7 @@ if [ -z "$BUNDLE" ]; then
   exit 1
 fi
 
-cat > .claude/commands/security-scan.md << CMDEOF
+cat > .claude/commands/security-scan-all.md << CMDEOF
 ---
 description: Run a full security scan (SAST + SCA + Secrets) on this project or a given path.
 argument-hint: "[path]"
@@ -62,11 +62,11 @@ CMDEOF
 
 cat > .claude/commands/security-report.md << CMDEOF
 ---
-description: Generate a Markdown security report from the last scan.
-argument-hint: "[path]"
+description: Generate an HTML security report (or JSON/Markdown/SARIF).
+argument-hint: "[--format html|json|md|sarif] [--output <file>]"
 ---
 \`\`\`bash
-node $BUNDLE scan \${1:-.} --format markdown
+node $BUNDLE scan . --format \${1:-html} --output \${2:-security-report.html}
 \`\`\`
 CMDEOF
 
@@ -91,7 +91,7 @@ node $BUNDLE scan \${1:-.} --only secrets --format cli
 CMDEOF
 
 echo "✓ Installed shortcuts in .claude/commands/:"
-echo "  /security-scan, /security-fix, /security-fix-all, /security-baseline"
+echo "  /security-scan-all, /security-fix, /security-fix-all, /security-baseline"
 echo "  /security-report, /security-sca, /security-secrets"
 echo ""
 echo "These work in this project. Re-run /agentic-security:security-setup in other projects."
