@@ -281,6 +281,10 @@ That's a real codebase. Run `/security-baseline save`, commit the baseline file,
 node $(find ~/.claude/plugins -name "agentic-security.mjs" | sort | tail -1) setup
 ```
 
+**Short-form commands disappear mid-session** — Claude Code can evict plugin commands from the active session after long-running tool calls (large scans, multi-file fixes). Two options:
+- Run `/reload-plugins` to restore all short-form commands for the rest of the session.
+- Use the fully-qualified form instead: `/agentic-security:security-fix-all`, `/agentic-security:security-scan-all`, etc. — these resolve through the plugin skill system and are always available.
+
 **CI fails with `'pull-requests: write' but only allowed 'none'`** — add the `permissions:` block shown in the GitHub Actions install section above.
 
 **Scan is slow on a large repo** — use `--changed-since HEAD~5` to scan only modified files.
