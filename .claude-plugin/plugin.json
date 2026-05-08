@@ -1,6 +1,6 @@
 {
   "name": "agentic-security",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Defensive AppSec for Claude Code: SAST, SCA, and Secret scanning with auto-remediation.",
   "author": { "name": "Ross Young", "email": "ross@clearcapabilities.com" },
   "vendor": "Clear Capabilities Inc.",

@@ -6,7 +6,7 @@ argument-hint: "[--format html|json|md|sarif] [--output <file>]"
 Re-scan and render a report. Defaults to an interactive HTML file.
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan . --format ${1:-html} --output ${2:-security-report.html}
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan . --format ${1:-html} --output ${2:-security-report.html}; ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec
 ```
 
 Common uses:
