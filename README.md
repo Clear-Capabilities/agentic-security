@@ -181,11 +181,15 @@ Put `before.html` and `after.html` side by side. In less than 20 minutes you wen
 
 ## What makes it different
 
-**Fewer false positives.** Most scanners flag `crypto.createHash('md5')` as a critical password-hashing issue. We look at variable names and context — if it's a cache key or ETag, it's info-level. We follow actual data flow, so `escapeHtml(input); res.send(input)` (sanitizer return discarded) is still flagged. Test fixtures, translation files, and example values are silently suppressed via a 4-gate filter.
+**Triage is built in, not bolted on.** Findings are deduplicated, scored, and FP-filtered before you see a single result. Every finding gets an exploitability score (0–100) based on whether it's reachable from a route handler, whether the source is HTTP-facing, and how critical the sink class is. Findings are sorted by score, not just severity label.
 
-**CVEs ranked by real-world exploitation.** Every CVE gets an [EPSS](https://www.first.org/epss/) score — the probability it's being actively exploited. Two CVEs both labeled "high" now have `exploitability: 87%` vs. `exploitability: 2%`. Fix the right one first.
+**Context-aware false-positive suppression.** Most scanners flag `crypto.createHash('md5')` as a critical password-hashing issue regardless of context. We classify it by surrounding variable names — a cache key or ETag is info-level; a password field is critical. For IDOR, we check whether the lookup uses an auth-derived ownership clause in the WHERE, or whether a post-lookup comparison (`basket.UserId !== customer.id`) with a guard (`throw` / `res.status(403)`) exists nearby — if so, it's not flagged. For XSS, `element.innerHTML === value` (comparison) is distinguished from `element.innerHTML = value` (assignment). For secrets, SQL template literals, OAuth URL fragment keys, and values in `codefixes/`, `test/`, or `fixtures/` paths are suppressed automatically. Sanitizer return values are tracked: `escapeHtml(input); res.send(input)` (return discarded) is still flagged.
 
-**Your code never leaves your machine.** The only network call is to OSV.dev, and we send only `package@version` strings. Pass `--no-network` to go fully offline.
+**Forward-only taint flow.** The taint engine enforces direction — a source defined *after* the sink cannot create a phantom finding. Cross-file taint tracks up to 5 hops (BFS), following imports and call chains across files and showing the full propagation path.
+
+**CVEs ranked by real-world exploitation.** Every CVE gets an [EPSS](https://www.first.org/epss/) score — the probability it's being actively exploited in the next 30 days. Two CVEs both labeled "high" might have `epssScore: 0.87` vs. `epssScore: 0.02`. Fix the right one first.
+
+**Your code never leaves your machine.** The only network calls are to OSV.dev (dependency CVE lookups) and first.org (EPSS scores). We send only `package@version` strings to OSV — no source code, no file paths.
 
 ---
 
