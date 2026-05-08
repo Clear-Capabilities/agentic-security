@@ -32,10 +32,18 @@ Install for: [Claude Code](#claude-code) · [GitHub Actions](#github-actions) ·
 /plugin install agentic-security@clearcapabilities
 ```
 
-Then run this once in each project you want to protect:
+When prompted for installation scope, choose **"Install for you (user scope)"** — this makes the plugin available across all your projects without reinstalling.
 
-```bash
-node $(find ~/.claude/plugins -name "agentic-security.mjs" | sort | tail -1) setup
+Then reload the plugin registry:
+
+```
+/reload-plugins
+```
+
+Then run this once in each project you want to use the shorter command forms:
+
+```
+/agentic-security:security-setup
 ```
 
 That's it. You now have `/security-scan-all`, `/security-fix-all`, and the rest.
