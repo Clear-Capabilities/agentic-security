@@ -254,11 +254,11 @@ export function toHTML(scan, meta = {}) {
     .map(s => `<tr><td>${_esc(s)}</td><td class="num">${stride[s] || 0}</td></tr>`).join('');
   const hotRows = hotspots.map(([f, n]) => `<tr><td><code>${_esc(f)}</code></td><td class="num">${n}</td></tr>`).join('');
   const SECTIONS = [
-    { kind: 'secret', label: 'Secrets', color: '#f97316', icon: '🔑' },
-    { kind: 'sast',   label: 'SAST',    color: '#38bdf8', icon: '🔍' },
-    { kind: 'logic',  label: 'Logic',   color: '#a78bfa', icon: '⚙️' },
-    { kind: 'sca',    label: 'SCA',     color: '#34d058', icon: '📦' },
     { kind: 'iac',    label: 'IaC',     color: '#ffb800', icon: '🏗️' },
+    { kind: 'logic',  label: 'Logic',   color: '#a78bfa', icon: '⚙️' },
+    { kind: 'sast',   label: 'SAST',    color: '#38bdf8', icon: '🔍' },
+    { kind: 'sca',    label: 'SCA',     color: '#34d058', icon: '📦' },
+    { kind: 'secret', label: 'Secrets', color: '#f97316', icon: '🔑' },
   ];
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -283,6 +283,8 @@ export function toHTML(scan, meta = {}) {
   table code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;color:#e2e8f4}
   .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
   .filters input,.filters select{padding:6px 10px;background:#0f172a;border:1px solid #1e293b;border-radius:4px;color:#e2e8f4;font:13px/1 -apple-system,system-ui,sans-serif}
+  .btn{padding:5px 12px;background:#1e293b;border:1px solid #334155;border-radius:4px;color:#94a3b8;font:12px/1 -apple-system,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:#273549;color:#e2e8f4}
   .section{margin-bottom:28px}
   .section-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;user-select:none}
   .section-title{font-size:15px;font-weight:700;letter-spacing:0.02em}
@@ -317,6 +319,8 @@ export function toHTML(scan, meta = {}) {
   <div class="filters">
     <input id="q" placeholder="Filter by file, vuln, CWE&hellip;" />
     <select id="sev"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+    <select id="kind"><option value="">All scan types</option><option value="iac">IaC</option><option value="logic">Logic</option><option value="sast">SAST</option><option value="sca">SCA</option><option value="secret">Secrets</option></select>
+    <button class="btn" id="toggleAll">Collapse All</button>
   </div>
   <div id="findings"></div>
 </main>
@@ -325,6 +329,8 @@ const FINDINGS = ${data};
 const SEV_HEX = ${JSON.stringify(SEV_HEX)};
 const SECTIONS = ${JSON.stringify(SECTIONS)};
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
+
+let allCollapsed = false;
 
 function makeCard(f) {
   const hex = SEV_HEX[f.severity] || '#888';
@@ -353,10 +359,14 @@ function makeCard(f) {
 function render() {
   const q = document.getElementById('q').value.toLowerCase();
   const sev = document.getElementById('sev').value;
+  const kind = document.getElementById('kind').value;
   const root = document.getElementById('findings');
   root.innerHTML = '';
+  allCollapsed = false;
+  document.getElementById('toggleAll').textContent = 'Collapse All';
 
   for (const sec of SECTIONS) {
+    if (kind && sec.kind !== kind) continue;
     const secFindings = FINDINGS.filter(f => f.kind === sec.kind);
     const visible = secFindings.filter(f =>
       (!sev || f.severity === sev) &&
@@ -397,8 +407,19 @@ function render() {
   }
 }
 
+document.getElementById('toggleAll').addEventListener('click', () => {
+  allCollapsed = !allCollapsed;
+  document.getElementById('toggleAll').textContent = allCollapsed ? 'Expand All' : 'Collapse All';
+  document.querySelectorAll('.section-body').forEach(b => {
+    b.classList.toggle('collapsed', allCollapsed);
+    const toggle = b.previousElementSibling?.querySelector('.section-toggle');
+    if (toggle) toggle.textContent = allCollapsed ? '▸' : '▾';
+  });
+});
+
 document.getElementById('q').addEventListener('input', render);
 document.getElementById('sev').addEventListener('change', render);
+document.getElementById('kind').addEventListener('change', render);
 render();
 </script>
 </body></html>`;
