@@ -873,7 +873,7 @@ function scanIaC(fp,raw){
   const findings=[];const lines=raw.split('\n');
   for(const p of IAC_PATTERNS){
     if(!p.fileTypes.test(fp))continue;
-    const re=new RegExp(p.match.source,p.match.flags.replace(/g/g,'')+' g');
+    const re=new RegExp(p.match.source,p.match.flags.replace(/g/g,'')+'g');
     let m;while((m=re.exec(raw))){
       const line=raw.substring(0,m.index).split('\n').length;
       const id=`iac:${fp}:${line}:${p.vuln.replace(/\s/g,'_').slice(0,60)}`;
@@ -3673,7 +3673,7 @@ function App(){const[state,setState]=useState("idle");const[progress,setProgress
     return()=>{cancelled=true;};
   },[settingsOpen,llmBackend,ollamaUrl]);
 
-  const handleFolderScan=useCallback(async(e)=>{const files=[...( e.target?.files||[])].filter(f=>shouldScan(f.webkitRelativePath||f.name));if(!files.length)return setErr("No scannable files found in folder");setState("scanning");setErr(null);try{const fakeZip={files:{}};for(const f of files){const path=f.webkitRelativePath||f.name;fakeZip.files[path]={dir:false,async:()=>f.text()};}const r=await runFullScan(fakeZip,setProgress);const oa=genOpenAPI(r.routes,r.sources);const recs=generateRecs(r.findings,r.routes,r.sinks,r.sources,r.logicVulns,r.supplyChain,r.components);const{pfr,fc,...storeR}=r;setResults({...storeR,recs});setSwagger(JSON.stringify(oa,null,2));const fg=buildFlowGraph(pfr,r.findings);setFlowGraph(fg);setFileDescriptions({});setVerdictText(null);setAiError(null);setAiPhase("idle");setAiProgress({current:0,total:0,label:""});}catch(e){setErr("Failed: "+e.message);setState("idle");}setState("done");setTab("ep");},[]);
+  const handleFolderScan=useCallback(async(e)=>{const allFiles=[...(e.target?.files||[])];if(!allFiles.length)return setErr("No files found in folder");setState("scanning");setErr(null);try{const fakeZip={files:{}};for(const f of allFiles){const path=f.webkitRelativePath||f.name;fakeZip.files[path]={dir:false,async:()=>f.text()};}const r=await runFullScan(fakeZip,setProgress);const oa=genOpenAPI(r.routes,r.sources);const recs=generateRecs(r.findings,r.routes,r.sinks,r.sources,r.logicVulns,r.supplyChain,r.components);const{pfr,fc,...storeR}=r;setResults({...storeR,recs});setSwagger(JSON.stringify(oa,null,2));const fg=buildFlowGraph(pfr,r.findings);setFlowGraph(fg);setFileDescriptions({});setVerdictText(null);setAiError(null);setAiPhase("idle");setAiProgress({current:0,total:0,label:""});setState("done");setTab("ep");}catch(e){setErr("Failed: "+e.message);setState("idle");}},[]);
   const handleScan=useCallback(async(e)=>{e.preventDefault();const f=e.dataTransfer?.files?.[0]||e.target?.files?.[0];if(!f)return;if(!f.name.endsWith(".zip"))return setErr("Upload a .zip file (or use 'Scan Folder' to select a directory)");setState("scanning");setErr(null);try{const zip=await window.JSZip.loadAsync(f);const r=await runFullScan(zip,setProgress);const oa=genOpenAPI(r.routes,r.sources);const recs=generateRecs(r.findings,r.routes,r.sinks,r.sources,r.logicVulns,r.supplyChain,r.components);const {pfr,fc,...storeR}=r;setResults({...storeR,recs});setSwagger(JSON.stringify(oa,null,2));const fg=buildFlowGraph(pfr,r.findings);setFlowGraph(fg);setFileDescriptions({});setVerdictText(null);setAiError(null);setAiPhase("idle");setAiProgress({current:0,total:0,label:""});const engine=engineRef.current;if(engine){
   const importedComponents=(r.components||[]).filter(c=>c.reachable);
   if(importedComponents.length){(async()=>{
