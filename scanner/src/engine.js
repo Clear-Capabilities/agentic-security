@@ -769,6 +769,16 @@ const LOGIC_PATTERNS=[
   {regex:/(?:===|!==|==|!=)\s*process\.env\.\w+|process\.env\.\w+\s*(?:===|!==|==|!=)/g,vuln:"Timing Oracle — Non-Constant-Time Secret Comparison",severity:"medium",cwe:"CWE-208",stride:"Information Disclosure",fix:"Use crypto.timingSafeEqual() for all comparisons involving secrets or API keys.",code:"// BEFORE\nif (req.headers['x-api-key'] === process.env.API_KEY) { ... }\n\n// AFTER\nconst a = Buffer.from(req.headers['x-api-key'] || '');\nconst b = Buffer.from(process.env.API_KEY || '');\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401);"},
   // ── Missing Bounds on Financial/Quantity Fields ──────────────────────────────
   {regex:/(?:req|request|ctx)\s*(?:\.\s*body|\[\s*['"]body['"]\s*\])\s*[.[\s]*(?:quantity|amount|price|units|count|qty)\b(?![^;]{0,200}(?:Number\.isInteger|isNaN|Math\.abs|>=\s*1|>\s*0|>0|>=1|max\s*:))/g,vuln:"Missing Positive-Integer Validation on Financial Field",severity:"medium",cwe:"CWE-20",stride:"Tampering",fix:"Validate that financial/quantity fields are positive integers before processing. Negative values can create credit or reverse transactions.",code:"// BEFORE\nawait Order.create({ quantity: req.body.quantity, price: product.price });\n\n// AFTER\nconst qty = req.body.quantity;\nif (!Number.isInteger(qty) || qty < 1 || qty > 10000)\n  return res.status(400).json({ error: 'quantity must be 1-10000' });\nawait Order.create({ quantity: qty, price: product.price });"},
+  // ── #22: Missing timeout on outbound HTTP requests (DoS) ─────────────────────
+  {regex:/(?:await\s+)?(?:fetch|axios\.(?:get|post|put|patch|delete|request)|http\.(?:get|request)|https\.(?:get|request)|got)\s*\(/gi,vuln:"Missing Timeout on Outbound HTTP Request (DoS)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",fix:"Set a timeout on all outbound requests to prevent event-loop starvation from stalled upstreams.",code:"// fetch (Node 18+)\nconst resp = await fetch(url, { signal: AbortSignal.timeout(5000) });\n\n// axios\nawait axios.get(url, { timeout: 5000 });\n\n// node http\nconst req = http.get(url, cb);\nreq.setTimeout(5000, () => req.destroy());"},
+  // ── #24: ORM collection queries without pagination limit (DoS) ───────────────
+  {regex:/\.\s*(?:findAll|findMany|findAndCountAll)\s*\(\s*\{[^}]{0,500}\}/g,vuln:"ORM Collection Query Without Pagination Limit (DoS)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",fix:"Always set limit/take on collection queries to bound memory and DB load.",code:"const items = await Model.findAll({\n  where: { userId: req.user.id },\n  limit: Math.min(Number(req.query.limit) || 50, 100),\n  offset: Number(req.query.offset) || 0,\n});"},
+  // ── #27: Missing audit log on sensitive mutations (Repudiation) ──────────────
+  {regex:/(?:router|app)\s*\.\s*(?:delete|put|patch|post)\s*\([^)]{0,120}\)[^{]{0,40}\{[^}]{0,800}(?:User|Order|Payment|Role|Permission|Admin|Account|Invoice|Wallet)\s*\.\s*(?:destroy|delete|update|create|bulkCreate|findOneAndUpdate|findOneAndDelete)\s*\(/g,vuln:"Sensitive Mutation Without Audit Log (Repudiation Risk)",severity:"medium",cwe:"CWE-778",stride:"Repudiation",fix:"Record all sensitive mutations with actor, target, IP, and timestamp: await AuditLog.create({ action, actorId: req.user.id, targetId, ip: req.ip })",code:"await AuditLog.create({\n  action: 'resource.delete',\n  targetId: req.params.id,\n  actor: req.user.id,\n  ip: req.ip,\n  ua: req.headers['user-agent'],\n});"},
+  // ── #29: Auth events without source IP/user-agent logging (Repudiation) ──────
+  {regex:/(?:router|app)\s*\.\s*post\s*\(\s*['"`][^'"`]*(?:login|signin|logout|signout|authenticate|register|signup|password)[^'"`]*['"`][^{]{0,60}\{[^}]{0,800}(?:jwt\.sign|createToken|signToken|res\.json\s*\(\s*\{[^}]*token|res\.cookie)\s*\(/g,vuln:"Auth Event Without Source IP Logging (Repudiation Risk)",severity:"medium",cwe:"CWE-778",stride:"Repudiation",fix:"Log req.ip and req.headers['user-agent'] on every authentication event so account takeovers are traceable.",code:"logger.info('auth.success', {\n  userId: user.id,\n  ip: req.ip,\n  ua: req.headers['user-agent'],\n  ts: new Date().toISOString(),\n});"},
+  // ── #30: Unguarded recursive processing of user-controlled data (DoS) ────────
+  {regex:/(?:flatten|traverse|walk|deepMerge|deepClone|deepExtend|processTree|processNode|treeWalk)\s*\(\s*(?:req\.body|req\.query|req\.params|JSON\.parse\s*\()/gi,vuln:"Unguarded Recursive Processing of User Data (DoS)",severity:"high",cwe:"CWE-674",stride:"Denial of Service",fix:"Add a maxDepth parameter to any recursive function processing user-supplied data and throw when exceeded.",code:"function flatten(obj, depth = 0, maxDepth = 20) {\n  if (depth > maxDepth) throw new Error('Structure too deeply nested');\n  const result = {};\n  for (const k of Object.keys(obj)) {\n    if (typeof obj[k] === 'object' && obj[k] !== null)\n      Object.assign(result, flatten(obj[k], depth + 1, maxDepth));\n    else result[k] = obj[k];\n  }\n  return result;\n}"},
 ];
 
 // ─── Structural Vulnerability Patterns ───────────────────────────────────────
@@ -882,16 +892,20 @@ const STRUCTURAL_VULN_PATTERNS=[
   {regex:/(?:parseString|parseStringPromise|new\s+(?:xml2js\.)?Parser\s*\(|libxmljs\.parseXml|sax\.createStream)\s*\(/g,
    type:"XML Parser",vuln:"Unsafe XML Parsing (XXE Risk)",severity:"high",cwe:"CWE-611",stride:"Information Disclosure",
    fix:"Disable external entities in XML parser options"},
-  {regex:/(?:console\.(?:log|info|warn|error)|logger\.(?:info|warn|error|debug))\s*\([^;)]*(?:req\.|\.body\.|\.query\.|\.params\.)[^;)]{0,200}\)/g,
+  {regex:/(?:console\.(?:log|info|warn|error)|logger\.(?:info|warn|error|debug|log)|log\.(?:info|warn|error|debug)|winston\b[^(]{0,20}\(|pino\b[^(]{0,20}\()\s*\([^;)]{0,300}(?:req\.|\.body\.|\.query\.|\.params\.|req\.headers)[^;)]{0,300}\)/g,
    type:"Log Injection",vuln:"Log Injection (Unsanitized User Input Logged)",severity:"medium",cwe:"CWE-117",stride:"Repudiation",
-   fix:"Sanitize and truncate user-supplied values before logging"},
+   fix:"Sanitize user-controlled values before logging: const safe = v => String(v).replace(/[\\r\\n\\t]/g,' ').substring(0,200);"},
+  {regex:/(?:console\.(?:log|info|warn|error)|logger\.(?:info|warn|error|debug|log)|log\.(?:info|warn|error|debug))\s*\(\s*`[^`]{0,400}\$\{[^}]{0,100}(?:req\.|body\.|query\.|params\.|headers\.)[^}]{0,100}\}[^`]{0,400}`/g,
+   type:"Log Injection",vuln:"Log Injection via Template Literal (Unsanitized User Input)",severity:"medium",cwe:"CWE-117",stride:"Repudiation",
+   fix:"Sanitize interpolated values: logger.info(`User: ${String(req.body.name).replace(/[\\r\\n]/g,' ').substring(0,200)}`)"},
   // ── Broken Access Control ─────────────────────────────────────────────────
   {regex:/(?:app|router)\s*\.\s*(?:get|post|put|delete|patch)\s*\(\s*['"`][^'"`]*(?:admin|manage|superuser|\/api\/admin)[^'"`]*['"`]/gi,
    type:"Admin Route",vuln:"Admin/Management Route (Verify Auth)",severity:"high",cwe:"CWE-862",stride:"Elevation of Privilege",
    fix:"Protect admin routes with requireRole('admin') middleware"},
-  {regex:/router\s*\.\s*post\s*\(\s*['"`]\/(?:login|signin|auth|token|password)[^'"`]*['"`]/gi,
-   type:"Auth Endpoint",vuln:"Auth Endpoint Without Rate Limiting",severity:"medium",cwe:"CWE-307",stride:"Spoofing",
-   fix:"Apply express-rate-limit to all authentication endpoints"},
+  {regex:/(?:app|router)\s*\.\s*post\s*\(\s*['"`][^'"`]*\/(?:login|signin|register|signup|auth|token|password|forgot|reset|otp|mfa|2fa|verify)[^'"`]*['"`]/gi,
+   type:"Auth Endpoint",vuln:"Auth Endpoint Without Rate Limiting",severity:"medium",cwe:"CWE-307",stride:"Denial of Service",
+   fix:"Apply express-rate-limit to all auth endpoints: router.post('/login', rateLimit({ windowMs: 15*60*1000, max: 10 }), handler)",
+   predicate:_authRateLimitPredicate},
   // ── Security Misconfiguration ─────────────────────────────────────────────
   {regex:/res\s*\.\s*cookie\s*\(((?:[^()]|\([^()]*\)){0,400})\)/g,
    type:"Cookie Config",vuln:"Cookie Set Without Proper Security Flags",severity:"medium",cwe:"CWE-614",stride:"Information Disclosure",
@@ -954,6 +968,24 @@ const STRUCTURAL_VULN_PATTERNS=[
   {regex:/(?:findOne|find_by_token|where.*resetToken)\s*\([^;]{0,200}\)\s*[^;]{0,100}(?:404|'Invalid token'|"Invalid token"|'Token not found'|"Token not found")/g,
    type:"Auth Oracle",vuln:"Password Reset Token Oracle (Enumeration via Status Code)",severity:"medium",cwe:"CWE-204",stride:"Spoofing",
    fix:"Return identical responses whether the token is valid or not. Apply rate limiting on the reset endpoint."},
+  // ── #23: Busboy / Formidable without file-size limits (DoS) ─────────────────
+  {regex:/new\s+Busboy\s*\(\s*(?:\{(?![^}]{0,400}(?:limits|fileSize))[^}]{0,400}\}|\s*\))/g,
+   type:"File Upload",vuln:"Busboy Without File Size Limit (DoS)",severity:"high",cwe:"CWE-400",stride:"Denial of Service",
+   fix:"Set limits: { fileSize: 10 * 1024 * 1024 } in Busboy constructor options to cap upload size."},
+  {regex:/new\s+(?:Formidable|IncomingForm)\s*\(\s*(?:\{(?![^}]{0,400}(?:maxFileSize|maxFields))[^}]{0,400}\}|\s*\))/g,
+   type:"File Upload",vuln:"Formidable Without File Size Limit (DoS)",severity:"high",cwe:"CWE-400",stride:"Denial of Service",
+   fix:"Set maxFileSize in Formidable options: new Formidable({ maxFileSize: 10 * 1024 * 1024 })"},
+  // ── #25: Synchronous blocking I/O in server context (DoS) ───────────────────
+  {regex:/\b(?:fs\.readFileSync|fs\.writeFileSync|fs\.appendFileSync|fs\.readdirSync|fs\.statSync|fs\.existsSync|crypto\.pbkdf2Sync)\s*\(/g,
+   type:"Blocking I/O",vuln:"Synchronous Blocking I/O (DoS Risk in Server Context)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",
+   fix:"Replace with async equivalents: fs.promises.readFile(), fs.promises.stat(), util.promisify(crypto.pbkdf2)()"},
+  // ── #26: Body parser without size limit (DoS — large payload / Billion Laughs) ─
+  {regex:/(?:app|router)\s*\.\s*use\s*\(\s*express\s*\.\s*(?:json|urlencoded)\s*\(\s*\)\s*\)/g,
+   type:"Body Parser",vuln:"Express Body Parser Without Size Limit (DoS)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",
+   fix:"Set an explicit size limit: app.use(express.json({ limit: '1mb' })); app.use(express.urlencoded({ limit: '1mb', extended: true }))"},
+  {regex:/xml2js\s*\.\s*(?:parseString|parseStringPromise)\s*\(\s*(?:req\.|body\.|query\.|params\.|\w+\.body|\w+\.rawBody)/gi,
+   type:"XML Parser",vuln:"XML from User Input Without Size Limit (Billion Laughs Risk)",severity:"high",cwe:"CWE-776",stride:"Denial of Service",
+   fix:"Check payload size before parsing: if (raw.length > 1e6) return res.status(413).end(); Consider fast-xml-parser which limits entity expansion."},
 ];
 
 // FP-4: classify a weak-hash use site as 'security' (password/HMAC/token verify),
@@ -1042,6 +1074,14 @@ function _corsPredicate(matchText){
     return {fire:true, reason:'cors-permissive-origin'};
   }
   return {fire:false};
+}
+
+// #21: Predicate — suppress auth-endpoint warning when rate-limit middleware is visible on the same line
+function _authRateLimitPredicate(matchText, ctx) {
+  const snippet = ctx?.snippet || matchText;
+  if (/\b(?:rateLimit|throttle|slowDown|limiter|rateLimiter|apiLimiter|loginLimiter|authLimiter)\s*[,)]/i.test(snippet))
+    return { fire: false, reason: 'rate-limit-arg-present' };
+  return { fire: true };
 }
 
 // Structural vulnerability scanner, no source-sink taint chain required
@@ -1356,6 +1396,43 @@ function _logicPredicateFor(vuln){
       _REAUTH_PRESENT_RE.test(matchText)
         ? { fire: false, reason: 'reauth-present' }
         : { fire: true };
+  }
+  // #22: suppress if a timeout or abort signal is visible in the surrounding lines
+  if (vuln === 'Missing Timeout on Outbound HTTP Request (DoS)') {
+    return (matchText, ctx) => {
+      const lines = ctx.lines || [];
+      const surround = lines.slice(Math.max(0, ctx.line - 3), Math.min(lines.length, ctx.line + 6)).join('\n');
+      if (/\b(?:timeout|AbortSignal|AbortController|signal)\b/.test(surround)) return { fire: false, reason: 'timeout-present' };
+      return { fire: true };
+    };
+  }
+  // #24: suppress if a limit/take/pageSize is inside the matched call expression
+  if (vuln === 'ORM Collection Query Without Pagination Limit (DoS)') {
+    return (matchText, ctx) => {
+      if (/\b(?:limit|take|first|pageSize|LIMIT)\b/.test(matchText)) return { fire: false, reason: 'limit-present' };
+      const lines = ctx.lines || [];
+      const surround = lines.slice(Math.max(0, ctx.line - 1), Math.min(lines.length, ctx.line + 4)).join('\n');
+      if (/\b(?:limit|take|first|pageSize)\b/.test(surround)) return { fire: false, reason: 'limit-nearby' };
+      return { fire: true };
+    };
+  }
+  // #27: suppress if an audit/log call is visible in the surrounding handler lines
+  if (vuln === 'Sensitive Mutation Without Audit Log (Repudiation Risk)') {
+    return (matchText, ctx) => {
+      const lines = ctx.lines || [];
+      const surround = lines.slice(Math.max(0, ctx.line - 5), Math.min(lines.length, ctx.line + 30)).join('\n');
+      if (/\b(?:audit|AuditLog|auditLog|EventLog|activityLog|accessLog)\b/i.test(surround)) return { fire: false, reason: 'audit-present' };
+      return { fire: true };
+    };
+  }
+  // #29: suppress if req.ip or user-agent header is logged in the surrounding handler lines
+  if (vuln === 'Auth Event Without Source IP Logging (Repudiation Risk)') {
+    return (matchText, ctx) => {
+      const lines = ctx.lines || [];
+      const surround = lines.slice(Math.max(0, ctx.line - 2), Math.min(lines.length, ctx.line + 20)).join('\n');
+      if (/req\.ip\b|req\.socket\.remoteAddress|['"]x-forwarded-for['"]|['"]user-agent['"]/i.test(surround)) return { fire: false, reason: 'ip-logged' };
+      return { fire: true };
+    };
   }
   return null;
 }
