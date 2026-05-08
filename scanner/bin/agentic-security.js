@@ -141,7 +141,7 @@ description: Run a full security scan (SAST + SCA + Secrets) on this project or 
 argument-hint: "[path]"
 ---
 \`\`\`bash
-node ${bundle} scan \${1:-.} --format cli --verbose
+node ${bundle} scan \${1:-.} --format cli --verbose; ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec
 \`\`\`
 After the scan, findings are saved to \`.agentic-security/last-scan.json\`.
 If you see critical findings, run \`/security-fix-all --severity critical\` to remediate.

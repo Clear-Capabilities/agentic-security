@@ -6,7 +6,7 @@ argument-hint: "[path]"
 Run the agentic-security scanner against `${1:-.}` and surface the findings inline.
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan ${1:-.} --format cli --verbose
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan ${1:-.} --format cli --verbose; ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec
 ```
 
 After the scan, the JSON report is persisted to `.agentic-security/last-scan.json` for use by `/security-fix` and `/security-report`.
