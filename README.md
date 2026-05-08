@@ -19,8 +19,6 @@ Claude:           (rewrites to parameterized query, re-runs scan, finding gone)
 [![Tests](https://img.shields.io/badge/tests-24%2F24%20passing-success)]()
 [![Bundle](https://img.shields.io/badge/bundle-1.9MB%20single%20file-orange)]()
 
-Install for: [Claude Code](#claude-code) · [GitHub Actions](#github-actions) · [Terminal / CI](#terminal--ci)
-
 ---
 
 ## Installation
@@ -47,41 +45,6 @@ Then run this once in each project you want to use the shorter command forms:
 ```
 
 That's it. The short forms (`/security-scan-all`, `/security-fix-all`, etc.) will now work in this project alongside the always-available fully-qualified forms.
-
-### GitHub Actions
-
-```yaml
-# .github/workflows/security.yml
-name: Security
-on:
-  pull_request: {}
-  push: { branches: [main] }
-
-jobs:
-  security:
-    permissions:
-      contents: read
-      security-events: write
-      pull-requests: write
-    uses: clearcapabilities/agentic-security/.github/workflows/scan.yml@main
-    with:
-      fail-on: critical
-      baseline: ${{ github.event.pull_request.base.sha || 'HEAD~1' }}
-```
-
-Every PR gets a comment with severity counts and the top findings. Critical findings block merge.
-
-> If CI fails with `"requesting 'pull-requests: write' but only allowed 'none'"` — the `permissions:` block above is required.
-
-### Terminal / CI
-
-```bash
-curl -L -o agentic-security.mjs \
-  https://raw.githubusercontent.com/clearcapabilities/agentic-security/main/scanner/dist/agentic-security.mjs
-node agentic-security.mjs scan .
-```
-
-One self-contained 1.9 MB file. No `npm install`, no dependencies.
 
 ---
 
@@ -191,7 +154,7 @@ From now on, scans only show *new* findings added after this point. The pre-comm
 open after.html
 ```
 
-Put `before.html` and `after.html` side by side. In about 10 minutes you went from 49 critical findings to near-zero, and now have a gate that prevents regressions.
+Put `before.html` and `after.html` side by side. In less than 20 minutes you went from 35 critical findings to 0.
 
 ---
 
@@ -302,6 +265,45 @@ The 8 false-positive-reduction specs are in the [GitHub issues](https://github.c
 
 - **Issues / bugs:** [github.com/clearcapabilities/agentic-security/issues](https://github.com/clearcapabilities/agentic-security/issues)
 - **Email:** ross@clearcapabilities.com
+
+---
+
+## GitHub Actions
+
+```yaml
+# .github/workflows/security.yml
+name: Security
+on:
+  pull_request: {}
+  push: { branches: [main] }
+
+jobs:
+  security:
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+    uses: clearcapabilities/agentic-security/.github/workflows/scan.yml@main
+    with:
+      fail-on: critical
+      baseline: ${{ github.event.pull_request.base.sha || 'HEAD~1' }}
+```
+
+Every PR gets a comment with severity counts and the top findings. Critical findings block merge.
+
+> If CI fails with `"requesting 'pull-requests: write' but only allowed 'none'"` — the `permissions:` block above is required.
+
+---
+
+## Terminal / CI
+
+```bash
+curl -L -o agentic-security.mjs \
+  https://raw.githubusercontent.com/clearcapabilities/agentic-security/main/scanner/dist/agentic-security.mjs
+node agentic-security.mjs scan .
+```
+
+One self-contained 1.9 MB file. No `npm install`, no dependencies.
 
 ---
 
