@@ -131,10 +131,10 @@ A self-contained interactive page: severity chart, filterable finding list, fix 
 /agentic-security:security-fix-all --severity critical
 ```
 
-Before touching any code, Claude will read the findings and summarise what it's about to change. It may ask for confirmation — especially on a well-known codebase like Juice Shop, where it recognises that the vulnerabilities are intentional challenges. Tell it to proceed:
+Before touching any code, Claude will read the findings and summarise what it's about to change. On a well-known codebase like Juice Shop it will flag that the vulnerabilities are intentional challenges and ask how to proceed. Tell it:
 
 ```
-fix all critical vulns
+please remove all critical vulns. yes i understand juice shop has purposely built vulns but remove all critical vulns anyways
 ```
 
 Claude then works through each finding in sequence — parameterized queries instead of string concatenation, `bcrypt` instead of MD5, `execFile` instead of `exec`. Each fix is a normal edit you can review or revert. It runs serially because fixing one bug can change another.
