@@ -36,9 +36,10 @@ After the scan completes, read `.agentic-security/last-scan.json` and triage eve
 Present a Markdown table of confirmed findings only (exclude FPs):
 
 ```
-| # | Severity | Score | CWE | File:Line | Vulnerability | Why this matters |
+| # | Severity | Score | EPSS | CWE | File:Line | Vulnerability | Why this matters |
 ```
 
+- **EPSS** — show the `epssScore` from the finding as a percentage (e.g. `87%`) for SCA findings; use `—` for SAST/secrets findings that have no EPSS value.
 - Sort by severity tier (critical first), then by score descending within each tier.
 - Cap the table at 30 rows; if more exist, append: `… and N more — run /agentic-security:security-report for the full list.`
 - After the table, print one-line counts: `Confirmed: X critical, Y high, Z medium, W low | Suppressed as FP: N`

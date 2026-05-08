@@ -303,6 +303,7 @@ export function toHTML(scan, meta = {}) {
   .f-loc{color:#94a3b8;font-family:ui-monospace,monospace;font-size:11px}
   .f-vuln{font-weight:600;flex:1}
   .f-cwe{color:#64748b;font-size:11px;font-family:ui-monospace,monospace}
+  .f-epss{font-size:11px;font-weight:600;color:#f59e0b;background:#f59e0b18;padding:1px 6px;border-radius:3px;white-space:nowrap}
   .f-body{display:none;margin-top:12px;padding-top:12px;border-top:1px solid #1e293b;font-size:12px}
   .f.expanded .f-body{display:block}
   .f-body pre{background:#020617;padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;line-height:1.5}
@@ -344,12 +345,16 @@ function makeCard(f) {
   div.dataset.file = (f.file||'').toLowerCase();
   div.dataset.vuln = (f.vuln||'').toLowerCase();
   div.dataset.cwe = (f.cwe||'').toLowerCase();
+  const epssHtml = f.epssScore != null
+    ? '<span class="f-epss" title="EPSS: probability of exploitation in the next 30 days">EPSS ' + Math.round(f.epssScore * 100) + '%</span>'
+    : '';
   div.innerHTML =
     '<div class="f-head">' +
       '<span class="sev-tag" style="background:' + hex + '22;color:' + hex + '">' + esc(f.severity) + '</span>' +
       '<span class="f-loc">' + esc(f.file) + ':' + esc(f.line) + '</span>' +
       '<span class="f-vuln">' + esc(f.vuln) + '</span>' +
       '<span class="f-cwe">' + esc(f.cwe||'') + '</span>' +
+      epssHtml +
     '</div>' +
     '<div class="f-body">' +
       (f.snippet ? '<pre>' + esc(f.snippet) + '</pre>' : '') +
