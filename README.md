@@ -160,13 +160,6 @@ Agentic Security — 355 findings across 456 files
   Medium      167
   Low         1
   Info        9
-
-  Top problems:
-    33×  Unsafe Reflection / Remote Code Execution
-    33×  IDOR — anyone can read anyone else's data
-    26×  SQL Injection
-    15×  Cross-site scripting
-    12×  Hardcoded passwords / API keys
 ```
 
 355 real bugs. Most are clustered in a handful of files. Welcome to a real codebase.
