@@ -171,6 +171,8 @@ Agentic Security — 355 findings across 456 files
 open security-report.html
 ```
 
+![agentic-security HTML report](docs/report-screenshot.png)
+
 A self-contained interactive page: severity chart, filterable finding list, fix templates per finding, STRIDE attack coverage overview. One file — email it, attach to a Jira ticket, drop in Slack.
 
 **Step 4 — fix the worst stuff**
