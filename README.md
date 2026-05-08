@@ -11,7 +11,7 @@ You:              Add a /search endpoint that queries products by name.
 Claude:           (writes code — one query glues user input straight into SQL)
 agentic-security: ⚠ 1 new high-severity finding from this edit
                   [HIGH] CWE-89 SQL Injection (routes/products.js:42)
-You:              /security-fix-all --severity high
+You:              /agentic-security:security-fix-all --severity high
 Claude:           (rewrites to parameterized query, re-runs scan, finding gone)
 ```
 
@@ -46,7 +46,7 @@ Then run this once in each project you want to use the shorter command forms:
 /agentic-security:security-setup
 ```
 
-That's it. You now have `/security-scan-all`, `/security-fix-all`, and the rest.
+That's it. The short forms (`/security-scan-all`, `/security-fix-all`, etc.) will now work in this project alongside the always-available fully-qualified forms.
 
 ### GitHub Actions
 
@@ -88,13 +88,13 @@ One self-contained 1.9 MB file. No `npm install`, no dependencies.
 ## Commands
 
 ```
-/security-scan-all               scan everything — SAST + dependencies + secrets
-/security-fix-all --severity high  fix everything high and above
-/security-baseline save          lock in current findings; only show NEW problems after this
-/security-report                 open an interactive HTML report
-/security-secrets                secrets-only scan
-/security-sca                    dependency vulnerabilities only
-/security-fix <id>               fix a single finding by ID
+/agentic-security:security-scan-all               scan everything — SAST + dependencies + secrets
+/agentic-security:security-fix-all --severity high  fix everything high and above
+/agentic-security:security-baseline save          lock in current findings; only show NEW problems after this
+/agentic-security:security-report                 open an interactive HTML report
+/agentic-security:security-secrets                secrets-only scan
+/agentic-security:security-sca                    dependency vulnerabilities only
+/agentic-security:security-fix <id>               fix a single finding by ID
 ```
 
 ---
@@ -149,7 +149,7 @@ claude ~/code/juice-shop
 **Step 3 — scan it**
 
 ```
-/security-scan-all <code_directory_path>
+/agentic-security:security-scan-all <code_directory_path>
 ```
 
 ```
@@ -167,7 +167,7 @@ Agentic Security — 319 finding(s) across 456 file(s)
 **Step 3 — get a report**
 
 ```
-/security-report
+/agentic-security:security-report
 open security-report.html
 ```
 
@@ -176,7 +176,7 @@ A self-contained interactive page: severity chart, filterable finding list, fix 
 **Step 4 — fix the worst stuff**
 
 ```
-/security-fix-all --severity critical
+/agentic-security:security-fix-all --severity critical
 ```
 
 Claude works through each critical finding in sequence — parameterized queries instead of string concatenation, `bcrypt` instead of MD5, `execFile` instead of `exec`. Each fix is a normal edit you can review or revert. It runs serially because fixing one bug can change another.
@@ -184,7 +184,7 @@ Claude works through each critical finding in sequence — parameterized queries
 **Step 5 — lock in your progress**
 
 ```
-/security-baseline save
+/agentic-security:security-baseline save
 ```
 
 From now on, scans only show *new* findings added after this point. The pre-commit hook blocks any commit that introduces new critical bugs.
@@ -192,7 +192,7 @@ From now on, scans only show *new* findings added after this point. The pre-comm
 **Step 6 — generate the after-report, compare**
 
 ```
-/security-report --output after.html
+/agentic-security:security-report --output after.html
 open after.html
 ```
 
@@ -267,7 +267,7 @@ sinks:
 ```
 
 **My CI says "319 findings."**
-That's a real codebase. Run `/security-baseline save`, commit the baseline file, and from now on you only see *new* problems.
+That's a real codebase. Run `/agentic-security:security-baseline save`, commit the baseline file, and from now on you only see *new* problems.
 
 **How is this different from `npm audit`?**
 `npm audit` flags every CVE in your tree, including ones in code paths you never call. We filter by vulnerable-call-depth. Also covers 19 other manifest formats besides npm.
@@ -276,7 +276,7 @@ That's a real codebase. Run `/security-baseline save`, commit the baseline file,
 
 ## Troubleshooting
 
-**"Unknown command: /security-scan-all"** — run the setup step in your project:
+**"Unknown command: /security-scan-all"** — either use the fully-qualified form (`/agentic-security:security-scan-all`) which is always available, or run the setup step in your project to install the short forms:
 ```bash
 node $(find ~/.claude/plugins -name "agentic-security.mjs" | sort | tail -1) setup
 ```
