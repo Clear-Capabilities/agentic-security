@@ -253,6 +253,13 @@ export function toHTML(scan, meta = {}) {
   const strideRows = ['Spoofing','Tampering','Repudiation','Information Disclosure','Denial of Service','Elevation of Privilege']
     .map(s => `<tr><td>${_esc(s)}</td><td class="num">${stride[s] || 0}</td></tr>`).join('');
   const hotRows = hotspots.map(([f, n]) => `<tr><td><code>${_esc(f)}</code></td><td class="num">${n}</td></tr>`).join('');
+  const SECTIONS = [
+    { kind: 'secret', label: 'Secrets', color: '#f97316', icon: '🔑' },
+    { kind: 'sast',   label: 'SAST',    color: '#38bdf8', icon: '🔍' },
+    { kind: 'logic',  label: 'Logic',   color: '#a78bfa', icon: '⚙️' },
+    { kind: 'sca',    label: 'SCA',     color: '#34d058', icon: '📦' },
+    { kind: 'iac',    label: 'IaC',     color: '#ffb800', icon: '🏗️' },
+  ];
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <title>agentic-security — scan report</title>
@@ -274,9 +281,16 @@ export function toHTML(scan, meta = {}) {
   table td{padding:6px 8px;border-bottom:1px solid #1e293b}
   table .num{text-align:right;color:#94a3b8;font-variant-numeric:tabular-nums}
   table code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;color:#e2e8f4}
-  .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
   .filters input,.filters select{padding:6px 10px;background:#0f172a;border:1px solid #1e293b;border-radius:4px;color:#e2e8f4;font:13px/1 -apple-system,system-ui,sans-serif}
-  .findings{display:flex;flex-direction:column;gap:8px}
+  .section{margin-bottom:28px}
+  .section-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;user-select:none}
+  .section-title{font-size:15px;font-weight:700;letter-spacing:0.02em}
+  .section-count{font-size:12px;color:#94a3b8;background:#1e293b;padding:2px 8px;border-radius:10px;font-variant-numeric:tabular-nums}
+  .section-toggle{color:#475569;font-size:11px;margin-left:auto}
+  .section-body{display:flex;flex-direction:column;gap:8px}
+  .section-body.collapsed{display:none}
+  .section-empty{color:#475569;font-size:13px;font-style:italic;padding:8px 0}
   .f{background:#0f172a;border:1px solid #1e293b;border-radius:6px;padding:12px 16px;cursor:pointer}
   .f.expanded{border-color:#38bdf8}
   .f-head{display:flex;align-items:center;gap:12px;font-size:13px}
@@ -287,6 +301,7 @@ export function toHTML(scan, meta = {}) {
   .f.expanded .f-body{display:block}
   .f-body pre{background:#020617;padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;line-height:1.5}
   .f-fix{background:#0d1f3d;border-left:3px solid #38bdf8;padding:8px 12px;margin-top:8px;border-radius:0 4px 4px 0}
+  .hidden{display:none!important}
 </style></head>
 <body>
 <header>
@@ -302,45 +317,88 @@ export function toHTML(scan, meta = {}) {
   <div class="filters">
     <input id="q" placeholder="Filter by file, vuln, CWE&hellip;" />
     <select id="sev"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
-    <select id="kind"><option value="">All kinds</option><option>sast</option><option>sca</option><option>secret</option><option>logic</option><option>iac</option></select>
   </div>
-  <div id="findings" class="findings"></div>
+  <div id="findings"></div>
 </main>
 <script>
 const FINDINGS = ${data};
 const SEV_HEX = ${JSON.stringify(SEV_HEX)};
-const root = document.getElementById('findings');
+const SECTIONS = ${JSON.stringify(SECTIONS)};
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
+
+function makeCard(f) {
+  const hex = SEV_HEX[f.severity] || '#888';
+  const div = document.createElement('div');
+  div.className = 'f';
+  div.dataset.sev = f.severity;
+  div.dataset.file = (f.file||'').toLowerCase();
+  div.dataset.vuln = (f.vuln||'').toLowerCase();
+  div.dataset.cwe = (f.cwe||'').toLowerCase();
+  div.innerHTML =
+    '<div class="f-head">' +
+      '<span class="sev-tag" style="background:' + hex + '22;color:' + hex + '">' + esc(f.severity) + '</span>' +
+      '<span class="f-loc">' + esc(f.file) + ':' + esc(f.line) + '</span>' +
+      '<span class="f-vuln">' + esc(f.vuln) + '</span>' +
+      '<span class="f-cwe">' + esc(f.cwe||'') + '</span>' +
+    '</div>' +
+    '<div class="f-body">' +
+      (f.snippet ? '<pre>' + esc(f.snippet) + '</pre>' : '') +
+      (f.masked ? '<pre style="color:#f97316">' + esc(f.masked) + ' (masked)</pre>' : '') +
+      (f.fix && f.fix.description ? '<div class="f-fix"><b>Fix:</b> ' + esc(f.fix.description) + (f.fix.code ? '<pre>' + esc(f.fix.code) + '</pre>' : '') + '</div>' : '') +
+    '</div>';
+  div.addEventListener('click', () => div.classList.toggle('expanded'));
+  return div;
+}
+
 function render() {
   const q = document.getElementById('q').value.toLowerCase();
   const sev = document.getElementById('sev').value;
-  const kind = document.getElementById('kind').value;
+  const root = document.getElementById('findings');
   root.innerHTML = '';
-  for (const f of FINDINGS) {
-    if (sev && f.severity !== sev) continue;
-    if (kind && f.kind !== kind) continue;
-    if (q && !((f.file||'') + (f.vuln||'') + (f.cwe||'')).toLowerCase().includes(q)) continue;
-    const div = document.createElement('div');
-    div.className = 'f';
-    const hex = SEV_HEX[f.severity] || '#888';
-    div.innerHTML =
-      '<div class="f-head">' +
-        '<span class="sev-tag" style="background:' + hex + '22;color:' + hex + '">' + esc(f.severity) + '</span>' +
-        '<span class="f-loc">' + esc(f.file) + ':' + esc(f.line) + '</span>' +
-        '<span class="f-vuln">' + esc(f.vuln) + '</span>' +
-        '<span class="f-cwe">' + esc(f.cwe||'') + '</span>' +
-      '</div>' +
-      '<div class="f-body">' +
-        (f.snippet ? '<pre>' + esc(f.snippet) + '</pre>' : '') +
-        (f.fix && f.fix.description ? '<div class="f-fix"><b>Fix:</b> ' + esc(f.fix.description) + (f.fix.code ? '<pre>' + esc(f.fix.code) + '</pre>' : '') + '</div>' : '') +
-      '</div>';
-    div.addEventListener('click', () => div.classList.toggle('expanded'));
-    root.appendChild(div);
+
+  for (const sec of SECTIONS) {
+    const secFindings = FINDINGS.filter(f => f.kind === sec.kind);
+    const visible = secFindings.filter(f =>
+      (!sev || f.severity === sev) &&
+      (!q || (f.file||'').toLowerCase().includes(q) || (f.vuln||'').toLowerCase().includes(q) || (f.cwe||'').toLowerCase().includes(q))
+    );
+
+    const section = document.createElement('div');
+    section.className = 'section';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'section-header';
+    hdr.innerHTML =
+      '<span style="color:' + sec.color + ';font-size:16px">' + sec.icon + '</span>' +
+      '<span class="section-title" style="color:' + sec.color + '">' + esc(sec.label) + '</span>' +
+      '<span class="section-count">' + visible.length + ' of ' + secFindings.length + '</span>' +
+      '<span class="section-toggle">▾</span>';
+
+    const body = document.createElement('div');
+    body.className = 'section-body';
+
+    hdr.addEventListener('click', () => {
+      const collapsed = body.classList.toggle('collapsed');
+      hdr.querySelector('.section-toggle').textContent = collapsed ? '▸' : '▾';
+    });
+
+    if (visible.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'section-empty';
+      empty.textContent = secFindings.length === 0 ? 'No findings.' : 'All findings filtered out.';
+      body.appendChild(empty);
+    } else {
+      for (const f of visible) body.appendChild(makeCard(f));
+    }
+
+    section.appendChild(hdr);
+    section.appendChild(body);
+    root.appendChild(section);
   }
 }
+
 document.getElementById('q').addEventListener('input', render);
 document.getElementById('sev').addEventListener('change', render);
-document.getElementById('kind').addEventListener('change', render);
 render();
 </script>
 </body></html>`;
