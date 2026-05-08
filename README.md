@@ -153,16 +153,16 @@ claude ~/code/juice-shop
 ```
 
 ```
-Agentic Security — 355 findings across 456 files
+Agentic Security — 319 finding(s) across 456 file(s)
 
-  Critical    69
-  High        109
+  Critical    49
+  High        93
   Medium      167
   Low         1
   Info        9
 ```
 
-355 real bugs. Most are clustered in a handful of files. Welcome to a real codebase.
+319 real bugs. Most are clustered in a handful of files. Welcome to a real codebase.
 
 **Step 3 — get a report**
 
@@ -198,7 +198,7 @@ From now on, scans only show *new* findings added after this point. The pre-comm
 open after.html
 ```
 
-Put `before.html` and `after.html` side by side. In about 10 minutes you went from 69 critical findings to near-zero, and now have a gate that prevents regressions.
+Put `before.html` and `after.html` side by side. In about 10 minutes you went from 49 critical findings to near-zero, and now have a gate that prevents regressions.
 
 ---
 
@@ -268,7 +268,7 @@ sinks:
     severity: high
 ```
 
-**My CI says "355 findings."**
+**My CI says "319 findings."**
 That's a real codebase. Run `/security-baseline save`, commit the baseline file, and from now on you only see *new* problems.
 
 **How is this different from `npm audit`?**
