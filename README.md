@@ -179,7 +179,13 @@ A self-contained interactive page: severity chart, filterable finding list, fix 
 /agentic-security:security-fix-all --severity critical
 ```
 
-Claude works through each critical finding in sequence — parameterized queries instead of string concatenation, `bcrypt` instead of MD5, `execFile` instead of `exec`. Each fix is a normal edit you can review or revert. It runs serially because fixing one bug can change another.
+Before touching any code, Claude will read the findings and summarise what it's about to change. It may ask for confirmation — especially on a well-known codebase like Juice Shop, where it recognises that the vulnerabilities are intentional challenges. Tell it to proceed:
+
+```
+fix all 49 critical vulns
+```
+
+Claude then works through each finding in sequence — parameterized queries instead of string concatenation, `bcrypt` instead of MD5, `execFile` instead of `exec`. Each fix is a normal edit you can review or revert. It runs serially because fixing one bug can change another.
 
 **Step 5 — lock in your progress**
 
