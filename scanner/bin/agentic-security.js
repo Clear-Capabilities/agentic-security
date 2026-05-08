@@ -219,7 +219,7 @@ async function main() {
       case 'fix':      process.exit(await cmdFix(args));
       case 'baseline': process.exit(await cmdBaseline(args));
       case 'setup':    process.exit(await cmdSetup(args));
-      case 'version':  console.log('agentic-security 0.2.3'); process.exit(0);
+      case 'version':  console.log('agentic-security 0.2.5'); process.exit(0);
       case 'help': case '--help': case '-h': case undefined:
         console.log(USAGE); process.exit(cmd ? 0 : 1);
       default:
