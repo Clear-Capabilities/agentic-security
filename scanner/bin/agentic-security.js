@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
-import { toJSON, toMarkdown, toSARIF, toCLI, toHTML, exitCodeFor, normalizeFindings } from '../src/report/index.js';
+import { toJSON, toMarkdown, toSARIF, toCLI, toHTML, toSummary, exitCodeFor, normalizeFindings } from '../src/report/index.js';
 
 const USAGE = `agentic-security <command> [options]
 
@@ -17,7 +17,7 @@ Commands:
 
 Options:
   --only sast|sca|secrets      Limit scan to one pillar
-  --format json|md|sarif|cli|html  Report format (default: cli)
+  --format json|md|sarif|cli|html|summary  Report format (default: summary)
   --no-network                 Skip OSV/registry queries (offline mode)
   --verbose                    Include fix bodies in CLI output
   --output <file>              Write report to file instead of stdout
@@ -44,7 +44,7 @@ function parseArgs(argv) {
 
 async function cmdScan(args) {
   const target = args._[1] || '.';
-  const format = args.flags.format || 'cli';
+  const format = args.flags.format || 'summary';
   const verbose = !!args.flags.verbose;
   const output = args.flags.output;
   const noNet = !!args.flags['no-network'];
@@ -71,7 +71,8 @@ async function cmdScan(args) {
   else if (format === 'md' || format === 'markdown') body = toMarkdown(scan, meta);
   else if (format === 'sarif') body = JSON.stringify(toSARIF(scan, meta), null, 2);
   else if (format === 'html') body = toHTML(scan, meta);
-  else body = toCLI(scan, { verbose });
+  else if (format === 'cli') body = toCLI(scan, { verbose });
+  else body = toSummary(scan);
 
   if (output) await fsp.writeFile(output, body);
   else process.stdout.write(body + '\n');
@@ -141,9 +142,10 @@ description: Run a full security scan (SAST + SCA + Secrets) on this project or 
 argument-hint: "[path]"
 ---
 \`\`\`bash
-node ${bundle} scan \${1:-.} --format cli --verbose; ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec
+node ${bundle} scan \${1:-.}; ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec
 \`\`\`
-After the scan, findings are saved to \`.agentic-security/last-scan.json\`.
+Output is a grouped summary: severity counts, finding types by frequency, top affected files.
+Use \`--format cli\` for the full per-finding list. Findings are always saved to \`.agentic-security/last-scan.json\`.
 If you see critical findings, run \`/security-fix-all --severity critical\` to remediate.
 `,
     'security-fix.md': `---
@@ -228,7 +230,7 @@ After processing all findings, print a summary table:
 Then re-run the scan so suppressions take effect:
 
 \`\`\`bash
-node ${bundle} scan . --format cli; ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec
+node ${bundle} scan .; ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec
 \`\`\`
 
 Do not suppress anything you are not certain is a false positive. When in doubt, mark it TP and leave remediation to \`/security-fix\`.
@@ -256,7 +258,7 @@ async function main() {
       case 'fix':      process.exit(await cmdFix(args));
       case 'baseline': process.exit(await cmdBaseline(args));
       case 'setup':    process.exit(await cmdSetup(args));
-      case 'version':  console.log('agentic-security 0.3.1'); process.exit(0);
+      case 'version':  console.log('agentic-security 0.3.5'); process.exit(0);
       case 'help': case '--help': case '-h': case undefined:
         console.log(USAGE); process.exit(cmd ? 0 : 1);
       default:

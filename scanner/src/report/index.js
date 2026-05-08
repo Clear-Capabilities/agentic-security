@@ -452,6 +452,77 @@ export function toCLI(scan, { verbose=false, color=true }={}){
   return lines.join('\n');
 }
 
+export function toSummary(scan, { color=true }={}){
+  const findings = normalizeFindings(scan);
+  const lines = [];
+  const c = (s, code) => color ? `${code}${s}${RESET}` : s;
+
+  const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const f of findings) counts[f.severity] = (counts[f.severity]||0) + 1;
+
+  lines.push(c(BOLD + `Agentic Security — ${findings.length} finding(s) across ${scan.filesScanned||0} file(s)`, ''));
+  lines.push('');
+  lines.push(
+    `  ${c('Critical', SEV_COLOR.critical)}  ${String(counts.critical).padEnd(4)}` +
+    `  ${c('High', SEV_COLOR.high)}  ${String(counts.high).padEnd(4)}` +
+    `  ${c('Medium', SEV_COLOR.medium)}  ${String(counts.medium).padEnd(4)}` +
+    `  ${c('Low', SEV_COLOR.low)}  ${String(counts.low).padEnd(4)}` +
+    `  ${c('Info', SEV_COLOR.info)}  ${counts.info}`
+  );
+  lines.push('');
+
+  // Group findings by severity then vuln type, show top 3 examples per group
+  const SEVERITIES = ['critical', 'high', 'medium', 'low'];
+  for (const sev of SEVERITIES) {
+    const sevFindings = findings.filter(f => f.severity === sev);
+    if (!sevFindings.length) continue;
+
+    const label = sev.charAt(0).toUpperCase() + sev.slice(1);
+    lines.push(c(`${label} (${sevFindings.length})`, SEV_COLOR[sev]));
+
+    // Group by vuln type
+    const byVuln = new Map();
+    for (const f of sevFindings) {
+      if (!byVuln.has(f.vuln)) byVuln.set(f.vuln, []);
+      byVuln.get(f.vuln).push(f);
+    }
+
+    const vulnEntries = [...byVuln.entries()].sort((a, b) => b[1].length - a[1].length);
+    const shown = vulnEntries.slice(0, 6);
+    const hiddenTypes = vulnEntries.length - shown.length;
+
+    for (let i = 0; i < shown.length; i++) {
+      const [vuln, instances] = shown[i];
+      const isLast = i === shown.length - 1 && hiddenTypes === 0;
+      const prefix = isLast ? '└──' : '├──';
+      const examples = instances.slice(0, 2).map(f => `${f.file}:${f.line}`).join(', ');
+      const more = instances.length > 2 ? c(` +${instances.length - 2} more`, DIM) : '';
+      lines.push(`  ${prefix} ${c(`${vuln} ×${instances.length}`, BOLD)}  ${c(examples, DIM)}${more}`);
+    }
+    if (hiddenTypes > 0) {
+      lines.push(`  └── ${c(`…and ${hiddenTypes} more vulnerability type${hiddenTypes > 1 ? 's' : ''}`, DIM)}`);
+    }
+    lines.push('');
+  }
+
+  // Top files by finding count
+  const byFile = new Map();
+  for (const f of findings.filter(x => x.severity !== 'info')) {
+    byFile.set(f.file, (byFile.get(f.file) || 0) + 1);
+  }
+  const topFiles = [...byFile.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (topFiles.length) {
+    lines.push(c('Top files', BOLD));
+    for (const [file, count] of topFiles) {
+      lines.push(`  ${c(String(count).padStart(3), SEV_COLOR.high)}  ${file}`);
+    }
+    lines.push('');
+  }
+
+  lines.push(c(`Run /security-report to generate a full interactive HTML report.`, DIM));
+  return lines.join('\n');
+}
+
 export function exitCodeFor(scan){
   const findings = normalizeFindings(scan);
   if (findings.some(f=>f.severity==='critical')) return 3;
