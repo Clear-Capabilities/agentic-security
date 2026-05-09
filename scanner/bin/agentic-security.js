@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// agentic-security CLI — scan, fix, baseline, version.
+// agentic-security CLI — scan, fix, setup, version.
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
@@ -15,19 +15,18 @@ const USAGE = `agentic-security <command> [options]
 Commands:
   scan [path]                  Full SAST + SCA + Secrets sweep (default: cwd)
   fix --finding <id> [--apply] Apply fix for a single finding
-  baseline save|diff [path]    Manage finding baselines
   setup [project-dir]          Install /security-* shortcut commands into a project
   version                      Print version
 
 Options:
-  --only sast|sca|secrets      Limit scan to one pillar
+  --only sast|sca|secrets         Limit scan to one pillar
   --format <fmt>                  Output format: cli, json, md, sarif, html, cyclonedx, spdx, pbom (default: cli)
   --sca-reachable-only            Only surface SCA findings where the vulnerable function is reachable
-  --ingest-sarif <path-or-glob>  Merge external SARIF (Semgrep, gitleaks, Trivy, etc.) into this scan
-  --scorecard                    Enrich components with OSSF Scorecard scores (makes outbound API calls)
-  --no-network                 Skip OSV/registry queries (offline mode)
-  --verbose                    Include fix bodies in CLI output
-  --output <file>              Write report to file instead of stdout
+  --ingest-sarif <path-or-glob>   Merge external SARIF (Semgrep, gitleaks, Trivy, etc.) into this scan
+  --scorecard                     Enrich components with OSSF Scorecard scores (makes outbound API calls)
+  --no-network                    Skip OSV/registry queries (offline mode)
+  --verbose                       Include fix bodies in CLI output
+  --output <file>                 Write report to file instead of stdout
 
 Exit codes:
   0 = clean   1 = low/medium   2 = high   3 = critical   4 = error`;
@@ -110,7 +109,7 @@ async function cmdScan(args) {
   if (output) await fsp.writeFile(output, body);
   else process.stdout.write(body + '\n');
 
-  // Always persist last scan for /security-fix and /security-report
+  // Persist last scan for /security-fix and /security-report
   const stateDir = path.join(path.resolve(target), '.agentic-security');
   await fsp.mkdir(stateDir, { recursive: true });
   await fsp.writeFile(path.join(stateDir, 'last-scan.json'), JSON.stringify(toJSON(scan, meta), null, 2));
@@ -133,34 +132,6 @@ async function cmdFix(args) {
   }
   console.log('\nv0.1 emits the canonical fix template above. The `security-fixer` Claude subagent applies it to the file.');
   return 0;
-}
-
-async function cmdBaseline(args) {
-  const sub = args._[1];
-  const target = path.resolve(args._[2] || '.');
-  const blPath = path.join(target, '.agentic-security', 'baseline.json');
-  if (sub === 'save') {
-    const lastPath = path.join(target, '.agentic-security', 'last-scan.json');
-    if (!fs.existsSync(lastPath)) { console.error('Run `agentic-security scan` first.'); return 4; }
-    await fsp.copyFile(lastPath, blPath);
-    console.log(`Baseline saved → ${blPath}`);
-    return 0;
-  }
-  if (sub === 'diff') {
-    if (!fs.existsSync(blPath)) { console.error('No baseline. Run `agentic-security baseline save` first.'); return 4; }
-    const baseline = JSON.parse(await fsp.readFile(blPath, 'utf8'));
-    const { scan, meta } = await runScan(target, {});
-    const current = toJSON(scan, meta);
-    const baseIds = new Set(baseline.findings.map(f => f.id));
-    const curIds = new Set(current.findings.map(f => f.id));
-    const added = current.findings.filter(f => !baseIds.has(f.id));
-    const fixed = baseline.findings.filter(f => !curIds.has(f.id));
-    console.log(`Added: ${added.length}    Fixed: ${fixed.length}`);
-    for (const f of added) console.log(`  + [${f.severity}] ${f.file}:${f.line}  ${f.vuln}`);
-    for (const f of fixed) console.log(`  - [${f.severity}] ${f.file}:${f.line}  ${f.vuln}`);
-    return added.some(f => f.severity === 'critical') ? 3 : added.length ? 1 : 0;
-  }
-  console.error('baseline subcommand: save | diff'); return 4;
 }
 
 async function cmdSetup(args) {
@@ -194,17 +165,8 @@ Hand the finding to the security-fixer subagent: read the file, apply the fix te
 description: Remediate every finding at or above a severity threshold (default: critical).
 argument-hint: "[--severity critical|high|medium]"
 ---
+
 Read \`.agentic-security/last-scan.json\`. For every finding at or above \`\${1:-critical}\` severity, dispatch the security-fixer subagent in sequence — not in parallel, as each fix may change subsequent findings. After each batch, re-run \`/security-scan-all\` to confirm. Stop and report if any test fails.
-`,
-    'security-baseline.md': `---
-description: Save current findings as a baseline, or diff the current scan against the saved baseline.
-argument-hint: "save|diff [path]"
----
-\`\`\`bash
-node ${bundle} baseline \${1} \${2:-.}
-\`\`\`
-- \`save\` — lock current findings as baseline; future scans only show NEW problems
-- \`diff\` — re-scan and report regressions (added findings) and fixes (removed findings)
 `,
     'security-report.md': `---
 description: Generate an HTML security report (or JSON / Markdown / SARIF).
@@ -287,11 +249,10 @@ async function main() {
   const cmd = args._[0];
   try {
     switch (cmd) {
-      case 'scan':     process.exit(await cmdScan(args));
-      case 'fix':      process.exit(await cmdFix(args));
-      case 'baseline': process.exit(await cmdBaseline(args));
-      case 'setup':    process.exit(await cmdSetup(args));
-      case 'version':  console.log('agentic-security 0.3.6'); process.exit(0);
+      case 'scan':    process.exit(await cmdScan(args));
+      case 'fix':     process.exit(await cmdFix(args));
+      case 'setup':   process.exit(await cmdSetup(args));
+      case 'version': console.log('agentic-security 0.9.0'); process.exit(0);
       case 'help': case '--help': case '-h': case undefined:
         console.log(USAGE); process.exit(cmd ? 0 : 1);
       default:

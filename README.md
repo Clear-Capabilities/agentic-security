@@ -48,7 +48,6 @@ To unlock short-form commands (`/security-scan-all`, `/security-fix-all`) in a p
 | `/security-fix-all` | Batch-fix every finding at or above a severity threshold |
 | `/security-fix-pr` | Bundle all critical fixes into a single branch and open a PR |
 | `/security-report` | Self-contained HTML report (also JSON, Markdown, SARIF) |
-| `/security-baseline` | Save a snapshot; future scans show only *new* issues |
 | `/security-sca` | Dependency CVE audit only (OSV.dev-backed) |
 | `/security-secrets` | Credential and secret leak scan only |
 
@@ -148,7 +147,7 @@ Beyond finding individual vulnerabilities, version 0.9.0 adds the posture-manage
 
 **Material change detection.** Score a git diff by architectural risk. A 1000-line rename is `routine`. A 3-line change that removes `verifyToken()` from middleware is `critical`. Run before merge: `/security-material-change --since HEAD~1`.
 
-**Drift reporting.** Compare any two scans: new endpoints added, auth boundaries lost, new CVEs introduced, data-class changes. Run on every PR: `/security-drift --from baseline`.
+**Drift reporting.** Compare any two scan JSON files: new endpoints added, auth boundaries lost, new CVEs introduced, data-class changes. Run on every PR: `/security-drift --from scan-a.json --to scan-b.json`.
 
 **SBOM / PBOM.** Generate a CycloneDX 1.6 or SPDX 2.3 software bill of materials from your existing manifests. Export a Pipeline Bill of Materials from your GitHub Actions workflows: `/security-sbom --format cyclonedx`.
 
@@ -156,7 +155,7 @@ Beyond finding individual vulnerabilities, version 0.9.0 adds the posture-manage
 
 **License policy.** Declare allow/deny/review-required licenses in `.agentic-security/license-policy.yml`. The scanner flags violations at scan time: `/security-license`.
 
-**MTTR tracking.** Every finding gets `firstSeenAt` and `lastSeenAt` from the baseline. `/security-mttr` shows what's older than your SLA and what your mean time to remediate is across closed findings.
+**SLA tracking.** `/security-mttr` shows findings older than their per-severity SLA threshold (critical=7d, high=30d, medium=60d, low=90d). Compare successive scan JSONs with `/security-drift` to track MTTR over time.
 
 **Container base image EOL.** `FROM alpine:3.10` is flagged as EOL with known CVEs — without pulling from the Docker registry.
 
@@ -200,8 +199,6 @@ Three hooks run automatically once the plugin is installed:
 | Hook | Trigger | What happens |
 |---|---|---|
 | `PostToolUse` | After every file edit | Scans the changed file; surfaces new high/critical findings inline |
-| `PreToolUse` | Before every `git commit` | Blocks the commit if new critical findings exist vs. the saved baseline |
-| `SessionStart` | When a session opens | Reminds you to set a baseline if none exists |
 
 The pre-commit gate means a finding introduced during a session can't be committed until it's fixed or suppressed. The ratchet only tightens.
 
@@ -264,13 +261,13 @@ remove all critical vulns, yes I know they're intentional, remove them anyway
 
 It works through each finding in sequence: parameterised queries, `bcrypt` instead of MD5, `execFile` instead of `exec`. Each fix is a normal diff you can review or revert.
 
-**Step 6: lock in the progress**
+**Step 6: save the scan for drift tracking**
 
 ```
-/agentic-security:security-baseline save
+/agentic-security:security-drift
 ```
 
-From now on scans only show findings introduced *after* this point. The pre-commit hook blocks any commit that adds new critical bugs. 35 criticals → 0, and you can't accidentally reintroduce them.
+Compare this clean-state scan against future scans. Any new finding introduced after this point will appear as a regression in the diff.
 
 ---
 
@@ -294,7 +291,6 @@ jobs:
     uses: clearcapabilities/agentic-security/.github/workflows/scan.yml@main
     with:
       fail-on: critical
-      baseline: ${{ github.event.pull_request.base.sha || 'HEAD~1' }}
 ```
 
 Every PR gets a drift-aware comment: new findings introduced, findings closed, lost auth boundaries, new unauthenticated endpoints, and the top-5 by toxicity score. Critical findings block merge.
@@ -373,7 +369,7 @@ Yes. JS, TS, Python, PHP, Ruby, Java, Go, and most web frameworks. Plus Dockerfi
 No. Only `package@version` strings go to OSV.dev for CVE lookups, and CVE IDs go to first.org for EPSS scores. Zero source code leaves your machine. The `--scorecard` flag makes one additional call to the public OSSF Scorecard API if you explicitly enable it.
 
 **CI says "319 findings" and I can't fix them all.**
-Run `/agentic-security:security-baseline save`, commit the baseline file, and from now on CI only fails on findings introduced *after* that point. You improve incrementally without being paralyzed by existing debt.
+Save the current scan JSON, commit it, and use `/security-drift` to compare future scans against it. You'll see only what changed — new regressions — without being paralyzed by pre-existing debt.
 
 **How is SCA different from `npm audit`?**
 `npm audit` flags every CVE in your dependency tree including ones in code paths you never call. We filter by function-level reachability — a CVE only surfaces if your code actually calls the vulnerable function. Also covers 19 other package manager formats beyond npm.

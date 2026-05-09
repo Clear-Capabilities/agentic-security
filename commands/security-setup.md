@@ -48,18 +48,6 @@ argument-hint: "[--severity critical|high|medium]"
 Read \`.agentic-security/last-scan.json\`. For every finding whose severity is at or above \`\${1:-critical}\`, dispatch the security-fixer subagent in sequence (not in parallel — each fix may invalidate later findings). After each batch, re-run \`/security-scan\` to confirm fixes landed. Stop and report if a fix's tests fail.
 CMDEOF
 
-cat > .claude/commands/security-baseline.md << CMDEOF
----
-description: Save current findings as a baseline, or diff the current scan against the saved baseline.
-argument-hint: "save|diff [path]"
----
-\`\`\`bash
-node $BUNDLE baseline \${1} \${2:-.}
-\`\`\`
-- \`save\` — copy \`.agentic-security/last-scan.json\` to \`.agentic-security/baseline.json\`
-- \`diff\` — re-scan and compare against the baseline, reporting regressions and fixed findings
-CMDEOF
-
 cat > .claude/commands/security-report.md << CMDEOF
 ---
 description: Generate an HTML security report (or JSON/Markdown/SARIF).
@@ -91,7 +79,7 @@ node $BUNDLE scan \${1:-.} --only secrets --format cli
 CMDEOF
 
 echo "✓ Installed shortcuts in .claude/commands/:"
-echo "  /security-scan-all, /security-fix, /security-fix-all, /security-baseline"
+echo "  /security-scan-all, /security-fix, /security-fix-all"
 echo "  /security-report, /security-sca, /security-secrets"
 echo ""
 echo "These work in this project. Re-run /agentic-security:security-setup in other projects."
