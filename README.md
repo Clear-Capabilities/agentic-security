@@ -19,27 +19,6 @@ AI writes code faster than any security review can keep up with. It glues user i
 
 ---
 
-## See it in action
-
-```
-You:              Add a /search endpoint that queries products by name.
-
-Claude:           [writes code, gluing user input straight into SQL]
-
-agentic-security: ⚠  1 new HIGH finding from this edit
-                  [HIGH] CWE-89 SQL Injection in routes/products.js:42
-                  → exec: db.query("SELECT * FROM products WHERE name = '" + req.query.name + "'")
-
-You:              /security-fix-all --critical
-
-Claude:           Rewrote to parameterised query. Re-ran scan, finding gone.
-                  routes/products.js:42  db.query("SELECT … WHERE name = ?", [req.query.name])
-```
-
-Zero friction between "Claude wrote something dangerous" and "it's fixed."
-
----
-
 ## Install
 
 ```
