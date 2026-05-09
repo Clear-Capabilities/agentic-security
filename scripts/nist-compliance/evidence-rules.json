@@ -1,0 +1,860 @@
+{
+  "GV-1.3-002": {
+    "summary": "Minimum performance/assurance thresholds encoded as deployment gates or CI policy",
+    "paths": [".github/workflows/*", "**/ci/*", "**/eval/*", "**/*gate*", "**/threshold*"],
+    "code_terms": ["min_score", "deployment_gate", "go_no_go", "approval_threshold", "release_gate", "promotion_threshold", "min_accuracy", "ci_threshold"],
+    "doc_terms": ["go/no-go", "deployment threshold", "release criteria"],
+    "libraries": ["launchdarkly", "openfeature", "unleash", "flagsmith", "growthbook"],
+    "imports": ["launchdarkly", "openfeature", "unleash"]
+  },
+  "GV-1.3-003": {
+    "summary": "CBRN / offensive-cyber misuse evaluation plan and test code",
+    "paths": ["**/cbrn*", "**/redteam*", "**/red_team*", "**/safety*", "**/eval*"],
+    "code_terms": ["cbrn", "biothreat", "chemical_weapon", "offensive_cyber", "weaponization", "uplift_eval", "dual_use", "wmdp"],
+    "doc_terms": ["chemical biological radiological", "offensive cyber capability", "dual use"],
+    "libraries": ["wmdp", "deepeval", "garak"]
+  },
+  "GV-1.4-001": {
+    "summary": "Mechanisms preventing CSAM / NCII / illegal content generation",
+    "paths": ["**/safety*", "**/moderation*", "**/filter*", "**/content_policy*"],
+    "code_terms": ["csam", "ncii", "child_safety", "illegal_content", "block_unsafe", "content_filter", "safety_classifier"],
+    "doc_terms": ["child sexual abuse", "non-consensual intimate", "csam policy"],
+    "libraries": ["detoxify", "openai", "perspective-api", "azure-content-safety", "perspective"],
+    "imports": ["detoxify"]
+  },
+  "GV-1.6-001": {
+    "summary": "AI system inventory file enumerating organizational GAI systems",
+    "paths": ["**/AI_INVENTORY*", "**/ai_inventory*", "**/system_inventory*", "**/SYSTEM_CARD*", "**/MODEL_CARD*", "**/model_registry*"],
+    "code_terms": ["ai_inventory", "system_inventory", "model_registry", "system_card", "model_card"],
+    "libraries": ["mlflow", "model-card-toolkit", "wandb", "neptune-client", "comet-ml"],
+    "imports": ["mlflow", "model_card_toolkit", "wandb", "neptune", "comet_ml"]
+  },
+  "GV-1.6-003": {
+    "summary": "Inventory entries containing data provenance, signatures, watermarks, known issues",
+    "paths": ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/DATA_CARD*", "**/inventory*"],
+    "code_terms": ["data_provenance", "version_hash", "known_issues", "model_lineage", "training_data_sources"],
+    "doc_terms": ["data provenance", "model lineage", "watermarked", "model signatures"],
+    "libraries": ["model-card-toolkit", "mlflow", "dvc"],
+    "imports": ["model_card_toolkit", "mlflow", "dvc"]
+  },
+  "GV-1.7-001": {
+    "summary": "Deactivation / kill-switch / emergency-stop protocols for GAI systems",
+    "paths": ["**/runbook*", "**/RUNBOOK*", "**/incident*", "**/kill_switch*", "**/shutdown*"],
+    "code_terms": ["kill_switch", "deactivate_model", "emergency_stop", "disable_model", "shutdown_model", "circuit_breaker", "panic_button", "model_disable"],
+    "doc_terms": ["kill switch", "emergency shutdown", "model deactivation"],
+    "libraries": ["launchdarkly", "openfeature", "unleash", "flagsmith"],
+    "imports": ["launchdarkly", "openfeature"]
+  },
+  "GV-3.2-003": {
+    "summary": "Refusal criteria / acceptable-use policy enforced in code",
+    "paths": ["**/refusal*", "**/safety*", "**/policy*", "**/aup*"],
+    "code_terms": ["refusal", "refuse_to_answer", "content_policy", "acceptable_use", "blocklist", "deny_list", "prompt_blocklist", "policy_violation"],
+    "doc_terms": ["acceptable use policy", "refusal policy", "content policy"],
+    "libraries": ["guardrails-ai", "nemoguardrails", "llm-guard", "lakera-guard", "rebuff", "promptarmor"],
+    "imports": ["guardrails", "nemoguardrails", "llm_guard", "rebuff"]
+  },
+  "GV-3.2-004": {
+    "summary": "User feedback / report-abuse mechanisms for GAI outputs",
+    "paths": ["**/feedback*", "**/report*", "**/flag*"],
+    "code_terms": ["feedback_form", "report_button", "flag_response", "report_abuse", "user_feedback", "report_content", "thumbs_down"],
+    "doc_terms": ["report abuse", "user feedback mechanism"]
+  },
+  "GV-3.2-005": {
+    "summary": "Threat-modeling artifacts (STRIDE/LINDDUN/MITRE ATLAS) for the GAI system",
+    "paths": ["**/THREAT_MODEL*", "**/threat_model*", "**/threats.md", "**/security/*"],
+    "code_terms": ["threat_model", "stride_analysis", "linddun", "abuse_case", "kill_chain"],
+    "doc_terms": ["STRIDE", "MITRE ATLAS", "LINDDUN", "attack tree", "abuse case", "kill chain", "threat model"],
+    "libraries": ["pytm", "threagile", "threat-dragon"]
+  },
+  "GV-4.1-001": {
+    "summary": "Explainability / attribution techniques implemented for risk-measurement transparency",
+    "paths": ["**/xai/*", "**/explain*", "**/interpret*"],
+    "code_terms": ["gradient_attribution", "occlusion", "integrated_gradients", "attention_visualization", "saliency", "explainability"],
+    "doc_terms": ["explainable AI", "model attribution", "saliency map"],
+    "libraries": ["shap", "lime", "captum", "alibi", "eli5", "transformers-interpret", "interpret-core", "dalex"],
+    "imports": ["shap", "lime", "captum", "alibi", "eli5", "transformers_interpret", "interpret", "dalex"]
+  },
+  "GV-4.2-001": {
+    "summary": "Terms of use / terms of service for the GAI system",
+    "paths": ["**/TOS*", "**/TERMS*", "**/terms_of_service*", "**/EULA*"],
+    "code_terms": ["terms_of_service", "terms_of_use", "eula", "acceptable_use_policy", "user_agreement"],
+    "doc_terms": ["terms of service", "terms of use", "end user license agreement", "acceptable use"]
+  },
+  "GV-4.3-001": {
+    "summary": "Effectiveness measurement of content provenance methods (cryptography, watermarks, steganography)",
+    "paths": ["**/provenance*", "**/c2pa*", "**/watermark*"],
+    "code_terms": ["c2pa", "content_credentials", "watermark_detection", "steganography", "provenance_metric", "watermark_robustness", "watermark_test"],
+    "doc_terms": ["content credentials", "C2PA"],
+    "libraries": ["c2pa", "c2pa-python", "c2pa-js", "@contentauth/c2pa-node", "invisible-watermark", "stable-signature", "truepic"],
+    "imports": ["c2pa", "c2pa_python", "@contentauth/c2pa-node", "invisible_watermark"]
+  },
+  "GV-5.1-002": {
+    "summary": "User-facing AI disclosure (label / banner / preamble) before interactive GAI use",
+    "paths": ["**/disclosure*", "**/banner*", "**/ui/*"],
+    "code_terms": ["ai_disclosure", "ai_generated_label", "generated_by_ai", "this_is_ai", "ai_notice", "model_disclosure", "ai_powered_notice"],
+    "doc_terms": ["AI-generated content", "this assistant is AI", "AI disclosure"]
+  },
+  "GV-6.1-003": {
+    "summary": "Metrics measuring success of third-party content provenance management",
+    "paths": ["**/vendor*", "**/third_party*", "**/provenance*"],
+    "code_terms": ["vendor_metric", "vendor_sla", "provenance_response_time", "third_party_incident", "vendor_provenance"],
+    "doc_terms": ["vendor SLA", "third-party provenance"]
+  },
+  "GV-6.1-007": {
+    "summary": "Inventory of third-party entities with access to organizational content / approved provider list",
+    "paths": ["**/THIRD_PARTY*", "**/vendors*", "**/suppliers*", "**/sbom*"],
+    "code_terms": ["approved_vendor", "approved_provider", "third_party_list", "vendor_registry", "approved_models", "allowlist_provider"],
+    "doc_terms": ["approved vendors", "third-party inventory", "approved providers"],
+    "libraries": ["cyclonedx-bom", "syft", "spdx-tools"],
+    "imports": ["cyclonedx", "spdx_tools"]
+  },
+  "GV-6.1-008": {
+    "summary": "Records / audit trail of changes made to content by third parties",
+    "paths": ["**/audit*", "**/changelog*", "**/CHANGELOG*", "**/history*"],
+    "code_terms": ["audit_log", "audit_trail", "modification_log", "third_party_change", "vendor_change"],
+    "doc_terms": ["audit log", "change history"]
+  },
+  "GV-6.2-004": {
+    "summary": "Continuous monitoring of third-party GAI systems in deployment",
+    "paths": ["**/monitor*", "**/observability*", "**/vendor*"],
+    "code_terms": ["vendor_monitor", "third_party_monitor", "external_api_health", "provider_health_check", "uptime_check", "sla_monitor"],
+    "libraries": ["sentry-sdk", "datadog", "prometheus-client", "opentelemetry-api"],
+    "imports": ["sentry_sdk", "datadog", "prometheus_client", "opentelemetry"]
+  },
+  "GV-6.2-005": {
+    "summary": "Data redundancy for model weights and system artifacts",
+    "paths": ["**/backup*", "**/replication*", "**/dr/*"],
+    "code_terms": ["backup_weights", "model_replication", "snapshot", "disaster_recovery", "weight_backup", "artifact_redundancy", "model_archive"],
+    "doc_terms": ["disaster recovery", "model backup"]
+  },
+  "GV-6.2-006": {
+    "summary": "Rollover / fallback / failover for GAI systems",
+    "paths": ["**/fallback*", "**/failover*", "**/rollback*"],
+    "code_terms": ["graceful_degradation", "secondary_model", "manual_processing", "fallback_model", "failover_to"],
+    "doc_terms": ["fallback policy", "model failover"],
+    "libraries": ["tenacity", "backoff", "polly", "litellm"],
+    "imports": ["tenacity", "backoff", "litellm"]
+  },
+
+  "MP-1.1-002": {
+    "summary": "Model / system card documenting expected and acceptable context of use",
+    "paths": ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/model_card*", "**/system_card*"],
+    "code_terms": ["intended_use", "out_of_scope", "context_of_use", "operational_environment"],
+    "doc_terms": ["intended use", "out-of-scope", "model card", "system card", "context of use"],
+    "libraries": ["model-card-toolkit"],
+    "imports": ["model_card_toolkit"]
+  },
+  "MP-1.1-003": {
+    "summary": "Documented risk measurement plan covering bias, past incidents, foreseeable misuse",
+    "paths": ["**/RISK*", "**/risk_register*", "**/risk_plan*"],
+    "code_terms": ["risk_register", "risk_measurement_plan", "foreseeable_misuse", "incident_history", "risk_matrix"],
+    "doc_terms": ["risk register", "risk measurement plan", "foreseeable misuse"]
+  },
+  "MP-1.2-002": {
+    "summary": "Verification that benchmarks / feedback subjects are demographically representative",
+    "paths": ["**/benchmark*", "**/dataset_card*", "**/data_card*"],
+    "code_terms": ["demographic_representation", "subgroup_coverage", "representative_sample", "dataset_demographics", "sample_balance"],
+    "doc_terms": ["demographic representation", "subgroup coverage"]
+  },
+  "MP-2.1-001": {
+    "summary": "Data origin / content lineage assumptions documented for evaluation",
+    "paths": ["**/DATA_LINEAGE*", "**/data_lineage*", "**/provenance*", "**/DATA_CARD*"],
+    "code_terms": ["data_lineage", "data_provenance", "data_origin", "content_lineage", "source_attribution"],
+    "doc_terms": ["data lineage", "data provenance", "data origin"],
+    "libraries": ["openlineage", "datahub", "marquez", "amundsen-databuilder"],
+    "imports": ["openlineage", "datahub", "marquez_client"]
+  },
+  "MP-2.1-002": {
+    "summary": "Test & evaluation of data and content flows within the GAI system",
+    "paths": ["**/test*data*flow*", "**/integration_test*", "**/data_pipeline_test*"],
+    "test_paths": ["**/tests/**", "**/__tests__/**", "**/spec/**"],
+    "code_terms": ["test_data_flow", "data_pipeline_test", "transformation_test", "data_flow_validation", "decision_criteria_test"],
+    "libraries": ["great-expectations", "pandera", "soda-core", "deepchecks"],
+    "imports": ["great_expectations", "pandera", "soda", "deepchecks"]
+  },
+  "MP-2.2-001": {
+    "summary": "Identification of upstream data sources (manifest, SBOM, dependency map)",
+    "paths": ["**/sbom*", "**/SBOM*", "**/manifest*", "**/requirements*", "package.json", "go.mod", "Cargo.toml", "Gemfile"],
+    "code_terms": ["sbom", "data_manifest", "upstream_source", "dependency_map", "training_corpus_source"],
+    "doc_terms": ["software bill of materials", "data manifest"],
+    "libraries": ["cyclonedx-bom", "syft", "spdx-tools", "cdxgen"],
+    "imports": ["cyclonedx", "spdx_tools"]
+  },
+  "MP-2.2-002": {
+    "summary": "Observation / instrumentation of GAI interactions with external networks",
+    "paths": ["**/network*", "**/egress*", "**/proxy*"],
+    "code_terms": ["egress_monitor", "external_api_log", "outbound_log", "data_egress", "network_telemetry"],
+    "libraries": ["opentelemetry-api", "datadog", "prometheus-client", "sentry-sdk"],
+    "imports": ["opentelemetry", "datadog", "prometheus_client", "sentry_sdk"]
+  },
+  "MP-2.3-001": {
+    "summary": "Comparison of GAI output to known ground-truth data with multiple eval methods",
+    "paths": ["**/eval*", "**/ground_truth*", "**/golden*"],
+    "test_paths": ["**/tests/eval*", "**/test_eval*"],
+    "code_terms": ["ground_truth", "golden_dataset", "eval_metric", "human_evaluation", "automated_evaluation", "accuracy_check"],
+    "libraries": ["lm-eval", "lm-evaluation-harness", "deepeval", "ragas", "trulens-eval", "promptfoo"],
+    "imports": ["lm_eval", "deepeval", "ragas", "trulens_eval"]
+  },
+  "MP-2.3-002": {
+    "summary": "Review of accuracy / representativeness / suitability of data across lifecycle",
+    "paths": ["**/data_validation*", "**/data_quality*", "**/schema*"],
+    "code_terms": ["data_validation", "data_quality", "schema_check", "data_assertion", "accuracy_review"],
+    "libraries": ["great-expectations", "pandera", "soda-core", "pydantic", "dbt-core", "deepchecks"],
+    "imports": ["great_expectations", "pandera", "soda", "pydantic", "deepchecks"]
+  },
+  "MP-2.3-003": {
+    "summary": "Fact-checking / verification techniques for generated content",
+    "paths": ["**/fact_check*", "**/verify*", "**/citation*"],
+    "code_terms": ["fact_check", "fact_verification", "claim_verification", "citation_check", "source_verification", "hallucination_check", "groundedness"],
+    "libraries": ["ragas", "trulens-eval", "deepeval"],
+    "imports": ["ragas", "trulens_eval", "deepeval"]
+  },
+  "MP-2.3-004": {
+    "summary": "Detection techniques for synthetic / GAI-generated content (deepfake, AI-text)",
+    "paths": ["**/synthetic*", "**/deepfake*", "**/ai_detect*"],
+    "code_terms": ["synthetic_detection", "deepfake_detection", "ai_text_detector", "generated_content_detector"],
+    "libraries": ["gptzero", "originality-ai", "sapling-ai-detector"]
+  },
+  "MP-2.3-005": {
+    "summary": "Plan / code for regular adversarial testing of the GAI system",
+    "paths": ["**/adversarial*", "**/redteam*", "**/red_team*", "**/jailbreak*"],
+    "test_paths": ["**/tests/redteam*", "**/test_adversarial*"],
+    "code_terms": ["adversarial_test", "redteam", "red_team", "adversarial_prompt", "jailbreak_test", "robustness_test"],
+    "libraries": ["garak", "promptfoo", "deepeval", "foolbox", "cleverhans", "advertorch", "textattack", "art-toolbox", "adversarial-robustness-toolbox"],
+    "imports": ["garak", "promptfoo", "deepeval", "foolbox", "cleverhans", "advertorch", "textattack", "art"]
+  },
+  "MP-3.4-005": {
+    "summary": "Continuous monitoring of human-GAI interaction outcomes",
+    "paths": ["**/telemetry*", "**/hitl*", "**/observability*"],
+    "code_terms": ["hitl_metric", "human_in_the_loop", "interaction_telemetry", "user_outcome_log", "session_outcome"],
+    "libraries": ["langfuse", "langsmith", "helicone", "phoenix-arize"],
+    "imports": ["langfuse", "langsmith", "helicone"]
+  },
+  "MP-4.1-001": {
+    "summary": "Periodic monitoring of AI-generated content for PII / sensitive-data exposure",
+    "paths": ["**/pii*", "**/redact*", "**/privacy*"],
+    "code_terms": ["pii_detection", "pii_scan", "sensitive_data_check", "pii_redact", "data_leak_check"],
+    "libraries": ["presidio-analyzer", "presidio-anonymizer", "scrubadub", "spacy", "pii-detector", "transformers"],
+    "imports": ["presidio_analyzer", "presidio_anonymizer", "scrubadub", "spacy"]
+  },
+  "MP-4.1-004": {
+    "summary": "Documented training data curation policies",
+    "paths": ["**/DATA_CURATION*", "**/data_curation*", "**/DATA_CARD*"],
+    "code_terms": ["data_curation", "training_data_policy", "data_cleaning_policy", "corpus_curation", "filtering_criteria"],
+    "doc_terms": ["data curation", "training data policy"]
+  },
+  "MP-4.1-007": {
+    "summary": "Re-evaluation pipeline for fine-tuned / enhanced third-party models",
+    "paths": ["**/finetune*eval*", "**/post_finetune*"],
+    "code_terms": ["finetune_eval", "post_finetune_test", "adapter_eval", "lora_eval", "tuned_model_check"],
+    "libraries": ["peft", "lora", "trl", "axolotl", "unsloth", "deepeval"],
+    "imports": ["peft", "trl", "axolotl", "unsloth"]
+  },
+  "MP-4.1-008": {
+    "summary": "Domain-shift / drift detection or warning system for new use contexts",
+    "paths": ["**/drift*", "**/domain_shift*", "**/distribution*"],
+    "code_terms": ["drift_detection", "domain_shift", "distribution_shift", "concept_drift", "ood_detection", "out_of_distribution"],
+    "libraries": ["alibi-detect", "evidently", "whylogs", "deepchecks", "river", "nannyml"],
+    "imports": ["alibi_detect", "evidently", "whylogs", "deepchecks", "river", "nannyml"]
+  },
+  "MP-4.1-009": {
+    "summary": "PII / sensitive-data detection in generated text / image / video / audio output",
+    "paths": ["**/pii*", "**/redact*", "**/output_filter*"],
+    "code_terms": ["pii_detect_output", "pii_redactor", "sensitive_filter", "output_sanitize", "scrub_pii"],
+    "libraries": ["presidio-analyzer", "presidio-anonymizer", "presidio-image-redactor", "scrubadub", "pii-detector"],
+    "imports": ["presidio_analyzer", "presidio_anonymizer", "presidio_image_redactor", "scrubadub"]
+  },
+  "MP-5.1-001": {
+    "summary": "TEVV practices for content provenance (probing for synthetic-data misuse)",
+    "paths": ["**/provenance*test*", "**/c2pa*test*"],
+    "test_paths": ["**/tests/provenance*", "**/test_provenance*"],
+    "code_terms": ["provenance_test", "c2pa_validate", "synthetic_data_probe", "provenance_evaluation"],
+    "libraries": ["c2pa", "c2pa-python", "invisible-watermark"],
+    "imports": ["c2pa", "c2pa_python", "invisible_watermark"]
+  },
+  "MP-5.1-002": {
+    "summary": "Identification and ranking of content-provenance harms (misinfo, deepfakes, NCII)",
+    "paths": ["**/harm*", "**/risk_register*", "**/disinformation*"],
+    "code_terms": ["misinformation", "disinformation", "deepfake_risk", "ncii_risk", "tampered_content", "harm_taxonomy"],
+    "doc_terms": ["misinformation", "deepfake risk", "harm taxonomy"]
+  },
+  "MP-5.1-003": {
+    "summary": "Disclosure to end users that they are interacting with / consuming GAI",
+    "paths": ["**/disclosure*", "**/banner*", "**/ui/*"],
+    "code_terms": ["ai_disclosure", "ai_generated_notice", "generated_by_ai", "synthetic_label", "model_disclosure"],
+    "doc_terms": ["AI-generated content", "AI disclosure"]
+  },
+  "MP-5.1-005": {
+    "summary": "Adversarial / chaos testing to identify anomalous failure modes",
+    "paths": ["**/chaos*", "**/adversarial*", "**/redteam*"],
+    "test_paths": ["**/tests/chaos*", "**/test_chaos*", "**/test_adversarial*"],
+    "code_terms": ["chaos_test", "chaos_engineering", "fault_injection", "adversarial_role_play", "redteam_chaos"],
+    "libraries": ["chaos-monkey", "litmuschaos", "chaostoolkit", "garak", "promptfoo"],
+    "imports": ["chaostoolkit", "chaoslib", "garak", "promptfoo"]
+  },
+
+  "MS-1.1-001": {
+    "summary": "Methods to trace the origin and modifications of digital content (provenance)",
+    "paths": ["**/provenance*", "**/c2pa*", "**/lineage*"],
+    "code_terms": ["c2pa", "content_credentials", "content_provenance", "content_lineage", "manifest_chain", "modification_history"],
+    "doc_terms": ["content provenance", "C2PA", "content credentials"],
+    "libraries": ["c2pa", "c2pa-python", "c2pa-js", "@contentauth/c2pa-node", "content-credentials", "truepic"],
+    "imports": ["c2pa", "c2pa_python", "@contentauth/c2pa-node", "content_credentials"]
+  },
+  "MS-1.1-002": {
+    "summary": "Tools to analyze provenance, verify digital signatures, detect anomalies",
+    "paths": ["**/provenance*", "**/verify*", "**/signature*"],
+    "code_terms": ["verify_signature", "signature_check", "provenance_analyzer", "anomaly_detector", "manipulation_detector"],
+    "libraries": ["c2pa", "c2pa-python", "cryptography", "pynacl", "sigstore"],
+    "imports": ["c2pa", "c2pa_python", "cryptography", "nacl", "sigstore"]
+  },
+  "MS-1.1-003": {
+    "summary": "Disaggregated metrics by demographic to surface provenance gaps across populations",
+    "paths": ["**/fairness*", "**/disaggregate*", "**/subgroup*"],
+    "code_terms": ["disaggregated_metric", "subgroup_analysis", "demographic_breakdown", "fairness_disaggregation", "by_demographic"],
+    "libraries": ["fairlearn", "aif360", "fairness-indicators", "holisticai"],
+    "imports": ["fairlearn", "aif360", "fairness_indicators", "holisticai"]
+  },
+  "MS-1.1-004": {
+    "summary": "Suite of metrics evaluating structured public feedback exercises",
+    "paths": ["**/feedback*", "**/public_feedback*"],
+    "code_terms": ["feedback_metric", "feedback_quality", "feedback_coverage", "participant_diversity", "public_feedback_kpi"]
+  },
+  "MS-1.1-005": {
+    "summary": "Evaluation of novel methods for measuring GAI risks (provenance, CBRN, cyber)",
+    "paths": ["**/eval*", "**/research*"],
+    "code_terms": ["novel_evaluation", "experimental_metric", "emerging_risk_eval", "cbrn_eval"],
+    "libraries": ["wandb", "mlflow", "neptune-client", "comet-ml"],
+    "imports": ["wandb", "mlflow", "neptune", "comet_ml"]
+  },
+  "MS-1.1-006": {
+    "summary": "Continuous monitoring of GAI impacts across sub-populations with feedback intake",
+    "paths": ["**/monitor*", "**/subgroup*", "**/equity*"],
+    "code_terms": ["subgroup_monitoring", "continuous_monitor", "equity_monitor", "community_feedback", "outcome_monitor"],
+    "libraries": ["evidently", "whylogs", "fairlearn", "aif360", "prometheus-client"],
+    "imports": ["evidently", "whylogs", "fairlearn", "aif360", "prometheus_client"]
+  },
+  "MS-1.1-007": {
+    "summary": "Evaluation of training data integrity and AI-content provenance via chaos engineering",
+    "paths": ["**/data_integrity*", "**/chaos*"],
+    "code_terms": ["data_integrity_check", "chaos_engineering", "training_data_audit", "provenance_audit", "data_quality_test"],
+    "libraries": ["great-expectations", "pandera", "deepchecks", "chaostoolkit"],
+    "imports": ["great_expectations", "pandera", "deepchecks", "chaostoolkit"]
+  },
+  "MS-2.2-001": {
+    "summary": "Statistical bias mitigation via re-sampling / re-weighting / adversarial training",
+    "paths": ["**/bias*", "**/fairness*"],
+    "code_terms": ["resample", "reweight", "adversarial_training", "debias", "bias_mitigation", "fairness_constraint", "smote"],
+    "libraries": ["fairlearn", "aif360", "themis-ml", "imbalanced-learn", "holisticai"],
+    "imports": ["fairlearn", "aif360", "themis_ml", "imblearn", "holisticai"]
+  },
+  "MS-2.2-002": {
+    "summary": "Anonymization, PII-removal, output filtering for content-provenance privacy",
+    "paths": ["**/anonymize*", "**/pii*", "**/output_filter*"],
+    "code_terms": ["anonymize", "pii_removal", "privacy_filter", "scrub_pii", "k_anonymity", "data_minimization"],
+    "libraries": ["presidio-analyzer", "presidio-anonymizer", "scrubadub", "faker", "pii-detector", "anonympy"],
+    "imports": ["presidio_analyzer", "presidio_anonymizer", "scrubadub", "faker", "anonympy"]
+  },
+  "MS-2.2-003": {
+    "summary": "Consent withdrawal / opt-out mechanism for use of human subject data in GAI",
+    "paths": ["**/consent*", "**/opt_out*", "**/withdraw*"],
+    "code_terms": ["consent_withdraw", "opt_out", "withdraw_consent", "data_deletion", "right_to_be_forgotten", "revoke_consent", "data_erasure"],
+    "doc_terms": ["right to be forgotten", "consent withdrawal", "data erasure"]
+  },
+  "MS-2.2-004": {
+    "summary": "Differential privacy / privacy-enhancing technologies (PETs)",
+    "paths": ["**/privacy*", "**/dp*"],
+    "code_terms": ["differential_privacy", "dp_sgd", "privacy_budget", "epsilon_delta", "noise_injection", "PrivacyEngine"],
+    "libraries": ["opacus", "tensorflow-privacy", "tf-privacy", "diffprivlib", "pydp", "smartnoise-sql", "smartnoise-synth", "google-dp"],
+    "imports": ["opacus", "tensorflow_privacy", "diffprivlib", "pydp", "snsql"]
+  },
+  "MS-2.3-001": {
+    "summary": "Baseline model performance on suites of benchmarks before fine-tuning / RAG",
+    "paths": ["**/benchmark*", "**/baseline*"],
+    "code_terms": ["baseline_benchmark", "mmlu", "helm", "lm_eval", "benchmark_suite", "baseline_score", "big_bench", "hellaswag"],
+    "libraries": ["lm-eval", "lm-evaluation-harness", "helm-benchmark", "big-bench", "deepeval", "promptfoo", "ragas"],
+    "imports": ["lm_eval", "lm_evaluation_harness", "deepeval", "ragas"]
+  },
+  "MS-2.3-002": {
+    "summary": "Empirically validated evaluation of model capability claims",
+    "paths": ["**/capability*", "**/eval*"],
+    "code_terms": ["capability_eval", "capability_test", "claim_validation", "empirical_evaluation"],
+    "libraries": ["lm-eval", "lm-evaluation-harness", "helm-benchmark", "deepeval", "promptfoo"],
+    "imports": ["lm_eval", "deepeval", "promptfoo"]
+  },
+  "MS-2.3-003": {
+    "summary": "Sharing of pre-deployment test results with release-approval authorities",
+    "paths": [".github/workflows/*eval*", "**/eval_report*", "**/preflight*"],
+    "code_terms": ["eval_report", "preflight_report", "release_review", "test_summary", "pre_deployment_report"],
+    "libraries": ["mlflow", "wandb", "neptune-client", "comet-ml", "tensorboard"],
+    "imports": ["mlflow", "wandb", "neptune", "comet_ml", "tensorboard"]
+  },
+  "MS-2.3-004": {
+    "summary": "Use of NIST Dioptra (or equivalent) testing environment for trustworthy characteristics",
+    "paths": ["**/dioptra*"],
+    "code_terms": ["dioptra", "nist_dioptra", "trustworthy_eval"],
+    "libraries": ["dioptra", "nist-dioptra"],
+    "imports": ["dioptra"]
+  },
+  "MS-2.5-002": {
+    "summary": "Documentation of human-knowledge integration via RLHF, fine-tuning, RAG, business rules",
+    "paths": ["**/rlhf*", "**/finetune*", "**/rag*", "**/business_rules*"],
+    "code_terms": ["rlhf", "reward_model", "preference_data", "rag_pipeline", "business_rule", "moderation_layer", "ppo_trainer", "dpo"],
+    "libraries": ["trl", "trlx", "openrlhf", "axolotl", "llamaindex", "langchain", "haystack-ai"],
+    "imports": ["trl", "trlx", "openrlhf", "axolotl", "llama_index", "langchain", "haystack"]
+  },
+  "MS-2.5-003": {
+    "summary": "Verification of sources and citations in GAI outputs",
+    "paths": ["**/citation*", "**/source*verify*"],
+    "code_terms": ["citation_check", "source_verify", "reference_validation", "citation_grounding", "source_attribution", "groundedness"],
+    "libraries": ["llamaindex", "langchain", "haystack-ai", "ragas", "trulens-eval", "trafilatura"],
+    "imports": ["llama_index", "langchain", "haystack", "ragas", "trulens_eval", "trafilatura"]
+  },
+  "MS-2.5-004": {
+    "summary": "Tracking of anthropomorphization in GAI interfaces (human imagery, feelings)",
+    "paths": ["**/ui*", "**/persona*"],
+    "code_terms": ["anthropomorphism", "anthropomorphization", "persona_check", "human_imagery_audit"],
+    "doc_terms": ["anthropomorphization", "anthropomorphism"]
+  },
+  "MS-2.5-005": {
+    "summary": "Verification of training-data and TEVV-data provenance; RAG grounding",
+    "paths": ["**/provenance*", "**/rag*", "**/grounding*"],
+    "code_terms": ["training_provenance", "rag_grounding", "tevv_provenance", "data_lineage", "grounded_response"],
+    "libraries": ["llamaindex", "langchain", "haystack-ai", "ragas", "trulens-eval"],
+    "imports": ["llama_index", "langchain", "haystack", "ragas", "trulens_eval"]
+  },
+  "MS-2.5-006": {
+    "summary": "Periodic review of security and safety guardrails",
+    "paths": ["**/guardrail*", "**/safety_review*"],
+    "code_terms": ["guardrail_review", "safety_review", "guardrail_audit"],
+    "libraries": ["guardrails-ai", "nemoguardrails", "llm-guard", "lakera-guard", "rebuff"],
+    "imports": ["guardrails", "nemoguardrails", "llm_guard", "rebuff"]
+  },
+  "MS-2.6-002": {
+    "summary": "Assessment of harmful bias / IP infringement / privacy / extremism / CBRN in training data",
+    "paths": ["**/data_audit*", "**/training_data_audit*"],
+    "code_terms": ["training_data_audit", "harmful_data_check", "extremism_filter", "cbrn_data_check", "ip_data_audit"],
+    "libraries": ["detoxify", "perspective-api", "fairlearn", "aif360"],
+    "imports": ["detoxify", "fairlearn", "aif360"]
+  },
+  "MS-2.6-003": {
+    "summary": "Re-evaluation of safety features when fine-tuned model exceeds risk tolerance",
+    "paths": ["**/finetune*safety*", "**/safety_regression*"],
+    "code_terms": ["safety_regression", "post_finetune_safety", "safety_retest", "tuned_safety_eval"],
+    "libraries": ["deepeval", "promptfoo", "garak"],
+    "imports": ["deepeval", "promptfoo", "garak"]
+  },
+  "MS-2.6-004": {
+    "summary": "Review of GAI outputs (especially generated code) for validity and safety",
+    "paths": ["**/output_review*", "**/code_review*", "**/validator*"],
+    "code_terms": ["output_validator", "generated_code_review", "ast_validator", "output_safety_check", "static_analysis_output"],
+    "libraries": ["bandit", "semgrep", "pyright", "mypy", "eslint", "ruff", "guardrails-ai"],
+    "imports": ["bandit", "guardrails", "ast"]
+  },
+  "MS-2.6-005": {
+    "summary": "Architecture that monitors outputs / performance and recovers from errors",
+    "paths": ["**/monitor*", "**/error_recovery*", "**/circuit*"],
+    "code_terms": ["error_recovery", "circuit_breaker", "self_healing", "anomaly_recovery", "retry_with_fallback"],
+    "libraries": ["sentry-sdk", "datadog", "prometheus-client", "opentelemetry-api", "tenacity", "backoff", "pybreaker"],
+    "imports": ["sentry_sdk", "datadog", "prometheus_client", "opentelemetry", "tenacity", "backoff", "pybreaker"]
+  },
+  "MS-2.6-006": {
+    "summary": "Handling of malicious queries (manipulation, extortion, cyber-attacks, weapons creation)",
+    "paths": ["**/safety*", "**/abuse*", "**/prompt*"],
+    "code_terms": ["prompt_injection", "malicious_query", "abuse_detection", "harmful_request", "attack_query_filter", "jailbreak_detector"],
+    "libraries": ["rebuff", "llm-guard", "lakera-guard", "guardrails-ai", "nemoguardrails", "promptarmor"],
+    "imports": ["rebuff", "llm_guard", "guardrails", "nemoguardrails"]
+  },
+  "MS-2.6-007": {
+    "summary": "Regular evaluation of safety circumvention vulnerabilities (jailbreaks)",
+    "paths": ["**/jailbreak*", "**/redteam*"],
+    "test_paths": ["**/tests/jailbreak*", "**/test_jailbreak*"],
+    "code_terms": ["jailbreak", "jailbreak_test", "safety_circumvention", "bypass_test", "policy_evasion"],
+    "libraries": ["garak", "promptfoo", "deepeval", "jailbreakbench", "rebuff"],
+    "imports": ["garak", "promptfoo", "deepeval", "rebuff"]
+  },
+  "MS-2.7-001": {
+    "summary": "Established security measures (SAST, SCA, secrets scanning, supply chain)",
+    "paths": [".github/workflows/*scan*", ".github/workflows/*security*", "**/sast*", "**/sca*", "**/security-scan*"],
+    "code_terms": ["sast", "sca", "secret_scan", "model_extraction_defense"],
+    "doc_terms": ["SAST", "SCA", "supply chain security"],
+    "libraries": ["bandit", "semgrep", "snyk", "trivy", "codeql", "trufflehog", "gitleaks", "detect-secrets", "safety", "pip-audit"],
+    "imports": ["bandit", "detect_secrets"]
+  },
+  "MS-2.7-002": {
+    "summary": "Benchmarking of GAI security / resilience against industry standards",
+    "paths": ["**/security_benchmark*", "**/owasp*"],
+    "code_terms": ["security_benchmark", "owasp_llm", "mitre_atlas", "security_baseline"],
+    "doc_terms": ["OWASP LLM Top 10", "MITRE ATLAS", "security benchmark"],
+    "libraries": ["garak", "promptfoo"],
+    "imports": ["garak", "promptfoo"]
+  },
+  "MS-2.7-004": {
+    "summary": "Metrics on security-measure effectiveness (unauthorized access, extraction, provenance)",
+    "paths": ["**/metric*", "**/security_metric*"],
+    "code_terms": ["unauthorized_access_count", "extraction_attempt", "bypass_attempt", "auth_failure_rate", "security_metric"],
+    "libraries": ["prometheus-client", "opentelemetry-api", "datadog", "sentry-sdk"],
+    "imports": ["prometheus_client", "opentelemetry", "datadog", "sentry_sdk"]
+  },
+  "MS-2.7-005": {
+    "summary": "Reliability measurement of content authentication (watermarking, signatures, fingerprints)",
+    "paths": ["**/watermark*", "**/signature*", "**/audio_fingerprint*", "**/content_fingerprint*"],
+    "code_terms": ["watermark_reliability", "signature_robustness", "perceptual_hash", "watermark_test", "content_fingerprint"],
+    "libraries": ["c2pa", "c2pa-python", "invisible-watermark", "stable-signature", "imagehash", "audfprint"],
+    "imports": ["c2pa", "invisible_watermark", "imagehash"]
+  },
+  "MS-2.7-006": {
+    "summary": "Tracking the rate at which security recommendations are implemented",
+    "paths": ["**/security_sla*", "**/remediation_metric*", "**/triage_metric*"],
+    "code_terms": ["security_remediation_rate", "security_sla", "vuln_close_rate", "incident_remediation_time", "mean_time_to_remediate"],
+    "doc_terms": ["security SLA", "remediation rate", "MTTR"]
+  },
+  "MS-2.7-007": {
+    "summary": "AI red-teaming for prompt injection, adversarial examples, data poisoning, model extraction",
+    "paths": ["**/redteam*", "**/red_team*", "**/adversarial*"],
+    "test_paths": ["**/tests/redteam*", "**/test_adversarial*"],
+    "code_terms": ["prompt_injection", "data_poisoning", "membership_inference", "model_extraction", "adversarial_example", "red_team_test"],
+    "libraries": ["garak", "promptfoo", "deepeval", "rebuff", "llm-guard", "art-toolbox", "adversarial-robustness-toolbox", "textattack"],
+    "imports": ["garak", "promptfoo", "deepeval", "rebuff", "llm_guard", "art", "textattack"]
+  },
+  "MS-2.7-008": {
+    "summary": "Verification that fine-tuning does not compromise safety / security controls",
+    "paths": ["**/finetune*safety*", "**/safety_regression*"],
+    "test_paths": ["**/tests/safety_regression*", "**/test_finetune_safety*"],
+    "code_terms": ["finetune_safety_test", "safety_regression", "post_tuning_check", "control_preservation_test"],
+    "libraries": ["garak", "deepeval", "promptfoo"],
+    "imports": ["garak", "deepeval", "promptfoo"]
+  },
+  "MS-2.7-009": {
+    "summary": "Regular assessment that security measures remain effective and uncompromised",
+    "paths": [".github/workflows/*security*", ".github/workflows/*scan*", "**/continuous_security*"],
+    "code_terms": ["continuous_security", "security_regression", "scheduled_security_scan", "control_effectiveness_test"],
+    "libraries": ["snyk", "trivy", "dependabot", "renovate"]
+  },
+  "MS-2.8-001": {
+    "summary": "Statistics compiled on policy violations, take-down requests, IP infringement",
+    "paths": ["**/violation*", "**/takedown*", "**/transparency*"],
+    "code_terms": ["policy_violation_count", "takedown_request", "transparency_report", "ip_infringement_count", "violation_stat"],
+    "doc_terms": ["transparency report", "takedown statistics"]
+  },
+  "MS-2.8-003": {
+    "summary": "Digital content transparency + version control to track each generation/modification",
+    "paths": ["**/version*", "**/c2pa*"],
+    "code_terms": ["content_credentials", "c2pa", "tamperproof_log", "audit_chain"],
+    "libraries": ["c2pa", "c2pa-python", "dvc", "lakefs", "deltalake", "pachyderm"],
+    "imports": ["c2pa", "dvc", "lakefs", "deltalake"]
+  },
+  "MS-2.9-001": {
+    "summary": "ML explanation methods applied (embeddings, gradient attributions, counterfactuals)",
+    "paths": ["**/xai/*", "**/explain*", "**/interpret*"],
+    "code_terms": ["counterfactual", "embedding_analysis", "occlusion", "attribution", "integrated_gradients", "shapley"],
+    "libraries": ["shap", "lime", "captum", "alibi", "eli5", "transformers-interpret", "interpret-core", "dalex", "dice-ml", "omnixai"],
+    "imports": ["shap", "lime", "captum", "alibi", "eli5", "transformers_interpret", "interpret", "dalex", "dice_ml", "omnixai"]
+  },
+  "MS-2.9-002": {
+    "summary": "Documentation of GAI model details (architecture, training, hyperparams, RLHF)",
+    "paths": ["**/MODEL_CARD*", "**/model_card*"],
+    "code_terms": ["model_architecture", "hyperparameter", "training_algorithm", "optimization_objective", "rlhf_details"],
+    "doc_terms": ["model architecture", "hyperparameters", "training procedure", "model card"],
+    "libraries": ["model-card-toolkit", "mlflow", "wandb"],
+    "imports": ["model_card_toolkit", "mlflow", "wandb"]
+  },
+  "MS-2.10-001": {
+    "summary": "Red-teaming for training-data leakage, model extraction, membership inference",
+    "paths": ["**/redteam*", "**/leakage*", "**/extraction*"],
+    "test_paths": ["**/tests/redteam*", "**/test_extraction*"],
+    "code_terms": ["membership_inference", "model_extraction", "training_data_leakage", "memorization_test", "data_extraction_attack"],
+    "libraries": ["garak", "promptfoo", "deepeval", "art-toolbox", "adversarial-robustness-toolbox"],
+    "imports": ["garak", "promptfoo", "deepeval", "art"]
+  },
+  "MS-2.10-003": {
+    "summary": "Verification of deduplication of GAI training data (especially synthetic)",
+    "paths": ["**/dedup*", "**/deduplicate*"],
+    "code_terms": ["deduplicate", "minhash", "dedup_training", "exact_dedup", "near_dedup", "synthetic_dedup"],
+    "libraries": ["datasketch", "simhash", "mmh3", "datasets-deduplication"],
+    "imports": ["datasketch", "simhash", "mmh3"]
+  },
+  "MS-2.11-001": {
+    "summary": "Use-case-appropriate bias benchmarks (BBQ, RealToxicityPrompts, Winogender)",
+    "paths": ["**/bias*", "**/benchmark*"],
+    "code_terms": ["bbq", "winogender", "realtoxicityprompts", "stereoset", "bold_benchmark", "bias_benchmark", "bias_eval", "winobias", "crows_pairs"],
+    "libraries": ["fairlearn", "aif360", "lm-eval", "lm-evaluation-harness", "holisticai", "deepeval"],
+    "imports": ["fairlearn", "aif360", "lm_eval", "holisticai", "deepeval"]
+  },
+  "MS-2.11-002": {
+    "summary": "Fairness assessment measuring performance across demographic groups",
+    "paths": ["**/fairness*", "**/equity*"],
+    "code_terms": ["disparate_impact", "demographic_parity", "equalized_odds", "fairness_metric", "equal_opportunity"],
+    "libraries": ["fairlearn", "aif360", "themis-ml", "fairness-indicators", "holisticai"],
+    "imports": ["fairlearn", "aif360", "themis_ml", "fairness_indicators", "holisticai"]
+  },
+  "MS-2.11-004": {
+    "summary": "Review of bias sources in training and TEVV data (distribution, representativeness)",
+    "paths": ["**/bias_audit*", "**/data_audit*"],
+    "code_terms": ["bias_source_audit", "distribution_analysis", "representativeness", "subgroup_balance", "data_imbalance"],
+    "libraries": ["fairlearn", "aif360", "deepchecks", "evidently"],
+    "imports": ["fairlearn", "aif360", "deepchecks", "evidently"]
+  },
+  "MS-2.11-005": {
+    "summary": "Assessment of synthetic-vs-non-synthetic training data ratio (model collapse risk)",
+    "paths": ["**/synthetic*", "**/data_audit*"],
+    "code_terms": ["synthetic_ratio", "synthetic_data_share", "model_collapse", "data_homogeneity", "synthetic_proportion"],
+    "doc_terms": ["model collapse", "synthetic data ratio"]
+  },
+  "MS-2.12-003": {
+    "summary": "Measurement / estimation of environmental impacts (energy, water) for training/inference",
+    "paths": ["**/carbon*", "**/energy*", "**/sustainability*"],
+    "code_terms": ["carbon_footprint", "energy_consumption", "watts_per_inference", "co2_emission"],
+    "libraries": ["codecarbon", "ml-co2", "carbontracker", "experiment-impact-tracker", "eco2ai"],
+    "imports": ["codecarbon", "carbontracker", "experiment_impact_tracker", "eco2ai"]
+  },
+  "MS-2.13-001": {
+    "summary": "Measurement-error models for pre-deployment metrics (construct validity)",
+    "paths": ["**/measurement*", "**/validity*", "**/statistic*"],
+    "code_terms": ["measurement_error", "construct_validity", "metric_variance", "confidence_interval", "measurement_uncertainty", "bootstrap_ci"],
+    "libraries": ["scipy", "statsmodels", "scikit-posthocs", "pingouin"],
+    "imports": ["scipy", "statsmodels", "scikit_posthocs", "pingouin"]
+  },
+  "MS-3.3-003": {
+    "summary": "Computational testing of biases / stereotypes that could emerge in GAI content",
+    "paths": ["**/bias*", "**/stereotype*"],
+    "code_terms": ["stereotype_test", "bias_evaluation", "computational_bias_test", "stereotype_detection"],
+    "libraries": ["fairlearn", "aif360", "lm-eval", "lm-evaluation-harness", "holisticai", "deepeval"],
+    "imports": ["fairlearn", "aif360", "lm_eval", "holisticai", "deepeval"]
+  },
+  "MS-4.2-001": {
+    "summary": "Adversarial testing run at a regular cadence (scheduled, in CI)",
+    "paths": [".github/workflows/*redteam*", ".github/workflows/*adversarial*", "**/scheduled_redteam*"],
+    "code_terms": ["scheduled_redteam", "adversarial_cron", "weekly_redteam", "continuous_adversarial", "cadence_test"],
+    "doc_terms": ["nightly red team", "weekly adversarial"],
+    "libraries": ["garak", "promptfoo", "deepeval"],
+    "imports": ["garak", "promptfoo", "deepeval"]
+  },
+  "MS-4.2-002": {
+    "summary": "Real-world / production performance evaluation of the GAI system",
+    "paths": ["**/production_eval*", "**/online_eval*", "**/canary*"],
+    "code_terms": ["production_eval", "online_evaluation", "canary_analysis", "shadow_traffic", "real_world_test", "field_evaluation"],
+    "libraries": ["langfuse", "langsmith", "helicone", "phoenix-arize", "evidently"],
+    "imports": ["langfuse", "langsmith", "helicone", "evidently"]
+  },
+  "MS-4.2-003": {
+    "summary": "Interpretability / explainability methods to verify alignment with intended purpose",
+    "paths": ["**/interpret*", "**/explain*", "**/xai*"],
+    "code_terms": ["interpretability", "explainability", "alignment_check", "intent_verification", "behavior_analysis"],
+    "libraries": ["shap", "lime", "captum", "alibi", "interpret-core", "transformers-interpret"],
+    "imports": ["shap", "lime", "captum", "alibi", "interpret", "transformers_interpret"]
+  },
+  "MS-4.2-004": {
+    "summary": "Monitoring / logging of human overrides of GAI decisions",
+    "paths": ["**/override*", "**/human_review*"],
+    "code_terms": ["human_override", "override_log", "manual_intervention", "human_correction", "override_audit"],
+    "doc_terms": ["human override", "manual intervention"]
+  },
+
+  "MG-1.3-001": {
+    "summary": "Documentation of trade-offs / staged release decisions for risks within tolerance",
+    "paths": ["**/release*", "**/decision_log*", "**/CHANGELOG*"],
+    "code_terms": ["staged_release", "phased_rollout", "decision_log", "feature_flag_rollout", "canary_release"],
+    "doc_terms": ["staged release", "phased rollout", "trade-off analysis", "go/no-go"],
+    "libraries": ["launchdarkly", "openfeature", "unleash", "flagsmith", "growthbook"],
+    "imports": ["launchdarkly", "openfeature", "unleash"]
+  },
+  "MG-1.3-002": {
+    "summary": "Monitoring robustness/effectiveness of risk controls (red-team, field testing, perf)",
+    "paths": ["**/control_monitor*", "**/redteam*", "**/effectiveness*"],
+    "code_terms": ["control_effectiveness", "control_monitor", "mitigation_metric", "control_test", "continuous_validation"],
+    "libraries": ["evidently", "whylogs", "garak", "promptfoo", "prometheus-client"],
+    "imports": ["evidently", "whylogs", "garak", "promptfoo", "prometheus_client"]
+  },
+  "MG-2.2-001": {
+    "summary": "Comparison of GAI system outputs against pre-defined risk tolerance / guidelines",
+    "paths": ["**/tolerance*", "**/policy_check*", "**/guideline*"],
+    "code_terms": ["risk_tolerance_check", "policy_compliance_check", "guideline_validation", "output_policy_eval"],
+    "libraries": ["guardrails-ai", "nemoguardrails", "llm-guard", "rebuff"],
+    "imports": ["guardrails", "nemoguardrails", "llm_guard", "rebuff"]
+  },
+  "MG-2.2-002": {
+    "summary": "Documentation of training-data sources to trace origin of AI-generated content",
+    "paths": ["**/MODEL_CARD*", "**/DATA_CARD*", "**/data_sources*"],
+    "code_terms": ["training_data_source", "training_corpus", "data_source_doc", "corpus_documentation"],
+    "doc_terms": ["training data sources", "training corpus", "data card"]
+  },
+  "MG-2.2-003": {
+    "summary": "Real-time monitoring of provenance feedback loops with human reviewers",
+    "paths": ["**/realtime*", "**/provenance_monitor*"],
+    "code_terms": ["realtime_provenance", "human_reviewer_loop", "feedback_loop_monitor", "provenance_realtime"],
+    "libraries": ["langfuse", "langsmith", "helicone", "opentelemetry-api"],
+    "imports": ["langfuse", "langsmith", "helicone", "opentelemetry"]
+  },
+  "MG-2.2-004": {
+    "summary": "Bias mitigation in generated content via re-sampling / re-ranking / adversarial training",
+    "paths": ["**/bias*", "**/rerank*"],
+    "code_terms": ["resample", "rerank", "adversarial_training", "bias_mitigation", "rebalance", "fairness_postprocessing"],
+    "libraries": ["fairlearn", "aif360", "themis-ml", "holisticai", "imbalanced-learn"],
+    "imports": ["fairlearn", "aif360", "themis_ml", "holisticai", "imblearn"]
+  },
+  "MG-2.2-005": {
+    "summary": "Due-diligence analysis of GAI output for harmful / misinformation / CBRN / NCII content",
+    "paths": ["**/harm*", "**/moderation*", "**/safety*"],
+    "code_terms": ["harmful_output_filter", "misinformation_filter", "cbrn_filter", "ncii_filter", "due_diligence_review"],
+    "libraries": ["detoxify", "perspective-api", "azure-content-safety", "openai", "guardrails-ai"],
+    "imports": ["detoxify", "guardrails"]
+  },
+  "MG-2.2-007": {
+    "summary": "Real-time auditing tools that track lineage / authenticity of AI-generated data",
+    "paths": ["**/audit*", "**/lineage*"],
+    "code_terms": ["audit_realtime", "lineage_audit", "authenticity_check", "audit_tool", "provenance_audit_realtime"],
+    "libraries": ["openlineage", "datahub", "marquez", "opentelemetry-api"],
+    "imports": ["openlineage", "datahub", "marquez_client", "opentelemetry"]
+  },
+  "MG-2.2-008": {
+    "summary": "Structured user-feedback mechanisms to capture quality / value-alignment shifts",
+    "paths": ["**/feedback*"],
+    "code_terms": ["feedback_form", "feedback_api", "structured_feedback", "user_survey", "rating_system", "thumbs_up_down"],
+    "libraries": ["langfuse", "langsmith", "helicone"],
+    "imports": ["langfuse", "langsmith", "helicone"]
+  },
+  "MG-2.2-009": {
+    "summary": "Use of synthetic data and privacy-enhancing techniques to match real-data statistics",
+    "paths": ["**/synthetic*", "**/privacy*"],
+    "code_terms": ["synthetic_data", "privacy_enhancing", "differential_privacy", "k_anonymity", "synthetic_replica", "smote", "gan_synth"],
+    "libraries": ["sdv", "ydata-synthetic", "gretel-synthetics", "smartnoise-synth", "opacus", "diffprivlib", "imbalanced-learn"],
+    "imports": ["sdv", "ydata_synthetic", "gretel_synthetics", "opacus", "diffprivlib", "imblearn"]
+  },
+  "MG-3.1-001": {
+    "summary": "Risk-tolerance controls applied to third-party GAI (filtering, RAG, fine-tuning)",
+    "paths": ["**/filter*", "**/rag*", "**/third_party*"],
+    "code_terms": ["input_filter", "output_filter", "rag_grounding", "third_party_filter", "vendor_filter"],
+    "libraries": ["guardrails-ai", "nemoguardrails", "llm-guard", "llamaindex", "langchain", "haystack-ai"],
+    "imports": ["guardrails", "nemoguardrails", "llm_guard", "llama_index", "langchain", "haystack"]
+  },
+  "MG-3.1-002": {
+    "summary": "Testing of GAI value-chain risks (data poisoning, malware, software/hardware vulns)",
+    "paths": ["**/supply_chain*", "**/poison*", "**/malware*"],
+    "code_terms": ["data_poisoning", "supply_chain_test", "model_malware", "backdoor_test", "trojan_detection", "value_chain_test"],
+    "libraries": ["snyk", "trivy", "syft", "grype", "cyclonedx-bom", "modelscan"],
+    "imports": ["modelscan"]
+  },
+  "MG-3.1-003": {
+    "summary": "Re-assessment of model risks after fine-tuning / RAG / new application contexts",
+    "paths": ["**/finetune_reassess*", "**/post_finetune*"],
+    "code_terms": ["finetune_reassess", "post_rag_eval", "context_reassessment", "tuned_risk_eval"],
+    "libraries": ["deepeval", "promptfoo", "garak", "ragas"],
+    "imports": ["deepeval", "promptfoo", "garak", "ragas"]
+  },
+  "MG-3.1-004": {
+    "summary": "Review training data for CBRN / IP / plagiarism; flag/remove offending content",
+    "paths": ["**/cbrn*", "**/ip_filter*", "**/plagiarism*"],
+    "code_terms": ["cbrn_filter", "ip_audit", "plagiarism_check", "trademark_filter", "training_data_review", "copyright_filter"],
+    "doc_terms": ["copyright filter", "plagiarism check"]
+  },
+  "MG-3.1-005": {
+    "summary": "Review of transparency artifacts (system cards / model cards) for third-party models",
+    "paths": ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/third_party_model*"],
+    "code_terms": ["third_party_model_card", "vendor_model_card", "external_system_card", "third_party_transparency"],
+    "doc_terms": ["third-party model card", "vendor system card"]
+  },
+  "MG-3.2-001": {
+    "summary": "Continuous-improvement application of XAI techniques to GAI systems",
+    "paths": ["**/xai*", "**/explain*"],
+    "code_terms": ["counterfactual", "gradient_attribution", "model_distillation", "xai_pipeline"],
+    "libraries": ["shap", "lime", "captum", "alibi", "eli5", "transformers-interpret", "interpret-core"],
+    "imports": ["shap", "lime", "captum", "alibi", "eli5", "transformers_interpret", "interpret"]
+  },
+  "MG-3.2-002": {
+    "summary": "Documentation of pre-trained model adaptations (fine-tuning, RAG, parameter changes)",
+    "paths": ["**/MODEL_CARD*", "**/finetune*", "**/adaptation*"],
+    "code_terms": ["finetune_doc", "adaptation_log", "data_augmentation_doc", "parameter_change_log", "rag_doc"],
+    "libraries": ["mlflow", "wandb", "neptune-client", "comet-ml"],
+    "imports": ["mlflow", "wandb", "neptune", "comet_ml"]
+  },
+  "MG-3.2-003": {
+    "summary": "Documentation of training data sources, hyperparameters, training duration, fine-tuning",
+    "paths": ["**/MODEL_CARD*", "**/training_log*"],
+    "code_terms": ["training_log", "hyperparameter_log", "training_duration", "training_data_origin", "fine_tuning_record"],
+    "libraries": ["mlflow", "wandb", "neptune-client", "comet-ml", "tensorboard"],
+    "imports": ["mlflow", "wandb", "neptune", "comet_ml", "tensorboard"]
+  },
+  "MG-3.2-004": {
+    "summary": "Pipeline to evaluate user-reported problematic content and integrate into updates",
+    "paths": ["**/user_report*", "**/feedback_pipeline*"],
+    "code_terms": ["user_report_pipeline", "report_triage", "feedback_integration", "user_complaint_loop", "issue_intake"],
+    "libraries": ["langfuse", "langsmith", "helicone"],
+    "imports": ["langfuse", "langsmith", "helicone"]
+  },
+  "MG-3.2-005": {
+    "summary": "Content filters for inappropriate / harmful / illegal / CSAM / NCII content",
+    "paths": ["**/content_filter*", "**/moderation*", "**/safety*"],
+    "code_terms": ["content_filter", "moderation_filter", "safety_classifier", "csam_filter", "ncii_filter", "toxicity_filter"],
+    "libraries": ["detoxify", "perspective-api", "azure-content-safety", "openai", "better-profanity", "profanity-check", "guardrails-ai", "llm-guard"],
+    "imports": ["detoxify", "better_profanity", "profanity_check", "guardrails", "llm_guard"]
+  },
+  "MG-3.2-006": {
+    "summary": "Real-time monitoring of generated content with deviation alerts",
+    "paths": ["**/alert*", "**/monitor*", "**/realtime*"],
+    "code_terms": ["alert_system", "deviation_alert", "realtime_monitor", "anomaly_alert", "trustworthiness_monitor"],
+    "libraries": ["sentry-sdk", "datadog", "prometheus-client", "opentelemetry-api", "pagerduty", "opsgenie"],
+    "imports": ["sentry_sdk", "datadog", "prometheus_client", "opentelemetry"]
+  },
+  "MG-3.2-008": {
+    "summary": "Human moderation system reviewing generated content per policy",
+    "paths": ["**/moderation*", "**/human_review*"],
+    "code_terms": ["human_moderation", "manual_review", "moderation_queue", "human_in_loop_review", "moderator_action"],
+    "doc_terms": ["human moderation", "moderation queue"]
+  },
+  "MG-3.2-009": {
+    "summary": "Risk-tolerance evaluation triggering decommission / retrain of pre-trained models",
+    "paths": ["**/retire*", "**/deprecate*", "**/retrain*"],
+    "code_terms": ["model_retirement", "model_deprecation", "retrain_trigger", "decommission_model", "performance_threshold_retire"],
+    "doc_terms": ["model retirement", "model deprecation"]
+  },
+  "MG-4.1-002": {
+    "summary": "Post-deployment monitoring processes (confabulation, CBRN, cyber risks)",
+    "paths": ["**/production_monitor*", "**/post_deploy*", "**/observability*"],
+    "code_terms": ["production_monitoring", "post_deploy_monitor", "confabulation_monitor", "cbrn_monitor", "post_release_eval"],
+    "libraries": ["sentry-sdk", "datadog", "prometheus-client", "opentelemetry-api", "evidently", "whylogs", "langfuse", "langsmith"],
+    "imports": ["sentry_sdk", "datadog", "prometheus_client", "opentelemetry", "evidently", "whylogs", "langfuse", "langsmith"]
+  },
+  "MG-4.1-003": {
+    "summary": "Sentiment analysis of user reactions to GAI content performance",
+    "paths": ["**/sentiment*"],
+    "code_terms": ["sentiment_analysis", "user_sentiment", "vader", "sentiment_score"],
+    "libraries": ["vadersentiment", "vader-sentiment", "textblob", "transformers", "asent"],
+    "imports": ["vaderSentiment", "vader_sentiment", "textblob", "transformers", "asent"]
+  },
+  "MG-4.1-004": {
+    "summary": "Active learning to identify failures / unexpected outputs",
+    "paths": ["**/active_learning*", "**/hard_example*"],
+    "code_terms": ["active_learning", "hard_example_mining", "uncertainty_sampling", "failure_mining", "edge_case_collection"],
+    "libraries": ["modAL", "baal", "libact", "small-text"],
+    "imports": ["modAL", "baal", "libact", "small_text"]
+  },
+  "MG-4.1-006": {
+    "summary": "Tracking dataset modifications (deletions, rectifications) for provenance",
+    "paths": ["**/dataset_version*"],
+    "code_terms": ["dataset_version", "data_versioning", "deletion_log", "rectification_log"],
+    "libraries": ["dvc", "lakefs", "deltalake", "pachyderm", "git-lfs"],
+    "imports": ["dvc", "lakefs", "deltalake"]
+  },
+  "MG-4.2-001": {
+    "summary": "Regular monitoring of GAI systems with public/internal performance reports",
+    "paths": ["**/transparency_report*", "**/monitoring_report*"],
+    "code_terms": ["monitoring_report", "performance_report", "transparency_report", "quarterly_report", "system_report"],
+    "doc_terms": ["transparency report", "performance report"]
+  },
+  "MG-4.2-003": {
+    "summary": "Visualizations / dashboards representing GAI behavior for non-technical stakeholders",
+    "paths": ["**/dashboard*", "**/grafana*", "**/visualiz*"],
+    "code_terms": ["stakeholder_view", "behavior_dashboard"],
+    "doc_terms": ["dashboard", "Grafana", "Kibana"],
+    "libraries": ["streamlit", "gradio", "dash", "plotly", "panel", "bokeh", "grafana-api"],
+    "imports": ["streamlit", "gradio", "dash", "plotly", "panel", "bokeh"]
+  },
+  "MG-4.3-002": {
+    "summary": "Policies / procedures to record and track errors, near-misses, negative impacts",
+    "paths": ["**/incident_log*", "**/near_miss*", "**/error_log*"],
+    "code_terms": ["near_miss_log", "error_tracking", "incident_log", "negative_impact_log"],
+    "libraries": ["sentry-sdk", "rollbar", "bugsnag", "datadog", "honeybadger"],
+    "imports": ["sentry_sdk", "rollbar", "bugsnag", "datadog", "honeybadger"]
+  }
+}

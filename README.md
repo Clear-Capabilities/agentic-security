@@ -59,6 +59,7 @@ That's it. The short forms (`/security-scan-all`, `/security-fix-all`, etc.) wil
 - **security-sca** — dependency CVE scan only
 - **security-secrets** — credential leak scan only
 - **security-setup** — install project shortcuts (run once per project)
+- **nist-ai-600-1** — audit-ready NIST AI 600-1 compliance attestation (122 testable controls)
 
 **Subagents**
 - **security-fixer** — reads context, adapts fix templates to your actual code, runs your tests
@@ -70,6 +71,7 @@ That's it. The short forms (`/security-scan-all`, `/security-fix-all`, etc.) wil
 - **sca-scan** — activates when you add/change a dependency or mention a CVE
 - **secret-scan** — activates before publishing or when you touch a config file
 - **fix-vulnerability** — activates when you ask Claude to fix a security issue
+- **nist-ai-600-1** — activates when you ask about NIST AI 600-1, AI RMF compliance, or GenAI audit readiness
 
 **Hooks** (always on)
 - **PostToolUse** — scans the file after every edit; surfaces new high/critical findings inline
@@ -199,6 +201,63 @@ Put `before.html` and `after.html` side by side. In less than 20 minutes you wen
 - **Signal over noise** — false-positive suppression by context, not just by rule
 - **Local-first** — one file, no cloud dependency, no code upload
 - **Ratchet, don't boil the ocean** — baseline + gate means you improve incrementally without getting paralyzed by legacy debt
+
+---
+
+## NIST AI 600-1 Compliance
+
+NIST AI 600-1 is the Generative AI Profile of the AI Risk Management Framework — 212 controls across four families (Govern, Map, Measure, Manage). `agentic-security` ships a deterministic scanner for the **122 code-testable controls** in that catalog, producing an audit-ready attestation sheet you can hand directly to a customer, auditor, or board.
+
+```
+/agentic-security:nist-ai-600-1
+```
+
+Or on any path:
+
+```
+/agentic-security:nist-ai-600-1 ~/code/my-genai-app
+```
+
+**What it produces**
+
+Three files in the current directory:
+
+| File | Use |
+|---|---|
+| `nist-ai-600-1-attestation.md` | Auditor-ready Markdown — per-control status + evidence |
+| `nist-ai-600-1-attestation.csv` | Spreadsheet — one row per control, filterable |
+| `nist-ai-600-1-attestation.json` | Machine-readable — suitable for CI gating |
+
+**How the 212 controls are divided**
+
+| Bucket | Controls | Best scanner status |
+|---|---|---|
+| Code-testable (Yes) | 55 | Compliant |
+| Code-testable (Partial) | 67 | Partial + External Attestation Required |
+| Organizational only (No) | 90 | _not scanned — policy/contract attestation only_ |
+
+The 90 organizational controls (board oversight, legal alignment, training programs, vendor contracts) cannot be evidenced from source code and are explicitly excluded from scanning. Marking them "Not Compliant" because no code matched would be misleading.
+
+**Multi-signal evidence scoring**
+
+For each testable control the scanner runs three passes:
+
+1. **Manifest pass** — parses `requirements.txt`, `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `composer.json`. A declared library that maps to a control (`opacus` → differential privacy, `fairlearn` → bias mitigation) is the strongest evidence type (weight 5.0).
+2. **Import pass** — detects language-specific import statements for 200+ compliance-relevant libraries across Python, JS/TS, Go, and Ruby (weight 4.0).
+3. **Keyword + path pass** — matches control-specific terms in code, config, and docs, with weights tiered by file type and a bonus for test coverage.
+
+A **negation filter** discards matches that appear in "we don't yet implement…", "future work", "planned for", "missing", or "lacks" contexts — so a roadmap comment doesn't inflate your score.
+
+**On a well-instrumented GenAI app** (differential privacy, fairness metrics, output watermarking, content filters, red-team CI) the scanner typically surfaces ~70% coverage across the 122 testable controls, with real library declarations and test files as evidence. On a vanilla AppSec codebase it correctly shows ~5% — only the controls that general security tooling addresses.
+
+**Example output row**
+
+```
+| MS-2.6-001 | Watermarking / content provenance | Compliant |
+| Evidence   | manifest: c2pa-python (requirements.txt) |
+|            | import: c2pa (src/output/provenance.py:3) |
+|            | code_term: content_credentials (src/output/provenance.py:14) |
+```
 
 ---
 
