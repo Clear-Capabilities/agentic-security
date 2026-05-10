@@ -5,6 +5,6 @@
   "author": { "name": "Ross Young", "email": "ross@clearcapabilities.com" },
   "vendor": "Clear Capabilities Inc.",
   "homepage": "https://github.com/clearcapabilities/agentic-security",
-  "license": "Elastic-2.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "keywords": ["security", "sast", "sca", "secrets", "iac", "cve", "osv", "kev", "cisa-kev", "claude-code", "appsec", "prompt-injection", "llm-security", "ai-security", "mcp-security", "agent-security", "authz", "broken-access-control", "business-logic", "aspm", "llmsecops", "aibom", "ml-bom", "owasp-llm-top-10", "model-security", "sbom", "cyclonedx", "spdx", "pbom", "compliance", "owasp-asvs", "pci-dss", "soc2", "nist-ai-600-1", "scorecard"]
 }

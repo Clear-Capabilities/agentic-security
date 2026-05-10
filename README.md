@@ -4,7 +4,7 @@
 
 The security layer built for AI-written code. Catches vulnerabilities the moment they're introduced, in the same session with the same agent, and fixes them before you move on.
 
-[![License: ELv2](https://img.shields.io/badge/license-Elastic--2.0-blue)](./LICENSE)
+[![License: PolyForm-NC-1.0.0](https://img.shields.io/badge/license-PolyForm--NC--1.0.0-blue)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-75%2F75%20passing-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.06MB%20·%20no%20install-orange)]()
 [![Version](https://img.shields.io/badge/version-0.12.0-blue)]()
@@ -677,7 +677,9 @@ New scanner rules should include a fixture that triggers the finding and a suppr
 
 ## License
 
-[Elastic License 2.0](./LICENSE): free for any use including commercial products and internal tools. The one restriction: you can't offer this software as a hosted service to others.
+[PolyForm Noncommercial License 1.0.0](./LICENSE).
+
+Free for noncommercial use — personal projects, research, education, hobby work, and qualifying noncommercial organizations (charitable, educational, government, research, environmental, public-safety). For any commercial use, contact [ross@clearcapabilities.com](mailto:ross@clearcapabilities.com) to obtain a commercial license.
 
 Built by [Ross Young](https://clearcapabilities.com) at Clear Capabilities Inc.
 

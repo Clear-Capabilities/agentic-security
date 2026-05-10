@@ -19,7 +19,7 @@
         "email": "ross@clearcapabilities.com"
       },
       "homepage": "https://github.com/clearcapabilities/agentic-security",
-      "license": "Elastic-2.0",
+      "license": "PolyForm-Noncommercial-1.0.0",
       "keywords": ["security", "sast", "sca", "secrets", "iac", "cve", "osv", "kev", "appsec", "vulnerability", "aspm", "sbom", "compliance", "mcp-security", "authz"],
       "category": "security"
     }

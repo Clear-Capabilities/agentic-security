@@ -40,5 +40,5 @@
     "smoke": "node bin/agentic-security.js scan test/fixtures/vulnerable-js"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
-  "license": "SEE LICENSE IN LICENSE"
+  "license": "PolyForm-Noncommercial-1.0.0"
 }
