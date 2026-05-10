@@ -12,6 +12,8 @@ const _require = createRequire(import.meta.url);
 import { scanLLM } from './sast/llm.js';
 import { scanBusinessLogic } from './sast/logic.js';
 import { scanPipeline } from './sast/pipeline.js';
+import { scanMCP } from './sast/mcp-audit.js';
+import { scanAuthZ } from './sast/authz.js';
 import { scanContainer } from './sca/container.js';
 import { detectDepConfusion } from './sca/dep-confusion.js';
 import { loadLicensePolicy, evaluateLicensePolicy } from './posture/license-policy.js';
@@ -192,6 +194,11 @@ function _isIaCFile(p){
   if (/(?:^|\/)\.github\/workflows\/.*\.ya?ml$/.test(p)) return true;
   if (/(?:^|\/)\.gitlab-ci\.ya?ml$/.test(p)) return true;
   if (/(?:^|\/)values\.ya?ml$/.test(p)) return true;
+  // MCP server config files (Claude Code agent host configuration)
+  if (/^claude_desktop_config\.json$/i.test(base)) return true;
+  if (/^\.?mcp\.json$/i.test(base)) return true;
+  if (/\.mcp\.json$/i.test(base)) return true;
+  if (/^mcp_servers\.json$/i.test(base)) return true;
   return false;
 }
 function getExt(n){const p=n.split(".");return p.length>1?p.pop().toLowerCase():"";}
@@ -2493,6 +2500,8 @@ function scoreToxicity(f, ctx={}){
   if(f.functionReachable==='reachable'){score+=15;factors.push('fn-reachable');}
   // +10 if cloud creds in same project
   if(hasCloudCreds){score+=10;factors.push('cloud-creds-colocated');}
+  // +20 if CISA KEV (Known Exploited Vulnerability — actively exploited in the wild)
+  if(f.kev===true||f.weaponized===true){score+=20;factors.push('cisa-kev-weaponized');}
   f.toxicityScore=Math.min(100,score);
   f.toxicityFactors=factors;
   f.toxicityLabel=score>=80?'Critical':score>=60?'High':score>=40?'Elevated':score>=20?'Medium':'Low';
@@ -2788,6 +2797,72 @@ async function _enrichWithEPSS(supplyChainResults){
     } else {
       r.epssScore = null;
       r.epssPercentile = null;
+    }
+  }
+  return out;
+}
+
+// CISA KEV (Known Exploited Vulnerabilities) overlay.
+// EPSS gives the *probability* of exploitation; KEV is the *ground truth* —
+// CISA publishes CVEs that have been observed exploited in the wild. A finding
+// flagged by KEV is "weaponized" and should be the top of the triage list.
+//
+// Cache: full catalog persisted with 24h TTL under the same disk-cache dir.
+const _KEV_FEED_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
+const _KEV_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function _loadKEVCatalog(){
+  if (process.env.AGENTIC_SECURITY_OFFLINE === '1') return null;
+  // Cached blob: { ts, byCve: { 'CVE-XXXX-YYYY': { dateAdded, ransomwareCampaign, vendor, product, vuln, action } } }
+  const cached = _osvCacheGet('kev:catalog');
+  if (cached && cached.ts && (Date.now() - cached.ts < _KEV_TTL_MS)) return cached.byCve || null;
+  try {
+    const res = await fetch(_KEV_FEED_URL, {
+      headers: { 'User-Agent': 'agentic-security/0.1' },
+    });
+    if (!res.ok) return cached?.byCve || null;
+    const j = await res.json();
+    const byCve = {};
+    for (const v of (j.vulnerabilities || [])) {
+      if (!v.cveID) continue;
+      byCve[v.cveID.toUpperCase()] = {
+        dateAdded: v.dateAdded || null,
+        ransomwareCampaign: (v.knownRansomwareCampaignUse || '').toLowerCase() === 'known',
+        vendor: v.vendorProject || '',
+        product: v.product || '',
+        vuln: v.vulnerabilityName || '',
+        action: v.requiredAction || '',
+        dueDate: v.dueDate || null,
+      };
+    }
+    _osvCacheSet('kev:catalog', { ts: Date.now(), byCve });
+    return byCve;
+  } catch { return cached?.byCve || null; }
+}
+
+async function _enrichWithKEV(supplyChainResults){
+  const out = supplyChainResults;
+  let catalog = null;
+  try { catalog = await _loadKEVCatalog(); } catch { catalog = null; }
+  if (!catalog) {
+    for (const r of out) { r.kev = false; r.weaponized = false; r.kevDateAdded = null; r.kevRansomware = false; }
+    return out;
+  }
+  for (const r of out) {
+    const cves = (r.cveAliases || []).filter(a => /^CVE-/i.test(a)).map(a => a.toUpperCase());
+    let hit = null;
+    for (const c of cves) { if (catalog[c]) { hit = catalog[c]; break; } }
+    if (hit) {
+      r.kev = true;
+      r.weaponized = true;
+      r.kevDateAdded = hit.dateAdded;
+      r.kevRansomware = hit.ransomwareCampaign;
+      r.kevDueDate = hit.dueDate;
+    } else {
+      r.kev = false;
+      r.weaponized = false;
+      r.kevDateAdded = null;
+      r.kevRansomware = false;
     }
   }
   return out;
@@ -3340,7 +3415,9 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       aF.push(...scanLLM(p,c));
       aLogic.push(...scanBusinessLogic(p,c));
       aF.push(...scanPipeline(p,c));
-      aF.push(...scanContainer(p,c));}catch(_){}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
+      aF.push(...scanContainer(p,c));
+      aF.push(...scanMCP(p,c));
+      aF.push(...scanAuthZ(p,c));}catch(_){}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
   setProgress({current:i,total:files.length,file:"Cross-file...",phase:"Linking"});const ii=buildImportGraph(fc);const cf=crossFileTaint(pfr,fc,ii);aF.push(...cf);
   setProgress({current:i,total:files.length,file:"Stored taint...",phase:"Linking"});const storedRegistry=buildStoredTaintRegistry(fc);const stf=crossStoredTaint(fc,storedRegistry);aF.push(...stf);
   setProgress({current:i,total:files.length,file:"Session taint...",phase:"Linking"});const sess=crossSessionTaint(fc);aF.push(...sess);
@@ -3359,6 +3436,8 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   let supplyChain=[];try{supplyChain=await queryOSV(components,allFileContents);}catch(_){supplyChain=[];}
   // Feat-9: enrich SCA findings with EPSS exploit-probability scores
   try{supplyChain=await _enrichWithEPSS(supplyChain);}catch(_){}
+  // 0.10.0: enrich SCA findings with CISA KEV (Known Exploited Vulnerabilities)
+  try{supplyChain=await _enrichWithKEV(supplyChain);}catch(_){}
   try{markUsedVulnFunctions(supplyChain,fc);}catch(_){}
   setProgress({current:i,total:files.length,file:"Registry metadata...",phase:"SCA"});
   let registryInfo=new Map();try{registryInfo=await queryRegistries(components);}catch(_){}
@@ -3799,7 +3878,7 @@ export {
   crossFindingChain, parseManifests, buildReachabilitySet,
   queryOSV, queryRegistries, computeExploitPathComponents,
   markUsedVulnFunctions, dedupeFindingsWithEvidence, scoreExploitability,
-  _enrichWithScorecard, scoreToxicity,
+  _enrichWithScorecard, scoreToxicity, _enrichWithKEV, _loadKEVCatalog,
   classifyOrphans, classifyField, classifyEndpoint, shouldScan,
   _isFalsePositiveCredential, _detectSafeSinkShape,
   _loadCustomRules, _isCustomSuppressed,

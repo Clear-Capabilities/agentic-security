@@ -78,9 +78,51 @@ node $BUNDLE scan \${1:-.} --only secrets --format cli
 \`\`\`
 CMDEOF
 
+cat > .claude/commands/security-mcp-audit.md << CMDEOF
+---
+description: Audit MCP server configurations for agent-host risks (untrusted install, hardcoded creds, prompt injection in descriptions, dangerous capabilities).
+argument-hint: "[path]"
+---
+\`\`\`bash
+node $BUNDLE scan \${1:-.} --format cli
+\`\`\`
+The audit fires on \`.mcp.json\`, \`claude_desktop_config.json\`, and \`mcp_servers.json\` files. Rerun after adding any new MCP server.
+CMDEOF
+
+cat > .claude/commands/security-authz.md << CMDEOF
+---
+description: Deep auth/authZ audit — JWT alg confusion, hardcoded JWT secret, OAuth2 PKCE/redirect_uri validation, multi-tenant scope, session fixation.
+argument-hint: "[path]"
+---
+\`\`\`bash
+node $BUNDLE scan \${1:-.} --format cli
+\`\`\`
+Covers OWASP A01 (Broken Access Control). Findings appear with kind:authz in the JSON report.
+CMDEOF
+
+cat > .claude/commands/security-kev.md << CMDEOF
+---
+description: List dependency CVEs in the CISA Known Exploited Vulnerabilities catalog (weaponized in the wild).
+---
+\`\`\`bash
+node -e "
+const fs = await import('node:fs/promises');
+const scan = JSON.parse(await fs.readFile('.agentic-security/last-scan.json', 'utf8'));
+const findings = (scan.findings||[]).filter(f => f.kev === true);
+console.log('CISA KEV findings:', findings.length);
+for (const f of findings.slice(0, 50)) {
+  const ransom = f.kevRansomware ? ' [ransomware]' : '';
+  const cve = (f.cveAliases||[])[0] || '';
+  console.log('  ' + f.severity.toUpperCase().padEnd(8) + ' ' + cve.padEnd(18) + ' ' + (f.package||'') + '@' + (f.version||'') + '  added ' + (f.kevDateAdded||'') + ransom);
+}
+"
+\`\`\`
+CMDEOF
+
 echo "✓ Installed shortcuts in .claude/commands/:"
 echo "  /security-scan-all, /security-fix, /security-fix-all"
 echo "  /security-report, /security-sca, /security-secrets"
+echo "  /security-mcp-audit, /security-authz, /security-kev"
 echo ""
 echo "These work in this project. Re-run /agentic-security:security-setup in other projects."
 ```

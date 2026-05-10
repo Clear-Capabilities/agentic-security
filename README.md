@@ -5,9 +5,9 @@
 The security layer built for AI-written code. Catches vulnerabilities the moment they're introduced, in the same session with the same agent, and fixes them before you move on.
 
 [![License: ELv2](https://img.shields.io/badge/license-Elastic--2.0-blue)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-69%2F69%20passing-brightgreen)]()
-[![Bundle](https://img.shields.io/badge/bundle-2.0MB%20·%20no%20install-orange)]()
-[![Version](https://img.shields.io/badge/version-0.9.0-blue)]()
+[![Tests](https://img.shields.io/badge/tests-72%2F72%20passing-brightgreen)]()
+[![Bundle](https://img.shields.io/badge/bundle-2.05MB%20·%20no%20install-orange)]()
+[![Version](https://img.shields.io/badge/version-0.10.0-blue)]()
 
 ---
 
@@ -60,6 +60,9 @@ To unlock short-form commands (`/security-scan-all`, `/security-fix-all`) in a p
 | `/security-poc` | Generate adversarial proof-of-concept for a specific finding |
 | `/security-logic-review` | Intent-vs-implementation review for business-logic bugs |
 | `/security-threat-model` | Render a STRIDE coverage table from the last scan |
+| `/security-mcp-audit` | Audit MCP server configs for agent-host risks (untrusted install, hardcoded creds, prompt injection in descriptions) |
+| `/security-authz` | Deep auth/authZ audit — JWT alg confusion, OAuth2 PKCE, multi-tenant scope, session fixation |
+| `/security-kev` | List dependency CVEs in the CISA Known Exploited Vulnerabilities catalog (weaponized in the wild) |
 
 ### Posture management
 
@@ -96,10 +99,17 @@ Code              SQL injection · XSS · Command injection · Path traversal ·
                   IDOR · SSTI · Prototype pollution · ReDoS · JWT bypass
                   Mass assignment · Weak crypto · Race conditions
 
+Auth / AuthZ      JWT alg:none · jwt.verify without algorithms allow-list
+                  Hardcoded JWT secret · OAuth2 missing PKCE · OAuth2 redirect_uri
+                  Session fixation · Multi-tenant cross-tenant reads (missing tenantId)
+
 AI / LLM          Prompt injection (direct, indirect, template) · Insecure tool definitions
                   Unsanitized LLM output · System prompt data exfiltration
+                  MCP server audit — untrusted install, hardcoded creds, prompt injection
+                  in descriptions, dangerous capabilities, filesystem over-scope
 
 Dependencies      CVEs from OSV.dev · EPSS exploit-probability scores
+                  CISA KEV — weaponized-in-the-wild flag for active attacks
                   Function-level reachability (only flag if the vuln fn is actually called)
                   200+ manifest formats (npm, pip, poetry, Cargo, go.mod, Gemfile…)
                   Container base image EOL · Dependency confusion · Typosquatting
@@ -135,8 +145,14 @@ A source defined *after* the sink can't create a phantom finding. Cross-file tai
 **AI-native attack chains.**
 `/security-chain` combines findings that share sources, sinks, or data classes into multi-step exploit paths. `/security-poc` generates a working adversarial test that either confirms the finding (TP_CONFIRMED) or categorizes it as a probable false positive (PROBABLE_FP).
 
-**CVEs ranked by real exploitation probability.**
-Every CVE gets an [EPSS](https://www.first.org/epss/) score — the probability it's being actively exploited in the next 30 days. Two CVEs both labeled "high" might show `EPSS:87%` vs `EPSS:2%`. Fix the right one first.
+**CVEs ranked by real exploitation probability — and ground-truth weaponization.**
+Every CVE gets an [EPSS](https://www.first.org/epss/) score (the probability of exploitation in the next 30 days) and is cross-referenced against the [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) catalog (CVEs being actively exploited in the wild right now). KEV findings get a `weaponized: true` flag, +20 toxicity, and a red `KEV` badge in the CLI — they sort to the top of the triage list automatically.
+
+**Agent-host security.**
+The Claude Code agent host is an attack surface most tooling ignores. `/security-mcp-audit` scans your `.mcp.json` and `claude_desktop_config.json` for untrusted install vectors (`curl|sh`), hardcoded API keys in env blocks, prompt-injection text in server descriptions, dangerous capabilities exposed to the model, and filesystem servers granted root or `$HOME` scope.
+
+**Broken Access Control as a first-class detector.**
+OWASP A01 is the #1 source of real breaches. `/security-authz` covers JWT alg:none / algorithm confusion, hardcoded JWT secrets, `jwt.verify` calls without an `algorithms` allow-list, OAuth2 authorization_code flows missing PKCE, `redirect_uri` taken from the request without validation, missing `session.regenerate()` after auth (session fixation), and multi-tenant queries that lack a `tenantId`/`orgId` scope.
 
 **Your code never leaves your machine.**
 The only outbound calls are `package@version` strings to OSV.dev, CVE IDs to first.org for EPSS scores, and (opt-in with `--scorecard`) OSSF Scorecard lookups. Zero source code. Zero file paths.

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "shell": {
+      "command": "npx",
+      "args": ["-y", "mcp-shell@1.0.0"]
+    }
+  }
+}

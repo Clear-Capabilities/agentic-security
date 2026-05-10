@@ -100,6 +100,11 @@ export function normalizeFindings(scan){
       epssPercentile: sc.epssPercentile ?? null,
       cvssVector: sc.cvssVector || null,
       functionReachable: sc.functionReachable || null,
+      // 0.10.0: CISA KEV — known-exploited-in-wild
+      kev: sc.kev === true,
+      kevDateAdded: sc.kevDateAdded || null,
+      kevRansomware: sc.kevRansomware === true,
+      weaponized: sc.weaponized === true,
       // 0.6.0 Feat-2: toxicity score
       toxicity: sc.toxicityScore ?? null,
       toxicityFactors: sc.toxicityFactors || null,
@@ -460,7 +465,8 @@ export function toCLI(scan, { verbose=false, color=true }={}){
   for (const f of findings) {
     const sevTag = c(`[${f.severity.toUpperCase()}]`, SEV_COLOR[f.severity]||'');
     const epssTag = f.epssScore != null ? c(`  EPSS:${Math.round(f.epssScore*100)}%`, DIM) : '';
-    lines.push(`${sevTag} ${c(f.cwe||'    ', DIM)}  ${f.file}:${f.line}  ${BOLD}${f.vuln}${RESET}${epssTag}`);
+    const kevTag = f.kev ? c('  KEV', '\x1b[1;31m') : '';
+    lines.push(`${sevTag} ${c(f.cwe||'    ', DIM)}  ${f.file}:${f.line}  ${BOLD}${f.vuln}${RESET}${epssTag}${kevTag}`);
     if (f.masked) lines.push(`        ${c('value:', DIM)} ${f.masked}`);
     if (verbose && f.fix?.description) {
       lines.push(`        ${c('fix:', DIM)} ${f.fix.description}`);
