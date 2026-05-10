@@ -4,10 +4,10 @@
 
 The security layer built for AI-written code. Catches vulnerabilities the moment they're introduced, in the same session with the same agent, and fixes them before you move on.
 
-[![License: PolyForm-Shield-1.0.0](https://img.shields.io/badge/license-PolyForm--Shield--1.0.0-blue)](./LICENSE)
+[![License: PolyForm-Internal-Use-1.0.0](https://img.shields.io/badge/license-PolyForm--Internal--Use--1.0.0-blue)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-75%2F75%20passing-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.06MB%20·%20no%20install-orange)]()
-[![Version](https://img.shields.io/badge/version-0.12.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.13.0-blue)]()
 
 ---
 
@@ -677,9 +677,19 @@ New scanner rules should include a fixture that triggers the finding and a suppr
 
 ## License
 
-[PolyForm Shield License 1.0.0](./LICENSE).
+[PolyForm Internal Use License 1.0.0](./LICENSE).
 
-Free for any use — personal, research, education, internal tools, and commercial products — **except** building a product or service that competes with agentic-security itself. In plain English: scan your own code, embed the scanner in your own commercial app, fork it for your own internal use. Don't fork it, rebrand it, and sell it as a competing security scanner. For licensing of competing use, contact [ross@clearcapabilities.com](mailto:ross@clearcapabilities.com).
+Free for any internal business purpose at any organization — personal projects, research, education, security audits of your own codebase, internal CI/CD at any company size including for-profit. **Not permitted**: providing or marketing the software as part of any product or service offered to others. In plain English: scan your own code freely. Don't fork it, embed it in something you sell, or ship it as part of a hosted service. For licensing of any of those use cases, contact [ross@clearcapabilities.com](mailto:ross@clearcapabilities.com).
+
+| Use case | Allowed |
+|---|---|
+| Personal projects, research, hobby use | ✅ |
+| Internal CI/CD at any company (incl. for-profit) | ✅ |
+| Security audits of your own codebase | ✅ |
+| Forking for internal use | ✅ |
+| Embedding in a product you sell or host for customers | ❌ contact us |
+| Forking and rebranding as a competing scanner | ❌ contact us |
+| Reselling as a paid security audit service | ❌ contact us |
 
 Built by [Ross Young](https://clearcapabilities.com) at Clear Capabilities Inc.
 

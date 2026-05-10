@@ -1,6 +1,6 @@
 {
   "name": "@clearcapabilities/agentic-security-scanner",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Scanner engine for the agentic-security Claude Code plugin — SAST, SCA (function-level reachability + CISA KEV), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, business logic, toxic-combinations scoring, SBOM, SARIF ingest, pipeline integrity, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -40,5 +40,5 @@
     "smoke": "node bin/agentic-security.js scan test/fixtures/vulnerable-js"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
-  "license": "PolyForm-Shield-1.0.0"
+  "license": "PolyForm-Internal-Use-1.0.0"
 }
