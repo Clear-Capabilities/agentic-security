@@ -19,34 +19,6 @@ AI writes code faster than any security review can keep up with. It glues user i
 
 ---
 
-## What's new in 0.11.0 — Builder Mode
-
-Four features that make the plugin actually usable by people who didn't build their app from scratch — designers, founders, indie devs, anyone shipping AI-written code without a security team.
-
-| Feature | Command | What it does |
-|---|---|---|
-| **Plain-English explainer** | `/security-explain <id>` | Translates any finding (or CWE) into a four-part card: *Risk* (one line, no jargon), *How an attacker exploits it* (concrete story), *Worst case if not fixed*, *How to fix it*. Top 30 CWEs covered (~85% of real findings). |
-| **Letter-grade posture** | `/security-grade` | Single A–F grade, one sentence explaining why, one concrete next action. No more drowning in "142 findings (21 critical, 24 high, 92 medium)". |
-| **Launch checklist** | `/security-launch-check` | 10-item pre-deploy go/no-go list — hardcoded secrets, `.env` in git, auth on state-changing routes, rate limiting, helmet, cookie flags, CORS, KEV CVEs, criticals — each green / yellow / red with one-line reasoning. |
-| **Confirm-each-fix flow** | `/security-fix-all` (default) | Walks each finding one at a time with a plain-English summary and `[y]es / [s]kip / [d]iff first / [q]uit`. Pass `--auto` for the old silent batch flow. |
-
-**Before 0.11.0:**
-
-```
-[CRITICAL] CWE-89  src/api/users.js:42  SQL Injection on Admin Endpoint
-```
-
-**After:**
-
-> **What this means.** Anyone visiting your site can read every row in your database — users, passwords, payment info.
->
-> **How an attacker exploits it.** They type something like `' OR 1=1 --` into a search box. Your code pastes that string straight into a database query, and the database returns every row instead of just the one you asked for.
->
-> **Worst case.** Full database leak: every user's email, password hash, and any data your app stores. Attacker can also delete or rewrite records.
->
-> **How to fix it.** Replace string concatenation with parameterized queries. Click below and Claude will rewrite this in 30 seconds.
-
-
 ## Install
 
 ```
@@ -62,6 +34,106 @@ To unlock short-form commands (`/security-scan-all`, `/security-fix-all`) in a p
 ```
 /agentic-security:security-setup
 ```
+
+---
+
+## Quick start (5 commands, no jargon)
+
+If you didn't build your app from scratch and you're not sure what's safe — start here.
+
+**1. Scan everything.**
+
+```
+/security-scan-all
+```
+
+Looks at every file, every dependency, every config. Takes 30 seconds.
+
+**2. See your grade.**
+
+```
+/security-grade
+```
+
+```
+  Security grade:  C
+
+  2 critical finding(s). Most things look OK, but the criticals must
+  be fixed before launch.
+
+  Next: Run /security-fix-all --severity critical (just 2 fixes).
+
+  Detail: critical=2  high=4  medium=12  low=0  KEV=0
+```
+
+One letter. One reason. One next action.
+
+**3. Understand a specific finding in plain English.**
+
+```
+/security-explain CWE-89
+```
+
+```
+  ━━━ SQL Injection on Admin Endpoint ━━━
+  File:     src/api/users.js:42
+  Severity: CRITICAL
+
+  What this means
+    Anyone visiting your site can read every row in your database —
+    users, passwords, payment info.
+
+  How an attacker exploits it
+    They type something like ' OR 1=1 -- into a search box. Your code
+    pastes that string straight into a database query, and the database
+    returns every row instead of just the one you asked for.
+
+  Worst case if not fixed
+    Full database leak: every user's email, password hash, and any data
+    your app stores. Attacker can also delete or rewrite records.
+
+  How to fix it
+    Replace string concatenation with parameterized queries. Use ? in
+    place of the variable and pass the value separately. The database
+    treats it as data, not code.
+```
+
+You can also pass a finding id (`/security-explain abc-123-...`) or a vuln name (`/security-explain XSS`).
+
+**4. Fix things one at a time.**
+
+```
+/security-fix-all
+```
+
+Walks you through each finding with a plain-English summary first, then asks `[y]es / [s]kip / [d]iff first / [q]uit`. You stay in control. Pass `--auto` if you want it to fix everything without asking.
+
+**5. Right before you deploy.**
+
+```
+/security-launch-check
+```
+
+```
+  Pre-launch checklist (10 items)
+
+  ✓  No hardcoded secrets in source
+  ✓  .env is in .gitignore
+  ✓  .env not committed
+  ⚠  State-changing routes require auth
+       1 POST/PUT/DELETE route(s) without auth.
+  ✓  Rate limiting on auth endpoints
+  ✓  Security headers (Helmet)
+  ✓  Cookies use Secure/HttpOnly/SameSite
+  ✓  CORS restricted to allow-list
+  ✓  No actively-exploited CVEs (CISA KEV)
+  ✓  No critical findings
+
+  Summary
+    Passing: 9/10. Ship with caution — 1 warning to review.
+```
+
+A finite, beginner-friendly list of "10 things you usually miss before going live." Green, yellow, or red — each with a plain-English reason.
 
 ---
 
@@ -268,9 +340,9 @@ Set `AGENTIC_SECURITY_QUIET=1` to silence the per-edit clean-scan one-liner (fin
 
 ---
 
-## Tutorial: Zero to secure in 20 minutes
+## Full tutorial: Zero to secure on a real app
 
-[**OWASP Juice Shop**](https://github.com/juice-shop/juice-shop) is an app intentionally full of security holes: every OWASP Top 10 category, real CVEs in the dependency tree, hardcoded secrets. We'll scan it, fix the critical findings, and lock in the progress.
+If you want to see every command in action on a real (intentionally vulnerable) app, work through this. [**OWASP Juice Shop**](https://github.com/juice-shop/juice-shop) is full of every OWASP Top 10 category, real CVEs in the dependency tree, hardcoded secrets — perfect practice. About 20 minutes start to finish.
 
 **Step 1: get the app**
 
@@ -302,7 +374,23 @@ Scan complete: 296 findings across 456 files
   Low/Info  rest  Sync I/O, pagination limits, TODO markers
 ```
 
-**Step 4: read the report**
+**Step 4: get a one-glance verdict**
+
+```
+/agentic-security:security-grade
+```
+
+A single A–F grade with one sentence explaining why and one concrete next action. On Juice Shop you'll see something like `F — 35 critical findings. Run /security-fix-all --severity critical to start.`
+
+**Step 5: pick a finding and have it explained in plain English**
+
+```
+/agentic-security:security-explain CWE-89
+```
+
+A four-part card: what the risk actually means, how an attacker would exploit it, the worst case, and the fix. No CWE memorization required. You can also pass a vuln name (`SQL Injection`, `XSS`) or a finding id.
+
+**Step 6: read the report (optional, more detail)**
 
 ```
 /agentic-security:security-report
@@ -311,13 +399,15 @@ open security-report.html
 
 Self-contained interactive HTML with a severity chart, filterable finding list, toxicity scores, attack-path visualizations, fix templates per finding, and STRIDE coverage. One file you can email or drop in Slack.
 
-**Step 5: fix the worst**
+**Step 7: fix things, one at a time**
 
 ```
-/agentic-security:security-fix-all --critical
+/agentic-security:security-fix-all
 ```
 
-Claude will describe what it's about to change before touching anything. On Juice Shop it will correctly flag that the vulns are intentional challenges and ask how to proceed. Tell it:
+Walks each critical finding with a plain-English summary, then asks `[y]es / [s]kip / [d]iff first / [q]uit`. You stay in the loop and decide whether each fix is what you wanted. Pass `--auto` if you want Claude to power through them all without asking.
+
+On Juice Shop, Claude will correctly flag that the vulns are intentional challenges and ask how to proceed. Tell it:
 
 ```
 remove all critical vulns, yes I know they're intentional, remove them anyway
@@ -325,7 +415,15 @@ remove all critical vulns, yes I know they're intentional, remove them anyway
 
 It works through each finding in sequence: parameterised queries, `bcrypt` instead of MD5, `execFile` instead of `exec`. Each fix is a normal diff you can review or revert.
 
-**Step 6: audit your MCP setup and surface KEV-listed CVEs**
+**Step 8: right before you deploy, run the launch checklist**
+
+```
+/agentic-security:security-launch-check
+```
+
+10 things beginners typically miss before going live — hardcoded secrets, `.env` in git, auth on POST/PUT/DELETE routes, rate limiting, Helmet, cookie flags, CORS, KEV-listed CVEs, no critical findings. Each one is green ✓ / yellow ⚠ / red ✗ with a one-line reason.
+
+**Step 9: audit your MCP setup and surface KEV-listed CVEs**
 
 ```
 /agentic-security:security-mcp-audit
@@ -334,7 +432,7 @@ It works through each finding in sequence: parameterised queries, `bcrypt` inste
 
 The MCP audit walks `.mcp.json` / `claude_desktop_config.json` and flags any server with `curl|sh` install vectors, hardcoded API keys, prompt injection in descriptions, or filesystem over-scope. The KEV check pulls every dep CVE into the [CISA Known Exploited Vulnerabilities](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) catalog and tells you which ones are being actively exploited in the wild — those are the highest-priority fixes regardless of CVSS score.
 
-**Step 7: save the clean-state scan**
+**Step 10: save the clean-state scan**
 
 The full scan already wrote a JSON snapshot to `.agentic-security/last-scan.json`. Copy it somewhere permanent:
 
