@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Clear Capabilities security plugins for Claude Code.",
-    "version": "0.14.0"
+    "version": "0.15.0"
   },
   "plugins": [
     {
       "name": "agentic-security",
       "source": "./",
       "description": "Full ASPM coverage in a Claude Code plugin: SAST, SCA (function-level reachability + CISA KEV), secrets, IaC, prompt-injection / LLM-app security, MCP / agent-tool audit, auth/authZ deep analysis, attack chains, adversarial PoC, business-logic review, toxic-combinations scoring, material-change detection, drift, SBOM (CycloneDX + SPDX), PBOM, SARIF ingest, API inventory, pipeline integrity, license policy, MTTR, auto-fix PR bundling, container scan, dep-confusion + typosquat, and 4-framework compliance (NIST AI 600-1, OWASP ASVS, PCI-DSS 4.0, SOC 2).",
-      "version": "0.14.0",
+      "version": "0.15.0",
       "author": {
         "name": "Ross Young",
         "email": "ross@clearcapabilities.com"

@@ -5,7 +5,7 @@ description: List every agentic-security command organized by category, with one
 Print the full agentic-security command catalog.
 
 ```
-agentic-security commands — 33 total
+agentic-security commands — 35 total
 
 SCANNING & FIXING
   /security-scan-all         Full SAST + SCA + secrets + IaC sweep
@@ -47,6 +47,9 @@ PROJECT META
   /security-setup            Install short-form commands in this project
   /security-status           Plugin & project health snapshot
   /security-help             This command
+  /security-badge            Print a markdown badge for your README
+  /security-share            Copy-paste posts (Twitter/LinkedIn/Discord)
+  /security-recap            Year-in-Security recap card
 
 USAGE NOTES
   - Every command works as /agentic-security:<name> too (the long form).

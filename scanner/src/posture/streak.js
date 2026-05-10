@@ -88,14 +88,22 @@ function _computeAchievements(streak, scan) {
   const counts = { critical: 0, high: 0, medium: 0 };
   for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
 
-  // Lifetime achievements (unlock once, never expire)
+  // Lifetime achievements (unlock once, never expire). Tiers escalate
+  // Bronze → Silver → Gold → Platinum → Diamond. Old IDs preserved for
+  // backward compatibility with persisted streak.json files.
   if (streak.totalScans >= 1) earned.add('first-scan');
   if (streak.hasEverHadCritical && counts.critical === 0) earned.add('clean-sweep');
   if (streak.totalFixesInferred >= 1) earned.add('first-fix');
+  // Triage tiers (was: triage-master at 10)
   if (streak.totalFixesInferred >= 10) earned.add('triage-master');
-  if (streak.daysCleanCritical >= 7) earned.add('streak-7');
-  if (streak.daysCleanCritical >= 30) earned.add('streak-30');
-  if (streak.daysCleanCritical >= 90) earned.add('streak-90');
+  if (streak.totalFixesInferred >= 50) earned.add('triage-silver');
+  if (streak.totalFixesInferred >= 200) earned.add('triage-gold');
+  // Streak tiers (Bronze/Silver/Gold/Platinum/Diamond)
+  if (streak.daysCleanCritical >= 7) earned.add('streak-7');         // Bronze
+  if (streak.daysCleanCritical >= 30) earned.add('streak-30');       // Silver
+  if (streak.daysCleanCritical >= 90) earned.add('streak-90');       // Gold
+  if (streak.daysCleanCritical >= 180) earned.add('streak-180');     // Platinum
+  if (streak.daysCleanCritical >= 365) earned.add('streak-365');     // Diamond
   if (_gradeRank(streak.lastGrade) >= _gradeRank('A')) earned.add('grade-a');
   if (streak.lastGrade === 'A+') earned.add('grade-a-plus');
   if (streak.launchCheckPassedAt) earned.add('launch-ready');
@@ -211,15 +219,23 @@ const ACHIEVEMENT_LABELS = {
   'first-scan':      { icon: '🛡️', label: 'First Scan', desc: 'Ran your first security scan' },
   'first-fix':       { icon: '🔧', label: 'First Fix', desc: 'Applied at least one fix' },
   'clean-sweep':     { icon: '🧹', label: 'Clean Sweep', desc: 'Took your project from criticals to zero' },
-  'triage-master':   { icon: '🎯', label: 'Triage Master', desc: '10+ findings remediated' },
-  'streak-7':        { icon: '🔥', label: '7-Day Streak', desc: '7 days clean of critical findings' },
-  'streak-30':       { icon: '🔥', label: '30-Day Streak', desc: '30 days clean of critical findings' },
-  'streak-90':       { icon: '🔥', label: '90-Day Streak', desc: '90 days clean of critical findings' },
+  // Triage tiers
+  'triage-master':   { icon: '🎯', label: 'Bronze Fixer', desc: '10+ findings remediated' },
+  'triage-silver':   { icon: '🥈', label: 'Silver Fixer', desc: '50+ findings remediated' },
+  'triage-gold':     { icon: '🥇', label: 'Gold Fixer', desc: '200+ findings remediated' },
+  // Streak tiers (Bronze → Diamond)
+  'streak-7':        { icon: '🥉', label: 'Bronze Streak', desc: '7 days clean of critical findings' },
+  'streak-30':       { icon: '🥈', label: 'Silver Streak', desc: '30 days clean of critical findings' },
+  'streak-90':       { icon: '🥇', label: 'Gold Streak', desc: '90 days clean of critical findings' },
+  'streak-180':      { icon: '💎', label: 'Platinum Streak', desc: '180 days clean of critical findings' },
+  'streak-365':      { icon: '💠', label: 'Diamond Streak', desc: '365 days clean of critical findings' },
+  // Grade
   'grade-a':         { icon: '🏆', label: 'Grade A', desc: 'Reached an A-tier security grade' },
-  'grade-a-plus':    { icon: '🥇', label: 'Grade A+', desc: 'Reached the perfect grade — zero findings' },
+  'grade-a-plus':    { icon: '🌟', label: 'Grade A+', desc: 'Reached the perfect grade — zero findings' },
   'launch-ready':    { icon: '🚀', label: 'Launch Ready', desc: 'Passed all 10 launch-check items' },
+  // Scan veteran
   'scan-veteran-25': { icon: '⭐', label: 'Scan Veteran (25)', desc: '25 scans completed' },
-  'scan-veteran-100':{ icon: '🌟', label: 'Scan Veteran (100)', desc: '100 scans completed' },
+  'scan-veteran-100':{ icon: '🎖️', label: 'Scan Centurion (100)', desc: '100 scans completed' },
 };
 
 export function formatAchievements(streak) {

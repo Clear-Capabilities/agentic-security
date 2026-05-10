@@ -1,6 +1,6 @@
 {
   "name": "agentic-security",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Full ASPM + LLMSecOps coverage in a Claude Code plugin: SAST, SCA (with function-level reachability + CISA KEV), secrets, IaC, prompt-injection / LLM-app security, MCP / agent-tool audit, auth/authZ deep analysis, model serialization defenses (torch.load, trust_remote_code, pickle), prompt template audit, AI-BOM (CycloneDX 1.7 ML-BOM), OWASP LLM Top 10 coverage map, attack chains, adversarial PoC, business-logic review, toxic-combinations scoring, material-change detection, drift reporting, SBOM (CycloneDX + SPDX) + PBOM, SARIF ingest, API inventory, pipeline integrity, license policy, MTTR / SLA tracking, auto-fix PR bundling, container layer scan, dependency confusion + typosquat detection, and 4-framework compliance attestation (NIST AI 600-1, OWASP ASVS, PCI-DSS 4.0, SOC 2). Local-first, F1-evaluated, no cloud lock-in.",
   "author": { "name": "Ross Young", "email": "ross@clearcapabilities.com" },
   "vendor": "Clear Capabilities Inc.",

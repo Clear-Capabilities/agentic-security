@@ -172,6 +172,28 @@ description: Map findings to OWASP LLM Top 10 (2025) — Prompt Injection, Sensi
 Run \`/agentic-security:security-llm-threat-model\` for the OWASP LLM Top 10 coverage map.
 CMDEOF
 
+cat > .claude/commands/security-badge.md << CMDEOF
+---
+description: Print a markdown badge of your current security grade for your project's README.
+---
+Run \`/agentic-security:security-badge\` for the badge markdown.
+CMDEOF
+
+cat > .claude/commands/security-share.md << CMDEOF
+---
+description: Generate copy-paste posts (Twitter/X, LinkedIn, Discord/Slack) about your security progress.
+argument-hint: "[twitter|linkedin|discord|all]"
+---
+Run \`/agentic-security:security-share \${1:-all}\` for shareable posts.
+CMDEOF
+
+cat > .claude/commands/security-recap.md << CMDEOF
+---
+description: Year-in-Security recap card — days active, scans run, fixes shipped, longest streak, top achievements.
+---
+Run \`/agentic-security:security-recap\` for the recap card.
+CMDEOF
+
 echo "✓ Installed shortcuts in .claude/commands/:"
 echo "  /security-scan-all, /security-fix, /security-fix-all"
 echo "  /security-report, /security-sca, /security-secrets"
@@ -179,6 +201,7 @@ echo "  /security-mcp-audit, /security-authz, /security-kev"
 echo "  /security-help, /security-status"
 echo "  /security-explain, /security-grade, /security-launch-check"
 echo "  /security-aibom, /security-llm-threat-model"
+echo "  /security-badge, /security-share, /security-recap"
 echo ""
 echo "These work in this project. Re-run /agentic-security:security-setup in other projects."
 ```

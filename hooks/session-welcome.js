@@ -55,10 +55,26 @@ if (isFirstTime) {
   process.exit(0);
 }
 
-// Returning session: print streak greeting if we have one
+// Returning session: print streak-at-risk warning if applicable, otherwise the
+// regular streak greeting.
 const streak = loadStreak();
-const line = formatStreakLine(streak);
-if (line) {
-  console.error('🛡️  ' + line);
+
+// Streak-at-risk: only nag when there's something worth losing (≥7 days clean)
+// and the last scan was ≥2 days ago. Don't-break-the-chain psychology.
+function _daysSince(iso) {
+  if (!iso) return null;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+const daysSinceScan = _daysSince(streak?.lastScanDate);
+const atRisk = streak
+  && (streak.daysCleanCritical || 0) >= 7
+  && daysSinceScan !== null && daysSinceScan >= 2;
+
+if (atRisk) {
+  console.error('⚠️  agentic-security: ' + streak.daysCleanCritical + '-day clean streak at risk — last scan was ' + daysSinceScan + ' days ago.');
+  console.error('    Run /security-scan-all to keep the streak going. Best ever: ' + (streak.bestDaysCleanCritical || streak.daysCleanCritical) + ' days.');
+} else {
+  const line = formatStreakLine(streak);
+  if (line) console.error('🛡️  ' + line);
 }
 process.exit(0);

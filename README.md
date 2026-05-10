@@ -7,7 +7,7 @@ The security layer built for AI-written code. Catches vulnerabilities the moment
 [![License: PolyForm-Internal-Use-1.0.0](https://img.shields.io/badge/license-PolyForm--Internal--Use--1.0.0-blue)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-75%2F75%20passing-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.06MB%20·%20no%20install-orange)]()
-[![Version](https://img.shields.io/badge/version-0.14.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.15.0-blue)]()
 
 ---
 
@@ -173,6 +173,8 @@ A finite, beginner-friendly list of "10 things you usually miss before going liv
 | `/security-status` | Plugin & project health snapshot — version, last scan, cache, hooks, streak, achievements |
 | `/security-help` | List every command organized by category with usage notes |
 | `/security-badge` | Print a markdown badge of your current security grade for your README |
+| `/security-share` | Generate copy-paste posts for Twitter / LinkedIn / Discord about your progress |
+| `/security-recap` | Year-in-Security recap card — days active, scans, fixes shipped, longest streak |
 
 All commands are available in the fully-qualified form (`/agentic-security:*`) everywhere, and as short forms in any project where you've run `/security-setup`.
 
@@ -240,7 +242,38 @@ Run:
 
 It prints the markdown for your current grade. Drop it in your README. Refresh by re-running after each scan.
 
-You also collect achievements as you go — first scan, first fix, clean sweep, 7-day streak, 30-day streak, launch ready, scan veteran. View them with `/security-status`.
+### Streaks, achievements, and tiers
+
+Every clean-of-critical day adds to your streak. Long streaks unlock named tiers:
+
+| Days | Tier | Icon |
+|---|---|---|
+| 7 | Bronze Streak | 🥉 |
+| 30 | Silver Streak | 🥈 |
+| 90 | Gold Streak | 🥇 |
+| 180 | Platinum Streak | 💎 |
+| 365 | Diamond Streak | 💠 |
+
+Other achievements you'll unlock along the way: First Scan 🛡️, First Fix 🔧, Clean Sweep 🧹, Bronze/Silver/Gold Fixer (10/50/200 fixes), Grade A 🏆, Grade A+ 🌟, Launch Ready 🚀, Scan Veteran (25), Scan Centurion (100). View them with `/security-status`.
+
+Don't break the chain — if your streak is at risk because you haven't scanned recently, the plugin reminds you on next session start.
+
+### Share your progress
+
+```
+/security-share          # all three platforms
+/security-share twitter  # Twitter / X (≤280 chars)
+/security-share linkedin # LinkedIn (longer-form)
+/security-share discord  # Discord / Slack (with badge)
+```
+
+Generates copy-paste-ready posts using your real grade and streak. The post is built locally — nothing ships until you publish it yourself.
+
+```
+/security-recap
+```
+
+A Spotify-Wrapped-style summary card: days protected, scans run, fixes shipped, grade journey, longest streak, top achievements. Best after a few months of history.
 
 ---
 
