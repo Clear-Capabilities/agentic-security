@@ -185,11 +185,12 @@ Evidence is multi-signal: declared dependencies carry the highest weight, follow
 ```
 Coverage: 73% (11/15 controls)
 
-| ID      | Title                                    | Status      | Signals              |
-|---------|------------------------------------------|-------------|----------------------|
-| V3.4.1  | Cookies set with Secure/HttpOnly/SameSite | Compliant  | code_term+config_term |
-| V2.4.1  | Secure password storage (bcrypt/argon2)  | Partial     | import               |
-| V5.1.1  | Input validation library in use          | Not Compliant |                    |
+  Compliant      V3.4.1  Cookies set with Secure/HttpOnly/SameSite   code_term+config_term
+  Compliant      V4.1.1  Access control enforced server-side          import+code_term
+  Partial        V2.4.1  Secure password storage (bcrypt/argon2)      import
+  Partial        V6.2.1  Strong cryptographic algorithms in use        code_term
+  Not Compliant  V5.1.1  Input validation library in use
+  Not Compliant  V8.3.1  Sensitive data not logged
 ```
 
 ---
