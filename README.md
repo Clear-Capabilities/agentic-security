@@ -59,6 +59,29 @@ Three commands. The whole product. The default for everyone.
 
 #### `/scan-all` — daily, before deploy
 
+**What `/scan-all` scans every run — nine pillars, no configuration required:**
+
+```
+       Pillar         What we scan
+       ─────────────────────────────────────────────────────────────
+       SAST           Taint analysis (regex + AST for JS/TS), Java
+                      rule pack, Python helpers.
+       SCA            OSV + CISA KEV + EPSS, function-level
+                      reachability, dep confusion, typosquat.
+       Secrets        50+ credential patterns, high-entropy heuristic,
+                      allowlist-aware.
+       IaC            Dockerfile, docker-compose, GitHub Actions,
+                      Kubernetes manifests.
+       LLM            OWASP LLM Top 10 (2025): prompt injection,
+                      sensitive disclosure, system prompt leakage.
+       MCP            Agent-tool audit for over-privileged MCP servers.
+       Pipeline       GitHub Actions integrity: floating tags,
+                      secret echoes, OIDC misconfig.
+       Auth/AuthZ     Broken access control, IDOR, mass assignment,
+                      session fixation.
+       Container      Base-image EOL, exposed ports, runtime mode.
+```
+
 A one-screen verdict. Either you're safe to ship, or you have a short list of things to fix.
 
 ```
@@ -81,29 +104,6 @@ A one-screen verdict. Either you're safe to ship, or you have a short list of th
      Why: An attacker can dump your entire users table.
 
   Type /show-findings to see the rest, or /fix-all to apply them.
-```
-
-**What `/scan-all` scans every run — nine pillars, no configuration required:**
-
-```
-       Pillar         What we scan
-       ─────────────────────────────────────────────────────────────
-       SAST           Taint analysis (regex + AST for JS/TS), Java
-                      rule pack, Python helpers.
-       SCA            OSV + CISA KEV + EPSS, function-level
-                      reachability, dep confusion, typosquat.
-       Secrets        50+ credential patterns, high-entropy heuristic,
-                      allowlist-aware.
-       IaC            Dockerfile, docker-compose, GitHub Actions,
-                      Kubernetes manifests.
-       LLM            OWASP LLM Top 10 (2025): prompt injection,
-                      sensitive disclosure, system prompt leakage.
-       MCP            Agent-tool audit for over-privileged MCP servers.
-       Pipeline       GitHub Actions integrity: floating tags,
-                      secret echoes, OIDC misconfig.
-       Auth/AuthZ     Broken access control, IDOR, mass assignment,
-                      session fixation.
-       Container      Base-image EOL, exposed ports, runtime mode.
 ```
 
 ---
