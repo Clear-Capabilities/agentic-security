@@ -172,103 +172,54 @@ That's the entire product. You don't need anything else to ship safer code.
 
 ### ⚙️ Developer Mode
 
-> **Full taxonomy. SARIF on every scan. CI gates. Audit-grade suppressions. 13 commands, everything behind flags.**
+> **Every flag, every format, every framework. There's a lot more under the hood.**
 
-For platform teams, AppSec engineers, and anyone who needs findings outside a chat window.
-
-Here's what a scan looks like in developer mode:
+Beyond the three easy-mode commands, agentic-security ships a full command surface for platform teams, AppSec engineers, and anyone who wants to go deeper:
 
 ```
-agentic-security — developer mode  ·  258 finding(s) across 412 file(s)
+/agentic-security:scan                  Run the scanner. Default (--all) gives a one-screen verdict.
+                                        Focused modes: --sca, --secrets, --authz, --mcp,
+                                        --pipeline, --logic, --diff.
 
-Severity    File:Line                CWE      CVSS  OWASP     Vuln                       Conf
-──────────────────────────────────────────────────────────────────────────────────────────────
-🛑 CRITICAL  routes/login.ts:34       CWE-89   9.8   A03:2021  SQL Injection              0.93
-🛑 CRITICAL  lib/insecurity.ts:43     CWE-916  8.1   A02:2021  MD5 Password Hashing       0.95
-🛑 CRITICAL  routes/b2bOrder.ts:17    CWE-94   9.8   A03:2021  RCE (VM Sandbox Escape)    0.91
-⚠️  HIGH     api/files.ts:67          CWE-22   7.5   A01:2021  Path Traversal             0.88
-…  +254 more
+/agentic-security:show-findings         Triage FPs then view results. Default (--all) opens an
+                                        interactive HTML report. Use --kev for weaponized CVEs,
+                                        --chains for exploit chains, or --threat-model [--stride|--llm].
 
-Critical: 31  High: 73  Medium: 149  Low: 5  Info: 0
+/agentic-security:fix                   Remediate findings. Use --one <id> to patch a single finding,
+                                        --all to batch-fix by severity, or --pr to bundle fixes
+                                        into a pull request.
 
-Machine-readable output written to .agentic-security/findings.{sarif,json,csv}
+/agentic-security:security-poc          Generate a working exploit payload + regression test for one
+                                        finding (or flag PROBABLE_FP if no payload can be constructed).
+
+/agentic-security:security-posture      Posture management — SBOM, AI-BOM, API inventory, license
+                                        policy, drift analysis, and SLA tracking. Use --sbom, --aibom,
+                                        --api, --license, --drift, or --mttr.
+
+/agentic-security:produce-compliance-report  Auditor-ready attestation for NIST AI 600-1, OWASP ASVS,
+                                             PCI-DSS 4.0, or SOC 2.
+
+/agentic-security:security-explain      Explain a finding in plain English — what it means, how an
+                                        attacker exploits it, the worst case, and how to fix it.
+
+/agentic-security:security-launch-check Pre-deploy checklist of the 10 things beginners typically
+                                        miss before going live.
+
+/agentic-security:security-grade        Single letter-grade snapshot (A–F) of your project's security
+                                        posture, with one concrete next action.
+
+/agentic-security:security-share        Generate copy-paste-ready posts (Twitter/X, LinkedIn,
+                                        Discord/Slack) about your security progress.
+
+/agentic-security:security-status       One-screen plugin & project health snapshot — version, last
+                                        scan time, finding counts, cache size, hook activation.
+
+/agentic-security:security-setup        Install short-form command shortcuts into this project.
+
+/agentic-security:security-help         Full command catalog with one-line descriptions.
 ```
 
-Every finding carries CWE, CVSS, OWASP, MITRE ATT&CK technique, CAPEC pattern, exploitability score, source/sink reachability, and toxic-combinations scoring.
-
-#### The full command surface
-
-**Scanning**
-
-| Command | What it does |
-|---|---|
-| `/scan --all` | Full SAST + SCA + secrets sweep — one-screen verdict |
-| `/scan --sca` | Dependency CVE audit only (OSV + CISA KEV + EPSS) |
-| `/scan --secrets` | Credential and API key sweep (60+ patterns + entropy) |
-| `/scan --authz` | Deep auth/authZ audit — JWT, OAuth2, IDOR, session fixation |
-| `/scan --mcp` | Audit MCP server configs for agent-host risks |
-| `/scan --pipeline` | Audit GitHub Actions; `--format pbom` for Pipeline BOM |
-| `/scan --logic` | Semantic business-logic review (intent vs. implementation) |
-| `/scan --diff` | Score a git diff by architectural risk (`--since <ref>`) |
-
-**Viewing & analysis**
-
-| Command | What it does |
-|---|---|
-| `/show-findings --all` | Triage FPs then open an interactive HTML report |
-| `/show-findings --kev` | List only CISA KEV findings (actively weaponized CVEs) |
-| `/show-findings --chains` | Synthesize multi-finding exploit chains |
-| `/show-findings --threat-model` | STRIDE table; add `--llm` for OWASP LLM Top 10 map |
-
-**Fixing**
-
-| Command | What it does |
-|---|---|
-| `/fix --one <id>` | Patch a single finding via the security-fixer subagent |
-| `/fix --all [--critical\|--high\|--medium\|--low]` | Batch-fix by severity tier |
-| `/fix --pr [--apply]` | Bundle fixes into a feature branch + PR |
-
-**Deep analysis**
-
-| Command | What it does |
-|---|---|
-| `/security-poc <id>` | Generate a working exploit payload + regression test |
-| `/security-explain <id>` | Plain-English explanation — what, how, worst case, fix |
-| `/security-launch-check` | Pre-deploy 10-item checklist (the things beginners miss) |
-
-**Posture management**
-
-| Command | What it does |
-|---|---|
-| `/security-posture --sbom` | CycloneDX 1.6 or SPDX 2.3 software bill of materials |
-| `/security-posture --aibom` | AI/ML Bill of Materials — models, prompts, frameworks |
-| `/security-posture --api` | Full API surface map with auth status + data classifications |
-| `/security-posture --license` | Enforce license allow/deny policy on all dependencies |
-| `/security-posture --drift` | Diff two scan snapshots — lost auth, new findings, new deps |
-| `/security-posture --mttr` | Show findings breaching per-severity SLA thresholds |
-
-**Compliance attestation**
-
-| Command | What it does |
-|---|---|
-| `/produce-compliance-report nist` | NIST AI 600-1 — 122 GenAI controls, audit-ready |
-| `/produce-compliance-report asvs` | OWASP ASVS Level 1+2 |
-| `/produce-compliance-report pci` | PCI-DSS 4.0 — 12 code-testable controls |
-| `/produce-compliance-report soc2` | SOC 2 Common Criteria CC6–CC9 |
-
-**Project meta**
-
-| Command | What it does |
-|---|---|
-| `/security-status` | Plugin + project health snapshot |
-| `/security-grade` | Letter grade (A–F) + README badge snippet |
-| `/security-help` | Full command catalog |
-| `/security-setup` | Install short-form shortcuts into this project |
-| `/security-share` | Ready-to-post content about your security progress |
-
----
-
-Every flag, output format, CI integration, suppression schema, and custom rule option is documented in the **[Developer Guide →](docs/for-appsec-pros.md)**.
+For the complete reference — CI integration, SARIF output, audit-grade suppressions, custom rules, org-wide fleet scans, and every flag — read the **[Developer Guide →](https://github.com/clearcapabilities/agentic-security/blob/main/docs/for-appsec-pros.md)**.
 
 ---
 
