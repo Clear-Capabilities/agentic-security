@@ -26,13 +26,20 @@ const LLM_SINK_PATTERNS = [
   /\b(?:model|genAI|chat)\.generateContent(?:Stream)?\s*\(/,
   // Mistral / Cohere / Groq / Together (same dotted-create shape)
   /\b(?:mistral|cohere|groq|together)\.(?:chat\.complete|chat\.completions\.create|generate)\s*\(/,
+  // Ollama / OpenAI-compatible HTTP endpoints via any client (requests/httpx/aiohttp/fetch).
+  // Matches a quoted URL pointing at a known LLM completion path.
+  /["'`][^"'`]*\/(?:api\/(?:generate|chat|embeddings)|v1\/(?:chat\/completions|completions|messages|embeddings))(?:["'`?]|$)/,
 ];
 
 // Lower-precision LLM-call shape used only as a corroborator (require import).
 const LLM_FUZZY_CALL_RE = /\b(?:complete|generate|chat|invoke|predict)\s*\(/;
 
 // Imports indicate an LLM-using file even when call shape is non-standard.
-const LLM_IMPORT_RE = /(?:from\s+["']?(?:anthropic|openai|@ai-sdk|ai|@anthropic-ai|@google\/generative-ai|cohere-ai|@mistralai|groq-sdk|together-ai|langchain)["']?|require\s*\(\s*["'](?:@anthropic-ai|@ai-sdk|openai|anthropic|cohere-ai|@mistralai|langchain|groq-sdk|together-ai)[^"']*["']\s*\)|\bimport\s+(?:OpenAI|Anthropic|GoogleGenerativeAI|Mistral|Cohere|Groq))/;
+const LLM_IMPORT_RE = /(?:from\s+["']?(?:anthropic|openai|@ai-sdk|ai|@anthropic-ai|@google\/generative-ai|cohere-ai|@mistralai|groq-sdk|together-ai|langchain|ollama|gpt4all|llama_index|llama-index)["']?|require\s*\(\s*["'](?:@anthropic-ai|@ai-sdk|openai|anthropic|cohere-ai|@mistralai|langchain|groq-sdk|together-ai|ollama)[^"']*["']\s*\)|\bimport\s+(?:OpenAI|Anthropic|GoogleGenerativeAI|Mistral|Cohere|Groq|Ollama))/;
+
+// Environment / config signals that a file is talking to an LLM endpoint
+// even when no SDK is imported (Ollama-style direct HTTP).
+const LLM_ENDPOINT_SIGNAL_RE = /(?:\b(?:OLLAMA_(?:BASE_URL|HOST)|ollama_url|openai_url|llm_url|LITELLM_|HUGGINGFACE_(?:HUB_)?TOKEN|HF_TOKEN|GROQ_API|TOGETHER_API|MISTRAL_API|ANTHROPIC_API|OPENAI_API)\b|\/api\/(?:generate|chat|embeddings)\b|\/v1\/(?:chat\/completions|completions|messages|embeddings)\b)/;
 
 // HTTP-tainted source (JS/TS + Python frameworks)
 const HTTP_TAINT_RHS_RE = /\b(?:req|request|ctx|c)\.(?:body|query|params|headers|cookies|files|url|originalUrl|rawBody)\b|\bsearchParams\b|\bawait\s+(?:request|req)\.(?:json|text|formData)\b/;
@@ -119,7 +126,8 @@ export function scanLLM(fp, raw) {
 
   const hasImport = LLM_IMPORT_RE.test(raw);
   const hasAnyStrictSink = LLM_SINK_PATTERNS.some(re => re.test(raw));
-  if (!hasImport && !hasAnyStrictSink) return [];
+  const hasEndpointSignal = LLM_ENDPOINT_SIGNAL_RE.test(raw);
+  if (!hasImport && !hasAnyStrictSink && !hasEndpointSignal) return [];
 
   const lines = raw.split('\n');
   const findings = [];
@@ -167,7 +175,7 @@ export function scanLLM(fp, raw) {
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
     const strictSink = _hasLLMSink(line);
-    const fuzzySink = !strictSink && hasImport && LLM_FUZZY_CALL_RE.test(line);
+    const fuzzySink = !strictSink && (hasImport || hasEndpointSignal) && LLM_FUZZY_CALL_RE.test(line);
     if (!strictSink && !fuzzySink) continue;
 
     const { text: ctx } = _ctxWindow(lines, li, 18);
@@ -293,7 +301,7 @@ export function scanLLM(fp, raw) {
 }
 
 export const _LLM_INTERNAL = {
-  LLM_SINK_PATTERNS, LLM_IMPORT_RE,
+  LLM_SINK_PATTERNS, LLM_IMPORT_RE, LLM_ENDPOINT_SIGNAL_RE,
   HTTP_TAINT_RHS_RE, PY_HTTP_TAINT_RHS_RE,
   EXT_TAINT_RHS_RE, PY_EXT_TAINT_RHS_RE,
   DANGEROUS_TOOL_NAME_RE, UNSAFE_HTML_SINK_RE, SYSTEM_PROMPT_LEAK_RE,

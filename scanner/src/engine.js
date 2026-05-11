@@ -10,6 +10,7 @@ import * as yaml from 'js-yaml';
 import { createRequire } from 'node:module';
 const _require = createRequire(import.meta.url);
 import { scanLLM } from './sast/llm.js';
+import { scanLLMOwasp } from './sast/llm-owasp.js';
 import { scanBusinessLogic } from './sast/logic.js';
 import { scanPipeline } from './sast/pipeline.js';
 import { scanMCP } from './sast/mcp-audit.js';
@@ -5241,6 +5242,7 @@ async function queryRegistries(components){
 // fileContents = code files keyed by relative path; depFileContents = manifest/lockfiles keyed by relative path.
 async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);const files=Object.keys(fileContents).filter(f=>shouldScan(f) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];let i=0;for(const p of files){i++;setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});try{const c=fileContents[p];if(!c||c.length>500000)continue;const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000)continue;fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aF.push(...scanAliasedSinks(p,c));aF.push(...scanJavaSAST(p,c));aLogic.push(...scanMiddlewareOrdering(p,c));aLogic.push(...scanReDoS(p,c));aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));aF.push(...scanIaC(p,c));
       aF.push(...scanLLM(p,c));
+      aF.push(...scanLLMOwasp(p,c));
       aLogic.push(...scanBusinessLogic(p,c));
       aF.push(...scanPipeline(p,c));
       aF.push(...scanContainer(p,c));

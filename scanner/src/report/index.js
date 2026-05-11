@@ -31,6 +31,7 @@ export function normalizeFindings(scan){
       severity: f.severity || 'medium',
       vuln: f.vuln || f.type,
       cwe: f.cwe || null,
+      owaspLlm: f.owaspLlm || null,
       stride: f.stride || null,
       file: f.file,
       line: f.line || f.source?.line || f.sink?.line || 0,

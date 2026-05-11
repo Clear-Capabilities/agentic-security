@@ -8,6 +8,9 @@ scanner/test/fixtures/vulnerable-js/.agentic-security/
 # Keyed by {app}-{sha} so updating the manifest invalidates only that entry.
 scanner/test/benchmark/realworld/.bench-cache/
 
+# OWASP LLM Top 10 goat benchmark — external repos cloned on demand.
+scanner/test/benchmark/llm-goats/.cache/
+
 # Python caches from compliance helper scripts (scripts/{nist,owasp-asvs,pci,soc2}/).
 __pycache__/
 

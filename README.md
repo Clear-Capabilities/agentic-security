@@ -73,7 +73,11 @@ Three commands. The whole product. The default for everyone.
        IaC            Dockerfile, docker-compose, GitHub Actions,
                       Kubernetes manifests.
        LLM            OWASP LLM Top 10 (2025): prompt injection,
-                      sensitive disclosure, system prompt leakage.
+                      sensitive disclosure, supply chain, data/model
+                      poisoning, improper output handling, excessive
+                      agency, system prompt leakage, vector & embedding
+                      weakness, misinformation prompts, unbounded
+                      consumption. Benchmarked against AIGoat + LLMGoat.
        MCP            Agent-tool audit for over-privileged MCP servers.
        Pipeline       GitHub Actions integrity: floating tags,
                       secret echoes, OIDC misconfig.
