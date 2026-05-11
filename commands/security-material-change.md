@@ -23,7 +23,7 @@ import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/material-change.js').then(m =>
 3. Print the agent's output verbatim.
 
 4. Suggest follow-ups based on `materialRisk`:
-   - `critical` → recommend `/security-fix` for any auth-removed / priv-from-body / new-shell-call findings, and `/security-poc` to validate a working exploit before merging.
+   - `critical` → recommend `/fix --one` for any auth-removed / priv-from-body / new-shell-call findings, and `/security-poc` to validate a working exploit before merging.
    - `high` → recommend `/security-poc` for the highest-tier finding.
    - `medium` / `low` / `none` → no follow-up; the diff is safe to merge from a posture standpoint.
 

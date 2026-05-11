@@ -33,4 +33,4 @@ Then re-run the scan so suppressions take effect:
 node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan . --format cli; ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec
 ```
 
-Do not suppress anything you are not certain is a false positive. When in doubt, mark it TP and leave remediation to `/security-fix`.
+Do not suppress anything you are not certain is a false positive. When in doubt, mark it TP and leave remediation to `/fix --one`.

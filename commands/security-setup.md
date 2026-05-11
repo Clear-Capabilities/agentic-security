@@ -17,23 +17,12 @@ if [ -z "$BUNDLE" ]; then
   exit 1
 fi
 
-cat > .claude/commands/security-fix.md << CMDEOF
+cat > .claude/commands/fix.md << CMDEOF
 ---
-description: Apply a remediation patch for a single finding from the last scan.
-argument-hint: "<finding-id>"
+description: Fix findings. Use --one <id> for a single finding, --all [--critical|--high|--medium|--low] for batch, or --pr to bundle into a pull request.
+argument-hint: "[--one <finding-id>] | [--all [--critical|--high|--medium|--low]] | [--pr [--apply] [--branch <name>]]"
 ---
-\`\`\`bash
-node $BUNDLE fix --finding \${1}
-\`\`\`
-Hand the finding off to the security-fixer subagent: read the affected file, apply the fix template adapted to the surrounding code, and run the project's test command if one is configured. Do not declare the fix complete until the finding no longer reproduces on re-scan.
-CMDEOF
-
-cat > .claude/commands/fix-all.md << CMDEOF
----
-description: Remediate every finding at or above a severity threshold (default critical).
-argument-hint: "[--severity critical|high|medium]"
----
-Read \`.agentic-security/last-scan.json\`. For every finding whose severity is at or above \`\${1:-critical}\`, dispatch the security-fixer subagent in sequence (not in parallel — each fix may invalidate later findings). After each batch, re-run \`/security-scan\` to confirm fixes landed. Stop and report if a fix's tests fail.
+Run \`/agentic-security:fix \$@\` to fix findings.
 CMDEOF
 
 cat > .claude/commands/scan.md << CMDEOF
@@ -156,8 +145,7 @@ Run \`/agentic-security:security-share \${1:-all}\` for shareable posts and reca
 CMDEOF
 
 echo "✓ Installed shortcuts in .claude/commands/:"
-echo "  /scan, /show-findings, /fix-all"
-echo "  /security-fix, /security-fix-pr, "
+echo "  /scan, /show-findings, /fix"
 echo "  /security-mcp-audit, /security-authz, /security-kev"
 echo "  /security-help, /security-status"
 echo "  /security-explain, /security-grade, /security-launch-check"

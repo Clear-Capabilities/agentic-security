@@ -46,11 +46,11 @@ let grade, reason, action;
 if (c > 10 || (c > 5 && kevCount > 0)) {
   grade = 'F';
   reason = c + ' critical finding(s)' + (kevCount ? ' including ' + kevCount + ' actively-exploited CVE(s)' : '') + '. Your project would not pass any security review in this state.';
-  action = 'Run /fix-all --severity critical to start triaging the worst.';
+  action = 'Run /fix --all --critical to start triaging the worst.';
 } else if (c >= 6) {
   grade = 'D';
   reason = c + ' critical finding(s) — too many to ship safely. Each one is a potential breach.';
-  action = 'Run /fix-all --severity critical to fix the worst, then /security-grade again.';
+  action = 'Run /fix --all --critical to fix the worst, then /security-grade again.';
 } else if (kevCount > 0) {
   grade = 'D';
   reason = kevCount + ' CVE(s) on the CISA Known Exploited Vulnerabilities list — these are being weaponized in real attacks right now.';
@@ -58,11 +58,11 @@ if (c > 10 || (c > 5 && kevCount > 0)) {
 } else if (c >= 3) {
   grade = 'C-';
   reason = c + ' critical finding(s). A working app, but with serious holes an attacker would target.';
-  action = 'Run /fix-all --severity critical.';
+  action = 'Run /fix --all --critical.';
 } else if (c >= 1) {
   grade = 'C';
   reason = c + ' critical finding(s). Most things look OK, but the criticals must be fixed before launch.';
-  action = 'Run /fix-all --severity critical (just ' + c + ' fix' + (c>1?'es':'') + ').';
+  action = 'Run /fix --all --critical (just ' + c + ' fix' + (c>1?'es':'') + ').';
 } else if (h > 10) {
   grade = 'B-';
   reason = '0 critical, but ' + h + ' high-severity findings — the volume itself is a risk.';
@@ -70,7 +70,7 @@ if (c > 10 || (c > 5 && kevCount > 0)) {
 } else if (h >= 3) {
   grade = 'B';
   reason = '0 critical and only ' + h + ' high-severity findings. You are in OK shape.';
-  action = 'Run /fix-all --severity high to clean up the remaining issues.';
+  action = 'Run /fix --all --high to clean up the remaining issues.';
 } else if (h > 0) {
   grade = 'A-';
   reason = '0 critical and ' + h + ' high-severity finding(s). Very close to clean.';

@@ -8,9 +8,9 @@ Print the full agentic-security command catalog.
 agentic-security commands
 
 EASY MODE — three commands. The whole product.
-  /scan                      One-screen "safe to deploy?" verdict (--sca-only or --secrets-only for focused scans)
-  /show-findings             Print findings from the last scan
-  /fix-all                   Batch-fix every finding at or above --severity
+  /scan --all                One-screen "safe to deploy?" verdict
+  /show-findings             Interactive HTML report of findings
+  /fix --all                 Batch-fix every finding at or above --severity
 
 DEVELOPER MODE — full catalog below.
 
@@ -18,9 +18,9 @@ SCANNING & FIXING
   /scan --all                Full SAST + SCA + secrets sweep (one-screen verdict)
   /scan --sca-only           Dependency CVE audit only (OSV.dev-backed)
   /scan --secrets-only       Hardcoded credential / API key scan only
-  /security-fix              Patch a single finding (by id) via the fixer subagent
-  /fix-all                   Batch-fix every finding at or above --severity
-  /security-fix-pr           Bundle critical fixes into a feature branch + PR
+  /fix --one <id>            Patch a single finding via the fixer subagent
+  /fix --all [--critical|--high|--medium|--low]  Batch-fix by severity tier
+  /fix --pr [--apply]        Bundle fixes into a feature branch + PR
   /security-triage           Validate findings; suppress confirmed false positives
 
 AI-NATIVE CAPABILITIES

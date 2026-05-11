@@ -31,7 +31,7 @@ process.stdout.write(driftToMarkdown(driftBetween(a, b)));
    - **Newly exposed data classes** (PII / PHI / PCI / Confidential)
 
 4. Suggest follow-ups based on the headline tier:
-   - `critical` (auth boundary lost or new critical finding) → recommend `/security-poc <id>` for the new finding and `/security-fix` to restore the boundary.
+   - `critical` (auth boundary lost or new critical finding) → recommend `/security-poc <id>` for the new finding and `/fix --one` to restore the boundary.
    - `high` (new unauth endpoints, new high-tier CVE) → recommend `/security-chain` to check whether the new surface combines with existing findings into an attack chain.
    - `medium`/`low`/`info` → no follow-up needed; safe to merge.
 

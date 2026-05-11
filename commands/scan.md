@@ -40,10 +40,10 @@ esac
 
 | Answer | Command |
 |--------|---------|
-| Critical only | `/fix-all --severity critical` |
-| Critical + High | `/fix-all --severity high` |
-| Critical + High + Medium | `/fix-all --severity medium` |
-| All | `/fix-all --severity low` |
+| Critical only | `/fix --all --critical` |
+| Critical + High | `/fix --all --high` |
+| Critical + High + Medium | `/fix --all --medium` |
+| All | `/fix --all --low` |
 
 If they ask to see specifics first, run `/scan --firehose` for the full per-finding list. Don't volunteer that list unprompted — the whole point of `/scan --all` is the one-screen summary.
 

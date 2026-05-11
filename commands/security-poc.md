@@ -25,7 +25,7 @@ Generate a concrete proof-of-concept (or false-positive verdict) for finding `${
 6. After printing:
    - If verdict is `TP_CONFIRMED`: offer to write the test to `tests/security/<finding-id>.test.<ext>` (matching project conventions). Ask before writing.
    - If verdict is `PROBABLE_FP`: offer to apply the suppression (append to `.agentic-security/rules.yml`). Ask before writing.
-   - If verdict is `INDETERMINATE`: leave the finding as-is and recommend `/security-fix ${1}` only if the user accepts the residual risk.
+   - If verdict is `INDETERMINATE`: leave the finding as-is and recommend `/fix --one ${1}` only if the user accepts the residual risk.
 
 ## Why this exists
 
@@ -34,4 +34,4 @@ A finding the team can't reproduce is a finding the team won't fix. By forcing a
 - Raises **precision**: findings whose data flow can't actually be exploited are demoted to PROBABLE_FP and suppressed at source.
 - Raises **recall on real bugs over time**: the regression test lives in CI and re-fires if the bug is reintroduced by a future commit.
 
-Together with `/security-fix`, this closes the loop: **find → prove → fix → test**.
+Together with `/fix --one`, this closes the loop: **find → prove → fix → test**.
