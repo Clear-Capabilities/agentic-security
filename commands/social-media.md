@@ -11,7 +11,7 @@ const fs = require('fs');
 
 let scan, streak;
 try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); }
-catch { console.log('No scan yet. Run /scan --all first, then /security-share.'); process.exit(0); }
+catch { console.log('No scan yet. Run /scan --all first, then /social-media.'); process.exit(0); }
 try { streak = JSON.parse(fs.readFileSync('.agentic-security/streak.json', 'utf8')); }
 catch { streak = {}; }
 
@@ -160,7 +160,7 @@ if (target === 'recap' || target === 'all') {
 
 if (!['twitter', 'x', 'linkedin', 'discord', 'slack', 'recap', 'all'].includes(target)) {
   console.error('Unknown target: ' + target);
-  console.error('Usage: /security-share [twitter|linkedin|discord|recap|all]');
+  console.error('Usage: /social-media [twitter|linkedin|discord|recap|all]');
   process.exit(1);
 }
 " -- "$1"
@@ -170,6 +170,6 @@ Print verbatim. The user wants the post text to copy.
 
 ## Why this exists
 
-Sharing security progress publicly is unusual right now — building a brag-worthy moment is half the battle. `/security-share` turns the celebration moments (streak hit, grade up, fix shipped) into a one-command copy-paste post. Pick the target platform — `twitter`, `linkedin`, `discord`/`slack`, or `all` — and paste the result wherever your audience is.
+Sharing security progress publicly is unusual right now — building a brag-worthy moment is half the battle. `/social-media` turns the celebration moments (streak hit, grade up, fix shipped) into a one-command copy-paste post. Pick the target platform — `twitter`, `linkedin`, `discord`/`slack`, or `all` — and paste the result wherever your audience is.
 
 The post is generated from your local `streak.json` and `last-scan.json` — nothing leaves your machine until you decide to publish.

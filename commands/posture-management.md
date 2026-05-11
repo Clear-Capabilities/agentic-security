@@ -108,7 +108,7 @@ for (const f of overSla.slice(0, 20)) console.log('  ' + f.severity + '\t' + f.a
 "
     ;;
   *)
-    echo "Usage: /security-posture <mode> [options]"
+    echo "Usage: /posture-management <mode> [options]"
     echo ""
     echo "  --sbom    [--format cyclonedx|spdx] [--output <file>]"
     echo "            CycloneDX 1.6 or SPDX 2.3 software bill of materials"
@@ -134,16 +134,16 @@ esac
 
 ## Modes
 
-**`/security-posture --sbom`** — Emit a CycloneDX 1.6 or SPDX 2.3 SBOM. Every component includes `purl`, license, scope, CVE IDs, CVSS vectors, EPSS scores, and `agentic-security:functionReachable` annotations. Required for FedRAMP, EU CRA, NIST SSDF, EO 14028, and most SOC 2 audits.
+**`/posture-management --sbom`** — Emit a CycloneDX 1.6 or SPDX 2.3 SBOM. Every component includes `purl`, license, scope, CVE IDs, CVSS vectors, EPSS scores, and `agentic-security:functionReachable` annotations. Required for FedRAMP, EU CRA, NIST SSDF, EO 14028, and most SOC 2 audits.
 
-**`/security-posture --aibom`** — AI/ML Bill of Materials (CycloneDX 1.7 ML-BOM compatible). Captures every model, prompt template, inference framework, and vector store. Required by EU AI Act and enterprise security questionnaires.
+**`/posture-management --aibom`** — AI/ML Bill of Materials (CycloneDX 1.7 ML-BOM compatible). Captures every model, prompt template, inference framework, and vector store. Required by EU AI Act and enterprise security questionnaires.
 
-**`/security-posture --api`** — Export the full API surface from the last scan. Each endpoint is annotated with auth status (🔒 / ⚠️) and data classifications (PII / PHI / PCI / Confidential). Available formats: `md` (risk-sorted table), `json` (machine-readable), `openapi` (OpenAPI 3.1 stub with security schemes).
+**`/posture-management --api`** — Export the full API surface from the last scan. Each endpoint is annotated with auth status (🔒 / ⚠️) and data classifications (PII / PHI / PCI / Confidential). Available formats: `md` (risk-sorted table), `json` (machine-readable), `openapi` (OpenAPI 3.1 stub with security schemes).
 
-**`/security-posture --license [--init]`** — Enforce a license allow/deny/review policy on the dependency tree. Use `--init` to create a default policy at `.agentic-security/license-policy.yml`. Violations appear as `kind: 'license'` findings: `high` for denied licenses (e.g., GPL-3.0 in closed-source), `low` for review-required or missing.
+**`/posture-management --license [--init]`** — Enforce a license allow/deny/review policy on the dependency tree. Use `--init` to create a default policy at `.agentic-security/license-policy.yml`. Violations appear as `kind: 'license'` findings: `high` for denied licenses (e.g., GPL-3.0 in closed-source), `low` for review-required or missing.
 
-**`/security-posture --drift`** — Diff two scan JSON snapshots. Reports: auth boundaries lost, new endpoints, new CVEs, severity deltas, newly exposed data classes. Defaults `--from` to the previous scan and `--to` to the current `.agentic-security/last-scan.json`. Follow-ups: `critical` → `/security-poc` + `/fix --one`; `high` → `/show-findings --chains`.
+**`/posture-management --drift`** — Diff two scan JSON snapshots. Reports: auth boundaries lost, new endpoints, new CVEs, severity deltas, newly exposed data classes. Defaults `--from` to the previous scan and `--to` to the current `.agentic-security/last-scan.json`. Follow-ups: `critical` → `/exploit-poc` + `/fix --one`; `high` → `/show-findings --chains`.
 
-**`/security-posture --mttr`** — Show findings breaching per-severity SLA thresholds (default: critical=7d, high=30d, medium=60d, low=90d). Finding age is measured from the scan timestamp in `last-scan.json`.
+**`/posture-management --mttr`** — Show findings breaching per-severity SLA thresholds (default: critical=7d, high=30d, medium=60d, low=90d). Finding age is measured from the scan timestamp in `last-scan.json`.
 
 🛡  agentic-security · created by ClearCapabilities.Com

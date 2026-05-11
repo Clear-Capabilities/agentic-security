@@ -36,27 +36,27 @@ FIXING
   /fix --pr [--apply]        Bundle fixes into a feature branch + PR
 
 DEEP ANALYSIS
-  /security-poc              Generate adversarial PoC for a specific finding
-  /security-explain          Plain-English explanation of any finding
-  /security-launch-check     Pre-deploy 10-item checklist
+  /exploit-poc              Generate adversarial PoC for a specific finding
+  /explain          Plain-English explanation of any finding
+  /launch-check     Pre-deploy 10-item checklist
 
 POSTURE MANAGEMENT
-  /security-posture --sbom   CycloneDX 1.6 or SPDX 2.3 software bill of materials
-  /security-posture --aibom  AI/ML Bill of Materials — models, prompts, frameworks
-  /security-posture --api    Full API surface map annotated with auth status + data classes
-  /security-posture --license  Enforce license allow/deny policy on deps (--init to create)
-  /security-posture --drift  Compare two scans — lost auth, new findings, new deps
-  /security-posture --mttr   Show findings exceeding per-severity SLA thresholds
+  /posture-management --sbom   CycloneDX 1.6 or SPDX 2.3 software bill of materials
+  /posture-management --aibom  AI/ML Bill of Materials — models, prompts, frameworks
+  /posture-management --api    Full API surface map annotated with auth status + data classes
+  /posture-management --license  Enforce license allow/deny policy on deps (--init to create)
+  /posture-management --drift  Compare two scans — lost auth, new findings, new deps
+  /posture-management --mttr   Show findings exceeding per-severity SLA thresholds
 
 COMPLIANCE ATTESTATION
-  /produce-compliance-report [nist|asvs|pci|soc2]  Auditor-ready attestation for any framework
+  /compliance-report [nist|asvs|pci|soc2]  Auditor-ready attestation for any framework
 
 PROJECT META
   
-  /security-status           Plugin & project health snapshot
+  /status           Plugin & project health snapshot
   /help                  This command
-  /security-grade            Letter grade (A–F) + README badge snippet
-  /security-share            Posts (Twitter/LinkedIn/Discord/recap) about your security progress
+  /report-card            Letter grade (A–F) + README badge snippet
+  /social-media            Posts (Twitter/LinkedIn/Discord/recap) about your security progress
 
 USAGE NOTES
   - Every command works as /agentic-security:<name> too (the long form).

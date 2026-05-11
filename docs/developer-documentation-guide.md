@@ -136,7 +136,7 @@ Every scan writes to `.agentic-security/` in the project:
        findings.json    Normalized findings, programmable schema.
        findings.sarif   SARIF 2.1.0 for GitHub Security tab, GitLab, etc.
        findings.csv     Spreadsheet / BigQuery / executive reports.
-       last-scan.json   Used by /fix --one, /show-findings, /security-posture.
+       last-scan.json   Used by /fix --one, /show-findings, /posture-management.
        suppressions.yml Audit-grade suppressions (see SUPPRESSIONS).
        rules.yml        Custom rules, severity overrides, version pins.
        triage.json      Triage state machine (see TRIAGE).
@@ -308,7 +308,7 @@ Add to `.pre-commit-config.yaml`:
 
 ```yaml
        - repo: https://github.com/clearcapabilities/agentic-security
-         rev: v0.24.0
+         rev: v0.25.0
          hooks:
            - id: agentic-security
 ```
@@ -387,21 +387,21 @@ Multiple packs union their CWE sets — `--pack owasp-top-10,llm-security` keeps
 Framework-specific attestations (Claude Code slash commands):
 
 ```
-       /produce-compliance-report asvs    OWASP ASVS Level 1+2
-       /produce-compliance-report pci     PCI-DSS 4.0
-       /produce-compliance-report soc2    SOC 2 Common Criteria CC6–CC9
-       /produce-compliance-report nist    NIST AI 600-1 (Generative AI risk)
+       /compliance-report asvs    OWASP ASVS Level 1+2
+       /compliance-report pci     PCI-DSS 4.0
+       /compliance-report soc2    SOC 2 Common Criteria CC6–CC9
+       /compliance-report nist    NIST AI 600-1 (Generative AI risk)
 ```
 
 Posture artifacts:
 
 ```
-       /security-posture --sbom           CycloneDX 1.6 or SPDX 2.3
-       /security-posture --aibom          CycloneDX 1.7 ML-BOM (AI components)
-       /security-posture --api            API surface map (md/json/openapi)
-       /security-posture --license        License allow/deny policy enforcement
-       /security-posture --drift          Diff two scan snapshots
-       /security-posture --mttr           SLA breach report
+       /posture-management --sbom           CycloneDX 1.6 or SPDX 2.3
+       /posture-management --aibom          CycloneDX 1.7 ML-BOM (AI components)
+       /posture-management --api            API surface map (md/json/openapi)
+       /posture-management --license        License allow/deny policy enforcement
+       /posture-management --drift          Diff two scan snapshots
+       /posture-management --mttr           SLA breach report
 ```
 
 Each produces an evidence-backed attestation sheet (CSV + JSON + Markdown) suitable for handing to an auditor.

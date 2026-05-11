@@ -87,7 +87,7 @@ elif [ "$MODE" = "--chains" ]; then
   echo "Invoking security-chain-synthesizer subagent on findings with severity >= $SEVERITY..."
   echo "(Load .agentic-security/last-scan.json, filter to severity >= $SEVERITY, pass to security-chain-synthesizer, print Markdown output verbatim.)"
   echo ""
-  echo "After chains: suggest /security-poc <chain-name> to validate, /fix --one <id> to break at weakest link."
+  echo "After chains: suggest /exploit-poc <chain-name> to validate, /fix --one <id> to break at weakest link."
 
 elif [ "$MODE" = "--threat-model" ]; then
 
@@ -180,7 +180,7 @@ fi
 
 **`/show-findings --kev`** — Triage then list only CVEs on the CISA Known Exploited Vulnerabilities catalog. These are actively weaponized in the wild — treat as P0. `kevRansomware: true` means CISA has linked the CVE to ransomware campaigns.
 
-**`/show-findings --chains [--severity critical|high|all]`** — Triage then invoke the `security-chain-synthesizer` subagent to find multi-finding exploit chains (e.g., IDOR + missing auth = account takeover). Prints Markdown chain report verbatim. After: suggest `/security-poc <chain-name>` to validate and `/fix --one <id>` to break at the weakest link.
+**`/show-findings --chains [--severity critical|high|all]`** — Triage then invoke the `security-chain-synthesizer` subagent to find multi-finding exploit chains (e.g., IDOR + missing auth = account takeover). Prints Markdown chain report verbatim. After: suggest `/exploit-poc <chain-name>` to validate and `/fix --one <id>` to break at the weakest link.
 
 **`/show-findings --threat-model`** _(default: --stride)_ — Triage then render a STRIDE coverage table from the last scan. Add `--llm` for the OWASP LLM Top 10 (2025) coverage map instead.
 

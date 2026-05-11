@@ -16,9 +16,9 @@ const path = require('path');
 
 const arg = (process.argv[1] || '').trim();
 if (!arg) {
-  console.error('Usage: /security-explain <finding-id | CWE-89 | vuln-name>');
-  console.error('  Example: /security-explain CWE-89');
-  console.error('  Example: /security-explain SQL Injection');
+  console.error('Usage: /explain <finding-id | CWE-89 | vuln-name>');
+  console.error('  Example: /explain CWE-89');
+  console.error('  Example: /explain SQL Injection');
   process.exit(1);
 }
 
@@ -73,7 +73,7 @@ if (finding) {
   console.log('');
 } else {
   console.error(\`No finding or CWE matched '\${arg}'.\`);
-  console.error('Run /scan --all first, then /security-explain <finding-id>.');
+  console.error('Run /scan --all first, then /explain <finding-id>.');
   process.exit(1);
 }
 
@@ -109,7 +109,7 @@ if (finding) {
   console.log('  Apply the fix:    /agentic-security:security-fix ' + finding.id);
   console.log('  See in context:   open ' + finding.file);
   if (finding.severity === 'critical' || finding.severity === 'high') {
-    console.log('  Generate PoC:     /agentic-security:security-poc ' + finding.id);
+    console.log('  Generate PoC:     /agentic-security:exploit-poc ' + finding.id);
   }
   console.log('');
 }

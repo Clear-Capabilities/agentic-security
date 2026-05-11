@@ -50,7 +50,7 @@ if (c > 10 || (c > 5 && kevCount > 0)) {
 } else if (c >= 6) {
   grade = 'D';
   reason = c + ' critical finding(s) — too many to ship safely. Each one is a potential breach.';
-  action = 'Run /fix --all --critical to fix the worst, then /security-grade again.';
+  action = 'Run /fix --all --critical to fix the worst, then /report-card again.';
 } else if (kevCount > 0) {
   grade = 'D';
   reason = kevCount + ' CVE(s) on the CISA Known Exploited Vulnerabilities list — these are being weaponized in real attacks right now.';
@@ -74,7 +74,7 @@ if (c > 10 || (c > 5 && kevCount > 0)) {
 } else if (h > 0) {
   grade = 'A-';
   reason = '0 critical and ' + h + ' high-severity finding(s). Very close to clean.';
-  action = 'Run /security-explain on the high finding(s) and decide whether to fix or accept.';
+  action = 'Run /explain on the high finding(s) and decide whether to fix or accept.';
 } else if (counts.medium > 0) {
   grade = 'A';
   reason = '0 critical and 0 high. ' + counts.medium + ' medium finding(s) remain — typically hardening, not breach risks.';

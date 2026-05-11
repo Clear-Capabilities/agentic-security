@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-75%2F75-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.16MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.24.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.25.0-blue)]()
 
 ---
 
@@ -189,29 +189,29 @@ Beyond the three easy-mode commands, agentic-security ships a full command surfa
                                         --all to batch-fix by severity, or --pr to bundle fixes
                                         into a pull request.
 
-/agentic-security:security-poc          Generate a working exploit payload + regression test for one
+/agentic-security:exploit-poc          Generate a working exploit payload + regression test for one
                                         finding (or flag PROBABLE_FP if no payload can be constructed).
 
-/agentic-security:security-posture      Posture management — SBOM, AI-BOM, API inventory, license
+/agentic-security:posture-management      Posture management — SBOM, AI-BOM, API inventory, license
                                         policy, drift analysis, and SLA tracking. Use --sbom, --aibom,
                                         --api, --license, --drift, or --mttr.
 
-/agentic-security:produce-compliance-report  Auditor-ready attestation for NIST AI 600-1, OWASP ASVS,
+/agentic-security:compliance-report  Auditor-ready attestation for NIST AI 600-1, OWASP ASVS,
                                              PCI-DSS 4.0, or SOC 2.
 
-/agentic-security:security-explain      Explain a finding in plain English — what it means, how an
+/agentic-security:explain      Explain a finding in plain English — what it means, how an
                                         attacker exploits it, the worst case, and how to fix it.
 
-/agentic-security:security-launch-check Pre-deploy checklist of the 10 things beginners typically
+/agentic-security:launch-check Pre-deploy checklist of the 10 things beginners typically
                                         miss before going live.
 
-/agentic-security:security-grade        Single letter-grade snapshot (A–F) of your project's security
+/agentic-security:report-card        Single letter-grade snapshot (A–F) of your project's security
                                         posture, with one concrete next action.
 
-/agentic-security:security-share        Generate copy-paste-ready posts (Twitter/X, LinkedIn,
+/agentic-security:social-media        Generate copy-paste-ready posts (Twitter/X, LinkedIn,
                                         Discord/Slack) about your security progress.
 
-/agentic-security:security-status       One-screen plugin & project health snapshot — version, last
+/agentic-security:status       One-screen plugin & project health snapshot — version, last
                                         scan time, finding counts, cache size, hook activation.
 
 /agentic-security:help                  Full command catalog with one-line descriptions.

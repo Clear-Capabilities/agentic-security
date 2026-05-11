@@ -29,7 +29,7 @@ case "$FRAMEWORK" in
     python3 ${CLAUDE_PLUGIN_ROOT}/scripts/soc2/scan.py "$PATH_ARG" --format "$FORMAT" --output "$OUTPUT"
     ;;
   *)
-    echo "Usage: /produce-compliance-report [nist|asvs|pci|soc2] [path] [--format md|csv|json]"
+    echo "Usage: /compliance-report [nist|asvs|pci|soc2] [path] [--format md|csv|json]"
     echo ""
     echo "  nist   — NIST AI 600-1 (122 GenAI controls; auditor-ready attestation)"
     echo "  asvs   — OWASP ASVS Level 1+2 (multi-signal evidence model)"
@@ -49,8 +49,8 @@ esac
 **`pci`** — PCI-DSS 4.0: strong cryptography, TLS, MFA, audit logging, account lockout, vulnerability scanning automation. Pure-organisational controls are out of scope by design.
 
 **`soc2`** — SOC 2 Common Criteria: logical access, MFA, encryption, monitoring, change management, vendor risk via SBOM, incident-response runbooks. For a full vendor questionnaire, also run:
-- `/security-posture --sbom --format cyclonedx` (CC9.2 evidence)
+- `/posture-management --sbom --format cyclonedx` (CC9.2 evidence)
 - `/scan --pipeline --format pbom` (CC8.1 evidence)
-- `/security-posture --mttr` (CC7.x — proves SLA tracking)
-- `/security-posture --api --format openapi` (CC6.x — proves access surface documented)
-- `/produce-compliance-report nist` (if the product uses GenAI)
+- `/posture-management --mttr` (CC7.x — proves SLA tracking)
+- `/posture-management --api --format openapi` (CC6.x — proves access surface documented)
+- `/compliance-report nist` (if the product uses GenAI)

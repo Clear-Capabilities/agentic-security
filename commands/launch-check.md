@@ -12,7 +12,7 @@ const path = require('path');
 let scan = null;
 try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); } catch {}
 if (!scan) {
-  console.log('No scan yet. Run /scan --all first, then /security-launch-check.');
+  console.log('No scan yet. Run /scan --all first, then /launch-check.');
   process.exit(0);
 }
 
@@ -167,7 +167,7 @@ checks.push({
   label: 'No critical findings',
   detail: crit === 0
     ? 'Zero critical findings — safe to ship.'
-    : crit + ' critical finding(s). Run /security-grade for the bigger picture.',
+    : crit + ' critical finding(s). Run /report-card for the bigger picture.',
 });
 
 // Render
