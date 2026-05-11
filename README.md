@@ -106,21 +106,28 @@ It's **fast.** First scan in under five seconds on most projects. Every save aft
 
 ---
 
-## What `/scan-all` catches
+## COVERAGE
 
-One command. Five pillars. Every scan.
-
-**Code (SAST).** SQL injection · XSS · command injection · path traversal · SSRF · code injection · prototype pollution · XXE · SSTI · NoSQL injection · authorization holes (IDOR, mass assignment, broken access control) · JWT footguns (alg: none, weak secrets, missing pinning) · OAuth misconfig · session fixation · insecure crypto · weak PRNG · MD5/SHA1 password hashing · error/stack-trace leaks.
-
-**LLM / agent security.** Prompt injection across Anthropic, OpenAI, LangChain, Vercel AI, Google, Mistral, Cohere, Groq, Together · prompt-template injection · MCP / agent-tool audit (dangerous capabilities, missing input validation) · unsafe model loading (`torch.load`, `pickle`, `trust_remote_code`) · AI-BOM (CycloneDX 1.7 ML-BOM).
-
-**Dependencies (SCA).** OSV + CISA KEV + EPSS — actively-exploited CVEs flagged · function-level reachability (only fires if vulnerable code is callable) · dependency confusion · typosquatting · container CVEs · 15+ package ecosystems (npm, pip, Maven, Gradle, Composer, Cargo, Go modules, Bundler, …).
-
-**Secrets.** API keys · JWTs · AWS / GCP / Azure tokens · SSH private keys · OAuth secrets · Slack webhooks · database URLs — pattern + entropy detection on every file.
-
-**Pipeline & IaC.** GitHub Actions workflow risks (floating tags, `permissions: write-all`, OIDC misconfig, secret echoes, script injection via `github.event.*`) · Dockerfile · Terraform · CloudFormation · k8s YAML · pipeline bill of materials (PBOM).
-
-**Plus the things every AppSec tool should have.** Attack-chain synthesis · adversarial PoC generation · business-logic review · toxic-combinations scoring · drift detection · MTTR / SLA tracking · audit-grade suppressions · org-wide scans · curated rule packs (OWASP Top 10, CWE Top 25, LLM Security, Supply Chain) · 4-framework compliance attestation (NIST AI 600-1, OWASP ASVS, PCI-DSS 4.0, SOC 2) · SBOM (CycloneDX + SPDX) · 11 output formats (CLI, JSON, SARIF, JUnit, CSV, HTML, Markdown, CycloneDX, SPDX, PBOM, AI-BOM).
+```
+       Pillar         What we scan
+       ─────────────────────────────────────────────────────────────
+       SAST           Taint analysis (regex + AST for JS/TS), Java
+                      rule pack, Python helpers.
+       SCA            OSV + CISA KEV + EPSS, function-level
+                      reachability, dep confusion, typosquat.
+       Secrets        50+ credential patterns, high-entropy heuristic,
+                      allowlist-aware.
+       IaC            Dockerfile, docker-compose, GitHub Actions,
+                      Kubernetes manifests.
+       LLM            OWASP LLM Top 10 (2025): prompt injection,
+                      sensitive disclosure, system prompt leakage.
+       MCP            Agent-tool audit for over-privileged MCP servers.
+       Pipeline       GitHub Actions integrity: floating tags,
+                      secret echoes, OIDC misconfig.
+       Auth/AuthZ     Broken access control, IDOR, mass assignment,
+                      session fixation.
+       Container      Base-image EOL, exposed ports, runtime mode.
+```
 
 ---
 
