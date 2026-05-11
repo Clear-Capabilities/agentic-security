@@ -166,7 +166,7 @@ Fixing 104 findings (31 critical + 73 high)…
 Applied 104 fixes, 0 skipped (tests failed), 0 regressions introduced.
 ```
 
-That's the entire product. You don't need anything else to ship safer code.
+That's our product. It's quick and easy to ship safe code.
 
 ---
 
