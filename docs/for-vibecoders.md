@@ -1,4 +1,4 @@
-# agentic-security for vibecoders
+# agentic-security
 
 > 🛡 Created by **[ClearCapabilities.Com](https://clearcapabilities.com)**.
 > The Claude Code Plugin that Catches what your AI Assistant Misses.

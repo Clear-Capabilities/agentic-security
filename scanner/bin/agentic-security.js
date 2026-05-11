@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
-import { toJSON, toMarkdown, toSARIF, toCSV, toCLI, toCLIByProfile, toShipVerdict, toProTable, toHTML, toSummary, exitCodeFor, normalizeFindings } from '../src/report/index.js';
+import { toJSON, toMarkdown, toSARIF, toCSV, toJUnit, toCLI, toCLIByProfile, toShipVerdict, toProTable, toHTML, toSummary, exitCodeFor, normalizeFindings } from '../src/report/index.js';
 import { toCycloneDX, toSPDX } from '../src/posture/sbom.js';
 import { toPBOM } from '../src/sast/pipeline.js';
 import { buildAIBOM, aibomToMarkdown } from '../src/posture/aibom.js';
@@ -14,6 +14,7 @@ import { ingestAndMerge } from '../src/sca/sarif-ingest.js';
 import { loadProfile, saveProfile, detectProfile, renderAttributionLine, ATTRIBUTION, ATTRIBUTION_URL } from '../src/posture/profile.js';
 import { applySuppressions, addSoftAcceptance, expiredSoftAcceptances } from '../src/posture/suppressions.js';
 import { applyOverrides, validateOverrides } from '../src/posture/rule-overrides.js';
+import { listPacks, loadPack, applyPacks } from '../src/posture/rule-packs.js';
 import * as triage from '../src/posture/triage.js';
 import { buildSlackDigest, buildDiscordDigest, postWebhook, buildJiraIssue, buildPrComment, buildSiemEvent, loadIntegrationConfig } from '../src/integrations/index.js';
 import fg from 'fast-glob';
@@ -25,6 +26,8 @@ const USAGE = `agentic-security <command> [options]
 Commands:
   scan [path]                  Full SAST + SCA + Secrets sweep (default: cwd)
   ship                         (internal) Vibecoder verdict — invoked by /scan
+  ci [path]                    Baseline-aware CI scan: auto-detects PR base ref,
+                               writes SARIF + JUnit + JSON, applies --fail-on policy
   fix --finding <id> [--apply] Apply fix for a single finding
   accept --finding <id>        Soft-suppress a finding for 30 days (vibecoder)
   setup [project-dir]          Install /security-* shortcut commands into a project
@@ -33,13 +36,17 @@ Commands:
   org-scan --repos <list>      Pro: scan multiple repos and produce roll-up
   triage list|assign|trend     Pro: per-finding state, MTTR, assignment
   rules validate               Pro: lint .agentic-security/rules.yml
+  packs list                   List available curated rule packs
   digest --slack <webhook>     Vibecoder: send daily digest to Slack
   version                      Print version
 
 Options:
   --profile vibecoder|pro      Override profile for this run
   --only sast|sca|secrets      Limit scan to one pillar
-  --format <fmt>               cli | json | md | sarif | csv | html | cyclonedx | spdx | pbom | aibom | aibom-md
+  --format <fmt>               cli | json | md | sarif | junit | csv | html | cyclonedx | spdx | pbom | aibom | aibom-md
+  --pack <name>                Focus on a curated rule pack (repeatable): owasp-top-10 | cwe-top-25 | llm-security | supply-chain
+  --baseline <ref>             Diff against a git ref; only findings new vs. that ref count (ci subcommand)
+  --fail-on critical|high|medium|low|none  ci-mode exit policy (default: critical)
   --columns standard|mitre|capec|owasp  Pro-mode column set (default: standard)
   --confidence <0..1>          Override per-profile confidence threshold
   --firehose                   Show ALL findings (ignore confidence threshold)
@@ -168,6 +175,12 @@ async function cmdScan(args) {
   scan.secrets     = applyOverrides(scan.secrets     || [], targetAbs);
   scan.logicVulns  = applyOverrides(scan.logicVulns  || [], targetAbs);
 
+  // Curated rule packs: --pack <name> (repeatable). Narrows findings to the
+  // CWEs covered by the requested pack(s).
+  const packArg = args.flags.pack;
+  const packNames = packArg ? (Array.isArray(packArg) ? packArg : String(packArg).split(',')) : [];
+  if (packNames.length) Object.assign(scan, applyPacks(scan, packNames));
+
   // R2: Always emit machine-readable artifacts to .agentic-security/.
   await writeMachineOutput(targetAbs, scan, meta, profile);
 
@@ -176,6 +189,7 @@ async function cmdScan(args) {
   if (format === 'json') body = JSON.stringify(toJSON(scan, meta, { includeSuppressed }), null, 2);
   else if (format === 'md' || format === 'markdown') body = toMarkdown(scan, meta);
   else if (format === 'sarif') body = JSON.stringify(toSARIF(scan, meta), null, 2);
+  else if (format === 'junit') body = toJUnit(scan, meta);
   else if (format === 'csv')   body = toCSV(scan);
   else if (format === 'html') body = toHTML(scan, meta);
   else if (format === 'cyclonedx' || format === 'sbom') body = JSON.stringify(toCycloneDX(scan, meta), null, 2);
@@ -218,6 +232,78 @@ async function cmdShip(args) {
   const target = args._[1] || '.';
   args.flags.format = 'ship';
   return cmdScan(args);
+}
+
+// Detect the PR base ref from common CI environment variables. Returns null
+// if no CI baseline ref is in scope. The CLI --baseline flag takes precedence.
+function detectBaseline() {
+  return process.env.GITHUB_BASE_REF
+    || process.env.CI_MERGE_REQUEST_TARGET_BRANCH_NAME    // GitLab
+    || process.env.BUILDKITE_PULL_REQUEST_BASE_BRANCH     // Buildkite
+    || process.env.BITBUCKET_PR_DESTINATION_BRANCH        // Bitbucket
+    || null;
+}
+
+// Translate a scan exit code (0..3) and a --fail-on threshold into a CI exit code.
+// Returns 0 (pass) or 1 (fail).
+function ciExitCode(scanExitCode, failOn) {
+  switch (failOn) {
+    case 'none':                       return 0;
+    case 'critical': default:          return scanExitCode >= 3 ? 1 : 0;
+    case 'high':                       return scanExitCode >= 2 ? 1 : 0;
+    case 'medium':
+    case 'low':                        return scanExitCode >= 1 ? 1 : 0;
+  }
+}
+
+// `agentic-security ci [path] [--baseline <ref>] [--fail-on <sev>]`
+// Single-shot CI command: auto-detects PR base ref, runs a baseline-aware scan,
+// writes findings.{sarif,junit.xml,json} to .agentic-security/, and exits per
+// the --fail-on policy.
+async function cmdCi(args) {
+  const target = args._[1] || '.';
+  const targetAbs = path.resolve(target);
+  const failOn = args.flags['fail-on'] || 'critical';
+  const baseline = args.flags.baseline || detectBaseline();
+
+  if (baseline) process.stderr.write(`[ci] baseline: ${baseline}\n`);
+  else          process.stderr.write(`[ci] full scan (no baseline ref detected)\n`);
+
+  const profile = loadPersonaProfile(targetAbs, args);
+  const { scan, meta } = await runScan(target, { changedSince: baseline || null });
+
+  // Apply suppressions + overrides + packs, mirroring cmdScan's pipeline.
+  scan.findings    = applySuppressions(scan.findings    || [], targetAbs, profile);
+  scan.secrets     = applySuppressions(scan.secrets     || [], targetAbs, profile);
+  scan.logicVulns  = applySuppressions(scan.logicVulns  || [], targetAbs, profile);
+  scan.supplyChain = applySuppressions(scan.supplyChain || [], targetAbs, profile);
+  scan.findings    = applyOverrides(scan.findings    || [], targetAbs);
+  scan.secrets     = applyOverrides(scan.secrets     || [], targetAbs);
+  scan.logicVulns  = applyOverrides(scan.logicVulns  || [], targetAbs);
+  const packArg = args.flags.pack;
+  const packNames = packArg ? (Array.isArray(packArg) ? packArg : String(packArg).split(',')) : [];
+  if (packNames.length) Object.assign(scan, applyPacks(scan, packNames));
+
+  // Persist the three CI artifacts.
+  const stateDir = path.join(targetAbs, '.agentic-security');
+  await fsp.mkdir(stateDir, { recursive: true });
+  await fsp.writeFile(path.join(stateDir, 'findings.json'),
+    JSON.stringify(toJSON(scan, meta), null, 2));
+  await fsp.writeFile(path.join(stateDir, 'findings.sarif'),
+    JSON.stringify(toSARIF(scan, meta), null, 2));
+  await fsp.writeFile(path.join(stateDir, 'findings.junit.xml'),
+    toJUnit(scan, meta));
+
+  const scanCode = exitCodeFor(scan);
+  const findings = normalizeFindings(scan);
+  const sev = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const f of findings) sev[f.severity] = (sev[f.severity] || 0) + 1;
+  process.stderr.write(
+    `[ci] ${findings.length} findings — ${sev.critical} critical · ${sev.high} high · ${sev.medium} medium · ${sev.low} low\n` +
+    `[ci] artifacts: .agentic-security/findings.{json,sarif,junit.xml}\n` +
+    `[ci] fail-on=${failOn}  scan-exit=${scanCode}\n`
+  );
+  return ciExitCode(scanCode, failOn);
 }
 
 // /accept --finding <id> --reason "..."  (vibecoder soft 30-day suppression)
@@ -419,6 +505,19 @@ async function cmdRules(args) {
   console.error('rules validate'); return 4;
 }
 
+// packs list — enumerate the curated rule packs available to --pack.
+async function cmdPacks(args) {
+  const sub = args._[1] || 'list';
+  if (sub !== 'list') { console.error('Usage: agentic-security packs list'); return 4; }
+  const rows = listPacks();
+  const namePad = Math.max(...rows.map(r => r.name.length));
+  console.log('Available rule packs (use --pack <name>):\n');
+  for (const r of rows) {
+    console.log(`  ${r.name.padEnd(namePad)}  ${r.description}  [${r.cweCount} CWEs]`);
+  }
+  return 0;
+}
+
 // /digest --slack <webhook> | --discord <webhook>
 async function cmdDigest(args) {
   const target = path.resolve(args._[1] || '.');
@@ -579,15 +678,17 @@ async function main() {
     switch (cmd) {
       case 'scan':     process.exit(await cmdScan(args));
       case 'ship':     process.exit(await cmdShip(args));
+      case 'ci':       process.exit(await cmdCi(args));
       case 'fix':      process.exit(await cmdFix(args));
       case 'accept':   process.exit(await cmdAccept(args));
       case 'profile':  process.exit(await cmdProfile(args));
       case 'triage':   process.exit(await cmdTriage(args));
       case 'org-scan': process.exit(await cmdOrgScan(args));
       case 'rules':    process.exit(await cmdRules(args));
+      case 'packs':    process.exit(await cmdPacks(args));
       case 'digest':   process.exit(await cmdDigest(args));
       case 'setup':    process.exit(await cmdSetup(args));
-      case 'version':  console.log('agentic-security 0.16.4  ·  created by ClearCapabilities.Com'); process.exit(0);
+      case 'version':  console.log('agentic-security 0.17.0  ·  created by ClearCapabilities.Com'); process.exit(0);
       case 'help': case '--help': case '-h': case undefined:
         console.log(USAGE); process.exit(cmd ? 0 : 1);
       default:

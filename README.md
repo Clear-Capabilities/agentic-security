@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-75%2F75-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.16MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.16.4-blue)]()
+[![Version](https://img.shields.io/badge/version-0.17.0-blue)]()
 
 ---
 
@@ -82,9 +82,11 @@ For the senior engineer. The platform team. The person who actually reads SARIF.
 ```bash
 agentic-security profile set pro
 agentic-security scan . --format sarif
+agentic-security ci . --fail-on critical          # one-shot CI runner
+agentic-security scan --pack owasp-top-10 .       # focus on a curated CWE pack
 ```
 
-Full taxonomy: CWE / CVSS / OWASP / MITRE ATT&CK. SARIF, JSON, CSV — every scan. CI gates. Slack, Jira, GitHub Security, SIEM. Audit-grade suppressions with reviewer + expiry. Triage workflow with MTTR trends. Org-wide scans across a fleet of repos. Custom rules in YAML.
+Full taxonomy: CWE / CVSS / OWASP / MITRE ATT&CK. SARIF, JSON, JUnit, CSV — every scan. CI gates. Curated rule packs (`owasp-top-10`, `cwe-top-25`, `llm-security`, `supply-chain`). Pre-commit hook. Slack, Jira, GitHub Security, SIEM. Audit-grade suppressions with reviewer + expiry. Triage workflow with MTTR trends. Org-wide scans across a fleet of repos. Custom rules in YAML.
 
 [Developer guide →](docs/for-appsec-pros.md)
 

@@ -220,6 +220,48 @@ export function toCSV(scan){
   return rows.join('\n');
 }
 
+// JUnit XML output — for CI test-report aggregators (Jenkins, GitLab, CircleCI).
+// Each finding becomes one <testcase> with a <failure> child. The whole report
+// is one <testsuite> wrapped in <testsuites>.
+export function toJUnit(scan, meta={}){
+  const findings = normalizeFindings(scan);
+  const esc = v => {
+    if (v == null) return '';
+    return String(v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  };
+  const escCdata = v => String(v == null ? '' : v).replace(/]]>/g, ']]]]><![CDATA[>');
+  const sev = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const f of findings) sev[f.severity] = (sev[f.severity] || 0) + 1;
+  const failures = findings.length;
+  const ts = meta.startedAt || new Date().toISOString();
+  const lines = [];
+  lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+  lines.push(`<testsuites name="agentic-security" tests="${failures}" failures="${failures}" timestamp="${esc(ts)}">`);
+  lines.push(`  <testsuite name="agentic-security" tests="${failures}" failures="${failures}" timestamp="${esc(ts)}">`);
+  for (const f of findings) {
+    const classname = esc(f.cwe || f.kind || 'finding');
+    const name = esc(`${f.file || '?'}:${f.line || 0} ${f.vuln || ''}`.trim());
+    const failType = esc(f.severity || 'medium');
+    const failMsg = esc(f.vuln || 'finding');
+    const body = [
+      `severity: ${f.severity || 'medium'}`,
+      f.cwe ? `cwe: ${f.cwe}` : null,
+      `file: ${f.file || '?'}:${f.line || 0}`,
+      f.snippet ? `snippet: ${f.snippet}` : null,
+      f.fix?.description ? `\nremediation: ${f.fix.description}` : null,
+      f.fix?.code ? `\nfix:\n${f.fix.code}` : null,
+    ].filter(Boolean).join('\n');
+    lines.push(`    <testcase classname="${classname}" name="${name}">`);
+    lines.push(`      <failure type="${failType}" message="${failMsg}"><![CDATA[${escCdata(body)}]]></failure>`);
+    lines.push(`    </testcase>`);
+  }
+  lines.push('  </testsuite>');
+  lines.push('</testsuites>');
+  return lines.join('\n');
+}
+
 export function toMarkdown(scan, meta={}){
   const findings = normalizeFindings(scan);
   const lines = ['# Agentic Security — Scan Report', ''];

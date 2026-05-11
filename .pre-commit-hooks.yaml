@@ -1,0 +1,8 @@
+- id: agentic-security
+  name: agentic-security scan (staged changes)
+  description: Fast SAST + secrets scan on staged files only. Blocks on high or critical findings.
+  entry: node scanner/dist/agentic-security.mjs ci
+  language: system
+  args: ['--baseline', 'HEAD', '--fail-on', 'high']
+  pass_filenames: false
+  stages: [pre-commit]

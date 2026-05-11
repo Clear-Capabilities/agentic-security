@@ -275,6 +275,14 @@ Configuration in `.agentic-security/integrations.yml` (gitignored).
 
 ## CI/CD
 
+Two options. The first is a single-command CI runner; the second is the raw scan with SARIF upload.
+
+```bash
+       # ci: auto-detects PR base ref, writes findings.{json,sarif,junit.xml},
+       #     applies the --fail-on policy. Exits 0 (pass) or 1 (fail).
+       npx @clearcapabilities/agentic-security-scanner ci . --fail-on critical
+```
+
 ```yaml
        - uses: actions/checkout@v4
        - uses: actions/setup-node@v4
@@ -287,6 +295,33 @@ Configuration in `.agentic-security/integrations.yml` (gitignored).
 ```
 
 The `bench.yml` workflow at `.github/workflows/bench.yml` shows the pattern used by the project itself: per-app F1 floor enforcement that blocks regressions.
+
+### Pre-commit framework hook
+
+Add to `.pre-commit-config.yaml`:
+
+```yaml
+       - repo: https://github.com/clearcapabilities/agentic-security
+         rev: v0.17.0
+         hooks:
+           - id: agentic-security
+```
+
+The hook runs `agentic-security ci --baseline HEAD --fail-on high` against the staged changes and blocks the commit on any high or critical finding.
+
+### Rule packs
+
+Focus a scan on a curated CWE allowlist with `--pack`:
+
+```bash
+       agentic-security scan --pack owasp-top-10 .
+       agentic-security scan --pack cwe-top-25 .
+       agentic-security scan --pack llm-security .
+       agentic-security scan --pack supply-chain .
+       agentic-security packs list
+```
+
+Multiple packs union their CWE sets — `--pack owasp-top-10,llm-security` keeps findings in either list.
 
 ---
 
