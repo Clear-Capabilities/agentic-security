@@ -98,13 +98,13 @@ Looks at every file, every dependency, every config. Takes 30 seconds.
 
 One letter. One reason. One next action.
 
-**3. Fix things one at a time.**
+**3. Fix everything in one shot.**
 
 ```
 /security-fix-all
 ```
 
-Walks you through each finding with a plain-English summary first, then asks `[y]es / [s]kip / [d]iff first / [q]uit`. You stay in control. Pass `--auto` if you want it to fix everything without asking.
+Applies every critical finding in sequence — no prompts, no interruptions. Each fix is patched, the file is re-scanned to confirm the finding is gone, and the next one runs. If a fix breaks a test or introduces a new finding, the loop stops and tells you which one. Add `--severity high` or `--severity medium` to widen the net.
 
 **4. Right before you deploy.**
 
@@ -151,7 +151,7 @@ A finite, beginner-friendly list of "10 things you usually miss before going liv
 |---|---|
 | `/security-scan-all` | Full sweep: SAST + SCA + secrets + IaC across every file |
 | `/security-fix` | Patch a single finding, adapted to your actual code |
-| `/security-fix-all` | Walk each finding with `[y]es/[s]kip/[d]iff/[q]uit` confirmation (or `--auto` for batch) |
+| `/security-fix-all` | Silent batch — apply every fix at or above `--severity` (default `critical`), stop on first test failure |
 | `/security-fix-pr` | Bundle all critical fixes into a single branch and open a PR |
 | `/security-report` | Self-contained HTML report (also JSON, Markdown, SARIF) |
 | `/security-triage` | Validate findings for false positives; suppress confirmed FPs before reporting |
@@ -364,13 +364,13 @@ open security-report.html
 
 Self-contained interactive HTML with a severity chart, filterable finding list, toxicity scores, attack-path visualizations, fix templates per finding, and STRIDE coverage. One file you can email or drop in Slack.
 
-**Step 7: fix things, one at a time**
+**Step 7: fix everything in one shot**
 
 ```
 /agentic-security:security-fix-all
 ```
 
-Walks each critical finding with a plain-English summary, then asks `[y]es / [s]kip / [d]iff first / [q]uit`. You stay in the loop and decide whether each fix is what you wanted. Pass `--auto` if you want Claude to power through them all without asking.
+Powers through every critical finding without asking. Each fix is patched, the file is re-scanned to confirm the finding is gone, and the next one runs. Stops only if a fix breaks a test or introduces a new finding — then tells you which one so you can decide. Use `--severity high` or `--severity medium` to widen the net.
 
 On Juice Shop, Claude will correctly flag that the vulns are intentional challenges and ask how to proceed. Tell it:
 
