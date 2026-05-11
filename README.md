@@ -219,7 +219,7 @@ Beyond the three easy-mode commands, agentic-security ships a full command surfa
 /agentic-security:security-help         Full command catalog with one-line descriptions.
 ```
 
-For the complete reference — CI integration, SARIF output, audit-grade suppressions, custom rules, org-wide fleet scans, and every flag — read the **[Developer Guide →](https://github.com/clearcapabilities/agentic-security/blob/main/docs/for-appsec-pros.md)**.
+For the complete reference — CI integration, SARIF output, audit-grade suppressions, custom rules, org-wide fleet scans, and every flag — read the **[Developer Guide →](https://github.com/clearcapabilities/agentic-security/blob/main/docs/developer-documentation-guide.md)**.
 
 ---
 

@@ -18,7 +18,7 @@ DESCRIPTION
        audit-grade suppressions, org-wide fleet scans, and custom rules.
 
        This document covers the pro mode. For the simplified vibecoder
-       surface, see for-vibecoders(7).
+       surface, see 
 ```
 
 ---
@@ -474,7 +474,7 @@ Triage a single finding and re-scan to confirm:
 ## SEE ALSO
 
 ```
-       for-vibecoders(7)    Easy-mode usage guide for non-security
+       
                             developers.
        LICENSE              Full license terms.
        commands/            Slash-command definitions for the Claude
