@@ -35,7 +35,7 @@ In **Claude Code** (recommended — gets you the slash commands):
 /plugin marketplace add https://github.com/clearcapabilities/agentic-security
 ```
 
-That's it. Type `/scan` to confirm it's working.
+That's it. Type `/scan --all` to confirm it's working.
 
 For **CI, terminal, or any project anywhere** (no Claude Code required):
 
@@ -57,9 +57,9 @@ Three commands. The whole product. The default for everyone.
 
 ---
 
-#### `/scan` — daily, before deploy
+#### `/scan --all` — daily, before deploy
 
-**What `/scan` scans every run — nine pillars, no configuration required:**
+**What `/scan --all` scans every run — nine pillars, no configuration required:**
 
 ```
        Pillar         What we scan
