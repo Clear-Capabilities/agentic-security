@@ -24,7 +24,7 @@ function _bomRef(c) {
 export function toCycloneDX(scan, meta = {}) {
   const components = scan.components || [];
   const supplyChain = (scan.supplyChain || []).filter(s => s.type === 'vulnerable_dep');
-  const serialNumber = `urn:uuid:${(crypto.randomUUID && crypto.randomUUID()) || crypto.createHash('md5').update(JSON.stringify(meta)).digest('hex')}`;
+  const serialNumber = `urn:uuid:${crypto.randomUUID()}`;
 
   const cdxComponents = components.map(c => ({
     type: 'library',
@@ -72,7 +72,7 @@ export function toCycloneDX(scan, meta = {}) {
 export function toSPDX(scan, meta = {}) {
   const components = scan.components || [];
   const supplyChain = (scan.supplyChain || []).filter(s => s.type === 'vulnerable_dep');
-  const docNamespace = `https://agentic-security.local/spdx/${(crypto.randomUUID && crypto.randomUUID()) || crypto.createHash('md5').update(JSON.stringify(meta)).digest('hex')}`;
+  const docNamespace = `https://agentic-security.local/spdx/${crypto.randomUUID()}`;
   const ts = meta.startedAt || new Date().toISOString();
 
   const packages = components.map((c, i) => ({

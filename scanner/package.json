@@ -1,6 +1,6 @@
 {
   "name": "@clearcapabilities/agentic-security-scanner",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Scanner engine for the agentic-security Claude Code plugin — SAST, SCA (function-level reachability + CISA KEV), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, business logic, toxic-combinations scoring, SBOM, SARIF ingest, pipeline integrity, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -28,7 +28,8 @@
     "@babel/preset-react": "^7.24.0",
     "@babel/preset-typescript": "^7.24.0",
     "fast-glob": "^3.3.2",
-    "js-yaml": "^4.1.1"
+    "js-yaml": "^4.1.1",
+    "safe-regex": "^2.1.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -37,7 +38,10 @@
   "scripts": {
     "build": "ncc build bin/agentic-security.js -o dist --minify && mv dist/index.js dist/agentic-security.mjs && rm -f dist/package.json && chmod +x dist/agentic-security.mjs",
     "test": "node --test test/smoke.test.js test/llm.test.js test/logic.test.js test/fn-reach.test.js test/material-change.test.js test/drift.test.js test/sbom.test.js test/api-inventory.test.js test/sarif-ingest.test.js test/pipeline.test.js test/license-policy.test.js test/mttr.test.js test/container.test.js test/dep-confusion.test.js test/scorecard.test.js test/mcp-audit.test.js test/authz.test.js test/kev.test.js test/model-load.test.js test/prompt-template.test.js test/aibom.test.js",
-    "smoke": "node bin/agentic-security.js scan test/fixtures/vulnerable-js"
+    "smoke": "node bin/agentic-security.js scan test/fixtures/vulnerable-js",
+    "bench": "node test/benchmark/bench.js",
+    "bench:update": "node test/benchmark/bench.js --update-baseline",
+    "bench:realworld": "node test/benchmark/realworld/bench-realworld.js"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
   "license": "PolyForm-Internal-Use-1.0.0"

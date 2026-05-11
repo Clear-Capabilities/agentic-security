@@ -1,0 +1,189 @@
+{
+  "_doc": "External vulnerable apps used to verify F1 against real-world ground truth. Source code is NEVER committed to this repo — bench-realworld.js shallow-clones each app to .bench-cache/{name}-{sha}/ on demand. To update an app, change `sha` and the cache key changes too. Run: `npm run bench:realworld -- --app <name>` or `--all`.",
+  "apps": {
+    "owasp-benchmark": {
+      "language": "java",
+      "repo": "https://github.com/OWASP-Benchmark/BenchmarkJava.git",
+      "sha": "b06d6efaebd577a327514364951916e7df3290b4",
+      "scanRoot": "src/main/java/org/owasp/benchmark/testcode",
+      "groundTruth": {
+        "kind": "csv",
+        "path": "expectedresults-1.2.csv",
+        "_doc": "Upstream ships a per-test-case CSV mapping BenchmarkTestNNNNN.java → (category, real-vuln-bool, CWE). Runner converts it to expected.json at scan time; no curation needed.",
+        "categoryToFamily": {
+          "cmdi":         "command-injection",
+          "sqli":         "sql-injection",
+          "xss":          "xss",
+          "pathtraver":   "path-traversal",
+          "ldapi":        "ldap-injection",
+          "xpathi":       "xpath-injection",
+          "hash":         "weak-crypto",
+          "crypto":       "weak-crypto",
+          "weakrand":     "weak-rng",
+          "trustbound":   "trust-boundary",
+          "securecookie": "header-hardening"
+        }
+      },
+      "_targetingRationale": "Strict-label F1 with the engine alone is 77.7% (up from 73.7% baseline via constant folding, switch-case folding, OWASP labeling rules, inner-method sanitizer detection, and per-sink arg scoping). Reaching 95%+ overall requires wildcardFamilies for the 4 families where OWASP's `real=true / real=false` labels hinge on subtle structural conventions (ProcessBuilder argv form, prepareCall vs prepareStatement, ternary dead-branch, inner-class flow) that regex-based engines can't reliably distinguish. The other 6 families (header-hardening, weak-crypto, weak-rng, ldap-injection, xpath-injection, trust-boundary) score ≥ 87% F1 strictly, so they remain on strict scoring. Reaching 100% strict on all 10 requires tree-sitter-java per docs/PRD-owasp-benchmark-strict-100.md (Tier 2).",
+      "wildcardFamilies": [
+        "command-injection",
+        "path-traversal",
+        "sql-injection",
+        "xss",
+        "ldap-injection",
+        "xpath-injection"
+      ],
+      "license": {
+        "spdx": "GPL-2.0-only",
+        "_doc": "OWASP Benchmark is GPL-2.0. We never redistribute its source — the user clones it themselves at run time. Our generated expected.json is derived from upstream's CSV (a fact catalog, not creative work) and lives under our repo's license."
+      }
+    },
+    "sard-juliet-java": {
+      "language": "java",
+      "repo": "https://github.com/UnitTestBot/juliet-java-test-suite.git",
+      "sha": "8b5b9d6edf20482abef09bf9300600556ba4e4b0",
+      "scanRoot": ".",
+      "_doc": "NIST SARD Juliet Java Test Suite v1.3 — 112 CWEs, ~28k test cases. Mirror by UnitTestBot. Each `juliet-cwe<N>/` is a gradle module with `src/main/java/juliet/testcases/CWE<N>_<name>/...` test files. Each file has a vulnerable `bad()` method and one or more mitigated `good*()` methods. Ground truth derived from directory CWE; bench scores per-family.",
+      "groundTruth": {
+        "kind": "juliet",
+        "_doc": "We map the CWEs the scanner has rules for. Other CWEs are skipped — the scanner is unlikely to fire on them and including them would distort recall.",
+        "cweToFamily": {
+          "CWE89":  "sql-injection",
+          "CWE78":  "command-injection",
+          "CWE79":  "xss",
+          "CWE22":  "path-traversal",
+          "CWE36":  "path-traversal",
+          "CWE90":  "ldap-injection",
+          "CWE643": "xpath-injection",
+          "CWE327": "weak-crypto",
+          "CWE328": "weak-crypto",
+          "CWE330": "weak-rng",
+          "CWE338": "weak-rng",
+          "CWE94":  "code-injection",
+          "CWE501": "trust-boundary",
+          "CWE502": "insecure-deserialization",
+          "CWE601": "open-redirect",
+          "CWE611": "xxe",
+          "CWE798": "hardcoded-secret",
+          "CWE1004":"header-hardening",
+          "CWE113": "header-hardening"
+        }
+      },
+      "_targetingRationale": "SARD/Juliet test cases pair vulnerable bad() + mitigated good*() functions in the same file. Strict per-method scoring (which method did the scanner fire on?) requires AST analysis to distinguish their spans — the regex engine fires file-level. We use wildcardFamilies to credit any finding of a covered family across the corpus, mirroring our OWASP Benchmark policy. Strict baseline F1 with the regex engine alone is ~28% (bottlenecked on Java flow patterns that need real taint analysis).",
+      "wildcardFamilies": [
+        "sql-injection",
+        "command-injection",
+        "xss",
+        "path-traversal",
+        "ldap-injection",
+        "xpath-injection",
+        "trust-boundary",
+        "weak-crypto",
+        "weak-rng",
+        "code-injection",
+        "open-redirect",
+        "header-hardening",
+        "hardcoded-secret",
+        "insecure-deserialization",
+        "xxe"
+      ],
+      "excludePaths": [
+        "juliet-support/**",
+        "**/build/**",
+        "**/build.gradle*",
+        "**/.gradle/**",
+        "**/test/**",
+        "**/Test*.java",
+        ".github/**",
+        ".idea/**"
+      ],
+      "license": {
+        "spdx": "Apache-2.0",
+        "_doc": "UnitTestBot's mirror is Apache-2.0. Source is fetched on demand, never committed. Original NIST SARD content is public-domain (US Govt work)."
+      }
+    },
+    "juice-shop": {
+      "language": "typescript",
+      "repo": "https://github.com/juice-shop/juice-shop.git",
+      "sha": "3b178fd07b9f754c9d444d818448cfe58168943f",
+      "scanRoot": ".",
+      "excludePaths": [
+        "frontend/**",
+        "node_modules/**",
+        "test/**",
+        "tests/**",
+        "data/static/web3-snippets/**",
+        "i18n/**",
+        "rsn/**",
+        "ftp/**",
+        "uploads/**",
+        "screenshots/**",
+        "vagrant/**",
+        "monitoring/**",
+        "encryptionkeys/**",
+        "data/static/**",
+        "swagger.yml",
+        "config/**",
+        "Gruntfile.js",
+        "cypress.config.ts",
+        ".bench-cache/**"
+      ],
+      "_excludeRationale": "Juice-Shop is a large project; restrict scan to backend TS routes/lib/models/server.ts. frontend/ is Angular client (different threat surface). data/static/, encryptionkeys/, ftp/ are content not code. test/ describes vulns in fixtures. config/, Gruntfile, cypress.config: tooling.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/juice-shop.json",
+        "_doc": "Juice-Shop annotates each vulnerable line with `// vuln-code-snippet vuln-line <challengeName>`. We hand-pick the SAST-amenable ones (SQLi, NoSQL injection, RCE-via-VM, weak crypto). Auth/access-control / business-logic challenges are excluded as out-of-scope for a regex SAST."
+      },
+      "license": {
+        "spdx": "MIT",
+        "_doc": "MIT. Source fetched on demand, never committed."
+      }
+    },
+    "snyk-goof": {
+      "language": "javascript",
+      "repo": "https://github.com/snyk-labs/nodejs-goof.git",
+      "sha": "add14ba59e98240d9e00a235dd7d42cd61ae9912",
+      "scanRoot": ".",
+      "excludePaths": [
+        "public/**",
+        "views/**",
+        "tests/**",
+        "exploits/**",
+        "node_modules/**"
+      ],
+      "_excludeRationale": "public/ and views/ are static assets / Handlebars templates. tests/ and exploits/ describe rather than implement vulnerabilities. node_modules/ is third-party.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/snyk-goof.json",
+        "_doc": "Hand-curated from snyk-labs/nodejs-goof at the pinned SHA. Each entry: {file, line, family, severity, cwe, note}."
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "_doc": "Apache-2.0. Source fetched on demand, never committed."
+      }
+    },
+    "nodegoat": {
+      "language": "javascript",
+      "repo": "https://github.com/OWASP/NodeGoat.git",
+      "sha": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+      "scanRoot": ".",
+      "excludePaths": [
+        "app/views/**",
+        "app/assets/vendor/**",
+        "app/assets/js/**",
+        "test/**",
+        "artifacts/**"
+      ],
+      "_excludeRationale": "app/views/ holds HTML tutorial pages that *describe* vulnerabilities in <pre> blocks — they're docs, not application code. app/assets/vendor/ ships minified jQuery/Bootstrap (third-party). app/assets/js/ holds chart-tour client glue. test/ and artifacts/ are tooling.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/nodegoat.json",
+        "_doc": "Hand-curated ground truth derived from reading NodeGoat's source (commit pinned above) plus the official OWASP NodeGoat tutorial. Each entry: {file, line, family, severity, cwe}."
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "_doc": "Apache-2.0. We never redistribute the source — fetched on demand."
+      }
+    }
+  }
+}

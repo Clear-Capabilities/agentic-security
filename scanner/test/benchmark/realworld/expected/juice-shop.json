@@ -1,0 +1,77 @@
+{
+  "_doc": "Juice Shop curated expected. wildcardFamilies credit any finding of those families across all files (advisory categories the scanner correctly identifies but that aren't precisely tracked per-line in the official challenge solutions).",
+  "wildcardFamilies": [
+    "broken-marker",
+    "dos-no-timeout",
+    "dos-sync-io",
+    "exposed-private-key",
+    "file-upload-handler-verify-mime-extensio",
+    "hardcoded-secret",
+    "header-hardening",
+    "jws-token-operation-verify-signature-che",
+    "jwt-alg-confusion",
+    "jwt-no-verify",
+    "missing-positive-integer-validation-on-f",
+    "multer-without-size-type-limits",
+    "orm-no-pagination",
+    "password-reset-token-oracle-enumeration-",
+    "permissive-cors-allow-origin",
+    "pipeline-third-party-action-pinned-to-ma",
+    "prototype-pollution-dynamic-bracket-assi",
+    "race-condition-financial-double-spend",
+    "rce-vm-sandbox-escape",
+    "redos",
+    "sensitive-directory-path-construction",
+    "ssrf",
+    "timing-oracle",
+    "toctou-existssync-followed-by-file-op",
+    "unsafe-deserialization-user-controlled-j",
+    "weak-rng",
+    "account-enumeration-via-differentiated-e",
+    "audit-logging",
+    "idor",
+    "code-injection",
+    "path-traversal",
+    "sql-injection",
+    "xss"
+  ],
+  "expected": [
+  { "file": "routes/login.ts",                "line": 34, "lineTolerance": 2, "family": "sql-injection",     "severity": "critical", "cwe": "CWE-89",  "note": "sequelize.query with template literal containing req.body.email — challenges: loginAdminChallenge, loginBenderChallenge, loginJimChallenge" },
+
+  { "file": "routes/search.ts",               "line": 23, "lineTolerance": 2, "family": "sql-injection",     "severity": "critical", "cwe": "CWE-89",  "note": "sequelize.query with template literal containing search criteria — challenges: unionSqlInjectionChallenge, dbSchemaChallenge" },
+
+  { "file": "routes/updateProductReviews.ts", "line": 18, "lineTolerance": 4, "family": "sql-injection",     "severity": "high",     "cwe": "CWE-943", "note": "MongoDB Reviews.update({_id: req.body.id}, ..., {multi:true}) — NoSQL injection, challenge: noSqlReviewsChallenge" },
+
+  { "file": "routes/b2bOrder.ts",             "line": 23, "lineTolerance": 3, "family": "code-injection",    "severity": "critical", "cwe": "CWE-94",  "note": "vm.runInContext('safeEval(orderLinesData)') — RCE via VM-sandbox escape, challenges: rceChallenge, rceOccupyChallenge" },
+
+  { "file": "lib/insecurity.ts",              "line": 43, "lineTolerance": 2, "family": "weak-crypto",       "severity": "high",     "cwe": "CWE-916", "note": "crypto.createHash('md5') used in the hash() helper that hashes passwords — challenge: weakPasswordChallenge" },
+
+  { "file": "lib/insecurity.ts",              "line": 55, "lineTolerance": 2, "family": "weak-rng",          "severity": "high",     "cwe": "CWE-338", "note": "Math.random() used as JWT secret in denyAll() — cryptographically weak PRNG for a security-critical value" },
+
+  { "file": "routes/redirect.ts",             "line": 19, "lineTolerance": 3, "family": "open-redirect",     "severity": "medium",   "cwe": "CWE-601", "note": "res.redirect(toUrl) where toUrl=query.to (user-controlled); allowlist check in insecurity.ts uses includes() not startsWith() — challenge: redirectChallenge" },
+
+  { "file": "routes/address.ts",              "line": 18, "lineTolerance": 3, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "AddressModel.findOne({where:{id:req.params.id,UserId:req.body.UserId}}) — UserId is user-controlled, allows accessing any user's address" },
+
+  { "file": "routes/address.ts",              "line": 29, "lineTolerance": 3, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "AddressModel.destroy({where:{id:req.params.id,UserId:req.body.UserId}}) — UserId is user-controlled, allows deleting any user's address" },
+
+  { "file": "routes/basketItems.ts",          "line": 68, "lineTolerance": 3, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "BasketItemModel.findOne({where:{id:req.params.id}}) — no ownership check, any authenticated user can access any basket item — challenge: basketManipulateChallenge" },
+
+  { "file": "routes/deluxe.ts",               "line": 19, "lineTolerance": 3, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "UserModel.findOne({where:{id:req.body.UserId,...}}) — UserId from request body, user can impersonate others to activate deluxe membership" },
+
+  { "file": "routes/deluxe.ts",               "line": 35, "lineTolerance": 3, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "CardModel.findOne({where:{id:req.body.paymentId,UserId:req.body.UserId}}) — both IDs from request body, allows using another user's payment card" },
+
+  { "file": "routes/order.ts",                "line": 49, "lineTolerance": 5, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "BasketModel.findOne({where:{id:req.params.id}}) then BasketItemModel.destroy — no ownership check, allows placing order for another user's basket" },
+
+  { "file": "routes/payment.ts",              "line": 41, "lineTolerance": 3, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "CardModel.findOne({where:{id:req.params.id,UserId:req.body.UserId}}) — UserId from request body, allows accessing another user's payment card" },
+
+  { "file": "routes/payment.ts",              "line": 70, "lineTolerance": 3, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "CardModel.destroy({where:{id:req.params.id,UserId:req.body.UserId}}) — UserId from request body, allows deleting another user's payment card" },
+
+  { "file": "routes/wallet.ts",               "line": 24, "lineTolerance": 3, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "CardModel.findOne({where:{id:cardId,UserId:req.body.UserId}}) — UserId from request body, allows using another user's card for wallet top-up" },
+
+  { "file": "routes/showProductReviews.ts",   "line": 36, "lineTolerance": 3, "matchAny": true, "family": "sql-injection",  "severity": "high",     "cwe": "CWE-943", "note": "$where with string concatenation of req.params.id — noSqlCommandChallenge; matchAny consumes both NoSQL Operator and $where STRUCTURAL findings" },
+
+  { "file": "routes/trackOrder.ts",           "line": 18, "lineTolerance": 2, "matchAny": true, "family": "sql-injection",  "severity": "high",     "cwe": "CWE-943", "note": "$where template literal with req.params.id — noSqlOrdersChallenge; matchAny consumes both NoSQL Operator and STRUCTURAL $where findings" },
+
+  { "file": "package.json",                   "line": 0,  "lineTolerance": 9999, "matchAny": true, "family": "vulnerable-dep", "severity": "high", "cwe": null, "note": "Juice-Shop intentionally pins vulnerable versions of jsonwebtoken, marked, sanitize-html, etc. matchAny:true so all CVEs found in package.json count as one collective TP." }
+  ]
+}

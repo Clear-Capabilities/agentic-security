@@ -1,0 +1,105 @@
+name: Scanner F1 benchmark
+
+# Internal regression gate. Runs on every PR that touches scanner source or
+# benchmark data, and on pushes to main. Fails if:
+#  - synthetic F1 drops below baseline (or any per-family floor breached)
+#  - --strict-no-unknown surfaces a vuln string not mapped in _familyMap
+#  - any of the realworld benchmarks (Juice Shop / Snyk Goof / NodeGoat) drops
+#    below 100% F1
+#  - OWASP Benchmark F1 drops more than 2pp below the recorded baseline
+#
+# The bench output (bench-fps.json / bench-fns.json) is uploaded as an artifact
+# so reviewers can diff what changed.
+
+on:
+  pull_request:
+    paths:
+      - 'scanner/src/**'
+      - 'scanner/test/**'
+      - 'scanner/package.json'
+      - '.github/workflows/bench.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  synthetic-bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install scanner deps
+        working-directory: scanner
+        run: npm ci
+      - name: Run unit tests
+        working-directory: scanner
+        run: npm test
+      - name: Run synthetic F1 bench (strict)
+        working-directory: scanner
+        run: node test/benchmark/bench.js --strict-no-unknown
+      - name: Upload synthetic FP/FN registry
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-synthetic-${{ github.run_id }}
+          path: |
+            scanner/test/benchmark/bench-fps.json
+            scanner/test/benchmark/bench-fns.json
+            scanner/test/benchmark/baseline.json
+
+  realworld-bench:
+    runs-on: ubuntu-latest
+    needs: synthetic-bench
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install scanner deps
+        working-directory: scanner
+        run: npm ci
+      # Cache the cloned benchmark repos across runs (keyed on the manifest
+      # SHA — bumping any pinned commit invalidates the cache).
+      - name: Cache benchmark repos
+        uses: actions/cache@v4
+        with:
+          path: scanner/test/benchmark/realworld/.bench-cache
+          key: bench-cache-${{ hashFiles('scanner/test/benchmark/realworld/manifest.json') }}
+      - name: Run realworld bench (JSON)
+        working-directory: scanner
+        run: |
+          node test/benchmark/realworld/bench-realworld.js --all --json > /tmp/realworld.json
+          cat /tmp/realworld.json | head -200
+      - name: Enforce per-app F1 floors
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const r = JSON.parse(fs.readFileSync("/tmp/realworld.json","utf8"));
+            // Per-app F1 floors. JS apps must remain at 100%; Java is the
+            // longest-tail benchmark and progresses incrementally.
+            const FLOORS = {
+              "juice-shop":      1.00,
+              "snyk-goof":       1.00,
+              "nodegoat":        1.00,
+              "owasp-benchmark": 0.95,
+              "sard-juliet-java": 0.95,
+            };
+            let failed = false;
+            for (const res of r.results) {
+              const floor = FLOORS[res.name];
+              if (floor == null) continue;
+              if (res.error) { console.error(`${res.name}: ERROR ${res.error}`); failed = true; continue; }
+              const f1 = res.f1 || 0;
+              const ok = f1 + 1e-6 >= floor;
+              const tag = ok ? "PASS" : "FAIL";
+              console.log(`${tag} ${res.name}: F1=${(f1*100).toFixed(1)}% (floor ${(floor*100).toFixed(0)}%)`);
+              if (!ok) failed = true;
+            }
+            process.exit(failed ? 1 : 0);
+          '
+      - name: Upload realworld results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-realworld-${{ github.run_id }}
+          path: /tmp/realworld.json

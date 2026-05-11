@@ -1,0 +1,204 @@
+{
+  "_doc": "Per-fixture expected findings, used by scripts/bench.js to compute precision/recall/F1. Match key is (file, line±tolerance, family). 'expectedNone: true' means the fixture should produce zero findings of any family except those listed in 'expected'. Add fixtures incrementally — only fixtures listed here are scored.",
+  "_familyMap": {
+    "_doc": "Maps scanner vuln strings → canonical family. New vuln names get auto-categorized via prefix; explicit overrides win.",
+    "exact": {
+      "Command Injection": "command-injection",
+      "SQL Injection": "sql-injection",
+      "SQL Injection on Admin Endpoint — Direct DB Compromise": "sql-injection",
+      "Code Injection": "code-injection",
+      "XSS": "xss",
+      "document.write XSS Sink": "xss",
+      "SSRF": "ssrf",
+      "Path Traversal": "path-traversal",
+      "Mass Assignment": "mass-assignment",
+      "Mass Assignment (Object.assign with req.body)": "mass-assignment",
+      "Mass Assignment (Field-by-Field then save)": "mass-assignment",
+      "Mass Assignment (req.body Direct to Model)": "mass-assignment",
+      "Privilege Escalation via Mass Assignment": "mass-assignment",
+      "IDOR (Custom DAO with User-Controlled ID)": "idor",
+      "Sensitive Data Stored Unencrypted (Encryption Disabled)": "data-exposure",
+      "IDOR": "idor",
+      "Prototype Pollution (Object.assign with User Object)": "prototype-pollution",
+      "MD5/SHA1 Password Hashing": "weak-crypto",
+      "Weak Cryptographic Hash (MD5/SHA1)": "weak-crypto",
+      "Weak Randomness": "weak-rng",
+      "Hardcoded Secret": "hardcoded-secret",
+      "High-Entropy Credential Candidate": "hardcoded-secret",
+      "Password in URL": "hardcoded-secret",
+      "Vulnerable Dependency": "vulnerable-dep",
+      "Dependency Confusion (Internal Package on Public Registry)": "vulnerable-dep",
+      "Typosquat / Confusable Package": "vulnerable-dep",
+      "Path Traversal (User-Controlled Path)": "path-traversal",
+      "Weak Cryptographic Hash (MD5/SHA1) — Java": "weak-crypto",
+      "Cryptographically Weak PRNG — Java": "weak-rng",
+      "SQL Injection — Java JDBC/Hibernate": "sql-injection",
+      "Command Injection — Java Runtime/ProcessBuilder": "command-injection",
+      "Reflected XSS — Java Servlet Response Write": "xss",
+      "Insecure Cookie — Missing Secure/HttpOnly Flags": "header-hardening",
+      "Trust Boundary Violation — User Data Stored in Session": "trust-boundary",
+      "LDAP Injection — Java JNDI/Spring LDAP": "ldap-injection",
+      "XPath Injection — Java": "xpath-injection",
+      "Reflected XSS": "xss",
+      "Reflected XSS (User Input in Response)": "xss",
+      "Stored XSS / Second-Order Injection": "xss",
+      "Session-Stored XSS / Second-Order Injection": "xss",
+      "Verify x-powered-by Header is Disabled": "header-hardening",
+      "Cookie Set Without Secure": "header-hardening",
+      "Cookie Set Without HttpOnly": "header-hardening",
+      "Session Cookie Without Secure": "header-hardening",
+      "Session Cookie Without HttpOnly": "header-hardening",
+      "Full User Object Exposed in Response": "data-exposure",
+      "Sensitive Mutation Without Audit Log (Repudiation Risk)": "audit-logging",
+      "Potential IDOR (User-Controlled ID)": "idor",
+      "Potential Indirect IDOR — findAll Without Ownership Scope": "idor",
+      "ORM Collection Query Without Pagination Limit (DoS)": "orm-no-pagination",
+      "RSA Private Key": "hardcoded-secret",
+      "DSA Private Key": "hardcoded-secret",
+      "EC Private Key": "hardcoded-secret",
+      "PGP Private Key Block": "hardcoded-secret",
+      "OpenSSH Private Key": "hardcoded-secret",
+      "JWT Decoded Without Signature Verification": "jwt-no-verify",
+      "JWT Forgery → Mass Assignment → Privilege Escalation": "jwt-no-verify",
+      "JWT Algorithm Confusion": "jwt-alg-confusion",
+      "JWT Sign (Verify Algorithm Pinned)": "jwt-alg-confusion",
+      "OAuth Authorization Code Theft via Open Redirect": "open-redirect",
+      "Synchronous Blocking I/O (DoS Risk in Server Context)": "dos-sync-io",
+      "Missing Timeout on Outbound HTTP Request (DoS)": "dos-no-timeout",
+      "GraphQL Missing Query Depth/Complexity Limit (DoS Risk)": "graphql-dos",
+      "ORM Collection Query Without Pagination Limit (DoS)": "orm-no-pagination",
+      "Regex ReDoS — Catastrophic Backtracking": "redos",
+      "Timing Oracle — Non-Constant-Time Secret Comparison": "timing-oracle",
+      "Log Injection (Unsanitized User Input Logged)": "log-injection",
+      "Known-Broken Code Marker Near Security-Sensitive Logic": "broken-marker",
+      "Vulnerable Dependency": "vulnerable-dep",
+      "VM Sandbox Execution (RCE Risk)": "code-injection",
+      "NoSQL Injection": "sql-injection",
+      "NoSQL Injection ($where with User Input)": "sql-injection",
+      "NoSQL Injection (User-Controlled Query Filter)": "sql-injection"
+    },
+    "prefix": {
+      "Command Injection": "command-injection",
+      "SQL Injection": "sql-injection",
+      "Code Injection": "code-injection",
+      "VM Sandbox Execution": "code-injection",
+      "NoSQL Injection": "sql-injection",
+      "Reflected XSS": "xss",
+      "Stored XSS": "xss",
+      "DOM XSS": "xss",
+      "XSS": "xss",
+      "Path Traversal": "path-traversal",
+      "Potential IDOR": "idor",
+      "AuthZ:": "idor",
+      "Mass Assignment": "mass-assignment",
+      "JWT": "jwt-no-verify",
+      "Hardcoded": "hardcoded-secret",
+      "MCP:": "mcp",
+      "Synchronous Blocking I/O": "dos-sync-io",
+      "Missing Timeout": "dos-no-timeout",
+      "Regex ReDoS": "redos",
+      "Timing Oracle": "timing-oracle",
+      "Full User Object": "data-exposure",
+      "Verify x-powered-by": "header-hardening",
+      "Cookie Set Without": "header-hardening",
+      "Log Injection": "log-injection",
+      "Sensitive Route Mounted Before Auth": "middleware-ordering",
+      "Command Injection (Aliased Call)": "command-injection",
+      "Command Injection (Indirect Property Access)": "command-injection",
+      "Open Redirect": "open-redirect",
+      "SSRF": "ssrf",
+      "Container base image": "container-base-image",
+      "Known-Broken Code Marker": "broken-marker",
+      "Insecure HTTP": "transport-security",
+      "Server-Side Template Injection": "ssti",
+      "SSTI": "ssti",
+      "Cryptographically Weak PRNG": "weak-rng",
+      "Weak Randomness": "weak-rng",
+      "Template Autoescape Disabled": "ssti",
+      "NoSQL Injection": "sql-injection",
+      "Session Cookie Without": "header-hardening"
+    }
+  },
+  "fixtures": {
+    "vulnerable-js": {
+      "_doc": "Hand-crafted vulnerable Express app. Each line has a known vuln.",
+      "expected": [
+        { "file": "app.js", "line": 2,  "family": "header-hardening",  "severity": "low",      "_note": "express() without helmet() or disable('x-powered-by')" },
+        { "file": "app.js", "line": 7,  "family": "sql-injection",     "severity": "critical" },
+        { "file": "app.js", "line": 8,  "family": "xss",               "severity": "high"     },
+        { "file": "app.js", "line": 14, "family": "command-injection", "severity": "critical" },
+        { "file": "app.js", "line": 14, "family": "xss",               "severity": "high",     "_note": "res.send(out) where out is exec stdout — taint path" },
+        { "file": "app.js", "line": 19, "family": "hardcoded-secret",  "severity": "critical" },
+        { "file": "app.js", "line": 20, "family": "hardcoded-secret",  "severity": "critical" },
+        { "file": "app.js", "line": 24, "family": "weak-crypto",       "severity": "medium"   },
+        { "file": "app.js", "line": 28, "family": "code-injection",    "severity": "critical" },
+        { "file": "app.js", "line": 28, "family": "xss",               "severity": "high",     "_note": "res.send(eval(req.body.expr)) — xss via eval result" },
+        { "file": "app.js", "line": 34, "family": "path-traversal",    "severity": "high"     },
+        { "file": "app.js", "line": 38, "family": "audit-logging",     "severity": "medium",   "_note": "POST /user invokes User.create without audit log" },
+        { "file": "app.js", "line": 39, "family": "mass-assignment",   "severity": "high"     },
+        { "file": "package.json", "line": 0, "lineTolerance": 9999, "matchAny": true, "family": "vulnerable-dep", "severity": "high" }
+      ]
+    },
+    "clean-js": {
+      "_doc": "Parameterized queries, execFile + arg array, env-var secrets, sha256. Should fire ZERO SAST findings.",
+      "expected": [],
+      "expectedNone": true
+    },
+    "timing-oracle": {
+      "_doc": "Mix of real timing-oracle vulns (lines 3, 8) and feature-flag env comparisons (lines 15, 18, 21) the precondition should suppress.",
+      "expected": [
+        { "file": "app.js", "line": 3, "family": "timing-oracle", "severity": "medium" },
+        { "file": "app.js", "line": 8, "family": "timing-oracle", "severity": "medium" }
+      ]
+    },
+    "redos-mixed": {
+      "_doc": "Catastrophic patterns (lines 2, 5, 8) plus safe shapes (12, 15, 18) the analyzer must NOT flag.",
+      "expected": [
+        { "file": "app.js", "line": 2, "family": "redos", "severity": "medium" },
+        { "file": "app.js", "line": 5, "family": "redos", "severity": "medium" },
+        { "file": "app.js", "line": 8, "family": "redos", "severity": "medium" }
+      ]
+    },
+    "rule-library-shape": {
+      "_doc": "All `eval(`, `exec(`, `db.query(` etc. appear inside string literals describing rules. A scanner with proper string-literal awareness should fire ZERO findings. Without it, ~8 self-detections fire.",
+      "expected": [],
+      "expectedNone": true
+    },
+    "cli-script-context": {
+      "_doc": "One-shot CLI script with sync fs I/O. The 'DoS in Server Context' rule should NOT fire — the file is hashbanged, top-level process.exit() runs, no server imports.",
+      "expected": [],
+      "expectedNone": true
+    },
+    "ast-aliased-sink": {
+      "_doc": "Three forms of aliased command-injection sink: destructured ({exec}=cp), property-assigned (runShell=cp.exec), bracket-access (cp['exec']). Tests AST taint expansion (#8). All three should fire after the slice landed in scanAliasedSinks().",
+      "expected": [
+        { "file": "app.js", "line": 3,  "family": "header-hardening",  "severity": "low" },
+        { "file": "app.js", "line": 8,  "family": "command-injection", "severity": "critical" },
+        { "file": "app.js", "line": 14, "family": "command-injection", "severity": "critical" },
+        { "file": "app.js", "line": 19, "family": "command-injection", "severity": "critical" }
+      ]
+    },
+    "middleware-ordering": {
+      "_doc": "Express middleware-ordering bug: /admin and /api are mounted before global authMiddleware. Tests framework-aware sequence detection (#9). /public is fine, /dashboard is mounted AFTER auth (also fine).",
+      "expected": [
+        { "file": "app.js", "line": 7,  "family": "header-hardening",     "severity": "low" },
+        { "file": "app.js", "line": 11, "family": "middleware-ordering", "severity": "high" },
+        { "file": "app.js", "line": 14, "family": "middleware-ordering", "severity": "high" }
+      ]
+    },
+    "orm-raw-sql": {
+      "_doc": "Prisma $queryRaw/$executeRaw, Sequelize literal, TypeORM raw where — all common ORM-bypass shapes that previously slipped past the SQL-injection detector.",
+      "expected": [
+        { "file": "app.js", "line": 2,  "family": "header-hardening",  "severity": "low" },
+        { "file": "app.js", "line": 10, "family": "sql-injection",    "severity": "high" },
+        { "file": "app.js", "line": 16, "family": "sql-injection",    "severity": "high" },
+        { "file": "app.js", "line": 21, "family": "sql-injection",    "severity": "high" },
+        { "file": "app.js", "line": 22, "family": "idor",             "severity": "high",   "_note": "User.findAll without ownership scope" },
+        { "file": "app.js", "line": 22, "family": "orm-no-pagination","severity": "medium", "_note": "User.findAll without limit" },
+        { "file": "app.js", "line": 23, "family": "data-exposure",    "severity": "high",   "_note": "res.json(users) returns full user objects" },
+        { "file": "app.js", "line": 28, "family": "sql-injection",    "severity": "high" },
+        { "file": "app.js", "line": 30, "family": "data-exposure",    "severity": "high",   "_note": "res.json(users) returns full user objects" }
+      ]
+    }
+  }
+}

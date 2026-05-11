@@ -212,20 +212,31 @@ test('FP-6: logic-pattern operational gates (Feedback / Coupon / Sensitive-Accou
 });
 
 test('FP-3: sanitizer effectiveness by data-flow (discarded return ≠ sanitization)', async () => {
-  const expected = {
-    'useless-call.js': { sev: 'medium' },   // bare escapeHtml(s); → not downgraded
-    'proper-call.js':  { sev: 'info' },     // const safe = escapeHtml(s); → downgraded
-    'fake-escape.js':  { sev: 'medium' },   // custom escapeError that rethrows → not promoted to sanitizer
-  };
-  for (const [fixture, want] of Object.entries(expected)) {
+  // useless-call.js and fake-escape.js: sanitizer return is discarded or fake → real finding
+  for (const fixture of ['useless-call.js', 'fake-escape.js']) {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agsec-san-'));
     try {
       await fs.cp(FIX('sanitizer-misuse/' + fixture), path.join(tmpDir, fixture));
       const { scan } = await runScan(tmpDir);
       const xss = normalizeFindings(scan).filter(f => /XSS|Reflected/.test(f.vuln));
       assert.ok(xss.length >= 1, `${fixture}: expected ≥1 XSS finding`);
-      assert.ok(xss.some(f => f.severity === want.sev),
-        `${fixture}: expected at least one XSS finding at severity '${want.sev}', got: ${xss.map(f=>f.severity).join(', ')}`);
+      assert.ok(xss.some(f => f.severity === 'medium'),
+        `${fixture}: expected XSS at severity 'medium', got: ${xss.map(f=>f.severity).join(', ')}`);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+  // proper-call.js: sanitizer return IS used → finding suppressed entirely (not a real vuln)
+  {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agsec-san-'));
+    try {
+      await fs.cp(FIX('sanitizer-misuse/proper-call.js'), path.join(tmpDir, 'proper-call.js'));
+      const { scan } = await runScan(tmpDir);
+      const xss = normalizeFindings(scan).filter(f => /XSS|Reflected/.test(f.vuln));
+      assert.strictEqual(xss.length, 0, `proper-call.js: expected 0 XSS findings (sanitized properly), got ${xss.length}`);
+      // Verify it was tracked as suppressed (mechanism worked, not just missed)
+      const suppressed = (scan.suppressions || []).filter(s => /XSS|Reflected/.test(s.vuln));
+      assert.ok(suppressed.length >= 1, `proper-call.js: expected XSS in suppressions, got ${suppressed.length}`);
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }

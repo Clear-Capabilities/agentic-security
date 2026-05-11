@@ -78,12 +78,52 @@ function _emit(fp, line, vuln, severity, cwe, snippet, fix, confidence=0.85) {
   };
 }
 
+// Strip string-literal contents while preserving line/col so the raw-SQL and
+// shape-only patterns below don't self-detect inside fix-message templates or
+// other string-embedded examples.
+function _stripStrings(code){
+  const out = code.split('');
+  const n = code.length;
+  let i = 0, state = 0; // 0 NORMAL, 1 SQ, 2 DQ, 3 BT
+  while (i < n) {
+    const c = code[i];
+    if (state === 0) {
+      if (c === "'") { state = 1; i++; continue; }
+      if (c === '"') { state = 2; i++; continue; }
+      if (c === '`') { state = 3; i++; continue; }
+      i++; continue;
+    }
+    const quote = state === 1 ? "'" : state === 2 ? '"' : '`';
+    if (c === '\\' && i + 1 < n) { if (code[i+1] !== '\n') out[i+1] = ' '; out[i] = ' '; i += 2; continue; }
+    if (c === quote) { state = 0; i++; continue; }
+    if (state === 3 && c === '$' && code[i+1] === '{') {
+      // Preserve template expression content: skip ahead until matching }.
+      let depth = 1; out[i]='$'; out[i+1]='{'; i += 2;
+      while (i < n && depth > 0) {
+        if (code[i] === '{') depth++;
+        else if (code[i] === '}') depth--;
+        i++;
+      }
+      continue;
+    }
+    if (c !== '\n') out[i] = ' ';
+    i++;
+  }
+  return out.join('');
+}
+
 export function scanAuthZ(fp, raw) {
   if (!_SCAN_EXT_RE.test(fp)) return [];
   const fpNorm = fp.replace(/\\/g, '/');
   if (_NONPROD_PATH_RE.test(fpNorm)) return [];
   if (!raw || raw.length > 500_000) return [];
 
+  // `rawForShape` is used by detectors that match on code shape (raw SQL, JWT
+  // calls). String literals are blanked so fix-message templates and example
+  // snippets don't self-detect. Detectors that explicitly read literal content
+  // (hardcoded JWT secret) keep using `raw`.
+  const rawForShape = _stripStrings(raw);
+  const linesShape = rawForShape.split('\n');
   const lines = raw.split('\n');
   const findings = [];
   const seen = new Set();
@@ -181,10 +221,10 @@ export function scanAuthZ(fp, raw) {
   }
   let rm;
   const rawSqlRe = new RegExp(MT_RAW_SQL_RE.source, 'gi');
-  while ((rm = rawSqlRe.exec(raw))) {
+  while ((rm = rawSqlRe.exec(rawForShape))) {
     const block = rm[0];
     if (!MT_TENANT_KEY_RE.test(block)) {
-      const line = raw.substring(0, rm.index).split('\n').length;
+      const line = rawForShape.substring(0, rm.index).split('\n').length;
       push(_emit(fp, line,
         'AuthZ: raw SQL where-by-id without tenant scope',
         'high', 'CWE-639', lines[line - 1] || block.slice(0, 120),

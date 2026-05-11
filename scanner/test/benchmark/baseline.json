@@ -1,0 +1,96 @@
+{
+  "precision": 1,
+  "recall": 1,
+  "f1": 1,
+  "tp": 51,
+  "fp": 0,
+  "fn": 0,
+  "perFamily": {
+    "header-hardening": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0
+    },
+    "sql-injection": {
+      "tp": 5,
+      "fp": 0,
+      "fn": 0
+    },
+    "xss": {
+      "tp": 3,
+      "fp": 0,
+      "fn": 0
+    },
+    "command-injection": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0
+    },
+    "hardcoded-secret": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    },
+    "weak-crypto": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "code-injection": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "path-traversal": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "audit-logging": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "mass-assignment": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "vulnerable-dep": {
+      "tp": 17,
+      "fp": 0,
+      "fn": 0
+    },
+    "timing-oracle": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    },
+    "redos": {
+      "tp": 3,
+      "fp": 0,
+      "fn": 0
+    },
+    "middleware-ordering": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    },
+    "idor": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "orm-no-pagination": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "data-exposure": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    }
+  },
+  "ts": "2026-05-10T15:57:23.220Z"
+}

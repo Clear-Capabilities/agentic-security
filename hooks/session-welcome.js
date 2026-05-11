@@ -35,13 +35,12 @@ const isFirstTime = !fs.existsSync(marker);
 if (isFirstTime) {
   const lines = [
     '',
-    '🔒 agentic-security is active in this project.',
+    '🛡  agentic-security is active in this project.',
+    '   Created by ClearCapabilities.Com — https://clearcapabilities.com',
     '',
-    '  /security-scan-all     full SAST + SCA + secrets + IaC sweep',
-    '  /security-grade        single A-F grade with one-sentence reason',
-    '  /security-launch-check pre-deploy 10-item checklist',
-    '  /security-help         see all 33 commands by category',
-    '  /security-status       project health & plugin status',
+    '   Building an app?            → /ship',
+    '   AppSec / security work?     → /security-scan-all',
+    '   Not sure which you are?     → /security-onboard',
     '',
     '  Hooks: every Edit/Write scans the changed file in <5s.',
     '  This welcome shows once per project.',

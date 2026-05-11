@@ -1,13 +1,41 @@
 # agentic-security
 
-**Ship fast. Stay secure. Automatically.**
+**The boring copilot that catches what your AI assistant misses.**
 
-The security layer built for AI-written code. Catches vulnerabilities the moment they're introduced, in the same session with the same agent, and fixes them before you move on.
+> 🛡 Created by **[ClearCapabilities.Com](https://clearcapabilities.com)**.
+> Local-first. No signup. Works inside Claude Code.
 
 [![License: PolyForm-Internal-Use-1.0.0](https://img.shields.io/badge/license-PolyForm--Internal--Use--1.0.0-blue)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-75%2F75%20passing-brightgreen)]()
-[![Bundle](https://img.shields.io/badge/bundle-2.06MB%20·%20no%20install-orange)]()
-[![Version](https://img.shields.io/badge/version-0.15.0-blue)]()
+[![Bundle](https://img.shields.io/badge/bundle-2.13MB%20·%20no%20install-orange)]()
+[![Version](https://img.shields.io/badge/version-0.16.0-blue)]()
+
+---
+
+## Pick your path
+
+This tool serves two audiences with different needs.
+
+#### 👉 I'm building an app  ([for-vibecoders.md](docs/for-vibecoders.md))
+You want to ship safely without learning what XSS means. You vibecode with Claude. You want one command that tells you "you're good" or "fix this exact line."
+
+```bash
+agentic-security ship       # one verdict, three actions, copy-paste fixes
+```
+
+#### 👉 I'm responsible for application security  ([for-appsec-pros.md](docs/for-appsec-pros.md))
+You're a security engineer or AppSec lead. You need SARIF, CWE/CVSS/OWASP/MITRE columns, Jira sync, org-wide scans, audit-grade suppressions, and reproducible F1 numbers.
+
+```bash
+agentic-security profile set pro
+agentic-security scan . --format cli --columns mitre
+```
+
+#### Not sure? Run this:
+```bash
+agentic-security profile detect       # heuristic guess
+agentic-security profile set vibecoder # or: pro — picks defaults across the tool
+```
 
 ---
 

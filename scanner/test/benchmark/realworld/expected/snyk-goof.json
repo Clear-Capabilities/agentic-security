@@ -1,0 +1,40 @@
+{
+  "_doc": "Snyk Goof curated expected. wildcardFamilies cover the long tail of advisory findings the scanner correctly produces (Dockerfile EOL, missing rate limit, weak rng, etc.) which aren't part of the canonical Snyk-Goof exploit walkthrough.",
+  "wildcardFamilies": [
+    "broken-marker",
+    "container-base-image",
+    "debug-admin-route-exposed",
+    "docker-service-publishes-sensitive-port-",
+    "header-hardening",
+    "log-injection",
+    "middleware-ordering",
+    "path-traversal",
+    "privilege-field-set-from-request-body",
+    "session-cookie-missing-secure-flag",
+    "ssti",
+    "weak-hardcoded-session-secret",
+    "weak-rng",
+    "xss",
+    "hardcoded-secret",
+    "mass-assignment"
+  ],
+  "expected": [
+  { "file": "routes/index.js",  "line": 174, "lineTolerance": 3, "family": "command-injection", "severity": "critical", "cwe": "CWE-78",  "note": "exec('identify ' + url) where url comes from req.body.content via regex match" },
+
+  { "file": "routes/index.js",  "line": 29,  "lineTolerance": 8, "family": "open-redirect",     "severity": "high",     "cwe": "CWE-601", "note": "res.redirect(redirectPage) — onLoginSuccessHook" },
+  { "file": "routes/index.js",  "line": 74,  "lineTolerance": 8, "family": "open-redirect",     "severity": "high",     "cwe": "CWE-601", "note": "res.redirect(redirectPage) — adminLoginSuccess" },
+
+  { "file": "routes/index.js",  "line": 235, "lineTolerance": 8, "family": "mass-assignment",   "severity": "high",     "cwe": "CWE-915", "note": "todo.content = req.body.content; .save() — mass assignment update flow" },
+  { "file": "routes/users.js",  "line": 32,  "lineTolerance": 8, "family": "mass-assignment",   "severity": "high",     "cwe": "CWE-915", "note": "user.name/address/role assigned from req.body.* and .save()" },
+
+  { "file": "routes/index.js",  "line": 360, "lineTolerance": 4, "family": "prototype-pollution","severity": "critical","cwe": "CWE-1321","note": "_.merge(message, req.body.message, ...) — lodash deep merge of user input is the canonical proto-pollution sink" },
+
+  { "file": "routes/index.js",  "line": 204, "lineTolerance": 4, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "Todo.findById(req.params.id) without ownership check — destroy" },
+  { "file": "routes/index.js",  "line": 232, "lineTolerance": 4, "family": "idor",              "severity": "high",     "cwe": "CWE-639", "note": "Todo.findById(req.params.id) without ownership check — update" },
+
+  { "file": "app.js",           "line": 42,  "lineTolerance": 5, "family": "hardcoded-secret",  "severity": "high",     "cwe": "CWE-798", "note": "session({secret: 'keyboard cat'}) — hardcoded session signing key" },
+  { "file": "app.js",           "line": 42,  "lineTolerance": 5, "family": "header-hardening",  "severity": "medium",   "cwe": "CWE-1004","note": "session({cookie:{path:'/'}}) — missing httpOnly/secure/sameSite flags" },
+
+  { "file": "package.json",     "line": 0,   "lineTolerance": 9999, "matchAny": true, "family": "vulnerable-dep", "severity": "high", "cwe": null, "note": "Snyk-Goof's defining feature: dozens of known-vulnerable npm deps (mongoose, marked, ejs, lodash, adm-zip, etc.). matchAny:true so all CVEs found in package.json count as one collective TP." }
+  ]
+}

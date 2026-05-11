@@ -1,7 +1,7 @@
 agentic-security
 Copyright (c) 2026 Ross Young / Clear Capabilities Inc.
 
-This product is licensed under the Elastic License 2.0. See LICENSE.
+This product is licensed under the PolyForm Internal Use License 1.0.0. See LICENSE.
 
 The vulnerability detection patterns and remediation templates are derived
 from the attacksurface.html analyzer authored by Ross Young at Clear

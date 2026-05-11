@@ -197,6 +197,29 @@ export function toJSON(scan, meta={}, opts={}){
   return out;
 }
 
+// R2: Always-on CSV writer for pro mode. One row per finding, columns chosen
+// for spreadsheet/Excel/BigQuery import.
+export function toCSV(scan){
+  const findings = normalizeFindings(scan);
+  const esc = v => {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const header = ['id', 'severity', 'vuln', 'cwe', 'cvss', 'owasp', 'file', 'line', 'confidence', 'reachable', 'kind', 'snippet'];
+  const rows = [header.join(',')];
+  for (const f of findings) {
+    rows.push([
+      esc(f.id), esc(f.severity), esc(f.vuln), esc(f.cwe), esc(f.cvss || ''),
+      esc(f.owasp || ''), esc(f.file), esc(f.line),
+      esc(f.confidence == null ? '' : f.confidence.toFixed(3)),
+      esc(f.reachable == null ? '' : f.reachable),
+      esc(f.kind), esc((f.snippet || '').slice(0, 200)),
+    ].join(','));
+  }
+  return rows.join('\n');
+}
+
 export function toMarkdown(scan, meta={}){
   const findings = normalizeFindings(scan);
   const lines = ['# Agentic Security — Scan Report', ''];
@@ -478,6 +501,145 @@ export function toCLI(scan, { verbose=false, color=true }={}){
   for (const f of findings) counts[f.severity] = (counts[f.severity]||0) + 1;
   lines.push(`${c('Critical:', SEV_COLOR.critical)} ${counts.critical}    ${c('High:', SEV_COLOR.high)} ${counts.high}    ${c('Medium:', SEV_COLOR.medium)} ${counts.medium}    ${c('Low:', SEV_COLOR.low)} ${counts.low}    ${c('Info:', SEV_COLOR.info)} ${counts.info}`);
   return lines.join('\n');
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PERSONA-AWARE RENDERERS (R3 + R5)
+// ────────────────────────────────────────────────────────────────────────────
+//
+//   toShipVerdict: vibecoder default — one-screen verdict, hides taxonomy,
+//                  shows up to 3 actionable items each with inline fix snippet.
+//   toProTable:    pro default — table with CWE/CVSS/OWASP/MITRE columns,
+//                  ranked by exploitability, full taxonomy visible.
+//
+// Both filter by `confidenceMin` from the profile.
+
+const CONF_DEFAULT_VIB = 0.9;
+const CONF_DEFAULT_PRO = 0.3;
+
+function _withConfidence(findings, min) {
+  // confidence defaults to 1.0 when unset — engine doesn't always populate it,
+  // so we never silently drop unset findings. Power users can `--firehose`.
+  return findings.filter(f => (f.confidence == null ? 1.0 : f.confidence) >= min);
+}
+
+function _sevToEmoji(sev) {
+  return { critical: '🔴', high: '🟠', medium: '🟡', low: '🔵', info: '⚪' }[sev] || '•';
+}
+
+export function toShipVerdict(scan, options = {}) {
+  const profile = options.profile || { confidenceMin: CONF_DEFAULT_VIB, showTaxonomy: false };
+  const color = options.color !== false;
+  const c = (s, code) => color ? `${code}${s}${RESET}` : s;
+  const findings = _withConfidence(normalizeFindings(scan), profile.confidenceMin ?? CONF_DEFAULT_VIB);
+  const actionable = findings.filter(f => /critical|high/.test(f.severity));
+  const advisoryCount = findings.length - actionable.length;
+  const sev = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const f of findings) sev[f.severity] = (sev[f.severity] || 0) + 1;
+
+  const lines = [];
+  const bar = '─────────────────────────────────────────';
+  lines.push(bar);
+  if (actionable.length === 0) {
+    lines.push(c('  ✅  Safe to deploy', SEV_COLOR.low + BOLD));
+  } else {
+    lines.push(c('  ❌  Not safe to deploy', SEV_COLOR.critical + BOLD));
+  }
+  lines.push(bar);
+  lines.push(`  • ${sev.critical} critical · ${sev.high} high · ${advisoryCount} advisory`);
+  lines.push('');
+
+  if (actionable.length) {
+    lines.push(c(`  ${actionable.length} thing${actionable.length === 1 ? '' : 's'} to fix:`, BOLD));
+    lines.push('');
+    actionable.slice(0, 5).forEach((f, idx) => {
+      lines.push(`  ${idx + 1}. ${c(f.file + ':' + f.line, BOLD)}  —  ${f.vuln}`);
+      if (f.fix?.code) {
+        const fixLines = f.fix.code.split('\n').slice(0, 4);
+        for (const fl of fixLines) lines.push(`     ${c(fl, DIM)}`);
+      } else if (f.fix?.description) {
+        lines.push(`     ${c(f.fix.description, DIM)}`);
+      }
+      lines.push('');
+    });
+    if (actionable.length > 5) lines.push(c(`  + ${actionable.length - 5} more — run /security-scan-all --firehose to see all`, DIM));
+    lines.push('');
+    lines.push(c('  Run /fix <n> to apply the fix automatically.', DIM));
+  } else if (advisoryCount > 0) {
+    lines.push(c(`  ${advisoryCount} advisory item${advisoryCount === 1 ? '' : 's'} — run /details to see them.`, DIM));
+  }
+  lines.push('');
+  lines.push(c('  🛡  agentic-security · created by ClearCapabilities.Com', DIM));
+  return lines.join('\n');
+}
+
+export function toProTable(scan, options = {}) {
+  const profile = options.profile || { confidenceMin: CONF_DEFAULT_PRO, showTaxonomy: true };
+  const color = options.color !== false;
+  const c = (s, code) => color ? `${code}${s}${RESET}` : s;
+  const columns = options.columns || 'standard'; // 'standard' | 'mitre' | 'capec' | 'owasp'
+  const findings = _withConfidence(normalizeFindings(scan), profile.confidenceMin ?? CONF_DEFAULT_PRO);
+
+  // Rank by exploitability (or severity rank if absent).
+  findings.sort((a, b) => {
+    const ea = a.exploitability ?? (1 - (SEV_RANK[a.severity] || 0) / 4);
+    const eb = b.exploitability ?? (1 - (SEV_RANK[b.severity] || 0) / 4);
+    return eb - ea;
+  });
+
+  const lines = [];
+  lines.push(c(BOLD + `agentic-security — pro mode  ·  ${findings.length} finding(s) across ${scan.filesScanned || 0} file(s)`, ''));
+  lines.push(c('created by ClearCapabilities.Com', DIM));
+  lines.push('');
+
+  // Header row depends on column profile.
+  const hdr = (() => {
+    if (columns === 'mitre') return ['Severity', 'File:Line', 'ATT&CK', 'Vuln', 'Conf'];
+    if (columns === 'capec') return ['Severity', 'File:Line', 'CAPEC', 'Vuln', 'Conf'];
+    if (columns === 'owasp') return ['Severity', 'File:Line', 'CWE', 'OWASP', 'Vuln', 'Conf'];
+    return ['Severity', 'File:Line', 'CWE', 'CVSS', 'OWASP', 'Vuln', 'Conf'];
+  })();
+  lines.push(c(hdr.join('  '), BOLD));
+  lines.push(c('─'.repeat(80), DIM));
+
+  for (const f of findings) {
+    const sev = c(_sevToEmoji(f.severity) + ' ' + (f.severity || '').toUpperCase().padEnd(8), SEV_COLOR[f.severity] || '');
+    const where = `${f.file}:${f.line}`.padEnd(40);
+    const cwe = (f.cwe || '—').padEnd(10);
+    const cvss = (f.cvss || f.cvssV3?.score || '—').toString().padEnd(5);
+    const owasp = (f.owasp || f.owaspCategory || '—').padEnd(10);
+    const mitre = (f.mitreAttack || f.attckTechnique || '—').padEnd(20);
+    const capec = (f.capec || '—').padEnd(10);
+    const conf = (f.confidence == null ? '—' : f.confidence.toFixed(2));
+    const vuln = (f.vuln || '').slice(0, 60);
+
+    if (columns === 'mitre') lines.push(`${sev}  ${where}  ${mitre}  ${vuln}  ${conf}`);
+    else if (columns === 'capec') lines.push(`${sev}  ${where}  ${capec}  ${vuln}  ${conf}`);
+    else if (columns === 'owasp') lines.push(`${sev}  ${where}  ${cwe}  ${owasp}  ${vuln}  ${conf}`);
+    else lines.push(`${sev}  ${where}  ${cwe}  ${cvss}  ${owasp}  ${vuln}  ${conf}`);
+  }
+
+  // Footer counts.
+  const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
+  lines.push('');
+  lines.push(
+    `${c('Critical:', SEV_COLOR.critical)} ${counts.critical}  ` +
+    `${c('High:', SEV_COLOR.high)} ${counts.high}  ` +
+    `${c('Medium:', SEV_COLOR.medium)} ${counts.medium}  ` +
+    `${c('Low:', SEV_COLOR.low)} ${counts.low}  ` +
+    `${c('Info:', SEV_COLOR.info)} ${counts.info}`
+  );
+  lines.push('');
+  lines.push(c('Machine-readable output written to .agentic-security/findings.{sarif,json,csv}', DIM));
+  return lines.join('\n');
+}
+
+// Persona dispatcher. Picks the renderer based on the profile.
+export function toCLIByProfile(scan, options = {}) {
+  const profile = options.profile || {};
+  if (profile.profile === 'pro') return toProTable(scan, options);
+  return toShipVerdict(scan, options);
 }
 
 export function toSummary(scan, { color=true }={}){
