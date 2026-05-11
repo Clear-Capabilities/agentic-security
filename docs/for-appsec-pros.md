@@ -308,7 +308,7 @@ Add to `.pre-commit-config.yaml`:
 
 ```yaml
        - repo: https://github.com/clearcapabilities/agentic-security
-         rev: v0.21.0
+         rev: v0.22.0
          hooks:
            - id: agentic-security
 ```
