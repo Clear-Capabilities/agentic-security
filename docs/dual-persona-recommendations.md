@@ -407,7 +407,7 @@ The README currently mixes audiences. Separate them.
 ```
 agentic-security
 
-The boring copilot that catches what your AI assistant misses.
+The Claude Code Plugin that Catches what your AI Assistant Misses.
 
   > I'm building an app                    [vibecoder path]
   > I'm responsible for app security       [appsec pro path]

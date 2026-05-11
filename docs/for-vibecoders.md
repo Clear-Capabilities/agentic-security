@@ -1,7 +1,7 @@
 # agentic-security for vibecoders
 
 > 🛡 Created by **[ClearCapabilities.Com](https://clearcapabilities.com)**.
-> The boring copilot that catches what your AI assistant misses.
+> The Claude Code Plugin that Catches what your AI Assistant Misses.
 
 You're building an app. You don't have time to learn what CWE-79 means. You want a tool that tells you "you're good" or "fix this exact line" and shuts up otherwise.
 

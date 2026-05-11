@@ -1,6 +1,6 @@
 # agentic-security 🛡
 
-**The boring copilot that catches what your AI assistant misses.**
+**The Claude Code Plugin that Catches what your AI Assistant Misses.**
 
 > Created by **[ClearCapabilities.Com](https://clearcapabilities.com)** · runs inside Claude Code · local-first · free for solo devs
 
