@@ -550,23 +550,25 @@ export function toShipVerdict(scan, options = {}) {
   lines.push('');
 
   if (actionable.length) {
-    lines.push(c(`  ${actionable.length} thing${actionable.length === 1 ? '' : 's'} to fix:`, BOLD));
+    // Cumulative counts so each option shows what the user is actually
+    // signing up for (e.g., `high` fixes both critical AND high).
+    const nCrit = sev.critical || 0;
+    const nHigh = nCrit + (sev.high || 0);
+    const nMed  = nHigh + (sev.medium || 0);
+    const nLow  = nMed  + (sev.low || 0);
+
+    lines.push(c('  Which level do you want to fix first?', BOLD));
     lines.push('');
-    actionable.slice(0, 5).forEach((f, idx) => {
-      lines.push(`  ${idx + 1}. ${c(f.file + ':' + f.line, BOLD)}  —  ${f.vuln}`);
-      if (f.fix?.code) {
-        const fixLines = f.fix.code.split('\n').slice(0, 4);
-        for (const fl of fixLines) lines.push(`     ${c(fl, DIM)}`);
-      } else if (f.fix?.description) {
-        lines.push(`     ${c(f.fix.description, DIM)}`);
-      }
-      lines.push('');
-    });
-    if (actionable.length > 5) lines.push(c(`  + ${actionable.length - 5} more — run /security-scan-all --firehose to see all`, DIM));
+    if (nCrit > 0) lines.push(`     /security-fix-all --severity critical   (${nCrit} ${nCrit === 1 ? 'fix' : 'fixes'})`);
+    if (nHigh > nCrit) lines.push(`     /security-fix-all --severity high       (${nHigh} fixes)`);
+    if (nMed > nHigh) lines.push(`     /security-fix-all --severity medium     (${nMed} fixes)`);
+    if (nLow > nMed) lines.push(`     /security-fix-all --severity low        (${nLow} fixes)`);
     lines.push('');
-    lines.push(c('  Run /fix <n> to apply the fix automatically.', DIM));
+    lines.push(c('  Or pick a single one:', DIM));
+    lines.push(c('     /security-scan-all --firehose      see every finding', DIM));
+    lines.push(c('     /security-fix --finding <id>       fix exactly one', DIM));
   } else if (advisoryCount > 0) {
-    lines.push(c(`  ${advisoryCount} advisory item${advisoryCount === 1 ? '' : 's'} — run /details to see them.`, DIM));
+    lines.push(c(`  ${advisoryCount} advisory item${advisoryCount === 1 ? '' : 's'} — run /security-scan-all --firehose to see them.`, DIM));
   }
   lines.push('');
   lines.push(c('  🛡  agentic-security · created by ClearCapabilities.Com', DIM));
