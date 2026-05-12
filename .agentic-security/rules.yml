@@ -1,0 +1,49 @@
+# Files where the scanner self-detects: rule libraries trip on their own
+# detection patterns / fix-message strings.
+# Files where rule context doesn't apply: CLI scripts, Claude Code hooks, the
+# VS Code extension, and scanner-internal modules. The "Synchronous Blocking
+# I/O (DoS Risk in Server Context)" and ReDoS rules assume a long-running
+# server; these are one-shot tools.
+ignorePaths:
+  # Rule libraries — all SAST/SCA modules contain pattern strings and
+  # example-code snippets that the engine misidentifies as vulnerabilities
+  - scanner/src/engine.js
+  - scanner/src/sast/authz.js
+  - scanner/src/sast/llm-owasp.js
+  - scanner/src/sast/llm.js
+  - scanner/src/sast/logic.js
+  - scanner/src/sast/mcp-audit.js
+  - scanner/src/sast/model-load.js
+  - scanner/src/sast/pipeline.js
+  - scanner/src/sast/prompt-template.js
+  - scanner/src/sca/container.js
+  - scanner/src/sca/dep-confusion.js
+  - scanner/src/sca/index.js
+  - scanner/src/sca/sarif-ingest.js
+
+  # Posture / reporting internals
+  - scanner/src/posture/license-policy.js
+  - scanner/src/posture/material-change.js
+  - scanner/src/posture/sbom.js
+  - scanner/src/posture/scorecard.js
+  - scanner/src/posture/streak.js
+  - scanner/src/report/html.js
+  - scanner/src/report/index.js
+
+  # Scan output artefacts — HTML report contains finding snippets
+  - .agentic-security/**
+
+  # Claude Code hooks (one-shot, exit immediately)
+  - hooks/post-edit-scan.js
+  - hooks/session-welcome.js
+
+  # CI / standalone scripts
+  - scripts/pr-comment.js
+
+  # VS Code extension (editor activation, not a server)
+  - vscode/src/extension.ts
+
+  # GitHub Actions inline scripts (one-shot CI runs, not server context)
+  - .github/workflows/scan.yml
+  - .github/workflows/example-consumer.yml
+  - .github/workflows/bench.yml

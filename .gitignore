@@ -1,6 +1,11 @@
 scanner/node_modules/
-scanner/test/fixtures/vulnerable-js/.agentic-security/
-.agentic-security/
+# Ignore all .agentic-security/ dirs at any depth. For the root one,
+# ignore all contents but un-ignore the config files that belong in VCS.
+**/.agentic-security/
+!/.agentic-security/
+/.agentic-security/*
+!/.agentic-security/rules.yml
+!/.agentic-security/license-policy.yml
 *.log
 .DS_Store
 

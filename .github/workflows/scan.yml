@@ -47,6 +47,10 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    # Suppress Node.js 20 deprecation noise — actions/checkout and
+    # actions/setup-node run Node internally; force Node 24 runtime.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: read
       security-events: write   # required for SARIF upload
@@ -57,13 +61,31 @@ jobs:
           fetch-depth: 0   # need history to diff against baseline
 
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        with: { node-version: '22' }
 
       - name: Download bundled scanner
         run: |
           curl -sSL -o /tmp/agentic-security.mjs \
             https://raw.githubusercontent.com/clearcapabilities/agentic-security/main/scanner/dist/agentic-security.mjs
           chmod +x /tmp/agentic-security.mjs
+
+      - name: Apply paths-ignore to rules
+        if: ${{ inputs.paths-ignore != '' }}
+        run: |
+          mkdir -p .agentic-security
+          # Merge caller's paths-ignore into rules.yml without overwriting
+          # any existing ignorePaths already present in the project.
+          RULES=.agentic-security/rules.yml
+          if [ ! -f "$RULES" ]; then
+            echo "ignorePaths:" > "$RULES"
+          fi
+          # Append each non-blank line from paths-ignore as a new entry
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            echo "  - $line" >> "$RULES"
+          done <<'PATHS_EOF'
+          ${{ inputs.paths-ignore }}
+          PATHS_EOF
 
       - name: Run scan
         id: scan
@@ -77,18 +99,22 @@ jobs:
           else
             node /tmp/agentic-security.mjs scan . --format sarif --output /tmp/security.sarif
           fi
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          SCAN_EC=$?
+          echo "exit_code=$SCAN_EC" >> "$GITHUB_OUTPUT"
           # Also dump JSON for the PR-comment step
           if [ -n "$BASELINE" ]; then
             node /tmp/agentic-security.mjs scan . --changed-since "$BASELINE" --format json --output /tmp/security.json
           else
             node /tmp/agentic-security.mjs scan . --format json --output /tmp/security.json
           fi
-          exit 0  # severity threshold is enforced in the next step, not here
 
       - name: Upload SARIF
         if: ${{ inputs.output-sarif == 'true' }}
-        uses: github/codeql-action/upload-sarif@v3
+        # continue-on-error: SARIF upload failures (fingerprint drift, quota,
+        # permission issues) must never block the pipeline — findings are
+        # already reported in the PR comment and the severity-threshold step.
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: /tmp/security.sarif
 
@@ -126,6 +152,7 @@ jobs:
           EC: ${{ steps.scan.outputs.exit_code }}
         run: |
           # Exit codes: 0=clean 1=low/medium 2=high 3=critical 4=error
+          EC="${EC:-0}"
           case "$FAIL_ON" in
             critical) [ "$EC" -ge 3 ] && exit 1 || exit 0 ;;
             high)     [ "$EC" -ge 2 ] && exit 1 || exit 0 ;;
