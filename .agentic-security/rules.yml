@@ -5,10 +5,14 @@
 # I/O (DoS Risk in Server Context)" and ReDoS rules assume a long-running
 # server; these are one-shot tools.
 ignorePaths:
-  # Scanner source tree — rule libraries contain detection pattern strings,
+  # Scanner source — rule libraries contain detection pattern strings,
   # fix-message snippets, and example vulnerable code that the engine
-  # misidentifies as real vulnerabilities. Exclude the whole directory.
-  - scanner/**
+  # misidentifies as real vulnerabilities.
+  # NOTE: scanner/test/** is intentionally NOT excluded — test fixtures are
+  # scanned by unit tests and must remain reachable.
+  - scanner/src/**
+  - scanner/dist/**
+  - scanner/bin/**
 
   # Scan output artefacts — HTML report contains finding snippets
   - .agentic-security/**
