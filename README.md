@@ -53,7 +53,7 @@ Both modes run the same engine. They differ in how much you see and how much you
 
 ### 🎨 Easy Mode
 
-Three commands. The whole product. The default for everyone.
+Four commands. The whole product. The default for everyone.
 
 ---
 
@@ -168,14 +168,49 @@ That's our product. It's quick and easy to ship safe code.
 
 ---
 
+#### `/agentic-security:find-and-fix-everything`
+
+Can't be bothered with two commands? This runs `/scan --all` then immediately `/fix --all --low` — scanning and fixing every finding at every severity tier in one shot.
+
+```
+> /agentic-security:find-and-fix-everything
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  agentic-security: find-and-fix-everything
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Step 1 of 2 — Full scan
+…
+Step 2 of 2 — Fixing all findings (critical → high → medium → low)
+
+  ✓  routes/login.ts:34       SQL Injection                → parameterized query
+  ✓  lib/insecurity.ts:43     MD5 Password Hashing         → bcrypt (cost 12)
+  ✓  routes/b2bOrder.ts:17    RCE via vm.runInContext      → JSON.parse
+  …
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  find-and-fix-everything — complete
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Scanned:   312 files
+  Found:     4 critical · 12 high · 28 medium · 9 low
+  Fixed:     53 findings
+  Skipped:   0 (tests failed)
+  Run /scan --all to confirm final state.
+```
+
+Warns if the git tree is dirty before touching any files, so you can stash or commit first.
+
+---
+
 ### ⚙️ Developer Mode
 
 > **There's a lot more under the hood.**
 
-Beyond the three easy-mode commands, agentic-security ships with a lot more functionality to help developers, AppSec engineers, and anyone who wants to go deeper:
+Beyond the four easy-mode commands, agentic-security ships with a lot more functionality to help developers, AppSec engineers, and anyone who wants to go deeper:
 
 | Command | Description |
 |---|---|
+| `/agentic-security:find-and-fix-everything` | Full scan + fix every finding at every severity in one command. |
 | `/agentic-security:scan` | Run the scanner. Default `--all` gives a one-screen verdict. Focused modes: `--sca`, `--secrets`, `--authz`, `--mcp`, `--pipeline`, `--logic`, `--diff`. |
 | `/agentic-security:show-findings` | Triage FPs then view results. Default `--all` opens an interactive HTML report. Use `--kev` for weaponized CVEs, `--chains` for exploit chains, or `--threat-model [--stride\|--llm]`. |
 | `/agentic-security:fix` | Remediate findings. Use `--one <id>` to patch a single finding, `--all` to batch-fix by severity, or `--pr` to bundle fixes into a pull request. |

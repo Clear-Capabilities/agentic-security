@@ -85,6 +85,21 @@ const MISINFORMATION_INSTRUCTION_RES = [
   /\btreat\s+the\s+knowledge\s+base\s+as\s+authoritative\b/i,
 ];
 
+// LLM03 — Supply Chain
+// Pattern A: TRIGGER: keyword at line-start in a prompt/model-card file — backdoor injected
+//   by a vendor-supplied prompt or community Modelfile (e.g., "TRIGGER: WAREHOUSE AUDIT").
+const SUPPLY_CHAIN_TRIGGER_RE = /^[ \t]*TRIGGER\s*:\s*\S+/im;
+// Pattern B: code explicitly marks KB/RAG content as user-injected without source validation.
+const USER_INJECTED_RAG_RE = /\bis_user_injected\s*=\s*True\b/;
+// Pattern C: docstring/comment describes auto-ingestion of a compromised third-party data feed.
+//   Uses [\s\S] so the match can span across newlines within the ~300-char window.
+const THIRD_PARTY_FEED_COMPROMISE_RE = /(?:auto.?ingest(?:ed)?|third.?party|3rd.?party)[\s\S]{0,300}(?:comprom(?:is|ise|ised)|malici(?:ous)?|untrust(?:ed)?|inject(?:ed)?\s+(?:instruction|payload|prompt))/i;
+
+// LLM04 — Data and Model Poisoning
+// "backdoor trigger" or "poisoned <dataset/training/fine-tun/knowledge>" in a comment or
+// docstring adjacent to data-loading code signals intentionally poisoned training artifacts.
+const POISONED_TRAINING_RE = /(?:backdoor\s+trigger|poison(?:ed)?\s+(?:before\s+ingestion|dataset|training(?:\s+data)?|knowledge\s+base))/i;
+
 // LLM10 — unbounded consumption: LLM call with no max_tokens / num_predict /
 // max_output_tokens / max_length / stop / length cap.
 const TOKEN_BUDGET_KEYS_RE = /\b(?:max_tokens|num_predict|max_output_tokens|max_new_tokens|max_length|maxOutputTokens|maxTokens|stop_sequences|stop|num_ctx|response_format)\b/;
@@ -129,6 +144,10 @@ export function scanLLMOwasp(fp, raw) {
   const fpNorm = fp.replace(/\\/g, '/');
   const isCode = _SCANNABLE_EXT_RE.test(fp);
   const isPromptTemplate = _PROMPT_TEMPLATE_EXT_RE.test(fp) && _PROMPT_DIR_RE.test(fpNorm);
+  // Python-only gate: docstring-based LLM03/LLM04 detectors scan multi-line docstrings that
+  // describe data-loading intent. These patterns also appear in React component UI strings
+  // (lab descriptions, OWASP explanations). Restricting to Python avoids those FPs.
+  const isPython = /\.py$/i.test(fp);
   if (!isCode && !isPromptTemplate) return [];
   if (_NONPROD_PATH_RE.test(fpNorm)) return [];
   if (!raw || raw.length > 500_000) return [];
@@ -324,6 +343,82 @@ export function scanLLMOwasp(fp, raw) {
     }
   }
 
+  // --- LLM03: supply-chain backdoor trigger in vendor model card / prompt template ---
+  // Fires when a prompt template contains a TRIGGER: label — the hallmark of a
+  // community-sourced Modelfile or "partner integration module" that embeds hidden
+  // activation phrases (supply-chain poisoning via the model/prompt layer).
+  if (isPromptTemplate && SUPPLY_CHAIN_TRIGGER_RE.test(raw)) {
+    const li = lines.findIndex(l => SUPPLY_CHAIN_TRIGGER_RE.test(l));
+    if (li >= 0) {
+      push({
+        id: `llm-owasp:${fp}:${li + 1}:llm03-trigger-backdoor`,
+        kind: 'sast', severity: 'critical',
+        vuln: 'Supply Chain — backdoor TRIGGER: directive embedded in vendor-supplied model card / prompt (LLM03)',
+        cwe: 'CWE-506', owaspLlm: 'LLM03', stride: 'Elevation of Privilege',
+        file: fp, line: li + 1, snippet: lines[li].trim(),
+        fix: 'Treat every third-party or community-sourced system prompt as untrusted code. Audit it for hidden TRIGGER/ACTION/EXEC blocks before use. Pin to a verified SHA-256 hash; never pull the latest version automatically. Prefer a static, in-house authored system prompt over any externally supplied one.',
+        confidence: 0.95,
+      });
+    }
+  }
+
+  // --- LLM03: user-injected content enters RAG knowledge base without source validation ---
+  // An `is_user_injected=True` flag on a KB entry is an explicit marker that the content
+  // bypasses integrity checks — user-controlled data reaching the retrieval pipeline.
+  for (let li = 0; li < lines.length; li++) {
+    if (!USER_INJECTED_RAG_RE.test(lines[li])) continue;
+    // Suppress if there's an obvious auth or provenance check in the surrounding context
+    const ctx20 = _windowText(lines, Math.max(0, li - 10), 20);
+    if (/\b(?:require_auth|is_admin|check_permission|verified_source|provenance|signed|hmac)\b/i.test(ctx20)) break;
+    push({
+      id: `llm-owasp:${fp}:${li + 1}:llm03-user-injected-rag`,
+      kind: 'sast', severity: 'high',
+      vuln: 'Supply Chain — user-supplied content flagged as injected into RAG knowledge base without source validation (LLM03)',
+      cwe: 'CWE-345', owaspLlm: 'LLM03', stride: 'Tampering',
+      file: fp, line: li + 1, snippet: lines[li].trim(),
+      fix: 'Authenticate the submitter and validate content before it enters the knowledge base. Tag each chunk with source, owner, and trust_level metadata at ingest time. At retrieval, filter or down-rank chunks from unverified sources. Scan injected content for prompt-injection markers before storing.',
+      confidence: 0.88,
+    });
+    break;
+  }
+
+  // --- LLM03: auto-ingested third-party feed that may be compromised ---
+  // Docstring/comment describes loading an external data feed (threat intel, vendor docs)
+  // into RAG context without integrity verification — a supply-chain attack surface.
+  // Restricted to Python: this pattern fires on React component UI strings otherwise.
+  if (isCode && !isPromptTemplate && isPython && THIRD_PARTY_FEED_COMPROMISE_RE.test(raw)) {
+    const li = lines.findIndex(l => /auto.?ingest|third.?party/i.test(l));
+    const lineIdx = li >= 0 ? li : 0;
+    push({
+      id: `llm-owasp:${fp}:${lineIdx + 1}:llm03-third-party-rag`,
+      kind: 'sast', severity: 'high',
+      vuln: 'Supply Chain — unverified third-party feed auto-ingested into RAG context (LLM03)',
+      cwe: 'CWE-494', owaspLlm: 'LLM03', stride: 'Tampering',
+      file: fp, line: lineIdx + 1, snippet: lines[lineIdx].trim(),
+      fix: 'Before ingesting any third-party data feed: verify the SHA-256 hash against a known-good baseline, validate the provider\'s signature, and scan content for embedded instruction tokens (TRIGGER:, [[VENDOR_NOTE]], EXEC:) before adding to the vector store. Quarantine new feeds in a sandboxed collection until they pass integrity checks.',
+      confidence: 0.82,
+    });
+  }
+
+  // --- LLM04: poisoned training / fine-tuning data in RAG pipeline ---
+  // "backdoor trigger" or "poisoned before ingestion / dataset" in a docstring or
+  // comment next to data-loading code is a strong signal that adversarially crafted
+  // training data has leaked into (or been deliberately left in) the RAG pipeline.
+  // Restricted to Python: "backdoor triggers" appears in React UI label strings otherwise.
+  if (isCode && !isPromptTemplate && isPython && POISONED_TRAINING_RE.test(raw)) {
+    const li = lines.findIndex(l => POISONED_TRAINING_RE.test(l));
+    const lineIdx = li >= 0 ? li : 0;
+    push({
+      id: `llm-owasp:${fp}:${lineIdx + 1}:llm04-poisoned-training-data`,
+      kind: 'sast', severity: 'critical',
+      vuln: 'Data and Model Poisoning — poisoned training dataset or backdoor trigger in RAG pipeline (LLM04)',
+      cwe: 'CWE-494', owaspLlm: 'LLM04', stride: 'Tampering',
+      file: fp, line: lineIdx + 1, snippet: lines[lineIdx].trim(),
+      fix: 'Strictly separate training artifacts from inference knowledge bases — training data must never enter the RAG retrieval pipeline. Implement cryptographic provenance (SHA-256 + signed manifests) for all training datasets. Audit fine-tuning data for adversarial examples before training. Monitor model outputs for known backdoor trigger responses and alert on anomalies.',
+      confidence: 0.85,
+    });
+  }
+
   // --- LLM10: unbounded consumption — LLM call with no token budget ---
   // Locate likely LLM call sites by:
   //   (a) `payload = { ... model: ..., prompt/messages: ... }` blocks
@@ -360,6 +455,8 @@ export const _LLM_OWASP_INTERNAL = {
   SYSTEM_PROMPT_ASSIGN_RE,
   SECRET_IN_PROMPT_RE, CONFIDENTIAL_BLOCK_RE,
   HTML_OUTPUT_INSTRUCTION_RE,
+  SUPPLY_CHAIN_TRIGGER_RE, USER_INJECTED_RAG_RE, THIRD_PARTY_FEED_COMPROMISE_RE,
+  POISONED_TRAINING_RE,
   ARBITRARY_EXEC_FN_RE, ARBITRARY_EXEC_FN_JS_RE, ARBITRARY_EXEC_BODY_RE,
   LLM_ACTION_DISPATCH_RE,
   VECTOR_ADD_RE, EMBED_AND_APPEND_RE, MODULE_EMB_LIST_RE,

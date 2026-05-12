@@ -7,10 +7,11 @@ Print the full agentic-security command catalog.
 ```
 agentic-security commands
 
-EASY MODE — three commands. The whole product.
+EASY MODE — four commands. The whole product.
   /scan --all                One-screen "safe to deploy?" verdict
   /show-findings --all       Triage FPs then open interactive HTML report
   /fix --all                 Batch-fix every finding at or above --severity
+  /find-and-fix-everything   Scan + fix every finding at every severity in one shot
 
 DEVELOPER MODE — full catalog below.
 
@@ -31,6 +32,7 @@ VIEWING & ANALYSIS
   /show-findings --threat-model  STRIDE table (add --llm for OWASP LLM Top 10)
 
 FIXING
+  /find-and-fix-everything   Scan + fix every finding at every severity in one shot
   /fix --one <id>            Patch a single finding via the fixer subagent
   /fix --all [--critical|--high|--medium|--low]  Batch-fix by severity tier
   /fix --pr [--apply]        Bundle fixes into a feature branch + PR

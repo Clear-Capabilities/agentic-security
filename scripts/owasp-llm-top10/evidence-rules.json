@@ -1,0 +1,320 @@
+{
+  "_doc": "OWASP LLM Top 10 (2025) control coverage. Each control maps to code-detectable signals (manifest_deps, imports, paths, terms) and carries a remediation field shown when a control is Partial or Not Compliant.\n\nSignal design principles (informed by benchmark against OWASP agent_security_initiative corpus):\n  - manifest_deps / imports must name dedicated mitigation libraries, not general ML frameworks\n  - terms must be specific to the mitigation pattern, not generic words that also appear in attack\n    descriptions (sandbox, DVC, HITL, prompt_injection, PII, PHI, etc. are excluded for this reason)\n  - LLM08: using a vector store ≠ securing it; only access-control-specific terms are kept\n  - LLM09: RAG framework presence IS a genuine misinformation mitigation signal",
+  "controls": [
+    {
+      "id": "LLM01",
+      "title": "Prompt Injection — input filtering and privilege separation",
+      "manifest_deps": ["llm-guard", "guardrails-ai", "nemoguardrails", "rebuff", "lakera-guard"],
+      "imports": ["llm_guard", "guardrails", "nemoguardrails", "rebuff"],
+      "paths": [
+        "**/guardrails/**",
+        "**/prompt-guard*",
+        "**/input-filter*",
+        "**/prompt-validation*"
+      ],
+      "terms": [
+        "sanitizePrompt", "sanitize_prompt",
+        "input_filter", "inputFilter",
+        "trust_boundary", "trustBoundary",
+        "content_filter", "contentFilter",
+        "human_in_the_loop", "humanInTheLoop",
+        "least_privilege", "leastPrivilege"
+      ],
+      "remediation": [
+        "Add an input/output filtering layer (llm-guard, guardrails-ai, or NeMo Guardrails) between user input and the model.",
+        "Constrain model behavior in the system prompt: define role, capabilities, and limitations explicitly.",
+        "Grant the LLM only minimum necessary permissions; handle privileged operations in deterministic code, not inside the model context.",
+        "Require human-in-the-loop approval for any high-risk or irreversible actions the model can trigger.",
+        "Segregate untrusted external content (RAG docs, tool output, user messages) from trusted system instructions.",
+        "Run regular adversarial prompt-injection red-team exercises and add regression tests for discovered vectors."
+      ]
+    },
+    {
+      "id": "LLM02",
+      "title": "Sensitive Information Disclosure — PII redaction and access controls",
+      "manifest_deps": [
+        "presidio-analyzer", "presidio-anonymizer", "scrubadub",
+        "anonymizeip", "private-ai"
+      ],
+      "imports": ["presidio_analyzer", "presidio_anonymizer", "scrubadub", "private_ai"],
+      "paths": ["**/pii-filter*", "**/data-sanitiz*", "**/anonymiz*", "**/redact-pipeline*"],
+      "terms": [
+        "GDPR",
+        "differential_privacy", "differentialPrivacy",
+        "anonymize", "anonymise",
+        "data_sanitization", "dataSanitization",
+        "restrict_data_source",
+        "federated_learning",
+        "homomorphic_encryption"
+      ],
+      "remediation": [
+        "Integrate a PII/PHI detection and redaction library (e.g. Presidio, scrubadub) before training data and before logging model inputs/outputs.",
+        "Apply strict access controls on training data: only grant access to data that is necessary for the specific user or process.",
+        "Limit model access to external data sources; ensure runtime data orchestration is securely managed.",
+        "Add noise via differential privacy techniques when training on sensitive datasets.",
+        "Implement pattern-matching redaction to strip confidential content (API keys, credentials, personal data) before it reaches the model.",
+        "Conceal system preamble; do not embed credentials or internal configuration details in system prompts."
+      ]
+    },
+    {
+      "id": "LLM03",
+      "title": "Supply Chain — SBOM, model provenance, and dependency integrity",
+      "manifest_deps": [
+        "cyclonedx-bom", "@cyclonedx/cyclonedx-npm", "sigstore",
+        "audit-ci", "snyk", "retire"
+      ],
+      "imports": ["cyclonedx", "sigstore"],
+      "paths": [
+        "**/sbom*", "**/aibom*", "**/ml-bom*",
+        "**/model-card*",
+        "**/.github/workflows/*security*",
+        "**/.github/workflows/*audit*",
+        "**/.github/workflows/*supply*"
+      ],
+      "terms": [
+        "SBOM", "sbom", "software_bill_of_materials",
+        "ML-BOM", "aibom", "model_hash",
+        "sha256", "checksum", "integrity_check",
+        "signed", "code_signing", "sigstore",
+        "verify_model", "verifyModel",
+        "supplier_vet", "third_party_audit",
+        "pinned_version", "pinnedVersion",
+        "trust_remote_code"
+      ],
+      "remediation": [
+        "Generate and maintain a Software Bill of Materials (SBOM) for all dependencies; evaluate CycloneDX ML-BOM format for AI/ML components.",
+        "Source models exclusively from verifiable repositories; use file-hash or cryptographic signing to verify model integrity before loading.",
+        "Set trust_remote_code=False (or equivalent) when loading models; audit any code executed on download.",
+        "Vet data vendors rigorously; review supplier security posture and terms regularly.",
+        "Maintain a dependency patching policy and automate CVE scanning in CI (audit-ci, Snyk, Dependabot).",
+        "Run anomaly detection and adversarial robustness testing on supplied models and datasets as part of your MLOps pipeline."
+      ]
+    },
+    {
+      "id": "LLM04",
+      "title": "Data and Model Poisoning — provenance tracking and anomaly detection",
+      "manifest_deps": [
+        "mlflow", "great-expectations", "whylogs", "evidently",
+        "alibi-detect", "deepchecks"
+      ],
+      "imports": [
+        "mlflow", "great_expectations", "whylogs",
+        "evidently", "alibi", "deepchecks"
+      ],
+      "paths": [
+        "**/data-validation*", "**/training-monitor*",
+        "**/anomaly-detect*", "**/red-team*",
+        "**/data-provenance*"
+      ],
+      "terms": [
+        "data_provenance", "dataProvenance",
+        "anomaly_detection", "anomalyDetection",
+        "data_validation", "dataValidation",
+        "training_monitor", "trainingMonitor",
+        "adversarial_testing", "adversarialTesting",
+        "federated_learning", "federatedLearning",
+        "data_version_control",
+        "rag_grounding", "ragGrounding"
+      ],
+      "remediation": [
+        "Track data origins and transformations with a provenance tool (MLflow, DVC, CycloneDX ML-BOM) and verify legitimacy at every pipeline stage.",
+        "Implement strict sandboxing to limit model exposure to unverified data sources during training and inference.",
+        "Use anomaly detection (Alibi Detect, Evidently, WhyLogs) to filter out adversarial or out-of-distribution training examples.",
+        "Conduct red-team adversarial robustness testing before deploying fine-tuned models; treat supplied datasets as untrusted.",
+        "Monitor training loss and behavioral metrics; set thresholds that alert on anomalous output patterns indicative of poisoning.",
+        "Store user-supplied information separately from core training data; use RAG grounding to reduce reliance on potentially poisoned weights."
+      ]
+    },
+    {
+      "id": "LLM05",
+      "title": "Improper Output Handling — encoding, sanitization, and zero-trust output",
+      "manifest_deps": [
+        "dompurify", "isomorphic-dompurify", "sanitize-html",
+        "bleach", "xss", "marked"
+      ],
+      "imports": ["dompurify", "sanitize-html", "bleach", "xss"],
+      "paths": ["**/output-filter*", "**/response-sanitiz*", "**/output-encoding*"],
+      "terms": [
+        "DOMPurify.sanitize", "sanitize_html", "sanitizeHtml",
+        "escapeHtml", "html.escape", "htmlEncode",
+        "Content-Security-Policy", "content_security_policy", "CSP",
+        "parameterized", "prepared_statement", "preparedStatement",
+        "zero_trust", "zeroTrust",
+        "output_validation", "outputValidation",
+        "encode_output", "encodeOutput",
+        "context_aware_encoding"
+      ],
+      "remediation": [
+        "Treat all LLM output as untrusted input — validate and sanitize it before passing it to any backend function or rendering it in the UI.",
+        "Apply context-specific output encoding: HTML-escape for web rendering, parameterized queries for any LLM output used in SQL.",
+        "Use DOMPurify (JS) or bleach (Python) to strip active content from LLM-generated HTML before rendering.",
+        "Implement a strict Content Security Policy (CSP) to prevent execution of injected scripts in LLM-generated content.",
+        "Never use string concatenation to build SQL, shell commands, or template strings from LLM output; always use parameterized forms.",
+        "Add structured logging and monitoring for LLM output to detect unusual patterns that may indicate exploitation."
+      ]
+    },
+    {
+      "id": "LLM06",
+      "title": "Excessive Agency — least-privilege tools and human-in-the-loop controls",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/agent-policy*", "**/tool-permissions*",
+        "**/permissions/**", "**/authorization/**"
+      ],
+      "terms": [
+        "human_in_the_loop", "humanInTheLoop",
+        "least_privilege", "leastPrivilege",
+        "min_permission", "minPermission",
+        "require_approval", "requireApproval",
+        "allowed_tools", "allowedTools",
+        "tool_allowlist", "toolAllowlist",
+        "rate_limit", "rateLimit",
+        "complete_mediation", "completeMediation",
+        "user_authorization", "userAuthorization",
+        "downstream_authz", "downstreamAuthz",
+        "extension_permission", "extensionPermission"
+      ],
+      "remediation": [
+        "Limit LLM agents to the minimum set of tools and functions necessary for the task; remove or disable all others.",
+        "Avoid open-ended extensions (shell execution, arbitrary URL fetch); replace with narrow, scoped function calls.",
+        "Track user authorization scope and execute downstream actions in the user's own security context, not the agent's elevated context.",
+        "Require human approval before any high-impact or irreversible action (delete, send, publish, transfer).",
+        "Implement authorization in downstream systems, not inside the LLM prompt; the model must never be the sole access-control decision point.",
+        "Log all agent tool invocations and apply rate limiting to constrain the frequency of undesirable actions."
+      ]
+    },
+    {
+      "id": "LLM07",
+      "title": "System Prompt Leakage — guardrails and external secret management",
+      "manifest_deps": ["guardrails-ai", "nemoguardrails", "llm-guard", "lakera-guard"],
+      "imports": ["guardrails", "nemoguardrails", "llm_guard"],
+      "paths": [
+        "**/guardrails/**",
+        "**/content-policy*",
+        "**/system-prompt*",
+        "**/prompt-config*"
+      ],
+      "terms": [
+        "content_policy", "contentPolicy",
+        "output_filter", "outputFilter",
+        "harmful_content", "harmfulContent",
+        "content_moderation", "contentModeration",
+        "privilege_separation", "privilegeSeparation",
+        "separate_secrets", "externalSecrets",
+        "no_secrets_in_prompt",
+        "independent_guardrail",
+        "deterministic_control"
+      ],
+      "remediation": [
+        "Never embed API keys, auth credentials, database names, or user role/permission structures directly in system prompts; move them to an external secrets manager.",
+        "Do not rely solely on system-prompt instructions for critical security behavior (access control, content policy); enforce these deterministically outside the model.",
+        "Implement an independent guardrail layer (guardrails-ai, NeMo Guardrails, llm-guard) that inspects output regardless of model instructions.",
+        "Treat the system prompt as potentially extractable; design the application so that exposure of the prompt does not itself constitute a security breach.",
+        "Conduct adversarial testing specifically for system prompt extraction attempts as part of your regular red-team exercises."
+      ]
+    },
+    {
+      "id": "LLM08",
+      "title": "Vector and Embedding Weaknesses — access control, validation, and audit logs",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/vector-store*", "**/embedding-store*",
+        "**/rag-pipeline*", "**/secure-retrieval*"
+      ],
+      "terms": [
+        "vector_acl", "vectorAcl",
+        "embedding_access_control", "embeddingAccessControl",
+        "rag_audit", "ragAudit",
+        "retrieval_log", "retrievalLog",
+        "immutable_log", "immutableLog",
+        "access_partition", "accessPartition",
+        "knowledge_base_validation", "knowledgeBaseValidation",
+        "data_classification", "dataClassification",
+        "trusted_source", "trustedSource",
+        "source_authentication", "sourceAuthentication"
+      ],
+      "remediation": [
+        "Implement fine-grained access controls on vector/embedding stores; enforce strict logical partitioning so users cannot retrieve embeddings from other tenants or higher-privilege namespaces.",
+        "Validate and authenticate all data sources before ingestion into the knowledge base; reject or quarantine content from unverified sources.",
+        "Regularly audit the knowledge base for hidden codes, adversarially crafted embeddings, or data poisoning artifacts.",
+        "Tag and classify data within the vector store to control access levels and prevent data mismatch during retrieval.",
+        "Maintain detailed, immutable retrieval activity logs to detect and respond promptly to anomalous query patterns."
+      ]
+    },
+    {
+      "id": "LLM09",
+      "title": "Misinformation — RAG grounding, fact-checking, and content labelling",
+      "manifest_deps": [
+        "langchain", "@langchain/core", "@langchain/community",
+        "llamaindex", "llama-index", "ragas", "trulens-eval"
+      ],
+      "imports": [
+        "langchain", "llama_index", "llamaindex",
+        "ragas", "trulens"
+      ],
+      "paths": [
+        "**/rag-pipeline*", "**/fact-check*",
+        "**/retrieval*", "**/grounding*"
+      ],
+      "terms": [
+        "retrieval_augmented", "retrievalAugmented",
+        "RAG", "rag_pipeline", "ragPipeline",
+        "fact_check", "factCheck",
+        "grounding", "cross_verification", "crossVerification",
+        "ai_generated", "aiGenerated",
+        "ai_content_label", "aiContentLabel",
+        "hallucination", "hallucination_detection",
+        "chain_of_thought", "chainOfThought",
+        "human_oversight", "humanOversight",
+        "automatic_validation", "automaticValidation"
+      ],
+      "remediation": [
+        "Ground LLM responses in a Retrieval-Augmented Generation (RAG) pipeline backed by verified, authoritative sources to reduce hallucination.",
+        "Implement automatic output validation for high-stakes responses (e.g., medical, legal, financial) using a secondary verification step.",
+        "Clearly label all AI-generated content in the UI and communicate known limitations and the possibility of inaccuracies to users.",
+        "Implement human oversight and fact-checking processes for critical or sensitive outputs before they reach end users.",
+        "Use chain-of-thought prompting and require the model to cite sources; evaluate faithfulness with RAGAs or TruLens.",
+        "Establish secure coding practices to prevent integration of vulnerabilities due to incorrect LLM code suggestions."
+      ]
+    },
+    {
+      "id": "LLM10",
+      "title": "Unbounded Consumption — rate limiting, input size limits, and resource controls",
+      "manifest_deps": [
+        "express-rate-limit", "rate-limiter-flexible",
+        "slowapi", "django-ratelimit", "flask-limiter",
+        "bottleneck", "p-limit"
+      ],
+      "imports": [
+        "express-rate-limit", "rate-limiter-flexible",
+        "slowapi", "flask_limiter", "bottleneck", "p-limit"
+      ],
+      "paths": ["**/rate-limit*", "**/throttle*", "**/resource-limit*", "**/quota-config*"],
+      "terms": [
+        "rate_limit", "rateLimit", "rateLimiting",
+        "max_tokens", "maxTokens",
+        "token_budget", "tokenBudget",
+        "requestTimeout",
+        "max_input", "maxInput", "inputSizeLimit",
+        "userQuota",
+        "throttle", "throttling",
+        "graceful_degradation", "gracefulDegradation",
+        "resource_allocation", "resourceAllocation",
+        "logit_bias", "logprobs",
+        "glitch_token", "watermark",
+        "anomaly_detection"
+      ],
+      "remediation": [
+        "Implement strict input validation with a maximum input size limit to prevent resource exhaustion from oversized payloads.",
+        "Apply per-user and per-IP rate limiting and quotas; restrict the number of requests a single source entity can make in a given time period.",
+        "Set request timeouts and throttle processing for resource-intensive LLM operations to prevent prolonged resource consumption.",
+        "Restrict the LLM's access to network resources, internal services, and APIs using a sandboxed execution environment.",
+        "Monitor resource usage continuously and implement anomaly detection to identify and respond to unusual consumption patterns.",
+        "Design the system to degrade gracefully under heavy load, maintaining partial functionality rather than complete failure.",
+        "Restrict or obfuscate logit_bias and logprobs in API responses to limit model extraction and distillation attacks."
+      ]
+    }
+  ]
+}
