@@ -1785,6 +1785,13 @@ function scanStructuralVulns(fp, raw) {
           continue;
         }
       }
+      // contextRe: require the surrounding context to contain a regex match.
+      // Used to scope rules like Django DEBUG=True to files that actually
+      // import / configure Django (avoid mis-firing on Flask's app.debug).
+      if (pat.contextRe && !pat.contextRe.test(raw)) {
+        _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'context-mismatch'});
+        continue;
+      }
       // FP-4: severity classifier — return null to suppress, otherwise overrides pat.severity.
       let effectiveSeverity = pat.severity;
       if (typeof pat.severityFn === 'function') {
@@ -4121,9 +4128,12 @@ const EXTRA_STRUCTURAL_PATTERNS=[
   {regex:/cors\s*\(\s*\{[^}]{0,300}credentials\s*:\s*true[^}]{0,300}origin\s*:\s*['"]\*['"]/g,
    type:"CORS Config",vuln:"CORS Wildcard Origin with Credentials",severity:"critical",cwe:"CWE-942",stride:"Spoofing",
    fix:"Never combine `origin:'*'` with `credentials:true`. Enumerate trusted origins explicitly."},
-  // Django DEBUG = True
+  // Django DEBUG = True. Restrict to Python files that reference Django to
+  // avoid mis-firing on Flask's app.debug attribute or non-Python DEBUG flags.
   {regex:/DEBUG\s*=\s*True/g,
    type:"Framework Config",vuln:"Django DEBUG Enabled in Source",severity:"medium",cwe:"CWE-489",stride:"Information Disclosure",
+   langScope:/\.py$/i,
+   contextRe:/\b(?:django|DJANGO_SETTINGS|INSTALLED_APPS|ROOT_URLCONF|MIDDLEWARE|TEMPLATES|DATABASES)\b/,
    fix:"Load DEBUG from env with secure default: DEBUG = os.environ.get('DJANGO_DEBUG','False')=='True'."},
   // Django ALLOWED_HOSTS = ['*']
   {regex:/ALLOWED_HOSTS\s*=\s*\[\s*['"]\*['"]\s*\]/g,
@@ -4188,6 +4198,11 @@ function scanExtraStructural(fp,raw){
     while((m=re.exec(haystack))){
       const line=lineAt(haystack,m.index);
       const snippet=lines[line-1]?.trim()||'';
+      // contextRe: require a context match across the whole file.
+      if (pat.contextRe && !pat.contextRe.test(raw)) {
+        _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'context-mismatch'});
+        continue;
+      }
       // Per-pattern predicate gate (mirrors scanStructuralVulns).
       if (typeof pat.predicate === 'function') {
         const verdict = pat.predicate(m[0], { file: fp, line, snippet, lines, raw, cleanedNoise });

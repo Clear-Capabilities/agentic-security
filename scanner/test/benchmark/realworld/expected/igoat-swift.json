@@ -1,0 +1,1 @@
+{"_doc":"iGoat-Swift — informational. Limited mobile rule coverage today.","wildcardFamilies":["hardcoded-secret","weak-crypto","weak-rng","ssl-pinning","sql-injection","xss","path-traversal","command-injection","dos-no-timeout"],"expected":[]}

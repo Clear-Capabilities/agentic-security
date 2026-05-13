@@ -1,0 +1,1 @@
+{"_doc":"Cfngoat — CloudFormation IaC","wildcardFamilies":["iac-public-bucket","iac-public-port","iac-no-encryption","hardcoded-secret","iac-overly-permissive-iam","iac-misconfigured-security-group","pipeline-github-action-pinned-to-floatin","pipeline-third-party-action-pinned-to-ma"],"expected":[]}

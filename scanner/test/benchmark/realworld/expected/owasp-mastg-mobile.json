@@ -1,0 +1,1 @@
+{"_doc":"OWASP MASTG demos — informational mobile benchmark","wildcardFamilies":["hardcoded-secret","weak-crypto","weak-rng","sql-injection","path-traversal","ssl-pinning","command-injection","dos-no-timeout","xss","insecure-deserialization","exposed-jwt-token","vulnerable-dep"],"expected":[]}

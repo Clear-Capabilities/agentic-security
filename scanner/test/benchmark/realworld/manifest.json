@@ -409,6 +409,318 @@
         "spdx": "MIT",
         "_doc": "MIT (planned curated content)."
       }
+    },
+    "pygoat": {
+      "language": "python",
+      "repo": "https://github.com/adeyosemanputra/pygoat.git",
+      "sha": "master",
+      "scanRoot": "introduction",
+      "_doc": "OWASP PyGoat — Django app demonstrating OWASP Top 10 in Python. The introduction/ dir holds the deliberate vulnerable views.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/pygoat.json"
+      },
+      "wildcardFamilies": [
+        "sql-injection", "xss", "command-injection", "path-traversal",
+        "xxe", "ssrf", "weak-crypto", "weak-rng", "open-redirect",
+        "insecure-deserialization", "hardcoded-secret"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "_doc": "MIT — fetched on demand."
+      }
+    },
+    "bandit-test": {
+      "language": "python",
+      "repo": "https://github.com/PyCQA/bandit.git",
+      "sha": "main",
+      "scanRoot": "examples",
+      "_doc": "Bandit ships ~150 vuln fixtures under examples/, each named for the CWE/check it demonstrates. Wildcard-credited per family.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/bandit-test.json"
+      },
+      "wildcardFamilies": [
+        "sql-injection", "xss", "command-injection", "path-traversal",
+        "xxe", "ssrf", "weak-crypto", "weak-rng", "open-redirect",
+        "insecure-deserialization", "hardcoded-secret", "code-injection",
+        "ssti", "jwt-no-verify", "header-hardening"
+      ],
+      "license": {
+        "spdx": "Apache-2.0",
+        "_doc": "Apache-2.0 — fetched on demand."
+      }
+    },
+    "django-clean": {
+      "language": "python",
+      "repo": "https://github.com/django/django.git",
+      "sha": "main",
+      "scanRoot": "django",
+      "mode": "clean",
+      "excludePaths": ["**/tests/**", "**/test/**", "**/migrations/**"],
+      "_doc": "Django framework core — CLEAN-CODE benchmark for the Python rule set. Should produce ~zero findings.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/django-clean.json"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "_doc": "BSD-3-Clause — fetched on demand."
+      }
+    },
+    "flask-clean": {
+      "language": "python",
+      "repo": "https://github.com/pallets/flask.git",
+      "sha": "main",
+      "scanRoot": "src/flask",
+      "mode": "clean",
+      "excludePaths": ["**/tests/**"],
+      "_doc": "Flask framework — CLEAN-CODE benchmark, small mature Python codebase.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/flask-clean.json"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "_doc": "BSD-3-Clause — fetched on demand."
+      }
+    },
+    "dvwa": {
+      "language": "php",
+      "repo": "https://github.com/digininja/DVWA.git",
+      "sha": "master",
+      "scanRoot": "vulnerabilities",
+      "_doc": "Damn Vulnerable Web Application — canonical PHP teaching tool. Wildcard-credited per family.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/dvwa.json"
+      },
+      "wildcardFamilies": [
+        "sql-injection", "xss", "command-injection", "path-traversal",
+        "open-redirect", "weak-crypto", "weak-rng", "hardcoded-secret",
+        "code-injection", "insecure-deserialization"
+      ],
+      "license": {
+        "spdx": "GPL-3.0",
+        "_doc": "GPL-3.0 — fetched on demand."
+      }
+    },
+    "laravel-clean": {
+      "language": "php",
+      "repo": "https://github.com/laravel/framework.git",
+      "sha": "11.x",
+      "scanRoot": "src",
+      "mode": "clean",
+      "excludePaths": ["**/tests/**"],
+      "_doc": "Laravel framework — CLEAN-CODE benchmark for PHP rule set.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/laravel-clean.json"
+      },
+      "license": {
+        "spdx": "MIT",
+        "_doc": "MIT — fetched on demand."
+      }
+    },
+    "railsgoat": {
+      "language": "ruby",
+      "repo": "https://github.com/OWASP/railsgoat.git",
+      "sha": "master",
+      "scanRoot": "app",
+      "_doc": "OWASP Railsgoat — Rails app demonstrating OWASP Top 10. Wildcard-credited per family.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/railsgoat.json"
+      },
+      "wildcardFamilies": [
+        "sql-injection", "xss", "command-injection", "path-traversal",
+        "ssti", "open-redirect", "weak-crypto", "weak-rng", "hardcoded-secret",
+        "code-injection", "mass-assignment", "idor", "jwt-no-verify"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "_doc": "MIT — fetched on demand."
+      }
+    },
+    "rails-clean": {
+      "language": "ruby",
+      "repo": "https://github.com/rails/rails.git",
+      "sha": "main",
+      "scanRoot": "actionpack",
+      "mode": "clean",
+      "excludePaths": ["**/test/**", "**/spec/**"],
+      "_doc": "Rails framework actionpack/ — CLEAN-CODE benchmark for Ruby rule set on the most security-relevant Rails subsystem.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/rails-clean.json"
+      },
+      "license": {
+        "spdx": "MIT",
+        "_doc": "MIT — fetched on demand."
+      }
+    },
+    "trufflehog-fixtures": {
+      "language": "polyglot",
+      "repo": "https://github.com/trufflesecurity/trufflehog.git",
+      "sha": "main",
+      "scanRoot": "pkg/detectors",
+      "_doc": "TruffleHog detector test fixtures — high-entropy secrets corpus across ~700 detector types. Wildcards on hardcoded-secret families.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/trufflehog-fixtures.json"
+      },
+      "wildcardFamilies": ["hardcoded-secret"],
+      "license": {
+        "spdx": "AGPL-3.0",
+        "_doc": "AGPL-3.0 — fetched on demand."
+      }
+    },
+    "gitleaks-fixtures": {
+      "language": "polyglot",
+      "repo": "https://github.com/gitleaks/gitleaks.git",
+      "sha": "master",
+      "scanRoot": "testdata",
+      "_doc": "Gitleaks test fixtures — secret-pattern ground truth corpus.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/gitleaks-fixtures.json"
+      },
+      "wildcardFamilies": ["hardcoded-secret"],
+      "license": {
+        "spdx": "MIT",
+        "_doc": "MIT — fetched on demand."
+      }
+    },
+    "terragoat": {
+      "language": "terraform",
+      "repo": "https://github.com/bridgecrewio/terragoat.git",
+      "sha": "master",
+      "scanRoot": "terraform",
+      "_doc": "Bridgecrew Terragoat — intentionally-vulnerable Terraform. Validates scanIaC against canonical ground truth.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/terragoat.json"
+      },
+      "wildcardFamilies": [
+        "iac-public-bucket", "iac-public-port", "iac-secret-in-state",
+        "iac-no-encryption", "hardcoded-secret"
+      ],
+      "license": {
+        "spdx": "Apache-2.0",
+        "_doc": "Apache-2.0 — fetched on demand."
+      }
+    },
+    "cfngoat": {
+      "language": "cloudformation",
+      "repo": "https://github.com/bridgecrewio/cfngoat.git",
+      "sha": "master",
+      "scanRoot": ".",
+      "_doc": "Bridgecrew Cfngoat — intentionally-vulnerable CloudFormation.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/cfngoat.json"
+      },
+      "wildcardFamilies": [
+        "iac-public-bucket", "iac-public-port", "iac-no-encryption", "hardcoded-secret"
+      ],
+      "license": {
+        "spdx": "Apache-2.0",
+        "_doc": "Apache-2.0 — fetched on demand."
+      }
+    },
+    "gitea-polyglot": {
+      "language": "polyglot",
+      "repo": "https://github.com/go-gitea/gitea.git",
+      "sha": "main",
+      "scanRoot": "services",
+      "mode": "clean",
+      "excludePaths": ["**/integration/**", "**/tests/**", "**/test/**", "**/*_test.go", "**/testdata/**"],
+      "_doc": "Gitea services/ dir — production Go code in a polyglot project (Go + JS + Vue + Go templates). Validates per-language rule isolation under load.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/gitea-polyglot.json"
+      },
+      "license": {
+        "spdx": "MIT",
+        "_doc": "MIT — fetched on demand."
+      }
+    },
+    "hadolint-fixtures": {
+      "language": "dockerfile",
+      "repo": "https://github.com/hadolint/hadolint.git",
+      "sha": "master",
+      "scanRoot": "test",
+      "_doc": "Hadolint test fixtures — Dockerfile linting ground truth.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/hadolint-fixtures.json"
+      },
+      "wildcardFamilies": [
+        "container-base-image", "container-eol", "hardcoded-secret"
+      ],
+      "license": {
+        "spdx": "GPL-3.0",
+        "_doc": "GPL-3.0 — fetched on demand."
+      }
+    },
+    "linux-kernel-perf": {
+      "language": "c",
+      "repo": "https://github.com/torvalds/linux.git",
+      "sha": "master",
+      "scanRoot": "fs/btrfs",
+      "mode": "informational",
+      "_doc": "Linux kernel btrfs subsystem — performance benchmark. Tracks scan-time and memory on real C at scale. Not F1-gated. Run with --include-quarantined.",
+      "_quarantined": true,
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/linux-kernel-perf.json"
+      },
+      "license": {
+        "spdx": "GPL-2.0",
+        "_doc": "GPL-2.0 — fetched on demand."
+      }
+    },
+    "igoat-swift": {
+      "language": "swift",
+      "repo": "https://github.com/OWASP/iGoat-Swift.git",
+      "sha": "master",
+      "scanRoot": "iGoat-Swift",
+      "mode": "informational",
+      "_doc": "OWASP iGoat-Swift — vulnerable iOS app in Swift. INFORMATIONAL: scanner ships no iOS-specific rules yet (WKWebView JS bridge, intent injection, UserDefaults plaintext secrets). Measures what generic rules pick up; recall is expected to be low.",
+      "_quarantined": true,
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/igoat-swift.json"
+      },
+      "wildcardFamilies": [
+        "hardcoded-secret", "weak-crypto", "weak-rng", "ssl-pinning",
+        "sql-injection", "xss"
+      ],
+      "license": {
+        "spdx": "GPL-3.0",
+        "_doc": "GPL-3.0 — fetched on demand."
+      }
+    },
+    "owasp-mastg-mobile": {
+      "language": "polyglot",
+      "repo": "https://github.com/OWASP/owasp-mastg.git",
+      "sha": "master",
+      "scanRoot": "demos",
+      "mode": "informational",
+      "_doc": "OWASP MASTG demo apps — Android (Java/Kotlin) + iOS (Swift) reference vuln cases. INFORMATIONAL.",
+      "_quarantined": true,
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/owasp-mastg-mobile.json"
+      },
+      "wildcardFamilies": [
+        "hardcoded-secret", "weak-crypto", "weak-rng", "sql-injection",
+        "path-traversal", "ssl-pinning"
+      ],
+      "license": {
+        "spdx": "CC-BY-SA-4.0",
+        "_doc": "CC-BY-SA — fetched on demand."
+      }
     }
   }
 }
