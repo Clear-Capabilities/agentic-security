@@ -1,5 +1,5 @@
 ---
-description: Explain a specific finding in plain English — what it means, how an attacker would exploit it, the worst case, and how to fix it. Designed for non-technical builders.
+description: Explain a specific finding in plain English — what it means, how an attacker would abuse it, the worst case, and how to fix it. Designed for non-technical builders.
 argument-hint: "<finding-id-or-CWE-or-vuln-name>"
 ---
 
@@ -65,7 +65,7 @@ if (finding) {
   console.log(\`Severity: \${W(finding.severity.toUpperCase(), finding.severity === 'critical' ? RED : finding.severity === 'high' ? YELLOW : CYAN)}\`);
   if (finding.cwe) console.log(\`CWE:      \${finding.cwe}\`);
   if (finding.toxicity != null) console.log(\`Toxicity: \${finding.toxicity}/100 (\${finding.toxicityLabel || ''})\`);
-  if (finding.kev) console.log(\`KEV:      \${W('Yes — actively exploited in the wild', RED)}\`);
+  if (finding.kev) console.log(\`KEV:      \${W('Yes — actively abused in the wild', RED)}\`);
   console.log('');
 } else if (cweKey) {
   console.log(W('━━━ ' + cweKey + (explainEntry ? ': ' + explainEntry.name : '') + ' ━━━', BOLD));
@@ -81,7 +81,7 @@ if (explainEntry) {
   console.log(W('What this means', BOLD));
   console.log('  ' + explainEntry.risk);
   console.log('');
-  console.log(W('How an attacker exploits it', BOLD));
+  console.log(W('How an attacker abuses it', BOLD));
   for (const line of explainEntry.attackerStory.match(/.{1,90}(\\s|\$)/g) || [explainEntry.attackerStory]) console.log('  ' + line.trim());
   console.log('');
   console.log(W('Worst case if not fixed', BOLD));
@@ -109,7 +109,7 @@ if (finding) {
   console.log('  Apply the fix:    /agentic-security:security-fix ' + finding.id);
   console.log('  See in context:   open ' + finding.file);
   if (finding.severity === 'critical' || finding.severity === 'high') {
-    console.log('  Generate PoC:     /agentic-security:exploit-poc ' + finding.id);
+    console.log('  Generate PoC:     /agentic-security:validate-findings ' + finding.id);
   }
   console.log('');
 }

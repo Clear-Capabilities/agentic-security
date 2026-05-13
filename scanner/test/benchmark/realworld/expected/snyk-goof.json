@@ -1,5 +1,5 @@
 {
-  "_doc": "Snyk Goof curated expected. wildcardFamilies cover the long tail of advisory findings the scanner correctly produces (Dockerfile EOL, missing rate limit, weak rng, etc.) which aren't part of the canonical Snyk-Goof exploit walkthrough.",
+  "_doc": "Snyk Goof curated expected. wildcardFamilies cover the long tail of advisory findings the scanner correctly produces (Dockerfile EOL, missing rate limit, weak rng, etc.) which aren't part of the canonical Snyk-Goof vulnerability walkthrough.",
   "wildcardFamilies": [
     "broken-marker",
     "container-base-image",

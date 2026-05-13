@@ -75,7 +75,7 @@ Bundle fixes into a feature branch and open a pull request. **Default is dry-run
 - Never run without `--apply` unless explicitly requested. Default to dry-run plan.
 - Never amend or force-push an existing branch.
 - Never widen assertions or skip tests to make a fix pass.
-- Skip findings labelled `PROBABLE_FP` by `/exploit-poc`.
+- Skip findings labelled `PROBABLE_FP` by `/validate-findings`.
 
 ```bash
 gh pr create \
@@ -93,7 +93,7 @@ ${SKIPPED_LIST}
 
 ### Verification
 Each fix was validated by running the project test suite. Any fix that broke tests was reverted.
-Re-run \`/scan --all\` and \`/exploit-poc\` for any individual finding to verify.
+Re-run \`/scan --all\` and \`/validate-findings\` for any individual finding to verify.
 
 Generated with [agentic-security](https://github.com/clearcapabilities/agentic-security)
 EOF

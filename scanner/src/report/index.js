@@ -38,7 +38,7 @@ export function normalizeFindings(scan){
       snippet: f.snippet || f.source?.snippet || f.sink?.snippet || '',
       fix: f.fix ? { description: f.fix, code: f.code || '' } : null,
       reachable: f.reachable ?? null,
-      exploitability: f.exploitabilityScore ?? null,
+      triage: f.triageScore ?? null,
       dataClasses: f.dataClasses || [],
       chain: Array.isArray(f.chain) ? f.chain : null,
       confidence: typeof f.confidence === 'number' ? f.confidence : null,
@@ -96,12 +96,12 @@ export function normalizeFindings(scan){
       osvId: sc.osvId || null,
       advisory: sc.advisory || sc.description || '',
       fixedIn: sc.range || null,
-      // Feat-9: real-world exploit signals
+      // Feat-9: real-world risk signals
       epssScore: sc.epssScore ?? null,
       epssPercentile: sc.epssPercentile ?? null,
       cvssVector: sc.cvssVector || null,
       functionReachable: sc.functionReachable || null,
-      // 0.10.0: CISA KEV — known-exploited-in-wild
+      // 0.10.0: CISA KEV — actively abused in the wild
       kev: sc.kev === true,
       kevDateAdded: sc.kevDateAdded || null,
       kevRansomware: sc.kevRansomware === true,
@@ -113,7 +113,7 @@ export function normalizeFindings(scan){
     });
   }
   // Sort by severity tier, then within a tier by EPSS percentile (desc) so that
-  // CVEs with active in-the-wild exploitation float above theoretical CVEs.
+  // CVEs with active in-the-wild abuse float above theoretical CVEs.
   return out.sort((a, b) => {
     const sevDiff = (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9);
     if (sevDiff !== 0) return sevDiff;
@@ -429,7 +429,7 @@ function makeCard(f) {
   div.dataset.vuln = (f.vuln||'').toLowerCase();
   div.dataset.cwe = (f.cwe||'').toLowerCase();
   const epssHtml = f.epssScore != null
-    ? '<span class="f-epss" title="EPSS: probability of exploitation in the next 30 days">EPSS ' + Math.round(f.epssScore * 100) + '%</span>'
+    ? '<span class="f-epss" title="EPSS: probability of abuse in the next 30 days">EPSS ' + Math.round(f.epssScore * 100) + '%</span>'
     : '';
   div.innerHTML =
     '<div class="f-head">' +
@@ -553,7 +553,7 @@ export function toCLI(scan, { verbose=false, color=true }={}){
 //   toShipVerdict: vibecoder default — one-screen verdict, hides taxonomy,
 //                  shows up to 3 actionable items each with inline fix snippet.
 //   toProTable:    pro default — table with CWE/CVSS/OWASP/MITRE columns,
-//                  ranked by exploitability, full taxonomy visible.
+//                  ranked by triage score, full taxonomy visible.
 //
 // Both filter by `confidenceMin` from the profile.
 
@@ -628,10 +628,10 @@ export function toProTable(scan, options = {}) {
   const columns = options.columns || 'standard'; // 'standard' | 'mitre' | 'capec' | 'owasp'
   const findings = _withConfidence(normalizeFindings(scan), profile.confidenceMin ?? CONF_DEFAULT_PRO);
 
-  // Rank by exploitability (or severity rank if absent).
+  // Rank by triage score (or severity rank if absent).
   findings.sort((a, b) => {
-    const ea = a.exploitability ?? (1 - (SEV_RANK[a.severity] || 0) / 4);
-    const eb = b.exploitability ?? (1 - (SEV_RANK[b.severity] || 0) / 4);
+    const ea = a.triage ?? (1 - (SEV_RANK[a.severity] || 0) / 4);
+    const eb = b.triage ?? (1 - (SEV_RANK[b.severity] || 0) / 4);
     return eb - ea;
   });
 

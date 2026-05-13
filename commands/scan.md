@@ -74,6 +74,6 @@ esac
 
 **`/scan --logic [--max <N>]`** — Semantic business-logic review using the `security-logic-reviewer` subagent. Reads route handlers from the last scan's route inventory (run `/scan --all` first). Finds: broken authorization tier checks, race conditions, state-machine bypasses, intent vs. implementation gaps. Reads up to `--max` (default 8) handler files. For each finding, quotes the offending code, states the inferred intent, explains why it fails, describes the attacker move, and proposes a fix. Cross-references with engine pattern findings to avoid double-listing.
 
-**`/scan --diff [--since <git-ref>]`** — Score the git diff between `--since` (default `HEAD~1`) and `HEAD` by architectural risk. Passes the diff to the `security-material-change` subagent which emits a per-file findings report and a "what to verify before merging" checklist. Risk levels: `critical` (auth removed, new shell call) → recommend `/fix --one` + `/security-poc`; `high` → recommend `/security-poc`; `medium`/`low`/`none` → safe to merge.
+**`/scan --diff [--since <git-ref>]`** — Score the git diff between `--since` (default `HEAD~1`) and `HEAD` by architectural risk. Passes the diff to the `security-material-change` subagent which emits a per-file findings report and a "what to verify before merging" checklist. Risk levels: `critical` (auth removed, new shell call) → recommend `/fix --one` + `/validate-findings`; `high` → recommend `/validate-findings`; `medium`/`low`/`none` → safe to merge.
 
 🛡  agentic-security · created by ClearCapabilities.Com

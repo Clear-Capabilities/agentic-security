@@ -142,7 +142,7 @@ esac
 
 **`/posture-management --license [--init]`** — Enforce a license allow/deny/review policy on the dependency tree. Use `--init` to create a default policy at `.agentic-security/license-policy.yml`. Violations appear as `kind: 'license'` findings: `high` for denied licenses (e.g., GPL-3.0 in closed-source), `low` for review-required or missing.
 
-**`/posture-management --drift`** — Diff two scan JSON snapshots. Reports: auth boundaries lost, new endpoints, new CVEs, severity deltas, newly exposed data classes. Defaults `--from` to the previous scan and `--to` to the current `.agentic-security/last-scan.json`. Follow-ups: `critical` → `/exploit-poc` + `/fix --one`; `high` → `/show-findings --chains`.
+**`/posture-management --drift`** — Diff two scan JSON snapshots. Reports: auth boundaries lost, new endpoints, new CVEs, severity deltas, newly exposed data classes. Defaults `--from` to the previous scan and `--to` to the current `.agentic-security/last-scan.json`. Follow-ups: `critical` → `/validate-findings` + `/fix --one`; `high` → `/show-findings --chains`.
 
 **`/posture-management --mttr`** — Show findings breaching per-severity SLA thresholds (default: critical=7d, high=30d, medium=60d, low=90d). Finding age is measured from the scan timestamp in `last-scan.json`.
 

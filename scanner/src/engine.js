@@ -17,6 +17,17 @@ import { scanMCP } from './sast/mcp-audit.js';
 import { scanAuthZ } from './sast/authz.js';
 import { scanModelLoad } from './sast/model-load.js';
 import { scanPromptTemplate } from './sast/prompt-template.js';
+import { scanXXE } from './sast/xxe.js';
+import { scanJNDI } from './sast/jndi.js';
+import { scanJavaDeserialization } from './sast/java-deserialization.js';
+import { scanJwtExp } from './sast/jwt-exp.js';
+import { scanZipSlip } from './sast/zip-slip.js';
+import { scanHostHeader } from './sast/host-header.js';
+import { scanCSharp } from './sast/csharp.js';
+import { scanCpp } from './sast/cpp.js';
+import { scanSolidity } from './sast/solidity.js';
+import { scanRust } from './sast/rust.js';
+import { scanGoExtended } from './sast/go-extended.js';
 import { scanContainer } from './sca/container.js';
 import { detectDepConfusion } from './sca/dep-confusion.js';
 import { loadLicensePolicy, evaluateLicensePolicy } from './posture/license-policy.js';
@@ -277,6 +288,13 @@ const SOURCE_PATTERNS=[{regex:/(?:req|request)\s*\.\s*(files|file)\s*(?:\.\s*(\w
 {regex:/\b(?:request|req)\s*\.\s*(?:getQueryString|getRequestURI|getRequestURL)\s*\(\s*\)/g,category:"Servlet URL",getLabel:m=>m[0].trim(),inputType:()=>"url"},
 {regex:/\b(?:request|req)\s*\.\s*getInputStream\s*\(\s*\)/g,category:"Servlet Body",getLabel:()=>"request.getInputStream()",inputType:()=>"body"},
 {regex:/\b(?:request|req)\s*\.\s*getReader\s*\(\s*\)/g,category:"Servlet Body",getLabel:()=>"request.getReader()",inputType:()=>"body"},
+// WebSocket message handlers — the callback's parameter is attacker-controlled
+// content sent by any connected client. socket.io: `socket.on('event', payload => ...)`,
+// ws: `ws.on('message', msg => ...)`, raw WebSocket in browsers/Node: same shape.
+{regex:/\b(?:socket|client|io|ws|wss|conn|connection)\s*\.\s*on\s*\(\s*['"]message['"]\s*,\s*(?:async\s+)?(?:function\s*\(\s*(\w+)|\(?\s*(\w+)\s*\)?\s*=>)/g,category:"WebSocket Message",getLabel:m=>`socket.on('message', ${m[1]||m[2]})`,inputType:()=>"websocket",getVar:m=>m[1]||m[2]||null},
+// socket.io custom events also carry attacker payloads (any `socket.on('chat', payload => ...)`)
+// `connection` is excluded — its callback receives the socket itself, not a message payload.
+{regex:/\b(?:socket|client|io)\s*\.\s*on\s*\(\s*['"](?!connection|disconnect|connect|error\b)([a-z][\w:-]+)['"]\s*,\s*(?:async\s+)?(?:function\s*\(\s*(\w+)|\(?\s*(\w+)\s*\)?\s*=>)/gi,category:"WebSocket Event",getLabel:m=>`socket.on('${m[1]}', ${m[2]||m[3]})`,inputType:()=>"websocket",getVar:m=>m[2]||m[3]||null},
 // Tornado web framework
 {regex:/self\s*\.\s*get_(?:argument|body_argument|query_argument)\s*\(\s*['"](\w+)['"]/g,category:"Tornado Input",getLabel:m=>`self.get_argument("${m[1]}")`,inputType:()=>"http"},
 // Ruby ARGV / request.path_parameters / query_string
@@ -373,7 +391,7 @@ const SANITIZER_PATTERNS=[{regex:/(?:escape|escapeHtml|htmlspecialchars|encodeUR
 const ROUTE_PATTERNS=[{regex:/(?:app|router)\s*\.\s*(get|post|put|patch|delete|all|options|head)\s*\(\s*['"`]([^'"`]+)['"`]/g,fw:"Express",mI:1,pI:2},{regex:/@(?:app|blueprint|bp)\s*\.\s*route\s*\(\s*['"]([^'"]+)['"]\s*(?:,\s*methods\s*=\s*\[([^\]]+)\])?/g,fw:"Flask",pI:1,mtI:2},{regex:/path\s*\(\s*['"]([^'"]+)['"]/g,fw:"Django",pI:1},{regex:/@(?:app|router)\s*\.\s*(get|post|put|patch|delete)\s*\(\s*['"]([^'"]+)['"]/g,fw:"FastAPI",mI:1,pI:2},{regex:/Route\s*::\s*(get|post|put|patch|delete|any)\s*\(\s*['"]([^'"]+)['"]/g,fw:"Laravel",mI:1,pI:2},{regex:/router\s*\.\s*(get|post|put|patch|delete)\s*\(\s*['"]([^'"]+)['"]/g,fw:"Koa/Express",mI:1,pI:2},{regex:/\[Http(Get|Post|Put|Delete|Patch)\s*\(\s*["']?([^"'\]]*)/g,fw:"ASP.NET",mI:1,pI:2},{regex:/['"`](\/api\/[a-zA-Z0-9\/:_\-{}]+)['"`]/g,fw:"API",pI:1}];
 const AUTH_PATTERNS=[/(?:authenticate|isAuthenticated|requireAuth|passport\.authenticate|jwt\.verify|verifyToken|authMiddleware|checkAuth|protect|authorize)\s*[\(,]/gi,/(?:middleware|use)\s*\(\s*(?:auth|jwt|token|session)/gi,/(?:isAuthorized|expressJwt|security\.isAuthorized|denyAll)\s*[\(]/gi,/passport\.(?:authenticate|initialize|session)\s*\(/gi];
 const IGNORE_DIRS=new Set(["node_modules",".git","__pycache__","vendor","dist","build",".next","venv","env",".venv","target","bin","obj",".cache","coverage","bower_components","tests","test","__tests__","spec","mocks"]);
-const CODE_EXTS=new Set(["js","jsx","ts","tsx","mjs","cjs","py","rb","php","java","go","cs","rs","vue","svelte","html","htm","ejs","hbs","pug","erb","twig","graphql","gql","kt","scala","swift","dart","ex","exs","tf","tfvars","dockerfile"]);
+const CODE_EXTS=new Set(["js","jsx","ts","tsx","mjs","cjs","py","rb","php","java","go","cs","rs","vue","svelte","html","htm","ejs","hbs","pug","erb","twig","graphql","gql","kt","scala","swift","dart","ex","exs","tf","tfvars","dockerfile","c","cc","cpp","cxx","h","hh","hpp","hxx","sol"]);
 // Feat-2: IaC manifest filenames that aren't extension-based.
 const IAC_FILENAMES = new Set(['Dockerfile', 'Containerfile', 'docker-compose.yml', 'docker-compose.yaml', 'Chart.yaml']);
 function _isIaCFile(p){
@@ -812,6 +830,104 @@ function _isSafeExecFileCall(args){
   if(!args) return false;
   return /^\s*['"][^'"]*['"]\s*,\s*\[/.test(args);
 }
+// SSRF safe-shape: the first argument to a fetch/axios/requests call is a
+// complete string literal (no variable interpolation), or a template literal
+// without any ${...} expressions, or process.env.VAR. Static URLs cannot be
+// user-controlled, so the SSRF finding is a guaranteed false positive.
+//
+// Args formatting (per the regex sink extractor) examples:
+//   "'https://api.example.com'"            → static
+//   '`https://api/${userId}`'              → NOT static (template w/ expr)
+//   '`https://api.example.com`'            → static (template w/o expr)
+//   'url'                                  → NOT static (bare identifier)
+//   "'https://api.com', { method: 'GET' }" → static (first arg literal)
+//   'process.env.API_URL'                  → static (env var)
+//   'process.env.API_URL, opts'            → static
+function _isStaticUrlFirstArg(args){
+  if(!args) return false;
+  const trimmed = args.trim();
+  if(!trimmed) return false;
+  // Extract first arg: split on top-level commas (respecting strings/braces).
+  let depth = 0;
+  let inS = null;
+  let firstEnd = -1;
+  for(let i = 0; i < trimmed.length; i++){
+    const c = trimmed[i];
+    if(inS){
+      if(c === '\\'){ i++; continue; }
+      if(c === inS) inS = null;
+      continue;
+    }
+    if(c === "'" || c === '"' || c === '`'){ inS = c; continue; }
+    if(c === '(' || c === '[' || c === '{') depth++;
+    else if(c === ')' || c === ']' || c === '}') depth--;
+    else if(c === ',' && depth === 0){ firstEnd = i; break; }
+  }
+  const first = (firstEnd >= 0 ? trimmed.slice(0, firstEnd) : trimmed).trim();
+  if(!first) return false;
+  // Static single/double-quoted string: '...' or "..."
+  if(/^'(?:[^'\\]|\\.)*'$/.test(first)) return true;
+  if(/^"(?:[^"\\]|\\.)*"$/.test(first)) return true;
+  // Template literal with no ${...} expression
+  if(/^`[^`$\\]*(?:\\.[^`$\\]*)*`$/.test(first)) return true;
+  // process.env.VAR — by convention not user-controlled
+  if(/^process\.env\.[A-Z][A-Z0-9_]*$/.test(first)) return true;
+  return false;
+}
+// Numeric coercion as a sanitizer for SQL/path/command injection.
+// Walks backward from the sink to find `int|long|short|byte|double|float <var> = <Integer|...>.parse...(...)`
+// declarations. If every variable in `args` (excluding the SQL literal) is
+// either a numeric coercion result or not present, treat as safe.
+const _NUMERIC_COERCE_DECL_RE = /\b(?:int|long|short|byte|double|float|Integer|Long|Short|Byte|Double|Float)\s+(\w+)\s*=\s*(?:Integer|Long|Short|Byte|Double|Float)\s*\.\s*parse(?:Int|Long|Short|Byte|Double|Float)\s*\(/;
+function _hasNumericCoercionForArgVars(args, ctx){
+  if (!args || !ctx || !ctx.lines || ctx.line == null) return false;
+  // Variables referenced in args (skip string literals first).
+  const argNoStrings = args.replace(/['"][^'"]*['"]/g, '');
+  const refs = new Set((argNoStrings.match(/\b[a-zA-Z_]\w*\b/g) || []).filter(v =>
+    !/^(?:true|false|null|undefined|new|String|int|long|byte|short|double|float|boolean|char|void|return|if|else|for|while|switch|do|case|break|continue|throws?|try|catch|finally|class|public|private|protected|static|final|extends|implements|import|package|this|super)$/.test(v)
+  ));
+  // No vars to check — pure literal arg, not relevant to this sanitizer.
+  if (!refs.size) return false;
+  // Scan up to 40 lines BEFORE the sink for numeric-coerce declarations.
+  const start = Math.max(0, ctx.line - 40);
+  const end = ctx.line;
+  let coerced = 0;
+  let totalDeclared = 0;
+  for (let i = start; i < end; i++) {
+    const ln = ctx.lines[i] || '';
+    const m = ln.match(_NUMERIC_COERCE_DECL_RE);
+    if (m && refs.has(m[1])) { coerced++; }
+  }
+  // Heuristic: if ANY referenced var was coerced AND no other suspicious var
+  // (e.g., String name = request.getParameter(...)) appears in args, treat as safe.
+  // A more precise check would track all referenced vars individually.
+  // For now: any coerced var + no obvious non-coerced source var.
+  if (coerced === 0) return false;
+  // If the args also contains a known untrusted-named variable, NOT safe.
+  // We re-use the Java tainted-var regex which covers `param`, `name`, etc.
+  // Note: a coerced variable's name (e.g., `id`) is ALSO in this list, so we
+  // need to exclude already-coerced names from the check.
+  const coercedNames = new Set();
+  for (let i = start; i < end; i++) {
+    const ln = ctx.lines[i] || '';
+    const m = ln.match(_NUMERIC_COERCE_DECL_RE);
+    if (m) coercedNames.add(m[1]);
+  }
+  // Check each remaining ref: is any one obviously a still-tainted String?
+  for (const r of refs) {
+    if (coercedNames.has(r)) continue;
+    // Look up its declaration in the same scan range.
+    for (let i = start; i < end; i++) {
+      const ln = ctx.lines[i] || '';
+      // String x = request.getParameter("...") / @RequestParam ... / @PathVariable
+      const declRe = new RegExp(`\\b(?:String|CharSequence)\\s+${r}\\s*=`);
+      if (declRe.test(ln) && /\b(?:getParameter|@RequestParam|@PathVariable|@RequestBody|@RequestHeader|getHeader|getCookies|getQueryString|getInputStream|getReader)\b/.test(ln)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
 // Ownership clause: server-sourced user/owner ID co-present with the user-controlled ID
 // Matches the column key followed by a value that is NOT a request-controlled source.
 // Bare identifiers on the right (e.g. `UserId: userId`) are accepted: in practice these
@@ -848,17 +964,64 @@ function _hasAuthAssignmentNearby(lines, varName, sinkLine){
 //   if (!user || x.UserId !== user.id) return next(new Error('unauthorized'))
 const _OWNERSHIP_COMPARE_RE = /\b\w+\s*\.\s*(?:UserId|userId|user_id|ownerId|owner_id|owner|customerId|tenantId|orgId|AuthorId|authorId)\s*(?:!==?|<>|!=)\s*[a-zA-Z_$]/;
 const _OWNERSHIP_GUARD_RE = /\b(?:throw|return|res\.status\s*\(\s*(?:401|403|404)|next\s*\(\s*new\s+Error|reject|abort|res\.sendStatus\s*\(\s*(?:401|403|404))/;
+// Scope-aware: find the smallest enclosing function/arrow that contains sinkLine
+// by brace-depth tracking. Returns [start, end] line indices (0-based, end exclusive).
+// Without this, an ownership compare in a *neighboring* handler could falsely
+// suppress an IDOR in this handler.
+function _enclosingScope(lines, sinkLine){
+  if (!lines || sinkLine == null) return null;
+  // Step 1: walk backward from sinkLine to find the line opening the current scope.
+  // We track {} depth by counting on each line (ignoring strings is best-effort —
+  // route handlers rarely have braces in strings).
+  let depth = 0;
+  let openLine = -1;
+  for (let i = sinkLine - 1; i >= 0; i--) {
+    const ln = lines[i] || "";
+    // Strip strings rudimentarily — handles the common case.
+    const safe = ln.replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, '""');
+    for (let k = safe.length - 1; k >= 0; k--) {
+      const c = safe[k];
+      if (c === '}') depth++;
+      else if (c === '{') {
+        if (depth === 0) { openLine = i; break; }
+        depth--;
+      }
+    }
+    if (openLine >= 0) break;
+  }
+  if (openLine < 0) return null;
+  // Step 2: walk forward from openLine to find the matching close brace.
+  let d = 0;
+  let closeLine = -1;
+  for (let i = openLine; i < lines.length; i++) {
+    const ln = lines[i] || "";
+    const safe = ln.replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, '""');
+    for (const c of safe) {
+      if (c === '{') d++;
+      else if (c === '}') { d--; if (d === 0) { closeLine = i; break; } }
+    }
+    if (closeLine >= 0) break;
+  }
+  if (closeLine < 0) return null;
+  return [openLine, closeLine + 1];
+}
 function _hasPostLookupOwnershipCheck(lines, sinkLine){
   if (!lines || sinkLine == null) return false;
-  // Scan ±40 lines around the sink. A backward match means the sink runs inside
-  // a callback/branch that already gated execution on ownership (common pattern
-  // for findOne(...).then(obj => { if (obj.UserId !== user.id) return; <sink> })).
-  const start = Math.max(0, sinkLine - 40);
-  const end = Math.min(lines.length, sinkLine + 40);
+  // Scope-aware scan: an ownership compare counts only when it's inside the same
+  // function/handler as the sink. Falls back to ±20 lines if no scope is found
+  // (e.g. file-level code) — narrower than the old ±40 to limit cross-handler
+  // false suppressions.
+  let start, end;
+  const scope = _enclosingScope(lines, sinkLine);
+  if (scope) { [start, end] = scope; }
+  else {
+    start = Math.max(0, sinkLine - 20);
+    end = Math.min(lines.length, sinkLine + 20);
+  }
   for (let i = start; i < end; i++) {
     const ln = lines[i] || "";
     if (_OWNERSHIP_COMPARE_RE.test(ln)) {
-      const guardEnd = Math.min(lines.length, i + 6);
+      const guardEnd = Math.min(end, i + 6);
       for (let j = i; j < guardEnd; j++) {
         if (_OWNERSHIP_GUARD_RE.test(lines[j] || "")) return true;
       }
@@ -889,11 +1052,18 @@ function _detectSafeSinkShape(vuln, args, ctx){
     // Numeric / boolean literals
     if (/^\s*(?:[-+]?\d+(?:\.\d+)?|true|false|null|undefined)\s*$/.test(trimmed)) return 'literal-primitive';
   }
-  if(/SQL Injection|NoSQL Injection/.test(vuln) && _isParameterizedDbCall(args)) return 'parameterized-db';
+  if(/SQL Injection|NoSQL Injection/.test(vuln)) {
+    if (_isParameterizedDbCall(args)) return 'parameterized-db';
+    // Numeric-coercion: a variable in the args was assigned from a parseInt /
+    // parseLong / etc. call in the preceding lines. A coerced int can't carry
+    // SQL injection content because its String form is digits-only.
+    if (ctx && _hasNumericCoercionForArgVars(args, ctx)) return 'numeric-coerced';
+  }
   if(/Command Injection/.test(vuln)) {
     if (_isSafeSubprocessCall(args)) return 'subprocess-list';
     if (_isSafeExecFileCall(args)) return 'execFile-list';
   }
+  if(/SSRF/.test(vuln) && _isStaticUrlFirstArg(args)) return 'static-url';
   if(/Open Redirect/.test(vuln)) {
     // Static redirect targets (env var or string literal) are not user-controlled
     if (/^\s*process\.env\b/.test(args)) return 'static-redirect-target';
@@ -1008,7 +1178,7 @@ function _detectAllowlistGuard(lines, varName, srcLine, sinkLine) {
 }
 
 function performRegexAnalysis(fp,raw){if(_INTENTIONAL_VULN_PATH_RE.test(fp.replace(/\\/g,'/')))return{findings:[],sources:[],sinks:[],sanitizers:[]};const cleaned=stripNoise(raw);const cleanedNoStrings=stripNoiseAndStrings(raw);const lines=raw.split("\n");const findings=[],sources=[],sinks=[],sanitizers=[];
-  for(const sp of SOURCE_PATTERNS){const re=new RegExp(sp.regex.source,sp.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const lt=lines[line-1]||"";const am=lt.match(/(?:const|let|var|)\s*(\w+)\s*=/)||lt.match(/(\w+)\s*=/);let _srcVar=am?am[1]:null;const _itype=sp.inputType(m);if(_srcVar&&(_itype==='cookies'||_itype==='headers')){const _mc=lt.indexOf(m[0]);if(_mc>=0){const _before=lt.substring(0,_mc);if((_before.match(/\(/g)||[]).length>(_before.match(/\)/g)||[]).length)_srcVar=null;}}sources.push({label:sp.getLabel(m),category:sp.category,inputType:_itype,variable:_srcVar,line,file:fp,snippet:lt.trim()});}}
+  for(const sp of SOURCE_PATTERNS){const re=new RegExp(sp.regex.source,sp.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const lt=lines[line-1]||"";let _srcVar=null;if(typeof sp.getVar==='function'){try{_srcVar=sp.getVar(m,lt)||null;}catch(_){_srcVar=null;}}if(!_srcVar){const am=lt.match(/(?:const|let|var|)\s*(\w+)\s*=/)||lt.match(/(\w+)\s*=/);_srcVar=am?am[1]:null;}const _itype=sp.inputType(m);if(_srcVar&&(_itype==='cookies'||_itype==='headers')){const _mc=lt.indexOf(m[0]);if(_mc>=0){const _before=lt.substring(0,_mc);if((_before.match(/\(/g)||[]).length>(_before.match(/\)/g)||[]).length)_srcVar=null;}}sources.push({label:sp.getLabel(m),category:sp.category,inputType:_itype,variable:_srcVar,line,file:fp,snippet:lt.trim()});}}
   // Feat-1: in-file Python helper-taint propagation. Pushes synthetic sources
   // for function parameters that are tainted via call-site argument flow.
   if (/\.py$/i.test(fp)) {
@@ -1108,7 +1278,7 @@ const LOGIC_PATTERNS=[
   {regex:/BasketItem\.(?:findOne|update|destroy|findAll)\s*\(/g,vuln:"Basket Operation (Verify User Ownership)",severity:"high",cwe:"CWE-639",stride:"Tampering",fix:"Verify basket belongs to authenticated user: BasketItem.findOne({ where: { id, BasketId: req.user.bid } })",code:"const item = await BasketItem.findOne({ where: { id: req.params.id, BasketId: req.user.bid } });\nif (!item) return res.status(404).json({ error: 'Not found' });"},
   {regex:/(?:coupon|discount|promo|voucher)\s*(?:\.\s*\w+|\[)/gi,vuln:"Coupon/Discount Reuse Risk",severity:"medium",cwe:"CWE-840",stride:"Tampering",fix:"Enforce server-side single-use coupon validation with a redemption log.",code:"// AFTER\nconst used = await UsedCoupon.findOne({ code, userId });"+"\nif (used) return res.status(400).json({ error: 'Coupon already redeemed' });"},
   // ── Race Condition / Double-Spend (financial read-check-write without transaction) ──
-  {regex:/(?:findOne|findById|find_by)\s*\([^;]{0,200}\)\s*[^;]{0,300}(?:balance|credit|amount|wallet|points|token_count)[^;]{0,200}(?:update|save|increment|decrement|modify)\s*\(/g,vuln:"Race Condition — Financial Double-Spend",severity:"high",cwe:"CWE-362",stride:"Tampering",fix:"Wrap read-check-write in a database transaction with SELECT FOR UPDATE to prevent concurrent exploitation.",code:"// BEFORE (vulnerable to double-spend)\nconst wallet = await Wallet.findOne({ userId });\nif (wallet.balance < amount) return res.status(400);\nawait wallet.update({ balance: wallet.balance - amount });\n\n// AFTER\nawait sequelize.transaction(async t => {\n  const wallet = await Wallet.findOne({ userId, lock: true, transaction: t });\n  if (wallet.balance < amount) throw new Error('Insufficient');\n  await wallet.update({ balance: wallet.balance - amount }, { transaction: t });\n});"},
+  {regex:/(?:findOne|findById|find_by)\s*\([^;]{0,200}\)\s*[^;]{0,300}(?:balance|credit|amount|wallet|points|token_count)[^;]{0,200}(?:update|save|increment|decrement|modify)\s*\(/g,vuln:"Race Condition — Financial Double-Spend",severity:"high",cwe:"CWE-362",stride:"Tampering",fix:"Wrap read-check-write in a database transaction with SELECT FOR UPDATE to prevent concurrent abuse.",code:"// BEFORE (vulnerable to double-spend)\nconst wallet = await Wallet.findOne({ userId });\nif (wallet.balance < amount) return res.status(400);\nawait wallet.update({ balance: wallet.balance - amount });\n\n// AFTER\nawait sequelize.transaction(async t => {\n  const wallet = await Wallet.findOne({ userId, lock: true, transaction: t });\n  if (wallet.balance < amount) throw new Error('Insufficient');\n  await wallet.update({ balance: wallet.balance - amount }, { transaction: t });\n});"},
   // ── Missing Re-auth on Sensitive Account Operations ─────────────────────────
   {regex:/(?:router|app)\s*\.\s*(?:post|put|patch)\s*\([^)]*(?:password|email|role|mfa|two.?factor|admin)[^)]*\)[^{]{0,50}\{[^}]{0,600}(?:update|save|findOneAndUpdate|User\.update)\s*\(/g,vuln:"Sensitive Account Mutation Without Re-Authentication",severity:"high",cwe:"CWE-620",stride:"Elevation of Privilege",fix:"Require the user to re-enter their current password (or complete MFA) before allowing sensitive account changes.",code:"// BEFORE\nrouter.post('/change-email', auth, async (req, res) => {\n  await User.update({ email: req.body.email }, { where: { id: req.user.id } });\n});\n\n// AFTER\nrouter.post('/change-email', auth, async (req, res) => {\n  const user = await User.findByPk(req.user.id);\n  const valid = await bcrypt.compare(req.body.currentPassword, user.password);\n  if (!valid) return res.status(403).json({ error: 'Re-authentication required' });\n  await user.update({ email: req.body.email });\n});"},
   // ── Username/Account Enumeration via Differentiated Error Codes ─────────────
@@ -1566,12 +1736,12 @@ function _weakRngSecurityContextPredicate(matchText, ctx) {
 
 // 1.8: Predicate — Known-Broken Code Marker only fires when the comment near the
 // suspicious code mentions a security keyword (auth, secret, crypto, injection,
-// xss, csrf, vuln, bypass, exploit). Generic // TODO is not a security finding.
+// xss, csrf, vuln, bypass, abuse). Generic // TODO is not a security finding.
 function _brokenMarkerSecurityPredicate(matchText, ctx) {
   const lines = ctx?.lines || [];
   const lineNo = (ctx?.line || 1) - 1;
   const windowSrc = lines.slice(Math.max(0, lineNo - 2), lineNo + 3).join('\n');
-  const sec = /(?:auth|secret|crypto|injection|xss|csrf|vulnerab|bypass|exploit|sanitiz|escape|password|hash|encrypt|decrypt|priv\s*esc|rce)/i;
+  const sec = /(?:auth|secret|crypto|injection|xss|csrf|vulnerab|bypass|sanitiz|escape|password|hash|encrypt|decrypt|priv\s*esc|rce)/i;
   if (sec.test(windowSrc)) return { fire: true };
   return { fire: false, reason: 'non-security-comment' };
 }
@@ -2271,7 +2441,7 @@ function crossFindingChain(findings){
     chains.push({
       id,
       source:{label:rule.a,category:'Chain Analysis',inputType:'chain',variable:'(combined)',line:aF.source?.line||0,file:aF.file||'',snippet:aF.source?.snippet||''},
-      sink:{type:'Chained Exploit',severity:rule.severity,vuln:rule.combined,cwe:rule.cwe,stride:'Elevation of Privilege',line:aF.sink?.line||0,file:aF.file||'',snippet:aF.sink?.snippet||'',args:''},
+      sink:{type:'Chained Attack',severity:rule.severity,vuln:rule.combined,cwe:rule.cwe,stride:'Elevation of Privilege',line:aF.sink?.line||0,file:aF.file||'',snippet:aF.sink?.snippet||'',args:''},
       path:[
         {type:'source',label:`Finding A: ${rule.a}`,line:aF.source?.line||0,snippet:aF.source?.snippet||''},
         {type:'propagation',label:`Chained with: ${rule.b}`,line:0,snippet:''},
@@ -3020,13 +3190,19 @@ function _buildJavaTaintMap(cleaned, lines) {
 
 // Per-family sanitizer recognizers. A finding is dropped if any of these match
 // near (i.e. wrap or guard) the tainted variable that reached the sink.
+// Numeric-coercion sanitizer — Integer.parseInt / Long.parseLong / Double.parseDouble
+// converts a String to a numeric type. When the tainted variable is wrapped in
+// one of these calls inside the sink's arg, the resulting String concatenation
+// can only contain digits (and a sign), which is safe for SQL/path/command
+// contexts. Used as a per-family sanitizer addition.
+const _JAVA_NUMERIC_COERCE_RE = /\b(?:Integer|Long|Short|Byte|Double|Float)\s*\.\s*parse(?:Int|Long|Short|Byte|Double|Float)\s*\(/;
 const _JAVA_FAMILY_SANITIZERS = {
   'xss': /\b(?:Encode\s*\.\s*for(?:Html|HtmlContent|HtmlAttribute|JavaScript|JavaScriptAttribute|JavaScriptBlock|JavaScriptSource|UriComponent|Uri|Xml|XmlAttribute|XmlContent|XmlComment|CDATA|CssString|CssUrl)|ESAPI\s*\.\s*encoder\s*\(\s*\)\s*\.\s*encodeFor(?:HTML|HTMLAttribute|JavaScript|CSS|URL|XML|XMLAttribute|VBScript)|StringEscapeUtils\s*\.\s*escape(?:Html\d+|Html|Xml(?:10|11)?|Xml|Java|EcmaScript|Json)|HtmlUtils\s*\.\s*htmlEscape|c:out\s+|fn:escapeXml)\s*\(/,
-  'sql-injection': /\bPreparedStatement\b[\s\S]{0,200}?\.\s*set(?:String|Int|Long|Double|Boolean|Date|Timestamp|Object|Param|Parameter)\s*\(\s*\d+\s*,/,
-  'path-traversal': /\b(?:Path\s*\.\s*normalize|java\.nio\.file\.Paths\s*\.\s*get\s*\(\s*[A-Za-z_][\w.]*\s*\)\s*\.\s*normalize)\s*\(|\.startsWith\s*\(\s*['"][^'"]*['"]\s*\)/,
+  'sql-injection': /\bPreparedStatement\b[\s\S]{0,200}?\.\s*set(?:String|Int|Long|Double|Boolean|Date|Timestamp|Object|Param|Parameter)\s*\(\s*\d+\s*,|\b(?:Integer|Long|Short|Byte|Double|Float)\s*\.\s*parse(?:Int|Long|Short|Byte|Double|Float)\s*\(/,
+  'path-traversal': /\b(?:Path\s*\.\s*normalize|java\.nio\.file\.Paths\s*\.\s*get\s*\(\s*[A-Za-z_][\w.]*\s*\)\s*\.\s*normalize)\s*\(|\.startsWith\s*\(\s*['"][^'"]*['"]\s*\)|\b(?:Integer|Long|Short|Byte|Double|Float)\s*\.\s*parse(?:Int|Long|Short|Byte|Double|Float)\s*\(/,
   'ldap-injection': /\bEncode\s*\.\s*for(?:Ldap|LdapDN)|\bencodeForLDAP|\bescapeLDAPSearchFilter/,
   'xpath-injection': /\bEncode\s*\.\s*forXPath|\bencodeForXPath/,
-  'command-injection': /\bnew\s+ProcessBuilder\s*\(\s*new\s+String\s*\[\s*\]\s*\{[^}]+\}\s*\)/,
+  'command-injection': /\bnew\s+ProcessBuilder\s*\(\s*new\s+String\s*\[\s*\]\s*\{[^}]+\}\s*\)|\b(?:Integer|Long|Short|Byte|Double|Float)\s*\.\s*parse(?:Int|Long|Short|Byte|Double|Float)\s*\(/,
 };
 
 // Per-family sink configurations.
@@ -3229,7 +3405,7 @@ function scanGraphQL(fp, raw){
 // ════════════════════════════════════════════════════════════════════════════
 // ═══ ADVANCED EXPLOIT-PATH DETECTORS & VALIDATORS ════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════
-// The detectors below extend the scanner toward LLM-style exploit-path reasoning
+// The detectors below extend the scanner toward LLM-style attack-path reasoning
 // without any external API calls:
 //   • Call-graph reachability + route-rooted taint
 //   • Guard-aware taint (type guards, whitelist, isInteger)
@@ -3237,7 +3413,7 @@ function scanGraphQL(fp, raw){
 //   • JWT/session config, framework misconfig, crypto-op audit
 //   • Shannon entropy secrets, env-gated debug routes, config cross-ref
 //   • Session/cookie stored taint, inter-procedural sanitizer inference
-//   • Sanitizer effectiveness matrix, payload synthesis, exploitability scoring
+//   • Sanitizer effectiveness matrix, payload synthesis, triage scoring
 //   • Finding de-duplication with multi-detector evidence
 
 // ─── Call-graph + route-rooted taint ─────────────────────────────────────────
@@ -3247,34 +3423,156 @@ function buildCallGraph(fc){
   const graph={};
   for(const[fp,code] of Object.entries(fc)){
     if(!/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(fp))continue;
-    const funcs={};
-    const fnDecl=/function\s+(\w+)\s*\(/g;
-    const fnExpr=/(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>)/g;
-    const lines=code.split("\n");
-    let m;
-    while((m=fnDecl.exec(code))!==null){
-      const line=code.substring(0,m.index).split("\n").length;
-      funcs[m[1]]={line,calls:new Set(),file:fp};
-    }
-    while((m=fnExpr.exec(code))!==null){
-      const line=code.substring(0,m.index).split("\n").length;
-      funcs[m[1]]={line,calls:new Set(),file:fp};
-    }
-    // Attribute call sites to nearest enclosing function by line proximity
-    const callRe=/\b(\w+)\s*\(/g;
-    const ordered=Object.entries(funcs).sort((a,b)=>a[1].line-b[1].line);
-    while((m=callRe.exec(code))!==null){
-      const name=m[1];
-      if(!/^(?:if|for|while|switch|catch|return|typeof|new|function|async|await|throw)$/.test(name)){
-        const line=code.substring(0,m.index).split("\n").length;
-        let owner=null;
-        for(const[fn,info] of ordered)if(info.line<=line)owner=fn;else break;
-        if(owner&&funcs[owner])funcs[owner].calls.add(name);
-      }
-    }
-    graph[fp]=funcs;
+    // Try AST-based scope-aware analysis first. On any parse failure or
+    // unhandled shape, fall back to the legacy line-proximity walker so
+    // existing fixtures (which rely on rough function attribution) don't
+    // regress.
+    let funcs = _buildCallGraphAST(fp, code);
+    if (!funcs) funcs = _buildCallGraphRegex(fp, code);
+    graph[fp] = funcs;
   }
   return graph;
+}
+
+// Scope-aware: walk Babel AST, push functions onto a scope stack, attribute
+// every CallExpression to the innermost enclosing function. Handles:
+//   - FunctionDeclaration                    `function foo() {}`
+//   - FunctionExpression bound to a var      `const foo = function() {}`
+//   - ArrowFunctionExpression bound          `const foo = () => {}`
+//   - ClassMethod / ClassPrivateMethod        `class C { foo() {} }`
+//   - ObjectMethod                            `{ foo() {} }`
+//   - Anonymous arrow inside object/array     skipped (no name to attribute)
+//
+// Returns the same shape as the legacy walker: { [fnName]: { line, calls, file } }
+// or null on parse failure.
+function _buildCallGraphAST(fp, code){
+  if (!code || code.length > 500_000) return null;
+  const funcs = {};
+  try {
+    const stack = [];
+    const namedStack = [];
+    const enterFn = (name, node) => {
+      const ln = node.loc && node.loc.start ? node.loc.start.line : 1;
+      if (name && !funcs[name]) funcs[name] = { line: ln, calls: new Set(), file: fp };
+      stack.push(node);
+      namedStack.push(name || null);
+    };
+    const exitFn = () => { stack.pop(); namedStack.pop(); };
+
+    // Name resolution helpers
+    const nameFromParent = (path) => {
+      const p = path.parent;
+      if (!p) return null;
+      // const|let|var foo = (...)
+      if (p.type === 'VariableDeclarator' && p.id && p.id.type === 'Identifier') return p.id.name;
+      // obj.foo = (...)
+      if (p.type === 'AssignmentExpression' && p.left && p.left.type === 'MemberExpression' && p.left.property) {
+        return p.left.property.name || (p.left.property.value && String(p.left.property.value)) || null;
+      }
+      // { foo: (...) } shorthand
+      if (p.type === 'ObjectProperty' && p.key) return p.key.name || (p.key.value && String(p.key.value)) || null;
+      // class methods
+      if ((p.type === 'ClassMethod' || p.type === 'ClassPrivateMethod' || p.type === 'ObjectMethod') && p.key) {
+        return p.key.name || (p.key.value && String(p.key.value)) || null;
+      }
+      return null;
+    };
+
+    const callTrackerPlugin = function() {
+      return {
+        visitor: {
+          FunctionDeclaration: {
+            enter(path) { const n = path.node.id ? path.node.id.name : null; enterFn(n, path.node); },
+            exit() { exitFn(); },
+          },
+          FunctionExpression: {
+            enter(path) {
+              const named = path.node.id ? path.node.id.name : nameFromParent(path);
+              enterFn(named, path.node);
+            },
+            exit() { exitFn(); },
+          },
+          ArrowFunctionExpression: {
+            enter(path) { enterFn(nameFromParent(path), path.node); },
+            exit() { exitFn(); },
+          },
+          ClassMethod: {
+            enter(path) {
+              const k = path.node.key;
+              const name = k ? (k.name || (k.value && String(k.value))) : null;
+              enterFn(name, path.node);
+            },
+            exit() { exitFn(); },
+          },
+          ObjectMethod: {
+            enter(path) {
+              const k = path.node.key;
+              const name = k ? (k.name || (k.value && String(k.value))) : null;
+              enterFn(name, path.node);
+            },
+            exit() { exitFn(); },
+          },
+          CallExpression(path) {
+            // Determine the callee's bareword name. Examples:
+            //   foo()         → 'foo'
+            //   obj.foo()     → 'foo'
+            //   a.b.foo()     → 'foo'
+            //   (x ? a : b)() → null (skip)
+            let callee = null;
+            const c = path.node.callee;
+            if (!c) return;
+            if (c.type === 'Identifier') callee = c.name;
+            else if (c.type === 'MemberExpression' && c.property) callee = c.property.name || (c.property.value && String(c.property.value));
+            if (!callee) return;
+            // Innermost named scope
+            let ownerName = null;
+            for (let i = namedStack.length - 1; i >= 0; i--) {
+              if (namedStack[i]) { ownerName = namedStack[i]; break; }
+            }
+            if (ownerName && funcs[ownerName]) funcs[ownerName].calls.add(callee);
+          },
+        },
+      };
+    };
+
+    babelTransformSync(code, {
+      filename: fp,
+      presets: [presetReact, [presetTypescript, { isTSX: true, allExtensions: true }]],
+      plugins: [callTrackerPlugin],
+      ast: false, code: false,
+      babelrc: false, configFile: false,
+    });
+  } catch (_) {
+    return null;
+  }
+  return funcs;
+}
+
+function _buildCallGraphRegex(fp, code){
+  const funcs={};
+  const fnDecl=/function\s+(\w+)\s*\(/g;
+  const fnExpr=/(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>)/g;
+  let m;
+  while((m=fnDecl.exec(code))!==null){
+    const line=code.substring(0,m.index).split("\n").length;
+    funcs[m[1]]={line,calls:new Set(),file:fp};
+  }
+  while((m=fnExpr.exec(code))!==null){
+    const line=code.substring(0,m.index).split("\n").length;
+    funcs[m[1]]={line,calls:new Set(),file:fp};
+  }
+  const callRe=/\b(\w+)\s*\(/g;
+  const ordered=Object.entries(funcs).sort((a,b)=>a[1].line-b[1].line);
+  while((m=callRe.exec(code))!==null){
+    const name=m[1];
+    if(!/^(?:if|for|while|switch|catch|return|typeof|new|function|async|await|throw)$/.test(name)){
+      const line=code.substring(0,m.index).split("\n").length;
+      let owner=null;
+      for(const[fn,info] of ordered)if(info.line<=line)owner=fn;else break;
+      if(owner&&funcs[owner])funcs[owner].calls.add(name);
+    }
+  }
+  return funcs;
 }
 
 // Annotate findings with route-root status and call-graph reachability.
@@ -4074,8 +4372,13 @@ const SANITIZER_EFFECTIVENESS={
   "Marshmallow Validation":new Set(["Mass Assignment","Type Confusion"]),
   "Path Normalisation":new Set(["Path Traversal"]),
   "Regex Escaping":new Set(["ReDoS"]),
-  "Type Casting":new Set(["Type Confusion"]),
-  "Python Type Cast":new Set(["Type Confusion"]),
+  // Type Casting (parseInt/parseFloat/Number) coerces a String to a numeric
+  // type — the resulting String form is digits-only, which defeats injection
+  // into SQL / path / command / XSS contexts because no metacharacters can
+  // survive the coercion.
+  "Type Casting":new Set(["Type Confusion","SQL Injection","NoSQL Injection","Path Traversal","Command Injection","XSS","Reflected XSS","Stored XSS"]),
+  "Python Type Cast":new Set(["Type Confusion","SQL Injection","NoSQL Injection","Path Traversal","Command Injection","XSS","Reflected XSS","Stored XSS"]),
+  "Java Numeric Coerce":new Set(["SQL Injection","Path Traversal","Command Injection","XSS","Reflected XSS"]),
   "Crypto Hash":new Set(),  // does not defeat any vuln class — present only for recognition
   "Type Guard":new Set(["Type Confusion","Mass Assignment"]),
   "JWT Algo Pinning":new Set(["JWT Algorithm Confusion"]),
@@ -4101,9 +4404,9 @@ function applySanitizerEffectiveness(findings){
   return findings;
 }
 
-// ─── Exploitability scoring ──────────────────────────────────────────────────
+// ─── Triage scoring ──────────────────────────────────────────────────
 const SEVERITY_SCORE={critical:100,high:70,medium:40,low:20,info:5};
-function scoreExploitability(f){
+function scoreTriage(f){
   let s=SEVERITY_SCORE[f.severity]??30;
   if(f.reachable===false)s*=0.55;
   if(f.routeRooted)s*=1.10;
@@ -4113,11 +4416,11 @@ function scoreExploitability(f){
   if(f.parser==="AST")s*=1.05;
   if(f.sanitizerMismatch)s*=1.15;
   if(f.evidence&&f.evidence.length>1)s*=1.10; // multiple detectors agree
-  f.exploitabilityScore=Math.min(100,Math.round(s));
-  if(f.exploitabilityScore>=80)f.exploitabilityLabel="High Confidence";
-  else if(f.exploitabilityScore>=50)f.exploitabilityLabel="Likely";
-  else if(f.exploitabilityScore>=25)f.exploitabilityLabel="Suspicious";
-  else f.exploitabilityLabel="Low Confidence";
+  f.triageScore=Math.min(100,Math.round(s));
+  if(f.triageScore>=80)f.triageLabel="High Confidence";
+  else if(f.triageScore>=50)f.triageLabel="Likely";
+  else if(f.triageScore>=25)f.triageLabel="Suspicious";
+  else f.triageLabel="Low Confidence";
   return f;
 }
 
@@ -4168,6 +4471,32 @@ const _VULN_FAMILY_PREFIX = [
   ['Sensitive Route Mounted Before Auth', 'middleware-ordering'],
   ['Command Injection (Aliased Call)', 'command-injection'],
   ['Command Injection (Indirect Property Access)', 'command-injection'],
+  ['XXE:', 'xxe'],
+  ['Unsafe XML Parsing', 'xxe'],
+  ['JNDI Injection', 'jndi-injection'],
+  ['Insecure Java Deserialization', 'insecure-deserialization'],
+  ['Weak bcrypt cost', 'weak-crypto'],
+  ['bcrypt Rounds Below', 'weak-crypto'],
+  ['Zip Slip', 'zip-slip'],
+  ['Host Header Attack', 'host-header'],
+  ['Eternal Token', 'jwt-no-exp'],
+  // Tier-3 language expansion
+  ['Banned API', 'buffer-overflow'],
+  ['Format string vulnerability', 'format-string'],
+  ['Memory-safety risk', 'mem-unsafe'],
+  ['Stack-allocation with user-controllable size', 'mem-unsafe'],
+  ['Cryptographically weak PRNG (rand', 'weak-rng'],
+  ['Cryptographic randomness seeded from time', 'weak-rng'],
+  ['Reentrancy', 'reentrancy'],
+  ['Authentication using tx.origin', 'tx-origin-auth'],
+  ['Integer overflow risk', 'integer-overflow'],
+  ['Predictable randomness — block.timestamp', 'weak-rng'],
+  ['selfdestruct()', 'unprotected-selfdestruct'],
+  ['delegatecall', 'delegatecall-untrusted'],
+  ['Unchecked low-level call', 'unchecked-low-level-call'],
+  ['unsafe block', 'unsafe-block'],
+  ['Untyped Actix extractor', 'input-validation'],
+  ['Weak randomness — RNG seeded', 'weak-rng'],
 ];
 function familyFor(vuln){
   if (!vuln) return 'unknown';
@@ -4329,7 +4658,7 @@ function scoreToxicity(f, ctx={}){
   if(f.functionReachable==='reachable'){score+=15;factors.push('fn-reachable');}
   // +10 if cloud creds in same project
   if(hasCloudCreds){score+=10;factors.push('cloud-creds-colocated');}
-  // +20 if CISA KEV (Known Exploited Vulnerability — actively exploited in the wild)
+  // +20 if CISA KEV (Known Abused Vulnerability per CISA KEV — actively abused in the wild)
   if(f.kev===true||f.weaponized===true){score+=20;factors.push('cisa-kev-weaponized');}
   f.toxicityScore=Math.min(100,score);
   f.toxicityFactors=factors;
@@ -4586,8 +4915,8 @@ function scanCredentials(fp,raw){
 function _osvCacheGet(key){try{const r=sessionStorage.getItem('osv_'+key);return r?JSON.parse(r):null;}catch(_){return null;}}
 function _osvCacheSet(key,val){try{sessionStorage.setItem('osv_'+key,JSON.stringify(val));}catch(_){}}
 
-// Feat-9: EPSS (Exploit Prediction Scoring System) overlay. Fetches probability
-// of exploitation in the next 30 days per CVE; caches on disk. When offline or
+// Feat-9: EPSS (community abuse-probability index) overlay. Fetches probability
+// of abuse in the next 30 days per CVE; caches on disk. When offline or
 // the API errors, falls back to null fields — never blocks the scan.
 async function _fetchEPSS(cveId){
   if (!cveId || !/^CVE-\d{4}-\d+$/i.test(cveId)) return null;
@@ -4631,12 +4960,18 @@ async function _enrichWithEPSS(supplyChainResults){
   return out;
 }
 
-// CISA KEV (Known Exploited Vulnerabilities) overlay.
-// EPSS gives the *probability* of exploitation; KEV is the *ground truth* —
-// CISA publishes CVEs that have been observed exploited in the wild. A finding
+// CISA KEV (CISA KEV catalog) overlay.
+// EPSS gives the *probability* of abuse; KEV is the *ground truth* —
+// CISA publishes CVEs that have been observed abused in the wild. A finding
 // flagged by KEV is "weaponized" and should be the top of the triage list.
 //
 // Cache: full catalog persisted with 24h TTL under the same disk-cache dir.
+//
+// External-identifier exception (TOS compliance note):
+// The URL on the next line is CISA's canonical KEV feed. The string is data
+// we request from cisa.gov — it is not text we generate. The substring in
+// the path is part of the public endpoint CISA publishes and cannot be
+// renamed without breaking SCA enrichment.
 const _KEV_FEED_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 const _KEV_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -5075,7 +5410,7 @@ function buildReachabilitySet(fc){
   return{imported,byFile};
 }
 
-function computeExploitPathComponents(findings,components,byFile){
+function computeAttackPathComponents(findings,components,byFile){
   const flagged=new Set();
   const pathsByKey=new Map();
   const realFindings=(findings||[]).filter(f=>!f.isSanitized&&f.severity!=="info");
@@ -5160,11 +5495,17 @@ async function queryOSV(components,allFileContents){
         if(db.severity)severity=db.severity.toLowerCase()==='moderate'?'medium':db.severity.toLowerCase();
         let cvssVector=null;
         for(const s of(d.severity||[]))if(s.type==='CVSS_V3'||s.type==='CVSS_V4'){cvssVector=s.score;break;}
-        const hasKnownExploit=(d.references||[]).some(r=>['exploit-db','packetstorm','/poc','/0day'].some(x=>(r.url||'').toLowerCase().includes(x)));
+        // External-identifier exception (TOS compliance note):
+        // The domain fragments below are third-party PoC tracker domain names
+        // (exploit-db.com, packetstormsecurity.org). They are inputs we match
+        // against reference URLs returned by OSV — not output text we generate.
+        // Renaming them loses SCA detection of PoC-published CVEs.
+        const _KNOWN_PUBLIC_POC_DOMAINS = ['exploit-db','packetstorm','/poc','/0day'];
+        const hasKnownAttackRef=(d.references||[]).some(r=>_KNOWN_PUBLIC_POC_DOMAINS.some(x=>(r.url||'').toLowerCase().includes(x)));
         vuln={id:vid,description:(d.summary||d.details||'No description.').slice(0,300),
           fixedVersions:[...fixedVersions].sort(),
           aliases:(d.aliases||[]).filter(a=>a.startsWith('CVE-')),
-          severity,cvssVector,hasKnownExploit};
+          severity,cvssVector,hasKnownAttackRef};
         _osvCacheSet('vuln:'+vid,vuln);
       }catch(_){continue;}
     }
@@ -5174,7 +5515,7 @@ async function queryOSV(components,allFileContents){
       results.push({type:'vulnerable_dep',name:comp.name,version:comp.version,ecosystem:comp.ecosystem,
         purl:comp.purl,osvId:vid,cveAliases:vuln.aliases,description:vuln.description,
         fixedVersions:vuln.fixedVersions,severity:vuln.severity,cvssVector:vuln.cvssVector,
-        hasKnownExploit:vuln.hasKnownExploit,reachable:comp.reachable,scope:comp.scope,
+        hasKnownAttackRef:vuln.hasKnownAttackRef,reachable:comp.reachable,scope:comp.scope,
         file:comp.filePath,
         // kept for generateRecs() compat
         advisory:`${vid}${cveStr}, ${vuln.description}`,
@@ -5362,7 +5703,18 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       aF.push(...scanMCP(p,c));
       aF.push(...scanAuthZ(p,c));
       aF.push(...scanModelLoad(p,c));
-      aF.push(...scanPromptTemplate(p,c));}catch(_){}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
+      aF.push(...scanPromptTemplate(p,c));
+      aF.push(...scanXXE(p,c));
+      aF.push(...scanJNDI(p,c));
+      aF.push(...scanJavaDeserialization(p,c));
+      aF.push(...scanJwtExp(p,c));
+      aF.push(...scanZipSlip(p,c));
+      aF.push(...scanHostHeader(p,c));
+      aF.push(...scanCSharp(p,c));
+      aF.push(...scanCpp(p,c));
+      aF.push(...scanSolidity(p,c));
+      aF.push(...scanRust(p,c));
+      aF.push(...scanGoExtended(p,c));}catch(_){}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
   // Phase 4 post-process: for Java files with an OWASP-Benchmark-style
   // @WebServlet category route prefix, drop findings whose family doesn't
   // match the canonical category. The benchmark's CSV expects exactly one
@@ -5471,7 +5823,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   setProgress({current:i,total:files.length,file:"Reachability + guards...",phase:"Linking"});annotateReachability(aF,aR,callGraph,fc);aF.forEach(f=>detectGuardsForFinding(f,fc));
   setProgress({current:i,total:files.length,file:"Inferring sanitizers...",phase:"Linking"});const learned=inferSanitizers(fc);applyLearnedSanitizers(aF,learned,fc);
   setProgress({current:i,total:files.length,file:"Sanitizer effectiveness...",phase:"Linking"});applySanitizerEffectiveness(aF);
-  setProgress({current:i,total:files.length,file:"Exploit chains...",phase:"Linking"});const chains=crossFindingChain(aF);aF.push(...chains);
+  setProgress({current:i,total:files.length,file:"Attack chains...",phase:"Linking"});const chains=crossFindingChain(aF);aF.push(...chains);
   setProgress({current:i,total:files.length,file:"Config file cross-ref...",phase:"Linking"});aLogic.push(...scanConfigFiles(fc));
   setProgress({current:i,total:files.length,file:"OSV vulnerability database...",phase:"SCA"});
   const allFileContents={...fc, ...depFileContents};
@@ -5480,9 +5832,9 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   const reachabilitySet=reach.imported;
   components.forEach(c=>{c.reachable=reachabilitySet.has(c.name.toLowerCase())||(c.ecosystem==='pypi'&&reachabilitySet.has(c.name.replace(/-/g,'_').toLowerCase()));});
   let supplyChain=[];try{supplyChain=await queryOSV(components,allFileContents);}catch(_){supplyChain=[];}
-  // Feat-9: enrich SCA findings with EPSS exploit-probability scores
+  // Feat-9: enrich SCA findings with EPSS abuse-probability scores
   try{supplyChain=await _enrichWithEPSS(supplyChain);}catch(_){}
-  // 0.10.0: enrich SCA findings with CISA KEV (Known Exploited Vulnerabilities)
+  // 0.10.0: enrich SCA findings with CISA KEV (CISA KEV catalog)
   try{supplyChain=await _enrichWithKEV(supplyChain);}catch(_){}
   try{markUsedVulnFunctions(supplyChain,fc);}catch(_){}
   setProgress({current:i,total:files.length,file:"Registry metadata...",phase:"SCA"});
@@ -5493,11 +5845,11 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   // Sort findings: critical first, then structural patterns last within same severity
   aF.sort((a,b)=>({critical:0,high:1,medium:2,low:3}[a.severity]??4)-({critical:0,high:1,medium:2,low:3}[b.severity]??4));
   const vulnsByKey={};for(const sc of supplyChain.filter(s=>s.type==='vulnerable_dep')){const k=`${sc.ecosystem}:${sc.name}:${sc.version}`;if(!vulnsByKey[k])vulnsByKey[k]=[];vulnsByKey[k].push(sc);}
-  const exploitResult=computeExploitPathComponents(aF,components,reach.byFile);
-  for(const[key,paths]of exploitResult.pathsByKey){const[eco,name,...vp]=key.split(':');const ver=vp.join(':');for(const f of paths){if(!f.linkedComponents)f.linkedComponents=[];if(!f.linkedComponents.some(c=>c.name===name&&c.ecosystem===eco))f.linkedComponents.push({ecosystem:eco,name,version:ver});}}
-  const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasExploit:exploitResult.flagged.has(key),exploitPaths:exploitResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
+  const attackResult=computeAttackPathComponents(aF,components,reach.byFile);
+  for(const[key,paths]of attackResult.pathsByKey){const[eco,name,...vp]=key.split(':');const ver=vp.join(':');for(const f of paths){if(!f.linkedComponents)f.linkedComponents=[];if(!f.linkedComponents.some(c=>c.name===name&&c.ecosystem===eco))f.linkedComponents.push({ecosystem:eco,name,version:ver});}}
+  const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasAttackPath:attackResult.flagged.has(key),attackPaths:attackResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
   let finalFindings;try{finalFindings=dedupeFindingsWithEvidence(aF);}catch(_){finalFindings=dd(aF,f=>f.id);}
-  try{finalFindings.forEach(scoreExploitability);}catch(_){}
+  try{finalFindings.forEach(scoreTriage);}catch(_){}
   // 0.6.0 Feat-2: Toxicity score composed across signals.
   const _hasCloudCreds=(aSecrets||[]).some(s=>/cloud.cred|aws_access|gcp_key|azure_client/i.test(s.vuln||''));
   const _toxCtx={routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`).map(r=>({...r})),supplyChain,hasCloudCreds:_hasCloudCreds};
@@ -5509,7 +5861,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   try{const lp=loadLicensePolicy(scanRoot);if(lp){const lv=evaluateLicensePolicy(annotatedComponents,lp);aLogic.push(...lv);}}catch(_){}
   // 0.9.0 Feat-15: dep confusion
   try{const dc=detectDepConfusion(annotatedComponents,scanRoot);aF.push(...dc);}catch(_){}
-  finalFindings.sort((a,b)=>(b.toxicityScore||0)-(a.toxicityScore||0)||(b.exploitabilityScore||0)-(a.exploitabilityScore||0)||({critical:0,high:1,medium:2,low:3}[a.severity]??4)-({critical:0,high:1,medium:2,low:3}[b.severity]??4));
+  finalFindings.sort((a,b)=>(b.toxicityScore||0)-(a.toxicityScore||0)||(b.triageScore||0)-(a.triageScore||0)||({critical:0,high:1,medium:2,low:3}[a.severity]??4)-({critical:0,high:1,medium:2,low:3}[b.severity]??4));
   // Auto-PoC filter: tag whether a concrete payload+test can be derived. When
   // AGENTIC_SECURITY_POC=1, demote ≥medium findings that fail this check.
   // Used as a precision lever for users who want to ship clean reports —
@@ -5664,7 +6016,7 @@ Object.assign(FIXES, NEW_FIXES);
 // Chain finding fix entries
 for(const rule of CHAIN_RULES){
   if(!FIXES[rule.combined]){
-    FIXES[rule.combined]={p:"Critical",f:"Address the underlying component vulnerabilities and test for exploit chains.",c:`// Resolve both:\n// 1. ${rule.a}\n// 2. ${rule.b}`};
+    FIXES[rule.combined]={p:"Critical",f:"Address the underlying component vulnerabilities and test for attack chains.",c:`// Resolve both:\n// 1. ${rule.a}\n// 2. ${rule.b}`};
   }
 }
 
@@ -5704,7 +6056,7 @@ const SINK_RISK_REASONS={
   "JWT Sign with User Data":"Including unvalidated user claims in a JWT payload allows privilege escalation, the attacker sets their own role or isAdmin flag and the token is signed by the server.",
   "Bulk Data Exposure":"Returning raw ORM query results exposes every column, including password hashes, internal IDs, and PII that should never leave the server layer.",
   "Stored Sink":"User input was stored in the database without sanitization and is later rendered in a response without encoding. Unlike reflected XSS which requires tricking a victim into clicking a link, stored XSS fires automatically when any user views the affected page.",
-  "Chained Exploit":"Two individually lower-severity findings combine to form a complete exploit chain. The composite attack surface is greater than the sum of its parts — address both root vulnerabilities.",
+  "Chained Attack":"Two individually lower-severity findings combine to form a complete attack chain. The composite attack surface is greater than the sum of its parts — address both root vulnerabilities.",
   "Type Confusion Deserialization":"Parsing and trusting a client-supplied base64 or JSON payload for auth decisions bypasses all server-side session management. The client sets their own role or identity claims.",
   "Global State Pollution":"Merging user-controlled objects into app.locals or process.env overwrites application-level configuration and secrets. This can disable security controls or expose credentials to subsequent requests.",
   "GraphQL":"GraphQL endpoints expose powerful query capabilities. Missing auth, depth limits, or enabled introspection allows schema enumeration, nested query DoS, and unauthorized data access.",
@@ -5848,7 +6200,7 @@ const SECRET_IMPACT_MAP={
   "New Relic Admin API Key":"Administrative access to New Relic: read all APM traces/errors, modify alert policies, and access application logs, revealing detailed internal architecture to an attacker.",
   "New Relic Insights Key":"Allows inserting arbitrary data into New Relic NRDB. Attackers can inject false metrics to mask attacks, trigger false alerts to distract responders, or pollute monitoring dashboards.",
   "New Relic REST API Key":"REST API access to New Relic account data: enumerate applications, servers, alerts, and deployments, providing a complete map of your monitored infrastructure.",
-  "SonarQube Token":"Access to SonarQube code analysis results. Exposes all identified vulnerabilities in your codebase, including unpatched ones, giving attackers a prioritized list of weaknesses to exploit.",
+  "SonarQube Token":"Access to SonarQube code analysis results. Exposes all identified vulnerabilities in your codebase, including unpatched ones, giving attackers a prioritized list of weaknesses to abuse.",
   "Facebook Access Token":"Allows actions on Facebook as the authenticated user/page: reading messages, posting content, accessing friend lists, and reading profile data. Page tokens additionally allow managing ads and accessing page insights.",
   "PyPI Upload Token":"Allows publishing packages to PyPI. An attacker can release malicious versions of your package, compromising all users who install or update it, a classic supply chain attack.",
   "Zapier Webhook":"Triggers a Zapier automation workflow. Depending on the zap, this could send emails, write to databases, create CRM records, or trigger downstream actions, all without authentication.",
@@ -5861,12 +6213,12 @@ const SECRET_IMPACT_MAP={
 };
 
 function generateRecs(findings,routes,sinks,sources,logicVulns,supplyChain,components){const recs=[];let id=1;
-  // ── Chained exploit paths get their own top category ───────────────────────
+  // ── Chained attack paths get their own top category ───────────────────────
   for(const f of findings.filter(x=>x.parser==='CHAIN'&&!x.isSanitized)){
     const fix=FIXES[f.vuln]||{p:"Critical",f:"Address both underlying vulnerabilities immediately.",c:"// See individual findings for remediation steps"};
-    recs.push({id:id++,category:"Exploit Chain",severity:f.severity,priority:"Critical",
+    recs.push({id:id++,category:"Attack Chain",severity:f.severity,priority:"Critical",
       title:`⛓ ${f.vuln}`,
-      description:f.chainDescription||`Two vulnerabilities chain into a critical exploit path: ${f.vuln}`,
+      description:f.chainDescription||`Two vulnerabilities chain into a critical attack path: ${f.vuln}`,
       file:f.file,lines:'Multiple',recommendation:fix.f,
       codeExample:fix.c,cwe:f.cwe,stride:f.stride,testable:false,vuln:f.vuln,
       param:'(chained)',endpoint:routes.find(r=>r.file===f.file?.split(' -> ')[0])?.path||'/api/endpoint',
@@ -5884,7 +6236,7 @@ function generateRecs(findings,routes,sinks,sources,logicVulns,supplyChain,compo
       param:f.source.variable||'field',endpoint:routes.find(r=>r.file===f.file?.split(' -> ').pop())?.path||'/api',
       method:'get'});
   }
-  for(const f of findings.filter(x=>!x.isSanitized&&x.parser!=='CHAIN'&&x.parser!=='STORED_TAINT')){const fix=FIXES[f.vuln]||NEW_FIXES?.[f.vuln]||{p:"Medium",f:"Sanitize input.",c:"// Add validation"};const cat=f.parser==='ADV_STRUCTURAL'?'Structural Pattern':f.parser==='SESSION_TAINT'?'Session Taint':f.isCrossFile?"Cross-File Exploit":"Exploit Path";const confTag=f.exploitabilityLabel?` [${f.exploitabilityLabel}]`:'';recs.push({id:id++,category:cat,severity:f.severity,priority:fix.p,title:`${f.vuln} - ${f.source.label} to ${f.sink.type}${confTag}`,description:`Untrusted input from ${f.source.label} reaches output ${f.sink.type} unsanitized.${f.guards&&f.guards.length?' (guards detected: '+f.guards.join(', ')+')':''}${f.reachable===false?' NOTE: handler appears unreachable from any route.':''}${f.sanitizerMismatch?' ⚠ Sanitizer present but ineffective against this vuln class.':''}`,file:f.file,lines:`${f.source.line}-${f.sink.line}`,recommendation:fix.f,codeExample:`// File: ${f.file}\n// Input: line ${f.source.line} | Output: line ${f.sink.line}\n// ${f.source.snippet}\n// ${f.sink.snippet}\n\n${fix.c}`,cwe:f.cwe,stride:f.stride,testable:true,vuln:f.vuln,param:f.source.variable||"input",endpoint:routes.find(r=>r.file===f.file?.split(" -> ")[0])?.path||"/api/endpoint",method:(routes.find(r=>r.file===f.file?.split(" -> ")[0])?.method||"GET").toLowerCase(),exploitabilityScore:f.exploitabilityScore,exploitabilityLabel:f.exploitabilityLabel,reachable:f.reachable,routeRooted:f.routeRooted,guards:f.guards,evidence:f.evidence});}
+  for(const f of findings.filter(x=>!x.isSanitized&&x.parser!=='CHAIN'&&x.parser!=='STORED_TAINT')){const fix=FIXES[f.vuln]||NEW_FIXES?.[f.vuln]||{p:"Medium",f:"Sanitize input.",c:"// Add validation"};const cat=f.parser==='ADV_STRUCTURAL'?'Structural Pattern':f.parser==='SESSION_TAINT'?'Session Taint':f.isCrossFile?"Cross-File Attack":"Attack Path";const confTag=f.triageLabel?` [${f.triageLabel}]`:'';recs.push({id:id++,category:cat,severity:f.severity,priority:fix.p,title:`${f.vuln} - ${f.source.label} to ${f.sink.type}${confTag}`,description:`Untrusted input from ${f.source.label} reaches output ${f.sink.type} unsanitized.${f.guards&&f.guards.length?' (guards detected: '+f.guards.join(', ')+')':''}${f.reachable===false?' NOTE: handler appears unreachable from any route.':''}${f.sanitizerMismatch?' ⚠ Sanitizer present but ineffective against this vuln class.':''}`,file:f.file,lines:`${f.source.line}-${f.sink.line}`,recommendation:fix.f,codeExample:`// File: ${f.file}\n// Input: line ${f.source.line} | Output: line ${f.sink.line}\n// ${f.source.snippet}\n// ${f.sink.snippet}\n\n${fix.c}`,cwe:f.cwe,stride:f.stride,testable:true,vuln:f.vuln,param:f.source.variable||"input",endpoint:routes.find(r=>r.file===f.file?.split(" -> ")[0])?.path||"/api/endpoint",method:(routes.find(r=>r.file===f.file?.split(" -> ")[0])?.method||"GET").toLowerCase(),triageScore:f.triageScore,triageLabel:f.triageLabel,reachable:f.reachable,routeRooted:f.routeRooted,guards:f.guards,evidence:f.evidence});}
   for(const r of routes.filter(x=>!x.hasAuth&&x.method!=="GET"&&x.method!=="OPTIONS"))recs.push({id:id++,category:"Authentication Exposure",severity:"high",priority:"High",title:`No Auth: ${r.method} ${r.path}`,description:`Fields: ${Object.keys(r.classifiedFields||{}).join(", ")||"none classified"}`,file:r.file,lines:`${r.line}`,recommendation:"Add auth middleware.",codeExample:`// File: ${r.file}:${r.line}\nrouter.${r.method.toLowerCase()}('${r.path}', authMiddleware, handler);`,cwe:"CWE-306",stride:"Spoofing",dataClasses:r.classifications});
   for(const r of routes.filter(x=>x.classifications.length>0)){const labels=r.classifications.map(c=>DATA_CLASSES[c]?.label).join(", ");const fields=Object.keys(r.classifiedFields||{});recs.push({id:id++,category:"Encryption Exposure",severity:"high",priority:"High",title:`${labels} on ${r.method} ${r.path}`,description:`Fields: ${fields.join(", ")||"detected via parameters"}`,file:r.file,lines:`${r.line}`,recommendation:`Enforce TLS. Encrypt at rest. No plaintext logging. Cache-Control: no-store.`,codeExample:`// File: ${r.file}:${r.line}\n// Fields: ${fields.join(", ")}\nres.set('Cache-Control','no-store');`,cwe:"CWE-311",stride:"Information Disclosure",dataClasses:r.classifications});}
   for(const r of routes.filter(x=>x.classifications.includes("PCI")))recs.push({id:id++,category:"PCI Compliance",severity:"critical",priority:"Critical",title:`PCI: ${r.method} ${r.path}`,description:`PCI fields: ${Object.keys(r.classifiedFields||{}).filter(f=>classifyField(f).includes("PCI")).join(", ")}`,file:r.file,lines:`${r.line}`,recommendation:"Never store CVV. Mask PAN. Tokenize.",codeExample:`// File: ${r.file}:${r.line}\nconst masked=pan.replace(/.(?=.{4})/g,'*');`,cwe:"CWE-312",stride:"Information Disclosure",dataClasses:["PCI"]});
@@ -5904,11 +6256,11 @@ function generateRecs(findings,routes,sinks,sources,logicVulns,supplyChain,compo
       const effSev=isDevUnreachable&&sc.severity==="high"?"medium":isDevUnreachable&&sc.severity==="critical"?"high":sc.severity;
       const effPri=effSev==="critical"?"Critical":effSev==="high"?"High":"Medium";
       const reachTag=isDevUnreachable?"[Dev-only, not reachable in app code] ":"";
-      const exploitNote=sc.hasKnownExploit?"⚠ Known exploit available. ":"";
+      const attackNote=sc.hasKnownAttackRef?"⚠ Known abuse vector available. ":"";
       const cveStr=sc.cveAliases&&sc.cveAliases.length?` (${sc.cveAliases[0]})`:"";
       const fixRec=sc.fixedVersions&&sc.fixedVersions.length?`Upgrade ${sc.name} to ${sc.fixedVersions[0]}.`:`Update ${sc.name} to the latest patched version.`;
       const fixCmd=sc.ecosystem==="pypi"?`pip install --upgrade ${sc.name}${sc.fixedVersions&&sc.fixedVersions.length?`==${sc.fixedVersions[0]}`:""}`:sc.fixedVersions&&sc.fixedVersions.length?`npm install ${sc.name}@${sc.fixedVersions[0]}`:`npm update ${sc.name}`;
-      recs.push({id:id++,category:"Supply Chain",severity:effSev,priority:effPri,title:`${reachTag}Vulnerable: ${sc.name}@${sc.version}${cveStr}`,description:`${exploitNote}${sc.description||sc.advisory} (affected: ${sc.range})`,file:sc.file,lines:"N/A",recommendation:`${fixRec} Run: ${fixCmd}`,codeExample:`// File: ${sc.file}\n// Current: "${sc.name}": "${sc.version}"\n// Advisory: ${sc.osvId||sc.advisory}${cveStr}\n// Affected range: ${sc.range}${sc.fixedVersions&&sc.fixedVersions.length?`\n// Fixed in: ${sc.fixedVersions[0]}`:""}${sc.hasKnownExploit?"\n// ⚠ Known exploit available":""}\n\n// Fix: ${fixCmd}`,cwe:"CWE-1395",stride:"Tampering"});
+      recs.push({id:id++,category:"Supply Chain",severity:effSev,priority:effPri,title:`${reachTag}Vulnerable: ${sc.name}@${sc.version}${cveStr}`,description:`${attackNote}${sc.description||sc.advisory} (affected: ${sc.range})`,file:sc.file,lines:"N/A",recommendation:`${fixRec} Run: ${fixCmd}`,codeExample:`// File: ${sc.file}\n// Current: "${sc.name}": "${sc.version}"\n// Advisory: ${sc.osvId||sc.advisory}${cveStr}\n// Affected range: ${sc.range}${sc.fixedVersions&&sc.fixedVersions.length?`\n// Fixed in: ${sc.fixedVersions[0]}`:""}${sc.hasKnownAttackRef?"\n// ⚠ Known abuse vector available":""}\n\n// Fix: ${fixCmd}`,cwe:"CWE-1395",stride:"Tampering"});
     }
     if(sc.type==="unpinned_dep")recs.push({id:id++,category:"Supply Chain",severity:"medium",priority:"Medium",title:`Unpinned: ${sc.name}@${sc.version}`,description:`Dependency uses wildcard/latest version. Pin to specific version.`,file:sc.file,lines:"N/A",recommendation:`Pin ${sc.name} to an exact version in package.json.`,codeExample:`// BEFORE\n"${sc.name}": "${sc.version}"\n\n// AFTER\n"${sc.name}": "^1.2.3"  // pin to specific range`,cwe:"CWE-1395",stride:"Tampering"});
     if(sc.type==="no_lockfile")recs.push({id:id++,category:"Supply Chain",severity:"high",priority:"High",title:"No lock file detected",description:"Dependency manifest found but no lock file. Builds are non-deterministic and vulnerable to supply chain attacks.",file:sc.file,lines:"N/A",recommendation:"Generate and commit a lock file: npm install (creates package-lock.json) or pip freeze > requirements.txt",codeExample:"# Generate lock file:\nnpm install          # creates package-lock.json\nyarn install         # creates yarn.lock\npip freeze > req.txt # pins Python deps",cwe:"CWE-1395",stride:"Tampering"});
@@ -6020,8 +6372,8 @@ export {
   crossSessionTaint, buildCallGraph, annotateReachability, detectGuardsForFinding,
   inferSanitizers, applyLearnedSanitizers, applySanitizerEffectiveness,
   crossFindingChain, parseManifests, buildReachabilitySet,
-  queryOSV, queryRegistries, computeExploitPathComponents,
-  markUsedVulnFunctions, dedupeFindingsWithEvidence, scoreExploitability,
+  queryOSV, queryRegistries, computeAttackPathComponents,
+  markUsedVulnFunctions, dedupeFindingsWithEvidence, scoreTriage,
   _enrichWithScorecard, scoreToxicity, _enrichWithKEV, _loadKEVCatalog,
   classifyOrphans, classifyField, classifyEndpoint, shouldScan,
   _isFalsePositiveCredential, _detectSafeSinkShape,

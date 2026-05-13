@@ -183,7 +183,7 @@
     "name": "Information Disclosure",
     "risk": "Your app leaks information that helps attackers — stack traces, internal paths, dependency versions, debug pages.",
     "attackerStory": "Production app shows a Django/Express stack trace on error. Attacker sees database type, ORM version, exact file paths, and internal class names — a roadmap for further attacks.",
-    "worstCase": "Reconnaissance becomes free. Attacker knows your stack, finds public CVEs, and targets the right exploits.",
+    "worstCase": "Reconnaissance becomes free. Attacker knows your stack, finds public CVEs, and targets the right vulnerabilities.",
     "fix": "Always run with `NODE_ENV=production` (or equivalent). Custom error pages that say 'Something went wrong' to users while logging the real error server-side. Remove `X-Powered-By` headers. Never expose `/.git/`, `/.env`, `/debug` routes to the public internet."
   },
   "CWE-285": {

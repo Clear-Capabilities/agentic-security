@@ -2,27 +2,27 @@
   "precision": 1,
   "recall": 1,
   "f1": 1,
-  "tp": 51,
+  "tp": 122,
   "fp": 0,
   "fn": 0,
   "perFamily": {
     "header-hardening": {
-      "tp": 4,
+      "tp": 7,
       "fp": 0,
       "fn": 0
     },
     "sql-injection": {
-      "tp": 5,
+      "tp": 7,
       "fp": 0,
       "fn": 0
     },
     "xss": {
-      "tp": 3,
+      "tp": 6,
       "fp": 0,
       "fn": 0
     },
     "command-injection": {
-      "tp": 4,
+      "tp": 10,
       "fp": 0,
       "fn": 0
     },
@@ -32,17 +32,17 @@
       "fn": 0
     },
     "weak-crypto": {
-      "tp": 1,
+      "tp": 2,
       "fp": 0,
       "fn": 0
     },
     "code-injection": {
-      "tp": 1,
+      "tp": 2,
       "fp": 0,
       "fn": 0
     },
     "path-traversal": {
-      "tp": 1,
+      "tp": 2,
       "fp": 0,
       "fn": 0
     },
@@ -77,7 +77,7 @@
       "fn": 0
     },
     "idor": {
-      "tp": 1,
+      "tp": 6,
       "fp": 0,
       "fn": 0
     },
@@ -90,7 +90,107 @@
       "tp": 2,
       "fp": 0,
       "fn": 0
+    },
+    "xxe": {
+      "tp": 7,
+      "fp": 0,
+      "fn": 0
+    },
+    "jndi-injection": {
+      "tp": 3,
+      "fp": 0,
+      "fn": 0
+    },
+    "insecure-deserialization": {
+      "tp": 7,
+      "fp": 0,
+      "fn": 0
+    },
+    "jwt-no-exp": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "jwt-alg-confusion": {
+      "tp": 3,
+      "fp": 0,
+      "fn": 0
+    },
+    "zip-slip": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    },
+    "host-header": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    },
+    "open-redirect": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "buffer-overflow": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0
+    },
+    "format-string": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "mem-unsafe": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "weak-rng": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0
+    },
+    "integer-overflow": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "reentrancy": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "tx-origin-auth": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "unprotected-selfdestruct": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "delegatecall-untrusted": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "unsafe-block": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0
+    },
+    "ssrf": {
+      "tp": 3,
+      "fp": 0,
+      "fn": 0
+    },
+    "dos-no-timeout": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0
     }
   },
-  "ts": "2026-05-10T15:57:23.220Z"
+  "ts": "2026-05-13T14:28:50.900Z"
 }

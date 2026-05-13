@@ -7,7 +7,7 @@ export {
   crossSessionTaint, buildCallGraph, annotateReachability, detectGuardsForFinding,
   inferSanitizers, applyLearnedSanitizers, applySanitizerEffectiveness,
   crossFindingChain, classifyOrphans, classifyField, classifyEndpoint,
-  scoreExploitability, dedupeFindingsWithEvidence,
+  scoreTriage, dedupeFindingsWithEvidence,
   SOURCE_PATTERNS, SINK_PATTERNS, SANITIZER_PATTERNS, ROUTE_PATTERNS,
   LOGIC_PATTERNS, STRUCTURAL_VULN_PATTERNS, EXTRA_STRUCTURAL_PATTERNS,
   CHAIN_RULES, GRAPHQL_VULN_PATTERNS, GUARD_PATTERNS,

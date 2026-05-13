@@ -45,7 +45,7 @@ let grade, reason, action;
 
 if (c > 10 || (c > 5 && kevCount > 0)) {
   grade = 'F';
-  reason = c + ' critical finding(s)' + (kevCount ? ' including ' + kevCount + ' actively-exploited CVE(s)' : '') + '. Your project would not pass any security review in this state.';
+  reason = c + ' critical finding(s)' + (kevCount ? ' including ' + kevCount + ' actively-abused CVE(s)' : '') + '. Your project would not pass any security review in this state.';
   action = 'Run /fix --all --critical to start triaging the worst.';
 } else if (c >= 6) {
   grade = 'D';
@@ -53,7 +53,7 @@ if (c > 10 || (c > 5 && kevCount > 0)) {
   action = 'Run /fix --all --critical to fix the worst, then /report-card again.';
 } else if (kevCount > 0) {
   grade = 'D';
-  reason = kevCount + ' CVE(s) on the CISA Known Exploited Vulnerabilities list — these are being weaponized in real attacks right now.';
+  reason = kevCount + ' CVE(s) on the CISA KEV (Known Abused CVEs) list — these are being weaponized in real attacks right now.';
   action = 'Run /security-kev to see them, then update the affected packages.';
 } else if (c >= 3) {
   grade = 'C-';

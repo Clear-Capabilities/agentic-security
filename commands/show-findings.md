@@ -1,5 +1,5 @@
 ---
-description: Triage findings for false positives then view results. Default (--all) opens an interactive HTML report. Use --kev for weaponized CVEs, --chains for exploit chains, or --threat-model [--stride|--llm] for a threat model table.
+description: Triage findings for false positives then view results. Default (--all) opens an interactive HTML report. Use --kev for weaponized CVEs, --chains for attack chains, or --threat-model [--stride|--llm] for a threat model table.
 argument-hint: "[path] [--all] [--kev] [--chains [--severity critical|high|all]] [--threat-model [--stride|--llm]]"
 ---
 
@@ -80,14 +80,14 @@ for (const f of findings.slice(0, 50)) {
 }
 if (!findings.length) console.log('  No KEV findings. Dependencies look clean against CISA BOD 22-01.');
 console.log('');
-console.log(W('KEV = actively exploited in the wild. Treat these as P0.', '2'));
+console.log(W('KEV = actively abused in the wild. Treat these as P0.', '2'));
 "
 
 elif [ "$MODE" = "--chains" ]; then
   echo "Invoking security-chain-synthesizer subagent on findings with severity >= $SEVERITY..."
   echo "(Load .agentic-security/last-scan.json, filter to severity >= $SEVERITY, pass to security-chain-synthesizer, print Markdown output verbatim.)"
   echo ""
-  echo "After chains: suggest /exploit-poc <chain-name> to validate, /fix --one <id> to break at weakest link."
+  echo "After chains: suggest /validate-findings <chain-name> to validate, /fix --one <id> to break at weakest link."
 
 elif [ "$MODE" = "--threat-model" ]; then
 
@@ -167,7 +167,7 @@ console.log('');
 const zero = buckets.filter(b => b.findings.length === 0);
 if (zero.length) { console.log(W('No findings (under-covered or absent):', BOLD)); for (const b of zero) console.log('  ' + b.name); console.log(''); }
 const top2 = buckets.filter(b => b.findings.length);
-if (top2.length) { console.log(W('Highest-exploitability per category:', BOLD)); for (const b of top2) { const f = b.findings[0]; console.log('  [' + b.name + ']  ' + (f.severity||'').toUpperCase() + '  ' + (f.title||f.vuln||'')); } }
+if (top2.length) { console.log(W('Highest-impact per category:', BOLD)); for (const b of top2) { const f = b.findings[0]; console.log('  [' + b.name + ']  ' + (f.severity||'').toUpperCase() + '  ' + (f.title||f.vuln||'')); } }
 "
 fi
 
@@ -178,9 +178,9 @@ fi
 
 **`/show-findings` or `/show-findings --all`** — Triage FPs then write a self-contained HTML report to `reports/findings-<timestamp>.html` and open it. Includes severity charts, filterable findings list, per-finding code evidence, and fix templates.
 
-**`/show-findings --kev`** — Triage then list only CVEs on the CISA Known Exploited Vulnerabilities catalog. These are actively weaponized in the wild — treat as P0. `kevRansomware: true` means CISA has linked the CVE to ransomware campaigns.
+**`/show-findings --kev`** — Triage then list only CVEs on the CISA KEV (Known Abused CVEs) catalog. These are actively weaponized in the wild — treat as P0. `kevRansomware: true` means CISA has linked the CVE to ransomware campaigns.
 
-**`/show-findings --chains [--severity critical|high|all]`** — Triage then invoke the `security-chain-synthesizer` subagent to find multi-finding exploit chains (e.g., IDOR + missing auth = account takeover). Prints Markdown chain report verbatim. After: suggest `/exploit-poc <chain-name>` to validate and `/fix --one <id>` to break at the weakest link.
+**`/show-findings --chains [--severity critical|high|all]`** — Triage then invoke the `security-chain-synthesizer` subagent to find multi-finding attack chains (e.g., IDOR + missing auth = account takeover). Prints Markdown chain report verbatim. After: suggest `/validate-findings <chain-name>` to validate and `/fix --one <id>` to break at the weakest link.
 
 **`/show-findings --threat-model`** _(default: --stride)_ — Triage then render a STRIDE coverage table from the last scan. Add `--llm` for the OWASP LLM Top 10 (2025) coverage map instead.
 

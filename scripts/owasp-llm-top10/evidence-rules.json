@@ -150,7 +150,7 @@
         "Use DOMPurify (JS) or bleach (Python) to strip active content from LLM-generated HTML before rendering.",
         "Implement a strict Content Security Policy (CSP) to prevent execution of injected scripts in LLM-generated content.",
         "Never use string concatenation to build SQL, shell commands, or template strings from LLM output; always use parameterized forms.",
-        "Add structured logging and monitoring for LLM output to detect unusual patterns that may indicate exploitation."
+        "Add structured logging and monitoring for LLM output to detect unusual patterns that may indicate compromise."
       ]
     },
     {

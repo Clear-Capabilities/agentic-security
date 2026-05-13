@@ -13,7 +13,7 @@ SYNOPSIS
        /scan [PATH] [--all|--sca|--secrets|--authz|--mcp|--pipeline|--logic|--diff]
        /fix [--one <id>] [--all [--severity]] [--pr [--apply]]
        /show-findings [--all|--kev|--chains|--threat-model]
-       /exploit-poc <finding-id>
+       /validate-findings <finding-id>
        /explain <finding-id|CWE-N|vuln-name>
        /compliance-report [nist|asvs|pci|soc2|llm]
        /trim-dependencies [path] [--dry-run] [--include-dev]
@@ -503,7 +503,7 @@ Each pillar can be run independently. Run each of these and compare output.
 ```
 
 Backed by OSV.dev. Look for `kev: true` entries — these are on the CISA Known
-Exploited Vulnerabilities catalog and should be treated as P0.
+CISA KEV catalog and should be treated as P0.
 
 **Secrets sweep:**
 
@@ -563,8 +563,8 @@ state-machine bypasses. Run `/scan --all` first to populate the route inventory.
 ```
 
 Scores the git diff by architectural risk. Risk levels:
-- `critical` — auth removed, new shell call → run `/exploit-poc` + `/fix --one`
-- `high` → run `/exploit-poc`
+- `critical` — auth removed, new shell call → run `/validate-findings` + `/fix --one`
+- `high` → run `/validate-findings`
 - `medium`/`low`/`none` → safe to merge
 
 ---
@@ -586,7 +586,7 @@ You can also explain by CWE or by name fragment:
 
 The output is a plain-English card with four sections:
 1. What this means
-2. How an attacker exploits it
+2. How an attacker abuses it
 3. Worst case if not fixed
 4. How to fix it
 
@@ -607,7 +607,7 @@ Do not fix a finding the team cannot reproduce. This exercise generates a
 concrete proof-of-concept payload first.
 
 ```
-/exploit-poc <finding-id>
+/validate-findings <finding-id>
 ```
 
 Three possible verdicts:
@@ -615,7 +615,7 @@ Three possible verdicts:
 | Verdict | Meaning | Next step |
 |---------|---------|-----------|
 | `TP_CONFIRMED` | Real. Payload + regression test produced. | Write the test to `tests/security/`, then `/fix --one <id>`. |
-| `PROBABLE_FP` | No exploitable data flow found. Suppression entry offered. | Review the blocker; apply suppression if you agree. |
+| `PROBABLE_FP` | No viable attack path found. Suppression entry offered. | Review the blocker; apply suppression if you agree. |
 | `INDETERMINATE` | Cannot determine. | Apply `/fix --one <id>` if you accept residual risk. |
 
 If the verdict is `TP_CONFIRMED`, the subagent offers to write the regression
@@ -837,7 +837,7 @@ View findings mapped to STRIDE:
 The STRIDE table shows which categories are under-covered. A blank row means
 the scanner found no matching findings — good news, or a signal to look harder.
 
-**Find multi-step exploit chains:**
+**Find multi-step attack chains:**
 
 ```
 /show-findings --chains --severity high
@@ -848,7 +848,7 @@ multi-step chains (e.g., IDOR + missing auth = account takeover). For each
 chain it identifies:
 - The weakest link (the one fix that breaks the whole chain)
 - The full attack path narrative
-- Which findings to pass to `/exploit-poc` for validation
+- Which findings to pass to `/validate-findings` for validation
 
 **List only actively weaponized CVEs:**
 
@@ -1317,14 +1317,14 @@ Logic review:        /scan --logic
 Diff review:         /scan --diff --since main
 
 Explain a finding:   /explain <id|CWE-N|name>
-Validate it's real:  /exploit-poc <finding-id>
+Validate it's real:  /validate-findings <finding-id>
 Fix one:             /fix --one <finding-id>
 Fix by tier:         /fix --all --high
 Fix as PR:           /fix --pr --severity high --apply
 
 HTML report:         /show-findings --all
 Weaponized CVEs:     /show-findings --kev
-Exploit chains:      /show-findings --chains
+Attack chains:      /show-findings --chains
 Threat model:        /show-findings --threat-model --llm
 
 Trim bloat deps:     /trim-dependencies

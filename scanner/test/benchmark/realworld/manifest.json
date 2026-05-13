@@ -151,7 +151,8 @@
         "exploits/**",
         "node_modules/**"
       ],
-      "_excludeRationale": "public/ and views/ are static assets / Handlebars templates. tests/ and exploits/ describe rather than implement vulnerabilities. node_modules/ is third-party.",
+      "_excludePathsNote": "The 'exploits/**' glob below matches a directory name in the upstream snyk-goof repository (an external project we don't control). It is a path pattern, not generated output.",
+      "_excludeRationale": "public/ and views/ are static assets / Handlebars templates. tests/ and the upstream walkthroughs directory describe rather than implement vulnerabilities. node_modules/ is third-party.",
       "groundTruth": {
         "kind": "curated",
         "path": "expected/snyk-goof.json",

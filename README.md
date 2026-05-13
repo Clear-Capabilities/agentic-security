@@ -2,7 +2,7 @@
 
 ### The Claude Code Plugin that Catches what your AI Assistant Misses.
 
-> Built by **[ClearCapabilities.Com](https://clearcapabilities.com)**
+> Built by **[Clear Capabilities](https://www.clearcapabilities.com/products/agentic-security)**
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-75%2F75-brightgreen)]()
@@ -214,13 +214,13 @@ Beyond the four easy-mode commands, agentic-security ships with a lot more funct
 |---|---|
 | `/agentic-security:find-and-fix-everything` | Full scan + fix every finding at every severity in one command. |
 | `/agentic-security:scan` | Run the scanner. Default `--all` gives a one-screen verdict. Focused modes: `--sca`, `--secrets`, `--authz`, `--mcp`, `--pipeline`, `--logic`, `--diff`. |
-| `/agentic-security:show-findings` | Triage FPs then view results. Default `--all` opens an interactive HTML report. Use `--kev` for weaponized CVEs, `--chains` for exploit chains, or `--threat-model [--stride\|--llm]`. |
+| `/agentic-security:show-findings` | Triage FPs then view results. Default `--all` opens an interactive HTML report. Use `--kev` for weaponized CVEs, `--chains` for attack chains, or `--threat-model [--stride\|--llm]`. |
 | `/agentic-security:fix` | Remediate findings. Use `--one <id>` to patch a single finding, `--all` to batch-fix by severity, or `--pr` to bundle fixes into a pull request. |
-| `/agentic-security:exploit-poc` | Generate a working exploit payload + regression test for one finding (or flag `PROBABLE_FP` if no payload can be constructed). |
+| `/agentic-security:validate-findings` | For a finding produced from your **working directory**, build a PoC input + regression test that validates the vulnerability before you fix it. Refuses targets outside the scan root, prompts for consent, emits `PROBABLE_FP` when no PoC can be constructed. Intended for code you own under authorized security review. |
 | `/agentic-security:trim-dependencies` | Find and remove packages installed but never imported in source code — reduces attack surface and bloat. |
 | `/agentic-security:posture-management` | SBOM, AI-BOM, API inventory, license policy, drift analysis, and SLA tracking. Use `--sbom`, `--aibom`, `--api`, `--license`, `--drift`, or `--mttr`. |
 | `/agentic-security:compliance-report` | Auditor-ready attestation for NIST AI 600-1, OWASP ASVS, PCI-DSS 4.0, SOC 2, or OWASP LLM Top 10 (2025). |
-| `/agentic-security:explain` | Explain a finding in plain English — what it means, how an attacker exploits it, the worst case, and how to fix it. |
+| `/agentic-security:explain` | Explain a finding in plain English — what it means, how an attacker abuses it, the worst case, and how to fix it. |
 | `/agentic-security:launch-check` | Pre-deploy checklist of the 10 things beginners typically miss before going live. |
 | `/agentic-security:report-card` | Single letter-grade snapshot (A–F) of your project's security posture, with one concrete next action. |
 | `/agentic-security:social-media` | Generate copy-paste-ready posts (Twitter/X, LinkedIn, Discord/Slack) about your security progress. |

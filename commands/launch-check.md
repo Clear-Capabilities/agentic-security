@@ -153,7 +153,7 @@ const kevFindings = findings.filter(f => f.kev === true).length;
 checks.push({
   ok: kevFindings === 0,
   warn: false,
-  label: 'No actively-exploited CVEs (CISA KEV)',
+  label: 'No actively-abused CVEs (CISA KEV)',
   detail: kevFindings === 0
     ? 'No KEV-listed dependency CVEs.'
     : kevFindings + ' CVE(s) being weaponized in the wild. Run /security-kev and update those packages first.',

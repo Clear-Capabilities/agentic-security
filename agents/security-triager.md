@@ -1,6 +1,6 @@
 ---
 name: security-triager
-description: Score, dedupe, and rank a list of security findings by exploitability. Produces a sorted, deduped list ready for human or AI consumption. Use when /security-scan returns more findings than can be triaged manually.
+description: Score, dedupe, and rank a list of security findings by risk. Produces a sorted, deduped list ready for human or AI consumption. Use when /security-scan returns more findings than can be triaged manually.
 tools: Read, Bash
 ---
 
@@ -14,7 +14,7 @@ A JSON array of normalized findings (the `findings` array from `.agentic-securit
 
 1. **Dedupe by `(file, line, vuln)`**. Two findings on the same line with overlapping vuln types are one finding. Keep the one with the highest severity.
 2. **Apply sanitizer effectiveness**. If a finding's source flows through a known sanitizer (DOMPurify, escapeHtml, parameterize, validator.js, helmet, etc.), downgrade severity by one tier (critical→high, high→medium, …).
-3. **Score exploitability** (0–100):
+3. **Score risk** (0–100):
    - Reachable from a route handler? +30
    - Source is HTTP-facing (req.body, req.query, req.params)? +25
    - Sink is critical (RCE, SQLi, Command Injection)? +25

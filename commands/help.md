@@ -28,7 +28,7 @@ SCANNING
 VIEWING & ANALYSIS
   /show-findings --all       Triage FPs then open interactive HTML report (default)
   /show-findings --kev       Show only CISA KEV (actively weaponized) findings
-  /show-findings --chains    Synthesize multi-finding exploit chains
+  /show-findings --chains    Synthesize multi-finding attack chains
   /show-findings --threat-model  STRIDE table (add --llm for OWASP LLM Top 10)
 
 FIXING
@@ -38,7 +38,7 @@ FIXING
   /fix --pr [--apply]        Bundle fixes into a feature branch + PR
 
 DEEP ANALYSIS
-  /exploit-poc              Generate adversarial PoC for a specific finding
+  /validate-findings              Generate adversarial PoC for a specific finding
   /explain          Plain-English explanation of any finding
   /launch-check     Pre-deploy 10-item checklist
 

@@ -75,7 +75,7 @@ For each finding:
 <1–3 sentences: explain the gap. Cite the specific identifier (variable, field, route) from the quoted code. Avoid jargon.>
 
 **Concrete attacker move**
-<1 sentence: a request or input that exploits the flaw, e.g. "POST /orders/123/pay with no prior /orders/123/checkout call">
+<1 sentence: a request or input that abuses the flaw, e.g. "POST /orders/123/pay with no prior /orders/123/checkout call">
 
 **Fix**
 <1–2 sentences describing the exact change. Reference helpers that already exist in the project when possible.>
