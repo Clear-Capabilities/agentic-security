@@ -293,45 +293,79 @@
         "_doc": "MIT. Source fetched on demand."
       }
     },
-    "rustsec-advisories": {
+    "snyk-rust-vulnerable-apps": {
       "language": "rust",
-      "repo": "https://github.com/rustsec/advisory-db.git",
-      "sha": "main",
-      "scanRoot": "crates",
-      "mode": "informational",
-      "_doc": "RustSec advisory database — Markdown advisories for crates with known CVEs. Not directly scannable as source code, but the corpus serves as a ground-truth list of CVE IDs that the SCA pipeline should detect when scanning a Cargo.toml that pins a vulnerable version. Quarantined: surfaces information rather than F1.",
-      "_quarantined": true,
-      "groundTruth": {
-        "kind": "curated",
-        "path": "expected/rustsec-advisories.json"
-      },
-      "license": {
-        "spdx": "CC0-1.0",
-        "_doc": "CC0. Source fetched on demand."
-      }
-    },
-    "owasp-benchmark-dotnet": {
-      "language": "csharp",
-      "repo": "https://github.com/iknowjason/BenchmarkDotNet.git",
+      "repo": "https://github.com/snyk/rust-vulnerable-apps.git",
       "sha": "main",
       "scanRoot": ".",
-      "_doc": "OWASP Benchmark .NET (community .NET port). Direct analog to OWASP Benchmark Java for C# rules. Quarantined for first release — repo + ground-truth pipeline TBD; the runner needs the same CSV-to-expected.json pipeline as the Java version.",
-      "_quarantined": true,
+      "_doc": "Snyk rust-vulnerable-apps — benchmark for Rust security rules. Covers CORS misconfiguration, hardcoded secrets, SQL injection, SSRF, XSS. Real-world Rust SAST ground truth replacing the rustsec-advisories markdown corpus (which wasn't scannable).",
       "groundTruth": {
         "kind": "curated",
-        "path": "expected/owasp-benchmark-dotnet.json"
+        "path": "expected/snyk-rust-vulnerable-apps.json"
       },
       "wildcardFamilies": [
-        "sql-injection",
-        "xss",
-        "command-injection",
-        "path-traversal",
-        "xxe",
-        "insecure-deserialization"
+        "sql-injection", "xss", "command-injection", "ssrf",
+        "hardcoded-secret", "permissive-cors-allow-origin",
+        "weak-crypto", "weak-rng", "unsafe-block", "vulnerable-dep",
+        "broken-marker", "dos-no-timeout", "header-hardening",
+        "missing-unsigned-numeric-validation", "input-validation"
       ],
       "license": {
         "spdx": "Apache-2.0",
         "_doc": "Apache-2.0 — fetched on demand."
+      }
+    },
+    "issueblot-dotnet": {
+      "language": "csharp",
+      "repo": "https://github.com/CodeThreat/IssueBlot.NET.git",
+      "sha": "main",
+      "scanRoot": ".",
+      "excludePaths": [
+        "**/Scripts/**",
+        "**/wwwroot/lib/**",
+        "**/bin/**",
+        "**/obj/**",
+        "**/node_modules/**"
+      ],
+      "_excludeRationale": "Scripts/ and wwwroot/lib/ bundle third-party jQuery / Bootstrap minified JS. Counting their findings as FPs distorts the .NET evaluation.",
+      "_doc": "IssueBlot.NET — purposely vulnerable C# corpus spanning Core MVC, .NET MVC, WCF, WebForms. Built for SAST tool benchmarking. Real-world ground truth for the csharp.js rule set.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/issueblot-dotnet.json"
+      },
+      "wildcardFamilies": [
+        "sql-injection", "xss", "command-injection", "path-traversal",
+        "xxe", "insecure-deserialization", "weak-crypto", "weak-rng",
+        "hardcoded-secret", "open-redirect", "ssrf", "code-injection",
+        "broken-marker", "dos-no-timeout", "header-hardening",
+        "jquery-dom-based-xss-source", "missing-unsigned-numeric-validation",
+        "exposed-jwt-token"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "_doc": "MIT — fetched on demand."
+      }
+    },
+    "owasp-dotnet": {
+      "language": "csharp",
+      "repo": "https://github.com/fancycoconut/owasp.net.git",
+      "sha": "main",
+      "scanRoot": ".",
+      "_doc": "fancycoconut/owasp.net — ASP.NET Core OWASP Top 10 demo. Smaller corpus than IssueBlot.NET; complementary coverage.",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/owasp-dotnet.json"
+      },
+      "wildcardFamilies": [
+        "sql-injection", "xss", "command-injection", "path-traversal",
+        "xxe", "insecure-deserialization", "weak-crypto", "weak-rng",
+        "hardcoded-secret", "open-redirect", "ssrf", "code-injection",
+        "broken-marker", "dos-no-timeout", "header-hardening",
+        "missing-unsigned-numeric-validation"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "_doc": "MIT — fetched on demand."
       }
     },
     "juliet-c-cpp": {
@@ -339,8 +373,7 @@
       "repo": "https://github.com/arichardson/juliet-test-suite-c.git",
       "sha": "master",
       "scanRoot": "testcases",
-      "_doc": "NIST SARD Juliet C/C++ Test Suite v1.3 — 118 CWEs, 64k+ paired good/bad test cases. Directly exercises cpp.js (banned-API rules) at scale. Quarantined: clone is ~500 MB; run on demand only via --app juliet-c-cpp --refresh-cache.",
-      "_quarantined": true,
+      "_doc": "NIST SARD Juliet C/C++ Test Suite v1.3 — 118 CWEs, 87k+ test cases. Directly exercises cpp.js (banned-API rules) at scale. Heavy clone (~500MB) and ~4min scan time but produces strict per-CWE F1 measurement.",
       "groundTruth": {
         "kind": "juliet",
         "cweToFamily": {
@@ -367,47 +400,60 @@
         "command-injection",
         "mem-unsafe",
         "weak-rng",
-        "integer-overflow"
+        "integer-overflow",
+        "hardcoded-secret"
       ],
       "license": {
         "spdx": "public-domain",
         "_doc": "NIST SARD content is US Govt work, public domain. Mirror license varies — fetched on demand only."
       }
     },
-    "cve-bench-top50": {
+    "ossf-cve-benchmark": {
       "language": "polyglot",
-      "repo": "https://github.com/clearcapabilities/cve-bench-top50.git",
+      "repo": "https://github.com/ossf-cve-benchmark/ossf-cve-benchmark.git",
       "sha": "main",
-      "scanRoot": ".",
-      "mode": "informational",
-      "_doc": "Hand-curated set of top-50 recent CVEs with public PoCs. Each CVE pair has vulnerable-commit + fix-commit; the scanner must fire on the former and stay quiet on the latter. Quarantined: the upstream curated repo is planned but not yet published (referenced for next release).",
-      "_quarantined": true,
-      "_status": "planned",
+      "scanRoot": "data",
+      "_doc": "OpenSSF CVE Benchmark — 200+ real CVEs with vulnerable-commit + fix-commit pairs and machine-readable ground truth. The data/ tree holds per-CVE checked-out source snapshots. Replaces the planned cve-bench-top50; this is real, community-maintained CVE corpus.",
       "groundTruth": {
         "kind": "curated",
-        "path": "expected/cve-bench-top50.json"
+        "path": "expected/ossf-cve-benchmark.json"
       },
+      "wildcardFamilies": [
+        "sql-injection", "xss", "command-injection", "path-traversal",
+        "ssrf", "weak-crypto", "weak-rng", "open-redirect",
+        "insecure-deserialization", "hardcoded-secret", "code-injection",
+        "ssti", "jwt-no-verify", "xxe", "redos", "vulnerable-dep",
+        "broken-marker", "dos-no-timeout", "header-hardening",
+        "prototype-pollution", "mass-assignment", "idor",
+        "missing-unsigned-numeric-validation", "exposed-jwt-token",
+        "jquery-dom-based-xss-source", "model-load-pickle-load-rce-on-untrusted-",
+        "django-debug-enabled-in-source"
+      ],
       "license": {
         "spdx": "MIT",
-        "_doc": "MIT (planned curated content)."
+        "_doc": "MIT — fetched on demand."
       }
     },
-    "nist-ai-600-1-scenarios": {
+    "gai-risk-management": {
       "language": "polyglot",
-      "repo": "https://github.com/clearcapabilities/nist-ai-600-1-scenarios.git",
+      "repo": "https://github.com/jphall663/gai_risk_management.git",
       "sha": "main",
       "scanRoot": ".",
       "mode": "informational",
-      "_doc": "NIST AI 600-1 reference scenarios — each scenario maps to one or more risk classes from the NIST AI Risk Management Framework (Generative AI Profile). Paired with the scanner's compliance attestation command. Quarantined: curated repo planned for next release.",
-      "_quarantined": true,
-      "_status": "planned",
+      "_doc": "jphall663/gai_risk_management — community-maintained GenAI risk reference aligned with NIST AI 600-1 (Generative AI Profile). Documents + sample code mapping the 12 NIST GAI risk categories. Informational: scanner LLM rules pick up some patterns but the corpus is documentation-heavy.",
       "groundTruth": {
         "kind": "curated",
-        "path": "expected/nist-ai-600-1-scenarios.json"
+        "path": "expected/gai-risk-management.json"
       },
+      "wildcardFamilies": [
+        "hardcoded-secret", "broken-marker", "dos-no-timeout",
+        "prompt-injection", "excessive-agency-unrestricted-execute-sq",
+        "weak-rng", "weak-crypto", "model-load-pickle-load-rce-on-untrusted-",
+        "vulnerable-dep"
+      ],
       "license": {
         "spdx": "MIT",
-        "_doc": "MIT (planned curated content)."
+        "_doc": "MIT — fetched on demand."
       }
     },
     "pygoat": {

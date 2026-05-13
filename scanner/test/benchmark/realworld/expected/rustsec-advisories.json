@@ -1,5 +1,0 @@
-{
-  "_doc": "RustSec advisory-db — Markdown advisories are not directly scannable as Rust source. This entry is INFORMATIONAL: the SCA pipeline is the path that consumes these advisories. Quarantined in manifest; here for documentation completeness.",
-  "wildcardFamilies": [],
-  "expected": []
-}
