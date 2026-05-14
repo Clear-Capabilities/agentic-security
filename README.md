@@ -33,7 +33,7 @@ That command lives inside Claude Code, runs locally on your laptop, and explains
 In **Claude Code** (recommended — gets you the slash commands):
 
 ```
-/plugin marketplace add https://github.com/clearcapabilities/agentic-security
+/plugin marketplace add https://github.com/Clear-Capabilities/agentic-security
 ```
 
 That's it. Type `/agentic-security:scan --all` to confirm it's working.
@@ -257,7 +257,7 @@ When an enterprise prospect asks "are you secure?", these are what you hand them
 | `/agentic-security:social-media` | Generate copy-paste-ready posts (Twitter/X, LinkedIn, Discord/Slack) about your security progress. |
 | `/agentic-security:help` | Full command catalog with one-line descriptions and example invocations. |
 
-To learn more read the **[Developer Documentation](https://github.com/clearcapabilities/agentic-security/blob/main/docs/developer-documentation-guide.md)**.
+To learn more read the **[Developer Documentation](https://github.com/Clear-Capabilities/agentic-security/blob/main/docs/developer-documentation-guide.md)**.
 
 ---
 

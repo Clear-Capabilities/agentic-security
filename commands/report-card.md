@@ -121,7 +121,7 @@ if (grade === 'A+') {
 const colors = { 'A+': 'brightgreen', 'A': 'brightgreen', 'A-': 'green', 'B': 'green', 'B-': 'yellowgreen', 'C': 'yellow', 'C-': 'orange', 'D': 'orange', 'F': 'red' };
 const params = new URLSearchParams({ label: 'agentic-security', message: grade, color: colors[grade] || 'lightgrey', logo: 'shield', logoColor: 'white' });
 const badgeUrl = 'https://img.shields.io/static/v1?' + params.toString();
-const repo = 'https://github.com/clearcapabilities/agentic-security';
+const repo = 'https://github.com/Clear-Capabilities/agentic-security';
 console.log('  README badge:');
 console.log('  [![agentic-security: ' + grade + '](' + badgeUrl + ')](' + repo + ')');
 console.log('');

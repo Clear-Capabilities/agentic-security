@@ -1001,7 +1001,7 @@ Raw scan with SARIF upload to GitHub Security tab:
 Pre-commit framework hook (`.pre-commit-config.yaml`):
 
 ```yaml
-       - repo: https://github.com/clearcapabilities/agentic-security
+       - repo: https://github.com/Clear-Capabilities/agentic-security
          rev: v0.34.0
          hooks:
            - id: agentic-security
@@ -1115,7 +1115,7 @@ Maintainer: Ross Young <ross@clearcapabilities.com>.
 
 ## BUGS
 
-Report at <https://github.com/clearcapabilities/agentic-security/issues>.
+Report at <https://github.com/Clear-Capabilities/agentic-security/issues>.
 
 ---
 

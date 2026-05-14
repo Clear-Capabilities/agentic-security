@@ -102,7 +102,7 @@ To report a security vulnerability, please email security@\${(() => {
   try { return JSON.parse(fs.readFileSync('package.json','utf8')).author?.email?.split('@')[1] || 'example.com'; } catch { return 'example.com'; }
 })()} rather than opening a public issue. We aim to respond within 48 hours.
 
-Scanned with [agentic-security](https://github.com/clearcapabilities/agentic-security).
+Scanned with [agentic-security](https://github.com/Clear-Capabilities/agentic-security).
 \`;
   fs.appendFileSync(readmePath, section);
 });

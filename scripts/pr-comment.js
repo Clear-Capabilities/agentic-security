@@ -72,7 +72,7 @@ const grade = computeGrade(scan);
 const baselineGrade = baseline ? computeGrade(baseline) : null;
 const baselineSev = baseline ? counts(baseline) : null;
 const top = (scan.findings || []).filter(f => ['critical','high'].includes(f.severity)).slice(0, 10);
-const repo = 'https://github.com/clearcapabilities/agentic-security';
+const repo = 'https://github.com/Clear-Capabilities/agentic-security';
 
 const lines = [];
 // Header — badge + grade delta

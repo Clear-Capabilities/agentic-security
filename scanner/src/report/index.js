@@ -301,7 +301,7 @@ export function toSARIF(scan, meta={}){
     $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
     version: '2.1.0',
     runs: [{
-      tool: { driver: { name: 'agentic-security', version: '0.1.0', informationUri: 'https://github.com/clearcapabilities/agentic-security', rules: [...ruleMap.values()] }},
+      tool: { driver: { name: 'agentic-security', version: '0.1.0', informationUri: 'https://github.com/Clear-Capabilities/agentic-security', rules: [...ruleMap.values()] }},
       results: findings.map(f => ({
         ruleId: f.vuln ? f.vuln.replace(/[^a-zA-Z0-9]/g, '_') : 'unknown',
         level: SEV_TO_SARIF[f.severity] || 'warning',

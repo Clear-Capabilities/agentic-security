@@ -43,7 +43,7 @@ function computeGrade() {
 const { grade, color } = computeGrade();
 const encodedGrade = encodeURIComponent('Security%3A ' + grade);
 const badgeUrl = \`https://img.shields.io/badge/security-\${grade}-\${color}\`;
-const badgeMd = \`[![Security: \${grade}](\${badgeUrl})](https://github.com/clearcapabilities/agentic-security)\`;
+const badgeMd = \`[![Security: \${grade}](\${badgeUrl})](https://github.com/Clear-Capabilities/agentic-security)\`;
 
 const scanDate = scan.scannedAt ? new Date(scan.scannedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 

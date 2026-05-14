@@ -4,7 +4,7 @@
   "description": "SAST + SCA + Secret scanning surfaced as VS Code diagnostics. Powered by the agentic-security CLI.",
   "version": "0.1.0",
   "publisher": "clearcapabilities",
-  "repository": "https://github.com/clearcapabilities/agentic-security",
+  "repository": "https://github.com/Clear-Capabilities/agentic-security",
   "license": "PolyForm-Internal-Use-1.0.0",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Linters", "Other"],

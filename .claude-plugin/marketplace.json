@@ -18,7 +18,7 @@
         "name": "Ross Young",
         "email": "ross@clearcapabilities.com"
       },
-      "homepage": "https://github.com/clearcapabilities/agentic-security",
+      "homepage": "https://github.com/Clear-Capabilities/agentic-security",
       "license": "PolyForm-Internal-Use-1.0.0",
       "keywords": ["security", "sast", "sca", "secrets", "iac", "cve", "osv", "kev", "appsec", "vulnerability", "aspm", "sbom", "compliance", "mcp-security", "authz"],
       "category": "security"

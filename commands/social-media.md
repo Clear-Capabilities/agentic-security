@@ -38,7 +38,7 @@ else grade = 'A+';
 const days = streak.daysCleanCritical || 0;
 const fixes = streak.totalFixesInferred || 0;
 const totalScans = streak.totalScans || 1;
-const repo = 'https://github.com/clearcapabilities/agentic-security';
+const repo = 'https://github.com/Clear-Capabilities/agentic-security';
 
 // Highest-tier achievement to brag about
 const TIER_ORDER = ['streak-365', 'streak-180', 'streak-90', 'streak-30', 'streak-7', 'triage-gold', 'triage-silver', 'triage-master', 'grade-a-plus', 'launch-ready', 'clean-sweep', 'first-fix', 'first-scan'];

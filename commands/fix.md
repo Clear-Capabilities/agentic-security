@@ -102,7 +102,7 @@ ${SKIPPED_LIST}
 Each fix was validated by running the project test suite. Any fix that broke tests was reverted.
 Re-run \`/scan --all\` and \`/validate-findings\` for any individual finding to verify.
 
-Generated with [agentic-security](https://github.com/clearcapabilities/agentic-security)
+Generated with [agentic-security](https://github.com/Clear-Capabilities/agentic-security)
 EOF
 )"
 ```
