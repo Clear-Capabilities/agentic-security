@@ -8,7 +8,7 @@
 [![Tests](https://img.shields.io/badge/tests-75%2F75-brightgreen)]()
 [![F1](https://img.shields.io/badge/F1%20benchmark-100%25-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.32.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.34.1-blue)]()
 
 ---
 
@@ -191,6 +191,48 @@ Runs `/scan --all` then immediately `/fix --all --low` — scanning and fixing e
 | `/agentic-security:vault-wizard` | Guided migration from `.env` files to Doppler, Infisical, or platform-native secrets management. |
 | `/agentic-security:security-trend` | Rolling trend line: findings fixed vs. introduced across scans, sparkline chart, regression detection. |
 | `/agentic-security:security-badge` | Shields.io badge for your README and an investor-ready security posture paragraph for due-diligence docs. |
+
+#### Real-time bodyguards (new in 0.34.0)
+
+Active protection at the moment code is written or commands are run. Designed for builders shipping with AI assistants. Configure once; runs forever.
+
+| Command | Description |
+|---|---|
+| `/agentic-security:ai-bodyguard` | PreToolUse hook that intercepts insecure AI-generated code BEFORE it hits disk. Catches SQLi-via-concatenation, `NEXT_PUBLIC_` secrets, hardcoded API keys, `eval` on user input, `jwt.decode()` without verify, Supabase `service_role` on the client, LLM calls without `max_tokens`, CORS `*` + credentials. Modes: `off` / `warn` / `block`. |
+| `/agentic-security:destructive-guard` | PreToolUse hook on `Bash` that blocks foot-guns: `rm -rf` on parent dirs, `DROP TABLE`, `supabase db reset`, `git push --force` to main, `curl \| bash`, `aws s3 rm --recursive`, `docker system prune -a`, `chmod 777`, and 5+ more. Each refusal includes a plain-English why + the safer alternative. |
+| `/agentic-security:predeploy-gate` | Blocks production deploys (`vercel --prod`, `fly deploy`, `wrangler publish`, `netlify deploy --prod`, `railway up`) when critical findings or KEV-listed dependencies are present. Two layers — Claude-Code Bash hook AND a sourced shell wrapper for your terminal. |
+
+#### Active rotation & cost control (new in 0.34.0)
+
+| Command | Description |
+|---|---|
+| `/agentic-security:rotate-key-auto` | ACTIVELY rotates a leaked credential end-to-end. Detects provider (OpenAI / Anthropic / Stripe / AWS / GitHub / Supabase service-role / Slack / Google), prints exact revoke commands, scrubs the value across every file (with backups), and pushes the replacement to Vercel/Fly/Railway/Cloudflare/Netlify env vars via their CLI. Goes beyond `/rotate-secret` which guides — this one does the work. |
+| `/agentic-security:llm-cost-ceiling` | Audits every Anthropic / OpenAI call site in your code. Auto-patches missing `max_tokens`. Generates rate-limit middleware tailored to your framework (Next.js App Router / Express / FastAPI). Generates a daily $-spend tracker that throws when the cap is hit. Protection against the #1 LLM-app failure mode: prompt-injection on an uncapped endpoint draining thousands overnight. |
+
+#### Translate the jargon (new in 0.34.0)
+
+| Command | Description |
+|---|---|
+| `/agentic-security:risk-in-dollars` | Translates each finding's CWE into best/likely/worst-case $ exposure sourced from public incident settlements. Cites the specific regulatory framework whose fines apply (GDPR Art. 33, CCPA, PCI-DSS, HIPAA, NIST AI 600-1). Sort by worst-case to prioritize what to fix first. |
+| `/agentic-security:story-explain` | Narrative-form explanation: "Meet Mallory. She visits your `/api/users` page, changes `?id=1` to `?id=2`, and now she's reading your other users' data." 4-act story with named attacker, minute-by-minute timeline, concrete payloads, and the literal fix line. |
+| `/agentic-security:daily-checkin` | Daily security digest posted to Slack / Discord / a generic webhook. Shows what changed since yesterday — new findings, resolved findings, KEV alerts — not just totals. Async security awareness without opening a dashboard. |
+
+#### Customer-facing artifacts (new in 0.34.0)
+
+When an enterprise prospect asks "are you secure?", these are what you hand them.
+
+| Command | Description |
+|---|---|
+| `/agentic-security:security-onepager` | Generates a customer-facing "How we keep your data safe" markdown from your REAL scan posture and detected stack. Live traffic-light state, clean-scan streak, alignment with OWASP ASVS / LLM Top 10 / NIST AI 600-1 / PCI-DSS / SOC 2. PDF-ready via `pandoc`. |
+| `/agentic-security:privacy-docs` | Detects every third-party data processor (Stripe, Supabase, Clerk, Sentry, PostHog, GA4, OpenAI, Anthropic, Resend, ...) and generates a tailored `PRIVACY.md` naming each with the exact data they receive + their DPA + sub-processor URLs. Plus optional React cookie-consent component matched to detected analytics providers. Jurisdiction-aware (EU / US-CA / UK / OTHER). |
+| `/agentic-security:trust-page` | Writes `/.well-known/security.txt` (RFC 9116, 1-year expiry) and a `/security` page that displays your live posture. Framework-aware: Next.js App Router, Pages Router, or vanilla HTML. Buyers and infosec teams look for both — most vibe-coded apps have neither. |
+
+#### Resilience & onboarding (new in 0.34.0)
+
+| Command | Description |
+|---|---|
+| `/agentic-security:disaster-playbook` | Generates `DISASTER.md` — a stack-specific incident response runbook with the EXACT commands and URLs you'll need if you get hacked tomorrow. Supabase RLS reset queries, Stripe key roll commands, Vercel rollback steps, AWS IAM-key disable, npm supply-chain triage. Bookmark it BEFORE the incident. |
+| `/agentic-security:tutorial` | First-run walkthrough that picks ONE real finding from your project, explains it in plain English, walks you through fixing it with consent at every step, then verifies the fix actually worked. The antidote to "I just installed this and don't know what to do." |
 
 #### Dependency & supply chain
 

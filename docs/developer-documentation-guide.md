@@ -7,7 +7,7 @@ NAME
        integrations for the security stack you already run.
 
 VERSION
-       0.32.0
+       0.34.1
 
 SYNOPSIS
        agentic-security [--profile pro] COMMAND [ARGS] [OPTIONS]
@@ -40,6 +40,30 @@ SYNOPSIS
        /vault-wizard [doppler|infisical|vercel|railway]
        /security-trend
        /security-badge
+
+       Real-time bodyguards (0.34.0):
+       /ai-bodyguard [on|off|warn|block|status]
+       /destructive-guard [on|off|warn|block|status]
+       /predeploy-gate [install|check|status|off]
+
+       Active rotation & cost control (0.34.0):
+       /rotate-key-auto <value|--scan> [--yes]
+       /llm-cost-ceiling [--apply] [--generate-middleware]
+                         [--generate-tracker --daily-cap-dollars N]
+
+       Translate the jargon (0.34.0):
+       /risk-in-dollars [--top N] [--json]
+       /story-explain <finding-id|--random|--worst>
+       /daily-checkin [--setup|--slack <url>|--discord <url>|--crontab]
+
+       Customer-facing artifacts (0.34.0):
+       /security-onepager [--company NAME] [--contact EMAIL]
+       /privacy-docs [--jurisdiction EU|US-CA|UK|OTHER] [--generate-banner]
+       /trust-page --contact <email> [--pgp <url>] [--canonical-url <url>]
+
+       Resilience & onboarding (0.34.0):
+       /disaster-playbook [--stack supabase,stripe,vercel,...]
+       /tutorial
 
        Dependency & supply chain:
        /trim-dependencies [path] [--dry-run] [--include-dev]
@@ -333,6 +357,263 @@ Confirm with:
                 • SOC 2 evidence note mapping to CC6.1, CC6.6, CC7.1, CC7.2
 ```
 
+### Real-time bodyguards (added in 0.34.0)
+
+```
+       ai-bodyguard [on|off|warn|block|status]
+              PreToolUse hook on Edit / Write / MultiEdit. Scans the
+              content the agent is about to write BEFORE it hits disk.
+              High-precision rules with near-zero FP rate:
+                • SQL injection via string concatenation
+                • exec()/spawn()/os.system() with template strings
+                • NEXT_PUBLIC_*SECRET / NEXT_PUBLIC_*API_KEY (browser leak)
+                • Hardcoded sk-/ghp_/xoxb-/AKIA/pk_live_ credentials
+                • dangerouslySetInnerHTML without sanitize
+                • eval()/new Function() on user input
+                • jwt.decode() instead of jwt.verify()
+                • Supabase service_role key in client-side code
+                • LLM messages.create() without max_tokens
+                • CORS '*' + Allow-Credentials: true
+              Config: .agentic-security/bodyguard.json
+                {"mode": "warn"|"block"|"off", "skipPaths": [...]}
+              Block mode returns exit 2 + stderr msg (Claude Code denial
+              signal). Warn mode prints to stderr but allows the edit.
+
+       destructive-guard [on|off|warn|block|status]
+              PreToolUse hook on Bash. Pauses on commands vibe-coders
+              most often regret. 13 critical/high patterns:
+                CRITICAL:  rm -rf on parent dirs, rm -rf with no target,
+                           DROP TABLE / DROP DATABASE / TRUNCATE,
+                           supabase db reset, git push --force to main,
+                           git push --force any branch, aws s3 rm --recursive
+                HIGH:      git reset --hard, git clean -fdx, vercel --prod,
+                           curl|bash, chmod 777, docker system prune -a
+              Config: .agentic-security/destructive-guard.json
+                {"mode": "block"|"warn"|"off", "extraPatterns": [{...}]}
+              Add custom patterns: each entry {name, re, severity, why,
+              instead}. Override per-command with AS_GATE_OVERRIDE=1.
+
+       predeploy-gate [install|check|status|off]
+              Two-layer block on prod deploys:
+                • PreToolUse Bash hook (catches direct prod commands
+                  inside Claude Code)
+                • Shell wrapper functions sourced from
+                  scripts/predeploy-gate.sh (intercepts in the user's
+                  own terminal: vercel, fly, flyctl, wrangler, netlify,
+                  railway)
+              Gate checks:
+                1. last-scan.json exists
+                2. Scan is no older than require_recent_scan_hours
+                3. Zero findings at block_on severities (default critical)
+                4. Zero KEV-listed dependencies (when block_on_kev: true)
+              Config: .agentic-security/predeploy-gate.json
+                {"block_on": ["critical"], "block_on_kev": true,
+                 "require_recent_scan_hours": 24}
+              Bypass once: AS_GATE_OVERRIDE=1 <command>
+```
+
+### Active rotation & cost control (added in 0.34.0)
+
+```
+       rotate-key-auto <value> | --scan [--yes]
+              ACTIVELY rotate a leaked credential end-to-end.
+              Provider detection by prefix:
+                openai                sk-...,  sk-proj-...
+                anthropic             sk-ant-...
+                stripe                sk_live_..., rk_live_...
+                aws                   AKIA[A-Z0-9]{16}
+                github                ghp_..., github_pat_...
+                supabase-service-role JWT with role=service_role
+                slack                 xoxb-/xoxa-/xoxp-...
+                google-api            AIza...
+              For each detected provider:
+                1. Print exact revoke commands (console URL + CLI)
+                2. Print blast-radius warning (Stripe = real money,
+                   AWS = crypto-mining, Supabase service-role = RLS bypass)
+                3. Prompt for new value (or read from --new-value)
+                4. Scrub leaked value across all text files
+                   (with backups in .agentic-security/rotation-backups/)
+                5. Push new value to detected deploy platforms:
+                   vercel env / fly secrets / railway variables /
+                   wrangler secret / netlify env:set
+                6. Print final audit checklist (billing dashboard,
+                   git history grep, history rewrite caveat)
+              --scan walks the repo, finds all leaked keys, rotates each.
+              --yes skips confirmation prompts (CI / non-interactive).
+
+       llm-cost-ceiling [--apply] [--generate-middleware]
+                        [--generate-tracker --daily-cap-dollars N]
+              Audit every LLM call site, enforce cost ceilings.
+              Detected SDKs (by file ext + pattern):
+                JS/TS:  anthropic.messages.create,
+                        openai.chat.completions.create,
+                        openai.completions.create (legacy)
+                Python: client.messages.create (Anthropic),
+                        client.chat.completions.create (OpenAI)
+              Recognized cap keys: max_tokens, max_completion_tokens
+              (OpenAI o1/o3), max_output_tokens (Gemini).
+              --apply        Auto-patch missing max_tokens (default: 1024).
+                             JS/TS: injects as first prop in object literal.
+                             Python: injects as first kwarg.
+                             Conservative — leaves complex call shapes alone.
+              --generate-middleware
+                             Writes drop-in rate-limit middleware tailored
+                             to detected framework:
+                               next → middleware/llm-rate-limit.ts
+                               express/fastify → middleware/llm-rate-limit.ts
+                               python → middleware/llm_rate_limit.py
+                             Defaults: 20 calls / IP / 60s window.
+              --generate-tracker --daily-cap-dollars N
+                             Writes lib/llm-spend-tracker.ts:
+                               trackAndGate({dailyCapUsd, model,
+                                             inputTokens, outputTokens})
+                             Throws SpendCeilingExceeded once cap is hit.
+                             Pricing table for Claude/GPT-4o models is
+                             baked-in; override per project.
+              Exit 1 if any uncapped calls remain — suitable for CI gate.
+```
+
+### Translate the jargon (added in 0.34.0)
+
+```
+       risk-in-dollars [--top N] [--json]
+              Translate each finding's CWE into best-/likely-/worst-case
+              dollar exposure. Sourced from public incident settlements
+              (Capital One $190M for SSRF, T-Mobile $350M for IDOR, Equifax
+              $1.4B for SQLi, etc.). 19 CWE classes mapped with named
+              scenarios + specific regulatory triggers (GDPR Art. 33,
+              CCPA, PCI-DSS 4.0, HIPAA, NIST AI 600-1, EU AI Act).
+              Default sort: worst-case descending.
+              Data source: scripts/data/dollar-risk-bands.json (editable).
+
+       story-explain <finding-id> | --random | --worst
+              Narrative-form explanation instead of CWE jargon. 4-act
+              structure:
+                Setup           — what the app does, where the bug lives
+                Meet <Name>     — attacker persona matched to vuln class
+                The attack      — minute-by-minute, present tense, concrete
+                                  URLs and payloads (not "an attacker would")
+                The aftermath   — customer ticket, regulator clock, $ cost
+                What stops this — the literal 2–3 line code fix
+              Attacker personas mapped to vuln classes (SQLi → competitor
+              doing recon; IDOR → curious user; hardcoded key → bot; ...).
+
+       daily-checkin [--setup|--slack <url>|--discord <url>|--webhook <url>]
+                     [--crontab|--rescan|--project-name NAME]
+              Post a daily security digest to messaging tools.
+              Digest shape:
+                Open counts (critical/high/medium)
+                New findings since last digest (with file:line, top 5)
+                Resolved finding count
+                KEV (known-exploited) package count
+              State in .agentic-security/daily-checkin-last.json —
+              fingerprints from last run drive the new/resolved diff.
+              Renderers: plain text, Slack Block Kit, Discord embeds,
+              generic JSON. --crontab prints suggested cron line.
+              --rescan forces a fresh scan before building the digest
+              (otherwise reads last-scan.json).
+```
+
+### Customer-facing artifacts (added in 0.34.0)
+
+```
+       security-onepager [--company NAME] [--contact EMAIL]
+                         [--output PATH] [--print]
+              Customer-facing "How we keep your data safe" markdown.
+              Auto-derived sections:
+                Posture summary  Live counts + traffic-light state +
+                                 clean-scan streak from streak.json
+                Stack            Detected frameworks
+                Practices        Conditional — only includes practices
+                                 the scan output actually evidences
+                                 (Supabase RLS audit only if Supabase
+                                 detected, Stripe webhook integrity
+                                 only if Stripe detected, etc.)
+                Data handling    TLS, encryption-at-rest, least-access
+                Incident response  24h ack / 72h initial / GDPR Art. 33
+                Frameworks       OWASP ASVS, LLM Top 10, NIST AI 600-1,
+                                 PCI-DSS, SOC 2 alignment statement
+              Output is markdown — convert to PDF with `pandoc SECURITY.md
+              -o SECURITY.pdf --pdf-engine=xelatex`.
+
+       privacy-docs [--company NAME] [--contact EMAIL]
+                    [--jurisdiction EU|US-CA|UK|OTHER]
+                    [--generate-banner]
+              Detect every third-party data processor and generate a
+              tailored PRIVACY.md. 14 providers mapped:
+                Stripe, Supabase, Clerk, Auth0, Sentry, PostHog,
+                Mixpanel, GA4, OpenAI, Anthropic, Vercel Analytics,
+                Cloudflare Analytics, Resend, SendGrid.
+              Each processor entry includes:
+                Purpose, exact data received, DPA URL, sub-processors URL,
+                cookies set (if any), category (auth/payment/analytics/ai)
+              Jurisdiction adds the appropriate rights clause (GDPR/UK
+              GDPR/CCPA/generic). --generate-banner writes a React
+              cookie-consent component to components/CookieBanner.tsx
+              with localStorage persistence + analyticsConsent event.
+
+       trust-page --contact <email> [--pgp <url>] [--canonical-url <url>]
+              Generates three artifacts:
+                1. public/.well-known/security.txt
+                   RFC 9116 compliant. Contact, Expires (1y), Preferred-
+                   Languages, optional Encryption (PGP), Canonical, Policy.
+                2. public/security-posture.json
+                   Live snapshot (counts, streak, last-scan) consumed by
+                   the page below at build time.
+                3. /security page tailored to framework:
+                   Next.js App Router → app/security/page.tsx
+                   Next.js Pages Router → src/pages/security.tsx
+                   Vanilla → public/security/index.html
+              Page shows traffic-light state, critical/high/medium counts,
+              clean-streak days, last-scan time, practices block, and the
+              disclosure contact channel.
+              Re-run periodically — security.txt has a 1-year expiry.
+```
+
+### Resilience & onboarding (added in 0.34.0)
+
+```
+       disaster-playbook [--stack supabase,stripe,vercel,...]
+                         [--output PATH] [--print]
+              Generate a stack-specific incident-response runbook
+              (DISASTER.md) BEFORE you get hacked. Detects platforms:
+                Supabase, Stripe, Vercel, Fly, Auth0, Clerk, AWS, npm
+              Sections (each with exact commands, queries, URLs):
+                Universal first-10-minutes triage
+                Supabase: service-role rotation, RLS audit, PITR,
+                          force re-auth, suspected DB write triage
+                Stripe: roll keys, audit charges, dispute fraud,
+                        Radar rules, webhook secret rotation
+                Vercel: bad-deploy rollback, paused auto-deploys,
+                        compromised-dep redeploy, function budget
+                Auth0 / Clerk: revoke sessions, rotate client secret
+                AWS: disable IAM key, hunt crypto-mining instances,
+                     lock public S3, GuardDuty enable
+                npm: pin out bad package, rebuild, audit install
+                     scripts, rotate every cred the script could read
+                After the fire: disclosure (GDPR 72h), postmortem,
+                                regression test
+              Templates parameterised with actual env var names.
+
+       tutorial
+              First-run walkthrough that picks ONE real finding from the
+              user's project, explains it in plain English, walks them
+              through fixing it with consent at every step, then
+              verifies the fix actually worked.
+              Flow:
+                0. Orient. Run a scan if none exists.
+                1. Pick a teachable finding (high/critical with named
+                   CWE in {89,78,22,79,639,918,798}; skip TOCTOU /
+                   license / indeterminate)
+                2. Show ±15 lines of context around the finding
+                3. Show 2-line attacker timeline + real-world incident
+                4. Show the fix with consent prompt
+                5. Re-scan affected file, confirm finding is gone
+                6. Suggest next 3 commands by name
+              Rules: ONE finding only, ask before acting, match user's
+              pace, no shaming, end with concrete next steps.
+```
+
 ### Dependency & supply chain
 
 ```
@@ -455,7 +736,60 @@ Every scan writes to `.agentic-security/` in the project root:
        integrations.yml Webhooks + API tokens (gitignored).
        profile.yml      Persona profile (pro|vibecoder).
        streak.json      Security grade history and achievements.
+       bodyguard.json   /ai-bodyguard config (mode + skipPaths).
+       destructive-guard.json  /destructive-guard config (mode + extraPatterns).
+       predeploy-gate.json     /predeploy-gate config (block_on, KEV, freshness).
+       daily-checkin.json      /daily-checkin webhook destinations + min severity.
+       daily-checkin-last.json  Fingerprint store for digest deltas.
+       rotation-backups/<ts>/   Backups created by /rotate-key-auto before scrub.
+       poc-cache/        Per-finding PoC verdicts from /validate-findings.
+       poc/<id>/         Generated PoC tests, variants.json, etc.
 ```
+
+---
+
+## HOOKS
+
+The plugin ships three runtime hooks that the Claude Code harness invokes
+automatically. Registered via `hooks/hooks.json`:
+
+```
+       SessionStart
+              hooks/session-welcome.js
+              Prints the welcome banner with last-scan summary.
+
+       PreToolUse  (matcher: Edit|Write|MultiEdit)
+              hooks/pre-edit-bodyguard.js   [added 0.34.0]
+              Scans the proposed content BEFORE write. Exits 2 to deny
+              (block mode + critical pattern) or 0 with stderr message
+              (warn mode). Reads .agentic-security/bodyguard.json. ~10ms.
+
+       PreToolUse  (matcher: Bash)
+              hooks/pre-bash-guard.js       [added 0.34.0]
+              Intercepts destructive shell commands before they run.
+              Critical patterns return exit 2 (deny); high patterns
+              return exit 0 with stderr warning. Reads
+              .agentic-security/destructive-guard.json. ~5ms.
+
+       PostToolUse  (matcher: Edit|Write|MultiEdit)
+              hooks/post-edit-scan.js
+              Scans the directory of the edited file, surfaces NEW high/
+              critical findings. Throttled per-file ≤1/5s.
+```
+
+All hooks read JSON event payloads on stdin per the Claude Code hook
+contract, are stdlib-only (no `node_modules` dependency at the hook
+level), and degrade silently if their config file is missing.
+
+To disable a hook without uninstalling the plugin:
+
+```json
+{
+  "mode": "off"
+}
+```
+
+Written to the relevant `.agentic-security/<hook>.json` file.
 
 ---
 
@@ -514,7 +848,7 @@ Suppressions are structured, reviewed, and auditable. Stored in
          file: lib/admin.js
          line: 47
          cwe: CWE-798
-         rule_version: 0.32.0
+         rule_version: 0.34.0
          reason: |
            Hardcoded credential is in a test fixture, not a production
            code path. Verified via call-graph analysis (no production
@@ -580,7 +914,7 @@ State is persisted to `.agentic-security/triage.json`.
 `.agentic-security/rules.yml`:
 
 ```yaml
-       version: 0.32.0
+       version: 0.34.0
 
        severityOverrides:
          "Hardcoded Credential Check": medium
@@ -656,7 +990,7 @@ Pre-commit framework hook (`.pre-commit-config.yaml`):
 
 ```yaml
        - repo: https://github.com/clearcapabilities/agentic-security
-         rev: v0.32.0
+         rev: v0.34.0
          hooks:
            - id: agentic-security
 ```
@@ -736,8 +1070,23 @@ Posture management artifacts:
 ```
        commands/            Slash-command definitions for the Claude Code plugin.
        agents/              Sub-agent system-prompt definitions.
-       scripts/             Compliance helper scripts (NIST, SOC 2, PCI-DSS,
-                            OWASP ASVS, OWASP LLM Top 10).
+       hooks/               PreToolUse + PostToolUse + SessionStart hook scripts.
+       scripts/             Compliance helpers + standalone Python scripts:
+                              rotate-key-auto.py
+                              llm-cost-ceiling.py
+                              risk-in-dollars.py
+                              disaster-playbook.py
+                              daily-checkin.py
+                              security-onepager.py
+                              privacy-docs.py
+                              trust-page.py
+                              predeploy-gate.sh
+                              run-poc-tests.py
+       scripts/data/        Data files (dollar-risk-bands.json, etc.).
+       scripts/validator/   /validate-findings backing infrastructure
+                              (detect-framework.mjs, run-test.mjs,
+                              chain_rules.json, post_exploit_templates.json,
+                              risk-context.mjs, refusal-classes.mjs, etc.).
        .claude-plugin/      Plugin manifest.
        CLAUDE.md            Codebase conventions and architecture.
        LICENSE              Full license terms.
@@ -1046,6 +1395,131 @@ Creates `scripts/cve-monitor.mjs` and `.github/workflows/cve-alerts.yml`.
 Add `CVE_ALERT_URL` as a GitHub Actions secret, enable the workflow, and
 your team gets notified at 8am UTC whenever a new CVE drops for any of your
 installed packages.
+
+---
+
+## Exercise 12 — Turn on the real-time bodyguards
+
+The 0.34.0 hooks give you protection at the moment code is written or
+commands are run — distinct from the post-edit scanner. Two hooks, both
+configurable:
+
+```
+/ai-bodyguard warn          # try in warn mode first (default)
+/destructive-guard block    # default — blocks rm -rf, force-push to main, etc.
+```
+
+After running each, the relevant `.agentic-security/<hook>.json` is
+written. Verify by trying a known-bad operation in Claude Code:
+
+- For `/ai-bodyguard`: ask Claude to "write a Next.js route that takes a
+  user id from the URL and returns SELECT * FROM users WHERE id = ${id}".
+  In warn mode you'll see a stderr explanation. In block mode the edit
+  is refused with exit 2.
+- For `/destructive-guard`: ask Claude to run `rm -rf /` or
+  `DROP TABLE users`. The hook blocks the call with a plain-English
+  reason + the safer alternative.
+
+When you're confident, escalate `/ai-bodyguard` from `warn` → `block`.
+
+---
+
+## Exercise 13 — Cap your LLM costs
+
+Critical before you ship any AI feature.
+
+```
+/llm-cost-ceiling                         # audit
+/llm-cost-ceiling --apply                 # auto-patch missing max_tokens
+/llm-cost-ceiling --generate-middleware   # rate-limit per IP per minute
+/llm-cost-ceiling --generate-tracker --daily-cap-dollars 50
+```
+
+Each step is a separate decision. Review with `git diff` before
+committing the patches.
+
+---
+
+## Exercise 14 — Generate the customer-facing trust artifacts
+
+When an enterprise prospect asks "are you secure?" you want three
+artifacts ready:
+
+```
+/trust-page --contact security@myapp.com --canonical-url https://myapp.com
+/security-onepager --company "My App Inc." --contact security@myapp.com
+/privacy-docs --jurisdiction US-CA --generate-banner
+```
+
+After these run, you have:
+
+- `public/.well-known/security.txt` — the file every infosec team checks
+- `app/security/page.tsx` (or vanilla HTML) — your live-posture trust page
+- `SECURITY.md` — sales-ready one-pager
+- `PRIVACY.md` — privacy policy tailored to your actual data processors
+- `components/CookieBanner.tsx` — React consent banner matched to your
+  analytics
+
+Convert SECURITY.md to PDF for sales emails:
+
+```bash
+pandoc SECURITY.md -o SECURITY.pdf --pdf-engine=xelatex
+```
+
+---
+
+## Exercise 15 — Have a disaster plan BEFORE you need one
+
+```
+/disaster-playbook
+```
+
+Writes `DISASTER.md` with stack-specific incident-response commands.
+Bookmark it. Re-run when your stack changes (the runbook is generated,
+not authored — it goes stale fast).
+
+---
+
+## Exercise 16 — Block accidental prod deploys
+
+```
+/predeploy-gate install
+```
+
+Default config: blocks on any critical finding OR any KEV-listed
+dependency OR if last scan is older than 24h. Tighten by setting
+`block_on: ["critical", "high"]` in `.agentic-security/predeploy-gate.json`.
+
+In your terminal, source the shell wrapper for protection outside Claude
+Code:
+
+```bash
+echo 'source ${CLAUDE_PLUGIN_ROOT}/scripts/predeploy-gate.sh' >> ~/.zshrc
+```
+
+Verify:
+
+```bash
+vercel deploy --prod
+# 🚦  agentic-security pre-deploy gate
+#     ✅  Safe to deploy. Proceeding...
+```
+
+Bypass once: `AS_GATE_OVERRIDE=1 vercel deploy --prod`.
+
+---
+
+## Exercise 17 — Wire up the daily check-in
+
+```
+/daily-checkin --setup
+```
+
+Interactive prompt for Slack/Discord webhooks. Then add to your crontab
+or GitHub Actions schedule (see `/daily-checkin --crontab` for the line).
+
+The digest shows what changed since yesterday — not just today's totals.
+State persists in `.agentic-security/daily-checkin-last.json`.
 
 ---
 
