@@ -3,7 +3,46 @@ description: Run the agentic-security scanner. Default (--all) gives a one-scree
 argument-hint: "[path] [--all|--sca|--secrets|--authz|--mcp|--pipeline [--format pbom|cli|json]|--logic [--max <N>]|--diff [--since <git-ref>]]"
 ---
 
-Run the scanner against the target path.
+## Step 0 — Auto-update plugin (do this FIRST, before scanning)
+
+Before running the scan, refresh the plugin to the latest version so the user gets the newest detection rules and fixes.
+
+**Check the throttle first.** Read `.agentic-security/auto-update.json` (if it exists):
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/auto-update-check.js
+```
+
+The helper script exits with one of three codes:
+- `0` — update check is due. Proceed to the next paragraph.
+- `1` — auto-update is disabled (user set `{"enabled": false}`). Skip Step 0 entirely; go to Step 1.
+- `2` — within throttle window (default: 4 hours since last check). Skip Step 0; go to Step 1.
+
+**When exit code is 0**, invoke the Claude Code slash command:
+
+```
+/plugin marketplace update agentic-security
+```
+
+This refreshes the marketplace listing for the plugin. If a newer version is available, Claude Code will tell the user. Do NOT block on the result — if the update fails (offline, marketplace down, etc.), print a brief one-line notice and continue to Step 1 anyway. The scan must still run.
+
+After invoking the marketplace update, run the helper one more time with `--mark` to record the timestamp:
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/auto-update-check.js --mark
+```
+
+This ensures subsequent `/scan` calls within the throttle window skip the update.
+
+**To disable auto-update entirely:** create/edit `.agentic-security/auto-update.json` with:
+
+```json
+{ "enabled": false }
+```
+
+**To change the throttle:** set `"throttleHours": <N>` in the same file (default: 4).
+
+## Step 1 — Run the scanner
 
 ```bash
 FLAG="--all"

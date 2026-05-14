@@ -7,7 +7,7 @@ NAME
        integrations for the security stack you already run.
 
 VERSION
-       0.34.1
+       0.34.2
 
 SYNOPSIS
        agentic-security [--profile pro] COMMAND [ARGS] [OPTIONS]
@@ -20,6 +20,16 @@ SYNOPSIS
        /show-findings [--all|--kev|--chains|--threat-model]
        /validate-findings <finding-id>
        /explain <finding-id|CWE-N|vuln-name>
+
+       Auto-update behavior (0.34.2+):
+              Every /scan invocation first runs an auto-update check via
+              scripts/auto-update-check.js. If the throttle window
+              (default: 4h) has elapsed, /scan instructs Claude Code to
+              run `/plugin marketplace update agentic-security` to refresh
+              the plugin to the latest version. Throttle and on/off switch
+              live in .agentic-security/auto-update.json:
+                {"enabled": true, "throttleHours": 4, "lastCheck": <epoch>}
+              To disable entirely: {"enabled": false}.
 
        Vibe-coder essentials (0.32.0):
        /stack-playbook
@@ -736,6 +746,8 @@ Every scan writes to `.agentic-security/` in the project root:
        integrations.yml Webhooks + API tokens (gitignored).
        profile.yml      Persona profile (pro|vibecoder).
        streak.json      Security grade history and achievements.
+       auto-update.json  /scan auto-update throttle + on/off switch.
+                         Schema: {enabled, throttleHours, lastCheck}.
        bodyguard.json   /ai-bodyguard config (mode + skipPaths).
        destructive-guard.json  /destructive-guard config (mode + extraPatterns).
        predeploy-gate.json     /predeploy-gate config (block_on, KEV, freshness).

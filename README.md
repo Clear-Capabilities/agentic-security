@@ -8,7 +8,7 @@
 [![Tests](https://img.shields.io/badge/tests-75%2F75-brightgreen)]()
 [![F1](https://img.shields.io/badge/F1%20benchmark-100%25-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.34.1-blue)]()
+[![Version](https://img.shields.io/badge/version-0.34.2-blue)]()
 
 ---
 
