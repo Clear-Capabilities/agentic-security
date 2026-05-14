@@ -253,6 +253,56 @@ A finding the team can't reproduce is a finding the team won't fix. By forcing a
 
 Together with `/fix --one`, this closes the loop: **find → prove → fix → test**.
 
+## Automating PoC execution
+
+After `/validate-findings` has generated test files, use `scripts/run-poc-tests.py` to batch-execute them outside of Claude — in CI, in a pre-commit hook, or from the terminal.
+
+```bash
+# Run all PoCs for the current project
+python3 scripts/run-poc-tests.py
+
+# Only critical and high findings
+python3 scripts/run-poc-tests.py --severity high
+
+# Single finding by ID
+python3 scripts/run-poc-tests.py --id <finding-id>
+
+# List which findings have generated PoCs (without running)
+python3 scripts/run-poc-tests.py --list
+
+# CI gate — exits 1 if any TP_PROVEN findings, writes JUnit XML
+python3 scripts/run-poc-tests.py --severity high --junit poc-results.xml
+
+# Re-run even if a cached verdict exists
+python3 scripts/run-poc-tests.py --no-cache
+
+# Machine-readable output
+python3 scripts/run-poc-tests.py --json
+```
+
+The script reads `.agentic-security/last-scan.json` for findings, discovers test files under `.agentic-security/poc/<id>/poc.*`, checks the same verdict cache that `/validate-findings` writes, and auto-detects the project test framework (jest / vitest / pytest / go test / cargo test / etc.).
+
+**Exit codes:** `0` = no proven vulnerabilities · `1` = at least one `TP_PROVEN` finding
+
+**Verdicts emitted:**
+
+| Verdict | Meaning |
+|---|---|
+| `TP_PROVEN` | Test ran and failed — vulnerable behaviour confirmed |
+| `PROBABLE_FP_VERIFIED` | Test ran and passed — data flow is blocked |
+| `INDETERMINATE_TEST_INVALID` | Test errored (missing dep, compile failure, timeout) |
+| `CACHED` | Returned from verdict cache — no test executed |
+| `NO_POC` | No test generated yet — run `/validate-findings` first |
+
+**Typical workflow:**
+
+```
+/scan --all
+/validate-findings --all --severity high
+python3 scripts/run-poc-tests.py --severity high --junit poc-results.xml
+/fix --all --high
+```
+
 ## Scope (compliance note)
 
 This skill operates only on findings whose `file` resolves inside the current working directory. It is intended for pre-remediation validation of code the user owns, under authorized security review. It does not accept remote targets, does not probe external systems, and refuses findings whose path resolves outside the scan root. Generated tests target `localhost` / `127.0.0.1` / the in-process test runner only — never a remote host.
