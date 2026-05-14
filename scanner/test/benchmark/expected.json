@@ -1,11 +1,11 @@
 {
-  "_doc": "Per-fixture expected findings, used by scripts/bench.js to compute precision/recall/F1. Match key is (file, line±tolerance, family). 'expectedNone: true' means the fixture should produce zero findings of any family except those listed in 'expected'. Add fixtures incrementally — only fixtures listed here are scored.",
+  "_doc": "Per-fixture expected findings, used by scripts/bench.js to compute precision/recall/F1. Match key is (file, line\u00b1tolerance, family). 'expectedNone: true' means the fixture should produce zero findings of any family except those listed in 'expected'. Add fixtures incrementally \u2014 only fixtures listed here are scored.",
   "_familyMap": {
-    "_doc": "Maps scanner vuln strings → canonical family. New vuln names get auto-categorized via prefix; explicit overrides win.",
+    "_doc": "Maps scanner vuln strings \u2192 canonical family. New vuln names get auto-categorized via prefix; explicit overrides win.",
     "exact": {
       "Command Injection": "command-injection",
       "SQL Injection": "sql-injection",
-      "SQL Injection on Admin Endpoint — Direct DB Compromise": "sql-injection",
+      "SQL Injection on Admin Endpoint \u2014 Direct DB Compromise": "sql-injection",
       "Code Injection": "code-injection",
       "XSS": "xss",
       "document.write XSS Sink": "xss",
@@ -30,15 +30,15 @@
       "Dependency Confusion (Internal Package on Public Registry)": "vulnerable-dep",
       "Typosquat / Confusable Package": "vulnerable-dep",
       "Path Traversal (User-Controlled Path)": "path-traversal",
-      "Weak Cryptographic Hash (MD5/SHA1) — Java": "weak-crypto",
-      "Cryptographically Weak PRNG — Java": "weak-rng",
-      "SQL Injection — Java JDBC/Hibernate": "sql-injection",
-      "Command Injection — Java Runtime/ProcessBuilder": "command-injection",
-      "Reflected XSS — Java Servlet Response Write": "xss",
-      "Insecure Cookie — Missing Secure/HttpOnly Flags": "header-hardening",
-      "Trust Boundary Violation — User Data Stored in Session": "trust-boundary",
-      "LDAP Injection — Java JNDI/Spring LDAP": "ldap-injection",
-      "XPath Injection — Java": "xpath-injection",
+      "Weak Cryptographic Hash (MD5/SHA1) \u2014 Java": "weak-crypto",
+      "Cryptographically Weak PRNG \u2014 Java": "weak-rng",
+      "SQL Injection \u2014 Java JDBC/Hibernate": "sql-injection",
+      "Command Injection \u2014 Java Runtime/ProcessBuilder": "command-injection",
+      "Reflected XSS \u2014 Java Servlet Response Write": "xss",
+      "Insecure Cookie \u2014 Missing Secure/HttpOnly Flags": "header-hardening",
+      "Trust Boundary Violation \u2014 User Data Stored in Session": "trust-boundary",
+      "LDAP Injection \u2014 Java JNDI/Spring LDAP": "ldap-injection",
+      "XPath Injection \u2014 Java": "xpath-injection",
       "Reflected XSS": "xss",
       "Reflected XSS (User Input in Response)": "xss",
       "Stored XSS / Second-Order Injection": "xss",
@@ -51,7 +51,7 @@
       "Full User Object Exposed in Response": "data-exposure",
       "Sensitive Mutation Without Audit Log (Repudiation Risk)": "audit-logging",
       "Potential IDOR (User-Controlled ID)": "idor",
-      "Potential Indirect IDOR — findAll Without Ownership Scope": "idor",
+      "Potential Indirect IDOR \u2014 findAll Without Ownership Scope": "idor",
       "ORM Collection Query Without Pagination Limit (DoS)": "orm-no-pagination",
       "RSA Private Key": "hardcoded-secret",
       "DSA Private Key": "hardcoded-secret",
@@ -59,23 +59,24 @@
       "PGP Private Key Block": "hardcoded-secret",
       "OpenSSH Private Key": "hardcoded-secret",
       "JWT Decoded Without Signature Verification": "jwt-no-verify",
-      "JWT Forgery → Mass Assignment → Privilege Escalation": "jwt-no-verify",
+      "JWT Forgery \u2192 Mass Assignment \u2192 Privilege Escalation": "jwt-no-verify",
       "JWT Algorithm Confusion": "jwt-alg-confusion",
       "JWT Sign (Verify Algorithm Pinned)": "jwt-alg-confusion",
       "OAuth Authorization Code Theft via Open Redirect": "open-redirect",
       "Synchronous Blocking I/O (DoS Risk in Server Context)": "dos-sync-io",
       "Missing Timeout on Outbound HTTP Request (DoS)": "dos-no-timeout",
       "GraphQL Missing Query Depth/Complexity Limit (DoS Risk)": "graphql-dos",
-      "ORM Collection Query Without Pagination Limit (DoS)": "orm-no-pagination",
-      "Regex ReDoS — Catastrophic Backtracking": "redos",
-      "Timing Oracle — Non-Constant-Time Secret Comparison": "timing-oracle",
+      "Regex ReDoS \u2014 Catastrophic Backtracking": "redos",
+      "Timing Oracle \u2014 Non-Constant-Time Secret Comparison": "timing-oracle",
       "Log Injection (Unsanitized User Input Logged)": "log-injection",
       "Known-Broken Code Marker Near Security-Sensitive Logic": "broken-marker",
-      "Vulnerable Dependency": "vulnerable-dep",
       "VM Sandbox Execution (RCE Risk)": "code-injection",
       "NoSQL Injection": "sql-injection",
       "NoSQL Injection ($where with User Input)": "sql-injection",
-      "NoSQL Injection (User-Controlled Query Filter)": "sql-injection"
+      "NoSQL Injection (User-Controlled Query Filter)": "sql-injection",
+      "Sensitive cookie without secure flag (data exposure)": "data-exposure",
+      "Cleartext HTTP transmission (new URL with http://)": "insecure-http",
+      "Open Redirect (response.sendRedirect with non-literal)": "open-redirect"
     },
     "prefix": {
       "Command Injection": "command-injection",
@@ -115,7 +116,6 @@
       "Cryptographically Weak PRNG": "weak-rng",
       "Weak Randomness": "weak-rng",
       "Template Autoescape Disabled": "ssti",
-      "NoSQL Injection": "sql-injection",
       "Session Cookie Without": "header-hardening",
       "XXE:": "xxe",
       "Unsafe XML Parsing": "xxe",
@@ -126,8 +126,8 @@
       "Weak bcrypt cost": "weak-crypto",
       "bcrypt Rounds Below": "weak-crypto",
       "Eternal Token": "jwt-no-exp",
-      "XXE —": "xxe",
-      "Insecure Deserialization —": "insecure-deserialization",
+      "XXE \u2014": "xxe",
+      "Insecure Deserialization \u2014": "insecure-deserialization",
       "Banned API": "buffer-overflow",
       "Format string vulnerability": "format-string",
       "Memory-safety risk": "mem-unsafe",
@@ -137,33 +137,112 @@
       "Reentrancy": "reentrancy",
       "Authentication using tx.origin": "tx-origin-auth",
       "Integer overflow risk": "integer-overflow",
-      "Predictable randomness — block.timestamp": "weak-rng",
+      "Predictable randomness \u2014 block.timestamp": "weak-rng",
       "selfdestruct()": "unprotected-selfdestruct",
       "delegatecall": "delegatecall-untrusted",
       "Unchecked low-level call": "unchecked-low-level-call",
       "unsafe block": "unsafe-block",
-      "Weak randomness — RNG seeded": "weak-rng",
-      "Untyped Actix extractor": "input-validation"
+      "Weak randomness \u2014 RNG seeded": "weak-rng",
+      "Untyped Actix extractor": "input-validation",
+      "Cleartext HTTP": "insecure-http",
+      "Sensitive cookie": "data-exposure",
+      "Open Redirect (response.sendRedirect": "open-redirect"
     }
   },
   "fixtures": {
     "vulnerable-js": {
       "_doc": "Hand-crafted vulnerable Express app. Each line has a known vuln.",
       "expected": [
-        { "file": "app.js", "line": 2,  "family": "header-hardening",  "severity": "low",      "_note": "express() without helmet() or disable('x-powered-by')" },
-        { "file": "app.js", "line": 7,  "family": "sql-injection",     "severity": "critical" },
-        { "file": "app.js", "line": 8,  "family": "xss",               "severity": "high"     },
-        { "file": "app.js", "line": 14, "family": "command-injection", "severity": "critical" },
-        { "file": "app.js", "line": 14, "family": "xss",               "severity": "high",     "_note": "res.send(out) where out is exec stdout — taint path" },
-        { "file": "app.js", "line": 19, "family": "hardcoded-secret",  "severity": "critical" },
-        { "file": "app.js", "line": 20, "family": "hardcoded-secret",  "severity": "critical" },
-        { "file": "app.js", "line": 24, "family": "weak-crypto",       "severity": "medium"   },
-        { "file": "app.js", "line": 28, "family": "code-injection",    "severity": "critical" },
-        { "file": "app.js", "line": 28, "family": "xss",               "severity": "high",     "_note": "res.send(eval(req.body.expr)) — xss via eval result" },
-        { "file": "app.js", "line": 34, "family": "path-traversal",    "severity": "high"     },
-        { "file": "app.js", "line": 38, "family": "audit-logging",     "severity": "medium",   "_note": "POST /user invokes User.create without audit log" },
-        { "file": "app.js", "line": 39, "family": "mass-assignment",   "severity": "high"     },
-        { "file": "package.json", "line": 0, "lineTolerance": 9999, "matchAny": true, "family": "vulnerable-dep", "severity": "high" }
+        {
+          "file": "app.js",
+          "line": 2,
+          "family": "header-hardening",
+          "severity": "low",
+          "_note": "express() without helmet() or disable('x-powered-by')"
+        },
+        {
+          "file": "app.js",
+          "line": 7,
+          "family": "sql-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "app.js",
+          "line": 8,
+          "family": "xss",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 14,
+          "family": "command-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "app.js",
+          "line": 14,
+          "family": "xss",
+          "severity": "high",
+          "_note": "res.send(out) where out is exec stdout \u2014 taint path"
+        },
+        {
+          "file": "app.js",
+          "line": 19,
+          "family": "hardcoded-secret",
+          "severity": "critical"
+        },
+        {
+          "file": "app.js",
+          "line": 20,
+          "family": "hardcoded-secret",
+          "severity": "critical"
+        },
+        {
+          "file": "app.js",
+          "line": 24,
+          "family": "weak-crypto",
+          "severity": "medium"
+        },
+        {
+          "file": "app.js",
+          "line": 28,
+          "family": "code-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "app.js",
+          "line": 28,
+          "family": "xss",
+          "severity": "high",
+          "_note": "res.send(eval(req.body.expr)) \u2014 xss via eval result"
+        },
+        {
+          "file": "app.js",
+          "line": 34,
+          "family": "path-traversal",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 38,
+          "family": "audit-logging",
+          "severity": "medium",
+          "_note": "POST /user invokes User.create without audit log"
+        },
+        {
+          "file": "app.js",
+          "line": 39,
+          "family": "mass-assignment",
+          "severity": "high"
+        },
+        {
+          "file": "package.json",
+          "line": 0,
+          "lineTolerance": 9999,
+          "matchAny": true,
+          "family": "vulnerable-dep",
+          "severity": "high"
+        }
       ]
     },
     "clean-js": {
@@ -174,16 +253,41 @@
     "timing-oracle": {
       "_doc": "Mix of real timing-oracle vulns (lines 3, 8) and feature-flag env comparisons (lines 15, 18, 21) the precondition should suppress.",
       "expected": [
-        { "file": "app.js", "line": 3, "family": "timing-oracle", "severity": "medium" },
-        { "file": "app.js", "line": 8, "family": "timing-oracle", "severity": "medium" }
+        {
+          "file": "app.js",
+          "line": 3,
+          "family": "timing-oracle",
+          "severity": "medium"
+        },
+        {
+          "file": "app.js",
+          "line": 8,
+          "family": "timing-oracle",
+          "severity": "medium"
+        }
       ]
     },
     "redos-mixed": {
       "_doc": "Catastrophic patterns (lines 2, 5, 8) plus safe shapes (12, 15, 18) the analyzer must NOT flag.",
       "expected": [
-        { "file": "app.js", "line": 2, "family": "redos", "severity": "medium" },
-        { "file": "app.js", "line": 5, "family": "redos", "severity": "medium" },
-        { "file": "app.js", "line": 8, "family": "redos", "severity": "medium" }
+        {
+          "file": "app.js",
+          "line": 2,
+          "family": "redos",
+          "severity": "medium"
+        },
+        {
+          "file": "app.js",
+          "line": 5,
+          "family": "redos",
+          "severity": "medium"
+        },
+        {
+          "file": "app.js",
+          "line": 8,
+          "family": "redos",
+          "severity": "medium"
+        }
       ]
     },
     "rule-library-shape": {
@@ -192,185 +296,636 @@
       "expectedNone": true
     },
     "cli-script-context": {
-      "_doc": "One-shot CLI script with sync fs I/O. The 'DoS in Server Context' rule should NOT fire — the file is hashbanged, top-level process.exit() runs, no server imports.",
+      "_doc": "One-shot CLI script with sync fs I/O. The 'DoS in Server Context' rule should NOT fire \u2014 the file is hashbanged, top-level process.exit() runs, no server imports.",
       "expected": [],
       "expectedNone": true
     },
     "ast-aliased-sink": {
       "_doc": "Three forms of aliased command-injection sink: destructured ({exec}=cp), property-assigned (runShell=cp.exec), bracket-access (cp['exec']). Tests AST taint expansion (#8). All three should fire after the slice landed in scanAliasedSinks().",
       "expected": [
-        { "file": "app.js", "line": 3,  "family": "header-hardening",  "severity": "low" },
-        { "file": "app.js", "line": 8,  "family": "command-injection", "severity": "critical" },
-        { "file": "app.js", "line": 14, "family": "command-injection", "severity": "critical" },
-        { "file": "app.js", "line": 19, "family": "command-injection", "severity": "critical" }
+        {
+          "file": "app.js",
+          "line": 3,
+          "family": "header-hardening",
+          "severity": "low"
+        },
+        {
+          "file": "app.js",
+          "line": 8,
+          "family": "command-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "app.js",
+          "line": 14,
+          "family": "command-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "app.js",
+          "line": 19,
+          "family": "command-injection",
+          "severity": "critical"
+        }
       ]
     },
     "middleware-ordering": {
       "_doc": "Express middleware-ordering bug: /admin and /api are mounted before global authMiddleware. Tests framework-aware sequence detection (#9). /public is fine, /dashboard is mounted AFTER auth (also fine).",
       "expected": [
-        { "file": "app.js", "line": 7,  "family": "header-hardening",     "severity": "low" },
-        { "file": "app.js", "line": 11, "family": "middleware-ordering", "severity": "high" },
-        { "file": "app.js", "line": 14, "family": "middleware-ordering", "severity": "high" }
+        {
+          "file": "app.js",
+          "line": 7,
+          "family": "header-hardening",
+          "severity": "low"
+        },
+        {
+          "file": "app.js",
+          "line": 11,
+          "family": "middleware-ordering",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 14,
+          "family": "middleware-ordering",
+          "severity": "high"
+        }
       ]
     },
     "orm-raw-sql": {
-      "_doc": "Prisma $queryRaw/$executeRaw, Sequelize literal, TypeORM raw where — all common ORM-bypass shapes that previously slipped past the SQL-injection detector.",
+      "_doc": "Prisma $queryRaw/$executeRaw, Sequelize literal, TypeORM raw where \u2014 all common ORM-bypass shapes that previously slipped past the SQL-injection detector.",
       "expected": [
-        { "file": "app.js", "line": 2,  "family": "header-hardening",  "severity": "low" },
-        { "file": "app.js", "line": 10, "family": "sql-injection",    "severity": "high" },
-        { "file": "app.js", "line": 16, "family": "sql-injection",    "severity": "high" },
-        { "file": "app.js", "line": 21, "family": "sql-injection",    "severity": "high" },
-        { "file": "app.js", "line": 22, "family": "idor",             "severity": "high",   "_note": "User.findAll without ownership scope" },
-        { "file": "app.js", "line": 22, "family": "orm-no-pagination","severity": "medium", "_note": "User.findAll without limit" },
-        { "file": "app.js", "line": 23, "family": "data-exposure",    "severity": "high",   "_note": "res.json(users) returns full user objects" },
-        { "file": "app.js", "line": 28, "family": "sql-injection",    "severity": "high" },
-        { "file": "app.js", "line": 30, "family": "data-exposure",    "severity": "high",   "_note": "res.json(users) returns full user objects" }
+        {
+          "file": "app.js",
+          "line": 2,
+          "family": "header-hardening",
+          "severity": "low"
+        },
+        {
+          "file": "app.js",
+          "line": 10,
+          "family": "sql-injection",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 16,
+          "family": "sql-injection",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 21,
+          "family": "sql-injection",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 22,
+          "family": "idor",
+          "severity": "high",
+          "_note": "User.findAll without ownership scope"
+        },
+        {
+          "file": "app.js",
+          "line": 22,
+          "family": "orm-no-pagination",
+          "severity": "medium",
+          "_note": "User.findAll without limit"
+        },
+        {
+          "file": "app.js",
+          "line": 23,
+          "family": "data-exposure",
+          "severity": "high",
+          "_note": "res.json(users) returns full user objects"
+        },
+        {
+          "file": "app.js",
+          "line": 28,
+          "family": "sql-injection",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 30,
+          "family": "data-exposure",
+          "severity": "high",
+          "_note": "res.json(users) returns full user objects"
+        }
       ]
     },
     "xxe-java": {
       "_doc": "Java XXE: DocumentBuilderFactory, SAXParserFactory, XMLInputFactory all flagged unless disallow-doctype-decl is set. Safe.java sets the feature and must not fire.",
       "expected": [
-        { "file": "Vuln.java", "line": 8,  "family": "xxe", "severity": "high" },
-        { "file": "Vuln.java", "line": 13, "family": "xxe", "severity": "high" },
-        { "file": "Vuln.java", "line": 16, "family": "xxe", "severity": "high" }
+        {
+          "file": "Vuln.java",
+          "line": 8,
+          "family": "xxe",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.java",
+          "line": 13,
+          "family": "xxe",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.java",
+          "line": 16,
+          "family": "xxe",
+          "severity": "high"
+        }
       ]
     },
     "xxe-python": {
       "_doc": "Python XXE: lxml.etree, xml.etree.ElementTree, xml.sax all flagged. safe.py imports defusedxml and must not fire.",
       "expected": [
-        { "file": "vuln.py", "line": 2,  "family": "xxe", "severity": "high", "_note": "lxml.etree (aliased) — match starts at the import line" },
-        { "file": "vuln.py", "line": 10, "family": "xxe", "severity": "high" },
-        { "file": "vuln.py", "line": 14, "family": "xxe", "severity": "high" }
+        {
+          "file": "vuln.py",
+          "line": 2,
+          "family": "xxe",
+          "severity": "high",
+          "_note": "lxml.etree (aliased) \u2014 match starts at the import line"
+        },
+        {
+          "file": "vuln.py",
+          "line": 10,
+          "family": "xxe",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.py",
+          "line": 14,
+          "family": "xxe",
+          "severity": "high"
+        }
       ]
     },
     "jndi-java": {
       "_doc": "JNDI injection family: variable lookup() is the Log4Shell RCE pattern; ${jndi:...} in logger; ldap:// URI built from request.",
       "expected": [
-        { "file": "Vuln.java", "line": 7,  "family": "jndi-injection", "severity": "critical" },
-        { "file": "Vuln.java", "line": 12, "family": "jndi-injection", "severity": "high" },
-        { "file": "Vuln.java", "line": 17, "family": "jndi-injection", "severity": "critical" }
+        {
+          "file": "Vuln.java",
+          "line": 7,
+          "family": "jndi-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "Vuln.java",
+          "line": 12,
+          "family": "jndi-injection",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.java",
+          "line": 17,
+          "family": "jndi-injection",
+          "severity": "critical"
+        }
       ]
     },
     "java-deserialization": {
       "_doc": "Java native deserialization: ObjectInputStream.readObject, XMLDecoder, XStream.fromXML, fastjson autoType, SnakeYAML new Yaml().load().",
       "expected": [
-        { "file": "Vuln.java", "line": 7,  "family": "insecure-deserialization", "severity": "critical" },
-        { "file": "Vuln.java", "line": 11, "family": "insecure-deserialization", "severity": "critical" },
-        { "file": "Vuln.java", "line": 16, "family": "insecure-deserialization", "severity": "high" },
-        { "file": "Vuln.java", "line": 20, "family": "insecure-deserialization", "severity": "critical" },
-        { "file": "Vuln.java", "line": 24, "family": "insecure-deserialization", "severity": "critical" }
+        {
+          "file": "Vuln.java",
+          "line": 7,
+          "family": "insecure-deserialization",
+          "severity": "critical"
+        },
+        {
+          "file": "Vuln.java",
+          "line": 11,
+          "family": "insecure-deserialization",
+          "severity": "critical"
+        },
+        {
+          "file": "Vuln.java",
+          "line": 16,
+          "family": "insecure-deserialization",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.java",
+          "line": 20,
+          "family": "insecure-deserialization",
+          "severity": "critical"
+        },
+        {
+          "file": "Vuln.java",
+          "line": 24,
+          "family": "insecure-deserialization",
+          "severity": "critical"
+        }
       ]
     },
     "jwt-exp": {
-      "_doc": "JWT-no-exp + weak bcrypt cost. Lines 16/26 are safe shapes (expiresIn set / exp claim in payload) but existing JWT-Sign rule also fires — by family-dedup they collapse to jwt-no-verify at the same line.",
+      "_doc": "JWT-no-exp + weak bcrypt cost. Lines 16/26 are safe shapes (expiresIn set / exp claim in payload) but existing JWT-Sign rule also fires \u2014 by family-dedup they collapse to jwt-no-verify at the same line.",
       "expected": [
-        { "file": "app.js", "line": 6,  "family": "jwt-no-exp",         "severity": "high", "_note": "no expiresIn — eternal token" },
-        { "file": "app.js", "line": 6,  "family": "jwt-alg-confusion", "severity": "high", "_note": "existing JWT Sign verify rule fires too" },
-        { "file": "app.js", "line": 11, "family": "weak-crypto",        "severity": "high" },
-        { "file": "app.js", "line": 16, "family": "jwt-alg-confusion", "severity": "high", "_note": "existing JWT Sign verify rule fires (legacy FP for safe shape)" },
-        { "file": "app.js", "line": 26, "family": "jwt-alg-confusion", "severity": "high" }
+        {
+          "file": "app.js",
+          "line": 6,
+          "family": "jwt-no-exp",
+          "severity": "high",
+          "_note": "no expiresIn \u2014 eternal token"
+        },
+        {
+          "file": "app.js",
+          "line": 6,
+          "family": "jwt-alg-confusion",
+          "severity": "high",
+          "_note": "existing JWT Sign verify rule fires too"
+        },
+        {
+          "file": "app.js",
+          "line": 11,
+          "family": "weak-crypto",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 16,
+          "family": "jwt-alg-confusion",
+          "severity": "high",
+          "_note": "existing JWT Sign verify rule fires (legacy FP for safe shape)"
+        },
+        {
+          "file": "app.js",
+          "line": 26,
+          "family": "jwt-alg-confusion",
+          "severity": "high"
+        }
       ]
     },
     "zip-slip": {
       "_doc": "Java new File(outDir, entry.getName()) without canonical check. Python tarfile.extractall() without filter='data'. Safe.java validates with canonical path; Safe Python uses filter='data'.",
       "expected": [
-        { "file": "Vuln.java", "line": 10, "family": "zip-slip", "severity": "high" },
-        { "file": "vuln.py",   "line": 5,  "family": "zip-slip", "severity": "high" }
+        {
+          "file": "Vuln.java",
+          "line": 10,
+          "family": "zip-slip",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.py",
+          "line": 5,
+          "family": "zip-slip",
+          "severity": "high"
+        }
       ]
     },
     "host-header": {
       "_doc": "Host header attack: req.headers.host in password-reset URL and in redirect target. Reset-safe uses process.env.PUBLIC_HOST and is suppressed.",
       "expected": [
-        { "file": "app.js", "line": 2,  "family": "header-hardening", "severity": "low" },
-        { "file": "app.js", "line": 7,  "family": "host-header",      "severity": "high" },
-        { "file": "app.js", "line": 14, "family": "host-header",      "severity": "high" },
-        { "file": "app.js", "line": 14, "family": "open-redirect",    "severity": "high", "_note": "existing redirect detector also fires" }
+        {
+          "file": "app.js",
+          "line": 2,
+          "family": "header-hardening",
+          "severity": "low"
+        },
+        {
+          "file": "app.js",
+          "line": 7,
+          "family": "host-header",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 14,
+          "family": "host-header",
+          "severity": "high"
+        },
+        {
+          "file": "app.js",
+          "line": 14,
+          "family": "open-redirect",
+          "severity": "high",
+          "_note": "existing redirect detector also fires"
+        }
       ]
     },
     "websocket-source": {
       "_doc": "WebSocket payload data flows into exec() and eval(). Validates the new SOURCE_PATTERNS entry + getVar callback parameter extraction.",
       "expected": [
-        { "file": "app.js", "line": 8,  "family": "command-injection", "severity": "critical" },
-        { "file": "app.js", "line": 13, "family": "code-injection",    "severity": "critical" }
+        {
+          "file": "app.js",
+          "line": 8,
+          "family": "command-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "app.js",
+          "line": 13,
+          "family": "code-injection",
+          "severity": "critical"
+        }
       ]
     },
     "csharp-sast": {
       "_doc": "C#/.NET narrow rules: SQL concat, Process shell, Razor Html.Raw, XmlDocument w/o XmlResolver, Newtonsoft TypeNameHandling, BinaryFormatter, ValidateInput(false), Path.Combine no canonical check. Safe.cs must produce zero findings.",
       "expected": [
-        { "file": "Vuln.cs", "line": 13, "family": "sql-injection",            "severity": "high" },
-        { "file": "Vuln.cs", "line": 18, "family": "command-injection",        "severity": "critical" },
-        { "file": "Vuln.cs", "line": 22, "family": "xss",                      "severity": "high" },
-        { "file": "Vuln.cs", "line": 27, "family": "xxe",                      "severity": "high" },
-        { "file": "Vuln.cs", "line": 32, "family": "insecure-deserialization", "severity": "critical" },
-        { "file": "Vuln.cs", "line": 37, "family": "insecure-deserialization", "severity": "critical" },
-        { "file": "Vuln.cs", "line": 41, "family": "xss",                      "severity": "high" },
-        { "file": "Vuln.cs", "line": 47, "family": "path-traversal",           "severity": "high" }
+        {
+          "file": "Vuln.cs",
+          "line": 13,
+          "family": "sql-injection",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.cs",
+          "line": 18,
+          "family": "command-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "Vuln.cs",
+          "line": 22,
+          "family": "xss",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.cs",
+          "line": 27,
+          "family": "xxe",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.cs",
+          "line": 32,
+          "family": "insecure-deserialization",
+          "severity": "critical"
+        },
+        {
+          "file": "Vuln.cs",
+          "line": 37,
+          "family": "insecure-deserialization",
+          "severity": "critical"
+        },
+        {
+          "file": "Vuln.cs",
+          "line": 41,
+          "family": "xss",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.cs",
+          "line": 47,
+          "family": "path-traversal",
+          "severity": "high"
+        }
       ]
     },
     "cpp-sast": {
       "_doc": "C/C++ banned APIs: strcpy/strcat, printf(user), system(user), memcpy w/ user-len, srand(time(NULL)), rand(). safe.c uses strncpy + printf(\"%s\",x) and must produce zero findings.",
       "expected": [
-        { "file": "vuln.c", "line": 8,  "family": "buffer-overflow",   "severity": "high" },
-        { "file": "vuln.c", "line": 9,  "family": "buffer-overflow",   "severity": "high" },
-        { "file": "vuln.c", "line": 13, "family": "format-string",     "severity": "high" },
-        { "file": "vuln.c", "line": 19, "family": "command-injection", "severity": "critical" },
-        { "file": "vuln.c", "line": 24, "family": "mem-unsafe",        "severity": "high" },
-        { "file": "vuln.c", "line": 28, "family": "weak-rng",          "severity": "high" },
-        { "file": "vuln.c", "line": 29, "family": "weak-rng",          "severity": "medium" }
+        {
+          "file": "vuln.c",
+          "line": 8,
+          "family": "buffer-overflow",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.c",
+          "line": 9,
+          "family": "buffer-overflow",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.c",
+          "line": 13,
+          "family": "format-string",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.c",
+          "line": 19,
+          "family": "command-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "vuln.c",
+          "line": 24,
+          "family": "mem-unsafe",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.c",
+          "line": 28,
+          "family": "weak-rng",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.c",
+          "line": 29,
+          "family": "weak-rng",
+          "severity": "medium"
+        }
       ]
     },
     "solidity-sast": {
       "_doc": "Solidity: reentrancy, tx.origin auth, pre-0.8 pragma overflow, block.timestamp RNG, unprotected selfdestruct, untrusted delegatecall. Safe.sol fixes all of these and must produce zero findings.",
       "expected": [
-        { "file": "Vuln.sol", "line": 2,  "family": "integer-overflow",          "severity": "high" },
-        { "file": "Vuln.sol", "line": 14, "family": "reentrancy",                "severity": "critical" },
-        { "file": "Vuln.sol", "line": 21, "family": "tx-origin-auth",            "severity": "high" },
-        { "file": "Vuln.sol", "line": 26, "family": "weak-rng",                  "severity": "medium" },
-        { "file": "Vuln.sol", "line": 31, "family": "unprotected-selfdestruct",  "severity": "critical" },
-        { "file": "Vuln.sol", "line": 36, "family": "delegatecall-untrusted",    "severity": "critical" }
+        {
+          "file": "Vuln.sol",
+          "line": 2,
+          "family": "integer-overflow",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.sol",
+          "line": 14,
+          "family": "reentrancy",
+          "severity": "critical"
+        },
+        {
+          "file": "Vuln.sol",
+          "line": 21,
+          "family": "tx-origin-auth",
+          "severity": "high"
+        },
+        {
+          "file": "Vuln.sol",
+          "line": 26,
+          "family": "weak-rng",
+          "severity": "medium"
+        },
+        {
+          "file": "Vuln.sol",
+          "line": 31,
+          "family": "unprotected-selfdestruct",
+          "severity": "critical"
+        },
+        {
+          "file": "Vuln.sol",
+          "line": 36,
+          "family": "delegatecall-untrusted",
+          "severity": "critical"
+        }
       ]
     },
     "rust-sast": {
       "_doc": "Rust: sqlx::query with format!, Command shell-form, Command::arg(format!()), zero-seeded RNG, unsafe block density (informational).",
       "expected": [
-        { "file": "vuln.rs", "line": 7,  "family": "sql-injection",      "severity": "high" },
-        { "file": "vuln.rs", "line": 13, "family": "command-injection",  "severity": "critical" },
-        { "file": "vuln.rs", "line": 17, "family": "command-injection",  "severity": "high" },
-        { "file": "vuln.rs", "line": 21, "family": "weak-rng",           "severity": "high" },
-        { "file": "vuln.rs", "line": 25, "family": "unsafe-block",       "severity": "info" }
+        {
+          "file": "vuln.rs",
+          "line": 7,
+          "family": "sql-injection",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.rs",
+          "line": 13,
+          "family": "command-injection",
+          "severity": "critical"
+        },
+        {
+          "file": "vuln.rs",
+          "line": 17,
+          "family": "command-injection",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.rs",
+          "line": 21,
+          "family": "weak-rng",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.rs",
+          "line": 25,
+          "family": "unsafe-block",
+          "severity": "info"
+        }
       ]
     },
     "go-extended": {
-      "_doc": "Go SSRF + exec shell-form. http.Get / http.NewRequest with user-controlled URL → SSRF; exec.Command(\"sh\",\"-c\",userInput) → command injection. Each http.Get also fires a Missing-Timeout finding.",
+      "_doc": "Go SSRF + exec shell-form. http.Get / http.NewRequest with user-controlled URL \u2192 SSRF; exec.Command(\"sh\",\"-c\",userInput) \u2192 command injection. Each http.Get also fires a Missing-Timeout finding.",
       "expected": [
-        { "file": "vuln.go", "line": 11, "family": "ssrf",              "severity": "high" },
-        { "file": "vuln.go", "line": 11, "family": "dos-no-timeout",    "severity": "medium" },
-        { "file": "vuln.go", "line": 17, "family": "ssrf",              "severity": "high" },
-        { "file": "vuln.go", "line": 23, "family": "command-injection", "severity": "critical" }
+        {
+          "file": "vuln.go",
+          "line": 11,
+          "family": "ssrf",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.go",
+          "line": 11,
+          "family": "dos-no-timeout",
+          "severity": "medium"
+        },
+        {
+          "file": "vuln.go",
+          "line": 17,
+          "family": "ssrf",
+          "severity": "high"
+        },
+        {
+          "file": "vuln.go",
+          "line": 23,
+          "family": "command-injection",
+          "severity": "critical"
+        }
       ]
     },
     "idor-ownership-extended": {
       "_doc": "IDOR ownership shape coverage. Safe1-3 (Prisma AND, spread helper, local-var) must not fire IDOR. Vuln1 (no clause) and Vuln2 (ownership column bound to tainted value) must fire IDOR. AuthZ tenant-scope warnings expected per current behavior (collapsed into family=idor by dedup).",
       "expected": [
-        { "file": "app.js", "line": 4,  "family": "header-hardening", "severity": "low" },
-        { "file": "app.js", "line": 8,  "family": "idor",             "severity": "high", "_note": "AuthZ tenant-scope warning (no tenantId)" },
-        { "file": "app.js", "line": 17, "family": "idor",             "severity": "high", "_note": "AuthZ tenant-scope warning" },
-        { "file": "app.js", "line": 26, "family": "idor",             "severity": "high", "_note": "AuthZ tenant-scope warning" },
-        { "file": "app.js", "line": 39, "family": "idor",             "severity": "high", "_note": "Vuln1: no ownership clause" },
-        { "file": "app.js", "line": 45, "family": "idor",             "severity": "high", "_note": "Vuln2: IDOR (AuthZ tenant collapsed via family dedup)" }
+        {
+          "file": "app.js",
+          "line": 4,
+          "family": "header-hardening",
+          "severity": "low"
+        },
+        {
+          "file": "app.js",
+          "line": 8,
+          "family": "idor",
+          "severity": "high",
+          "_note": "AuthZ tenant-scope warning (no tenantId)"
+        },
+        {
+          "file": "app.js",
+          "line": 17,
+          "family": "idor",
+          "severity": "high",
+          "_note": "AuthZ tenant-scope warning"
+        },
+        {
+          "file": "app.js",
+          "line": 26,
+          "family": "idor",
+          "severity": "high",
+          "_note": "AuthZ tenant-scope warning"
+        },
+        {
+          "file": "app.js",
+          "line": 39,
+          "family": "idor",
+          "severity": "high",
+          "_note": "Vuln1: no ownership clause"
+        },
+        {
+          "file": "app.js",
+          "line": 45,
+          "family": "idor",
+          "severity": "high",
+          "_note": "Vuln2: IDOR (AuthZ tenant collapsed via family dedup)"
+        }
       ]
     },
     "ssrf-static-url": {
       "_doc": "SSRF precision fixture. Static-URL fetch/axios/process.env calls must NOT fire SSRF; only the variable-URL fetch on line 32 should. Validates the _isStaticUrlFirstArg safe-shape.",
       "expected": [
-        { "file": "app.js", "line": 3,  "family": "header-hardening", "severity": "low" },
-        { "file": "app.js", "line": 7,  "family": "dos-no-timeout",   "severity": "medium" },
-        { "file": "app.js", "line": 13, "family": "dos-no-timeout",   "severity": "medium" },
-        { "file": "app.js", "line": 19, "family": "dos-no-timeout",   "severity": "medium" },
-        { "file": "app.js", "line": 25, "family": "dos-no-timeout",   "severity": "medium" },
-        { "file": "app.js", "line": 32, "family": "ssrf",             "severity": "high", "_note": "Real SSRF — variable-controlled URL" },
-        { "file": "app.js", "line": 32, "family": "dos-no-timeout",   "severity": "medium" },
-        { "file": "app.js", "line": 33, "family": "xss",              "severity": "medium", "_note": "res.send(text from upstream)" }
+        {
+          "file": "app.js",
+          "line": 3,
+          "family": "header-hardening",
+          "severity": "low"
+        },
+        {
+          "file": "app.js",
+          "line": 7,
+          "family": "dos-no-timeout",
+          "severity": "medium"
+        },
+        {
+          "file": "app.js",
+          "line": 13,
+          "family": "dos-no-timeout",
+          "severity": "medium"
+        },
+        {
+          "file": "app.js",
+          "line": 19,
+          "family": "dos-no-timeout",
+          "severity": "medium"
+        },
+        {
+          "file": "app.js",
+          "line": 25,
+          "family": "dos-no-timeout",
+          "severity": "medium"
+        },
+        {
+          "file": "app.js",
+          "line": 32,
+          "family": "ssrf",
+          "severity": "high",
+          "_note": "Real SSRF \u2014 variable-controlled URL"
+        },
+        {
+          "file": "app.js",
+          "line": 32,
+          "family": "dos-no-timeout",
+          "severity": "medium"
+        },
+        {
+          "file": "app.js",
+          "line": 33,
+          "family": "xss",
+          "severity": "medium",
+          "_note": "res.send(text from upstream)"
+        }
       ]
     }
   }

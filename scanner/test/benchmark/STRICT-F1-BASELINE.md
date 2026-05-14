@@ -61,7 +61,7 @@ they're a side-effect of the matchAny collapse, not engine error.
 | App | Strict F1 | Per-family bottlenecks | Path forward |
 |---|---:|---|---|
 | owasp-benchmark | 80.0% | sql-injection / xss / path-traversal / command-injection score 59–73% because OWASP's `real=true / real=false` labels hinge on constant-folded if-branches, ternary dead-branch, ProcessBuilder argv vs string-concat, and inner-class flow — patterns the regex+AST engine cannot reliably distinguish. The 6 families with no flow ambiguity (header-hardening, weak-crypto, weak-rng, ldap-injection, xpath-injection, trust-boundary) all score 100% strict. | Tree-sitter Java per `docs/PRD-owasp-benchmark-strict-100.md` (Tier 2). Estimated to land 80% → 95%+. |
-| sard-juliet-java | 25.6% | Recall is the dominant issue (R=17%). Engine emits 4,778 findings against 13,366 expected entries — large families like sql-injection (3,404 FN) and header-hardening (1,734 FN) are deeply under-detected. We extended the CWE-to-family map in 0.34.5 to cover XSS variants, hardcoded-credential CWEs, weak-RNG variants, etc. — xss jumped 0→91% precision and hardcoded-secret 0→23% precision as a result. | Add engine rules per missing CWE family (large effort), or curate per-test-file expected entries instead of relying on `buildJulietExpected` walk. |
+| sard-juliet-java | **32.7%** (up from 25.6% in 0.34.5) | 0.34.6 implements roadmap items #6, #7, #8 via `src/sast/java-bench-extras.js` — new rules for CWE-601 (open-redirect), CWE-319 (insecure-http), CWE-315 (data-exposure), plus suppression patterns for argv-form ProcessBuilder, parameterized prepareStatement, and constant-folded dead-branches. Open-redirect family: 0% → 89% F1 (+801 TPs). Data-exposure family: 0% → 80% F1 (+142 TPs). Insecure-http rule was tightened to avoid FPs and currently has 0% recall — needs a follow-up combining literal-URL detection with downstream tainted-data flow. | Continue with roadmap items 1 (tree-sitter), 4–5 (inter/cross-file taint), 9 (request wrappers). |
 | juliet-c-cpp | n/a (quarantined) | C/C++ Juliet emits ~87k findings without a `buildJulietExpected`-style GT builder for C/C++ that maps `juliet-cweN/` directories to families. Strict scoring is not meaningful here without that builder. | Add a `buildJulietCppExpected` runner mirroring the Java one. Until then, app is quarantined (excluded by default, run with `--include-quarantined`). |
 
 ## Numbers vs. the wildcard-relaxed claim
@@ -69,7 +69,7 @@ they're a side-effect of the matchAny collapse, not engine error.
 | Mode | Apps at 100% | Average F1 | Lowest |
 |---|---:|---:|---|
 | Wildcard-relaxed (default — family-level coverage) | 33 of 33 | 100% | 100% (all) |
-| Strict line-level (`--no-wildcards`) | **30 of 33** | **97.3%** | 25.6% (sard-juliet-java) |
+| Strict line-level (`--no-wildcards`) | **30 of 33** | **97.5%** | 32.7% (sard-juliet-java, up from 25.6%) |
 
 The strict numbers are the defensible claim. The wildcard-relaxed numbers
 remain valid as a family-coverage indicator (does the scanner find at
