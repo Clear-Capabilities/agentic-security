@@ -205,6 +205,7 @@ export function toJSON(scan, meta={}, opts={}){
       latestVersion: c.latestVersion, license: c.license,
     })),
     suppressedCount: (scan.suppressions||[]).length,
+    blastRadiusSignals: scan.blastRadiusSignals || null,
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];
   return out;
