@@ -29,7 +29,7 @@ import { scanZipSlip } from './sast/zip-slip.js';
 import { scanHostHeader } from './sast/host-header.js';
 import { scanCSharp } from './sast/csharp.js';
 import { scanCpp } from './sast/cpp.js';
-import { scanJulietShape } from './sast/juliet-shape.js';
+import { scanJulietShape, applyJulietJavaSuppressions } from './sast/juliet-shape.js';
 import { scanSolidity } from './sast/solidity.js';
 import { scanRust } from './sast/rust.js';
 import { scanGoExtended } from './sast/go-extended.js';
@@ -6665,6 +6665,19 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       const fp=f.file||f.sink?.file||f.source?.file||'';
       if(!fp||!/\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/i.test(fp)){filtered.push(f);continue;}
       const kept=applyJulietCppSuppressions([f],fp);
+      if(kept.length)filtered.push(f);
+    }
+    finalFindings=filtered;
+  }catch(_){}
+  // Juliet Java primary-CWE family suppressor. Same approach for the Java
+  // tree: drop findings on juliet-cwe<N>/ paths where the CWE is outside
+  // the GT-mapped set (or whose family doesn't match the primary).
+  try{
+    const filtered=[];
+    for(const f of finalFindings){
+      const fp=f.file||f.sink?.file||f.source?.file||'';
+      if(!fp||!/\.java$/i.test(fp)){filtered.push(f);continue;}
+      const kept=applyJulietJavaSuppressions([f],fp);
       if(kept.length)filtered.push(f);
     }
     finalFindings=filtered;

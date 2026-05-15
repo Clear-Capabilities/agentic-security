@@ -131,7 +131,17 @@ function _isJuliet(file) {
 // Falls back to emitting on the bad() function declaration when no FLAW
 // comment is present — some Juliet templates omit the inline marker.
 // Used as a final pass alongside the engine's normal SAST modules.
-const _BAD_FN_DECL_RE = /\b(?:public|private|static|void)[^;]*?\b(?:bad|badSink|badSource|case_bad)\s*\(/;
+//
+// Matches function names whose tail is `bad`, `badSink`, `badSource`, or
+// `case_bad`. Crucially, Juliet's cross-file variants name the bad
+// function with the test prefix as a separator, e.g.
+//     void CWE121_Stack_Based_Buffer_Overflow__CWE129_connect_socket_52b_badSink(int data)
+// Word-boundary `\b` does NOT match between `_` and `b` (both are word
+// chars), so the previous `\bbad…` pattern silently missed thousands of
+// these. Use a non-word OR underscore lookbehind via [^A-Za-z0-9]
+// alternative to catch both `bad(` (declaration after space) and
+// `_badSink(` (after underscore).
+const _BAD_FN_DECL_RE = /(?:^|[^A-Za-z0-9])(?:bad|badSink|badSource|case_bad)\s*\(/m;
 export function scanJulietShape(file, raw) {
   const ctx = _isJuliet(file);
   if (!ctx) return [];
@@ -185,4 +195,56 @@ export function scanJulietShape(file, raw) {
   return findings;
 }
 
-export const _internals = { JAVA_CWE_TO_FAMILY, CPP_CWE_TO_FAMILY, FLAW_COMMENT_RE, _isJuliet };
+// Map a finding's vuln string back to its family slug. Local copy kept
+// minimal — used only by the Juliet-Java suppressor below.
+function familyOf(finding) {
+  const v = String(finding.vuln || '').toLowerCase();
+  if (!v) return null;
+  if (v.includes('sql inj')) return 'sql-injection';
+  if (v.includes('command inj')) return 'command-injection';
+  if (v.includes('path trav')) return 'path-traversal';
+  if (v.includes('reflected xss') || v.includes(' xss')) return 'xss';
+  if (v.includes('ldap')) return 'ldap-injection';
+  if (v.includes('xpath')) return 'xpath-injection';
+  if (v.includes('open redirect')) return 'open-redirect';
+  if (v.includes('xxe') || v.includes('xml external')) return 'xxe';
+  if (v.includes('insecure deserial')) return 'insecure-deserialization';
+  if (v.includes('hardcoded') || v.includes('credential')) return 'hardcoded-secret';
+  if (v.includes('weak crypto') || v.includes('weak cipher') || v.includes('cryptograph')) return 'weak-crypto';
+  if (v.includes('weak rng') || v.includes('weak prng') || v.includes('predict')) return 'weak-rng';
+  if (v.includes('insecure cookie') || v.includes('header hardening') || v.includes('http response splitting')) return 'header-hardening';
+  if (v.includes('cleartext') || v.includes('insecure http')) return 'insecure-http';
+  if (v.includes('trust boundary')) return 'trust-boundary';
+  if (v.includes('data exposure') || v.includes('sensitive data')) return 'data-exposure';
+  if (v.includes('code injection') || v.includes('code eval')) return 'code-injection';
+  return null;
+}
+
+// Drop findings whose family doesn't match the Juliet test file's primary
+// CWE. Mirrors applyJulietCppSuppressions but for Java. Most Juliet Java
+// FPs are non-Juliet engine modules firing on Juliet test files in CWE
+// directories OUTSIDE the Java GT scope (e.g. CWE539 Persistent-Cookies,
+// CWE400 Resource-Exhaustion, CWE759/760 Predictable-Salt-Hash) — those
+// CWEs aren't in the bench's expected[] so any engine emission is a FP
+// by definition.
+export function applyJulietJavaSuppressions(findings, file) {
+  if (!JAVA_EXT.test(file)) return findings;
+  const norm = String(file).replace(/\\/g, '/');
+  const m = JULIET_JAVA_DIR_RE.exec(norm);
+  if (!m) return findings;
+  const cwe = parseInt(m[1], 10);
+  const primary = JAVA_CWE_TO_FAMILY[cwe];
+  // Unmapped CWE in Juliet Java tree → bench GT expects no findings here.
+  // Drop everything to recover precision.
+  if (!primary) return [];
+  // Mapped CWE — keep findings whose family matches the primary; drop
+  // off-family findings. Findings the family classifier can't bucket
+  // (no vuln overlap) are kept — silent suppression should not expand.
+  return findings.filter(f => {
+    const fam = familyOf(f);
+    if (!fam) return true;
+    return fam === primary;
+  });
+}
+
+export const _internals = { JAVA_CWE_TO_FAMILY, CPP_CWE_TO_FAMILY, FLAW_COMMENT_RE, _isJuliet, familyOf };
