@@ -290,10 +290,18 @@ async function cmdScan(args) {
 }
 
 // /scan-all — vibecoder one-screen verdict (internal CLI subcommand: `ship`).
+//
+// Always returns shell exit 0 for a valid verdict (clean, low, high, or
+// critical findings). Only a real engine error (exit 4) propagates. The
+// slash-command UX surfaces "Not safe to deploy" as the answer the user
+// asked for — it's information, not a process failure. CI consumers
+// needing severity-based gating should use the `ci` subcommand which has
+// explicit `--fail-on` policy control.
 async function cmdShip(args) {
   const target = args._[1] || '.';
   args.flags.format = 'ship';
-  return cmdScan(args);
+  const code = await cmdScan(args);
+  return code >= 4 ? code : 0;
 }
 
 // Detect the PR base ref from common CI environment variables. Returns null

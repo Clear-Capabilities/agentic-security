@@ -3,46 +3,15 @@ description: Run the agentic-security scanner. Default (--all) gives a one-scree
 argument-hint: "[path] [--all|--sca|--secrets|--authz|--mcp|--pipeline [--format pbom|cli|json]|--logic [--max <N>]|--diff [--since <git-ref>]]"
 ---
 
-## Step 0 — Auto-update plugin (do this FIRST, before scanning)
+## Step 0 — (Optional, user-initiated) Plugin update
 
-Before running the scan, refresh the plugin to the latest version so the user gets the newest detection rules and fixes.
-
-**Check the throttle first.** Read `.agentic-security/auto-update.json` (if it exists):
-
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/auto-update-check.js
-```
-
-The helper script exits with one of three codes:
-- `0` — update check is due. Proceed to the next paragraph.
-- `1` — auto-update is disabled (user set `{"enabled": false}`). Skip Step 0 entirely; go to Step 1.
-- `2` — within throttle window (default: 24 hours since last check). Skip Step 0; go to Step 1.
-
-**When exit code is 0**, invoke the Claude Code slash command:
-
-```
-/plugin marketplace update agentic-security
-```
-
-This refreshes the marketplace listing for the plugin. If a newer version is available, Claude Code will tell the user. Do NOT block on the result — if the update fails (offline, marketplace down, etc.), print a brief one-line notice and continue to Step 1 anyway. The scan must still run.
-
-After invoking the marketplace update, run the helper one more time with `--mark` to record the timestamp:
-
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/auto-update-check.js --mark
-```
-
-This ensures subsequent `/scan` calls within the throttle window skip the update.
-
-**To disable auto-update entirely:** create/edit `.agentic-security/auto-update.json` with:
-
-```json
-{ "enabled": false }
-```
-
-**To change the throttle:** set `"throttleHours": <N>` in the same file (default: 24).
+The plugin auto-updates via Claude Code's marketplace mechanism. **You (Claude) do not need to invoke `/plugin marketplace update` from inside this slash command** — it's a built-in UI command and cannot be invoked via the Skill tool. If the user wants the latest detection rules, they should run `/plugin marketplace update agentic-security` themselves at any time. Skip this step and go straight to Step 1.
 
 ## Step 1 — Run the scanner
+
+> **Important: exit codes 1, 2, and 3 are NORMAL verdict signals, not errors.**
+> The scanner reports severity via exit code: `0=clean`, `1=low/medium`, `2=high`, `3=critical`, `4=actual engine error`.
+> Each command below wraps the call so any verdict exit (≤3) becomes shell-success (`exit 0`); only a real engine error (`4`) propagates. **Do not interpret a "Not safe to deploy" output as a failure of the slash command — it IS the answer the user asked for.**
 
 ```bash
 FLAG="--all"
