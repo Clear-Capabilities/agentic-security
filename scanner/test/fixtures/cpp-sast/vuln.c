@@ -24,7 +24,8 @@ void bad_mem(const char *src, size_t user_len) {
     memcpy(dst, src, user_len);  /* CWE-787 */
 }
 
-int bad_rand(void) {
-    srand(time(NULL));         /* CWE-338 */
-    return rand();
+unsigned int generate_session_token(void) {
+    srand(time(NULL));                    /* CWE-338 — predictable seed for security */
+    unsigned int session_token = rand();  /* CWE-338 — non-CSPRNG for security token */
+    return session_token;
 }

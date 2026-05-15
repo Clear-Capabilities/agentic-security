@@ -42,8 +42,10 @@
     "prepublishOnly": "npm run build",
     "test": "node --test test/smoke.test.js test/llm.test.js test/logic.test.js test/fn-reach.test.js test/material-change.test.js test/drift.test.js test/sbom.test.js test/api-inventory.test.js test/sarif-ingest.test.js test/pipeline.test.js test/license-policy.test.js test/mttr.test.js test/container.test.js test/dep-confusion.test.js test/scorecard.test.js test/mcp-audit.test.js test/authz.test.js test/kev.test.js test/model-load.test.js test/prompt-template.test.js test/llm-owasp.test.js test/aibom.test.js test/packs.test.js test/junit.test.js test/ci.test.js",
     "smoke": "node bin/agentic-security.js scan test/fixtures/vulnerable-js",
+    "prebench": "npm run build",
     "bench": "node test/benchmark/bench.js",
     "bench:update": "node test/benchmark/bench.js --update-baseline",
+    "prebench:realworld": "npm run build",
     "bench:realworld": "node test/benchmark/realworld/bench-realworld.js",
     "bench:llm-goats": "node test/benchmark/llm-goats/bench-llm-goats.js"
   },

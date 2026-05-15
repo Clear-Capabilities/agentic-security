@@ -30,13 +30,22 @@ on:
 jobs:
   synthetic-bench:
     runs-on: ubuntu-latest
+    # Suppress the Node.js 20 deprecation warning on bundled actions
+    # (actions/checkout, actions/setup-node, actions/upload-artifact run
+    # their own internal Node runtime). Forcing Node 24 keeps them on a
+    # supported version. Mirror scan.yml.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        with: { node-version: '22' }
       - name: Install scanner deps
         working-directory: scanner
         run: npm ci
+      - name: Build scanner bundle
+        working-directory: scanner
+        run: npm run build
       - name: Run unit tests
         working-directory: scanner
         run: npm test
@@ -56,10 +65,12 @@ jobs:
   realworld-bench:
     runs-on: ubuntu-latest
     needs: synthetic-bench
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        with: { node-version: '22' }
       - name: Install scanner deps
         working-directory: scanner
         run: npm ci
