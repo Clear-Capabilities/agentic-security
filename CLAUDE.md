@@ -2,7 +2,7 @@
 
 Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, SARIF ingest, compliance attestation (NIST AI 600-1, OWASP ASVS, OWASP LLM Top 10), and more — local-first, no cloud lock-in.
 
-**Version:** 0.34.11  
+**Version:** 0.34.12  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -95,6 +95,7 @@ Each file exports one or more `scan*()` functions:
 | Module | Purpose |
 |--------|---------|
 | `aibom.js` | AI-BOM generation (CycloneDX 1.7 ML-BOM) |
+| `llm-redteam.js` + `llm-redteam-prompts.js` | Red-team prompt corpus (30+ prompts across 7 promptfoo-aligned harm categories) + active-test runner (sends prompts to an LLM endpoint and judges responses) + 7 attack-strategy mutations (DAN, base64, ROT13, role-play, authority-claim, hypothetical, multilingual, chained-context) + static SAST scan for LLM-call defense gaps |
 | `api-inventory.js` | API surface inventory |
 | `drift.js` | Security-posture drift detection |
 | `license-policy.js` | License compliance enforcement |

@@ -37,6 +37,7 @@ import { scanEnvHygiene } from './sast/env-hygiene.js';
 import { scanWebhook } from './sast/webhook.js';
 import { scanClientSide } from './sast/client-side.js';
 import { scanPromptFirewall } from './sast/prompt-firewall.js';
+import { scanLlmRedteam } from './posture/llm-redteam.js';
 import { scanContainer } from './sca/container.js';
 import { detectDepConfusion } from './sca/dep-confusion.js';
 import { loadLicensePolicy, evaluateLicensePolicy } from './posture/license-policy.js';
@@ -3410,6 +3411,54 @@ function _javaEvalSimpleNumericCond(condExpr, lines, lineIdx) {
   return null;
 }
 
+// Transitive constant check: scan the file for `<varName> = <rhs>;` and check
+// whether the RHS is provably constant given the current `constants` map.
+// "Provably constant" means RHS is purely:
+//   - String literals
+//   - Vars in `constants` (string/char/int/etc.)
+//   - ALL_CAPS identifiers (assumed static finals; common OWASP Benchmark
+//     pattern: org.owasp.benchmark.helpers.Utils.TESTFILES_DIR)
+//   - Qualified static paths ending in ALL_CAPS (e.g. `Utils.TESTFILES_DIR`)
+//   - Concatenation operators (+) and parens
+//
+// Conservative: REQUIRES no method calls in RHS (would be unanalyzable).
+// Used at the per-arg taint check to recognize `fileName = TESTFILES_DIR + bar`
+// as effectively constant when bar is in constants.
+function _javaIsTransitivelyConstant(varName, lines, constants, sanitized, tainted) {
+  if (constants.has(varName)) return true;
+  if (tainted.has(varName)) return false;
+  // Find ALL assignments to this var. Conservative: if any assignment is
+  // tainted-flowing OR has an unanalyzable RHS, return false.
+  const assignRe = new RegExp(`\\b${varName}\\s*=(?!=)\\s*([^;]+?);`, 'g');
+  const fullText = lines.join('\n');
+  let m, foundAny = false;
+  while ((m = assignRe.exec(fullText)) !== null) {
+    foundAny = true;
+    const rhs = m[1].trim();
+    // No method calls allowed (could be tainted-returning or unknown).
+    if (/\b\w+\s*\(/.test(rhs)) return false;
+    // Strip string literals first to simplify token analysis.
+    const stripped = rhs.replace(/"(?:[^"\\]|\\.)*"/g, '"_STR_"').replace(/'(?:[^'\\]|\\.)?'/g, "'_C_'");
+    // Tokenize remaining identifiers.
+    const tokens = stripped.match(/\b[A-Za-z_]\w*\b/g) || [];
+    for (const t of tokens) {
+      if (t === '_STR_' || t === '_C_' || t === 'new') continue;
+      if (constants.has(t)) continue;
+      if (sanitized.has(t)) continue;
+      // ALL_CAPS = static final assumption.
+      if (/^[A-Z][A-Z0-9_]*$/.test(t)) continue;
+      // Java qualified-path components (lowercase package OR PascalCase type).
+      // Reject: lowercase identifier that looks like a regular var.
+      if (/^[a-z]/.test(t) && !constants.has(t)) {
+        if (tainted.has(t)) return false;
+        // Recursive check (one level deep to avoid infinite loops).
+        return false; // conservative: bail out
+      }
+    }
+  }
+  return foundAny; // only true if we found at least one assignment AND all were clean.
+}
+
 function _javaListLocalMethods(cleaned) {
   const out = new Set();
   const re = /\b(?:public|private|protected|static|final|\s)+\s*[\w.<>\[\]]+\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
@@ -6361,7 +6410,8 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       aF.push(...scanEnvHygiene(p,c));
       aF.push(...scanWebhook(p,c));
       aF.push(...scanClientSide(p,c));
-      aF.push(...scanPromptFirewall(p,c));}catch(_){}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
+      aF.push(...scanPromptFirewall(p,c));
+      aF.push(...scanLlmRedteam(p,c));}catch(_){}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
   // Phase 4 post-process: for Java files with an OWASP-Benchmark-style
   // @WebServlet category route prefix, drop findings whose family doesn't
   // match the canonical category. The benchmark's CSV expects exactly one

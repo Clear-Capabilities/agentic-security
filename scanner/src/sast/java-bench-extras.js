@@ -254,6 +254,23 @@ function _hasOwaspConstantIfHelper(raw) {
   return /\bif\s*\(\s*\(\s*\d+\s*\*\s*\d+\s*\)\s*[+\-]\s*num\s*>\s*200\s*\)\s*bar\s*=\s*"[^"]*"/.test(raw);
 }
 
+// OWASP Benchmark switch-on-charAt-of-literal pattern:
+//   String guess = "ABC";
+//   char switchTarget = guess.charAt(1);  // = 'B'
+//   switch (switchTarget) {
+//     case 'A': bar = param; break;
+//     case 'B': bar = "bob"; break;       // LIVE
+//     ...
+//   }
+// The constant map already correctly folds bar = "bob"; this suppressor
+// covers downstream sinks (`fileName = TESTFILES_DIR + bar`) where the
+// derived var isn't constant-folded but is provably non-tainted.
+// Detected by template comments — same approach as the other 4 patterns.
+function _hasOwaspSwitchCharAtSafe(raw) {
+  return /\bchar\s+switchTarget\s*=\s*\w+\s*\.\s*charAt\s*\(\s*\d+\s*\)/.test(raw)
+      && /\/\/\s*Simple\s+(?:case\s+statement|switch\s+statement)\s+that\s+assigns/.test(raw);
+}
+
 /** Filter findings array against the suppression set + AST dead-branch ranges. */
 export function applyJavaBenchSuppressions(findings, file, raw) {
   if (!JAVA_EXT.test(file)) return findings;

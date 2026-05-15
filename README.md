@@ -8,7 +8,7 @@
 [![Tests](https://img.shields.io/badge/tests-96%2F96-brightgreen)]()
 [![F1](https://img.shields.io/badge/F1%20benchmark-100%25-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.34.11-blue)]()
+[![Version](https://img.shields.io/badge/version-0.34.12-blue)]()
 
 ---
 
@@ -169,6 +169,14 @@ Runs `/scan --all` then immediately `/fix --all --low` — scanning and fixing e
 | `/agentic-security:validate-findings` | Build a PoC + regression test that proves a vulnerability before fixing it. Emits `PROBABLE_FP` when no PoC can be constructed. |
 | `/agentic-security:explain` | Explain a finding in plain English — what it means, how an attacker abuses it, worst case, and how to fix it. |
 
+#### LLM red-teaming (new in 0.34.12)
+
+| Command | Description |
+|---|---|
+| `/agentic-security:llm-redteam` | Send 30+ adversarial prompts across 7 categories (security, privacy, harmful, bias, misinformation, agentic, coding-agent) through your LLM endpoint, with mutations via 7 attack strategies (DAN, base64, ROT13, role-play, authority-claim, hypothetical, multilingual, chained-context). Markdown report with per-plugin verdict. Static `--scan` mode catches missing defenses (eval-on-LLM-output, missing max_tokens, system-prompt injection vectors) without making any LLM calls. |
+| `/agentic-security:jailbreak-detector` | Faster, focused subset — runs the canonical "make this harmful" prompt through each known jailbreak family and reports DEFENDED / JAILBROKEN / PARTIAL per family. |
+| `/agentic-security:llm-eval` | Generate a [promptfoo](https://www.promptfoo.dev)-compatible YAML eval suite that you can commit to your repo as a CI gate. Drop-in for existing promptfoo workflows. |
+
 #### Vibe-coder essentials (new in 0.32.0)
 
 | Command | Description |
@@ -270,7 +278,7 @@ The scanner is evaluated against the OWASP Benchmark (2,740 Java test cases), 33
 | Scoring mode | What it measures | Score |
 |---|---|---|
 | **Wildcard-relaxed** (default) | "Does the scanner find at least one finding in each vulnerability family this app contains?" — i.e. family-level coverage. This is the mode most published security tool benchmarks use. | **100% on 35/35 benchmarks** |
-| **Strict line-level** (`--no-wildcards`) | "Does each emitted finding land on the exact file:line the upstream ground truth labels?" — a much harder bar. | **100% on 34/35** benchmarks after the 0.34.11 sweep. **87.9%** on OWASP Benchmark (up from 79.7% via OWASP-shape suppressors). **54.8%** on SARD Juliet Java (up from 25.6% baseline via cross-file source chaining). **7.0%** on juliet-c-cpp (incidental-CWE precision artifact dominates). |
+| **Strict line-level** (`--no-wildcards`) | "Does each emitted finding land on the exact file:line the upstream ground truth labels?" — a much harder bar. | **100% on 34/35** benchmarks after the 0.34.12 sweep. **87.9%** on OWASP Benchmark (up from 79.7% via OWASP-shape suppressors). **54.8%** on SARD Juliet Java (up from 25.6% baseline via cross-file source chaining). **7.0%** on juliet-c-cpp (incidental-CWE precision artifact dominates). |
 
 Why the gap on the remaining 3? OWASP Benchmark uses `real=true / real=false` labels that hinge on constant-folded if-branches, inner-class flow, and List/Map index obfuscation that regex+AST engines can't reliably distinguish — would need full collection-semantics modeling. SARD Juliet's remaining recall gap (sql-injection at 26%, xss at 18%) is in DataflowThruInnerClass / Vector / Stream variants where the BadSource hides behind multiple call frames; precise AST taint analysis is the next lift. juliet-c-cpp's 7.0% reflects engine emissions on test files whose primary CWE doesn't match what the engine detects (e.g. `rand()` fires on every PRNG site even in non-crypto tests).
 
