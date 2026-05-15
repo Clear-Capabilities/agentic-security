@@ -321,41 +321,53 @@ function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies) {
   const tps = []; const fps = []; const fns = [];
   const consumed = new Set();
   const wildSet = new Set(wildcardFamilies || []);
+  // Perf: index actuals by basename for O(1) lookup instead of O(A) scan per
+  // expected entry. With 55k expected × 87k actuals this drops 4.8B ops to
+  // ~150k. Each actual is also cached with its precomputed file/line/family
+  // to avoid recomputing in the hot loop.
+  const actualByBase = new Map(); // basename → [indices]
+  const actualMeta = new Array(actual.length); // {file, base, line, fam}
+  for (let i = 0; i < actual.length; i++) {
+    const a = actual[i];
+    const aFile = fileOf(a);
+    const base = aFile.replace(/\\/g,'/').split('/').slice(-1)[0];
+    const meta = { file: aFile, base, line: lineOf(a), fam: familyForBench(a.vuln, vulnFamilyMap, a), vuln: a.vuln };
+    actualMeta[i] = meta;
+    if (!actualByBase.has(base)) actualByBase.set(base, []);
+    actualByBase.get(base).push(i);
+  }
   // First pass: wildcardFamilies — credit every actual finding whose family is
   // listed (advisory rules that fire correctly across many files; we don't
   // track them per-line).
   if (wildSet.size) {
     for (let i = 0; i < actual.length; i++) {
-      const a = actual[i];
-      const fam = familyForBench(a.vuln, vulnFamilyMap, a);
-      if (wildSet.has(fam)) {
+      const meta = actualMeta[i];
+      if (wildSet.has(meta.fam)) {
         consumed.add(i);
-        tps.push({ family: fam, file: fileOf(a), line: lineOf(a), wildcard: true, matchedVuln: a.vuln });
+        tps.push({ family: meta.fam, file: meta.file, line: meta.line, wildcard: true, matchedVuln: meta.vuln });
       }
     }
   }
-  // Second pass: match expected entries normally.
+  // Second pass: match expected entries normally — O(E + sum-of-basename-buckets)
   for (const e of expected) {
     const tol = typeof e.lineTolerance === 'number' ? e.lineTolerance : LINE_TOLERANCE;
     let matched = false;
-    for (let i = 0; i < actual.length; i++) {
+    const baseE = e.file.replace(/\\/g,'/').split('/').slice(-1)[0];
+    const candidates = actualByBase.get(baseE) || [];
+    for (const i of candidates) {
       if (consumed.has(i)) continue;
-      const a = actual[i];
-      const aFile = fileOf(a);
-      const baseE = e.file.replace(/\\/g,'/').split('/').slice(-1)[0];
-      const baseA = aFile.replace(/\\/g,'/').split('/').slice(-1)[0];
-      // Match either by basename or by suffix path.
-      if (baseA !== baseE && !aFile.endsWith('/' + e.file)) continue;
-      const aLine = lineOf(a);
+      const meta = actualMeta[i];
+      // Match either by basename (already filtered) or by suffix path.
+      if (meta.base !== baseE && !meta.file.endsWith('/' + e.file)) continue;
+      const aLine = meta.line;
       // Range match (per-method Juliet GT): match if aLine ∈ [e.line, e.lineEnd].
       // Otherwise fall back to point match within tolerance.
       if (typeof e.lineEnd === 'number' && e.lineEnd >= e.line) {
         if (aLine < e.line || aLine > e.lineEnd) continue;
       } else if (Math.abs(aLine - e.line) > tol) continue;
-      const fam = familyForBench(a.vuln, vulnFamilyMap, a);
-      if (fam !== e.family) continue;
+      if (meta.fam !== e.family) continue;
       consumed.add(i);
-      tps.push({ ...e, matchedVuln: a.vuln });
+      tps.push({ ...e, matchedVuln: meta.vuln });
       matched = true;
       // matchAny: one expected entry consumes ALL matching actuals (used for
       // "the famous vuln-deps" case — package.json carries dozens of CVEs and
@@ -366,8 +378,8 @@ function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies) {
   }
   for (let i = 0; i < actual.length; i++) {
     if (consumed.has(i)) continue;
-    const a = actual[i];
-    fps.push({ file: fileOf(a), line: lineOf(a), family: familyForBench(a.vuln, vulnFamilyMap, a), vuln: a.vuln });
+    const meta = actualMeta[i];
+    fps.push({ file: meta.file, line: meta.line, family: meta.fam, vuln: meta.vuln });
   }
   return { tps, fps, fns };
 }

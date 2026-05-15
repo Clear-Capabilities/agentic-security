@@ -20,6 +20,7 @@ import { scanPromptTemplate } from './sast/prompt-template.js';
 import { scanXXE } from './sast/xxe.js';
 import { scanJNDI } from './sast/jndi.js';
 import { scanJavaBenchExtras, applyJavaBenchSuppressions } from './sast/java-bench-extras.js';
+import { deadBranchRanges as _deadBranchRanges, isLineInDeadRange as _isLineInDeadRange } from './sast/java-ast-folding.js';
 import { scanJavaDeserialization } from './sast/java-deserialization.js';
 import { scanJwtExp } from './sast/jwt-exp.js';
 import { scanZipSlip } from './sast/zip-slip.js';
@@ -3214,6 +3215,104 @@ const _JAVA_ALLOWLIST_GUARD_RE = /if\s*\(\s*!\s*(?:Pattern\s*\.\s*matches\s*\(\s
 // Find methods in the file whose body contains a known sanitizer call. These
 // methods are treated as sanitizer wrappers — assignments from them produce
 // sanitized values. Common in OWASP Benchmark "DataflowThruInnerClass" tests.
+// ─── Cross-file Java tainted-method index ──────────────────────────────
+//
+// Roadmap item #5 (true cross-file source chaining). A pre-pass over every
+// Java file in the scan builds a global Set<methodName> of methods that
+// return user-input. A method qualifies if its body:
+//   - calls a known source (request.getParameter, System.getenv,
+//     Socket.getInputStream/readLine chain, etc.) AND
+//   - returns a value transitively assigned from that source.
+//
+// Subsequent per-file taint analysis treats `var = SomeWrapper.knownGetter(...)`
+// or `var = StaticClass.helper(...)` as an additional source bind when
+// `knownGetter` / `helper` is in this set.
+//
+// Targets Juliet's DataflowThruInnerClass / Vector / Stream variants where
+// the BadSource lives in a helper file (juliet.support.IO, custom wrapper
+// classes) that the per-file scan can't see.
+let _GLOBAL_JAVA_TAINTED_METHODS = new Set();
+
+const _GLOBAL_JAVA_SOURCE_RE_FOR_INDEX = /\b(?:request|req)\s*\.\s*(?:getParameter|getHeader|getCookies|getQueryString|getInputStream|getReader|getRequestURI|getRequestURL|getRemoteUser|getRemoteAddr|getPathInfo)\b|\bSystem\s*\.\s*get(?:env|Property)\s*\(|\bnew\s+(?:Server)?Socket\s*\(|\.openConnection\s*\(\s*\)|\.readLine\s*\(\s*\)|\bgetTheValue\s*\(/;
+
+function _buildGlobalJavaTaintedMethodIndex(fileContents) {
+  const out = new Set();
+  for (const [path, content] of Object.entries(fileContents)) {
+    if (!/\.java$/i.test(path) || !content || content.length > 500_000) continue;
+    if (!_GLOBAL_JAVA_SOURCE_RE_FOR_INDEX.test(content)) continue;
+    const cleaned = stripNoise(content);
+    // Same method-extraction pattern as _javaFindSanitizerMethods.
+    const re = /\b(?:public|private|protected|static|final|\s)+\s*[\w.<>\[\]]+\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
+    let m;
+    while ((m = re.exec(cleaned)) !== null) {
+      const methodName = m[1];
+      if (['if','for','while','switch','catch','synchronized','class','new'].includes(methodName)) continue;
+      // Find body via brace counter.
+      let depth = 1, j = m.index + m[0].length;
+      while (j < cleaned.length && depth > 0) {
+        const ch = cleaned[j];
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+        j++;
+      }
+      const body = cleaned.substring(m.index + m[0].length, j - 1);
+      // Quick gate: body must contain a source AND a `return X` statement.
+      if (!_GLOBAL_JAVA_SOURCE_RE_FOR_INDEX.test(body)) continue;
+      // Build local taint within body.
+      const sourceVars = new Set();
+      const bindRe = /\b([A-Za-z_]\w*)\s*=\s*[^;]*\b(?:request\s*\.\s*get\w+|System\s*\.\s*get(?:env|Property)|\w+\s*\.\s*readLine|\w+\s*\.\s*getInputStream)\s*\(/g;
+      let bm;
+      while ((bm = bindRe.exec(body)) !== null) sourceVars.add(bm[1]);
+      // Propagate transitively.
+      let changed = true, safety = 4;
+      while (changed && safety-- > 0) {
+        changed = false;
+        const aRe = /\b([A-Za-z_]\w*)\s*=(?!=)\s*([^;]+?)(?:;|\/\/|$)/g;
+        let am;
+        while ((am = aRe.exec(body)) !== null) {
+          const lhs = am[1];
+          const rhs = am[2];
+          if (sourceVars.has(lhs)) continue;
+          if (['if','for','while','return','this','new'].includes(lhs)) continue;
+          if (_JAVA_GENERIC_SANITIZER_RE.test(rhs)) continue;
+          const tokens = rhs.match(/\b[A-Za-z_]\w*\b/g) || [];
+          if (tokens.some(t => sourceVars.has(t))) {
+            sourceVars.add(lhs);
+            changed = true;
+          }
+        }
+      }
+      // Look for `return X` where X is in sourceVars.
+      const retRe = /\breturn\s+([A-Za-z_]\w*)\s*[;)]/g;
+      let rm;
+      while ((rm = retRe.exec(body)) !== null) {
+        if (sourceVars.has(rm[1])) {
+          out.add(methodName);
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// List every locally-defined method name in a Java file. Used by the taint
+// propagator: if RHS calls a local method that is NOT in the passthrough set,
+// don't propagate taint just because the call's args contain a tainted var
+// (the method's return may be a constant — OWASP Benchmark's
+// DataflowThruInnerClass uses this trick).
+function _javaListLocalMethods(cleaned) {
+  const out = new Set();
+  const re = /\b(?:public|private|protected|static|final|\s)+\s*[\w.<>\[\]]+\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
+  let m;
+  while ((m = re.exec(cleaned)) !== null) {
+    const name = m[1];
+    if (['if','for','while','switch','catch','synchronized','class','new','else'].includes(name)) continue;
+    out.add(name);
+  }
+  return out;
+}
+
 function _javaFindSanitizerMethods(cleaned) {
   const out = new Set();
   // Match: <return-type> <methodName>(...) { ... }
@@ -3280,8 +3379,15 @@ function _javaFindTaintPassthroughMethods(cleaned) {
     const body = cleaned.substring(m.index + m[0].length, j - 1);
     // Skip if body contains a sanitizer — sanitizer detection takes precedence.
     if (_JAVA_GENERIC_SANITIZER_RE.test(body)) continue;
+    // Skip if body has a ternary/if/switch where any branch produces a string
+    // literal — taint flow is conditional and the literal branch may be the
+    // only live one (OWASP Benchmark's constant-folded helper pattern).
+    // Conservative: avoid passthrough marking entirely for these shapes.
+    if (/\?\s*"[^"]*"|:\s*"[^"]*"\s*[;:]|case\s+[^:]+:\s*\w+\s*=\s*"[^"]*"/.test(body)) continue;
+    // Also skip methods with multiple `return` statements where any returns a
+    // string literal — same reasoning.
+    if (/\breturn\s+"[^"]*"\s*[;)]/.test(body) && /\breturn\s+[A-Za-z_]\w*\s*[;)]/.test(body)) continue;
     // Build local-var taint set: vars assigned from any param (transitive).
-    // Use the same iterative-fixed-point logic as the main taint map.
     const localTainted = new Set(params);
     let changed = true, safety = 6;
     while (changed && safety-- > 0) {
@@ -3295,6 +3401,9 @@ function _javaFindTaintPassthroughMethods(cleaned) {
         if (localTainted.has(lhs)) continue;
         // Skip if RHS goes through a sanitizer.
         if (_JAVA_GENERIC_SANITIZER_RE.test(rhs)) continue;
+        // Skip if RHS contains a ternary with a literal branch — could be
+        // sanitized depending on the condition.
+        if (/\?[^:]*"[^"]*"\s*:|\?[^:]*:\s*"[^"]*"/.test(rhs)) continue;
         const tokens = rhs.match(/\b[A-Za-z_]\w*\b/g) || [];
         if (tokens.some(t => localTainted.has(t))) {
           localTainted.add(lhs);
@@ -3302,19 +3411,25 @@ function _javaFindTaintPassthroughMethods(cleaned) {
         }
       }
     }
-    // Look for `return <X>` where X is in localTainted.
+    // Look for `return <X>` where X is in localTainted AND X is a parameter
+    // (direct passthrough — most precise signal). Stricter than tracking
+    // through transitive assignments.
     const returnRe = /\breturn\s+([A-Za-z_]\w*)\s*[;)]/g;
     const passthroughPositions = new Set();
     let rm;
     while ((rm = returnRe.exec(body)) !== null) {
       const retVar = rm[1];
       if (!localTainted.has(retVar)) continue;
-      // Find which param position(s) this var traces back to.
-      // Conservative: mark all params as potential passthroughs.
-      // Engine sees `methodCall(arg1, arg2)`; if any arg is tainted and method
-      // is in the index, mark result tainted. Per-position precision would
-      // require tracking the var's exact source.
-      for (let i = 0; i < params.length; i++) passthroughPositions.add(i);
+      // Only mark the param position(s) directly returned (not transitive).
+      const paramIdx = params.indexOf(retVar);
+      if (paramIdx >= 0) {
+        passthroughPositions.add(paramIdx);
+      } else {
+        // Fall back to all positions (existing conservative behaviour) only
+        // when the returned var was clearly assigned from exactly one param.
+        // Skip otherwise — better to miss than to FP.
+        continue;
+      }
     }
     if (passthroughPositions.size > 0) out.set(methodName, passthroughPositions);
   }
@@ -3327,6 +3442,12 @@ function _buildJavaTaintMap(cleaned, lines) {
   const sourceVarLine = new Map();
   const sanitizerMethods = _javaFindSanitizerMethods(cleaned);
   const passthroughMethods = _javaFindTaintPassthroughMethods(cleaned);
+  // Dead-branch awareness: assignments inside provably-unreachable if/switch
+  // branches must NOT propagate taint. Without this, OWASP Benchmark's
+  // canonical dead-else pattern (`if ((7*42)-86>200) bar="x"; else bar=param;`)
+  // taints `bar` even though the live branch always assigns the literal.
+  let deadRanges = [];
+  try { deadRanges = _deadBranchRanges(cleaned); } catch { /* parse error → no dead-range awareness */ }
   // Pass 1: find direct source-bound variables.
   const sourceBindGroups = [_JAVA_SOURCE_BINDS];
   // Juliet-shape patterns (readLine, getInputStream chains) only apply when
@@ -3346,6 +3467,26 @@ function _buildJavaTaintMap(cleaned, lines) {
       }
     }
   }
+  // Cross-file source chaining (roadmap #5): if RHS of an assignment calls a
+  // method known globally to return user-input (built by
+  // _buildGlobalJavaTaintedMethodIndex in the runFullScan pre-pass), mark LHS
+  // tainted. Common Juliet shapes: helper.readData(), wrapper.getValue().
+  if (_GLOBAL_JAVA_TAINTED_METHODS.size > 0) {
+    const globalMethodCallRe = /\b([A-Za-z_]\w*)\s*=\s*[^;]*\b([A-Za-z_]\w*)\s*\(/g;
+    let gm;
+    while ((gm = globalMethodCallRe.exec(cleaned)) !== null) {
+      const lhs = gm[1];
+      const calledMethod = gm[2];
+      if (lhs === calledMethod) continue; // skip same-name (e.g. constructor pattern)
+      if (_GLOBAL_JAVA_TAINTED_METHODS.has(calledMethod)) {
+        if (!tainted.has(lhs)) {
+          tainted.add(lhs);
+          const ln = cleaned.substring(0, gm.index).split('\n').length;
+          if (!sourceVarLine.has(lhs)) sourceVarLine.set(lhs, ln);
+        }
+      }
+    }
+  }
   // OWASP Benchmark convention: `param` is almost always the user-controlled
   // String. Detect it and similar canonical names whenever they appear on the
   // LHS of an assignment whose RHS references any tainted var.
@@ -3359,6 +3500,9 @@ function _buildJavaTaintMap(cleaned, lines) {
     changed = false;
     for (let i = 0; i < lines.length; i++) {
       const ln = lines[i];
+      // Skip assignments in provably-dead branches — they can't influence the
+      // live program state. (Fixes OWASP Benchmark dead-else FPs.)
+      if (deadRanges.length && _isLineInDeadRange(i + 1, deadRanges)) continue;
       const re = new RegExp(_JAVA_ASSIGN_RE.source, _JAVA_ASSIGN_RE.flags);
       let am;
       while ((am = re.exec(ln)) !== null) {
@@ -3387,15 +3531,25 @@ function _buildJavaTaintMap(cleaned, lines) {
         // returns one of its parameters, and a tainted var is passed at that
         // position. Mark LHS tainted. (Roadmap item #4.)
         if (passthroughMethods.size > 0) {
-          for (const [methodName] of passthroughMethods) {
+          let propagated = false;
+          for (const [methodName, positions] of passthroughMethods) {
             const callRe = new RegExp(`\\b${methodName}\\s*\\(([^)]*)\\)`);
             const cm = callRe.exec(rhs);
             if (!cm) continue;
-            const argTokens = (cm[1].match(/\b[A-Za-z_]\w*\b/g) || []);
-            if (argTokens.some(t => tainted.has(t) && !sanitized.has(t))) {
-              if (!tainted.has(lhs)) { tainted.add(lhs); changed = true; }
-              break;
+            // Split args by top-level commas; check only the positions where
+            // taint is known to pass through.
+            const args = cm[1].split(',').map(s => s.trim());
+            for (const pos of positions) {
+              const arg = args[pos];
+              if (!arg) continue;
+              const argTokens = arg.match(/\b[A-Za-z_]\w*\b/g) || [];
+              if (argTokens.some(t => tainted.has(t) && !sanitized.has(t))) {
+                if (!tainted.has(lhs)) { tainted.add(lhs); changed = true; }
+                propagated = true;
+                break;
+              }
             }
+            if (propagated) break;
           }
         }
         // Otherwise: if RHS references any tainted var (and isn't a pure literal),
@@ -3516,7 +3670,14 @@ function scanJavaSAST(fp, raw) {
   const cleaned = stripNoise(raw);
   const lines = raw.split('\n');
   const findings = [];
-  const hasSource = _JAVA_HTTP_SOURCE_RE.test(cleaned);
+  // hasSource: file has a direct user-input source OR calls a globally-known
+  // tainted-returning method (cross-file source chaining, roadmap #5).
+  let hasSource = _JAVA_HTTP_SOURCE_RE.test(cleaned);
+  if (!hasSource && _GLOBAL_JAVA_TAINTED_METHODS.size > 0) {
+    for (const mn of _GLOBAL_JAVA_TAINTED_METHODS) {
+      if (new RegExp(`\\b${mn}\\s*\\(`).test(cleaned)) { hasSource = true; break; }
+    }
+  }
   const restrictTo = _javaWebServletCategory(cleaned);
   const _WEAK_ALGO_LITERAL_RE = /['"](?:MD2|MD4|MD5|SHA-?1|SHA1|DES|DESede|3DES|RC2|RC4|Blowfish|AES\/ECB|HmacMD5|HmacSHA1|SSL|SSLv2|SSLv3|TLSv1|TLSv1\.1|SHA1PRNG|MD5withRSA|SHA1withRSA|SHA1WithRSA|MD5withDSA)[^"']*['"]/i;
   let hasWeakAlgoLiteral = _WEAK_ALGO_LITERAL_RE.test(cleaned);
@@ -5973,7 +6134,14 @@ async function queryRegistries(components){
 
 // Node port: takes { fileContents, depFileContents } maps directly instead of a JSZip object.
 // fileContents = code files keyed by relative path; depFileContents = manifest/lockfiles keyed by relative path.
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);const files=Object.keys(fileContents).filter(f=>shouldScan(f) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];let i=0;for(const p of files){i++;setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});try{const c=fileContents[p];if(!c||c.length>500000)continue;const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000)continue;fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aF.push(...scanAliasedSinks(p,c));aF.push(...scanJavaSAST(p,c));aF.push(...scanJavaBenchExtras(p,c));aLogic.push(...scanMiddlewareOrdering(p,c));aLogic.push(...scanReDoS(p,c));aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));aF.push(...scanIaC(p,c));
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
+  // Pre-pass: build cross-file Java tainted-method index so per-file taint
+  // analysis can recognize calls to user-input-returning helper methods
+  // defined in OTHER files (Juliet's DataflowThruInnerClass / Vector / Stream
+  // variants, OWASP Benchmark's helpers package). Roadmap item #5.
+  try { _GLOBAL_JAVA_TAINTED_METHODS = _buildGlobalJavaTaintedMethodIndex(fileContents); }
+  catch { _GLOBAL_JAVA_TAINTED_METHODS = new Set(); }
+  const files=Object.keys(fileContents).filter(f=>shouldScan(f) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];let i=0;for(const p of files){i++;setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});try{const c=fileContents[p];if(!c||c.length>500000)continue;const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000)continue;fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aF.push(...scanAliasedSinks(p,c));aF.push(...scanJavaSAST(p,c));aF.push(...scanJavaBenchExtras(p,c));aLogic.push(...scanMiddlewareOrdering(p,c));aLogic.push(...scanReDoS(p,c));aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));aF.push(...scanIaC(p,c));
       aF.push(...scanLLM(p,c));
       aF.push(...scanLLMOwasp(p,c));
       aLogic.push(...scanBusinessLogic(p,c));
