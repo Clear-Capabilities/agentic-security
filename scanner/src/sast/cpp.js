@@ -1,9 +1,10 @@
 // C / C++ memory-safety SAST module.
 //
 // Covers the OWASP C/C++ "banned-API" set: classic functions that are
-// unsafe by design and have safer replacements. These patterns are
-// syntactic — no taint analysis. Precision is high because the unsafe
-// functions are universally documented as deprecated.
+// unsafe by design and have safer replacements. Patterns are syntactic —
+// no taint analysis. Each rule has an optional `gate(ctx)` predicate that
+// runs against the file/line context to suppress emissions outside the
+// security-relevant context for that rule.
 //
 // Vuln families:
 //   - buffer-overflow   strcpy, strcat, gets, sprintf (no `_s` / no `n`)
@@ -16,6 +17,55 @@
 
 import { blankComments } from './_comment-strip.js';
 
+// ── context detectors ───────────────────────────────────────────────────────
+
+// Files that #include any well-known crypto header — strong signal that any
+// rand()/srand() call here is security-relevant.
+const _CRYPTO_INCLUDE_RE = /#\s*include\s*[<"](?:openssl\/|sodium|sodium\.h|sodium\/|mbedtls\/|wolfssl\/|crypto\.h|gcrypt\.h|nettle\/|tomcrypt|bcrypt\.h|wincrypt\.h|bearssl|monocypher|s2n|botan)[^>"]*[>"]/i;
+
+// Variable names that suggest the rand() output feeds something security-
+// sensitive: tokens, keys, IVs, nonces, salts, session IDs, passwords.
+const _CRYPTO_VAR_RE = /\b(?:token|key|iv|nonce|salt|seed|secret|password|passwd|pwd|cookie|session|sid|csrf|nonce|challenge|jwt|hmac|signature|sig)\b/i;
+
+// Sensitive context for `rand()`: either the assignment target on the same
+// line, OR the surrounding 5 lines mention crypto-suggestive identifiers.
+function _isCryptoContextRand(ctx) {
+  const file = ctx.file;
+  if (_CRYPTO_INCLUDE_RE.test(ctx.raw)) return true;
+  // Check the line + 4 lines before for a crypto-shaped variable name.
+  const lines = ctx.raw.split('\n');
+  const start = Math.max(0, ctx.line - 5);
+  const window = lines.slice(start, ctx.line).join(' ');
+  if (_CRYPTO_VAR_RE.test(window)) return true;
+  // Some files name themselves cryptographically (e.g. `crypto_kdf.c`).
+  if (/(?:crypt|secure|auth|password|secret|token|kdf|hkdf|hmac|nonce|prng|rand)/i.test(file)) return true;
+  return false;
+}
+
+// Defensive `sizeof(dst)` check on the destination of a strcpy/strcat. If the
+// surrounding 3 lines guard the copy with `if (strlen(src) < sizeof(dst))` or
+// equivalent, we can't say the call is unsafe.
+const _SIZEOF_GUARD_RE = /\bsizeof\s*\(\s*\w+\s*\)|\bstrnlen\s*\(|\bsnprintf\s*\(/;
+function _isStrcpyGuarded(ctx) {
+  const lines = ctx.raw.split('\n');
+  const start = Math.max(0, ctx.line - 4);
+  const window = lines.slice(start, ctx.line).join(' ');
+  return _SIZEOF_GUARD_RE.test(window);
+}
+
+// Format-string: only fire when the variable holding the format string was
+// not assigned from a string literal earlier in the file.
+function _isPrintfVarLiteral(ctx, varName) {
+  if (!varName) return false;
+  // Search for `varName = "literal"` or `const char *varName = "literal"` etc.
+  const re = new RegExp(`\\b${varName}\\s*=\\s*"`, 'm');
+  // Only consider assignments BEFORE the call (positional check).
+  const before = ctx.raw.split('\n').slice(0, ctx.line - 1).join('\n');
+  return re.test(before);
+}
+
+// ── rule table ──────────────────────────────────────────────────────────────
+
 const FINDINGS = [
   // Banned string-handling: no upper bound. strcpy/strcat have safer _s
   // variants on Windows and strlcpy on BSD/macOS.
@@ -24,13 +74,16 @@ const FINDINGS = [
     re: /\b(strcpy|strcat|gets|stpcpy|sprintf)\s*\(/g,
     vuln: 'Banned API — unbounded string copy/format (potential buffer overflow)',
     remediation: 'Replace with the bounded variant: strcpy → strlcpy / strcpy_s; strcat → strlcat / strcat_s; gets → fgets(buf, sizeof(buf), stdin); sprintf → snprintf(buf, sizeof(buf), "%s", v). The unbounded form will silently overflow on attacker-controlled input.',
+    gate: (ctx) => !_isStrcpyGuarded(ctx),
   },
   {
     id: 'cpp-printf-fmt', severity: 'high', cwe: 'CWE-134', family: 'format-string',
     // printf/fprintf/sprintf where the format arg is a variable, not a literal
-    re: /\b(?:printf|fprintf|syslog|vprintf|vsyslog|warn(?:x)?|err(?:x)?)\s*\(\s*(?:[a-zA-Z_]\w*|argv\[\d+\])\s*[,)]/g,
+    re: /\b(?:printf|fprintf|syslog|vprintf|vsyslog|warn(?:x)?|err(?:x)?)\s*\(\s*([a-zA-Z_]\w*|argv\[\d+\])\s*[,)]/g,
     vuln: 'Format string vulnerability — non-literal format argument',
     remediation: 'Always pass a literal format string: `printf("%s", user_input)` instead of `printf(user_input)`. A user-controlled `%n` / `%s` chain can read or write arbitrary memory.',
+    // Capture group 1 = the variable name; suppress if proven literal.
+    gate: (ctx, m) => !_isPrintfVarLiteral(ctx, m && m[1]),
   },
   {
     id: 'cpp-system', severity: 'critical', cwe: 'CWE-78', family: 'command-injection',
@@ -62,12 +115,18 @@ const FINDINGS = [
     re: /\b(?:rand|random|srand)\s*\(/g,
     vuln: 'Cryptographically weak PRNG (rand/random/srand)',
     remediation: 'rand() is a linear-congruential generator — predictable from a few outputs. For security use cases (tokens, IVs, salts), use a CSPRNG: getrandom() / RAND_bytes() / std::random_device + std::mt19937_64 seeded from /dev/urandom.',
+    // Only fire in plausibly-cryptographic contexts. Outside crypto: rand()
+    // is a normal language facility (test data, branch selection, jitter).
+    gate: (ctx) => _isCryptoContextRand(ctx),
   },
   {
     id: 'cpp-srand-time', severity: 'high', cwe: 'CWE-338', family: 'weak-rng',
     re: /\bsrand\s*\(\s*time\s*\(\s*(?:NULL|nullptr|0)?\s*\)/g,
     vuln: 'Cryptographic randomness seeded from time() (fully predictable)',
     remediation: 'time() seeds are guessable to within ±1 second. For any security-sensitive RNG, seed from /dev/urandom or use OS-provided CSPRNG (getrandom() / BCryptGenRandom).',
+    // Same gate — `srand(time(NULL))` outside a crypto context is just a
+    // common (bad) example pattern, not a real vulnerability.
+    gate: (ctx) => _isCryptoContextRand(ctx),
   },
 ];
 
@@ -94,6 +153,13 @@ export function scanCpp(fp, raw) {
       // are often re-declarations / wrappers in the same file.
       const lineText = (raw.split('\n')[line - 1] || '');
       if (/^\s*#\s*define\b/.test(lineText)) continue;
+      // Per-rule contextual gate (Action 2). Suppress when the surrounding
+      // file/line context shows the call is not security-relevant.
+      if (typeof rule.gate === 'function') {
+        try {
+          if (!rule.gate({ file: fp, raw, line, lineText }, m)) continue;
+        } catch { /* gate threw → fail open, keep finding */ }
+      }
       out.push({
         id, file: fp, line,
         vuln: rule.vuln,

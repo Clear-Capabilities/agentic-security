@@ -128,6 +128,7 @@ async function loadCuratedExpected(name, gtPath) {
 async function buildJulietCppExpected(repoRoot, gt) {
   const expected = [];
   const cweMap = gt.cweToFamily || {};
+  const precise = !!gt.preciseMethodScoring;
   const root = path.join(repoRoot, 'testcases');
   let entries;
   try { entries = await fs.readdir(root, { withFileTypes: true }); }
@@ -151,19 +152,96 @@ async function buildJulietCppExpected(repoRoot, gt) {
         // headers via the same heuristic in cpp.js.
         if (/^main_linux\.c|main\.c|std_thread\.c$/i.test(f.name)) continue;
         const rel = path.relative(repoRoot, p);
-        expected.push({
-          file: rel,
-          line: 1,
-          lineTolerance: 9999,
-          matchAny: true,
-          family,
-          cwe,
-        });
+        if (precise) {
+          // Per-method GT: extract _bad()/_good*() spans. Emissions inside
+          // _bad() count as TPs; emissions in _good*() count as FPs.
+          let content = '';
+          try { content = await fs.readFile(p, 'utf8'); } catch { /* skip */ }
+          if (!content) continue;
+          const methods = findCppMethodSpans(content);
+          let anyEmitted = false;
+          for (const meth of methods) {
+            // Juliet C/C++ naming: <case>_bad / <case>_goodG2B / <case>_goodB2G / <case>_good.
+            // _bad and _goodG2B (good source → bad sink) should fire.
+            // _good and _goodB2G should NOT fire.
+            const isBad = /_bad$/.test(meth.name) || /_goodG2B(?:\d*)$/.test(meth.name);
+            if (isBad) {
+              expected.push({
+                file: rel,
+                line: meth.startLine,
+                lineEnd: meth.endLine,
+                lineTolerance: 0,
+                matchAny: true,
+                family,
+                cwe,
+                method: meth.name,
+              });
+              anyEmitted = true;
+            }
+          }
+          if (!anyEmitted) {
+            expected.push({ file: rel, line: 1, lineTolerance: 9999, matchAny: true, family, cwe });
+          }
+        } else {
+          expected.push({
+            file: rel,
+            line: 1,
+            lineTolerance: 9999,
+            matchAny: true,
+            family,
+            cwe,
+          });
+        }
       }
     }
     await walk(path.join(root, e.name));
   }
   return expected;
+}
+
+// Walk a C/C++ file and extract { name, startLine, endLine } for each
+// function definition using brace-counting. Sufficient for Juliet's
+// template-generated files where each test has clearly-delimited
+// `<case>_bad` / `<case>_goodG2B` / `<case>_goodB2G` / `<case>_good`
+// functions with no preprocessor obfuscation in the body.
+function findCppMethodSpans(content) {
+  const methods = [];
+  // Match: optional storage qualifiers + return type + identifier + params + opening brace.
+  // Keep the regex permissive — Juliet uses a small subset of C/C++ types in test files.
+  const declRe = /^(?:[ \t]*(?:static|extern|inline|void|int|char|long|short|float|double|unsigned|signed|size_t|ssize_t|FILE|bool|wchar_t|HANDLE|struct\s+\w+|[A-Za-z_]\w*\s*\*?)\s+)+(\w+)\s*\([^)]*\)\s*\{/gm;
+  let m;
+  while ((m = declRe.exec(content))) {
+    const name = m[1];
+    if (name === 'if' || name === 'while' || name === 'for' || name === 'switch' || name === 'sizeof' || name === 'return') continue;
+    const openIdx = m.index + m[0].length - 1;
+    let depth = 1, i = openIdx + 1;
+    while (i < content.length && depth > 0) {
+      const ch = content[i];
+      if (ch === '"' || ch === "'") {
+        const quote = ch; i++;
+        while (i < content.length && content[i] !== quote) {
+          if (content[i] === '\\') i += 2; else i++;
+        }
+        i++; continue;
+      }
+      if (ch === '/' && content[i + 1] === '/') {
+        while (i < content.length && content[i] !== '\n') i++;
+        continue;
+      }
+      if (ch === '/' && content[i + 1] === '*') {
+        i += 2;
+        while (i < content.length - 1 && !(content[i] === '*' && content[i + 1] === '/')) i++;
+        i += 2; continue;
+      }
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      i++;
+    }
+    const startLine = content.substring(0, m.index).split('\n').length;
+    const endLine = content.substring(0, i).split('\n').length;
+    methods.push({ name, startLine, endLine });
+  }
+  return methods;
 }
 
 // Walk a Java file and extract { name, startLine, endLine } for each method

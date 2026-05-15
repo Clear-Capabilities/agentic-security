@@ -50,7 +50,7 @@
       "groundTruth": {
         "kind": "juliet",
         "preciseMethodScoring": false,
-        "_preciseMethodScoringDoc": "When true, buildJulietExpected extracts bad()/goodG2B() method spans via brace-counting and emits per-method expected entries with line ranges. Emissions in good()/goodB2G() spans become FPs (intentionally sanitized code emissions). Reveals true engine precision but lowers strict F1 vs. file-level GT. Default false until tree-sitter-java integration lands (roadmap #1).",
+        "_preciseMethodScoringDoc": "Methodology toggle. When true, buildJulietExpected extracts bad()/goodG2B() spans and scores per-method — strictly more honest, but NOT comparable to the published file-level baselines. Default false to keep cross-version F1 numbers comparable. Flip to true when reporting per-method precision separately.",
         "_doc": "We map the CWEs the scanner has rules for. Mappings extended in 0.34.5 to cover XSS variants (CWE-80/81/83), additional hardcoded-credential CWEs (CWE-256/259/321), data-exposure (CWE-315), insecure transport (CWE-319), additional weak-RNG (CWE-329/336), cookie flags (CWE-614), and path-traversal (CWE-23). Each scanner finding now maps to a Juliet CWE directory if one exists.",
         "cweToFamily": {
           "CWE23": "path-traversal",
@@ -451,6 +451,8 @@
       "_doc": "NIST SARD Juliet C/C++ Test Suite v1.3 \u2014 118 CWEs, 87k+ test cases. Directly exercises cpp.js (banned-API rules) at scale. Un-quarantined in this release: buildJulietCppExpected walks testcases/CWE<N>_*/  and emits one expected entry per .c/.cpp file for the CWEs the scanner has rules for.",
       "groundTruth": {
         "kind": "juliet-c-cpp",
+        "preciseMethodScoring": false,
+        "_preciseMethodScoringDoc": "Methodology toggle. When true, buildJulietCppExpected extracts <case>_bad / <case>_goodG2B function spans via findCppMethodSpans and scores per-method — strictly more honest, but NOT comparable to the file-level baseline. Default false to keep cross-version F1 numbers comparable. Flip to true when reporting per-method precision separately.",
         "cweToFamily": {
           "CWE78": "command-injection",
           "CWE120": "buffer-overflow",

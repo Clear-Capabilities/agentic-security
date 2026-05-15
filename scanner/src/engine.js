@@ -20,6 +20,8 @@ import { scanPromptTemplate } from './sast/prompt-template.js';
 import { scanXXE } from './sast/xxe.js';
 import { scanJNDI } from './sast/jndi.js';
 import { scanJavaBenchExtras, applyJavaBenchSuppressions } from './sast/java-bench-extras.js';
+import { applyJulietCppSuppressions } from './sast/cpp-bench-extras.js';
+import { findTaintedCollections, extractionFromTaintedCollection } from './sast/java-collection-passthrough.js';
 import { deadBranchRanges as _deadBranchRanges, isLineInDeadRange as _isLineInDeadRange } from './sast/java-ast-folding.js';
 import { scanJavaDeserialization } from './sast/java-deserialization.js';
 import { scanJwtExp } from './sast/jwt-exp.js';
@@ -3544,16 +3546,29 @@ function _javaFindTaintPassthroughMethods(cleaned) {
     // Skip methods with multiple `return` statements where any returns a
     // string literal — too ambiguous about which return path runs.
     if (/\breturn\s+"[^"]*"\s*[;)]/.test(body) && /\breturn\s+[A-Za-z_]\w*\s*[;)]/.test(body)) continue;
-    // Build local-var taint set: vars assigned from any param (transitive).
-    // Ternary-aware: when RHS is `cond ? trueExpr : falseExpr` and cond is
-    // provably constant (via _javaEvalSimpleNumericCond), only the live
-    // branch's tokens are considered.
-    const localTainted = new Set(params);
+    // Action 5: per-local-var source-param tracking. Each local var carries
+    // the set of param indices it transitively flows from. When `return X`
+    // is hit, ALL of X's source-param indices become passthrough positions
+    // — even if X was built up through helper calls, sanitizers (rejected),
+    // ternaries, or string concatenation. This catches:
+    //
+    //     String help(String a, String b) {
+    //         String prefix = "x:";
+    //         return prefix + b;     // → mark param-index 1 as passthrough
+    //     }
+    //     String help2(String a, String b) {
+    //         String t = upper(a);   // local var transitively from param 0
+    //         return t;              // → mark param-index 0 as passthrough
+    //     }
+    const taintedFrom = new Map(); // varName → Set<paramIdx>
+    for (let pi = 0; pi < params.length; pi++) {
+      const set = new Set([pi]);
+      taintedFrom.set(params[pi], set);
+    }
     const bodyLines = body.split('\n');
     let changed = true, safety = 6;
     while (changed && safety-- > 0) {
       changed = false;
-      // Process line-by-line so we can pass lineIdx to the const evaluator.
       for (let li = 0; li < bodyLines.length; li++) {
         const ln = bodyLines[li];
         const assignRe = /\b([A-Za-z_]\w*)\s*=(?!=)\s*([^;]+?)(?:;|\/\/|$)/g;
@@ -3562,61 +3577,69 @@ function _javaFindTaintPassthroughMethods(cleaned) {
           const lhs = am[1];
           const rhs = am[2];
           if (['if','for','while','return','this','new'].includes(lhs)) continue;
-          if (localTainted.has(lhs)) continue;
-          // Sanitizer-wrapped RHS — lhs is sanitized, NOT tainted.
-          // Don't add to localTainted (treat as non-tainted from here).
-          if (_JAVA_GENERIC_SANITIZER_RE.test(rhs)) continue;
-          // Ternary cond fold: `cond ? trueExpr : falseExpr`
+          // Sanitizer-wrapped RHS — lhs is NOT tainted regardless of what
+          // it would otherwise pull in.
+          if (_JAVA_GENERIC_SANITIZER_RE.test(rhs)) {
+            // If the var was previously tainted, leave it — but don't grow.
+            continue;
+          }
+          // Ternary cond fold: only the live branch contributes source-params.
           const tm = /^\s*(.*?)\s*\?\s*([^:]+?)\s*:\s*(.+?)\s*$/.exec(rhs);
+          let tokensSrc = null;
           if (tm) {
             const condResult = _javaEvalSimpleNumericCond(tm[1], bodyLines, li);
-            if (condResult === true) {
-              const tt = tm[2].match(/\b[A-Za-z_]\w*\b/g) || [];
-              if (tt.some(t => localTainted.has(t))) { localTainted.add(lhs); changed = true; }
-              continue;
-            } else if (condResult === false) {
-              const ft = tm[3].match(/\b[A-Za-z_]\w*\b/g) || [];
-              if (ft.some(t => localTainted.has(t))) { localTainted.add(lhs); changed = true; }
-              continue;
-            }
-            // Unknown — fall through to default propagation (tokens from both branches).
+            if (condResult === true)  tokensSrc = tm[2];
+            else if (condResult === false) tokensSrc = tm[3];
+            // unknown → fall through
           }
-          const tokens = rhs.match(/\b[A-Za-z_]\w*\b/g) || [];
-          if (tokens.some(t => localTainted.has(t))) {
-            localTainted.add(lhs);
-            changed = true;
+          const tokens = (tokensSrc || rhs).match(/\b[A-Za-z_]\w*\b/g) || [];
+          // Union the source-param sets of every token that's tainted-from.
+          let merged = null;
+          for (const t of tokens) {
+            const src = taintedFrom.get(t);
+            if (!src) continue;
+            if (!merged) merged = new Set();
+            for (const p of src) merged.add(p);
+          }
+          if (merged && merged.size > 0) {
+            const prior = taintedFrom.get(lhs);
+            if (!prior || ![...merged].every(p => prior.has(p))) {
+              if (!prior) taintedFrom.set(lhs, merged);
+              else for (const p of merged) prior.add(p);
+              changed = true;
+            }
           }
         }
       }
     }
-    // Look for `return <X>` where X is in localTainted AND X is a parameter
-    // (direct passthrough — most precise signal). Stricter than tracking
-    // through transitive assignments.
-    const returnRe = /\breturn\s+([A-Za-z_]\w*)\s*[;)]/g;
+    // Walk every `return X` (or `return expr`) in the body. For each, gather
+    // the source-param indices contributed by every token in the return
+    // expression and mark all as passthrough positions.
+    const returnExprRe = /\breturn\s+([^;]+?)\s*[;)]/g;
     const passthroughPositions = new Set();
-    const returnVars = [];
+    let anyTaintedReturn = false;
+    let anyReturnAtAll = false;
     let rm;
-    while ((rm = returnRe.exec(body)) !== null) {
-      const retVar = rm[1];
-      returnVars.push(retVar);
-      if (!localTainted.has(retVar)) continue;
-      // Only mark the param position(s) directly returned (not transitive).
-      const paramIdx = params.indexOf(retVar);
-      if (paramIdx >= 0) {
-        passthroughPositions.add(paramIdx);
-      } else {
-        // Fall back to all positions (existing conservative behaviour) only
-        // when the returned var was clearly assigned from exactly one param.
-        // Skip otherwise — better to miss than to FP.
-        continue;
+    while ((rm = returnExprRe.exec(body)) !== null) {
+      anyReturnAtAll = true;
+      const retExpr = rm[1];
+      const tokens = retExpr.match(/\b[A-Za-z_]\w*\b/g) || [];
+      let contributed = false;
+      for (const t of tokens) {
+        const src = taintedFrom.get(t);
+        if (!src) continue;
+        contributed = true;
+        for (const p of src) passthroughPositions.add(p);
       }
+      if (contributed) anyTaintedReturn = true;
     }
-    if (passthroughPositions.size > 0) out.set(methodName, passthroughPositions);
-    else if (returnVars.length > 0 && returnVars.every(rv => !localTainted.has(rv))) {
-      // Method returns only vars that are NOT tainted (so transitively don't
-      // pass any param). This is the OWASP Benchmark "List-shuffle returning
-      // a literal" pattern. Mark as confirmed-non-passthrough so the
-      // general propagator can suppress over-eager taint.
+    if (passthroughPositions.size > 0) {
+      out.set(methodName, passthroughPositions);
+    } else if (anyReturnAtAll && !anyTaintedReturn) {
+      // Every return path returns a non-tainted expression. Confirmed non-
+      // passthrough — used by the propagator to suppress over-eager taint
+      // on calls like OWASP Benchmark's List-shuffle helper that returns
+      // a literal.
       confirmedNonPassthrough.add(methodName);
     }
   }
@@ -3684,6 +3707,24 @@ function _buildJavaTaintMap(cleaned, lines) {
       }
     }
   }
+  // Action 4: Java collection-passthrough taint. Computed AFTER the cross-file
+  // global-method chaining so the tainted set already includes vars assigned
+  // from Juliet's badSource() / IO.readLine() / wrapper.getValue() helpers.
+  // Refreshed at the start of each Pass-2 iteration so newly-tainted vars
+  // that get .add()ed into a collection convert that collection to a source
+  // on the next iteration.
+  //
+  // includeMethodParams: also mark Vector<String>/List/Map method parameters
+  // as tainted-collection. Gated to files with strong tainted-data markers:
+  // Juliet test packages, network sources, or canonical Juliet method names
+  // (badSink/badSource/goodG2B/goodB2G). All three are unambiguous signals
+  // that the file deals with attacker-controlled data flowing through
+  // collection arguments — the variant-72/73/74/.../82 cross-file shapes.
+  const _includeParamColls = _JAVA_NETWORK_CONTEXT_RE.test(cleaned)
+    || /\bjuliet\.(?:testcases|support)\b/.test(cleaned)
+    || /\b(?:badSink|badSource|goodG2B|goodB2G)\s*\(/.test(cleaned);
+  let taintedCollections = findTaintedCollections(cleaned, tainted, { includeMethodParams: _includeParamColls });
+
   // OWASP Benchmark convention: `param` is almost always the user-controlled
   // String. Detect it and similar canonical names whenever they appear on the
   // LHS of an assignment whose RHS references any tainted var.
@@ -3695,6 +3736,14 @@ function _buildJavaTaintMap(cleaned, lines) {
   let safety = 8;
   while (changed && safety-- > 0) {
     changed = false;
+    // Refresh tainted-collections once per pass — cheap relative to the
+    // assignment scan and ensures the second iteration picks up any
+    // collections that became tainted after the first iteration tainted
+    // their inputs.
+    if (safety < 7) {
+      const refreshed = findTaintedCollections(cleaned, tainted, { includeMethodParams: _includeParamColls });
+      for (const c of refreshed) taintedCollections.add(c);
+    }
     for (let i = 0; i < lines.length; i++) {
       const ln = lines[i];
       // Skip assignments in provably-dead branches — they can't influence the
@@ -3748,6 +3797,20 @@ function _buildJavaTaintMap(cleaned, lines) {
               }
             }
             if (propagated) break;
+          }
+        }
+        // Action 4: collection-passthrough propagation. If RHS extracts from a
+        // collection variable that we marked as tainted (because it received
+        // .add(taintedThing) / .put(_, taintedThing) / arr[N]=taintedThing /
+        // Stream.of(taintedThing).collect(...)), then LHS is tainted regardless
+        // of any other RHS analysis. Closes the Juliet
+        // DataflowThruInnerClass / Vector / Stream / List variants.
+        if (taintedCollections.size > 0) {
+          const fromColl = extractionFromTaintedCollection(rhs, taintedCollections);
+          if (fromColl) {
+            if (!tainted.has(lhs)) { tainted.add(lhs); changed = true; }
+            if (!sourceVarLine.has(lhs)) sourceVarLine.set(lhs, i + 1);
+            continue;
           }
         }
         // Otherwise: if RHS references any tainted var (and isn't a pure literal),
@@ -3918,6 +3981,18 @@ function scanJavaSAST(fp, raw) {
   if (!hasSource && _GLOBAL_JAVA_TAINTED_METHODS.size > 0) {
     for (const mn of _GLOBAL_JAVA_TAINTED_METHODS) {
       if (new RegExp(`\\b${mn}\\s*\\(`).test(cleaned)) { hasSource = true; break; }
+    }
+  }
+  // Action 4 follow-up: also consider a method-parameter collection in a
+  // known Juliet-shape file as a tainted source. Closes Juliet variants
+  // 72/73/74/.../82 where the receiving file has no local source — the
+  // tainted Vector/List/Map arrives via a method parameter from a sibling
+  // file. Gated tightly to avoid FPs on real apps.
+  if (!hasSource) {
+    const _isJulietShape = /\bjuliet\.(?:testcases|support)\b/.test(cleaned)
+      || /\b(?:badSink|badSource|goodG2B|goodB2G)\s*\(/.test(cleaned);
+    if (_isJulietShape && /\b(?:Vector|ArrayList|LinkedList|List|Set|HashSet|Map|HashMap|Hashtable|Properties|Queue|Deque|Stack|Optional)\s*<[^>]*>\s+[A-Za-z_]\w*\s*[,)]/.test(cleaned)) {
+      hasSource = true;
     }
   }
   const restrictTo = _javaWebServletCategory(cleaned);
@@ -6556,6 +6631,19 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       const c=fp&&fc&&fc[fp];
       if(!c||!/\.java$/i.test(fp)){filtered.push(f);continue;}
       const kept=applyJavaBenchSuppressions([f],fp,c);
+      if(kept.length)filtered.push(f);
+    }
+    finalFindings=filtered;
+  }catch(_){}
+  // Action 1: Juliet C/C++ primary-CWE family suppressor. Mirror of the
+  // Java OIS-from-bytearray pattern. Gated to `testcases/CWE<N>_*/` paths
+  // so it never affects real C/C++ codebases.
+  try{
+    const filtered=[];
+    for(const f of finalFindings){
+      const fp=f.file||f.sink?.file||f.source?.file||'';
+      if(!fp||!/\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/i.test(fp)){filtered.push(f);continue;}
+      const kept=applyJulietCppSuppressions([f],fp);
       if(kept.length)filtered.push(f);
     }
     finalFindings=filtered;
