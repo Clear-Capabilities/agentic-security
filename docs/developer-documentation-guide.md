@@ -1,4 +1,17 @@
-# AGENTIC-SECURITY
+# agentic-security — Developer Guide
+
+> The full reference. For the marketing-friendly overview, see [README.md](../README.md). This document assumes you read code, write rules, and own a CI pipeline.
+
+The 30-second tour for engineers:
+
+- **One ESM bundle.** `dist/agentic-security.mjs` is a 2.6 MB single-file CLI. Pure Node ≥ 20, no native deps, no daemon, no cloud. Pipes directly into shell, CI, IDE, or any wrapper.
+- **One state directory.** Every artifact lives under `.agentic-security/` in your repo: `last-scan.json`, `findings.{json,sarif,csv,junit.xml}`, `triage.json`, `tickets.json`, `fix-history/`, `rules.lock.json`, `scan-history.json`, integrations config. Easy to gitignore, easy to inspect, easy to ship.
+- **Four output personas.** Vibecoder (one-screen verdict + plain English) / Pro (full taxonomy, CSV+SARIF, audit suppressions) / CI (SARIF+JUnit+JSON+exit code per `--fail-on`) / machine (JSON pipe).
+- **Designed to be extended.** Custom rule DSL (Semgrep-lite), per-project rule overrides, rule packs, SARIF ingest from external tools, two-way ticket sync, deterministic mode + lockfile.
+
+If you want to skip ahead: [QUICKSTART](#quickstart) · [ARCHITECTURE](#architecture) · [COMMANDS](#commands) · [RECIPES](#recipes) · [OUTPUT FILES](#output-files) · [INTEGRATIONS](#integrations) · [CI/CD](#cicd) · [FINDINGS SCHEMA](#findings-schema).
+
+---
 
 ```
 NAME
@@ -21,7 +34,7 @@ SYNOPSIS
        /validate-findings <finding-id>
        /explain <finding-id|CWE-N|vuln-name>
 
-       Pro & vibecoder essentials (0.35.0):
+       Pro & vibecoder essentials:
        /secure [path] [--launch]
        agentic-security fix --finding <id> [--preview|--apply]
        agentic-security undo [--all|--list]
@@ -33,7 +46,7 @@ SYNOPSIS
        (auto-on) EPSS exploit-prediction enrichment via FIRST.org
        (auto-on) Blast-radius / cost framing per finding
 
-       Auto-update behavior (0.34.2+):
+       Auto-update behavior:
               Every /scan invocation first runs an auto-update check via
               scripts/auto-update-check.js. If the throttle window
               (default: 24h) has elapsed, /scan instructs Claude Code to
@@ -43,7 +56,7 @@ SYNOPSIS
                 {"enabled": true, "throttleHours": 24, "lastCheck": <epoch>}
               To disable entirely: {"enabled": false}.
 
-       Vibe-coder essentials (0.32.0):
+       Stack hardening:
        /stack-playbook
        /harden
        /db-audit
@@ -63,27 +76,27 @@ SYNOPSIS
        /security-trend
        /security-badge
 
-       Real-time bodyguards (0.34.0):
+       Real-time bodyguards:
        /ai-bodyguard [on|off|warn|block|status]
        /destructive-guard [on|off|warn|block|status]
        /predeploy-gate [install|check|status|off]
 
-       Active rotation & cost control (0.34.0):
+       Active rotation & cost control:
        /rotate-key-auto <value|--scan> [--yes]
        /llm-cost-ceiling [--apply] [--generate-middleware]
                          [--generate-tracker --daily-cap-dollars N]
 
-       Translate the jargon (0.34.0):
+       Translate the jargon:
        /risk-in-dollars [--top N] [--json]
        /story-explain <finding-id|--random|--worst>
        /daily-checkin [--setup|--slack <url>|--discord <url>|--crontab]
 
-       Customer-facing artifacts (0.34.0):
+       Customer-facing artifacts:
        /security-onepager [--company NAME] [--contact EMAIL]
        /privacy-docs [--jurisdiction EU|US-CA|UK|OTHER] [--generate-banner]
        /trust-page --contact <email> [--pgp <url>] [--canonical-url <url>]
 
-       Resilience & onboarding (0.34.0):
+       Resilience & onboarding:
        /disaster-playbook [--stack supabase,stripe,vercel,...]
        /tutorial
 
@@ -156,6 +169,82 @@ DESCRIPTION
 
 ---
 
+## ARCHITECTURE
+
+```
+                       ┌──────────────────────────────────┐
+                       │    fileContents (your code)      │
+                       └──────────────────┬───────────────┘
+                                          │
+                       ┌──────────────────▼───────────────┐
+              ┌────────┤   engine.js   (taint + AST)      ├────────┐
+              │        └──────────────────┬───────────────┘        │
+              │                           │                        │
+   ┌──────────▼──────────┐  ┌─────────────▼─────────┐  ┌───────────▼──────────┐
+   │ SAST (25+ modules)  │  │ SCA (OSV+KEV+EPSS,    │  │ Secrets (60+ patterns │
+   │ SQLi, XSS, AuthZ,   │  │ function-reachability,│  │ + entropy heuristic) │
+   │ XXE, JWT, RLS, MCP, │  │ dep-confusion,        │  │                      │
+   │ LLM, prompt-firewall│  │ typosquat, SARIF      │  │                      │
+   └──────────┬──────────┘  └─────────────┬─────────┘  └───────────┬──────────┘
+              │                           │                        │
+              └───────────────────────────┼────────────────────────┘
+                                          │
+                       ┌──────────────────▼───────────────┐
+                       │   posture/ enrichment pipeline    │
+                       │  triage · suppressions · packs    │
+                       │  EPSS · blast-radius · KEV        │
+                       │  scorecard · custom-rules         │
+                       └──────────────────┬───────────────┘
+                                          │
+                       ┌──────────────────▼───────────────┐
+                       │           reporters               │
+                       │  CLI · JSON · SARIF · JUnit · CSV │
+                       │  HTML · CycloneDX · SPDX · PBOM   │
+                       │  AI-BOM · ship-verdict · pro-table│
+                       └──────────────────┬───────────────┘
+                                          │
+              ┌───────────────────────────┼─────────────────────────┐
+              ▼                           ▼                         ▼
+     last-scan.json              SARIF → GitHub Security    tickets sync
+     (drives /fix, /report,      Tab / DefectDojo /         (GH Issues /
+      /chain, /trend, /badge)    pipeline integrations      Linear / Jira)
+```
+
+### Data flow at a glance
+
+1. `runScan()` walks the tree under `--changed-since` / `--pr` filters; yields `{ fileContents, depFileContents }` to the engine.
+2. `runFullScan()` runs every SAST module per file, builds the cross-file taint + reachability graphs, and emits raw findings into `scan.{findings, secrets, logicVulns, supplyChain, components, routes}`.
+3. The CLI applies the **enrichment pipeline** in order: SARIF ingest → suppressions (inline, custom, soft-acceptance) → rule overrides → rule packs → custom-rule pattern DSL → EPSS → blast-radius → optional `--deterministic` post-processing.
+4. The CLI writes `findings.{json, sarif, csv, junit.xml}` to `.agentic-security/`, persists `last-scan.json` for downstream commands, and appends a snapshot to `scan-history.json`.
+5. `normalizeFindings()` projects the raw schema into the canonical wire format consumed by every reporter.
+
+### Repository layout
+
+```
+       scanner/
+         bin/agentic-security.js     # CLI entry point (subcommand dispatch)
+         dist/agentic-security.mjs   # Bundled single-file CLI (built artifact)
+         src/engine.js               # Main SAST/SCA/secrets orchestrator
+         src/runScan.js              # Filesystem driver + readTree
+         src/sast/                   # 25+ language/family modules
+         src/sca/                    # OSV/KEV reachability, container, dep-confusion
+         src/secrets/                # 60+ pattern matchers + entropy
+         src/posture/                # Enrichment + reporting glue:
+                                     #   epss, blast-radius, custom-rules,
+                                     #   deterministic, fix-history, router,
+                                     #   triage, suppressions, packs, …
+         src/integrations/           # Slack/Discord/Jira/GH/Linear plumbing
+         src/report/                 # CLI/JSON/SARIF/JUnit/CSV/HTML renderers
+         test/                       # Node test runner suite (96 tests)
+       commands/                     # Slash-command markdown files
+       agents/                       # Sub-agent system prompts
+       hooks/                        # Claude Code event-driven scripts
+       .claude-plugin/plugin.json    # Plugin manifest
+       .agentic-security/            # Per-project runtime state (gitignored)
+```
+
+---
+
 ## SETUP
 
 ```
@@ -172,6 +261,115 @@ Confirm with:
 ```
        agentic-security profile show
 ```
+
+---
+
+## QUICKSTART
+
+Five minutes from `npx` to a working pro setup with a CI gate, ticket sync, and a deterministic baseline.
+
+### 1. Install and confirm
+
+```bash
+       npx @clearcapabilities/agentic-security-scanner version
+       # → agentic-security 0.35.0 · created by ClearCapabilities.Com
+```
+
+Or globally, if you prefer the short alias `as`:
+
+```bash
+       npm install -g @clearcapabilities/agentic-security-scanner
+       as version
+```
+
+### 2. Flip into pro mode
+
+```bash
+       agentic-security profile set pro
+```
+
+Lowers confidence threshold to ≥ 0.3, surfaces full taxonomy
+(CWE / CVSS / OWASP / MITRE ATT&CK / CAPEC), writes SARIF + CSV every scan,
+upgrades suppressions to audit-grade.
+
+### 3. Run your first scan
+
+```bash
+       agentic-security scan . --pack owasp-top-10 --format pro
+```
+
+Writes `.agentic-security/findings.{json, sarif, csv}` and prints the pro
+table. Your team's noise floor is now visible. Triage it once.
+
+### 4. Lock the rule-pack version
+
+```bash
+       agentic-security rules lock
+       # → wrote .agentic-security/rules.lock.json
+       #   scanner: 0.35.0  rulePackHash: 40669df8f5856e18
+```
+
+Required if you want byte-stable scans for audits, regression baselines,
+and reproducibility across the team. Re-run after upgrading.
+
+### 5. Wire CI
+
+```bash
+       # Generates .github/workflows/security.yml that runs on every PR,
+       # uploads SARIF, posts review comments, and fails on critical/high.
+       agentic-security ci . --fail-on critical
+       # — OR via the slash command, with an opinionated workflow file —
+       # claude /agentic-security:ci-gate --apply
+```
+
+### 6. Wire ticket sync (optional, dry-run first)
+
+```bash
+       # GitHub Issues — uses the gh CLI, no extra auth needed.
+       agentic-security tickets sync --provider github --severity high --dry-run
+
+       # Linear — needs LINEAR_API_KEY + a team UUID.
+       LINEAR_API_KEY=lin_api_… \
+         agentic-security tickets sync --provider linear \
+                                       --team-id <team-uuid> --severity high
+
+       # Jira — needs JIRA_BASE_URL, JIRA_EMAIL, JIRA_TOKEN, JIRA_PROJECT_KEY.
+       agentic-security tickets sync --provider jira --severity critical
+```
+
+Idempotent. Re-running creates issues for new findings, closes tickets for
+resolved findings, no-ops if nothing changed.
+
+### 7. Make it auditable
+
+```bash
+       agentic-security scan . --deterministic --format sarif --output baseline.sarif
+```
+
+Stable-sorts findings, zeros timing/scanId, refuses to run if the lockfile
+doesn't match. Commit `baseline.sarif` to your repo as the regression
+baseline; future PRs run `--changed-since` against it.
+
+### 8. (Pro tip) Author one custom rule
+
+```bash
+       mkdir -p .agentic-security/rules
+       cat > .agentic-security/rules/no-internal-bypass.yml <<'YAML'
+       id: my-org/no-internal-bypass-header
+       title: "x-internal-bypass header is debug-only"
+       severity: critical
+       cwe: CWE-287
+       languages: [javascript, typescript]
+       match:
+         pattern: 'request\.headers\[\s*['"'"'"]x-internal-bypass['"'"'"]'
+       message: "x-internal-bypass should never appear in production paths."
+       remediation: "Remove the header check or guard it behind NODE_ENV !== 'production'."
+       YAML
+       agentic-security rule test "src/**/*.ts"
+```
+
+Custom rules ship findings exactly like built-ins, with the prefix
+`custom:<id>:<file>:<line>` so you can filter them downstream.
 
 ---
 
@@ -212,7 +410,7 @@ Confirm with:
               regex, severity overrides, and disabled rules.
 ```
 
-### Vibe-coder essentials (added in 0.31.0–0.32.0)
+### Vibe-coder essentials
 
 ```
        stack-playbook
@@ -377,7 +575,7 @@ Confirm with:
                   due-diligence questionnaires or pitch decks
 ```
 
-### Pro & vibecoder essentials (added in 0.35.0)
+### Pro & vibecoder essentials
 
 ```
        secure [PATH] [--launch] [--json] [--run]
@@ -488,7 +686,7 @@ Confirm with:
               network. Disable with --no-blast-radius.
 ```
 
-### Real-time bodyguards (added in 0.34.0)
+### Real-time bodyguards
 
 ```
        ai-bodyguard [on|off|warn|block|status]
@@ -543,7 +741,7 @@ Confirm with:
               Bypass once: AS_GATE_OVERRIDE=1 <command>
 ```
 
-### Active rotation & cost control (added in 0.34.0)
+### Active rotation & cost control
 
 ```
        rotate-key-auto <value> | --scan [--yes]
@@ -604,7 +802,7 @@ Confirm with:
               Exit 1 if any uncapped calls remain — suitable for CI gate.
 ```
 
-### Translate the jargon (added in 0.34.0)
+### Translate the jargon
 
 ```
        risk-in-dollars [--top N] [--json]
@@ -645,7 +843,7 @@ Confirm with:
               (otherwise reads last-scan.json).
 ```
 
-### Customer-facing artifacts (added in 0.34.0)
+### Customer-facing artifacts
 
 ```
        security-onepager [--company NAME] [--contact EMAIL]
@@ -701,7 +899,7 @@ Confirm with:
               Re-run periodically — security.txt has a 1-year expiry.
 ```
 
-### Resilience & onboarding (added in 0.34.0)
+### Resilience & onboarding
 
 ```
        disaster-playbook [--stack supabase,stripe,vercel,...]
@@ -787,6 +985,151 @@ Confirm with:
               List available rule packs (owasp-top-10, cwe-top-25,
               llm-security, supply-chain).
 ```
+
+---
+
+## RECIPES
+
+Worked examples for the workflows pros set up most often. Every recipe is copy-pasteable.
+
+### Block PRs that introduce new critical findings
+
+Two-step pattern: snapshot a baseline once, then `--changed-since` against it on every PR.
+
+```bash
+       # ── one time, on the protected branch ──
+       agentic-security scan . --deterministic \
+                               --format sarif \
+                               --output .agentic-security/baseline.sarif
+       git add .agentic-security/baseline.sarif .agentic-security/rules.lock.json
+       git commit -m "security: pin baseline + rule-pack lockfile"
+
+       # ── on every PR (CI) ──
+       agentic-security ci .                # auto-detects PR base ref
+       # exits 1 if there are NEW critical findings vs. main; exits 0 otherwise.
+```
+
+`agentic-security ci` writes the three CI artifacts (`findings.json`,
+`findings.sarif`, `findings.junit.xml`) plus a one-line stderr summary
+formatted for GitHub Actions log highlighting.
+
+### Author + share a rule pack
+
+Rule packs in `.agentic-security/rules/` can be committed to your repo and
+shared across projects via a tarball or git submodule.
+
+```yaml
+       # .agentic-security/rules/stripe-webhook-must-verify.yml
+       id: my-org/stripe-webhook-must-verify
+       title: "Stripe webhook handler missing constructEvent()"
+       severity: critical
+       cwe: CWE-345
+       languages: [javascript, typescript]
+       match:
+         allOf:
+           - 'app\.(post|use)\([^)]*[''"]\/.*stripe.*webhook'
+           - 'req\.(body|rawBody)'
+         notMatch: 'stripe\.webhooks\.constructEvent\('
+         window: 60
+       message: "Stripe webhook handler reads req.body without verifying the
+                 stripe-signature header. Anyone can POST a fake event."
+       remediation: |
+         const sig = req.headers['stripe-signature'];
+         const event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
+```
+
+Test it before checking in:
+
+```bash
+       agentic-security rule test "test/fixtures/**/*.{ts,js}"
+       # → Loaded 1 rule(s); testing against N file(s).
+       #     [PASS] my-org/stripe-webhook-must-verify → fixtures/vulnerable/handler.ts:12
+       #     [FAIL (false positive)] … → fixtures/clean/handler.ts:14   (oops, regex too loose)
+```
+
+### Sync findings to your existing tracker
+
+The `tickets sync` command is **idempotent** and safe to run on a cron.
+State persists in `.agentic-security/tickets.json`; re-runs no-op on
+unchanged findings.
+
+```bash
+       # Cron: every 15 minutes, ensure GitHub Issues mirrors the latest scan.
+       */15 * * * *  cd /repo && \
+                     agentic-security scan . --no-network && \
+                     agentic-security tickets sync --provider github --severity high
+```
+
+Closed manually in GitHub but still in scan? `tickets sync` won't reopen
+it — the state file remembers the closure. Closed in scan but still open
+in GitHub? Next sync auto-closes the issue.
+
+### Filter SCA noise: only reachable + actively-exploited
+
+EPSS percentile + reachability is the highest-signal SCA filter we ship.
+
+```bash
+       agentic-security scan . --pack supply-chain \
+                               --sca-reachable-only \
+                               --format pro \
+                               --columns mitre
+       # then filter the JSON for what actually matters in CI:
+       jq '.findings[] | select(.exploitedNow == true and .reachable == true)' \
+          .agentic-security/findings.json
+```
+
+Combined with `--deterministic`, this gives you a stable, prioritized
+queue you can copy into Jira / Linear without re-triaging across runs.
+
+### Custom suppressions with audit trail
+
+For mature teams: every suppression carries a `reason` and a
+`reviewedBy` field, both surfaced in the CSV / SARIF / SBOM exports.
+
+```yaml
+       # .agentic-security/rules.yml
+       suppressions:
+         - rule: "Hardcoded Credential Check"
+           files: ["src/test/fixtures/**/*"]
+           reason: "Test fixture, not production code."
+           reviewedBy: "alice@team"
+           reviewedAt: "2025-04-12"
+         - rule: "Reflected XSS"
+           files: ["src/internal/admin/preview.tsx"]
+           reason: "Admin-only path, output rendered through DOMPurify upstream."
+           reviewedBy: "bob@team"
+           reviewedAt: "2025-04-12"
+```
+
+Vibecoder mode allows soft suppressions that auto-expire after 30 days
+(`agentic-security accept --finding <id> --reason "vibecoded"`); pro mode
+only honors hard suppressions in `rules.yml`.
+
+### Generate auditor-ready compliance evidence
+
+```bash
+       agentic-security scan . --deterministic
+       claude /agentic-security:compliance-report nist     # NIST AI 600-1
+       claude /agentic-security:compliance-report asvs     # OWASP ASVS
+       claude /agentic-security:compliance-report llm      # OWASP LLM Top 10
+```
+
+Each report cross-references concrete scan evidence, lockfile hash, and
+scanner version — the receipts an auditor wants instead of a checkbox.
+
+### Build a custom CLI wrapper
+
+The scanner exports its public API for embedding:
+
+```js
+       import { runScan } from '@clearcapabilities/agentic-security-scanner';
+
+       const { scan, meta } = await runScan('.', { changedSince: 'origin/main' });
+       const critical = scan.findings.filter(f => f.severity === 'critical');
+       if (critical.length) process.exit(1);
+```
+
+See `scanner/src/index.js` for the full export surface.
 
 ---
 
@@ -892,14 +1235,12 @@ automatically. Registered via `hooks/hooks.json`:
               Prints the welcome banner with last-scan summary.
 
        PreToolUse  (matcher: Edit|Write|MultiEdit)
-              hooks/pre-edit-bodyguard.js   [added 0.34.0]
-              Scans the proposed content BEFORE write. Exits 2 to deny
+              hooks/pre-edit-bodyguard.js              Scans the proposed content BEFORE write. Exits 2 to deny
               (block mode + critical pattern) or 0 with stderr message
               (warn mode). Reads .agentic-security/bodyguard.json. ~10ms.
 
        PreToolUse  (matcher: Bash)
-              hooks/pre-bash-guard.js       [added 0.34.0]
-              Intercepts destructive shell commands before they run.
+              hooks/pre-bash-guard.js                  Intercepts destructive shell commands before they run.
               Critical patterns return exit 2 (deny); high patterns
               return exit 0 with stderr warning. Reads
               .agentic-security/destructive-guard.json. ~5ms.
@@ -1065,7 +1406,7 @@ State is persisted to `.agentic-security/triage.json`.
            fix: "Remove the x-internal-bypass header check."
 ```
 
-### Pattern-rule DSL — `.agentic-security/rules/*.yml` (added in 0.35.0)
+### Pattern-rule DSL — `.agentic-security/rules/*.yml`
 
 Standalone, Semgrep-lite rules that produce findings directly without dataflow modeling. Each YAML file in `.agentic-security/rules/` defines one or more rules:
 
@@ -1093,7 +1434,7 @@ Test fixture pairs (`vulnerable/foo.js` + `clean/foo.js`):
 
 The harness reports `PASS` when a rule fires on `vulnerable/`, `FAIL (false positive)` when it fires on `clean/`, and `FAIL (missed)` when it doesn't fire on `vulnerable/`.
 
-### Rule-pack lockfile — `.agentic-security/rules.lock.json` (added in 0.35.0)
+### Rule-pack lockfile — `.agentic-security/rules.lock.json`
 
 ```
        agentic-security rules lock
@@ -1130,7 +1471,7 @@ Configuration in `.agentic-security/integrations.yml` (gitignored).
               One JSON event per finding, with source_attribution and
               rule_version for correlation.
 
-       Two-way ticket sync (added in 0.35.0)
+       Two-way ticket sync
               agentic-security tickets sync --provider github|linear|jira
               Creates issues for new findings, closes them when findings
               drop. Idempotent state in .agentic-security/tickets.json.
@@ -1584,7 +1925,7 @@ installed packages.
 
 ## Exercise 12 — Turn on the real-time bodyguards
 
-The 0.34.0 hooks give you protection at the moment code is written or
+The bodyguard hooks give you protection at the moment code is written or
 commands are run — distinct from the post-edit scanner. Two hooks, both
 configurable:
 
@@ -1776,7 +2117,7 @@ Current scores:
 | Wildcard-relaxed (default) | F1 100.0%           | F1 100% on 33/33 apps (family-level coverage)       |
 | Strict line-level (`--no-wildcards`) | F1 100.0%  | See per-app breakdown below                          |
 
-Strict-line breakdown on real-world benchmarks (after 0.34.5 GT curation):
+Strict-line breakdown on real-world benchmarks (post ground-truth curation):
 
 ```
 30 apps at F1 100%   snyk-goof, nodegoat, juice-shop, railsgoat, trufflehog-fixtures,

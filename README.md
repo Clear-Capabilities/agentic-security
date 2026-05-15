@@ -1,8 +1,8 @@
 # agentic-security
 
-### The Claude Code Plugin that Catches what your AI Assistant Misses.
+### The Claude Code plugin that catches what your AI assistant misses.
 
-> Built by **[Clear Capabilities](https://www.clearcapabilities.com/products/agentic-security)**
+> Built by **[Clear Capabilities](https://www.clearcapabilities.com/products/agentic-security)** · Local-first · No cloud, no signups, no API keys
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-96%2F96-brightgreen)]()
@@ -12,53 +12,91 @@
 
 ---
 
-## Why you need this
+## The 30-second pitch
 
-Your AI is fast. It's also writing security bugs.
-
-This morning Claude wrote your login route in 9 seconds. Beautiful code. Tests pass.
+This morning, your AI shipped a login route in 9 seconds. Beautiful code. Tests pass.
 
 It also lets anyone in the world log in as admin with a single line of curl.
 
-You don't know this yet. Neither does Claude.
+You don't know that yet. **Neither does your AI.**
 
-**One command finds it. One command fixes it.**
+`agentic-security` is the safety net you bolt onto your AI workflow:
 
-That command lives inside Claude Code, runs locally on your laptop, and explains every finding in plain English.
+- **Find it.** SAST + SCA + secrets + IaC + LLM safety, in one local command.
+- **Understand it.** Plain-English narrative + cost-of-exploit framing — not CVE jargon.
+- **Fix it.** Preview every patch, apply with one command, undo if it breaks anything.
+
+Nothing leaves your laptop. The only thing you give up is the false belief that your AI knew what it was doing.
 
 ---
 
-## Install
+## Install in 30 seconds
 
-In **Claude Code** (recommended — gets you the slash commands):
+In **Claude Code** (recommended — adds 50+ slash commands):
 
 ```
 /plugin marketplace add https://github.com/Clear-Capabilities/agentic-security
 ```
 
-That's it. Type `/agentic-security:scan --all` to confirm it's working.
+Then type `/agentic-security:secure` and let it tell you the next step.
 
-For **CI, terminal, or any project anywhere** (no Claude Code required):
+In your **terminal**, anywhere (no Claude Code required):
 
 ```bash
-npx @clearcapabilities/agentic-security-scanner scan .
+npx @clearcapabilities/agentic-security-scanner secure .
 ```
 
-The scanner runs entirely on your machine. Nothing leaves your laptop. No signups, no API keys, no cloud.
+Same engine. No accounts. No telemetry. Works offline after first run.
 
 ---
 
-## Two modes. One tool.
+## What 30 seconds gets you
 
-Both modes run the same engine. They differ in how much you see and how much you can configure.
+```
+─────────────────────────────────────────────────────────────────
+  ❌  Not safe to deploy  ·  api-billing
+─────────────────────────────────────────────────────────────────
+   3 critical · 8 high · 22 medium · 41 advisory
 
-### 🎨 Easy Mode
+   [critical] SQL Injection                api/users.ts:42
+     Could leak PII for ~5,000 users.
+     Estimated cost if exploited: $125k–$1.3M
+     Fix:  use parameterized query — db.query('SELECT * FROM users WHERE id = ?', [id])
 
-Four commands. The whole product. The default for everyone.
+   [critical] Hardcoded Stripe live key    src/lib/billing.ts:7
+     Could enable fraudulent charges against your account.
+     Estimated cost if exploited: $50k–$500k (chargebacks + Stripe fees)
+     Fix:  rotate via /agentic-security:rotate-key-auto, then move to env var
+
+   [critical] Missing webhook signature    api/stripe-webhook.ts:12
+     Anyone can POST a fake "payment.succeeded" and unlock paid features.
+     Estimated cost if exploited: cost of a free subscription × every attacker
+     Fix:  stripe.webhooks.constructEvent(rawBody, signature, endpointSecret)
+
+   How many do you want to fix?
+     1. Critical only           (3 fixes)
+     2. Critical + High         (11 fixes)
+     3. Critical + High + Medium (33 fixes)
+─────────────────────────────────────────────────────────────────
+```
+
+That's the default. No CVE numbers. No CWE jargon. The stakes, the cost, the fix.
 
 ---
 
-#### `/agentic-security:scan --all` runs 12 different scans to secure your code:
+## Pick your path
+
+| You are… | Start here |
+|---|---|
+| A builder shipping fast with AI, no security background | [→ Builder Quickstart](#-for-vibecoders--builders) |
+| A security engineer or pro dev managing real risk | [→ Pro Quickstart](#-for-security-pros--engineers) |
+| Curious | Run `npx @clearcapabilities/agentic-security-scanner scan .` and see what it finds |
+
+---
+
+## What it scans
+
+`agentic-security` runs **12 different scans** in a single sweep:
 
 ```
        Pillar         What we scan
@@ -99,100 +137,90 @@ Four commands. The whole product. The default for everyone.
                       across every commit, sparkline view.
 ```
 
-A one-screen verdict. Either you're safe to ship, or you have a short list of things to fix.
-
-```
-─────────────────────────────────────────
-  ✅  Safe to deploy
-─────────────────────────────────────────
-```
-
-…or, when there's work to do:
-
-```
-─────────────────────────────────────────
-  ❌  Not safe to deploy
-─────────────────────────────────────────
-  • 31 critical · 73 high · 149 advisory
-
-  How many do you want to fix?
-
-     1. Critical only                (31 fixes)
-     2. Critical + High              (104 fixes)
-     3. Critical + High + Medium     (253 fixes)
-
-  Reply with 1, 2, or 3.
-
-  Or pick a single one:
-     /agentic-security:show-findings --all  see every finding in HTML
-     /agentic-security:fix --one <id>       fix exactly one
-```
-
 ---
 
-#### `/agentic-security:show-findings --all`
+## 🎨 For Vibecoders / Builders
 
-Writes a self-contained HTML report to `reports/findings-<timestamp>.html` and opens it in your default browser. Severity charts, filterable findings list, per-finding evidence with offending code snippet, and the proposed fix template. No external assets, no network required — works offline.
+You ship features fast. You don't know what a CWE is. You're scared of pushing prod because last time you accidentally deployed a `console.log` of a Stripe key. You want someone to tell you what's wrong, in English, with the fix.
 
----
+### Two commands cover 90% of what you need
 
-#### `/agentic-security:fix --all`
+**`/agentic-security:secure`** — when you don't know what to do.
 
-Pick a severity tier; `/fix --all` dispatches the security-fixer agent on every finding at or above it. Tiers are **cumulative** — `--high` patches critical + high. Sequential, test-aware, codebase-context-aware (detects your auth library, ORM, and framework before writing the fix).
+It looks at your project state and tells you the single best next step. No menu, no choice paralysis.
 
-| Flag | Fixes |
+```
+🛡  agentic-security · next step
+
+  Action:  fix-critical
+  Why:     2 critical finding(s) open. Preview each fix, then --apply.
+  Run:     agentic-security fix --finding <id> --preview
+```
+
+**`/agentic-security:find-and-fix-everything`** — when you have 10 minutes before lunch.
+
+Runs `/scan --all` then immediately `/fix --all --low` — finds and fixes everything at every severity in one shot. The security-fixer agent reads your auth library, ORM, and framework before writing each fix, so the patches look like the rest of your code.
+
+### Why findings are different here
+
+Other scanners give you `[CRITICAL] CWE-89 SQL Injection at api/users.ts:42`. You stare at it, you Google it, you give up.
+
+We give you this:
+
+```
+[critical] SQL Injection on api/users.ts:42
+   Could leak PII for ~5,000 users.
+   Estimated cost if exploited: $125k–$1.3M
+   (breach response, regulatory fines, customer churn)
+
+   Fix:  use a parameterized query
+         db.query('SELECT * FROM users WHERE id = ?', [id])
+```
+
+Every finding gets:
+- **Stakes** — what data is at risk, how many users, in plain English
+- **Cost** — a dollar band based on your actual stack (Stripe present? You're in fraud-loss range)
+- **Fix** — the literal line of code to write, in the language of YOUR codebase
+
+This is automatic, on by default. Disable with `--no-blast-radius` if you really want.
+
+### The bodyguards (set once, run forever)
+
+| Command | What it does |
 |---|---|
-| `--critical` (default) | Critical only |
-| `--high` | Critical + High |
-| `--medium` | Critical + High + Medium |
-| `--low` | Everything |
+| `/agentic-security:ai-bodyguard` | Intercepts insecure AI-generated code BEFORE it hits disk. SQLi via concat, hardcoded API keys, `eval` on user input, `jwt.decode()` without verify, Supabase service-role on the client, LLM call without `max_tokens`. Modes: `off` / `warn` / `block`. |
+| `/agentic-security:destructive-guard` | Blocks foot-guns when Claude tries to run them: `rm -rf` on parent dirs, `DROP TABLE`, `git push --force` to main, `curl \| bash`, `chmod 777`, and 8+ more. Plain-English why + safer alternative on every refusal. |
+| `/agentic-security:predeploy-gate` | Blocks `vercel --prod` / `fly deploy` / `wrangler publish` / `netlify deploy --prod` / `railway up` when critical findings or KEV-listed deps are present. Hooks into Claude AND your terminal. |
+| `/agentic-security:cve-alerts` | Daily Slack/Discord ping when a new CVE drops for any package you use. |
 
----
-
-#### `/agentic-security:find-and-fix-everything`
-
-Runs `/scan --all` then immediately `/fix --all --low` — scanning and fixing every finding at every severity tier in one shot.
-
----
-
-### ⚙️ Developer Mode
-
-Beyond the four Easy Mode commands, the toolkit splits into two audiences. Pick the section that matches you.
-
----
-
-### 🎨 For Vibecoders / Builders
-
-You're shipping fast with an AI assistant. You don't have a security team. You want plain English, one-button fixes, and someone yelling at you before you push a `.env` to GitHub.
+### The full builder catalog
 
 #### Understand what's wrong (in English)
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `/agentic-security:secure` | Smart router. Inspects project state and tells you the single best next action — no menu, no choice paralysis. Add `--launch` for pre-deploy intent. |
-| `/agentic-security:explain` | Plain-English explanation of a finding — what it means, how an attacker abuses it, worst case, and the fix. |
-| `/agentic-security:story-explain` | "Meet Mallory. She visits `/api/users`, changes `?id=1` to `?id=2`…" 4-act narrative with attacker, timeline, payloads, and fix line. |
+| `/agentic-security:explain` | Plain-English explanation of a finding — what it means, how an attacker abuses it, worst case, fix. |
+| `/agentic-security:story-explain` | "Meet Mallory. She visits `/api/users`, changes `?id=1` to `?id=2`…" 4-act narrative with attacker, timeline, payloads, fix line. |
 | `/agentic-security:attack-surface` | 3–5 realistic attack scenarios written like stories. No CVE IDs. |
-| `/agentic-security:risk-in-dollars` | Each finding's best/likely/worst-case $ exposure, sourced from real incident settlements. Cites GDPR / CCPA / HIPAA / NIST AI 600-1 fines. |
-| **Blast-radius narrative** (auto-on) | Every finding stamped with who's affected, what data is at risk, and a $-cost band — inferred from your actual stack signals (Stripe, auth, schema). |
+| `/agentic-security:risk-in-dollars` | Each finding's best/likely/worst-case $ exposure, sourced from public incident settlements. Cites GDPR / CCPA / HIPAA / NIST AI 600-1 fines. |
 | `/agentic-security:report-card` | Single A–F letter grade with one concrete next action. |
 | `/agentic-security:tutorial` | First-run walkthrough: picks one real finding from your project, explains it, walks you through fixing it, verifies it. |
 
-#### Fix things, safely
+#### Fix it, safely
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `/agentic-security:fix --all` | Pick a tier (`--critical` / `--high` / `--medium` / `--low`); the security-fixer agent patches each one, sequential, test-aware, codebase-context-aware. |
+| `/agentic-security:fix --all` | Pick a tier (`--critical` / `--high` / `--medium` / `--low`); the security-fixer agent patches each one, sequential, test-aware. |
 | `agentic-security fix --finding <id> --preview` | Unified-diff preview before any write. `--apply` writes and backs up the original. |
-| `agentic-security undo [--all\|--list]` | Atomic revert for the most recent applied fix. Safer than `git stash` for partial rollbacks. |
+| `agentic-security undo [--all\|--list]` | Atomic revert for the most recent fix. Safer than `git stash` for partial rollbacks. |
 | `/agentic-security:harden` | One-command hardening: security headers, `.gitignore`, `SECURITY.md`, `npm audit` script. Idempotent. |
 | `/agentic-security:rotate-secret` | Detects which provider owns a leaked key, finds every reference, gives platform-specific rotation steps. |
-| `/agentic-security:rotate-key-auto` | Goes further: actually revokes, scrubs the value across files, and pushes the replacement to Vercel/Fly/Railway/Cloudflare env vars via CLI. |
+| `/agentic-security:rotate-key-auto` | Goes further: actually revokes, scrubs the value across files, pushes the replacement to Vercel/Fly/Railway/Cloudflare/Netlify env vars via CLI. |
 | `/agentic-security:vault-wizard` | Guided migration from `.env` to Doppler, Infisical, or platform-native secrets. |
 
 #### Hardening for the stack you actually use
 
-| Command | Description |
+| Command | What it does |
 |---|---|
 | `/agentic-security:stack-playbook` | Copy-paste-ready security checklist for Next.js, Supabase, Stripe, Clerk, OpenAI, Prisma, and 10+ more — specific to your combination. |
 | `/agentic-security:db-audit` | Supabase RLS audit — service-role exposure, `auth.admin` client-side, missing RLS. |
@@ -203,41 +231,64 @@ You're shipping fast with an AI assistant. You don't have a security team. You w
 | `/agentic-security:csp-cors` | Generates exact CSP + CORS headers for your stack from your actual dependency list. |
 | `/agentic-security:prompt-firewall` | LLM app gaps: user input in system prompts, missing `max_tokens`, LLM-output→SQL, no output validation. |
 | `/agentic-security:llm-cost-ceiling` | Auto-patches missing `max_tokens`; generates rate-limit middleware + daily $-spend tracker that throws when capped. |
-| `/agentic-security:deploy-check` | Vercel / Railway / Fly / Netlify / Cloudflare Workers — security headers, HTTPS enforcement, preview-deployment leaks. |
+| `/agentic-security:deploy-check` | Vercel / Railway / Fly / Netlify / Cloudflare — security headers, HTTPS, preview-deployment leaks. |
 | `/agentic-security:launch-check` | The 10 things builders typically miss before going live. |
-
-#### Real-time bodyguards
-
-Set once. Run forever. Active protection at the moment code is written or commands are run.
-
-| Command | Description |
-|---|---|
-| `/agentic-security:ai-bodyguard` | PreToolUse hook that intercepts insecure AI-generated code BEFORE it hits disk. SQLi-via-concat, hardcoded API keys, `eval` on user input, `jwt.decode()` without verify, service-role on the client, LLM calls without `max_tokens`. Modes: `off` / `warn` / `block`. |
-| `/agentic-security:destructive-guard` | PreToolUse hook on `Bash` blocking foot-guns: `rm -rf` on parents, `DROP TABLE`, `git push --force` to main, `curl \| bash`, `chmod 777`, and 8+ more. Plain-English why + safer alternative on every refusal. |
-| `/agentic-security:predeploy-gate` | Blocks production deploys when critical findings or KEV-listed deps are present. Bash hook + sourced shell wrapper. |
-| `/agentic-security:cve-alerts` | Daily CVE push to Slack/Discord when new vulnerabilities drop for your dependencies. |
-| `/agentic-security:daily-checkin` | Daily digest of what changed since yesterday — new, resolved, KEV alerts. Slack / Discord / generic webhook. |
 
 #### Things to hand a customer or investor
 
-| Command | Description |
+| Command | What it does |
 |---|---|
 | `/agentic-security:security-badge` | Shields.io badge for your README + due-diligence-ready security posture paragraph. |
 | `/agentic-security:security-onepager` | Customer-facing "How we keep your data safe" page generated from your real posture. PDF-ready. |
 | `/agentic-security:privacy-docs` | Detects every third-party data processor (Stripe, Supabase, Clerk, Sentry, OpenAI, …) and generates a tailored `PRIVACY.md` + cookie-consent component. Jurisdiction-aware. |
-| `/agentic-security:trust-page` | Writes `/.well-known/security.txt` (RFC 9116) + a `/security` page with your live posture. Framework-aware. |
-| `/agentic-security:disaster-playbook` | Stack-specific `DISASTER.md` with EXACT commands you'll need if you get hacked tomorrow. Bookmark it BEFORE the incident. |
+| `/agentic-security:trust-page` | Writes `/.well-known/security.txt` (RFC 9116) + a `/security` page with your live posture. |
+| `/agentic-security:disaster-playbook` | Stack-specific `DISASTER.md` with EXACT commands you'll need if you get hacked tomorrow. Bookmark BEFORE the incident. |
 | `/agentic-security:social-media` | Copy-paste-ready posts (Twitter/X, LinkedIn, Discord/Slack) about your security progress. |
 
 ---
 
-### 🔧 For Security Pros / Engineers
+## 🔧 For Security Pros / Engineers
 
-You triage findings for a living. You need depth, customization, integration into your existing workflow, and audit-defensible artifacts.
+You triage findings for a living. Most scanners drown you in noise, are impossible to extend, and make every PR review feel like archaeology. You need depth, customization, integration, and audit-defensible output.
+
+### What sets it apart
+
+- **Local-first.** No telemetry, no SaaS lock-in. Runs in air-gapped CI.
+- **Function-level reachability.** Drops SCA findings whose vulnerable function isn't reachable from any route — kills your noisiest bucket.
+- **EPSS-aware prioritization.** Every CVE finding decorated with EPSS score + percentile (FIRST.org). CVEs with percentile ≥ 95% get tagged `exploited-now` and bumped one severity tier so they sort to the top. KEV layered on top.
+- **Custom rule DSL.** Semgrep-lite YAML rules in `.agentic-security/rules/*.yml`. `rule test` harness over `vulnerable/` + `clean/` fixtures.
+- **Two-way ticket sync.** GitHub Issues / Linear / Jira. Idempotent state in `.agentic-security/tickets.json`.
+- **Deterministic mode.** Byte-stable output + rule-pack lockfile (`rules.lock.json`) for audits and CI baselines.
+- **Diff-aware.** `--pr` mode scans only changed files; auto-detects PR base from GitHub / GitLab / Buildkite / Bitbucket env vars.
+- **Standards-shaped output.** SARIF, JUnit, CycloneDX (SBOM + ML-BOM + PBOM), SPDX. Drops directly into existing dashboards.
+- **Honest F1.** 100% wildcard / 87.9% strict on OWASP Benchmark, with a public per-app baseline file. We tell you where we miss.
+
+### 5-minute pro setup
+
+```bash
+# 1. Flip to pro mode (lowers confidence threshold, shows full taxonomy,
+#    writes SARIF + CSV every scan, audit-grade suppression schema).
+npx @clearcapabilities/agentic-security-scanner profile set pro
+
+# 2. Lock the rule-pack version for reproducible scans across the team.
+npx @clearcapabilities/agentic-security-scanner rules lock
+
+# 3. Wire two-way ticket sync (dry-run first).
+npx @clearcapabilities/agentic-security-scanner tickets sync \
+   --provider github --severity high --dry-run
+
+# 4. Add a CI gate that fails on critical findings new since the PR base.
+npx @clearcapabilities/agentic-security-scanner ci . --fail-on critical
+
+# 5. Generate compliance attestation evidence.
+npx @clearcapabilities/agentic-security-scanner scan . --format aibom > ai-bom.json
+```
+
+### The full pro catalog
 
 #### Deep scanning, validation, and reporting
 
-| Command | Description |
+| Command | What it does |
 |---|---|
 | `/agentic-security:scan` | Full SAST + SCA + secrets sweep. Focused modes: `--sca`, `--secrets`, `--authz`, `--mcp`, `--pipeline`, `--logic`, `--diff`. SARIF + JSON + CSV written every scan. |
 | `agentic-security scan --pr [ref]` | Diff-aware: only scan files changed since the PR base. Auto-detects GitHub / GitLab / Buildkite / Bitbucket env vars. |
@@ -245,22 +296,21 @@ You triage findings for a living. You need depth, customization, integration int
 | `agentic-security rules lock` | Pin the active rule-pack hash + scanner version in `.agentic-security/rules.lock.json`. |
 | `/agentic-security:show-findings` | Triage UI. `--all` opens an interactive HTML report. `--kev` filters to weaponized CVEs, `--chains` shows attack chains, `--threat-model [--stride\|--llm]` builds a model. |
 | `/agentic-security:validate-findings` | Build a PoC + regression test that proves a vulnerability before fixing. Emits `PROBABLE_FP` when no PoC can be constructed. |
-| **EPSS enrichment** (auto-on) | Every CVE finding decorated with EPSS score + percentile (FIRST.org). Percentile ≥ 95% gets `exploited-now` tag and one-tier severity bump. Disable with `--no-epss`. |
 
 #### Customization and rule authoring
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `agentic-security rule list \| test <glob>` | Author custom YAML rules in `.agentic-security/rules/*.yml` (Semgrep-lite: regex / allOf / notMatch / window). The `rule test` harness reports PASS / FAIL on `vulnerable/` + `clean/` fixture pairs. |
+| `agentic-security rule list \| test <glob>` | Author custom YAML rules in `.agentic-security/rules/*.yml` (regex / `allOf` / `notMatch` / `window`). The `rule test` harness reports PASS / FAIL on `vulnerable/` + `clean/` fixture pairs. |
 | `agentic-security rules validate` | Lint `.agentic-security/rules.yml` for schema errors, invalid regex, severity overrides, disabled rules. |
 | `agentic-security packs list` | Curated rule packs: `owasp-top-10`, `cwe-top-25`, `llm-security`, `supply-chain`. Activate with `--pack`. |
 
 #### Integrations and workflow
 
-| Command | Description |
+| Command | What it does |
 |---|---|
 | `agentic-security tickets sync --provider github\|linear\|jira` | Two-way sync findings ↔ tickets. Creates issues for new findings, closes tickets when findings drop. State in `.agentic-security/tickets.json`. Supports `--dry-run`. |
-| `/agentic-security:fix --pr` | Bundle fixes into a feature branch and open a PR. Default dry-run; `--apply` to commit. Skips tests-failing fixes; never amends or force-pushes. |
+| `/agentic-security:fix --pr` | Bundle fixes into a feature branch and open a PR. Default dry-run; `--apply` to commit. Skips test-failing fixes; never amends or force-pushes. |
 | `/agentic-security:ci-gate` | Generates `.github/workflows/security.yml` — runs on every PR, uploads SARIF to GitHub Security tab, posts PR comments, fails on critical/high. |
 | `agentic-security org-scan --repos <list>` | Fleet scan across N repos with bounded concurrency. Per-repo + rolled-up JSON output. |
 | `agentic-security triage list \| assign \| transition \| trend` | Per-finding state machine with MTTR + opened/closed deltas. Persists to `.agentic-security/triage.json`. |
@@ -268,7 +318,7 @@ You triage findings for a living. You need depth, customization, integration int
 
 #### LLM red-teaming
 
-| Command | Description |
+| Command | What it does |
 |---|---|
 | `/agentic-security:llm-redteam` | Send 30+ adversarial prompts (security, privacy, harmful, bias, misinformation, agentic, coding-agent) through your LLM endpoint with 7 attack-strategy mutations (DAN, base64, ROT13, role-play, authority, hypothetical, multilingual, chained-context). Static `--scan` mode catches missing defenses without making any LLM calls. |
 | `/agentic-security:jailbreak-detector` | Faster focused subset — runs the canonical "make this harmful" prompt through each known jailbreak family. Reports DEFENDED / JAILBROKEN / PARTIAL per family. |
@@ -276,7 +326,7 @@ You triage findings for a living. You need depth, customization, integration int
 
 #### Dependency, supply chain, and posture
 
-| Command | Description |
+| Command | What it does |
 |---|---|
 | `/agentic-security:posture-management` | SBOM, AI-BOM, API inventory, license policy, drift, MTTR / SLA tracking. |
 | `/agentic-security:compliance-report` | Auditor-ready attestation for NIST AI 600-1, OWASP ASVS, or OWASP LLM Top 10 (2025). |
@@ -290,22 +340,78 @@ You triage findings for a living. You need depth, customization, integration int
 | `/agentic-security:status` | One-screen plugin & project health snapshot — version, last scan, finding counts, cache size, hook activation. |
 | `/agentic-security:help` | Full command catalog with one-line descriptions and example invocations. |
 
-To learn more read the **[Developer Documentation](https://github.com/Clear-Capabilities/agentic-security/blob/main/docs/developer-documentation-guide.md)**.
+The full reference lives in the **[Developer Documentation](https://github.com/Clear-Capabilities/agentic-security/blob/main/docs/developer-documentation-guide.md)**.
+
+---
+
+## How it works
+
+```
+                       ┌──────────────────────────────────┐
+                       │    fileContents (your code)      │
+                       └──────────────────┬───────────────┘
+                                          │
+                       ┌──────────────────▼───────────────┐
+              ┌────────┤   engine.js   (taint + AST)      ├────────┐
+              │        └──────────────────┬───────────────┘        │
+              │                           │                        │
+   ┌──────────▼──────────┐  ┌─────────────▼─────────┐  ┌───────────▼──────────┐
+   │ SAST (25+ modules)  │  │ SCA (OSV+KEV+EPSS,    │  │ Secrets (60+ patterns │
+   │ SQLi, XSS, AuthZ,   │  │ function-reachability,│  │ + entropy heuristic) │
+   │ XXE, JWT, RLS, MCP, │  │ dep-confusion,        │  │                      │
+   │ LLM, prompt-firewall│  │ typosquat, SARIF      │  │                      │
+   └──────────┬──────────┘  └─────────────┬─────────┘  └───────────┬──────────┘
+              │                           │                        │
+              └───────────────────────────┼────────────────────────┘
+                                          │
+                       ┌──────────────────▼───────────────┐
+                       │   posture/ enrichment pipeline    │
+                       │  triage · suppressions · packs    │
+                       │  EPSS · blast-radius · KEV        │
+                       │  scorecard · custom-rules         │
+                       └──────────────────┬───────────────┘
+                                          │
+                       ┌──────────────────▼───────────────┐
+                       │           reporters               │
+                       │  CLI · JSON · SARIF · JUnit · CSV │
+                       │  HTML · CycloneDX · SPDX · PBOM   │
+                       │  AI-BOM · ship-verdict · pro-table│
+                       └──────────────────┬───────────────┘
+                                          │
+              ┌───────────────────────────┼─────────────────────────┐
+              ▼                           ▼                         ▼
+     last-scan.json              SARIF → GitHub Security    tickets sync
+     (drives /fix, /report,      Tab / DefectDojo /         (GH Issues /
+      /chain, /trend, /badge)    pipeline integrations      Linear / Jira)
+```
+
+The whole engine ships as a single 2.6 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node ≥ 20. No native deps. No daemon. No background process.
+
+---
+
+## What this is NOT
+
+We try to be honest about the boundaries.
+
+- **Not a SaaS dashboard.** It's a CLI + Claude Code plugin. There is no web app, no multi-tenant platform, no cross-org rollup (yet).
+- **Not a replacement for a pentester.** Static analysis catches patterns; humans catch business-logic flaws. The `security-logic-reviewer` subagent and `/validate-findings` close part of the gap, not all of it.
+- **Not magic.** It can miss novel vulnerabilities, especially anything that requires understanding intent. We publish strict-mode F1 numbers per app so you can see exactly where we fall short.
+- **Not free for resale.** PolyForm Internal Use license. Use it on your own code, ship it inside your own products. Don't repackage it as a competing scanner.
 
 ---
 
 ## F1 benchmark
 
-The scanner is evaluated against the OWASP Benchmark (2,740 Java test cases), 33 real-world vulnerable apps (NodeGoat, Juice Shop, DVWA, and more), and an adversarial LLM/AI suite. Every rule ships with a `vulnerable/` + `clean/` fixture pair.
+Evaluated against the OWASP Benchmark (2,740 Java test cases), 33 real-world vulnerable apps (NodeGoat, Juice Shop, DVWA, and more), and an adversarial LLM/AI suite. Every rule ships with a `vulnerable/` + `clean/` fixture pair.
 
 ### Two F1 numbers — both honest, both reported
 
 | Scoring mode | What it measures | Score |
 |---|---|---|
-| **Wildcard-relaxed** (default) | "Does the scanner find at least one finding in each vulnerability family this app contains?" — i.e. family-level coverage. This is the mode most published security tool benchmarks use. | **100% on 35/35 benchmarks** |
+| **Wildcard-relaxed** (default) | "Does the scanner find at least one finding in each vulnerability family this app contains?" — i.e. family-level coverage. The mode most published security tool benchmarks use. | **100% on 35/35 benchmarks** |
 | **Strict line-level** (`--no-wildcards`) | "Does each emitted finding land on the exact file:line the upstream ground truth labels?" — a much harder bar. | **100% on 34/35** benchmarks. **87.9%** on OWASP Benchmark (via OWASP-shape suppressors). **54.8%** on SARD Juliet Java (via cross-file source chaining). **7.0%** on juliet-c-cpp (incidental-CWE precision artifact dominates). |
 
-Why the gap on the remaining 3? OWASP Benchmark uses `real=true / real=false` labels that hinge on constant-folded if-branches, inner-class flow, and List/Map index obfuscation that regex+AST engines can't reliably distinguish — would need full collection-semantics modeling. SARD Juliet's remaining recall gap (sql-injection at 26%, xss at 18%) is in DataflowThruInnerClass / Vector / Stream variants where the BadSource hides behind multiple call frames; precise AST taint analysis is the next lift. juliet-c-cpp's 7.0% reflects engine emissions on test files whose primary CWE doesn't match what the engine detects (e.g. `rand()` fires on every PRNG site even in non-crypto tests).
+**Why the gap on the remaining apps?** OWASP Benchmark uses `real=true / real=false` labels that hinge on constant-folded if-branches, inner-class flow, and List/Map index obfuscation that regex+AST engines can't reliably distinguish. SARD Juliet's remaining recall gap is in DataflowThruInnerClass / Vector / Stream variants where the BadSource hides behind multiple call frames; precise AST taint analysis is the next lift. juliet-c-cpp's 7.0% reflects engine emissions on test files whose primary CWE doesn't match what the engine detects.
 
 Reproduce either number:
 
@@ -315,10 +421,24 @@ npm run bench:realworld                           # wildcard-relaxed (default)
 node test/benchmark/realworld/bench-realworld.js --all --no-wildcards   # strict
 ```
 
-Full strict-baseline breakdown per app, plus the roadmap to raise each one, is documented in [`scanner/test/benchmark/STRICT-F1-BASELINE.md`](scanner/test/benchmark/STRICT-F1-BASELINE.md).
+Full strict-baseline breakdown per app, plus the roadmap to raise each one, is in [`scanner/test/benchmark/STRICT-F1-BASELINE.md`](scanner/test/benchmark/STRICT-F1-BASELINE.md).
+
+---
+
+## Privacy and data
+
+Everything runs locally. Nothing about your code, findings, or project structure leaves your machine — ever — by default.
+
+The only network calls the scanner makes are to public CVE / EPSS data sources (OSV.dev, FIRST.org EPSS API, CISA KEV catalog), and they're all disk-cached under `~/.claude/agentic-security/`. Pass `--no-network` (or use `--deterministic`) to disable them entirely; everything else still works against the cache.
+
+No accounts. No API keys to provision. No telemetry. No "anonymous usage stats."
 
 ---
 
 ## License
 
 Full legal terms in [LICENSE](./LICENSE). The short version: don't resell, don't reverse-engineer, otherwise enjoy.
+
+---
+
+> Built with care by **[Clear Capabilities](https://www.clearcapabilities.com/products/agentic-security)**. Found a bug, have a feature idea, want to talk? [ross@clearcapabilities.com](mailto:ross@clearcapabilities.com)
