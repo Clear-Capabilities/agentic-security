@@ -1,4 +1,13 @@
+<div align="center">
+
 # agentic-security — Developer Guide
+
+Built by **[Clear Capabilities](https://www.clearcapabilities.com/)** · The full reference for security engineers
+
+[![Docs](https://img.shields.io/badge/docs-developer%20guide-F47217?labelColor=2A1208)]()
+[![Version](https://img.shields.io/badge/version-0.36.0-F47217?labelColor=2A1208)]()
+
+</div>
 
 > The full reference. For the marketing-friendly overview, see [README.md](../README.md). This document assumes you read code, write rules, and own a CI pipeline.
 
@@ -1620,7 +1629,7 @@ Posture management artifacts:
 
 ## AUTHOR
 
-Built by **[ClearCapabilities.Com](https://clearcapabilities.com)**.
+Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**.
 Maintainer: Ross Young <ross@clearcapabilities.com>.
 
 ---
