@@ -5,8 +5,6 @@
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/products/agentic-security)** · Local-first · No cloud, no signups, no API keys
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-96%2F96-brightgreen)]()
-[![F1](https://img.shields.io/badge/F1%20benchmark-100%25-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
 [![Version](https://img.shields.io/badge/version-0.36.0-blue)]()
 
