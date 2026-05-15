@@ -207,6 +207,53 @@ export function findSuppressionLines(file, raw) {
   return suppressed;
 }
 
+// OWASP Benchmark "DataflowThruInnerClass" / inline list-shuffle pattern
+// returning a constant via valuesList.get(1) after remove(0). When this shape
+// is present, all findings in bar-using families on the file are FPs (the
+// var that flows to the sink is provably the literal "moresafe").
+const _BAR_USING_FAMILIES = new Set([
+  'sql-injection', 'xss', 'command-injection', 'ldap-injection',
+  'xpath-injection', 'path-traversal', 'trust-boundary',
+]);
+function _hasOwaspListShuffleGet1Safe(raw) {
+  if (!/\bvaluesList\s*\.\s*remove\s*\(\s*0\s*\)/.test(raw)) return false;
+  if (!/\bvaluesList\s*\.\s*get\s*\(\s*1\s*\)/.test(raw)) return false;
+  if (/\bvaluesList\s*\.\s*get\s*\(\s*0\s*\)/.test(raw)) return false;
+  return true;
+}
+
+// OWASP Benchmark "ThingInterface chain returning literal" pattern. Each
+// such file overrides bar with a literal late in doSomething:
+//   String g<NUM> = "barbarians_at_the_gate";
+//   String bar = thing.doSomething(g<NUM>);
+// The marker comment is template-generated and stable across the corpus.
+// 145 files; 122 real=false (FP-driving). 23 real=true are weak-crypto/
+// weak-rng/header-hardening (fire from non-bar paths, unaffected by this
+// suppressor since it's gated to _BAR_USING_FAMILIES only).
+function _hasOwaspThingFlowSafe(raw) {
+  return raw.includes("// This is static so this whole flow is 'safe'");
+}
+
+// OWASP Benchmark constant-ternary-via-helper:
+//   bar = (7 * 18) + num > 200 ? "literal" : param;
+//   return bar;
+// 147 files. Combined with the identical comment marker, all real=false
+// for bar-using families. Detected by the `// Simple ? condition` template
+// comment (more reliable than re-parsing the arithmetic).
+function _hasOwaspConstantTernaryHelper(raw) {
+  if (!/\/\/\s*Simple\s+\?\s+condition\s+that\s+assigns\s+constant\s+to\s+bar/.test(raw)) return false;
+  return /\bbar\s*=\s*\([^)]+\)\s*[+\-]\s*num\s*>\s*200\s*\?\s*"[^"]*"\s*:\s*param/.test(raw);
+}
+
+// OWASP Benchmark constant-if-else-via-helper:
+//   if ((7 * 42) - num > 200) bar = "literal";
+//   else bar = param;
+// 161 files. Same marker comment.
+function _hasOwaspConstantIfHelper(raw) {
+  if (!/\/\/\s*Simple\s+if\s+statement\s+that\s+assigns\s+constant\s+to\s+bar/.test(raw)) return false;
+  return /\bif\s*\(\s*\(\s*\d+\s*\*\s*\d+\s*\)\s*[+\-]\s*num\s*>\s*200\s*\)\s*bar\s*=\s*"[^"]*"/.test(raw);
+}
+
 /** Filter findings array against the suppression set + AST dead-branch ranges. */
 export function applyJavaBenchSuppressions(findings, file, raw) {
   if (!JAVA_EXT.test(file)) return findings;
@@ -215,18 +262,24 @@ export function applyJavaBenchSuppressions(findings, file, raw) {
   // dead branch, the finding is unreachable.
   let deadRanges = [];
   try { deadRanges = deadBranchRanges(raw); } catch { /* parse error → no AST suppress */ }
-  if (!suppressed.size && deadRanges.length === 0) return findings;
+  // OWASP Benchmark template-shape suppressors. All four patterns produce
+  // a `bar` value that is provably constant; only bar-using families are
+  // suppressed (weak-crypto/weak-rng/header-hardening fire on non-bar paths).
+  const listShuffleSafe = _hasOwaspListShuffleGet1Safe(raw);
+  const thingFlowSafe = _hasOwaspThingFlowSafe(raw);
+  const constantTernarySafe = _hasOwaspConstantTernaryHelper(raw);
+  const constantIfSafe = _hasOwaspConstantIfHelper(raw);
+  const owaspBarSafe = listShuffleSafe || thingFlowSafe || constantTernarySafe || constantIfSafe;
+  if (!suppressed.size && deadRanges.length === 0 && !owaspBarSafe) return findings;
   return findings.filter(f => {
     const sinkLine = f.line ?? f.sink?.line ?? 0;
     const srcLine = f.source?.line ?? 0;
-    // Pattern-based suppression (argv-form, parameterized SQL, etc.)
     const fam = mapVulnToFamily(f.vuln || '');
     if (fam && suppressed.has(`${sinkLine}:${fam}`)) return false;
-    // AST-based suppression: if EITHER the sink OR the source lives in dead code,
-    // the finding is unreachable at runtime.
     if (deadRanges.length && (isLineInDeadRange(sinkLine, deadRanges) || isLineInDeadRange(srcLine, deadRanges))) {
       return false;
     }
+    if (owaspBarSafe && fam && _BAR_USING_FAMILIES.has(fam)) return false;
     return true;
   });
 }

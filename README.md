@@ -8,7 +8,7 @@
 [![Tests](https://img.shields.io/badge/tests-96%2F96-brightgreen)]()
 [![F1](https://img.shields.io/badge/F1%20benchmark-100%25-brightgreen)]()
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.34.10-blue)]()
+[![Version](https://img.shields.io/badge/version-0.34.11-blue)]()
 
 ---
 
@@ -270,7 +270,7 @@ The scanner is evaluated against the OWASP Benchmark (2,740 Java test cases), 33
 | Scoring mode | What it measures | Score |
 |---|---|---|
 | **Wildcard-relaxed** (default) | "Does the scanner find at least one finding in each vulnerability family this app contains?" — i.e. family-level coverage. This is the mode most published security tool benchmarks use. | **100% on 35/35 benchmarks** |
-| **Strict line-level** (`--no-wildcards`) | "Does each emitted finding land on the exact file:line the upstream ground truth labels?" — a much harder bar. | **100% on 34/35** benchmarks after the 0.34.10 sweep. **79.7%** on OWASP Benchmark. **54.8%** on SARD Juliet Java (up from 25.6% baseline via cross-file source chaining). **7.0%** on juliet-c-cpp (incidental-CWE precision artifact dominates). |
+| **Strict line-level** (`--no-wildcards`) | "Does each emitted finding land on the exact file:line the upstream ground truth labels?" — a much harder bar. | **100% on 34/35** benchmarks after the 0.34.11 sweep. **87.9%** on OWASP Benchmark (up from 79.7% via OWASP-shape suppressors). **54.8%** on SARD Juliet Java (up from 25.6% baseline via cross-file source chaining). **7.0%** on juliet-c-cpp (incidental-CWE precision artifact dominates). |
 
 Why the gap on the remaining 3? OWASP Benchmark uses `real=true / real=false` labels that hinge on constant-folded if-branches, inner-class flow, and List/Map index obfuscation that regex+AST engines can't reliably distinguish — would need full collection-semantics modeling. SARD Juliet's remaining recall gap (sql-injection at 26%, xss at 18%) is in DataflowThruInnerClass / Vector / Stream variants where the BadSource hides behind multiple call frames; precise AST taint analysis is the next lift. juliet-c-cpp's 7.0% reflects engine emissions on test files whose primary CWE doesn't match what the engine detects (e.g. `rand()` fires on every PRNG site even in non-crypto tests).
 

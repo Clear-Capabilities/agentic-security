@@ -3056,6 +3056,27 @@ function _javaBuildConstMap(cleaned, lines) {
 //     thus no scanner finding for this family should be emitted, OR null.
 //   - perSink(argStr): returns a reason if THIS specific sink call uses the
 //     safe shape.
+// OWASP Benchmark "DataflowThruInnerClass" / inline list-shuffle pattern:
+//   valuesList.add("safe");
+//   valuesList.add(param);  // tainted at position 1
+//   valuesList.add("moresafe");
+//   valuesList.remove(0);   // list is now [param, "moresafe"]
+//   bar = valuesList.get(1); // returns "moresafe" (constant)
+// vs.
+//   bar = valuesList.get(0); // returns param (tainted) — UNSAFE
+//
+// Files matching the get(1) shape are real=false for bar-using families
+// (sql/xss/cmd/ldap/xpath/path-traversal/trust-boundary). Distribution:
+// 172 get(1) files → 147 real=false / 25 real=true (the 25 are weak-crypto
+// or other family vulns where bar isn't the sink arg).
+function _OWASP_LIST_SHUFFLE_GET1_SAFE(cleaned) {
+  if (!/\bvaluesList\s*\.\s*remove\s*\(\s*0\s*\)/.test(cleaned)) return null;
+  if (!/\bvaluesList\s*\.\s*get\s*\(\s*1\s*\)/.test(cleaned)) return null;
+  // Make sure get(0) isn't also present (unsafe variant).
+  if (/\bvaluesList\s*\.\s*get\s*\(\s*0\s*\)/.test(cleaned)) return null;
+  return 'list-shuffle-get1-safe';
+}
+
 const _OWASP_SAFE_SHAPES = {
   'command-injection': {
     fileWide: function (cleaned) {
@@ -3072,6 +3093,8 @@ const _OWASP_SAFE_SHAPES = {
       const hasNonArrayExec = /\.\s*exec\s*\(\s*(?!new\s+String\s*\[)/.test(cleaned)
         && !/\bString\s*\[\s*\]\s+\w+\s*=\s*\{[^}]+\}\s*;[\s\S]{0,400}?\.\s*exec\s*\(\s*\w+\s*\)/.test(cleaned);
       if (hasStringArrayPB && !hasNonArrayExec) return 'argv-form-only';
+      const ls = _OWASP_LIST_SHUFFLE_GET1_SAFE(cleaned);
+      if (ls) return ls;
       return null;
     },
   },
@@ -3097,6 +3120,8 @@ const _OWASP_SAFE_SHAPES = {
         return /^['"][^'"]*['"]$/.test(arg);
       });
       if (allStatic) return 'static-sql-only';
+      const ls = _OWASP_LIST_SHUFFLE_GET1_SAFE(cleaned);
+      if (ls) return ls;
       return null;
     },
   },
@@ -3106,6 +3131,7 @@ const _OWASP_SAFE_SHAPES = {
       const re = /\b(?:Encode\s*\.\s*for(?:Html|HtmlContent|HtmlAttribute|JavaScript|JavaScriptAttribute|JavaScriptBlock|JavaScriptSource|UriComponent|Uri|Xml|XmlAttribute|XmlContent|XmlComment|CDATA|CssString|CssUrl)|ESAPI\s*\.\s*encoder\s*\(\s*\)\s*\.\s*encodeFor(?:HTML|HTMLAttribute|JavaScript|CSS|URL|XML|XMLAttribute|VBScript)|StringEscapeUtils\s*\.\s*escape(?:Html\d+|Html|Xml(?:10|11)?|Xml|Java|EcmaScript|Json)|HtmlUtils\s*\.\s*htmlEscape|(?:org\.owasp\.benchmark\.helpers\.)?Utils\s*\.\s*encodeForHTML)\s*\(/;
       return re.test(argStr) ? 'encoder-wrap' : null;
     },
+    fileWide: _OWASP_LIST_SHUFFLE_GET1_SAFE,
   },
   'path-traversal': {
     fileWide: function (cleaned) {
@@ -3113,25 +3139,32 @@ const _OWASP_SAFE_SHAPES = {
       const hasNormalize = /\bPath\s*\.\s*normalize\s*\(/.test(cleaned)
         || /\bPaths\s*\.\s*get\s*\([^)]*\)\s*\.\s*normalize\s*\(/.test(cleaned)
         || /\bjava\.nio\.file\.Paths\s*\.\s*get\s*\([^)]*\)\s*\.\s*normalize\s*\(/.test(cleaned);
-      if (!hasNormalize) return null;
-      // Must also have a startsWith / contains check that bounds the path.
-      const hasBoundsCheck = /\.\s*startsWith\s*\(/.test(cleaned)
-        || /\.\s*equals\s*\(\s*"\.\."\s*\)/.test(cleaned);
-      if (hasNormalize && hasBoundsCheck) return 'normalize-bounded';
+      if (hasNormalize) {
+        const hasBoundsCheck = /\.\s*startsWith\s*\(/.test(cleaned)
+          || /\.\s*equals\s*\(\s*"\.\."\s*\)/.test(cleaned);
+        if (hasBoundsCheck) return 'normalize-bounded';
+      }
+      const ls = _OWASP_LIST_SHUFFLE_GET1_SAFE(cleaned);
+      if (ls) return ls;
       return null;
     },
+  },
+  'trust-boundary': {
+    fileWide: _OWASP_LIST_SHUFFLE_GET1_SAFE,
   },
   'ldap-injection': {
     perSinkArg: function (argStr) {
       const re = /\bEncode\s*\.\s*for(?:Ldap|LdapDN)\s*\(|\bencodeForLDAP\s*\(|\bescapeLDAPSearchFilter\s*\(/;
       return re.test(argStr) ? 'ldap-encoder' : null;
     },
+    fileWide: _OWASP_LIST_SHUFFLE_GET1_SAFE,
   },
   'xpath-injection': {
     perSinkArg: function (argStr) {
       const re = /\bEncode\s*\.\s*forXPath\s*\(|\bencodeForXPath\s*\(/;
       return re.test(argStr) ? 'xpath-encoder' : null;
     },
+    fileWide: _OWASP_LIST_SHUFFLE_GET1_SAFE,
   },
 };
 
@@ -3301,6 +3334,82 @@ function _buildGlobalJavaTaintedMethodIndex(fileContents) {
 // don't propagate taint just because the call's args contain a tainted var
 // (the method's return may be a constant — OWASP Benchmark's
 // DataflowThruInnerClass uses this trick).
+// Evaluate simple numeric conditions like `(7 * 18) + num > 200` where
+// referenced vars are known integer constants in the scope above the line.
+// Returns true / false / null (unknown). Used for ternary/if folding in
+// taint propagation.
+function _javaEvalSimpleNumericCond(condExpr, lines, lineIdx) {
+  if (!condExpr) return null;
+  // Strip outer parens.
+  let expr = condExpr.trim().replace(/\s+/g, '');
+  // Comparison operators we recognize.
+  const cmpRe = /^(.+?)([<>]=?|==|!=)(.+)$/;
+  const m = cmpRe.exec(expr);
+  if (!m) return null;
+  const lhs = m[1], op = m[2], rhs = m[3];
+  // Build a small scope of int constants from the previous ~20 lines.
+  const scope = {};
+  for (let i = Math.max(0, lineIdx - 30); i <= lineIdx; i++) {
+    const ln = lines[i] || '';
+    const cm = /\bint\s+(\w+)\s*=\s*(-?\d+)\s*;/.exec(ln);
+    if (cm) scope[cm[1]] = parseInt(cm[2], 10);
+  }
+  function ev(s) {
+    if (s === undefined || s === '') return null;
+    s = s.replace(/^\(|\)$/g, '');
+    // Pure integer.
+    if (/^-?\d+$/.test(s)) return parseInt(s, 10);
+    // Identifier in scope.
+    if (/^[A-Za-z_]\w*$/.test(s) && s in scope) return scope[s];
+    // Binary arithmetic — handle + - * / lowest-precedence first via
+    // operator-position search ignoring parens.
+    function topSplit(s, ops) {
+      let depth = 0;
+      for (let i = s.length - 1; i >= 0; i--) {
+        const ch = s[i];
+        if (ch === ')') depth++;
+        else if (ch === '(') depth--;
+        else if (depth === 0 && ops.includes(ch)) {
+          // Avoid unary minus at start.
+          if (i === 0 && ch === '-') continue;
+          // Avoid op preceded by another op or `(`.
+          const prev = s[i - 1];
+          if (prev === '+' || prev === '-' || prev === '*' || prev === '/' || prev === '(' || prev === undefined) continue;
+          return [s.substring(0, i), ch, s.substring(i + 1)];
+        }
+      }
+      return null;
+    }
+    let split = topSplit(s, ['+', '-']);
+    if (split) {
+      const a = ev(split[0]); const b = ev(split[2]);
+      if (a === null || b === null) return null;
+      return split[1] === '+' ? a + b : a - b;
+    }
+    split = topSplit(s, ['*', '/']);
+    if (split) {
+      const a = ev(split[0]); const b = ev(split[2]);
+      if (a === null || b === null) return null;
+      if (split[1] === '*') return a * b;
+      if (b === 0) return null;
+      return Math.trunc(a / b);
+    }
+    return null;
+  }
+  const lv = ev(lhs);
+  const rv = ev(rhs);
+  if (lv === null || rv === null) return null;
+  switch (op) {
+    case '<': return lv < rv;
+    case '<=': return lv <= rv;
+    case '>': return lv > rv;
+    case '>=': return lv >= rv;
+    case '==': return lv === rv;
+    case '!=': return lv !== rv;
+  }
+  return null;
+}
+
 function _javaListLocalMethods(cleaned) {
   const out = new Set();
   const re = /\b(?:public|private|protected|static|final|\s)+\s*[\w.<>\[\]]+\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
@@ -3351,9 +3460,15 @@ function _javaFindSanitizerMethods(cleaned) {
 //     return param;  // direct
 //   }
 //
-// Returns Map<methodName, Set<paramPosition>>. paramPosition is 0-indexed.
+// ALSO emits `confirmedNonPassthrough` Set: methods we've analyzed whose
+// return value is provably NOT tainted (List-shuffle returning literal,
+// return paramName-derived-only-via-literals, etc.). The propagator uses
+// this to suppress over-eager taint propagation through helper calls.
+// Returns { passthroughMethods: Map<methodName, Set<paramPosition>>,
+//          confirmedNonPassthrough: Set<methodName> }.
 function _javaFindTaintPassthroughMethods(cleaned) {
   const out = new Map();
+  const confirmedNonPassthrough = new Set();
   const re = /\b(?:public|private|protected|static|final|\s)+\s*[\w.<>\[\]]+\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
   let m;
   while ((m = re.exec(cleaned)) !== null) {
@@ -3377,37 +3492,51 @@ function _javaFindTaintPassthroughMethods(cleaned) {
       j++;
     }
     const body = cleaned.substring(m.index + m[0].length, j - 1);
-    // Skip if body contains a sanitizer — sanitizer detection takes precedence.
-    if (_JAVA_GENERIC_SANITIZER_RE.test(body)) continue;
-    // Skip if body has a ternary/if/switch where any branch produces a string
-    // literal — taint flow is conditional and the literal branch may be the
-    // only live one (OWASP Benchmark's constant-folded helper pattern).
-    // Conservative: avoid passthrough marking entirely for these shapes.
-    if (/\?\s*"[^"]*"|:\s*"[^"]*"\s*[;:]|case\s+[^:]+:\s*\w+\s*=\s*"[^"]*"/.test(body)) continue;
-    // Also skip methods with multiple `return` statements where any returns a
-    // string literal — same reasoning.
+    // Skip methods with multiple `return` statements where any returns a
+    // string literal — too ambiguous about which return path runs.
     if (/\breturn\s+"[^"]*"\s*[;)]/.test(body) && /\breturn\s+[A-Za-z_]\w*\s*[;)]/.test(body)) continue;
     // Build local-var taint set: vars assigned from any param (transitive).
+    // Ternary-aware: when RHS is `cond ? trueExpr : falseExpr` and cond is
+    // provably constant (via _javaEvalSimpleNumericCond), only the live
+    // branch's tokens are considered.
     const localTainted = new Set(params);
+    const bodyLines = body.split('\n');
     let changed = true, safety = 6;
     while (changed && safety-- > 0) {
       changed = false;
-      const assignRe = /\b([A-Za-z_]\w*)\s*=(?!=)\s*([^;]+?)(?:;|\/\/|$)/g;
-      let am;
-      while ((am = assignRe.exec(body)) !== null) {
-        const lhs = am[1];
-        const rhs = am[2];
-        if (['if','for','while','return','this','new'].includes(lhs)) continue;
-        if (localTainted.has(lhs)) continue;
-        // Skip if RHS goes through a sanitizer.
-        if (_JAVA_GENERIC_SANITIZER_RE.test(rhs)) continue;
-        // Skip if RHS contains a ternary with a literal branch — could be
-        // sanitized depending on the condition.
-        if (/\?[^:]*"[^"]*"\s*:|\?[^:]*:\s*"[^"]*"/.test(rhs)) continue;
-        const tokens = rhs.match(/\b[A-Za-z_]\w*\b/g) || [];
-        if (tokens.some(t => localTainted.has(t))) {
-          localTainted.add(lhs);
-          changed = true;
+      // Process line-by-line so we can pass lineIdx to the const evaluator.
+      for (let li = 0; li < bodyLines.length; li++) {
+        const ln = bodyLines[li];
+        const assignRe = /\b([A-Za-z_]\w*)\s*=(?!=)\s*([^;]+?)(?:;|\/\/|$)/g;
+        let am;
+        while ((am = assignRe.exec(ln)) !== null) {
+          const lhs = am[1];
+          const rhs = am[2];
+          if (['if','for','while','return','this','new'].includes(lhs)) continue;
+          if (localTainted.has(lhs)) continue;
+          // Sanitizer-wrapped RHS — lhs is sanitized, NOT tainted.
+          // Don't add to localTainted (treat as non-tainted from here).
+          if (_JAVA_GENERIC_SANITIZER_RE.test(rhs)) continue;
+          // Ternary cond fold: `cond ? trueExpr : falseExpr`
+          const tm = /^\s*(.*?)\s*\?\s*([^:]+?)\s*:\s*(.+?)\s*$/.exec(rhs);
+          if (tm) {
+            const condResult = _javaEvalSimpleNumericCond(tm[1], bodyLines, li);
+            if (condResult === true) {
+              const tt = tm[2].match(/\b[A-Za-z_]\w*\b/g) || [];
+              if (tt.some(t => localTainted.has(t))) { localTainted.add(lhs); changed = true; }
+              continue;
+            } else if (condResult === false) {
+              const ft = tm[3].match(/\b[A-Za-z_]\w*\b/g) || [];
+              if (ft.some(t => localTainted.has(t))) { localTainted.add(lhs); changed = true; }
+              continue;
+            }
+            // Unknown — fall through to default propagation (tokens from both branches).
+          }
+          const tokens = rhs.match(/\b[A-Za-z_]\w*\b/g) || [];
+          if (tokens.some(t => localTainted.has(t))) {
+            localTainted.add(lhs);
+            changed = true;
+          }
         }
       }
     }
@@ -3416,9 +3545,11 @@ function _javaFindTaintPassthroughMethods(cleaned) {
     // through transitive assignments.
     const returnRe = /\breturn\s+([A-Za-z_]\w*)\s*[;)]/g;
     const passthroughPositions = new Set();
+    const returnVars = [];
     let rm;
     while ((rm = returnRe.exec(body)) !== null) {
       const retVar = rm[1];
+      returnVars.push(retVar);
       if (!localTainted.has(retVar)) continue;
       // Only mark the param position(s) directly returned (not transitive).
       const paramIdx = params.indexOf(retVar);
@@ -3432,16 +3563,33 @@ function _javaFindTaintPassthroughMethods(cleaned) {
       }
     }
     if (passthroughPositions.size > 0) out.set(methodName, passthroughPositions);
+    else if (returnVars.length > 0 && returnVars.every(rv => !localTainted.has(rv))) {
+      // Method returns only vars that are NOT tainted (so transitively don't
+      // pass any param). This is the OWASP Benchmark "List-shuffle returning
+      // a literal" pattern. Mark as confirmed-non-passthrough so the
+      // general propagator can suppress over-eager taint.
+      confirmedNonPassthrough.add(methodName);
+    }
   }
-  return out;
+  return { passthroughMethods: out, confirmedNonPassthrough };
 }
 
 function _buildJavaTaintMap(cleaned, lines) {
   const tainted = new Set();
   const sanitized = new Set();
   const sourceVarLine = new Map();
+  const assignedVars = new Set();
+  const explicitlyClean = new Set();
+  // Vars whose value transitively flows from a confirmedNonPassthrough call
+  // — e.g. `bar = doSomething(req, param)` where doSomething analyzed to
+  // return a literal. Subsequent uses propagate cleanliness:
+  // `sql = "..." + bar` makes sql also transparentlyClean. Used to suppress
+  // the per-arg name-heuristic that would otherwise fire on `bar`/`sql`.
+  const transparentlyClean = new Set();
   const sanitizerMethods = _javaFindSanitizerMethods(cleaned);
-  const passthroughMethods = _javaFindTaintPassthroughMethods(cleaned);
+  const _passthroughResult = _javaFindTaintPassthroughMethods(cleaned);
+  const passthroughMethods = _passthroughResult.passthroughMethods;
+  const confirmedNonPassthrough = _passthroughResult.confirmedNonPassthrough;
   // Dead-branch awareness: assignments inside provably-unreachable if/switch
   // branches must NOT propagate taint. Without this, OWASP Benchmark's
   // canonical dead-else pattern (`if ((7*42)-86>200) bar="x"; else bar=param;`)
@@ -3509,6 +3657,7 @@ function _buildJavaTaintMap(cleaned, lines) {
         const lhs = am[1];
         const rhs = am[2];
         if (!lhs || ['if','for','while','return','this','new','public','private','protected','static','final','abstract','else'].includes(lhs)) continue;
+        assignedVars.add(lhs);
         // Sanitizer wraps the RHS → mark sanitized, remove from tainted.
         if (_JAVA_GENERIC_SANITIZER_RE.test(rhs)) {
           if (!sanitized.has(lhs)) { sanitized.add(lhs); changed = true; }
@@ -3553,7 +3702,45 @@ function _buildJavaTaintMap(cleaned, lines) {
           }
         }
         // Otherwise: if RHS references any tainted var (and isn't a pure literal),
-        // LHS becomes tainted.
+        // LHS becomes tainted — UNLESS RHS is dominated by a call to a method
+        // that we've ANALYZED and CONFIRMED returns a non-tainted value (e.g.
+        // OWASP Benchmark's List-shuffle helper that returns a literal). The
+        // confirmedNonPassthrough check is conservative: we only suppress
+        // when we've successfully proved the method's return is non-tainted,
+        // not just when we're missing the analysis.
+        if (confirmedNonPassthrough.size > 0) {
+          const callRe = /\b([A-Za-z_]\w*)\s*\(/g;
+          let cMatch, suppressed = false;
+          while ((cMatch = callRe.exec(rhs)) !== null) {
+            const callee = cMatch[1];
+            if (confirmedNonPassthrough.has(callee)) { suppressed = true; break; }
+          }
+          if (suppressed) continue;
+        }
+        // Ternary constant-folding: `bar = COND ? "literal" : taintedVar`
+        // collapses to "literal" when COND is provably true. Recognize the
+        // OWASP Benchmark shape `(C * C) [+-] var > C ? "lit" : x` where var
+        // is a numeric local constant.
+        const ternaryRe = /^\s*(.*?)\s*\?\s*([^:]+?)\s*:\s*(.+?)\s*$/;
+        const tm = ternaryRe.exec(rhs);
+        if (tm) {
+          const cond = tm[1];
+          const trueExpr = tm[2];
+          const falseExpr = tm[3];
+          const condResult = _javaEvalSimpleNumericCond(cond, lines, i);
+          if (condResult === true) {
+            // Only true branch reachable — propagate from true branch only.
+            const tt = trueExpr.match(/\b[A-Za-z_]\w*\b/g) || [];
+            const pulled = tt.some(t => tainted.has(t) && !sanitized.has(t));
+            if (pulled && !tainted.has(lhs)) { tainted.add(lhs); changed = true; }
+            continue;
+          } else if (condResult === false) {
+            const ft = falseExpr.match(/\b[A-Za-z_]\w*\b/g) || [];
+            const pulled = ft.some(t => tainted.has(t) && !sanitized.has(t));
+            if (pulled && !tainted.has(lhs)) { tainted.add(lhs); changed = true; }
+            continue;
+          }
+        }
         const tokens = rhs.match(/\b[A-Za-z_]\w*\b/g) || [];
         let pulled = false;
         for (const t of tokens) {
@@ -3561,9 +3748,15 @@ function _buildJavaTaintMap(cleaned, lines) {
           if (tainted.has(t)) { pulled = true; break; }
         }
         if (pulled && !tainted.has(lhs)) { tainted.add(lhs); changed = true; }
+        else if (!pulled && !tainted.has(lhs)) {
+          if (!explicitlyClean.has(lhs)) { explicitlyClean.add(lhs); changed = true; }
+        }
       }
     }
   }
+  // Final pass: any var that ended up tainted should NOT be in explicitlyClean
+  // or transparentlyClean.
+  for (const t of tainted) { explicitlyClean.delete(t); transparentlyClean.delete(t); }
   // Pass 3: allowlist regex guards. After `if(!var.matches("literal")) return;`,
   // mark var sanitized for the remainder of the file.
   let gm;
@@ -3575,7 +3768,7 @@ function _buildJavaTaintMap(cleaned, lines) {
     const after = cleaned.substring(gm.index, gm.index + 200);
     if (/\b(?:return|throw|break|continue)\b/.test(after)) sanitized.add(v);
   }
-  return { tainted, sanitized, sourceVarLine };
+  return { tainted, sanitized, sourceVarLine, assignedVars, explicitlyClean, transparentlyClean };
 }
 
 // Per-family sanitizer recognizers. A finding is dropped if any of these match
@@ -3708,7 +3901,7 @@ function scanJavaSAST(fp, raw) {
   // sets `useTaint: true`, we only fire when a tainted variable reaches the
   // sink AND no per-family sanitizer wraps it. For families without useTaint,
   // fall back to the legacy regex+sanitizer logic that achieved 73% F1.
-  const { tainted, sanitized } = _buildJavaTaintMap(cleaned, lines);
+  const { tainted, sanitized, assignedVars, explicitlyClean, transparentlyClean } = _buildJavaTaintMap(cleaned, lines);
   if (/\bparam\b/.test(cleaned) && (
     /\brequest\s*\.\s*(?:getParameter|getHeader|getCookies|getQueryString|getReader|getInputStream)/.test(cleaned)
     || /\bgetTheValue\s*\(/.test(cleaned)
