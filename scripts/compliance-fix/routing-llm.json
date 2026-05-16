@@ -1,0 +1,84 @@
+{
+  "framework": "OWASP LLM Top 10 (2025)",
+  "match_strategy": "exact_id",
+  "routes": {
+    "LLM01": {
+      "title": "Prompt Injection",
+      "commands": [
+        { "cmd": "/agentic-security:prompt-firewall", "desc": "Find user input flowing into system prompts and missing output validation." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the prompt-firewall fixes." },
+        { "cmd": "/agentic-security:llm-redteam", "desc": "Validate defenses against DAN, base64, role-play, authority-claim, hypothetical, multilingual, and chained-context jailbreaks." }
+      ]
+    },
+    "LLM02": {
+      "title": "Sensitive Information Disclosure",
+      "commands": [
+        { "cmd": "/agentic-security:scan --secrets", "desc": "Surface hardcoded secrets and PII patterns." },
+        { "cmd": "/agentic-security:env-check", "desc": "Catch NEXT_PUBLIC_ leaks, real .env.example values, hardcoded fallbacks." },
+        { "cmd": "/agentic-security:db-audit", "desc": "Find service-role exposure and missing RLS that would leak training/inference data." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    },
+    "LLM03": {
+      "title": "Supply Chain",
+      "commands": [
+        { "cmd": "/agentic-security:scan --sca", "desc": "OSV + KEV + EPSS dependency check, including model-loading patterns." },
+        { "cmd": "/agentic-security:install-script-audit", "desc": "Audit every npm package's postinstall/preinstall scripts." },
+        { "cmd": "/agentic-security:dep-pinning", "desc": "Find loose version ranges that allow silent supply-chain injection." },
+        { "cmd": "/agentic-security:vendor-audit", "desc": "Find copy-pasted third-party code vendored directly into the repo." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    },
+    "LLM04": {
+      "title": "Data and Model Poisoning",
+      "commands": [
+        { "cmd": "/agentic-security:scan", "desc": "Catches unsafe torch.load / pickle / trust_remote_code patterns." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ],
+      "note": "Provenance tracking (MLflow/DVC/CycloneDX ML-BOM) and anomaly detection on training data are out of code-scan scope. /agentic-security:posture-management --aibom generates the ML-BOM artifact."
+    },
+    "LLM05": {
+      "title": "Improper Output Handling",
+      "commands": [
+        { "cmd": "/agentic-security:prompt-firewall", "desc": "Catches LLM output flowing into SQL/exec/HTML without validation." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    },
+    "LLM06": {
+      "title": "Excessive Agency",
+      "commands": [
+        { "cmd": "/agentic-security:scan --mcp", "desc": "MCP / agent-tool over-privilege audit." },
+        { "cmd": "/agentic-security:auth-audit", "desc": "Verify the agent executes in the user's auth context, not its own." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    },
+    "LLM07": {
+      "title": "System Prompt Leakage",
+      "commands": [
+        { "cmd": "/agentic-security:prompt-firewall", "desc": "Find secrets/role logic embedded in system prompts." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    },
+    "LLM08": {
+      "title": "Vector and Embedding Weaknesses",
+      "commands": [
+        { "cmd": "/agentic-security:db-audit", "desc": "Verify RLS / tenant partitioning on the vector store." },
+        { "cmd": "/agentic-security:auth-audit", "desc": "Verify retrieval is gated by the caller's auth context." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    },
+    "LLM09": {
+      "title": "Misinformation",
+      "process_only": true,
+      "note": "Not patchable by a static scan. Document your RAG grounding strategy, fact-check pipeline, and output-labelling policy in SECURITY.md. Consider promptfoo evaluations: /agentic-security:llm-eval to scaffold a CI-bound test suite."
+    },
+    "LLM10": {
+      "title": "Unbounded Consumption",
+      "commands": [
+        { "cmd": "/agentic-security:llm-cost-ceiling", "desc": "Auto-patches missing max_tokens; generates rate-limit middleware + daily $-spend tracker." },
+        { "cmd": "/agentic-security:rate-limit-check", "desc": "Find endpoints (especially AI/payment/auth) missing rate limits." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    }
+  }
+}

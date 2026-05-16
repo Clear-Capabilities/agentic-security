@@ -1,0 +1,106 @@
+{
+  "framework": "OWASP ASVS Level 1+2",
+  "match_strategy": "id_prefix",
+  "routes": {
+    "V1.4": {
+      "title": "Trust boundaries",
+      "process_only": true,
+      "note": "Trust-boundary documentation is an architectural deliverable. /agentic-security:posture-management --api generates an API inventory you can annotate; /agentic-security:disaster-playbook produces an incident-response baseline."
+    },
+    "V2.1": {
+      "title": "Password policy",
+      "commands": [
+        { "cmd": "/agentic-security:auth-audit", "desc": "Audit auth provider config (Clerk, NextAuth, Auth0, Lucia) for password-length policy." }
+      ]
+    },
+    "V2.4": {
+      "title": "Secure password storage",
+      "commands": [
+        { "cmd": "/agentic-security:auth-audit", "desc": "Verify the auth provider hashes with bcrypt/argon2/scrypt and that no custom auth bypasses it." },
+        { "cmd": "/agentic-security:scan --secrets", "desc": "Catch any plaintext or weakly-hashed credential persistence." }
+      ]
+    },
+    "V2.7": {
+      "title": "Multi-factor authentication",
+      "commands": [
+        { "cmd": "/agentic-security:auth-audit", "desc": "Verify MFA is enabled in the auth provider config." }
+      ]
+    },
+    "V3.2": {
+      "title": "Session token entropy",
+      "commands": [
+        { "cmd": "/agentic-security:auth-audit", "desc": "Verify the auth provider mints session tokens with strong entropy (no DIY random)." }
+      ]
+    },
+    "V3.4": {
+      "title": "Cookie flags",
+      "commands": [
+        { "cmd": "/agentic-security:auth-audit", "desc": "Catch cookies set without Secure / HttpOnly / SameSite." },
+        { "cmd": "/agentic-security:harden", "desc": "Adds safe defaults to cookie config where the framework allows it." }
+      ]
+    },
+    "V4.1": {
+      "title": "Authorization enforcement",
+      "commands": [
+        { "cmd": "/agentic-security:scan --authz", "desc": "Broken access control, IDOR, mass assignment, multi-tenant scope checks." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    },
+    "V5.1": {
+      "title": "Input validation",
+      "commands": [
+        { "cmd": "/agentic-security:scan", "desc": "Detects missing zod/joi/yup validation on route handlers." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    },
+    "V5.3": {
+      "title": "SQL injection — parameterized queries",
+      "commands": [
+        { "cmd": "/agentic-security:scan", "desc": "SQLi detection across JS/TS, Python, Java, Go, C#, PHP." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply parameterized-query patches." }
+      ]
+    },
+    "V5.5": {
+      "title": "Output encoding / XSS",
+      "commands": [
+        { "cmd": "/agentic-security:scan", "desc": "React dangerouslySetInnerHTML and other XSS sinks." },
+        { "cmd": "/agentic-security:csp-cors", "desc": "Generates a CSP header that hardens XSS exposure further." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply the fixes." }
+      ]
+    },
+    "V7.1": {
+      "title": "Logging hygiene",
+      "commands": [
+        { "cmd": "/agentic-security:scan --secrets", "desc": "Catches console.log / logger.info of secrets/PII." },
+        { "cmd": "/agentic-security:env-check", "desc": "Catches NEXT_PUBLIC_ leaks." }
+      ]
+    },
+    "V8.3": {
+      "title": "Encryption at rest",
+      "commands": [
+        { "cmd": "/agentic-security:db-audit", "desc": "Catches unencrypted columns and direct DB connections that bypass RLS." }
+      ],
+      "note": "Disk/volume-level encryption is a deploy-platform concern — see /agentic-security:deploy-check."
+    },
+    "V9.1": {
+      "title": "TLS enforcement",
+      "commands": [
+        { "cmd": "/agentic-security:deploy-check", "desc": "Verifies HTTPS, HSTS, and security headers on Vercel/Railway/Fly/Netlify/Cloudflare." }
+      ]
+    },
+    "V13.1": {
+      "title": "API documentation",
+      "commands": [
+        { "cmd": "/agentic-security:posture-management --api", "desc": "Generates an API inventory from your route handlers." }
+      ],
+      "note": "Authoring the OpenAPI / GraphQL schema itself is a manual deliverable."
+    },
+    "V14.2": {
+      "title": "Dependency CVE scanning",
+      "commands": [
+        { "cmd": "/agentic-security:ci-gate", "desc": "Generates a GitHub Action that runs SCA on every PR and fails on critical/high CVEs." },
+        { "cmd": "/agentic-security:cve-alerts", "desc": "Daily Slack/Discord ping when a new CVE drops for any package you use." }
+      ]
+    }
+  }
+}

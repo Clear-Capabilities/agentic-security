@@ -1,0 +1,126 @@
+{
+  "framework": "NIST AI 600-1",
+  "match_strategy": "keyword",
+  "doc": "NIST AI 600-1 has 122 individual controls, most of which are governance / process work that no code scanner can patch. We route by keyword in the control's summary or title. Anything that doesn't match a keyword is reported as process_only.",
+  "keyword_routes": [
+    {
+      "keywords": ["sbom", "bill of materials", "cyclonedx", "dependency provenance"],
+      "title": "SBOM / dependency provenance",
+      "commands": [
+        { "cmd": "/agentic-security:posture-management --sbom", "desc": "Generate CycloneDX SBOM." },
+        { "cmd": "/agentic-security:scan --sca", "desc": "OSV + KEV + EPSS dependency scan." }
+      ]
+    },
+    {
+      "keywords": ["ml-bom", "ai-bom", "model card", "model inventory", "ai inventory"],
+      "title": "AI-BOM / model inventory",
+      "commands": [
+        { "cmd": "/agentic-security:posture-management --aibom", "desc": "Generate CycloneDX 1.7 ML-BOM." }
+      ]
+    },
+    {
+      "keywords": ["api inventory", "endpoint inventory", "attack surface"],
+      "title": "API surface inventory",
+      "commands": [
+        { "cmd": "/agentic-security:posture-management --api", "desc": "Generate API inventory from route handlers." },
+        { "cmd": "/agentic-security:attack-surface", "desc": "Plain-English attack scenarios for the surface." }
+      ]
+    },
+    {
+      "keywords": ["rate limit", "throttle", "unbounded", "resource exhaustion", "dos", "denial of service"],
+      "title": "Rate limiting / unbounded consumption",
+      "commands": [
+        { "cmd": "/agentic-security:rate-limit-check", "desc": "Find endpoints missing rate limits." },
+        { "cmd": "/agentic-security:llm-cost-ceiling", "desc": "Cap LLM-call cost and request rate." }
+      ]
+    },
+    {
+      "keywords": ["pii", "phi", "personal information", "data leak", "data disclosure", "sensitive data"],
+      "title": "PII / sensitive data exposure",
+      "commands": [
+        { "cmd": "/agentic-security:scan --secrets", "desc": "Hardcoded secrets and PII patterns." },
+        { "cmd": "/agentic-security:env-check", "desc": "NEXT_PUBLIC_ leaks, env hygiene." },
+        { "cmd": "/agentic-security:db-audit", "desc": "RLS misconfig that leaks tenant data." },
+        { "cmd": "/agentic-security:privacy-docs", "desc": "Generate jurisdiction-aware PRIVACY.md from your detected processors." }
+      ]
+    },
+    {
+      "keywords": ["prompt injection", "jailbreak", "system prompt"],
+      "title": "Prompt injection / system prompt",
+      "commands": [
+        { "cmd": "/agentic-security:prompt-firewall", "desc": "Find user input in system prompts and output validation gaps." },
+        { "cmd": "/agentic-security:llm-redteam", "desc": "Adversarial test across known jailbreak families." }
+      ]
+    },
+    {
+      "keywords": ["model loading", "model deserialization", "trust_remote_code", "pickle", "torch.load"],
+      "title": "Unsafe model loading",
+      "commands": [
+        { "cmd": "/agentic-security:scan", "desc": "Catches torch.load / pickle / trust_remote_code patterns." }
+      ]
+    },
+    {
+      "keywords": ["incident response", "incident plan", "breach response", "recovery plan"],
+      "title": "Incident response",
+      "commands": [
+        { "cmd": "/agentic-security:disaster-playbook", "desc": "Generate stack-specific DISASTER.md with rotation commands and recovery steps." }
+      ]
+    },
+    {
+      "keywords": ["secrets management", "credential storage", "api key", "vault"],
+      "title": "Secrets management",
+      "commands": [
+        { "cmd": "/agentic-security:scan --secrets", "desc": "Find hardcoded credentials." },
+        { "cmd": "/agentic-security:vault-wizard", "desc": "Guided migration from .env to Doppler / Infisical / platform-native secrets." }
+      ]
+    },
+    {
+      "keywords": ["authorization", "access control", "rbac", "least privilege", "idor"],
+      "title": "Authorization / access control",
+      "commands": [
+        { "cmd": "/agentic-security:scan --authz", "desc": "Broken access control, IDOR, mass assignment." },
+        { "cmd": "/agentic-security:auth-audit", "desc": "Auth provider misconfig." }
+      ]
+    },
+    {
+      "keywords": ["security header", "csp", "content security policy", "cors", "https", "tls"],
+      "title": "Transport / browser security headers",
+      "commands": [
+        { "cmd": "/agentic-security:csp-cors", "desc": "Generate CSP + CORS for your stack." },
+        { "cmd": "/agentic-security:deploy-check", "desc": "Verify HTTPS, HSTS, headers on deploy platform." }
+      ]
+    },
+    {
+      "keywords": ["ci gate", "pre-deploy", "deployment gate", "release gate", "go/no-go", "deployment threshold"],
+      "title": "Pre-deploy / release gating",
+      "commands": [
+        { "cmd": "/agentic-security:ci-gate", "desc": "Generate a GitHub Action that gates PRs on security." },
+        { "cmd": "/agentic-security:predeploy-gate", "desc": "Block production deploys when critical findings or KEV-listed deps are present." }
+      ]
+    },
+    {
+      "keywords": ["compliance attestation", "evidence", "audit trail", "auditable"],
+      "title": "Compliance evidence",
+      "commands": [
+        { "cmd": "/agentic-security:security-onepager", "desc": "Customer-facing 'How we keep your data safe' doc generated from real posture." },
+        { "cmd": "/agentic-security:trust-page", "desc": "Generate /.well-known/security.txt + /security page." }
+      ]
+    },
+    {
+      "keywords": ["webhook", "signature verification", "hmac"],
+      "title": "Webhook integrity",
+      "commands": [
+        { "cmd": "/agentic-security:webhook-audit", "desc": "Webhook handlers missing signature verification (Stripe, GitHub, Clerk, Svix, Resend, Twilio)." }
+      ]
+    },
+    {
+      "keywords": ["supply chain", "package integrity", "install script", "postinstall", "preinstall"],
+      "title": "Supply chain integrity",
+      "commands": [
+        { "cmd": "/agentic-security:install-script-audit", "desc": "Audit every npm package's postinstall/preinstall scripts." },
+        { "cmd": "/agentic-security:dep-pinning", "desc": "Catch loose version ranges." },
+        { "cmd": "/agentic-security:vendor-audit", "desc": "Find vendored third-party code that doesn't get CVE updates." }
+      ]
+    }
+  ]
+}
