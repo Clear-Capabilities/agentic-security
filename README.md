@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.38.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.39.0-blue)]()
 
 ---
 

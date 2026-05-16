@@ -24,7 +24,7 @@ NAME
        integrations for the security stack you already run.
 
 VERSION
-       0.38.0
+       0.39.0
 
 SYNOPSIS
        agentic-security [--profile pro] COMMAND [ARGS] [OPTIONS]
