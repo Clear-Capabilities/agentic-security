@@ -292,7 +292,6 @@ You triage findings for a living. Most scanners drown you in noise, are impossib
 - **Deterministic mode.** Byte-stable output + rule-pack lockfile (`rules.lock.json`) for audits and CI baselines.
 - **Diff-aware.** `--pr` mode scans only changed files; auto-detects PR base from GitHub / GitLab / Buildkite / Bitbucket env vars.
 - **Standards-shaped output.** SARIF, JUnit, CycloneDX (SBOM + ML-BOM + PBOM), SPDX. Drops directly into existing dashboards.
-- **Honest F1.** 94.2% strict on OWASP Benchmark, 94.2% on SARD Juliet Java, 96.9% on Juliet C/C++ (file-level, OWASP-scorecard convention) with a public per-app baseline file. We tell you where we miss.
 
 ### 5-minute pro setup
 
@@ -426,35 +425,8 @@ We try to be honest about the boundaries.
 
 - **Not a SaaS dashboard.** It's a CLI + Claude Code plugin. There is no web app, no multi-tenant platform, no cross-org rollup (yet).
 - **Not a replacement for a pentester.** Static analysis catches patterns; humans catch business-logic flaws. The `security-logic-reviewer` subagent and `/validate-findings` close part of the gap, not all of it.
-- **Not magic.** It can miss novel vulnerabilities, especially anything that requires understanding intent. We publish strict-mode F1 numbers per app so you can see exactly where we fall short.
+- **Not magic.** It can miss novel vulnerabilities, especially anything that requires understanding intent.
 - **Not free for resale.** PolyForm Internal Use license. Use it on your own code, ship it inside your own products. Don't repackage it as a competing scanner.
-
----
-
-## F1 benchmark
-
-Evaluated against the OWASP Benchmark (2,740 Java test cases), 33 real-world vulnerable apps (NodeGoat, Juice Shop, DVWA, and more), and an adversarial LLM/AI suite. Every rule ships with a `vulnerable/` + `clean/` fixture pair.
-
-### Two F1 numbers — both honest, both reported
-
-| Scoring mode | What it measures | Score |
-|---|---|---|
-| **Wildcard-relaxed** (default) | "Does the scanner find at least one finding in each vulnerability family this app contains?" — i.e. family-level coverage. The mode most published security tool benchmarks use. | **100% on 35/35 benchmarks** |
-| **Strict file-level** (`--no-wildcards`, OWASP-scorecard convention) | "For each test file, does the engine fire iff the file is real=true?" One TP per test that fires; one FP per safe test the engine fires on. | **100% on 29/32** benchmarks. **94.2%** on OWASP Benchmark (via 5 template suppressors + per-arg taint extensions). **94.2%** on SARD Juliet Java (via Juliet-shape detector + per-language CWE suppressor). **96.9%** on juliet-c-cpp (Juliet-shape detector handles cross-file `_badSink` variants). |
-
-**Why the gap on the remaining apps?** OWASP Benchmark uses `real=true / real=false` labels that hinge on constant-folded if-branches and inner-class flow that the remaining FP clusters can't be cleanly distinguished by template comment alone — the next 2-3 pp would require either per-template engineering or full Java AST + integer-arithmetic constant folding. SARD Juliet's remaining FNs are in `cwe113` cross-file variants and `hardcoded-secret` precision-noisy fallbacks. juliet-c-cpp's remaining FNs are subdirectory variants (s01/s02/...) where the bad function follows additional naming patterns.
-
-**Note on prior numbers**: a `matchAny` scoring bug was inflating bench-reported numbers by 1.5–2× on file-level GT (fixed in 0.36.0; see [`STRICT-F1-BASELINE.md`](scanner/test/benchmark/STRICT-F1-BASELINE.md) for the full methodology correction). The numbers above are the corrected file-level F1 — what an outside auditor expects "F1" to mean.
-
-Reproduce either number:
-
-```bash
-cd scanner
-npm run bench:realworld                           # wildcard-relaxed (default)
-node test/benchmark/realworld/bench-realworld.js --all --no-wildcards   # strict
-```
-
-Full strict-baseline breakdown per app, plus the roadmap to raise each one, is in [`scanner/test/benchmark/STRICT-F1-BASELINE.md`](scanner/test/benchmark/STRICT-F1-BASELINE.md).
 
 ---
 
