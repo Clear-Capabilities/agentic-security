@@ -593,6 +593,8 @@ export function toShipVerdict(scan, options = {}) {
   const advisoryCount = findings.length - actionable.length;
   const sev = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const f of findings) sev[f.severity] = (sev[f.severity] || 0) + 1;
+  const kevCount = findings.filter(f => f.kev === true).length;
+  const confirmedCount = findings.filter(f => f.validated === true || f.confirmed === true).length;
 
   const lines = [];
   const bar = '─────────────────────────────────────────';
@@ -606,6 +608,16 @@ export function toShipVerdict(scan, options = {}) {
   }
   lines.push(bar);
   lines.push(`  • ${sev.critical} critical · ${sev.high} high · ${advisoryCount} advisory`);
+  // KEV: surface "being exploited now" — more visceral than $-cost framing alone.
+  // Only show when at least one finding is in CISA KEV (known-exploited).
+  if (kevCount > 0) {
+    lines.push(c(`  🔥 ${kevCount} actively exploited in the wild (CISA KEV)`, SEV_COLOR.critical + BOLD));
+  }
+  // CONFIRMED: surface validator-confirmed criticals as a trust signal —
+  // distinguishes "tool said so" from "tool built a PoC and it ran."
+  if (confirmedCount > 0) {
+    lines.push(c(`  ✓  ${confirmedCount} CONFIRMED (PoC built by /validate-findings)`, '\x1b[1;32m'));
+  }
   lines.push('');
 
   if (actionable.length) {

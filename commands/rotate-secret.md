@@ -1,6 +1,6 @@
 ---
-description: Guide for rotating a leaked secret — detects the provider from the key format, lists every file that references it, and gives platform-specific rotation steps.
-argument-hint: "[secret-value-or-finding-id]"
+description: Guide for rotating a leaked secret — detects the provider from the key format, lists every file that references it, and gives platform-specific rotation steps. Add --scrub-history to also rewrite git history with git filter-repo / BFG.
+argument-hint: "[secret-value-or-finding-id] [--scrub-history]"
 ---
 
 Rotate a leaked secret. Detects which provider the secret belongs to (Stripe, OpenAI, Anthropic, GitHub, Supabase, etc.), finds every file that references it, and gives exact rotation steps for your deployment platform.
@@ -147,3 +147,17 @@ console.log('');
 ```
 
 A leaked secret that is still in git history is still compromised even after rotation, because anyone who cloned the repo before the rotation has the old key. If the key was committed, assume it was used — check provider audit logs immediately.
+
+## `--scrub-history` — purge from git history
+
+Pass `--scrub-history` along with the leaked value to also rewrite the value out of every past commit using `git filter-repo` (preferred) or BFG. The command will:
+
+1. Refuse if the working tree is dirty (uncommitted changes would be lost).
+2. Refuse if the repo has unmerged feature branches (rewriting history orphans them) — pass `--force` to override.
+3. Detect which tool is available and print install instructions if neither is (`brew install git-filter-repo` or `brew install bfg`).
+4. Create a backup ref (`backup/pre-scrub-<timestamp>`) so the rewrite is reversible until you `git push --force`.
+5. Replace every occurrence of the value with `***REVOKED***` across all commits, branches, and tags.
+6. Write an audit log to `.agentic-security/rotation-history/<timestamp>.json` (pre-/post-rewrite SHAs, scrubbed value prefix, timestamp, operator).
+7. Print the irreversible next steps: `git push --force`, force-update protected branches in your hoster's UI, notify collaborators to re-clone, and (GitHub only) open a support ticket to purge cached blob views.
+
+**Even with history scrubbed, treat the original key as compromised.** Anyone with a pre-rewrite clone or a cached GitHub blob view still has it. Rotating the value at the provider is the only thing that actually removes danger — history scrub is hygiene for audits and embarrassment, not safety.

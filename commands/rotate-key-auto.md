@@ -1,6 +1,6 @@
 ---
-description: ACTIVELY rotate a leaked API key end-to-end. Detects provider, prints the exact revoke commands for that provider's console + CLI, scrubs the value from every file (with backups), and pushes the replacement to Vercel/Fly/Railway/Cloudflare/Netlify if their CLI is installed. Distinct from /rotate-secret (which guides) — this does the work.
-argument-hint: "<leaked-value> | --scan | --provider <name> --new-value <new>"
+description: ACTIVELY rotate a leaked API key end-to-end. Detects provider, prints the exact revoke commands for that provider's console + CLI, scrubs the value from every file (with backups), and pushes the replacement to Vercel/Fly/Railway/Cloudflare/Netlify if their CLI is installed. Use --scrub-history to also purge the value from git history (git filter-repo / BFG). Distinct from /rotate-secret (which guides) — this does the work.
+argument-hint: "<leaked-value> | --scan | --provider <name> --new-value <new> | [--scrub-history]"
 ---
 
 # Active key rotation
@@ -58,8 +58,33 @@ Where `ARGS` is `${1}` (or `--scan` etc.). The script is interactive by default 
 
 - All file edits are **reversible** — backups under `.agentic-security/rotation-backups/<timestamp>/`.
 - The script never logs full key values — only prefix + suffix.
-- Refuses to operate on git history — it only scrubs the current working tree. If you've already pushed the leak, the key is dead; revoke is the only safe path.
+- Working-tree scrub only by default. Pass `--scrub-history` to also rewrite git history (see below).
 - Won't auto-push to a deployment platform without explicit `y` confirmation per env var per platform.
+
+## `--scrub-history` — purge from git history
+
+A revoked key in git history is no longer dangerous (it can't be used), but it CAN be embarrassing in an audit, and security teams flag it. Adding `--scrub-history` rewrites history to remove the value.
+
+```bash
+/rotate-key-auto sk-leakedValue... --scrub-history
+```
+
+What it does:
+
+1. **Refuses if the working tree is dirty** — uncommitted changes would be lost in the rewrite. Commit or stash first.
+2. **Refuses if you're not on a clean main/master branch with no in-flight feature branches** — rewriting history with active branches creates orphan commits and confused collaborators. Switch branches and merge first, or pass `--force` to override.
+3. **Detects which tool is available**: `git filter-repo` (preferred) > `bfg` (Java jar). Refuses if neither is installed and prints install instructions:
+   - `brew install git-filter-repo` or `pip install git-filter-repo`
+   - `brew install bfg`
+4. **Creates a tagged backup** of the pre-rewrite repo state (`backup/pre-scrub-<timestamp>`) so the rewrite is reversible until you `git push --force`.
+5. **Performs the rewrite** with the appropriate tool, replacing the leaked value with `***REVOKED***`.
+6. **Prints the manual steps** you must take next:
+   - `git push --force` — irreversible. Confirm the team is OK with it first.
+   - Force-update protected branches via the GitHub/GitLab UI (settings → branches).
+   - Notify any collaborators that they must re-clone — `git pull` will fail post-rewrite.
+   - Open a GitHub support ticket to purge cached views (`https://support.github.com/contact/private-information`).
+
+**Audit log**: every `--scrub-history` operation writes `.agentic-security/rotation-history/<timestamp>.json` capturing what was scrubbed, by whom, when, and the pre-/post-rewrite SHAs. Hand this to your security team as evidence the rotation was completed.
 
 ## What you must do that the script can't
 

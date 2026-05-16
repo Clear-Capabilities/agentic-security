@@ -59,6 +59,8 @@ Same engine. No accounts.
   ❌  Not safe to deploy  ·  api-billing
 ─────────────────────────────────────────────────────────────────
    3 critical · 8 high · 22 medium · 41 advisory
+   🔥 2 actively exploited in the wild (CISA KEV)
+   ✓  1 CONFIRMED (PoC built by /validate-findings)
 
    [critical] SQL Injection                api/users.ts:42
      Could leak PII for ~5,000 users.
@@ -171,6 +173,12 @@ It looks at your project state and tells you the single best next step. No menu,
 
 Runs `/scan --all` then immediately `/fix --all --low` — finds and fixes everything at every severity in one shot. The security-fixer agent reads your auth library, ORM, and framework before writing each fix, so the patches look like the rest of your code.
 
+### Two more vibecoder-shaped commands
+
+**`/agentic-security:scan --uncommitted`** — "what did I just break?" Scans only the files you've changed since your last commit (staged + unstaged + untracked). No git-ref vocabulary, no full-repo wait — same one-screen verdict, scoped to your current edit.
+
+**`/agentic-security:supply-chain-check`** — "is `npm install` safe?" One-screen roll-up across six dep audits (CVE, KEV, pinning, install scripts, vendored code, freshness). Replaces having to remember which of `/dep-pinning`, `/dep-freshness`, `/install-script-audit`, `/vendor-audit`, `/trim-dependencies`, `/dep-alternatives` to run.
+
 ### Why findings are different here
 
 Other scanners give you `[CRITICAL] CWE-89 SQL Injection at api/users.ts:42`. You stare at it, you Google it, you give up.
@@ -208,6 +216,11 @@ We give you this:
 - **3-point cost** — best (P5) / likely (P50) / worst (P95), not a meaningless range
 - **Component breakdown** — IR + legal + notification + credit monitoring + regulatory + damage + class action + churn, each computed separately
 - **Comparable incident** — a real public settlement to calibrate against (Equifax, T-Mobile, Capital One, Anthem, etc.)
+
+**Plus two trust signals at the top of the verdict:**
+
+- **🔥 Actively exploited (CISA KEV)** — when one of your findings touches a vulnerability that's on CISA's Known Exploited Vulnerabilities catalog. This is the difference between "this could theoretically be bad" and "people are running scripts that exploit this *today*."
+- **✓ CONFIRMED** — when `/validate-findings` has built a working PoC against a finding. Filters the "scanner shouted at me" anxiety from the "this is a real bug I can prove" certainty.
 
 The numbers are grounded in **public data sources**: IBM Cost of a Data Breach 2024 (per-industry, per-record costs), NetDiligence Cyber Claims Study 2024 (SMB distributions), HHS OCR HIPAA enforcement records, GDPR Enforcement Tracker medians, and 25+ public settlement records.
 
