@@ -103,7 +103,7 @@ The mascot (Patch) reacts to whatever your scan actually said.
 | You are… | Start here |
 |---|---|
 | A builder shipping fast with AI, no security background | [→ Builder Quickstart](#-for-vibecoders--builders) |
-| A security engineer or pro dev managing real risk | [→ Pro Quickstart](#-for-security-pros--engineers) |
+| A security engineer or professional developer managing real risk | [→ Pro Quickstart](#-for-security-pros--engineers) |
 | Curious | Run `npx @clearcapabilities/agentic-security-scanner scan .` and see what it finds |
 
 ---
