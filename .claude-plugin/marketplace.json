@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Clear Capabilities security plugins for Claude Code.",
-    "version": "0.39.1"
+    "version": "0.39.2"
   },
   "plugins": [
     {
       "name": "agentic-security",
       "source": "./",
       "description": "Agentic-Security is a powerful Claude Code plugin that automatically performs Application Security Testing (SAST, SCA, secrets detection, and more). Think of it as the easy button for making your Claude-generated code safe and secure.",
-      "version": "0.39.1",
+      "version": "0.39.2",
       "author": {
         "name": "Ross Young",
         "email": "ross@clearcapabilities.com"

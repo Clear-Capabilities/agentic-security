@@ -16,7 +16,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { PACKS } from './rule-packs.js';
 
-export const SCANNER_VERSION = '0.39.1';
+export const SCANNER_VERSION = '0.39.2';
 const LOCK_FILE = 'rules.lock.json';
 
 // Hash the union of pack CWE sets — stable across runs as long as PACKS is unchanged.

@@ -915,7 +915,7 @@ async function main() {
       case 'packs':    process.exit(await cmdPacks(args));
       case 'digest':   process.exit(await cmdDigest(args));
       case 'setup':    process.exit(await cmdSetup(args));
-      case 'version':  console.log('agentic-security 0.39.1  ·  created by ClearCapabilities.Com'); process.exit(0);
+      case 'version':  console.log('agentic-security 0.39.2  ·  created by ClearCapabilities.Com'); process.exit(0);
       case 'help': case '--help': case '-h': case undefined:
         console.log(USAGE); process.exit(cmd ? 0 : 1);
       default:
