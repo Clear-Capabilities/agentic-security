@@ -236,6 +236,7 @@ This is automatic, on by default. Disable with `--no-blast-radius` if you really
 | `/agentic-security:destructive-guard` | Blocks foot-guns when Claude tries to run them: `rm -rf` on parent dirs, `DROP TABLE`, `git push --force` to main, `curl \| bash`, `chmod 777`, and 8+ more. Plain-English why + safer alternative on every refusal. |
 | `/agentic-security:predeploy-gate` | Blocks `vercel --prod` / `fly deploy` / `wrangler publish` / `netlify deploy --prod` / `railway up` when critical findings or KEV-listed deps are present. Hooks into Claude AND your terminal. |
 | `/agentic-security:cve-alerts` | Daily Slack/Discord ping when a new CVE drops for any package you use. |
+| `/agentic-security:daily-checkin` | Daily security digest to Slack / Discord / generic webhook: what's new since yesterday, what got resolved, which KEV packages landed in your tree. Async awareness without opening a dashboard. |
 
 ### The full builder catalog
 
@@ -244,7 +245,7 @@ This is automatic, on by default. Disable with `--no-blast-radius` if you really
 | Command | What it does |
 |---|---|
 | `/agentic-security:explain` | Plain-English explanation of a finding — what it means, how an attacker abuses it, worst case, fix. |
-| `/agentic-security:story-explain` | "Meet Mallory. She visits `/api/users`, changes `?id=1` to `?id=2`…" 4-act narrative with attacker, timeline, payloads, fix line. |
+| `/agentic-security:story-explain` | "Meet Mallory. She visits `/api/users`, changes `?id=1` to `?id=2`…" 4-act narrative with attacker, timeline, payloads, fix line. Add `--post-mortem` for past-tense + "what we shipped" block — drop straight into a Notion incident write-up or customer email. |
 | `/agentic-security:attack-surface` | 3–5 realistic attack scenarios written like stories. No CVE IDs. |
 | `/agentic-security:risk-in-dollars` | Each finding's best/likely/worst-case $ exposure, sourced from public incident settlements. Cites GDPR / CCPA / HIPAA / NIST AI 600-1 fines. |
 | `/agentic-security:report-card` | Single A–F letter grade with one concrete next action. |
@@ -258,8 +259,8 @@ This is automatic, on by default. Disable with `--no-blast-radius` if you really
 | `agentic-security fix --finding <id> --preview` | Unified-diff preview before any write. `--apply` writes and backs up the original. |
 | `agentic-security undo [--all\|--list]` | Atomic revert for the most recent fix. Safer than `git stash` for partial rollbacks. |
 | `/agentic-security:harden` | One-command hardening: security headers, `.gitignore`, `SECURITY.md`, `npm audit` script. Idempotent. |
-| `/agentic-security:rotate-secret` | Detects which provider owns a leaked key, finds every reference, gives platform-specific rotation steps. |
-| `/agentic-security:rotate-key-auto` | Goes further: actually revokes, scrubs the value across files, pushes the replacement to Vercel/Fly/Railway/Cloudflare/Netlify env vars via CLI. |
+| `/agentic-security:rotate-secret` | Detects which provider owns a leaked key, finds every reference, gives platform-specific rotation steps. Add `--scrub-history` to also rewrite git history via `git filter-repo` / BFG. |
+| `/agentic-security:rotate-key-auto` | Goes further: actually revokes, scrubs the value across files, pushes the replacement to Vercel/Fly/Railway/Cloudflare/Netlify env vars via CLI. `--scrub-history` purges git history and writes an audit log to `.agentic-security/rotation-history/`. |
 | `/agentic-security:vault-wizard` | Guided migration from `.env` to Doppler, Infisical, or platform-native secrets. |
 
 #### Hardening for the stack you actually use
@@ -372,6 +373,7 @@ npx @clearcapabilities/agentic-security-scanner scan . --format aibom > ai-bom.j
 |---|---|
 | `/agentic-security:posture-management` | SBOM, AI-BOM, API inventory, license policy, drift, MTTR / SLA tracking. |
 | `/agentic-security:compliance-report` | Auditor-ready attestation for NIST AI 600-1, OWASP ASVS, or OWASP LLM Top 10 (2025). |
+| `/agentic-security:compliance-fix` | Routes every Not-Compliant control from `/compliance-report` to the agentic-security command that closes it, deduped + ordered. Flags controls that require manual / process work. |
 | `/agentic-security:trim-dependencies` | Find and remove packages installed but never imported. |
 | `/agentic-security:dep-freshness` | Score how stale your direct dependencies are across all ecosystems. |
 | `/agentic-security:dep-pinning` | Audit manifests for loose version ranges that allow silent supply-chain injection. |
@@ -380,7 +382,7 @@ npx @clearcapabilities/agentic-security-scanner scan . --format aibom > ai-bom.j
 | `/agentic-security:vendor-audit` | Copy-pasted third-party code vendored directly into the repo — invisible to dependency scanners. |
 | `/agentic-security:security-tests` | Generate failing security regression tests + passing fix-validation tests for each finding (Jest / Vitest / pytest). |
 | `/agentic-security:status` | One-screen plugin & project health snapshot — version, last scan, finding counts, cache size, hook activation. |
-| `/agentic-security:help` | Full command catalog with one-line descriptions and example invocations. |
+| `/agentic-security:help` | Full command catalog, ICP-segmented (🎨 Vibecoder lane / 🔧 Pro lane / 🤝 Both). |
 
 The full reference lives in the **[Developer Documentation](https://github.com/Clear-Capabilities/agentic-security/blob/main/docs/developer-documentation-guide.md)**.
 
