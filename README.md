@@ -14,7 +14,7 @@
 
 ## The 30-second pitch
 
-This morning, your AI shipped a new webpage in 9 seconds. Beautiful code. Tests pass.
+This morning, your AI Coding Assistant shipped a new webpage in 9 seconds. Beautiful code. Tests pass.
 
 It also lets anyone in the world log in as admin with a single line of curl.
 
