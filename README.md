@@ -16,7 +16,7 @@
 
 This morning, your AI Coding Assistant shipped a new webpage in 9 seconds. Beautiful code. Tests pass.
 
-It also lets anyone in the world log in as admin with a single line of curl.
+It also lets anyone in the world log in as admin without even a password and violates data privacy requirements.
 
 You don't know that yet. **Neither does your AI.**
 
