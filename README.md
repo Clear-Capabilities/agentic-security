@@ -439,10 +439,10 @@ The whole engine ships as a single 2.6 MB ESM bundle (`dist/agentic-security.mjs
 
 We try to be honest about the boundaries.
 
-- **Not a SaaS dashboard.** It's a CLI + Claude Code plugin. There is no web app, no multi-tenant platform, no cross-org rollup (yet).
+- **Not a SaaS dashboard.** It's a CLI + Claude Code plugin.
 - **Not a replacement for a pentester.** Static analysis catches patterns; humans catch business-logic flaws. The `security-logic-reviewer` subagent and `/validate-findings` close part of the gap, not all of it.
 - **Not magic.** It can miss novel vulnerabilities, especially anything that requires understanding intent.
-- **Not free for resale.** PolyForm Internal Use license. Use it on your own code, ship it inside your own products. Don't repackage it as a competing scanner.
+- **Not free for resale.** PolyForm Internal Use license. Use it to make your own code safe and secure, Don't repackage it as a competing scanner.
 
 ---
 
