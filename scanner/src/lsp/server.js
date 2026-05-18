@@ -83,12 +83,20 @@ async function publishDiagnostics(uri, findings) {
 async function scanFile(uri) {
   const filePath = uriToPath(uri);
   if (!filePath || !fs.existsSync(filePath)) return;
-  // For now we scan the whole project root and filter by file. This is
-  // overkill for a single-file save but reuses the existing scanner with
-  // no incremental support. A future optimization: per-file in-memory scan.
+  // Incremental scan: hand runScan a single-file `fileContents` map so the
+  // engine processes only this file. Cross-file taint/call-graph passes that
+  // need the rest of the project are silently no-ops here — the trade-off is
+  // worth it: a 100k-LoC project saves a file every few seconds, and the
+  // engine reading every file on every save (the previous behavior) made the
+  // plugin unusable.
+  //
+  // Operators who want cross-file analysis can run `/scan --all` from a
+  // separate terminal; the LSP path is for editor-visible immediate feedback.
   try {
-    const { scan } = await runScan(_rootDir);
     const rel = path.relative(_rootDir, filePath);
+    const content = fs.readFileSync(filePath, 'utf8');
+    const fileContents = { [rel]: content };
+    const { scan } = await runScan(_rootDir, { fileContents });
     const findings = (scan.findings || []).filter(f => f.file === rel);
     await publishDiagnostics(uri, findings);
   } catch (e) {

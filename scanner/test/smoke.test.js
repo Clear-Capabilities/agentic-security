@@ -244,7 +244,10 @@ test('FP-3: sanitizer effectiveness by data-flow (discarded return ≠ sanitizat
 });
 
 test('Feat-4: custom rules YAML — adds custom sink + suppression hides legacy finding', async () => {
+  // Custom rules in this fixture are unsigned; opt-in to allow them for the test.
+  process.env.AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS = '1';
   const { scan } = await runScan(FIX('custom-rules'));
+  delete process.env.AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS;
   const findings = normalizeFindings(scan);
   // Custom sink fires
   const custom = findings.filter(f => /Custom/i.test(f.vuln));
@@ -449,8 +452,10 @@ test('FP-13: SCA findings honor rules.yml suppressions (supplyChain pipeline)', 
     ],
   };
   // Load custom rules from the fixture's rules.yml so the suppression is registered
+  process.env.AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS = '1';  // unsigned test fixture
   const { _loadCustomRules } = await import('../src/engine.js');
   await _loadCustomRules(FIX('sca-suppression'));
+  delete process.env.AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS;
   const { normalizeFindings } = await import('../src/report/index.js');
   const out = normalizeFindings(synthetic);
   assert.equal(out.length, 0, `expected the SCA finding to be suppressed, got ${out.length}`);

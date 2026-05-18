@@ -1,4 +1,7 @@
 {
+  "_caveat": "This F1 is benchmark-specific. The engine ships precision lifters (scanner/src/sast/primary-cwe-java.js, java-constant-fold.js) tuned to OWASP Benchmark file shape (@WebServlet servlets ≤300 LoC, canonical variable names). The number does NOT generalize to arbitrary Java code. See bench/README.md.",
+  "_real_world_f1_validated": false,
+  "_cve_replay_corpus_status": "1/500 starter entries — half of the PRD's central technical claim is unmeasured",
   "f1": 0.9066937119675457,
   "precision": 0.8690861957226182,
   "recall": 0.9477031802120142,

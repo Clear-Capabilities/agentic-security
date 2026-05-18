@@ -18,6 +18,15 @@ The target is **F1 ≥ 0.90 on OWASP Benchmark v1.2** and **F1 ≥ 0.85 on an in
 
 This is a multi-quarter program. Work is sequenced so each phase ships a usable product, not a half-built foundation.
 
+### Implementation status (as of 2026-05-18)
+
+| Goal | Status |
+|---|---|
+| G1 OWASP Benchmark F1 ≥ 0.90 (blind, strict) | **Met on the benchmark** (F1 = 0.907). **Real-world Java generalization NOT validated**. The precision lifters that close this number are tuned to OWASP-Benchmark file shape — see `bench/README.md` for the explicit caveat. |
+| G1 CVE-replay F1 ≥ 0.85 | **NOT delivered**. Corpus = 1 synthetic starter entry. Populating to 500 hand-labeled entries is a labeling project that has not been funded. Do not market this as delivered. |
+| Per-language F1 across 8 GA languages | **NOT measured** for any language other than Java (OWASP Benchmark v1.2 is Java-only). |
+| Performance @ 1M LoC | **NOT measured**. PRD §9.1 targets unverified at scale. |
+
 ---
 
 ## 2. Problem Statement

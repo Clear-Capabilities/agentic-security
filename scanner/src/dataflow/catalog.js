@@ -337,11 +337,28 @@ export const CATALOG = [
   { kind: 'sanitizer', id: 'go-strconv-atoi', language: 'go', match: { type: 'call', callee: 'Atoi' },         effect: 'strip', appliesTo: ['*'] },
 ];
 
-// Pre-build lookups: callee name → entry.
+// Provenance defaults (Sentinel-parity audit P1-10):
+//
+// Every catalog entry is implicitly `source: 'official'` (curated by this
+// repo's maintainers, drawn from upstream framework docs). Future community
+// contributions or LLM-inferred entries will carry `source: 'community'` or
+// `source: 'inferred'`. Operators who want to opt OUT of non-official
+// entries set `AGENTIC_SECURITY_CATALOG_OFFICIAL_ONLY=1`.
+//
+// We default-stamp `source: 'official'` on entries that don't have one so
+// existing callers keep working.
+for (const e of CATALOG) {
+  if (!e.source) e.source = 'official';
+}
+
+const OFFICIAL_ONLY = process.env.AGENTIC_SECURITY_CATALOG_OFFICIAL_ONLY === '1';
+
+// Pre-build lookups: callee name → entry. Filter by provenance.
 const CALLEE_INDEX = new Map();
 const MEMBER_INDEX = new Map();
 for (const e of CATALOG) {
   if (!e.match) continue;
+  if (OFFICIAL_ONLY && e.source !== 'official') continue;
   if (e.match.type === 'call' && e.match.callee && e.match.callee !== '*') {
     const k = e.match.callee;
     if (!CALLEE_INDEX.has(k)) CALLEE_INDEX.set(k, []);

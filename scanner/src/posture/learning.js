@@ -75,29 +75,57 @@ function matchesPattern(filePath, pattern) {
 }
 
 // Apply feedback to a freshly produced set of findings. Returns
-// { kept: Finding[], suppressed: SuppressionLogEntry[] }
+// { kept: Finding[], suppressed: SuppressionLogEntry[] }.
+//
+// SAFETY (post-premortem R3.3):
+//   - DEFAULT OFF: only consulted when AGENTIC_SECURITY_LEARN=1.
+//   - QUORUM: a stableId is suppressed only after ≥ AGENTIC_SECURITY_LEARN_QUORUM
+//     distinct fp entries (default 2).
+//   - CAP: most-recent 500 entries by `at` timestamp are honored — bounds
+//     the poisoning blast radius.
+//   - PATTERN MATCHES require ≥ quorum entries with the same family+filePattern.
 export function applyFeedback(scanRoot, findings) {
   const suppressed = [];
+  // OPT-IN gate.
+  if (process.env.AGENTIC_SECURITY_LEARN !== '1') return { kept: findings, suppressed };
   const data = loadFeedback(scanRoot);
   if (!data.entries || !data.entries.length) return { kept: findings, suppressed };
+  const quorum = Math.max(1, parseInt(process.env.AGENTIC_SECURITY_LEARN_QUORUM || '2', 10));
+  // Keep the most recent 500 entries by `at`.
+  const sorted = [...data.entries].sort((a, b) => String(a.at || '').localeCompare(String(b.at || ''))).slice(-500);
+  const fpCountById = new Map();
   const fpById = new Map();
-  const fpPatterns = [];
   const tpById = new Set();
-  for (const e of data.entries) {
+  const patternCounts = new Map();
+  for (const e of sorted) {
     if (e.verdict === 'fp') {
-      if (e.stableId) fpById.set(e.stableId, e);
-      // Pattern-based: same family + same file shape + similar sink snippet.
+      if (e.stableId) {
+        fpCountById.set(e.stableId, (fpCountById.get(e.stableId) || 0) + 1);
+        if (!fpById.has(e.stableId)) fpById.set(e.stableId, e);
+      }
       if (e.family && (e.file || e.sinkSnippet)) {
-        fpPatterns.push({
-          family: e.family,
-          filePattern: e.file ? e.file.split('/').slice(0, -1).join('/') + '/*' : null,
-          sinkSnippet: (e.sinkSnippet || '').slice(0, 80),
-          reason: e.reason,
-        });
+        const k = `${e.family}|${e.file ? e.file.split('/').slice(0, -1).join('/') + '/*' : ''}|${(e.sinkSnippet || '').slice(0, 80)}`;
+        patternCounts.set(k, (patternCounts.get(k) || 0) + 1);
       }
     } else if (e.verdict === 'tp') {
       if (e.stableId) tpById.add(e.stableId);
     }
+  }
+  // Drop stableIds below quorum.
+  for (const [id, count] of fpCountById) {
+    if (count < quorum) fpById.delete(id);
+  }
+  // Build pattern list — only patterns at quorum.
+  const fpPatterns = [];
+  for (const [key, count] of patternCounts) {
+    if (count < quorum) continue;
+    const [family, filePattern, sinkSnippet] = key.split('|');
+    fpPatterns.push({
+      family: family || null,
+      filePattern: filePattern || null,
+      sinkSnippet: sinkSnippet || '',
+      reason: `quorum-${count}-fp-votes`,
+    });
   }
   const kept = [];
   for (const f of findings) {

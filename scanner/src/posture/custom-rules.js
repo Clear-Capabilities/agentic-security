@@ -31,6 +31,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
 import fg from 'fast-glob';
+import { loadTrustedKeys, verifyRulePack } from './rule-pack-signing.js';
 
 const LANG_EXTS = {
   javascript: ['.js', '.mjs', '.cjs', '.jsx'],
@@ -60,7 +61,29 @@ export function loadCustomRules(scanRoot) {
       .filter(f => /\.(ya?ml)$/i.test(f))
       .map(f => path.join(dir, f));
   } catch { return out; }
+  const trustedKeys = loadTrustedKeys(scanRoot);
   for (const fp of files) {
+    // Signature verification (PRD FR-DSL-2). Default: refuse unsigned rules
+    // unless AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1.
+    let unsignedAllowed = false;
+    const r = verifyRulePack(fp, trustedKeys);
+    if (!r.ok) {
+      if (r.reason === 'unsigned' && r.allowUnsigned) {
+        console.error(`agentic-security: WARNING — loading UNSIGNED rule pack ${path.basename(fp)} (AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1). Findings will be tagged _unsigned:true.`);
+        unsignedAllowed = true;
+      } else if (r.reason === 'no-trusted-keys') {
+        if (process.env.AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS === '1') {
+          console.error(`agentic-security: WARNING — no trusted-keys.json; loading ${path.basename(fp)} unsigned-allowed.`);
+          unsignedAllowed = true;
+        } else {
+          console.error(`agentic-security: REFUSED rule pack ${path.basename(fp)} — no .agentic-security/trusted-keys.json. Set AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1 to override (audit-logged).`);
+          continue;
+        }
+      } else {
+        console.error(`agentic-security: REFUSED rule pack ${path.basename(fp)} — ${r.reason}.`);
+        continue;
+      }
+    }
     let raw;
     try { raw = yaml.load(fs.readFileSync(fp, 'utf8')); } catch (e) {
       console.error(`agentic-security: bad YAML in ${path.basename(fp)}: ${e.message}`);
@@ -69,7 +92,10 @@ export function loadCustomRules(scanRoot) {
     const list = Array.isArray(raw) ? raw : (raw?.rules ? raw.rules : [raw]);
     for (const r of list) {
       const norm = normalizeRule(r, fp);
-      if (norm) out.push(norm);
+      if (norm) {
+        if (unsignedAllowed) norm._unsigned = true;
+        out.push(norm);
+      }
     }
   }
   return out;

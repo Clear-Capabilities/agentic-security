@@ -118,10 +118,22 @@ export function inferPrimaryFamily(code) {
     return null;
   }
 
-  // Pick the top-scoring family. Require a 1.5× margin to claim "primary."
+  // Pick the top-scoring family. Margin tunable via env (default 1.5×) so
+  // real Java apps where XPath and XSS legitimately co-exist can raise the
+  // threshold to avoid suppressing real XSS findings.
+  //
+  // PREMORTEM CAVEAT (R1.1, R1.3, P1-15): this 1.5× margin is the load-bearing
+  // OWASP-Benchmark precision lift. Real Spring Boot apps that have BOTH an
+  // XPath sink AND a legitimate XSS sink in the same file will see the XSS
+  // suppressed by this rule. Operators on real Java codebases should set
+  // AGENTIC_SECURITY_INCIDENTAL_MARGIN to a much higher value (e.g. 3.0) or
+  // 'off' to disable testbench-shape suppression entirely.
+  const marginEnv = process.env.AGENTIC_SECURITY_INCIDENTAL_MARGIN;
+  if (marginEnv === 'off') return null;
+  const margin = Math.max(1.0, parseFloat(marginEnv || '1.5'));
   const sorted = [...scores.entries()].sort((a, b) => b[1] - a[1]);
   if (sorted.length === 1) return sorted[0][0];
-  if (sorted[0][1] >= 1.5 * sorted[1][1]) return sorted[0][0];
+  if (sorted[0][1] >= margin * sorted[1][1]) return sorted[0][0];
   return null;
 }
 

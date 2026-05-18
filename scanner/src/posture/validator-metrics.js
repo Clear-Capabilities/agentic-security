@@ -77,6 +77,37 @@ export function recordRun(scanRoot, { benchmark, mode, tp, fp, fn, perFamily }) 
   return entry;
 }
 
+// Record one PRODUCTION-TRIAGE outcome (operator marked a finding tp/fp).
+// This is the per-CWE quality signal from real-world use, complementing the
+// per-benchmark numbers above. Without this, the only feedback the engine
+// gets is OWASP-Benchmark-tuned; with it, customer-real-world precision
+// trends are visible in /security-trend.
+//
+//   benchmark: 'production-triage' (fixed string, used as the storage key)
+//   verdict:   'tp' | 'fp' | 'wontfix'
+//   family:    the finding's family name
+//
+// Aggregated per-CWE counts are stored under
+// data.productionTriage[family] = { tp, fp, wontfix, lastAt }.
+// summarize() and a future /security-trend command surface this.
+export function recordTriage(scanRoot, { family, verdict, stableId }) {
+  if (!family || !['tp', 'fp', 'wontfix'].includes(verdict)) return null;
+  const data = _read(scanRoot);
+  data.productionTriage = data.productionTriage || {};
+  const row = data.productionTriage[family] = data.productionTriage[family] || { tp: 0, fp: 0, wontfix: 0, lastAt: null };
+  row[verdict] = (row[verdict] || 0) + 1;
+  row.lastAt = new Date().toISOString();
+  // Cap per-family rows so a runaway triage script can't bloat the file.
+  if ((row.tp || 0) + (row.fp || 0) + (row.wontfix || 0) > 10_000) {
+    // Stop accumulating; the trend is well-established by now.
+    row._capped = true;
+    return row;
+  }
+  void stableId;
+  _write(scanRoot, data);
+  return row;
+}
+
 // Read the latest entry and compare against floors.
 export function getLatest(scanRoot, benchmark) {
   const data = _read(scanRoot);
@@ -110,18 +141,39 @@ export function checkFloors(scanRoot, benchmark) {
   return out;
 }
 
-// Convenience: render a short human summary.
+// Convenience: render a short human summary including both benchmark
+// numbers AND the production-triage trend (per-CWE TP/FP from real-world
+// operator verdicts via /triage).
 export function summarize(scanRoot, benchmark) {
   const latest = getLatest(scanRoot, benchmark);
-  if (!latest) return '(no metrics history yet)';
-  const r = latest.aggregate;
-  const fams = Object.entries(latest.perFamily || {})
-    .sort((a, b) => b[1].tp - a[1].tp);
+  const data = _read(scanRoot);
   const lines = [];
-  lines.push(`${latest.benchmark} (${latest.mode}) @ ${latest.when.slice(0, 16)}`);
-  lines.push(`  F1=${r.f1} P=${r.precision} R=${r.recall} (TP=${r.tp} FP=${r.fp} FN=${r.fn})`);
-  for (const [fam, s] of fams.slice(0, 10)) {
-    lines.push(`  · ${fam.padEnd(20)} P=${s.precision} R=${s.recall} (TP=${s.tp} FP=${s.fp} FN=${s.fn})`);
+  if (latest) {
+    const r = latest.aggregate;
+    const fams = Object.entries(latest.perFamily || {})
+      .sort((a, b) => b[1].tp - a[1].tp);
+    lines.push(`Benchmark: ${latest.benchmark} (${latest.mode}) @ ${latest.when.slice(0, 16)}`);
+    lines.push(`  F1=${r.f1} P=${r.precision} R=${r.recall} (TP=${r.tp} FP=${r.fp} FN=${r.fn})`);
+    for (const [fam, s] of fams.slice(0, 10)) {
+      lines.push(`  · ${fam.padEnd(20)} P=${s.precision} R=${s.recall} (TP=${s.tp} FP=${s.fp} FN=${s.fn})`);
+    }
+  } else {
+    lines.push('(no benchmark metrics yet)');
+  }
+  // Production-triage trend (R3.3 / P1-11 — this is the real-world signal,
+  // not the benchmark proxy).
+  const triage = data.productionTriage || {};
+  const fams = Object.entries(triage)
+    .filter(([, c]) => (c.tp || 0) + (c.fp || 0) > 0)
+    .sort((a, b) => ((b[1].fp || 0) - (a[1].fp || 0)));
+  if (fams.length) {
+    lines.push('');
+    lines.push('Production-triage trend (real-world precision proxy):');
+    for (const [fam, c] of fams.slice(0, 10)) {
+      const total = (c.tp || 0) + (c.fp || 0);
+      const pHat = total ? (c.tp / total).toFixed(2) : '?';
+      lines.push(`  · ${fam.padEnd(20)} P≈${pHat} (TP=${c.tp || 0} FP=${c.fp || 0} wontfix=${c.wontfix || 0})`);
+    }
   }
   return lines.join('\n');
 }

@@ -6875,13 +6875,42 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   // not benchmark-tuned. Findings ride through the standard dedup/cluster/
   // confidence pipeline below; the LLM-validator stage above already ran but
   // any deep-mode finding emitted here will be unvalidated.
-  if (process.env.AGENTIC_SECURITY_DEEP === '1') {
+  //
+  // SAFETY: Deep mode is gated for CI safety:
+  //   - Global timeout via AGENTIC_SECURITY_DEEP_TIMEOUT_MS (default 300_000 = 5 min)
+  //   - Auto-disabled in CI unless AGENTIC_SECURITY_DEEP_IN_CI=1 is also set,
+  //     so a pathological file can't hang the whole pipeline.
+  const _deepRequested = process.env.AGENTIC_SECURITY_DEEP === '1';
+  const _inCi = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI ||
+                   process.env.BUILDKITE || process.env.CIRCLECI || process.env.JENKINS_URL);
+  const _deepInCiAllowed = process.env.AGENTIC_SECURITY_DEEP_IN_CI === '1';
+  const _deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed);
+  if (_deepEnabled) {
+    const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
+    const t0 = Date.now();
     try {
       const { perFile, callGraph } = buildProjectIR(fc);
-      const irFindings = runDeepAnalysis(perFile, callGraph, { fnLimit: 5000 });
-      // Mark these findings so the rest of the pipeline knows they came from
-      // the deep engine; the LLM validator already ran above so flag them
-      // unvalidated.
+      // The runDeepAnalysis call is synchronous in this codebase; we can't
+      // truly interrupt it without re-architecting the worklist. We pass a
+      // deadlineMs hint that the inner loops check; if absent, we still cap
+      // function count via fnLimit. Operators who suspect a hung run can
+      // kill the process and re-run with AGENTIC_SECURITY_DEEP=0.
+      const irFindings = runDeepAnalysis(perFile, callGraph, {
+        fnLimit: parseInt(process.env.AGENTIC_SECURITY_DEEP_FN_LIMIT || '5000', 10),
+        deadlineMs: t0 + budgetMs,
+      });
+      const elapsed = Date.now() - t0;
+      if (elapsed > budgetMs) {
+        // We exceeded budget — surface a single info finding so operators see it.
+        finalFindings.push({
+          id: `ir-taint-timeout:${scanRoot || ''}`,
+          file: '(deep-engine)', line: 0,
+          vuln: `IR-TAINT deep mode exceeded ${budgetMs}ms budget (${elapsed}ms used) — results may be incomplete`,
+          severity: 'info',
+          parser: 'IR-TAINT',
+          confidence: 0.5,
+        });
+      }
       for (const f of irFindings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
@@ -6891,6 +6920,17 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       // Deep mode is best-effort. A parser blowup in one file shouldn't kill
       // the scan — fall back to the pattern-only result.
     }
+  } else if (_deepRequested && _inCi) {
+    // Operator asked for deep but we're in CI — emit a non-blocking notice
+    // so they know it was skipped and how to override.
+    finalFindings.push({
+      id: 'ir-taint-ci-skipped',
+      file: '(deep-engine)', line: 0,
+      vuln: 'IR-TAINT deep mode skipped in CI environment (set AGENTIC_SECURITY_DEEP_IN_CI=1 to opt in)',
+      severity: 'info',
+      parser: 'IR-TAINT',
+      confidence: 1.0,
+    });
   }
   // Phase 2 (Sentinel-parity): LLM validator stage. No-op unless the operator
   // sets AGENTIC_SECURITY_LLM_VALIDATE=1 AND AGENTIC_SECURITY_LLM_ENDPOINT. When

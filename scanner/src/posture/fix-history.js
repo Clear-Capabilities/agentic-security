@@ -60,14 +60,28 @@ export function preview(originalContent, newContent, file) {
   return out.join('\n');
 }
 
-// Apply a fix and record it in history. Returns the history entry.
+// Apply a fix and record it in history. Two-phase commit (premortem P2-9):
+//
+//   1. Write the backup file + fsync.
+//   2. Write the log with the entry marked status='pending' + fsync.
+//   3. Write the new file content + fsync.
+//   4. Update the log entry to status='applied' + fsync.
+//
+// If we crash between (1) and (3) — backup exists, log entry says 'pending',
+// file is untouched. `recover()` rolls forward by deleting the pending entry.
+// If we crash between (3) and (4) — backup exists, log entry says 'pending',
+// file IS the new content. `recover()` checks file hash; if it matches newSha
+// the entry is promoted to 'applied'; if it matches originalSha it's dropped.
+//
+// This guarantees the file is never modified without a corresponding
+// recoverable log entry.
 export async function applyFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln }) {
   ensure(scanRoot);
   const absFile = path.resolve(scanRoot, file);
   const id = `fix-${Date.now().toString(36)}-${sha(file + findingId).slice(0, 6)}`;
   const bakPath = path.join(historyDir(scanRoot), `${id}.bak`);
-  await fsp.writeFile(bakPath, originalContent);
-  await fsp.writeFile(absFile, newContent);
+  // Phase 1: backup + fsync.
+  await _writeAndSync(bakPath, originalContent);
   const entry = {
     id,
     findingId,
@@ -78,12 +92,84 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
     originalSha: sha(originalContent),
     newSha: sha(newContent),
     appliedAt: new Date().toISOString(),
+    status: 'pending',
     reverted: false,
   };
+  // Phase 2: log entry marked pending + fsync.
   const log = readLog(scanRoot);
   log.push(entry);
-  writeLog(scanRoot, log);
+  await _writeLogAndSync(scanRoot, log);
+  // Phase 3: write the new content to the target file + fsync.
+  try {
+    await _writeAndSync(absFile, newContent);
+  } catch (e) {
+    // File write failed — undo log entry, leave backup.
+    entry.status = 'failed';
+    entry.error = e.message;
+    await _writeLogAndSync(scanRoot, log);
+    throw e;
+  }
+  // Phase 4: promote to applied.
+  entry.status = 'applied';
+  await _writeLogAndSync(scanRoot, log);
   return entry;
+}
+
+async function _writeAndSync(fp, content) {
+  await fsp.mkdir(path.dirname(fp), { recursive: true });
+  const handle = await fsp.open(fp, 'w');
+  try {
+    await handle.writeFile(content);
+    if (typeof handle.sync === 'function') await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function _writeLogAndSync(scanRoot, log) {
+  ensure(scanRoot);
+  const fp = logPath(scanRoot);
+  const handle = await fsp.open(fp, 'w');
+  try {
+    await handle.writeFile(JSON.stringify(log, null, 2));
+    if (typeof handle.sync === 'function') await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+// Recover from a crash mid-applyFix. Reads the log, examines any 'pending'
+// entries, compares the file's current sha against entry.newSha / .originalSha,
+// and either promotes to 'applied' or drops the entry. Returns the recovered
+// entries.
+export async function recover(scanRoot) {
+  const log = readLog(scanRoot);
+  const recovered = [];
+  for (const e of log) {
+    if (e.status !== 'pending') continue;
+    const absFile = path.resolve(scanRoot, e.file);
+    let curr;
+    try { curr = await fsp.readFile(absFile, 'utf8'); }
+    catch { e.status = 'failed'; e.error = 'file-missing'; recovered.push(e); continue; }
+    const currSha = sha(curr);
+    if (currSha === e.newSha) {
+      e.status = 'applied';
+      e.recoveredAt = new Date().toISOString();
+      recovered.push(e);
+    } else if (currSha === e.originalSha) {
+      e.status = 'failed';
+      e.error = 'file-untouched-during-crash';
+      e.recoveredAt = new Date().toISOString();
+      recovered.push(e);
+    } else {
+      e.status = 'failed';
+      e.error = `file-content-mismatch-curr-sha=${currSha}`;
+      e.recoveredAt = new Date().toISOString();
+      recovered.push(e);
+    }
+  }
+  if (recovered.length) await _writeLogAndSync(scanRoot, log);
+  return recovered;
 }
 
 // Revert the most recent un-reverted fix. Returns the entry or null.

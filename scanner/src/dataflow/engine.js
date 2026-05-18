@@ -243,10 +243,17 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   const all = [];
   const seen = new Set();
   const fnLimit = opts.fnLimit || 5000;
+  const deadlineMs = typeof opts.deadlineMs === 'number' ? opts.deadlineMs : Infinity;
   let n = 0;
 
-  for (const fn of callGraph.functions.values()) {
+  // Deterministic ordering (Sentinel-parity §9.2): sort functions by qid so
+  // cache-cold runs produce the same finding sequence run-over-run.
+  const fnList = [...callGraph.functions.values()].sort((a, b) =>
+    a.qid < b.qid ? -1 : a.qid > b.qid ? 1 : 0
+  );
+  for (const fn of fnList) {
     if (++n > fnLimit) break;
+    if (Date.now() > deadlineMs) break;  // global timeout
     // Module-level functions: analyze with an empty entry state. The function
     // discovers its own sources from req.body/process.env/etc. as it walks.
     const callContext = {
