@@ -1,1 +1,0 @@
-{"_doc":"Hadolint test fixtures","wildcardFamilies":["container-base-image","container-eol","hardcoded-secret","container-root-user","container-no-version-pin"],"expected":[]}

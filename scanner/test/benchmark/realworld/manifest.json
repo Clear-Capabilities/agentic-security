@@ -490,41 +490,6 @@
         "_doc": "MIT — fetched on demand."
       }
     },
-    "owasp-dotnet": {
-      "language": "csharp",
-      "repo": "https://github.com/fancycoconut/owasp.net.git",
-      "sha": "4e29712",
-      "scanRoot": ".",
-      "_doc": "fancycoconut/owasp.net — ASP.NET Core OWASP Top 10 demo. Smaller corpus than IssueBlot.NET; complementary coverage.",
-      "groundTruth": {
-        "kind": "curated",
-        "path": "expected/owasp-dotnet.json",
-        "auditorVerified": false,
-        "_auditorRationale": "GT entries were derived by reading the cloned source and (in some apps) re-using auto-curate.py to absorb engine emissions. Useful for engine regression but NOT for outside-auditor F1 claims — see STRICT-F1-BASELINE.md for the auditor-verified subset."
-      },
-      "wildcardFamilies": [
-        "sql-injection",
-        "xss",
-        "command-injection",
-        "path-traversal",
-        "xxe",
-        "insecure-deserialization",
-        "weak-crypto",
-        "weak-rng",
-        "hardcoded-secret",
-        "open-redirect",
-        "ssrf",
-        "code-injection",
-        "broken-marker",
-        "dos-no-timeout",
-        "header-hardening",
-        "missing-unsigned-numeric-validation"
-      ],
-      "license": {
-        "spdx": "MIT",
-        "_doc": "MIT — fetched on demand."
-      }
-    },
     "juliet-c-cpp": {
       "language": "c",
       "repo": "https://github.com/arichardson/juliet-test-suite-c.git",
@@ -713,81 +678,6 @@
       "license": {
         "spdx": "MIT-with-CC-BY-4.0-data",
         "_doc": "Tooling is MIT; the dataset on Zenodo is CC BY 4.0. We never redistribute the database — user downloads from Zenodo themselves. Derived expected[] is a fact catalog over public CVE data."
-      }
-    },
-    "ossf-cve-benchmark": {
-      "language": "polyglot",
-      "repo": "https://github.com/ossf-cve-benchmark/ossf-cve-benchmark.git",
-      "sha": "91c59fd54b2b768c0f310bb0027d2ac59cdf74d4",
-      "scanRoot": "data",
-      "_doc": "OpenSSF CVE Benchmark — 200+ real CVEs with vulnerable-commit + fix-commit pairs and machine-readable ground truth. The data/ tree holds per-CVE checked-out source snapshots. Replaces the planned cve-bench-top50; this is real, community-maintained CVE corpus.",
-      "groundTruth": {
-        "kind": "curated",
-        "path": "expected/ossf-cve-benchmark.json",
-        "auditorVerified": true,
-        "_auditorRationale": "OSSF CVE-Benchmark ships per-CVE checked-out source snapshots paired with vulnerable-commit + fix-commit + CWE. GT entries trace to the CVE-fix-commit pair."
-      },
-      "wildcardFamilies": [
-        "sql-injection",
-        "xss",
-        "command-injection",
-        "path-traversal",
-        "ssrf",
-        "weak-crypto",
-        "weak-rng",
-        "open-redirect",
-        "insecure-deserialization",
-        "hardcoded-secret",
-        "code-injection",
-        "ssti",
-        "jwt-no-verify",
-        "xxe",
-        "redos",
-        "vulnerable-dep",
-        "broken-marker",
-        "dos-no-timeout",
-        "header-hardening",
-        "prototype-pollution",
-        "mass-assignment",
-        "idor",
-        "missing-unsigned-numeric-validation",
-        "exposed-jwt-token",
-        "jquery-dom-based-xss-source",
-        "model-load-pickle-load-rce-on-untrusted-",
-        "django-debug-enabled-in-source"
-      ],
-      "license": {
-        "spdx": "MIT",
-        "_doc": "MIT — fetched on demand."
-      }
-    },
-    "gai-risk-management": {
-      "language": "polyglot",
-      "repo": "https://github.com/jphall663/gai_risk_management.git",
-      "sha": "a0e3fccf74d6c968ff43a7b1661b3f496681b75f",
-      "scanRoot": ".",
-      "mode": "informational",
-      "_doc": "jphall663/gai_risk_management — community-maintained GenAI risk reference aligned with NIST AI 600-1 (Generative AI Profile). Documents + sample code mapping the 12 NIST GAI risk categories. Informational: scanner LLM rules pick up some patterns but the corpus is documentation-heavy.",
-      "groundTruth": {
-        "kind": "curated",
-        "path": "expected/gai-risk-management.json",
-        "auditorVerified": false,
-        "_auditorRationale": "GT entries were derived by reading the cloned source and (in some apps) re-using auto-curate.py to absorb engine emissions. Useful for engine regression but NOT for outside-auditor F1 claims — see STRICT-F1-BASELINE.md for the auditor-verified subset."
-      },
-      "wildcardFamilies": [
-        "hardcoded-secret",
-        "broken-marker",
-        "dos-no-timeout",
-        "prompt-injection",
-        "excessive-agency-unrestricted-execute-sq",
-        "weak-rng",
-        "weak-crypto",
-        "model-load-pickle-load-rce-on-untrusted-",
-        "vulnerable-dep"
-      ],
-      "license": {
-        "spdx": "MIT",
-        "_doc": "MIT — fetched on demand."
       }
     },
     "pygoat": {
@@ -1158,28 +1048,6 @@
       "license": {
         "spdx": "MIT",
         "_doc": "MIT — fetched on demand."
-      }
-    },
-    "hadolint-fixtures": {
-      "language": "dockerfile",
-      "repo": "https://github.com/hadolint/hadolint.git",
-      "sha": "0fc69d73b0aaac8212681d4688652b766e583663",
-      "scanRoot": "test",
-      "_doc": "Hadolint test fixtures — Dockerfile linting ground truth.",
-      "groundTruth": {
-        "kind": "curated",
-        "path": "expected/hadolint-fixtures.json",
-        "auditorVerified": true,
-        "_auditorRationale": "Upstream hadolint ships Dockerfile fixtures designed to exercise its rules. Every match is intentional by upstream design."
-      },
-      "wildcardFamilies": [
-        "container-base-image",
-        "container-eol",
-        "hardcoded-secret"
-      ],
-      "license": {
-        "spdx": "GPL-3.0",
-        "_doc": "GPL-3.0 — fetched on demand."
       }
     },
     "linux-kernel-perf": {
