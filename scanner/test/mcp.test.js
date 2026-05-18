@@ -523,3 +523,68 @@ test('audit log redacts secrets that appear in tool arguments', async () => {
   assert.match(log, /\[REDACTED:aws-access-key\]/);
   await cleanup();
 });
+
+// ─── OWASP A01 — apply_fix refuses reserved write paths ──────────────────────
+
+test('apply_fix refuses to write under .git/', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', severity: 'high', file: '.git/hooks/post-commit', line: 1, fix: { replacement: '#!/bin/sh\nrm -rf /\n' } }],
+  });
+  await fsp.mkdir(path.join(root, '.git', 'hooks'), { recursive: true });
+  await fsp.writeFile(path.join(root, '.git', 'hooks', 'post-commit'), 'original');
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true });
+  const p = payload(r);
+  assert.equal(p.applied, false);
+  assert.match(p.reason, /reserved path/);
+  assert.equal(await fsp.readFile(path.join(root, '.git', 'hooks', 'post-commit'), 'utf8'), 'original');
+  await cleanup();
+});
+
+test('apply_fix refuses to write under .agentic-security/ (self-modification)', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', severity: 'high', file: '.agentic-security/rules.yml', line: 1, fix: { replacement: 'disable: all' } }],
+  });
+  await fsp.writeFile(path.join(root, '.agentic-security', 'rules.yml'), 'original rules');
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true });
+  const p = payload(r);
+  assert.equal(p.applied, false);
+  assert.match(p.reason, /reserved path/);
+  assert.equal(await fsp.readFile(path.join(root, '.agentic-security', 'rules.yml'), 'utf8'), 'original rules');
+  await cleanup();
+});
+
+test('apply_fix refuses to write under node_modules/ (supply-chain)', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', severity: 'high', file: 'node_modules/express/index.js', line: 1, fix: { replacement: 'malicious()' } }],
+  });
+  await fsp.mkdir(path.join(root, 'node_modules', 'express'), { recursive: true });
+  await fsp.writeFile(path.join(root, 'node_modules', 'express', 'index.js'), 'legit module');
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true });
+  const p = payload(r);
+  assert.equal(p.applied, false);
+  assert.match(p.reason, /reserved path/);
+  assert.equal(await fsp.readFile(path.join(root, 'node_modules', 'express', 'index.js'), 'utf8'), 'legit module');
+  await cleanup();
+});
+
+// ─── OWASP A03 — redactString input-size cap ─────────────────────────────────
+
+test('redactString caps very large inputs before regex pass (DoS defense)', () => {
+  // 1 MB string — well over INPUT_MAX. Should return quickly and not lock CPU.
+  const huge = 'x'.repeat(1_000_000);
+  const t0 = Date.now();
+  const out = redactString(huge);
+  const ms = Date.now() - t0;
+  assert.ok(ms < 500, `redactString took ${ms}ms on 1MB input (should be fast after cap)`);
+  // Output truncated to SNIPPET_MAX (2000) + ellipsis suffix
+  assert.ok(out.length < 3000, `output not capped: length=${out.length}`);
+});
+
+// ─── OWASP A05 — no default singleton, no surprise cwd binding ───────────────
+
+test('server.js does not export a default handleRequest singleton', async () => {
+  const mod = await import('../src/mcp/server.js');
+  assert.equal(typeof mod.handleRequest, 'undefined',
+    'handleRequest must NOT be exported as a singleton (footgun: binds to import-time cwd)');
+  assert.equal(typeof mod.createServer, 'function');
+});

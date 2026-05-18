@@ -136,7 +136,9 @@ export function createServer({ sessionRoot = process.cwd() } = {}) {
   return { handleRequest, sessionRoot };
 }
 
-const _default = createServer();
-export const handleRequest = _default.handleRequest;
+// NOTE: no default-singleton export. Callers must use createServer({...})
+// with an explicit sessionRoot. Removed because the prior default was bound
+// to process.cwd() at module-load time — a footgun for any caller that
+// imported `handleRequest` directly (OWASP A05).
 
 export { SERVER_NAME, SERVER_VERSION, PROTOCOL_VERSION, CODE_FINGERPRINT };

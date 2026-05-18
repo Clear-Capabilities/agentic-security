@@ -25,6 +25,25 @@ const MAX_FILE_BYTES = 500_000;
 const MAX_TOTAL_SCAN_BYTES = 50_000_000;
 const META = { source: 'agentic-security-mcp', untrusted_excerpts: true };
 
+// OWASP A01 — refuse writes to paths that could subvert the security tool
+// itself or the host's source-control / dependency state. A forged finding
+// could otherwise tell apply_fix to overwrite our own rules.yml, our audit
+// log, a .git/hooks/post-commit payload, or a node_modules package.
+const RESERVED_WRITE_PREFIXES = [
+  '.git/',
+  '.agentic-security/',
+  'node_modules/',
+];
+function _isReservedWritePath(sessionRoot, absFile) {
+  // Resolve sessionRoot symlinks so the relative path is computed against
+  // the same canonical root as `absFile` (which _confine already realpath'd).
+  // On macOS /tmp → /private/tmp; without this normalization the relative
+  // would contain "../" and the prefix check would miss the reserved path.
+  const rootReal = fs.realpathSync(path.resolve(sessionRoot));
+  const rel = path.relative(rootReal, absFile).replace(/\\/g, '/');
+  return RESERVED_WRITE_PREFIXES.some(p => rel === p.replace(/\/$/, '') || rel.startsWith(p));
+}
+
 // ─── Path confinement ────────────────────────────────────────────────────────
 // Lexical check + lstat symlink reject + realpath re-check. OWASP MCP05.
 //
@@ -262,6 +281,9 @@ export const apply_fix = {
     try { absFile = _confine(ctx.sessionRoot, f.file, 'finding.file'); }
     catch (e) {
       return { _meta: META, applied: false, reason: `path-escape refused: ${e.message}` };
+    }
+    if (_isReservedWritePath(ctx.sessionRoot, absFile)) {
+      return { _meta: META, applied: false, reason: `reserved path refused: writes to .git/, .agentic-security/, or node_modules/ are not permitted via apply_fix` };
     }
     if (!fs.existsSync(absFile)) {
       return { _meta: META, applied: false, reason: `File not found: ${absFile}` };

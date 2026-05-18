@@ -38,10 +38,16 @@ const PATTERNS = [
 ];
 
 const SNIPPET_MAX = 2000;
+// OWASP A03 — cap input before running 14 regex patterns over it. A forged
+// last-scan.json could plant a 50MB description string; without this cap a
+// single explain_finding/query_taint call would peg CPU. After truncation
+// the snippet still gets the final SNIPPET_MAX trim downstream.
+const INPUT_MAX = 100_000;
 
 export function redactString(s) {
   if (typeof s !== 'string') return s;
   let out = s;
+  if (out.length > INPUT_MAX) out = out.slice(0, INPUT_MAX) + `…(+${out.length - INPUT_MAX})`;
   for (const [re, kind] of PATTERNS) {
     out = out.replace(re, `[REDACTED:${kind}]`);
   }
