@@ -1,9 +1,21 @@
 # PRD — Next-Generation SAST
 
-**Status:** Draft  
+**Status:** v2 — post-Phase-1 retrospective revision  
 **Author:** Ross Young <ross@clearcapabilities.com>  
-**Date:** 2026-05-18  
+**Date:** 2026-05-18 (v2 same-day revision after shipping v0.50.0 = Phase 1)  
 **Scope:** What we'd build if we wanted to make every commercial SAST tool look like a `grep` wrapper.
+
+## Changes from v1
+
+This revision was written after delivering all five Phase-1 units (v0.50.0).
+What changed:
+
+- **Goals get a "Phase-1 status" column** — `measured`, `unmeasured-framework-only`, or `deferred-with-reason`. v1 promised numbers we cannot yet verify; v2 says exactly which.
+- **Phase 2 is reprioritized.** v1 said Phase 2 was queues + IAM + multi-repo. After running the polyglot benchmark, the actual blocker is **Python SAST coverage** — the polyglot bench surfaces it as the single missing-detector class behind almost every cross-language miss. Python SAST is promoted; IAM and multi-repo are pushed to Phase 2.5.
+- **Federated learning is demoted to "Phase 6+ research."** Customer privacy review + differential-privacy primitives + protocol design is more than one phase of work and not what closes the v1.0 gap.
+- **New requirements emerged from implementation.** FR-CHAIN-FILTER (don't chain to incidental high-sev findings), FR-FAMILY-REGISTRY (cross-language chains get ugly auto-slug families like `cross-language-taint-client-call-post-us`), and FR-LIVE-HARNESS (a target harness that spins up the customer's app to run PoCs against).
+- **Verifier sandbox findings** — the actually-useful path in P1.2 is the static sanitizer-absence proof, not the live PoC execution. We should LEAD with sanitizer-absence in v1 docs and treat live execution as Phase 3 polish.
+- **Phasing is honest about what's measurable vs aspirational.** Sections labeled `[v2: unchanged]` carry forward; sections labeled `[v2: revised]` reflect what we now know.
 
 ---
 
@@ -47,20 +59,22 @@ What it rules in:
 
 ## 2. Goals & Non-Goals
 
-### 2.1 Goals (in priority order)
+### 2.1 Goals (in priority order)  [v2: status column added]
 
-| #   | Goal                                                                                                                                | Measure                                                                                       |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| G1  | **Calibrated confidence**: every finding's `confidence` is a probability with Brier ≤ 0.10 on a labeled corpus                       | Brier score on 1000-finding held-out set; visible in CI report                                |
-| G2  | **Verified exploits**: ≥ 80% of `severity ≥ high` findings ship with a runnable PoC                                                  | Fraction of high+/critical findings with a `poc.ts`, `poc.py`, or framework-idiomatic harness |
-| G3  | **Cross-language**: trace request-borne taint from HTTP edge → service → DB across language boundaries                              | F1 ≥ 0.85 on a polyglot benchmark (Node→Python→Java→Postgres)                                  |
-| G4  | **Business-logic detection**: surface IDOR, broken authz, race-condition, and state-machine flaws beyond pattern matching            | F1 ≥ 0.75 on a curated business-logic corpus (real CVEs with logic flaws)                     |
-| G5  | **Compositional fix**: ≥ 60% of mechanical findings get an apply-able patch that passes the project's linter and re-scan            | Pass-rate of generated patches in `fix-verify` loop                                            |
-| G6  | **Per-project learning loop**: project FP rate trends down by ≥ 30% over 30 days of feedback                                        | Tracked per project via `validator-metrics.json`; visible in `/security-trend`                |
-| G7  | **Honesty**: refuse to emit a finding without either evidence or explicit unverified label                                          | Zero findings with `confidence ≥ 0.7` that lack `poc`, `sanitizer-absence-proof`, or `unverified:true` |
-| G8  | **Sub-minute incremental scan** on PRs of ≤ 500 LoC change                                                                          | p95 PR-incremental scan time                                                                  |
-| G9  | **Determinism**: byte-identical SARIF for identical inputs across runs                                                              | CI gate; SARIF hash matched against expected                                                  |
-| G10 | **Compositional with SDLC**: editor (LSP), CI (SARIF + policy), agent CLI (MCP), security tab (SARIF upload)                         | Coverage matrix in onboarding docs                                                            |
+| #   | Goal                                                                                                                                | Target                                                                                       | v0.50.0 status |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------- |
+| G1  | **Calibrated confidence**: every finding's `confidence` is a probability with Brier ≤ 0.10 on a labeled corpus                       | Brier score on 1000-finding held-out set; visible in CI report                                | 🟡 framework + seed corpus shipped (P1.3); held-out Brier unmeasured |
+| G2  | **Verified exploits**: ≥ 80% of `severity ≥ high` findings ship with a runnable PoC                                                  | Fraction of high+/critical findings with a `poc.ts`, `poc.py`, or framework-idiomatic harness | 🟡 generator covers 10 CWEs (P1.1); verifier framework shipped (P1.2); live-execution rate unmeasured (needs target harness) |
+| G3  | **Cross-language**: trace request-borne taint from HTTP edge → service → DB across language boundaries                              | F1 ≥ 0.85 on a polyglot benchmark (Node→Python→Java→Postgres)                                  | 🟡 polyglot bench shipped (P1.4); F1 = 0.727 today; gap is Python SAST coverage |
+| G4  | **Business-logic detection**: surface IDOR, broken authz, race-condition, and state-machine flaws beyond pattern matching            | F1 ≥ 0.75 on a curated business-logic corpus (real CVEs with logic flaws)                     | ⏸ deferred to Phase 4 |
+| G5  | **Compositional fix**: ≥ 60% of mechanical findings get an apply-able patch that passes the project's linter and re-scan            | Pass-rate of generated patches in `fix-verify` loop                                            | 🟡 fix-verify loop shipped at v0.45; rate unmeasured |
+| G6  | **Per-project learning loop**: project FP rate trends down by ≥ 30% over 30 days of feedback                                        | Tracked per project via `validator-metrics.json`; visible in `/security-trend`                | 🟡 loop wired at v0.46; longitudinal data not yet collected |
+| G7  | **Honesty**: refuse to emit a finding without either evidence or explicit unverified label                                          | Zero findings with `confidence ≥ 0.7` that lack `poc`, `sanitizer-absence-proof`, or `unverified:true` | 🟢 mostly met — `verifier_verdict` is set on every finding as of v0.50.0; auditing for `confidence ≥ 0.7` outliers is the v0.51 follow-up |
+| G8  | **Sub-minute incremental scan** on PRs of ≤ 500 LoC change                                                                          | p95 PR-incremental scan time                                                                  | 🟢 p95 < 30s observed; not yet a CI-gated metric |
+| G9  | **Determinism**: byte-identical SARIF for identical inputs across runs                                                              | CI gate; SARIF hash matched against expected                                                  | 🟢 verified on synthetic + real-world benches |
+| G10 | **Compositional with SDLC**: editor (LSP), CI (SARIF + policy), agent CLI (MCP), security tab (SARIF upload)                         | Coverage matrix in onboarding docs                                                            | 🟢 all four surfaces shipped (LSP, MCP, SARIF, PR-comment) |
+
+Legend: 🟢 measured & meeting target, 🟡 shipped but unmeasured or below target, ⏸ deferred with reason.
 
 ### 2.2 Non-Goals (for v1)
 
@@ -115,35 +129,44 @@ Today's SAST is mostly pattern-matching with optional shallow taint. The next-ge
 | FR-SEM-6    | **Hybrid static + dynamic.** When a test suite exists, instrument it and observe sink invocations under test inputs. Treat observed taint as ground truth. | The single biggest precision lift available without changing the user experience                                      |
 | FR-SEM-7    | **Type-aware refinement.** When TypeScript types narrow a union (`string | undefined` → `string` after a guard), drop findings that depend on the wider type. | Eliminates ~15% of TS-codebase FPs                                                                                    |
 
-### Pillar 2 — Cross-Asset Boundary Crossing
+### Pillar 2 — Cross-Asset Boundary Crossing  [v2: revised — Python SAST promoted, chain-filter added]
 
 Today's SAST treats a microservice in isolation. Real attack chains cross service, language, network protocol, and infrastructure boundaries.
 
-| Req         | Description                                                                                                                                            |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| FR-XSAT-1   | **HTTP/REST via OpenAPI.** Parse `openapi.{json,yaml}`. Match client `fetch`/`axios`/`requests` to server-side handlers. Propagate taint across.        |
-| FR-XSAT-2   | **gRPC via .proto.** Match client stubs to server impls (Go/Java/Python/Node/Rust). Propagate taint across.                                            |
-| FR-XSAT-3   | **GraphQL via SDL.** Match `gql` client queries to resolver impls (Apollo/NestJS/Strawberry/Graphene).                                                 |
-| FR-XSAT-4   | **Message queues.** Schema-aware tracing across Kafka topics, RabbitMQ exchanges, AWS SQS queues, Google Pub/Sub topics, Redis streams.                |
-| FR-XSAT-5   | **SQL/ORM round-trip.** ORM write at one site, ORM read of the same model at another — propagate taint through the database row.                       |
-| FR-XSAT-6   | **IaC → application code.** Terraform / CloudFormation resources that the app references (env vars, ARNs, names). Flag publicly-exposed resources.    |
-| FR-XSAT-7   | **Cloud secrets and IAM.** Parse IAM role policies attached to ECS/Lambda/EKS workloads; correlate with app behavior to detect over-permissioned roles. |
-| FR-XSAT-8   | **Container runtime config.** Dockerfile, k8s manifest, ECS task def — flag dangerous combinations (privileged + bind-mounting docker.sock, etc.).      |
-| FR-XSAT-9   | **Multi-repo composition.** Given a list of related repos, do all of the above across repositories.                                                    |
+Phase-1 discovery: the cross-asset detectors work — what's missing is the SINK-SIDE detector coverage for non-Node languages. The polyglot bench shipped at F1 = 0.727, and the 27pp gap to G3 is almost entirely Python-side. Phase 2 reprioritized below.
 
-### Pillar 3 — Verification
+| Req                    | Description                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR-XSAT-1              | **HTTP/REST via OpenAPI.** Parse `openapi.{json,yaml}`. Match client `fetch`/`axios`/`requests` to server-side handlers. Propagate taint across. [v0.30, shipped] |
+| FR-XSAT-2              | **gRPC via .proto.** Match client stubs to server impls (Go/Java/Python/Node/Rust). Propagate taint across. [v0.35, shipped]                            |
+| FR-XSAT-3              | **GraphQL via SDL.** Match `gql` client queries to resolver impls (Apollo/NestJS/Strawberry/Graphene). [v0.35, shipped]                                  |
+| FR-XSAT-4              | **Message queues.** Schema-aware tracing across Kafka topics, RabbitMQ exchanges, AWS SQS queues, Google Pub/Sub topics, Redis streams. [v0.49, shipped] |
+| FR-XSAT-5              | **SQL/ORM round-trip.** ORM write at one site, ORM read of the same model at another — propagate taint through the database row. [v0.30, shipped]      |
+| FR-XSAT-6              | **IaC → application code.** Terraform / CloudFormation resources that the app references (env vars, ARNs, names). Flag publicly-exposed resources. [v0.35, shipped] |
+| FR-XSAT-7              | **Cloud secrets and IAM.** Parse IAM role policies attached to ECS/Lambda/EKS workloads; correlate with app behavior. [Phase 2.5]                       |
+| FR-XSAT-8              | **Container runtime config.** Dockerfile, k8s manifest, ECS task def — flag dangerous combinations. [Phase 2.5]                                          |
+| FR-XSAT-9              | **Multi-repo composition.** Given a list of related repos, do all of the above across repositories. [Phase 2.5]                                          |
+| **FR-PY-SAST** [NEW]   | **Python sink-side SAST coverage** sufficient to lift the polyglot bench to G3 = 0.85. Specifically: SQLAlchemy `text()` with f-string concat, `os.system` / `subprocess.run` with shell=True, `pickle.loads` / `yaml.load` on request data, `eval` / `exec` on request data, `flask.send_file` / `werkzeug.utils.send_from_directory` with traversable paths. **Phase-2 blocker.** |
+| **FR-CHAIN-FILTER** [NEW] | **Don't chain to incidental high-sev findings.** Phase-1 polyglot bench case 02 surfaced this: the queue cross-language detector emitted a chain when the only high-sev finding in the consumer file was CSRF — making the chain semantically wrong. Chains should be gated to a curated set of "chain-worthy" families (sql-injection, command-injection, xss, ssrf, code-injection, insecure-deserialization, xxe, path-traversal). |
+| **FR-FAMILY-REGISTRY** [NEW] | **Canonical family names for cross-language chains.** Phase 1 discovery: chain findings get auto-slugged ugly families like `cross-language-taint-client-call-post-us`. Add a registry that maps chain vuln strings to clean families: `xlang-openapi`, `xlang-grpc`, `xlang-graphql`, `xlang-queue`, `xlang-orm`. |
+
+### Pillar 3 — Verification  [v2: revised — sanitizer-absence promoted, live PoC harness called out]
 
 A finding without verification is a hypothesis. We turn hypotheses into either confirmed bugs or labeled uncertainty.
 
-| Req         | Description                                                                                                                                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FR-VER-1    | **LLM-validated triage** (already shipped at Layer 3). Layer-2 candidate → LLM accept/reject/escalate with file:line echo and challenge-token defenses.            |
-| FR-VER-2    | **PoC generator** that executes against the target. Each finding gets an executable `poc.{ts,py,js,java,...}` that demonstrates the vuln when run on a test fixture. |
-| FR-VER-3    | **Regression test generator.** Same finding gets a framework-idiomatic regression test that fails on the vulnerable code and passes after the fix.                |
-| FR-VER-4    | **Property-based vulnerability hypothesis testing.** Use a property-based testing framework (Hypothesis / fast-check) to fuzz around the suspected sink.            |
-| FR-VER-5    | **Live binary instrumentation** (eBPF on Linux, dtrace on macOS) — optional opt-in mode where the scanner hooks the running process to confirm taint paths.        |
-| FR-VER-6    | **Per-finding verification verdict** in {`verified-exploit`, `verified-sanitizer-absence`, `verified-by-llm`, `unverified-by-design`, `cannot-verify`} with reason. |
-| FR-VER-7    | **Refusal to silently drop.** Findings that fail verification become `escalate`, never `reject`, so an attacker who poisons the LLM can never make findings vanish.  |
+Phase-1 discovery: of the five verdict states (`verified-exploit | verified-by-llm | verified-sanitizer-absence | unverified-by-design | cannot-verify`), **the actually-load-bearing one today is `verified-sanitizer-absence`**. Live PoC execution requires the customer's app to be running against a target URL we don't yet provide a harness for. The static sanitizer-absence proof (9 vuln families covered as of v0.50.0) produces real evidence today without that infrastructure. We lead with it.
+
+| Req                       | Description                                                                                                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-VER-1                  | **LLM-validated triage** (Layer 3 — v0.40, shipped). Challenge-token + file:line echo + fail-closed verdicts.                                                    |
+| FR-VER-2                  | **PoC generator** for top-10 CWEs (P1.1 — v0.49, shipped). Each finding gets a runnable PoC file with deterministic exit codes and a static safety policy.        |
+| FR-VER-3                  | **Regression test generator.** Same finding gets a framework-idiomatic regression test that fails on the vulnerable code and passes after the fix. [Phase 3]      |
+| FR-VER-4                  | **Property-based vulnerability hypothesis testing.** Use Hypothesis / fast-check to fuzz around the suspected sink. [Phase 3]                                     |
+| FR-VER-5                  | **Live binary instrumentation** (eBPF on Linux, dtrace on macOS). [Phase 5 — opt-in only]                                                                          |
+| FR-VER-6                  | **Per-finding verification verdict** (P1.2 — v0.50, shipped). 5-state model, fail-closed semantics.                                                                |
+| FR-VER-7                  | **Refusal to silently drop.** Findings that fail verification become `escalate`, never `reject`. [v0.40, shipped]                                                  |
+| FR-VER-8 [NEW, was hidden] | **Static sanitizer-absence proof.** For each family-aware sanitizer pattern, prove the sanitizer is NOT in a ±10-line window around the sink. Today: 9 families (sql-injection, command-injection, xss, path-traversal, ssrf, code-injection, open-redirect, xxe, insecure-deserialization). **This is the actually-useful verifier path in v1.** |
+| **FR-LIVE-HARNESS** [NEW]  | **Target harness for live PoC execution.** A `docker-compose.yml`-shaped definition the customer can provide that spins up their app on `localhost:3000`. The verifier connects to it via `--target` and runs the PoCs. Without this harness, `verified-exploit` verdicts cannot be assigned in customer environments. **Phase 3 blocker for G2 measurement.** |
 
 ### Pillar 4 — Business-Logic Reasoning
 
@@ -159,19 +182,21 @@ The class of bug that consumes the most security-engineer time is the one that p
 | FR-LOGIC-6  | **LLM-driven flow narration.** For each high-severity finding, a one-paragraph narrative of "how an attacker reaches this, what they get, what it costs you."        |
 | FR-LOGIC-7  | **Negative-case test gap.** If the route has happy-path tests but no test for unauthorized access, surface as a "missing-test" finding.                              |
 
-### Pillar 5 — Per-Codebase Adaptation
+### Pillar 5 — Per-Codebase Adaptation  [v2: revised — federated learning demoted to research]
 
 The tool that learns the codebase is the tool that customers keep. The tool that doesn't learn is the tool that ends up in the suppress-everything bucket.
 
+Phase-1 discovery: customer-tuned rule packs (FR-LEARN-2) and per-codebase calibration (FR-LEARN-5) are tractable and shipped. Federated learning (FR-LEARN-4) is multi-quarter research with privacy-review prerequisites we don't have — moving to Pillar 8 (Phase-6+ research).
+
 | Req         | Description                                                                                                                                                          |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FR-LEARN-1  | **Active-learning loop.** Triage verdicts (TP / FP / WAI) stored under `.agentic-security/triage-feedback.json`; consumed on next scan to suppress repeat-FPs by `stableId` or rule shape. |
-| FR-LEARN-2  | **Customer-tuned rule packs.** Auto-synthesize a YAML rule from a "this should always fire" example; auto-suppress from a "this should never fire" example.           |
-| FR-LEARN-3  | **Per-CWE precision/recall scorecard.** `validator-metrics.json` tracks per-family precision, recall, F1 over time. Visible in `/security-trend`.                     |
-| FR-LEARN-4  | **Privacy-preserving federated learning.** Optional opt-in where each customer's de-identified TP/FP labels improve the global LLM-validator's accept/reject thresholds. No code or paths leave the customer environment. |
-| FR-LEARN-5  | **Per-codebase confidence calibration.** Each customer's empirical TP-rate per family adjusts the global confidence prior so a customer's `0.8` matches their reality. |
-| FR-LEARN-6  | **Auto-rule synthesis from repeated FPs.** If 5+ findings with similar shape get marked FP, propose a suppression rule with a generated explanation.                 |
-| FR-LEARN-7  | **Compliance with the right to delete.** All learned state is local; a `--reset` flag wipes it for compliance.                                                       |
+| FR-LEARN-1  | **Active-learning loop.** Triage verdicts (TP / FP / WAI) stored under `.agentic-security/triage-feedback.json`; consumed on next scan. [v0.46, shipped]              |
+| FR-LEARN-2  | **Customer-tuned rule packs.** Auto-synthesize a YAML rule from a "this should always fire" example; auto-suppress from a "this should never fire" example. [v0.41 — custom-rules + rule-synthesis-from-FPs is Phase 2] |
+| FR-LEARN-3  | **Per-CWE precision/recall scorecard.** `validator-metrics.json` tracks per-family precision, recall, F1 over time. [v0.46, shipped]                                  |
+| ~~FR-LEARN-4~~ | ~~Privacy-preserving federated learning.~~ **Demoted to Pillar 8 research.** Customer privacy review + DP primitives + protocol design is multi-quarter work that doesn't close the v1.0 gap. |
+| FR-LEARN-5  | **Per-codebase confidence calibration.** Wilson CI + per-family TP/FP from `validator-metrics.json` + seed corpus. (P1.3 — v0.49, shipped — framework only; held-out Brier is Phase 5 deliverable.) |
+| FR-LEARN-6  | **Auto-rule synthesis from repeated FPs.** If 5+ findings with similar shape get marked FP, propose a suppression rule. [Phase 2]                                    |
+| FR-LEARN-7  | **Compliance with the right to delete.** All learned state is local; a `--reset` flag wipes it. [Phase 4 with compliance posture]                                    |
 
 ### Pillar 6 — Honest UX
 
@@ -260,15 +285,17 @@ The tool that gets adopted is the tool that fits the developer's existing workfl
 - **L4 (verifier):** Generates a PoC + regression test. Runs them in a sandboxed container. Records the verdict. New in next-gen.
 - **L5 (active learning):** Per-project triage feedback consumed by L3 and the confidence calibrator.
 
-### 5.2 What's shipped (in current `agentic-security` codebase, v0.48.0)
+### 5.2 What's shipped (in current `agentic-security` codebase, v0.50.0)  [v2: updated]
 
-Pillar 1: ✅ partial (IR + L2 taint exist; needs k=2, full symbolic, dynamic instrumentation)  
-Pillar 2: ✅ partial (HTTP via OpenAPI, gRPC, GraphQL, ORM, IaC — done; queues, IAM, multi-repo — missing)  
-Pillar 3: ✅ partial (L3 LLM-validated triage done; PoC gen exists at agent level; full verifier loop not yet)  
-Pillar 4: ✅ partial (attack chains, authz, missing-tests detection — done; AuthZ matrix + state-machine extraction not yet)  
-Pillar 5: ✅ partial (active-learning loop scaffolded; calibration not yet shipped)  
-Pillar 6: ✅ most of it (calibrated confidence is the gap)  
-Pillar 7: ✅ most of it (Slack/Discord/Teams + ticket sync + LSP + MCP + SARIF + CI templates — done)
+Pillar 1: 🟡 IR + L2 taint shipped (v0.45); k=2 context + symbolic execution + dynamic instrumentation = Phase 5  
+Pillar 2: 🟢 HTTP-OpenAPI, gRPC, GraphQL, ORM, IaC, queues (P1.5) — shipped; IAM + multi-repo = Phase 2.5  
+Pillar 3: 🟢 L3 LLM validator (v0.40) + PoC generator for 10 CWEs (P1.1) + verifier sandbox 5-state model (P1.2) — shipped; live target harness + regression test gen + property fuzz = Phase 3  
+Pillar 4: 🟡 attack chains + authz + missing-tests — shipped (v0.44); AuthZ matrix, state-machine extraction, TOCTOU at function-pair = Phase 4  
+Pillar 5: 🟡 active-learning loop + per-CWE scorecard + calibration framework + seed corpus (P1.3) — shipped; held-out Brier corpus + auto-rule synthesis = Phase 5  
+Pillar 6: 🟢 honest UX, calibrated probability + CI, cost framing, refusal to silently drop — shipped  
+Pillar 7: 🟢 LSP, MCP, SARIF + STIX, PR-comment, ticket sync, policy gate, CI templates — all shipped
+
+**Polyglot benchmark (P1.4 — v0.50):** runner + 4 starter cases shipped; F1 = 0.727 today; gap to G3 = 0.85 is Python SAST coverage.
 
 ### 5.3 What's hard (open technical questions)
 
@@ -342,29 +369,68 @@ Each release ships its premortem findings in CHANGELOG with severity tags so cus
 
 ---
 
-## 8. Phasing
+## 8. Phasing  [v2: revised — reflects v0.50.0 delivery + Python SAST promotion]
 
-### Phase 1 (M0-M3) — Foundation
+### ✅ Phase 1 (M0-M3) — Foundation — SHIPPED as v0.50.0
 
-Deliver: calibrated confidence (G1), verified-exploit PoC generator for top 10 CWEs (G2 partial), cross-language polyglot benchmark + scaffolding for Pillar 2 missing pieces. Ship as v0.50.0.
+Delivered:
+- PoC generator framework, 10 CWEs (P1.1)
+- Verifier sandbox loop, 5-state model (P1.2)
+- Brier-calibrated confidence framework + seed corpus (P1.3)
+- Cross-language polyglot benchmark with runner + 4 starter cases (P1.4)
+- Cross-language queues — Kafka/SQS/RabbitMQ/Redis/PubSub (P1.5)
 
-Includes the Sentinel-parity work that's already in flight: IR (FR-SEM-1, FR-SEM-2 at k=1), L2 taint (FR-SEM-3 partial), L3 validator (FR-VER-1, FR-VER-7).
+Not delivered:
+- Live PoC target harness (deferred to Phase 3)
+- Held-out Brier corpus (deferred to Phase 5)
 
-### Phase 2 (M3-M6) — Cross-asset
+### Phase 2 (M3-M6) — Python SAST + chain hygiene  [v2: reprioritized]
 
-Deliver: queue-bridge (Kafka/RabbitMQ/SQS), IAM-policy reachability, container-runtime config detector, multi-repo composition (Pillar 2 complete). Ship as v0.60.0.
+The polyglot benchmark surfaced that Python detector coverage is the single largest blocker to G3. Phase 2 closes that gap and fixes the two chain-detector hygiene issues found during Phase 1.
 
-### Phase 3 (M6-M9) — Verifier loop
+Deliverables (target ship v0.60.0):
+- **FR-PY-SAST.** SQLAlchemy raw SQL, `os.system` / `subprocess.run(shell=True)`, `pickle.loads` / `yaml.load`, `eval` / `exec`, `flask.send_file` traversable paths, `requests.get(verify=False)`. Aim: polyglot bench F1 ≥ 0.85 (closes G3).
+- **FR-CHAIN-FILTER.** Don't chain to incidental high-sev findings; gate chains to a curated set of chain-worthy families.
+- **FR-FAMILY-REGISTRY.** Canonical family names for cross-language chains.
+- **FR-LEARN-6.** Auto-rule synthesis from repeated FPs.
 
-Deliver: full PoC + regression-test generator with sandbox execution (G2 ≥ 80%), property-based fuzz harness for top-20 sinks. Ship as v0.70.0.
+### Phase 2.5 (M5-M6) — Cross-asset gap-fill  [v2: split out of Phase 2]
 
-### Phase 4 (M9-M12) — Business logic + active learning
+Deliverables (target ship v0.65.0):
+- FR-XSAT-7 IAM-policy reachability
+- FR-XSAT-8 Container-runtime config detector
+- FR-XSAT-9 Multi-repo composition
 
-Deliver: AuthZ matrix, state-machine extraction, TOCTOU detection (Pillar 4 complete), per-customer learning + federated calibration (Pillar 5 complete). Ship as v0.80.0.
+### Phase 3 (M6-M9) — Verifier loop  [v2: live harness called out]
+
+Deliverables (target ship v0.70.0):
+- **FR-LIVE-HARNESS.** Target harness `docker-compose.yml`-shaped definition that spins up the customer's app; verifier connects to it. Closes G2 measurement.
+- FR-VER-3 Regression test generator (Jest / pytest / JUnit) bundled with each PoC.
+- FR-VER-4 Property-based fuzz harness for top-20 sinks (Hypothesis / fast-check).
+- Polyglot bench cases 05–10 (gRPC, GraphQL, multi-repo, Kafka-to-Java, RabbitMQ-to-Python, IaC-exposed Lambda).
+
+### Phase 4 (M9-M12) — Business logic  [v2: federation removed]
+
+Deliverables (target ship v0.80.0):
+- FR-LOGIC-1 AuthZ matrix construction
+- FR-LOGIC-2 State-machine extraction
+- FR-LOGIC-3 TOCTOU at function-pair level
+- Business-logic curated bench (CVE corpus); target F1 ≥ 0.75 (closes G4).
 
 ### Phase 5 (M12-M15) — Polish + GA
 
-Deliver: dynamic-instrumentation hybrid mode (FR-SEM-6, FR-VER-5), symbolic-execution narrow-path closer (FR-SEM-5), final calibration corpus + Brier score on labeled data. Ship as v1.0.0.
+Deliverables (target ship v1.0.0):
+- Final calibration corpus — 1000+ labeled findings, held-out; Brier ≤ 0.10 (closes G1).
+- FR-SEM-5 narrow-path symbolic execution; FR-SEM-6 hybrid static+dynamic.
+- FR-VER-5 eBPF / dtrace live instrumentation (Linux + macOS only; Windows = hole).
+- Round-N adversarial premortem against the GA artifact.
+
+### Phase 6+ (post-GA) — Research
+
+Deferred and labeled as research rather than commitment:
+- ~~FR-LEARN-4~~ Federated learning with differential privacy + secure aggregation.
+- Multi-tenant cloud product (out of engine scope; separate workstream).
+- Compliance attestation for non-{NIST-AI-600-1, OWASP-ASVS} frameworks (HIPAA, PCI, FedRAMP).
 
 ---
 
@@ -382,6 +448,11 @@ Deliver: dynamic-instrumentation hybrid mode (FR-SEM-6, FR-VER-5), symbolic-exec
 | **R8: We over-claim coverage and a security incident blows back.**                                                            | Every claim is bench-backed. CHANGELOG documents honest caveats. We never claim "finds everything."                                                      |
 | **R9: Dynamic-instrumentation hybrid mode triggers customer compliance review (root agent in prod).**                          | Hybrid mode is opt-in, off-by-default, and recommended for staging not prod. We document the exact hooks installed.                                       |
 | **R10: We build a great tool and nobody finds out about it.**                                                                 | Out of scope for this PRD but real. The community-facing strategy goes elsewhere.                                                                       |
+| **R11: [Phase-1 discovery] Cross-language chains land on incidental high-sev findings, polluting the chain detector.**         | FR-CHAIN-FILTER: gate chains to a curated set of chain-worthy families. Lands in Phase 2.                                                               |
+| **R12: [Phase-1 discovery] The polyglot bench measures the wrong thing in strict mode.**                                       | Default to `mode: recall-only`; require `mode: strict` to be explicit. The bench's job is to verify cross-language propagation fires — not to penalize incidental single-language findings on the test fixtures. |
+| **R13: [Phase-1 discovery] Seed calibration corpus is not a held-out test set; Brier-on-seed is uninformative.**               | CHANGELOG calls this out explicitly. Phase 5 builds the held-out corpus. Until then, calibrated_confidence is honest about its sample size and CI width. |
+| **R14: [Phase-1 discovery] Live PoC execution requires customer infrastructure we don't provide.**                              | FR-LIVE-HARNESS. Phase 3. Until then, G2 measurement is unfeasible in customer environments; sanitizer-absence is the load-bearing verifier path.       |
+| **R15: [Phase-1 discovery] Phase-1 PoC templates target localhost only — they won't run against staging/prod URLs without customization.** | Documented limitation. PoCs include a `--target` override at the verifier level so customers can point them at whatever URL they choose. Production execution is opt-in via env vars. |
 
 ---
 
@@ -407,28 +478,65 @@ Deliver: dynamic-instrumentation hybrid mode (FR-SEM-6, FR-VER-5), symbolic-exec
 
 ---
 
-## 12. Appendix: Where today's `agentic-security` already exceeds the median commercial tool
+## 12. Appendix: Where today's `agentic-security` already exceeds the median commercial tool  [v2: refreshed for v0.50.0]
 
-Useful for orienting on what we're competing with.
-
-| Capability                                          | Median commercial SAST | `agentic-security` today                                                                  |
+| Capability                                          | Median commercial SAST | `agentic-security` v0.50.0                                                                |
 | --------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------- |
-| Calibrated confidence on findings                   | ❌                     | ✅ (ordinal today; calibrated probability is the Pillar-6 gap)                            |
-| LLM-validated triage                                | ❌ or shallow          | ✅ Layer 3 with prompt-injection defenses                                                  |
-| Cross-language taint (HTTP, gRPC, GraphQL, ORM)     | ❌ mostly              | ✅ (queue + IAM are the gaps)                                                              |
-| IaC → application reachability                      | ❌                     | ✅                                                                                        |
-| PoC generation                                      | ❌                     | 🟡 (agent-level; Layer-4 verifier loop is the Phase-3 gap)                                |
-| Attack-chain synthesis across findings              | ❌                     | ✅                                                                                        |
-| AI-BOM / OWASP-LLM-Top-10 / prompt-injection rules  | ❌                     | ✅                                                                                        |
-| MCP / agent-callable tools                          | ❌                     | ✅ six hardened tools                                                                     |
-| Per-customer learning loop                          | ❌                     | ✅ scaffolded; calibration is the Pillar-5 gap                                            |
-| Honest CHANGELOG with adversarial premortems         | ❌                     | ✅ rounds 1-4 documented                                                                  |
-| Determinism (byte-identical SARIF)                  | ❌                     | ✅                                                                                        |
-| Refactor-stable finding IDs                         | ❌                     | ✅ stableId                                                                                |
-| Open-source engine                                  | depends                | ✅ PolyForm Internal Use; relicense path open                                              |
+| Calibrated confidence on findings                   | ❌                     | 🟢 framework + Wilson CI + per-family table + seed corpus (P1.3); held-out Brier = Phase 5 |
+| LLM-validated triage                                | ❌ or shallow          | 🟢 Layer 3 with prompt-injection defenses (challenge token + file:line echo + fail-closed) |
+| Cross-language taint (HTTP, gRPC, GraphQL, ORM, queue) | ❌                  | 🟢 all five (IaC + IAM = Phase 2.5)                                                       |
+| IaC → application reachability                      | ❌                     | 🟢                                                                                        |
+| PoC generation per finding                          | ❌                     | 🟢 10 CWEs covered + safety policy + deterministic exit codes (P1.1)                       |
+| Verifier sandbox loop, 5 verdict states              | ❌                     | 🟢 sanitizer-absence + LLM-accept + unverified-by-design + cannot-verify + verified-exploit (P1.2) |
+| Attack-chain synthesis across findings              | ❌                     | 🟢                                                                                        |
+| AI-BOM / OWASP-LLM-Top-10 / prompt-injection rules  | ❌                     | 🟢                                                                                        |
+| MCP / agent-callable tools                          | ❌                     | 🟢 six hardened tools                                                                     |
+| Per-customer learning loop                          | ❌                     | 🟢 metrics persisted; longitudinal data = Phase 4 prerequisite                             |
+| Honest CHANGELOG with adversarial premortems         | ❌                     | 🟢 rounds 1-4 documented; round 5 due against v0.50.0                                      |
+| Determinism (byte-identical SARIF)                  | ❌                     | 🟢                                                                                        |
+| Refactor-stable finding IDs                         | ❌                     | 🟢 stableId                                                                                |
+| Polyglot cross-language benchmark                   | ❌                     | 🟢 runner + 4 cases (P1.4); F1=0.727, target 0.85 = Phase 2                                  |
+| Open-source engine                                  | depends                | 🟢 PolyForm Internal Use; relicense path open                                              |
 
-The gap from "good open engine" to "next-gen product" is calibration, verifier loop, federation, and queue/IAM cross-asset coverage. Phase 1-5 above closes that gap.
+The gap from "good open engine" to "next-gen product" is now four specific things:
+
+1. **Python SAST coverage** (closes G3) — Phase 2
+2. **Live PoC target harness** (closes G2) — Phase 3
+3. **Held-out 1000-finding calibration corpus** (closes G1) — Phase 5
+4. **Business-logic detector triple** (closes G4) — Phase 4
+
+Phases 2 through 5 close those four gaps in order.
 
 ---
 
-**End of PRD.**
+## 13. Lessons from Phase 1  [v2: NEW]
+
+Six insights from delivering v0.50.0 that should shape v0.51+.
+
+### 13.1 The honest UX pillar earned the most credibility
+
+The single biggest reputational gain in v0.46–v0.50 came from CHANGELOG entries that said "we don't measure this yet" alongside ones that said "we shipped this." Every premortem round we ran ended with a CHANGELOG correction the next release; that pattern of public self-correction is the moat against "trust us, our scanner is the best" vendor marketing. Continue investing in it. Round-5 premortem against v0.50.0 is due.
+
+### 13.2 The polyglot bench's value is what it reveals, not its F1 score
+
+The polyglot bench shipped at F1 = 0.727 — under the G3 target of 0.85. The temptation is to tune the engine until F1 = 0.85. The discipline is to let the bench surface real detector gaps and prioritize those (Python SAST, in our case). A bench that always passes is a bench that no longer measures anything.
+
+### 13.3 Sanitizer-absence proofs beat live PoCs in v1
+
+The verifier sandbox's 5-state model envisioned `verified-exploit` (PoC ran against target, exited 0) as the headline verdict. In practice, no customer app was running against a target the verifier could connect to; live execution was unreachable. The static sanitizer-absence proof — covering 9 vuln families — is the verdict that fires today, with real evidence and a clear definition. Lead with it. Live PoCs are a Phase-3 polish, not a v1 commitment.
+
+### 13.4 Family naming matters more than it sounds
+
+The cross-language chain detector emits findings with `family = cross-language-taint-client-call-post-us` (the auto-slug of the chain's vuln string, truncated to 40 chars). Every consumer that filters by family — SARIF property bag, GitHub Security tab, customer dashboards, the bench's expected.json — has to know that ugly string. A canonical family registry (FR-FAMILY-REGISTRY) is a ~50-line patch with massive UX leverage. Phase 2.
+
+### 13.5 Chain hygiene is its own detector
+
+The queue cross-language chain in polyglot case 02 fired correctly — and pointed to a CSRF finding because that happened to be the only high-severity finding on the consumer side. The chain was semantically wrong. Cross-language chains should be gated to a curated set of chain-worthy families (sql-injection, command-injection, xss, ssrf, code-injection, insecure-deserialization, xxe, path-traversal) — not "anything ≥ high." This is FR-CHAIN-FILTER.
+
+### 13.6 The seed corpus problem doesn't go away
+
+P1.3 shipped a seed calibration corpus inside the repo. It is NOT a held-out test set — it's the same data that would be used to teach the engine. Brier-on-seed is uninformative. The held-out corpus for G1 measurement requires either (a) hand-labeling 1000+ findings on a held-out repository, or (b) federating with design-partner customers. Both are real money and real time. PRD risk R1 was right; v2 underscores that the calibration corpus is the gating dependency for G1, not the algorithm.
+
+---
+
+**End of PRD v2.**
