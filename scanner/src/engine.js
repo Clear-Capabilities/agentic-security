@@ -5404,7 +5404,10 @@ function dedupeFindingsWithEvidence(findings){
     const file=(f.source?.file||f.file||"").split(" -> ")[0];
     // Dedup key uses family (not full vuln name) so multiple rules in the same
     // family at the same source/sink lines collapse into one finding.
-    const fam = familyFor(f.vuln);
+    // Preserve a detector-set family rather than overwriting with the auto-slug —
+    // detectors set explicit family names that the per-category grader and
+    // family-aware filters rely on.
+    const fam = f.family || familyFor(f.vuln);
     f.family = fam;
     // Dedup at the SINK granularity: one finding per (file, sink-line, family).
     // Multiple sources reaching the same sink collapse — the merged finding

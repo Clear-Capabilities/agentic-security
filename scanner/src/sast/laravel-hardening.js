@@ -22,10 +22,17 @@ function _line(raw, idx) {
   return raw.slice(0, idx).split('\n').length;
 }
 
-function _isLaravelPhpFile(raw) {
+// Heuristic for "this PHP file is an application (not the framework / vendor)".
+// The framework itself defines dd/dump as helpers; flagging calls inside the
+// framework source is pure false-positive.
+function _isApplicationPhpFile(file, raw) {
+  if (/(?:^|[\\/])(?:vendor|node_modules)[\\/]/.test(file)) return false;
+  if (/(?:^|[\\/])src[\\/]Illuminate[\\/]/.test(file)) return false;
+  if (/(?:^|[\\/])framework[\\/]src[\\/]/.test(file)) return false;
+  if (/\bnamespace\s+Illuminate\\/.test(raw)) return false;
+  // Must look like a Laravel application file.
   return /\bnamespace\s+App\\\w+/.test(raw) ||
-         /\bIlluminate\\/.test(raw) ||
-         /\buse\s+(?:App|Illuminate)\\/.test(raw);
+         /\b(?:use|extends|implements)\s+(?:App|Illuminate)\\/.test(raw);
 }
 
 export function scanLaravelHardening(file, raw) {
@@ -83,10 +90,12 @@ export function scanLaravelHardening(file, raw) {
 
   // ── PHP source checks ───────────────────────────────────────────────────
   if (!_PHP_FILE_RE.test(file)) return [];
-  if (!_isLaravelPhpFile(raw)) return [];
+  if (!_isApplicationPhpFile(file, raw)) return [];
 
-  // 1. dd() / dump() / var_dump() left in code
-  for (const m of raw.matchAll(/\b(?:dd|dump|var_dump)\s*\(/g)) {
+  // 1. dd() / dump() / var_dump() left in code — only as standalone calls,
+  // not as method declarations (`function dump(...)`) or method references
+  // (`->dump`, `::dump`).
+  for (const m of raw.matchAll(/(?<!function\s)(?<!->)(?<!::)\b(?:dd|dump|var_dump)\s*\(/g)) {
     findings.push({
       id: `laravel:debug-dump:${file}:${_line(raw, m.index)}`,
       file, line: _line(raw, m.index),
