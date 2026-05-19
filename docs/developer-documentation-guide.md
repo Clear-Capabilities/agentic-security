@@ -24,7 +24,7 @@ NAME
        integrations for the security stack you already run.
 
 VERSION
-       0.39.2
+       0.60.0
 
 SYNOPSIS
        agentic-security [--profile pro] COMMAND [ARGS] [OPTIONS]
@@ -188,7 +188,7 @@ DESCRIPTION
               │        └──────────────────┬───────────────┘        │
               │                           │                        │
    ┌──────────▼──────────┐  ┌─────────────▼─────────┐  ┌───────────▼──────────┐
-   │ SAST (25+ modules)  │  │ SCA (OSV+KEV+EPSS,    │  │ Secrets (60+ patterns │
+   │ SAST (40+ modules)  │  │ SCA (OSV+KEV+EPSS,    │  │ Secrets (60+ patterns│
    │ SQLi, XSS, AuthZ,   │  │ function-reachability,│  │ + entropy heuristic) │
    │ XXE, JWT, RLS, MCP, │  │ dep-confusion,        │  │                      │
    │ LLM, prompt-firewall│  │ typosquat, SARIF      │  │                      │
@@ -196,11 +196,34 @@ DESCRIPTION
               │                           │                        │
               └───────────────────────────┼────────────────────────┘
                                           │
+       ┌──────────────────────────────────▼──────────────────────────────────┐
+       │  Phase-1/2/3/4 Deep Engine  (opt-in: AGENTIC_SECURITY_DEEP=1)       │
+       │                                                                     │
+       │  ir/       parser-js · parser-py · parser-java · ssa · callgraph    │
+       │            class-hierarchy (CHA + RTA) · function-as-value registry │
+       │                                                                     │
+       │  dataflow/ engine (interprocedural taint, k=1 monovariant)          │
+       │            access-paths (P1.1) · receiver-context (P1.2)            │
+       │            higher-order (P1.3) · backward slicing (P1.4)            │
+       │            implicit-flow (P1.5) · RHS tabulation (P2.1)             │
+       │            summaries · exception-flow (P3.4)                        │
+       │            symbolic-exec (P3.1) · numeric-domain (P3.2)             │
+       │            async-sequencing (P3.3) · sanitizer-proof (P4.2)         │
+       │            incremental (P4.3) · string-domain (P4.4)                │
+       │            polyglot embeddings (P4.7) · catalog (140+ entries)      │
+       │                                                                     │
+       │  llm-validator/  Layer-3 LLM accept/reject/escalate per finding     │
+       │                  (opt-in: AGENTIC_SECURITY_LLM_VALIDATE=1)          │
+       └──────────────────────────────────┬──────────────────────────────────┘
+                                          │
                        ┌──────────────────▼───────────────┐
                        │   posture/ enrichment pipeline    │
                        │  triage · suppressions · packs    │
                        │  EPSS · blast-radius · KEV        │
                        │  scorecard · custom-rules         │
+                       │  schema-aware bridges (P4.1)      │
+                       │  cross-lang openapi/grpc/graphql  │
+                       │  /orm/iac-reachability/queues     │
                        └──────────────────┬───────────────┘
                                           │
                        ┌──────────────────▼───────────────┐
@@ -215,6 +238,12 @@ DESCRIPTION
      last-scan.json              SARIF → GitHub Security    tickets sync
      (drives /fix, /report,      Tab / DefectDojo /         (GH Issues /
       /chain, /trend, /badge)    pipeline integrations      Linear / Jira)
+
+       Sideband consumers:
+         mcp/    JSON-RPC 2.0 server — exposes 6 tools to any MCP-speaking
+                 agent (Claude Code / Cursor / Cline / Aider / Codex).
+         lsp/    Language-Server-Protocol server — powers JetBrains, Neovim,
+                 and VS Code plugins via textDocument/publishDiagnostics.
 ```
 
 ### Data flow at a glance
@@ -229,24 +258,63 @@ DESCRIPTION
 
 ```
        scanner/
-         bin/agentic-security.js     # CLI entry point (subcommand dispatch)
+         bin/                        # CLI entry points:
+           agentic-security.js       #   primary CLI dispatch
+           agentic-security-mcp.js   #   MCP server (stdio JSON-RPC)
+           agentic-security-lsp.js   #   LSP server (IDE integration)
+           agentic-security-rule.js  #   custom-rule authoring + test harness
+           agentic-security-diff.js  #   scanner-vs-scanner diff harness
          dist/agentic-security.mjs   # Bundled single-file CLI (built artifact)
          src/engine.js               # Main SAST/SCA/secrets orchestrator
          src/runScan.js              # Filesystem driver + readTree
-         src/sast/                   # 25+ language/family modules
+         src/sast/                   # 40+ language/family modules
          src/sca/                    # OSV/KEV reachability, container, dep-confusion
          src/secrets/                # 60+ pattern matchers + entropy
+         src/ir/                     # Phase-1/2 IR (opt-in via AGENTIC_SECURITY_DEEP=1):
+                                     #   parser-js (Babel) · parser-py · parser-java
+                                     #   callgraph · class-hierarchy (CHA + RTA)
+                                     #   ssa (Cytron/Ferrante φ-placement)
+         src/dataflow/               # Interprocedural taint engine + extensions:
+                                     #   engine · catalog (140+ entries) · summaries
+                                     #   access-paths (P1.1) · receiver-context (P1.2)
+                                     #   higher-order · backward · implicit-flow
+                                     #   tabulation (RHS) · path-feasibility
+                                     #   exception-flow (P3.4) · symbolic-exec (P3.1)
+                                     #   numeric-domain (P3.2) · async-sequencing (P3.3)
+                                     #   sanitizer-proof (P4.2) · string-domain (P4.4)
+                                     #   incremental (P4.3) · polyglot (P4.7)
+         src/llm-validator/          # Layer-3 LLM accept/reject/escalate per finding
+                                     #   (opt-in via AGENTIC_SECURITY_LLM_VALIDATE=1)
+         src/mcp/                    # MCP server — 6 tools any MCP-speaking agent
+                                     # can call (scan_diff, query_taint,
+                                     # explain_finding, apply_fix, verify_fix,
+                                     # synthesize_fix). Stdio JSON-RPC 2.0 over NDJSON.
+         src/lsp/                    # LSP server (powers JetBrains/Neovim/VS Code)
          src/posture/                # Enrichment + reporting glue:
-                                     #   epss, blast-radius, custom-rules,
-                                     #   deterministic, fix-history, router,
-                                     #   triage, suppressions, packs, …
-         src/integrations/           # Slack/Discord/Jira/GH/Linear plumbing
+                                     #   epss · blast-radius · custom-rules
+                                     #   deterministic · fix-history · router
+                                     #   triage · suppressions · packs · confidence
+                                     #   stable-id · clustering · exploitability
+                                     #   reachability-filter · learning · fix-verify
+                                     #   schema-aware-bridge (P4.1)
+                                     #   cross-lang-{openapi,grpc,graphql,orm,queues}
+                                     #   iac-reachability · fix-plan · path-predicates
+                                     #   validator-metrics · deploy-platform
+                                     #   stack-playbook · security-trend
+         src/integrations/           # Slack/Discord/Teams/PagerDuty webhooks +
+                                     # GitHub/GitLab PR comments + Jira/Linear/
+                                     # ServiceNow/GitHub-Issues two-way ticket sync
          src/report/                 # CLI/JSON/SARIF/JUnit/CSV/HTML renderers
-         test/                       # Node test runner suite (96 tests)
-       commands/                     # Slash-command markdown files
-       agents/                       # Sub-agent system prompts
-       hooks/                        # Claude Code event-driven scripts
-       .claude-plugin/plugin.json    # Plugin manifest
+         test/                       # Node test runner suite (470 main + 26 cpp)
+       commands/                     # 76 slash-command markdown files
+       agents/                       # 7 sub-agent system prompts
+       hooks/                        # 5 Claude Code event-driven scripts
+       jetbrains-plugin/             # LSP4IJ-backed JetBrains plugin
+       nvim-plugin/                  # Native-LSP Neovim plugin (Lua)
+       vscode/                       # VS Code extension (TS source)
+       bench/cve-replay/             # F1 ≥ 0.85 measurement scaffolding
+       scripts/ci-templates/         # CI configs (GitLab/CircleCI/Buildkite/Jenkins)
+       .claude-plugin/plugin.json    # Plugin manifest (declares MCP, hooks, agents)
        .agentic-security/            # Per-project runtime state (gitignored)
 ```
 
@@ -1247,7 +1315,7 @@ Every scan writes to `.agentic-security/` in the project root:
 
 ## HOOKS
 
-The plugin ships three runtime hooks that the Claude Code harness invokes
+The plugin ships five runtime hooks that the Claude Code harness invokes
 automatically. Registered via `hooks/hooks.json`:
 
 ```
@@ -1259,15 +1327,31 @@ automatically. Registered via `hooks/hooks.json`:
               sessions: one-line streak greeting.
 
        PreToolUse  (matcher: Edit|Write|MultiEdit)
-              hooks/pre-edit-bodyguard.js              Scans the proposed content BEFORE write. Exits 2 to deny
-              (block mode + critical pattern) or 0 with stderr message
-              (warn mode). Reads .agentic-security/bodyguard.json. ~10ms.
+              hooks/pre-edit-bodyguard.js
+              Real-time AI-coding bodyguard. Scans the proposed content
+              BEFORE write with high-precision rules for the bugs vibe-
+              coders most often ship by accident (SQLi via concat,
+              NEXT_PUBLIC_ secrets, dangerouslySetInnerHTML, JWT without
+              verify, Supabase service-role on the client, LLM call with
+              no max_tokens, etc.). Exits 2 to deny (block mode + critical
+              pattern) or 0 with stderr message (warn mode). Reads
+              .agentic-security/bodyguard.json. ~10ms.
+
+       PreToolUse  (matcher: Edit|Write|MultiEdit)
+              hooks/conversation-context.js
+              Injects open findings + recent /fix history + pending
+              fix-plans for the file being edited as conversation context
+              so Claude doesn't re-introduce a just-fixed vuln. ~2ms.
 
        PreToolUse  (matcher: Bash)
-              hooks/pre-bash-guard.js                  Intercepts destructive shell commands before they run.
-              Critical patterns return exit 2 (deny); high patterns
-              return exit 0 with stderr warning. Reads
-              .agentic-security/destructive-guard.json. ~5ms.
+              hooks/pre-bash-guard.js
+              Intercepts destructive shell commands before they run —
+              rm -rf, DROP TABLE, supabase db reset, git push --force to
+              main, curl | bash, chmod 777, aws s3 rm --recursive, docker
+              system prune -a, and 10+ other foot-guns. Critical patterns
+              return exit 2 (deny); high patterns return exit 0 with
+              stderr warning. Reads .agentic-security/destructive-guard.json.
+              ~5ms.
 
        PostToolUse  (matcher: Edit|Write|MultiEdit)
               hooks/post-edit-scan.js
@@ -1288,6 +1372,150 @@ To disable a hook without uninstalling the plugin:
 ```
 
 Written to the relevant `.agentic-security/<hook>.json` file.
+
+---
+
+## MCP SERVER
+
+agentic-security ships an MCP (Model Context Protocol) server at
+`scanner/bin/agentic-security-mcp.js`, registered under
+`.claude-plugin/plugin.json#mcpServers`. It is also reachable as
+`agentic-security mcp`. Transport: JSON-RPC 2.0 over NDJSON on stdin/stdout.
+
+Six tools are exposed — any MCP-speaking agent (Claude Code, Cursor CLI,
+Codex CLI, Cline, Aider) can call them:
+
+```
+       scan_diff(files)
+              Re-scan a specific file list. Fast, scoped scan that returns
+              findings limited to those paths. Used by /fix to verify a
+              proposed patch is local.
+
+       query_taint(source, sink)
+              Ask the engine "is there a flow from X to Y?". Exposes the
+              interprocedural taint engine as a queryable graph for agents
+              doing custom analysis.
+
+       explain_finding(finding_id)
+              Plain-English finding explanation. Same content surface as
+              the /explain slash command.
+
+       synthesize_fix(finding_id)
+              Returns the proposed replacement text + bounds for one
+              finding. No file writes. Used as a planning step before
+              apply_fix.
+
+       verify_fix(stable_id, files)
+              Re-scan + run the project linter against the proposed files.
+              No writes. Returns ok:false with a structured reason when
+              the patch doesn't actually remove the original finding or
+              introduces new ≥medium findings.
+
+       apply_fix(finding_id, confirm, dry_run?)
+              Actually write the patch. Refuses unless last-scan.json HMAC
+              verifies and confirm:true. Honours dry_run.
+```
+
+**Safety rails (mapped to the OWASP MCP top-10):**
+
+- **MCP09 — kill switch.** `AGENTIC_SECURITY_MCP_DISABLED=1` exits the bin
+  and refuses every `tools/call`.
+- **Session root pinning.** Fixed at boot via `--root` arg,
+  `AGENTIC_SECURITY_MCP_ROOT` env, or cwd. All tool paths are confined
+  under it via lstat + realpath (symlinks refused).
+- **MCP03 / MCP06 — output is data, not instructions.** Tool outputs
+  include `_meta.untrusted_excerpts:true` so the agent treats scanner
+  output as data, not instructions. `apply_fix` refuses unless
+  last-scan.json HMAC verifies.
+- **MCP01 / MCP10 — secret hygiene.** All tool outputs and audit args are
+  redacted of known credential shapes (AWS, GitHub, Slack, Anthropic,
+  OpenAI, Stripe, JWT, PEM private keys, hardcoded password literals).
+- **MCP08 — audit log.** `.agentic-security/mcp-audit.log` (NDJSON, hash-
+  chained — verify with `verifyAuditLog`) records every `tools/call`.
+- **MCP04 / MCP09 — fleet visibility.** `initialize` response includes
+  `serverInfo.codeFingerprint` (SHA-256 of MCP source files) so operators
+  can detect unauthorized builds.
+
+---
+
+## AGENTS
+
+The plugin ships seven sub-agents in `agents/`. Each agent is a markdown
+system prompt loaded by the Claude Code harness; commands invoke them
+via the Agent tool.
+
+```
+       security-poc-generator
+              For ONE finding, build a PoC input + a regression test
+              (framework-idiomatic), trace the data flow step-by-step,
+              and emit 3-5 adversarial variants for confirmed TPs.
+              Emits PROBABLE_FP when a static blocker is found,
+              REFUSED for out-of-tree paths, INDETERMINATE_BY_CLASS
+              for vuln families that cannot be reliably proven by a
+              sub-minute regression test. Used by /validate-findings.
+
+       security-fixer
+              Apply remediation patches for individual findings.
+              Reads the affected file, applies the canonical fix
+              template adapted to the surrounding code, re-runs tests
+              if available. Used by /fix.
+
+       security-triager
+              Score, dedupe, and rank a finding list by risk. Produces
+              a sorted, deduped list ready for human or AI consumption.
+              Used by /triage and /show-findings.
+
+       security-chain-synthesizer
+              Combine individual findings into multi-step attack chains
+              (e.g., IDOR + missing auth = account takeover). Used by
+              /show-findings --chains.
+
+       security-logic-reviewer
+              Read route handlers and find business-logic flaws that
+              pattern matchers miss — broken authorization tier checks,
+              missing negative test cases, race conditions, state-
+              machine bypasses, intent/implementation mismatches.
+
+       security-material-change
+              Score the security materiality of a git diff. Separates
+              routine refactors from architectural risk — auth removed,
+              new endpoints, new prompts with user input, new shell
+              calls, new IaC privilege grants. Used by PR review flows.
+
+       sca-malware-analyst
+              Per-component CLEAN/SUSPICIOUS/MALICIOUS verdict for
+              third-party dependencies. Used after /supply-chain-check
+              when you need to decide whether a vuln is malware vs an
+              ordinary CVE.
+```
+
+---
+
+## IDE INTEGRATIONS
+
+The same engine ships as an LSP server that powers all editor plugins.
+Bin entry: `scanner/bin/agentic-security-lsp.js`. The server wraps
+`runScan` and emits `textDocument/publishDiagnostics` to the editor.
+
+```
+       jetbrains-plugin/
+              LSP4IJ-backed JetBrains plugin (IntelliJ / PyCharm /
+              GoLand / WebStorm / RubyMine / PhpStorm). ~100 LoC +
+              plugin.xml. Build with `./gradlew buildPlugin`.
+
+       nvim-plugin/
+              Native-LSP Neovim plugin (Lua). Attaches the bundled
+              LSP server on filetype-matched buffers. Install via
+              lazy.nvim or vim-plug.
+
+       vscode/
+              VS Code extension. Source in `vscode/src/extension.ts`.
+              Built and packaged separately.
+```
+
+All three surface the same findings inline as the CLI emits — diagnostics
+are keyed by stableId, so navigating between IDE and CLI references the
+same identity.
 
 ---
 

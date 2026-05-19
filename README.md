@@ -300,12 +300,20 @@ You triage findings for a living. Most scanners drown you in noise, are impossib
 
 ### What sets it apart
 
+- **Commercial-grade taint engine.** Field-sensitive access-path lattice + object/receiver sensitivity (CHA + RTA) + higher-order callback propagation + backward slicing + implicit-flow + RHS demand-driven tabulation + SSA + bounded symbolic execution with numeric range domain. Multi-language IR (JS/TS, Python, Java). Opt-in via `AGENTIC_SECURITY_DEEP=1`. Honest blind-bench: 88.0% F1 on OWASP Benchmark v1.2 strict-blind (no label leakage, identifier-scramble verified).
 - **Function-level reachability.** Drops SCA findings whose vulnerable function isn't reachable from any route — kills your noisiest bucket.
 - **EPSS-aware prioritization.** Every CVE finding decorated with EPSS score + percentile (FIRST.org). CVEs with percentile ≥ 95% get tagged `exploited-now` and bumped one severity tier so they sort to the top. KEV layered on top.
-- **Custom rule DSL.** Semgrep-lite YAML rules in `.agentic-security/rules/*.yml`. `rule test` harness over `vulnerable/` + `clean/` fixtures.
+- **Cross-language taint.** Schema-aware bridges follow flows across HTTP/gRPC/GraphQL/queues/ORM round-trips — OpenAPI + proto + SDL fields paired by structural identity (with synonym detection: `email` ↔ `emailAddress`), not name match.
+- **Polyglot embedded-language taint.** Tainted strings inside strings — SQL / JNDI / shell / LDAP / XPath / Mongo / HTML / CSS — recognized even when no obvious sink shape matches (Log4Shell-class detection).
+- **MCP server.** Six tools any MCP-speaking agent (Claude Code / Cursor / Cline / Aider / Codex) can call: `scan_diff`, `query_taint`, `explain_finding`, `synthesize_fix`, `verify_fix`, `apply_fix`. Hash-chained audit log, session-root pinning, secret redaction, kill switch, code fingerprint — mapped to the OWASP MCP top-10.
+- **IDE plugins via LSP.** Same engine powers JetBrains (LSP4IJ), Neovim (native LSP), and VS Code. Inline diagnostics keyed by `stableId` so IDE and CLI reference identical findings.
+- **Refactor-stable IDs + confidence + exploitability.** Every finding carries a 16-hex `stableId` (hash of rule + normalized sink signature + path shape), a calibrated `confidence` ∈ [0,1] with tier label, and a composite `exploitability` ∈ [0,1] combining severity + reachability + auth gating + project mitigations + KEV/EPSS.
+- **Custom rule DSL.** Semgrep-lite YAML rules in `.agentic-security/rules/*.yml`. `rule test` harness over `vulnerable/` + `clean/` fixtures. `/query` translates natural-language descriptions into the rule DSL.
 - **Two-way ticket sync.** GitHub Issues / Linear / Jira. Idempotent state in `.agentic-security/tickets.json`.
 - **Deterministic mode.** Byte-stable output + rule-pack lockfile (`rules.lock.json`) for audits and CI baselines.
+- **Incremental scans.** Persisted file-hash + per-function summary cache invalidate only changed files + transitive callers — PR-scoped re-analysis is 10× faster on large monorepos.
 - **Diff-aware.** `--pr` mode scans only changed files; auto-detects PR base from GitHub / GitLab / Buildkite / Bitbucket env vars.
+- **Active-learning loop.** `/triage` verdicts persisted to `.agentic-security/triage-feedback.json`; past FPs by stableId or pattern get suppressed; past TPs get a confidence bump on the next scan.
 - **Standards-shaped output.** SARIF, JUnit, CycloneDX (SBOM + ML-BOM + PBOM), SPDX. Drops directly into existing dashboards.
 
 ### 5-minute pro setup
@@ -336,11 +344,17 @@ npx @clearcapabilities/agentic-security-scanner scan . --format aibom > ai-bom.j
 | Command | What it does |
 |---|---|
 | `/agentic-security:scan` | Full SAST + SCA + secrets sweep. Focused modes: `--sca`, `--secrets`, `--authz`, `--mcp`, `--pipeline`, `--logic`, `--diff`. SARIF + JSON + CSV written every scan. |
+| `AGENTIC_SECURITY_DEEP=1 agentic-security scan` | Engage the interprocedural taint engine: IR + access-paths + receiver-context + higher-order + backward slicing + RHS tabulation + SSA + symbolic-exec + polyglot embeddings. |
 | `agentic-security scan --pr [ref]` | Diff-aware: only scan files changed since the PR base. Auto-detects GitHub / GitLab / Buildkite / Bitbucket env vars. |
 | `agentic-security scan --deterministic` | Reproducible mode: stable-sorts findings, zeros timing/scanId, forces `--no-network`, verifies `rules.lock.json`. Required for byte-stable CI baselines. |
 | `agentic-security rules lock` | Pin the active rule-pack hash + scanner version in `.agentic-security/rules.lock.json`. |
 | `/agentic-security:show-findings` | Triage UI. `--all` opens an interactive HTML report. `--kev` filters to weaponized CVEs, `--chains` shows attack chains, `--threat-model [--stride\|--llm]` builds a model. |
 | `/agentic-security:validate-findings` | Build a PoC + regression test that proves a vulnerability before fixing. Emits `PROBABLE_FP` when no PoC can be constructed. |
+| `/agentic-security:why-fired` | Provenance graph for ONE finding — which detector fired, which rule matched, what evidence was present, which suppressions/mitigations were considered. |
+| `/agentic-security:why-not <CWE>` | Recall spot-check — shows what the engine considered for a CWE in the current scan and explains why no finding was reported. Surfaces catalog gaps. |
+| `/agentic-security:diff-scan` | Run two scanner versions side-by-side and report the delta. Lets you safely preview a scanner upgrade. |
+| `/agentic-security:self-test` | Adversarial self-test: scanner attacks itself by mutating known-vuln fixtures with renaming / wrapping / API-swap strategies. Surfaces detector gaps. |
+| `/agentic-security:scan-baseline` | Finding-level diff between two scan JSON outputs. Useful for "what did this PR introduce?" or "did yesterday's fix actually close it?". |
 
 #### Customization and rule authoring
 
@@ -349,6 +363,8 @@ npx @clearcapabilities/agentic-security-scanner scan . --format aibom > ai-bom.j
 | `agentic-security rule list \| test <glob>` | Author custom YAML rules in `.agentic-security/rules/*.yml` (regex / `allOf` / `notMatch` / `window`). The `rule test` harness reports PASS / FAIL on `vulnerable/` + `clean/` fixture pairs. |
 | `agentic-security rules validate` | Lint `.agentic-security/rules.yml` for schema errors, invalid regex, severity overrides, disabled rules. |
 | `agentic-security packs list` | Curated rule packs: `owasp-top-10`, `cwe-top-25`, `llm-security`, `supply-chain`. Activate with `--pack`. |
+| `/agentic-security:query` | SentQL — describe a custom check in natural language; the assistant translates it to the project's YAML rule DSL and previews before saving. |
+| `/agentic-security:triage` | Interactive triage. Capture true-positive / false-positive / won't-fix verdicts. Persists to `.agentic-security/triage-feedback.json` and feeds the active-learning loop on the next scan. |
 
 #### Integrations and workflow
 
@@ -357,6 +373,11 @@ npx @clearcapabilities/agentic-security-scanner scan . --format aibom > ai-bom.j
 | `agentic-security tickets sync --provider github\|linear\|jira` | Two-way sync findings ↔ tickets. Creates issues for new findings, closes tickets when findings drop. State in `.agentic-security/tickets.json`. Supports `--dry-run`. |
 | `/agentic-security:fix --pr` | Bundle fixes into a feature branch and open a PR. Default dry-run; `--apply` to commit. Skips test-failing fixes; never amends or force-pushes. |
 | `/agentic-security:ci-gate` | Generates `.github/workflows/security.yml` — runs on every PR, uploads SARIF to GitHub Security tab, posts PR comments, fails on critical/high. |
+| `/agentic-security:ci-gate-multi` | Auto-detects GitLab CI / CircleCI / Buildkite / Jenkins from the repo and emits the matching template. `--provider <name>` to override. |
+| `/agentic-security:install-hooks` | Install pre-commit and pre-push git hooks that run scoped scans on every commit and full diff scans before push. Blocks on new critical findings by default. |
+| `/agentic-security:predeploy-gate` | Block production deploys (`vercel --prod`, `fly deploy`, `wrangler publish`, `netlify deploy --prod`, `railway up`) when critical findings or KEV-listed deps are present. Intercepts both in Claude's Bash tool AND in the user's terminal via a sourced shell wrapper. |
+| `agentic-security mcp` | Launch the MCP server (also auto-registered in `.claude-plugin/plugin.json`). Six tools: `scan_diff`, `query_taint`, `explain_finding`, `synthesize_fix`, `verify_fix`, `apply_fix`. Stdio JSON-RPC 2.0; hash-chained audit log; OWASP MCP top-10 hardened. |
+| `agentic-security lsp` | Launch the LSP server (also auto-registered for JetBrains / Neovim / VS Code plugins). |
 | `agentic-security org-scan --repos <list>` | Fleet scan across N repos with bounded concurrency. Per-repo + rolled-up JSON output. |
 | `agentic-security triage list \| assign \| transition \| trend` | Per-finding state machine with MTTR + opened/closed deltas. Persists to `.agentic-security/triage.json`. |
 | `/agentic-security:security-trend` | Rolling trend line: fixed vs. introduced delta across scans, sparkline, regression detection. |
@@ -368,6 +389,22 @@ npx @clearcapabilities/agentic-security-scanner scan . --format aibom > ai-bom.j
 | `/agentic-security:llm-redteam` | Send 30+ adversarial prompts (security, privacy, harmful, bias, misinformation, agentic, coding-agent) through your LLM endpoint with 7 attack-strategy mutations (DAN, base64, ROT13, role-play, authority, hypothetical, multilingual, chained-context). Static `--scan` mode catches missing defenses without making any LLM calls. |
 | `/agentic-security:jailbreak-detector` | Faster focused subset — runs the canonical "make this harmful" prompt through each known jailbreak family. Reports DEFENDED / JAILBROKEN / PARTIAL per family. |
 | `/agentic-security:llm-eval` | Generate a [promptfoo](https://www.promptfoo.dev)-compatible YAML eval suite committable to your repo as a CI gate. |
+| `/agentic-security:prompt-firewall` | Audit LLM/AI app security gaps — user input in system prompts, missing `max_tokens`, LLM output used as SQL/code, missing output validation. |
+| `/agentic-security:llm-cost-ceiling` | Auto-patch missing `max_tokens` caps across every LLM call in the codebase, generate rate-limit middleware, emit a daily $-spend tracker. Vibe-coder protection against an uncapped endpoint draining thousands of dollars in hours. |
+
+#### Adversarial review and threat modeling
+
+| Command | What it does |
+|---|---|
+| `/agentic-security:adversary` | Bounded-budget LLM agent simulates a real attacker against ONE finding. Produces a hash-chained transcript showing what data was reached, what permissions obtained, what business actions performed. |
+| `/agentic-security:three-agent-review` | Red team (attack) + blue team (hardening) + auditor (final verdict) for ONE finding. Composes adversary-agent with defender + auditor. |
+| `/agentic-security:threat-model` | Auto-derived STRIDE threat model from the last scan — assets, trust boundaries, per-category finding counts, top findings per attacker objective. |
+| `/agentic-security:trust-boundary` | Auto-generated Mermaid diagram of the architecture's trust boundaries — HTTP routes, queue producers/consumers, gRPC endpoints, DB edges, IaC-exposed assets — with findings rendered ON the diagram. |
+| `/agentic-security:personas` | Per-attacker-persona prioritization (script kiddie / opportunistic / APT / supply-chain / insider) — what each adversary class would target first. |
+| `/agentic-security:spof` | Single-point-of-failure analysis — which auth / sanitizer / rate-limit / CSRF middleware, if removed or bypassed, would expose the most high+ findings. |
+| `/agentic-security:concurrency-bugs` | Missed unlocks, unguarded locks on early-return paths, fire-and-forget async, 2-lock deadlock cycles. Go / Java / JS-TS / Python. |
+| `/agentic-security:spec-drift` | Functions whose names claim a behavior the body doesn't deliver (e.g., `validateOwnership()` that doesn't check user identity, `sanitize()` that doesn't escape). |
+| `/agentic-security:archaeology` | Pre-incident archaeology — walk git history to answer "when did this codebase first become vulnerable to X?". For post-mortems and regulatory due-diligence. |
 
 #### Dependency, supply chain, and posture
 
@@ -402,7 +439,7 @@ The full reference lives in the **[Developer Documentation](https://github.com/C
               │        └──────────────────┬───────────────┘        │
               │                           │                        │
    ┌──────────▼──────────┐  ┌─────────────▼─────────┐  ┌───────────▼──────────┐
-   │ SAST (25+ modules)  │  │ SCA (OSV+KEV+EPSS,    │  │ Secrets (60+ patterns │
+   │ SAST (40+ modules)  │  │ SCA (OSV+KEV+EPSS,    │  │ Secrets (60+ patterns│
    │ SQLi, XSS, AuthZ,   │  │ function-reachability,│  │ + entropy heuristic) │
    │ XXE, JWT, RLS, MCP, │  │ dep-confusion,        │  │                      │
    │ LLM, prompt-firewall│  │ typosquat, SARIF      │  │                      │
@@ -410,11 +447,28 @@ The full reference lives in the **[Developer Documentation](https://github.com/C
               │                           │                        │
               └───────────────────────────┼────────────────────────┘
                                           │
+       ┌──────────────────────────────────▼──────────────────────────────────┐
+       │  Deep Engine — opt-in via AGENTIC_SECURITY_DEEP=1                    │
+       │                                                                      │
+       │  ir/        JS/TS · Python · Java IR + CFG + cross-file callgraph +  │
+       │             SSA + class-hierarchy (CHA + RTA)                        │
+       │  dataflow/  forward + backward interproc taint · access-paths ·      │
+       │             receiver-context · higher-order · implicit-flow ·        │
+       │             RHS tabulation · symbolic-exec (numeric range domain) ·  │
+       │             async-sequencing · exception-flow · sanitizer-proof ·    │
+       │             string-domain · polyglot (SQL/JNDI/LDAP/HTML/shell) ·    │
+       │             incremental (file-hash + summary cache)                  │
+       │  llm-validator/  optional Layer-3 LLM accept/reject/escalate         │
+       └──────────────────────────────────┬──────────────────────────────────┘
+                                          │
                        ┌──────────────────▼───────────────┐
                        │   posture/ enrichment pipeline    │
                        │  triage · suppressions · packs    │
                        │  EPSS · blast-radius · KEV        │
                        │  scorecard · custom-rules         │
+                       │  schema-aware bridges · iac-reach │
+                       │  cross-lang openapi/grpc/graphql  │
+                       │  /orm/queues · confidence·learning│
                        └──────────────────┬───────────────┘
                                           │
                        ┌──────────────────▼───────────────┐
@@ -429,6 +483,22 @@ The full reference lives in the **[Developer Documentation](https://github.com/C
      last-scan.json              SARIF → GitHub Security    tickets sync
      (drives /fix, /report,      Tab / DefectDojo /         (GH Issues /
       /chain, /trend, /badge)    pipeline integrations      Linear / Jira)
+
+       Sideband interfaces:
+         mcp/        JSON-RPC 2.0 server — 6 tools any MCP-speaking agent
+                     (Claude Code / Cursor / Cline / Aider / Codex) can call:
+                     scan_diff, query_taint, explain_finding, synthesize_fix,
+                     verify_fix, apply_fix. Hash-chained audit log; OWASP MCP
+                     top-10 hardened.
+         lsp/        Language-Server-Protocol — powers JetBrains, Neovim, and
+                     VS Code plugins via textDocument/publishDiagnostics.
+         hooks/      5 Claude Code event hooks: session-welcome, pre-edit
+                     bodyguard (real-time block-before-write), conversation
+                     -context, pre-bash-guard (destructive command intercept),
+                     post-edit-scan.
+         agents/     7 sub-agents: poc-generator, fixer, triager, chain-
+                     synthesizer, logic-reviewer, material-change, malware
+                     -analyst.
 ```
 
 The whole engine ships as a single 2.6 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node ≥ 20. No native deps. No daemon. No background process.
