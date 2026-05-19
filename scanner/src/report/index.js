@@ -105,6 +105,45 @@ export function normalizeFindings(scan){
       verifier_reason: f.verifier_reason || null,
       verifier_runner: f.verifier_runner || null,
       narration: typeof f.narration === 'string' ? f.narration : null,
+      // v3 next-gen — Pillars 8 (Adversary Simulation) + 9 (Production-Aware
+      // Reasoning) + spec/clone/ai/why-fired property bag.
+      mitigationVerdict: f.mitigationVerdict || null,
+      mitigationsApplied: Array.isArray(f.mitigationsApplied) ? f.mitigationsApplied : null,
+      mitigatedByWaf: f.mitigatedByWaf === true,
+      wafRuleId: f.wafRuleId || null,
+      mitigatedByAuth: f.mitigatedByAuth === true,
+      authMechanism: f.authMechanism || null,
+      mitigatedByNetwork: f.mitigatedByNetwork === true,
+      networkExposure: f.networkExposure || null,
+      featureFlag: f.featureFlag || null,
+      featureFlagState: f.featureFlagState || null,
+      featureFlagRollout: typeof f.featureFlagRollout === 'number' ? f.featureFlagRollout : null,
+      exposedInProd: f.exposedInProd === true,
+      unreachableInProd: f.unreachableInProd === true,
+      coldPath: f.coldPath === true,
+      hotPath: f.hotPath === true,
+      prodRequestCount: typeof f.prodRequestCount === 'number' ? f.prodRequestCount : null,
+      crownJewelScore: typeof f.crownJewelScore === 'number' ? f.crownJewelScore : null,
+      crownJewelTier: f.crownJewelTier || null,
+      crownJewelFactors: Array.isArray(f.crownJewelFactors) ? f.crownJewelFactors : null,
+      cloneClusterId: f.cloneClusterId || null,
+      cloneClusterSize: typeof f.cloneClusterSize === 'number' ? f.cloneClusterSize : null,
+      provenance: f.provenance || null,
+      provenanceScore: typeof f.provenanceScore === 'number' ? f.provenanceScore : null,
+      typeNarrowed: f.typeNarrowed || null,
+      strideCategory: f.strideCategory || null,
+      personaScores: f.personaScores || null,
+      personaTopTwo: Array.isArray(f.personaTopTwo) ? f.personaTopTwo : null,
+      personaMaxName: f.personaMaxName || null,
+      personaMaxScore: typeof f.personaMaxScore === 'number' ? f.personaMaxScore : null,
+      reverseExposure: f.reverseExposure || null,
+      specMined: f.specMined || null,
+      whyFired: f.whyFired || null,
+      adversaryTranscript: f.adversaryTranscript || null,
+      // v3 next-gen — bounty + playbook fields.
+      predictedBountyUsd: f.predictedBountyUsd || null,
+      bountyConfidence: f.bountyConfidence || null,
+      attackPlaybook: f.attackPlaybook || null,
     });
   }
   for (const s of (scan.secrets||[])) {
@@ -258,6 +297,9 @@ export function toJSON(scan, meta={}, opts={}){
     })),
     suppressedCount: (scan.suppressions||[]).length,
     blastRadiusSignals: scan.blastRadiusSignals || null,
+    // v3 next-gen — scan-level reports (counterfactual SPOF list, threat model
+    // summary, trust-boundary Mermaid, calibration-drift alarms).
+    _v3: scan._v3 || null,
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];
   return out;

@@ -128,6 +128,35 @@ you already run, customization, and audit-defensible output.
     /llm-eval                  Generate promptfoo YAML eval suite
 
 ═══════════════════════════════════════════════════════════════
+🆕 NEXT-GEN (v3) — production-aware + adversary-grade
+═══════════════════════════════════════════════════════════════
+The v3 PRD additions. These read .agentic-security/last-scan.json — run /scan first.
+
+  Production-aware filters (compose with any /scan mode)
+    /scan --exposed-only            Only findings prod controls don't already block
+    /scan --mitigated-only          Inverse — findings your WAF/auth/network handles
+    /scan --persona apt-nation-state    Filter by attacker class
+
+  Attacker-grade output
+    /threat-model              Auto-derived STRIDE — assets, boundaries, findings
+    /personas                  Per-persona priority matrix (5 adversary classes)
+    /playbook                  Copy-paste attack scripts (curl / Nuclei / multi-step)
+    /bounty                    Predicted HackerOne / Immunefi USD payouts
+    /adversary --finding <id> --target <url>    Multi-step LLM exploit agent
+
+  Defensive-posture views
+    /spof                      Single-point-of-failure controls (counterfactual)
+    /trust-boundary            Auto-Mermaid architecture diagram with findings
+    /scan --concurrency        Data races, missed unlocks, deadlock cycles
+    /scan --spec-drift         Function name vs. body intent-drift detector
+
+  Engineering / forensics
+    /archaeology --finding <id>      When did our codebase first become vulnerable?
+    /why-fired --finding <id>        Full provenance graph for one finding
+    /diff-scan --baseline <bin> --candidate <bin>     FR-SDLC-10 scanner-vs-scanner
+    /self-test                 Adversarial self-test — scanner attacks itself
+
+═══════════════════════════════════════════════════════════════
 🤝 BOTH LANES USE THESE
 ═══════════════════════════════════════════════════════════════
 

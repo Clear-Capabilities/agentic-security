@@ -153,7 +153,16 @@ const STRIDE = [
 ];
 const W = (s, code) => process.stdout.isTTY ? '\x1b[' + code + 'm' + s + '\x1b[0m' : s;
 const BOLD = '1', DIM = '2', YELLOW = '33', GREEN = '32';
-const buckets = STRIDE.map(cat => ({ ...cat, findings: findings.filter(f => f.stride === cat.id || f.stride === cat.name) }));
+// v3: prefer the new f.strideCategory (lowercase camelCase from threat-model.js),
+// fall back to legacy f.stride for older scans.
+const STRIDE_KEY = { S: 'spoofing', T: 'tampering', R: 'repudiation', I: 'informationDisclosure', D: 'denialOfService', E: 'elevationOfPrivilege' };
+const buckets = STRIDE.map(cat => ({
+  ...cat,
+  findings: findings.filter(f =>
+    f.strideCategory === STRIDE_KEY[cat.id] ||
+    f.stride === cat.id || f.stride === cat.name
+  ),
+}));
 console.log(''); console.log(W('STRIDE Coverage Table', BOLD)); console.log('');
 console.log('| Category               | Count | Top finding |');
 console.log('|------------------------|-------|-------------|');

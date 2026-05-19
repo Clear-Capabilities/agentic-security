@@ -91,6 +91,28 @@ import { applyPathConstraints } from './posture/path-predicates.js';
 // Phase 3 (Sentinel-parity Layer 1 + 2) — IR + interprocedural taint engine.
 import { buildProjectIR } from './ir/index.js';
 import { runDeepAnalysis } from './dataflow/index.js';
+// v3 next-gen — Pillars 1, 4, 5, 6, 8, 9.
+import { annotateCloneClusters, findCloneOutliers } from './posture/semantic-clone.js';
+import { annotateAiProvenance } from './posture/ai-code-fingerprint.js';
+import { annotateCrownJewelScores } from './posture/crown-jewels.js';
+import { annotateFeatureFlagGating } from './posture/feature-flags.js';
+import { annotatePersonaScores } from './posture/persona-prioritization.js';
+import { annotateMitigationComposite } from './posture/mitigation-composite.js';
+import { annotateTypeNarrowing } from './posture/type-narrowing.js';
+import { annotateWhyFired } from './posture/why-fired.js';
+import { scanSpecificationDrift } from './posture/specification-mining.js';
+import { runCounterfactual } from './posture/counterfactual.js';
+import { buildThreatModel, annotateStrideCategory } from './posture/threat-model.js';
+import { annotateWafMitigation } from './posture/waf-ingest.js';
+import { annotateTelemetry } from './posture/telemetry-ingest.js';
+import { annotateAuthMitigation } from './posture/auth-posture-import.js';
+import { annotateNetworkMitigation } from './posture/network-policy-import.js';
+import { annotateScaReverseBlast } from './posture/reverse-blast-radius.js';
+import { computeDrift as computeCalibrationDrift } from './posture/calibration-drift.js';
+import { buildTrustBoundaryDiagram } from './posture/trust-boundary-diagram.js';
+import { scanConcurrency } from './posture/concurrency-checker.js';
+import { annotateBountyPrediction } from './posture/bounty-prediction.js';
+import { annotateAttackPlaybooks } from './posture/attack-playbooks.js';
 
 // Disk-backed cache replacing browser sessionStorage. One JSON blob per key under ~/.claude/agentic-security/osv-cache/.
 const _CACHE_DIR = path.join(os.homedir(), '.claude', 'agentic-security', 'osv-cache');
@@ -6861,6 +6883,44 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   try { annotateCalibratedConfidence(finalFindings, { scanRoot }); } catch(_) {}
   const _projectCtx = (() => { try { return detectProjectContext(fc, aR); } catch { return {}; } })();
   try { annotateExploitability(finalFindings, _projectCtx); } catch(_) {}
+  // v3 next-gen: production-aware context ingest (Pillar 9). Must run BEFORE
+  // the mitigation composite, persona prioritization, and final why-fired
+  // record so those see the demotion signals.
+  try { annotateWafMitigation(finalFindings, scanRoot); } catch(_) {}
+  try { annotateAuthMitigation(finalFindings, scanRoot); } catch(_) {}
+  try { annotateNetworkMitigation(finalFindings, scanRoot); } catch(_) {}
+  try { annotateTelemetry(finalFindings, scanRoot); } catch(_) {}
+  try { annotateFeatureFlagGating(finalFindings, fc, { scanRoot }); } catch(_) {}
+  // v3 next-gen: composite mitigation verdict consumes every prod signal above.
+  try { annotateMitigationComposite(finalFindings); } catch(_) {}
+  // v3 next-gen: crown-jewel mapping (FR-PROD-5) — score each file/finding by
+  // business impact. Must run before persona prioritization (which uses it).
+  try { annotateCrownJewelScores(finalFindings, fc); } catch(_) {}
+  // v3 next-gen: clone clusters (FR-SEM-8) + emit clone-outlier infos.
+  try { annotateCloneClusters(finalFindings); } catch(_) {}
+  try {
+    const outliers = findCloneOutliers(finalFindings);
+    if (outliers && outliers.length) finalFindings.push(...outliers);
+  } catch(_) {}
+  // v3 next-gen: AI-generated-code fingerprint (FR-LEARN-10). Property bag tag.
+  try { annotateAiProvenance(finalFindings, fc); } catch(_) {}
+  // v3 next-gen: whole-program type narrowing (FR-SEM-10) — heuristic
+  // confidence dampener on findings rooted in functions whose callers all
+  // pass narrowly-typed values.
+  try { annotateTypeNarrowing(finalFindings, fc); } catch(_) {}
+  // v3 next-gen: STRIDE classification (FR-LOGIC-10).
+  try { annotateStrideCategory(finalFindings); } catch(_) {}
+  // v3 next-gen: per-attacker-persona score matrix (FR-ADV-2). Must run AFTER
+  // crown-jewels + mitigation composite so it sees those signals.
+  try { annotatePersonaScores(finalFindings); } catch(_) {}
+  // v3 next-gen: SCA reverse-blast-radius enrichment (FR-ADV-5).
+  try { annotateScaReverseBlast(finalFindings, fc); } catch(_) {}
+  // v3 next-gen: bug-bounty payout prediction (FR-ADV-3). Composes with the
+  // mitigation composite — gated/unreachable findings get the bounty scaled
+  // down rather than zeroed.
+  try { annotateBountyPrediction(finalFindings); } catch(_) {}
+  // v3 next-gen: attack-playbook annotation (FR-ADV-4). Only for high+ findings.
+  try { annotateAttackPlaybooks(finalFindings); } catch(_) {}
   // Phase-1 next-gen P1.1 (FR-VER-2): attach a runnable PoC to each finding
   // when a CWE template covers it. Findings without coverage get f.poc=null.
   try { annotatePocs(finalFindings, { routes: aR }); } catch(_) {}
@@ -6915,6 +6975,19 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   try {
     const bl = scanBusinessLogicV2(_allXlangFiles);
     if (bl && bl.length) finalFindings.push(...bl);
+  } catch(_) {}
+  // v3 next-gen: specification-mining drift detector (FR-LOGIC-8). Emits
+  // findings for function-name-vs-body mismatches. Low confidence by default;
+  // active-learning loop tunes per project.
+  try {
+    const sm = scanSpecificationDrift(_allXlangFiles);
+    if (sm && sm.length) finalFindings.push(...sm);
+  } catch(_) {}
+  // v3 next-gen: bounded concurrency-bug detector (FR-SEM-9). Heuristic only;
+  // catches missed unlocks, fire-and-forget async, and 2-lock deadlock cycles.
+  try {
+    const cc = scanConcurrency(_allXlangFiles);
+    if (cc && cc.length) finalFindings.push(...cc);
   } catch(_) {}
   // FR-LOGIC-6: LLM-driven flow narration (template fallback when no LLM endpoint).
   try { await annotateNarration(finalFindings); } catch(_) {}
@@ -7146,7 +7219,17 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   _filterInPlace(aSecrets);
   _filterInPlace(supplyChain);
   classifyOrphans(aSrc,aSink,finalFindings,fc);
-  return{routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value}};}
+  // v3 next-gen: capture scan-level reports (counterfactual, threat model,
+  // trust-boundary diagram, calibration-drift alarms). All best-effort.
+  let _v3 = {};
+  try { _v3.counterfactual = runCounterfactual(finalFindings, fc); } catch(_) {}
+  try { _v3.threatModel = buildThreatModel(finalFindings, fc); } catch(_) {}
+  try { _v3.trustBoundaryDiagram = buildTrustBoundaryDiagram(finalFindings, fc); } catch(_) {}
+  try { _v3.calibrationDrift = computeCalibrationDrift(scanRoot); } catch(_) {}
+  // v3 next-gen: why-fired provenance is captured LAST so it reflects the
+  // final state of each finding after every other annotator has run.
+  try { annotateWhyFired(finalFindings, {}); } catch(_) {}
+  return{routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value}};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

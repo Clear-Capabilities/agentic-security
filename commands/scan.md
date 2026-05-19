@@ -1,6 +1,6 @@
 ---
-description: Run the agentic-security scanner. Default (--all) gives a one-screen "safe to deploy?" verdict. Focused modes: --sca, --secrets, --authz, --mcp, --pipeline, --logic, --diff, --uncommitted.
-argument-hint: "[path] [--all|--sca|--secrets|--authz|--mcp|--pipeline [--format pbom|cli|json]|--logic [--max <N>]|--diff [--since <git-ref>]|--uncommitted]"
+description: Run the agentic-security scanner. Default (--all) gives a one-screen "safe to deploy?" verdict. Focused modes include SCA, secrets, authZ, MCP, pipeline, logic, diff, uncommitted, plus v3 production-aware filters (--exposed-only) and supplementary blocks (--show-personas / --show-bounty / --show-playbook / --show-spof / --show-trust-boundary / --show-threat-model).
+argument-hint: "[path] [--all|--sca|--secrets|--authz|--mcp|--pipeline [--format pbom|cli|json]|--logic [--max <N>]|--diff [--since <git-ref>]|--uncommitted|--concurrency|--spec-drift] [--exposed-only|--mitigated-only|--unreachable-only] [--persona <name>] [--show-personas|--show-bounty|--show-playbook|--show-spof|--show-trust-boundary|--show-threat-model|--show-drift]"
 ---
 
 ## Step 0 — (Optional, user-initiated) Plugin update
@@ -17,27 +17,67 @@ The plugin auto-updates via Claude Code's marketplace mechanism. **You (Claude) 
 FLAG="--all"
 PATH_ARG="."
 EXTRA=""
-i=1
+PASSTHROUGH=""
 for arg in "$@"; do
   case "$arg" in
-    --all|--sca|--secrets|--authz|--mcp|--pipeline|--logic|--diff|--uncommitted) FLAG="$arg" ;;
+    --all|--sca|--secrets|--authz|--mcp|--pipeline|--logic|--diff|--uncommitted|--concurrency|--spec-drift) FLAG="$arg" ;;
+    --exposed-only|--mitigated-only|--unreachable-only|\
+    --show-personas|--show-bounty|--show-playbook|--show-spof|\
+    --show-trust-boundary|--show-threat-model|--show-drift|--firehose|--honest)
+      PASSTHROUGH="$PASSTHROUGH $arg" ;;
+    --persona)
+      PASSTHROUGH="$PASSTHROUGH $arg" ;;
+    script-kiddie|opportunistic-criminal|apt-nation-state|supply-chain-attacker|malicious-insider)
+      PASSTHROUGH="$PASSTHROUGH $arg" ;;
     *) [ "$FLAG" = "--all" ] && PATH_ARG="$arg" || EXTRA="$EXTRA $arg" ;;
   esac
 done
 
 case "$FLAG" in
   --sca)
-    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --only sca --format cli
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --only sca --format cli $PASSTHROUGH
     ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec ;;
   --secrets)
-    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --only secrets --format cli
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --only secrets --format cli $PASSTHROUGH
     ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec ;;
   --authz)
-    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --format cli
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --format cli $PASSTHROUGH
     ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec ;;
   --mcp)
-    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --format cli
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --format cli $PASSTHROUGH
     ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec ;;
+  --concurrency)
+    # v3 next-gen: surface only concurrency-bug family findings.
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --format json --output .agentic-security/_concurrency-scan.json >/dev/null 2>&1
+    node -e "
+const fs=require('fs');
+const d=JSON.parse(fs.readFileSync('.agentic-security/_concurrency-scan.json','utf8'));
+const items=(d.findings||[]).filter(f=>f.family==='concurrency-bug');
+console.log('Concurrency-bug findings: '+items.length);
+console.log('');
+for(const f of items.slice(0,40)){
+  console.log('  ['+(f.severity||'').toUpperCase()+'] '+f.vuln+'  '+f.file+':'+f.line);
+  if(f.remediation) console.log('    fix: '+f.remediation);
+}
+"
+    rm -f .agentic-security/_concurrency-scan.json
+    exit 0 ;;
+  --spec-drift)
+    # v3 next-gen: surface only specification-drift findings.
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --format json --output .agentic-security/_spec-drift-scan.json >/dev/null 2>&1
+    node -e "
+const fs=require('fs');
+const d=JSON.parse(fs.readFileSync('.agentic-security/_spec-drift-scan.json','utf8'));
+const items=(d.findings||[]).filter(f=>f.family==='spec-drift');
+console.log('Specification-drift findings: '+items.length);
+console.log('');
+for(const f of items.slice(0,40)){
+  console.log('  ['+(f.severity||'').toUpperCase()+'] '+f.vuln+'  '+f.file+':'+f.line);
+  if(f.description) console.log('    why: '+f.description);
+}
+"
+    rm -f .agentic-security/_spec-drift-scan.json
+    exit 0 ;;
   --pipeline)
     FORMAT=$(echo "$EXTRA" | grep -o -- '--format [a-z]*' | awk '{print $2}')
     node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan . --format ${FORMAT:-cli}
@@ -88,7 +128,7 @@ import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/material-change.js').then(m =>
     rm -f .agentic-security/_uncommitted.json
     exit 0 ;;
   *)
-    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs ship "$PATH_ARG"
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs ship "$PATH_ARG" $PASSTHROUGH
     ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec ;;
 esac
 ```
@@ -119,5 +159,37 @@ esac
 **`/scan --uncommitted`** — Vibecoder-friendly: scans only files you've changed since the last commit (staged + unstaged + untracked). No git-ref vocabulary required. Returns the same one-screen verdict, scoped to "what did I just change."
 
 **`/scan --diff [--since <git-ref>]`** — Score the git diff between `--since` (default `HEAD~1`) and `HEAD` by architectural risk. Passes the diff to the `security-material-change` subagent which emits a per-file findings report and a "what to verify before merging" checklist. Risk levels: `critical` (auth removed, new shell call) → recommend `/fix --one` + `/validate-findings`; `high` → recommend `/validate-findings`; `medium`/`low`/`none` → safe to merge.
+
+**`/scan --concurrency`** *(v3)* — Surface only concurrency-bug findings: missed unlocks, unguarded locks on early-return paths, fire-and-forget async, 2-lock deadlock cycles. Covers Go (`sync.Mutex`, channels), Java (`synchronized`, `Lock`), JS/TS (workers, promises), and Python (`asyncio.Lock`, `with`).
+
+**`/scan --spec-drift`** *(v3)* — Surface only specification-drift findings: functions whose names claim a behavior the body doesn't deliver (e.g., `validateOwnership()` whose body never references `req.user.id`). Catches the bug class no pattern matcher reaches.
+
+## v3 production-aware filters
+
+These flags compose with any mode above. They demote findings the customer's production stack already mitigates:
+
+**`--exposed-only`** — Show only findings whose composite verdict is `exposed-in-prod` (not blocked by WAF / auth / network policy / feature flag, and reachable). The single biggest precision lifter — typical projects see 30–60% fewer findings to triage.
+
+**`--mitigated-only`** — Inverse. Useful for verifying that your defenses cover the surface you think they cover.
+
+**`--unreachable-only`** — Findings on code paths not reachable from any production entry.
+
+**`--persona <name>`** — Filter to findings where the named attacker persona is in the finding's top-2 ranked personas. Personas: `script-kiddie`, `opportunistic-criminal`, `apt-nation-state`, `supply-chain-attacker`, `malicious-insider`.
+
+## v3 supplementary output blocks
+
+Add any of these to extend the report with extra blocks (the verdict and exit code are unchanged):
+
+| Flag | What it adds |
+|------|--------------|
+| `--show-personas` | Per-persona top-3 findings — what each attacker class would target |
+| `--show-bounty` | Predicted HackerOne / Immunefi USD payout bands per finding |
+| `--show-playbook` | Copy-paste curl / Nuclei attack playbooks for high+ findings |
+| `--show-spof` | Single-point-of-failure defensive controls (counterfactual analysis) |
+| `--show-trust-boundary` | Mermaid diagram of the architecture with findings rendered on it |
+| `--show-threat-model` | Auto-derived STRIDE threat model summary |
+| `--show-drift` | Calibration-drift alarms — when self-reported confidence diverges from triage accuracy |
+
+For deep dives on any v3 capability there is a dedicated slash command: `/threat-model`, `/playbook`, `/spof`, `/trust-boundary`, `/archaeology`, `/diff-scan`, `/why-fired`, `/adversary`, `/self-test`, `/personas`, `/bounty`.
 
 🛡  agentic-security · created by ClearCapabilities.Com

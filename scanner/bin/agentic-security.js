@@ -76,6 +76,19 @@ Options:
   --confidence <0..1>          Override per-profile confidence threshold
   --firehose                   Show ALL findings (ignore confidence threshold)
   --honest                     Show only high-confidence (≥0.9) findings
+  --exposed-only               Filter to findings the production stack does NOT mitigate
+  --mitigated-only             Filter to findings already mitigated by WAF/auth/network/flag
+  --unreachable-only           Filter to findings on unreachable code paths
+  --persona <name>             Filter to findings whose top-2 personas include <name>
+                               (script-kiddie|opportunistic-criminal|apt-nation-state|
+                                supply-chain-attacker|malicious-insider)
+  --show-personas              Append per-persona top-picks block
+  --show-bounty                Append predicted bug-bounty payout block
+  --show-playbook              Append attack-playbook block for high+ findings
+  --show-spof                  Append single-point-of-failure-controls block
+  --show-trust-boundary        Append the auto-generated trust-boundary Mermaid diagram
+  --show-threat-model          Append the auto-derived STRIDE threat model summary
+  --show-drift                 Append calibration-drift alarms (overconfidence detection)
   --sca-reachable-only         Only SCA findings where the vulnerable function is reachable
   --ingest-sarif <glob>        Merge external SARIF into this scan
   --scorecard                  Enrich components with OSSF Scorecard scores
@@ -107,6 +120,95 @@ function effectiveConfidence(profile, args) {
   if (args.flags['honest']) return 0.9;
   if (args.flags['confidence'] != null) return parseFloat(args.flags['confidence']);
   return profile.confidenceMin ?? (profile.profile === 'pro' ? 0.3 : 0.9);
+}
+
+// v3 next-gen — render supplementary blocks on top of the normal CLI body.
+// Each block is opt-in via a flag; renderV3Blocks returns '' when no flags
+// are set, so the default output is unchanged.
+function renderV3Blocks(scan, flags) {
+  const out = [];
+  const findings = scan.findings || [];
+  if (flags['show-personas']) {
+    out.push('\n── Per-attacker-persona top picks ───────────────────────────────');
+    const byPersona = new Map();
+    for (const f of findings) {
+      if (!Array.isArray(f.personaTopTwo)) continue;
+      for (const p of f.personaTopTwo) {
+        if (!byPersona.has(p)) byPersona.set(p, []);
+        byPersona.get(p).push(f);
+      }
+    }
+    if (!byPersona.size) out.push('  (no findings carry persona scores yet — rerun /scan)');
+    for (const [persona, items] of byPersona) {
+      items.sort((a, b) => (b.personaMaxScore || 0) - (a.personaMaxScore || 0));
+      out.push(`\n  ${persona} (${items.length} relevant)`);
+      for (const f of items.slice(0, 3)) {
+        const sev = (f.severity || '').toUpperCase();
+        out.push(`    [${sev}] ${(f.vuln || '').slice(0, 60)} — ${f.file}:${f.line}`);
+      }
+    }
+  }
+  if (flags['show-bounty']) {
+    out.push('\n── Predicted bug-bounty payouts ─────────────────────────────────');
+    const withBounty = findings.filter(f => f.predictedBountyUsd);
+    if (!withBounty.length) out.push('  (no findings carry bounty predictions — rerun /scan)');
+    const sorted = withBounty.slice().sort((a, b) => (b.predictedBountyUsd.likely || 0) - (a.predictedBountyUsd.likely || 0));
+    for (const f of sorted.slice(0, 15)) {
+      const b = f.predictedBountyUsd;
+      out.push(`  $${b.low}-$${b.high} (likely $${b.likely}, ${b.program}) — ${(f.vuln || '').slice(0, 50)}  ${f.file}:${f.line}`);
+    }
+  }
+  if (flags['show-playbook']) {
+    out.push('\n── Attack playbooks (high+ findings only) ───────────────────────');
+    const withPb = findings.filter(f => f.attackPlaybook);
+    if (!withPb.length) out.push('  (no high+/critical findings to show playbooks for)');
+    for (const f of withPb.slice(0, 5)) {
+      const pb = f.attackPlaybook;
+      out.push(`\n  ${pb.cwe} — ${pb.title}  (${f.file}:${f.line})`);
+      out.push('  ────────────────────────────────────');
+      out.push(pb.script.split('\n').map(l => '  ' + l).join('\n'));
+    }
+  }
+  if (flags['show-spof']) {
+    out.push('\n── Single-point-of-failure controls (counterfactual) ────────────');
+    const spof = scan._v3?.counterfactual?.spofControls || [];
+    if (!spof.length) out.push('  (no SPOF controls detected — either no controls or no clusters of high+ findings depend on one)');
+    for (const c of spof.slice(0, 10)) {
+      out.push(`  ${c.control} @ ${c.location} — would expose ${c.wouldExpose} high+ findings if removed`);
+    }
+  }
+  if (flags['show-trust-boundary']) {
+    out.push('\n── Trust-boundary diagram (Mermaid) ─────────────────────────────');
+    const d = scan._v3?.trustBoundaryDiagram;
+    if (!d) out.push('  (no diagram — rerun /scan)');
+    else {
+      out.push('  ```mermaid');
+      out.push(d.mermaid.split('\n').map(l => '  ' + l).join('\n'));
+      out.push('  ```');
+    }
+  }
+  if (flags['show-threat-model']) {
+    out.push('\n── Auto-generated STRIDE threat model ───────────────────────────');
+    const tm = scan._v3?.threatModel;
+    if (!tm) out.push('  (no threat model — rerun /scan)');
+    else {
+      out.push(`  Assets: ${tm.summary.assetCount}   Trust boundaries: ${tm.summary.boundaryCount}`);
+      for (const [cat, count] of Object.entries(tm.summary.strideCounts)) {
+        out.push(`  ${cat.padEnd(22)} ${count}`);
+      }
+    }
+  }
+  if (flags['show-drift']) {
+    out.push('\n── Calibration-drift alarms ─────────────────────────────────────');
+    const dr = scan._v3?.calibrationDrift;
+    const alarms = dr?.alarms || [];
+    if (!alarms.length) out.push('  (no drift detected — confidence matches realized accuracy within threshold)');
+    for (const a of alarms) {
+      out.push(`  ${a.family}: reported ${(a.reportedAccuracy * 100).toFixed(0)}% vs realized ${(a.realizedAccuracy * 100).toFixed(0)}% (N=${a.sampleSize})`);
+      out.push(`    ${a.recommendation}`);
+    }
+  }
+  return out.join('\n');
 }
 
 // Always-on machine output (R2). Vibecoder gets JSON only; pro gets JSON+SARIF+CSV.
@@ -254,6 +356,29 @@ async function cmdScan(args) {
     try { enrichWithBlastRadius(scan, targetAbs); } catch {}
   }
 
+  // v3 next-gen filter flags — operate on the production-aware composite
+  // verdict. These run after every annotator so the verdict is final.
+  if (args.flags['exposed-only']) {
+    scan.findings = (scan.findings || []).filter(f => f.mitigationVerdict === 'exposed-in-prod' || !f.mitigationVerdict);
+    scan.supplyChain = (scan.supplyChain || []).filter(f => f.mitigationVerdict === 'exposed-in-prod' || !f.mitigationVerdict);
+  }
+  if (args.flags['mitigated-only']) {
+    scan.findings = (scan.findings || []).filter(f => f.mitigationVerdict === 'mitigated-in-prod');
+    scan.supplyChain = (scan.supplyChain || []).filter(f => f.mitigationVerdict === 'mitigated-in-prod');
+  }
+  if (args.flags['unreachable-only']) {
+    scan.findings = (scan.findings || []).filter(f => f.mitigationVerdict === 'unreachable-in-prod');
+    scan.supplyChain = (scan.supplyChain || []).filter(f => f.mitigationVerdict === 'unreachable-in-prod');
+  }
+  // --persona <name> filter — keep only findings where the named persona
+  // appears in the top-2 ranked personas for the finding.
+  if (args.flags['persona']) {
+    const want = String(args.flags['persona']);
+    scan.findings = (scan.findings || []).filter(f =>
+      Array.isArray(f.personaTopTwo) && f.personaTopTwo.includes(want)
+    );
+  }
+
   // Deterministic post-process: stable-sort findings + zero out timing.
   if (isDeterministic()) makeDeterministic(scan, meta);
 
@@ -278,6 +403,13 @@ async function cmdScan(args) {
   else if (format === 'pro')   body = toProTable(scan, { profile: effProfile, columns: args.flags.columns });
   else if (format === 'cli')   body = toCLIByProfile(scan, { profile: effProfile, columns: args.flags.columns, verbose });
   else body = toSummary(scan);
+
+  // v3 next-gen — supplementary blocks for human-readable formats. These
+  // are append-only and do not change the verdict / exit code. The blocks
+  // are only meaningful when v3 annotators have run (default scan path).
+  if (format === 'cli' || format === 'ship' || format === 'pro' || format === 'md' || format === 'markdown') {
+    body += renderV3Blocks(scan, args.flags);
+  }
 
   if (output) await fsp.writeFile(output, body);
   else process.stdout.write(body + '\n');
@@ -1235,7 +1367,7 @@ async function main() {
         runStdio({ sessionRoot: path.resolve(root) });
         return;
       }
-      case 'version':  console.log('agentic-security 0.51.0  ·  created by ClearCapabilities.Com'); process.exit(0);
+      case 'version':  console.log('agentic-security 0.54.0  ·  created by ClearCapabilities.Com'); process.exit(0);
       case 'help': case '--help': case '-h': case undefined:
         console.log(USAGE); process.exit(cmd ? 0 : 1);
       default:
