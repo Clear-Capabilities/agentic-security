@@ -10,6 +10,8 @@ import {
   hashFileContent, pickReusableSummaries, seedSummaryCache,
   serializeSummaries, commitIncrementalState,
 } from './incremental.js';
+import { buildPointsTo } from './points-to.js';
+import { annotateSoftTaint } from './soft-taint.js';
 
 export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // Path-feasibility pass over every function before the taint walk.
@@ -67,9 +69,18 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
       priorState = null;
     }
   }
+  // v0.70 #2 — Steensgaard points-to / alias analysis. Built once before
+  // the worklist, passed via opts so the engine can resolve aliased
+  // mutations (`let a = obj; a.x = tainted; sink(obj.x)`).
+  let pointsToGraph = null;
+  if (process.env.AGENTIC_SECURITY_POINTS_TO === '1') {
+    try { pointsToGraph = buildPointsTo(perFileIR, callGraph); }
+    catch { pointsToGraph = null; }
+  }
   let findings = runTaintEngine(perFileIR, callGraph, {
     ...opts,
     summaryCache: preSeededCache || undefined,
+    _pointsTo: pointsToGraph || undefined,
   });
   for (const f of findings) f._pathFeasibilityPruned = totalPruned;
   if (preSeededCache) {
@@ -84,6 +95,12 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // P1.4 — backward slice (opt-in via AGENTIC_SECURITY_BACKWARD_SLICE=1).
   if (process.env.AGENTIC_SECURITY_BACKWARD_SLICE === '1') {
     findings = annotateBackwardSlices(findings, perFileIR, callGraph);
+  }
+  // v0.70 #6 — probabilistic / soft taint. Walks each finding's trace +
+  // chain, multiplies (1 - effectiveness) across sanitizers, demotes
+  // below-threshold findings to lower severity (never drops).
+  if (process.env.AGENTIC_SECURITY_SOFT_TAINT === '1') {
+    findings = annotateSoftTaint(findings);
   }
   // v0.69 — commit incremental state after a successful scan.
   if (incrementalEnabled && opts.scanRoot && currentFileHashes) {

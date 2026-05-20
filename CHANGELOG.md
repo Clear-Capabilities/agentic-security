@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.70.0 — taint engine foundations release (4 more of 10 leap items)
+
+Second of three releases (v0.69 / v0.70 / v0.71). v0.70 adds the
+"needs new theory" capabilities — aliasing, type inference, soft taint,
+and DB round-trip flow. These are the foundations that lift the
+intra-procedural lattice; v0.71 will swap in IFDS + symbolic exec on
+top.
+
+### #2 Steensgaard points-to / alias analysis — `scanner/src/dataflow/points-to.js`
+Unification-based, near-linear alias analysis. Walks every assign/call
+across the function set, unifying classes for direct copies + field
+store/load operations. Interprocedural step at resolved call sites
+unifies caller args with callee params. The engine consumes the graph
+via `_addPathAliasAware`: when a tainted target is added to state, all
+aliases of the root variable are tainted too. Closes the
+`let a = obj; a.x = tainted; sink(obj.x)` FN class.
+Opt-in via `AGENTIC_SECURITY_POINTS_TO=1`.
+
+### #7 Type-stub integration — `scanner/src/ir/type-stubs.js`
+Parses TypeScript `.d.ts` under `node_modules/@types/**`, Python `.pyi`
+at project root. Outputs `{signatures, types, frameworks, fingerprint}`.
+Cache under `$XDG_CONFIG_HOME/agentic-security/stub-cache/` keyed by
+package-lock + package.json fingerprint. Budget gate via
+`AGENTIC_SECURITY_TYPE_STUBS_BUDGET_MS` (default 10s).
+Opt-in via `AGENTIC_SECURITY_TYPE_STUBS=1`.
+
+### #6 Probabilistic / soft taint — `scanner/src/dataflow/soft-taint.js`
+Post-pass over IR-TAINT findings: walks `trace + chain + pathSteps`,
+multiplies (1 − sanitizer-effectiveness) across each call. 22-entry
+default-effectiveness table (DOMPurify=0.98, parameterize=1.0,
+trim=0.05, etc.) — overrideable per catalog entry via
+`sanitizerEffectiveness` field. Findings below
+`AGENTIC_SECURITY_SOFT_TAINT_THRESHOLD` (default 0.5) get severity
+demoted (critical→high→medium→low→info) but are NEVER dropped —
+auditors see the demotion + the sanitizer that earned it.
+Opt-in via `AGENTIC_SECURITY_SOFT_TAINT=1`.
+
+### #10 Database-aware taint — `scanner/src/sast/db-taint.js`
+Recognizes ORM write/read pairs across Sequelize / Prisma / TypeORM /
+Mongoose / Django ORM / SQLAlchemy. When `req.body.X` is written to
+`Model.field` then later read and rendered, emits a stored-XSS
+finding with a 2-step trace pointing at both the write and read sites.
+Handles indirection (`const u = await Model.findOne(...); res.send(u.bio)`)
+and direct chains (`res.send(Model.findOne(...).bio)`).
+Fires automatically — already gated by ORM context heuristic.
+
+### Test totals
+**773 scanner tests pass / 0 fail** (up from 736 in v0.69).
+Dataflow: 196 tests (up from 188).
+
+### Migration
+All four items are additive. v0.69's items remain opt-in this release;
+v0.71 will flip the v0.69 set to default-on if CVE-replay shows F1
+delta ≥ +1pp without precision drop >1pp across two consecutive runs.
+
 ## 0.69.0 — taint engine wire-up release (4 of 10 leap items)
 
 First of three releases (v0.69 / v0.70 / v0.71) that lift the taint

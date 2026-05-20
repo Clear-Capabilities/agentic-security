@@ -35,8 +35,31 @@
 
 import { matchSource, matchSinkOrSanitizer } from './catalog.js';
 import { accessPathOf, isCoveredBy, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual } from './access-paths.js';
+import { aliasesForVar } from './points-to.js';
 import { higherOrderTaintFlow } from './higher-order.js';
 import { SummaryCache, entryStateFromCall } from './summaries.js';
+
+// v0.70 #2 — addPath that also taints every alias of the variable.
+// When `target` is a dotted path like "a.x" and the root `a` has aliases
+// {a, obj}, we taint both `a.x` and `obj.x`. The points-to graph is read
+// from callContext._pointsTo (built by runDeepAnalysis when
+// AGENTIC_SECURITY_POINTS_TO=1).
+function _addPathAliasAware(state, path, callContext) {
+  let s = addPath(state, path);
+  const pt = callContext && callContext._pointsTo;
+  const fnQid = callContext && callContext._currentFnQid;
+  if (!pt || !fnQid || typeof path !== 'string') return s;
+  // Determine the variable root + remainder of the path.
+  const dot = path.indexOf('.');
+  const root = dot >= 0 ? path.slice(0, dot) : path;
+  const rest = dot >= 0 ? path.slice(dot) : '';
+  const aliases = aliasesForVar(pt, fnQid, root);
+  for (const a of aliases) {
+    if (a === root) continue;
+    s = addPath(s, a + rest);
+  }
+  return s;
+}
 
 function exprTaint(expr, state) {
   // Returns true iff this expression evaluates to a tainted value under the
@@ -203,7 +226,7 @@ function step(node, stateIn, callContext) {
             });
           }
           if (sum && sum.returnTainted) {
-            newState = addPath(newState, target);
+            newState = _addPathAliasAware(newState, target, callContext);
             callContext._taintSources.push({
               varName: target,
               sourceId: `interproc:${qid}`,
@@ -222,7 +245,7 @@ function step(node, stateIn, callContext) {
         }
       }
       if (src && target) {
-        newState = addPath(newState, target);
+        newState = _addPathAliasAware(newState, target, callContext);
         const sourcePath = accessPathOf(node.source);
         if (sourcePath) newState = addPath(newState, sourcePath);
         callContext._taintSources.push({ varName: target, sourceId: src.id, sourceLabel: src.label, provenance: src.provenance || null, line: node.line });
@@ -232,7 +255,7 @@ function step(node, stateIn, callContext) {
         // later uses of the same source remain tainted. The target path
         // becomes the new tainted location.
         if (target) {
-          newState = addPath(newState, target);
+          newState = _addPathAliasAware(newState, target, callContext);
           const sourcePath = accessPathOf(node.source);
           if (sourcePath && !isCoveredBy(newState, sourcePath)) newState = addPath(newState, sourcePath);
         }
@@ -383,6 +406,11 @@ function analyzeFunction(fn, entryState, callContext) {
   const outStates = new Map();
   inStates.set(fn.cfg.entry, new Set(entryState));
   work.push(fn.cfg.entry);
+  // v0.70 #2 — points-to context for the step() transfer. Setting it here
+  // (instead of plumbing through step's signature) keeps the worklist loop
+  // unchanged and lets `step` consult `aliasesForVar` when callContext._pointsTo
+  // is present.
+  if (callContext) callContext._currentFnQid = fn.qid;
   const deadlineMs = (callContext && typeof callContext.deadlineMs === 'number') ? callContext.deadlineMs : Infinity;
   const visited = 0;
   let iterations = 0;

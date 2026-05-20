@@ -77,6 +77,7 @@ import { scanResponseSplitting } from './sast/response-splitting.js';
 import { scanStoredPromptInjection } from './sast/llm-stored-prompt.js';
 import { scanRAGPoisoning } from './sast/rag-poisoning.js';
 import { scanAgentToolEscalation } from './sast/agent-tool-escalation.js';
+import { scanDbTaint } from './sast/db-taint.js';
 import { scanSSRFCloudMetadata } from './sast/ssrf-cloud-metadata.js';
 import { scanMutationXSS } from './sast/mutation-xss.js';
 import { scanDeserializationGadgets, _detectGadgets } from './sast/deserialization-gadgets.js';
@@ -6663,6 +6664,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       aF.push(...scanStoredPromptInjection(p,c));
       aF.push(...scanRAGPoisoning(p,c));
       aF.push(...scanAgentToolEscalation(p,c));
+      aF.push(...scanDbTaint(p,c));
       aF.push(...scanSSRFCloudMetadata(p,c));
       aF.push(...scanMutationXSS(p,c));
       aF.push(...scanKotlin(p,c));
