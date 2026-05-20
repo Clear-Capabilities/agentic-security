@@ -71,6 +71,9 @@ import { scanTOCTOU } from './sast/toctou.js';
 import { scanNoSQLInjection } from './sast/nosql-injection.js';
 import { scanLDAPInjection } from './sast/ldap-injection.js';
 import { scanXPathInjection } from './sast/xpath-injection.js';
+import { scanSSTI } from './sast/ssti.js';
+import { scanOpenRedirect } from './sast/open-redirect.js';
+import { scanResponseSplitting } from './sast/response-splitting.js';
 import { scanSSRFCloudMetadata } from './sast/ssrf-cloud-metadata.js';
 import { scanMutationXSS } from './sast/mutation-xss.js';
 import { scanDeserializationGadgets, _detectGadgets } from './sast/deserialization-gadgets.js';
@@ -431,7 +434,7 @@ const SINK_PATTERNS=[{regex:/(?:db|database|collection|model|query|cursor|sessio
 // Rails ActiveRecord raw-SQL forms.
 {regex:/\.\s*(?:find_by_sql|exec_query|execute|connection\.execute)\s*\(/g,type:"ActiveRecord Raw SQL",severity:"high",vuln:"SQL Injection (ActiveRecord raw)",cwe:"CWE-89",stride:"Tampering",langScope:/\.rb$/i},
 // TypeORM unsafe query-builder forms — orderBy/where/andWhere with template literals.
-{regex:/\.\s*(?:createQueryBuilder|getRepository)\s*\([^)]*\)[^;]{0,200}\.\s*(?:where|andWhere|orWhere|orderBy)\s*\(\s*[`']/g,type:"TypeORM Raw Where",severity:"high",vuln:"SQL Injection (TypeORM raw clause)",cwe:"CWE-89",stride:"Tampering"},{regex:/(?:innerHTML|outerHTML)\s*=(?!=)/g,type:"DOM Write",severity:"critical",vuln:"XSS",cwe:"CWE-79",stride:"Tampering"},{regex:/dangerouslySetInnerHTML/g,type:"React Unsafe HTML",severity:"critical",vuln:"XSS",cwe:"CWE-79",stride:"Tampering"},{regex:/(?:exec|spawn|execSync|system|popen|subprocess\.(?:call|run|Popen)|child_process|shell_exec|passthru)\s*\(/g,type:"OS Command",severity:"critical",vuln:"Command Injection",cwe:"CWE-78",stride:"Elevation of Privilege"},{regex:/(?:res\s*\.\s*redirect|response\s*\.\s*redirect|\.redirect\s*\(|header\s*\(\s*['"]Location)/g,type:"Redirect",severity:"medium",vuln:"Open Redirect",cwe:"CWE-601",stride:"Spoofing"},{regex:/(?:readFile|writeFile|createReadStream|unlink|fopen|file_get_contents)\s*\(/g,type:"File Op",severity:"high",vuln:"Path Traversal",cwe:"CWE-22",stride:"Information Disclosure"},{regex:/(?:eval|new\s+Function)\s*\(/g,type:"Code Eval",severity:"critical",vuln:"Code Injection",cwe:"CWE-94",stride:"Elevation of Privilege"},{regex:/(?:res\.send|res\.write|res\.end|echo|print)\s*\(/g,type:"HTTP Response",severity:"medium",vuln:"Reflected XSS",cwe:"CWE-79",stride:"Tampering"},// SSTI sink: render WITHOUT a static string template name. `res.render('view',data)`
+{regex:/\.\s*(?:createQueryBuilder|getRepository)\s*\([^)]*\)[^;]{0,200}\.\s*(?:where|andWhere|orWhere|orderBy)\s*\(\s*[`']/g,type:"TypeORM Raw Where",severity:"high",vuln:"SQL Injection (TypeORM raw clause)",cwe:"CWE-89",stride:"Tampering"},{regex:/(?:innerHTML|outerHTML)\s*=(?!=)/g,type:"DOM Write",severity:"critical",vuln:"XSS",cwe:"CWE-79",stride:"Tampering"},{regex:/dangerouslySetInnerHTML/g,type:"React Unsafe HTML",severity:"critical",vuln:"XSS",cwe:"CWE-79",stride:"Tampering"},{regex:/(?:exec|spawn|execSync|system|popen|subprocess\.(?:call|run|Popen)|child_process|shell_exec|passthru)\s*\(/g,type:"OS Command",severity:"critical",vuln:"Command Injection",cwe:"CWE-78",stride:"Elevation of Privilege"},{regex:/(?:readFile|writeFile|createReadStream|unlink|fopen|file_get_contents)\s*\(/g,type:"File Op",severity:"high",vuln:"Path Traversal",cwe:"CWE-22",stride:"Information Disclosure"},{regex:/(?:eval|new\s+Function)\s*\(/g,type:"Code Eval",severity:"critical",vuln:"Code Injection",cwe:"CWE-94",stride:"Elevation of Privilege"},{regex:/(?:res\.send|res\.write|res\.end|echo|print)\s*\(/g,type:"HTTP Response",severity:"medium",vuln:"Reflected XSS",cwe:"CWE-79",stride:"Tampering"},// SSTI sink: render WITHOUT a static string template name. `res.render('view',data)`
 // is fine — the data param doesn't render unless the template uses unsafe blocks.
 // Real SSTI is `res.render(req.body.tmpl)` or `res.render(\`${userInput}\`)`. We
 // only fire when the first arg is NOT a static double/single-quoted literal.
@@ -6651,6 +6654,9 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       aF.push(...scanNoSQLInjection(p,c));
       aF.push(...scanLDAPInjection(p,c));
       aF.push(...scanXPathInjection(p,c));
+      aF.push(...scanSSTI(p,c));
+      aF.push(...scanOpenRedirect(p,c));
+      aF.push(...scanResponseSplitting(p,c));
       aF.push(...scanSSRFCloudMetadata(p,c));
       aF.push(...scanMutationXSS(p,c));
       aF.push(...scanKotlin(p,c));

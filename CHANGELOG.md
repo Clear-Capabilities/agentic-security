@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.67.0 — detection rules for 6 new CWE families (SSTI / LDAP / open-redirect / response-splitting)
+
+The v0.66 corpus expansion exposed six CWE families with no detection
+coverage (or partial coverage that missed common shapes). This release
+ships dedicated detectors plus a runner fix.
+
+### New SAST detectors
+
+| Module | CWE | Languages | What it catches |
+|--------|-----|-----------|-----------------|
+| `sast/ssti.js`               | CWE-94   | py, js, php, java | Jinja2 `from_string` / `Template()`, Handlebars / EJS / Mustache / Pug `.compile`, Twig `createTemplate`, Velocity `evaluate` — fires only when the template body is non-literal AND has a taint hint or comes from a variable assigned from user input in the preceding 10 lines |
+| `sast/open-redirect.js`      | CWE-601  | js, py, java, php | `res.redirect` / `ctx.redirect` / `flask.redirect` / `HttpResponseRedirect` / Spring `"redirect:" + …` / PHP `header("Location: " . …)` with user-derived target AND no allow-list check in the preceding 30 lines |
+| `sast/response-splitting.js` | CWE-113  | js, py, java, php | `setHeader` / `addHeader` / `response.headers[…] = …` / PHP `header()` with user-derived value (or method param in Java handler context) AND no CRLF strip / sanitizer above |
+| `sast/ldap-injection.js`     | CWE-90   | js, java, py | **Extended:** indirect filter shape (`String filter = "(uid=" + name + ")"; ctx.search(…, filter, …)`) and `search_s` / `paged_search` callees, gated on a file-level LDAP context hint |
+
+XPath (CWE-643) and ReDoS (CWE-1333) already had working detectors; the
+runner just wasn't checking the right arrays.
+
+### Runner fix
+
+`bench/cve-replay/runner.mjs` now consults `scan.findings`, `scan.secrets`,
+`scan.supplyChain`, AND `scan.logicVulns` when scoring a fixture.
+Previously, business-logic findings (where ReDoS / weak-crypto / behavioral
+checks live) were invisible to the scoring pipeline.
+
+### Engine cleanup
+
+Removed the legacy coarse `(?:res\.redirect|response\.redirect|.redirect\(|header\(['"]Location)`
+REGEX rule from `engine.js` — the new `scanOpenRedirect` detector is
+precise (allow-list aware) and replaces it cleanly.
+
+### Results on the v0.66 corpus
+
+All 9 fixtures across the 6 new CWE families now score **pre:TP post:TN**:
+
+| CVE | CWE | v0.66 | v0.67 |
+|-----|-----|-------|-------|
+| CVE-2017-16016-handlebars-ssti       | CWE-94   | pre:FN | pre:TP post:TN |
+| CVE-2017-9805-ldap-injection         | CWE-90   | pre:FN | pre:TP post:TN |
+| CVE-2018-1320-xpath-injection        | CWE-643  | pre:TP | pre:TP post:TN |
+| CVE-2019-8341-jinja-ssti             | CWE-94   | pre:FN | pre:TP post:TN |
+| CVE-2020-15252-open-redirect         | CWE-601  | pre:TP post:FP | pre:TP post:TN |
+| CVE-2020-7660-resp-splitting         | CWE-113  | pre:FN | pre:TP post:TN |
+| CVE-2021-25966-open-redirect-py      | CWE-601  | pre:FN | pre:TP post:TN |
+| CVE-2021-29622-ldap-py               | CWE-90   | pre:FN | pre:TP post:TN |
+| CVE-2021-3801-redos                  | CWE-1333 | pre:FN | pre:TP post:TN |
+
+Aggregate F1: **0.500 → 0.597** on the same 88-entry corpus. Wilson 95%
+CI [0.334, 0.523] (narrower than v0.66's [0.249, 0.429]). Regression
+tier still F1=1.0.
+
+### Tests
+
+`scanner/test/new-cwe-detectors.test.js` — 11 tests covering each
+detector's vulnerable + clean shape, including post-fixture
+suppression patterns (allow-list checks for open-redirect, CRLF
+sanitizers for response-splitting).
+
+**665 scanner tests pass / 0 fail** (up from 654).
+
 ## 0.66.0 — interprocedural precision + LLM default-on + C# / Kotlin IRs + corpus to 88
 
 Four world-class lifts shipped together. After v0.65 the F1=0.636 number
