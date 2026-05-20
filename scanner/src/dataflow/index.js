@@ -14,6 +14,8 @@ import { buildPointsTo } from './points-to.js';
 import { annotateSoftTaint } from './soft-taint.js';
 import { runIfdsTaintEngine } from './ifds.js';
 import { proveExploits } from './exploit-prover.js';
+import { applyStubAwareFilter } from './stub-aware-filter.js';
+import { loadProjectStubs } from '../ir/type-stubs.js';
 
 export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // Path-feasibility pass over every function before the taint walk.
@@ -117,6 +119,17 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // below-threshold findings to lower severity (never drops).
   if (process.env.AGENTIC_SECURITY_SOFT_TAINT === '1') {
     findings = annotateSoftTaint(findings);
+  }
+  // v0.73 — type-stub-aware filter. Consults the project's TS/.pyi/JAR
+  // stub signatures (loaded by ir/type-stubs.js when AGENTIC_SECURITY_TYPE_STUBS=1).
+  // If a finding's source type is provably non-stringy (number, boolean,
+  // Date, RegExp) AND the sink class can't be triggered by that type,
+  // demote the finding's severity.
+  if (process.env.AGENTIC_SECURITY_TYPE_STUBS === '1' && opts.scanRoot) {
+    try {
+      const stubs = loadProjectStubs(opts.scanRoot);
+      findings = applyStubAwareFilter(findings, stubs);
+    } catch { /* stub load failure must not fail the scan */ }
   }
   // v0.71 #9 — symbolic exploit proof. For each finding, run the SMT-lite
   // infeasibility check (and optionally Z3 when AGENTIC_SECURITY_SYMEXEC_Z3=1

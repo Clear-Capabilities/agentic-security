@@ -1,6 +1,6 @@
 {
   "name": "agentic-security",
-  "version": "0.72.1",
+  "version": "0.73.0",
   "description": "Agentic-Security: SAST + SCA + secrets + IaC + LLM-sec scanner with deterministic fix toolchain. Exposes a Model Context Protocol (MCP) server with 12 tools Cursor's agent can call directly.",
   "author": {
     "name": "Ross Young",

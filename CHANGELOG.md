@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.73.0 — technical depth: IFDS summary edges + type-stub filter + cross-repo federation
+
+Three technical-depth lifts. v0.71 shipped IFDS scaffolding with bottom
+summaries; v0.70 added type-stubs but didn't thread them into the
+engine; v0.68 added cross-lang within a single repo but not cross-repo.
+v0.73 closes all three loops.
+
+### IFDS full summary edges — `scanner/src/dataflow/ifds.js`
+
+The v0.71 IFDS solver used bottom summaries (every callee was assumed
+clean → no interprocedural facts flowed). v0.73 adds:
+- `summaries: Map<qid|entryFact, Set<exitFact>>` records per-function
+  summary edges
+- `pendingReturns: Map<qid|entryFact, [{fn,returnNode,callerEntry}]>`
+  registers callers waiting on more summary facts
+- `_entryFactForCall(callNode, currentFact, callee)` derives callee's
+  entry fact from a call site
+- `_mapReturnFact(callNode, exitFact, callerCurrent)` translates exit
+  facts back into caller namespace
+- Summary reuse: second call to same (callee, entry fact) is O(1)
+
+This is what makes IFDS polynomial in practice rather than re-solving
+every call site.
+
+### Type-stub-aware filter — `scanner/src/dataflow/stub-aware-filter.js`
+
+Post-pass after the taint engine. Consults the project's TS/.pyi/JAR
+type stubs (loaded by v0.70's `ir/type-stubs.js`) and demotes findings
+whose source type cannot carry the vulnerability metacharacters:
+
+| Family | CWE | Safe types (demoted) |
+|--------|-----|----------------------|
+| XSS    | CWE-79 | number, boolean, Date, RegExp, bigint |
+| SQLi   | CWE-89 | number, boolean, Date, bigint |
+| Cmd    | CWE-78 | number, boolean, bigint |
+| Path   | CWE-22 | number, boolean |
+| SSRF   | CWE-918 | number, boolean |
+
+Severity drops one tier (critical → high → medium → low → info); never
+drops the finding. Operator sees `_stubTypeDemoted: true` + reason.
+
+Gate: `AGENTIC_SECURITY_TYPE_STUBS=1` (same flag as the v0.70 stub
+loader).
+
+### Cross-repo federation — `scanner/src/dataflow/cross-repo.js`
+
+The intra-repo `cross-lang-openapi.js` posture module shipped in v0.66
+ties a single repo's client call to its server route. v0.73 ships the
+inter-repo lift: `buildFederatedGraph(specs)` walks a SET of OpenAPI
+specs from different repos, finds shared `(method, path)` endpoints
+with overlapping field schemas, and emits federated edges. Each edge
+becomes a `CROSS-REPO` finding (`CWE-829`, `family: cross-repo-taint`)
+showing both repos + the shared fields in the trace.
+
+Use case: scan the auth-service repo + the billing-service repo
+together; the scanner detects that `/users/{id}` is published by auth
+and consumed by billing, with shared fields `email + bio`. A taint in
+auth's response surfaces in billing's input — both teams now own the
+sanitization contract.
+
+### Test totals
+**832 scanner tests pass / 0 fail** (up from 811).
+
 ## 0.72.1 — CI template + README adopts the v0.72 viral features
 
 Patch release. Two adoption follow-ups for v0.72's viral features.

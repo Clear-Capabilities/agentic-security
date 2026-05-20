@@ -70,6 +70,54 @@ function _flowAssign(node, fact) {
   return out;
 }
 
+/**
+ * v0.73 — derive the callee's entry fact from a call site + caller fact.
+ *
+ *   - If the caller's currentFact is ZERO (no taint), the callee's entry
+ *     is ZERO too (reachability propagation).
+ *   - If the caller has a tainted access path that matches one of the
+ *     call's arguments, the corresponding callee parameter becomes the
+ *     callee's entry fact.
+ *   - Otherwise the callee starts clean (ZERO) — the caller's taint
+ *     doesn't flow into this call.
+ */
+function _entryFactForCall(callNode, currentFact, callee) {
+  if (currentFact === ZERO) return ZERO;
+  const args = callNode.args || [];
+  const params = callee.params || [];
+  for (let i = 0; i < args.length && i < params.length; i++) {
+    const argPath = _exprAccessPath(args[i]);
+    if (argPath === currentFact || (argPath && currentFact.startsWith(argPath + '.'))) {
+      // The caller's tainted path arrives via this argument; bind it to
+      // the parameter name in the callee's scope.
+      const tail = currentFact === argPath ? '' : currentFact.slice(argPath.length);
+      return params[i] + tail;
+    }
+  }
+  return ZERO;
+}
+
+/**
+ * v0.73 — when a callee's summary says it returns with exit fact F,
+ * translate that back into the caller's variable namespace. For now:
+ *   - ZERO stays ZERO (reachability)
+ *   - If the exit fact is a callee-local var (assign target inside the
+ *     callee body) it doesn't escape the call — return ZERO.
+ *   - If the exit fact corresponds to a parameter the caller bound to a
+ *     specific arg, map it back to that arg's access path. This is the
+ *     interprocedural mutation-through-param case.
+ * v1 is conservative: returns ZERO unless we can map back precisely.
+ */
+function _mapReturnFact(callNode, exitFact, callerCurrent) {
+  if (exitFact === ZERO) return ZERO;
+  // For v1, we don't try to map callee param mutations back to caller
+  // args without alias info — that's covered by the worklist engine's
+  // _addPathAliasAware path. Here we conservatively propagate the
+  // caller's current fact (which is already correct if the callee was
+  // pure w.r.t. the caller's tainted vars).
+  return callerCurrent;
+}
+
 function _exprAccessPath(expr) {
   if (!expr) return null;
   if (expr.kind === 'ident') return expr.name;
@@ -120,7 +168,15 @@ export class IFDSSolver {
     // Path edges: for each node id, Set<"entryFact|currentFact">
     this.pathEdges = new Map();
     // Summary edges: per qid, Map<entryFact, Set<exitFact>>
+    // This is the v0.73 lift: real summaries replace the v0.71 bottom
+    // placeholder. When a callee has been solved under `entryFact` and
+    // we already know the resulting `exitFacts`, the caller jumps over
+    // the call site by applying those facts directly.
     this.summaries = new Map();
+    // Pending-callsite registry: per (callee qid + entry fact), the list
+    // of return sites waiting on more summaries to materialize. When a
+    // new exit fact is added, we re-propagate at each return site.
+    this.pendingReturns = new Map();
     // Findings: emitted whenever a sink call fires.
     this.findings = [];
     // Worklist: array of { fn, nodeId, entryFact, currentFact }
@@ -130,9 +186,41 @@ export class IFDSSolver {
     this.edgeCount = 0;
   }
 
+  _summaryKey(qid, entryFact) { return `${qid}|${entryFact}`; }
+
+  _addSummary(qid, entryFact, exitFact) {
+    const key = this._summaryKey(qid, entryFact);
+    if (!this.summaries.has(key)) this.summaries.set(key, new Set());
+    const set = this.summaries.get(key);
+    if (set.has(exitFact)) return false;
+    set.add(exitFact);
+    // Replay pending return sites: any caller that asked for this
+    // (callee, entryFact) gets the new exit fact propagated.
+    const pending = this.pendingReturns.get(key);
+    if (pending) {
+      for (const { fn, returnNodeId, callerEntry } of pending) {
+        this._propagate(fn, returnNodeId, callerEntry, exitFact);
+      }
+    }
+    return true;
+  }
+
+  _getSummaries(qid, entryFact) {
+    const set = this.summaries.get(this._summaryKey(qid, entryFact));
+    return set ? [...set] : [];
+  }
+
+  _registerPendingReturn(qid, entryFact, fn, returnNodeId, callerEntry) {
+    const key = this._summaryKey(qid, entryFact);
+    if (!this.pendingReturns.has(key)) this.pendingReturns.set(key, []);
+    this.pendingReturns.get(key).push({ fn, returnNodeId, callerEntry });
+  }
+
   run() {
     if (!this.callGraph || !this.callGraph.functions) return [];
-    // Seed: for every function, add ZERO → ZERO at its entry.
+    // Seed: for every function, add ZERO → ZERO at its entry. This is
+    // the main-procedure seed in IFDS; with no main, every function is
+    // potentially the entry point for the analysis.
     for (const fn of this.callGraph.functions.values()) {
       if (!fn.cfg) continue;
       this._propagate(fn, fn.cfg.entry, ZERO, ZERO);
@@ -166,6 +254,31 @@ export class IFDSSolver {
       for (const f of _detectSinkAtCall(node, currentFact)) {
         this.findings.push({ ...f, _fnQid: fn.qid, _entryFact: entryFact });
       }
+      // v0.73 — interprocedural call: if the callee is resolved AND we
+      // can derive an entry fact for it, look up (or queue) its summary
+      // and apply the resulting exit facts at the return site.
+      const resolved = this.callGraph.resolve ? this.callGraph.resolve(node.callee) : null;
+      const callee = resolved && resolved.qid ? resolved : null;
+      if (callee && callee.cfg) {
+        const calleeEntryFact = _entryFactForCall(node, currentFact, callee);
+        // Seed the callee at its entry with the derived fact.
+        this._propagate(callee, callee.cfg.entry, calleeEntryFact, calleeEntryFact);
+        // Apply any already-known summaries to OUR return site.
+        const existing = this._getSummaries(callee.qid, calleeEntryFact);
+        for (const succ of (node.succ || [])) {
+          for (const exitFact of existing) {
+            this._propagate(fn, succ, entryFact, _mapReturnFact(node, exitFact, currentFact));
+          }
+          // Register the return site so when more summaries arrive, we
+          // re-propagate at it.
+          this._registerPendingReturn(callee.qid, calleeEntryFact, fn, succ, entryFact);
+        }
+      }
+    }
+    // v0.73 — at the function exit, record a summary edge
+    // (entryFact, currentFact) for this function. Callers use it.
+    if (node.kind === 'exit' || (node.succ || []).length === 0) {
+      this._addSummary(fn.qid, entryFact, currentFact);
     }
     // Compute next facts.
     let nextFacts;

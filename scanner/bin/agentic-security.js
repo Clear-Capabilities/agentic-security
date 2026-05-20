@@ -137,7 +137,7 @@ function printBanner(args) {
     BOLD:  '\x1b[1m',
     RESET: '\x1b[0m',
   } : { FROG:'', DEEP:'', CREAM:'', DIM:'', BOLD:'', RESET:'' };
-  const v = '0.72.1';
+  const v = '0.73.0';
   const compact = !args.flags.full;
   if (compact) {
     const lines = [
@@ -1665,7 +1665,7 @@ async function main() {
         }
         process.exit(0);
       }
-      case 'version':  console.log('agentic-security 0.72.1  ·  created by ClearCapabilities.Com'); process.exit(0);
+      case 'version':  console.log('agentic-security 0.73.0  ·  created by ClearCapabilities.Com'); process.exit(0);
       case 'banner':   { printBanner(args); process.exit(0); }
       case 'harness':  process.exit(await cmdHarness(args));
       case 'scan-baseline': process.exit(await cmdScanBaseline(args));
