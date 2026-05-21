@@ -32,7 +32,7 @@
     "14":     { "sev": "critical", "eol": "2023-04-30", "message": "Node.js 14 reached EOL on 2023-04-30." },
     "16":     { "sev": "high",     "eol": "2023-09-11", "message": "Node.js 16 reached EOL on 2023-09-11." },
     "18":     { "sev": "low",      "eol": "2025-04-30", "message": "Node.js 18 enters EOL on 2025-04-30." },
-    "latest": { "sev": "low",      "eol": null,         "message": "node:latest is a floating tag — pin to an LTS (e.g. node:22-alpine)." }
+    "latest": { "sev": "low",      "eol": null,         "message": "node:latest is a floating tag — pin to an LTS (e.g. node:24-alpine)." }
   },
   "python": {
     "2":      { "sev": "critical", "eol": "2020-01-01", "message": "Python 2 reached EOL on 2020-01-01. Migrate to Python 3." },

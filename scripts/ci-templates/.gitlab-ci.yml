@@ -8,7 +8,7 @@ stages:
 
 agentic-security:
   stage: security
-  image: node:20
+  image: node:24
   script:
     - npm install --no-audit --no-fund @clear-capabilities/agentic-security-scanner
     - npx agentic-security scan --all --json > findings.json

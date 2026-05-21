@@ -73,7 +73,7 @@ if (detected !== 'github') {
 // Detect project type
 const pkg = (() => { try { return JSON.parse(fs.readFileSync('package.json','utf8')); } catch { return null; } })();
 const isNode = !!pkg;
-const nodeVersion = pkg?.engines?.node?.replace(/[^0-9.]/g,'').split('.')[0] || '20';
+const nodeVersion = pkg?.engines?.node?.replace(/[^0-9.]/g,'').split('.')[0] || '24';
 const hasPython = fs.existsSync('requirements.txt') || fs.existsSync('pyproject.toml');
 const installCmd = isNode ? 'npm ci' : hasPython ? 'pip install -r requirements.txt' : 'echo no install';
 const testCmd = isNode ? (pkg?.scripts?.test ? 'npm test' : 'echo no tests') : hasPython ? 'pytest' : 'echo no tests';

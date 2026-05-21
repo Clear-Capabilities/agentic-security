@@ -8,7 +8,7 @@
 
 The 30-second tour for engineers:
 
-- **One ESM bundle.** `dist/agentic-security.mjs` is a 2.6 MB single-file CLI. Pure Node ≥ 20, no native deps, no daemon. Pipes directly into shell, CI, IDE, or any wrapper.
+- **One ESM bundle.** `dist/agentic-security.mjs` is a 2.6 MB single-file CLI. Pure Node ≥ 24, no native deps, no daemon. Pipes directly into shell, CI, IDE, or any wrapper.
 - **One state directory.** Every artifact lives under `.agentic-security/` in your repo: `last-scan.json`, `findings.{json,sarif,csv,junit.xml}`, `triage.json`, `tickets.json`, `fix-history/`, `rules.lock.json`, `scan-history.json`, integrations config. Easy to gitignore, easy to inspect, easy to ship.
 - **Four output personas.** Vibecoder (one-screen verdict + plain English) / Pro (full taxonomy, CSV+SARIF, audit suppressions) / CI (SARIF+JUnit+JSON+exit code per `--fail-on`) / machine (JSON pipe).
 - **Designed to be extended.** Custom rule DSL (Semgrep-lite), per-project rule overrides, rule packs, SARIF ingest from external tools, two-way ticket sync, deterministic mode + lockfile.
@@ -328,9 +328,9 @@ DESCRIPTION
        commands/                     # 76 slash-command markdown files
        agents/                       # 7 sub-agent system prompts
        hooks/                        # 5 Claude Code event-driven scripts
-       jetbrains-plugin/             # LSP4IJ-backed JetBrains plugin
-       nvim-plugin/                  # Native-LSP Neovim plugin (Lua)
-       vscode/                       # VS Code extension (TS source)
+       ide/jetbrains/                # LSP4IJ-backed JetBrains plugin
+       ide/nvim/                     # Native-LSP Neovim plugin (Lua)
+       ide/vscode/                   # VS Code extension (TS source)
        bench/cve-replay/             # F1 ≥ 0.85 measurement scaffolding
        scripts/ci-templates/         # CI configs (GitLab/CircleCI/Buildkite/Jenkins)
        .claude-plugin/plugin.json    # Plugin manifest (declares MCP, hooks, agents)
@@ -1517,18 +1517,18 @@ Bin entry: `scanner/bin/agentic-security-lsp.js`. The server wraps
 `runScan` and emits `textDocument/publishDiagnostics` to the editor.
 
 ```
-       jetbrains-plugin/
+       ide/jetbrains/
               LSP4IJ-backed JetBrains plugin (IntelliJ / PyCharm /
               GoLand / WebStorm / RubyMine / PhpStorm). ~100 LoC +
               plugin.xml. Build with `./gradlew buildPlugin`.
 
-       nvim-plugin/
+       ide/nvim/
               Native-LSP Neovim plugin (Lua). Attaches the bundled
               LSP server on filetype-matched buffers. Install via
               lazy.nvim or vim-plug.
 
-       vscode/
-              VS Code extension. Source in `vscode/src/extension.ts`.
+       ide/vscode/
+              VS Code extension. Source in `ide/vscode/src/extension.ts`.
               Built and packaged separately.
 ```
 
@@ -1775,7 +1775,7 @@ Raw scan with SARIF upload to GitHub Security tab:
 ```yaml
        - uses: actions/checkout@v4
        - uses: actions/setup-node@v4
-         with: { node-version: '20' }
+         with: { node-version: '24' }
        - run: |
            npx @clear-capabilities/agentic-security-scanner scan . \
              --format sarif --output security.sarif

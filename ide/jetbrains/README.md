@@ -18,7 +18,7 @@ in the scanner. The plugin is < 100 LoC of Kotlin + a plugin.xml manifest.
 
 ```bash
 # Requires JDK 17 + Gradle.
-cd jetbrains-plugin
+cd ide/jetbrains
 ./gradlew buildPlugin
 # Output: build/distributions/agentic-security-jetbrains-*.zip
 ```

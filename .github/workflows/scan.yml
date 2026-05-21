@@ -70,7 +70,7 @@ jobs:
           fetch-depth: 0   # need history to diff against baseline
 
       - uses: actions/setup-node@v5
-        with: { node-version: '22' }
+        with: { node-version: '24' }
 
       - name: Download bundled scanner
         env:

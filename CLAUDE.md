@@ -14,7 +14,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 
 | Path | Purpose | Local CLAUDE.md? |
 |------|---------|------------------|
-| `scanner/` | Node.js scan engine (ESM, Node ≥ 20). Bundle at `dist/agentic-security.mjs`. | `scanner/CLAUDE.md` |
+| `scanner/` | Node.js scan engine (ESM, Node ≥ 24). Bundle at `dist/agentic-security.mjs`. | `scanner/CLAUDE.md` |
 | `scanner/src/sast/` | SAST detector modules. 60+ files. Adding a rule? Read here. | `scanner/src/sast/CLAUDE.md` |
 | `scanner/src/posture/` | Annotation pipeline + state stores. 90+ modules. | `scanner/src/posture/CLAUDE.md` |
 | `scanner/src/dataflow/` | Layer-2 taint engine (k=1 monovariant return-taint; see local file for what is and isn't modelled). | `scanner/src/dataflow/CLAUDE.md` |
@@ -30,7 +30,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `hooks/` | Claude Code hook scripts + `hooks.json`. |  |
 | `scripts/` | Compliance + helper scripts + CI templates (`scripts/ci-templates/`). |  |
 | `docs/POSITIONING.md` | ICP statement: vibecoder-first; pro follow-on. |  |
-| `jetbrains-plugin/`, `nvim-plugin/`, `vscode/` | IDE distributions. |  |
+| `ide/{jetbrains,nvim,vscode}/` | IDE distributions. |  |
 | `.claude-plugin/` | Plugin manifest (`plugin.json`, `marketplace.json`). |  |
 | `.claude/settings.json` | Team-committed Claude Code settings (read-deny rules for bundles + cached artifacts). |  |
 | `.agentic-security/` | Runtime state (last scan, streak, rules override, hook throttle). |  |

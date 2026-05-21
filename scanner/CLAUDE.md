@@ -1,6 +1,6 @@
 # scanner/
 
-Node-only scan engine. ESM throughout, Node ≥ 20. The CLI bundle (`dist/agentic-security.mjs`) is built from `bin/agentic-security.js` and committed; the `src/` tree is what tests run against.
+Node-only scan engine. ESM throughout, Node ≥ 24. The CLI bundle (`dist/agentic-security.mjs`) is built from `bin/agentic-security.js` and committed; the `src/` tree is what tests run against.
 
 ## Build invariants
 

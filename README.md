@@ -300,7 +300,6 @@ This is automatic, on by default. Disable with `--no-blast-radius` if you really
 | Command | What it does |
 |---|---|
 | `/agentic-security:security-badge` | Shields.io badge for your README + due-diligence-ready security posture paragraph. |
-| `/agentic-security:agent-harness-assessment` | Plain-English assessment of the six harness controls — tool access, guardrails, feedback loops, audit evidence, failure mode, compliance. Asks which compliance frameworks to generate (NIST AI 600-1 / OWASP ASVS / OWASP LLM Top 10) and routes into `/compliance-report`. For a CISO, buyer questionnaire, or Series A diligence. |
 | `/agentic-security:security-onepager` | Customer-facing "How we keep your data safe" page generated from your real posture. PDF-ready. |
 | `/agentic-security:privacy-docs` | Detects every third-party data processor (Stripe, Supabase, Clerk, Sentry, OpenAI, …) and generates a tailored `PRIVACY.md` + cookie-consent component. Jurisdiction-aware. |
 | `/agentic-security:trust-page` | Writes `/.well-known/security.txt` (RFC 9116) + a `/security` page with your live posture. |
@@ -541,7 +540,7 @@ The full reference lives in the **[Developer Documentation](https://github.com/C
                      -analyst.
 ```
 
-The whole engine ships as a single 2.6 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node ≥ 20. No native deps. No daemon. No background process.
+The whole engine ships as a single 2.6 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node ≥ 24. No native deps. No daemon. No background process.
 
 ---
 

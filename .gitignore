@@ -38,6 +38,7 @@ __pycache__/
 # Compliance attestation outputs are generated per-project, not committed.
 nist-ai-600-1-attestation.*
 owasp-asvs-attestation.*
+owasp-llm-top10-attestation.*
 pci-dss-attestation.*
 soc2-attestation.*
 

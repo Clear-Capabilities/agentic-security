@@ -20,10 +20,10 @@
       "Read(./bench/owasp-benchmark-v1.2/**)",
       "Read(./bench/sard-juliet-java/**)",
       "Read(./bench/polyglot/**)",
-      "Read(./jetbrains-plugin/build/**)",
-      "Read(./jetbrains-plugin/.gradle/**)",
-      "Read(./vscode/node_modules/**)",
-      "Read(./vscode/out/**)",
+      "Read(./ide/jetbrains/build/**)",
+      "Read(./ide/jetbrains/.gradle/**)",
+      "Read(./ide/vscode/node_modules/**)",
+      "Read(./ide/vscode/out/**)",
       "Read(./**/__pycache__/**)",
       "Read(./scripts/__pycache__/**)"
     ]
