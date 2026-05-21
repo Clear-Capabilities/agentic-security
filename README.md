@@ -300,6 +300,7 @@ This is automatic, on by default. Disable with `--no-blast-radius` if you really
 | Command | What it does |
 |---|---|
 | `/agentic-security:security-badge` | Shields.io badge for your README + due-diligence-ready security posture paragraph. |
+| `/agentic-security:harness-score` | Scores this project's AI agent harness against the six-domain rubric in `docs/HARNESS_ASSESSMENT_SPEC.md`. Emits a four-level domain report with overall = MIN(six). CI-gateable (exits non-zero below `Operating`). |
 | `/agentic-security:security-onepager` | Customer-facing "How we keep your data safe" page generated from your real posture. PDF-ready. |
 | `/agentic-security:privacy-docs` | Detects every third-party data processor (Stripe, Supabase, Clerk, Sentry, OpenAI, …) and generates a tailored `PRIVACY.md` + cookie-consent component. Jurisdiction-aware. |
 | `/agentic-security:trust-page` | Writes `/.well-known/security.txt` (RFC 9116) + a `/security` page with your live posture. |

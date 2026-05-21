@@ -1,0 +1,62 @@
+{
+  "_doc": "EU AI Act Articles 9–15 — v0 code-detectable mapping for high-risk AI systems. The Act's applicability (whether your system is in scope of Annex III) is a legal determination owned by Counsel / GRC. This overlay surfaces only the code-shaped obligations: risk management system (Art. 9), data governance (Art. 10), technical documentation (Art. 11), record-keeping (Art. 12), transparency (Art. 13), human oversight (Art. 14), accuracy / robustness / cybersecurity (Art. 15). Article 12 is the most code-detectable.",
+  "_version": "0.1",
+  "controls": [
+    {
+      "id": "EU-AI-Art.9",
+      "title": "Risk management system — continuous risk identification + mitigation",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/RISK*.md", "**/risk-management*", "**/risk-register*", "**/threat-model*", "**/THREAT_MODEL*"],
+      "terms":         ["risk_management_system", "riskManagementSystem", "risk_register", "riskRegister", "risk_mitigation"]
+    },
+    {
+      "id": "EU-AI-Art.10",
+      "title": "Data and data governance — quality, bias, representativeness",
+      "manifest_deps": ["fairlearn", "aif360", "great-expectations", "deepchecks", "dvc"],
+      "imports":       ["fairlearn", "aif360", "great_expectations", "deepchecks", "dvc"],
+      "paths":         ["**/data-governance/**", "**/bias-check*", "**/fairness*"],
+      "terms":         ["data_governance", "dataGovernance", "bias_audit", "biasAudit", "fairness_metric", "fairnessMetric", "representative_sample"]
+    },
+    {
+      "id": "EU-AI-Art.11",
+      "title": "Technical documentation — system card, capabilities, limitations",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/TECHNICAL_DOC*", "**/AI_BOM*"],
+      "terms":         ["model_card", "modelCard", "system_card", "systemCard", "AIBOM", "ai_bom"]
+    },
+    {
+      "id": "EU-AI-Art.12",
+      "title": "Record-keeping — automatic logs of operations and decisions",
+      "manifest_deps": ["winston", "pino", "bunyan", "structlog", "loguru", "@sentry/node"],
+      "imports":       ["winston", "pino", "bunyan", "structlog", "loguru"],
+      "paths":         ["**/audit-log*", "**/audit_log*", "**/logging/**"],
+      "terms":         ["audit_log", "auditLog", "automatic_logging", "automaticLogging", "decision_log", "decisionLog", "tamper_evident", "tamperEvident", "hash_chain", "hashChain"]
+    },
+    {
+      "id": "EU-AI-Art.13",
+      "title": "Transparency to users — disclosure of AI use and limitations",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/AI_DISCLOSURE*", "**/transparency*", "**/user-notice*"],
+      "terms":         ["ai_disclosure", "aiDisclosure", "ai_notice", "aiNotice", "you_are_interacting_with_AI", "powered_by_AI"]
+    },
+    {
+      "id": "EU-AI-Art.14",
+      "title": "Human oversight — override, abort, take-over by qualified human",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/human-in-the-loop*", "**/oversight/**", "**/approval-workflow*"],
+      "terms":         ["human_in_the_loop", "humanInTheLoop", "human_review", "humanReview", "requires_approval", "requiresApproval", "abort_button", "abortButton", "override_decision", "overrideDecision"]
+    },
+    {
+      "id": "EU-AI-Art.15",
+      "title": "Accuracy, robustness, cybersecurity — adversarial robustness + security testing",
+      "manifest_deps": ["promptfoo", "@anthropic-ai/sdk", "adversarial-robustness-toolbox"],
+      "imports":       ["promptfoo", "adversarial_robustness_toolbox"],
+      "paths":         ["**/red-team*", "**/redteam*", "**/adversarial*", "**/security-tests/**"],
+      "terms":         ["red_team", "redTeam", "adversarial_test", "adversarialTest", "jailbreak_test", "jailbreakTest", "robustness_test"]
+    }
+  ]
+}

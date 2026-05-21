@@ -1,0 +1,70 @@
+{
+  "_doc": "ISO/IEC 27001:2022 Annex A — v0 code-detectable mapping. The 2022 revision groups 93 controls into Organizational (A.5), People (A.6), Physical (A.7), and Technological (A.8). Only the Technological (A.8) subset and a few Organizational controls are mechanically inspectable; the rest must be evidenced via process documentation owned by Compliance / GRC.",
+  "_version": "0.1",
+  "controls": [
+    {
+      "id": "A.5.15",
+      "title": "Access control — formalized access policy",
+      "manifest_deps": ["passport", "next-auth", "@clerk/nextjs", "django-allauth", "flask-login"],
+      "imports":       ["passport", "next-auth", "@clerk/nextjs", "django.contrib.auth", "flask_login"],
+      "paths":         ["**/auth/**", "**/access-control/**", "**/rbac/**"],
+      "terms":         ["authenticate", "authorize", "requireAuth", "require_role", "hasPermission", "checkPermission"]
+    },
+    {
+      "id": "A.5.23",
+      "title": "Information security for use of cloud services",
+      "manifest_deps": ["@aws-sdk/client-iam", "@google-cloud/iam", "@azure/identity"],
+      "imports":       ["boto3", "google.cloud.iam_v1", "@azure/identity"],
+      "paths":         ["**/iam/**", "**/cloud-security/**"],
+      "terms":         ["IAM_ROLE", "service_account", "managed_identity", "least_privilege", "leastPrivilege"]
+    },
+    {
+      "id": "A.8.5",
+      "title": "Secure authentication — MFA / strong authentication",
+      "manifest_deps": ["speakeasy", "otplib", "@simplewebauthn/server", "django-otp", "pyotp"],
+      "imports":       ["speakeasy", "otplib", "@simplewebauthn/server", "pyotp"],
+      "paths":         ["**/mfa/**", "**/2fa/**", "**/webauthn/**"],
+      "terms":         ["totp", "TOTP", "mfa", "webauthn", "passkey", "second_factor"]
+    },
+    {
+      "id": "A.8.9",
+      "title": "Configuration management",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/.github/workflows/**", "**/terraform/**", "**/ansible/**", "**/pulumi/**", "**/dockerfile*", "**/Dockerfile"],
+      "terms":         ["infrastructure_as_code", "config_management"]
+    },
+    {
+      "id": "A.8.15",
+      "title": "Logging — events, exceptions, audit",
+      "manifest_deps": ["winston", "pino", "bunyan", "structlog", "loguru", "@sentry/node"],
+      "imports":       ["winston", "pino", "bunyan", "structlog", "loguru", "sentry_sdk"],
+      "paths":         ["**/logging/**", "**/audit/**"],
+      "terms":         ["audit_log", "auditLog", "audit_event", "AUDIT_LEVEL"]
+    },
+    {
+      "id": "A.8.16",
+      "title": "Monitoring activities — anomaly + threat detection",
+      "manifest_deps": ["@sentry/node", "@sentry/nextjs", "@datadog/browser-rum", "newrelic"],
+      "imports":       ["@sentry/node", "@sentry/nextjs", "@datadog/browser-rum", "newrelic"],
+      "paths":         ["**/monitoring/**", "**/telemetry/**"],
+      "terms":         ["captureException", "capture_exception", "alert_on", "alertOn", "circuit_breaker", "circuitBreaker"]
+    },
+    {
+      "id": "A.8.24",
+      "title": "Use of cryptography",
+      "manifest_deps": ["bcrypt", "argon2", "node-forge", "cryptography", "tweetnacl"],
+      "imports":       ["bcrypt", "argon2", "crypto", "cryptography", "tweetnacl"],
+      "paths":         ["**/crypto/**", "**/encrypt*/**"],
+      "terms":         ["AES-256-GCM", "RSA-OAEP", "Ed25519", "createCipheriv", "encrypt(", "decrypt("]
+    },
+    {
+      "id": "A.8.28",
+      "title": "Secure coding",
+      "manifest_deps": ["eslint-plugin-security", "bandit", "brakeman", "gosec"],
+      "imports":       [],
+      "paths":         ["**/.github/workflows/codeql*", "**/.github/workflows/scan*", "**/security-scan*", "**/sast*"],
+      "terms":         ["secure_coding", "secureCoding", "sast", "static_analysis"]
+    }
+  ]
+}

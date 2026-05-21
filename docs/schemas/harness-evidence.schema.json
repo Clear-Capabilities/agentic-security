@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Clear-Capabilities/agentic-security/docs/schemas/harness-evidence.schema.json",
+  "title": "Harness Assessment Evidence Entry",
+  "description": "One entry in a harness-emitted evidence log. See docs/HARNESS_ASSESSMENT_EVIDENCE.md for full semantics.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "trace_id",
+    "session_id",
+    "ts",
+    "actor",
+    "type",
+    "prev_hash",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$",
+      "description": "Schema version in major.minor form."
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID prefixed with evt_."
+    },
+    "trace_id": {
+      "type": "string",
+      "pattern": "^trc_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^ses_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "type": "object",
+      "required": ["kind", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["model", "harness", "human", "tool"] },
+        "id":   { "type": "string", "minLength": 1 }
+      }
+    },
+    "type": {
+      "enum": [
+        "session_start",
+        "tool_call",
+        "guardrail_decision",
+        "validator_outcome",
+        "session_end"
+      ]
+    },
+    "prev_hash": {
+      "type": "string",
+      "pattern": "^sha256:(GENESIS|[a-f0-9]{64})$"
+    },
+    "payload": { "type": "object" },
+    "vendor_extensions": { "type": "object" }
+  },
+  "oneOf": [
+    { "if": { "properties": { "type": { "const": "session_start" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/sessionStart" } } } },
+    { "if": { "properties": { "type": { "const": "tool_call" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/toolCall" } } } },
+    { "if": { "properties": { "type": { "const": "guardrail_decision" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/guardrailDecision" } } } },
+    { "if": { "properties": { "type": { "const": "validator_outcome" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/validatorOutcome" } } } },
+    { "if": { "properties": { "type": { "const": "session_end" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/sessionEnd" } } } }
+  ],
+  "$defs": {
+    "sha256Hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "sensitivityTier": {
+      "enum": [
+        "read-only",
+        "write-local",
+        "write-shared",
+        "external-effect",
+        "financial",
+        "identity-modifying"
+      ]
+    },
+    "sessionStart": {
+      "type": "object",
+      "required": ["harness_version", "spec_version", "model", "tool_manifest_hash", "denylist_hash", "sensitivity_tiers", "environment"],
+      "properties": {
+        "harness_version":     { "type": "string" },
+        "spec_version":        { "type": "string", "pattern": "^\\d+\\.\\d+$" },
+        "model": {
+          "type": "object",
+          "required": ["vendor", "name"],
+          "properties": {
+            "vendor":  { "type": "string" },
+            "name":    { "type": "string" },
+            "version": { "type": "string" },
+            "params":  { "type": "object" }
+          }
+        },
+        "tool_manifest_hash":  { "$ref": "#/$defs/sha256Hash" },
+        "denylist_hash":       { "$ref": "#/$defs/sha256Hash" },
+        "sensitivity_tiers": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "object",
+              "properties": {
+                "rate_per_min":      { "type": ["number", "null"] },
+                "cost_ceiling_usd":  { "type": ["number", "null"] },
+                "requires_approval": { "type": "boolean" }
+              }
+            }
+          }
+        },
+        "environment": { "enum": ["production", "staging", "dev"] },
+        "user": {
+          "type": "object",
+          "properties": {
+            "id":   { "type": "string" },
+            "role": { "type": "string" }
+          }
+        }
+      }
+    },
+    "toolCall": {
+      "type": "object",
+      "required": ["tool_call_id", "tool_name", "sensitivity_tier", "args_hash", "permitted", "outcome"],
+      "properties": {
+        "tool_call_id":     { "type": "string" },
+        "tool_name":        { "type": "string" },
+        "tool_version":     { "type": "string" },
+        "sensitivity_tier": { "$ref": "#/$defs/sensitivityTier" },
+        "args_hash":        { "$ref": "#/$defs/sha256Hash" },
+        "args_redacted":    { "type": "object" },
+        "permitted":        { "type": "boolean" },
+        "denial_reason":    { "type": ["string", "null"] },
+        "outcome":          { "enum": ["ok", "error", "denied", "timeout", "rate_limited", "cost_limited"] },
+        "outcome_detail":   { "type": ["string", "null"] },
+        "duration_ms":      { "type": "integer", "minimum": 0 },
+        "model_reasoning":  { "type": ["string", "null"] },
+        "approval": {
+          "type": "object",
+          "properties": {
+            "required":   { "type": "boolean" },
+            "granted_by": { "type": ["string", "null"] },
+            "granted_at": { "type": ["string", "null"], "format": "date-time" },
+            "method":     { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "guardrailDecision": {
+      "type": "object",
+      "required": ["guardrail_id", "guardrail_kind", "target_event", "decision"],
+      "properties": {
+        "guardrail_id":   { "type": "string" },
+        "guardrail_kind": { "enum": ["denylist", "rate_limit", "cost_limit", "sandbox", "untrusted_input_tag", "semantic_classifier"] },
+        "target_event":   { "type": "string" },
+        "decision":       { "enum": ["block", "allow", "warn", "elevate_required"] },
+        "reason":         { "type": "string" },
+        "denylist_version": { "$ref": "#/$defs/sha256Hash" },
+        "rate_window_s":    { "type": "integer", "minimum": 1 },
+        "rate_count":       { "type": "integer", "minimum": 0 },
+        "rate_limit":       { "type": "integer", "minimum": 0 }
+      }
+    },
+    "validatorOutcome": {
+      "type": "object",
+      "required": ["validator_id", "validator_kind", "target_event", "verdict"],
+      "properties": {
+        "validator_id":   { "type": "string" },
+        "validator_kind": { "enum": ["schema", "range", "sanity", "critic_model", "consistency"] },
+        "target_event":   { "type": "string" },
+        "verdict":        { "enum": ["pass", "fail", "indeterminate"] },
+        "reason":         { "type": "string" },
+        "intent_stated":     { "type": ["string", "null"] },
+        "intent_actual":     { "type": ["string", "null"] },
+        "intent_divergence": { "type": "boolean" }
+      }
+    },
+    "sessionEnd": {
+      "type": "object",
+      "required": ["outcome", "tool_call_count", "tail_hash"],
+      "properties": {
+        "outcome":            { "enum": ["ok", "circuit_broken", "abandoned", "fail_closed"] },
+        "tool_call_count":    { "type": "integer", "minimum": 0 },
+        "denied_count":       { "type": "integer", "minimum": 0 },
+        "validator_failures": { "type": "integer", "minimum": 0 },
+        "circuit_breaker": {
+          "type": "object",
+          "properties": {
+            "tripped":  { "type": "boolean" },
+            "trigger":  { "type": ["string", "null"] },
+            "reset_by": { "type": ["string", "null"] }
+          }
+        },
+        "tail_hash": { "$ref": "#/$defs/sha256Hash" }
+      }
+    }
+  }
+}

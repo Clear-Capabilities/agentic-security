@@ -1,0 +1,70 @@
+{
+  "_doc": "SOC 2 Common Criteria — v0 code-detectable mapping. The Compliance team owns the authoritative control set and must sign off on this file before any auditor uses its output. Controls here cover the CC subset that is mechanically inspectable from a codebase; process controls (vendor management, change management, training records) are out of scope by design and must be evidenced separately.",
+  "_version": "0.1",
+  "controls": [
+    {
+      "id": "CC6.1",
+      "title": "Logical access controls — identity and authentication",
+      "manifest_deps": ["passport", "next-auth", "@clerk/nextjs", "lucia", "@auth0/auth0-react", "django-allauth", "flask-login", "devise", "spring-security"],
+      "imports":       ["passport", "next-auth", "@clerk/nextjs", "lucia", "@auth0/auth0-react", "django.contrib.auth", "flask_login"],
+      "paths":         ["**/auth/**", "**/authn/**", "**/authorization/**"],
+      "terms":         ["authenticate", "verifyToken", "verify_token", "requireAuth", "require_auth", "session_user", "current_user"]
+    },
+    {
+      "id": "CC6.6",
+      "title": "Encryption of data in transit",
+      "manifest_deps": ["https", "@hapi/hapi", "fastify"],
+      "imports":       ["https", "ssl", "tls"],
+      "paths":         ["**/tls/**", "**/ssl/**"],
+      "terms":         ["TLS_VERSION", "https://", "httpsOptions", "tls.createServer", "ssl_context", "force_https", "secure: true", "Strict-Transport-Security"]
+    },
+    {
+      "id": "CC6.7",
+      "title": "Encryption of data at rest",
+      "manifest_deps": ["bcrypt", "argon2", "scrypt-async", "node-forge", "cryptography", "@aws-sdk/client-kms"],
+      "imports":       ["bcrypt", "argon2", "scrypt", "crypto", "cryptography", "aws-sdk/clients/kms"],
+      "paths":         ["**/encrypt*/**", "**/kms*/**"],
+      "terms":         ["AES-256-GCM", "encrypt_at_rest", "encryptAtRest", "KMS_KEY_ID", "createCipheriv"]
+    },
+    {
+      "id": "CC7.1",
+      "title": "System monitoring and log generation",
+      "manifest_deps": ["winston", "pino", "bunyan", "loglevel", "structlog", "loguru", "@sentry/node", "@sentry/nextjs", "@datadog/datadog-api-client"],
+      "imports":       ["winston", "pino", "bunyan", "structlog", "loguru", "sentry_sdk", "@sentry/node", "@sentry/nextjs"],
+      "paths":         ["**/logging/**", "**/observability/**", "**/telemetry/**"],
+      "terms":         ["logger.info", "logger.error", "log.audit", "audit_log", "auditLog"]
+    },
+    {
+      "id": "CC7.2",
+      "title": "Anomalous activity detection",
+      "manifest_deps": ["@sentry/node", "@sentry/nextjs", "@datadog/browser-rum", "@grafana/k6"],
+      "imports":       ["@sentry/node", "@sentry/nextjs", "@datadog/browser-rum"],
+      "paths":         ["**/anomaly*/**", "**/alerts/**"],
+      "terms":         ["alertOn", "alert_on", "thresholdBreach", "rateLimitExceeded", "circuit_breaker", "circuitBreaker"]
+    },
+    {
+      "id": "CC7.3",
+      "title": "Incident response procedures",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/INCIDENT*", "**/RUNBOOK*", "**/DISASTER*", "**/runbooks/**", "**/incident-response/**"],
+      "terms":         ["incident_response", "incidentResponse", "runbook", "on-call", "oncall", "pagerduty"]
+    },
+    {
+      "id": "CC7.4",
+      "title": "Vulnerability identification, evaluation, remediation",
+      "manifest_deps": ["npm-audit", "@snyk/sdk", "owasp-zap"],
+      "imports":       [],
+      "paths":         ["**/security/**", "**/.github/workflows/codeql*", "**/.github/workflows/scan*"],
+      "terms":         ["npm audit", "yarn audit", "snyk test", "agentic-security scan", "CVE-", "GHSA-"]
+    },
+    {
+      "id": "CC8.1",
+      "title": "Change management — code review and deployment controls",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/.github/CODEOWNERS", "**/.github/PULL_REQUEST_TEMPLATE*", "**/.github/workflows/**", "**/pre-commit*"],
+      "terms":         ["required_reviewers", "branch_protection", "code_review", "pull_request_review"]
+    }
+  ]
+}

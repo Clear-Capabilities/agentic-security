@@ -41,6 +41,10 @@ owasp-asvs-attestation.*
 owasp-llm-top10-attestation.*
 pci-dss-attestation.*
 soc2-attestation.*
+iso-27001-attestation.*
+iso-42001-attestation.*
+eu-ai-act-attestation.*
+HARNESS_SCORE.*
 
 # Per-scan output files written into project's .agentic-security/ dir.
 findings.json

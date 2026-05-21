@@ -1,0 +1,62 @@
+{
+  "_doc": "ISO/IEC 42001:2023 — v0 code-detectable mapping for an AI Management System (AIMS). The clauses are organizational by nature, but several have code-inspectable shadow controls (risk register, AI inventory, logging of model interactions, human oversight gates, data governance). The full AIMS implementation is a management system, not a code scan; this overlay surfaces only the parts mechanically visible.",
+  "_version": "0.1",
+  "controls": [
+    {
+      "id": "AIMS-6.1.3",
+      "title": "AI risk assessment — inventory of risks per AI system",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/RISK*.md", "**/risk-register*", "**/ai-risk-assessment*", "**/threat-model*", "**/THREAT_MODEL*"],
+      "terms":         ["risk_register", "riskRegister", "ai_risk", "aiRisk", "threat_model", "threatModel"]
+    },
+    {
+      "id": "AIMS-6.2",
+      "title": "AI objectives — measurable performance / safety targets",
+      "manifest_deps": ["promptfoo", "@anthropic-ai/sdk", "@openai/openai"],
+      "imports":       [],
+      "paths":         ["**/evals/**", "**/eval-suite*", "**/benchmark*", "**/promptfoo*"],
+      "terms":         ["eval_suite", "evalSuite", "benchmark", "f1_score", "F1Score", "pass_rate"]
+    },
+    {
+      "id": "AIMS-8.2",
+      "title": "AI system impact assessment",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/IMPACT*.md", "**/AIIA*", "**/data-protection-impact*"],
+      "terms":         ["impact_assessment", "impactAssessment", "AIIA", "DPIA"]
+    },
+    {
+      "id": "AIMS-8.3",
+      "title": "AI system data management — provenance, quality, governance",
+      "manifest_deps": ["dvc", "lakefs", "great-expectations", "deepchecks"],
+      "imports":       ["dvc", "great_expectations", "deepchecks"],
+      "paths":         ["**/data-governance/**", "**/data-pipeline*", "**/training-data*"],
+      "terms":         ["data_provenance", "dataProvenance", "data_lineage", "dataLineage", "training_data_source"]
+    },
+    {
+      "id": "AIMS-8.4",
+      "title": "Human oversight — checkpoints, override, abort",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/oversight/**", "**/human-in-the-loop*", "**/approval-workflow*"],
+      "terms":         ["human_in_the_loop", "humanInTheLoop", "human_review", "humanReview", "requires_approval", "requiresApproval", "abort_button", "abortButton"]
+    },
+    {
+      "id": "AIMS-9.1",
+      "title": "Monitoring, measurement, analysis — model performance over time",
+      "manifest_deps": ["evidently", "arize", "whylogs", "weights-and-biases", "@datadog/datadog-api-client"],
+      "imports":       ["evidently", "arize", "whylogs", "wandb"],
+      "paths":         ["**/model-monitoring/**", "**/drift*"],
+      "terms":         ["model_drift", "modelDrift", "performance_monitor", "performanceMonitor", "evaluation_log"]
+    },
+    {
+      "id": "AIMS-A.6.2.6",
+      "title": "Documentation — model and system cards",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/model-card*", "**/AI_BOM*", "**/aibom*"],
+      "terms":         ["model_card", "modelCard", "system_card", "systemCard", "AIBOM", "ai_bom"]
+    }
+  ]
+}
