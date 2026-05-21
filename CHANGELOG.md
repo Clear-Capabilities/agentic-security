@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.75.1 — /agent-harness-assessment + interactive compliance routing + README badge relocation
+
+Three follow-ups to the 0.75.0 surface:
+
+**Renamed `/executive-summary` → `/agent-harness-assessment`.** The
+previous name framed this as a finance-style report. The actual artifact
+is an assessment of the AI-agent harness: a CISO/buyer reading it wants
+to know whether to trust an AI agent working in this project, not just
+see a posture grade. The new name reflects the audience.
+
+**Interactive compliance step.** After printing the six-control
+assessment, the command now asks (via AskUserQuestion) which compliance
+frameworks the reader wants generated NOW — NIST AI 600-1, OWASP ASVS,
+OWASP LLM Top 10 (2025), or none. For each selection, the model invokes
+`/compliance-report <fw>` with the matching positional argument
+(`nist`, `asvs`, `llm`) so an auditor-ready file lands on disk. The
+Compliance section in the assessment now says what evidence COULD be
+produced; the interactive step closes the loop to evidence that EXISTS.
+
+**README "Status badge" section relocated** from the top-of-README hero
+region into the Security Pros section, between the 5-minute pro setup
+and the full pro catalog. Adopting the badge is a pro-shaped step
+(it requires CI wiring + a baseline scan). Three example badges now
+render on three distinct lines via trailing `<br>` so the severity
+ladder is legible at a glance.
+
 ## 0.75.0 — /executive-summary: CISO-facing six-control posture report
 
 New top-level command for buyer-questionnaire / diligence / CISO use.
