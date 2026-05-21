@@ -1,11 +1,12 @@
 ---
-description: CISO-facing six-control posture report — tool access, guardrails, feedback, audit evidence, failure mode, compliance.
+description: Agent harness assessment — six-control trust report: tool access, guardrails, feedback, audit, failure mode, compliance.
 argument-hint: "[--output PATH] [--format text|md]"
 ---
 
-Print a detailed plain-English executive summary of the harness controls in
-this project. Audience: a CISO who has fifteen minutes, no familiarity with
-this codebase, and needs to know whether to trust an AI agent working in it.
+Print a detailed plain-English assessment of the AI-agent harness in this
+project. Audience: a CISO, security buyer, or diligence reviewer who has
+fifteen minutes, no familiarity with this codebase, and needs to know
+whether to trust an AI agent working in it.
 
 No CWE numbers. No CVSS. Six numbered sections. Each section has four named
 subsections (modeled on `/explain`):
@@ -383,7 +384,7 @@ function renderText() {
   const proj = path.basename(cwd);
   const W2 = 92;
   lines.push('');
-  lines.push(W('━━━ Security Posture — Executive Summary ━━━', BOLD));
+  lines.push(W('━━━ Agent Harness Assessment ━━━', BOLD));
   lines.push('  Project: ' + proj);
   lines.push('  Generated: ' + new Date().toISOString());
   lines.push('  Audience: CISO / security reviewer / buyer questionnaire');
@@ -439,7 +440,7 @@ function renderText() {
 function renderMarkdown() {
   const lines = [];
   const proj = path.basename(cwd);
-  lines.push('# Security Posture — Executive Summary');
+  lines.push('# Agent Harness Assessment');
   lines.push('');
   lines.push('- **Project:** ' + proj);
   lines.push('- **Generated:** ' + new Date().toISOString());
@@ -502,15 +503,60 @@ they can read in ten to fifteen minutes or paste into a buyer questionnaire.
 
 ---
 
+## Interactive compliance step (DO this after printing the assessment)
+
+After the bash block prints the six-control assessment, the **Compliance**
+section (#6) only summarizes what evidence COULD be produced. To produce
+the actual artifact on disk for an auditor, the model MUST run the
+follow-up step below — do not skip it.
+
+1. Call the AskUserQuestion tool with a single multiSelect question:
+
+   - **question:** "Which compliance reports do you want generated now?"
+   - **header:** "Frameworks"
+   - **multiSelect:** true
+   - **options** (exactly these four; user can pick zero, one, two, or all three):
+     - **NIST AI 600-1** — Generative AI Profile, 122 controls
+     - **OWASP ASVS** — Application Security Verification Standard
+     - **OWASP LLM Top 10 (2025)** — 10 GenAI/LLM risk controls
+     - **None right now** — skip artifact generation
+
+2. For each framework the user selects, run `/compliance-report <fw>` with
+   the matching positional argument (the command takes ONE positional):
+
+   | User's selection | `/compliance-report` argument |
+   |---|---|
+   | NIST AI 600-1 | `nist` |
+   | OWASP ASVS | `asvs` |
+   | OWASP LLM Top 10 | `llm` |
+
+   Invoke each via the Skill tool — `skill: "agentic-security:compliance-report"`,
+   `args: "<fw>"` — once per selected framework, sequentially (not in parallel,
+   so the artifact files don't race on stdout). If the user selected "None right
+   now", do not invoke /compliance-report; instead confirm "skipping compliance
+   artifact generation — you can run /compliance-report later" and end the turn.
+
+3. After all selected reports complete, tell the user which artifacts now
+   exist on disk (the report command writes to predictable filenames:
+   `nist-ai-600-1-attestation.md`, `owasp-asvs-attestation.md`,
+   `owasp-llm-top10-attestation.md`).
+
+This interactive step is the difference between "the agent harness CAN emit
+compliance evidence" (the Compliance section's claim) and "compliance
+evidence exists on disk right now" — auditors only accept the latter.
+
+---
+
 ## Notes for downstream use
 
 - **Default format is plain text** with ANSI color for terminal reading.
   `--format md` switches to GitHub-flavored markdown. `--output PATH`
-  implies `--format md` and writes to that path (typical: `EXECUTIVE_SUMMARY.md`).
+  implies `--format md` and writes to that path (typical:
+  `AGENT_HARNESS_ASSESSMENT.md`).
 - **Live evidence.** The "Live status (this project)" subsection of each
   control is derived from current state — hooks wired, scan signed, audit
   log entry count, remote witness configured, compliance artifacts present.
-  A CISO is reading the *current* posture, not a generic template.
+  The reviewer is reading the *current* posture, not a generic template.
 - **The four subsections per control** are deliberate, modeled on
   `/explain`'s plain-English narrative shape:
   - **What it does** — the control in 2–3 sentences of plain English.
@@ -525,6 +571,6 @@ they can read in ten to fifteen minutes or paste into a buyer questionnaire.
   patterns — those are necessarily concrete — but the connective tissue
   is written for an executive reader.
 - **What it is not.** This is the controls report. It is not the
-  findings report (`/scan --all`), the grade (`/report-card`), or the
-  compliance attestation (`/compliance-report`). Those exist; this one
-  lives upstream of them — "should the CISO trust the agent at all."
+  findings report (`/scan --all`) or the grade (`/report-card`). It
+  routes INTO `/compliance-report` for framework-specific attestations
+  via the interactive step above.
