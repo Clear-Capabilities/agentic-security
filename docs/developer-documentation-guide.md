@@ -24,7 +24,7 @@ NAME
        integrations for the security stack you already run.
 
 VERSION
-       0.60.0
+       0.76.0
 
 SYNOPSIS
        agentic-security [--profile pro] COMMAND [ARGS] [OPTIONS]
@@ -63,18 +63,18 @@ SYNOPSIS
        Stack hardening:
        /stack-playbook
        /harden
-       /db-audit
-       /auth-audit
-       /rate-limit-check
-       /webhook-audit
-       /env-check
+       /audit --target db                                (was /db-audit)
+       /audit --target auth                              (was /auth-audit)
+       /audit --target rate-limit                        (was /rate-limit-check)
+       /audit --target webhook                           (was /webhook-audit)
+       /audit --target env                               (was /env-check)
        /rotate-secret [secret-value-or-finding-id]
-       /deploy-check
-       /attack-surface
-       /prompt-firewall
-       /csp-cors
-       /security-tests [--finding <id>|--all|--critical]
-       /ci-gate [--severity critical|high|medium] [--comment] [--apply]
+       /audit --target deploy                            (was /deploy-check)
+       /threat --view surface                            (was /attack-surface)
+       /audit --target prompt                            (was /prompt-firewall)
+       /audit --target csp-cors                          (was /csp-cors)
+       /generate --type tests [--finding <id>|--all|--critical]  (was /security-tests)
+       /ci [--severity critical|high|medium] [--comment] [--apply]  (was /ci-gate)
        /cve-alerts [--slack <url>|--discord <url>] [--apply]
        /vault-wizard [doppler|infisical|vercel|railway]
        /security-trend
@@ -83,26 +83,26 @@ SYNOPSIS
        Real-time bodyguards:
        /ai-bodyguard [on|off|warn|block|status]
        /destructive-guard [on|off|warn|block|status]
-       /predeploy-gate [install|check|status|off]
+       /ci --predeploy [install|check|status|off]        (was /predeploy-gate)
 
        Active rotation & cost control:
        /rotate-secret --auto <value|--scan> [--yes]
-       /llm-cost-ceiling [--apply] [--generate-middleware]
+       /audit --target llm-cost [--apply] [--generate-middleware]  (was /llm-cost-ceiling)
                          [--generate-tracker --daily-cap-dollars N]
 
        Translate the jargon:
        /risk-in-dollars [--top N] [--json]
-       /explain --narrative <finding-id|--random|--worst>
+       /explain --narrative <finding-id|--random|--worst>  (was /story-explain)
        /daily-checkin [--setup|--slack <url>|--discord <url>|--crontab]
 
        Customer-facing artifacts (all from one command — picks format by flag):
        /security-attestation                            (badge — default)
        /security-attestation --format onepager [--company NAME] [--contact EMAIL]
        /security-attestation --format page --contact <email> [--pgp <url>]
-       /privacy-docs [--jurisdiction EU|US-CA|UK|OTHER] [--generate-banner]
+       /generate --type privacy [--jurisdiction EU|US-CA|UK|OTHER] [--generate-banner]  (was /privacy-docs)
 
        Resilience & onboarding:
-       /disaster-playbook [--stack supabase,stripe,vercel,...]
+       /generate --type disaster [--stack supabase,stripe,vercel,...]  (was /disaster-playbook)
        /tutorial
 
        Dependency & supply chain (one command, per-check views via --show):
@@ -111,7 +111,7 @@ SYNOPSIS
        /supply-chain-check --show freshness             (was /dep-freshness)
        /supply-chain-check --show alternatives          (was /dep-alternatives)
        /supply-chain-check --show install-scripts       (was /install-script-audit)
-       /supply-chain-check --show vendored              (was /vendor-audit; both still standalone)
+       /supply-chain-check --show vendored              (was /vendor-audit)
        /trim [--what code|deps]                         (was /trim-dead-code + /trim-dependencies)
 
        Posture & compliance:
@@ -119,8 +119,8 @@ SYNOPSIS
        /compliance-report [nist|asvs|llm]
        /status
        /report-card
-       /launch-check
-       /social-media
+       /audit --target launch                            (was /launch-check)
+       /generate --type social                           (was /social-media)
        /help
 
 DESCRIPTION
@@ -325,7 +325,7 @@ DESCRIPTION
                                      # ServiceNow/GitHub-Issues two-way ticket sync
          src/report/                 # CLI/JSON/SARIF/JUnit/CSV/HTML renderers
          test/                       # Node test runner suite (470 main + 26 cpp)
-       commands/                     # 76 slash-command markdown files
+       commands/                     # 38 slash-command markdown files
        agents/                       # 7 sub-agent system prompts
        hooks/                        # 5 Claude Code event-driven scripts
        ide/jetbrains/                # LSP4IJ-backed JetBrains plugin
@@ -413,7 +413,7 @@ and reproducibility across the team. Re-run after upgrading.
        # uploads SARIF, posts review comments, and fails on critical/high.
        agentic-security ci . --fail-on critical
        # — OR via the slash command, with an opinionated workflow file —
-       # claude /agentic-security:ci-gate --apply
+       # claude /agentic-security:ci --apply
 ```
 
 ### 6. Wire ticket sync (optional, dry-run first)
@@ -528,7 +528,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Prints applied/skipped/failed per step. Safe to run multiple
               times (idempotent per item).
 
-       db-audit
+       audit --target db
               Surfaces all database security findings from last-scan.json:
               Supabase service-role key exposure, NEXT_PUBLIC_ vars leaking
               service keys, auth.admin called client-side, bypassRowLevel-
@@ -536,7 +536,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               raw pg Pool/Client in request handlers, and SQL injection.
               Provides remediation steps and severity breakdown.
 
-       auth-audit
+       audit --target auth
               Deep-audits the authentication layer. Covers: allowDangerous-
               EmailAccountLinking, trustHost: true (CSRF bypass), missing
               NEXTAUTH_SECRET, weak or hardcoded session secrets, hardcoded
@@ -544,7 +544,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               paths in publicRoutes, session cookies without secure/sameSite,
               JWT alg:none, algorithm confusion, JWT without expiry.
 
-       rate-limit-check
+       audit --target rate-limit
               Find API endpoints missing rate limiting by category:
                 auth    — login/register/forgot/verify (brute-force risk)
                 ai      — generation/chat/inference (cost explosion risk)
@@ -553,7 +553,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Prints copy-paste @upstash/ratelimit setup for serverless
               and express-rate-limit for Node servers.
 
-       webhook-audit
+       audit --target webhook
               Audit webhook handlers for missing cryptographic signature
               verification. Detects provider (Stripe, GitHub, Clerk, Svix,
               Resend, Twilio) from imports and URL patterns. Fires only when
@@ -561,7 +561,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Explains the fake-payment attack vector and provides provider-
               specific fix snippets including raw-body parser requirements.
 
-       env-check
+       audit --target env
               Runtime + scan-based environment hygiene report:
                 • .env* files absent from .gitignore
                 • .env* files tracked in git (git ls-files check)
@@ -579,7 +579,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Ends with post-rotation verification checklist and git-history
               purge advice.
 
-       deploy-check
+       audit --target deploy
               Platform-specific infra security audit. Detects platform from
               config files and checks:
                 Vercel   — security headers in vercel.json / next.config.js,
@@ -590,7 +590,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
                 Cloudflare Workers — compatibility_date in wrangler.toml
               Provides copy-paste remediation for each platform.
 
-       attack-surface
+       threat --view surface
               Gathers scan statistics (severity counts, KEV deps, attack
               chains, unauth state routes) and instructs Claude to synthesise
               a plain-English threat narrative — 3–5 realistic attack
@@ -598,7 +598,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               single-line fix per scenario. Written for builders, not
               security engineers.
 
-       prompt-firewall
+       audit --target prompt
               Surfaces all LLM/AI security findings:
                 • User input concatenated into system prompts (prompt
                   injection via system prompt contamination)
@@ -609,7 +609,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Gate: all rules require an LLM API import to fire (zero
               impact on non-AI codebases).
 
-       csp-cors
+       audit --target csp-cors
               Reads package.json for external services (Supabase, Stripe,
               Clerk, OpenAI, analytics, Sentry, Intercom) and instructs
               Claude to generate exact Content-Security-Policy and CORS
@@ -617,7 +617,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Outputs ready-to-paste header blocks for Next.js, Express,
               and Vercel JSON.
 
-       security-tests [--finding <id>|--all|--critical]
+       generate --type tests [--finding <id>|--all|--critical]
               Detects the project's test framework (Vitest, Jest, pytest,
               Node test runner) and instructs Claude to generate per-finding
               test files with:
@@ -626,7 +626,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Uses real imports from the affected file, not mocks. Outputs
               as security/<slug>-security.test.{js|ts|py}.
 
-       ci-gate [--severity critical|high|medium] [--comment] [--apply]
+       ci [--severity critical|high|medium] [--comment] [--apply]
               Generates .github/workflows/security.yml that:
                 • Runs on pull_request and push to main
                 • Uploads SARIF to GitHub Security tab
@@ -662,7 +662,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
                 • List of newly introduced finding IDs
               Each /scan --all run automatically appends a snapshot.
 
-       security-badge
+       security-attestation (default — badge format)
               Computes letter grade (A–F) from last-scan.json and generates:
                 • Shields.io badge Markdown for README
                 • Professional security posture paragraph for investor
@@ -683,7 +683,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
                 last scan > 7 days   → re-scan
                 clean                → `/security-attestation`
                 --launch + criticals → BLOCK
-                --launch + clean     → `/launch-check`
+                --launch + clean     → `/audit --target launch`
               --run auto-executes the recommended `agentic-security ...`
               command. --json emits the decision as a struct for piping.
 
@@ -830,7 +830,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Add custom patterns: each entry {name, re, severity, why,
               instead}. Override per-command with AS_GATE_OVERRIDE=1.
 
-       predeploy-gate [install|check|status|off]
+       ci --predeploy [install|check|status|off]
               Two-layer block on prod deploys:
                 • PreToolUse Bash hook (catches direct prod commands
                   inside Claude Code)
@@ -852,7 +852,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
 ### Active rotation & cost control
 
 ```
-       rotate-key-auto <value> | --scan [--yes]
+       rotate-secret --auto <value> | --scan [--yes]
               ACTIVELY rotate a leaked credential end-to-end.
               Provider detection by prefix:
                 openai                sk-...,  sk-proj-...
@@ -878,7 +878,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               --scan walks the repo, finds all leaked keys, rotates each.
               --yes skips confirmation prompts (CI / non-interactive).
 
-       llm-cost-ceiling [--apply] [--generate-middleware]
+       audit --target llm-cost [--apply] [--generate-middleware]
                         [--generate-tracker --daily-cap-dollars N]
               Audit every LLM call site, enforce cost ceilings.
               Detected SDKs (by file ext + pattern):
@@ -923,7 +923,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Default sort: worst-case descending.
               Data source: scripts/data/dollar-risk-bands.json (editable).
 
-       story-explain <finding-id> | --random | --worst
+       explain --narrative <finding-id> | --random | --worst
               Narrative-form explanation instead of CWE jargon. 4-act
               structure:
                 Setup           — what the app does, where the bug lives
@@ -954,7 +954,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
 ### Customer-facing artifacts
 
 ```
-       security-onepager [--company NAME] [--contact EMAIL]
+       security-attestation --format onepager [--company NAME] [--contact EMAIL]
                          [--output PATH] [--print]
               Customer-facing "How we keep your data safe" markdown.
               Auto-derived sections:
@@ -973,7 +973,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               Output is markdown — convert to PDF with `pandoc SECURITY.md
               -o SECURITY.pdf --pdf-engine=xelatex`.
 
-       privacy-docs [--company NAME] [--contact EMAIL]
+       generate --type privacy [--company NAME] [--contact EMAIL]
                     [--jurisdiction EU|US-CA|UK|OTHER]
                     [--generate-banner]
               Detect every third-party data processor and generate a
@@ -989,7 +989,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
               cookie-consent component to components/CookieBanner.tsx
               with localStorage persistence + analyticsConsent event.
 
-       trust-page --contact <email> [--pgp <url>] [--canonical-url <url>]
+       security-attestation --format page --contact <email> [--pgp <url>] [--canonical-url <url>]
               Generates three artifacts:
                 1. public/.well-known/security.txt
                    RFC 9116 compliant. Contact, Expires (1y), Preferred-
@@ -1010,7 +1010,7 @@ Custom rules ship findings exactly like built-ins, with the prefix
 ### Resilience & onboarding
 
 ```
-       disaster-playbook [--stack supabase,stripe,vercel,...]
+       generate --type disaster [--stack supabase,stripe,vercel,...]
                          [--output PATH] [--print]
               Generate a stack-specific incident-response runbook
               (DISASTER.md) BEFORE you get hacked. Detects platforms:
@@ -1054,30 +1054,30 @@ Custom rules ship findings exactly like built-ins, with the prefix
 ### Dependency & supply chain
 
 ```
-       trim-dependencies [PATH] [--dry-run] [--include-dev]
+       trim --what deps [PATH] [--dry-run] [--include-dev]
               Find installed packages never imported in source code.
               Reports per-package on-disk size and transitive dep count.
               Default is --dry-run; pass --apply to execute removals.
 
-       dep-freshness
+       supply-chain-check --show freshness
               Score how stale direct dependencies are across all ecosystems.
               Stale deps are the primary CVE accumulation vector.
 
-       dep-pinning
+       supply-chain-check --show pinning
               Audit manifests for loose version ranges that allow silent
               supply-chain injection. Flags unpinned deps and missing
               lockfiles.
 
-       dep-alternatives
+       supply-chain-check --show alternatives
               Find heavy or high-risk dependencies with lighter-weight,
               native, or more actively maintained alternatives.
 
-       install-script-audit
+       supply-chain-check --show install-scripts
               Audit every npm package (direct and transitive) for
               postinstall/preinstall scripts — the primary supply-chain
               attack vector in the npm ecosystem.
 
-       vendor-audit
+       supply-chain-check --show vendored
               Find copy-pasted or bundled third-party code vendored directly
               into the repo — invisible to dependency scanners and never
               receiving security updates.
@@ -1305,10 +1305,11 @@ Every scan writes to `.agentic-security/` in the project root:
        findings.sarif   SARIF 2.1.0 for GitHub Security tab, GitLab, etc.
        findings.csv     Spreadsheet / BigQuery / executive reports.
        last-scan.json   Live state consumed by /fix, /show-findings,
-                        /posture-management, /db-audit, /auth-audit,
-                        /rate-limit-check, /webhook-audit, /attack-surface,
-                        /prompt-firewall, /deploy-check, /security-attestation,
-                        /security-tests, /security-trend.
+                        /posture-management, /audit --target db|auth|
+                        rate-limit|webhook|env|deploy|prompt|csp-cors|
+                        llm-cost|launch, /threat --view surface,
+                        /security-attestation, /generate --type tests,
+                        /security-trend.
        scan-history.json  Rolling window (30 scans) for /security-trend.
                           Appended automatically on every scan.
        cve-alert-state.json  Seen CVE IDs for /cve-alerts deduplication.
@@ -1322,7 +1323,7 @@ Every scan writes to `.agentic-security/` in the project root:
                          Schema: {enabled, throttleHours, lastCheck}.
        bodyguard.json   /ai-bodyguard config (mode + skipPaths).
        destructive-guard.json  /destructive-guard config (mode + extraPatterns).
-       predeploy-gate.json     /predeploy-gate config (block_on, KEV, freshness).
+       predeploy-gate.json     /ci --predeploy config (block_on, KEV, freshness).
        daily-checkin.json      /daily-checkin webhook destinations + min severity.
        daily-checkin-last.json  Fingerprint store for digest deltas.
        rotation-backups/<ts>/   Backups created by /rotate-secret --auto before scrub.
@@ -1554,7 +1555,7 @@ CI gating example — blocks the pipeline on any critical finding:
        agentic-security scan . --severity critical
 ```
 
-Or use the generated workflow from `/ci-gate --apply`.
+Or use the generated workflow from `/ci --apply`.
 
 ---
 
@@ -1732,7 +1733,7 @@ Configuration in `.agentic-security/integrations.yml` (gitignored).
        GitHub Security tab / GitLab
               SARIF auto-written every scan. Upload via
               github/codeql-action/upload-sarif@v3.
-              Use /ci-gate --apply to generate a full workflow.
+              Use /ci --apply to generate a full workflow.
 
        Slack / Discord
               Webhook digest with critical/high/medium counts +
@@ -1761,7 +1762,7 @@ Configuration in `.agentic-security/integrations.yml` (gitignored).
 Auto-generated GitHub Actions workflow (recommended):
 
 ```
-       /ci-gate --apply --severity high --comment
+       /ci --apply --severity high --comment
 ```
 
 Manual CI runner (auto-detects PR base ref):
@@ -1867,14 +1868,14 @@ Posture management artifacts:
        agents/              Sub-agent system-prompt definitions.
        hooks/               PreToolUse + PostToolUse + SessionStart hook scripts.
        scripts/             Compliance helpers + standalone Python scripts:
-                              rotate-key-auto.py
-                              llm-cost-ceiling.py
+                              rotate-secret-auto.py
+                              audit-llm-cost.py
                               risk-in-dollars.py
-                              disaster-playbook.py
+                              generate-disaster.py
                               daily-checkin.py
-                              security-onepager.py
-                              privacy-docs.py
-                              trust-page.py
+                              attestation-onepager.py
+                              generate-privacy.py
+                              attestation-page.py
                               predeploy-gate.sh
                               run-poc-tests.py
        scripts/data/        Data files (dollar-risk-bands.json, etc.).
@@ -1967,18 +1968,18 @@ manager with `/vault-wizard`, audit git history with `git log -S <value>`.
 
 ```
 /scan --authz
-/auth-audit
+/audit --target auth
 ```
 
 The `--authz` flag covers JWT algorithm confusion, hardcoded JWT secrets, missing
 `algorithms:[]`, OAuth2 PKCE, redirect_uri validation, session fixation, and
-multi-tenant queries. `/auth-audit` surfaces provider-specific misconfigurations
+multi-tenant queries. `/audit --target auth` surfaces provider-specific misconfigurations
 (Clerk, NextAuth, Auth0, Lucia, Better Auth).
 
 **Database security:**
 
 ```
-/db-audit
+/audit --target db
 ```
 
 Supabase-aware: RLS disabled, service-role key exposed client-side, admin API
@@ -1988,10 +1989,10 @@ in browser code, bypassed row-level security, raw pg connections in handlers.
 
 ```
 /scan --logic
-/prompt-firewall
+/audit --target prompt
 ```
 
-`--logic` invokes the business-logic reviewer. `/prompt-firewall` surfaces
+`--logic` invokes the business-logic reviewer. `/audit --target prompt` surfaces
 LLM-specific risks: system prompt contamination, missing max_tokens, model
 output used as SQL/exec input (second-order injection), no output validation.
 
@@ -2017,7 +2018,7 @@ permissions, OIDC misconfigurations, `github.event.*` script injection.
 **Platform infrastructure:**
 
 ```
-/deploy-check
+/audit --target deploy
 ```
 
 Checks your actual deployment config files: Vercel headers, Railway health
@@ -2159,7 +2160,7 @@ specific to how those three systems interact — not generic OWASP advice.
 Generate and apply a GitHub Actions workflow:
 
 ```
-/ci-gate --apply --severity high --comment
+/ci --apply --severity high --comment
 ```
 
 This creates `.github/workflows/security.yml`. Push it, open a PR, and the
@@ -2225,10 +2226,10 @@ When you're confident, escalate `/ai-bodyguard` from `warn` → `block`.
 Critical before you ship any AI feature.
 
 ```
-/llm-cost-ceiling                         # audit
-/llm-cost-ceiling --apply                 # auto-patch missing max_tokens
-/llm-cost-ceiling --generate-middleware   # rate-limit per IP per minute
-/llm-cost-ceiling --generate-tracker --daily-cap-dollars 50
+/audit --target llm-cost                  # audit
+/audit --target llm-cost --apply          # auto-patch missing max_tokens
+/audit --target llm-cost --generate-middleware   # rate-limit per IP per minute
+/audit --target llm-cost --generate-tracker --daily-cap-dollars 50
 ```
 
 Each step is a separate decision. Review with `git diff` before
@@ -2244,7 +2245,7 @@ artifacts ready:
 ```
 /security-attestation --format page --contact security@myapp.com --canonical-url https://myapp.com
 /security-attestation --format onepager --company "My App Inc." --contact security@myapp.com
-/privacy-docs --jurisdiction US-CA --generate-banner
+/generate --type privacy --jurisdiction US-CA --generate-banner
 ```
 
 After these run, you have:
@@ -2267,7 +2268,7 @@ pandoc SECURITY.md -o SECURITY.pdf --pdf-engine=xelatex
 ## Exercise 15 — Have a disaster plan BEFORE you need one
 
 ```
-/disaster-playbook
+/generate --type disaster
 ```
 
 Writes `DISASTER.md` with stack-specific incident-response commands.
@@ -2279,7 +2280,7 @@ not authored — it goes stale fast).
 ## Exercise 16 — Block accidental prod deploys
 
 ```
-/predeploy-gate install
+/ci --predeploy install
 ```
 
 Default config: blocks on any critical finding OR any KEV-listed

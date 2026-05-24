@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.76.0 — Command consolidation: 80 → 38 slash commands
+
+Simplified the command surface from 80 individual slash commands down to
+38 by merging related commands into consolidated routers with flags.
+No functionality removed — all logic preserved behind flags on fewer,
+more discoverable parent commands.
+
+### New consolidated commands
+
+| New command | Absorbed | Routing |
+|---|---|---|
+| `/audit` | db-audit, auth-audit, rate-limit-check, webhook-audit, env-check, csp-cors, deploy-check, launch-check, llm-cost-ceiling, prompt-firewall | `--target <area>` or `--all` |
+| `/threat` | threat-model, personas, playbook, bounty, adversary, attack-surface, trust-boundary, spof | `--view <name>` |
+| `/llm` | llm-redteam, jailbreak-detector, llm-eval | `--mode redteam\|jailbreak\|eval` |
+| `/ci` | ci-gate, predeploy-gate, install-hooks | default / `--predeploy` / `--hooks` |
+| `/generate` | privacy-docs, disaster-playbook, social-media, security-tests | `--type privacy\|disaster\|social\|tests` |
+| `/scanner` | self-test, diff-scan, scan-baseline, concurrency-bugs, spec-drift | `--self-test` / `--diff` / `--baseline` / `--concurrency` / `--spec-drift` |
+
+### Commands absorbed into existing commands
+
+- `/why-fired` → `/explain --provenance --finding <id>`
+- `/why-not` → `/explain --gap <CWE>`
+- `/install-script-audit` → `/supply-chain-check --show install-scripts`
+- `/vendor-audit` → `/supply-chain-check --show vendored`
+
+### Deleted deprecated aliases (11)
+
+ci-gate-multi, rotate-key-auto, trim-dead-code, trim-dependencies,
+story-explain, security-badge, security-onepager, trust-page,
+dep-pinning, dep-freshness, dep-alternatives.
+
 ## 0.75.1 — /agent-harness-assessment + interactive compliance routing + README badge relocation
 
 Three follow-ups to the 0.75.0 surface:
