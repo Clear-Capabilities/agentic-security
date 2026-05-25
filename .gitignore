@@ -1,4 +1,6 @@
 scanner/node_modules/
+ide/vscode/node_modules/
+ide/vscode/dist/
 
 # scanner/dist/agentic-security.mjs IS tracked in git on purpose: the
 # reusable .github/workflows/scan.yml fetches it from raw.githubusercontent.com
