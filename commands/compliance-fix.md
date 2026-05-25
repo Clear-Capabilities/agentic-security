@@ -1,6 +1,6 @@
 ---
 description: Route every Not-Compliant control from /compliance-report to the command that closes it. Ordered, deduped.
-argument-hint: "[nist|asvs|llm] [path] [--json]"
+argument-hint: "[nist|asvs|llm|eu-ai-act] [path] [--json]"
 ---
 
 Re-runs the chosen compliance scanner, then prints an execution plan: each Not-Compliant or Partial control routed to the `/agentic-security:*` command that addresses it, deduplicated and ordered, with process-only controls listed separately.
@@ -12,15 +12,16 @@ PATH_ARG="${2:-.}"
 EXTRA_ARGS="${@:3}"
 
 case "$FRAMEWORK" in
-  nist|asvs|llm)
+  nist|asvs|llm|eu-ai-act)
     python3 ${CLAUDE_PLUGIN_ROOT}/scripts/compliance-fix/plan.py "$FRAMEWORK" "$PATH_ARG" $EXTRA_ARGS
     ;;
   *)
-    echo "Usage: /compliance-fix [nist|asvs|llm] [path] [--json]"
+    echo "Usage: /compliance-fix [nist|asvs|llm|eu-ai-act] [path] [--json]"
     echo ""
-    echo "  nist   — route NIST AI 600-1 gaps (122 controls; most are governance/process)"
-    echo "  asvs   — route OWASP ASVS Level 1+2 gaps"
-    echo "  llm    — route OWASP LLM Top 10 (2025) gaps"
+    echo "  nist       — route NIST AI 600-1 gaps (122 controls)"
+    echo "  asvs       — route OWASP ASVS Level 1+2 gaps (144 requirements)"
+    echo "  llm        — route OWASP LLM Top 10 (2025) gaps"
+    echo "  eu-ai-act  — route EU AI Act gaps (72 controls)"
     echo ""
     echo "  --json   emit the plan as machine-readable JSON instead of human-readable text"
     exit 1

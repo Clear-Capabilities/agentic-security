@@ -1,0 +1,164 @@
+{
+  "framework": "EU AI Act",
+  "match_strategy": "id_prefix",
+  "routes": {
+    "EU-AI-Art.5": {
+      "title": "Prohibited practices",
+      "commands": [
+        { "cmd": "/agentic-security:scan", "desc": "Detect code patterns that may indicate prohibited AI practices." },
+        { "cmd": "/agentic-security:llm", "desc": "LLM security scan including manipulative/deceptive patterns." }
+      ]
+    },
+    "EU-AI-Art.9": {
+      "title": "Risk management system",
+      "commands": [
+        { "cmd": "/agentic-security:threat", "desc": "Auto-derive STRIDE threat model for risk identification." },
+        { "cmd": "/agentic-security:risk-in-dollars", "desc": "Quantify finding risk in dollar exposure." },
+        { "cmd": "/agentic-security:scan --all", "desc": "Full scan to identify risks across all pillars." }
+      ]
+    },
+    "EU-AI-Art.10.1": {
+      "title": "Data governance — datasets subject to governance",
+      "commands": [
+        { "cmd": "/agentic-security:posture-management --aibom", "desc": "Generate AI-BOM documenting data sources and governance." }
+      ]
+    },
+    "EU-AI-Art.10.2": {
+      "title": "Data governance — design, collection, labelling, bias",
+      "commands": [
+        { "cmd": "/agentic-security:llm", "desc": "Scan for bias and fairness issues in LLM-calling code." }
+      ]
+    },
+    "EU-AI-Art.10.3": { "process_only": true, "title": "Dataset representativeness", "note": "Requires statistical analysis of dataset composition — organizational data science responsibility." },
+    "EU-AI-Art.10.4": { "process_only": true, "title": "Geographic/contextual factors", "note": "Requires domain-specific dataset analysis." },
+    "EU-AI-Art.10.5": { "process_only": true, "title": "Special category data for bias monitoring", "note": "Requires legal basis (GDPR Art. 9) for processing special category data." },
+    "EU-AI-Art.10.6": { "process_only": true, "title": "Data management practices", "note": "Requires documented data governance framework." },
+    "EU-AI-Art.10.legal": { "process_only": true, "title": "Lawful data collection", "note": "Requires legal review of training data rights, GDPR consent basis, and copyright compliance. Counsel owns this." },
+    "EU-AI-Art.11": {
+      "title": "Technical documentation",
+      "commands": [
+        { "cmd": "/agentic-security:posture-management --aibom", "desc": "Generate AI-BOM with model cards and system documentation." }
+      ]
+    },
+    "EU-AI-Art.11.annex4": { "process_only": true, "title": "Annex IV completeness", "note": "Requires review against Annex IV checklist — system description, intended purpose, design specs, training methodology, validation, performance metrics." },
+    "EU-AI-Art.12": {
+      "title": "Record-keeping — automatic logging",
+      "commands": [
+        { "cmd": "/agentic-security:scan", "desc": "Verify logging and audit trail presence in the application." },
+        { "cmd": "/agentic-security:audit --target deploy", "desc": "Check logging configuration in deployment." }
+      ]
+    },
+    "EU-AI-Art.13": {
+      "title": "Transparency",
+      "commands": [
+        { "cmd": "/agentic-security:generate --type privacy", "desc": "Generate transparency disclosures about AI use." }
+      ]
+    },
+    "EU-AI-Art.14.1": {
+      "title": "Human oversight — design for oversight",
+      "commands": [
+        { "cmd": "/agentic-security:scan --mcp", "desc": "Audit agent/MCP tool permissions for human oversight gaps." }
+      ]
+    },
+    "EU-AI-Art.14.2": { "process_only": true, "title": "Risk prevention via oversight", "note": "Requires documented human oversight procedures for risk mitigation." },
+    "EU-AI-Art.14.3": { "process_only": true, "title": "Proportionate oversight measures", "note": "Requires risk-based oversight calibration." },
+    "EU-AI-Art.14.4": { "process_only": true, "title": "Operator competence and training", "note": "Requires documented training program for human overseers including automation bias awareness." },
+    "EU-AI-Art.14.5": { "process_only": true, "title": "Provider/deployer specific obligations", "note": "Requires role-specific oversight documentation." },
+    "EU-AI-Art.14.bias": { "process_only": true, "title": "Automation bias awareness", "note": "Requires training materials on automation bias for human oversight operators." },
+    "EU-AI-Art.15.1": {
+      "title": "Accuracy, robustness, cybersecurity levels",
+      "commands": [
+        { "cmd": "/agentic-security:scan --all", "desc": "Full security scan for cybersecurity baseline." },
+        { "cmd": "/agentic-security:harden", "desc": "Apply security hardening." }
+      ]
+    },
+    "EU-AI-Art.15.2": { "process_only": true, "title": "Accuracy metrics declaration", "note": "Requires documented accuracy levels in instructions of use." },
+    "EU-AI-Art.15.3": {
+      "title": "Adversarial resilience",
+      "commands": [
+        { "cmd": "/agentic-security:llm --endpoint", "desc": "Active red-team adversarial testing (if endpoint available)." },
+        { "cmd": "/agentic-security:validate-findings", "desc": "Build PoCs to validate robustness." }
+      ]
+    },
+    "EU-AI-Art.15.4": {
+      "title": "Technical redundancy",
+      "commands": [
+        { "cmd": "/agentic-security:generate --type disaster", "desc": "Generate disaster recovery and failover playbook." }
+      ]
+    },
+    "EU-AI-Art.15.5": {
+      "title": "Cybersecurity measures",
+      "commands": [
+        { "cmd": "/agentic-security:scan --all", "desc": "Full SAST + SCA + secrets scan." },
+        { "cmd": "/agentic-security:fix --all", "desc": "Apply all fixes." },
+        { "cmd": "/agentic-security:harden", "desc": "Security hardening." }
+      ]
+    },
+    "EU-AI-Art.15.infra": {
+      "title": "Infrastructure security (IAM, patching, network)",
+      "commands": [
+        { "cmd": "/agentic-security:audit --target deploy", "desc": "Audit deployment infrastructure security." },
+        { "cmd": "/agentic-security:supply-chain-check", "desc": "Dependency patching and vulnerability audit." }
+      ]
+    },
+    "EU-AI-Art.17": {
+      "title": "Quality management system",
+      "process_only": true,
+      "note": "QMS requires organizational policies, procedures, accountability structures, internal audits, and corrective action processes. Beyond code-scan scope."
+    },
+    "EU-AI-Art.43": {
+      "title": "Conformity assessment",
+      "process_only": true,
+      "note": "Conformity assessment (internal or Notified Body) is a formal procedure before market placement. Requires legal/regulatory process."
+    },
+    "EU-AI-Art.49": {
+      "title": "EU database registration",
+      "process_only": true,
+      "note": "Administrative requirement to register in the EU AI database before deployment."
+    },
+    "EU-AI-Art.51": { "process_only": true, "title": "GPAI classification", "note": "Requires legal determination of GPAI model classification." },
+    "EU-AI-Art.53.1a": {
+      "title": "GPAI technical documentation",
+      "commands": [
+        { "cmd": "/agentic-security:posture-management --aibom", "desc": "Generate AI-BOM as foundation for GPAI documentation." }
+      ]
+    },
+    "EU-AI-Art.53.1b": { "process_only": true, "title": "Downstream provider documentation", "note": "Requires integration guides and model capability/limitation documentation for downstream users." },
+    "EU-AI-Art.53.1c": { "process_only": true, "title": "Copyright compliance policy", "note": "Requires legal review of training data copyright compliance. Counsel owns this." },
+    "EU-AI-Art.53.1d": { "process_only": true, "title": "Training data summary", "note": "Requires sufficiently detailed published summary of training data content." },
+    "EU-AI-Art.55.1": {
+      "title": "Systemic risk — model evaluation",
+      "commands": [
+        { "cmd": "/agentic-security:llm", "desc": "LLM security evaluation." },
+        { "cmd": "/agentic-security:validate-findings", "desc": "Adversarial testing and PoC generation." }
+      ]
+    },
+    "EU-AI-Art.55.2": {
+      "title": "Systemic risk — incident tracking",
+      "commands": [
+        { "cmd": "/agentic-security:generate --type disaster", "desc": "Generate incident tracking and reporting playbook." }
+      ]
+    },
+    "EU-AI-Art.55.3": {
+      "title": "Systemic risk — cybersecurity",
+      "commands": [
+        { "cmd": "/agentic-security:scan --all", "desc": "Full security scan." },
+        { "cmd": "/agentic-security:harden", "desc": "Apply cybersecurity hardening." }
+      ]
+    },
+    "EU-AI-Art.55.4": { "process_only": true, "title": "Energy and compute tracking", "note": "Requires energy consumption and compute usage tracking tools (codecarbon, carbontracker)." },
+    "EU-AI-Art.72": {
+      "title": "Post-market monitoring",
+      "commands": [
+        { "cmd": "/agentic-security:security-trend", "desc": "Enable rolling trend tracking for post-deployment monitoring." },
+        { "cmd": "/agentic-security:cve-alerts", "desc": "Set up daily CVE alerts for ongoing vulnerability monitoring." }
+      ]
+    },
+    "EU-AI-Art.73": {
+      "title": "Serious incident reporting",
+      "commands": [
+        { "cmd": "/agentic-security:generate --type disaster", "desc": "Generate incident response playbook with reporting procedures." }
+      ]
+    }
+  }
+}

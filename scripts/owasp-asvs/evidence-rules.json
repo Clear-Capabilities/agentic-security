@@ -1,75 +1,2769 @@
 {
-  "_doc": "OWASP ASVS Level 1+2 control coverage. Edit / extend per project. Each control: { id, title, manifest_deps[], imports[], paths[], terms[] }.",
+  "_doc": "OWASP ASVS 4.0.3 Level 1+2 — comprehensive requirement mapping across all 14 verification chapters. Published under CC BY-SA 4.0 by the OWASP Foundation. Requirement IDs reference the ASVS standard; descriptions are independently authored. Architecture (V1) and process requirements will show as Not Compliant unless evidenced through documentation.",
+  "_version": "1.0",
   "controls": [
     {
-      "id": "V1.4.1", "title": "Trust boundaries documented",
-      "paths": ["**/THREAT_MODEL.md", "**/threat-model*", "**/architecture/**.md"],
-      "terms": ["trust boundary", "threat model", "STRIDE", "attack surface"]
+      "id": "V1.1.6",
+      "title": "Centralized security controls (not duplicated)",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/middleware/auth*",
+        "**/lib/security*",
+        "**/common/security*",
+        "**/shared/auth*",
+        "**/core/security*"
+      ],
+      "terms": [
+        "securityMiddleware",
+        "security_middleware",
+        "centralized auth",
+        "auth middleware",
+        "security_controls"
+      ]
     },
     {
-      "id": "V2.1.1", "title": "Password length ≥ 8 characters enforced",
-      "imports": ["bcrypt", "argon2", "@node-rs/argon2"],
-      "terms": ["min_length", "minLength", "minimumPasswordLength", "PASSWORD_MIN"]
+      "id": "V1.2.1",
+      "title": "Unique identity per user account",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/models/user*",
+        "**/schema/user*",
+        "**/entities/user*"
+      ],
+      "terms": [
+        "userId",
+        "user_id",
+        "unique_id",
+        "UUID",
+        "primary_key",
+        "UNIQUE"
+      ]
     },
     {
-      "id": "V2.4.1", "title": "Secure password storage (bcrypt / argon2 / scrypt)",
-      "manifest_deps": ["bcrypt", "bcryptjs", "argon2", "argon2-cffi", "@node-rs/argon2"],
-      "imports": ["bcrypt", "bcryptjs", "argon2"]
+      "id": "V1.4.1",
+      "title": "Trust boundaries documented",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/THREAT_MODEL.md",
+        "**/threat-model*",
+        "**/architecture/**.md",
+        "**/docs/architecture*"
+      ],
+      "terms": [
+        "trust boundary",
+        "threat model",
+        "STRIDE",
+        "attack surface",
+        "trust zone"
+      ]
     },
     {
-      "id": "V2.7.1", "title": "MFA available for high-value users",
-      "manifest_deps": ["speakeasy", "pyotp", "@simplewebauthn/server", "fido2-lib"],
-      "terms": ["TOTP", "WebAuthn", "MFA", "two_factor", "multi_factor"]
+      "id": "V1.4.2",
+      "title": "Encryption at trust boundary crossings",
+      "manifest_deps": [],
+      "imports": [
+        "tls",
+        "https",
+        "ssl"
+      ],
+      "paths": [],
+      "terms": [
+        "TLS",
+        "mTLS",
+        "ssl_context",
+        "trust boundary encryption",
+        "encrypted channel"
+      ]
     },
     {
-      "id": "V3.2.1", "title": "Session tokens generated with strong entropy",
-      "imports": ["crypto.randomBytes", "secrets", "uuid"],
-      "terms": ["randomBytes", "secrets.token_", "uuid.v4", "uuidv4"]
+      "id": "V1.5.2",
+      "title": "No deserialization of untrusted data",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "safe_load",
+        "safeLoad",
+        "JSON.parse",
+        "deserialize",
+        "untrusted data"
+      ]
     },
     {
-      "id": "V3.4.1", "title": "Cookies set with Secure / HttpOnly / SameSite",
-      "terms": ["httpOnly: true", "httponly", "secure: true", "sameSite", "samesite"]
+      "id": "V1.5.3",
+      "title": "Input validation at trusted service layer",
+      "manifest_deps": [
+        "joi",
+        "yup",
+        "zod",
+        "ajv",
+        "express-validator",
+        "pydantic",
+        "marshmallow"
+      ],
+      "imports": [
+        "joi",
+        "yup",
+        "zod",
+        "ajv",
+        "pydantic",
+        "marshmallow"
+      ],
+      "paths": [
+        "**/validators/**",
+        "**/validation/**"
+      ],
+      "terms": [
+        "validateInput",
+        "validate_input",
+        "input validation",
+        "schema validation"
+      ]
     },
     {
-      "id": "V4.1.1", "title": "Authorization enforced on every protected endpoint",
-      "terms": ["authorize", "isAuthenticated", "requireAuth", "permit_if", "@RolesAllowed", "AuthGuard"]
+      "id": "V1.6.1",
+      "title": "Key management with rotation support",
+      "manifest_deps": [
+        "@aws-sdk/client-kms",
+        "azure-keyvault-keys",
+        "@google-cloud/kms"
+      ],
+      "imports": [
+        "kms",
+        "keyvault",
+        "keyring"
+      ],
+      "paths": [
+        "**/key-rotation*",
+        "**/key_management*"
+      ],
+      "terms": [
+        "key rotation",
+        "key_rotation",
+        "keyRotation",
+        "KMS",
+        "key management",
+        "rotateKey"
+      ]
     },
     {
-      "id": "V5.1.1", "title": "Input validation library in use",
-      "manifest_deps": ["joi", "yup", "zod", "ajv", "express-validator", "marshmallow", "pydantic", "validator"],
-      "imports": ["joi", "yup", "zod", "marshmallow", "pydantic"]
+      "id": "V1.6.2",
+      "title": "Managed crypto library (not custom crypto)",
+      "manifest_deps": [
+        "bcrypt",
+        "argon2",
+        "tweetnacl",
+        "libsodium-wrappers",
+        "node-forge",
+        "crypto-js",
+        "cryptography"
+      ],
+      "imports": [
+        "crypto",
+        "bcrypt",
+        "argon2",
+        "tweetnacl",
+        "nacl",
+        "cryptography"
+      ],
+      "paths": [],
+      "terms": []
     },
     {
-      "id": "V5.3.4", "title": "Parameterized queries (no string-concat SQL)",
-      "imports": ["knex", "prisma", "sequelize", "sqlalchemy", "pg"],
-      "terms": ["parameterized", "$1", "execute(?", "params=("]
+      "id": "V1.7.1",
+      "title": "Common logging format and approach",
+      "manifest_deps": [
+        "winston",
+        "pino",
+        "bunyan",
+        "morgan",
+        "log4js",
+        "structlog"
+      ],
+      "imports": [
+        "winston",
+        "pino",
+        "bunyan",
+        "morgan",
+        "log4js",
+        "structlog",
+        "logging"
+      ],
+      "paths": [
+        "**/logger*",
+        "**/logging*"
+      ],
+      "terms": [
+        "structured logging",
+        "log format",
+        "logFormat",
+        "log_format"
+      ]
     },
     {
-      "id": "V5.5.1", "title": "Output encoding / context-aware HTML escape",
-      "imports": ["dompurify", "sanitize-html", "bleach", "html-escaper"],
-      "terms": ["escapeHtml", "DOMPurify.sanitize", "html.escape"]
+      "id": "V1.7.2",
+      "title": "Logs shipped to remote analysis system",
+      "manifest_deps": [
+        "@datadog/browser-logs",
+        "@sentry/node",
+        "newrelic",
+        "@elastic/elasticsearch"
+      ],
+      "imports": [
+        "datadog",
+        "sentry",
+        "newrelic",
+        "elasticsearch"
+      ],
+      "paths": [
+        "**/logging/**",
+        "**/observability/**"
+      ],
+      "terms": [
+        "log shipping",
+        "remote logging",
+        "log aggregation",
+        "SIEM",
+        "log drain",
+        "fluentd",
+        "logstash"
+      ]
     },
     {
-      "id": "V7.1.1", "title": "Sensitive data not logged in production",
-      "terms": ["redact", "scrubber", "PII", "PHI", "filter_logs", "logFilter"]
+      "id": "V1.8.1",
+      "title": "Sensitive data identified and classified",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/DATA_CLASSIFICATION*",
+        "**/data-classification*",
+        "**/data_inventory*"
+      ],
+      "terms": [
+        "data classification",
+        "data_classification",
+        "PII",
+        "PHI",
+        "PCI",
+        "sensitive data",
+        "confidential"
+      ]
     },
     {
-      "id": "V8.3.1", "title": "Sensitive data encrypted at rest",
-      "imports": ["crypto-js", "node-forge", "cryptography", "openssl"],
-      "terms": ["AES-256", "AES_256", "encrypt_at_rest", "data-at-rest"]
+      "id": "V1.9.1",
+      "title": "Encrypted communications between components",
+      "manifest_deps": [],
+      "imports": [
+        "tls",
+        "https",
+        "ssl"
+      ],
+      "paths": [],
+      "terms": [
+        "TLS",
+        "mTLS",
+        "ssl_context",
+        "encrypted",
+        "https://",
+        "tls.connect"
+      ]
     },
     {
-      "id": "V9.1.1", "title": "TLS enforced for all comms",
-      "terms": ["https://", "tls.connect", "ssl_ctx", "rejectUnauthorized: true", "force_ssl"]
+      "id": "V1.10.1",
+      "title": "Source code under version control with access control",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        ".gitignore",
+        ".github/CODEOWNERS",
+        "CODEOWNERS"
+      ],
+      "terms": [
+        "CODEOWNERS",
+        "branch protection",
+        "protected branch"
+      ]
     },
     {
-      "id": "V13.1.1", "title": "API documented (OpenAPI / GraphQL schema)",
-      "paths": ["**/openapi*.{yml,yaml,json}", "**/swagger*.{yml,yaml,json}", "**/*.graphql"]
+      "id": "V1.11.3",
+      "title": "Sensitive flows rate-limited",
+      "manifest_deps": [
+        "express-rate-limit",
+        "rate-limiter-flexible",
+        "bottleneck",
+        "p-throttle"
+      ],
+      "imports": [
+        "rateLimit",
+        "rate_limit",
+        "RateLimiter"
+      ],
+      "paths": [],
+      "terms": [
+        "rate limit",
+        "rateLimit",
+        "rate_limit",
+        "throttle",
+        "rateLimiter"
+      ]
     },
     {
-      "id": "V14.2.1", "title": "Dependency CVE scanning automated",
-      "manifest_deps": ["snyk", "audit-ci"],
-      "paths": [".github/workflows/*security*.yml", ".github/workflows/*audit*.yml", "**/.snyk"]
+      "id": "V1.12.1",
+      "title": "User uploads stored outside web root",
+      "manifest_deps": [
+        "multer",
+        "@aws-sdk/client-s3",
+        "formidable"
+      ],
+      "imports": [
+        "multer",
+        "s3",
+        "formidable"
+      ],
+      "paths": [],
+      "terms": [
+        "upload_dir",
+        "uploadDir",
+        "storage bucket",
+        "S3",
+        "blob storage",
+        "outside web root"
+      ]
+    },
+    {
+      "id": "V1.14.3",
+      "title": "Build pipeline with integrity verification",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        ".github/workflows/*.yml",
+        "**/Dockerfile",
+        "**/Jenkinsfile",
+        "**/.gitlab-ci.yml"
+      ],
+      "terms": [
+        "checksum",
+        "SHA256",
+        "integrity",
+        "verify signature",
+        "reproducible build",
+        "artifact signing"
+      ]
+    },
+    {
+      "id": "V1.14.4",
+      "title": "Build pipeline runs SAST and dependency scanning",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        ".github/workflows/*security*.yml",
+        ".github/workflows/*scan*.yml",
+        ".github/workflows/*audit*.yml"
+      ],
+      "terms": [
+        "npm audit",
+        "snyk",
+        "SAST",
+        "dependency scan",
+        "security scan",
+        "CodeQL",
+        "agentic-security"
+      ]
+    },
+    {
+      "id": "V2.1.1",
+      "title": "Password minimum length >= 8 characters enforced",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "min_length",
+        "minLength",
+        "minimumPasswordLength",
+        "PASSWORD_MIN",
+        "minlength: 8",
+        "minLength: 8",
+        "min_length=8"
+      ]
+    },
+    {
+      "id": "V2.1.2",
+      "title": "Password maximum >= 64 characters allowed",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "maxLength",
+        "max_length",
+        "maximumPasswordLength",
+        "PASSWORD_MAX",
+        "maxlength: 64",
+        "maxlength: 128",
+        "max_length=128"
+      ]
+    },
+    {
+      "id": "V2.1.4",
+      "title": "Unicode characters permitted in passwords",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "unicode",
+        "UTF-8",
+        "utf8",
+        "normalize",
+        "NFKC",
+        "NFC",
+        "unicode password"
+      ]
+    },
+    {
+      "id": "V2.1.7",
+      "title": "No composition rules beyond minimum length",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "no composition",
+        "no complexity",
+        "password policy",
+        "passwordPolicy",
+        "password_policy"
+      ]
+    },
+    {
+      "id": "V2.1.8",
+      "title": "Breached password list check",
+      "manifest_deps": [
+        "hibp",
+        "haveibeenpwned",
+        "pwned-passwords",
+        "zxcvbn"
+      ],
+      "imports": [
+        "hibp",
+        "zxcvbn",
+        "pwnedpasswords"
+      ],
+      "paths": [],
+      "terms": [
+        "breached",
+        "pwned",
+        "haveibeenpwned",
+        "hibp",
+        "compromised password",
+        "password breach",
+        "zxcvbn"
+      ]
+    },
+    {
+      "id": "V2.1.11",
+      "title": "Password change functionality available",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/change-password*",
+        "**/changePassword*",
+        "**/password/change*"
+      ],
+      "terms": [
+        "changePassword",
+        "change_password",
+        "updatePassword",
+        "update_password",
+        "password change"
+      ]
+    },
+    {
+      "id": "V2.1.12",
+      "title": "Password change requires current password verification",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "currentPassword",
+        "current_password",
+        "oldPassword",
+        "old_password",
+        "verify current",
+        "confirm password"
+      ]
+    },
+    {
+      "id": "V2.2.1",
+      "title": "Anti-automation controls on authentication endpoints",
+      "manifest_deps": [
+        "express-rate-limit",
+        "rate-limiter-flexible",
+        "express-brute"
+      ],
+      "imports": [
+        "rateLimit",
+        "rate_limit",
+        "brute"
+      ],
+      "paths": [],
+      "terms": [
+        "rate limit",
+        "rateLimit",
+        "rate_limit",
+        "brute force",
+        "lockout",
+        "account lockout",
+        "login attempt",
+        "max attempts",
+        "CAPTCHA",
+        "captcha"
+      ]
+    },
+    {
+      "id": "V2.2.3",
+      "title": "Notification on credential changes",
+      "manifest_deps": [
+        "nodemailer",
+        "@sendgrid/mail",
+        "postmark"
+      ],
+      "imports": [
+        "nodemailer",
+        "sendgrid",
+        "postmark"
+      ],
+      "paths": [],
+      "terms": [
+        "password changed notification",
+        "credential change",
+        "email notification",
+        "notify user",
+        "security alert email"
+      ]
+    },
+    {
+      "id": "V2.3.1",
+      "title": "System-generated initial passwords unique and random",
+      "manifest_deps": [],
+      "imports": [
+        "crypto"
+      ],
+      "paths": [],
+      "terms": [
+        "generatePassword",
+        "generate_password",
+        "randomPassword",
+        "random_password",
+        "temporary password",
+        "initial password"
+      ]
+    },
+    {
+      "id": "V2.4.1",
+      "title": "Passwords stored with bcrypt/argon2/scrypt",
+      "manifest_deps": [
+        "bcrypt",
+        "bcryptjs",
+        "argon2",
+        "argon2-cffi",
+        "@node-rs/argon2",
+        "scrypt"
+      ],
+      "imports": [
+        "bcrypt",
+        "bcryptjs",
+        "argon2",
+        "scrypt"
+      ],
+      "paths": [],
+      "terms": [
+        "bcrypt",
+        "argon2",
+        "scrypt",
+        "hashPassword",
+        "hash_password",
+        "password hash"
+      ]
+    },
+    {
+      "id": "V2.4.3",
+      "title": "Appropriate hash work factor configured",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "saltRounds",
+        "salt_rounds",
+        "cost_factor",
+        "work_factor",
+        "rounds=",
+        "time_cost",
+        "memory_cost",
+        "parallelism"
+      ]
+    },
+    {
+      "id": "V2.5.1",
+      "title": "Secure reset token for password recovery",
+      "manifest_deps": [],
+      "imports": [
+        "crypto"
+      ],
+      "paths": [
+        "**/reset-password*",
+        "**/password-reset*",
+        "**/forgot-password*"
+      ],
+      "terms": [
+        "resetToken",
+        "reset_token",
+        "password reset",
+        "forgot password",
+        "recovery token",
+        "randomBytes"
+      ]
+    },
+    {
+      "id": "V2.5.4",
+      "title": "No shared or default accounts",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "no default",
+        "no shared account",
+        "default password",
+        "shared account",
+        "generic account"
+      ]
+    },
+    {
+      "id": "V2.7.1",
+      "title": "MFA available for high-value actions",
+      "manifest_deps": [
+        "speakeasy",
+        "pyotp",
+        "@simplewebauthn/server",
+        "fido2-lib",
+        "otplib"
+      ],
+      "imports": [
+        "speakeasy",
+        "pyotp",
+        "otplib",
+        "fido2"
+      ],
+      "paths": [],
+      "terms": [
+        "TOTP",
+        "WebAuthn",
+        "MFA",
+        "two_factor",
+        "multi_factor",
+        "twoFactor",
+        "multiFactor",
+        "2FA"
+      ]
+    },
+    {
+      "id": "V2.7.2",
+      "title": "OTP mechanism resistant to phishing",
+      "manifest_deps": [
+        "@simplewebauthn/server",
+        "fido2-lib"
+      ],
+      "imports": [
+        "simplewebauthn",
+        "fido2"
+      ],
+      "paths": [],
+      "terms": [
+        "WebAuthn",
+        "FIDO2",
+        "phishing resistant",
+        "hardware key",
+        "U2F",
+        "passkey"
+      ]
+    },
+    {
+      "id": "V2.7.4",
+      "title": "OTP generated from approved CSPRNG",
+      "manifest_deps": [],
+      "imports": [
+        "crypto"
+      ],
+      "paths": [],
+      "terms": [
+        "randomBytes",
+        "crypto.randomInt",
+        "secrets.token",
+        "CSPRNG",
+        "secure random"
+      ]
+    },
+    {
+      "id": "V2.10.1",
+      "title": "Service secrets not hardcoded in source",
+      "manifest_deps": [
+        "dotenv",
+        "@aws-sdk/client-secrets-manager",
+        "@google-cloud/secret-manager"
+      ],
+      "imports": [
+        "dotenv",
+        "secrets_manager"
+      ],
+      "paths": [
+        ".env.example",
+        "**/.env.template"
+      ],
+      "terms": [
+        "process.env",
+        "os.environ",
+        "vault",
+        "secret manager",
+        "env variable",
+        "KMS"
+      ]
+    },
+    {
+      "id": "V2.10.2",
+      "title": "Service accounts follow least privilege",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/iam*",
+        "**/permissions*",
+        "**/roles*"
+      ],
+      "terms": [
+        "least privilege",
+        "minimal permissions",
+        "scoped credentials",
+        "service account",
+        "IAM role"
+      ]
+    },
+    {
+      "id": "V2.10.4",
+      "title": "API keys sufficiently random and unique",
+      "manifest_deps": [],
+      "imports": [
+        "crypto",
+        "uuid"
+      ],
+      "paths": [],
+      "terms": [
+        "generateApiKey",
+        "generate_api_key",
+        "api_key",
+        "apiKey",
+        "randomBytes",
+        "uuid.v4"
+      ]
+    },
+    {
+      "id": "V3.1.1",
+      "title": "Session tokens generated with CSPRNG",
+      "manifest_deps": [
+        "express-session",
+        "cookie-session",
+        "koa-session"
+      ],
+      "imports": [
+        "crypto.randomBytes",
+        "secrets",
+        "uuid",
+        "express-session"
+      ],
+      "paths": [],
+      "terms": [
+        "randomBytes",
+        "secrets.token_",
+        "uuid.v4",
+        "uuidv4",
+        "session token",
+        "session id"
+      ]
+    },
+    {
+      "id": "V3.2.1",
+      "title": "Session tokens have sufficient entropy (>=128 bits)",
+      "manifest_deps": [],
+      "imports": [
+        "crypto"
+      ],
+      "paths": [],
+      "terms": [
+        "randomBytes(16",
+        "randomBytes(32",
+        "randomBytes(64",
+        "token_hex(32",
+        "entropy",
+        "128 bits"
+      ]
+    },
+    {
+      "id": "V3.2.3",
+      "title": "Logout invalidates server-side session",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/logout*",
+        "**/signout*"
+      ],
+      "terms": [
+        "session.destroy",
+        "session.invalidate",
+        "logout",
+        "signout",
+        "sign_out",
+        "destroySession",
+        "req.logout"
+      ]
+    },
+    {
+      "id": "V3.3.1",
+      "title": "Absolute session timeout configured",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "maxAge",
+        "max_age",
+        "session timeout",
+        "SESSION_TIMEOUT",
+        "absolute timeout",
+        "session expiry",
+        "SESSION_MAX_AGE"
+      ]
+    },
+    {
+      "id": "V3.3.2",
+      "title": "Idle session timeout configured",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "idle timeout",
+        "inactivity timeout",
+        "SESSION_IDLE",
+        "rolling: true",
+        "touch()",
+        "session idle"
+      ]
+    },
+    {
+      "id": "V3.3.3",
+      "title": "Session invalidated on password change",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "invalidate sessions",
+        "revoke sessions",
+        "destroy all sessions",
+        "logout all",
+        "logoutAll",
+        "invalidateAllSessions"
+      ]
+    },
+    {
+      "id": "V3.4.1",
+      "title": "Cookies set with Secure/HttpOnly/SameSite",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "httpOnly: true",
+        "httponly",
+        "secure: true",
+        "sameSite",
+        "samesite",
+        "HttpOnly",
+        "SameSite=Strict",
+        "SameSite=Lax"
+      ]
+    },
+    {
+      "id": "V3.4.3",
+      "title": "Session token not exposed in URL or logs",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "session not logged",
+        "redact session",
+        "no token in url",
+        "cookie only",
+        "Authorization header"
+      ]
+    },
+    {
+      "id": "V3.5.2",
+      "title": "PKCE used for OAuth code flow",
+      "manifest_deps": [
+        "openid-client",
+        "passport-oauth2",
+        "oidc-client-ts"
+      ],
+      "imports": [
+        "openid-client",
+        "passport-oauth2",
+        "oidc-client"
+      ],
+      "paths": [],
+      "terms": [
+        "PKCE",
+        "code_verifier",
+        "code_challenge",
+        "S256",
+        "pkce"
+      ]
+    },
+    {
+      "id": "V3.5.3",
+      "title": "State parameter used for CSRF in OAuth",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "state parameter",
+        "oauth state",
+        "state=",
+        "anti-csrf",
+        "state_param",
+        "nonce"
+      ]
+    },
+    {
+      "id": "V3.7.1",
+      "title": "Re-authentication for sensitive transactions",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "re-auth",
+        "reauth",
+        "reauthenticate",
+        "step-up auth",
+        "confirm password",
+        "sudo mode",
+        "elevated session"
+      ]
+    },
+    {
+      "id": "V4.1.1",
+      "title": "Authorization enforced server-side on every endpoint",
+      "manifest_deps": [
+        "casl",
+        "casbin",
+        "accesscontrol",
+        "express-jwt-permissions"
+      ],
+      "imports": [
+        "casl",
+        "casbin",
+        "accesscontrol"
+      ],
+      "paths": [
+        "**/middleware/auth*",
+        "**/guards/**",
+        "**/policies/**"
+      ],
+      "terms": [
+        "authorize",
+        "isAuthenticated",
+        "requireAuth",
+        "permit_if",
+        "@RolesAllowed",
+        "AuthGuard",
+        "checkPermission"
+      ]
+    },
+    {
+      "id": "V4.1.2",
+      "title": "Access control enforced on data resources",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "row-level security",
+        "RLS",
+        "data access control",
+        "ownership check",
+        "belongs_to",
+        "user.id ===",
+        "authorize resource"
+      ]
+    },
+    {
+      "id": "V4.1.3",
+      "title": "Principle of least privilege enforced per function",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/roles*",
+        "**/permissions*"
+      ],
+      "terms": [
+        "least privilege",
+        "role-based",
+        "RBAC",
+        "permissions",
+        "role",
+        "capability",
+        "scope"
+      ]
+    },
+    {
+      "id": "V4.1.4",
+      "title": "Deny-by-default access control",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "deny by default",
+        "deny-by-default",
+        "default deny",
+        "whitelist",
+        "allowlist",
+        "explicit allow"
+      ]
+    },
+    {
+      "id": "V4.1.5",
+      "title": "Same access rules regardless of request method or origin",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "method-agnostic",
+        "request origin",
+        "access control middleware",
+        "before_action",
+        "beforeEach"
+      ]
+    },
+    {
+      "id": "V4.2.1",
+      "title": "Sensitive data accessible only by authorized users",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "authorize",
+        "requireRole",
+        "require_role",
+        "checkAccess",
+        "check_access",
+        "data authorization"
+      ]
+    },
+    {
+      "id": "V4.2.2",
+      "title": "IDOR protection on object references",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "IDOR",
+        "indirect reference",
+        "ownership check",
+        "authorize resource",
+        "user owns",
+        "findByIdAndUser",
+        "where user_id"
+      ]
+    },
+    {
+      "id": "V4.3.1",
+      "title": "Admin interfaces require strong authentication",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/admin/**",
+        "**/dashboard/**"
+      ],
+      "terms": [
+        "admin auth",
+        "admin guard",
+        "requireAdmin",
+        "require_admin",
+        "isAdmin",
+        "is_admin",
+        "admin middleware",
+        "ADMIN_ROLE"
+      ]
+    },
+    {
+      "id": "V4.3.2",
+      "title": "Directory listing disabled",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "directory listing",
+        "autoindex off",
+        "Options -Indexes",
+        "directoryListing: false",
+        "serveStatic"
+      ]
+    },
+    {
+      "id": "V5.1.1",
+      "title": "Input validation strategy defined and enforced",
+      "manifest_deps": [
+        "joi",
+        "yup",
+        "zod",
+        "ajv",
+        "express-validator",
+        "marshmallow",
+        "pydantic",
+        "validator"
+      ],
+      "imports": [
+        "joi",
+        "yup",
+        "zod",
+        "marshmallow",
+        "pydantic"
+      ],
+      "paths": [
+        "**/validators/**",
+        "**/validation/**",
+        "**/schemas/**"
+      ],
+      "terms": [
+        "input validation",
+        "validate input",
+        "schema validation",
+        "validateRequest",
+        "validate_request"
+      ]
+    },
+    {
+      "id": "V5.1.2",
+      "title": "Positive (allowlist) validation preferred",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "allowlist",
+        "whitelist",
+        "enum",
+        "isIn",
+        "oneOf",
+        "pattern",
+        "regex",
+        "allowed values"
+      ]
+    },
+    {
+      "id": "V5.1.3",
+      "title": "Structured data strongly typed and validated",
+      "manifest_deps": [
+        "zod",
+        "ajv",
+        "yup",
+        "joi",
+        "pydantic",
+        "marshmallow",
+        "class-validator"
+      ],
+      "imports": [
+        "zod",
+        "ajv",
+        "yup",
+        "joi",
+        "pydantic",
+        "marshmallow"
+      ],
+      "paths": [],
+      "terms": [
+        "z.object",
+        "Joi.object",
+        "yup.object",
+        "jsonschema",
+        "JSON Schema",
+        "type checking",
+        "class-validator"
+      ]
+    },
+    {
+      "id": "V5.1.5",
+      "title": "URL redirects and forwards validated against allowlist",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "redirect whitelist",
+        "redirect allowlist",
+        "allowed redirect",
+        "validateRedirect",
+        "validate_redirect",
+        "safe redirect",
+        "open redirect"
+      ]
+    },
+    {
+      "id": "V5.2.1",
+      "title": "Anti-mass-assignment controls",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "mass assignment",
+        "fillable",
+        "guarded",
+        "pick(",
+        "allowedFields",
+        "permitted_params",
+        "strong_params",
+        "permit(",
+        "req.body."
+      ]
+    },
+    {
+      "id": "V5.2.6",
+      "title": "Untrusted HTML markup sanitized against XSS",
+      "manifest_deps": [
+        "dompurify",
+        "sanitize-html",
+        "xss",
+        "bleach",
+        "isomorphic-dompurify"
+      ],
+      "imports": [
+        "dompurify",
+        "sanitize-html",
+        "xss",
+        "bleach"
+      ],
+      "paths": [],
+      "terms": [
+        "sanitize",
+        "DOMPurify",
+        "sanitizeHtml",
+        "clean html",
+        "strip tags",
+        "escapeHtml"
+      ]
+    },
+    {
+      "id": "V5.2.7",
+      "title": "HTML sanitizer library used (not regex)",
+      "manifest_deps": [
+        "dompurify",
+        "sanitize-html",
+        "bleach",
+        "isomorphic-dompurify"
+      ],
+      "imports": [
+        "dompurify",
+        "sanitize-html",
+        "bleach"
+      ],
+      "paths": [],
+      "terms": [
+        "DOMPurify.sanitize",
+        "sanitizeHtml",
+        "bleach.clean",
+        "html sanitizer"
+      ]
+    },
+    {
+      "id": "V5.2.8",
+      "title": "SVG scripting and inline content restricted",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "svg sanitize",
+        "svg filter",
+        "FORBID_TAGS",
+        "foreignObject",
+        "svg validation",
+        "image/svg+xml"
+      ]
+    },
+    {
+      "id": "V5.3.1",
+      "title": "Output encoding appropriate to context",
+      "manifest_deps": [
+        "he",
+        "html-entities",
+        "html-escaper",
+        "encode-html-template-tag"
+      ],
+      "imports": [
+        "he",
+        "html-entities",
+        "html-escaper"
+      ],
+      "paths": [],
+      "terms": [
+        "escapeHtml",
+        "html.escape",
+        "encodeURIComponent",
+        "htmlspecialchars",
+        "output encoding",
+        "context-aware encoding"
+      ]
+    },
+    {
+      "id": "V5.3.3",
+      "title": "JavaScript context-aware output encoding",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "encodeURIComponent",
+        "JSON.stringify",
+        "escapeJs",
+        "javascript escape",
+        "context encoding",
+        "js encode"
+      ]
+    },
+    {
+      "id": "V5.3.4",
+      "title": "SQL queries use parameterized statements",
+      "manifest_deps": [
+        "knex",
+        "prisma",
+        "sequelize",
+        "typeorm",
+        "pg",
+        "mysql2",
+        "better-sqlite3"
+      ],
+      "imports": [
+        "knex",
+        "prisma",
+        "sequelize",
+        "typeorm",
+        "pg",
+        "mysql2",
+        "sqlalchemy"
+      ],
+      "paths": [],
+      "terms": [
+        "parameterized",
+        "$1",
+        "execute(?",
+        "params=(",
+        "prepared statement",
+        "placeholder",
+        "query(?)"
+      ]
+    },
+    {
+      "id": "V5.3.5",
+      "title": "OS command injection prevented via parameterization",
+      "manifest_deps": [],
+      "imports": [
+        "child_process",
+        "subprocess",
+        "shlex"
+      ],
+      "paths": [],
+      "terms": [
+        "execFile",
+        "spawn",
+        "subprocess.run",
+        "shlex.quote",
+        "shell=False",
+        "command injection",
+        "no shell"
+      ]
+    },
+    {
+      "id": "V5.3.7",
+      "title": "XPath and LDAP injection prevented",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "xpath escape",
+        "ldap escape",
+        "parameterized xpath",
+        "ldap filter",
+        "LDAP injection"
+      ]
+    },
+    {
+      "id": "V5.3.8",
+      "title": "Server-side template injection prevented",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "template injection",
+        "SSTI",
+        "sandbox template",
+        "auto-escape",
+        "autoescape",
+        "nunjucks autoesc",
+        "jinja2 autoescape"
+      ]
+    },
+    {
+      "id": "V5.3.10",
+      "title": "SSRF protection on server-side requests",
+      "manifest_deps": [
+        "ssrf-req-filter",
+        "ssrf-agent"
+      ],
+      "imports": [
+        "ssrf-req-filter"
+      ],
+      "paths": [],
+      "terms": [
+        "SSRF",
+        "ssrf",
+        "URL allowlist",
+        "URL whitelist",
+        "validateUrl",
+        "validate_url",
+        "internal network",
+        "private IP"
+      ]
+    },
+    {
+      "id": "V5.5.1",
+      "title": "Unsafe deserialization prevented",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "safe_load",
+        "safeLoad",
+        "JSON.parse",
+        "safe deserialization",
+        "no pickle",
+        "yaml.safe_load",
+        "deserialize"
+      ]
+    },
+    {
+      "id": "V5.5.2",
+      "title": "XML external entity (XXE) processing disabled",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "XXE",
+        "disallow-doctype-decl",
+        "FEATURE_EXTERNAL_ENTITIES",
+        "resolve_entities=False",
+        "noent: false",
+        "defusedxml"
+      ]
+    },
+    {
+      "id": "V5.5.3",
+      "title": "Safe JSON parsing practices",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "JSON.parse",
+        "json.loads",
+        "try catch",
+        "try/except",
+        "safe parse",
+        "json parse error"
+      ]
+    },
+    {
+      "id": "V6.1.1",
+      "title": "Regulated or sensitive data encrypted at rest",
+      "manifest_deps": [
+        "@aws-sdk/client-kms",
+        "crypto-js",
+        "node-forge",
+        "cryptography"
+      ],
+      "imports": [
+        "crypto",
+        "cryptography",
+        "Cipher"
+      ],
+      "paths": [],
+      "terms": [
+        "AES-256",
+        "AES_256",
+        "encrypt_at_rest",
+        "data-at-rest",
+        "column encryption",
+        "field-level encryption",
+        "encrypt"
+      ]
+    },
+    {
+      "id": "V6.2.1",
+      "title": "Proven and approved cryptographic algorithms",
+      "manifest_deps": [],
+      "imports": [
+        "crypto"
+      ],
+      "paths": [],
+      "terms": [
+        "AES",
+        "RSA",
+        "ECDSA",
+        "Ed25519",
+        "ChaCha20",
+        "SHA-256",
+        "SHA-384",
+        "SHA-512"
+      ]
+    },
+    {
+      "id": "V6.2.2",
+      "title": "Current cryptographic algorithms used (no deprecated)",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "aes-256-gcm",
+        "AES-GCM",
+        "sha256",
+        "sha384",
+        "sha512",
+        "ECDHE",
+        "curve25519"
+      ]
+    },
+    {
+      "id": "V6.2.3",
+      "title": "Random values generated from approved CSPRNG",
+      "manifest_deps": [],
+      "imports": [
+        "crypto"
+      ],
+      "paths": [],
+      "terms": [
+        "crypto.randomBytes",
+        "crypto.getRandomValues",
+        "secrets.token",
+        "SecureRandom",
+        "CSPRNG",
+        "randomUUID"
+      ]
+    },
+    {
+      "id": "V6.2.5",
+      "title": "Deprecated algorithms identified and replaced",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "no MD5",
+        "no SHA1",
+        "deprecated algorithm",
+        "algorithm upgrade",
+        "migrate crypto"
+      ]
+    },
+    {
+      "id": "V6.2.6",
+      "title": "Nonces and IVs not reused across operations",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "randomIV",
+        "random_iv",
+        "generateIV",
+        "nonce",
+        "initialization vector",
+        "unique IV",
+        "randomBytes"
+      ]
+    },
+    {
+      "id": "V6.2.7",
+      "title": "Encrypted data authenticated (AEAD mode)",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "GCM",
+        "aes-256-gcm",
+        "ChaCha20-Poly1305",
+        "AEAD",
+        "authenticated encryption",
+        "authTag"
+      ]
+    },
+    {
+      "id": "V6.3.2",
+      "title": "UUIDs use version 4 (CSPRNG-based)",
+      "manifest_deps": [
+        "uuid"
+      ],
+      "imports": [
+        "uuid",
+        "crypto"
+      ],
+      "paths": [],
+      "terms": [
+        "uuid.v4",
+        "uuidv4",
+        "randomUUID",
+        "UUID v4",
+        "uuid4"
+      ]
+    },
+    {
+      "id": "V6.4.1",
+      "title": "Key lifecycle management (generation, rotation, revocation)",
+      "manifest_deps": [
+        "@aws-sdk/client-kms",
+        "azure-keyvault-keys",
+        "@google-cloud/kms"
+      ],
+      "imports": [
+        "kms",
+        "keyvault"
+      ],
+      "paths": [
+        "**/key-rotation*",
+        "**/key-management*"
+      ],
+      "terms": [
+        "key rotation",
+        "key lifecycle",
+        "key generation",
+        "key revocation",
+        "key management",
+        "KMS"
+      ]
+    },
+    {
+      "id": "V6.4.2",
+      "title": "Key material not directly exposed to application code",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "key vault",
+        "KMS",
+        "secret manager",
+        "HSM",
+        "key reference",
+        "key alias",
+        "wrapped key"
+      ]
+    },
+    {
+      "id": "V7.1.1",
+      "title": "No sensitive data exposed in error messages",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "redact",
+        "scrubber",
+        "PII",
+        "PHI",
+        "filter_logs",
+        "logFilter",
+        "generic error",
+        "safe error"
+      ]
+    },
+    {
+      "id": "V7.1.2",
+      "title": "Exception handling covers entire application",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "global error handler",
+        "uncaughtException",
+        "unhandledRejection",
+        "error boundary",
+        "ErrorBoundary",
+        "exception handler",
+        "app.use(err"
+      ]
+    },
+    {
+      "id": "V7.1.3",
+      "title": "Last-resort error handler prevents information leakage",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "fallback error",
+        "last resort",
+        "500 error",
+        "Internal Server Error",
+        "generic error page",
+        "default error handler"
+      ]
+    },
+    {
+      "id": "V7.1.4",
+      "title": "Consistent error handling strategy across application",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/errors/**",
+        "**/exceptions/**",
+        "**/error-handler*"
+      ],
+      "terms": [
+        "error handler",
+        "error middleware",
+        "AppError",
+        "HttpException",
+        "CustomError",
+        "BaseError",
+        "error strategy"
+      ]
+    },
+    {
+      "id": "V7.2.1",
+      "title": "Security-relevant events logged",
+      "manifest_deps": [
+        "winston",
+        "pino",
+        "bunyan"
+      ],
+      "imports": [
+        "winston",
+        "pino",
+        "bunyan",
+        "logging"
+      ],
+      "paths": [],
+      "terms": [
+        "security event",
+        "audit log",
+        "auditLog",
+        "audit_log",
+        "security log",
+        "login failed",
+        "access denied",
+        "auth event"
+      ]
+    },
+    {
+      "id": "V7.2.2",
+      "title": "Log entries contain sufficient context",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "log context",
+        "request id",
+        "requestId",
+        "correlation id",
+        "correlationId",
+        "user id",
+        "timestamp",
+        "structured log"
+      ]
+    },
+    {
+      "id": "V7.3.1",
+      "title": "Sensitive data not present in log output",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "redact",
+        "mask",
+        "scrub",
+        "sanitize log",
+        "filter sensitive",
+        "log sanitizer",
+        "no password in log"
+      ]
+    },
+    {
+      "id": "V7.3.2",
+      "title": "Log injection prevented",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "log injection",
+        "sanitize log input",
+        "escape log",
+        "structured logging",
+        "JSON log",
+        "no user input in log"
+      ]
+    },
+    {
+      "id": "V7.4.1",
+      "title": "Log analysis or monitoring capability present",
+      "manifest_deps": [
+        "@datadog/browser-logs",
+        "@sentry/node",
+        "newrelic",
+        "@elastic/elasticsearch"
+      ],
+      "imports": [
+        "datadog",
+        "sentry",
+        "newrelic"
+      ],
+      "paths": [
+        "**/monitoring/**",
+        "**/alerting/**"
+      ],
+      "terms": [
+        "log analysis",
+        "alerting",
+        "monitoring",
+        "SIEM",
+        "log aggregation",
+        "Datadog",
+        "Sentry",
+        "CloudWatch"
+      ]
+    },
+    {
+      "id": "V8.1.1",
+      "title": "Data inventory and classification maintained",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/DATA_CLASSIFICATION*",
+        "**/data-classification*",
+        "**/data-inventory*",
+        "**/DATA_FLOW*"
+      ],
+      "terms": [
+        "data classification",
+        "data_classification",
+        "data inventory",
+        "PII inventory",
+        "sensitive fields"
+      ]
+    },
+    {
+      "id": "V8.2.1",
+      "title": "Anti-caching headers on sensitive responses",
+      "manifest_deps": [
+        "helmet",
+        "nocache"
+      ],
+      "imports": [
+        "helmet",
+        "nocache"
+      ],
+      "paths": [],
+      "terms": [
+        "no-cache",
+        "no-store",
+        "Cache-Control",
+        "must-revalidate",
+        "Pragma: no-cache",
+        "nocache"
+      ]
+    },
+    {
+      "id": "V8.2.2",
+      "title": "Sensitive data not embedded in URL parameters",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "POST body",
+        "request body",
+        "no token in url",
+        "no password in url",
+        "sensitive in body"
+      ]
+    },
+    {
+      "id": "V8.3.1",
+      "title": "Sensitive data encrypted in transit",
+      "manifest_deps": [],
+      "imports": [
+        "tls",
+        "https",
+        "ssl"
+      ],
+      "paths": [],
+      "terms": [
+        "https://",
+        "tls.connect",
+        "ssl_ctx",
+        "rejectUnauthorized: true",
+        "force_ssl",
+        "TLS",
+        "HTTPS"
+      ]
+    },
+    {
+      "id": "V8.3.4",
+      "title": "PII fields identified for data protection",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/privacy*",
+        "**/data-protection*",
+        "**/DATA_FLOW*"
+      ],
+      "terms": [
+        "PII",
+        "personal data",
+        "personally identifiable",
+        "data subject",
+        "privacy",
+        "GDPR"
+      ]
+    },
+    {
+      "id": "V8.3.5",
+      "title": "Data subject access and deletion supported",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/gdpr*",
+        "**/data-request*",
+        "**/privacy*"
+      ],
+      "terms": [
+        "data deletion",
+        "right to erasure",
+        "data export",
+        "data subject access",
+        "DSAR",
+        "forget me",
+        "delete account",
+        "deleteUser"
+      ]
+    },
+    {
+      "id": "V8.3.7",
+      "title": "Sensitive data sent in HTTP body not query string",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "POST method",
+        "request body",
+        "no query string",
+        "body parser",
+        "bodyParser",
+        "express.json"
+      ]
+    },
+    {
+      "id": "V9.1.1",
+      "title": "TLS enforced for all client connections",
+      "manifest_deps": [],
+      "imports": [
+        "tls",
+        "https"
+      ],
+      "paths": [],
+      "terms": [
+        "https://",
+        "tls.connect",
+        "ssl_ctx",
+        "rejectUnauthorized: true",
+        "force_ssl",
+        "HTTPS",
+        "SSL_CERT"
+      ]
+    },
+    {
+      "id": "V9.1.2",
+      "title": "Latest TLS versions required (1.2+)",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "TLSv1.2",
+        "TLSv1.3",
+        "minVersion",
+        "ssl.PROTOCOL_TLSv1_2",
+        "TLS_MIN_VERSION",
+        "tls1.2"
+      ]
+    },
+    {
+      "id": "V9.1.3",
+      "title": "Only strong cipher suites enabled",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "ciphers",
+        "cipher suite",
+        "ECDHE",
+        "AES_256_GCM",
+        "CHACHA20",
+        "strong ciphers",
+        "cipher list"
+      ]
+    },
+    {
+      "id": "V9.2.1",
+      "title": "Server certificate validation enabled",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "rejectUnauthorized: true",
+        "verify_ssl",
+        "cert_reqs",
+        "CERT_REQUIRED",
+        "ca cert",
+        "certificate pinning"
+      ]
+    },
+    {
+      "id": "V10.2.1",
+      "title": "No time-bombs, backdoors, or malicious logic",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "code review",
+        "peer review",
+        "pull request",
+        "CODEOWNERS",
+        "approved review"
+      ]
+    },
+    {
+      "id": "V10.3.2",
+      "title": "Client-side integrity verification for loaded resources",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "integrity=",
+        "crossorigin",
+        "SRI",
+        "subresource integrity",
+        "sha384-",
+        "sha256-"
+      ]
+    },
+    {
+      "id": "V10.3.3",
+      "title": "Subresource Integrity for external scripts",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/*.html",
+        "**/index.html"
+      ],
+      "terms": [
+        "integrity=",
+        "crossorigin=",
+        "SRI",
+        "sha384-",
+        "sha256-",
+        "subresource"
+      ]
+    },
+    {
+      "id": "V11.1.1",
+      "title": "Business logic events processed in correct sequence",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "state machine",
+        "workflow",
+        "step validation",
+        "sequence check",
+        "order validation",
+        "status transition"
+      ]
+    },
+    {
+      "id": "V11.1.3",
+      "title": "Concurrent requests handled safely (race conditions prevented)",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "mutex",
+        "lock",
+        "optimistic locking",
+        "pessimistic locking",
+        "version column",
+        "SELECT FOR UPDATE",
+        "transaction isolation",
+        "atomic",
+        "race condition"
+      ]
+    },
+    {
+      "id": "V11.1.5",
+      "title": "Rate limiting on critical business operations",
+      "manifest_deps": [
+        "express-rate-limit",
+        "rate-limiter-flexible",
+        "bottleneck",
+        "p-throttle"
+      ],
+      "imports": [
+        "rateLimit",
+        "rate_limit",
+        "RateLimiter",
+        "bottleneck"
+      ],
+      "paths": [],
+      "terms": [
+        "rate limit",
+        "rateLimit",
+        "rate_limit",
+        "throttle",
+        "requests per minute",
+        "rate limiting"
+      ]
+    },
+    {
+      "id": "V11.1.6",
+      "title": "Anti-automation controls on sensitive actions",
+      "manifest_deps": [
+        "express-rate-limit",
+        "hcaptcha",
+        "recaptcha"
+      ],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "CAPTCHA",
+        "captcha",
+        "reCAPTCHA",
+        "hCaptcha",
+        "bot detection",
+        "anti-bot",
+        "challenge"
+      ]
+    },
+    {
+      "id": "V12.1.1",
+      "title": "File upload size limits enforced",
+      "manifest_deps": [
+        "multer",
+        "formidable",
+        "busboy"
+      ],
+      "imports": [
+        "multer",
+        "formidable",
+        "busboy"
+      ],
+      "paths": [],
+      "terms": [
+        "maxFileSize",
+        "max_file_size",
+        "fileSize",
+        "limits",
+        "upload limit",
+        "MAX_UPLOAD",
+        "limit: {"
+      ]
+    },
+    {
+      "id": "V12.1.2",
+      "title": "Uploaded file types validated",
+      "manifest_deps": [
+        "file-type",
+        "mime-types"
+      ],
+      "imports": [
+        "file-type",
+        "mime-types",
+        "mimetypes"
+      ],
+      "paths": [],
+      "terms": [
+        "file type",
+        "mime type",
+        "allowed types",
+        "fileFilter",
+        "file_filter",
+        "content type check",
+        "extension check",
+        "ALLOWED_EXTENSIONS"
+      ]
+    },
+    {
+      "id": "V12.3.1",
+      "title": "User-submitted filenames sanitized",
+      "manifest_deps": [
+        "sanitize-filename"
+      ],
+      "imports": [
+        "sanitize-filename",
+        "secure_filename"
+      ],
+      "paths": [],
+      "terms": [
+        "sanitize filename",
+        "sanitizeFilename",
+        "secure_filename",
+        "strip path",
+        "basename",
+        "filename sanitize"
+      ]
+    },
+    {
+      "id": "V12.3.2",
+      "title": "Path traversal prevented in file operations",
+      "manifest_deps": [],
+      "imports": [
+        "path"
+      ],
+      "paths": [],
+      "terms": [
+        "path traversal",
+        "directory traversal",
+        "path.resolve",
+        "path.normalize",
+        "realpath",
+        "../",
+        "path.join",
+        "path.basename"
+      ]
+    },
+    {
+      "id": "V12.3.6",
+      "title": "Correct MIME/Content-Type set on responses",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "Content-Type",
+        "content-type",
+        "mime type",
+        "X-Content-Type-Options",
+        "nosniff"
+      ]
+    },
+    {
+      "id": "V12.5.1",
+      "title": "File uploads stored outside web root",
+      "manifest_deps": [
+        "@aws-sdk/client-s3",
+        "multer"
+      ],
+      "imports": [
+        "s3",
+        "multer"
+      ],
+      "paths": [],
+      "terms": [
+        "upload directory",
+        "uploadDir",
+        "upload_dir",
+        "S3",
+        "blob storage",
+        "cloud storage",
+        "outside web root"
+      ]
+    },
+    {
+      "id": "V12.6.1",
+      "title": "User-generated content served from sandboxed domain",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "sandbox domain",
+        "CDN",
+        "separate domain",
+        "content domain",
+        "user content domain",
+        "static assets domain"
+      ]
+    },
+    {
+      "id": "V13.1.1",
+      "title": "API documented with machine-readable schema",
+      "manifest_deps": [
+        "swagger-jsdoc",
+        "swagger-ui-express",
+        "@nestjs/swagger",
+        "express-openapi-validator"
+      ],
+      "imports": [
+        "swagger-jsdoc",
+        "swagger-ui-express"
+      ],
+      "paths": [
+        "**/openapi*.{yml,yaml,json}",
+        "**/swagger*.{yml,yaml,json}",
+        "**/*.graphql",
+        "**/api-docs*"
+      ],
+      "terms": [
+        "openapi",
+        "swagger",
+        "API documentation",
+        "GraphQL schema"
+      ]
+    },
+    {
+      "id": "V13.1.3",
+      "title": "API responses conform to defined schema",
+      "manifest_deps": [
+        "express-openapi-validator",
+        "ajv"
+      ],
+      "imports": [
+        "express-openapi-validator",
+        "ajv"
+      ],
+      "paths": [],
+      "terms": [
+        "response validation",
+        "schema validation",
+        "validate response",
+        "response schema",
+        "contract testing"
+      ]
+    },
+    {
+      "id": "V13.1.4",
+      "title": "CORS policy restricts allowed origins",
+      "manifest_deps": [
+        "cors"
+      ],
+      "imports": [
+        "cors"
+      ],
+      "paths": [],
+      "terms": [
+        "CORS",
+        "Access-Control-Allow-Origin",
+        "cors({",
+        "allowedOrigins",
+        "origin:",
+        "cors_allowed"
+      ]
+    },
+    {
+      "id": "V13.2.1",
+      "title": "Appropriate HTTP methods enforced per endpoint",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "app.get",
+        "app.post",
+        "app.put",
+        "app.delete",
+        "router.get",
+        "router.post",
+        "@Get",
+        "@Post",
+        "methods=["
+      ]
+    },
+    {
+      "id": "V13.2.2",
+      "title": "JSON schema validation on request bodies",
+      "manifest_deps": [
+        "ajv",
+        "express-openapi-validator",
+        "zod",
+        "joi"
+      ],
+      "imports": [
+        "ajv",
+        "zod",
+        "joi"
+      ],
+      "paths": [],
+      "terms": [
+        "schema validation",
+        "validate body",
+        "body schema",
+        "request validation",
+        "JSON schema"
+      ]
+    },
+    {
+      "id": "V13.2.5",
+      "title": "GraphQL query depth and complexity limiting",
+      "manifest_deps": [
+        "graphql-depth-limit",
+        "graphql-validation-complexity",
+        "graphql-query-complexity"
+      ],
+      "imports": [
+        "graphql-depth-limit",
+        "graphql-query-complexity"
+      ],
+      "paths": [],
+      "terms": [
+        "depth limit",
+        "query complexity",
+        "maxDepth",
+        "max_depth",
+        "cost analysis",
+        "query cost"
+      ]
+    },
+    {
+      "id": "V13.2.6",
+      "title": "GraphQL per-field authorization",
+      "manifest_deps": [
+        "graphql-shield",
+        "graphql-authz"
+      ],
+      "imports": [
+        "graphql-shield"
+      ],
+      "paths": [],
+      "terms": [
+        "field authorization",
+        "field-level auth",
+        "graphql auth",
+        "resolver guard",
+        "@Auth",
+        "fieldPermission"
+      ]
+    },
+    {
+      "id": "V13.4.1",
+      "title": "WebSocket connections require authentication",
+      "manifest_deps": [
+        "ws",
+        "socket.io"
+      ],
+      "imports": [
+        "ws",
+        "socket.io"
+      ],
+      "paths": [],
+      "terms": [
+        "WebSocket auth",
+        "ws auth",
+        "socket auth",
+        "connection auth",
+        "socket middleware",
+        "onConnection auth"
+      ]
+    },
+    {
+      "id": "V14.1.1",
+      "title": "Separate build and deployment environments",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/Dockerfile",
+        "**/docker-compose*",
+        ".github/workflows/*.yml",
+        "**/.gitlab-ci.yml",
+        "**/Jenkinsfile"
+      ],
+      "terms": [
+        "build stage",
+        "deploy stage",
+        "CI/CD",
+        "build pipeline",
+        "multi-stage",
+        "production build"
+      ]
+    },
+    {
+      "id": "V14.1.5",
+      "title": "Admin access to infrastructure limited",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/CODEOWNERS",
+        ".github/CODEOWNERS"
+      ],
+      "terms": [
+        "admin access",
+        "infrastructure access",
+        "IAM",
+        "least privilege",
+        "access control",
+        "RBAC"
+      ]
+    },
+    {
+      "id": "V14.2.1",
+      "title": "Dependency CVE scanning automated in CI",
+      "manifest_deps": [
+        "audit-ci",
+        "better-npm-audit"
+      ],
+      "imports": [],
+      "paths": [
+        ".github/workflows/*security*.yml",
+        ".github/workflows/*audit*.yml",
+        ".github/workflows/*scan*.yml"
+      ],
+      "terms": [
+        "npm audit",
+        "snyk test",
+        "SAST",
+        "dependency scan",
+        "CVE scan",
+        "vulnerability scan",
+        "agentic-security",
+        "dependabot"
+      ]
+    },
+    {
+      "id": "V14.2.2",
+      "title": "Unnecessary features and components removed",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "dead code",
+        "unused",
+        "tree shaking",
+        "pruning",
+        "minimal install",
+        "production only"
+      ]
+    },
+    {
+      "id": "V14.2.3",
+      "title": "Security-related HTTP headers configured",
+      "manifest_deps": [
+        "helmet"
+      ],
+      "imports": [
+        "helmet"
+      ],
+      "paths": [],
+      "terms": [
+        "helmet",
+        "security headers",
+        "X-Content-Type-Options",
+        "X-Frame-Options",
+        "Strict-Transport-Security",
+        "Content-Security-Policy"
+      ]
+    },
+    {
+      "id": "V14.2.5",
+      "title": "Third-party component inventory maintained",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [
+        "**/package-lock.json",
+        "**/yarn.lock",
+        "**/pnpm-lock.yaml",
+        "**/Pipfile.lock",
+        "**/poetry.lock",
+        "**/go.sum"
+      ],
+      "terms": [
+        "SBOM",
+        "software bill of materials",
+        "dependency inventory",
+        "third-party inventory",
+        "license audit"
+      ]
+    },
+    {
+      "id": "V14.3.1",
+      "title": "Error messages do not reveal sensitive server info",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "generic error",
+        "safe error",
+        "error handler",
+        "hide stack",
+        "no stack trace",
+        "production error"
+      ]
+    },
+    {
+      "id": "V14.3.2",
+      "title": "Debug mode disabled in production",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "NODE_ENV=production",
+        "DEBUG=false",
+        "debug: false",
+        "production mode",
+        "debug mode off",
+        "FLASK_DEBUG=0"
+      ]
+    },
+    {
+      "id": "V14.3.3",
+      "title": "HTTP response headers do not reveal server technology",
+      "manifest_deps": [
+        "helmet"
+      ],
+      "imports": [
+        "helmet"
+      ],
+      "paths": [],
+      "terms": [
+        "X-Powered-By",
+        "removeHeader",
+        "hidePoweredBy",
+        "server header",
+        "hide server",
+        "helmet.hidePoweredBy"
+      ]
+    },
+    {
+      "id": "V14.4.1",
+      "title": "HTTP Strict Transport Security (HSTS) header set",
+      "manifest_deps": [
+        "helmet"
+      ],
+      "imports": [
+        "helmet"
+      ],
+      "paths": [],
+      "terms": [
+        "Strict-Transport-Security",
+        "HSTS",
+        "hsts",
+        "max-age=",
+        "includeSubDomains",
+        "helmet.hsts"
+      ]
+    },
+    {
+      "id": "V14.4.2",
+      "title": "Content Security Policy (CSP) header configured",
+      "manifest_deps": [
+        "helmet"
+      ],
+      "imports": [
+        "helmet"
+      ],
+      "paths": [],
+      "terms": [
+        "Content-Security-Policy",
+        "CSP",
+        "contentSecurityPolicy",
+        "default-src",
+        "script-src",
+        "helmet.contentSecurityPolicy"
+      ]
+    },
+    {
+      "id": "V14.4.3",
+      "title": "X-Content-Type-Options nosniff header set",
+      "manifest_deps": [
+        "helmet"
+      ],
+      "imports": [
+        "helmet"
+      ],
+      "paths": [],
+      "terms": [
+        "X-Content-Type-Options",
+        "nosniff",
+        "noSniff"
+      ]
+    },
+    {
+      "id": "V14.4.5",
+      "title": "Content-Type header specified on all responses",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "Content-Type",
+        "content-type",
+        "application/json",
+        "text/html",
+        "res.type",
+        "res.setHeader"
+      ]
+    },
+    {
+      "id": "V14.4.6",
+      "title": "X-Frame-Options or CSP frame-ancestors set",
+      "manifest_deps": [
+        "helmet"
+      ],
+      "imports": [
+        "helmet"
+      ],
+      "paths": [],
+      "terms": [
+        "X-Frame-Options",
+        "frame-ancestors",
+        "DENY",
+        "SAMEORIGIN",
+        "frameguard",
+        "helmet.frameguard"
+      ]
+    },
+    {
+      "id": "V14.4.7",
+      "title": "CORS policy properly restricted",
+      "manifest_deps": [
+        "cors"
+      ],
+      "imports": [
+        "cors"
+      ],
+      "paths": [],
+      "terms": [
+        "CORS",
+        "Access-Control-Allow-Origin",
+        "cors({",
+        "allowedOrigins",
+        "origin:",
+        "cors_allowed",
+        "cors whitelist"
+      ]
+    },
+    {
+      "id": "V14.5.1",
+      "title": "Server-side request parsing and content negotiation restricted",
+      "manifest_deps": [],
+      "imports": [],
+      "paths": [],
+      "terms": [
+        "body parser limit",
+        "payload limit",
+        "maxPayloadSize",
+        "express.json({ limit",
+        "bodyParser.json({ limit"
+      ]
+    },
+    {
+      "id": "V14.5.3",
+      "title": "HTTP parameter pollution prevented",
+      "manifest_deps": [
+        "hpp"
+      ],
+      "imports": [
+        "hpp"
+      ],
+      "paths": [],
+      "terms": [
+        "HPP",
+        "parameter pollution",
+        "hpp",
+        "duplicate parameter",
+        "query whitelist"
+      ]
     }
   ]
 }

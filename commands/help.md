@@ -138,7 +138,7 @@ you already run, customization, and audit-defensible output.
     /posture-management --drift  Compare two scans
     /posture-management --mttr   Findings exceeding SLA thresholds
     /security-trend            Rolling history + regression detection
-    /compliance-report [nist|asvs|llm]   Auditor-ready attestation
+    /compliance-report [nist|asvs|llm|eu-ai-act]   Auditor-ready attestation
     /compliance-fix            Route every Not-Compliant control to its fix
 
   Scanner engineering

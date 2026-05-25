@@ -42,9 +42,6 @@ nist-ai-600-1-attestation.*
 owasp-asvs-attestation.*
 owasp-llm-top10-attestation.*
 pci-dss-attestation.*
-soc2-attestation.*
-iso-27001-attestation.*
-iso-42001-attestation.*
 eu-ai-act-attestation.*
 HARNESS_SCORE.*
 

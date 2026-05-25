@@ -7,7 +7,7 @@ addresses it. Prints a deduped, ordered plan; flags process-only controls
 that no tool can close.
 
 Usage:
-    plan.py {nist|asvs|llm} [PATH] [--dry-run]
+    plan.py {nist|asvs|llm|eu-ai-act} [PATH] [--dry-run]
 
 PATH defaults to '.'. With --dry-run the script prints the plan and stops.
 Without --dry-run the script just prints the plan with a one-liner telling
@@ -25,9 +25,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.dirname(HERE)
 
 FRAMEWORKS = {
-    "llm":  ("owasp-llm-top10",   "routing-llm.json"),
-    "asvs": ("owasp-asvs",        "routing-asvs.json"),
-    "nist": ("nist-compliance",   "routing-nist.json"),
+    "llm":      ("owasp-llm-top10",   "routing-llm.json"),
+    "asvs":     ("owasp-asvs",        "routing-asvs.json"),
+    "nist":     ("nist-compliance",    "routing-nist.json"),
+    "eu-ai-act":("eu-ai-act",        "routing-eu-ai-act.json"),
 }
 
 # ANSI for the action lines — falls back to plain if NO_COLOR or non-TTY.

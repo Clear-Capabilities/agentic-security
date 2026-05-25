@@ -1,62 +1,590 @@
 {
-  "_doc": "EU AI Act Articles 9–15 — v0 code-detectable mapping for high-risk AI systems. The Act's applicability (whether your system is in scope of Annex III) is a legal determination owned by Counsel / GRC. This overlay surfaces only the code-shaped obligations: risk management system (Art. 9), data governance (Art. 10), technical documentation (Art. 11), record-keeping (Art. 12), transparency (Art. 13), human oversight (Art. 14), accuracy / robustness / cybersecurity (Art. 15). Article 12 is the most code-detectable.",
-  "_version": "0.1",
+  "_doc": "EU AI Act — comprehensive mapping covering prohibited practices (Art. 5), high-risk system obligations (Art. 9-15), quality management (Art. 17), conformity assessment (Art. 43), EU database registration (Art. 49/71), GPAI model obligations (Art. 51-55), post-market monitoring (Art. 72), and serious incident reporting (Art. 73). Many obligations are organizational/legal and will show as Not Compliant unless evidenced through documentation or process artifacts. EU legislation is public law and is freely referenceable.",
+  "_version": "2.0",
   "controls": [
     {
-      "id": "EU-AI-Art.9",
-      "title": "Risk management system — continuous risk identification + mitigation",
+      "id": "EU-AI-Art.9.1",
+      "title": "Establish and maintain a risk management system throughout the AI lifecycle",
       "manifest_deps": [],
       "imports":       [],
       "paths":         ["**/RISK*.md", "**/risk-management*", "**/risk-register*", "**/threat-model*", "**/THREAT_MODEL*"],
-      "terms":         ["risk_management_system", "riskManagementSystem", "risk_register", "riskRegister", "risk_mitigation"]
+      "terms":         ["risk_management_system", "riskManagementSystem", "risk_register", "riskRegister", "risk_lifecycle"]
     },
     {
-      "id": "EU-AI-Art.10",
-      "title": "Data and data governance — quality, bias, representativeness",
-      "manifest_deps": ["fairlearn", "aif360", "great-expectations", "deepchecks", "dvc"],
-      "imports":       ["fairlearn", "aif360", "great_expectations", "deepchecks", "dvc"],
-      "paths":         ["**/data-governance/**", "**/bias-check*", "**/fairness*"],
-      "terms":         ["data_governance", "dataGovernance", "bias_audit", "biasAudit", "fairness_metric", "fairnessMetric", "representative_sample"]
-    },
-    {
-      "id": "EU-AI-Art.11",
-      "title": "Technical documentation — system card, capabilities, limitations",
+      "id": "EU-AI-Art.9.2",
+      "title": "Identify and analyze known and reasonably foreseeable risks",
       "manifest_deps": [],
       "imports":       [],
-      "paths":         ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/TECHNICAL_DOC*", "**/AI_BOM*"],
-      "terms":         ["model_card", "modelCard", "system_card", "systemCard", "AIBOM", "ai_bom"]
+      "paths":         ["**/risk-register*", "**/risk-analysis*", "**/risk-identification*", "**/threat-model*"],
+      "terms":         ["risk_identification", "riskIdentification", "foreseeable_risk", "foreseeableRisk", "risk_analysis", "riskAnalysis", "known_risk"]
     },
     {
-      "id": "EU-AI-Art.12",
-      "title": "Record-keeping — automatic logs of operations and decisions",
+      "id": "EU-AI-Art.9.3",
+      "title": "Estimate risks with regard to health, safety, and fundamental rights",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/risk-assessment*", "**/impact-assessment*", "**/DPIA*", "**/fundamental-rights*"],
+      "terms":         ["risk_estimation", "riskEstimation", "impact_assessment", "impactAssessment", "fundamental_rights", "fundamentalRights", "health_safety_risk"]
+    },
+    {
+      "id": "EU-AI-Art.9.4",
+      "title": "Adopt risk management measures to eliminate or reduce risks to acceptable levels",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/risk-mitigation*", "**/risk-treatment*", "**/safeguard*", "**/guardrail*"],
+      "terms":         ["risk_mitigation", "riskMitigation", "risk_treatment", "riskTreatment", "acceptable_risk", "acceptableRisk", "residual_risk", "residualRisk"]
+    },
+    {
+      "id": "EU-AI-Art.9.5",
+      "title": "Test to identify the most appropriate risk management measures",
+      "manifest_deps": ["promptfoo", "deepeval", "garak"],
+      "imports":       ["promptfoo", "deepeval", "garak"],
+      "paths":         ["**/safety-test*", "**/risk-test*", "**/evals/**", "**/eval-suite*"],
+      "terms":         ["safety_test", "safetyTest", "risk_test", "riskTest", "mitigation_test", "mitigationTest"]
+    },
+    {
+      "id": "EU-AI-Art.9.6",
+      "title": "Communicate residual risks to deployers",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/KNOWN_ISSUES*", "**/LIMITATIONS*", "**/RESIDUAL_RISK*", "**/deployer-guide*"],
+      "terms":         ["residual_risk", "residualRisk", "known_limitation", "knownLimitation", "deployer_communication", "risk_disclosure"]
+    },
+    {
+      "id": "EU-AI-Art.9.7",
+      "title": "Use testing procedures appropriate to the intended purpose of the AI system",
+      "manifest_deps": ["promptfoo", "deepeval"],
+      "imports":       ["promptfoo", "deepeval"],
+      "paths":         ["**/test-plan*", "**/test-strategy*", "**/validation-plan*", "**/evals/**"],
+      "terms":         ["test_plan", "testPlan", "validation_plan", "validationPlan", "intended_purpose", "intendedPurpose", "test_procedure"]
+    },
+    {
+      "id": "EU-AI-Art.9.8",
+      "title": "Test at individually appropriate stages throughout the development process",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/.github/workflows/*", "**/ci/*", "**/pre-deploy*", "**/test-gate*"],
+      "terms":         ["pre_deploy_test", "preDeployTest", "stage_gate", "stageGate", "development_stage", "ci_gate", "ciGate"]
+    },
+    {
+      "id": "EU-AI-Art.9.9",
+      "title": "Define metrics relevant to the specific risks covered by the AI system",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/metrics*", "**/risk-metrics*", "**/KPI*", "**/safety-metrics*"],
+      "terms":         ["risk_metric", "riskMetric", "safety_metric", "safetyMetric", "performance_threshold", "performanceThreshold", "kpi"]
+    },
+    {
+      "id": "EU-AI-Art.10.1",
+      "title": "Training, validation, and testing datasets subject to data governance practices",
+      "manifest_deps": ["dvc", "lakefs", "great-expectations", "deepchecks"],
+      "imports":       ["dvc", "great_expectations", "deepchecks"],
+      "paths":         ["**/data-governance/**", "**/dataset*", "**/training-data*", "**/data-pipeline*"],
+      "terms":         ["data_governance", "dataGovernance", "training_dataset", "trainingDataset", "validation_dataset", "validationDataset", "test_dataset"]
+    },
+    {
+      "id": "EU-AI-Art.10.2",
+      "title": "Data governance covering design choices, collection, labelling, cleaning, and bias examination",
+      "manifest_deps": ["great-expectations", "cleanlab", "label-studio"],
+      "imports":       ["great_expectations", "cleanlab"],
+      "paths":         ["**/data-governance/**", "**/data-quality*", "**/labelling*", "**/labeling*", "**/data-cleaning*", "**/bias-check*"],
+      "terms":         ["data_collection", "dataCollection", "data_labelling", "dataLabelling", "data_cleaning", "dataCleaning", "bias_examination", "biasExamination", "annotation_guideline"]
+    },
+    {
+      "id": "EU-AI-Art.10.3",
+      "title": "Datasets must be relevant, sufficiently representative, and as error-free as possible",
+      "manifest_deps": ["great-expectations", "deepchecks", "cleanlab"],
+      "imports":       ["great_expectations", "deepchecks", "cleanlab"],
+      "paths":         ["**/data-validation*", "**/data-quality*", "**/schema-validation*"],
+      "terms":         ["representative_sample", "representativeSample", "data_quality", "dataQuality", "error_free", "data_validation", "dataValidation", "data_completeness"]
+    },
+    {
+      "id": "EU-AI-Art.10.4",
+      "title": "Account for characteristics specific to geographic, contextual, or functional setting",
+      "manifest_deps": ["fairlearn", "aif360"],
+      "imports":       ["fairlearn", "aif360"],
+      "paths":         ["**/fairness*", "**/demographic*", "**/geographic*", "**/context-specific*"],
+      "terms":         ["geographic_context", "geographicContext", "demographic_parity", "demographicParity", "contextual_setting", "deployment_context", "deploymentContext"]
+    },
+    {
+      "id": "EU-AI-Art.10.5",
+      "title": "Processing of special category personal data for bias monitoring where strictly necessary",
+      "manifest_deps": ["fairlearn", "aif360"],
+      "imports":       ["fairlearn", "aif360"],
+      "paths":         ["**/bias-monitoring*", "**/bias-audit*", "**/protected-attribute*", "**/sensitive-data*"],
+      "terms":         ["special_category_data", "specialCategoryData", "protected_attribute", "protectedAttribute", "bias_monitoring", "biasMonitoring", "sensitive_attribute"]
+    },
+    {
+      "id": "EU-AI-Art.10.6",
+      "title": "Appropriate data governance and management practices for development datasets",
+      "manifest_deps": ["dvc", "lakefs"],
+      "imports":       ["dvc"],
+      "paths":         ["**/data-management*", "**/data-governance/**", "**/data-lineage*", "**/data-catalog*"],
+      "terms":         ["data_management", "dataManagement", "data_lineage", "dataLineage", "data_provenance", "dataProvenance", "data_catalog", "dataCatalog"]
+    },
+    {
+      "id": "EU-AI-Art.11.1",
+      "title": "Technical documentation drawn up before placing on market and kept up to date",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/TECHNICAL_DOC*", "**/AI_BOM*", "**/model-card*", "**/system-card*"],
+      "terms":         ["model_card", "modelCard", "system_card", "systemCard", "technical_documentation", "technicalDocumentation", "AIBOM", "ai_bom"]
+    },
+    {
+      "id": "EU-AI-Art.11.2",
+      "title": "Simplified technical documentation for SMEs",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/TECHNICAL_DOC*"],
+      "terms":         ["simplified_documentation", "simplifiedDocumentation", "sme_documentation"]
+    },
+    {
+      "id": "EU-AI-Art.11.3",
+      "title": "Commission simplified documentation templates for high-risk AI systems",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         []
+    },
+    {
+      "id": "EU-AI-Art.12.1",
+      "title": "Automatic logging of events throughout the AI system lifecycle",
       "manifest_deps": ["winston", "pino", "bunyan", "structlog", "loguru", "@sentry/node"],
       "imports":       ["winston", "pino", "bunyan", "structlog", "loguru"],
-      "paths":         ["**/audit-log*", "**/audit_log*", "**/logging/**"],
-      "terms":         ["audit_log", "auditLog", "automatic_logging", "automaticLogging", "decision_log", "decisionLog", "tamper_evident", "tamperEvident", "hash_chain", "hashChain"]
+      "paths":         ["**/audit-log*", "**/audit_log*", "**/logging/**", "**/logger*"],
+      "terms":         ["automatic_logging", "automaticLogging", "audit_log", "auditLog", "event_log", "eventLog", "lifecycle_log"]
     },
     {
-      "id": "EU-AI-Art.13",
-      "title": "Transparency to users — disclosure of AI use and limitations",
+      "id": "EU-AI-Art.12.2",
+      "title": "Logging must enable traceability of AI system functioning",
+      "manifest_deps": ["winston", "pino", "structlog"],
+      "imports":       ["winston", "pino", "structlog"],
+      "paths":         ["**/audit-log*", "**/trace*", "**/correlation-id*"],
+      "terms":         ["traceability", "trace_id", "traceId", "correlation_id", "correlationId", "decision_log", "decisionLog", "tamper_evident", "tamperEvident", "hash_chain", "hashChain"]
+    },
+    {
+      "id": "EU-AI-Art.12.3",
+      "title": "Logging capabilities appropriate to the intended purpose of the AI system",
+      "manifest_deps": ["winston", "pino", "structlog", "opentelemetry"],
+      "imports":       ["winston", "pino", "structlog", "opentelemetry"],
+      "paths":         ["**/logging-config*", "**/log-level*", "**/structured-log*"],
+      "terms":         ["log_level", "logLevel", "structured_log", "structuredLog", "log_retention", "logRetention", "logging_policy", "loggingPolicy"]
+    },
+    {
+      "id": "EU-AI-Art.12.4",
+      "title": "Deployers must retain automatically generated logs for appropriate periods",
       "manifest_deps": [],
       "imports":       [],
-      "paths":         ["**/AI_DISCLOSURE*", "**/transparency*", "**/user-notice*"],
-      "terms":         ["ai_disclosure", "aiDisclosure", "ai_notice", "aiNotice", "you_are_interacting_with_AI", "powered_by_AI"]
+      "paths":         ["**/log-retention*", "**/retention-policy*", "**/log-archive*"],
+      "terms":         ["log_retention", "logRetention", "retention_period", "retentionPeriod", "log_archive", "logArchive", "retention_policy", "retentionPolicy"]
     },
     {
-      "id": "EU-AI-Art.14",
-      "title": "Human oversight — override, abort, take-over by qualified human",
+      "id": "EU-AI-Art.13.1",
+      "title": "Design and develop AI systems for sufficiently transparent operation",
+      "manifest_deps": ["shap", "lime", "captum"],
+      "imports":       ["shap", "lime", "captum"],
+      "paths":         ["**/transparency*", "**/explainability*", "**/xai/**"],
+      "terms":         ["transparency", "explainability", "interpretability", "transparent_operation", "transparentOperation"]
+    },
+    {
+      "id": "EU-AI-Art.13.2",
+      "title": "Accompany AI system with instructions for use containing deployer-relevant information",
       "manifest_deps": [],
       "imports":       [],
-      "paths":         ["**/human-in-the-loop*", "**/oversight/**", "**/approval-workflow*"],
-      "terms":         ["human_in_the_loop", "humanInTheLoop", "human_review", "humanReview", "requires_approval", "requiresApproval", "abort_button", "abortButton", "override_decision", "overrideDecision"]
+      "paths":         ["**/INSTRUCTIONS*", "**/deployer-guide*", "**/USER_GUIDE*", "**/integration-guide*"],
+      "terms":         ["instructions_for_use", "instructionsForUse", "deployer_guide", "deployerGuide", "user_manual", "userManual", "integration_guide"]
     },
     {
-      "id": "EU-AI-Art.15",
-      "title": "Accuracy, robustness, cybersecurity — adversarial robustness + security testing",
-      "manifest_deps": ["promptfoo", "@anthropic-ai/sdk", "adversarial-robustness-toolbox"],
+      "id": "EU-AI-Art.13.3",
+      "title": "Provide information on capabilities, limitations, accuracy levels, and foreseeable misuse",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/LIMITATIONS*", "**/AI_DISCLOSURE*", "**/KNOWN_ISSUES*"],
+      "terms":         ["ai_disclosure", "aiDisclosure", "capability_statement", "capabilityStatement", "known_limitation", "knownLimitation", "foreseeable_misuse", "foreseeableMisuse", "accuracy_level"]
+    },
+    {
+      "id": "EU-AI-Art.14.1",
+      "title": "Design AI systems for effective human oversight during the period of use",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/human-in-the-loop*", "**/oversight/**", "**/human-oversight*"],
+      "terms":         ["human_oversight", "humanOversight", "human_in_the_loop", "humanInTheLoop", "oversight_interface", "oversightInterface"]
+    },
+    {
+      "id": "EU-AI-Art.14.2",
+      "title": "Human oversight aimed at preventing or minimizing foreseeable risks to health, safety, or fundamental rights",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/oversight/**", "**/safety-gate*", "**/review-workflow*"],
+      "terms":         ["human_review", "humanReview", "safety_review", "safetyReview", "risk_prevention", "riskPrevention", "oversight_protocol"]
+    },
+    {
+      "id": "EU-AI-Art.14.3",
+      "title": "Oversight measures proportionate to the risks, level of autonomy, and context of use",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/approval-workflow*", "**/escalation*", "**/override*", "**/abort*"],
+      "terms":         ["requires_approval", "requiresApproval", "escalation_policy", "escalationPolicy", "override_decision", "overrideDecision", "abort_button", "abortButton", "autonomy_level"]
+    },
+    {
+      "id": "EU-AI-Art.14.4",
+      "title": "Individuals assigned to oversight have necessary competence, training, authority, and support",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/RBAC*", "**/role-assignment*", "**/access-control*", "**/training-record*"],
+      "terms":         ["oversight_role", "oversightRole", "operator_training", "operatorTraining", "competence_requirement", "access_control", "accessControl"]
+    },
+    {
+      "id": "EU-AI-Art.14.5",
+      "title": "High-risk AI systems identified in Annex III must allow operator to override or reverse output",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/override*", "**/rollback*", "**/undo*", "**/revert*", "**/kill-switch*"],
+      "terms":         ["override_output", "overrideOutput", "reverse_decision", "reverseDecision", "kill_switch", "killSwitch", "emergency_stop", "emergencyStop", "human_override", "humanOverride"]
+    },
+    {
+      "id": "EU-AI-Art.15.1",
+      "title": "Achieve appropriate levels of accuracy, robustness, and cybersecurity",
+      "manifest_deps": ["promptfoo", "adversarial-robustness-toolbox"],
       "imports":       ["promptfoo", "adversarial_robustness_toolbox"],
-      "paths":         ["**/red-team*", "**/redteam*", "**/adversarial*", "**/security-tests/**"],
-      "terms":         ["red_team", "redTeam", "adversarial_test", "adversarialTest", "jailbreak_test", "jailbreakTest", "robustness_test"]
+      "paths":         ["**/accuracy-test*", "**/robustness-test*", "**/security-test*", "**/benchmark*"],
+      "terms":         ["accuracy_level", "accuracyLevel", "robustness_test", "robustnessTest", "cybersecurity_measure", "cybersecurityMeasure"]
+    },
+    {
+      "id": "EU-AI-Art.15.2",
+      "title": "Declare accuracy levels and relevant accuracy metrics in instructions of use",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/MODEL_CARD*", "**/SYSTEM_CARD*", "**/ACCURACY*", "**/metrics*", "**/benchmark-results*"],
+      "terms":         ["accuracy_metric", "accuracyMetric", "precision", "recall", "f1_score", "F1Score", "false_positive_rate", "falsePositiveRate", "declared_accuracy"]
+    },
+    {
+      "id": "EU-AI-Art.15.3",
+      "title": "Resilient to errors, faults, inconsistencies, and adversarial attacks",
+      "manifest_deps": ["adversarial-robustness-toolbox", "garak", "promptfoo"],
+      "imports":       ["adversarial_robustness_toolbox", "garak", "promptfoo"],
+      "paths":         ["**/red-team*", "**/redteam*", "**/adversarial*", "**/fuzz*", "**/perturbation*"],
+      "terms":         ["adversarial_test", "adversarialTest", "red_team", "redTeam", "jailbreak_test", "jailbreakTest", "fuzz_test", "fuzzTest", "perturbation_test", "error_resilience"]
+    },
+    {
+      "id": "EU-AI-Art.15.4",
+      "title": "Technical redundancy solutions including backup or fail-safe plans",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/failover*", "**/fallback*", "**/backup*", "**/redundancy*", "**/circuit-breaker*", "**/disaster-recovery*"],
+      "terms":         ["failover", "fallback", "backup_plan", "backupPlan", "redundancy", "circuit_breaker", "circuitBreaker", "fail_safe", "failSafe", "disaster_recovery"]
+    },
+    {
+      "id": "EU-AI-Art.15.5",
+      "title": "Cybersecurity measures appropriate to the circumstances and the risks",
+      "manifest_deps": ["helmet", "csurf", "rate-limiter-flexible", "express-rate-limit"],
+      "imports":       ["helmet", "csurf"],
+      "paths":         ["**/security/**", "**/security-config*", "**/security-headers*", "**/WAF*", "**/encryption*"],
+      "terms":         ["security_header", "securityHeader", "encryption_at_rest", "encryptionAtRest", "tls", "access_control", "accessControl", "vulnerability_scan", "vulnerabilityScan", "security_patch", "securityPatch", "data_poisoning", "dataPoisoning", "model_poisoning"]
+    },
+
+    {
+      "id": "EU-AI-Art.5.1a",
+      "title": "Prohibited — subliminal or manipulative techniques causing harm",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["subliminal_manipulation", "subliminalManipulation", "dark_pattern", "darkPattern", "deceptive_design", "manipulative_technique"]
+    },
+    {
+      "id": "EU-AI-Art.5.1b",
+      "title": "Prohibited — exploiting vulnerabilities of specific groups (age, disability)",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["vulnerability_exploitation", "age_targeting", "disability_targeting", "exploit_vulnerability"]
+    },
+    {
+      "id": "EU-AI-Art.5.1c",
+      "title": "Prohibited — social scoring by public authorities",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["social_scoring", "socialScoring", "social_credit", "socialCredit", "citizen_score", "behavior_score"]
+    },
+    {
+      "id": "EU-AI-Art.5.1d",
+      "title": "Prohibited — real-time remote biometric identification in public spaces (law enforcement)",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["real_time_biometric", "realTimeBiometric", "facial_recognition_live", "live_identification", "biometric_surveillance"]
+    },
+    {
+      "id": "EU-AI-Art.5.1e",
+      "title": "Prohibited — untargeted scraping of facial images for recognition databases",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["face_scraping", "faceScraping", "biometric_scraping", "facial_database", "untargeted_scrape"]
+    },
+    {
+      "id": "EU-AI-Art.5.1f",
+      "title": "Prohibited — emotion recognition in workplace and education (unless safety/medical)",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["emotion_recognition", "emotionRecognition", "emotion_detection", "emotionDetection", "sentiment_workplace", "affect_recognition"]
+    },
+    {
+      "id": "EU-AI-Art.5.1g",
+      "title": "Prohibited — biometric categorization inferring sensitive attributes (race, politics, etc.)",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["biometric_categorization", "biometricCategorization", "race_inference", "political_inference", "sensitive_attribute_inference"]
+    },
+    {
+      "id": "EU-AI-Art.5.1h",
+      "title": "Prohibited — predictive policing based solely on profiling",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["predictive_policing", "predictivePolicing", "crime_prediction", "recidivism_score", "risk_profiling_police"]
+    },
+
+    {
+      "id": "EU-AI-Art.10.legal",
+      "title": "Data governance gap — lawful collection and processing basis for training data",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/DATA_LICENSE*", "**/data-consent*", "**/data-rights*", "**/GDPR*", "**/data-processing-agreement*"],
+      "terms":         ["lawful_basis", "lawfulBasis", "data_consent", "dataConsent", "processing_agreement", "data_license", "dataLicense", "copyright_compliance", "training_data_rights"]
+    },
+    {
+      "id": "EU-AI-Art.11.annex4",
+      "title": "Technical documentation gap — Annex IV completeness check for system documentation",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/ANNEX_IV*", "**/technical-documentation*", "**/system-description*", "**/intended-purpose*", "**/design-specification*"],
+      "terms":         ["intended_purpose", "intendedPurpose", "system_description", "systemDescription", "design_specification", "performance_metric", "training_methodology", "validation_procedure"]
+    },
+    {
+      "id": "EU-AI-Art.14.bias",
+      "title": "Human oversight gap — automation bias awareness and operator training requirements",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/operator-training*", "**/oversight-training*", "**/automation-bias*", "**/OPERATOR_GUIDE*"],
+      "terms":         ["automation_bias", "automationBias", "operator_training", "operatorTraining", "oversight_training", "human_competence", "override_training"]
+    },
+    {
+      "id": "EU-AI-Art.15.infra",
+      "title": "Cybersecurity gap — traditional infrastructure security (IAM, patching, network)",
+      "manifest_deps": ["helmet", "express-rate-limit", "rate-limiter-flexible", "cors"],
+      "imports":       ["helmet", "cors"],
+      "paths":         ["**/iam/**", "**/network-security*", "**/firewall*", "**/waf*", "**/patch-management*"],
+      "terms":         ["identity_access_management", "IAM", "network_segmentation", "networkSegmentation", "patch_management", "patchManagement", "firewall_rule", "waf_config", "intrusion_detection"]
+    },
+
+    {
+      "id": "EU-AI-Art.17.1",
+      "title": "Quality management system — documented policies, procedures, and instructions",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/QMS*", "**/quality-management*", "**/quality-policy*", "**/QUALITY*"],
+      "terms":         ["quality_management_system", "qualityManagementSystem", "QMS", "quality_policy", "qualityPolicy"]
+    },
+    {
+      "id": "EU-AI-Art.17.2",
+      "title": "QMS — resource management and accountability structures",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["accountability_structure", "responsible_person", "ai_governance_officer"]
+    },
+    {
+      "id": "EU-AI-Art.17.3",
+      "title": "QMS — design and design verification procedures",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/design-review*", "**/design-verification*"],
+      "terms":         ["design_verification", "designVerification", "design_review", "designReview"]
+    },
+    {
+      "id": "EU-AI-Art.17.4",
+      "title": "QMS — development, quality control, and quality assurance procedures",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/qa/**", "**/quality-assurance*", "**/quality-control*"],
+      "terms":         ["quality_assurance", "qualityAssurance", "quality_control", "qualityControl", "QA_process"]
+    },
+    {
+      "id": "EU-AI-Art.17.5",
+      "title": "QMS — examination, test, and validation procedures (before, during, after development)",
+      "manifest_deps": ["pytest", "jest", "vitest", "mocha"],
+      "imports":       ["pytest", "jest", "vitest"],
+      "paths":         ["**/validation/**", "**/test-plan*", "**/acceptance-test*"],
+      "terms":         ["validation_procedure", "validationProcedure", "test_plan", "testPlan", "acceptance_criteria", "acceptanceCriteria"]
+    },
+    {
+      "id": "EU-AI-Art.17.6",
+      "title": "QMS — data management procedures including data governance",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/data-management*", "**/data-governance*", "**/DATA_GOVERNANCE*"],
+      "terms":         ["data_management_procedure", "data_governance_policy", "data_lifecycle"]
+    },
+    {
+      "id": "EU-AI-Art.17.7",
+      "title": "QMS — internal audit schedule and corrective action procedures",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/internal-audit*", "**/corrective-action*", "**/AUDIT*"],
+      "terms":         ["internal_audit", "internalAudit", "corrective_action", "correctiveAction", "audit_schedule"]
+    },
+
+    {
+      "id": "EU-AI-Art.43.1",
+      "title": "Conformity assessment — internal or third-party assessment before market placement",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/conformity-assessment*", "**/CONFORMITY*", "**/CE_MARK*", "**/declaration-of-conformity*"],
+      "terms":         ["conformity_assessment", "conformityAssessment", "notified_body", "notifiedBody", "CE_marking", "declaration_of_conformity"]
+    },
+    {
+      "id": "EU-AI-Art.43.2",
+      "title": "Conformity assessment — Annex VI internal control procedure",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/internal-control*", "**/annex-vi*"],
+      "terms":         ["internal_control_procedure", "annex_vi", "self_assessment"]
+    },
+
+    {
+      "id": "EU-AI-Art.49",
+      "title": "EU database registration — registering the high-risk AI system before deployment",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/eu-database*", "**/registration*"],
+      "terms":         ["eu_database_registration", "euDatabaseRegistration", "ai_system_registration", "market_registration"]
+    },
+
+    {
+      "id": "EU-AI-Art.51.1",
+      "title": "GPAI model obligations — classification and general obligations for GPAI providers",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/GPAI*", "**/general-purpose-ai*", "**/foundation-model*"],
+      "terms":         ["general_purpose_ai", "generalPurposeAI", "GPAI", "foundation_model", "foundationModel"]
+    },
+    {
+      "id": "EU-AI-Art.53.1a",
+      "title": "GPAI — technical documentation drawn up and kept up to date",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/MODEL_CARD*", "**/model-documentation*", "**/SYSTEM_CARD*", "**/training-report*"],
+      "terms":         ["model_card", "modelCard", "training_report", "trainingReport", "model_documentation"]
+    },
+    {
+      "id": "EU-AI-Art.53.1b",
+      "title": "GPAI — information and documentation for downstream providers integrating the model",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/integration-guide*", "**/downstream-provider*", "**/API_DOCS*"],
+      "terms":         ["downstream_provider", "downstreamProvider", "integration_guide", "model_capabilities", "model_limitations"]
+    },
+    {
+      "id": "EU-AI-Art.53.1c",
+      "title": "GPAI — policy for complying with EU copyright law in model training",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/COPYRIGHT*", "**/training-data-license*", "**/data-rights*", "**/opt-out*"],
+      "terms":         ["copyright_compliance", "copyrightCompliance", "training_data_rights", "opt_out_mechanism", "text_data_mining", "TDM_reservation"]
+    },
+    {
+      "id": "EU-AI-Art.53.1d",
+      "title": "GPAI — sufficiently detailed summary of training data content",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/TRAINING_DATA_SUMMARY*", "**/data-summary*", "**/dataset-card*"],
+      "terms":         ["training_data_summary", "trainingDataSummary", "dataset_card", "datasetCard", "data_composition", "data_source_summary"]
+    },
+    {
+      "id": "EU-AI-Art.55.1",
+      "title": "GPAI with systemic risk — model evaluation and adversarial testing obligations",
+      "manifest_deps": ["promptfoo", "garak", "adversarial-robustness-toolbox"],
+      "imports":       ["promptfoo", "garak", "art"],
+      "paths":         ["**/model-eval*", "**/red-team*", "**/adversarial-test*", "**/systemic-risk*"],
+      "terms":         ["systemic_risk", "systemicRisk", "model_evaluation", "modelEvaluation", "red_team", "redTeam", "adversarial_test", "capability_assessment"]
+    },
+    {
+      "id": "EU-AI-Art.55.2",
+      "title": "GPAI with systemic risk — tracking and reporting serious incidents",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/incident-report*", "**/serious-incident*"],
+      "terms":         ["serious_incident", "seriousIncident", "incident_report", "incidentReport", "systemic_risk_report"]
+    },
+    {
+      "id": "EU-AI-Art.55.3",
+      "title": "GPAI with systemic risk — adequate cybersecurity protections",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/cybersecurity-policy*", "**/security-assessment*"],
+      "terms":         ["cybersecurity_protection", "model_security", "inference_security", "weight_protection", "model_theft_prevention"]
+    },
+    {
+      "id": "EU-AI-Art.55.4",
+      "title": "GPAI with systemic risk — energy consumption and compute tracking",
+      "manifest_deps": ["codecarbon", "carbontracker", "eco2ai"],
+      "imports":       ["codecarbon", "carbontracker", "eco2ai"],
+      "paths":         ["**/carbon*", "**/energy-tracking*", "**/compute-budget*", "**/sustainability*"],
+      "terms":         ["energy_consumption", "energyConsumption", "carbon_footprint", "carbonFootprint", "compute_budget", "computeBudget", "training_cost", "flops", "gpu_hours"]
+    },
+
+    {
+      "id": "EU-AI-Art.72.1",
+      "title": "Post-market monitoring — system for collecting and analyzing performance data after deployment",
+      "manifest_deps": ["evidently", "whylogs", "mlflow", "datadog"],
+      "imports":       ["evidently", "whylogs", "mlflow"],
+      "paths":         ["**/post-market*", "**/production-monitoring*", "**/model-monitoring*", "**/drift-detection*"],
+      "terms":         ["post_market_monitoring", "postMarketMonitoring", "production_monitoring", "productionMonitoring", "model_drift", "modelDrift", "performance_monitoring", "continuous_evaluation"]
+    },
+    {
+      "id": "EU-AI-Art.72.2",
+      "title": "Post-market monitoring — proportionate to nature and risks of the AI system",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/monitoring-plan*", "**/PMM-plan*"],
+      "terms":         ["monitoring_plan", "monitoringPlan", "monitoring_frequency", "risk_proportionate"]
+    },
+    {
+      "id": "EU-AI-Art.72.3",
+      "title": "Post-market monitoring — integration with existing quality management systems",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["pmm_integration", "qms_integration", "monitoring_qms"]
+    },
+
+    {
+      "id": "EU-AI-Art.73.1",
+      "title": "Serious incident reporting — notify authorities of serious incidents or malfunctions",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/incident-report*", "**/serious-incident*", "**/authority-notification*"],
+      "terms":         ["serious_incident_report", "seriousIncidentReport", "authority_notification", "authorityNotification", "incident_timeline", "15_day_report"]
+    },
+    {
+      "id": "EU-AI-Art.73.2",
+      "title": "Serious incident reporting — immediate report followed by detailed investigation",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         ["**/incident-investigation*", "**/root-cause*"],
+      "terms":         ["incident_investigation", "incidentInvestigation", "root_cause_analysis", "rootCauseAnalysis", "corrective_measure"]
+    },
+    {
+      "id": "EU-AI-Art.73.3",
+      "title": "Serious incident reporting — cooperation with competent authorities during investigation",
+      "manifest_deps": [],
+      "imports":       [],
+      "paths":         [],
+      "terms":         ["authority_cooperation", "competent_authority", "regulatory_response"]
     }
   ]
 }
