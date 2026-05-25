@@ -64,7 +64,7 @@ Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_C
 
 ---
 
-## Three commands to know
+## Five commands to know
 
 **`/agentic-security:secure`** — Don't know what to do? It tells you the single best next step.
 
@@ -79,6 +79,10 @@ Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_C
 **`/agentic-security:find-and-fix-everything`** — Scan + fix everything in one shot. The security-fixer agent reads your auth library, ORM, and framework before writing each fix, so the patches look like the rest of your code.
 
 **`/agentic-security:scan --all`** — Full 12-pillar sweep: SAST, SCA, secrets, IaC, LLM safety, auth, MCP, pipeline, containers, deploy, supply chain, and trends.
+
+**`/agentic-security:compliance-report`** — Auditor-ready compliance attestation against NIST AI 600-1, OWASP ASVS, or OWASP LLM Top 10 (2025). Pass the framework name to scope it: `/compliance-report nist`, `/compliance-report asvs`, or `/compliance-report llm`.
+
+**`/agentic-security:compliance-fix`** — Routes every Not-Compliant control from your compliance report to the command that closes it, deduped and ordered. Flags controls that require manual or process work so you know what to automate and what to delegate.
 
 38 commands total — [full catalog](commands/help.md).
 
