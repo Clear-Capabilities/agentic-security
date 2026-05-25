@@ -4,8 +4,8 @@
 // via Settings → Plugins → Install Plugin from Disk.
 
 plugins {
-    id("org.jetbrains.intellij") version "1.17.3"
-    kotlin("jvm") version "1.9.22"
+    id("org.jetbrains.intellij") version "1.17.4"
+    kotlin("jvm") version "1.9.25"
 }
 
 group = "com.clearcapabilities"
@@ -16,7 +16,7 @@ repositories { mavenCentral() }
 intellij {
     version.set("2023.3.6")
     type.set("IC")
-    plugins.set(listOf("com.redhat.devtools.lsp4ij:0.5.0"))
+    plugins.set(listOf("com.redhat.devtools.lsp4ij:0.19.4"))
 }
 
 tasks {
