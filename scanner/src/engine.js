@@ -5633,41 +5633,125 @@ function markUsedVulnFunctions(supplyChain,fc){
 }
 
 // Annotate each supplyChain finding with `functionReachable` ∈ {'reachable','unreachable','unknown'}.
-// The CVE only matters if the developer's code actually calls the vulnerable function
-// AND that call site sits in code reachable from a route handler.
-function _annotateFunctionReachability(supplyChain, routes, callGraph, fc){
-  for(const sc of (supplyChain||[])){
-    if(sc.type!=='vulnerable_dep')continue;
-    const sites=sc.vulnerableFunctionCallSites||[];
-    if(!sites.length){sc.functionReachable='unknown';continue;}
-    let reachable=false;
-    for(const site of sites){
-      // Classifier 1: site is inline inside a route handler (within 25 lines of the route def)
-      const fileRoutes=(routes||[]).filter(r=>r.file===site.file);
-      for(const route of fileRoutes){
-        if(site.line>=route.line&&site.line<=route.line+25){
-          // Make sure no function declaration intervenes
-          const fileLines=(fc[site.file]||'').split('\n');
-          const between=fileLines.slice(route.line,site.line-1).join('\n');
-          if(!/function\s+\w+\s*\(/.test(between)){reachable=true;break;}
-        }
-      }
-      if(reachable)break;
-      // Classifier 2: enclosing function appears in another named function's calls (cross-fn reachability)
-      const enclosing=_enclosingFn(fc[site.file]||'',site.line);
-      if(enclosing){
-        // callGraph is {filePath: {fnName: {calls: Set, ...}}}
-        outer: for(const[,fileFns] of Object.entries(callGraph||{})){
-          if(typeof fileFns!=='object'||!fileFns)continue;
-          for(const[fn,info] of Object.entries(fileFns)){
-            const calls=info&&info.calls;
-            if(fn!==enclosing&&calls&&(calls.has?.(enclosing)||(Array.isArray(calls)&&calls.includes(enclosing)))){reachable=true;break outer;}
+// The CVE only matters if the developer's code actually calls the vulnerable
+// function. The question is HOW reachable: is the call inline in a route
+// handler (definitely user-input-reachable), called by some caller eventually
+// reached from a route (transitively reachable), or called by code that no
+// route ever touches (function-reachable but not route-reachable)?
+//
+// Phase 2 / Item 4 of the SCA improvement plan: distinguish these tiers.
+// Sets two fields:
+//   sc.functionReachable: 'reachable' | 'unreachable' | 'unknown'
+//   sc.routeReachable:    true | false       (only meaningful when functionReachable === 'reachable')
+//
+// Used by the tier-assignment block downstream to label
+// `reachabilityTier: 'route-reachable-via-function'` (highest urgency) vs
+// `'function-reachable'` (called but not chained to a route).
+
+// Set of every (file, fnName) that *is* a route handler. The enclosing
+// function at a route's declaration line, mapped from the (file, line) pairs
+// the route scanner emitted.
+function _buildRouteHandlerSet(routes, fc){
+  const handlers = new Set(); // 'file::fnName'
+  for (const r of (routes || [])) {
+    const content = fc[r.file];
+    if (typeof content !== 'string') continue;
+    const fn = _enclosingFn(content, r.line);
+    if (fn) handlers.add(r.file + '::' + fn);
+    // Capture an anonymous handler too — many JS routes are
+    // `app.get('/x', (req, res) => { … })` where the route line itself IS
+    // the function body. The body's identifier is unstable but we can mark
+    // the file:line for the inline check.
+  }
+  return handlers;
+}
+
+// Reverse-BFS through the call graph: starting from `enclosingFn` in `file`,
+// find every function (anywhere in the program) that transitively calls it,
+// up to `maxDepth`. Returns the set of caller fnNames.
+function _reverseCallGraphReachable(callGraph, startFn, maxDepth){
+  if (!callGraph || typeof callGraph !== 'object') return new Set();
+  const visited = new Set([startFn]);
+  let frontier = new Set([startFn]);
+  for (let depth = 0; depth < maxDepth && frontier.size; depth++) {
+    const next = new Set();
+    for (const [file, fileFns] of Object.entries(callGraph)) {
+      if (!fileFns || typeof fileFns !== 'object') continue;
+      for (const [fn, info] of Object.entries(fileFns)) {
+        if (visited.has(file + '::' + fn) || visited.has(fn)) continue;
+        const calls = info && info.calls;
+        if (!calls) continue;
+        for (const target of frontier) {
+          const hit = calls.has?.(target) || (Array.isArray(calls) && calls.includes(target));
+          if (hit) {
+            next.add(fn);
+            // Track both qualified and unqualified — the route-handler set
+            // uses 'file::fn' but the call graph carries bare fn names.
+            visited.add(fn);
+            visited.add(file + '::' + fn);
+            break;
           }
         }
       }
-      if(reachable)break;
     }
-    sc.functionReachable=reachable?'reachable':'unreachable';
+    frontier = next;
+  }
+  return visited;
+}
+
+function _annotateFunctionReachability(supplyChain, routes, callGraph, fc){
+  const routeHandlers = _buildRouteHandlerSet(routes, fc);
+  // Pre-extract just the unqualified names too — the call-graph traversal
+  // matches on bare fnName when the qualified form isn't available.
+  const routeHandlerNames = new Set();
+  for (const k of routeHandlers) {
+    const fn = k.split('::')[1];
+    if (fn) routeHandlerNames.add(fn);
+  }
+
+  for (const sc of (supplyChain || [])) {
+    if (sc.type !== 'vulnerable_dep') continue;
+    const sites = sc.vulnerableFunctionCallSites || [];
+    if (!sites.length) { sc.functionReachable = 'unknown'; sc.routeReachable = false; continue; }
+    let functionReachable = false;
+    let routeReachable = false;
+    for (const site of sites) {
+      // Classifier 1: site is inline inside a route handler (within 25 lines
+      // of the route def, no intervening function declaration). This is the
+      // strongest signal — the vulnerable function is called directly from
+      // user-input handling code.
+      const fileRoutes = (routes || []).filter(r => r.file === site.file);
+      for (const route of fileRoutes) {
+        if (site.line >= route.line && site.line <= route.line + 25) {
+          const fileLines = (fc[site.file] || '').split('\n');
+          const between = fileLines.slice(route.line, site.line - 1).join('\n');
+          if (!/function\s+\w+\s*\(/.test(between)) {
+            functionReachable = true;
+            routeReachable = true;
+            break;
+          }
+        }
+      }
+      if (routeReachable) break;
+      // Classifier 2: walk reverse call graph from the enclosing function.
+      // If any caller-chain hits a known route-handler function, the site
+      // is route-reachable-via-function. If no caller at all, we keep
+      // functionReachable=false for this site.
+      const enclosing = _enclosingFn(fc[site.file] || '', site.line);
+      if (!enclosing) continue;
+      const callers = _reverseCallGraphReachable(callGraph, enclosing, 4);
+      if (callers.size > 1) functionReachable = true; // at least one caller exists
+      for (const callerFn of callers) {
+        if (routeHandlerNames.has(callerFn) || routeHandlers.has(site.file + '::' + callerFn)) {
+          routeReachable = true;
+          functionReachable = true;
+          break;
+        }
+      }
+      if (routeReachable) break;
+    }
+    sc.functionReachable = functionReachable ? 'reachable' : 'unreachable';
+    sc.routeReachable = routeReachable;
   }
 }
 function _enclosingFn(content,line){
@@ -7310,16 +7394,48 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   const dd=(a,k)=>[...new Map(a.map(x=>[k(x),x])).values()];
   // 0.6.0 Feat-1: annotate function-level reachability on SCA findings
   try { _annotateFunctionReachability(supplyChain,dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`).map(r=>({...r})),callGraph,fc); } catch(_) {}
-  // Reachability tier classification for SCA findings
-  for(const sc of supplyChain||[]){
-    if(sc.type!=='vulnerable_dep')continue;
-    if(sc.functionReachable==='reachable')sc.reachabilityTier='function-reachable';
-    else if(sc.functionReachable==='unreachable')sc.reachabilityTier='unreachable';
-    else if(sc.reachable)sc.reachabilityTier='import-reachable';
-    else if(sc.isBuildOnly||sc.scope==='optional'&&!sc.reachable){sc.reachabilityTier='build-only';sc.isBuildOnly=true;if(sc.severity==='critical')sc.severity='medium';else if(sc.severity==='high')sc.severity='low';}
-    else if(sc.scope==='required')sc.reachabilityTier='manifest-only';
-    else sc.reachabilityTier='transitive-only';
-    if(sc.reachabilityTier==='transitive-only'){sc.unreachable=true;sc._reachabilityDemoted=true;}
+  // Reachability tier classification for SCA findings. Order matters —
+  // each tier represents a narrower (more certain) form of reachability,
+  // so we check from most-specific to least-specific.
+  //
+  // route-reachable-via-function (Phase 2 / Item 4): the vulnerable
+  //   function is called AND that call site is rooted in (or
+  //   transitively-called from) a route handler. Highest urgency.
+  // function-reachable: the vulnerable function is called, but the call
+  //   chain does not reach a route handler in <=4 hops. Real but lower
+  //   priority than route-reachable.
+  // unreachable: vulnerable function never called from the project.
+  // import-reachable: package is imported but no vulnerable function call
+  //   was identified (OSV may not list function-level data).
+  // build-only / manifest-only / transitive-only: progressively weaker
+  //   signals; the dep exists but we can't confirm any use of it.
+  for (const sc of supplyChain || []) {
+    if (sc.type !== 'vulnerable_dep') continue;
+    if (sc.functionReachable === 'reachable' && sc.routeReachable === true) {
+      sc.reachabilityTier = 'route-reachable-via-function';
+    } else if (sc.functionReachable === 'reachable') {
+      sc.reachabilityTier = 'function-reachable';
+    } else if (sc.functionReachable === 'unreachable') {
+      sc.reachabilityTier = 'unreachable';
+    } else if (sc.reachable) {
+      sc.reachabilityTier = 'import-reachable';
+    } else if (sc.isBuildOnly || (sc.scope === 'optional' && !sc.reachable)) {
+      sc.reachabilityTier = 'build-only';
+      sc.isBuildOnly = true;
+      if (sc.severity === 'critical') sc.severity = 'medium';
+      else if (sc.severity === 'high') sc.severity = 'low';
+    } else if (sc.scope === 'required') {
+      sc.reachabilityTier = 'manifest-only';
+    } else {
+      sc.reachabilityTier = 'transitive-only';
+    }
+    if (sc.reachabilityTier === 'transitive-only') { sc.unreachable = true; sc._reachabilityDemoted = true; }
+    // Mark as the strongest "vulnerable function actually invoked" signal so
+    // posture/reachability-filter can preserve full severity on this tier
+    // while demoting lower tiers.
+    if (sc.reachabilityTier === 'route-reachable-via-function') {
+      sc.routeReachableViaFunction = true;
+    }
   }
   // Early dedup: collapse duplicates BEFORE the annotation pipeline to reduce work.
   try{const _earlyMap=new Map();for(const f of aF){const k=`${f.file||''}:${f.line||0}:${f.vuln||''}`;if(!_earlyMap.has(k))_earlyMap.set(k,f);}aF.length=0;aF.push(..._earlyMap.values());}catch(_){}
