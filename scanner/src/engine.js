@@ -7445,6 +7445,44 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   const vulnsByKey={};for(const sc of supplyChain.filter(s=>s.type==='vulnerable_dep')){const k=`${sc.ecosystem}:${sc.name}:${sc.version}`;if(!vulnsByKey[k])vulnsByKey[k]=[];vulnsByKey[k].push(sc);}
   const attackResult=computeAttackPathComponents(aF,components,reach.byFile);
   for(const[key,paths]of attackResult.pathsByKey){const[eco,name,...vp]=key.split(':');const ver=vp.join(':');for(const f of paths){if(!f.linkedComponents)f.linkedComponents=[];if(!f.linkedComponents.some(c=>c.name===name&&c.ecosystem===eco))f.linkedComponents.push({ecosystem:eco,name,version:ver});}}
+  // Phase 4 / Item 8 of the SCA improvement plan: reverse pointer.
+  // For each (component-key, sastFindings[]) pair from attackResult, find
+  // the matching supplyChain finding(s) and stamp linkedFindings[] on them
+  // — each entry pointing at the SAST finding that taint-flows to that
+  // dep. Also persist a one-line chain narrative so /show-findings
+  // --chains can consume it without re-invoking the synthesizer agent.
+  // Size-capped to MAX_LINKED_FINDINGS per SCA finding (premortem 3R-7
+  // — don't unbounded-grow last-scan.json on a noisy attack graph).
+  const MAX_LINKED_FINDINGS = 10;
+  for (const [key, paths] of attackResult.pathsByKey) {
+    const scaFindings = vulnsByKey[key] || [];
+    if (!scaFindings.length || !paths.length) continue;
+    for (const sc of scaFindings) {
+      if (!Array.isArray(sc.linkedFindings)) sc.linkedFindings = [];
+      if (!Array.isArray(sc.chainNarratives)) sc.chainNarratives = [];
+      for (const sastF of paths) {
+        if (sc.linkedFindings.length >= MAX_LINKED_FINDINGS) break;
+        const linkEntry = {
+          findingId: sastF.id || null,
+          vuln: sastF.vuln || sastF.title || null,
+          severity: sastF.severity || null,
+          file: sastF.file || sastF.sink?.file || null,
+          line: sastF.sink?.line ?? sastF.line ?? null,
+        };
+        // Dedupe by (findingId, file:line, vuln) so re-runs of this block
+        // (we hit it once per attack-graph traversal) don't grow the array.
+        const dedupeKey = `${linkEntry.findingId}|${linkEntry.file}:${linkEntry.line}|${linkEntry.vuln}`;
+        if (sc.linkedFindings.some(e => `${e.findingId}|${e.file}:${e.line}|${e.vuln}` === dedupeKey)) continue;
+        sc.linkedFindings.push(linkEntry);
+        // Narrative: short, human-readable. Avoids re-invoking the
+        // synthesizer agent for the common case where the chain is just
+        // "SAST X reaches vulnerable dep Y".
+        const narrative = `${linkEntry.vuln || 'sink'} on ${linkEntry.file || '?'}:${linkEntry.line || 0} → ${sc.name}@${sc.version} (${sc.osvId || (sc.cveAliases && sc.cveAliases[0]) || 'unknown CVE'})`;
+        if (!sc.chainNarratives.includes(narrative)) sc.chainNarratives.push(narrative);
+      }
+      sc.hasLinkedSastFindings = sc.linkedFindings.length > 0;
+    }
+  }
   const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasAttackPath:attackResult.flagged.has(key),attackPaths:attackResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
   try{aF.push(...scanDbTaintCrossFile(fc));}catch(_){}
   try{aF.push(...scanStoredPromptInjectionCrossFile(fc));}catch(_){}
