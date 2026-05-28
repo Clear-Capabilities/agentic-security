@@ -68,6 +68,7 @@ import { scanLlmRedteam } from './posture/llm-redteam.js';
 import { scanContainer } from './sca/container.js';
 import { detectDepConfusion } from './sca/dep-confusion.js';
 import { loadLicensePolicy, evaluateLicensePolicy } from './posture/license-policy.js';
+import { loadScaPolicy, applyScaPolicy } from './posture/sca-policy.js';
 import { scanDeployPlatform } from './posture/deploy-platform.js';
 import { runStackPlaybook } from './posture/stack-playbook.js';
 // Phase 1 (Sentinel-parity PRD) — new detection modules.
@@ -7822,6 +7823,10 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   catch (e) { _annotatorErrors.push({ phase: '_enrichWithScorecard', err: String((e && e.message) || e) }); }
   // 0.8.0 Feat-10: license policy
   try{const lp=loadLicensePolicy(scanRoot);if(lp){const lv=evaluateLicensePolicy(annotatedComponents,lp);aLogic.push(...lv);}}catch(_){}
+  // Phase 4 / Item 7 of the SCA improvement plan: load sca-policy.yml and
+  // apply accept-risk / SLA / major-version-freeze rules. supplyChain
+  // findings get suppressed/tagged in place.
+  try { const sp = loadScaPolicy(scanRoot); if (sp && !sp._error) applyScaPolicy(supplyChain, sp); } catch (_) {}
   // 0.9.0 Feat-15: dep confusion
   try{const dc=detectDepConfusion(annotatedComponents,scanRoot);aF.push(...dc);}catch(_){}
   // Deployment-platform security checklist

@@ -5,6 +5,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { statePath, safeWriteState } from './state-dir.js';
+import { appendAcceptRiskFromTriage } from './sca-policy.js';
 
 export const STATES = ['open', 'in-progress', 'fixed', 'wont-fix', 'false-positive'];
 
@@ -44,6 +45,15 @@ export function syncWithScan(scanRoot, findings) {
         assignee: null,
         opened_at: now,
         comments: [],
+        // Phase 4 / Item 7: capture SCA-relevant fields so the
+        // triage → sca-policy bridge has enough data to materialize an
+        // accept-risk entry on wont-fix. No-ops for SAST findings.
+        type: f.type || null,
+        name: f.name || null,
+        version: f.version || null,
+        ecosystem: f.ecosystem || null,
+        osvId: f.osvId || null,
+        cveAliases: Array.isArray(f.cveAliases) ? f.cveAliases : [],
       };
       data.transitions.push({ id, from: null, to: 'open', at: now });
     }
@@ -80,7 +90,22 @@ export function transition(scanRoot, id, toState, comment) {
   if (toState === 'fixed') cur.fixed_at = new Date().toISOString();
   data.transitions.push({ id, from, to: toState, at: new Date().toISOString(), comment });
   _save(scanRoot, data);
-  return { ok: true };
+
+  // Phase 4 / Item 7 of the SCA improvement plan — bridge wont-fix
+  // transitions on SCA findings into sca-policy.yml accept-risk entries
+  // so the suppression is durable across rescans. The finding object on
+  // the triage store has a `type` field when it was synced from a scan
+  // via syncWithScan; we only bridge type === 'vulnerable_dep'.
+  let policyBridge = null;
+  if (toState === 'wont-fix' && cur.type === 'vulnerable_dep') {
+    try {
+      const reason = comment || `Marked wont-fix in triage on ${new Date().toISOString().slice(0,10)}`;
+      policyBridge = appendAcceptRiskFromTriage(scanRoot, cur, reason);
+    } catch (e) {
+      policyBridge = { ok: false, reason: String(e && e.message || e) };
+    }
+  }
+  return { ok: true, policyBridge };
 }
 
 export function comment(scanRoot, id, author, body) {
