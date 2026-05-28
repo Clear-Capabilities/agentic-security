@@ -8,9 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
-
-const VIBECODER_PATH = '.agentic-security/accepted.json';
-const PRO_PATH = '.agentic-security/suppressions.yml';
+import { statePath, safeWriteState } from './state-dir.js';
 
 const MS_PER_DAY = 86400000;
 const SOFT_TTL_DAYS = 30;
@@ -22,7 +20,7 @@ function _dateOnly(iso) {
 }
 
 export function loadSoftAccepted(scanRoot) {
-  const fp = path.join(scanRoot || process.cwd(), VIBECODER_PATH);
+  const fp = statePath(scanRoot, 'accepted.json');
   if (!fs.existsSync(fp)) return [];
   try {
     const raw = JSON.parse(fs.readFileSync(fp, 'utf8'));
@@ -31,9 +29,8 @@ export function loadSoftAccepted(scanRoot) {
 }
 
 export function saveSoftAccepted(scanRoot, items) {
-  const fp = path.join(scanRoot || process.cwd(), VIBECODER_PATH);
-  fs.mkdirSync(path.dirname(fp), { recursive: true });
-  fs.writeFileSync(fp, JSON.stringify({ accepted: items }, null, 2));
+  const fp = statePath(scanRoot, 'accepted.json');
+  safeWriteState(fp, JSON.stringify({ accepted: items }, null, 2));
 }
 
 export function addSoftAcceptance(scanRoot, finding, reason) {
@@ -53,7 +50,7 @@ export function addSoftAcceptance(scanRoot, finding, reason) {
 }
 
 export function loadProSuppressions(scanRoot) {
-  const fp = path.join(scanRoot || process.cwd(), PRO_PATH);
+  const fp = statePath(scanRoot, 'suppressions.yml');
   if (!fs.existsSync(fp)) return [];
   try {
     const parsed = yaml.load(fs.readFileSync(fp, 'utf8'));

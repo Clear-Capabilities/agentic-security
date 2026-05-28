@@ -82,6 +82,11 @@ async function _postRemote(url, entry) {
 export function auditCall({ sessionRoot, tool, args, outcome, reason }) {
   if (!sessionRoot) return;
   try {
+    // Safety: only write audit log if sessionRoot looks like a project root
+    const MARKERS = ['.git', 'package.json', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.xml', 'composer.json', 'Gemfile'];
+    let hasMarker = false;
+    for (const m of MARKERS) { try { if (fs.existsSync(path.join(sessionRoot, m))) { hasMarker = true; break; } } catch {} }
+    if (!hasMarker) return;
     const dir = path.join(sessionRoot, '.agentic-security');
     fs.mkdirSync(dir, { recursive: true });
     const logFile = path.join(dir, 'mcp-audit.log');

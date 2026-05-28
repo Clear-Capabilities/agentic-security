@@ -11,6 +11,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { isSafeStateDir } from './state-dir.js';
 
 function _streakPath(stateDir) {
   return path.join(stateDir, 'streak.json');
@@ -115,6 +116,7 @@ function _computeAchievements(streak, scan) {
 
 // Public — invoked by the CLI after every full scan.
 export function recordScan(stateDir, scan) {
+  if (!isSafeStateDir(stateDir)) return null;
   try { fs.mkdirSync(stateDir, { recursive: true }); } catch {}
   const prev = loadStreak(stateDir);
   const today = _todayUTC();
@@ -182,6 +184,7 @@ export function recordScan(stateDir, scan) {
 
 // Mark "launch check passed 10/10" — called from /security-launch-check
 export function markLaunchCheckPassed(stateDir) {
+  if (!isSafeStateDir(stateDir)) return null;
   const prev = loadStreak(stateDir);
   const next = { ...prev, launchCheckPassedAt: new Date().toISOString() };
   next.achievements = _computeAchievements(next, { findings: [] });

@@ -76,6 +76,30 @@ function _lang(fp) {
  * Walk the file once collecting WRITE pairs (model, field, line) where the
  * written value is a user source.
  */
+function _buildModelTableMap(code, lang) {
+  const map = new Map();
+  if (lang === 'js') {
+    for (const m of code.matchAll(/(?:sequelize\.define|\.init)\s*\(\s*['"](\w+)['"][\s\S]*?tableName\s*:\s*['"](\w+)['"]/g))
+      map.set(m[1], m[2]);
+    for (const m of code.matchAll(/class\s+(\w+)\s+extends\s+Model[\s\S]*?tableName\s*:\s*['"](\w+)['"]/g))
+      map.set(m[1], m[2]);
+    for (const m of code.matchAll(/@@map\s*\(\s*['"](\w+)['"]\s*\)/g))
+      map.set('_prisma_', m[1]);
+  } else if (lang === 'py') {
+    for (const m of code.matchAll(/class\s+(\w+)[\s\S]*?class\s+Meta[\s\S]*?db_table\s*=\s*['"](\w+)['"]/g))
+      map.set(m[1], m[2]);
+    for (const m of code.matchAll(/__tablename__\s*=\s*['"](\w+)['"]/g))
+      map.set('_sqla_', m[1]);
+  }
+  return map;
+}
+
+function _resolveTableName(model, tableMap) {
+  if (!model) return model;
+  if (tableMap.has(model)) return tableMap.get(model);
+  return model.toLowerCase() + 's';
+}
+
 function _findTaintedWrites(code, lang) {
   const writes = [];
   const patterns = lang === 'js' ? WRITE_PATTERNS_JS : WRITE_PATTERNS_PY;

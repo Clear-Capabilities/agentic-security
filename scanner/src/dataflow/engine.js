@@ -62,13 +62,13 @@ function _addPathAliasAware(state, path, callContext) {
   return s;
 }
 
+let _activeConstantVars = null;
+
 function exprTaint(expr, state) {
-  // Returns true iff this expression evaluates to a tainted value under the
-  // given taint state. ALSO treats catalog-registered source patterns as
-  // tainted at-read — `req.body.host` used inline (no intermediate local)
-  // is tainted because the source resolves at the read site.
   if (expr && expr.kind === 'member' && exprIsSource(expr)) return true;
   if (!expr) return false;
+  // Constant propagation: variables assigned from literals are never tainted
+  if (expr.kind === 'ident' && _activeConstantVars && _activeConstantVars.has(expr.name)) return false;
   // P1.1 — field-sensitive access path: if the expression is a pure
   // ident/member chain ("x.y.z"), ask the access-path lattice whether any
   // shorter prefix in the state covers it. This is what makes
@@ -157,11 +157,33 @@ function exprIsSource(expr) {
     const hit = matchSource(expr);
     if (hit) return hit;
   }
-  // Recurse — `req.body.name` should still find `req.body` as source.
   if (expr.kind === 'member' && expr.object) {
     return exprIsSource(expr.object);
   }
   return null;
+}
+
+const _SQL_KEYWORDS = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|UNION|WHERE|FROM|JOIN|INTO|VALUES|SET|EXEC|EXECUTE)\b/i;
+const _HTML_META = /[<>'"&]|innerHTML|outerHTML|document\.write/;
+const _SHELL_META = /[;|`$(){}]|&&|\|\|/;
+
+function _literalPartsOfExpr(expr) {
+  if (!expr) return [];
+  if (expr.kind === 'literal') return [String(expr.value || '')];
+  if (expr.kind === 'tpl') return (expr.parts || []).filter(p => p.kind === 'literal').map(p => String(p.value || ''));
+  if (expr.kind === 'binary') return [..._literalPartsOfExpr(expr.left), ..._literalPartsOfExpr(expr.right)];
+  return [];
+}
+
+function literalSkeletonMatchesFamily(expr, cwe) {
+  const literals = _literalPartsOfExpr(expr);
+  if (!literals.length) return true;
+  const joined = literals.join(' ');
+  if (!joined.trim()) return true;
+  if (cwe === 'CWE-89' || cwe === 'CWE-943') return _SQL_KEYWORDS.test(joined);
+  if (cwe === 'CWE-79') return _HTML_META.test(joined);
+  if (cwe === 'CWE-78') return _SHELL_META.test(joined);
+  return true;
 }
 
 // Apply a CFG node to a taint-state. Returns the new state + any finding emitted.
@@ -177,9 +199,13 @@ function step(node, stateIn, callContext) {
       return { state, findings };
 
     case 'assign': {
-      // Source detection on RHS.
       const src = exprIsSource(node.source);
       const target = typeof node.target === 'string' ? node.target : null;
+      // Constant propagation: track variables assigned from literals
+      if (target && _activeConstantVars) {
+        if (node.source && node.source.kind === 'literal') _activeConstantVars.set(target, node.source.value);
+        else _activeConstantVars.delete(target);
+      }
       let newState = state;
       // Premortem #7: interprocedural return-taint via SummaryCache. If the
       // RHS is a call to a known callee whose empty-entry-state summary says
@@ -340,6 +366,8 @@ function step(node, stateIn, callContext) {
             const taintedArgIdx = e.argIndex === 'all'
               ? argTaints.findIndex(Boolean) : e.argIndex;
             const taintedArgExpr = (node.args || [])[taintedArgIdx];
+            // String content analysis: skip if literal skeleton doesn't match injection family
+            if (e.vuln && taintedArgExpr && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
             // Premortem #10: attribute the source for THIS sink to the
             // source(s) that taint the actual argument expression — not the
             // first source the worklist happened to record. We walk the
@@ -438,12 +466,13 @@ function step(node, stateIn, callContext) {
 // every 100 iterations. A pathological CFG (large generated file with dense
 // control flow) can otherwise hold past the global timeout.
 function analyzeFunction(fn, entryState, callContext) {
-  const nodes = fn.cfg.nodes; // plain object
+  const nodes = fn.cfg.nodes;
   const work = [];
-  const inStates = new Map(); // nodeId → Set<varName>
+  const inStates = new Map();
   const outStates = new Map();
   inStates.set(fn.cfg.entry, new Set(entryState));
   work.push(fn.cfg.entry);
+  _activeConstantVars = new Map();
   // v0.70 #2 — points-to context for the step() transfer. Setting it here
   // (instead of plumbing through step's signature) keeps the worklist loop
   // unchanged and lets `step` consult `aliasesForVar` when callContext._pointsTo
@@ -712,6 +741,21 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     }
   }
   // v0.69 — expose cache to caller (runDeepAnalysis) for incremental persistence.
+  // Dead code suppression: demote findings in functions with zero callers
+  // (except route handlers which are entry points)
+  const calledQids = new Set();
+  if (callGraph.edges) for (const e of callGraph.edges) calledQids.add(typeof e.to === 'string' ? e.to : e.to?.qid);
+  if (callGraph.callersOf) for (const [qid, callers] of callGraph.callersOf) { if (callers && callers.size) calledQids.add(qid); }
+  for (const f of all) {
+    if (!f._funcQid) continue;
+    const fn = callGraph.functions?.get(f._funcQid);
+    if (!fn) continue;
+    if (calledQids.has(f._funcQid)) continue;
+    if (/handler|route|controller|middleware|endpoint/i.test(fn.name || '')) continue;
+    f._inDeadCode = true;
+    const dg = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
+    if (dg[f.severity]) f.severity = dg[f.severity];
+  }
   Object.defineProperty(all, '_summaryCache', { value: summaryCache, enumerable: false });
   return all;
 }

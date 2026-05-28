@@ -28,13 +28,14 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { statePath } from './state-dir.js';
 
 const DEFAULT_THRESHOLD = 0.15;
 const MIN_SAMPLE_SIZE = 10;
 const WINDOW_DAYS = 30;
 
 function loadTriageFeedback(scanRoot) {
-  const fp = path.join(scanRoot || process.cwd(), '.agentic-security', 'triage-feedback.json');
+  const fp = statePath(scanRoot, 'triage-feedback.json');
   try {
     if (!fs.existsSync(fp)) return [];
     const data = JSON.parse(fs.readFileSync(fp, 'utf8'));

@@ -55,7 +55,7 @@ import { scanCpp } from './sast/cpp.js';
 import { scanJulietShape, applyJulietJavaSuppressions, applyJulietCsSuppressions } from './sast/juliet-shape.js';
 import { scanCppDataflow, _parseErrorCount as _cppDataflowParseErrors } from './sast/cpp-dataflow.js';
 import { scanSolidity } from './sast/solidity.js';
-import { scanRust } from './sast/rust.js';
+import { scanRust, extractRustImportMap } from './sast/rust.js';
 import { scanGoExtended } from './sast/go-extended.js';
 import { scanDatabaseRLS } from './sast/db-rls.js';
 import { scanRateLimit } from './sast/rate-limit.js';
@@ -4563,15 +4563,40 @@ function scanMiddlewareOrdering(fp, raw){
     if (isAuth && line < firstAuthAt) firstAuthAt = line;
     if (mountPath) mounts.push({ line, mountPath, handlerArgs, isAuth });
   }
+  let firstRateLimitAt = Infinity;
+  for (const mt of mounts) {
+    if (/rateLimit|rate.?limit|throttle|slowDown/i.test(mt.handlerArgs) && mt.line < firstRateLimitAt) firstRateLimitAt = mt.line;
+  }
   for (const mt of mounts) {
     if (mt.isAuth) continue;
     if (!_SENSITIVE_PATH_RE.test(mt.mountPath)) continue;
-    if (mt.line >= firstAuthAt) continue;     // mounted after auth — fine
+    if (mt.line >= firstAuthAt) continue;
     findings.push({
       vuln: `Sensitive Route Mounted Before Auth Middleware (${mt.mountPath})`,
       severity: 'high', cwe: 'CWE-285', stride: 'Elevation of Privilege',
       file: fp, line: mt.line, snippet: lines[mt.line - 1]?.trim() || '',
       fix: `Register your auth middleware before mounting ${mt.mountPath}. Either move app.use(authMiddleware) above this line, or pass authMiddleware directly: app.use('${mt.mountPath}', authMiddleware, router).`,
+    });
+  }
+  // Check rate-limiting before auth (auth endpoints should be rate-limited)
+  if (firstAuthAt < Infinity && firstRateLimitAt > firstAuthAt) {
+    findings.push({
+      vuln: 'Rate Limiting After Auth Middleware — brute-force attacks bypass rate limits',
+      severity: 'medium', cwe: 'CWE-307', stride: 'Denial of Service',
+      file: fp, line: firstAuthAt, snippet: lines[firstAuthAt - 1]?.trim() || '',
+      fix: 'Register rate-limiting middleware BEFORE auth middleware so brute-force login attempts are throttled: app.use(rateLimit({...})); app.use(authMiddleware);',
+    });
+  }
+  // Check for method-level auth on sensitive routes
+  const routeRe = /\b(?:app|router)\.(get|post|put|patch|delete)\s*\(\s*['"]([^'"]*(?:admin|user|account|settings|profile|payment|billing|dashboard)[^'"]*)['"]\s*,\s*(?!.*(?:auth|protect|verify|guard))/gi;
+  for (const rm of cleaned.matchAll(routeRe)) {
+    const routeLine = lineAt(cleaned, rm.index);
+    if (routeLine >= firstAuthAt) continue;
+    findings.push({
+      vuln: `Sensitive Route Without Auth — ${rm[1].toUpperCase()} ${rm[2]}`,
+      severity: 'high', cwe: 'CWE-306', stride: 'Elevation of Privilege',
+      file: fp, line: routeLine, snippet: lines[routeLine - 1]?.trim() || '',
+      fix: `Add auth middleware to this route: router.${rm[1]}('${rm[2]}', authMiddleware, handler). Or ensure app.use(authMiddleware) appears before this route definition.`,
     });
   }
   return findings;
@@ -5507,17 +5532,50 @@ const VULN_FUNCTION_HINTS = {
   ...(typeof _VULN_FUNCTION_HINTS_GENERATED === 'object' && !Array.isArray(_VULN_FUNCTION_HINTS_GENERATED) ? Object.fromEntries(Object.entries(_VULN_FUNCTION_HINTS_GENERATED).filter(([k])=>!k.startsWith('_'))) : {}),
   ...(typeof _VULN_FUNCTION_HINTS_DATA === 'object' && !Array.isArray(_VULN_FUNCTION_HINTS_DATA) ? Object.fromEntries(Object.entries(_VULN_FUNCTION_HINTS_DATA).filter(([k])=>!k.startsWith('_'))) : {}),
 };
+function _semverSatisfies(ver,range){
+  if(!ver||!range)return false;
+  const parse=v=>{const m=(v||'').match(/^[=v]*(\d+)\.(\d+)\.(\d+)/);return m?[+m[1],+m[2],+m[3]]:null;};
+  const cmp=(a,b)=>{for(let i=0;i<3;i++){if(a[i]!==b[i])return a[i]-b[i];}return 0;};
+  const v=parse(ver);if(!v)return false;
+  for(const part of range.split(/\s*\|\|\s*/)){
+    let ok=true;
+    for(const cond of part.split(/\s+/).filter(Boolean)){
+      const m=cond.match(/^([<>=!]+)(.+)$/);if(!m)continue;
+      const t=parse(m[2]);if(!t){ok=false;break;}
+      const c=cmp(v,t);const op=m[1];
+      if(op==='>='&&c<0){ok=false;break;}
+      if(op==='>'&&c<=0){ok=false;break;}
+      if(op==='<='&&c>0){ok=false;break;}
+      if(op==='<'&&c>=0){ok=false;break;}
+      if(op==='='&&c!==0){ok=false;break;}
+      if(op==='!='&&c===0){ok=false;break;}
+    }
+    if(ok)return true;
+  }
+  return false;
+}
 function markUsedVulnFunctions(supplyChain,fc){
   const used={};
   const perFile={};
   for(const[fp,content] of Object.entries(fc)){
     const lines=content.split('\n');
+    // Rust import-aware matching: build import map for .rs files
+    let _rustImports=null;
+    if(/\.rs$/i.test(fp)){try{_rustImports=extractRustImportMap(content);}catch(_){}}
     for(const[pkg,fns] of Object.entries(VULN_FUNCTION_HINTS)){
       if(!perFile[pkg])perFile[pkg]=[];
       for(const fn of fns){
         const re=new RegExp(`\\b(?:${pkg.replace(/\W/g,'\\$&')}|_)\\.${fn}\\b`,'g');
+        // Rust: also match bare function calls if import map traces them to this package
+        const rustBareRe=_rustImports?new RegExp(`\\b${fn.replace(/\W/g,'\\$&')}\\s*[(<]`,'g'):null;
         for(let li=0;li<lines.length;li++){
-          if(re.test(lines[li])){
+          let matched=re.test(lines[li]);
+          re.lastIndex=0;
+          if(!matched&&rustBareRe){
+            if(rustBareRe.test(lines[li])&&(_rustImports.map.get(fn)===pkg||_rustImports.map.get(fn)===pkg.replace(/-/g,'_')||_rustImports.globs.has(pkg)||_rustImports.globs.has(pkg.replace(/-/g,'_')))){matched=true;}
+            rustBareRe.lastIndex=0;
+          }
+          if(matched){
             perFile[pkg].push({pkg,fn,file:fp,line:li+1});
             if(!used[pkg])used[pkg]=new Set();
             used[pkg].add(fn);
@@ -5529,10 +5587,20 @@ function markUsedVulnFunctions(supplyChain,fc){
   }
   for(const sc of supplyChain||[]){
     if(sc.type!=='vulnerable_dep')continue;
-    // Merge hints: hardcoded → OSV ecosystem_specific → skip if none
+    // Merge hints: versioned → hardcoded → OSV ecosystem_specific → skip if none
     const hardcoded=VULN_FUNCTION_HINTS[sc.name]||[];
+    // Version-scoped hints: check pkg@range keys
+    const versionedFns=[];
+    for(const[hk,hv] of Object.entries(VULN_FUNCTION_HINTS)){
+      if(!hk.includes('@'))continue;
+      const atIdx=hk.indexOf('@');
+      const hPkg=hk.slice(0,atIdx);
+      const hRange=hk.slice(atIdx+1);
+      if(hPkg!==sc.name)continue;
+      try{if(_semverSatisfies(sc.version,hRange))versionedFns.push(...hv);}catch(_){}
+    }
     const osvFns=Array.isArray(sc.osvVulnFunctions)?sc.osvVulnFunctions.map(f=>{const d=f.lastIndexOf('.');return d>0?f.slice(d+1):f;}):[];
-    const allFns=[...new Set([...hardcoded,...osvFns])];
+    const allFns=[...new Set([...versionedFns,...hardcoded,...osvFns])];
     if(!allFns.length){sc.functionReachable='unknown';sc.noKnownCallSite=true;sc._hintSource='none';continue;}
     sc._hintSource=osvFns.length?(hardcoded.length?'hardcoded+osv':'osv'):'hardcoded';
     // Search codebase for these functions (if not already searched via VULN_FUNCTION_HINTS)
@@ -6339,8 +6407,33 @@ function _parsePubspecLock(text,filePath){
   }return out;
 }
 
+const _APT_TO_LIB={'libssl-dev':'openssl','libssl3':'openssl','openssl':'openssl','zlib1g-dev':'zlib','zlib1g':'zlib','libcurl4-openssl-dev':'libcurl','libcurl4':'libcurl','libxml2-dev':'libxml2','libxml2':'libxml2','libpq-dev':'postgresql','libsqlite3-dev':'sqlite','libjpeg-dev':'libjpeg','libpng-dev':'libpng','libfreetype6-dev':'freetype','libexpat1-dev':'expat','libyaml-dev':'libyaml','libffi-dev':'libffi','libgmp-dev':'gmp','libncurses-dev':'ncurses','libreadline-dev':'readline'};
+function _parseCMakeLists(text,filePath){
+  const out=[];
+  for(const m of text.matchAll(/find_package\s*\(\s*(\w+)(?:\s+(\d+[\d.]*))?\s*(?:REQUIRED|COMPONENTS)?/gi)){
+    const name=m[1].toLowerCase();const ver=m[2]||'0.0.0';
+    out.push({name,version:ver,group:'',scope:'required',purl:`pkg:generic/${name}@${ver}`,ecosystem:'system',filePath,isUnpinned:!m[2]});
+  }
+  return out;
+}
+function _parseConanfile(text,filePath){
+  const out=[];
+  for(const m of text.matchAll(/(?:requires|build_requires)\s*[=(]\s*["']([^/]+)\/([^"'@]+)/g)){
+    out.push({name:m[1].toLowerCase(),version:m[2],group:'',scope:'required',purl:`pkg:generic/${m[1].toLowerCase()}@${m[2]}`,ecosystem:'system',filePath,isUnpinned:false});
+  }
+  return out;
+}
+function _parseVcpkgJson(text,filePath){
+  const out=[];try{const d=JSON.parse(text);
+    for(const dep of(d.dependencies||[])){
+      const name=typeof dep==='string'?dep:dep.name;
+      const ver=(typeof dep==='object'&&dep['version>='])?dep['version>=']:'0.0.0';
+      if(name)out.push({name:name.toLowerCase(),version:ver,group:'',scope:'required',purl:`pkg:generic/${name.toLowerCase()}@${ver}`,ecosystem:'system',filePath,isUnpinned:ver==='0.0.0'});
+    }
+  }catch(_){}return out;
+}
 function parseManifests(allFileContents){
-  const PARSERS={'package.json':_parsePackageJson,'package-lock.json':_parsePackageLockJson,'yarn.lock':_parseYarnLock,'pnpm-lock.yaml':_parsePnpmLock,'requirements.txt':_parseRequirementsTxt,'pyproject.toml':_parsePyprojectToml,'poetry.lock':_parsePoetryLock,'Pipfile.lock':_parsePipfileLock,'composer.json':_parseComposerJson,'composer.lock':_parseComposerLock,'Gemfile':_parseGemfile,'Gemfile.lock':_parseGemfileLock,'go.mod':_parseGoMod,'Cargo.toml':_parseCargoToml,'Cargo.lock':_parseCargoLock,'pom.xml':_parsePomXml,'build.gradle':_parseBuildGradle,'build.gradle.kts':_parseBuildGradle,'pubspec.yaml':_parsePubspecYaml,'pubspec.lock':_parsePubspecLock};
+  const PARSERS={'package.json':_parsePackageJson,'package-lock.json':_parsePackageLockJson,'yarn.lock':_parseYarnLock,'pnpm-lock.yaml':_parsePnpmLock,'requirements.txt':_parseRequirementsTxt,'pyproject.toml':_parsePyprojectToml,'poetry.lock':_parsePoetryLock,'Pipfile.lock':_parsePipfileLock,'composer.json':_parseComposerJson,'composer.lock':_parseComposerLock,'Gemfile':_parseGemfile,'Gemfile.lock':_parseGemfileLock,'go.mod':_parseGoMod,'Cargo.toml':_parseCargoToml,'Cargo.lock':_parseCargoLock,'pom.xml':_parsePomXml,'build.gradle':_parseBuildGradle,'build.gradle.kts':_parseBuildGradle,'pubspec.yaml':_parsePubspecYaml,'pubspec.lock':_parsePubspecLock,'CMakeLists.txt':_parseCMakeLists,'conanfile.txt':_parseConanfile,'vcpkg.json':_parseVcpkgJson};
   const out=[],seen=new Set();
   for(const[fp,content]of Object.entries(allFileContents)){
     const base=fp.split('/').pop();
@@ -6931,6 +7024,8 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   // 0.10.0: enrich SCA findings with CISA KEV (CISA KEV catalog)
   try{supplyChain=await _enrichWithKEV(supplyChain);}catch(_){}
   try{markUsedVulnFunctions(supplyChain,fc);}catch(_){}
+  // Python AST-based function validation (deep mode only)
+  if(process.env.AGENTIC_SECURITY_DEEP==='1'){try{const{validateOsvFunctionsExist}=await import('./sca/py-package-functions.js');for(const sc of supplyChain){if(sc.type!=='vulnerable_dep'||sc.ecosystem!=='pypi')continue;if(!sc.osvVulnFunctions||!sc.osvVulnFunctions.length)continue;const{validated,missing}=validateOsvFunctionsExist(sc.name,sc.osvVulnFunctions,scanRoot);if(validated.length)sc._pyAstValidated=validated;if(missing.length)sc._pyAstMissing=missing;}}catch(_){}}
   // LLM-assisted function extraction for CVEs without hints (opt-in: AGENTIC_SECURITY_LLM_SCA=1)
   if(process.env.AGENTIC_SECURITY_LLM_SCA==='1'){try{const{extractVulnFunctionsViaLLM}=await import('./sca/llm-function-extract.js');const enriched=await extractVulnFunctionsViaLLM(supplyChain);if(enriched.length){markUsedVulnFunctions(supplyChain,fc);}}catch(_){}}
   setProgress({current:i,total:files.length,file:"Registry metadata...",phase:"SCA"});
@@ -7457,6 +7552,12 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   // v3 next-gen: why-fired provenance is captured LAST so it reflects the
   // final state of each finding after every other annotator has run.
   _runAnnotator("annotateWhyFired", () => { annotateWhyFired(finalFindings, {}); });
+  // SCA-SAST correlation: link SAST findings to SCA vulnerable packages
+  try{for(const f of finalFindings){if(!f.chain||!f.chain.length)continue;const src=f.chain[0]?.label||'';for(const sc of supplyChain){if(sc.type!=='vulnerable_dep')continue;if(src.includes(sc.name)||f.vuln?.toLowerCase().includes(sc.name)){f.scaCorrelation={osvId:sc.osvId,package:sc.name,version:sc.version,confirmed:true};sc.sastConfirmed=true;break;}}}}catch(_){}
+  // Multi-sink chain detection: group findings by source variable
+  try{const srcGroups=new Map();for(const f of finalFindings){const src=f.chain?.[0]?.label;if(!src)continue;if(!srcGroups.has(src))srcGroups.set(src,[]);srcGroups.get(src).push(f);}for(const[src,group]of srcGroups){if(group.length<2)continue;const groupId=`multi-sink:${src}:${group.length}`;for(const f of group)f._multiSinkGroupId=groupId;finalFindings.push({id:groupId,file:group[0].file,line:group[0].line,vuln:`Multi-Sink Taint Chain — ${src} reaches ${group.length} sinks`,severity:group.some(f=>f.severity==='critical')?'critical':'high',cwe:'CWE-20',parser:'MULTI-SINK',confidence:0.85,sinks:group.map(f=>({file:f.file,line:f.line,vuln:f.vuln})),_aggregated:true});}}catch(_){}
+  // SCA transitive dedup: collapse duplicate CVEs across dep chains
+  try{const osvGroups=new Map();for(const sc of supplyChain){if(sc.type!=='vulnerable_dep'||!sc.osvId)continue;if(!osvGroups.has(sc.osvId))osvGroups.set(sc.osvId,[]);osvGroups.get(sc.osvId).push(sc);}for(const[osvId,group]of osvGroups){if(group.length<=1)continue;const primary=group.find(s=>s.isDirect)||group[0];primary.dependents=group.filter(s=>s!==primary).map(s=>({name:s.name,version:s.version,depChain:s.depChain,isDirect:s.isDirect}));primary._transitiveDeduped=group.length-1;for(const dup of group){if(dup!==primary)dup._deduplicatedInto=primary.osvId;}supplyChain.splice(0,supplyChain.length,...supplyChain.filter(s=>!s._deduplicatedInto));}}catch(_){}
   const _scanMeta={filesScanned:files.length,filesSkipped:_filesSkipped,filesTimedOut:_filesTimedOut,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length}};
   return{routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors};}
 

@@ -27,6 +27,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { statePath } from './state-dir.js';
 
 const MIN_SAMPLES_FOR_CALIBRATION = 30;
 
@@ -102,7 +103,7 @@ function _readJsonMaybe(fp) {
 // seed file. The bundled seed ships with this release; the customer file
 // overrides per-family when N is higher there.
 export function loadCalibrationHistory(scanRoot) {
-  const customer = _readJsonMaybe(path.join(scanRoot || process.cwd(), '.agentic-security', 'validator-metrics.json')) || {};
+  const customer = _readJsonMaybe(statePath(scanRoot, 'validator-metrics.json')) || {};
   const seedPath = new URL('./calibration-seed.json', import.meta.url);
   let seed = null;
   try { seed = JSON.parse(fs.readFileSync(seedPath, 'utf8')); } catch { seed = null; }
@@ -122,7 +123,7 @@ export function loadCalibrationHistory(scanRoot) {
   if (customer) merge(customer);
   // Merge triage-derived TP/FP counts (auto-feedback loop)
   try {
-    const triage = _readJsonMaybe(path.join(scanRoot || process.cwd(), '.agentic-security', 'triage.json'));
+    const triage = _readJsonMaybe(statePath(scanRoot, 'triage.json'));
     if (triage && triage.findings) {
       const triageFams = {};
       for (const f of Object.values(triage.findings)) {

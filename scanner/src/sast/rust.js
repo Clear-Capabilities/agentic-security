@@ -103,3 +103,29 @@ export function scanRust(fp, raw) {
   }
   return out;
 }
+
+export function extractRustImportMap(code) {
+  const map = new Map();
+  const globs = new Set();
+  const useRe = /\buse\s+([\w_][\w_:]*?)(?:::(\w+|\{[^}]+\}|\*))(?:\s+as\s+(\w+))?/g;
+  for (const m of code.matchAll(useRe)) {
+    const cratePath = m[1];
+    const crate = cratePath.split('::')[0];
+    const imported = m[2];
+    const alias = m[3];
+    if (imported === '*') {
+      globs.add(crate);
+      continue;
+    }
+    if (imported.startsWith('{')) {
+      const items = imported.slice(1, -1).split(',').map(s => s.trim());
+      for (const item of items) {
+        const parts = item.split(/\s+as\s+/);
+        map.set(parts[1] || parts[0], crate);
+      }
+      continue;
+    }
+    map.set(alias || imported, crate);
+  }
+  return { map, globs };
+}

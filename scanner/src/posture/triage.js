@@ -4,13 +4,12 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-
-const STORE_PATH = '.agentic-security/triage.json';
+import { statePath, safeWriteState } from './state-dir.js';
 
 export const STATES = ['open', 'in-progress', 'fixed', 'wont-fix', 'false-positive'];
 
 function _storePath(scanRoot) {
-  return path.join(scanRoot || process.cwd(), STORE_PATH);
+  return statePath(scanRoot, 'triage.json');
 }
 
 export function loadTriage(scanRoot) {
@@ -22,8 +21,7 @@ export function loadTriage(scanRoot) {
 
 function _save(scanRoot, data) {
   const fp = _storePath(scanRoot);
-  fs.mkdirSync(path.dirname(fp), { recursive: true });
-  fs.writeFileSync(fp, JSON.stringify(data, null, 2));
+  safeWriteState(fp, JSON.stringify(data, null, 2));
 }
 
 // Sync the triage store with the latest scan: new findings become 'open',

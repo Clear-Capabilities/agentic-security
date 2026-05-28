@@ -6,6 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
+import { statePath, safeWriteState, resolveProjectRoot } from './state-dir.js';
 
 export const PROFILES = ['vibecoder', 'pro'];
 
@@ -35,7 +36,7 @@ export const DEFAULTS = {
 };
 
 function _profilePath(scanRoot) {
-  return path.join(scanRoot || process.cwd(), '.agentic-security', 'profile.yml');
+  return statePath(scanRoot, 'profile.yml');
 }
 
 export function loadProfile(scanRoot) {
@@ -52,10 +53,8 @@ export function loadProfile(scanRoot) {
 
 export function saveProfile(scanRoot, updates) {
   const fp = _profilePath(scanRoot);
-  fs.mkdirSync(path.dirname(fp), { recursive: true });
   const current = loadProfile(scanRoot);
   const next = { ...current, ...updates };
-  // Strip values equal to defaults so the file stays minimal.
   const defaults = DEFAULTS[next.profile];
   const out = {};
   for (const k of Object.keys(next)) {
@@ -63,7 +62,7 @@ export function saveProfile(scanRoot, updates) {
     out[k] = next[k];
   }
   if (!('profile' in out)) out.profile = next.profile;
-  fs.writeFileSync(fp, yaml.dump(out));
+  safeWriteState(fp, yaml.dump(out));
   return next;
 }
 
@@ -71,7 +70,7 @@ export function saveProfile(scanRoot, updates) {
 // Returns 'pro' if the repo has signals indicating professional security work,
 // otherwise 'vibecoder'. Run only on first scan.
 export function detectProfile(scanRoot) {
-  const root = scanRoot || process.cwd();
+  const root = resolveProjectRoot(scanRoot);
   const signals = ['SECURITY.md', '.github/workflows/security.yml', '.semgrep.yml',
                    '.snyk', 'codeql-config.yml', 'compliance/', 'docs/threat-model.md'];
   for (const s of signals) {

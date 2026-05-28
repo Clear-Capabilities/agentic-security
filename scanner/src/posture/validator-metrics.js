@@ -24,11 +24,11 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { statePath, safeWriteState } from './state-dir.js';
 
-const FILE = '.agentic-security/validator-metrics.json';
 const HISTORY_CAP = 100;
 
-function _filePath(scanRoot) { return path.join(scanRoot || process.cwd(), FILE); }
+function _filePath(scanRoot) { return statePath(scanRoot, 'validator-metrics.json'); }
 
 function _read(scanRoot) {
   const fp = _filePath(scanRoot);
@@ -39,10 +39,7 @@ function _read(scanRoot) {
 
 function _write(scanRoot, data) {
   const fp = _filePath(scanRoot);
-  try {
-    fs.mkdirSync(path.dirname(fp), { recursive: true });
-    fs.writeFileSync(fp, JSON.stringify(data, null, 2));
-  } catch { /* swallow — telemetry is best-effort */ }
+  safeWriteState(fp, JSON.stringify(data, null, 2));
 }
 
 function _round(n) { return Math.round(n * 10000) / 10000; }

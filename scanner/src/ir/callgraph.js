@@ -8,11 +8,25 @@
 //   4. Anything else → unresolved; the dataflow engine treats the callee as
 //      an opaque sink for taint.
 
-export function buildCallGraph(perFileIR) {
-  // perFileIR is { [file]: parseJsFile output }
-  const functions = new Map(); // qid → FunctionIR
-  const byNameInFile = new Map(); // file → Map<name, qid>
-  const classMethods = new Map(); // 'ClassName.method' → qid
+export function buildCallGraph(perFileIR, fileContents) {
+  const functions = new Map();
+  const byNameInFile = new Map();
+  const classMethods = new Map();
+  // Re-export resolution: track `export { x } from './y'` and `module.exports = require('./y')`
+  const reexportMap = new Map();
+  if (fileContents) {
+    for (const [file, code] of Object.entries(fileContents)) {
+      if (!code || typeof code !== 'string') continue;
+      for (const m of code.matchAll(/export\s*\{\s*([^}]+)\s*\}\s*from\s*['"]([^'"]+)['"]/g)) {
+        const names = m[1].split(',').map(n => n.trim().split(/\s+as\s+/));
+        for (const [orig, alias] of names) {
+          reexportMap.set(`${file}::${alias || orig}`, { sourceFile: m[2], sourceName: orig.trim() });
+        }
+      }
+      const cjsReexport = code.match(/module\.exports\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+      if (cjsReexport) reexportMap.set(`${file}::*`, { sourceFile: cjsReexport[1], sourceName: '*' });
+    }
+  }
 
   for (const file of Object.keys(perFileIR || {})) {
     const ir = perFileIR[file];
@@ -21,7 +35,6 @@ export function buildCallGraph(perFileIR) {
     for (const fn of ir.functions) {
       functions.set(fn.qid, fn);
       byNameInFile.get(file).set(fn.name, fn.qid);
-      // Class methods: qid carries the class name as the scope.
       const m = fn.qid.match(/::([A-Z]\w*)::(\w+)@/);
       if (m) classMethods.set(`${m[1]}.${m[2]}`, fn.qid);
     }
@@ -56,7 +69,6 @@ export function buildCallGraph(perFileIR) {
   // ClassName.method falls back).
   function resolve(name) {
     if (!name || typeof name !== 'string') return null;
-    // Direct ident match — search every file's same-file map.
     for (const m of byNameInFile.values()) {
       if (m.has(name)) return m.get(name);
     }
@@ -65,6 +77,14 @@ export function buildCallGraph(perFileIR) {
       const tail = name.split('.').slice(-1)[0];
       for (const m of byNameInFile.values()) {
         if (m.has(tail)) return m.get(tail);
+      }
+    }
+    // Follow re-exports: if name was re-exported from another file, resolve there
+    for (const [key, { sourceName }] of reexportMap) {
+      if (key.endsWith(`::${name}`) || (sourceName === name)) {
+        for (const m of byNameInFile.values()) {
+          if (m.has(sourceName)) return m.get(sourceName);
+        }
       }
     }
     return null;

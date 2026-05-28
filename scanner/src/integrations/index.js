@@ -13,9 +13,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
+import { statePath } from '../posture/state-dir.js';
 
 function _configPath(scanRoot) {
-  return path.join(scanRoot || process.cwd(), '.agentic-security', 'integrations.yml');
+  return statePath(scanRoot, 'integrations.yml');
 }
 
 export function loadIntegrationConfig(scanRoot) {

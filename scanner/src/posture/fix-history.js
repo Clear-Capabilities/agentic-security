@@ -12,13 +12,19 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+import { isSafeStateDir, statePath } from './state-dir.js';
 
 function historyDir(scanRoot) {
-  return path.join(scanRoot, '.agentic-security', 'fix-history');
+  return statePath(scanRoot, 'fix-history');
 }
 function logPath(scanRoot) { return path.join(historyDir(scanRoot), 'log.json'); }
 
-function ensure(scanRoot) { fs.mkdirSync(historyDir(scanRoot), { recursive: true }); }
+function ensure(scanRoot) {
+  const dir = historyDir(scanRoot);
+  if (!isSafeStateDir(path.dirname(dir))) return false;
+  fs.mkdirSync(dir, { recursive: true });
+  return true;
+}
 
 export function readLog(scanRoot) {
   const fp = logPath(scanRoot);

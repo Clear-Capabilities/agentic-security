@@ -13,14 +13,12 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-
-const TRIAGE_PATH = path.join('.agentic-security', 'triage-feedback.json');
-const PROPOSED_DIR = path.join('.agentic-security', 'rules-proposed');
+import { statePath, isSafeStateDir } from './state-dir.js';
 
 const DEFAULT_FP_THRESHOLD = 5;
 
 function _readTriage(scanRoot) {
-  const fp = path.join(scanRoot || process.cwd(), TRIAGE_PATH);
+  const fp = statePath(scanRoot, 'triage-feedback.json');
   if (!fs.existsSync(fp)) return null;
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
 }
@@ -87,7 +85,8 @@ export function synthesizeRules(scanRoot, opts = {}) {
     groups.get(k).push(e);
   }
   const proposals = [];
-  const dir = path.join(scanRoot || process.cwd(), PROPOSED_DIR);
+  const dir = statePath(scanRoot, 'rules-proposed');
+  if (!opts.dryRun && !isSafeStateDir(path.dirname(dir))) return [];
   for (const [, group] of groups) {
     if (group.length < threshold) continue;
     const summary = _summarizeGroup(group);
@@ -105,4 +104,4 @@ export function synthesizeRules(scanRoot, opts = {}) {
   return proposals;
 }
 
-export const _internals = { DEFAULT_FP_THRESHOLD, TRIAGE_PATH, PROPOSED_DIR };
+export const _internals = { DEFAULT_FP_THRESHOLD };

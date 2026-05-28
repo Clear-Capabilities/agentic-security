@@ -44,6 +44,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+import { statePath, ensureStateDir, safeWriteState } from '../posture/state-dir.js';
 
 // Bump on every prompt change so the cache invalidates. Exported as a
 // stable public symbol (premortem 4R-15) so the validator-cache GC subcommand
@@ -98,7 +99,9 @@ function endpointConfig() {
 }
 
 function ensureCacheDir(scanRoot) {
-  const dir = path.join(scanRoot || process.cwd(), CACHE_DIR);
+  const base = ensureStateDir(scanRoot);
+  if (!base) return null;
+  const dir = path.join(base, 'llm-cache');
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
   return dir;
 }
@@ -112,15 +115,14 @@ function cacheKey(finding, fileHash, modelId) {
 }
 
 function readCache(scanRoot, key) {
-  const fp = path.join(scanRoot || process.cwd(), CACHE_DIR, key + '.json');
+  const fp = statePath(scanRoot, 'llm-cache', key + '.json');
   if (!fs.existsSync(fp)) return null;
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
 }
 
 function writeCache(scanRoot, key, value) {
-  ensureCacheDir(scanRoot);
-  const fp = path.join(scanRoot || process.cwd(), CACHE_DIR, key + '.json');
-  try { fs.writeFileSync(fp, JSON.stringify(value, null, 2)); } catch {}
+  const fp = statePath(scanRoot, 'llm-cache', key + '.json');
+  safeWriteState(fp, JSON.stringify(value, null, 2));
 }
 
 function fileHashOf(fileContents, file) {

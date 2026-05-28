@@ -11,11 +11,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
 import { verifyLastScan } from './integrity.js';
-
-const OVERRIDES_PATH = '.agentic-security/rules.yml';
+import { statePath } from './state-dir.js';
 
 function _path(scanRoot) {
-  return path.join(scanRoot || process.cwd(), OVERRIDES_PATH);
+  return statePath(scanRoot, 'rules.yml');
 }
 
 export function loadOverrides(scanRoot) {

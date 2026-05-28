@@ -30,8 +30,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
-
-const TRUSTED_KEYS_FILE = '.agentic-security/trusted-keys.json';
+import { statePath } from './state-dir.js';
 
 // Built-in trust root. These are the keys the maintainers of agentic-security
 // use to sign official rule packs. Production deployment requires the
@@ -49,7 +48,7 @@ export const BUNDLED_OFFICIAL_KEYS = [
 ];
 
 function _trustedKeysPath(scanRoot) {
-  return path.join(scanRoot || process.cwd(), TRUSTED_KEYS_FILE);
+  return statePath(scanRoot, 'trusted-keys.json');
 }
 
 // Load the EFFECTIVE trusted-key set. Composition:

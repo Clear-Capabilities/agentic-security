@@ -6,12 +6,12 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { statePath, safeWriteState } from './state-dir.js';
 
-const HISTORY_FILE = '.agentic-security/scan-history.json';
 const MAX_HISTORY = 30; // rolling window
 
 function _readHistory(scanRoot) {
-  const histPath = scanRoot ? path.join(scanRoot, HISTORY_FILE) : HISTORY_FILE;
+  const histPath = statePath(scanRoot, 'scan-history.json');
   try {
     return JSON.parse(fs.readFileSync(histPath, 'utf8'));
   } catch {
@@ -20,11 +20,8 @@ function _readHistory(scanRoot) {
 }
 
 function _writeHistory(scanRoot, history) {
-  const histPath = scanRoot ? path.join(scanRoot, HISTORY_FILE) : HISTORY_FILE;
-  try {
-    fs.mkdirSync(path.dirname(histPath), { recursive: true });
-    fs.writeFileSync(histPath, JSON.stringify(history.slice(-MAX_HISTORY), null, 2));
-  } catch {}
+  const histPath = statePath(scanRoot, 'scan-history.json');
+  safeWriteState(histPath, JSON.stringify(history.slice(-MAX_HISTORY), null, 2));
 }
 
 function _snapshotFromScan(scan, label) {

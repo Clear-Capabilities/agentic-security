@@ -269,6 +269,11 @@ function renderV3Blocks(scan, flags) {
 // Always-on machine output (R2). Vibecoder gets JSON only; pro gets JSON+SARIF+CSV.
 async function writeMachineOutput(targetAbs, scan, meta, profile) {
   const stateDir = path.join(targetAbs, '.agentic-security');
+  const { isSafeStateDir: _isSafe } = await import('../src/posture/state-dir.js');
+  if (!_isSafe(stateDir)) {
+    if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write machine output at ${stateDir} — no project marker\n`);
+    return;
+  }
   await fsp.mkdir(stateDir, { recursive: true });
   // Always JSON (used by /security-fix and /security-report).
   await fsp.writeFile(path.join(stateDir, 'findings.json'),
@@ -495,14 +500,19 @@ async function cmdScan(args) {
   else process.stdout.write(body + '\n');
 
   // Persist last scan for /security-fix and /security-report
+  const { isSafeStateDir: _isSafeStateDir } = await import('../src/posture/state-dir.js');
   const stateDir = path.join(path.resolve(target), '.agentic-security');
-  await fsp.mkdir(stateDir, { recursive: true });
-  const persistedScan = toJSON(scan, meta);
-  const lastScanBody = JSON.stringify(persistedScan, null, 2);
-  await fsp.writeFile(path.join(stateDir, 'last-scan.json'), lastScanBody);
-  try {
-    await fsp.writeFile(path.join(stateDir, 'last-scan.json.sig'), _signLastScan(lastScanBody));
-  } catch { /* non-fatal — sig file is best-effort */ }
+  if (_isSafeStateDir(stateDir)) {
+    await fsp.mkdir(stateDir, { recursive: true });
+    const persistedScan = toJSON(scan, meta);
+    const lastScanBody = JSON.stringify(persistedScan, null, 2);
+    await fsp.writeFile(path.join(stateDir, 'last-scan.json'), lastScanBody);
+    try {
+      await fsp.writeFile(path.join(stateDir, 'last-scan.json.sig'), _signLastScan(lastScanBody));
+    } catch { /* non-fatal — sig file is best-effort */ }
+  } else {
+    if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write state at ${stateDir} — no project marker in ${path.resolve(target)}\n`);
+  }
 
   // 0.14.0 — update streak / achievements after every full scan. Suppress
   // streak side effects when the user only wants raw JSON output (CI piping).
@@ -587,6 +597,11 @@ async function cmdCi(args) {
 
   // Persist the three CI artifacts.
   const stateDir = path.join(targetAbs, '.agentic-security');
+  const { isSafeStateDir: _isSafeCi } = await import('../src/posture/state-dir.js');
+  if (!_isSafeCi(stateDir)) {
+    if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write CI artifacts at ${stateDir} — no project marker\n`);
+    return;
+  }
   await fsp.mkdir(stateDir, { recursive: true });
   await fsp.writeFile(path.join(stateDir, 'findings.json'),
     JSON.stringify(toJSON(scan, meta), null, 2));

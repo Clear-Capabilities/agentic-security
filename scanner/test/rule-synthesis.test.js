@@ -8,6 +8,8 @@ import * as path from 'node:path';
 import { synthesizeRules } from '../src/posture/rule-synthesis.js';
 
 function _writeTriage(root, verdicts) {
+  // Add a project marker so the state-dir safety check allows writes
+  fs.writeFileSync(path.join(root, 'package.json'), '{"name":"test","version":"1.0.0"}');
   fs.mkdirSync(path.join(root, '.agentic-security'), { recursive: true });
   fs.writeFileSync(path.join(root, '.agentic-security', 'triage-feedback.json'),
                    JSON.stringify({ verdicts }, null, 2));
