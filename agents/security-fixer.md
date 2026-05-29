@@ -34,7 +34,18 @@ The parent agent passes you a JSON finding object from `.agentic-security/last-s
 
 1. **Read** the file at `finding.file` around `finding.line ± 30`. Understand what the surrounding code is doing. (You have `Read`.)
 
-2. **Decide appropriateness.** Look at the snippet, surrounding context, and `fix.description`. Is the canonical fix actually right here? If the surrounding code already validates the input upstream, if there's an existing custom sanitizer, or if the finding is in a test fixture — STOP and report `refused: <reason>`. Don't proceed to step 3.
+1.5 **Read 3-5 style-mirror examples** of how this codebase already handles the same family. The MCP layer exposes a helper:
+
+   ```js
+   import { findStyleExamples } from '@clear-capabilities/agentic-security-scanner/posture/fix-style-mirror.js';
+   const examples = findStyleExamples(scanRoot, finding);
+   ```
+
+   For SQLi, that returns up to 5 existing parameterized-query call sites in sibling files. For XSS, it returns existing `escapeHtml` / `sanitize` / `DOMPurify` usages. **If the examples show a consistent house pattern, prefer that framing over the generic canonical fix** when reasoning about appropriateness in step 2.
+
+   When no examples exist (new file area, unfamiliar codebase), fall through to the canonical replacement.
+
+2. **Decide appropriateness.** Look at the snippet, surrounding context, the style-mirror examples (if any), and `fix.description`. Is the canonical fix actually right here? If the surrounding code already validates the input upstream, if there's an existing custom sanitizer, or if the finding is in a test fixture — STOP and report `refused: <reason>`. Don't proceed to step 3.
 
 3. **Call `synthesize_fix({ finding_id })`** via MCP. This returns the stored replacement text, the patch bounds (touched files, LoC delta), and a `recommendsFixPlan` flag if the patch is oversized. You do NOT modify this text.
 

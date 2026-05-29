@@ -973,6 +973,29 @@ export const query_triage_memory = {
   },
 };
 
+// ─── query_findings_memory ─────────────────────────────────────────────────
+// Natural-language Q&A across the scanner's accumulated institutional
+// memory: current findings + past triage decisions + scan history +
+// AGENTS.md narrative. Use to answer "have we seen something like this
+// before?" without reading multiple files.
+
+export const query_findings_memory = {
+  name: 'query_findings_memory',
+  description: 'Search the scanner accumulated memory (current scan findings + past wont-fix/false-positive decisions + scan history + AGENTS.md narrative) by natural-language terms. Returns top-10 results scored by term-match count and ranked finding > triage > history > AGENTS.md.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      query: { type: 'string', description: 'Natural-language search terms (2+ chars each).' },
+    },
+    required: ['query'],
+  },
+  async handler({ query }, ctx) {
+    const { queryFindingsMemory } = await import('../posture/findings-memory.js');
+    return { _meta: META, ...queryFindingsMemory(ctx.sessionRoot, query || '') };
+  },
+};
+
 // ─── lookup_cve ────────────────────────────────────────────────────────────
 // LangChain harness-anatomy #8: bridge the knowledge-cutoff gap by exposing
 // the local OSV / KEV / EPSS cache as a structured tool. Read-only — never
@@ -1068,4 +1091,4 @@ export const apply_sca_upgrade = {
   },
 };
 
-export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory];
+export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory];

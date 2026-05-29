@@ -76,6 +76,10 @@ const ALLOWLIST = new Set([
   'material-change.js::classifyHunk',
   'profile.js::PROFILES',
   'profile.js::DEFAULTS',
+  // intent-context.js extractIntentSignals is also surfaced via SessionStart
+  // hooks for "show me the current intent" tooling. The engine consumes
+  // suppressByIntent; the extractor is the lower-level helper.
+  'intent-context.js::extractIntentSignals',
   'rule-overrides.js::loadOverrides',
   'rule-overrides.js::runCustomRules',
   'rule-pack-signing.js::BUNDLED_OFFICIAL_KEYS',

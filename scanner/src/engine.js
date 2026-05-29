@@ -160,6 +160,9 @@ import { analyzeLicenseGraph, loadLicenseGraphPolicy } from './posture/license-g
 import { generateAttributions, persistAttributions } from './posture/license-attributions.js';
 import { annotateAttackTaxonomy, summarizeTaxonomy } from './posture/attack-taxonomy.js';
 import { suppressByPastDecisions } from './posture/triage-memory.js';
+import { suppressByIntent } from './posture/intent-context.js';
+import { annotateGitHistory } from './posture/git-history.js';
+import { applyThreatModel } from './posture/threat-model-grounding.js';
 import { annotateTypeNarrowing } from './posture/type-narrowing.js';
 import { annotateWhyFired } from './posture/why-fired.js';
 import { scanSpecificationDrift } from './posture/specification-mining.js';
@@ -7741,6 +7744,21 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
     // previously marked wont-fix or false-positive in this project.
     if (process.env.AGENTIC_SECURITY_NO_TRIAGE_MEMORY !== '1') {
       _runAnnotator("suppressByPastDecisions", () => { suppressByPastDecisions(scanRoot, finalFindings); });
+    }
+    // Intent-aware FP suppression — demote findings on files marked as
+    // intentionally vulnerable (sandbox/CTF/tutorial/example/etc.).
+    if (process.env.AGENTIC_SECURITY_NO_INTENT_CTX !== '1') {
+      _runAnnotator("suppressByIntent", () => { suppressByIntent(scanRoot, finalFindings); });
+    }
+    // Git history — stamp each finding with introducedBy / introducedIn /
+    // originatingPrompt by running `git blame` on the finding's line.
+    if (process.env.AGENTIC_SECURITY_NO_GIT_HISTORY !== '1') {
+      _runAnnotator("annotateGitHistory", () => { annotateGitHistory(scanRoot, finalFindings); });
+    }
+    // Threat-model grounding — bump severity on crown-jewels, demote
+    // out-of-scope, tag compliance regimes, stamp attacker profile.
+    if (process.env.AGENTIC_SECURITY_NO_THREAT_MODEL_GROUNDING !== '1') {
+      _runAnnotator("applyThreatModel", () => { applyThreatModel(scanRoot, finalFindings); });
     }
   }
   // v3 next-gen: crown-jewel mapping (FR-PROD-5) — score each file/finding by

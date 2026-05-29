@@ -63,12 +63,12 @@ test('tools/list exposes the PRD-named tools', async () => {
   // Phase-2: verify_fix + synthesize_fix. C.6: find_rule_module.
   // Harness-anatomy #4: append/read_scratchpad. #2: AGENTS.md. #8: lookup_cve.
   // SCA-plan Phase 3 / Item 5: apply_sca_upgrade + synthesize_sca_upgrade.
-  // Conversational triage memory: query_triage_memory (item #4 in chat enh).
+  // Chat enhancements: query_triage_memory (#4) + query_findings_memory (#12).
   assert.deepEqual(names, [
     'append_agents_memory', 'append_scratchpad', 'apply_fix',
     'apply_sca_upgrade',
     'explain_finding', 'find_rule_module', 'lookup_cve',
-    'query_taint', 'query_triage_memory',
+    'query_findings_memory', 'query_taint', 'query_triage_memory',
     'read_agents_memory', 'read_scratchpad', 'scan_diff',
     'synthesize_fix', 'synthesize_sca_upgrade', 'verify_fix',
   ]);
@@ -349,9 +349,9 @@ test('stdio: spawned bin handles initialize+tools/list over NDJSON', async () =>
   await new Promise(r => child.on('exit', r));
   const lines = stdout.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
   assert.equal(lines[0].result.serverInfo.name, SERVER_NAME);
-  // 15 tools: 14 (after SCA-upgrade pair) + query_triage_memory added in
-  // the conversational triage memory change.
-  assert.equal(lines[1].result.tools.length, 15);
+  // 16 tools: 15 (after query_triage_memory) + query_findings_memory
+  // added in the findings-memory chat-enhancement change.
+  assert.equal(lines[1].result.tools.length, 16);
   await fsp.rm(tmpRoot, { recursive: true, force: true });
 });
 
