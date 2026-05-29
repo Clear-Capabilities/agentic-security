@@ -14,11 +14,13 @@
 ##   - test fixtures            — synthetic vulnerable code
 ##   - generated bundles        — minified, not human-edited
 ##
-## This file is honored by the **advanced** code-scanning setup. If your
-## repository uses the **default** setup, switch to advanced (Settings →
-## Code security → Code scanning → CodeQL → Set up → Advanced) so this
-## config is picked up. The companion workflow at
-## .github/workflows/codeql.yml runs this configuration on push + PR.
+## This file is honored by the **advanced** code-scanning setup (which this
+## repository uses — confirmed in Settings → Code security → Code scanning).
+## Default setup ignores this config; if you switch back, all language
+## extractors will run on every path and the paths-ignore list silently
+## becomes a no-op. The companion workflow at .github/workflows/codeql.yml
+## scopes analysis to `javascript-typescript` only — the other extractors
+## (python, go, ruby, java) are not invoked.
 
 name: "agentic-security"
 
@@ -33,6 +35,11 @@ paths-ignore:
   - "commands/**"
   - "agents/**"
   - "skills/**"
+  # Developer tools + Claude Code lifecycle hooks. Not user-facing / not
+  # an adversarial-input surface. The agentic-security scanner already
+  # covers these on every scan via its own dataflow engine.
+  - "scripts/**"
+  - "hooks/**"
   # Test fixtures (synthetic vulnerable code).
   - "**/test/fixtures/**"
   - "**/test/benchmark/**"
