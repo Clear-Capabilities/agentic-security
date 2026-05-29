@@ -1,0 +1,32 @@
+{
+  "id": "ccpa",
+  "name": "California Consumer Privacy Act (Cal. Civ. Code §1798.100 et seq.)",
+  "publisher": "California Legislature",
+  "license": "California statute (public)",
+  "url": "https://leginfo.legislature.ca.gov/faces/codes_displayText.xhtml?division=3.&part=4.&lawCode=CIV&title=1.81.5",
+  "controls": [
+    {
+      "id": "§1798.100",
+      "summary": "Consumer right to know — businesses inform consumers about categories of personal info collected.",
+      "evidence": ["DPIA artifact lists every PII field with file:line provenance."],
+      "mapsTo": ["module:privacy-taint"]
+    },
+    {
+      "id": "§1798.105",
+      "summary": "Right to delete — businesses comply with verified deletion requests.",
+      "evidence": ["No data-exposure findings on PII storage paths."]
+    },
+    {
+      "id": "§1798.150",
+      "summary": "Civil action for security breach affecting personal information.",
+      "evidence": ["Crypto findings cleared on PII handling code.", "TLS pinning checks pass."],
+      "mapsTo": ["family:crypto-weak-cipher", "family:crypto-tls-version", "family:crypto-tls-no-verify"]
+    },
+    {
+      "id": "§1798.81.5",
+      "summary": "Reasonable security procedures and practices.",
+      "evidence": ["No critical findings on user-data endpoints.", "Auth-missing zero on PII paths."],
+      "mapsTo": ["family:auth-missing", "family:authz", "family:hardcoded-secret"]
+    }
+  ]
+}

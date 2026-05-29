@@ -1,0 +1,51 @@
+{
+  "id": "eu-ai-act",
+  "name": "EU Artificial Intelligence Act (Regulation 2024/1689)",
+  "publisher": "European Parliament & Council",
+  "license": "EU law (Official Journal)",
+  "url": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj",
+  "controls": [
+    {
+      "id": "Art.9",
+      "summary": "Risk management system — continuous, iterative risk identification and mitigation.",
+      "evidence": ["Threat model artifact (.agentic-security/threat-model.{json,md}).", "Continuous scan history present."],
+      "mapsTo": ["module:threat-model-auto", "module:scan-history"]
+    },
+    {
+      "id": "Art.10",
+      "summary": "Data governance — training/validation data is relevant, representative, and bias-checked.",
+      "evidence": ["No training-data-pii findings.", "DPIA artifact for any PII handling."],
+      "mapsTo": ["family:training-data-pii", "family:pii-exposure"]
+    },
+    {
+      "id": "Art.11",
+      "summary": "Technical documentation — system architecture, components, training procedures documented.",
+      "evidence": ["AIBOM artifact at .agentic-security/aibom.json.", "Threat model + DPIA + compliance-evidence present."],
+      "mapsTo": ["module:aibom", "module:threat-model-auto", "module:compliance-policy"]
+    },
+    {
+      "id": "Art.12",
+      "summary": "Record-keeping — automatic logging of system events for traceability.",
+      "evidence": ["MCP audit log .agentic-security/mcp-audit.log present.", "Scan history retained."],
+      "mapsTo": ["module:mcp-audit", "module:scan-history"]
+    },
+    {
+      "id": "Art.13",
+      "summary": "Transparency — instructions for use enable users to interpret the system's output correctly.",
+      "evidence": ["why-fired annotation surfaces detection provenance on every finding."],
+      "mapsTo": ["module:why-fired"]
+    },
+    {
+      "id": "Art.14",
+      "summary": "Human oversight — system permits humans to override / interrupt.",
+      "evidence": ["Fix application requires confirm:true.", "Bodyguard hook can refuse risky edits."],
+      "mapsTo": ["module:pre-edit-bodyguard", "module:apply-fix"]
+    },
+    {
+      "id": "Art.15",
+      "summary": "Accuracy, robustness, cybersecurity — appropriate level of accuracy and resilience.",
+      "evidence": ["Calibration + held-out evaluation present (.agentic-security/calibration-seed.json).", "OWASP Benchmark regression gate."],
+      "mapsTo": ["module:calibration", "module:holdout-eval"]
+    }
+  ]
+}

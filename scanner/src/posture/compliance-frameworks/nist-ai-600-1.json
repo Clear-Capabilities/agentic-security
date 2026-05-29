@@ -1,0 +1,51 @@
+{
+  "id": "nist-ai-600-1",
+  "name": "NIST AI 600-1 — Generative AI Profile",
+  "publisher": "NIST",
+  "license": "public-domain (US Federal publication)",
+  "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf",
+  "controls": [
+    {
+      "id": "GV-1.1-001",
+      "function": "GOVERN",
+      "summary": "Document and disseminate AI policies, processes, and procedures.",
+      "evidence": ["CLAUDE.md / SECURITY.md present.", ".agentic-security/compliance.policy.yml present."],
+      "mapsTo": ["module:compliance-policy"]
+    },
+    {
+      "id": "MP-2.3-002",
+      "function": "MAP",
+      "summary": "Identify and document GAI risks (CBRN, confabulation, harmful bias, prompt injection, IP, etc.).",
+      "evidence": ["Threat model artifact.", "Attack-taxonomy ATLAS mappings on findings."],
+      "mapsTo": ["module:threat-model-auto", "module:attack-taxonomy"]
+    },
+    {
+      "id": "MS-2.1-001",
+      "function": "MEASURE",
+      "summary": "Continuously monitor GAI system for risks identified during the MAP function.",
+      "evidence": ["Watch mode artifacts.", "Continuous scan history."],
+      "mapsTo": ["module:watch-mode", "module:scan-history"]
+    },
+    {
+      "id": "MG-3.2-005",
+      "function": "MANAGE",
+      "summary": "Manage GAI risks tied to prompt injection.",
+      "evidence": ["Zero open critical findings in family prompt-injection / llm-app-security."],
+      "mapsTo": ["family:prompt-injection", "family:llm-app-security"]
+    },
+    {
+      "id": "MG-4.1-001",
+      "function": "MANAGE",
+      "summary": "Establish processes for managing GAI supply chain risks.",
+      "evidence": ["No mlflow-untrusted-uri / hf-datasets-rce / streaming-dataset-url findings.", "AIBOM artifact present."],
+      "mapsTo": ["family:mlflow-untrusted-uri", "family:hf-datasets-rce", "family:streaming-dataset-url", "module:aibom"]
+    },
+    {
+      "id": "MG-2.4-001",
+      "function": "MANAGE",
+      "summary": "Establish content provenance / authenticity controls.",
+      "evidence": ["Sigstore provenance opt-in configured for model loads.", "ATTRIBUTIONS.md generated."],
+      "mapsTo": ["module:sigstore-verify", "module:license-attributions"]
+    }
+  ]
+}

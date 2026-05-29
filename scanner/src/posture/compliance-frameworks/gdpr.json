@@ -1,0 +1,45 @@
+{
+  "id": "gdpr",
+  "name": "General Data Protection Regulation (EU 2016/679)",
+  "publisher": "European Parliament & Council",
+  "license": "EU law (Official Journal)",
+  "url": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+  "controls": [
+    {
+      "id": "Art.5",
+      "summary": "Principles relating to processing of personal data (lawfulness, fairness, transparency, purpose limitation, data minimization, accuracy, storage limitation, integrity, accountability).",
+      "evidence": ["DPIA artifact at .agentic-security/dpia.md.", "PII fields enumerated by the privacy-taint module."],
+      "mapsTo": ["family:pii-exposure", "module:privacy-taint"]
+    },
+    {
+      "id": "Art.25",
+      "summary": "Data protection by design and by default.",
+      "evidence": ["Threat model produced before code.", "PII annotation runs at scan time, not as an afterthought."],
+      "mapsTo": ["module:threat-model-auto", "module:privacy-taint"]
+    },
+    {
+      "id": "Art.30",
+      "summary": "Records of processing activities — controller maintains a register.",
+      "evidence": ["DPIA + privacy-taint annotations cover each PII field with file:line provenance."],
+      "mapsTo": ["module:privacy-taint"]
+    },
+    {
+      "id": "Art.32",
+      "summary": "Security of processing — appropriate technical and organizational measures.",
+      "evidence": ["Zero open critical crypto findings.", "Auth-missing findings zero on user-data endpoints.", "TLS pinning checks pass."],
+      "mapsTo": ["family:crypto-weak-cipher", "family:crypto-tls-version", "family:crypto-tls-no-verify", "family:auth-missing"]
+    },
+    {
+      "id": "Art.33",
+      "summary": "Notification of personal data breach to the supervisory authority within 72 hours.",
+      "evidence": ["Fix history retained.", "Audit log preserves the breach-window evidence."],
+      "mapsTo": ["module:fix-history", "module:mcp-audit"]
+    },
+    {
+      "id": "Art.35",
+      "summary": "Data protection impact assessment (DPIA) for high-risk processing.",
+      "evidence": ["DPIA artifact present at .agentic-security/dpia.md."],
+      "mapsTo": ["module:privacy-taint:emitDpiaArtifact"]
+    }
+  ]
+}

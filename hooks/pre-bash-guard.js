@@ -172,12 +172,59 @@ function formatViolation(cmd, violations, mode, willBlock) {
     } catch {}
   }
 
-  if (!violations.length) process.exit(0);
+  // ── Dep-add interception ────────────────────────────────────────────────
+  // For `npm install <pkg>` / `pip install <pkg>` / etc., validate every
+  // requested package against OSV malicious-catalog + typosquat detection
+  // + project sca-policy.yml deny list BEFORE the install runs.
+  let depViolations = [];
+  try {
+    // Lazy-load the ESM dep-add-guard from the bundle; tolerate import
+    // failure (e.g. when running outside an installed plugin).
+    const depGuard = await tryImportDepGuard();
+    if (depGuard) {
+      const reqs = depGuard.parseInstallCommand(cmd);
+      for (const r of reqs) {
+        const result = depGuard.inspectPackage({ ...r, scanRoot: cwd });
+        if (result.decision === 'deny') {
+          depViolations.push({
+            name: `dep-add deny: ${r.ecosystem}:${r.name}`,
+            severity: 'critical',
+            hint: result.reasons.join(' | '),
+          });
+        } else if (result.decision === 'review') {
+          depViolations.push({
+            name: `dep-add review: ${r.ecosystem}:${r.name}`,
+            severity: 'high',
+            hint: result.reasons.join(' | '),
+          });
+        }
+      }
+    }
+  } catch {}
 
-  const critical = violations.some(v => v.severity === 'critical');
+  const allViolations = [...violations, ...depViolations];
+  if (!allViolations.length) process.exit(0);
+
+  const critical = allViolations.some(v => v.severity === 'critical');
   const willBlock = cfg.mode === 'block' && critical;
-  const msg = formatViolation(cmd, violations, cfg.mode, willBlock);
+  const msg = formatViolation(cmd, allViolations, cfg.mode, willBlock);
 
   process.stderr.write(msg + '\n');
   process.exit(willBlock ? 2 : 0);
 })();
+
+async function tryImportDepGuard() {
+  try {
+    // Try ESM dynamic import for installed plugin layout.
+    const mod = await import('@clear-capabilities/agentic-security-scanner/posture/dep-add-guard.js');
+    return mod;
+  } catch {}
+  try {
+    // Fall back to relative path for dev / monorepo layout.
+    const here = path.dirname(__filename);
+    const rel  = path.resolve(here, '..', 'scanner', 'src', 'posture', 'dep-add-guard.js');
+    const fileUrl = 'file://' + rel;
+    return await import(fileUrl);
+  } catch {}
+  return null;
+}
