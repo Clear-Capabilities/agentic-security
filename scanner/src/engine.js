@@ -136,6 +136,7 @@ import { annotateCompositeRisk } from './posture/composite-risk.js';
 // runs that need bit-identical baselines).
 import { scanLlmApp } from './sast/llm-app.js';
 import { scanMobile } from './sast/mobile.js';
+import { scanPqc } from './sast/post-quantum-crypto.js';
 import { runCrossServiceTaint } from './dataflow/cross-service-taint.js';
 import { annotateRuntimeCorrelation } from './posture/runtime-correlation.js';
 import { applyLearnedCalibration } from './posture/triage-learning.js';
@@ -148,6 +149,7 @@ import { annotateProvenance } from './sca/sigstore-verify.js';
 import { runSbomDiff } from './posture/sbom-diff.js';
 import { loadPolicy as loadCompliancePolicy, verifyPolicy as verifyCompliancePolicy, emitEvidenceJsonLd as emitComplianceJsonLd, emitEvidenceMarkdown as emitComplianceMarkdown } from './posture/compliance-policy.js';
 import { generateBundles as generateExploitBundles } from './posture/exploit-bundle.js';
+import { buildMigrationPlan as buildPqcPlan, persistMigrationPlan as persistPqcPlan } from './posture/pqc-migration-plan.js';
 import { annotateTypeNarrowing } from './posture/type-narrowing.js';
 import { annotateWhyFired } from './posture/why-fired.js';
 import { scanSpecificationDrift } from './posture/specification-mining.js';
@@ -7261,6 +7263,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       if (process.env.AGENTIC_SECURITY_NO_INTEGRATION !== '1') {
         if (process.env.AGENTIC_SECURITY_NO_LLM_APP !== '1') aF.push(...scanLlmApp(p,c));
         if (process.env.AGENTIC_SECURITY_NO_MOBILE  !== '1') aF.push(...scanMobile(p,c));
+        if (process.env.AGENTIC_SECURITY_NO_PQC     !== '1') aF.push(...scanPqc(p,c));
       }
       const _ftElapsed=Date.now()-_ft0;
       if(_ftElapsed>_perFileTimeoutMs){aF.push({id:`file-timeout:${p}`,file:p,line:0,vuln:`File analysis exceeded ${_perFileTimeoutMs}ms (${_ftElapsed}ms)`,severity:'info',parser:'ENGINE',confidence:0.5,_timeout:true});_filesTimedOut++;}
@@ -8108,7 +8111,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   // (threat-model.json/.md, dpia.md, compliance-evidence.json/.md,
   // sbom-history/<sha>.json, exploit-bundles/) under .agentic-security/.
   let _threatModel = null, _apiContractFindings = [], _sbomDiff = null,
-      _complianceReport = null, _exploitBundles = null;
+      _complianceReport = null, _exploitBundles = null, _pqcPlan = null;
   if (process.env.AGENTIC_SECURITY_NO_INTEGRATION !== '1') {
     // Threat model — STRIDE + entities + attack trees rooted in findings.
     if (process.env.AGENTIC_SECURITY_NO_THREAT_MODEL !== '1') {
@@ -8145,6 +8148,14 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
         }
       } catch (_) {}
     }
+    // PQC migration plan — aggregates pqc-migration findings into a
+    // structured plan (.agentic-security/pqc-migration-plan.{json,md}).
+    if (process.env.AGENTIC_SECURITY_NO_PQC_PLAN !== '1') {
+      try {
+        _pqcPlan = buildPqcPlan(finalFindings);
+        if (_pqcPlan) persistPqcPlan(scanRoot, _pqcPlan);
+      } catch (_) {}
+    }
     // Exploit bundles — per-family PoC + Jest + pytest + remediation for
     // top-N critical/high findings.
     if (process.env.AGENTIC_SECURITY_NO_EXPLOIT_BUNDLES !== '1') {
@@ -8162,7 +8173,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   }
 
   const _scanMeta={filesScanned:files.length,filesSkipped:_filesSkipped,filesTimedOut:_filesTimedOut,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length}};
-  return{routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles};}
+  return{routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.
