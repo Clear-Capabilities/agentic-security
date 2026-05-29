@@ -15,7 +15,7 @@ test('attack-tax: SQL injection mapped to T1190 + CAPEC-66', () => {
     assert.deepEqual(f.attck, ['T1190']);
     assert.ok(f.attckName.includes('Public-Facing'));
     assert.deepEqual(f.capec, ['CAPEC-66']);
-    assert.equal(f.killChain, 'exploitation');
+    assert.equal(f.attckTactic, 'exploitation');
     assert.ok(Array.isArray(f.d3fend));
   }
 });
@@ -45,26 +45,29 @@ test('attack-tax: ML/LLM families get ATLAS technique IDs', () => {
   assert.deepEqual(sd.atlas, ['AML.T0019']);
 });
 
-test('attack-tax: kill-chain stages are valid values', () => {
+test('attack-tax: attckTactic values are MITRE ATT&CK Enterprise tactics', () => {
+  // attack.mitre.org/tactics/enterprise/ — the 14 Enterprise tactics, plus
+  // 'exploitation' which we use as a remediation-side stage when a finding
+  // doesn't cleanly fit a single ATT&CK tactic.
   const validStages = new Set([
-    // Lockheed Martin kill chain
-    'reconnaissance','weaponization','delivery','exploitation','installation','c2','actions',
-    // MITRE ATT&CK tactics (overlap with kill chain on some terms)
-    'resource-development','initial-access','execution','persistence','privilege-escalation','defense-evasion','credential-access','discovery','lateral-movement','collection','exfiltration','impact',
+    'reconnaissance', 'resource-development', 'initial-access',
+    'execution', 'persistence', 'privilege-escalation', 'defense-evasion',
+    'credential-access', 'discovery', 'lateral-movement', 'collection',
+    'c2', 'exfiltration', 'impact', 'exploitation',
   ]);
   const fs = Object.keys(_t.FAMILY_MAP).map(family => F(family));
   annotateAttackTaxonomy(fs);
   for (const f of fs) {
-    assert.ok(validStages.has(f.killChain), `${f.family}: invalid killChain "${f.killChain}"`);
+    assert.ok(validStages.has(f.attckTactic), `${f.family}: invalid attckTactic "${f.attckTactic}"`);
   }
 });
 
-test('attack-tax: every mapping has attck + d3fend + capec + killChain', () => {
+test('attack-tax: every mapping has attck + d3fend + capec + attckTactic', () => {
   for (const [family, map] of Object.entries(_t.FAMILY_MAP)) {
     assert.ok(Array.isArray(map.attck) && map.attck.length, `${family} missing attck`);
     assert.ok(typeof map.attckName === 'string' && map.attckName.length, `${family} missing attckName`);
     assert.ok(Array.isArray(map.d3fend) && map.d3fend.length, `${family} missing d3fend`);
-    assert.ok(map.killChain, `${family} missing killChain`);
+    assert.ok(map.attckTactic, `${family} missing attckTactic`);
     assert.ok(Array.isArray(map.capec) && map.capec.length, `${family} missing capec`);
   }
 });
@@ -123,7 +126,7 @@ test('attack-tax: K8s pod-security families map to T1611 escape-to-host', () => 
   annotateAttackTaxonomy(fs);
   for (const f of fs) {
     assert.deepEqual(f.attck, ['T1611']);
-    assert.equal(f.killChain, 'privilege-escalation');
+    assert.equal(f.attckTactic, 'privilege-escalation');
   }
 });
 
@@ -132,7 +135,7 @@ test('attack-tax: cloud public-S3 maps to T1530 Data from Cloud Storage', () => 
   annotateAttackTaxonomy(fs);
   for (const f of fs) {
     assert.deepEqual(f.attck, ['T1530']);
-    assert.equal(f.killChain, 'collection');
+    assert.equal(f.attckTactic, 'collection');
   }
 });
 
