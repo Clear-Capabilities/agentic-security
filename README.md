@@ -2,7 +2,12 @@
 
 <img src="docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
 
-### Build faster with an<br>Agentic Workforce.<br>Safe, secure, and compliant<br>is now the default.
+<h3>
+Build faster with an<br>
+Agentic Workforce.<br>
+Safe, secure, and compliant<br>
+is now the default.
+</h3>
 
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**.
 
