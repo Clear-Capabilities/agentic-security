@@ -174,6 +174,6 @@ SAST fixes write source code via the `apply_fix` MCP tool. That tool refuses eve
 | `--harden` | Apply project-wide hardening defaults (CSP, security headers, rate limit, etc.) | `/harden` |
 | `--trim` | Trim unused code or unused packages. `--what code|deps|both` | `/trim` |
 | `--generate <type>` | Generate security artifacts: privacy policy, disaster playbook, regression tests, social posts | `/generate` |
-| `--all` | All findings in one batch (existing) | `/find-and-fix-everything` |
+| `--all` | All findings in one batch (existing) | (see also `/find-and-fix-everything` — first-class command for the vibecoder path) |
 
 🛡  agentic-security · created by ClearCapabilities.Com

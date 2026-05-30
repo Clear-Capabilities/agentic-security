@@ -69,11 +69,13 @@ Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_C
 
 ---
 
-## Nine commands
+## Ten commands
 
 ![agentic-security demo](docs/brand/demo.gif)
 
 **`/agentic-security:secure`** — Router. Picks the single best next action from project state. Also: `--tour`, `--help`, `--daily`.
+
+**`/agentic-security:find-and-fix-everything`** — One-shot scan + fix every severity in one command. The vibecoder "just make it safe" path.
 
 **`/agentic-security:scan`** — Run the scanner. Modes: full / diff / watch / baseline / archaeology / scanner-meta.
 
@@ -91,7 +93,7 @@ Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_C
 
 **`/agentic-security:labs`** — Experimental + AI-driven. Modes: claude-audit / model-rescan / synthesize-rule / cross-repo / risk-dollars / time-to-fix / llm.
 
-45 legacy aliases preserved for back-compat — see [full catalog](commands/help.md).
+44 legacy aliases preserved for back-compat — see [full catalog](commands/help.md).
 
 ---
 
@@ -122,7 +124,7 @@ Deep engine details — [architecture](docs/ARCHITECTURE.md).
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.85.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.85.1-blue)]()
 [![agentic-security](https://img.shields.io/badge/agentic--security-passing-brightgreen)]()
 
 ## License
