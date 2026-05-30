@@ -7,7 +7,7 @@ description: Explain a CVE / GHSA / finding in plain English. Activate on CVE-id
 
 Activates automatically when the user references a vulnerability by ID
 (`CVE-2024-1234`, `GHSA-jf85-cpcp-j695`) or asks for an explanation of a
-specific finding. Don't wait for them to type `/explain`.
+specific finding. Don't wait for them to type `/triage --explain`.
 
 ## When to fire
 
@@ -37,10 +37,10 @@ specific finding. Don't wait for them to type `/explain`.
    - **How an attacker abuses it** — concrete steps, not abstract risk.
    - **Worst case if unfixed** — tie to money / regulatory / customer impact.
    - **How to fix it** — the literal code change. Cite an existing
-     command if there is one (e.g. `/rotate-secret`).
+     command if there is one (e.g. `/fix --rotate-secret`).
 
 4. **Offer the narrative shape if the user is non-technical.** Suggest
-   `/explain --narrative` for the four-act attack story when the
+   `/triage --explain --narrative` for the four-act attack story when the
    audience is a builder or a PM, not a security engineer.
 
 ## Don't
@@ -56,5 +56,5 @@ specific finding. Don't wait for them to type `/explain`.
 ## Canonical command
 
 If the user wants the explanation as a one-shot CLI output:
-`/explain <finding-id-or-CWE-or-vuln-name>` (or `/explain --narrative`
+`/triage --explain <finding-id-or-CWE-or-vuln-name>` (or `/triage --explain --narrative`
 for the attack-story shape).

@@ -25,9 +25,9 @@ Refuse to write to any path that:
    `build/`, `target/`).
 
 If the user explicitly asks for one of these in their prompt, the subagent
-should refuse with a one-line explanation and a pointer to `/rotate-key-auto`
-(for credential files), `/install-hooks` (for `.git/hooks/`), or
-`/ci-gate` / `/ci-gate-multi` (for CI workflows).
+should refuse with a one-line explanation and a pointer to `/fix --rotate-secret`
+(for credential files), `/setup --hooks` (for `.git/hooks/`), or
+`/ci` (for CI workflows).
 
 ## What is allowed
 

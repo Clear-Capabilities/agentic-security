@@ -70,6 +70,6 @@ You're about to call `Edit` / `Write` with a body that contains any of:
 
 ## Canonical commands
 
-- `/ai-bodyguard on` — make this skill mandatory on every Edit
+- `/setup --bodyguard` — make this skill mandatory on every Edit
 - `/scan --uncommitted` — scan just-edited files for code-eval shapes
-- `/explain CWE-94` — full explanation of code-injection family
+- `/triage --explain CWE-94` — full explanation of code-injection family

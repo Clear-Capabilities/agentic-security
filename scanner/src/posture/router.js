@@ -7,8 +7,8 @@
 // Decision tree (cheap, no scan):
 //   - No prior scan?              → run /scan first
 //   - Prior scan, criticals open? → run /fix --all --critical
-//   - Prior scan, highs open?     → /fix --all --high  OR  /show-findings
-//   - Prior scan, only mediums?   → /report-card
+//   - Prior scan, highs open?     → /fix --all --high  OR  /triage --show
+//   - Prior scan, only mediums?   → /posture --report-card
 //   - All clean?                  → /security-badge   (celebrate + share)
 //   - Pre-deploy intent (--launch flag, or no scan in 7 days)? → /launch-check
 //
@@ -71,7 +71,7 @@ export function decide({ scanRoot, intent }) {
   if (sev.high > 0) {
     return {
       action: 'review-high',
-      command: 'claude /show-findings',
+      command: 'claude /triage --show',
       reason: `${sev.high} high finding(s). Review and triage before fixing.`,
     };
   }
@@ -85,7 +85,7 @@ export function decide({ scanRoot, intent }) {
   if (sev.medium > 0) {
     return {
       action: 'report-card',
-      command: 'claude /report-card',
+      command: 'claude /posture --report-card',
       reason: `Only mediums remain. Get a letter-grade snapshot and pick what's worth fixing.`,
     };
   }

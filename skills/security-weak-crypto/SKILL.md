@@ -55,6 +55,6 @@ You're about to call `Edit` / `Write` with a body that contains any of:
 
 ## Canonical commands
 
-- `/ai-bodyguard on` — make this skill mandatory on every Edit/Write
+- `/setup --bodyguard` — make this skill mandatory on every Edit/Write
 - `/scan --secrets` — pick up weak-crypto findings the bodyguard missed
 - `/fix --one <id>` — close any md5/sha1-password finding already flagged

@@ -141,7 +141,7 @@ export function augmentPrBody(scanRoot, opts = {}) {
   lines.push('');
 
   if (!baseline) {
-    lines.push(`> Baseline against \`${baselineRef}\` not found — showing the full current scan as added. Run \`/pr-augment --persist-baseline ${baselineRef}\` from \`${baselineRef}\` to enable diff mode.`);
+    lines.push(`> Baseline against \`${baselineRef}\` not found — showing the full current scan as added. Run \`/compliance --pr --persist-baseline ${baselineRef}\` from \`${baselineRef}\` to enable diff mode.`);
     lines.push('');
   }
 

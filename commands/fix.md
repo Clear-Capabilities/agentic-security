@@ -83,7 +83,7 @@ Bundle fixes into a feature branch and open a pull request. **Default is dry-run
 - Never run without `--apply` unless explicitly requested. Default to dry-run plan.
 - Never amend or force-push an existing branch.
 - Never widen assertions or skip tests to make a fix pass.
-- Skip findings labelled `PROBABLE_FP` by `/validate-findings`.
+- Skip findings labelled `PROBABLE_FP` by `/triage --validate`.
 
 ```bash
 gh pr create \
@@ -101,7 +101,7 @@ ${SKIPPED_LIST}
 
 ### Verification
 Each fix was validated by running the project test suite. Any fix that broke tests was reverted.
-Re-run \`/scan --all\` and \`/validate-findings\` for any individual finding to verify.
+Re-run \`/scan --all\` and \`/triage --validate\` for any individual finding to verify.
 
 Generated with [agentic-security](https://github.com/Clear-Capabilities/agentic-security)
 EOF
@@ -166,14 +166,14 @@ SAST fixes write source code via the `apply_fix` MCP tool. That tool refuses eve
 
 `/fix` now also routes:
 
-| Flag | Behaviour | Legacy alias |
-|---|---|---|
-| `--compliance` | Route every Not-Compliant control from the compliance report to the command that closes it | `/compliance-fix` |
-| `--rotate-secret` | Guided revoke + scrub of a leaked secret. `--auto` runs end-to-end; `--scrub-history` rewrites git | `/rotate-secret` |
-| `--vault` | Guided migration from scattered env vars to a secrets vault (Doppler / Infisical / Vercel / Railway) | `/vault-wizard` |
-| `--harden` | Apply project-wide hardening defaults (CSP, security headers, rate limit, etc.) | `/harden` |
-| `--trim` | Trim unused code or unused packages. `--what code|deps|both` | `/trim` |
-| `--generate <type>` | Generate security artifacts: privacy policy, disaster playbook, regression tests, social posts | `/generate` |
-| `--all` | All findings in one batch (existing) | (see also `/find-and-fix-everything` — first-class command for the vibecoder path) |
+| Flag | Behaviour |
+|---|---|
+| `--compliance` | Route every Not-Compliant control from the compliance report to the command that closes it |
+| `--rotate-secret` | Guided revoke + scrub of a leaked secret. `--auto` runs end-to-end; `--scrub-history` rewrites git |
+| `--vault` | Guided migration from scattered env vars to a secrets vault (Doppler / Infisical / Vercel / Railway) |
+| `--harden` | Apply project-wide hardening defaults (CSP, security headers, rate limit, etc.) |
+| `--trim` | Trim unused code or unused packages. `--what code|deps|both` |
+| `--generate <type>` | Generate security artifacts: privacy policy, disaster playbook, regression tests, social posts |
+| `--all` | All findings in one batch (see also `/find-and-fix-everything` — first-class command for the vibecoder path) |
 
 🛡  agentic-security · created by ClearCapabilities.Com

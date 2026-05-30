@@ -973,7 +973,7 @@ export function toShipVerdict(scan, options = {}) {
   // CONFIRMED: surface validator-confirmed criticals as a trust signal —
   // distinguishes "tool said so" from "tool built a PoC and it ran."
   if (confirmedCount > 0) {
-    lines.push(c(`  ✓  ${confirmedCount} CONFIRMED (PoC built by /validate-findings)`, '\x1b[1;32m'));
+    lines.push(c(`  ✓  ${confirmedCount} CONFIRMED (PoC built by /triage --validate)`, '\x1b[1;32m'));
   }
   lines.push('');
 

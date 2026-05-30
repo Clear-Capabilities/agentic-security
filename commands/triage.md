@@ -83,7 +83,7 @@ const ask = q => new Promise(res => rl.question(q, ans => res(ans.trim())));
       fs.mkdirSync(path.dirname(FEEDBACK), { recursive: true });
       fs.writeFileSync(FEEDBACK, JSON.stringify(feedback, null, 2));
       // Premortem 2R-7: also record into per-CWE production-triage metrics so
-      // /security-trend can surface real-world precision trends.
+      // /posture --trend can surface real-world precision trends.
       try {
         const { recordTriage } = await import(path.join(process.env.CLAUDE_PLUGIN_ROOT || '.', 'scanner/src/posture/validator-metrics.js'));
         recordTriage(process.cwd(), { family: f.family, verdict, stableId: f.stableId });
@@ -120,12 +120,12 @@ Tournament mode produces the same final state (`triage-feedback.json` + cross-re
 
 `/triage` now also routes:
 
-| Flag | Behaviour | Legacy alias |
-|---|---|---|
-| `--show` | View findings table / HTML report. `--all|--kev|--chains|--threat-model` | `/show-findings` |
-| `--explain` | Plain-English explanation of a finding. `--narrative|--provenance|--gap` | `/explain` |
-| `--validate` | Verify a finding is exploitable. PoC + adversarial variants + verdict | `/validate-findings` |
-| `--red-team` | Roleplay an attacker: exploit narrative + fuzz inputs + defender evaluation | `/red-team` |
-| `--exploit` | Build PoC in chosen format. `--format curl|jest|pytest|burp|sqlmap` | `/exploit-builder` |
-| `--query` | Write a security check in natural language; emits YAML rule + preview | `/query` |
-| `--tournament` | Ranked walk-through (already shipped in v0.84.2) | `/triage-tournament` |
+| Flag | Behaviour |
+|---|---|
+| `--show` | View findings table / HTML report. `--all|--kev|--chains|--threat-model` |
+| `--explain` | Plain-English explanation of a finding. `--narrative|--provenance|--gap` |
+| `--validate` | Verify a finding is exploitable. PoC + adversarial variants + verdict |
+| `--red-team` | Roleplay an attacker: exploit narrative + fuzz inputs + defender evaluation |
+| `--exploit` | Build PoC in chosen format. `--format curl|jest|pytest|burp|sqlmap` |
+| `--query` | Write a security check in natural language; emits YAML rule + preview |
+| `--tournament` | Ranked walk-through |

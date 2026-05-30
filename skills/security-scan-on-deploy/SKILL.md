@@ -28,14 +28,14 @@ commands (`vercel --prod`, `fly deploy`, `wrangler publish`, `npm publish`,
 2. **Render the verdict, not the wall of findings.** The user is
    making a deploy decision, not auditing. Lead with:
    - **Safe to deploy** — no critical/high findings → say so in one
-     line, mention the streak, offer `/security-attestation` to
+     line, mention the streak, offer `/compliance --attestation` to
      generate the badge.
    - **Critical findings present** — refuse to bless the deploy.
      Show the top 3 by exploitability, route to `/fix --all
      --critical` for batch remediation, or recommend wiring the
      CI bench gate so blocking is automatic next time.
    - **High but no critical** — show count, recommend triage via
-     `/show-findings --all` before deploy, mention the deploy is
+     `/triage --show --all` before deploy, mention the deploy is
      still possible but flag the risk.
 
 3. **Surface the production-aware filters.** If `/scan --exposed-only`
@@ -45,7 +45,7 @@ commands (`vercel --prod`, `fly deploy`, `wrangler publish`, `npm publish`,
 
 4. **Offer one-finding triage flow.** If there's one blocker,
    suggest:
-   `/explain <id>` → `/fix --one <id>` → re-scan → ship.
+   `/triage --explain <id>` → `/fix --one <id>` → re-scan → ship.
    Don't just list the finding and walk away.
 
 ## Don't
@@ -61,5 +61,5 @@ commands (`vercel --prod`, `fly deploy`, `wrangler publish`, `npm publish`,
 - `/scan --all` — full sweep
 - `/scan --uncommitted` — only the user's recent edits
 - `/secure` — vibecoder router; figures out the right next action
-- `/security-attestation` — generate the badge / deploy-ready attestation
+- `/compliance --attestation` — generate the badge / deploy-ready attestation
 - `/find-and-fix-everything` — batch remediation pass before deploy

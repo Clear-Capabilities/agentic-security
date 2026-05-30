@@ -112,7 +112,7 @@ If your context resets mid-batch (e.g. the harness recycled you), your first act
 
 ## Path-confinement
 
-The MCP `apply_fix` tool already refuses reserved paths (`.git/`, `.github/`, `.gitlab/`, `.circleci/`, `.buildkite/`, `.agentic-security/`, `node_modules/`, `.terraform/`, `.aws/`, `k8s/`, plus manifest files and `*.tf` / `docker-compose.yml`). You don't need to re-check, but you should still **recognize** when a finding points to one of these and surface a clearer message: "this finding belongs to /rotate-key-auto, /install-hooks, /ci-gate, or /csp-cors — security-fixer is the wrong tool."
+The MCP `apply_fix` tool already refuses reserved paths (`.git/`, `.github/`, `.gitlab/`, `.circleci/`, `.buildkite/`, `.agentic-security/`, `node_modules/`, `.terraform/`, `.aws/`, `k8s/`, plus manifest files and `*.tf` / `docker-compose.yml`). You don't need to re-check, but you should still **recognize** when a finding points to one of these and surface a clearer message: "this finding belongs to /fix --rotate-secret, /setup --hooks, /ci, or /compliance --audit — security-fixer is the wrong tool."
 
 See `agents/_CONFINEMENT.md` for the full reserved list.
 

@@ -93,7 +93,22 @@ Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_C
 
 **`/agentic-security:labs`** — Experimental + AI-driven. Modes: claude-audit / model-rescan / synthesize-rule / cross-repo / risk-dollars / time-to-fix / llm.
 
-44 legacy aliases preserved for back-compat — see [full catalog](commands/help.md).
+Every legacy capability is reachable as a mode of one of these dispatchers — run `/secure --help` for the full surface.
+
+---
+
+## Compliance frameworks
+
+`/compliance --report <framework>` generates an auditor-ready attestation that scans your project against:
+
+| Framework | `<framework>` | Coverage map |
+|---|---|---|
+| NIST AI 600-1 (2024) — Generative AI Profile | `nist` | [coverage](docs/compliance/nist-ai-600-1-coverage.md) |
+| OWASP ASVS 4.0.3 — Application Security Verification Standard | `asvs` | [coverage](docs/compliance/owasp-asvs-coverage.md) |
+| OWASP LLM Top 10 (2025) | `llm` | [coverage](docs/compliance/owasp-llm-top10-coverage.md) |
+| EU AI Act | `eu-ai-act` | [`scripts/eu-ai-act/`](scripts/eu-ai-act/) |
+
+`/compliance --walkthrough <framework>` adds step-by-step auditor narratives with per-control evidence mapping for `nist-csf-2`, `nist-ai-600-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, and `ccpa` — or bring your own controls at `.agentic-security/compliance/<id>/controls.json`.
 
 ---
 

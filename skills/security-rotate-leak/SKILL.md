@@ -49,7 +49,7 @@ attacker has to find it.
    - GitHub PAT = potential pushes / forks / settings changes.
 
 5. **Run the active rotation if the user agrees**:
-   `/rotate-secret --auto`. This is the only command that touches the
+   `/fix --rotate-secret --auto`. This is the only command that touches the
    provider's API for you. Without `--auto`, surface the manual steps
    and stop.
 
@@ -58,7 +58,7 @@ attacker has to find it.
    force-push to a shared branch — do NOT run without explicit user
    confirmation.
 
-7. **Propose the next step**: `/vault-wizard` to migrate the rest of
+7. **Propose the next step**: `/fix --vault` to migrate the rest of
    the project's env-var surface to a real secrets manager so this
    doesn't happen again.
 
@@ -73,7 +73,7 @@ attacker has to find it.
 
 ## Canonical commands
 
-- `/rotate-secret` — guided rotation steps for the detected provider
-- `/rotate-secret --auto` — end-to-end (revoke + scrub + push replacement)
-- `/rotate-secret --auto --scrub-history` — also purge from git history
-- `/vault-wizard` — migrate to Doppler / Infisical / platform secrets
+- `/fix --rotate-secret` — guided rotation steps for the detected provider
+- `/fix --rotate-secret --auto` — end-to-end (revoke + scrub + push replacement)
+- `/fix --rotate-secret --auto --scrub-history` — also purge from git history
+- `/fix --vault` — migrate to Doppler / Infisical / platform secrets

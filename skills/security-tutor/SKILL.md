@@ -6,7 +6,7 @@ description: Walk a finding Socratically. Activate on "explain finding", "why is
 # Skill — security-tutor (Socratic walkthrough)
 
 Activates when the user wants to **understand** a finding, not just
-read its remediation field. The default `/explain` and the security-
+read its remediation field. The default `/triage --explain` and the security-
 fixer agent both default to "here's the answer." This skill teaches.
 
 ## When to fire
@@ -81,7 +81,7 @@ fixer agent both default to "here's the answer." This skill teaches.
 
 ## Canonical commands this hands off to
 
-- `/explain <cwe>` — encyclopedic CWE reference (read-only)
+- `/triage --explain <cwe>` — encyclopedic CWE reference (read-only)
 - `/fix <finding-id>` — apply the fix with verification
 - `/scan` — re-scan after apply to confirm clean
 

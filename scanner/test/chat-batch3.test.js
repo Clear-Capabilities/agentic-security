@@ -150,9 +150,9 @@ test('threat-model: _bumpSeverity is monotone', () => {
 
 // ── red-team command (#6) ─────────────────────────────────────────────────
 
-test('red-team: dispatcher /triage documents red-team mode + alias preserved', () => {
+test('red-team: dispatcher /triage documents red-team mode', () => {
   const triage = fs.readFileSync(path.resolve(import.meta.dirname, '..', '..', 'commands', 'triage.md'), 'utf8');
   assert.match(triage, /red-team/i);
-  // Legacy alias still present for back-compat
-  assert.ok(fs.existsSync(path.resolve(import.meta.dirname, '..', '..', 'commands', 'red-team.md')));
+  // Legacy alias removed — capability lives only on the dispatcher now
+  assert.ok(!fs.existsSync(path.resolve(import.meta.dirname, '..', '..', 'commands', 'red-team.md')));
 });

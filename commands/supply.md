@@ -9,12 +9,12 @@ Supply chain dispatcher.
 
 ## Modes
 
-| Flag | Behaviour | Legacy alias |
-|---|---|---|
-| (default) or `--check` | Full SCA pass: OSV + KEV + EPSS, function-level reachability, dependency confusion | `/supply-chain-check` |
-| `--sbom` | Conversational SBOM exploration — query deps, drift, transitive paths in natural language | `/sbom-explore` |
-| `--cve-alerts` | Subscribe to a daemon that pings when a new CVE affects an installed dep | `/cve-alerts` |
-| `--license` | License-graph view: per-component license, transitive copyleft, dual-license traps. Backed by `license-graph.js`. | (newly surfaced) |
+| Flag | Behaviour |
+|---|---|
+| (default) or `--check` | Full SCA pass: OSV + KEV + EPSS, function-level reachability, dependency confusion |
+| `--sbom` | Conversational SBOM exploration — query deps, drift, transitive paths in natural language |
+| `--cve-alerts` | Subscribe to a daemon that pings when a new CVE affects an installed dep |
+| `--license` | License-graph view: per-component license, transitive copyleft, dual-license traps. Backed by `license-graph.js`. |
 
 ## Examples
 

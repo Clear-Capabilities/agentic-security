@@ -14,15 +14,16 @@ const CMDS = path.resolve(import.meta.dirname, '..', '..', 'commands');
 
 // v0.85.0 command consolidation: the rich docs that lived in individual
 // command files now live in the dispatcher commands (labs.md, triage.md,
-// supply.md). The legacy command files remain as thin aliases. These
-// tests now verify the dispatcher carries the documented capability.
+// supply.md). The legacy alias files have since been removed. These
+// tests verify the dispatcher carries the documented capability and the
+// alias files are gone.
 
 test('dispatch: /labs documents synthesize-rule mode', () => {
   const body = fs.readFileSync(path.join(CMDS, 'labs.md'), 'utf8');
   assert.match(body, /^---\n[\s\S]*?description:/);
   assert.match(body, /synthesize-rule/);
-  // Legacy alias file still present for back-compat
-  assert.ok(fs.existsSync(path.join(CMDS, 'synthesize-rule.md')));
+  // Legacy alias removed — capability lives only on the dispatcher now
+  assert.ok(!fs.existsSync(path.join(CMDS, 'synthesize-rule.md')));
 });
 
 test('dispatch: /triage documents tournament + verdict workflow', () => {
@@ -37,8 +38,8 @@ test('dispatch: /supply documents sbom + cve-alerts + transitive', () => {
   const body = fs.readFileSync(path.join(CMDS, 'supply.md'), 'utf8');
   assert.match(body, /sbom/i);
   assert.match(body, /cve/i);
-  // Legacy alias still present
-  assert.ok(fs.existsSync(path.join(CMDS, 'sbom-explore.md')));
+  // Legacy alias removed — capability lives only on the dispatcher now
+  assert.ok(!fs.existsSync(path.join(CMDS, 'sbom-explore.md')));
 });
 
 test('dispatch: /triage documents exploit mode with curl/jest/pytest formats', () => {
@@ -52,8 +53,8 @@ test('dispatch: /triage documents exploit mode with curl/jest/pytest formats', (
 test('dispatch: /labs documents model-rescan + cites AGENTIC_SECURITY_LLM_MODEL', () => {
   const body = fs.readFileSync(path.join(CMDS, 'labs.md'), 'utf8');
   assert.match(body, /model-rescan/);
-  // Detailed env-var references remain in posture/model-rescan.js + the legacy alias
-  assert.ok(fs.existsSync(path.join(CMDS, 'model-rescan.md')));
+  // Detailed env-var references remain in posture/model-rescan.js; legacy alias removed
+  assert.ok(!fs.existsSync(path.join(CMDS, 'model-rescan.md')));
 });
 
 test('model-rescan: diffValidatorRuns detects verdict flips', () => {

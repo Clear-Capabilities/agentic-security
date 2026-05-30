@@ -230,7 +230,7 @@ export function renderWalkthrough(fw, evaluation, opts = {}) {
       lines.push('');
     }
     if (ev.status === 'absent' || ev.status === 'partial') {
-      lines.push(`**Remediation:** address the bullet(s) above, then re-run \`/auditor-walkthrough ${fw.id}\` to update this report.`);
+      lines.push(`**Remediation:** address the bullet(s) above, then re-run \`/compliance --walkthrough ${fw.id}\` to update this report.`);
       lines.push('');
     }
   }

@@ -260,10 +260,10 @@ esac
 
 ## Quick reference
 
-| Mode | Was | Purpose |
-|---|---|---|
-| `/ci` | `/ci-gate` | CI workflow (GitHub default, `--provider` for others) |
-| `/ci --predeploy` | `/predeploy-gate` | Block vercel/fly/wrangler deploys |
-| `/ci --hooks` | `/install-hooks` | Pre-commit + pre-push git hooks |
+| Mode | Purpose |
+|---|---|
+| `/ci` | CI workflow (GitHub default, `--provider` for others) |
+| `/ci --predeploy` | Block vercel/fly/wrangler deploys |
+| `/ci --hooks` | Pre-commit + pre-push git hooks |
 
 Pass `--apply` to write files. Default is dry-run.

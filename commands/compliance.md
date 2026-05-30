@@ -9,13 +9,13 @@ Compliance + auditor flows dispatcher.
 
 ## Modes
 
-| Flag | Behaviour | Legacy alias |
-|---|---|---|
-| `--report <framework>` | Generate auditor-ready compliance attestation. Frameworks: `nist`, `asvs`, `llm`, `eu-ai-act` | `/compliance-report` |
-| `--walkthrough <framework>` | Step-by-step auditor narrative with evidence mapping per control. Frameworks: `nist-csf-2`, `nist-ai-600-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, `ccpa` (or BYO at `.agentic-security/compliance/<id>/controls.json`) | `/auditor-walkthrough` |
-| `--attestation` | Render buyer-facing security posture artifact. `--format badge|onepager|page` | `/security-attestation` |
-| `--audit <target>` | Stack-specific security audits. Targets: `db`, `auth`, `rate-limit`, `webhook`, `env`, `csp-cors`, `deploy`, `launch`, `llm-cost`, `prompt` | `/audit` |
-| `--pr` | Generate PR-description block (security delta vs base + ATT&CK + reviewers + artifacts) | `/pr-augment` |
+| Flag | Behaviour |
+|---|---|
+| `--report <framework>` | Generate auditor-ready compliance attestation. Frameworks: `nist`, `asvs`, `llm`, `eu-ai-act` |
+| `--walkthrough <framework>` | Step-by-step auditor narrative with evidence mapping per control. Frameworks: `nist-csf-2`, `nist-ai-600-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, `ccpa` (or BYO at `.agentic-security/compliance/<id>/controls.json`) |
+| `--attestation` | Render buyer-facing security posture artifact. `--format badge|onepager|page` |
+| `--audit <target>` | Stack-specific security audits. Targets: `db`, `auth`, `rate-limit`, `webhook`, `env`, `csp-cors`, `deploy`, `launch`, `llm-cost`, `prompt` |
+| `--pr` | Generate PR-description block (security delta vs base + ATT&CK + reviewers + artifacts) |
 
 ## Examples
 
@@ -29,4 +29,4 @@ Compliance + auditor flows dispatcher.
 
 ## Implementation
 
-Routes to the existing posture modules (`compliance-policy.js`, `auditor-walkthrough.js`, `pr-augment.js`) and existing command files.
+Routes to the posture modules (`compliance-policy.js`, `auditor-walkthrough.js`, `pr-augment.js`) and the scanner CLI.

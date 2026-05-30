@@ -166,7 +166,7 @@ esac
 
 **`/scan --uncommitted`** — Vibecoder-friendly: scans only files you've changed since the last commit (staged + unstaged + untracked). No git-ref vocabulary required. Returns the same one-screen verdict, scoped to "what did I just change."
 
-**`/scan --diff [--since <git-ref>]`** — Score the git diff between `--since` (default `HEAD~1`) and `HEAD` by architectural risk. Passes the diff to the `security-material-change` subagent which emits a per-file findings report and a "what to verify before merging" checklist. Risk levels: `critical` (auth removed, new shell call) → recommend `/fix --one` + `/validate-findings`; `high` → recommend `/validate-findings`; `medium`/`low`/`none` → safe to merge.
+**`/scan --diff [--since <git-ref>]`** — Score the git diff between `--since` (default `HEAD~1`) and `HEAD` by architectural risk. Passes the diff to the `security-material-change` subagent which emits a per-file findings report and a "what to verify before merging" checklist. Risk levels: `critical` (auth removed, new shell call) → recommend `/fix --one` + `/triage --validate`; `high` → recommend `/triage --validate`; `medium`/`low`/`none` → safe to merge.
 
 **`/scan --concurrency`** *(v3)* — Surface only concurrency-bug findings: missed unlocks, unguarded locks on early-return paths, fire-and-forget async, 2-lock deadlock cycles. Covers Go (`sync.Mutex`, channels), Java (`synchronized`, `Lock`), JS/TS (workers, promises), and Python (`asyncio.Lock`, `with`).
 
@@ -202,17 +202,15 @@ Add any of these to extend the report with extra blocks (the verdict and exit co
 
 For deep dives on any v3 capability there is a dedicated slash command (now consolidated under `/posture`, `/triage`, etc).
 
-## Consolidated modes (v0.85.0+)
+## Consolidated modes
 
-`/scan` now also routes the following absorbed commands:
+`/scan` also routes:
 
-| Flag | Behaviour | Legacy alias |
-|---|---|---|
-| `--watch` | Continuous incremental scan, writes `.agentic-security/watch-status.{md,json}` on every change | `/watch` |
-| `--baseline` | Set / view / refresh the scan baseline | (was `/scanner --baseline`) |
-| `--archaeology` | Historical analysis — when was each line of code authored, by whom, against which prompt | `/archaeology` |
-| `--scanner-meta` | Scanner self-test / version diff / concurrency check / spec-drift check | `/scanner` |
-
-The legacy commands continue to work — they're aliases that forward to the right `--mode`.
+| Flag | Behaviour |
+|---|---|
+| `--watch` | Continuous incremental scan, writes `.agentic-security/watch-status.{md,json}` on every change |
+| `--baseline` | Set / view / refresh the scan baseline |
+| `--archaeology` | Historical analysis — when was each line of code authored, by whom, against which prompt |
+| `--scanner-meta` | Scanner self-test / version diff / concurrency check / spec-drift check |
 
 🛡  agentic-security · created by ClearCapabilities.Com

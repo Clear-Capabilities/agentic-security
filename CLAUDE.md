@@ -25,7 +25,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `scanner/test/` | Node test runner suite. Scoped via `npm run test:{smoke,sast,posture,dataflow,mcp,report,lifecycle}` — see `scanner/CLAUDE.md`. |  |
 | `bench/cve-replay/` | Real-CVE replay corpus + runner. Six entries today; target 500 (`bench/cve-replay/CONTRIBUTING.md`). |  |
 | `bench/owasp-benchmark-v1.2/`, `bench/sard-juliet-java/`, `bench/polyglot/` | External benches (gitignored, regenerated). |  |
-| `commands/` | Slash-command markdown files. 10 primary dispatchers (`secure`, `find-and-fix-everything`, `scan`, `triage`, `fix`, `posture`, `compliance`, `supply`, `setup`, `labs`) + 44 legacy aliases for back-compat. |  |
+| `commands/` | Slash-command markdown files. Primary dispatchers (`secure`, `find-and-fix-everything`, `scan`, `triage`, `fix`, `posture`, `compliance`, `supply`, `setup`, `labs`) plus standalone `ci` and `three-agent-review`. Every capability is a mode of a dispatcher; the legacy single-purpose aliases have been removed. |  |
 | `agents/` | Sub-agent system prompts. Edit-capable agents follow `agents/_CONFINEMENT.md`. |  |
 | `hooks/` | Claude Code hook scripts + `hooks.json`. |  |
 | `scripts/` | Compliance + helper scripts + CI templates (`scripts/ci-templates/`). |  |
@@ -86,7 +86,7 @@ The skill `skills/add-scan-rule.md` packages the same workflow for on-demand inv
 
 - **Plugin manifest:** `.claude-plugin/plugin.json` — registers the MCP server, hooks, agents, and slash commands.
 - **Settings:** `.claude/settings.json` (committed) defines the team's read-deny list — generated bundles, cached benches, scan-state JSON. Override locally via `.claude/settings.local.json` (gitignored).
-- **Commands:** markdown files in `commands/` — one per slash command. Index in `commands/help.md`.
+- **Commands:** markdown files in `commands/` — one per slash command. Index via `/secure --help` (`commands/secure.md`).
 - **Agents:** markdown system prompts in `agents/`. Edit-capable agents (`security-fixer`, `refactor-cleaner`) inherit the path-confinement contract in `agents/_CONFINEMENT.md` — same reserved-write list as the MCP server.
 - **Hooks:** `hooks/hooks.json` wires SessionStart / PreToolUse / PostToolUse / Stop. The Stop hook (`hooks/session-stop-drift-check.js`) flags new files in `scanner/src/{sast,posture,dataflow}/` not yet mentioned in the relevant subdir CLAUDE.md.
 - **State:** `.agentic-security/last-scan.json` is the canonical scan output consumed by every downstream command.

@@ -9,15 +9,15 @@ Experimental + AI-driven analyses dispatcher. Modes that don't fit cleanly under
 
 ## Modes
 
-| Flag | Behaviour | Legacy alias |
-|---|---|---|
-| `--claude-audit` | Analyze patterns in Claude-introduced findings + draft CLAUDE.md stanzas to pre-empt them | `/claude-vuln-audit` |
-| `--model-rescan` | Re-validate the current scan with a different LLM and show the delta | `/model-rescan` |
-| `--synthesize-rule` | Draft a custom SAST detector from natural-language description, runs in shadow mode | `/synthesize-rule` |
-| `--cross-repo` | Look up sibling-repo fixes + triage decisions for the same family from this developer's cross-repo history | `/cross-repo-recall` |
-| `--risk-dollars` | Expected-value-of-exploitation in USD per finding (EV = EPSS × Impact × Reachability) | `/risk-dollars` |
-| `--time-to-fix` | Estimate engineering hours per finding from family base + patch shape + reachability | `/time-to-fix` |
-| `--llm` | LLM-specific risk surface: prompt injection, model loading, MCP audit, AI-BOM | `/llm` |
+| Flag | Behaviour |
+|---|---|
+| `--claude-audit` | Analyze patterns in Claude-introduced findings + draft CLAUDE.md stanzas to pre-empt them |
+| `--model-rescan` | Re-validate the current scan with a different LLM and show the delta |
+| `--synthesize-rule` | Draft a custom SAST detector from natural-language description, runs in shadow mode |
+| `--cross-repo` | Look up sibling-repo fixes + triage decisions for the same family from this developer's cross-repo history |
+| `--risk-dollars` | Expected-value-of-exploitation in USD per finding (EV = EPSS × Impact × Reachability) |
+| `--time-to-fix` | Estimate engineering hours per finding from family base + patch shape + reachability |
+| `--llm` | LLM-specific risk surface: prompt injection, model loading, MCP audit, AI-BOM |
 
 ## Examples
 

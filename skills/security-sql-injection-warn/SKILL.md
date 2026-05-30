@@ -72,7 +72,7 @@ You're about to call `Edit` / `Write` with a body that contains any of:
 
 ## Canonical commands
 
-- `/ai-bodyguard on` — block sqli shapes at Edit time
+- `/setup --bodyguard` — block sqli shapes at Edit time
 - `/scan --all` — pick up unprotected concats already in the codebase
-- `/explain CWE-89` — full SQLi explanation, attacker scenarios
+- `/triage --explain CWE-89` — full SQLi explanation, attacker scenarios
 - `/fix --one <id>` — apply the parameterized-query fix
