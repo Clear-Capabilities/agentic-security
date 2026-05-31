@@ -88,6 +88,8 @@ import { scanStoredTaint } from './sast/stored-taint.js';
 import { scanTreeSitterSinks } from './sast/tree-sitter-sinks.js';
 import { scanJavaStructural } from './sast/java-structural.js';
 import { scanCsharpStructural } from './sast/csharp-structural.js';
+import { scanJsFrameworkStructural } from './sast/js-framework-structural.js';
+import { scanPythonStructural } from './sast/python-structural.js';
 import { scanResponseSplitting } from './sast/response-splitting.js';
 import { scanStoredPromptInjection, scanStoredPromptInjectionCrossFile } from './sast/llm-stored-prompt.js';
 import { scanRAGPoisoning } from './sast/rag-poisoning.js';
@@ -7352,6 +7354,8 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       aF.push(...scanStoredTaint(p,c));
       aF.push(...scanJavaStructural(p,c));
       aF.push(...scanCsharpStructural(p,c));
+      aF.push(...scanJsFrameworkStructural(p,c));
+      aF.push(...scanPythonStructural(p,c));
       aF.push(...scanResponseSplitting(p,c));
       aF.push(...scanStoredPromptInjection(p,c));
       aF.push(...scanRAGPoisoning(p,c));

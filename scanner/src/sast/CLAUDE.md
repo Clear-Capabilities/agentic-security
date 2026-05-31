@@ -21,6 +21,8 @@ SAST detector modules. Each file exports one or more `scan*()` functions returni
 
 **Framework hardening** — `django-hardening.js`, `fastapi-hardening.js`, `laravel-hardening.js`, `quarkus-hardening.js`, `springboot-hardening.js`. Each detects "you used framework X but forgot the security-hardening step that ships with it" rather than a primary vuln.
 
+**Framework structural (taint-independent, JS/Py recall)** — `js-framework-structural.js` (Express/Koa/NestJS/TypeORM: SQLi via `.query`/`.execute` concat-template, koa-send path, `ctx.body` XSS, HttpService SSRF, deep-merge prototype pollution) and `python-structural.js` (Flask `render_template_string` XSS/SSTI, Django `.raw`/`.extra` + `cursor.execute` SQLi). High precision: parameterized/escaped/`{{ }}`-Jinja/`%s`-placeholder forms do NOT match; SSRF/path findings defer to `engine.js dropGuardedFindings`.
+
 **Cross-cutting vuln classes** — `authz.js`, `csrf.js`, `csv-injection.js` (formula injection into spreadsheet cells, CWE-1236), `host-header.js`, `jndi.js`, `jwt-exp.js`, `ldap-injection.js`, `xpath-injection.js`, `mass-assignment.js`, `mutation-xss.js`, `nosql-injection.js`, `prototype-pollution.js`, `ssrf-cloud-metadata.js`, `stored-taint.js` (second-order / stored injection — **opt-in** via `AGENTIC_SECURITY_STORED_TAINT=1`), `toctou.js`, `wrong-context-sanitizer.js` (HTML-entity encoder used in a URL context — wrong-context output encoding, CWE-79), `zip-slip.js`.
 
 **Cloud/infra** — `db-rls.js` (Supabase RLS), `env-hygiene.js` (NEXT_PUBLIC_ leaks, .env.example real values), `mobile-manifest.js`, `pipeline.js` (CI/CD integrity), `rate-limit.js`, `webhook.js`.

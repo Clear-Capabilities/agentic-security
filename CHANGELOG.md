@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.102.0 — JS/Python framework recall: structural detectors (PRD Tier 1)
+
+JavaScript and Python were the weakest languages (F1 ~0.75) — their remaining
+FNs were framework handlers where input arrives via a framework source
+(`@Query`, `ctx.query`, `request.GET`) and is concatenated into a sink, which
+the taint engine misses without a modeled source.
+
+- **`js-framework-structural.js`** (new): SQLi via `.query`/`.execute` concat /
+  template-literal (TypeORM/mysql/NestJS, CWE-89); koa-send path traversal
+  (CWE-22); `ctx.body` reflected XSS, suppressed by `escape()` (CWE-79);
+  NestJS `HttpService.get` SSRF (CWE-918); deep-merge prototype pollution,
+  suppressed by a `__proto__`/`FORBIDDEN_KEYS` filter (CWE-1321).
+- **`python-structural.js`** (new): Flask `render_template_string` built from
+  input — reflected XSS + SSTI (CWE-79; a Jinja `{{ }}` template is safe and
+  does NOT match); Django `.raw`/`.extra` and `cursor.execute` built with
+  concat / f-string / `%`-operator format (CWE-89; the `%s` parameterized
+  placeholder form does NOT match).
+- High precision (verified on the corpus pre/post pairs + a regression the
+  unit test caught: `execute("… %s", [v])` is the *safe* DB-API placeholder,
+  not `%`-format injection).
+- **Measured: 8 FN → TP** (flask-xss, hoek, koa-path, koa-xss, nestjs-sqli,
+  node-sqli, django, nestjs-ssrf). **Corpus FN 20 → 12; aggregate F1 0.861 →
+  0.916.** JavaScript 0.76 → 0.90, Python 0.82 → 0.88. No new FPs; full gate green.
+
 ## 0.101.0 — SSRF/path guard recognition: precision (PRD #1)
 
 The recall work (v0.98–v0.100) lifted aggregate F1 ~0.50 → ~0.80 but surfaced a
