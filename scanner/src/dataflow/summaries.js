@@ -1,9 +1,18 @@
 // Function-summary cache for context-sensitive interprocedural taint.
 //
-// PRD §6.2: "k-CFA configurable per analysis." This module implements the
-// k=1 monovariant version — each function gets ONE summary per distinct
-// entry-taint-state, cached by hash. Higher k = exponential blowup we don't
-// pay yet.
+// PRD §6.2: "k-CFA configurable per analysis." This module is VALUE-context
+// sensitive (FR-SEM-2): a function gets a distinct summary PER distinct
+// entry-taint-state, cached by hash and computed lazily at the call sites
+// that need it (see engine.js). So a helper that is pure when called with
+// clean args but vulnerable when called with tainted args is modelled
+// correctly at each call site, not collapsed to one empty-entry result.
+//
+// To bound the blowup that per-context computation invites, the number of
+// distinct NON-empty contexts kept per function is capped
+// (`_maxContextsPerFn`, env `AGENTIC_SECURITY_KCFA_MAX_CONTEXTS`, default 16;
+// 0 = pure monovariant). Over the cap we reuse the empty-entry summary.
+// Call-string (k>1) sensitivity is still not modelled — context is the
+// value-abstraction (which params are tainted), not the call stack.
 //
 // A summary captures, given a set of tainted parameter names at function
 // entry, what the function does:
@@ -43,6 +52,18 @@ export class SummaryCache {
     this._stack = new Set(); // qids currently being analyzed (recursion guard)
     this._iter = 0;
     this._maxIter = 5000;
+    // FR-SEM-2 (roadmap #2): the engine computes a distinct summary per
+    // entry-taint-state (value-context sensitivity), computed lazily at call
+    // sites. To stop that from blowing up when a hot helper is reached under
+    // many distinct tainted-arg combinations, cap the number of NON-empty
+    // entry contexts kept per function. Over the cap we reuse the empty-entry
+    // (monovariant) summary — the conservative base the pre-pass computed.
+    //   AGENTIC_SECURITY_KCFA_MAX_CONTEXTS=N  (default 16)
+    //   ...=0  disables context-sensitivity (pure monovariant).
+    this._contextsByQid = new Map(); // qid → Set<stateHash> of computed contexts
+    const envCap = Number(process.env.AGENTIC_SECURITY_KCFA_MAX_CONTEXTS);
+    this._maxContextsPerFn = Number.isFinite(envCap) && envCap >= 0 ? envCap : 16;
+    this._contextCapHits = 0;
   }
 
   _key(qid, taintedParams, receiverType) {
@@ -76,6 +97,24 @@ export class SummaryCache {
     if (this._cache.has(k)) {
       const cached = this._cache.get(k);
       if (!cached._recursive) return cached;
+    }
+    // Context cap (FR-SEM-2). Empty entry is always allowed — it's the base
+    // summary the pre-pass computes for every function. For a NON-empty
+    // context that's new and over budget, reuse the empty-entry summary
+    // instead of computing a fresh one.
+    const stateHash = _hashState(taintedParams);
+    if (stateHash !== 'empty') {
+      let ctxs = this._contextsByQid.get(qid);
+      if (!ctxs) { ctxs = new Set(); this._contextsByQid.set(qid, ctxs); }
+      if (!ctxs.has(stateHash) && ctxs.size >= this._maxContextsPerFn) {
+        this._contextCapHits++;
+        const base = this._cache.get(this._key(qid, new Set()));
+        if (base && !base._recursive) return base;
+        // No base summary yet → fall through and compute this one (we need a
+        // result), but don't grow the context set.
+      } else {
+        ctxs.add(stateHash);
+      }
     }
     if (this._stack.has(qid)) {
       this._hitRecursion = true;
@@ -125,7 +164,7 @@ export class SummaryCache {
   }
 
   size() { return this._cache.size; }
-  clear() { this._cache.clear(); this._iter = 0; }
+  clear() { this._cache.clear(); this._iter = 0; this._contextsByQid.clear(); this._contextCapHits = 0; }
 }
 
 function _summaryEq(a, b) {

@@ -331,7 +331,31 @@ function step(node, stateIn, callContext) {
           const entry = paramNames.length
             ? entryStateFromCall(paramNames, node.args || [], state)
             : new Set();
-          const sum = callContext._summaryCache.get(qid, entry);
+          let sum = callContext._summaryCache.get(qid, entry);
+          // FR-SEM-2: context-sensitive lazy compute at the plain-call site,
+          // mirroring the assign-call site. On a miss for a NON-empty entry,
+          // compute the callee's summary UNDER that tainted-arg context so a
+          // param mutated only when called with user input is detected here
+          // too (not just when the call's result is assigned). Bounded by the
+          // SummaryCache context cap.
+          if (!sum && entry.size && fn && fn.cfg) {
+            sum = callContext._summaryCache.compute(qid, entry, () => {
+              const inner = {
+                _findings: [], _taintSources: [], _returnTainted: false,
+                _stack: new Set(), deadlineMs: callContext.deadlineMs,
+                _summaryCache: callContext._summaryCache,
+                _callGraph: callContext._callGraph,
+                _mutatedParamsOut: new Set(),
+              };
+              try { analyzeFunction(fn, entry, inner); } catch {}
+              return {
+                returnTainted: !!inner._returnTainted,
+                mutatedParams: inner._mutatedParamsOut || new Set(),
+                taintedGlobals: new Set(),
+                findings: [],
+              };
+            });
+          }
           if (sum && sum.mutatedParams && sum.mutatedParams.size) {
             const mutated = callContext._summaryCache.applyAtCallSite(
               sum, paramNames, node.args || [], state);

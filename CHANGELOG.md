@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.90.0 — Context-sensitive taint completed + bounded (roadmap #2, FR-SEM-2)
+
+The interprocedural engine was already value-context sensitive at the
+assign-call site (a distinct summary per entry-taint-state, computed lazily;
+v0.66). This release completes and bounds it.
+
+- **Plain-call sites now lazily compute context-specific summaries too.**
+  Previously the plain (non-assign) call site only did a cache `get`, so a
+  param mutated *only* when the callee is invoked with tainted input was
+  missed there. It now mirrors the assign-call site (compute under the actual
+  tainted-arg context on a miss).
+- **Per-function context cap** in `SummaryCache` bounds the number of distinct
+  non-empty entry contexts kept per function so lazy per-call-site computation
+  can't blow up. Over the cap → reuse the empty-entry (monovariant) summary.
+  Tunable via `AGENTIC_SECURITY_KCFA_MAX_CONTEXTS` (default 16; **0 = pure
+  monovariant**, a clean kill-switch).
+- **Docs corrected:** `summaries.js` and `dataflow/CLAUDE.md` previously called
+  the engine "k=1 monovariant / one summary under empty entry." It is in fact
+  value-context sensitive; the real remaining limits are call-string (k>1)
+  sensitivity and param-level (not access-path-level) entry granularity.
+- New `test/kcfa-context.test.js` (context-sensitivity + cap + kill-switch +
+  clear); full gate green.
+
 ## 0.89.0 — Per-language metrics (#9) + roadmap audit (#3, #5 already shipped)
 
 Continuing the multi-language SAST roadmap. Investigation revealed several

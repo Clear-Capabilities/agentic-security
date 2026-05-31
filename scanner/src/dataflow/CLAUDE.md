@@ -5,7 +5,7 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
 ## Scope — what we actually model
 
 - **Intra-procedural field-sensitive taint** with access-path lattice (`access-paths.js`). `user.email` is distinguishable from `user.password`.
-- **k=1 monovariant interprocedural return-taint.** `SummaryCache` (`summaries.js`) holds one summary per function under empty entry state. At an assign-from-call site, if the resolved callee's summary says `returnTainted`, the LHS becomes tainted. Premortem-derived; was previously dead code.
+- **Value-context-sensitive interprocedural taint (FR-SEM-2).** `SummaryCache` (`summaries.js`) holds a distinct summary per distinct entry-taint-state. A pre-pass computes the empty-entry base for every function; call sites then lazily compute the summary under their actual tainted-arg context (at both assign-from-call and plain-call sites) so a helper that is clean with clean args but tainted with user input is detected per call site. Bounded by a per-function context cap (`AGENTIC_SECURITY_KCFA_MAX_CONTEXTS`, default 16; 0 = monovariant). Over the cap → reuse the empty-entry summary.
 - **Catalog-driven source/sink/sanitizer matching.** Add entries in `catalog.js`. Each entry: `kind` ∈ {source, sink, sanitizer}, plus language + framework + match shape. 200+ entries spanning Express/Flask/FastAPI/Django/Rails/PHP/Go-net-http/Gin/Echo.
 - **Path feasibility.** Constant-folds `if` conditions to prune unreachable branches.
 - **Per-flow source attribution.** Sources reported on a finding are the ones actually reaching the sink argument (via free-var matching in the sink expression), NOT the first source the worklist happened to see. Premortem-derived.
@@ -18,7 +18,8 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
 
 ## Scope — what we still do NOT model (today)
 
-- **Arbitrary entry-taint-state context-sensitivity (k-CFA).** The fixed-point pre-pass computes each function's summary under the EMPTY entry state; call sites query with `entryStateFromCall`, so this is partial — but a function that is pure under empty entry yet vulnerable only under a specific tainted-arg shape is still approximated. Lifting to full context-sensitivity is tracked as FR-SEM-2 (roadmap #2).
+- **Call-string (k>1) context-sensitivity.** Context is the *value* abstraction — which params are tainted at entry — not the call stack. Two call paths that reach a helper with the same tainted-arg shape share a summary. Entry-state granularity is also param-level, not arbitrary access paths (`f(obj)` with `obj.a` tainted ≡ `obj.b` tainted).
+- **Contexts beyond the per-function cap.** Once a function has been computed under `AGENTIC_SECURITY_KCFA_MAX_CONTEXTS` distinct tainted-arg shapes, further shapes fall back to the empty-entry summary (an under-approximation, bounded on purpose).
 - **Implicit flow.** `implicit-flow.js` exists for `if (tainted) { x = "yes" }` propagation but is conservative-by-default.
 
 ## Entry points
@@ -35,6 +36,7 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
 - `AGENTIC_SECURITY_DEEP_TIMEOUT_MS` — global walltime budget (default 300_000).
 - `AGENTIC_SECURITY_DEEP_FN_LIMIT` — function-count budget (default 5000).
 - `AGENTIC_SECURITY_DEEP_IN_CI=1` — also enable in CI (off by default; CI runs are time-bounded).
+- `AGENTIC_SECURITY_KCFA_MAX_CONTEXTS` — distinct non-empty entry contexts kept per function (default 16; 0 = monovariant).
 
 ## Gotchas
 
