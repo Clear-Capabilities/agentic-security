@@ -15,6 +15,8 @@ SAST detector modules. Each file exports one or more `scan*()` functions returni
 
 **Language-specific** — `cpp.js`, `csharp.js`, `dart-flutter.js`, `go-extended.js`, `java-deserialization.js`, `kotlin.js`, `php.js`, `python-sinks.js`, `ruby.js`, `rust.js`, `solidity.js`, `swift.js`, `xxe.js`.
 
+**Tree-sitter (long-tail languages, opt-in)** — `tree-sitter-sinks.js` (roadmap #8). AST-accurate detectors for languages with no first-class IR parser (rust/solidity/cpp/go/swift/dart), via `../ir/tree-sitter-loader.js`. Gated behind `AGENTIC_SECURITY_TREE_SITTER=1` and the **optional** `web-tree-sitter` + `tree-sitter-wasms` deps (ABI-pinned 0.20.8 ↔ 0.1.13, marked `--external` so they're never bundled). Degrades to a no-op when the flag or deps are absent. First rule: Rust shell-spawn command injection (CWE-78). Anchoring on real AST nodes means comments/strings can't false-match.
+
 **Framework hardening** — `django-hardening.js`, `fastapi-hardening.js`, `laravel-hardening.js`, `quarkus-hardening.js`, `springboot-hardening.js`. Each detects "you used framework X but forgot the security-hardening step that ships with it" rather than a primary vuln.
 
 **Cross-cutting vuln classes** — `authz.js`, `csrf.js`, `csv-injection.js` (formula injection into spreadsheet cells, CWE-1236), `host-header.js`, `jndi.js`, `jwt-exp.js`, `ldap-injection.js`, `xpath-injection.js`, `mass-assignment.js`, `mutation-xss.js`, `nosql-injection.js`, `prototype-pollution.js`, `ssrf-cloud-metadata.js`, `stored-taint.js` (second-order / stored injection — **opt-in** via `AGENTIC_SECURITY_STORED_TAINT=1`), `toctou.js`, `wrong-context-sanitizer.js` (HTML-entity encoder used in a URL context — wrong-context output encoding, CWE-79), `zip-slip.js`.

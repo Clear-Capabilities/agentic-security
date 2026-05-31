@@ -85,6 +85,7 @@ import { scanWrongContextSanitizer } from './sast/wrong-context-sanitizer.js';
 import { scanFrontendHygiene } from './sast/frontend-hygiene.js';
 import { scanCsvInjection } from './sast/csv-injection.js';
 import { scanStoredTaint } from './sast/stored-taint.js';
+import { scanTreeSitterSinks } from './sast/tree-sitter-sinks.js';
 import { scanResponseSplitting } from './sast/response-splitting.js';
 import { scanStoredPromptInjection, scanStoredPromptInjectionCrossFile } from './sast/llm-stored-prompt.js';
 import { scanRAGPoisoning } from './sast/rag-poisoning.js';
@@ -7562,6 +7563,9 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasAttackPath:attackResult.flagged.has(key),attackPaths:attackResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
   try{aF.push(...scanDbTaintCrossFile(fc));}catch(_){}
   try{aF.push(...scanStoredPromptInjectionCrossFile(fc));}catch(_){}
+  // Roadmap #8 — tree-sitter sinks for long-tail languages (opt-in,
+  // AGENTIC_SECURITY_TREE_SITTER=1; degrades to no-op without the optional dep).
+  if(process.env.AGENTIC_SECURITY_TREE_SITTER==='1'){try{aF.push(...await scanTreeSitterSinks(fc));}catch(_){}}
   let finalFindings;try{finalFindings=dedupeFindingsWithEvidence(aF);}catch(_){finalFindings=dd(aF,f=>f.id);}
   // 0.34.6: filter out Java FPs where a sanitizer pattern (argv-form ProcessBuilder,
   // parameterized prepareStatement, constant-folded dead-branch) is present.

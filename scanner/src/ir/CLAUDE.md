@@ -11,6 +11,7 @@ consumed by `scanner/src/dataflow/` for taint analysis.
 | Python   | `parser-py-cst.js`    | Python 3.8+ stdlib `ast` via subprocess (default when available) |
 | Python   | `parser-py.js`        | Hand-rolled regex parser (fallback when python3 missing) |
 | Java     | `parser-java.js`      | `java-parser` npm package (async)                |
+| Long-tail (rust/solidity/cpp/c/go/swift/dart) | `tree-sitter-loader.js` | **Optional** `web-tree-sitter` + `tree-sitter-wasms` (ABI-pinned 0.20.8 ↔ 0.1.13), lazy + degrades when absent. Powers `sast/tree-sitter-sinks.js` (opt-in via `AGENTIC_SECURITY_TREE_SITTER=1`). Marked `--external` in the build so the committed bundle never embeds WASM. |
 
 ## Python parser — dual-path with auto fallback
 

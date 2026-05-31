@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.97.0 — Tree-sitter foundation for long-tail languages (roadmap #8)
+
+First step of bringing languages with no first-class IR parser
+(rust/solidity/cpp/c/go/swift/dart) onto real AST analysis.
+
+- **Optional, ABI-pinned dependency:** `web-tree-sitter` 0.20.8 +
+  `tree-sitter-wasms` 0.1.13 as **optionalDependencies**, marked `--external`
+  in the ncc build so the committed bundle never embeds WASM (verified: bundle
+  stays ~3.5 MB and contains only the external `require`, not the grammars).
+- **`ir/tree-sitter-loader.js`** — lazy, cached, graceful. Loads the runtime +
+  grammar at runtime and returns null when absent, so the scanner stays fully
+  bootable offline / without the optional deps (long-tail languages fall back
+  to the existing pattern detectors).
+- **`sast/tree-sitter-sinks.js`** — first AST-accurate detector, gated behind
+  `AGENTIC_SECURITY_TREE_SITTER=1`: Rust shell-spawn command injection (CWE-78,
+  `Command::new("sh").arg("-c").arg(<dynamic>)`). Anchoring on real AST nodes
+  means the same pattern in a comment or string literal does NOT false-match —
+  the precision win over regex.
+- Opt-in + optional-dep gated ⇒ default scan behavior and the committed bundle
+  are unchanged. Tests + full gate green.
+
+Next on #8: more languages/rules (Solidity dangerous primitives, Go `exec`),
+and eventually CFG construction to route long-tail languages through the full
+taint engine.
+
 ## 0.96.0 — Surface coverage honesty + make the corpus reporter runnable
 
 Completes the measurement threads from 0.91/0.95 — the data existed but wasn't
