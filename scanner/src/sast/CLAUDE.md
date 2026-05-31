@@ -17,7 +17,7 @@ SAST detector modules. Each file exports one or more `scan*()` functions returni
 
 **Framework hardening** — `django-hardening.js`, `fastapi-hardening.js`, `laravel-hardening.js`, `quarkus-hardening.js`, `springboot-hardening.js`. Each detects "you used framework X but forgot the security-hardening step that ships with it" rather than a primary vuln.
 
-**Cross-cutting vuln classes** — `authz.js`, `csrf.js`, `host-header.js`, `jndi.js`, `jwt-exp.js`, `ldap-injection.js`, `xpath-injection.js`, `mass-assignment.js`, `mutation-xss.js`, `nosql-injection.js`, `prototype-pollution.js`, `ssrf-cloud-metadata.js`, `toctou.js`, `zip-slip.js`.
+**Cross-cutting vuln classes** — `authz.js`, `csrf.js`, `host-header.js`, `jndi.js`, `jwt-exp.js`, `ldap-injection.js`, `xpath-injection.js`, `mass-assignment.js`, `mutation-xss.js`, `nosql-injection.js`, `prototype-pollution.js`, `ssrf-cloud-metadata.js`, `toctou.js`, `wrong-context-sanitizer.js` (HTML-entity encoder used in a URL context — wrong-context output encoding, CWE-79), `zip-slip.js`.
 
 **Cloud/infra** — `db-rls.js` (Supabase RLS), `env-hygiene.js` (NEXT_PUBLIC_ leaks, .env.example real values), `mobile-manifest.js`, `pipeline.js` (CI/CD integrity), `rate-limit.js`, `webhook.js`.
 

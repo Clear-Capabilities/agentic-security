@@ -81,6 +81,7 @@ import { scanLDAPInjection } from './sast/ldap-injection.js';
 import { scanXPathInjection } from './sast/xpath-injection.js';
 import { scanSSTI } from './sast/ssti.js';
 import { scanOpenRedirect } from './sast/open-redirect.js';
+import { scanWrongContextSanitizer } from './sast/wrong-context-sanitizer.js';
 import { scanResponseSplitting } from './sast/response-splitting.js';
 import { scanStoredPromptInjection, scanStoredPromptInjectionCrossFile } from './sast/llm-stored-prompt.js';
 import { scanRAGPoisoning } from './sast/rag-poisoning.js';
@@ -149,6 +150,7 @@ import { applyLearnedCalibration } from './posture/triage-learning.js';
 import { annotateFormalVerification } from './dataflow/formal-verify.js';
 import { annotatePathFeasibility } from './dataflow/smt-feasibility.js';
 import { annotateProofGate } from './dataflow/proof-gate.js';
+import { computeAnalysisTiers, countUnmodeledSinkCandidates } from './posture/coverage-report.js';
 import { annotatePrivacyTaint, emitDpiaArtifact } from './dataflow/privacy-taint.js';
 import { buildThreatModel as buildAutoThreatModel, persistThreatModel as persistAutoThreatModel } from './posture/threat-model-auto.js';
 import { runApiContractScan } from './posture/api-contract.js';
@@ -7203,8 +7205,8 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   catch { _GLOBAL_JAVA_TAINTED_METHODS = new Set(); }
   const _perFileTimeoutMs = parseInt(process.env.AGENTIC_SECURITY_PER_FILE_TIMEOUT_MS || '10000', 10);
   const _fileTimings = [];
-  let _filesSkipped = 0, _filesTimedOut = 0;
-  const files=Object.keys(fileContents).filter(f=>shouldScan(f) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];let i=0;for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000)continue;fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aF.push(...scanAliasedSinks(p,c));aF.push(...scanJavaSAST(p,c));aF.push(...scanJavaBenchExtras(p,c));aLogic.push(...scanMiddlewareOrdering(p,c));aLogic.push(...scanReDoS(p,c));aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));aF.push(...scanIaC(p,c));
+  let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0;
+  const files=Object.keys(fileContents).filter(f=>shouldScan(f) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];let i=0;for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aF.push(...scanAliasedSinks(p,c));aF.push(...scanJavaSAST(p,c));aF.push(...scanJavaBenchExtras(p,c));aLogic.push(...scanMiddlewareOrdering(p,c));aLogic.push(...scanReDoS(p,c));aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));aF.push(...scanIaC(p,c));
       aF.push(...scanLLM(p,c));
       aF.push(...scanLLMOwasp(p,c));
       aLogic.push(...scanBusinessLogic(p,c));
@@ -7266,6 +7268,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       aF.push(...scanXPathInjection(p,c));
       aF.push(...scanSSTI(p,c));
       aF.push(...scanOpenRedirect(p,c));
+      aF.push(...scanWrongContextSanitizer(p,c));
       aF.push(...scanResponseSplitting(p,c));
       aF.push(...scanStoredPromptInjection(p,c));
       aF.push(...scanRAGPoisoning(p,c));
@@ -8264,7 +8267,12 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
     }
   }
 
-  const _scanMeta={filesScanned:files.length,filesSkipped:_filesSkipped,filesTimedOut:_filesTimedOut,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length}};
+  // Coverage-honesty report (#5 + #6): per-language analysis tier (IR-taint vs
+  // pattern-only), dense/large/timeout skips, and unmodeled-sink candidates.
+  let _analysisTier = null, _unmodeledSinks = null;
+  try { _analysisTier = computeAnalysisTiers(Object.keys(fc)); } catch {}
+  try { _unmodeledSinks = countUnmodeledSinkCandidates(fc, finalFindings); } catch {}
+  const _scanMeta={filesScanned:files.length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length}};
   return{routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".

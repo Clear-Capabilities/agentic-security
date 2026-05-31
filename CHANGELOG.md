@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.91.0 — Coverage honesty (#5+#6) + wrong-context encoding (#1 slice)
+
+Additive precision/trust features that cannot reduce existing detection.
+
+### #5 + #6 — Analysis-coverage honesty report
+- New `posture/coverage-report.js`. `_scanMeta` now publishes the scanner's
+  blind spots: per-language **analysis tier** (which languages got the IR +
+  taint engine vs. pattern-only — c/c++/rust/swift/solidity/dart are
+  pattern-only today), a `filesDenseSkipped` counter (dense files were
+  previously dropped with no count), and **unmodeled-sink candidates** —
+  dangerous-call shapes (eval/exec/deserialize/yaml.load/…) with no finding on
+  their line, i.e. recall blind spots to verify.
+
+### #1 (practical slice) — Wrong-context output encoding (CWE-79)
+- New `sast/wrong-context-sanitizer.js` flags an HTML-entity encoder
+  (`escapeHtml`/`htmlspecialchars`/`he.encode`/`lodash.escape`) applied to a
+  value used in a URL context (`href`/`src`/`location`). HTML-entity encoding
+  does NOT neutralize `javascript:`/`data:` schemes, so the value is still XSS
+  while looking sanitized. High precision: excludes `encodeURIComponent` (a
+  different, non-XSS mistake) and suppresses when a URL-scheme allow-list is
+  near. Fixtures + tests; full gate green.
+
+### Deferred (need core-engine work or carry correctness traps — not faked)
+- **#1 (full):** context-tagged taint through the lattice — the engine's taint
+  is binary and can't express "sanitized-for-HTML vs -for-JS". Core change.
+- **#7 validation libraries:** modeling zod/joi/etc. as blanket sanitizers
+  would cause FALSE NEGATIVES — a schema-validated string is still an XSS/SQL
+  payload. Needs schema-type awareness (validation defeats type-confusion /
+  NoSQL-operator injection, not output injection). Deferred deliberately.
+- **#2 stored/second-order taint, #3 import/type-aware call resolution,
+  #8 long-tail languages onto the IR, #10 corpus scale** — each its own lift.
+
 ## 0.90.0 — Context-sensitive taint completed + bounded (roadmap #2, FR-SEM-2)
 
 The interprocedural engine was already value-context sensitive at the
