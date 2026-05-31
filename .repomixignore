@@ -1,0 +1,16 @@
+# Synthetic secret test vectors — NOT real credentials.
+#
+# These files intentionally contain credential-shaped strings (a fake `ghp_`
+# GitHub token, AWS's published `AKIAIOSFODNN7EXAMPLE` example key, etc.) so the
+# scanner's own secret-detection, redaction, and MCP-audit tests have realistic
+# inputs to detect. repomix's secretlint check flags them as a false positive
+# and silently drops them from the pack. Excluding them here makes that
+# intentional and explicit while keeping the security check useful (and
+# un-noisy) for the rest of the repo. Nothing in these files is a real secret;
+# there is nothing to rotate.
+#
+# Note: agentic-security does not itself use secretlint — it ships its own
+# secret scanner (scanner/src/secrets/) plus a pre-commit bodyguard. This file
+# only tunes the external `repomix` tool.
+scanner/test/fixtures/mcp-audit/vuln-hardcoded-cred.mcp.json
+scanner/test/mcp.test.js

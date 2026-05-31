@@ -1,5 +1,14 @@
 // MCP server unit tests. Drives the JSON-RPC handler directly — no child
 // process — except for one end-to-end check of stdio framing.
+//
+// NOTE FOR SECRET SCANNERS (secretlint / repomix / etc.): every
+// credential-shaped string in this file — `AKIAIOSFODNN7EXAMPLE` (AWS's own
+// published example key), `ghp_aaaa…`, `xoxb-…`, `sk-ant-…`, `AIzaSy…`, the
+// sample JWT, etc. — is a SYNTHETIC test vector. They exist so the redaction
+// and audit-log tests can prove the MCP server scrubs provider key shapes
+// before returning data to an agent. None are real credentials; there is
+// nothing to rotate. They must keep their realistic shapes or the redaction
+// tests stop testing anything.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
