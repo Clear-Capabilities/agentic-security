@@ -11,6 +11,10 @@
 //   PHP: rand(), mt_rand(), array_rand(), shuffle()
 
 const SECURITY_CONTEXT = /\b(token|session|nonce|key|secret|password|otp|csrf|salt|code|pin|auth|reset|verify|captcha|challenge|ticket)\b/i;
+// camelCase carrier: a security term as the suffix of an identifier
+// (`newToken`, `genSecret`, `sessionId`) — `\bword\b` misses these. Case
+// sensitive so it only fires on the CamelCase boundary, not generic prose.
+const SECURITY_CONTEXT_CAMEL = /[a-z](?:Token|Secret|Nonce|Salt|Otp|Password|Passwd|ApiKey|SessionId|Csrf|Cookie|Jwt|Nonce)\b/;
 
 function _line(raw, idx) {
   return raw.slice(0, idx).split('\n').length;
@@ -67,10 +71,16 @@ export function scanWeakRandomness(fp, raw) {
       const lineStart = raw.lastIndexOf('\n', m.index) + 1;
       const lineEnd = raw.indexOf('\n', m.index);
       const lineText = raw.slice(lineStart, lineEnd > 0 ? lineEnd : raw.length);
-      if (!SECURITY_CONTEXT.test(lineText)) {
-        const prevLineStart = raw.lastIndexOf('\n', lineStart - 2) + 1;
-        const prevLine = raw.slice(prevLineStart, lineStart - 1);
-        if (!SECURITY_CONTEXT.test(prevLine)) continue;
+      if (!SECURITY_CONTEXT.test(lineText) && !SECURITY_CONTEXT_CAMEL.test(lineText)) {
+        // Widen the lookback to the enclosing block: the security keyword is
+        // often on the function signature a few lines up (`function newToken()
+        // { … Math.random() … }`), not the line immediately before the call.
+        let winStart = lineStart;
+        for (let k = 0; k < 6 && winStart > 0; k++) {
+          winStart = raw.lastIndexOf('\n', winStart - 2) + 1;
+        }
+        const window = raw.slice(winStart, lineStart - 1);
+        if (!SECURITY_CONTEXT.test(window) && !SECURITY_CONTEXT_CAMEL.test(window)) continue;
       }
       findings.push({
         id: `weak-rng:${fp}:${line}`,
@@ -79,7 +89,10 @@ export function scanWeakRandomness(fp, raw) {
         vuln: `Insecure Randomness — ${label} used for security-sensitive value`,
         severity: 'high',
         family: 'weak-rng',
-        cwe: 'CWE-330',
+        // CWE-338 (cryptographically weak PRNG) — more specific than the
+        // CWE-330 parent; every pattern here (Math.random / random.* / rand /
+        // math.rand) is a non-CSPRNG used in a security context.
+        cwe: 'CWE-338',
         parser: 'WEAK-RNG',
         confidence: 0.80,
         description: `${label} is not cryptographically secure. An attacker can predict the output and forge tokens, bypass OTP, or guess session identifiers.`,

@@ -10,11 +10,16 @@ import { blankComments } from './_comment-strip.js';
 
 const lineOf = (raw, idx) => raw.substring(0, idx).split('\n').length;
 
+// A string literal that may contain the *other* quote char (a SQL string like
+// `"… name = '"` embeds a single quote) — the naive `["'][^"'\n]*["']` breaks
+// on the embedded quote and misses the concat. Match each quote style with its
+// own body so embedded quotes are allowed.
+const STR = String.raw`(?:"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')`;
 // Dynamic-string shape inside a sink call: concat (`"…" +`), f-string (`f"…"`),
 // `.format(`, or `%`-format via the `%` OPERATOR after the string (`"…%s" % v`).
 // NOT a plain literal, and NOT a `%s` placeholder followed by a params list —
 // `execute("… %s", [v])` is the SAFE parameterized DB-API form.
-const DYN = String.raw`(?:[fF]["']|["'][^"'\n]*["']\s*\+|["'][^"'\n]*["']\s*%\s*[(\w]|["'][^"'\n]*["']\s*\.\s*format\s*\()`;
+const DYN = String.raw`(?:[fF]["']|${STR}\s*\+|${STR}\s*%\s*[(\w]|${STR}\s*\.\s*format\s*\()`;
 
 export function scanPythonStructural(fp, raw) {
   if (!/\.py$/i.test(fp)) return [];
@@ -61,6 +66,17 @@ export function scanPythonStructural(fp, raw) {
     vuln: 'SQL Injection — cursor.execute built with string concat / format (Python)',
     severity: 'critical', cwe: 'CWE-89', family: 'sql-injection', confidence: 0.7,
     remediation: 'Pass parameters as the second argument with `%s` placeholders: `cursor.execute("… WHERE id = %s", [id])`. Never concatenate or %-format values into the SQL string.',
+  });
+
+  // Path traversal: a file-open / send_file built from a dynamic string
+  // (concat / f-string / format). `open('/var/data/' + name)` is the shape;
+  // a bare literal path is not. Hardened forms (os.path.basename, secure
+  // containment) are removed by engine.js dropGuardedFindings (CWE-22).
+  const PATH_RE = new RegExp(String.raw`\b(?:open|os\.open|io\.open|codecs\.open|send_file|send_from_directory)\s*\(\s*` + DYN, 'g');
+  while ((m = PATH_RE.exec(code))) emit('path-traversal', lineOf(code, m.index), {
+    vuln: 'Path Traversal — file path built with string concat / f-string / format (Python)',
+    severity: 'high', cwe: 'CWE-22', family: 'path-traversal', confidence: 0.62,
+    remediation: 'Strip directory components and assert containment: `safe = os.path.basename(name); full = os.path.join(BASE, safe); assert os.path.realpath(full).startswith(BASE)`. Never concatenate user input straight into a file path.',
   });
 
   return findings;

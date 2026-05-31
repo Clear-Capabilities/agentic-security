@@ -40,6 +40,23 @@ test('Django raw()/extra() + cursor.execute with concat = SQLi; ORM/params clean
   assert.ok(none(py('v.py', 'cur.execute("SELECT * FROM u WHERE id = %s", [uid])'), 'CWE-89'));
 });
 
+test('cursor.execute with embedded-quote SQL string still flags (DYN robust literal)', () => {
+  // The SQL string contains a single quote: `"… name = '" + name`. The naive
+  // `["'][^"'\n]*["']` body broke on the embedded quote and missed this.
+  assert.ok(has(py('app.py', `cur.execute("SELECT * FROM items WHERE name = '" + name + "'")`), 'CWE-89'));
+});
+
+test('Python path traversal — open() built from concat/f-string; literal/basename clean', () => {
+  assert.ok(has(py('srv.py', "with open('/var/data/' + name) as fh:\n    return fh.read()"), 'CWE-22'));
+  assert.ok(has(py('srv.py', 'fh = open(f"/var/data/{name}")'), 'CWE-22'));
+  assert.ok(none(py('srv.py', "fh = open('/etc/app/config.txt')"), 'CWE-22'));
+});
+
+test('libxmljs XXE — parse with noent/dtdload enabled; safe parse clean', () => {
+  assert.ok(has(js('p.js', 'const doc = libxml.parseXmlString(req.body, { noent: true, dtdload: true });'), 'CWE-611'));
+  assert.ok(none(js('p.js', 'const doc = libxml.parseXmlString(req.body);'), 'CWE-611'));
+});
+
 test('no false positives on clean JS / Python', () => {
   assert.deepEqual(js('ok.js', 'function add(a, b){ return a + b; }'), []);
   assert.deepEqual(py('ok.py', 'def add(a, b):\n    return a + b'), []);

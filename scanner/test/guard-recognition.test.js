@@ -38,6 +38,18 @@ test('non-SSRF/path findings are untouched', () => {
   assert.equal(dropGuardedFindings([F('CWE-89', 'a.js', 1), F('CWE-79', 'a.js', 2)], fc).length, 2);
 });
 
+test('reflected-XSS dropped when the value is HTML-escaped; raw reflection kept', () => {
+  // escaped via a prior `const safe = escape(req.query.x)` then reflected.
+  // The flow-pair finding carries its line on sink/source, not at top level.
+  const safe = { 'app.js': "const safe = escape(req.query.msg || '');\nres.send('<div>' + safe + '</div>');" };
+  const escaped = { id: 'app.js:1:Reflected_XSS', cwe: 'CWE-79', file: 'app.js', vuln: 'Reflected XSS', severity: 'medium', source: { line: 1 }, sink: { line: 2 } };
+  assert.equal(dropGuardedFindings([escaped], safe).length, 0);
+  // raw source concatenated straight into the sink → kept
+  const vuln = { 'app.js': "res.send('<div>' + req.query.msg + '</div>');" };
+  const raw = { id: 'app.js:1:Reflected_XSS', cwe: 'CWE-79', file: 'app.js', vuln: 'Reflected XSS', severity: 'medium', sink: { line: 1 } };
+  assert.equal(dropGuardedFindings([raw], vuln).length, 1);
+});
+
 test('ssrf-cloud-metadata: metadata IP in a deny-list is not flagged; a real fetch is', () => {
   const n = (c) => scanSSRFCloudMetadata('x.js', c).filter(f => f.id.includes('hardcoded')).length;
   assert.equal(n('const DENY = new Set(["169.254.169.254"]); if (DENY.has(host)) throw new Error();'), 0);

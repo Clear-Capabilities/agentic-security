@@ -21,11 +21,14 @@ const STATE_CHANGE_RE = {
   django: /\b(?:require_POST|require_http_methods\s*\(\s*\[[^\]]*['"](POST|PUT|PATCH|DELETE)['"])/gi,
   fastapi: /@\w+\s*\.\s*(post|put|patch|delete)\s*\(/gi,
   spring: /@(PostMapping|PutMapping|PatchMapping|DeleteMapping)\b/g,
+  // Symfony: reading the POST body bag (`$request->request->get(...)`) is the
+  // state-change signal, plus the Route annotation method list.
+  symfony: /\$\w+\s*->\s*(?:request|getPayload\s*\(\s*\))\s*->\s*(?:get|getInt|getBoolean|getAlnum|getDigits|all|has)\s*\(|[#@]\[?\s*Route\s*\([^)]*methods\s*[:=]\s*[[{][^\]}]*['"](?:POST|PUT|PATCH|DELETE)['"]/gi,
 };
 
-const CSRF_DEFENCE_RE = /\b(?:csurf|csrfProtection|csrf\(\)|express-csrf-token|lusca\.csrf|fastify-csrf|CSRFProtect|csrf_protect|CsrfViewMiddleware|CsrfFilter|@CsrfProtected|sameSite\s*[:=]\s*['"](?:Strict|Lax)['"]|origin\s*===|referer\s*===|Origin\s*===|Referer\s*===)/i;
+const CSRF_DEFENCE_RE = /\b(?:csurf|csrfProtection|csrf\(\)|express-csrf-token|lusca\.csrf|fastify-csrf|CSRFProtect|csrf_protect|CsrfViewMiddleware|CsrfFilter|@CsrfProtected|isCsrfTokenValid|IsCsrfTokenValid|csrf_token|CsrfToken|sameSite\s*[:=]\s*['"](?:Strict|Lax)['"]|origin\s*===|referer\s*===|Origin\s*===|Referer\s*===)/i;
 
-const TOKEN_AUTH_RE = /\b(?:Authorization\s*:\s*Bearer|\.startsWith\s*\(\s*['"`]Bearer|req\.headers\.authorization|request\.headers\.get\(\s*['"`]authorization|bearer\s+token|x-api-key|verifyJWT|jwt\.verify|jsonwebtoken)/i;
+const TOKEN_AUTH_RE = /\b(?:Authorization\s*:\s*Bearer|\.startsWith\s*\(\s*['"`]Bearer|req\.headers\.authorization|request\.headers\.get\(\s*['"`]authorization|bearer\s+token|x-api-key|verifyJWT|jwt\.verify|jsonwebtoken|lexik_jwt|JWTTokenAuthenticator|headers\s*->\s*get\s*\(\s*['"]Authorization)/i;
 
 const TEST_FILE_RE = /(?:^|\/)(?:tests?|__tests__|specs?|test|fixtures)\//i;
 
@@ -39,6 +42,7 @@ export function scanCSRF(fp, raw) {
   if (/^(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(ext)) langSel = ['express', 'fastify'];
   else if (ext === 'py') langSel = ['flask', 'django', 'fastapi'];
   else if (ext === 'java' || ext === 'kt') langSel = ['spring'];
+  else if (ext === 'php' || ext === 'phtml') langSel = ['symfony'];
   if (!langSel) return [];
 
   const code = blankComments(raw, ext === 'py' ? 'py' : undefined);

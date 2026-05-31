@@ -91,6 +91,7 @@ import { scanCsharpStructural } from './sast/csharp-structural.js';
 import { scanJsFrameworkStructural } from './sast/js-framework-structural.js';
 import { scanPythonStructural } from './sast/python-structural.js';
 import { scanGoStructural } from './sast/go-structural.js';
+import { scanSecretConcat } from './sast/secret-concat.js';
 import { scanResponseSplitting } from './sast/response-splitting.js';
 import { scanStoredPromptInjection, scanStoredPromptInjectionCrossFile } from './sast/llm-stored-prompt.js';
 import { scanRAGPoisoning } from './sast/rag-poisoning.js';
@@ -1227,6 +1228,35 @@ function _hasSsrfHostGuard(ctx) { return _SSRF_HOST_GUARD_RE.test(_guardWindow(c
 const _PATH_GUARD_RE = /\b(?:basename|GetFileName|secure_filename|sanitize_filename|send_from_directory|safe_join)\s*\(|\b(?:startsWith|startswith|StartsWith|HasPrefix)\s*\(|\bgetCanonicalPath\b|\btoRealPath\b|\bfilepath\s*\.\s*(?:Clean|Base|Abs)\b/;
 function _hasPathGuard(ctx) { return _PATH_GUARD_RE.test(_guardWindow(ctx)); }
 
+// Reflected-XSS output-encoding guard: an HTML escaper applied near the sink.
+const _XSS_ESCAPER = String.raw`(?:escapeHtml|escape_html|escape-html|sanitizeHtml|sanitize_html|DOMPurify\.sanitize|he\.encode|he\.escape|_\.escape|validator\.escape|bleach\.clean|markupsafe|htmlspecialchars|htmlentities|html\.escape|escapeHTML|encodeURIComponent|escape)\s*\(`;
+const _XSS_ESCAPE_RE = new RegExp(_XSS_ESCAPER);
+// An escaper whose RESULT is captured (assigned / returned) — not a bare,
+// return-discarded `escapeHtml(s);` call, which does nothing for the reflected
+// value (FP-3 in smoke). Requires `… = <escaper>(` or `return <escaper>(`.
+const _XSS_ASSIGNED_ESCAPE_RE = new RegExp(String.raw`(?:[:=]|\breturn\b)\s*[^=;\n]*?` + _XSS_ESCAPER);
+// A raw request source appearing on the sink line itself (not via a prior
+// escaped var). If present, the reflection is unescaped — keep the finding.
+const _XSS_RAW_SOURCE_RE = /\breq(?:uest)?\s*\.|\bctx\s*\.\s*(?:query|params|request|body)\b|\$_(?:GET|POST|REQUEST|COOKIE)\b|\bparams\s*\[|\.(?:query|body|params)\s*\.[A-Za-z_$]/;
+function _hasXssOutputEncoding(ctx) {
+  if (!ctx || !Array.isArray(ctx.lines)) return false;
+  const line = ctx.lines[(ctx.line || 1) - 1] || '';
+  // The reflected-XSS finding is anchored either on the escaped-assignment line
+  // (`const safe = escape(req.query.x)`) or on the response sink line
+  // (`res.send('…' + safe + '…')`).
+  //  - If the finding line itself captures the escaped value (`const safe =
+  //    escape(req.query.x)`), the reflection is encoded → safe. A bare,
+  //    return-discarded `escapeHtml(s);` does NOT count.
+  if (_XSS_ASSIGNED_ESCAPE_RE.test(line)) return true;
+  //  - A raw, unescaped request source on the finding line is the real vuln
+  //    shape (`res.send('…' + req.query.x)`) → keep it.
+  if (_XSS_RAW_SOURCE_RE.test(line)) return false;
+  //  - Otherwise the sink reflects a variable; drop only if that variable was
+  //    escaped (and the result captured) in the surrounding window. A bare
+  //    `escapeHtml(s);` with a discarded return does NOT count.
+  return _XSS_ASSIGNED_ESCAPE_RE.test(_guardWindow(ctx, 8, 2));
+}
+
 // Centralized guard-recognition pass (#1). SSRF (CWE-918) and path-traversal
 // (CWE-22) are emitted by several independent detectors (regex, structural,
 // per-language flow, PY-SAST, CSHARP, GO) — none of which shared a notion of
@@ -1246,14 +1276,31 @@ export function dropGuardedFindings(findings, fileContents) {
     return arr;
   };
   return findings.filter((f) => {
-    if (!f || !f.file || typeof f.line !== 'number') return true;
+    if (!f || !f.file) return true;
+    // Already-sanitized findings (isSanitized / info) are owned by the
+    // sanitizer-dataflow pipeline, which records them in scan.suppressions.
+    // Don't hard-drop them here or that bookkeeping is lost (smoke FP-3).
+    if (f.isSanitized) return true;
     const cwe = f.cwe || '';
-    if (cwe !== 'CWE-918' && cwe !== 'CWE-22') return true;
+    const isXss = cwe === 'CWE-79' && /reflected xss/i.test(f.vuln || '');
+    if (cwe !== 'CWE-918' && cwe !== 'CWE-22' && !isXss) return true;
+    // Flow-pair findings (REGEX parser) carry the line on sink/source, not at
+    // the top level; fall back to those before parsing it out of the id.
+    let line = f.line;
+    if (typeof line !== 'number') {
+      line = (f.sink && f.sink.line) ?? (f.source && f.source.line);
+      if (typeof line !== 'number') {
+        const m = /:(\d+):/.exec(f.id || '');
+        if (m) line = Number(m[1]);
+      }
+    }
+    if (typeof line !== 'number') return true;
     const lines = linesOf(f.file);
     if (!lines) return true;
-    const ctx = { lines, line: f.line };
+    const ctx = { lines, line };
     if (cwe === 'CWE-918' && _hasSsrfHostGuard(ctx)) return false;
     if (cwe === 'CWE-22' && _hasPathGuard(ctx)) return false;
+    if (isXss && _hasXssOutputEncoding(ctx)) return false;
     return true;
   });
 }
@@ -5596,8 +5643,17 @@ function dedupeFindingsWithEvidence(findings){
     const key=`${file}:${sinkLine}:${fam}`;
     if(!buckets.has(key)){buckets.set(key,f);continue;}
     const kept=buckets.get(key);
-    // Keep highest-severity entry; preserve evidence from both.
-    const keepNew = (SEV_RANK[f.severity]??9) < (SEV_RANK[kept.severity]??9);
+    // Winner selection: an interprocedural flow finding (carries source→sink
+    // attribution) is the better carrier than a flat structural/regex match at
+    // the same sink — keep its chain/source-line attribution. When neither or
+    // both carry flow, fall back to severity. The winner keeps its own severity
+    // (we must not resurrect a rating that ownership/reachability analysis
+    // deliberately downgraded on one of the two findings).
+    const fHasFlow = !!(f.source && f.sink);
+    const kHasFlow = !!(kept.source && kept.sink);
+    const keepNew = (fHasFlow !== kHasFlow)
+      ? fHasFlow
+      : (SEV_RANK[f.severity]??9) < (SEV_RANK[kept.severity]??9);
     const winner = keepNew ? f : kept;
     const loser  = keepNew ? kept : f;
     if(!winner.evidence)winner.evidence=[winner.parser||"UNKNOWN"];
@@ -7358,6 +7414,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       aF.push(...scanJsFrameworkStructural(p,c));
       aF.push(...scanPythonStructural(p,c));
       aF.push(...scanGoStructural(p,c));
+      aF.push(...scanSecretConcat(p,c));
       aF.push(...scanResponseSplitting(p,c));
       aF.push(...scanStoredPromptInjection(p,c));
       aF.push(...scanRAGPoisoning(p,c));

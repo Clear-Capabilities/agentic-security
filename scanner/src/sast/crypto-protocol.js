@@ -196,6 +196,11 @@ function detectStaticIv(file, raw, code, out, seen) {
     { re: /\bcreateCipheriv\s*\([^,]+,\s*[^,]+,\s*['"`](?:0+|\\0+)['"`]/g },
     { re: /\bAES\.new\s*\([^,]+,[^,]+,\s*IV\s*=\s*b?['"](?:\\x00){8,}/g },
     { re: /\bcipher\.NewCBCEncrypter\s*\([^,]+,\s*make\s*\(\s*\[\]byte\s*,/g },  // make([]byte, blocksize)
+    // pyca/cryptography: a zero / repeated-byte literal IV — `iv = b'\x00' * 16`
+    // or `iv = b'\x00\x00…'` — fed to modes.CBC/CTR/CFB/OFB.
+    { re: /\biv\s*=\s*b['"](?:\\x00|\\0|0)+['"]\s*\*\s*\d+/gi },
+    { re: /\biv\s*=\s*b['"](?:\\x00|\\0){8,}['"]/gi },
+    { re: /\bmodes\.(?:CBC|CTR|CFB|OFB|GCM)\s*\(\s*b['"]/g },  // modes.CBC(b'…') literal IV/nonce
   ];
   for (const p of patterns) {
     let m;

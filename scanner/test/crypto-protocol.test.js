@@ -45,6 +45,12 @@ test('crypto-proto: Python — md5/sha1, verify=False, DES, ECB, PBKDF2 low iter
   assert.ok(fams.has('crypto-jwt-none'), 'jwt none alg');
 });
 
+test('crypto-proto: pyca/cryptography zero IV (iv = b\'\\x00\' * 16) flagged static-IV', () => {
+  const src = "from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes\ndef enc(plain, key):\n    iv = b'\\x00' * 16\n    c = Cipher(algorithms.AES(key), modes.CBC(iv))\n    return c.encryptor().update(plain)\n";
+  const out = scanCryptoProtocol('enc.py', src);
+  assert.ok(out.some(f => f.family === 'crypto-static-iv' && f.cwe === 'CWE-329'), 'zero IV flagged');
+});
+
 test('crypto-proto: Go InsecureSkipVerify + TLS 1.0 flagged', () => {
   const out = scanCryptoProtocol('insecure.go', read(path.join(FIX, 'vulnerable/insecure.go')));
   assert.ok(out.some(f => f.family === 'crypto-tls-no-verify'));

@@ -24,7 +24,7 @@ const RE = {
   // $_REQUEST/$_GET/$_POST on the sink line, which misses framework idioms
   // (`$f = $r->query->get('x'); shell_exec('gzip ' . $f)`).
   cmdInjectionStructural: /\b(?:shell_exec|exec|system|passthru|popen|proc_open|pcntl_exec)\s*\(\s*(?:"[^"\n]*\$|'[^'\n]*'\s*\.|"[^"\n]*"\s*\.)/g,
-  sqlInjectionStructural: /\b(?:DB::raw|DB::select|DB::statement|DB::insert|DB::update|DB::delete|whereRaw|orWhereRaw|havingRaw|selectRaw|orderByRaw|mysqli_query|pg_query)\s*\(\s*(?:DB::raw\s*\(\s*)?(?:"[^"\n]*\$|"[^"\n]*"\s*\.|'[^'\n]*'\s*\.)/g,
+  sqlInjectionStructural: /\b(?:DB::raw|DB::select|DB::statement|DB::insert|DB::update|DB::delete|whereRaw|orWhereRaw|havingRaw|selectRaw|orderByRaw|mysqli_query|mysql_query|pg_query|pg_send_query|sqlite_query|->query|->rawQuery)\s*\(\s*(?:DB::raw\s*\(\s*)?(?:"[^"\n]*\$|"[^"\n]*"\s*\.|'[^'\n]*'\s*\.)/g,
 };
 
 function lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }

@@ -71,6 +71,16 @@ export function scanJsFrameworkStructural(fp, raw) {
     });
   }
 
+  // XXE: libxmljs parse with entity expansion / DTD loading enabled
+  // (`noent: true`, `dtdload: true`, `replaceEntities: true`). These options
+  // turn an external-entity reference in attacker XML into file read / SSRF.
+  const XXE_RE = /\bparse(?:XmlString|Xml|FromString|XmlAsync)?\s*\([^)]*\b(?:noent|dtdload|dtdvalid|replaceEntities|external|expandEntities)\s*:\s*(?:true|1)\b/g;
+  while ((m = XXE_RE.exec(code))) emit('xxe', lineOf(code, m.index), {
+    vuln: 'XXE — XML parsed with entity expansion / DTD loading enabled (libxmljs)',
+    severity: 'high', cwe: 'CWE-611', family: 'xxe', confidence: 0.7,
+    remediation: 'Parse with entity expansion and DTD loading OFF — drop `noent`/`dtdload`/`replaceEntities` (they default to false). Untrusted XML with external entities enabled allows local file read and SSRF.',
+  });
+
   // Prototype pollution: a deep-merge/extend of req/ctx user input, unless the
   // file filters __proto__/constructor/prototype keys.
   const PROTO_RE = /\b(?:deepMerge|deepExtend|mergeDeep|defaultsDeep|mergeWith|_\.merge|merge|extend|assignIn)\s*\([^)\n]*\b(?:req|request|ctx)\s*\.\s*(?:body|query|params)\b/g;
