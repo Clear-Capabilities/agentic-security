@@ -10,11 +10,15 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
 - **Path feasibility.** Constant-folds `if` conditions to prune unreachable branches.
 - **Per-flow source attribution.** Sources reported on a finding are the ones actually reaching the sink argument (via free-var matching in the sink expression), NOT the first source the worklist happened to see. Premortem-derived.
 
-## Scope — what we do NOT model (today)
+## Scope — now modelled (was previously listed as gaps; closed in v0.66)
 
-- **Arbitrary entry-taint-state context-sensitivity.** Each function gets ONE summary, computed under empty entry. A function that's pure when called with clean args but vulnerable when called with tainted args is modelled as the empty-state result. Track FR-SEM-2 to lift this.
-- **Mutated-parameter taint at call sites.** The `SummaryCache.applyAtCallSite` helper exists for it; the engine doesn't consult it yet. If you want a helper that mutates its argument (`Object.assign(target, tainted)`) to taint the caller's `target`, this is the modelling gap.
-- **Higher-order taint flow** — partial. `higher-order.js` propagates taint into `arr.map(fn)` / `promise.then(fn)` callbacks at the IR level, but the recorded `_higherOrderInvocations` aren't fed back into the worklist yet.
+- **Mutated-parameter taint at call sites.** `engine.js` consults `SummaryCache.applyAtCallSite` at both assign-from-call and plain-call sites: a callee that mutates a param (e.g. `Object.assign(target, tainted)`, `_.merge`) taints the caller's argument variable. Covered by `test/interproc-k2.test.js`.
+- **Higher-order taint flow.** `_higherOrderInvocations` recorded during `analyzeFunction` are consumed in `runTaintEngine`: the callback is resolved, analyzed with a tainted parameter, and its findings merged back into the caller (`_via: 'higher-order'`, capped at `HO_CAP`). Covered by `test/closure-capture.test.js` and `test/phase6-taint.test.js`.
+- **Recursion via fixed point.** `runTaintEngine` runs a multi-pass fixed-point loop (`MAX_FP_ITERS=3`) until the summary cache stabilizes, so recursive cycles and call chains converge instead of under-approximating on a single pass.
+
+## Scope — what we still do NOT model (today)
+
+- **Arbitrary entry-taint-state context-sensitivity (k-CFA).** The fixed-point pre-pass computes each function's summary under the EMPTY entry state; call sites query with `entryStateFromCall`, so this is partial — but a function that is pure under empty entry yet vulnerable only under a specific tainted-arg shape is still approximated. Lifting to full context-sensitivity is tracked as FR-SEM-2 (roadmap #2).
 - **Implicit flow.** `implicit-flow.js` exists for `if (tainted) { x = "yes" }` propagation but is conservative-by-default.
 
 ## Entry points

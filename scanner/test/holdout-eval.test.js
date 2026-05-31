@@ -7,7 +7,51 @@ import {
   expectedCalibrationError,
   evaluateHeldOut,
   summarize,
+  languageOf,
+  perLanguage,
+  summarizePerLanguage,
 } from '../src/posture/holdout-eval.js';
+
+test('languageOf prefers explicit language, falls back to file extension', () => {
+  assert.equal(languageOf({ language: 'rb' }), 'rb');
+  assert.equal(languageOf({ file: 'app/models/user.rb' }), 'rb');
+  assert.equal(languageOf({ file: 'src/Main.kt' }), 'kt');
+  assert.equal(languageOf({ file: 'a.tsx' }), 'ts');
+  assert.equal(languageOf({}), 'unknown');
+});
+
+test('parseLabeledJsonl captures language (explicit + derived)', () => {
+  const text = [
+    '{"family":"sql","predicted":0.9,"actual":1,"language":"java"}',
+    '{"family":"xss","predicted":0.2,"actual":0,"file":"web/app.py"}',
+  ].join('\n');
+  const s = parseLabeledJsonl(text);
+  assert.equal(s[0].language, 'java');
+  assert.equal(s[1].language, 'py');
+});
+
+test('perLanguage computes per-language precision', () => {
+  const samples = [
+    { language: 'py', actual: 1 }, { language: 'py', actual: 1 }, { language: 'py', actual: 0 },
+    { language: 'rb', actual: 0 }, { language: 'rb', actual: 0 },
+  ];
+  const pl = perLanguage(samples);
+  assert.equal(pl.py.n, 3);
+  assert.equal(pl.py.precision, Number((2 / 3).toFixed(4)));
+  assert.equal(pl.rb.precision, 0); // 0 TP / 2 → all FPs
+});
+
+test('evaluateHeldOut surfaces a language whose precision trails the aggregate', () => {
+  // 20 clean JS TPs (precision 1.0) + 20 Ruby FPs (precision 0) → Ruby must
+  // be flagged even though the aggregate looks healthy-ish.
+  const samples = [];
+  for (let i = 0; i < 30; i++) samples.push({ family: 'sql', language: 'js', predicted: 0.9, actual: 1 });
+  for (let i = 0; i < 20; i++) samples.push({ family: 'sql', language: 'rb', predicted: 0.9, actual: 0 });
+  const r = evaluateHeldOut(samples);
+  assert.ok(r.perLanguage.rb && r.perLanguage.js);
+  assert.ok(r.notes.some(n => /language 'rb'/.test(n)), `expected rb regression note, got: ${JSON.stringify(r.notes)}`);
+  assert.match(summarizePerLanguage(r), /rb: precision=0\.000/);
+});
 
 test('parseLabeledJsonl skips malformed and bad-type lines', () => {
   const text = [

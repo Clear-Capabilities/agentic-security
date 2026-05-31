@@ -23,6 +23,25 @@ import { brierScore, computeBrierOnHeldOut, wilsonInterval } from './calibration
 
 const ECE_BINS_DEFAULT = 10;
 
+// Map a labeled sample to a source language. Prefer an explicit `language`
+// field; otherwise derive it from the `file` extension. Keeps per-language
+// metrics meaningful even for older corpora that only carry a file path.
+const EXT_TO_LANG = {
+  js: 'js', jsx: 'js', mjs: 'js', cjs: 'js', ts: 'ts', tsx: 'ts',
+  py: 'py', java: 'java', go: 'go', rb: 'rb', php: 'php',
+  cs: 'cs', kt: 'kt', kts: 'kt', swift: 'swift', rs: 'rs',
+  c: 'c', h: 'c', cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp',
+  sol: 'sol', dart: 'dart',
+};
+export function languageOf(o) {
+  if (o && typeof o.language === 'string' && o.language) return o.language;
+  if (o && typeof o.file === 'string') {
+    const ext = o.file.split('.').pop().toLowerCase();
+    if (EXT_TO_LANG[ext]) return EXT_TO_LANG[ext];
+  }
+  return 'unknown';
+}
+
 export function parseLabeledJsonl(text) {
   if (typeof text !== 'string' || !text.length) return [];
   const out = [];
@@ -39,6 +58,7 @@ export function parseLabeledJsonl(text) {
       if (p === null || a === null) continue;
       out.push({
         family: typeof o.family === 'string' ? o.family : 'unknown',
+        language: languageOf(o),
         stableId: typeof o.stableId === 'string' ? o.stableId : null,
         predicted: Math.max(0, Math.min(1, p)),
         actual: a,
@@ -98,6 +118,27 @@ export function perFamily(samples) {
   return fams;
 }
 
+// Per-language precision/recall breakdown (roadmap #9). The "perfect
+// multi-language SAST" claim is only defensible with per-language ground
+// truth — a corpus that's 90% JS can hide poor Ruby precision behind a
+// healthy aggregate. Mirrors perFamily, keyed by sample.language, and adds
+// a per-language precision so a regression in one language is visible.
+export function perLanguage(samples) {
+  const langs = {};
+  for (const s of samples) {
+    const l = s.language || 'unknown';
+    if (!langs[l]) langs[l] = { tp: 0, fp: 0, n: 0, precision: 0 };
+    langs[l].n++;
+    if (s.actual === 1) langs[l].tp++;
+    else if (s.actual === 0) langs[l].fp++;
+  }
+  for (const l of Object.keys(langs)) {
+    const { tp, fp } = langs[l];
+    langs[l].precision = (tp + fp) > 0 ? Number((tp / (tp + fp)).toFixed(4)) : 0;
+  }
+  return langs;
+}
+
 // One-shot evaluation: Brier + ECE + per-family TP/FP + overall precision.
 // Returns null only when there's truly no data; never returns a tautological
 // zero.
@@ -124,12 +165,28 @@ export function evaluateHeldOut(samples) {
     precision,
     precisionCi95: ci,
     perFamily: fams,
+    perLanguage: perLanguage(samples),
     notes: [
       ...(samples.length < 100 ? ['n<100: Brier and ECE have wide confidence; treat as directional, not decision-grade.'] : []),
       ...(brierR.brier !== null && brierR.brier > 0.10 ? [`brier=${brierR.brier.toFixed(3)} exceeds PRD target 0.10`] : []),
       ...(ece && ece.ece > 0.05 ? [`ece=${ece.ece.toFixed(3)} exceeds 0.05 calibration target`] : []),
+      // Per-language regression surfacing: a language with enough samples
+      // whose precision trails the aggregate by >0.15 is the failure the
+      // aggregate would otherwise mask.
+      ...Object.entries(perLanguage(samples))
+        .filter(([, m]) => m.n >= 20 && precision - m.precision > 0.15)
+        .map(([lang, m]) => `language '${lang}' precision=${m.precision.toFixed(3)} (n=${m.n}) trails aggregate ${precision.toFixed(3)}`),
     ],
   };
+}
+
+// Per-language dashboard line: one row per language, sorted by sample count.
+export function summarizePerLanguage(result) {
+  if (!result || !result.ok || !result.perLanguage) return 'per-language: no data';
+  return Object.entries(result.perLanguage)
+    .sort((a, b) => b[1].n - a[1].n)
+    .map(([lang, m]) => `${lang}: precision=${m.precision.toFixed(3)} (tp=${m.tp} fp=${m.fp} n=${m.n})`)
+    .join('\n');
 }
 
 // CLI-friendly summary line.

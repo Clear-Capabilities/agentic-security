@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.89.0 — Per-language metrics (#9) + roadmap audit (#3, #5 already shipped)
+
+Continuing the multi-language SAST roadmap. Investigation revealed several
+items were already implemented — so this release delivers the one genuinely
+missing safe item (#9) and corrects the record, rather than re-building what
+exists.
+
+### #9 — Per-language precision/recall (new)
+- `holdout-eval.js` now records a `language` per labeled sample (explicit
+  `language` field or derived from the `file` extension) and exposes
+  `perLanguage()` + `summarizePerLanguage()`.
+- `evaluateHeldOut` returns a `perLanguage` breakdown and **flags any language
+  whose precision trails the aggregate by >0.15** (n≥20) — the regression an
+  aggregate would otherwise mask (a 90%-JS corpus hiding poor Ruby precision).
+- New tests in `test/holdout-eval.test.js`.
+
+### #3 — Already implemented; doc corrected
+Audit found mutated-parameter taint (`applyAtCallSite`), higher-order callback
+taint (`_higherOrderInvocations` fed back into the worklist), and recursion via
+a multi-pass fixed point (`MAX_FP_ITERS`) were all shipped in v0.66 and covered
+by `interproc-k2` / `closure-capture` / `phase6-taint` tests. The stale
+`dataflow/CLAUDE.md` "what we do NOT model" section is corrected.
+
+### #5 — Already at parity
+The source/sink catalog already spans Spring, ASP.NET, Gin, Echo, Fiber, Chi,
+Gorilla, Buffalo, Laravel, Symfony, Rails, Sinatra, Ktor, JDBC/JPA/Hibernate,
+Dapper/ADO across all 8 languages. No new work needed.
+
+### Still deferred (research-grade; will ship as their own releases)
+#1 universal IR (no tree-sitter dep; `universal-ir.js` unwired), #2 k-CFA
+context-sensitivity (FR-SEM-2), #4 auto-derived library summaries, #7 dynamic
+dispatch + type inference, #8 incremental-by-default (needs a cold==warm gate),
+#10 LLM closed-loop validator. These are not faked into the engine.
+
 ## 0.88.0 — Proof-gate precision pass (multi-language SAST roadmap #6)
 
 First flagship of the "perfect multi-language SAST" program: report only
