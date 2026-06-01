@@ -7643,6 +7643,9 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   setProgress({current:i,total:files.length,file:"OSV vulnerability database...",phase:"SCA"});
   const allFileContents={...fc, ...depFileContents};
   const components=parseManifests(allFileContents);
+  // R8 (PRD §5): OS packages from an extracted container image's package DBs
+  // (dpkg/apk) — baked-in deps the Dockerfile never names. Feed the OSV/SBOM pipeline.
+  try{const{extractImagePackages}=await import('./sca/image-packages.js');for(const ip of extractImagePackages(allFileContents)){if(!components.some(c=>c.ecosystem===ip.ecosystem&&c.name===ip.name&&c.version===ip.version))components.push(ip);}}catch(_){}
   try{const{detectVendoredLibraries}=await import('./sca/vendor-detect.js');const vendored=detectVendoredLibraries(fc);for(const v of vendored){const key=`${v.ecosystem}:${v.name}:${v.version}`;if(!components.some(c=>`${c.ecosystem}:${c.name}:${c.version}`===key))components.push({...v,group:'',purl:`pkg:${v.ecosystem}/${v.name}@${v.version}`,filePath:v.file,isUnpinned:false,reachable:true});}}catch(_){}
   const reach=buildReachabilitySet(fc);
   const reachabilitySet=reach.imported;
