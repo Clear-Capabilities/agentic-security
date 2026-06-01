@@ -7607,6 +7607,14 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   // 0.10.0: enrich SCA findings with CISA KEV (CISA KEV catalog)
   try{supplyChain=await _enrichWithKEV(supplyChain);}catch(_){}
   try{markUsedVulnFunctions(supplyChain,fc);}catch(_){}
+  // R7 (PRD §5): import-aware call-site augmentation for npm/pypi deps. The regex
+  // pass above misses aliased / namespace imports (import {merge as deepMerge};
+  // deepMerge()) and over-matches bare names in files that don't import the
+  // package. This parses each JS/TS + Python file's imports, resolves vuln-fn
+  // calls THROUGH the alias map, and gates them to files that actually import the
+  // package — then ADDS the recovered sites so the route-reachability classifier
+  // below (which decides reachable/unreachable/unknown) sees them. Additive only.
+  try{const{augmentReachabilityViaImports}=await import('./sca/import-reachability.js');augmentReachabilityViaImports(supplyChain,fc,VULN_FUNCTION_HINTS);}catch(_){}
   // Python AST-based function validation (deep mode only)
   if(process.env.AGENTIC_SECURITY_DEEP==='1'){try{const{validateOsvFunctionsExist}=await import('./sca/py-package-functions.js');for(const sc of supplyChain){if(sc.type!=='vulnerable_dep'||sc.ecosystem!=='pypi')continue;if(!sc.osvVulnFunctions||!sc.osvVulnFunctions.length)continue;const{validated,missing}=validateOsvFunctionsExist(sc.name,sc.osvVulnFunctions,scanRoot);if(validated.length)sc._pyAstValidated=validated;if(missing.length)sc._pyAstMissing=missing;}}catch(_){}}
   // LLM-assisted function extraction for CVEs without hints (opt-in: AGENTIC_SECURITY_LLM_SCA=1)

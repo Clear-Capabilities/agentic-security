@@ -44,3 +44,16 @@ test('Function-level reachability — unknown: dep imported, no vuln fn invoked'
   assert.ok(sc.every(s => s.functionReachable === 'unknown'),
     `expected functionReachable='unknown' on every lodash CVE; got: ${sc.map(s => s.functionReachable).join(', ')}`);
 });
+
+test('R7 — aliased import: lodash merge via {merge as deepMerge} is reachable (regex pass misses it)', async () => {
+  const { scan } = await runScan(FIX('aliased'));
+  const sc = lodashSc(scan);
+  assert.ok(sc.length >= 1, `expected ≥1 lodash CVE finding, got ${sc.length}`);
+  // The regex pass keys on lodash.merge / _.merge and cannot see deepMerge(...).
+  // R7's import-aware augmenter resolves the alias → route-reachable → 'reachable'.
+  assert.ok(sc.some(s => s.functionReachable === 'reachable'),
+    `expected functionReachable='reachable' via the aliased import; got: ${sc.map(s => s.functionReachable).join(', ')}`);
+  const aliasSite = sc.flatMap(s => s.vulnerableFunctionCallSites || []).find(c => c.fn === 'merge' && c.via === 'alias');
+  assert.ok(aliasSite && /app\.js$/.test(aliasSite.file),
+    `expected an alias-resolved merge call site in app.js; got ${JSON.stringify(sc.flatMap(s => s.vulnerableFunctionCallSites || []))}`);
+});
