@@ -383,6 +383,20 @@ function step(node, stateIn, callContext) {
           });
         }
       }
+      // R4 (PRD §5): array-element taint. A mutating array method (push/unshift/
+      // splice/fill/copyWithin) called with a tainted argument taints the
+      // receiver array; an index read (a[0] → access path "a.0") is then covered
+      // by the receiver prefix. Object-property taint already flows via the
+      // access-path lattice — this closes the array case.
+      if (node.callee && node.callee.kind === 'member' && typeof node.callee.prop === 'string'
+          && /^(?:push|unshift|splice|fill|copyWithin)$/.test(node.callee.prop)
+          && Array.isArray(argTaints) && argTaints.some(Boolean)) {
+        // Mutate the state Set IN PLACE (the binding is const; the call case
+        // returns this same Set ref). Avoids touching the unrelated mutated-param
+        // paths in this case, keeping the blast radius to array-element taint only.
+        const _arrRecv = accessPathOf(node.callee.object);
+        if (_arrRecv) state.add(_arrRecv);
+      }
       if (cat) {
         for (const e of cat) {
           if (e.kind === 'sink' && (
