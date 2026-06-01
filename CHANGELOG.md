@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.119.1 — packaging: exclude internal scan-state from the npm tarball
+
+Packaging-only hotfix for the `@clear-capabilities/agentic-security-scanner` npm
+package; no functional change to the scanner or the plugin.
+
+- The published tarball had ballooned to 23.5 MB / 565 files because the `files`
+  allowlist pulled in `src/**/.agentic-security/` and `bin/.agentic-security/` —
+  the dogfooded self-scan state (findings.json, last-scan.json, scan-history,
+  threat-model). `npm pack` runs from `scanner/` and does not consult the
+  repo-root `.gitignore`, and a root `.npmignore` is ignored when a `files` field
+  is present, so the carve-out is done with negation entries in `files`
+  (`!**/.agentic-security`, `!**/.agentic-security/**`). The tarball is now
+  7.9 MB / 393 files with no scan-state.
+
 ## 0.119.0 — SAST/SCA capability program (PRD R1–R25, ex-R14)
 
 Implements the `docs/SAST_SCA_IMPROVEMENT_PRD.md` backlog — 24 of 25

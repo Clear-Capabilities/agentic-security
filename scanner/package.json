@@ -1,6 +1,6 @@
 {
   "name": "@clear-capabilities/agentic-security-scanner",
-  "version": "0.119.0",
+  "version": "0.119.1",
   "description": "Scanner engine for the agentic-security Claude Code plugin — SAST, SCA (function-level reachability + CISA KEV), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, business logic, toxic-combinations scoring, SBOM, SARIF ingest, pipeline integrity, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -27,7 +27,9 @@
     "src/",
     "bin/",
     "dist/",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "!**/.agentic-security",
+    "!**/.agentic-security/**"
   ],
   "engines": {
     "node": ">=24.0.0"
