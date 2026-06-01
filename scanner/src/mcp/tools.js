@@ -16,7 +16,7 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
-import { applyFix as applyFixHistory } from '../posture/fix-history.js';
+import { applyFix as applyFixHistory, fixAcceptanceRate } from '../posture/fix-history.js';
 import { verifyLastScan } from '../posture/integrity.js';
 import { redactString, redactFinding } from './redact.js';
 
@@ -578,7 +578,11 @@ export const apply_fix = {
       }
       throw e;
     }
-    return { _meta: META, applied: true, historyId: entry.id, file: f.file, backupPath: entry.backupPath, integrity: status, attemptOrdinal: entry.attemptOrdinal };
+    // R25 (PRD §5): surface the running auto-fix acceptance rate after each
+    // applied fix, so the closed loop reports its own success metric.
+    let acceptance = null;
+    try { acceptance = fixAcceptanceRate(ctx.sessionRoot); } catch { /* metric is best-effort */ }
+    return { _meta: META, applied: true, historyId: entry.id, file: f.file, backupPath: entry.backupPath, integrity: status, attemptOrdinal: entry.attemptOrdinal, acceptance };
   },
 };
 

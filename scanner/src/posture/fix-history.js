@@ -31,6 +31,30 @@ export function readLog(scanRoot) {
   if (!fs.existsSync(fp)) return [];
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return []; }
 }
+// R25 (PRD §5): auto-fix acceptance rate. The closed loop (apply → verify →
+// re-scan for SAST; dry-run + test-gate + rollback for SCA upgrades) already
+// exists; this surfaces the OUTCOME metric the PRD asks to track — the fraction
+// of RESOLVED fix attempts that landed and stuck. Pure aggregation over the
+// fix-history log; still-'pending' entries are excluded from the denominator.
+export function acceptanceFromEntries(entries) {
+  const counts = { applied: 0, pending: 0, reverted: 0, failed: 0, other: 0 };
+  for (const e of (Array.isArray(entries) ? entries : [])) {
+    const s = (e && e.status) || 'other';
+    if (counts[s] != null) counts[s]++; else counts.other++;
+  }
+  const accepted = counts.applied;
+  const resolved = counts.applied + counts.reverted + counts.failed;
+  return {
+    acceptanceRate: resolved > 0 ? Number((accepted / resolved).toFixed(4)) : null,
+    accepted, resolved, pending: counts.pending,
+    total: Array.isArray(entries) ? entries.length : 0, counts,
+  };
+}
+
+export function fixAcceptanceRate(scanRoot) {
+  return acceptanceFromEntries(readLog(scanRoot));
+}
+
 function writeLog(scanRoot, log) {
   ensure(scanRoot);
   fs.writeFileSync(logPath(scanRoot), JSON.stringify(log, null, 2));
