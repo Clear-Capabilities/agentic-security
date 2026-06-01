@@ -111,6 +111,9 @@ Options:
   --incremental                Reuse taint summaries from prior scans (speeds up deep mode in CI)
   --set-baseline               Save current findings as baseline (suppresses pre-existing issues)
   --since-baseline             Only show findings NOT in the saved baseline
+  --secret-history             Also sweep recent git history for committed secrets
+                               (removed from HEAD but recoverable from .git)
+  --history-depth <n>          Commits to sweep with --secret-history (default 50)
   --no-epss                    Skip EPSS exploit-prediction enrichment (default: enabled)
   --no-blast-radius            Skip blast-radius / cost framing (default: enabled)
   --verbose                    Include fix bodies + taxonomy in CLI output
@@ -395,6 +398,23 @@ async function cmdScan(args) {
       scan.findings = (scan.findings || []).filter(f => !baselineSet.has(f.stableId || f.id));
       process.stderr.write(`[baseline] filtered ${before - scan.findings.length} baseline findings, ${scan.findings.length} new\n`);
     } catch { /* baseline file unreadable, skip */ }
+  }
+
+  // R15 (PRD §5): --secret-history sweeps recent git history for secrets that
+  // may have been removed from HEAD but remain recoverable from .git.
+  if (args.flags['secret-history']) {
+    try {
+      const { sweepGitHistory } = await import('../src/posture/secret-history.js');
+      const { scanCredentials } = await import('../src/secrets/index.js');
+      const depth = parseInt(args.flags['history-depth'] || '50', 10);
+      const hist = sweepGitHistory(targetAbs, scanCredentials, { maxCommits: depth });
+      if (hist.length) {
+        scan.secrets = [...(scan.secrets || []), ...hist];
+        process.stderr.write(`[secret-history] ${hist.length} secret(s) found in the last ${depth} commits — rotate even if removed from HEAD\n`);
+      } else {
+        process.stderr.write(`[secret-history] no secrets found in the last ${depth} commits\n`);
+      }
+    } catch (e) { if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[secret-history] ${e && e.message}\n`); }
   }
 
   // 0.9.0 Feat-18: --scorecard flag enables OSSF Scorecard enrichment
