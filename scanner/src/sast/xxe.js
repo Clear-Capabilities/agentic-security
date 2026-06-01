@@ -64,6 +64,28 @@ const PYTHON_DEFUSED_RE = /(?:^|\n)\s*(?:from\s+defusedxml\b|import\s+defusedxml
 // upstream-recommended safe shape.
 const PYTHON_LXML_SAFE_RE = /XMLParser\s*\([^)]*\bresolve_entities\s*=\s*False\b[^)]*\)/;
 
+// ── PHP / Go / Ruby ─────────────────────────────────────────────────────────
+// Each of these XML stacks is XXE-SAFE BY DEFAULT in current versions; the
+// vulnerability appears only when the caller explicitly opts INTO external-
+// entity / DTD-loading behavior. So we flag the opt-in flags, not the parse
+// call itself — the plain parse is correctly clean.
+//
+// PHP:   loadXML / simplexml_load_string|file with LIBXML_NOENT, LIBXML_DTDLOAD,
+//        or LIBXML_DTDVALID. (PHP >= 8.0 disables entity substitution by
+//        default; these flags re-enable it.)
+const PHP_XXE_RE =
+  /\b(?:loadXML|simplexml_load_string|simplexml_load_file)\s*\([^;]*\bLIBXML_(?:NOENT|DTDLOAD|DTDVALID)\b/g;
+// Go:   encoding/xml Decoder made unsafe by `Strict = false` or a custom
+//       `Entity` map that defines expansions. Gated on an xml-decoder hint.
+const GO_XXE_RE =
+  /\b\w+\s*\.\s*(?:Strict\s*=\s*false|Entity\s*=\s*(?:map\[string\]string|xml\.HTMLEntity))/g;
+const GO_XML_HINT_RE = /\b(?:encoding\/xml|xml\.NewDecoder|xml\.Decoder)\b/;
+// Ruby: Nokogiri parse whose options enable NOENT / DTDLOAD / replace_entities.
+//       Default Nokogiri::XML(xml) is safe. Gated on a Nokogiri/LibXML hint.
+const RUBY_XXE_RE =
+  /\.\s*(?:noent|dtdload|dtdvalid|replace_entities)\b/g;
+const RUBY_XML_HINT_RE = /\bNokogiri\s*::\s*XML\b|\bLibXML\b|\bXML::Parser\b/;
+
 import { blankComments } from './_comment-strip.js';
 
 function _stripLineComment(s, lang) {
@@ -133,6 +155,51 @@ export function scanXXE(fp, raw) {
         });
       }
     }
+    return findings;
+  }
+
+  // ── PHP / Go / Ruby: flag the explicit opt-in to external entities ──────────
+  const _emitOptIn = (code, re, gate, mkVuln, mkRem) => {
+    if (gate && !gate.test(code)) return;
+    const r = new RegExp(re.source, re.flags);
+    let m;
+    const seen = new Set();
+    while ((m = r.exec(code))) {
+      const line = _lineOf(raw, m.index);
+      if (seen.has(line)) continue;
+      seen.add(line);
+      findings.push({
+        id: `xxe:${fp}:${line}`,
+        file: fp, line,
+        vuln: mkVuln(), severity: 'high', cwe: 'CWE-611',
+        stride: 'Information Disclosure',
+        snippet: (raw.split('\n')[line - 1] || '').trim().slice(0, 200),
+        remediation: mkRem(), confidence: 0.8, parser: 'XXE',
+      });
+    }
+  };
+
+  if (/\.(?:php|phtml)$/i.test(fp)) {
+    const code = blankComments(raw, 'py');
+    _emitOptIn(code, PHP_XXE_RE, null,
+      () => 'XXE: XML parsed with LIBXML_NOENT / LIBXML_DTDLOAD (external entities enabled)',
+      () => 'Drop the LIBXML_NOENT / LIBXML_DTDLOAD flags — PHP >= 8.0 disables entity substitution by default, so plain loadXML($xml) / simplexml_load_string($xml) is safe. If you must accept DTDs, set libxml_set_external_entity_loader to reject network/file access.');
+    return findings;
+  }
+
+  if (/\.go$/i.test(fp)) {
+    const code = blankComments(raw);
+    _emitOptIn(code, GO_XXE_RE, GO_XML_HINT_RE,
+      () => 'XXE: encoding/xml Decoder configured with Strict=false or a custom Entity map',
+      () => 'Go\'s encoding/xml ignores external entities by default — do not set Strict=false or populate Decoder.Entity with untrusted input. Leave the decoder at its defaults.');
+    return findings;
+  }
+
+  if (/\.rb$/i.test(fp)) {
+    const code = blankComments(raw, 'py');
+    _emitOptIn(code, RUBY_XXE_RE, RUBY_XML_HINT_RE,
+      () => 'XXE: Nokogiri parse options enable external entities (NOENT / DTDLOAD / replace_entities)',
+      () => 'Remove noent/dtdload/replace_entities — Nokogiri::XML(xml) is safe by default (entities are not expanded, DTDs are not loaded). Never enable these on untrusted XML.');
     return findings;
   }
 
