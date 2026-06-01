@@ -166,6 +166,21 @@ export const CATALOG = [
   { kind: 'source', id: 'go-buffalo-request',language:'go', framework:'buffalo',match: { type: 'member', object: 'c', prop: 'Request' }, label: 'c.Request (buffalo)' },
   { kind: 'source', id: 'go-gorilla-vars',  language: 'go', framework: 'gorilla',match: { type: 'call', callee: 'Vars' },        label: 'mux.Vars (gorilla)' },
 
+  // ─── SINKS (Go — database/sql) — R3 (PRD §5) ──────────────────────────────
+  // callee 'Query' is also a net/http SOURCE (r.URL.Query). The engine
+  // disambiguates by position — source at the assignment RHS, sink at a call
+  // with a tainted query argument — so coexistence is benign (a source call
+  // like r.URL.Query() has no tainted arg, so it never fires the sink).
+  { kind: 'sink', id: 'go-sql-query',    language: 'go', framework: 'database/sql', match: { type: 'call', callee: 'Query' },    argIndex: 0,
+    vuln: { name: 'SQL Injection (db.Query — Go)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use parameterized queries: db.Query("SELECT … WHERE id = $1", id). Never concatenate untrusted input into the SQL string.' } },
+  { kind: 'sink', id: 'go-sql-queryrow', language: 'go', framework: 'database/sql', match: { type: 'call', callee: 'QueryRow' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (db.QueryRow — Go)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use placeholders ($1 / ?) and pass args separately.' } },
+  { kind: 'sink', id: 'go-sql-exec',     language: 'go', framework: 'database/sql', match: { type: 'call', callee: 'Exec' },     argIndex: 0,
+    vuln: { name: 'SQL Injection (db.Exec — Go)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use parameterized statements: db.Exec("UPDATE t SET x=$1 WHERE id=$2", x, id).' } },
+
   // ─── SOURCES (Ruby — Rails / Sinatra) ─────────────────────────────────────
   { kind: 'source', id: 'rb-rails-params',  language: 'rb', framework: 'rails', match: { type: 'global', name: 'params' }, label: 'params (Rails)' },
   { kind: 'source', id: 'rb-rails-cookies', language: 'rb', framework: 'rails', match: { type: 'global', name: 'cookies' }, label: 'cookies (Rails)' },
@@ -747,22 +762,46 @@ function filterByProvenance(entries) {
   return list;
 }
 
-export function matchSource(memberExpr) {
-  // memberExpr is exprDesc: { kind: 'member', object: {kind:'ident',name}, prop }
-  if (!memberExpr || memberExpr.kind !== 'member') return null;
-  if (memberExpr.object?.kind !== 'ident') return null;
-  const k = `${memberExpr.object.name}.${memberExpr.prop}`;
-  const raw = MEMBER_INDEX.get(k);
-  if (!raw) return null;
-  const hits = filterByProvenance(raw);
-  if (!hits.length) return null;
-  return hits.find(h => h.kind === 'source') || null;
+export function matchSource(expr) {
+  if (!expr) return null;
+  // Member sources (req.query): the original path — unchanged.
+  if (expr.kind === 'member' && expr.object?.kind === 'ident') {
+    const raw = MEMBER_INDEX.get(`${expr.object.name}.${expr.prop}`);
+    if (raw) {
+      const hits = filterByProvenance(raw);
+      const s = hits.find(h => h.kind === 'source');
+      if (s) return s;
+    }
+  }
+  // R3 (PRD §5): CALL sources (r.FormValue(), r.URL.Query(), c.QueryParam()).
+  // matchSource previously handled only member reads, so Go's call-shaped
+  // sources were never recognized at the assignment RHS. Match by callee last
+  // segment (Go gives a dotted string; JS/Py a member/ident expr).
+  if (expr.kind === 'call') {
+    let cn = null;
+    if (typeof expr.callee === 'string') cn = expr.callee.includes('.') ? expr.callee.slice(expr.callee.lastIndexOf('.') + 1) : expr.callee;
+    else if (expr.callee && expr.callee.kind === 'member') cn = expr.callee.prop;
+    else if (expr.callee && expr.callee.kind === 'ident') cn = expr.callee.name;
+    if (cn) {
+      const raw = CALLEE_INDEX.get(cn);
+      if (raw) {
+        const hits = filterByProvenance(raw);
+        const s = hits.find(h => h.kind === 'source');
+        if (s) return s;
+      }
+    }
+  }
+  return null;
 }
 
 export function matchSinkOrSanitizer(calleeExpr) {
   if (!calleeExpr) return null;
   let calleeName = null;
-  if (calleeExpr.kind === 'ident') calleeName = calleeExpr.name;
+  // R3 (PRD §5): the Go IR (and other string-callee parsers) represent a call
+  // target as a dotted STRING ("db.Query") rather than a member expr. Match on
+  // the last segment so those languages' sinks/sanitizers are recognized too.
+  if (typeof calleeExpr === 'string') calleeName = calleeExpr.includes('.') ? calleeExpr.slice(calleeExpr.lastIndexOf('.') + 1) : calleeExpr;
+  else if (calleeExpr.kind === 'ident') calleeName = calleeExpr.name;
   else if (calleeExpr.kind === 'member') calleeName = calleeExpr.prop;
   if (!calleeName) return null;
   const raw = CALLEE_INDEX.get(calleeName);

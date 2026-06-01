@@ -79,6 +79,14 @@ function _lowerExpr(text) {
     const parts = _splitTopLevelCommas(inner).map(_lowerExpr);
     return { kind: 'tpl', parts };
   }
+  // R3 (PRD §5): string concat with `+` MUST be checked before the bare-literal
+  // rule below — otherwise `"SELECT " + q` (starts with `"`) is captured whole as
+  // a single literal and taint cannot flow through the concatenation. Only fires
+  // when there's a top-level `+` (a pure literal still falls through to literal).
+  if (/["'`]/.test(s) && s.includes('+')) {
+    const plusParts = _splitTopLevelPlus(s);
+    if (plusParts.length > 1) return { kind: 'tpl', parts: plusParts.map(_lowerExpr) };
+  }
   if (/^"/.test(s) || /^`/.test(s)) return { kind: 'literal', value: s };
   if (/^\d/.test(s)) return { kind: 'literal', value: s };
   if (/^(true|false|nil)\b/.test(s)) return { kind: 'literal', value: s };

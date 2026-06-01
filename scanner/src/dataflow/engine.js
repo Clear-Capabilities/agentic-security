@@ -158,6 +158,13 @@ function exprIsSource(expr) {
     const hit = matchSource(expr);
     if (hit) return hit;
   }
+  // R3 (PRD §5): call-shaped sources (r.FormValue(), r.URL.Query(), c.Query()).
+  // Previously only member reads were recognized, so Go's call-style sources
+  // never tainted the assignment target. matchSource now resolves call sources.
+  if (expr.kind === 'call') {
+    const hit = matchSource(expr);
+    if (hit) return hit;
+  }
   if (expr.kind === 'member' && expr.object) {
     return exprIsSource(expr.object);
   }
