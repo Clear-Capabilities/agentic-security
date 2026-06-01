@@ -38,6 +38,7 @@ import { scanAuthZ } from './sast/authz.js';
 import { scanApiBrokenAuthz } from './sast/api-authz.js';
 import { scanTerraform } from './sast/iac-terraform.js';
 import { scanCrossService } from './sast/cross-service.js';
+import { scanRbacConsistency } from './sast/rbac-consistency.js';
 import { scanModelLoad } from './sast/model-load.js';
 import { scanPromptTemplate } from './sast/prompt-template.js';
 import { scanXXE } from './sast/xxe.js';
@@ -7639,6 +7640,8 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   try{aF.push(...scanApiBrokenAuthz(aR));}catch(_){}
   // R22 (PRD §5): cross-service edges inferred from code (client call → matched route).
   try{aF.push(...scanCrossService(aR,fc));}catch(_){}
+  // R21 (PRD §5): RBAC role-tier consistency over the route inventory.
+  try{aF.push(...scanRbacConsistency(aR,fc));}catch(_){}
   setProgress({current:i,total:files.length,file:"Reachability + guards...",phase:"Linking"});annotateReachability(aF,aR,callGraph,fc);aF.forEach(f=>detectGuardsForFinding(f,fc));
   setProgress({current:i,total:files.length,file:"Inferring sanitizers...",phase:"Linking"});const learned=inferSanitizers(fc);applyLearnedSanitizers(aF,learned,fc);
   setProgress({current:i,total:files.length,file:"Sanitizer effectiveness...",phase:"Linking"});applySanitizerEffectiveness(aF);
