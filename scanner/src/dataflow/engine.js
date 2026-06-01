@@ -508,6 +508,11 @@ function step(node, stateIn, callContext) {
 // control flow) can otherwise hold past the global timeout.
 function analyzeFunction(fn, entryState, callContext) {
   const nodes = fn.cfg.nodes;
+  // R2 (PRD §5): set the call-string caller context to THIS function while its
+  // worklist computes callee summaries (so a callee is keyed by its caller).
+  // No-op for the key unless AGENTIC_SECURITY_KCFA_CALLSTRING=1. Restored below.
+  const _prevCallerCtx = (callContext && callContext._summaryCache && callContext._summaryCache.setCallerContext)
+    ? callContext._summaryCache.setCallerContext(fn.qid) : undefined;
   const work = [];
   const inStates = new Map();
   const outStates = new Map();
@@ -601,6 +606,10 @@ function analyzeFunction(fn, entryState, callContext) {
     for (const p of fn.params) {
       if (isCoveredBy(exit, p)) callContext._mutatedParamsOut.add(p);
     }
+  }
+  // R2: restore the caller context for the enclosing function's analysis.
+  if (_prevCallerCtx !== undefined && callContext && callContext._summaryCache && callContext._summaryCache.setCallerContext) {
+    callContext._summaryCache.setCallerContext(_prevCallerCtx);
   }
   return exit;
 }

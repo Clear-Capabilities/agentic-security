@@ -64,12 +64,30 @@ export class SummaryCache {
     const envCap = Number(process.env.AGENTIC_SECURITY_KCFA_MAX_CONTEXTS);
     this._maxContextsPerFn = Number.isFinite(envCap) && envCap >= 0 ? envCap : 16;
     this._contextCapHits = 0;
+    // R2 (PRD §5): bounded k=1 call-string sensitivity. OPT-IN (default OFF).
+    // When on, the cache key is extended with the immediate caller's qid, so two
+    // call paths reaching a helper with the SAME tainted-arg shape get DISTINCT
+    // summaries instead of sharing one (removes the over-merge that the pure
+    // value-context cache produces). Off by default → keys are byte-identical to
+    // before, so no behavior change for the shipped engine.
+    this._callString = process.env.AGENTIC_SECURITY_KCFA_CALLSTRING === '1';
+    this._callerCtx = null;
+  }
+
+  // Set the immediate-caller qid for call-string keying; returns the previous
+  // value so the engine can save/restore it around nested callee analysis.
+  setCallerContext(callerQid) {
+    const prev = this._callerCtx;
+    this._callerCtx = callerQid || null;
+    return prev;
   }
 
   _key(qid, taintedParams, receiverType) {
     // P1.2: when a receiver type is provided, extend the cache key with
     // its hash. Backward-compatible: no receiverType → same key as before.
-    const base = `${qid}::${_hashState(taintedParams)}`;
+    let base = `${qid}::${_hashState(taintedParams)}`;
+    // R2: append the caller qid when call-string sensitivity is enabled.
+    if (this._callString && this._callerCtx) base = `${base}@${this._callerCtx}`;
     if (!receiverType) return base;
     return `${base}::${hashReceiverType(receiverType)}`;
   }
