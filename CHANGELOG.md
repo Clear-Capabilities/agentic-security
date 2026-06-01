@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.119.0 — SAST/SCA capability program (PRD R1–R25, ex-R14)
+
+Implements the `docs/SAST_SCA_IMPROVEMENT_PRD.md` backlog — 24 of 25
+recommendations (DAST-lite/R14 intentionally out). Every change shipped with a
+fixture + test and the corpus gate held at 185/185.
+
+**Core engine**
+- **R1**: deep interprocedural taint (IR + field-/value-context-sensitive) is now
+  ON by default for local/interactive CLI scans, budgeted, CI-off-by-default
+  (`--no-deep` / `AGENTIC_SECURITY_DEEP=0` opt-out).
+- **R23**: fixed the incremental cache cold-start no-op (it never persisted a
+  baseline), with an end-to-end regression test.
+- **R4**: collection-element taint (`arr.push(tainted); sink(arr[i])`) on by
+  default; implicit/control-dependence flow wired in opt-in
+  (`AGENTIC_SECURITY_IMPLICIT_FLOW=1`).
+- **R2**: bounded k=1 call-string context sensitivity, opt-in
+  (`AGENTIC_SECURITY_KCFA_CALLSTRING=1`); default-off keys are byte-identical.
+- **R3**: deep-flow parity extended to **Go + Kotlin** — call-shaped sources
+  (`r.FormValue()`), string callees (`db.Query`), Go string-concat lowering,
+  Go `database/sql` sinks. (PHP/Ruby/C# parser concat-lowering remains.)
+- **R17**: per-finding corroboration ("one issue, many signals") + rank tiebreak.
+- **R13**: "provably safe" is a first-class verdict (`--hide-proven-safe`).
+- **R5**: context-aware sanitizer adequacy (HTML-escape before a shell/SQL sink).
+- **R6**: non-HTTP entrypoint taint (queue consumers / scheduled tasks / serverless).
+
+**SCA / supply chain**
+- **R7**: import-aware function-level reachability (JS/TS + Python) — resolves
+  aliased/namespace imports, gated to files that import the package.
+- **R12**: deterministic decision-first verdict per dependency
+  (AUTO_MERGE_PATCH / WAIT_FOR_PATCH / MANUAL_REVIEW / ACCEPT_RISK / WONT_FIX).
+- **R11**: OpenVEX export (`--format vex`) from reachability verdicts.
+- **R9**: static malicious install-script analysis (download-exec / base64-exec /
+  env-exfil lifecycle hooks).
+- **R10**: Gradle transitive dependency graph.
+- **R8**: container-image OS-package inventory (dpkg/apk).
+
+**Detection surfaces, validation, workflow**
+- **R20**: agent-loop taint (untrusted RAG/tool content → high-privilege tool).
+- **R19**: route-level BOLA/BFLA over the API inventory.
+- **R21**: RBAC role-tier authorization consistency.
+- **R22**: cross-service dataflow (client-call → matched route edge inference).
+- **R18**: semantic IaC (Terraform with variable resolution).
+- **R16**: independent-eval harness (per-family precision/recall/F1 + gate).
+- **R24**: PR-native net-new CI gate (`--fail-on-new`).
+- **R15**: git-history secret sweep (`--secret-history`).
+- **R25**: auto-fix acceptance-rate metric (surfaced in `apply_fix`).
+
+Several latent bugs were found and fixed along the way (the dead `implicit-flow`
+module, an `Object.assign`-taint path silently dying on a `const` binding, the
+IR-TAINT conversion dropping the `implicit` flag). Each opt-in/partial item and
+its remainder is tracked in the PRD rollup.
+
 ## 0.118.2 — Scanner F1 benchmark: restore F1 to 91.3% (3 FPs removed)
 
 The "Scanner F1 benchmark" CI job (`test/benchmark/bench.js`, separate from the
