@@ -48,12 +48,17 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
       scanner: opts.scannerVersion || 'unknown',
       rules: opts.rulesDigest || `catalog:${_catalogSize()}`,
     };
+    // Compute current file hashes UNCONDITIONALLY — the first scan (and any
+    // scan after a version/rule invalidation) must persist a baseline so the
+    // NEXT scan has something to reuse. This previously lived inside the
+    // valid-state branch, so a cold cache never committed and incremental was
+    // a permanent no-op (the commit guard at the bottom keys on currentFileHashes).
+    currentFileHashes = {};
+    for (const [fp, content] of Object.entries(opts.fileContents)) {
+      currentFileHashes[fp] = hashFileContent(content);
+    }
     const valid = validateIncrementalState(priorState, currentVersion);
     if (valid.valid) {
-      currentFileHashes = {};
-      for (const [fp, content] of Object.entries(opts.fileContents)) {
-        currentFileHashes[fp] = hashFileContent(content);
-      }
       const diff = diffFileHashes(priorState.files || {}, currentFileHashes);
       const changedQids = new Set();
       // Map a changed file to the qids it owns. perFileIR exposes file→fns.

@@ -127,3 +127,47 @@ test('hashFileContent is stable for identical input', () => {
   const c = hashFileContent('hello worlD');
   assert.notEqual(a, c);
 });
+
+// Regression (R23): end-to-end cold-commit → warm-reuse through runDeepAnalysis.
+// The unit tests above exercise the persistence PRIMITIVES directly, so they
+// stayed green while the orchestration in dataflow/index.js was a no-op: the
+// commit guard keyed on `currentFileHashes`, which was only computed inside the
+// valid-prior-state branch — so a COLD scan never persisted, and therefore no
+// later scan ever had state to reuse. This test drives the actual entry point
+// twice and fails if the first (cold) scan does not persist a baseline.
+test('incremental e2e: first runDeepAnalysis persists a baseline, second reuses it', async () => {
+  const { buildProjectIR } = await import('../src/ir/index.js');
+  const { runDeepAnalysis } = await import('../src/dataflow/index.js');
+  const root = mkRoot();
+  const files = {
+    'h.js':
+      'function getName(req){ return req.query.name; }\n' +
+      'function handler(req, res){ const n = getName(req); db.query("SELECT * FROM u WHERE n = " + n); }\n',
+  };
+  const { perFile, callGraph } = buildProjectIR(files);
+  const prev = process.env.AGENTIC_SECURITY_INCREMENTAL;
+  process.env.AGENTIC_SECURITY_INCREMENTAL = '1';
+  try {
+    // Run 1 — COLD. Must persist version.json + files.json (the exact files the
+    // pre-fix code never wrote on a cold cache).
+    runDeepAnalysis(perFile, callGraph, { scanRoot: root, fileContents: files });
+    const incDir = path.join(root, '.agentic-security', 'incremental');
+    assert.ok(fs.existsSync(path.join(incDir, 'version.json')), 'cold scan must persist version.json');
+    assert.ok(fs.existsSync(path.join(incDir, 'files.json')), 'cold scan must persist files.json');
+    const persistedFiles = JSON.parse(fs.readFileSync(path.join(incDir, 'files.json'), 'utf8'));
+    assert.ok(Object.keys(persistedFiles).length >= 1, 'files baseline must be non-empty');
+
+    // Run 2 — WARM. Prior state validates (same scanner/rules), so the engine
+    // seeds the SummaryCache and attaches _incrementalStats. Its presence proves
+    // run 1 committed AND run 2 read it back (the loop the bug broke end-to-end).
+    const findings2 = runDeepAnalysis(perFile, callGraph, { scanRoot: root, fileContents: files });
+    assert.ok(findings2._incrementalStats,
+      'warm run must attach _incrementalStats (prior state must have validated + seeded)');
+    assert.ok(findings2._incrementalStats.reusable >= 1,
+      `warm run should mark ≥1 persisted summary reusable, got ${findings2._incrementalStats.reusable}`);
+  } finally {
+    if (prev === undefined) delete process.env.AGENTIC_SECURITY_INCREMENTAL;
+    else process.env.AGENTIC_SECURITY_INCREMENTAL = prev;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
