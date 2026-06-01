@@ -28,7 +28,7 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
 
 ## Entry points
 
-- `runTaintEngine(perFileIR, callGraph, opts)` — the public entry. Called from `engine.js` when `AGENTIC_SECURITY_DEEP=1` (or auto-enabled outside CI).
+- `runTaintEngine(perFileIR, callGraph, opts)` — the public entry. Runs from `engine.js` when `AGENTIC_SECURITY_DEEP=1`. **R1 (PRD §5):** the CLI entry (`bin/agentic-security.js#cmdScan`) sets that env var by default for local/interactive scans (not in CI, and not when `--no-deep`/`AGENTIC_SECURITY_DEEP=0`), so the default `/scan --all` runs deep. In-process callers (tests, the cve-replay corpus) invoke `runScan()` directly without the CLI default and therefore stay deep-off unless they set the env var themselves (e.g. `test/deep-taint.test.js`).
 - `applyPathFeasibility` — constant-fold pass that runs before the worklist.
 - `annotateBackwardSlices` — backward-slice annotation for already-emitted findings.
 - `annotateProvenClean(findings, perFileIR)` (`proven-clean.js`) — proves a SQL sink is reached only through a parameterizer; sets `provenClean`. Wired by default in `runDeepAnalysis` (opt out: `AGENTIC_SECURITY_NO_PROOF_GATE=1`).

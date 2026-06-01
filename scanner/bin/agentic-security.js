@@ -330,6 +330,27 @@ async function cmdScan(args) {
     process.env.AGENTIC_SECURITY_INCREMENTAL = '1';
   }
 
+  // R1 (PRD §5): deep interprocedural taint (IR + field-sensitive, value-context-
+  // sensitive dataflow — src/dataflow/) is ON by default for local/interactive CLI
+  // scans, bounded by the existing wall-clock budget (AGENTIC_SECURITY_DEEP_TIMEOUT_MS,
+  // default 5 min) and function cap (AGENTIC_SECURITY_DEEP_FN_LIMIT, default 5000). It
+  // is the engine's strongest analysis and was previously gated off, so the default
+  // scan ran pattern/structural-only. Precedence (highest first):
+  //   --no-deep / AGENTIC_SECURITY_DEEP=0  → stays off (degrade to structural-only)
+  //   --deep    / AGENTIC_SECURITY_DEEP=1  → stays on (even in CI? no — see engine gate)
+  //   unset + not in CI                    → default ON here
+  //   unset + in CI                        → left unset; the engine keeps deep off in CI
+  //                                          unless AGENTIC_SECURITY_DEEP_IN_CI=1
+  // The in-process test/bench harnesses call runScan() directly (not this CLI entry),
+  // so they are unaffected and remain deterministic regression gates.
+  if (args.flags['no-deep']) process.env.AGENTIC_SECURITY_DEEP = '0';
+  else if (args.flags['deep']) process.env.AGENTIC_SECURITY_DEEP = '1';
+  else if (process.env.AGENTIC_SECURITY_DEEP == null || process.env.AGENTIC_SECURITY_DEEP === '') {
+    const inCi = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI ||
+                    process.env.BUILDKITE || process.env.CIRCLECI || process.env.JENKINS_URL);
+    if (!inCi) process.env.AGENTIC_SECURITY_DEEP = '1';
+  }
+
   // --pr [ref] : friendlier alias for --changed-since that auto-detects the PR
   // base ref (GitHub/GitLab/Buildkite/Bitbucket env vars) when no value is given.
   let changedSince = args.flags['changed-since'] || null;

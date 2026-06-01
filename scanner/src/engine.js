@@ -8050,10 +8050,14 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   try { await annotateNarration(finalFindings); }
   catch (e) { _annotatorErrors.push({ phase: 'annotateNarration', err: String((e && e.message) || e) }); }
   // Phase 3 (Sentinel-parity FR-L1, FR-L2) — IR + interprocedural taint.
-  // Opt-in via AGENTIC_SECURITY_DEEP=1 because it's currently breadth-first,
-  // not benchmark-tuned. Findings ride through the standard dedup/cluster/
-  // confidence pipeline below; the LLM-validator stage above already ran but
-  // any deep-mode finding emitted here will be unvalidated.
+  // R1 (PRD §5): the CLI entry (bin/agentic-security.js#cmdScan) now sets
+  // AGENTIC_SECURITY_DEEP=1 by default for local/interactive scans, so deep mode
+  // runs on the default `/scan --all` path. This gate is the enforcement +
+  // CI-safety point: it honors an explicit opt-out (DEEP=0) and keeps deep off in
+  // CI unless DEEP_IN_CI=1. In-process callers (tests, the cve-replay corpus) invoke
+  // runScan()/runFullScan() directly without the CLI default, so they stay deep-off
+  // and remain deterministic regression gates. Findings ride through the standard
+  // dedup/cluster/confidence pipeline below and the LLM-validator stage that follows.
   //
   // SAFETY: Deep mode is gated for CI safety:
   //   - Global timeout via AGENTIC_SECURITY_DEEP_TIMEOUT_MS (default 300_000 = 5 min)
