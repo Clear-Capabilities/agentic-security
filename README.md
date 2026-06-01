@@ -131,6 +131,27 @@ Deep engine details — [architecture](docs/ARCHITECTURE.md).
 
 ---
 
+## Language coverage
+
+Eight first-class languages, with cross-language detectors for the OWASP-relevant injection and crypto-misuse classes. Coverage is measured by a blind, regression-gated CVE-replay corpus (185 entries, every release held at **F1 = 1.000** with zero false positives or negatives; see [`bench/cve-replay`](bench/cve-replay/)).
+
+| Language | Vuln-class coverage |
+|----------|---------------------|
+| JavaScript / TypeScript | full (flow engine + structural) |
+| Python | full (flow engine + structural) |
+| Java | full |
+| Kotlin | full |
+| Go | full |
+| Ruby | full |
+| PHP | full |
+| C# | full |
+
+Detected across these languages: SQL injection, command injection, path traversal, LDAP injection, XPath injection, reflected XSS, SSRF, XXE, code injection (eval / SpEL / Groovy / Roslyn / template), insecure deserialization, hardcoded secrets, weak password hashing, weak ciphers (DES/RC4/Blowfish/ECB), static/zero IV, insecure randomness, CSRF, open redirect, HTTP response splitting, and ReDoS — plus the JS/Python-specific classes (prototype pollution, mass assignment) and the LLM/agent-tool surface.
+
+The detectors are precision-first: parameterized queries, escaped output, allow-list guards, CSPRNG-derived IVs, framework CSRF middleware, and token-auth schemes are recognized and **not** flagged.
+
+---
+
 ## What this is NOT
 
 - **Not a SaaS dashboard.** It's a CLI + Claude Code plugin.
@@ -142,7 +163,7 @@ Deep engine details — [architecture](docs/ARCHITECTURE.md).
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.118.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.118.1-blue)]()
 [![agentic-security](https://img.shields.io/badge/agentic--security-passing-brightgreen)]()
 
 ## License
