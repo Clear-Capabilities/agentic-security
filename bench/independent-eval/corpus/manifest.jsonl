@@ -1,0 +1,4 @@
+{"id":"smoke-sqli-vuln","path":"vulnerable/sqli.js","language":"js","cwe":"89","family":"sql-injection","label":"vulnerable"}
+{"id":"smoke-cmdi-vuln","path":"vulnerable/cmdi.js","language":"js","cwe":"78","family":"command-injection","label":"vulnerable"}
+{"id":"smoke-sqli-clean","path":"clean/sqli_safe.js","language":"js","cwe":"89","family":"sql-injection","label":"clean"}
+{"id":"smoke-cmdi-clean","path":"clean/cmdi_safe.js","language":"js","cwe":"78","family":"command-injection","label":"clean"}
