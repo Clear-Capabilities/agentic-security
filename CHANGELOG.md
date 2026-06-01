@@ -1,5 +1,195 @@
 # Changelog
 
+## 0.118.2 — Scanner F1 benchmark: restore F1 to 91.3% (3 FPs removed)
+
+The "Scanner F1 benchmark" CI job (`test/benchmark/bench.js`, separate from the
+cve-replay corpus) was failing. Root-caused three false positives and fixed all
+three at the detector level (no baseline edit):
+
+- **ReDoS double-flag** (introduced in v0.118.0): `scanRegexReDoS` (the
+  multi-language NFA detector) ran on all languages including JS, double-flagging
+  regexes already covered by `scanReDoS`. Restricted to the languages
+  `scanReDoS` misses string-form regexes in (java/cs/kt/py/php); js/rb stay with
+  `scanReDoS`.
+- **rule-library-shape SQLi-in-string** (pre-existing): `js-framework-structural`
+  matched a `db.query(\`…\`)` that was the *content* of a rule-definition string.
+  Added a same-line string-literal guard.
+- **secret double-count** (pre-existing): a split API key was reported twice —
+  once by `secret-concat` (CWE-798) and once as a High-Entropy Credential
+  Candidate. Drop the entropy candidate when a named secret detector already
+  flagged the same `file:line`.
+- **Measured: bench F1 90.3% → 91.3%, FP 20 → 17;** cve-replay corpus unchanged
+  at 185/185 F1=1.000; full gate green.
+
+## 0.118.1 — README: Language coverage section
+
+Documents the 8 first-class languages (JS/TS, Python, Java, Kotlin, Go, Ruby,
+PHP, C#) and the cross-language vuln-class coverage built out over v0.108–0.118
+(SQLi, command/code/LDAP/XPath injection, XSS, SSRF, XXE, deserialization,
+secrets, weak hashing/ciphers, static IV, CSRF, open redirect, response
+splitting, ReDoS), measured by the blind, regression-gated 185-entry CVE-replay
+corpus at F1=1.000. Docs + version only; no src/bundle/corpus change.
+
+## 0.118.0 — Multi-CWE gap fill: 167→185 corpus, matrix to 152/160 cells
+
+Closes the remaining detector-backed gaps across five CWEs in one batch, via
+detector extensions (each verified pre:TP post:TN; no corpus regression).
+
+- **`redos-nfa.js`** (CWE-1333): the multi-language NFA detector (was dormant)
+  now wired in for Java/C#/Kotlin, plus PHP/Ruby string-form regex extractors.
+  Go intentionally not scanned — its `regexp` package is RE2 (linear-time).
+- **`weak-password-hash.js`** (CWE-916): added Ruby, C#, Kotlin, PHP MD5/SHA1
+  forms. Password-context-gated; bcrypt/argon2 nearby suppresses.
+- **`open-redirect.js`** (CWE-601): added Go, Ruby, C#, Kotlin sinks, with
+  allow-list recognition and literal-target exemption.
+- **`ruby.js`** (CWE-502): `Marshal.load`/`YAML.load` on a non-literal arg.
+  **`go-structural.js`** (CWE-502): `encoding/gob` decode of untrusted bytes.
+  **`php.js`** (CWE-918): cURL / fopen-wrapper fetch of a `$_GET`-controlled URL.
+- **18 new corpus entries.** Not filled (intentional): CWE-1321 prototype
+  pollution in 7 non-JS languages, and CWE-1333 in Go (RE2) — 8 cells empty by
+  design. **Corpus 167 → 185; matrix 134 → 152/160 (95%).** F1=1.000; gate green.
+
+## 0.117.0 — Cross-language XPath injection (CWE-643) + 7 corpus entries
+
+Extends `xpath-injection.js` from Java/Python/JS to PHP, Go, Ruby, C#, Kotlin
+(`DOMXPath`, `SelectNodes`/interp, Nokogiri `.xpath`, xmlpath/htmlquery,
+`javax.xml.xpath`). All string-literal matching is embedded-quote-tolerant — an
+expression like `"//user[@name='" + x` embeds the attribute delimiter quote
+(also fixed a latent miss in the existing Java/Python patterns). Two issues
+caught pre-commit (a Kotlin post:FP, a test-author `${u}` JS-interpolated before
+the scanner). **Corpus 160 → 167; matrix 127 → 134/160.** F1=1.000; gate green.
+
+## 0.116.0 — Cross-language CSRF detection (CWE-352) + 3 corpus entries
+
+Extends `csrf.js` to Go (gin/echo/fiber/chi, net/http mux), Rails routes, and
+ASP.NET MVC `[HttpPost]` action attrs. Defence recognition added (gorilla/csrf,
+nosurf, `protect_from_forgery`, `[ValidateAntiForgeryToken]`/IAntiforgery).
+Token-auth exemption: `[ApiController]` + explicit Bearer is CSRF-safe; bare
+`[Authorize]` is not (cookie auth is the ASP.NET default). **Corpus 157 → 160;
+matrix 124 → 127/160.** F1=1.000; gate green.
+
+## 0.115.0 — Java reflected XSS (CWE-79): fills last XSS cell
+
+Adds Java to `xss-reflected-multilang.js` — servlet `response.getWriter()`
+write/print + `PrintWriter`, building an HTML string by concat. Static literals
+and OWASP/Commons/ESAPI encoders excluded. The reflected-XSS row (CWE-79) is now
+complete across all 8 languages. **Corpus 156 → 157; matrix 123 → 124/160.**
+F1=1.000; gate green.
+
+## 0.114.0 — Cross-language weak-cipher detection (CWE-327) + 3 corpus entries
+
+Extends `crypto-protocol.js` weak-cipher detection to the Go (`crypto/des`,
+`crypto/rc4`), PHP (`openssl_encrypt`/legacy `mcrypt_*` weak algos), and Ruby
+(`OpenSSL::Cipher` DES/RC4/Blowfish) idioms. AES-GCM stays clean. **Corpus
+153 → 156; matrix 120 → 123/160.** F1=1.000; gate green.
+
+## 0.113.0 — Cross-language static-IV detection (CWE-329) + 7 corpus entries
+
+Extends `crypto-protocol.js` static-IV detection to JVM (`IvParameterSpec`/
+`GCMParameterSpec` from a zero array), C# (zero `.IV`), PHP (empty/`str_repeat`
+IV), Ruby (fixed-literal IV), and Go (zero `make([]byte,…)` with a CBC/CTR mode,
+suppressed when filled from `crypto/rand`). CSPRNG-derived IVs stay clean across
+all languages. **Corpus 146 → 153; matrix 113 → 120/160.** F1=1.000; gate green.
+
+## 0.112.0 — Cross-language HTTP response splitting (CWE-113) + 7 corpus entries
+
+Extends `response-splitting.js` across all 8 languages (added Go, Ruby, C#,
+Kotlin header sinks) and fixes two latent bugs: the PHP value was read from the
+header-NAME capture group (never fired), and the request-scope param heuristic
+is generalized from Java to Java/Kotlin/C#. Sanitizer recognition extended
+(Python chained `.replace`, Ruby `gsub`/`delete`, Go `NewReplacer`/`ReplaceAll`,
+PHP `str_replace`) so fixed forms stay clean. Biggest single matrix gain this
+session. **Corpus 139 → 146; matrix 106 → 113/160.** F1=1.000; gate green.
+
+## 0.111.0 — Cross-language XXE detector (CWE-611) + 3 corpus entries
+
+Extends `xxe.js` (Java/Python) to PHP, Go, Ruby. Each non-JVM XML stack is
+XXE-safe by default, so the detector flags the explicit external-entity opt-in
+(PHP `LIBXML_NOENT`/`DTDLOAD`, Go `Strict=false`/custom Entity map, Nokogiri
+`noent`/`dtdload`/`replace_entities`) rather than the default-safe parse.
+**Corpus 136 → 139; matrix 103 → 106/160.** F1=1.000; gate green.
+
+## 0.110.0 — Cross-language code-injection detector (CWE-94) + 4 corpus entries
+
+New `code-injection-multilang.js` closes the CWE-94 gap in Java/C#/Go/Kotlin
+(JS/Python/Ruby `eval` stay with the flow engine). Flags dynamic
+code/expression evaluators on a non-literal argument — Java/Kotlin
+(`ScriptEngine.eval`, GroovyShell, SpEL, MVEL, OGNL), C# (Roslyn `CSharpScript`,
+`DataTable.Compute`), Go (yaegi/gomacro `interp.Eval`, `text/template` parse of a
+non-literal body). A literal argument does not match. **Corpus 132 → 136; matrix
+99 → 103/160.** F1=1.000; gate green.
+
+## 0.109.0 — Cross-language LDAP injection detector (CWE-90) + 6 corpus entries
+
+Extends `ldap-injection.js` from JS/Java/Python to PHP, Go, C#, Ruby, Kotlin.
+Per-language filter patterns gated by an LDAP attribute set (uid/cn/mail/…) so
+it doesn't fire on generic `key=value`. Two precision guards (both fix real FPs
+found while building): a backtrack-proof call-guard so an escaped call at the
+concat isn't flagged, and a file-level escape-API guard (`ldap_escape`,
+`EscapeFilter`, `escape_filter_chars`, …) for escape-then-use spanning lines.
+**Corpus 126 → 132; matrix 93 → 99/160.** F1=1.000; gate green.
+
+## 0.108.1 — Corpus scale-up batch 3 — 117→126, matrix 84→93 cells
+
+9 verified harvest entries across previously-empty cells the scanner already
+detects (no detector change): CWE-798 {java,go,ruby,php}, CWE-916 {java,go,php},
+CWE-918 {ruby}, CWE-601 {java}. Two discipline notes encoded in the generator so
+they don't recur: placeholder `AKIA…EXAMPLE` keys read as pre:FN (the secrets
+scanner correctly skips placeholders — regenerated with realistic keys), and a
+guarded open-redirect "fixed" variant read as post:FP (the detector doesn't yet
+recognize allow-list guards — post now uses literal targets). **126/126
+F1=1.000; gate exit 0.**
+
+## 0.108.0 — Corpus scale-up to 117 + baseline CI gate + cross-language XSS
+
+Squashes the v0.106.0–v0.107.3 development churn (7 commits, several corrective)
+into one coherent release.
+
+- **Corpus 101 → 117 entries**, all pre:TP post:TN, F1=1.000, verified blind
+  (manifest outside the scanned trees; identical under
+  `AGENTIC_SECURITY_BLIND_BENCH=1`). Batch 2 harvest (11) + cross-language
+  reflected XSS (5).
+- **`xss-reflected-multilang.js`** (new): taint-independent reflected XSS for
+  Go/Ruby/PHP/C#/Kotlin (input into an HTML response via concat/interp), each
+  with a per-language output-encoder exclusion. JS/Python XSS stays with the
+  flow engine.
+- **Corpus baseline CI gate** (the process fix): `corpus-baseline.json` records
+  the verdict for every entry; `runner.mjs --check-baseline`/`--update-baseline`
+  + npm scripts. The gate fails on any drift — a regressed entry, a removed
+  entry, or a new entry that does not pass. First `.github/workflows/ci.yml`
+  (repo had no CI): runs `npm test`, verifies the committed bundle matches
+  source, runs the corpus gate.
+- **CLAUDE.md gains the "Verification discipline" section.** 117/117, gate exit 0.
+
+## 0.105.0 — Corpus scale-up batch 1 (Tier 4) — 88→101, matrix 64→77 cells
+
+First batch of the cve-replay scale-up toward 500, prioritized by empty
+CWE×language cells. 13 new capability entries across 9 previously-empty cells
+(CWE-338 weak PRNG, CWE-94, CWE-352, CWE-22, CWE-502), each verified pre:TP
+post:TN. Two additive detector extensions unlock them: `weak-randomness.js`
+gains snake_case carriers + Java/Kotlin/C# PRNG patterns (CWE-338; SecureRandom
+stays clean), and `php.js`/`ruby.js` gain structural path traversal (CWE-22).
+**Corpus stays F1=1.000; matrix 64 → 77/160.**
+
+## 0.104.0 — Close remaining corpus FN/FP — cve-replay F1 0.929 → 1.000
+
+Implements the full remaining recall+precision backlog. Aggregate cve-replay now
+TP=88 FP=0 FN=0 TN=88 (F1=1.000); every language and CWE slice at F1=1.000.
+
+- **`secret-concat.js`** (new): language-agnostic hardcoded-secret split across
+  concatenated literals — reassembles `'AKIA'+'IOSF…'`/`'ghp'+'_…'`/`'sk'+'_live_…'`
+  and matches provider prefixes (CWE-798).
+- **`crypto-protocol.js`**: pyca/cryptography zero/static IV (CWE-329).
+  **`weak-randomness.js`**: camelCase security carrier; reclassified CWE-330 →
+  CWE-338. **`php.js`**: structural SQLi covers deprecated `mysql_query`.
+  **`js-framework-structural.js`**: libxmljs XXE (CWE-611).
+  **`python-structural.js`**: embedded-quote-tolerant literal matching +
+  `open()`/`send_file` path traversal (CWE-22). **`csrf.js`**: Symfony support.
+- **Precision (`engine.js` `dropGuardedFindings`)**: reflected-XSS
+  output-encoding guard (drop CWE-79 when the value passed through a *captured*
+  HTML escaper); `dedupeFindingsWithEvidence` prefers an interprocedural flow
+  finding over a flat structural match at the same sink.
+
 ## 0.103.0 — Go recall: structural detectors (PRD Tier 1)
 
 - **`go-structural.js`** (new): SQL injection via a `database/sql` query method
