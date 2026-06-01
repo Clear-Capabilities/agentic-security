@@ -34,8 +34,10 @@
 import { addPath } from './access-paths.js';
 
 export function isImplicitFlowEnabled() {
-  if (process.env.AGENTIC_SECURITY_IMPLICIT_FLOW === '0') return false;
-  return true;
+  // OPT-IN (default OFF): implicit/control-dependence flow is famously noisy, so
+  // it must be explicitly requested. Findings carry implicit:true + capped
+  // confidence so the standard pipeline ranks them below explicit flows.
+  return process.env.AGENTIC_SECURITY_IMPLICIT_FLOW === '1';
 }
 
 /**

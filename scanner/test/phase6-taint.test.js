@@ -202,8 +202,10 @@ test('implicit-flow: isImplicitFlowEnabled reads env', () => {
   const prev = process.env.AGENTIC_SECURITY_IMPLICIT_FLOW;
   process.env.AGENTIC_SECURITY_IMPLICIT_FLOW = '1';
   assert.equal(isImplicitFlowEnabled(), true);
+  // R4 (PRD §5): implicit flow is now OPT-IN (default OFF) — it was wired into
+  // the engine, and control-dependence flow is too noisy to run by default.
   delete process.env.AGENTIC_SECURITY_IMPLICIT_FLOW;
-  assert.equal(isImplicitFlowEnabled(), true);
+  assert.equal(isImplicitFlowEnabled(), false);
   process.env.AGENTIC_SECURITY_IMPLICIT_FLOW = '0';
   assert.equal(isImplicitFlowEnabled(), false);
   delete process.env.AGENTIC_SECURITY_IMPLICIT_FLOW;

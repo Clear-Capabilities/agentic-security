@@ -39,6 +39,7 @@ import { aliasesForVar } from './points-to.js';
 import { higherOrderTaintFlow } from './higher-order.js';
 import { SummaryCache, entryStateFromCall } from './summaries.js';
 import { lookupBuiltinSummary } from './builtin-summaries.js';
+import { isImplicitFlowEnabled, buildImplicitContext, implicitAssignTarget, markImplicitTaint, createImplicitFinding } from './implicit-flow.js';
 
 // v0.70 #2 — addPath that also taints every alias of the variable.
 // When `target` is a dotted path like "a.x" and the root `a` has aliases
@@ -549,6 +550,47 @@ function analyzeFunction(fn, entryState, callContext) {
     }
   }
 
+  // R4 (PRD §5) — implicit / control-dependence flow. OPT-IN (default OFF, see
+  // isImplicitFlowEnabled). Post-pass over the converged CFG: a sink reached
+  // INSIDE a tainted-condition branch can leak information even when its
+  // argument is constant or only implicitly tainted (a var assigned in that
+  // branch). Findings carry implicit:true + capped confidence.
+  if (isImplicitFlowEnabled() && fn.cfg) {
+    try {
+      const union = new Set();
+      for (const s of inStates.values()) for (const p of s) union.add(p);
+      const ictx = buildImplicitContext(fn.cfg, (expr) => exprTaint(expr, union));
+      // Mark vars assigned inside a tainted branch as implicit-tainted.
+      let implicitState = new Set();
+      for (const [nid, ctx] of ictx) {
+        const t = implicitAssignTarget(nodes[nid], ctx);
+        if (t) implicitState = markImplicitTaint(implicitState, t);
+      }
+      // A sink in a tainted branch whose arg is implicit-tainted (or constant)
+      // — and NOT already explicitly tainted (the normal pass covers that).
+      for (const [nid, ctx] of ictx) {
+        const node = nodes[nid];
+        if (!node || node.kind !== 'call') continue;
+        const cat = matchSinkOrSanitizer(node.callee);
+        const sink = cat && cat.find((e) => e.kind === 'sink');
+        if (!sink) continue;
+        const inS = inStates.get(nid) || new Set();
+        if ((node.args || []).some((a) => exprTaint(a, inS))) continue;
+        const argRefsImplicit = (node.args || []).some((a) => {
+          const ap = accessPathOf(a); return ap && isCoveredBy(implicitState, `implicit:${ap}`);
+        });
+        const allConst = (node.args || []).length > 0 && (node.args || []).every((a) => a && a.kind === 'literal');
+        if (argRefsImplicit || allConst) {
+          callContext._findings.push({
+            ...createImplicitFinding(node, ctx.conditionLabel),
+            _funcQid: fn.qid, sinkId: sink.id,
+            cwe: (sink.vuln && sink.vuln.cwe) || 'CWE-200',
+          });
+        }
+      }
+    } catch { /* implicit flow is best-effort + opt-in */ }
+  }
+
   const exit = outStates.get(fn.cfg.exit) || new Set();
   // v0.66 — record which params are tainted at function exit so the
   // caller's applyAtCallSite can propagate that mutated taint back. We
@@ -763,7 +805,10 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         cwe: f.cwe,
         remediation: f.remediation,
         parser: 'IR-TAINT',
-        confidence: 0.75,
+        // R4 implicit-flow: preserve the implicit flag + its capped confidence
+        // (a control-dependence finding, not an explicit data-flow one).
+        confidence: (f.implicit && typeof f.confidence === 'number') ? f.confidence : 0.75,
+        ...(f.implicit === true ? { implicit: true } : {}),
         source: f.trace && f.trace.length ? {
           file: fn.file,
           line: f.trace[0].line,
