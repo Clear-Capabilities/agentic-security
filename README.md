@@ -133,7 +133,7 @@ Deep engine details — [architecture](docs/ARCHITECTURE.md).
 
 ## Language coverage
 
-Eight first-class languages, with cross-language detectors for the OWASP-relevant injection and crypto-misuse classes. Coverage is measured by a blind, regression-gated CVE-replay corpus (185 entries, every release held at **F1 = 1.000** with zero false positives or negatives; see [`bench/cve-replay`](bench/cve-replay/)).
+Eight first-class languages, with cross-language detectors for the OWASP-relevant injection and crypto-misuse classes.
 
 | Language | Vuln-class coverage |
 |----------|---------------------|
