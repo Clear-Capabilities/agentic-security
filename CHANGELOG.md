@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.119.2 — plugin manifest validation fixes
+
+Manifest/packaging hotfix; no functional change to the scanner.
+
+- `commands/fix.md`: quoted the `description:` frontmatter value. The unquoted
+  colon-space (`Remediate findings: --one …`) parsed as a nested YAML mapping,
+  which `claude plugin validate` rejected — and would have caused the command to
+  load with all frontmatter fields silently dropped at runtime.
+- `.claude-plugin/plugin.json`: dropped the unknown `vendor` field (Claude Code
+  ignores it at load time; the company already lives in `author`).
+- Removed stray gitignored `.agentic-security/` runtime artifacts (regenerated
+  DPIA/threat-model output) from under `agents/` and `commands/`, where the
+  validator was mis-reading them as plugin agents/commands.
+
+`claude plugin validate` now passes; the two remaining warnings
+(`agents/_CONFINEMENT.md` and the root `CLAUDE.md`) are by-design per the
+underscore-doc convention enforced in `plugin-self-check.test.js`.
+
 ## 0.119.1 — packaging: exclude internal scan-state from the npm tarball
 
 Packaging-only hotfix for the `@clear-capabilities/agentic-security-scanner` npm

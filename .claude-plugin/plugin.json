@@ -1,12 +1,11 @@
 {
   "name": "agentic-security",
-  "version": "0.119.1",
+  "version": "0.119.2",
   "description": "Agentic-Security is a powerful Claude Code plugin that automatically performs Application Security Testing (SAST, SCA, secrets detection, and more). Think of it as the easy button for making your Claude-generated code safe and secure.",
   "author": {
     "name": "Ross Young",
     "email": "ross@clearcapabilities.com"
   },
-  "vendor": "Clear Capabilities Inc.",
   "homepage": "https://github.com/Clear-Capabilities/agentic-security",
   "license": "PolyForm-Internal-Use-1.0.0",
   "keywords": [

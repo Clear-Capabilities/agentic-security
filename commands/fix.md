@@ -1,5 +1,5 @@
 ---
-description: Remediate findings: --one <id>, --all by severity, --pr bundles a PR, --sca upgrades vulnerable deps.
+description: "Remediate findings: --one <id>, --all by severity, --pr bundles a PR, --sca upgrades vulnerable deps."
 argument-hint: "[--one <finding-id>] | [--all [--critical|--high|--medium|--low]] | [--pr [--severity critical|high|all] [--apply] [--branch <name>]] | [--sca [--pr] [--apply] [--tier critical|high|all]]"
 ---
 
