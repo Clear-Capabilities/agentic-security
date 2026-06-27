@@ -1,0 +1,42 @@
+{
+  "generatedAt": "2026-06-27",
+  "total": 28,
+  "passing": 21,
+  "metrics": {
+    "tierAccuracy": 0.6786,
+    "regretRate": 0.25,
+    "routerQuality": 0.75,
+    "routerMeanCost": 0.130536,
+    "hullAdvantage": -0.0457
+  },
+  "entries": {
+    "complex-cjs-to-esm": "pass",
+    "complex-deadlock": "regret",
+    "complex-debug-intermittent": "pass",
+    "complex-jwt-refactor": "pass",
+    "complex-lru-ttl": "pass",
+    "complex-multitenant-schema": "pass",
+    "complex-nplus1": "pass",
+    "complex-rate-limit-arch": "pass",
+    "complex-terse-scheduler": "regret",
+    "complex-terse-webhook": "regret",
+    "medium-add-pagination": "pass",
+    "medium-cb-to-async": "pass",
+    "medium-debounce": "regret",
+    "medium-null-check": "regret",
+    "medium-off-by-one": "pass",
+    "medium-undefined-return": "pass",
+    "medium-unit-test": "regret",
+    "medium-validate-form": "regret",
+    "simple-closure": "pass",
+    "simple-define-idempotent": "pass",
+    "simple-f2c": "pass",
+    "simple-format-json": "pass",
+    "simple-git-undo": "pass",
+    "simple-http404": "pass",
+    "simple-let-const": "pass",
+    "simple-rename": "pass",
+    "simple-spellcheck": "pass",
+    "simple-verbose-explain": "pass"
+  }
+}

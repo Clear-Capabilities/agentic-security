@@ -1,0 +1,28 @@
+{"id": "simple-closure", "trueTier": "simple", "prompt": "what is a closure in javascript?"}
+{"id": "simple-http404", "trueTier": "simple", "prompt": "what does HTTP 404 mean?"}
+{"id": "simple-rename", "trueTier": "simple", "prompt": "rename the variable `x` to `count`"}
+{"id": "simple-let-const", "trueTier": "simple", "prompt": "what's the difference between let and const?"}
+{"id": "simple-f2c", "trueTier": "simple", "prompt": "convert 100 fahrenheit to celsius"}
+{"id": "simple-git-undo", "trueTier": "simple", "prompt": "list three git commands to undo the last commit"}
+{"id": "simple-define-idempotent", "trueTier": "simple", "prompt": "define idempotent in one sentence"}
+{"id": "simple-spellcheck", "trueTier": "simple", "prompt": "spell-check these: recieve, seperate, occured"}
+{"id": "simple-format-json", "trueTier": "simple", "prompt": "format this object as pretty json: {a:1,b:2}"}
+{"id": "simple-verbose-explain", "trueTier": "simple", "prompt": "I am new to programming and I keep hearing the term recursion thrown around in tutorials and videos and on forums, and honestly I just want a plain-English explanation of what recursion actually means at a conceptual level, with maybe one tiny everyday analogy, nothing fancy, no code, just the idea so it finally clicks for me once and for all please."}
+{"id": "medium-null-check", "trueTier": "medium", "prompt": "add a null check to this handler and return early if the user is undefined"}
+{"id": "medium-debounce", "trueTier": "medium", "prompt": "write a function to debounce a callback by N milliseconds"}
+{"id": "medium-off-by-one", "trueTier": "medium", "prompt": "fix the off-by-one in this loop:\n```\nfor (let i = 0; i <= arr.length; i++) { use(arr[i]); }\n```"}
+{"id": "medium-cb-to-async", "trueTier": "medium", "prompt": "convert this callback function to async/await:\n```\nfs.readFile(p, (e, d) => cb(e, d));\n```"}
+{"id": "medium-add-pagination", "trueTier": "medium", "prompt": "add limit/offset pagination to this express route in src/routes/users.js"}
+{"id": "medium-undefined-return", "trueTier": "medium", "prompt": "why does this return undefined?\n```\nconst f = () => {\n  return\n  { x: 1 };\n};\n```"}
+{"id": "medium-validate-form", "trueTier": "medium", "prompt": "add input validation to this form submit handler so empty fields are rejected"}
+{"id": "medium-unit-test", "trueTier": "medium", "prompt": "write a unit test for a function that reverses a string, covering the empty-string case"}
+{"id": "complex-jwt-refactor", "trueTier": "complex", "prompt": "refactor the auth module to use JWT instead of server sessions and migrate the existing session store"}
+{"id": "complex-multitenant-schema", "trueTier": "complex", "prompt": "design a multi-tenant database schema for a SaaS billing system with per-tenant isolation"}
+{"id": "complex-debug-intermittent", "trueTier": "complex", "prompt": "debug this intermittent failure:\n```\nTypeError: cannot read 'id' of undefined\n  at processOrder (src/orders.js:88)\n  at async run (src/worker.js:21)\n```"}
+{"id": "complex-rate-limit-arch", "trueTier": "complex", "prompt": "architect a distributed rate-limiting layer for our public API that stays consistent across multiple instances"}
+{"id": "complex-cjs-to-esm", "trueTier": "complex", "prompt": "migrate this codebase from CommonJS to ESM and update all imports, including dynamic requires"}
+{"id": "complex-lru-ttl", "trueTier": "complex", "prompt": "implement an LRU cache with per-entry TTL and write the concurrency tests for eviction under load"}
+{"id": "complex-deadlock", "trueTier": "complex", "prompt": "the checkout flow deadlocks under load — trace the race condition across the order and inventory services and propose a fix"}
+{"id": "complex-nplus1", "trueTier": "complex", "prompt": "optimize the N+1 query in the orders service and add the necessary database indexes"}
+{"id": "complex-terse-webhook", "trueTier": "complex", "prompt": "the payment webhook sometimes double-charges customers; make it idempotent end to end"}
+{"id": "complex-terse-scheduler", "trueTier": "complex", "prompt": "our cron jobs silently overlap and corrupt state under load; fix it properly"}
