@@ -12,6 +12,11 @@
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start-self-check.js",
             "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/session-start-model-capture.js",
+            "timeout": 2
           }
         ]
       }
@@ -22,6 +27,11 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/legacy-alias-redirect.js",
+            "timeout": 2
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/model-cost-advisor.js",
             "timeout": 2
           }
         ]

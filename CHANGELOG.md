@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.120.0 — model-cost optimizer (per-prompt model + depth advisor)
+
+New opt-in Claude Code plugin feature; no functional change to the scanner.
+
+- `hooks/model-cost-advisor.js` (UserPromptSubmit): scores each prompt with a
+  zero-token local heuristic (length, code fences, file mentions, stack traces,
+  cheap vs. expensive verbs) and, when a strictly cheaper model + reasoning depth
+  would likely do the job, prints a one-line tip with the estimated token-cost
+  savings. Advisory only — Claude Code hooks cannot set the model or effort, so
+  the user taps `/model` + `/effort`. The tip is delivered via `systemMessage`
+  (out-of-band), never `additionalContext`, so the advisor itself costs no tokens.
+- `hooks/session-start-model-capture.js` (SessionStart): records the session
+  model to `.agentic-security/model-optimizer-state.json` — the only channel for
+  it, since there is no `$CLAUDE_MODEL` — and the advisor falls back to a
+  configurable `assumedModel` when it is absent.
+- Config `.agentic-security/model-optimizer.json` (`{ mode, minSavingsUsd,
+  assumedModel }`), default **off**; kill switch
+  `AGENTIC_SECURITY_MODEL_OPTIMIZER=off`.
+- `/setup --model-optimizer [--min-savings <usd>]` enables it (config write only;
+  the hooks are already registered in `hooks/hooks.json`).
+- Docs: `docs/MODEL_COST_OPTIMIZATION_PRD.md` (spec, R1–R11) and
+  `docs/MODEL_COST_OPTIMIZATION.md` (user guide). Tests:
+  `hooks/model-cost-advisor.test.js` (10 cases).
+
 ## 0.119.2 — plugin manifest validation fixes
 
 Manifest/packaging hotfix; no functional change to the scanner.
