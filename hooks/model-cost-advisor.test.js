@@ -4,6 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const {
   classifyTier, modelKey, estimateCost, buildAdvice,
+  cacheRewarmPenalty, savingsFractionFloor,
 } = require('./model-cost-advisor.js');
 
 test('classifyTier — simple prompts', () => {
@@ -84,4 +85,86 @@ test('buildAdvice — unknown model declines to advise', () => {
     assumedModel: 'also-unknown',
   });
   assert.equal(tip, null);
+});
+
+// ── #1 prompt-cache awareness ────────────────────────────────────────────────
+
+test('cacheRewarmPenalty — switching to a pricier-input model costs rewarm; zero ctx is free', () => {
+  const p = cacheRewarmPenalty(20000, 'claude-opus-4-8', 'claude-sonnet-4-6');
+  assert.ok(p > 0); // sonnet cache-write (1.25×3) exceeds opus cache-read (0.1×5)
+  assert.equal(cacheRewarmPenalty(0, 'claude-opus-4-8', 'claude-sonnet-4-6'), 0);
+});
+
+test('buildAdvice — small cached context still recommends the cheaper model', () => {
+  const tip = buildAdvice({
+    prompt: 'what is a promise in javascript?',
+    currentModel: 'claude-opus-4-8',
+    currentEffort: 'high',
+    cachedContextTokens: 0,
+  });
+  assert.match(tip, /\/model haiku/);
+});
+
+test('buildAdvice — a moderate cache still advises the switch, with a break-even caveat', () => {
+  const tip = buildAdvice({
+    prompt: 'what is a promise in javascript?',
+    currentModel: 'claude-opus-4-8',
+    currentEffort: 'high',
+    cachedContextTokens: 40000, // break-even ~1-2 turns → still worth switching
+  });
+  assert.match(tip, /\/model haiku/);
+  assert.match(tip, /worth it past ~\d+ more turns/);
+});
+
+test('buildAdvice — a deep cache flips a switch into a cache-safe effort drop (#3)', () => {
+  const tip = buildAdvice({
+    prompt: 'what is a promise in javascript?',
+    currentModel: 'claude-opus-4-8',
+    currentEffort: 'high',
+    cachedContextTokens: 200000, // break-even > breakEvenMaxTurns → suppress the switch
+  });
+  assert.match(tip, /\/effort low/);
+  assert.doesNotMatch(tip, /\/model/);   // switching that big a cache won't pay off
+  assert.match(tip, /cached context/);
+});
+
+test('buildAdvice — cold cache (size 0) switches freely with no break-even caveat', () => {
+  const tip = buildAdvice({
+    prompt: 'what is a promise in javascript?',
+    currentModel: 'claude-opus-4-8',
+    currentEffort: 'high',
+    cachedContextTokens: 0,
+  });
+  assert.match(tip, /\/model haiku/);
+  assert.doesNotMatch(tip, /worth it past/);
+});
+
+// ── #2 cost-quality dial ─────────────────────────────────────────────────────
+
+test('savingsFractionFloor — monotonic; 0 never advises, 10 is most eager', () => {
+  assert.equal(savingsFractionFloor(0), Infinity);
+  assert.equal(savingsFractionFloor(10), 0);
+  assert.ok(savingsFractionFloor(1) > savingsFractionFloor(5));
+  assert.ok(savingsFractionFloor(5) > savingsFractionFloor(9));
+  assert.ok(Math.abs(savingsFractionFloor(7) - 0.12) < 1e-9);
+});
+
+test('buildAdvice — costQualityTradeoff 0 (pure quality) never downgrades', () => {
+  const tip = buildAdvice({
+    prompt: 'what is a closure?',
+    currentModel: 'claude-opus-4-8',
+    currentEffort: 'high',
+    costQualityTradeoff: 0,
+  });
+  assert.equal(tip, null);
+});
+
+test('buildAdvice — a higher dial surfaces a borderline saving a lower dial suppresses', () => {
+  const base = {
+    prompt: 'Improve this loop:\n```\nfor (const x of items) doThing(x)\n```', // medium
+    currentModel: 'claude-sonnet-4-6',
+    currentEffort: 'medium', // ~26% saving dropping to low
+  };
+  assert.equal(buildAdvice({ ...base, costQualityTradeoff: 3 }), null);            // floor 28% > 26%
+  assert.match(buildAdvice({ ...base, costQualityTradeoff: 6 }), /\/effort low/);  // floor 16% < 26%
 });

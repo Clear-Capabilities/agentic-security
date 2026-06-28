@@ -43,10 +43,20 @@ also create/edit it by hand:
 ```json
 {
   "mode": "advise",
+  "costQualityTradeoff": 7,
   "minSavingsUsd": 0.01,
-  "assumedModel": "claude-opus-4-8"
+  "assumedModel": "claude-opus-4-8",
+  "assumedCachedTokens": null
 }
 ```
+
+- **`costQualityTradeoff`** — a 0–10 dial (default 7), borrowed from OpenRouter's
+  `cost_quality_tradeoff`. `0` = pure quality (never suggests a downgrade); `10` =
+  cheapest (suggests on any saving). It sets how eagerly tips appear.
+- **`minSavingsUsd`** — an absolute anti-noise floor; sub-cent savings never nag.
+- **`assumedCachedTokens`** — leave `null` to let the optimizer estimate your
+  growing conversation cache (see "Cache-aware" below); set a number to pin it, or
+  `0` to ignore cache cost entirely.
 
 Disable any time — set `"mode": "off"`, or use the kill switch:
 
@@ -72,6 +82,31 @@ export AGENTIC_SECURITY_MODEL_OPTIMIZER=off
 
 The tip is shown to *you* only — it is **not** sent to Claude, so it adds nothing
 to your token bill. Act on it or ignore it; the prompt runs either way.
+
+### Cache-aware: it won't tell you to throw away your context
+
+Switching models mid-session discards Claude's **prompt cache** — the cheap
+re-read of your conversation so far — and forces the new model to ingest it cold.
+Deep into a session that can cost *more* than the model you'd save. So the more
+context you've built up, the more the optimizer prefers a **cache-preserving
+effort drop on your current model** (e.g. `/effort low` on Opus) over a model
+switch:
+
+```
+💡 This simple task could run at lower depth — keeps your model and cached
+   context. /effort low on Opus 4.8 would cost ~40% less (est. saves ~$0.01).
+```
+
+Early in a session (little cache) it still recommends the cheaper model; the
+trade-off shifts automatically as your context grows.
+
+It measures the **real** cached size from your session transcript (not a guess),
+shows a switch's **break-even** ("worth it past ~N more turns — switching re-warms
+the cache"), suppresses switches that won't pay off, and — once your cache has gone
+cold past its 5-minute TTL — recommends switching freely again (nothing left to
+lose). Tune via `costQualityTradeoff`, `ttlSeconds`, and `breakEvenMaxTurns` in
+`.agentic-security/model-optimizer.json`. For a full accounting of what caching
+saved or wasted this session, run **`/posture --cache`**.
 
 ---
 

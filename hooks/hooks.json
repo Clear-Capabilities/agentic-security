@@ -50,6 +50,11 @@
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/conversation-context.js",
             "timeout": 2
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/cache-invalidator-guard.js",
+            "timeout": 2
           }
         ]
       },

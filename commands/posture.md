@@ -1,6 +1,6 @@
 ---
 description: Posture + reporting. Status snapshot, A-F report card, harness score, trend, threat model, stack playbook.
-argument-hint: "[--status|--report-card|--harness|--trend|--threat|--playbook|--mgmt]"
+argument-hint: "[--status|--report-card|--harness|--trend|--threat|--playbook|--mgmt|--cache]"
 ---
 
 # /posture
@@ -19,6 +19,7 @@ Posture + reporting dispatcher. One command, multiple views.
 | `--threat` | Threat model views: STRIDE, personas, playbook, bounty, adversary, surface, boundary, SPOF |
 | `--playbook` | Stack-specific posture playbook (Express, FastAPI, Django, Rails, Spring Boot, etc.) |
 | `--mgmt` | Posture management surface — auth, network, WAF, telemetry, feature-flag imports |
+| `--cache` | **Prompt-cache economics** for this session — cache-hit %, $ saved by caching, $ wasted on avoidable cache misses (model switches / TTL gaps / prefix changes), per-model breakdown. Reads the Claude Code transcript usage; advisory, read-only. |
 
 Add `--json` to any mode to emit machine-readable output for scripting / CI.
 
@@ -41,8 +42,11 @@ If there's no prior scan, the dashboard collapses to a single "run `/scan --all`
 /posture --trend               # findings trend
 /posture --threat --view stride
 /posture --playbook            # stack-specific playbook
+/posture --cache               # prompt-cache economics for this session
 ```
 
 ## Implementation
 
 Dispatches to existing command implementations based on the flag. All modes preserved — no functional regression.
+
+`--cache` runs the `cache-report` CLI subcommand (`scanner/bin/agentic-security.js` → `scanner/src/posture/cache-economics.js`), which parses the Claude Code transcript usage for this session and prints the economics + any detected cache leaks. The same data is available to agents via the `query_cache_telemetry` MCP tool.

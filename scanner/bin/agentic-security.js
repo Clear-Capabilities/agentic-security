@@ -1631,6 +1631,17 @@ async function main() {
       case 'rule-synth': process.exit(await cmdRuleSynth(args));
       case 'digest':   process.exit(await cmdDigest(args));
       case 'setup':    process.exit(await cmdSetup(args));
+      case 'cache-report': {
+        // Prompt-cache economics for the current session: parse the Claude Code
+        // transcript usage and report cache-hit %, $ saved, and avoidable leaks.
+        // Advisory/read-only — always exits 0.
+        const { analyzeTranscript, formatCacheReport } = await import('../src/posture/cache-economics.js');
+        const projectDir = path.resolve(args.flags.root || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+        const result = analyzeTranscript({ transcriptPath: args.flags.transcript, projectDir });
+        if (args.flags.json) console.log(JSON.stringify(result, null, 2));
+        else console.log(formatCacheReport(result));
+        process.exit(0);
+      }
       case 'mcp':      {
         const { runStdio } = await import('../src/mcp/stdio.js');
         const root = args.flags.root || process.env.AGENTIC_SECURITY_MCP_ROOT || process.cwd();

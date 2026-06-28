@@ -77,6 +77,7 @@ test('tools/list exposes the PRD-named tools', async () => {
     'append_agents_memory', 'append_scratchpad', 'apply_fix',
     'apply_sca_upgrade',
     'explain_finding', 'find_rule_module', 'lookup_cve',
+    'query_cache_telemetry',
     'query_findings_memory', 'query_taint', 'query_triage_memory',
     'read_agents_memory', 'read_scratchpad', 'scan_diff',
     'synthesize_fix', 'synthesize_sca_upgrade', 'verify_fix',
@@ -85,6 +86,28 @@ test('tools/list exposes the PRD-named tools', async () => {
     assert.equal(t.inputSchema.type, 'object');
     assert.equal(t.inputSchema.additionalProperties, false, `${t.name} schema must reject additional properties`);
   }
+  await cleanup();
+});
+
+test('query_cache_telemetry returns economics + leaks from a transcript', async () => {
+  const { handleRequest, cleanup } = await makeSession();
+  const fixture = path.join(__dirname, 'fixtures', 'cache-economics', 'session.jsonl');
+  const r = await call(handleRequest, 'query_cache_telemetry', { transcript_path: fixture }, 7);
+  const body = payload(r);
+  assert.equal(body.ok, true);
+  assert.equal(body.metrics.turns, 6);
+  assert.ok(body.metrics.savedUsd > 0);
+  assert.equal(body.leaks.length, 2);
+  assert.match(body.report, /cache hit ratio/);
+  assert.equal(body._meta.untrusted_excerpts, true);
+  await cleanup();
+});
+
+test('query_cache_telemetry is graceful with no transcript', async () => {
+  const { handleRequest, cleanup } = await makeSession();
+  const r = await call(handleRequest, 'query_cache_telemetry', { transcript_path: '/nope/missing.jsonl' }, 8);
+  const body = payload(r);
+  assert.equal(body.ok, false);
   await cleanup();
 });
 
@@ -358,9 +381,8 @@ test('stdio: spawned bin handles initialize+tools/list over NDJSON', async () =>
   await new Promise(r => child.on('exit', r));
   const lines = stdout.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
   assert.equal(lines[0].result.serverInfo.name, SERVER_NAME);
-  // 16 tools: 15 (after query_triage_memory) + query_findings_memory
-  // added in the findings-memory chat-enhancement change.
-  assert.equal(lines[1].result.tools.length, 16);
+  // 17 tools: 16 + query_cache_telemetry (cache-economics change).
+  assert.equal(lines[1].result.tools.length, 17);
   await fsp.rm(tmpRoot, { recursive: true, force: true });
 });
 

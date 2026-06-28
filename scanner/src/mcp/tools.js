@@ -18,6 +18,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { applyFix as applyFixHistory, fixAcceptanceRate } from '../posture/fix-history.js';
 import { verifyLastScan } from '../posture/integrity.js';
+import { analyzeTranscript, formatCacheReport } from '../posture/cache-economics.js';
 import { redactString, redactFinding } from './redact.js';
 
 // Lazy-loaded: these transitively pull in npm packages (fast-glob,
@@ -1021,6 +1022,31 @@ export const lookup_cve = {
   },
 };
 
+export const query_cache_telemetry = {
+  name: 'query_cache_telemetry',
+  description: 'Read prompt-cache economics for the current session from the Claude Code transcript: cache-hit %, $ saved by caching, $ wasted on avoidable cache misses (model switches / TTL gaps / prefix changes), and a per-model breakdown. Read-only, no network. Use to reason about token-cost efficiency and whether a model switch is worth the cache rewarm.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      // Optional explicit transcript path; otherwise derived from the session root.
+      transcript_path: { type: 'string', minLength: 1, maxLength: 4096 },
+    },
+    required: [],
+  },
+  async handler({ transcript_path } = {}, ctx) {
+    const result = analyzeTranscript({ transcriptPath: transcript_path, projectDir: ctx?.sessionRoot || process.cwd() });
+    if (!result.ok) return { _meta: META, ok: false, reason: result.reason };
+    return {
+      _meta: META,
+      ok: true,
+      metrics: result.metrics,
+      leaks: result.leaks,
+      report: formatCacheReport(result),
+    };
+  },
+};
+
 // ─── synthesize_sca_upgrade ───────────────────────────────────────────────
 // Phase 3 / Item 5 of the SCA improvement plan. Read-only counterpart to
 // apply_sca_upgrade — produces a structured upgrade plan via the
@@ -1095,4 +1121,4 @@ export const apply_sca_upgrade = {
   },
 };
 
-export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory];
+export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry];

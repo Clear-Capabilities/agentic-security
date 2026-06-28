@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.121.0 — prompt-cache economics (measured, cache-aware cost optimization)
+
+Cache-economics core (PRD `docs/CACHE_ECONOMICS_PRD.md`, features F1–F3). Turns
+Claude Code's own transcript usage into a dollarized, cache-aware view of token
+cost. No network, advisory-only.
+
+- **F1 — cache telemetry + report.** New `scanner/src/posture/cache-economics.js`
+  parses per-turn `usage` (cache read/write at 0.1× / 1.25×–2× input) and reports
+  cache-hit %, $ saved by caching, $ wasted on avoidable misses, $/turn, and a
+  per-model breakdown. Surfaced as the `cache-report` CLI subcommand (documented as
+  `/posture --cache`) and the read-only `query_cache_telemetry` MCP tool.
+- **F2 — silent-invalidator detector ("cache bodyguard").** Retrospectively
+  attributes cache drops to model-switch / TTL-gap / prefix-change (shown in the
+  report), plus a live PreToolUse hook (`hooks/cache-invalidator-guard.js`) that warns
+  before an edit to a cache anchor (`CLAUDE.md`, `.claude/settings*.json`) with the
+  estimated re-warm cost. Throttled; `AGENTIC_SECURITY_QUIET` / `…_CACHE_GUARD=off`.
+- **F3 — break-even + TTL-aware switching.** `hooks/model-cost-advisor.js` now reads
+  the *real* cached size from the transcript (`hooks/lib/transcript.js`), shows a
+  model switch's break-even ("worth it past ~N more turns"), suppresses switches that
+  won't pay off (preferring a cache-safe effort drop), and treats a cache gone cold
+  past the TTL as free to switch. New config: `ttlSeconds`, `breakEvenMaxTurns`.
+
+Also lands the OpenRouter-derived advisor controls that F3 builds on: a
+**`costQualityTradeoff` 0–10 dial** (replaces the one-sided `minSavingsUsd` gate;
+0 = never downgrade, 10 = cheapest) and the initial per-prompt **cache-rewarm
+penalty** that prefers a cache-preserving effort drop over a model switch.
+
+F4–F6 (depth-first formalization, subagent-offload advice, cost HUD/statusline) are
+specced in the PRD and ship next.
+
 ## 0.120.0 — model-cost optimizer (per-prompt model + depth advisor)
 
 New opt-in Claude Code plugin feature; no functional change to the scanner.

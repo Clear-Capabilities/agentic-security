@@ -15,7 +15,7 @@ Workflow + guard installer dispatcher.
 | `--ci` | Generate CI workflow tuned to your CI provider. `--provider auto|github-actions|gitlab-ci|circleci|native`, `--fail-on critical|high|medium` |
 | `--bodyguard` | Configure the AI bodyguard PreToolUse hook. Modes: `warn`, `block`, `off`. Per-project forbidden APIs at `.agentic-security/forbidden-apis.yml` |
 | `--destructive-guard` | Configure the destructive-Bash-command guard (rm -rf, force-push, etc.). Modes: `warn`, `block`, `off` |
-| `--model-optimizer` | Enable the per-prompt model-cost advisor (suggests a cheaper model + depth with est. token savings; advisory only — it can't switch for you). Modes: `advise`, `off`. `--min-savings <usd>` sets the suggestion threshold (default `0.01`). See `docs/MODEL_COST_OPTIMIZATION.md` |
+| `--model-optimizer` | Enable the per-prompt model-cost advisor (suggests a cheaper model + depth with est. token savings; advisory only — it can't switch for you). Modes: `advise`, `off`. `--quality <0-10>` sets the cost-quality dial (default `7`: `0`=never downgrade, `10`=cheapest); `--min-savings <usd>` is the absolute anti-noise floor. See `docs/MODEL_COST_OPTIMIZATION.md` |
 | `--all` | One-pass setup: installs hooks + CI + bodyguard + destructive-guard with sensible defaults (model-optimizer stays opt-in) |
 
 Bare `/setup` (no flag) prints this mode menu.
@@ -43,7 +43,8 @@ Prints a single summary of what was installed and the one command to harden each
 /setup --bodyguard mode=block                    # block insecure edits
 /setup --destructive-guard mode=warn             # warn on destructive bash
 /setup --model-optimizer                         # enable cheaper-model tips (advise)
-/setup --model-optimizer --min-savings 0.05      # only suggest when est. savings ≥ $0.05
+/setup --model-optimizer --quality 9             # lean aggressive on cost (dial 9/10)
+/setup --model-optimizer --min-savings 0.05      # absolute floor: only ≥ $0.05
 /setup --model-optimizer mode=off                # disable
 ```
 
@@ -54,7 +55,7 @@ Routes to `posture/workflow-installer.js` (detectProject, buildHookConfig, build
 `--model-optimizer` writes `.agentic-security/model-optimizer.json`:
 
 ```json
-{ "mode": "advise", "minSavingsUsd": 0.01, "assumedModel": "claude-opus-4-8" }
+{ "mode": "advise", "costQualityTradeoff": 7, "minSavingsUsd": 0.01, "assumedModel": "claude-opus-4-8", "assumedCachedTokens": null }
 ```
 
-Set `mode` from the flag (`advise` default, or `off`) and `minSavingsUsd` from `--min-savings`. The advisor (`hooks/model-cost-advisor.js`, UserPromptSubmit) and model capture (`hooks/session-start-model-capture.js`, SessionStart) are already registered in `hooks/hooks.json`, so enabling is purely the config write — no hook installation step. Confirm the config landed (`mode` is `advise`), then point the user at `docs/MODEL_COST_OPTIMIZATION.md`.
+Set `mode` from the flag (`advise` default, or `off`), `costQualityTradeoff` from `--quality` (0–10, default 7), and `minSavingsUsd` from `--min-savings`. The advisor (`hooks/model-cost-advisor.js`, UserPromptSubmit) and model capture (`hooks/session-start-model-capture.js`, SessionStart) are already registered in `hooks/hooks.json`, so enabling is purely the config write — no hook installation step. Confirm the config landed (`mode` is `advise`), then point the user at `docs/MODEL_COST_OPTIMIZATION.md`.

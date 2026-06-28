@@ -163,7 +163,7 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.120.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.121.0-blue)]()
 [![agentic-security](https://img.shields.io/badge/agentic--security-passing-brightgreen)]()
 
 ## License

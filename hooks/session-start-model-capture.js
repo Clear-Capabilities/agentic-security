@@ -48,7 +48,8 @@ function readStdinJSON() {
 
   try {
     fs.mkdirSync(stateDir, { recursive: true });
-    fs.writeFileSync(statePath, JSON.stringify({ model, capturedAt: new Date().toISOString() }) + '\n');
+    // turns: 0 resets the advisor's per-session cached-context estimate.
+    fs.writeFileSync(statePath, JSON.stringify({ model, capturedAt: new Date().toISOString(), turns: 0 }) + '\n');
   } catch { /* best-effort; never break the session */ }
   process.exit(0);
 })();
