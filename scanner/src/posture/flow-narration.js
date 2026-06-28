@@ -15,9 +15,9 @@
 
 const TEMPLATES = {
   'sql-injection': (f) =>
-    `An unauthenticated attacker sends a crafted request to ${_routeOf(f)} containing UNION-style SQL syntax in the ${f.source?.variable || 'tainted'} field. The server's database driver executes the injected query verbatim, returning rows from any table the connection has read access to. Typical impact: full table dump of users (emails, password hashes), bypass of authentication via boolean-blind exfiltration. If the DB role has write privileges, the attacker can also INSERT/UPDATE arbitrary rows. Recovery cost: incident response, customer notification, password reset, regulatory reporting if PII leaked.`,
+    `An unauthenticated attacker sends a crafted request containing UNION-style SQL syntax in the ${f.source?.variable || 'tainted'} field. The server's database driver executes the injected query verbatim, returning rows from any table the connection has read access to. Typical impact: full table dump of users (emails, password hashes), bypass of authentication via boolean-blind exfiltration. If the DB role has write privileges, the attacker can also INSERT/UPDATE arbitrary rows. Recovery cost: incident response, customer notification, password reset, regulatory reporting if PII leaked.`,
   'command-injection': (f) =>
-    `The handler at ${f.file}:${f.line} passes user-controlled input to a shell-spawning function. An attacker can append shell metacharacters (";", "$(...)", backticks) to execute arbitrary commands as the application's UID. Typical impact: read of /etc/passwd, /proc/self/environ (env vars including secrets), outbound connections to attacker-controlled hosts (data exfil). On unprivileged containers the blast radius is limited to that container; on privileged or root-owned processes, the attacker can pivot to the host.`,
+    `The handler passes user-controlled input to a shell-spawning function. An attacker can append shell metacharacters (";", "$(...)", backticks) to execute arbitrary commands as the application's UID. Typical impact: read of /etc/passwd, /proc/self/environ (env vars including secrets), outbound connections to attacker-controlled hosts (data exfil). On unprivileged containers the blast radius is limited to that container; on privileged or root-owned processes, the attacker can pivot to the host.`,
   'xss': (f) =>
     `An attacker injects HTML/JS markup into user-controllable input. The server reflects (or stores) it without encoding, so when a victim browser renders the page, the attacker's script executes in the victim's session origin. Typical impact: session cookie theft, CSRF-bypass on internal endpoints, account takeover via API calls executed under the victim's auth. Cost: incident response, customer notification, potential data egress depending on what the victim's session can access.`,
   'ssrf': (f) =>
@@ -27,18 +27,23 @@ const TEMPLATES = {
   'code-injection': (f) =>
     `User input is fed into a code-evaluation function (eval, new Function, exec). An attacker supplies arbitrary code that executes in the application's runtime context, with full access to the application's data, env, and outbound network. Typical impact: equivalent to remote code execution; same recovery cost as command-injection.`,
   'csrf': (f) =>
-    `The state-changing endpoint at ${f.file}:${f.line} doesn't validate that the request originated from your own application. An attacker hosts a page that issues a same-shape request from a logged-in victim's browser. Typical impact: state changes performed under the victim's identity — password change, money movement, role escalation. Cost: depends on what state can change; for billing endpoints, this is fraud-level.`,
+    `The state-changing endpoint doesn't validate that the request originated from your own application. An attacker hosts a page that issues a same-shape request from a logged-in victim's browser. Typical impact: state changes performed under the victim's identity — password change, money movement, role escalation. Cost: depends on what state can change; for billing endpoints, this is fraud-level.`,
   'open-redirect': (f) =>
     `The endpoint redirects to a URL the attacker controls. Used as part of phishing chains: victim clicks a legitimate-looking link to your domain, gets redirected to attacker.example, enters credentials thinking they're still on your site. Typical impact: phishing-amplified credential theft; reputational damage if your domain ends up on a phish-tracking list.`,
   'insecure-deserialization': (f) =>
     `The handler deserializes attacker-controlled bytes via pickle/yaml-load/Marshal. The deserialization callback invokes arbitrary code from class constructors / __reduce__ / __wakeup__. Typical impact: equivalent to remote code execution. Cost: full incident response, including investigating whether the attacker established persistence.`,
   'xxe': (f) =>
-    `The XML parser at ${f.file}:${f.line} resolves external entities. An attacker submits XML referencing file:///etc/passwd or http://internal/. Typical impact: file disclosure, SSRF, blind out-of-band exfiltration of secrets. Cost: similar to SSRF + path-traversal combined.`,
+    `The XML parser resolves external entities. An attacker submits XML referencing file:///etc/passwd or http://internal/. Typical impact: file disclosure, SSRF, blind out-of-band exfiltration of secrets. Cost: similar to SSRF + path-traversal combined.`,
 };
 
 function _routeOf(f) {
-  if (!f) return '<endpoint>';
-  return `${f.file || '?'}:${f.line || '?'}`;
+  if (!f) return 'this endpoint';
+  // Narration may run before the line is finalised; fall back to the file alone
+  // (or a generic phrase) rather than emitting "file:undefined" / "file:?".
+  const line = Number(f.line) || Number(f.source?.line) || 0;
+  if (f.file && line) return `${f.file}:${line}`;
+  if (f.file) return f.file;
+  return 'this endpoint';
 }
 
 function _templateFor(f) {
@@ -65,7 +70,7 @@ async function _renderLlm(f) {
 Vuln: ${f.vuln}
 CWE: ${f.cwe}
 Severity: ${f.severity}
-Location: ${f.file}:${f.line}
+Location: ${_routeOf(f)}
 Snippet: ${(f.snippet || '').slice(0, 200)}
 
 Write ONE paragraph (5-7 sentences) covering: (1) how an attacker reaches this code, (2) what they get if exploited, (3) typical recovery cost. Plain English, no marketing language, no emoji.`;

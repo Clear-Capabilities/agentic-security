@@ -38,3 +38,13 @@ test('templates cover the load-bearing CWE families', () => {
     assert.ok(typeof _internals.TEMPLATES[fam] === 'function', `missing narration template for ${fam}`);
   }
 });
+
+test('no narration emits a broken location when the line is missing', () => {
+  // Templates that reference a location must not render ":undefined" / ":?".
+  for (const fam of Object.keys(_internals.TEMPLATES)) {
+    const text = _internals.TEMPLATES[fam]({ family: fam, file: 'app.js' }); // no line
+    assert.doesNotMatch(text, /:undefined|:\?/, `${fam} template emits a broken location`);
+  }
+  // Generic fallback with no file/line at all stays clean.
+  assert.doesNotMatch(_internals._renderTemplate({ family: 'novel', severity: 'high' }), /:undefined|:\?|<endpoint>/);
+});

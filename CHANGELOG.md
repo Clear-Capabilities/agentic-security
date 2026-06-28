@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.124.1 — fix: narration no longer prints a broken location
+
+Now that v0.124.0 surfaces `narration` prominently inline, a pre-existing template
+bug became visible: some narrations read `app.js:?` / `app.js:undefined` because the
+location was interpolated before the finding's line was finalised.
+
+- `scanner/src/posture/flow-narration.js`: the location is redundant (the finding
+  header already shows `file:line`), so the family templates are now
+  location-agnostic, and `_routeOf()` (generic fallback + LLM prompt) falls back to
+  the file alone — or "this endpoint" — instead of emitting `:undefined` / `:?`.
+- Regression test in `test/flow-narration.test.js` asserts no template renders a
+  broken location when the line is absent.
+
 ## 0.124.0 — inline finding depth (no second command for "why it fired")
 
 The depth `/triage --explain` produces now renders **inline** in the finding views,
