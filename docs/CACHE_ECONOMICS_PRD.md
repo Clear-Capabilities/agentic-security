@@ -1,7 +1,7 @@
 # PRD — Prompt-Cache Economics (measured, cache-aware token-cost optimization)
 
-**Status:** Draft for review · Phase A (F1–F3) implemented in v0.121.0
-**Version:** 1.0
+**Status:** Phase A (F1–F3) shipped in v0.121.0 · Phase B (F4–F6) shipped in v0.122.0
+**Version:** 1.1
 **Date:** 2026-06-28
 **Author:** Ross Young / Clear Capabilities Inc.
 **Scope:** A cache-economics capability for the agentic-security plugin: a transcript
@@ -122,52 +122,54 @@ acceptance criteria below are met by the shipped tests.
   yields an effort-only tip; stale cache yields an uncaveated switch. **Met.**
 - **Effort:** M.
 
-### F4 — Depth-first routing philosophy  ·  Phase B
-- **Definition.** Formalize depth (effort) as the *primary*, cache-safe lever and a
-  model switch as the break-even-gated exception — in product copy, defaults, and the
-  dial semantics.
+### F4 — Depth-first routing philosophy  ·  Phase B  ·  shipped
+- **Definition.** Depth (effort) is the *primary*, cache-safe lever; a model switch is
+  the exception, only chosen when it saves *materially* more than the effort drop.
 - **Cache mechanic.** Effort changes do not invalidate the tools/system cache; model
-  switches do. So the cheapest *safe* win in an ongoing session is usually a depth
+  switches do — so the cheapest *safe* win in an ongoing session is usually a depth
   drop.
-- **Code.** Mostly realized by F3; remaining = docs/positioning, possibly a dial
-  default that biases toward effort, and a one-line "why effort first" rationale in
-  the tip.
-- **Test.** Snapshot tests on tip phrasing; assert effort is preferred at parity.
-- **Acceptance.** Docs + the advisor consistently present depth-first; no regression
-  in F3 tests.
+- **Code.** `buildAdvice` pick logic: a switch (candidate A, cache-busting) is chosen
+  over the effort drop (candidate B) only when `A.savings ≥ B.savings × (1 +
+  depthFirstMargin)` (default 0.25); two cache-safe candidates compare on savings
+  alone. The effort tip states the rationale ("keeps your model and cached context —
+  no cache rewarm").
+- **Test.** `hooks/model-cost-advisor.test.js` — default margin keeps the 2× switch;
+  a high margin flips the pick to the effort drop.
+- **Acceptance.** Effort preferred at parity and within the margin; no F3 regression.
+  **Met.**
 - **Effort:** S.
 
-### F5 — Subagent-offload advice  ·  Phase B
-- **Definition.** When a cheap one-off arrives mid-expensive-session, advise running
-  it as a **Haiku subagent** (protecting the main thread's warm cache) instead of
-  switching the main model.
-- **Cache mechanic.** A subagent runs in its own context; the main session's cache is
-  untouched — the cache-preserving way to "use Haiku for the cheap part."
-- **Code.** New advisor branch: when `tier==='simple'`, the current model is
-  expensive, and the cache is deep (switch suppressed by F3), emit a subagent
-  suggestion instead of (or alongside) the effort tip. Reuse `classifyTier` + the
-  cached-size signal.
-- **Test.** `buildAdvice` returns the subagent phrasing for (simple tier + Opus +
-  deep cache); not for shallow caches.
-- **Acceptance.** Suggestion appears only in the deep-cache/cheap-prompt regime; never
-  recommends disturbing the main cache for trivial work.
+### F5 — Subagent-offload advice  ·  Phase B  ·  shipped
+- **Definition.** When a cheap one-off arrives mid-expensive-session and a cheap-model
+  switch is cache-blocked, advise running it as a **Haiku subagent** (own context,
+  main cache untouched) instead of switching the main model.
+- **Cache mechanic.** A subagent runs in its own context; the main session's warm
+  cache is untouched — the cache-preserving way to "use Haiku for the cheap part."
+- **Code.** `buildAdvice` records a `suppressedSwitch` (a cost-worthy switch blocked
+  by the F3 break-even gate); when `tier==='simple'` and one exists, it returns the
+  subagent suggestion (full model saving, cache-safe) in preference to a partial
+  effort drop. Config `subagentAdvice` (default true).
+- **Test.** Subagent phrasing for (simple + Opus + deep cache); falls back to the
+  effort drop when `subagentAdvice:false`; never fires for shallow caches.
+- **Acceptance.** Appears only in the deep-cache/cheap-prompt regime; never disturbs
+  the main cache for trivial work. **Met.**
 - **Effort:** M.
 
-### F6 — Cost HUD / statusline + cache budget  ·  Phase B
+### F6 — Cost HUD / statusline + cache budget  ·  Phase B  ·  shipped
 - **Definition.** A live one-line statusline (spend, cache-hit %, $/turn) plus a soft
-  per-session budget that biases the `costQualityTradeoff` dial toward cheaper/
-  depth-down as it's approached.
+  per-session budget that biases the `costQualityTradeoff` dial toward cheaper as the
+  session's real spend approaches it.
 - **Cache mechanic.** Surfaces the F1 metrics continuously; the budget makes the dial
-  responsive to actual spend.
+  responsive to actual measured spend.
 - **Code.** `renderCacheStatusLine(metrics)` in `cache-economics.js` (mirrors
-  `watch-mode.js` `renderStatusLine`); a small `bin`/script that writes
-  `.agentic-security/cache-telemetry.json` and emits the line; a documented
-  `settings.json` `statusLine` snippet (the plugin can't force a statusline). Budget
-  read by the advisor from config.
-- **Test.** `renderCacheStatusLine` snapshot; budget-biases-dial unit test in the
-  advisor.
-- **Acceptance.** Statusline string is correct/parseable; near-budget sessions get a
-  more aggressive dial; opt-in only.
+  `watch-mode.js`); the `cache-statusline` CLI subcommand writes
+  `.agentic-security/cache-telemetry.json` and prints the line for a `settings.json`
+  `statusLine` command. Budget: `hooks/lib/transcript.js` `sessionSpendUsd` +
+  `biasedDial(dial, spend, budget)` in the advisor (config `sessionBudgetUsd`).
+- **Test.** `renderCacheStatusLine` shape snapshot + CJS/ESM spend parity
+  (`cache-economics.test.js`); `biasedDial` thresholds (`model-cost-advisor.test.js`).
+- **Acceptance.** Statusline string is correct/parseable; near/over-budget sessions
+  get a more aggressive dial; opt-in (budget defaults off). **Met.**
 - **Effort:** M.
 
 ---
@@ -176,8 +178,8 @@ acceptance criteria below are met by the shipped tests.
 
 | Phase | Features | Release | Rationale |
 |---|---|---|---|
-| **A (now)** | F1 telemetry · F2 invalidator detector · F3 break-even/TTL | **v0.121.0** | The measured foundation; F1 also makes every other estimate real |
-| **B (next)** | F4 depth-first · F5 subagent offload · F6 HUD/budget | v0.122.0 | Positioning + the "wow" surfaces, built on the measured base |
+| **A** ✅ | F1 telemetry · F2 invalidator detector · F3 break-even/TTL | **v0.121.0** | The measured foundation; F1 also makes every other estimate real |
+| **B** ✅ | F4 depth-first · F5 subagent offload · F6 HUD/budget | **v0.122.0** | Positioning + the "wow" surfaces, built on the measured base |
 
 **Out of scope (both phases):** any attempt to auto-switch the model/effort (the
 hook schema can't), and changing `cache_control` breakpoints/TTL (the harness owns

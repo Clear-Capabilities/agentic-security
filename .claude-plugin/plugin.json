@@ -1,6 +1,6 @@
 {
   "name": "agentic-security",
-  "version": "0.121.0",
+  "version": "0.122.0",
   "description": "Agentic-Security is a powerful Claude Code plugin that automatically performs Application Security Testing (SAST, SCA, secrets detection, and more). Think of it as the easy button for making your Claude-generated code safe and secure.",
   "author": {
     "name": "Ross Young",

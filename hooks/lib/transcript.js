@@ -49,6 +49,7 @@ function parse(jsonlPath) {
     out.push({
       model: msg.model,
       input: u.input_tokens || 0,
+      output: u.output_tokens || 0,
       cacheRead: u.cache_read_input_tokens || 0,
       cacheCreate: u.cache_creation_input_tokens || 0,
       ts: o.timestamp ? Date.parse(o.timestamp) : null,
@@ -83,4 +84,27 @@ function lastTurnAgeMs(opts = {}) {
   return l ? l.ageMs : null;
 }
 
-module.exports = { locate, parse, latest, latestCacheTokens, lastTurnAgeMs, encodeProjectDir };
+// Actual $ spent so far this session (for F6 cache-budget biasing). Prices the
+// real per-turn tokens: cache read ≈0.1×, write ≈1.25×, plus fresh in/out.
+const RATE = { haiku: { in: 1, out: 5 }, sonnet: { in: 3, out: 15 }, opus: { in: 5, out: 25 } };
+function rateFor(model) {
+  const s = String(model || '').toLowerCase();
+  if (s.includes('haiku')) return RATE.haiku;
+  if (s.includes('sonnet')) return RATE.sonnet;
+  if (s.includes('opus')) return RATE.opus;
+  return null;
+}
+function sessionSpendUsd(opts = {}) {
+  const f = locate(opts);
+  if (!f) return 0;
+  let usd = 0;
+  for (const r of parse(f)) {
+    const rt = rateFor(r.model);
+    if (!rt) continue;
+    const inRate = rt.in / 1e6, outRate = rt.out / 1e6;
+    usd += r.cacheRead * inRate * 0.1 + r.cacheCreate * inRate * 1.25 + r.input * inRate + (r.output || 0) * outRate;
+  }
+  return usd;
+}
+
+module.exports = { locate, parse, latest, latestCacheTokens, lastTurnAgeMs, sessionSpendUsd, encodeProjectDir };

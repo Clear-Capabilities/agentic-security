@@ -4,7 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const {
   classifyTier, modelKey, estimateCost, buildAdvice,
-  cacheRewarmPenalty, savingsFractionFloor,
+  cacheRewarmPenalty, savingsFractionFloor, biasedDial,
 } = require('./model-cost-advisor.js');
 
 test('classifyTier — simple prompts', () => {
@@ -116,16 +116,53 @@ test('buildAdvice — a moderate cache still advises the switch, with a break-ev
   assert.match(tip, /worth it past ~\d+ more turns/);
 });
 
-test('buildAdvice — a deep cache flips a switch into a cache-safe effort drop (#3)', () => {
+test('buildAdvice — a deep cache on a simple one-off suggests a Haiku subagent (F5)', () => {
   const tip = buildAdvice({
     prompt: 'what is a promise in javascript?',
     currentModel: 'claude-opus-4-8',
     currentEffort: 'high',
-    cachedContextTokens: 200000, // break-even > breakEvenMaxTurns → suppress the switch
+    cachedContextTokens: 200000, // switch is cache-blocked → offload to a subagent
+  });
+  assert.match(tip, /subagent/i);
+  assert.match(tip, /Haiku 4\.5/);
+  assert.doesNotMatch(tip, /\/model/);   // don't switch the main model
+  assert.doesNotMatch(tip, /\/effort/);  // subagent beats a partial effort drop here
+});
+
+test('buildAdvice — F5 can be disabled; deep cache then falls back to an effort drop', () => {
+  const tip = buildAdvice({
+    prompt: 'what is a promise in javascript?',
+    currentModel: 'claude-opus-4-8',
+    currentEffort: 'high',
+    cachedContextTokens: 200000,
+    subagentAdvice: false,
   });
   assert.match(tip, /\/effort low/);
-  assert.doesNotMatch(tip, /\/model/);   // switching that big a cache won't pay off
-  assert.match(tip, /cached context/);
+  assert.doesNotMatch(tip, /subagent/i);
+  assert.doesNotMatch(tip, /\/model/);
+});
+
+test('buildAdvice — F4 depth-first: a high margin prefers the effort drop over a switch', () => {
+  const base = {
+    prompt: 'what is a promise in javascript?',
+    currentModel: 'claude-opus-4-8',
+    currentEffort: 'high',
+    cachedContextTokens: 0, // cold cache → switch is otherwise on the table
+  };
+  // Default margin → the 2× cheaper switch is chosen.
+  assert.match(buildAdvice(base), /\/model haiku/);
+  // A very high margin → the cache-safe effort drop wins instead.
+  const tip = buildAdvice({ ...base, depthFirstMargin: 10 });
+  assert.match(tip, /\/effort low/);
+  assert.doesNotMatch(tip, /\/model/);
+});
+
+test('biasedDial — F6 budget biases the dial toward cheaper near/over budget', () => {
+  assert.equal(biasedDial(7, 0.50, 1.0), 7);   // under 75% → unchanged
+  assert.equal(biasedDial(7, 0.80, 1.0), 9);   // ≥75% → +2
+  assert.equal(biasedDial(7, 1.20, 1.0), 10);  // over budget → cheapest
+  assert.equal(biasedDial(10, 0.80, 1.0), 10); // capped at 10
+  assert.equal(biasedDial(7, 0.99, null), 7);  // no budget → unchanged
 });
 
 test('buildAdvice — cold cache (size 0) switches freely with no break-even caveat', () => {

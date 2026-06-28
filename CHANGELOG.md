@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.122.0 — cache economics Phase B (depth-first, subagent offload, cost HUD)
+
+Completes the cache-economics program (PRD `docs/CACHE_ECONOMICS_PRD.md`, F4–F6) on
+top of the v0.121.0 measured foundation. All in `hooks/model-cost-advisor.js`,
+`hooks/lib/transcript.js`, and `scanner/src/posture/cache-economics.js`.
+
+- **F4 — depth-first routing.** A model switch is now chosen over a cache-safe effort
+  drop only when it saves *materially* more (`A.savings ≥ B.savings × (1 +
+  depthFirstMargin)`, default 0.25). Effort is the primary lever; switching is the
+  break-even-gated exception.
+- **F5 — subagent offload.** For a simple one-off whose cheap-model switch is
+  cache-blocked (deep warm cache), the advisor suggests running it as a **Haiku
+  subagent** — full cheap-model savings without discarding the main session's cache.
+  Config `subagentAdvice` (default true).
+- **F6 — cost HUD + cache budget.** `cache-statusline` CLI prints a one-line HUD
+  (`$ spent · % cached · $/turn`) for a Claude Code `statusLine` command and writes
+  `.agentic-security/cache-telemetry.json`; the `query_cache_telemetry` MCP tool gains
+  a `statusline` field. A soft `sessionBudgetUsd` biases the `costQualityTradeoff`
+  dial toward cheaper as real session spend (priced from the transcript) approaches it.
+
 ## 0.121.0 — prompt-cache economics (measured, cache-aware cost optimization)
 
 Cache-economics core (PRD `docs/CACHE_ECONOMICS_PRD.md`, features F1–F3). Turns

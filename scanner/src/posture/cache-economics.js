@@ -203,6 +203,14 @@ const CAUSE_LABEL = {
   'prefix-change': 'prefix changed (system prompt / tools / context edit)',
 };
 
+// F6 — one-line HUD for a Claude Code statusLine command (mirrors
+// watch-mode.js renderStatusLine). Takes the metrics from computeCacheEconomics.
+export function renderCacheStatusLine(metrics) {
+  if (!metrics || !metrics.turns) return 'agentic-security: no session cost yet';
+  const hit = Math.round(metrics.cacheHitRatio * 100);
+  return `agentic-security: ${money(metrics.actualUsd)} · ${hit}% cached · ${money(metrics.costPerTurnUsd)}/turn`;
+}
+
 export function formatCacheReport(result) {
   if (!result.ok) {
     return result.reason === 'no-transcript'

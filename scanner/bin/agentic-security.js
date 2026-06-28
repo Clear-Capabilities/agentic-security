@@ -1642,6 +1642,25 @@ async function main() {
         else console.log(formatCacheReport(result));
         process.exit(0);
       }
+      case 'cache-statusline': {
+        // F6 — one-line cost HUD for a Claude Code statusLine command. Also writes
+        // .agentic-security/cache-telemetry.json for other pollers. Always exits 0.
+        const { analyzeTranscript, renderCacheStatusLine } = await import('../src/posture/cache-economics.js');
+        const projectDir = path.resolve(args.flags.root || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+        const result = analyzeTranscript({ transcriptPath: args.flags.transcript, projectDir });
+        if (result.ok) {
+          try {
+            const dir = path.join(projectDir, '.agentic-security');
+            fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(dir, 'cache-telemetry.json'),
+              JSON.stringify({ updatedAt: new Date().toISOString(), metrics: result.metrics, leaks: result.leaks }, null, 2));
+          } catch { /* best-effort */ }
+          console.log(renderCacheStatusLine(result.metrics));
+        } else {
+          console.log('agentic-security: no session cost yet');
+        }
+        process.exit(0);
+      }
       case 'mcp':      {
         const { runStdio } = await import('../src/mcp/stdio.js');
         const root = args.flags.root || process.env.AGENTIC_SECURITY_MCP_ROOT || process.cwd();

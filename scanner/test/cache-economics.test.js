@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyzeTranscript, formatCacheReport, _internal } from '../src/posture/cache-economics.js';
+import { analyzeTranscript, formatCacheReport, renderCacheStatusLine, _internal } from '../src/posture/cache-economics.js';
 const { parseTranscriptUsage, computeCacheEconomics, detectInvalidators, rateFor } = _internal;
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -63,6 +63,13 @@ test('analyzeTranscript — graceful when no transcript', () => {
   assert.match(formatCacheReport(result), /no Claude Code transcript/);
 });
 
+test('renderCacheStatusLine — F6 one-liner from metrics', () => {
+  const m = computeCacheEconomics(parseTranscriptUsage(FIXTURE));
+  const line = renderCacheStatusLine(m);
+  assert.match(line, /^agentic-security: \$[\d.]+ · \d+% cached · \$[\d.]+\/turn$/);
+  assert.equal(renderCacheStatusLine({ turns: 0 }), 'agentic-security: no session cost yet');
+});
+
 // Parity: the CJS hook twin agrees with the ESM parser on the shared fixture.
 test('hooks/lib/transcript.js — CJS twin agrees with ESM parser', () => {
   const require = createRequire(import.meta.url);
@@ -73,4 +80,8 @@ test('hooks/lib/transcript.js — CJS twin agrees with ESM parser', () => {
   // latestCacheTokens = last warm turn's input-side size (last sonnet turn).
   const last = esmRecs[esmRecs.length - 1];
   assert.equal(cjs.latestCacheTokens({ transcriptPath: FIXTURE }), last.cacheRead + last.cacheCreate + last.input);
+  // sessionSpendUsd (CJS, F6) matches the ESM actual-spend within rounding (all
+  // fixture writes are 5-min, so the flat 1.25× and the split agree).
+  const m = computeCacheEconomics(esmRecs);
+  assert.ok(Math.abs(cjs.sessionSpendUsd({ transcriptPath: FIXTURE }) - m.actualUsd) < 1e-6);
 });

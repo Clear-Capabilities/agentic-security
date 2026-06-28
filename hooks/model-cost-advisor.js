@@ -109,11 +109,23 @@ function savingsFractionFloor(dial) {
   return ((10 - d) / 10) * 0.4;      // dial 10 → 0%, 7 → 12%, 1 → 36%
 }
 
+// F6 — cache budget: as the session's actual spend approaches a soft budget, bias
+// the cost-quality dial toward cheaper (higher = more aggressive). Returns the
+// effective dial. No budget → unchanged.
+function biasedDial(dial, spendUsd, budgetUsd) {
+  if (!budgetUsd || budgetUsd <= 0 || !(spendUsd >= 0)) return dial;
+  const ratio = spendUsd / budgetUsd;
+  if (ratio >= 1) return 10;                    // over budget → cheapest
+  if (ratio >= 0.75) return Math.min(10, dial + 2); // closing in → lean cheaper
+  return dial;
+}
+
 // ── Config / state I/O ──────────────────────────────────────────────────────
 function readCfg() {
   const defaults = { mode: 'off', costQualityTradeoff: 7, minSavingsUsd: 0.01,
     assumedModel: 'claude-opus-4-8', assumedCachedTokens: null,
-    ttlSeconds: 300, breakEvenMaxTurns: 6, models: null };
+    ttlSeconds: 300, breakEvenMaxTurns: 6, depthFirstMargin: 0.25,
+    subagentAdvice: true, sessionBudgetUsd: null, models: null };
   try {
     const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
     return { ...defaults, ...parsed };
@@ -234,7 +246,8 @@ function roundUsd(n) {
 // Both must clear the cost-quality dial's fraction floor + the absolute floor.
 function buildAdvice({ prompt, currentModel, currentEffort, costQualityTradeoff = 7,
   minSavingsUsd = 0.01, assumedModel = 'claude-opus-4-8', modelAssumed = false,
-  cachedContextTokens = 0, breakEvenMaxTurns = 6, models = null }) {
+  cachedContextTokens = 0, breakEvenMaxTurns = 6, depthFirstMargin = 0.25,
+  subagentAdvice = true, models = null }) {
   const curId = modelKey(currentModel) || modelKey(assumedModel);
   if (!curId) return null;
 
@@ -253,6 +266,7 @@ function buildAdvice({ prompt, currentModel, currentEffort, costQualityTradeoff 
 
   // Candidate A — the tier's cheapest model+depth (may be a model switch).
   let A = null;
+  let suppressedSwitch = null; // a cost-worthy switch blocked by cache break-even (F5)
   {
     const recId = reco.model;
     const base = estimateCost(recId, tier, reco.effort, models);
@@ -261,13 +275,17 @@ function buildAdvice({ prompt, currentModel, currentEffort, costQualityTradeoff 
       if (recId === curId) {
         // Same model, depth-only change — cache-safe, no break-even.
         if (qualifies(perTurn)) A = { kind: 'effort', model: recId, effort: reco.effort, savings: perTurn };
-      } else {
+      } else if (qualifies(perTurn)) {
         // Model switch — net the one-time cache rewarm against the per-turn saving
         // as a break-even horizon, and only advise it if it pays off soon (#3).
         const penalty = cacheRewarmPenalty(cachedContextTokens, curId, recId, models);
         const breakEven = penalty <= 0 ? 0 : (perTurn > 0 ? penalty / perTurn : Infinity);
-        if (qualifies(perTurn) && breakEven <= breakEvenMaxTurns) {
+        if (breakEven <= breakEvenMaxTurns) {
           A = { kind: 'switch', model: recId, effort: reco.effort, savings: perTurn, breakEven };
+        } else {
+          // Worth it on cost, but the warm cache is too deep to recoup soon — F5
+          // can offer a subagent instead of disturbing the main cache.
+          suppressedSwitch = { model: recId, effort: reco.effort, savings: perTurn, breakEven };
         }
       }
     }
@@ -287,12 +305,30 @@ function buildAdvice({ prompt, currentModel, currentEffort, costQualityTradeoff 
     }
   }
 
-  // Bigger win wins; on a tie prefer the cache-safe effort downgrade (B).
-  const pick = (A && B) ? (B.savings >= A.savings ? B : A) : (A || B);
-  if (!pick) return null;
-
-  const pct = Math.round((pick.savings / curCost) * 100);
+  const pct = (s) => Math.round((s / curCost) * 100);
   const assumedNote = modelAssumed ? ' (assuming your model)' : '';
+
+  // F5 — subagent offload: a true one-off whose cheap-model switch is cache-blocked.
+  // Spawning a Haiku subagent captures the full model saving WITHOUT discarding the
+  // main session's warm cache — strictly better than a partial effort drop here.
+  if (subagentAdvice && tier === 'simple' && suppressedSwitch) {
+    const s = suppressedSwitch;
+    return `\u{1F4A1} This simple one-off sits on a deep warm cache (~${Math.round(cachedContextTokens / 1000)}k tokens). `
+      + `Switching your main model would discard it — instead run this as a ${table[s.model].label} subagent: `
+      + `it answers in its own context (~${pct(s.savings)}% cheaper for this task) and leaves your ${table[curId].label} cache intact.`;
+  }
+
+  // F4 — depth-first: prefer the cache-safe effort drop (B) over a model switch (A)
+  // unless the switch saves *materially* more (beyond depthFirstMargin). Two
+  // cache-safe candidates just compare on savings.
+  let pick;
+  if (A && B) {
+    if (A.kind === 'switch') pick = (A.savings >= B.savings * (1 + depthFirstMargin)) ? A : B;
+    else pick = (A.savings >= B.savings) ? A : B;
+  } else {
+    pick = A || B;
+  }
+  if (!pick) return null;
 
   if (pick.kind === 'switch') {
     const depthWord = pick.effort ? ` ${pick.effort}` : '';
@@ -303,12 +339,12 @@ function buildAdvice({ prompt, currentModel, currentEffort, costQualityTradeoff 
       ? ` (worth it past ~${Math.ceil(pick.breakEven)} more turns — switching re-warms the cache)`
       : '';
     return `\u{1F4A1} This looks like a ${tier} task${assumedNote}. ${table[pick.model].label}${depthWord} `
-      + `would cost ~${pct}% less per turn (est. ~${roundUsd(pick.savings)}/turn).${be} `
+      + `would cost ~${pct(pick.savings)}% less per turn (est. ~${roundUsd(pick.savings)}/turn).${be} `
       + `Run:  /model ${table[pick.model].short}${effortStep}`;
   }
-  // effort-only — keeps the model and its cached context.
-  return `\u{1F4A1} This ${tier} task could run at lower depth${assumedNote} — keeps your model and cached context. `
-    + `/effort ${pick.effort} on ${table[pick.model].label} would cost ~${pct}% less (est. saves ~${roundUsd(pick.savings)}).`;
+  // effort-only — the cache-safe primary lever (F4): keeps the model and its cache.
+  return `\u{1F4A1} This ${tier} task could run at lower depth${assumedNote} — keeps your model and cached context (no cache rewarm). `
+    + `/effort ${pick.effort} on ${table[pick.model].label} would cost ~${pct(pick.savings)}% less (est. saves ~${roundUsd(pick.savings)}).`;
 }
 
 // ── Entry point ─────────────────────────────────────────────────────────────
@@ -342,16 +378,25 @@ async function main() {
     }
   }
 
+  // F6 — bias the dial toward cheaper as the session's real spend nears the budget.
+  let effectiveDial = cfg.costQualityTradeoff;
+  if (typeof cfg.sessionBudgetUsd === 'number' && cfg.sessionBudgetUsd > 0) {
+    const spend = transcript.sessionSpendUsd({ transcriptPath: input.transcript_path, projectDir: cwd });
+    effectiveDial = biasedDial(cfg.costQualityTradeoff, spend, cfg.sessionBudgetUsd);
+  }
+
   const tip = buildAdvice({
     prompt,
     currentModel,
     currentEffort: process.env.CLAUDE_EFFORT || null,
-    costQualityTradeoff: cfg.costQualityTradeoff,
+    costQualityTradeoff: effectiveDial,
     minSavingsUsd: cfg.minSavingsUsd,
     assumedModel: cfg.assumedModel,
     modelAssumed: !captured,
     cachedContextTokens,
     breakEvenMaxTurns: cfg.breakEvenMaxTurns,
+    depthFirstMargin: cfg.depthFirstMargin,
+    subagentAdvice: cfg.subagentAdvice,
     models: cfg.models,
   });
 
@@ -370,5 +415,5 @@ if (require.main === module) {
 module.exports = {
   MODELS, TIER_PROFILE, TIER_RECO, TIER_DEPTH,
   modelKey, classifyTier, estimateCost, effortMult, roundUsd, buildAdvice,
-  cacheRewarmPenalty, savingsFractionFloor, effortRank,
+  cacheRewarmPenalty, savingsFractionFloor, effortRank, biasedDial,
 };

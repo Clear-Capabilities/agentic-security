@@ -18,7 +18,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { applyFix as applyFixHistory, fixAcceptanceRate } from '../posture/fix-history.js';
 import { verifyLastScan } from '../posture/integrity.js';
-import { analyzeTranscript, formatCacheReport } from '../posture/cache-economics.js';
+import { analyzeTranscript, formatCacheReport, renderCacheStatusLine } from '../posture/cache-economics.js';
 import { redactString, redactFinding } from './redact.js';
 
 // Lazy-loaded: these transitively pull in npm packages (fast-glob,
@@ -1043,6 +1043,7 @@ export const query_cache_telemetry = {
       metrics: result.metrics,
       leaks: result.leaks,
       report: formatCacheReport(result),
+      statusline: renderCacheStatusLine(result.metrics),
     };
   },
 };

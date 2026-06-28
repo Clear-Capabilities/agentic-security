@@ -104,9 +104,39 @@ It measures the **real** cached size from your session transcript (not a guess),
 shows a switch's **break-even** ("worth it past ~N more turns — switching re-warms
 the cache"), suppresses switches that won't pay off, and — once your cache has gone
 cold past its 5-minute TTL — recommends switching freely again (nothing left to
-lose). Tune via `costQualityTradeoff`, `ttlSeconds`, and `breakEvenMaxTurns` in
-`.agentic-security/model-optimizer.json`. For a full accounting of what caching
-saved or wasted this session, run **`/posture --cache`**.
+lose). For a full accounting of what caching saved or wasted this session, run
+**`/posture --cache`**.
+
+**Subagent offload.** For a *simple* one-off deep in an expensive session — where
+switching your main model would throw away a big warm cache — it suggests running
+the prompt as a **Haiku subagent** instead. The subagent answers in its own context
+(full cheap-model savings) and leaves your main cache intact.
+
+**Live cost HUD + budget (opt-in).** `cache-statusline` prints a one-liner
+(`agentic-security: $0.22 · 51% cached · $0.04/turn`) you can wire into Claude Code's
+status line, and writes `.agentic-security/cache-telemetry.json`:
+
+```json
+// .claude/settings.json
+{ "statusLine": { "type": "command", "command": "agentic-security cache-statusline" } }
+```
+
+Set `sessionBudgetUsd` and the optimizer automatically leans more aggressive on cost
+as your real spend approaches it.
+
+### Config reference (`.agentic-security/model-optimizer.json`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `mode` | `"off"` | `off` / `advise` |
+| `costQualityTradeoff` | `7` | 0 = never downgrade … 10 = cheapest |
+| `minSavingsUsd` | `0.01` | absolute anti-noise floor |
+| `ttlSeconds` | `300` | cache TTL; older = treat as cold (free to switch) |
+| `breakEvenMaxTurns` | `6` | suppress a switch whose cache rewarm needs more turns than this |
+| `depthFirstMargin` | `0.25` | a switch must beat the effort drop by this fraction to be chosen |
+| `subagentAdvice` | `true` | suggest a Haiku subagent for cache-blocked one-offs |
+| `sessionBudgetUsd` | `null` | soft session budget; biases the dial cheaper as spend nears it |
+| `assumedModel` | `"claude-opus-4-8"` | fallback when the session model is unknown |
 
 ---
 
