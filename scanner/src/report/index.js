@@ -29,6 +29,54 @@ function riskNote(f) {
   return null;
 }
 
+function _firstSentences(text, n) {
+  if (!text) return '';
+  const t = String(text).replace(/\s+/g, ' ').trim();
+  return t.split(/(?<=[.!?])\s+/).slice(0, n).join(' ');
+}
+
+// "How it fires" summary from the whyFired provenance already on the finding:
+// the source→sink flow (or the sink line), plus rejected sanitizers / observed
+// guards / reachability demotion. Returns null when no provenance exists.
+function _flowSummary(f) {
+  const w = f.whyFired;
+  if (!w || !w.evidence) return null;
+  const ev = w.evidence;
+  const steps = Array.isArray(ev.pathSteps) ? ev.pathSteps.filter(s => s && s.label) : [];
+  let flow = null;
+  if (steps.length) flow = steps.map(s => s.label).join(' → ');
+  else if (ev.sourceSnippet && ev.sinkSnippet && ev.sourceSnippet !== ev.sinkSnippet) flow = `${ev.sourceSnippet.trim()} → ${ev.sinkSnippet.trim()}`;
+  else if (ev.sinkSnippet) flow = String(ev.sinkSnippet).trim();
+  const tags = [];
+  if (Array.isArray(ev.sanitizers) && ev.sanitizers.length) tags.push(`${ev.sanitizers.length} sanitizer(s) rejected`);
+  if (Array.isArray(ev.guards) && ev.guards.length) tags.push(`${ev.guards.length} guard(s) seen`);
+  if (w.considered && w.considered.reachabilityFilter === 'demoted') tags.push('reachability-demoted');
+  return { detector: w.detector || null, parser: w.parser || null, flow, tags };
+}
+
+// The inline "explain" depth — assembled entirely from fields already on the
+// finding (narration + whyFired + fix), so the default finding view carries the
+// same depth as `/triage --explain` without a second command. verbose=false
+// trims the narration to 2 sentences and omits the evidence tags + fix code.
+function explainParts(f, { verbose = false } = {}) {
+  const why = f.narration
+    ? (verbose ? String(f.narration).replace(/\s+/g, ' ').trim() : _firstSentences(f.narration, 2))
+    : '';
+  const fs = _flowSummary(f);
+  let how = '';
+  if (fs && (fs.flow || fs.detector)) {
+    const head = fs.detector ? fs.detector + (fs.parser ? ` (${fs.parser})` : '') : '';
+    how = [head, fs.flow].filter(Boolean).join('  ·  ');
+    if (verbose && fs.tags.length) how += `  ·  ${fs.tags.join(' · ')}`;
+  }
+  let fix = '';
+  if (f.fix && typeof f.fix === 'object' && typeof f.fix.description === 'string') fix = f.fix.description;
+  else if (typeof f.fix === 'string') fix = f.fix;
+  else if (typeof f.remediation === 'string') fix = f.remediation;
+  const fixCode = verbose && f.fix && typeof f.fix === 'object' && typeof f.fix.code === 'string' ? f.fix.code : '';
+  return { why, how, fix: fix.replace(/\s+/g, ' ').trim(), fixCode };
+}
+
 function fingerprint(f){
   const s = `${f.file}:${f.line||f.source?.line||0}:${f.vuln||f.type||''}`;
   return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
@@ -703,9 +751,12 @@ export function toVex(scan, meta = {}) {
 }
 
 export function toHTML(scan, meta = {}) {
-  // Attach the "likely lower risk" note (computed server-side) so the browser
-  // render can badge over-stated high/critical findings.
-  const findings = normalizeFindings(scan).map(f => ({ ...f, _riskNote: riskNote(f) }));
+  // Attach the "likely lower risk" note + inline explain depth (computed
+  // server-side) so the browser render shows them without a second command.
+  const findings = normalizeFindings(scan).map(f => {
+    const ex = explainParts(f, { verbose: true });
+    return { ...f, _riskNote: riskNote(f), _explainWhy: ex.why, _explainHow: ex.how };
+  });
   const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
   const stride = {};
@@ -773,6 +824,9 @@ export function toHTML(scan, meta = {}) {
   .f-body{display:none;margin-top:12px;padding-top:12px;border-top:1px solid #1e293b;font-size:12px}
   .f.expanded .f-body{display:block}
   .f-body pre{background:#020617;padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;line-height:1.5}
+  .f-why{margin-top:8px;color:#cbd5e1}
+  .f-how{margin-top:6px;color:#94a3b8;font-size:13px}
+  .f-how code{font-family:ui-monospace,monospace;color:#e2e8f4}
   .f-fix{background:#0d1f3d;border-left:3px solid #38bdf8;padding:8px 12px;margin-top:8px;border-radius:0 4px 4px 0}
   .hidden{display:none!important}
 </style></head>
@@ -824,6 +878,8 @@ function makeCard(f) {
       (f._riskNote ? '<span class="f-note" title="The reachability / confidence pipeline marked this down from its rule-default severity">↓ ' + esc(f._riskNote) + '</span>' : '') +
     '</div>' +
     '<div class="f-body">' +
+      (f._explainWhy ? '<div class="f-why"><b>Why it matters:</b> ' + esc(f._explainWhy) + '</div>' : '') +
+      (f._explainHow ? '<div class="f-how"><b>How it fires:</b> <code>' + esc(f._explainHow) + '</code></div>' : '') +
       (f.snippet ? '<pre>' + esc(f.snippet) + '</pre>' : '') +
       (f.masked ? '<pre style="color:#f97316">' + esc(f.masked) + ' (masked)</pre>' : '') +
       (f.fix && f.fix.description ? '<div class="f-fix"><b>Fix:</b> ' + esc(f.fix.description) + (f.fix.code ? '<pre>' + esc(f.fix.code) + '</pre>' : '') + '</div>' : '') +
@@ -926,10 +982,12 @@ export function toCLI(scan, { verbose=false, color=true }={}){
     const rn = riskNote(f);
     if (rn) lines.push(`        ${c('↓ ' + rn, '\x1b[2;33m')}`);
     if (f.masked) lines.push(`        ${c('value:', DIM)} ${f.masked}`);
-    if (verbose && f.fix?.description) {
-      lines.push(`        ${c('fix:', DIM)} ${f.fix.description}`);
-      if (f.fix.code) for (const ln of f.fix.code.split('\n').slice(0, 6)) lines.push(`           ${c(ln, DIM)}`);
-    }
+    // Inline explain depth — why it matters / how it fires / the fix (#explain).
+    const ex = explainParts(f, { verbose });
+    if (ex.why) lines.push(`        ${c('why:', DIM)} ${ex.why}`);
+    if (ex.how) lines.push(`        ${c('how:', DIM)} ${ex.how}`);
+    if (ex.fix) lines.push(`        ${c('fix:', DIM)} ${ex.fix}`);
+    if (ex.fixCode) for (const ln of ex.fixCode.split('\n').slice(0, 6)) lines.push(`           ${c(ln, DIM)}`);
   }
   lines.push('');
   const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
@@ -1155,6 +1213,9 @@ export function toProTable(scan, options = {}) {
     else lines.push(`${sev}  ${where}  ${cwe}  ${cvss}  ${owasp}  ${vuln}  ${conf}`);
     const rn = riskNote(f);
     if (rn) lines.push(c('     ↓ ' + rn, '\x1b[2;33m'));
+    // One compact "why it matters" line keeps the table scannable but not bare.
+    const why1 = f.narration ? _firstSentences(f.narration, 1) : '';
+    if (why1) lines.push(c('     ↳ ' + why1, DIM));
   }
 
   // Footer counts.

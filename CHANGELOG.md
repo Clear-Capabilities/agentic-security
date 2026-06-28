@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.124.0 — inline finding depth (no second command for "why it fired")
+
+The depth `/triage --explain` produces now renders **inline** in the finding views,
+assembled from fields already on the finding (`narration` + `whyFired` + fix) — so the
+default per-finding view answers "why does this matter / how does it fire / how do I
+fix it" without a separate command. Addresses the "only ~2 sentences per finding"
+feedback. Presentation only — no detector/severity changes.
+
+- **Inline explain block** (`scanner/src/report/index.js`): every per-finding surface
+  now shows `why:` (the impact narration), `how:` (the `whyFired` detector + source→sink
+  flow, with sanitizers/guards/reachability under `--verbose`), and `fix:`. Wired into
+  the firehose list (`toCLI`), the pro table (a compact one-line "why"), and the HTML
+  report ("Why it matters" / "How it fires" blocks). Default trims the narration to two
+  sentences; `--verbose` shows the full narrative + fix code. Degrades gracefully when a
+  finding lacks the fields (e.g. SCA).
+- **`--firehose` actually lists findings now.** Previously it only lowered the
+  confidence threshold while the vibecoder verdict showed no per-finding list; it now
+  appends the full per-finding list (with the inline depth) so "Show ALL findings" does.
+
 ## 0.123.0 — report clarity: risk-demotion labels, depth discoverability, HTML export docs
 
 Acting on user feedback that findings could overstate severity, that explanations

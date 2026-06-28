@@ -55,3 +55,49 @@ test('toShipVerdict — clean scan shows no "want more detail" footer', () => {
   assert.match(out, /Safe to deploy/);
   assert.doesNotMatch(out, /Want more detail\?/);
 });
+
+// ── Inline explain depth (why it matters / how it fires / fix) ──────────────
+const explainable = {
+  severity: 'critical', cwe: 'CWE-89', file: 'app.js', line: 7, vuln: 'SQL Injection',
+  narration: 'An attacker sends UNION-style SQL in a request parameter. The driver executes it verbatim and returns rows from any readable table. Typical impact: full user-table dump. Recovery: incident response and notification.',
+  whyFired: { detector: 'sast/sql-injection', parser: 'STRUCTURAL', evidence: { sourceSnippet: 'req.params.id', sinkSnippet: 'db.query(`... ${req.params.id}`)', pathSteps: [], sanitizers: [], guards: [] }, considered: { reachabilityFilter: 'kept' } },
+  // Engine pre-normalize shape: fix=string description, code=string (normalizeFindings wraps these into {description, code}).
+  fix: 'Use a parameterized query with bound params.',
+  code: 'db.query("SELECT * FROM users WHERE id = ?", [id]);',
+};
+
+test('toCLI — renders inline why/how/fix from narration + whyFired', () => {
+  const out = stripAnsi(toCLI({ findings: [explainable] }, { color: false }));
+  assert.match(out, /why: An attacker sends UNION-style SQL.*returns rows from any readable table\./);
+  assert.match(out, /how: sast\/sql-injection \(STRUCTURAL\).*req\.params\.id → db\.query/);
+  assert.match(out, /fix: Use a parameterized query with bound params\./);
+  // default (non-verbose) trims narration to 2 sentences and omits fix code.
+  assert.doesNotMatch(out, /Recovery: incident response/);
+  assert.doesNotMatch(out, /SELECT \* FROM users WHERE id = \?/);
+});
+
+test('toCLI --verbose — full narration + fix code', () => {
+  const out = stripAnsi(toCLI({ findings: [explainable] }, { color: false, verbose: true }));
+  assert.match(out, /Recovery: incident response and notification\./); // full narration
+  assert.match(out, /SELECT \* FROM users WHERE id = \?/);             // fix code
+});
+
+test('toProTable — adds a one-line "why" under the row', () => {
+  const out = stripAnsi(toProTable({ findings: [explainable] }, { color: false, profile: { confidenceMin: 0 } }));
+  assert.match(out, /↳ An attacker sends UNION-style SQL in a request parameter\./);
+});
+
+test('toHTML — embeds why/how depth for the browser render', () => {
+  const html = toHTML({ findings: [explainable] });
+  assert.match(html, /"_explainWhy":"An attacker sends UNION-style SQL/);
+  assert.match(html, /"_explainHow":"sast\/sql-injection/);
+  assert.match(html, /class="f-why"/);
+  assert.match(html, /Why it matters:/);
+});
+
+test('explain depth degrades gracefully when fields are absent', () => {
+  const bare = { severity: 'high', cwe: 'CWE-79', file: 'x.js', line: 1, vuln: 'XSS' };
+  const out = stripAnsi(toCLI({ findings: [bare] }, { color: false }));
+  assert.doesNotMatch(out, /\n\s+why:/);
+  assert.doesNotMatch(out, /\n\s+how:/);
+});

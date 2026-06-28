@@ -543,6 +543,13 @@ async function cmdScan(args) {
   else if (format === 'cli')   body = toCLIByProfile(scan, { profile: effProfile, columns: args.flags.columns, verbose });
   else body = toSummary(scan);
 
+  // --firehose: the verdict/summary views don't list findings — append the full
+  // per-finding list (with inline why-it-matters / how-it-fires / fix depth) so
+  // "Show ALL findings" actually shows them. Add --verbose for full narration + code.
+  if (args.flags.firehose && (!format || format === 'ship' || format === 'summary')) {
+    body += '\n\n' + toCLI(scan, { verbose });
+  }
+
   // v3 next-gen — supplementary blocks for human-readable formats. These
   // are append-only and do not change the verdict / exit code. The blocks
   // are only meaningful when v3 annotators have run (default scan path).
