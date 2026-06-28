@@ -7,6 +7,28 @@ import { SCANNER_VERSION } from '../posture/version.js';
 const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const SEV_TO_SARIF = { critical: 'error', high: 'error', medium: 'warning', low: 'note', info: 'none' };
 
+// A short "likely lower risk than its label" note for a high/critical finding the
+// reachability / exploitability / confidence pipeline has already marked down.
+// Detector severities are hardcoded per rule, so a `critical` can outrun its real
+// risk; this surfaces that in the rendered output so the label isn't taken at face
+// value. Returns null when the headline severity is fair as-is. (We annotate, not
+// mutate — `severity` stays canonical for SARIF/exit codes/baselines.)
+function riskNote(f) {
+  if (!/^(critical|high)$/.test(String(f.severity || ''))) return null;
+  const mv = String(f.mitigationVerdict || '').toLowerCase();
+  if (f.unreachable === true || f.unreachableInProd === true || mv.includes('unreachable')) {
+    return 'likely lower risk — not reachable in prod';
+  }
+  if (mv.includes('saniti')) return 'likely lower risk — input appears sanitized';
+  const et = String(f.exploitabilityTier || '').toLowerCase();
+  if (et === 'minimal' || et === 'low') return `likely lower risk — ${et} exploitability`;
+  const ct = String(f.confidenceTier || '').toLowerCase();
+  if (ct === 'low' || (typeof f.confidence === 'number' && f.confidence > 0 && f.confidence < 0.5)) {
+    return 'lower confidence — verify before prioritising';
+  }
+  return null;
+}
+
 function fingerprint(f){
   const s = `${f.file}:${f.line||f.source?.line||0}:${f.vuln||f.type||''}`;
   return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
@@ -681,7 +703,9 @@ export function toVex(scan, meta = {}) {
 }
 
 export function toHTML(scan, meta = {}) {
-  const findings = normalizeFindings(scan);
+  // Attach the "likely lower risk" note (computed server-side) so the browser
+  // render can badge over-stated high/critical findings.
+  const findings = normalizeFindings(scan).map(f => ({ ...f, _riskNote: riskNote(f) }));
   const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
   const stride = {};
@@ -745,6 +769,7 @@ export function toHTML(scan, meta = {}) {
   .f-vuln{font-weight:600;flex:1}
   .f-cwe{color:#64748b;font-size:11px;font-family:ui-monospace,monospace}
   .f-epss{font-size:11px;font-weight:600;color:#f59e0b;background:#f59e0b18;padding:1px 6px;border-radius:3px;white-space:nowrap}
+  .f-note{font-size:11px;font-weight:600;color:#a3a3a3;background:#a3a3a318;padding:1px 6px;border-radius:3px;white-space:nowrap}
   .f-body{display:none;margin-top:12px;padding-top:12px;border-top:1px solid #1e293b;font-size:12px}
   .f.expanded .f-body{display:block}
   .f-body pre{background:#020617;padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;line-height:1.5}
@@ -796,6 +821,7 @@ function makeCard(f) {
       '<span class="f-vuln">' + esc(f.vuln) + '</span>' +
       '<span class="f-cwe">' + esc(f.cwe||'') + '</span>' +
       epssHtml +
+      (f._riskNote ? '<span class="f-note" title="The reachability / confidence pipeline marked this down from its rule-default severity">↓ ' + esc(f._riskNote) + '</span>' : '') +
     '</div>' +
     '<div class="f-body">' +
       (f.snippet ? '<pre>' + esc(f.snippet) + '</pre>' : '') +
@@ -897,6 +923,8 @@ export function toCLI(scan, { verbose=false, color=true }={}){
       ? c(`  V:${f.validator_verdict}`, DIM)
       : '';
     lines.push(`${sevTag} ${c(f.cwe||'    ', DIM)}  ${f.file}:${f.line}  ${BOLD}${f.vuln}${RESET}${epssTag}${kevTag}${verdictTag}`);
+    const rn = riskNote(f);
+    if (rn) lines.push(`        ${c('↓ ' + rn, '\x1b[2;33m')}`);
     if (f.masked) lines.push(`        ${c('value:', DIM)} ${f.masked}`);
     if (verbose && f.fix?.description) {
       lines.push(`        ${c('fix:', DIM)} ${f.fix.description}`);
@@ -1051,6 +1079,14 @@ export function toShipVerdict(scan, options = {}) {
   } else if (advisoryCount > 0) {
     lines.push(c(`  ${advisoryCount} advisory item${advisoryCount === 1 ? '' : 's'} — run /security-scan-all --firehose to see them.`, DIM));
   }
+  // Discoverability: the depth (per-finding explanation) and the shareable report
+  // exist but aren't obvious from the one-screen verdict — point to them.
+  if (findings.length > 0) {
+    lines.push('');
+    lines.push(c('  Want more detail?', BOLD));
+    lines.push(c('     /triage --explain <id>             why it fired, the data-flow trace, and the fix', DIM));
+    lines.push(c('     scan . --format html -o report.html   shareable browser report (charts + filters)', DIM));
+  }
   // Coverage-honesty line (#5/#6): show the scan's blind spots — which
   // languages got flow analysis vs pattern-only, what was skipped, and how
   // many dangerous-looking calls had no finding. One concise line, not bloat.
@@ -1117,6 +1153,8 @@ export function toProTable(scan, options = {}) {
     else if (columns === 'capec') lines.push(`${sev}  ${where}  ${capec}  ${vuln}  ${conf}`);
     else if (columns === 'owasp') lines.push(`${sev}  ${where}  ${cwe}  ${owasp}  ${vuln}  ${conf}`);
     else lines.push(`${sev}  ${where}  ${cwe}  ${cvss}  ${owasp}  ${vuln}  ${conf}`);
+    const rn = riskNote(f);
+    if (rn) lines.push(c('     ↓ ' + rn, '\x1b[2;33m'));
   }
 
   // Footer counts.

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.123.0 — report clarity: risk-demotion labels, depth discoverability, HTML export docs
+
+Acting on user feedback that findings could overstate severity, that explanations
+felt thin, and that the browser report was hard to find. No detector/severity logic
+changed — these are presentation + docs improvements in `scanner/src/report/`.
+
+- **"Likely lower risk" labels.** A high/critical finding the reachability /
+  exploitability / confidence pipeline has already marked down now renders a visible
+  `↓ likely lower risk — …` note (not reachable in prod / sanitized / low
+  exploitability / low confidence) in the CLI firehose, the pro table, and the HTML
+  report. Severity stays canonical (SARIF/exit codes/baselines unchanged) — this only
+  annotates, so a hardcoded rule severity isn't taken at face value.
+- **Depth is discoverable.** The one-screen ship verdict now points to
+  `/triage --explain <id>` (the why-it-fired narrative + data-flow trace + fix) and to
+  the shareable HTML report, so users don't conclude the terse default is all there is.
+- **HTML report surfaced in the README.** Documents `scan . --format html --output
+  report.html` (self-contained browser page: severity charts, STRIDE, filterable
+  findings) alongside json / md / sarif / csv.
+
 ## 0.122.0 — cache economics Phase B (depth-first, subagent offload, cost HUD)
 
 Completes the cache-economics program (PRD `docs/CACHE_ECONOMICS_PRD.md`, F4–F6) on

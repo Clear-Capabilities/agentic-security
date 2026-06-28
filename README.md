@@ -68,6 +68,13 @@ In your **terminal** (no Claude Code required):
 npx @clear-capabilities/agentic-security-scanner secure .
 ```
 
+**Want a shareable report?** Any scan can export a self-contained, browser-viewable HTML page (severity charts, STRIDE breakdown, filterable findings) — or JSON / Markdown / SARIF:
+
+```bash
+npx @clear-capabilities/agentic-security-scanner scan . --format html --output report.html
+# open report.html   (formats: html · json · md · sarif · csv)
+```
+
 Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_COMPATIBILITY.md).
 
 ---
@@ -183,7 +190,7 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.122.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.123.0-blue)]()
 [![agentic-security](https://img.shields.io/badge/agentic--security-passing-brightgreen)]()
 
 ## License
