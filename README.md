@@ -86,13 +86,13 @@ Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_C
 
 **`/agentic-security:fix`** — Remediation. Modes: id / all / pr / sca / compliance / rotate-secret / vault / harden / trim / generate.
 
-**`/agentic-security:posture`** — Posture + reporting. Modes: status / report-card / harness / trend / threat / playbook / mgmt.
+**`/agentic-security:posture`** — Posture + reporting. Modes: status / report-card / harness / trend / threat / playbook / mgmt / cache.
 
 **`/agentic-security:compliance`** — Compliance + auditor flows. Modes: report / walkthrough / attestation / audit / pr.
 
 **`/agentic-security:supply`** — Supply chain. Modes: check / sbom / cve-alerts / license.
 
-**`/agentic-security:setup`** — Workflow installers + guards. Modes: hooks / ci / bodyguard / destructive-guard.
+**`/agentic-security:setup`** — Workflow installers + guards. Modes: hooks / ci / bodyguard / destructive-guard / model-optimizer.
 
 **`/agentic-security:labs`** — Experimental + AI-driven. Modes: claude-audit / model-rescan / synthesize-rule / cross-repo / risk-dollars / time-to-fix / llm.
 
@@ -128,6 +128,26 @@ Every legacy capability is reachable as a mode of one of these dispatchers — r
 - **Auto-baseline for legacy codebases.** `--set-baseline` snapshots existing findings; `--since-baseline` shows only what's new. Day-one usable on any project.
 
 Deep engine details — [architecture](docs/ARCHITECTURE.md).
+
+---
+
+## Stop overpaying for tokens
+
+Your agentic workforce runs on tokens. agentic-security watches each prompt and tells you when a cheaper model or lower reasoning depth would answer it just as well — and it's the only tool that does this **cache-aware**, accounting for the prompt cache a model switch would throw away.
+
+```
+💡 This simple one-off sits on a deep warm cache (~250k tokens). Switching your
+   main model would discard it — instead run this as a Haiku 4.5 subagent: it
+   answers in its own context (~84% cheaper) and leaves your Opus 4.8 cache intact.
+```
+
+- **Per-prompt model + depth advice.** Suggests the cheapest model + effort that still does the job — you tap `/model` + `/effort`. Zero added tokens; the analysis is purely local.
+- **Cache-aware routing.** Prefers a cache-preserving effort drop over a model switch, shows a switch's break-even ("worth it past ~N more turns"), and offloads cheap one-offs to a Haiku subagent so your warm cache survives.
+- **Measured, not guessed.** `/posture --cache` reports what prompt caching actually **saved** and **wasted** this session — real dollars parsed from your transcript, no estimates.
+- **Cache bodyguard.** Warns *before* an edit to `CLAUDE.md` or `.claude/settings` silently invalidates your cache and forces a costly cold re-read.
+- **Live cost HUD + budget.** A statusline one-liner (`$ spent · % cached · $/turn`), and an optional session budget that auto-tightens spend as you approach it.
+
+Opt-in with `/setup --model-optimizer`. Details — [cache economics](docs/MODEL_COST_OPTIMIZATION.md).
 
 ---
 
