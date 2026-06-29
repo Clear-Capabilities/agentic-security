@@ -154,7 +154,9 @@ Your agentic workforce runs on tokens. agentic-security watches each prompt and 
 - **Cache bodyguard.** Warns *before* an edit to `CLAUDE.md` or `.claude/settings` silently invalidates your cache and forces a costly cold re-read.
 - **Live cost HUD + budget.** A statusline one-liner (`$ spent · % cached · $/turn`), and an optional session budget that auto-tightens spend as you approach it.
 
-Opt-in with `/setup --model-optimizer`. Details — [cache economics](docs/MODEL_COST_OPTIMIZATION.md).
+- **Multi-provider — lints your *own* AI-app code.** Scanning a project that calls Anthropic, OpenAI, Gemini, or xAI? It flags prompt-cache killers (a timestamp/UUID baked into a prompt prefix) and over-provisioned calls (a flagship model at high reasoning depth), and recommends a cheaper model + depth **in that provider's framework** — e.g. an OpenAI app gets "gpt-5.4 at `reasoning_effort: low`."
+
+Opt-in with `/setup --model-optimizer`. Details — [cache economics](docs/MODEL_COST_OPTIMIZATION.md) · [v2 roadmap](docs/CACHE_ECONOMICS_V2_PRD.md).
 
 ---
 
@@ -190,7 +192,7 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
 [![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.124.1-blue)]()
+[![Version](https://img.shields.io/badge/version-0.125.0-blue)]()
 [![agentic-security](https://img.shields.io/badge/agentic--security-passing-brightgreen)]()
 
 ## License

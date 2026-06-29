@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.125.0 — multi-provider LLM cost + prompt-cache linter (Cache Economics v2, phase 1)
+
+First slice of the Cache Economics v2 PRD (`docs/CACHE_ECONOMICS_V2_PRD.md`) — the
+foundation (P1 provider detection, P2 provider catalog) + the flagship analyzer (F1
+cache-hygiene + P3 per-provider model/depth recommendation). The optimizer now reaches
+beyond this Claude Code session into the user's **own AI-app code**, across providers.
+
+- **Provider catalog** (`scanner/src/posture/provider-catalog.js`): a dated, no-network
+  snapshot of Anthropic / OpenAI / Google Gemini / xAI — model ladder ($/1M rates), the
+  "depth" knob (effort / reasoning_effort / thinkingBudget), and the cache model
+  (explicit vs automatic vs implicit). Prices are sourced, not hardcoded-in-logic, with a
+  `SOURCED_AT` staleness date.
+- **LLM cost/cache detector** (`scanner/src/sast/llm-cost-advisor.js`, `scanLlmCost`):
+  provider-aware, gated on detecting an LLM SDK (low FP), emits **advisory** findings —
+  (1) *prompt-cache killer*: a timestamp/UUID/random value baked into a prompt prefix
+  that defeats caching; (2) *over-provisioned*: a flagship model at high depth, with the
+  catalog's cheaper model + lower depth **in that provider's framework** as the fix
+  (e.g. an OpenAI app → "gpt-5.4 at reasoning_effort=low"). Severity `low`/`info` so it
+  never inflates security counts.
+
+Remaining PRD phases (F2 measured cost, F3 TTL, F4 compaction, F5 pre-warm, F6 cross-
+session warmth, F7 self-tuning; full P4 per-provider economics) ship next.
+
 ## 0.124.1 — fix: narration no longer prints a broken location
 
 Now that v0.124.0 surfaces `narration` prominently inline, a pre-existing template
