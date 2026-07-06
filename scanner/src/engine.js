@@ -53,6 +53,7 @@ import { deadBranchRanges as _deadBranchRanges, isLineInDeadRange as _isLineInDe
 import { scanJavaDeserialization } from './sast/java-deserialization.js';
 import { scanJwtExp } from './sast/jwt-exp.js';
 import { scanZipSlip } from './sast/zip-slip.js';
+import { scanFileUpload } from './sast/file-upload.js';
 import { scanHostHeader } from './sast/host-header.js';
 import { scanPythonSinks } from './sast/python-sinks.js';
 import { scanCSharp } from './sast/csharp.js';
@@ -7431,6 +7432,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       aF.push(...scanJavaDeserialization(p,c));
       aF.push(...scanJwtExp(p,c));
       aF.push(...scanZipSlip(p,c));
+      aF.push(...scanFileUpload(p,c));
       aF.push(...scanHostHeader(p,c));
       aF.push(...scanPythonSinks(p,c));
       aF.push(...scanCSharp(p,c));

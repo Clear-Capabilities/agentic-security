@@ -1,5 +1,87 @@
 # Changelog
 
+## 0.126.0 — closing the find→fix loop: verified auto-fix, CWE-434/306, Fable 5 pricing
+
+The largest remediation-side release to date. Prior to this, findings could be
+*found* at scale but not *fixed* at scale — of the 677 findings on this repo's own
+scan, zero could be mechanically applied. This release closes that loop end to end
+while adding the detection classes and workflow polish the closed loop needed.
+Full detail and rationale: `docs/FIND_AND_FIX_LOOP_PRD.md` (implemented; the file
+itself is removed post-implementation per its own instructions).
+
+**Remediation — a verified patch path for every finding, not just the ones with a
+stored replacement.**
+- `apply_fix` (MCP) now accepts a caller-supplied `patch` (a files map) and
+  **re-verifies it inline** — rescan-clean, no new ≥medium finding, lint-clean —
+  before writing. Previously `apply_fix` refused any finding without a stored
+  `fix.replacement`; now a template-only or description-only finding (the vast
+  majority) can be fixed, because the bytes are proven safe at write time instead
+  of trusted at synthesis time.
+- **Deterministic zero-LLM patch synthesis** (`posture/deterministic-fix.js`) for
+  safe, context-independent classes — weak hash (md5/sha1→sha256), TLS
+  verify-off→on — materialized on demand by `synthesize_fix` and still gated by
+  the same inline verifier before `apply_fix` writes it.
+- Regression tests are wired into the fix loop: `synthesize_fix` surfaces the
+  scan's existing PoC-derived `regression_test` so a fix ships with a test that
+  fails pre-fix and passes post-fix.
+- `/fix --all` and `/find-and-fix-everything` now run independent findings in
+  **parallel** (serializing only same-file findings), never halt on the first
+  test failure, and publish the running **auto-fix acceptance rate**.
+- `/fix --sca` surfaces its **upgrade break-rate** (build/test-verified upgrades
+  are the default; the break-rate is how often an "available" upgrade actually
+  wasn't safe to take).
+- MTTR / SLA tracking is now live: every scan stamps `firstSeenAt`/`ageDays` and
+  surfaces an SLA-breach summary (`critical` 7d / `high` 30d / …).
+- The Layer-3 LLM validator gained a first-class Anthropic preset
+  (`AGENTIC_SECURITY_LLM_PRESET=anthropic`) — previously BYO-endpoint only, so the
+  FP-suppression layer was reachable with just a key instead of a hand-built
+  endpoint.
+
+**Detection.**
+- New **CWE-434 unrestricted file-upload detector** (JS/Python) — a whole CWE
+  class that had zero coverage: unguarded Multer configs and writes that use the
+  client-supplied filename as the destination.
+- New **CWE-306 missing-authentication** rule: an unauthenticated destructive
+  route (DELETE, or id-taking PUT/PATCH) fires only when the app authenticates
+  elsewhere in the codebase — so auth-detection is proven to work before the rule
+  trusts a "no auth found" signal, keeping it high-precision even on all-public
+  files.
+- Corrected stale documentation in `scanner/src/ir/CLAUDE.md`: the Python CST
+  parser's `match`-case bodies, walrus bindings, destructuring, and comprehension
+  filters were already fully lowered and taint-propagating — verified end-to-end
+  with new flow tests, not just parser-shape tests.
+- The independent-eval gate (`bench/independent-eval/`) is now **active**
+  (`aggregateF1`/`perFamilyRecall` floors instead of `null`) — proven to fail on a
+  deliberate regression and pass at the current corpus result.
+
+**Hooks & cost.**
+- Pricing tables across all five rate-table copies now include **Fable 5
+  ($10/$50 per MTok)** and Sonnet 5 — previously a Fable 5 session wasn't even
+  priced by the cache-economics reporter, and the cost advisor couldn't reason
+  about the flagship model at all.
+- Two mechanical subagents (`security-triager`, `sca-triager`) pinned to Haiku.
+- The two `UserPromptSubmit` hooks and three `PreToolUse` (Edit) hooks were each
+  consolidated into a single dispatcher process — halving/thirding the per-turn
+  node spawns. The security-critical bodyguard block is proven to survive
+  consolidation (a dedicated regression test asserts the exit-2 deny still
+  fires first and short-circuits the advisory hooks).
+- The post-edit hook now offers a one-tap auto-fix inline when a fresh finding is
+  mechanically fixable, instead of only pointing at `/fix-all`.
+- The model-cost optimizer now ships **on by default** (`mode: "advise"`) with a
+  predicted-vs-realized savings ledger.
+
+**Workflow.**
+- `scan --watch` wires the existing (previously unwired) watch-mode daemon:
+  continuous incremental re-scan on file change with a risk-delta status line.
+- Opt-in, offline-degrading **live-secret validation**
+  (`--validate-secrets`) — labels a detected secret `live`/`dead`/`unknown` via a
+  read-only provider "whoami" check (GitHub, Stripe, OpenAI, SendGrid), so "this
+  key is LIVE" is distinguished from "you have a high-entropy string."
+  `--secret-history` (git-history sweep) was already wired; this release adds
+  the liveness half.
+- Diff-scoped scans (`--pr` / `--changed-since`) now default `--incremental` on,
+  since a changed-file set is exactly the incremental cache's designed case.
+
 ## 0.125.0 — multi-provider LLM cost + prompt-cache linter (Cache Economics v2, phase 1)
 
 First slice of the Cache Economics v2 PRD (`docs/CACHE_ECONOMICS_V2_PRD.md`) — the

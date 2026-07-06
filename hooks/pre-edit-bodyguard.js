@@ -248,22 +248,25 @@ function formatFindings(findings, filePath, mode) {
   return lines.join('\n');
 }
 
-(async () => {
+// Pure evaluator — importable so the single PreToolUse dispatcher (#24) can run
+// the guard in-process and short-circuit on a block, without a second process
+// spawn. Returns { action: 'allow' | 'warn' | 'block', message? }; the IIFE below
+// maps that to the exact same exit codes / stderr the standalone hook used.
+async function evaluate(evt) {
   const cfg = readCfg();
-  if (cfg.mode === 'off') process.exit(0);
+  if (cfg.mode === 'off') return { action: 'allow' };
 
-  const evt = await readStdinJSON();
   const tool = evt.tool_name || evt.toolName;
-  if (!['Edit', 'Write', 'MultiEdit'].includes(tool)) process.exit(0);
+  if (!['Edit', 'Write', 'MultiEdit'].includes(tool)) return { action: 'allow' };
 
   const input = evt.tool_input || {};
   const filePath = input.file_path || input.filePath || '';
-  if (!filePath) process.exit(0);
+  if (!filePath) return { action: 'allow' };
   const rel = path.relative(cwd, filePath);
-  if (rel.startsWith('..')) process.exit(0);
+  if (rel.startsWith('..')) return { action: 'allow' };
 
   for (const skip of (cfg.skipPaths || [])) {
-    if (rel.includes(skip)) process.exit(0);
+    if (rel.includes(skip)) return { action: 'allow' };
   }
 
   // Determine the proposed content depending on the tool variant
@@ -275,22 +278,34 @@ function formatFindings(findings, filePath, mode) {
   } else if (tool === 'MultiEdit') {
     proposedContent = (input.edits || []).map(e => e.new_string || '').join('\n');
   }
-  if (!proposedContent || proposedContent.length < 8) process.exit(0);
+  if (!proposedContent || proposedContent.length < 8) return { action: 'allow' };
 
   const findings = scan(proposedContent, filePath);
+  if (!findings.length) return { action: 'allow' };
   const crit = findings.filter(f => f.severity === 'critical');
+  const message = formatFindings(findings, filePath, cfg.mode);
 
-  if (!findings.length) process.exit(0);
+  // Block only on a critical finding in block mode; otherwise warn (edit proceeds).
+  if (cfg.mode === 'block' && crit.length > 0) return { action: 'block', message };
+  return { action: 'warn', message };
+}
 
-  const msg = formatFindings(findings, filePath, cfg.mode);
-
-  if (cfg.mode === 'block' && crit.length > 0) {
-    // Exit code 2 + stderr message is the PreToolUse "deny" signal in Claude Code
-    process.stderr.write(msg + '\n');
+async function main() {
+  const evt = await readStdinJSON();
+  const d = await evaluate(evt);
+  if (d.action === 'block') {
+    // Exit code 2 + stderr message is the PreToolUse "deny" signal in Claude Code.
+    process.stderr.write(d.message + '\n');
     process.exit(2);
-  } else {
-    // Warn-only: stderr message visible to the user but edit proceeds
-    process.stderr.write(msg + '\n');
-    process.exit(0);
   }
-})();
+  if (d.action === 'warn') {
+    process.stderr.write(d.message + '\n');
+  }
+  process.exit(0);
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = { evaluate };

@@ -78,8 +78,18 @@ function writeThrottle(t) { try { fs.mkdirSync(stateDir, { recursive: true }); f
     process.exit(0);
   }
 
-  const top = fresh.slice(0, 5).map(f => `  [${f.severity.toUpperCase()}] ${f.cwe || ''} ${f.vuln} (${f.file}:${f.line})`).join('\n');
+  // #17 — offer the one-tap fix when a fresh finding ships a deterministic,
+  // verifier-checked replacement (fix.replacement). Degrades to the notify-only
+  // CTA when no finding is auto-fixable.
+  const fixable = fresh.filter(f => f.fix && typeof f.fix.replacement === 'string');
+  const top = fresh.slice(0, 5).map(f => {
+    const tag = (f.fix && typeof f.fix.replacement === 'string') ? ' ⚡auto-fixable' : '';
+    return `  [${f.severity.toUpperCase()}] ${f.cwe || ''} ${f.vuln} (${f.file}:${f.line})${tag}`;
+  }).join('\n');
   const more = fresh.length > 5 ? `\n  ...and ${fresh.length - 5} more` : '';
-  console.error(`🔒 agentic-security: ${fresh.length} new high/critical finding(s) from this edit:\n${top}${more}\n→ Run \`/agentic-security:fix-all --severity high\` to remediate.`);
+  const cta = fixable.length
+    ? `→ ${fixable.length} auto-fixable now: run \`/agentic-security:fix --all --severity high\` (each patch is re-scanned + lint-checked before it lands).`
+    : '→ Run `/agentic-security:fix-all --severity high` to remediate.';
+  console.error(`🔒 agentic-security: ${fresh.length} new high/critical finding(s) from this edit:\n${top}${more}\n${cta}`);
   process.exit(0);
 })();

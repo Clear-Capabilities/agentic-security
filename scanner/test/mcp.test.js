@@ -307,6 +307,67 @@ test('apply_fix writes replacement when all gates pass', async () => {
   await cleanup();
 });
 
+test('apply_fix (#3): a verifier-approved patch is applied for a template-only finding', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    // Description-only finding (no fix.replacement) — the case the stored path dead-ends on.
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, rule: 'demo', vuln: 'Weak hash', cwe: 'CWE-328', description: 'md5 used' }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), "const c=require('crypto');const h=c.createHash('md5');\n");
+  const clean = 'export function ok() { return 1; }\n';
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true, patch: { 'app.js': clean } });
+  const p = payload(r);
+  assert.equal(p.applied, true, `expected applied; got ${JSON.stringify(p)}`);
+  assert.equal(p.verified, true);
+  assert.equal(await fsp.readFile(path.join(root, 'app.js'), 'utf8'), clean);
+  await cleanup();
+});
+
+test('apply_fix (#3): patch path refuses a finding with no stableId', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', severity: 'high', file: 'app.js', line: 1, vuln: 'demo' }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), 'x\n');
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true, patch: { 'app.js': 'y\n' } });
+  const p = payload(r);
+  assert.equal(p.applied, false);
+  assert.match(p.reason, /stableId/);
+  assert.equal(await fsp.readFile(path.join(root, 'app.js'), 'utf8'), 'x\n', 'disk untouched when refused');
+  await cleanup();
+});
+
+test('apply_fix (#3): a patch that introduces a new ≥medium finding is REJECTED, disk untouched', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, rule: 'demo', vuln: 'demo', description: 'x' }],
+  });
+  const original = 'export function ok() { return 1; }\n';
+  await fsp.writeFile(path.join(root, 'app.js'), original);
+  // Reintroduces a weak password hash (md5 of a password) → rescan flags a new
+  // ≥medium finding → the inline verifier must reject and NOT write.
+  const bad = "const crypto=require('crypto');function h(password){return crypto.createHash('md5').update(password).digest('hex');}\n";
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true, patch: { 'app.js': bad } });
+  const p = payload(r);
+  assert.equal(p.applied, false, `a vuln-introducing patch must be rejected; got ${JSON.stringify(p)}`);
+  assert.match(p.reason, /rejected|verif/i);
+  assert.equal(await fsp.readFile(path.join(root, 'app.js'), 'utf8'), original, 'disk untouched on rejection');
+  await cleanup();
+});
+
+test('synthesize_fix → apply_fix (#1+#3): deterministic autofix applied end-to-end', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'deadbeefcafe0011', severity: 'medium', file: 'h.js', line: 1, rule: 'crypto-weak-hash', cwe: 'CWE-328', family: 'crypto-weak-hash', vuln: 'Weak hash md5', description: 'md5' }],
+  });
+  await fsp.writeFile(path.join(root, 'h.js'), "const c=require('crypto');module.exports=(s)=>c.createHash('md5').update(s).digest('hex');\n");
+  // 1) synthesize_fix materializes a deterministic md5→sha256 patch (no stored replacement).
+  const syn = payload(await call(handleRequest, 'synthesize_fix', { finding_id: 'F1' }));
+  assert.ok(syn.autofix && syn.autofix.patch, `expected a deterministic autofix; got ${JSON.stringify(syn)}`);
+  assert.match(syn.autofix.patch['h.js'], /sha256/);
+  // 2) apply_fix takes that patch, re-verifies inline, and writes it.
+  const ap = payload(await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true, patch: syn.autofix.patch }));
+  assert.equal(ap.applied, true, `expected applied; got ${JSON.stringify(ap)}`);
+  assert.match(await fsp.readFile(path.join(root, 'h.js'), 'utf8'), /sha256/);
+  await cleanup();
+});
+
 test('query_taint matches across findings', async () => {
   const { handleRequest, cleanup } = await makeSession({
     findings: [

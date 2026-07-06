@@ -26,13 +26,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/legacy-alias-redirect.js",
-            "timeout": 2
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/model-cost-advisor.js",
-            "timeout": 2
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch-user-prompt.js",
+            "timeout": 3
           }
         ]
       }
@@ -43,18 +38,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-bodyguard.js",
-            "timeout": 3
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/conversation-context.js",
-            "timeout": 2
-          },
-          {
-            "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/cache-invalidator-guard.js",
-            "timeout": 2
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/dispatch-pre-tool.js",
+            "timeout": 5
           }
         ]
       },

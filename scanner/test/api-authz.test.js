@@ -51,3 +51,30 @@ test('precision: an unauthed GET without an id among authed siblings is not flag
     R({ method: 'GET', path: '/health', line: 2, hasAuth: false }),
   ]).length, 0);
 });
+
+// #9 — CWE-306: destructive route with no auth in an all-public FILE, but the
+// app authenticates elsewhere (so auth-detection works). The in-file rules can't
+// see this; the app-level pass does.
+test('#9 CWE-306: unauthed DELETE in an all-public file fires when the app authenticates elsewhere', () => {
+  const f = scanApiBrokenAuthz([
+    R({ method: 'GET', path: '/me', file: 'a.js', line: 1, hasAuth: true }),          // app has auth somewhere
+    R({ method: 'DELETE', path: '/widgets/:id', file: 'b.js', line: 9, hasAuth: false }), // public destructive
+  ]);
+  assert.equal(f.length, 1);
+  assert.equal(f[0].cwe, '306');
+  assert.match(f[0].vuln, /Missing authentication/);
+});
+
+test('#9 precision: a public POST (login/signup-shaped) does NOT fire as missing-auth', () => {
+  assert.equal(scanApiBrokenAuthz([
+    R({ method: 'GET', path: '/me', file: 'a.js', line: 1, hasAuth: true }),
+    R({ method: 'POST', path: '/login', file: 'b.js', line: 2, hasAuth: false }), // intentionally public
+  ]).length, 0);
+});
+
+test('#9 precision: no CWE-306 when the app has NO auth anywhere (can\'t trust detection)', () => {
+  assert.equal(scanApiBrokenAuthz([
+    R({ method: 'DELETE', path: '/widgets/:id', file: 'b.js', line: 9, hasAuth: false }),
+    R({ method: 'GET', path: '/widgets', file: 'b.js', line: 1, hasAuth: false }),
+  ]).length, 0);
+});

@@ -31,14 +31,14 @@ ever suggest a cheaper option** — it never nudges you to spend more.
 
 ## Enable it
 
-The optimizer ships **off**. Turn it on with one command:
+The optimizer ships **on** (`mode: "advise"`) by default. To turn it off for a
+project:
 
 ```bash
-/agentic-security:setup --model-optimizer
+/agentic-security:setup --model-optimizer   # or set AGENTIC_SECURITY_MODEL_OPTIMIZER=off
 ```
 
-That writes `.agentic-security/model-optimizer.json` with `mode: "advise"`. You can
-also create/edit it by hand:
+You can also create/edit `.agentic-security/model-optimizer.json` by hand:
 
 ```json
 {
@@ -128,7 +128,7 @@ as your real spend approaches it.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `mode` | `"off"` | `off` / `advise` |
+| `mode` | `"advise"` | `off` / `advise` |
 | `costQualityTradeoff` | `7` | 0 = never downgrade … 10 = cheapest |
 | `minSavingsUsd` | `0.01` | absolute anti-noise floor |
 | `ttlSeconds` | `300` | cache TTL; older = treat as cold (free to switch) |
@@ -144,9 +144,14 @@ as your real spend approaches it.
 
 | Model | Input | Output | Reasoning depth |
 |---|---|---|---|
+| Fable 5 (`claude-fable-5`) | $10.00 | $50.00 | always on |
 | Opus 4.8 (`claude-opus-4-8`) | $5.00 | $25.00 | `low`–`max` |
+| Sonnet 5 (`claude-sonnet-5`) | $3.00 | $15.00 | `low`–`xhigh` |
 | Sonnet 4.6 (`claude-sonnet-4-6`) | $3.00 | $15.00 | `low`–`high` |
 | Haiku 4.5 (`claude-haiku-4-5`) | $1.00 | $5.00 | none (no effort knob) |
+
+Fable 5 is priced but never a *suggestion* target — it's the current flagship, so
+the optimizer only ever prices it as your starting point, not a downgrade.
 
 > Savings figures are **estimates** — they use a representative token profile per
 > tier, not a live token count, so treat them as magnitude, not invoice. Pricing

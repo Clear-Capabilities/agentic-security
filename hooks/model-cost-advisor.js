@@ -20,7 +20,8 @@
 //     "minSavingsUsd": 0.01,           // absolute anti-noise floor
 //     "assumedModel": "claude-opus-4-8",
 //     "assumedCachedTokens": null }    // null → grow estimate with session turns
-//   Default mode: "off" (ships dormant; enable via `/setup --model-optimizer`).
+//   Default mode: "advise" (correct pricing incl. Fable 5 + measured savings;
+//   disable per-project via model-optimizer.json mode:"off" or the kill switch).
 //   Kill switch: env AGENTIC_SECURITY_MODEL_OPTIMIZER=off.
 //
 // Two ideas borrowed from OpenRouter (see the plan/PRD):
@@ -44,12 +45,16 @@ const cfgPath = path.join(stateDir, 'model-optimizer.json');
 const statePath = path.join(stateDir, 'model-optimizer-state.json');
 
 // ── Pricing & capability table ────────────────────────────────────────────
-// Per 1M tokens (input / output). Source: claude-api skill, cached 2026-05-26.
+// Per 1M tokens (input / output). Source: claude-api skill, cached 2026-07-05.
 // Refresh from docs/MODEL_COST_OPTIMIZATION_PRD.md §2 when rates change.
+// Fable 5 is the current flagship (above Opus tier); a session running on it now
+// maps to a known entry so the advisor can price it and recommend a downgrade.
 const MODELS = {
-  'claude-opus-4-8':   { key: 'opus',   short: 'opus',   label: 'Opus 4.8',   in: 5, out: 25, effort: true },
-  'claude-sonnet-4-6': { key: 'sonnet', short: 'sonnet', label: 'Sonnet 4.6', in: 3, out: 15, effort: true },
-  'claude-haiku-4-5':  { key: 'haiku',  short: 'haiku',  label: 'Haiku 4.5',  in: 1, out: 5,  effort: false },
+  'claude-fable-5':    { key: 'fable',  short: 'fable',  label: 'Fable 5',    in: 10, out: 50, effort: true },
+  'claude-opus-4-8':   { key: 'opus',   short: 'opus',   label: 'Opus 4.8',   in: 5,  out: 25, effort: true },
+  'claude-sonnet-5':   { key: 'sonnet', short: 'sonnet', label: 'Sonnet 5',   in: 3,  out: 15, effort: true },
+  'claude-sonnet-4-6': { key: 'sonnet', short: 'sonnet', label: 'Sonnet 4.6', in: 3,  out: 15, effort: true },
+  'claude-haiku-4-5':  { key: 'haiku',  short: 'haiku',  label: 'Haiku 4.5',  in: 1,  out: 5,  effort: false },
 };
 
 // Representative token profile per tier (estimate, not a live count).
@@ -122,7 +127,7 @@ function biasedDial(dial, spendUsd, budgetUsd) {
 
 // ── Config / state I/O ──────────────────────────────────────────────────────
 function readCfg() {
-  const defaults = { mode: 'off', costQualityTradeoff: 7, minSavingsUsd: 0.01,
+  const defaults = { mode: 'advise', costQualityTradeoff: 7, minSavingsUsd: 0.01,
     assumedModel: 'claude-opus-4-8', assumedCachedTokens: null,
     ttlSeconds: 300, breakEvenMaxTurns: 6, depthFirstMargin: 0.25,
     subagentAdvice: true, sessionBudgetUsd: null, models: null };
@@ -178,8 +183,9 @@ function readStdinJSON() {
 function modelKey(raw) {
   if (typeof raw !== 'string' || !raw) return null;
   const s = raw.toLowerCase();
+  if (s.includes('fable') || s.includes('mythos')) return 'claude-fable-5';
   if (s.includes('haiku')) return 'claude-haiku-4-5';
-  if (s.includes('sonnet')) return 'claude-sonnet-4-6';
+  if (s.includes('sonnet')) return (s.includes('sonnet-5') || s.includes('sonnet 5')) ? 'claude-sonnet-5' : 'claude-sonnet-4-6';
   if (s.includes('opus')) return 'claude-opus-4-8';
   return null;
 }
@@ -247,7 +253,7 @@ function roundUsd(n) {
 function buildAdvice({ prompt, currentModel, currentEffort, costQualityTradeoff = 7,
   minSavingsUsd = 0.01, assumedModel = 'claude-opus-4-8', modelAssumed = false,
   cachedContextTokens = 0, breakEvenMaxTurns = 6, depthFirstMargin = 0.25,
-  subagentAdvice = true, models = null }) {
+  subagentAdvice = true, models = null, onDecision = null }) {
   const curId = modelKey(currentModel) || modelKey(assumedModel);
   if (!curId) return null;
 
@@ -313,6 +319,7 @@ function buildAdvice({ prompt, currentModel, currentEffort, costQualityTradeoff 
   // main session's warm cache — strictly better than a partial effort drop here.
   if (subagentAdvice && tier === 'simple' && suppressedSwitch) {
     const s = suppressedSwitch;
+    if (onDecision) onDecision({ tier, kind: 'subagent', model: s.model, savings: s.savings });
     return `\u{1F4A1} This simple one-off sits on a deep warm cache (~${Math.round(cachedContextTokens / 1000)}k tokens). `
       + `Switching your main model would discard it — instead run this as a ${table[s.model].label} subagent: `
       + `it answers in its own context (~${pct(s.savings)}% cheaper for this task) and leaves your ${table[curId].label} cache intact.`;
@@ -329,6 +336,7 @@ function buildAdvice({ prompt, currentModel, currentEffort, costQualityTradeoff 
     pick = A || B;
   }
   if (!pick) return null;
+  if (onDecision) onDecision({ tier, kind: pick.kind, model: pick.model, savings: pick.savings });
 
   if (pick.kind === 'switch') {
     const depthWord = pick.effort ? ` ${pick.effort}` : '';
@@ -347,20 +355,48 @@ function buildAdvice({ prompt, currentModel, currentEffort, costQualityTradeoff 
     + `/effort ${pick.effort} on ${table[pick.model].label} would cost ~${pct(pick.savings)}% less (est. saves ~${roundUsd(pick.savings)}).`;
 }
 
-// ── Entry point ─────────────────────────────────────────────────────────────
-async function main() {
-  // Kill switch wins over everything.
-  if (process.env.AGENTIC_SECURITY_MODEL_OPTIMIZER === 'off') process.exit(0);
+// ── Advice ledger (#12) ─────────────────────────────────────────────────────
+// Record each emitted decision's PREDICTED per-turn saving so the optimizer can
+// report predicted-vs-realized against the cache-economics session actuals.
+// Bounded, best-effort, zero-token — never breaks the prompt.
+function appendLedger(dir, entry, cap = 200) {
+  try {
+    let s = {};
+    try { s = JSON.parse(fs.readFileSync(path.join(dir, 'model-optimizer-state.json'), 'utf8')); } catch {}
+    const led = Array.isArray(s.savingsLedger) ? s.savingsLedger : [];
+    led.push(entry);
+    s.savingsLedger = led.slice(-cap);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'model-optimizer-state.json'), JSON.stringify(s));
+  } catch { /* best-effort */ }
+}
 
+// Pure summary of the advice ledger — the PREDICTED side of #12. Realized spend
+// comes from posture/cache-economics.js on the same session transcript.
+function summarizeAdvisorLedger(ledger) {
+  const led = Array.isArray(ledger) ? ledger : [];
+  const byTier = {};
+  let totalPredictedSavingUsd = 0;
+  for (const e of led) {
+    const t = e && e.tier ? e.tier : 'unknown';
+    byTier[t] = (byTier[t] || 0) + 1;
+    if (e && typeof e.savings === 'number') totalPredictedSavingUsd += e.savings;
+  }
+  return { adviceCount: led.length, totalPredictedSavingUsd, byTier };
+}
+
+// ── Core advisory ───────────────────────────────────────────────────────────
+// input → tip string (or null). No stdin/exit — importable so the single
+// UserPromptSubmit dispatcher (#24) can run it in-process alongside the alias
+// redirect. Records the decision to the ledger (#12) and advances the turn est.
+async function advise(input) {
+  if (process.env.AGENTIC_SECURITY_MODEL_OPTIMIZER === 'off') return null; // kill switch
   const cfg = readCfg();
-  if (cfg.mode !== 'advise') process.exit(0); // default 'off' → silent no-op
-
-  const input = await readStdinJSON();
-  const prompt = input.prompt || '';
-  if (!prompt) process.exit(0);
+  if (cfg.mode !== 'advise') return null;
+  const prompt = (input && input.prompt) || '';
+  if (!prompt) return null;
 
   const captured = readSessionModel();
-  const currentModel = captured || cfg.assumedModel;
 
   // Cached-context size: explicit override → real transcript size (0 if the
   // cache has gone cold past the TTL → free to switch, #3) → turns estimate.
@@ -387,7 +423,7 @@ async function main() {
 
   const tip = buildAdvice({
     prompt,
-    currentModel,
+    currentModel: captured || cfg.assumedModel,
     currentEffort: process.env.CLAUDE_EFFORT || null,
     costQualityTradeoff: effectiveDial,
     minSavingsUsd: cfg.minSavingsUsd,
@@ -398,13 +434,21 @@ async function main() {
     depthFirstMargin: cfg.depthFirstMargin,
     subagentAdvice: cfg.subagentAdvice,
     models: cfg.models,
+    onDecision: (d) => appendLedger(stateDir, { ...d, turn: turns }),
   });
 
+  bumpTurns(turns); // advance the session's cached-context estimate
+  return tip;
+}
+
+// ── Entry point (standalone CLI form) ───────────────────────────────────────
+async function main() {
+  const input = await readStdinJSON();
+  const tip = await advise(input);
   if (tip) {
     // systemMessage ONLY — never additionalContext (that would cost tokens).
     process.stdout.write(JSON.stringify({ systemMessage: tip }));
   }
-  bumpTurns(turns); // advance the session's cached-context estimate
   process.exit(0);
 }
 
@@ -416,4 +460,5 @@ module.exports = {
   MODELS, TIER_PROFILE, TIER_RECO, TIER_DEPTH,
   modelKey, classifyTier, estimateCost, effortMult, roundUsd, buildAdvice,
   cacheRewarmPenalty, savingsFractionFloor, effortRank, biasedDial,
+  advise, summarizeAdvisorLedger,
 };

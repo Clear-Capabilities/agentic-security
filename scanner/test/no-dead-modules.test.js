@@ -80,9 +80,6 @@ const ALLOWLIST = new Set([
   // hooks for "show me the current intent" tooling. The engine consumes
   // suppressByIntent; the extractor is the lower-level helper.
   'intent-context.js::extractIntentSignals',
-  // watch-mode.js::watchProject is called by the /scan --watch + /watch
-  // command shell scripts at runtime, not by an in-process import.
-  'watch-mode.js::watchProject',
   // llm-redteam.js exports both ends of an opt-in red-team pipeline that
   // surfaces in /triage --red-team. Called from the command shell at
   // invocation time, not via a static engine wire.

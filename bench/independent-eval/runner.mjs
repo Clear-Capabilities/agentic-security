@@ -66,11 +66,14 @@ function loadManifest(fp) {
 }
 
 const DEFAULT_THRESHOLDS = {
-  // Deliberately conservative — this is a gate skeleton. Real per-family bars
-  // get set once an independent corpus with enough samples is wired (see README).
+  // #5 — the gate is now ACTIVE (was inert). These floors are calibrated below
+  // the current corpus result so `--gate default` passes today but fails on a
+  // regression. When a larger INDEPENDENT corpus is wired (see README — real
+  // CVE-fix pairs we did not author), raise these and add per-family bars; the
+  // enforcement mechanism (checkGate → exit 1) is already in place.
   minSamples: 1,
-  aggregateF1: null,
-  perFamilyRecall: null,
+  aggregateF1: 0.70,      // current corpus aggregate F1 ≈ 0.80 → passes, catches drop
+  perFamilyRecall: 0.50,  // no detected family may fall below 50% recall
 };
 
 function loadThresholds(val) {

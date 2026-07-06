@@ -76,23 +76,28 @@ topLevel}`) as the regex parser. The CFG is built from the real AST, so:
 Each of these is a real failure mode; the regex fallback keeps the scan
 producing findings instead of returning empty.
 
-### What CST still doesn't model
+### What CST models (and the one remaining limit)
 
-The helper builds a CFG only for shapes the dataflow engine actually
-consumes. The following still emit `kind: 'noop'` nodes (future work):
+The helper now lowers — and the dataflow engine propagates taint through — all
+of the constructs this section once listed as unmodeled. Verified end-to-end in
+`test/parser-py-cst.test.js` (`#16` flow tests):
 
-- `match` case bodies (the function is captured; the per-case taint flow
-  isn't lowered)
-- destructuring assignment (`a, b = req.body`) — only single-target
-  assignments get a precise `target` field
-- comprehension generators (`for x in iter`) — the iter expression is
-  visible via the elt, but the generator's own `if` filters aren't yet
-  modeled
-- walrus `:=` at expression position — the RHS flows forward, but the
-  named binding isn't tracked as a separate variable
+- `match` case bodies — each `case` arm lowers to an `if` (the pattern) plus its
+  body block; a capture pattern (`case Foo(x)`) emits an assign for the binding.
+  Taint flows source → through a case body → sink.
+- walrus `:=` — the named binding is tracked as its own assign, both at statement
+  position and inside `if`/`while` tests (`_emit_walrus_assigns`).
+- comprehension generators — the loop-var assign from the iter AND the
+  generator's own `if` filters are emitted (`for x in iter if cond`).
+- destructuring assignment (`a, b = expr`) — one assign per target, sourced from
+  the element (`member[]`) of the RHS.
 
-These are deliberate to keep the CFG bounded; the regex parser's behavior
-was strictly worse (it dropped the entire function).
+**Remaining limit (a deep-engine collection-element trait, NOT a dropped CFG
+node):** taint carried through the *element* of a destructured tuple or a
+comprehension result — `a, b = src1, src2; sink(a)` or `xs = [src…]; sink(xs[0])`
+— does not always reach a finding. That's the collection-element-taint limitation
+tracked in `../dataflow/CLAUDE.md`; the CFG nodes are present, the element-level
+propagation is the open item.
 
 ## IR shape contract
 

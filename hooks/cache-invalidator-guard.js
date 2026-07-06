@@ -26,7 +26,7 @@ const throttlePath = path.join(stateDir, 'hook-throttle.json');
 const THROTTLE_MS = 30000;       // don't re-warn about the same anchor within 30s
 const MIN_WARM_TOKENS = 5000;    // below this the cache isn't worth protecting
 const CACHE_READ_MULT = 0.1;
-const IN_RATE = { haiku: 1, sonnet: 3, opus: 5 }; // $/1M input
+const IN_RATE = { fable: 10, haiku: 1, sonnet: 3, opus: 5 }; // $/1M input
 
 function readStdinJSON() {
   return new Promise((resolve) => {
@@ -51,10 +51,11 @@ function isCacheAnchor(file) {
 
 function inRateFor(model) {
   const s = String(model || '').toLowerCase();
+  if (s.includes('fable') || s.includes('mythos')) return IN_RATE.fable;
   if (s.includes('haiku')) return IN_RATE.haiku;
   if (s.includes('sonnet')) return IN_RATE.sonnet;
   if (s.includes('opus')) return IN_RATE.opus;
-  return IN_RATE.opus; // unknown → assume the priciest input (conservative warning)
+  return IN_RATE.fable; // unknown → assume the priciest input (conservative warning)
 }
 
 function throttled(key) {
@@ -77,28 +78,39 @@ function throttled(key) {
 
 function money(n) { return Math.abs(n) >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`; }
 
-(async () => {
-  if (process.env.AGENTIC_SECURITY_CACHE_GUARD === 'off') process.exit(0);
-  if (process.env.AGENTIC_SECURITY_QUIET === '1') process.exit(0);
-
-  const evt = await readStdinJSON();
+// Build the cache-invalidation warning for a PreToolUse payload, or null when
+// there's nothing to warn about. Importable so the single PreToolUse dispatcher
+// (#24) can run it in-process. Honors the kill switch, QUIET, the cache-anchor
+// test, the warm-cache floor, and the per-anchor throttle — so the standalone
+// hook and the dispatcher behave identically.
+function buildWarning(evt) {
+  if (process.env.AGENTIC_SECURITY_CACHE_GUARD === 'off') return null;
+  if (process.env.AGENTIC_SECURITY_QUIET === '1') return null;
   const tool = evt.tool_name || evt.toolName;
-  if (!['Edit', 'Write', 'MultiEdit'].includes(tool)) process.exit(0);
+  if (!['Edit', 'Write', 'MultiEdit'].includes(tool)) return null;
   const file = evt.tool_input?.file_path || evt.tool_input?.filePath || evt.tool_input?.path;
   const anchorLabel = isCacheAnchor(file);
-  if (!anchorLabel) process.exit(0);
+  if (!anchorLabel) return null;
 
   const warm = latest({ transcriptPath: evt.transcript_path, projectDir: cwd });
-  if (!warm || warm.cacheTokens < MIN_WARM_TOKENS) process.exit(0);
+  if (!warm || warm.cacheTokens < MIN_WARM_TOKENS) return null;
 
   const key = `cache-anchor:${path.basename(String(file))}`;
-  if (throttled(key)) process.exit(0);
+  if (throttled(key)) return null;
 
   const rewarmUsd = warm.cacheTokens * (inRateFor(warm.model) / 1e6) * (1 - CACHE_READ_MULT);
-  process.stderr.write(
-    `✂️  agentic-security: editing ${anchorLabel} invalidates your prompt cache.\n` +
+  return `✂️  agentic-security: editing ${anchorLabel} invalidates your prompt cache.\n` +
     `   ~${warm.cacheTokens.toLocaleString()} cached tokens would re-ingest cold next turn (est. ~${money(rewarmUsd)}).\n` +
-    `   If the change can wait for a natural break, you'll keep the cache warm.\n`
-  );
-  process.exit(0);
-})();
+    `   If the change can wait for a natural break, you'll keep the cache warm.\n`;
+}
+
+if (require.main === module) {
+  (async () => {
+    const evt = await readStdinJSON();
+    const warning = buildWarning(evt);
+    if (warning) process.stderr.write(warning);
+    process.exit(0);
+  })();
+}
+
+module.exports = { buildWarning };

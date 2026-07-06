@@ -34,6 +34,23 @@ function mk(r, kind, api, cwe, why) {
   };
 }
 
+// #9 — CWE-306 missing authentication for a state-changing route.
+function mk306(r) {
+  return {
+    id: `api-authz:missing-auth:${r.file}:${r.line}`,
+    severity: 'high',
+    file: r.file,
+    line: r.line || 0,
+    vuln: `Missing authentication for a state-changing route (${r.method} ${r.path})`,
+    cwe: '306',
+    family: 'broken-access-control',
+    parser: 'API-AUTHZ',
+    subfamily: 'missing-auth',
+    description: `${r.method} ${r.path} performs a destructive/state-changing operation with no authentication, while other routes in this app DO enforce it — so auth-detection demonstrably works here. An unauthenticated ${r.method} lets anyone invoke it (delete/modify another user's data).`,
+    remediation: 'Require authentication on this route (the same middleware/guard the app uses elsewhere) and, for object routes, verify the caller owns the target object.',
+  };
+}
+
 /**
  * Cross-route analysis over the aggregated route inventory (aR).
  * Pure: takes routes[], returns Finding[].
@@ -67,5 +84,24 @@ export function scanApiBrokenAuthz(routes) {
       }
     }
   }
+
+  // #9 — CWE-306 app-level pass. If the app authenticates SOME route (so our
+  // auth-detection works for it), a destructive route left unauthenticated is a
+  // missing-auth bug even when its file-local siblings are also public (the
+  // in-file inconsistency rule above cannot see that case). Scoped to DELETE and
+  // id-taking PUT/PATCH — the least-ambiguous "should never be public" shapes —
+  // so intentionally-public POSTs (login / signup / webhooks) don't false-fire.
+  // `push` dedupes by file:line, so a route already flagged BFLA/BOLA above is
+  // not double-reported here.
+  const appHasAuth = routes.some((r) => r && r.hasAuth);
+  if (appHasAuth) {
+    for (const r of routes) {
+      if (!r || r.hasAuth || !r.file || r.path === '(file-based)') continue;
+      const destructive = r.method === 'DELETE'
+        || ((r.method === 'PUT' || r.method === 'PATCH') && ID_PARAM.test(r.path || ''));
+      if (destructive) push(mk306(r));
+    }
+  }
+
   return findings;
 }

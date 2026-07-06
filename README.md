@@ -87,11 +87,11 @@ Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_C
 
 **`/agentic-security:find-and-fix-everything`** — One-shot scan + fix every severity in one command. The vibecoder "just make it safe" path.
 
-**`/agentic-security:scan`** — Run the scanner. Modes: full / diff / watch / baseline / archaeology / scanner-meta.
+**`/agentic-security:scan`** — Run the scanner. Modes: full / diff / watch / baseline / archaeology / scanner-meta. `--watch` re-scans incrementally on every file change and prints a live risk-delta.
 
 **`/agentic-security:triage`** — Decide on findings. Modes: id / show / explain / validate / tournament / red-team / exploit / query.
 
-**`/agentic-security:fix`** — Remediation. Modes: id / all / pr / sca / compliance / rotate-secret / vault / harden / trim / generate.
+**`/agentic-security:fix`** — Remediation. Modes: id / all / pr / sca / compliance / rotate-secret / vault / harden / trim / generate. Every patch — deterministic or agent-composed — is re-verified (rescan-clean + no new ≥medium + lint) before it's written; `--all` runs independent findings in parallel and never halts on the first failure.
 
 **`/agentic-security:posture`** — Posture + reporting. Modes: status / report-card / harness / trend / threat / playbook / mgmt / cache.
 
@@ -138,6 +138,18 @@ Deep engine details — [architecture](docs/ARCHITECTURE.md).
 
 ---
 
+## Fixes are verified, not trusted
+
+Every patch — whether it's a rule's stored fix, a zero-LLM deterministic swap, or one an agent composed for a finding with no stored fix — goes through the same gate before it touches disk: **rescan-clean, no new ≥medium finding, lint-clean.** If a patch doesn't pass, it isn't written. This is what makes `/find-and-fix-everything` real instead of a to-do list:
+
+- **Deterministic zero-LLM patches** for safe, context-independent classes (weak hash → SHA-256, TLS verification re-enabled) — no model call, no guessing.
+- **A verified path for everything else.** A finding with only a template or a plain-English remediation note — the common case — is now fixable: the agent composes the patch, the deterministic verifier proves it safe, then it's applied.
+- **Regression tests ship with the fix.** When the scan built a PoC for a finding, the generated test comes along — it fails before the patch and passes after.
+- **Parallel, and it doesn't stop at the first flake.** Independent findings fix concurrently; a single failing test doesn't halt the batch — every finding gets a fixed/skipped/refused verdict, and the loop reports its own **acceptance rate**.
+- **You can see your security debt aging.** Every scan stamps each finding's age and flags anything past its remediation SLA (critical: 7 days, high: 30, …).
+
+---
+
 ## Stop overpaying for tokens
 
 Your agentic workforce runs on tokens. agentic-security watches each prompt and tells you when a cheaper model or lower reasoning depth would answer it just as well — and it's the only tool that does this **cache-aware**, accounting for the prompt cache a model switch would throw away.
@@ -148,15 +160,15 @@ Your agentic workforce runs on tokens. agentic-security watches each prompt and 
    answers in its own context (~84% cheaper) and leaves your Opus 4.8 cache intact.
 ```
 
-- **Per-prompt model + depth advice.** Suggests the cheapest model + effort that still does the job — you tap `/model` + `/effort`. Zero added tokens; the analysis is purely local.
+- **Per-prompt model + depth advice.** Suggests the cheapest model + effort that still does the job — you tap `/model` + `/effort`. Zero added tokens; the analysis is purely local. Pricing covers the full current lineup, including Fable 5.
 - **Cache-aware routing.** Prefers a cache-preserving effort drop over a model switch, shows a switch's break-even ("worth it past ~N more turns"), and offloads cheap one-offs to a Haiku subagent so your warm cache survives.
-- **Measured, not guessed.** `/posture --cache` reports what prompt caching actually **saved** and **wasted** this session — real dollars parsed from your transcript, no estimates.
+- **Measured, not guessed.** `/posture --cache` reports what prompt caching actually **saved** and **wasted** this session — real dollars parsed from your transcript, no estimates — and the optimizer now tracks its own predicted-vs-realized savings.
 - **Cache bodyguard.** Warns *before* an edit to `CLAUDE.md` or `.claude/settings` silently invalidates your cache and forces a costly cold re-read.
 - **Live cost HUD + budget.** A statusline one-liner (`$ spent · % cached · $/turn`), and an optional session budget that auto-tightens spend as you approach it.
 
 - **Multi-provider — lints your *own* AI-app code.** Scanning a project that calls Anthropic, OpenAI, Gemini, or xAI? It flags prompt-cache killers (a timestamp/UUID baked into a prompt prefix) and over-provisioned calls (a flagship model at high reasoning depth), and recommends a cheaper model + depth **in that provider's framework** — e.g. an OpenAI app gets "gpt-5.4 at `reasoning_effort: low`."
 
-Opt-in with `/setup --model-optimizer`. Details — [cache economics](docs/MODEL_COST_OPTIMIZATION.md) · [v2 roadmap](docs/CACHE_ECONOMICS_V2_PRD.md).
+On by default (advisory only — a hook can't switch your model for you); disable per-project via `/setup --model-optimizer` or the kill switch. Details — [cache economics](docs/MODEL_COST_OPTIMIZATION.md) · [v2 roadmap](docs/CACHE_ECONOMICS_V2_PRD.md).
 
 ---
 
@@ -175,7 +187,7 @@ Eight first-class languages, with cross-language detectors for the OWASP-relevan
 | PHP | full |
 | C# | full |
 
-Detected across these languages: SQL injection, command injection, path traversal, LDAP injection, XPath injection, reflected XSS, SSRF, XXE, code injection (eval / SpEL / Groovy / Roslyn / template), insecure deserialization, hardcoded secrets, weak password hashing, weak ciphers (DES/RC4/Blowfish/ECB), static/zero IV, insecure randomness, CSRF, open redirect, HTTP response splitting, and ReDoS — plus the JS/Python-specific classes (prototype pollution, mass assignment) and the LLM/agent-tool surface.
+Detected across these languages: SQL injection, command injection, path traversal, LDAP injection, XPath injection, reflected XSS, SSRF, XXE, code injection (eval / SpEL / Groovy / Roslyn / template), insecure deserialization, hardcoded secrets, weak password hashing, weak ciphers (DES/RC4/Blowfish/ECB), static/zero IV, insecure randomness, CSRF, open redirect, HTTP response splitting, unrestricted file upload, missing authentication on state-changing routes, broken object/function-level authorization (BOLA/BFLA), and ReDoS — plus the JS/Python-specific classes (prototype pollution, mass assignment) and the LLM/agent-tool surface.
 
 The detectors are precision-first: parameterized queries, escaped output, allow-list guards, CSPRNG-derived IVs, framework CSRF middleware, and token-auth schemes are recognized and **not** flagged.
 
@@ -191,8 +203,8 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 ---
 
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Bundle](https://img.shields.io/badge/bundle-2.30MB-orange)]()
-[![Version](https://img.shields.io/badge/version-0.125.0-blue)]()
+[![Bundle](https://img.shields.io/badge/bundle-3.58MB-orange)]()
+[![Version](https://img.shields.io/badge/version-0.126.0-blue)]()
 [![agentic-security](https://img.shields.io/badge/agentic--security-passing-brightgreen)]()
 
 ## License

@@ -46,10 +46,11 @@ The tier is cumulative: `--high` fixes critical + high. Default is `--critical`.
 
 **Behavior:**
 
-1. Dispatch the `security-fixer` subagent per finding, in sequence (not parallel).
+1. Dispatch `security-fixer` for **independent** findings in parallel (up to ~10 in flight); serialize only findings that touch the SAME file, since each fix rewrites it. This clears a repo in one pass instead of one-finding-at-a-time.
 2. Order: critical first, then high, medium, low. Within a tier, order by `toxicityScore` DESC.
-3. After each fix, re-scan the affected file to verify the finding is gone and no regression was introduced.
-4. If tests fail, **stop and report** — do not auto-revert. Let the user decide (`git checkout <file>`).
+3. Each fix runs the closed loop the MCP layer enforces: `synthesize_fix` → (a deterministic `autofix.patch` when present, else a composed patch) → `apply_fix` (which **re-verifies inline**: original finding gone + no new ≥medium + lint) → re-scan the affected file. If `synthesize_fix` returned a `regression_test`, write it so the fix ships with a test that fails pre-fix and passes post-fix.
+4. **Do NOT halt on the first failure.** Record each finding's outcome (`fixed | skipped-verify | skipped-test | refused`) and keep going; report the full per-finding list at the end. A single flaky test must not block the rest of the batch.
+5. Publish the running **auto-fix acceptance rate** (`apply_fix` returns `acceptance` on every applied fix) so the loop reports its own success metric.
 
 Warn before starting if the git tree is dirty — the batch can't be safely rolled back with uncommitted changes mixed in. Suggest committing or stashing first.
 
@@ -147,6 +148,7 @@ This is the SCA counterpart to `/fix --all` for SAST findings. Instead of patchi
 - Never amend or force-push an existing branch.
 - Never skip the test gate. `apply_sca_upgrade` runs the project tests by default; if a project has no test command detected, surface that and require explicit user confirmation per finding.
 - Major-version bumps (`isBreaking: true`) are NOT auto-applied in v1; they require user opt-in via interactive confirm.
+- Surface the **upgrade break-rate** (rolled-back ÷ attempted) in the final summary. Build-and-test verification is the default and is never bypassed — an upgrade whose build/tests fail is rolled back, so the break-rate is how often an "available" upgrade was actually unsafe to take.
 
 **Output:**
 

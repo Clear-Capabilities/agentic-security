@@ -13,9 +13,11 @@ Annotators that run **after** every detector has emitted, plus state stores read
 
 **Risk amplification** — `epss.js`, `kev` (in `version.js`), `blast-radius.js`, `crown-jewels.js`, `exploitability.js`, `bounty-prediction.js`, `risk-in-dollars` (lives in `scripts/`, not here).
 
+**Secrets lifecycle** — `secret-history.js` (git-history blob sweep for committed-then-removed secrets, behind `--secret-history`), `secret-live-check.js` (opt-in, offline-degrading live/dead/unknown labeling via a read-only provider "whoami"; behind `--validate-secrets`).
+
 **Production-posture ingest** — `auth-posture-import.js`, `network-policy-import.js`, `telemetry-ingest.js`, `waf-ingest.js`, `feature-flags.js`. These read customer-side YAML and convert to mitigation flags consumed by `mitigation-composite.js`.
 
-**Fix lifecycle** — `fix-history.js` (apply + backup + recover), `fix-verify.js` (closed-loop re-scan + lint), `fix-plan.js` (oversized-patch fallback), `regression-test-gen.js`.
+**Fix lifecycle** — `fix-history.js` (apply + backup + recover), `fix-verify.js` (closed-loop re-scan + lint), `fix-plan.js` (oversized-patch fallback), `regression-test-gen.js`, `deterministic-fix.js` (safe context-independent literal-swap patch synthesis — md5/sha1→sha256, TLS verify-off→on — materialized on demand by `mcp/synthesize_fix`; every patch still passes through `apply_fix`'s inline verify before it lands).
 
 **Agentic verification** — `verifier.js`, `verifier-target.js`, `verifier-ephemeral.js`, `harness-discovery.js`, `adversary-agent.js`, `defender-agent.js`, `auditor-agent.js`, `three-agent-pipeline.js`.
 

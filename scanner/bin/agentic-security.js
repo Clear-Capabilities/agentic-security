@@ -113,6 +113,7 @@ Options:
   --since-baseline             Only show findings NOT in the saved baseline
   --hide-proven-safe           Drop findings discharged by a flow proof (provably safe)
   --secret-history             Also sweep recent git history for committed secrets
+  --validate-secrets           Label each detected secret live/dead/unknown (opt-in, network, offline-degrading)
                                (removed from HEAD but recoverable from .git)
   --history-depth <n>          Commits to sweep with --secret-history (default 50)
   --no-epss                    Skip EPSS exploit-prediction enrichment (default: enabled)
@@ -331,8 +332,40 @@ async function cmdScan(args) {
     }
   }
 
+  // #21 — --watch : continuous incremental re-scan on file change. Each change
+  // re-scans (incrementally) and writes a risk-delta to
+  // .agentic-security/watch-status.md that a statusline / /posture poll surfaces
+  // inline — so "did my edit add risk?" is answered without a manual re-scan.
+  // Blocks until Ctrl-C, like `jest --watch`. Opt-in, so it never affects a
+  // normal one-shot scan.
+  if (args.flags['watch']) {
+    process.env.AGENTIC_SECURITY_INCREMENTAL = '1';
+    const { watchProject, computeDelta, persistStatus, renderStatusLine } = await import('../src/posture/watch-mode.js');
+    process.stderr.write(`[watch] scanning ${targetAbs} on change — Ctrl-C to stop. Status → .agentic-security/watch-status.md\n`);
+    const seed = await runScan(targetAbs, {});
+    let prevFindings = seed.scan.findings || [];
+    await watchProject(targetAbs, async () => {
+      try {
+        const { scan } = await runScan(targetAbs, {});
+        const curr = scan.findings || [];
+        const delta = computeDelta(prevFindings, curr);
+        persistStatus(targetAbs, delta);
+        process.stderr.write('[watch] ' + renderStatusLine(delta) + '\n');
+        prevFindings = curr;
+      } catch (e) {
+        process.stderr.write(`[watch] rescan failed: ${e.message}\n`);
+      }
+    });
+    return 0; // watchProject blocks until aborted
+  }
+
   // --incremental : reuse taint summaries from prior scans for faster deep mode.
-  if (args.flags['incremental'] || process.env.AGENTIC_SECURITY_INCREMENTAL === '1') {
+  // #23 — default incremental ON for diff-scoped scans (--pr / --changed-since):
+  // that's the cache's designed use (small changed set → its callers), so the
+  // PR-native path is fast by default. A full-tree scan stays non-incremental
+  // unless explicitly requested (blanket-default flip needs broader validation).
+  const _diffScoped = !!(args.flags['pr'] || args.flags['changed-since']);
+  if (args.flags['incremental'] || process.env.AGENTIC_SECURITY_INCREMENTAL === '1' || _diffScoped) {
     process.env.AGENTIC_SECURITY_INCREMENTAL = '1';
   }
 
@@ -566,6 +599,46 @@ async function cmdScan(args) {
   if (_isSafeStateDir(stateDir)) {
     await fsp.mkdir(stateDir, { recursive: true });
     const persistedScan = toJSON(scan, meta);
+    // #10 — MTTR: stamp firstSeenAt/lastSeenAt/ageDays from the PREVIOUS scan so
+    // every finding carries an age, SLA breaches can be surfaced, and the fix
+    // loop can report time-to-clean. Best-effort; skipped under --deterministic
+    // so deterministic state stays byte-identical run-to-run.
+    if (!args.flags.deterministic) {
+      try {
+        const { stampFindingTimestamps, buildBaselineMap, renderSlaSummary } = await import('../src/posture/mttr.js');
+        let baselineMap = new Map();
+        try {
+          const prev = JSON.parse(await fsp.readFile(path.join(stateDir, 'last-scan.json'), 'utf8'));
+          baselineMap = buildBaselineMap(prev);
+        } catch { /* first run — empty baseline, everything is firstSeen now */ }
+        const now = Date.now();
+        stampFindingTimestamps(persistedScan.findings || [], baselineMap, now);
+        stampFindingTimestamps(persistedScan.secrets || [], baselineMap, now);
+        stampFindingTimestamps((persistedScan.supplyChain || []).filter(s => s.type === 'vulnerable_dep'), baselineMap, now);
+        // Surface the SLA-breach line on human-readable formats (not JSON/CI pipes).
+        const isJson = format === 'json' || format === 'sarif' || format === 'cyclonedx' || format === 'sbom' || format === 'spdx' || format === 'vex' || format === 'openvex' || format === 'pbom' || format === 'aibom';
+        if (!isJson) {
+          const sla = renderSlaSummary(persistedScan.findings || []);
+          if (sla) process.stderr.write(`⏰ agentic-security: ${sla}\n`);
+        }
+      } catch { /* MTTR is best-effort — never block a scan write */ }
+    }
+    // #22 — live-secret validation (opt-in, offline-degrading). Label each
+    // detected secret live | dead | unknown via a read-only provider "whoami".
+    // "This key is LIVE and was committed N commits ago" is the P0 that matters.
+    if (args.flags['validate-secrets'] || process.env.AGENTIC_SECURITY_VALIDATE_SECRETS === '1') {
+      try {
+        const { checkSecretLive } = await import('../src/posture/secret-live-check.js');
+        let live = 0;
+        for (const s of (persistedScan.secrets || [])) {
+          const { verdict, provider } = await checkSecretLive(s);
+          s.liveVerdict = verdict;
+          if (provider) s.liveProvider = provider;
+          if (verdict === 'live') live++;
+        }
+        if (live > 0) process.stderr.write(`🔴 agentic-security: ${live} LIVE secret(s) validated — rotate immediately (even if already removed from HEAD).\n`);
+      } catch { /* best-effort, offline-degrading — never block a scan */ }
+    }
     const lastScanBody = JSON.stringify(persistedScan, null, 2);
     await fsp.writeFile(path.join(stateDir, 'last-scan.json'), lastScanBody);
     try {
@@ -1535,7 +1608,7 @@ description: Remediate every finding at or above a severity threshold (default: 
 argument-hint: "[--severity critical|high|medium]"
 ---
 
-Read \`.agentic-security/last-scan.json\`. For every finding at or above \`\${1:-critical}\` severity, dispatch the security-fixer subagent in sequence — not in parallel, as each fix may change subsequent findings. After each batch, re-run \`/security-scan-all\` to confirm. Stop and report if any test fails.
+Read \`.agentic-security/last-scan.json\`. For every finding at or above \`\${1:-critical}\` severity, dispatch the security-fixer subagent — independent findings in parallel, serializing only findings that share a file. Each fix is inline-verified by apply_fix before it lands (finding gone + no new ≥medium + lint). Do NOT halt on the first failure: record each finding's outcome and continue, then report the full list and the auto-fix acceptance rate. Re-run \`/security-scan-all\` to confirm.
 `,
     'security-report.md': `---
 description: Generate an HTML security report (or JSON / Markdown / SARIF).

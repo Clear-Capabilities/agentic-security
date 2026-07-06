@@ -17,6 +17,7 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { applyFix as applyFixHistory, fixAcceptanceRate } from '../posture/fix-history.js';
+import { synthesizeDeterministicPatch } from '../posture/deterministic-fix.js';
 import { verifyLastScan } from '../posture/integrity.js';
 import { analyzeTranscript, formatCacheReport, renderCacheStatusLine } from '../posture/cache-economics.js';
 import { redactString, redactFinding } from './redact.js';
@@ -491,7 +492,7 @@ export const explain_finding = {
 // ─── apply_fix ───────────────────────────────────────────────────────────────
 export const apply_fix = {
   name: 'apply_fix',
-  description: 'Apply the stored replacement fix for a finding. Refuses if last-scan.json fails its HMAC check, if the finding is shadow-marked, or if its file path escapes the session root via lexical traversal OR a symlink. Requires confirm:true. Supports dry_run:true to preview without writing.',
+  description: 'Apply a fix for a finding. Two modes: (1) the stored fix.replacement, or (2) a caller-supplied `patch` (a files map) which is RE-VERIFIED inline (rescan-clean + no new ≥medium + lint) before any write — this unblocks findings that ship only a template or description. Refuses if last-scan.json fails its HMAC check, if the finding is shadow-marked, or if a path escapes the session root via lexical traversal OR a symlink. Requires confirm:true. Supports dry_run:true to preview without writing.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -499,10 +500,15 @@ export const apply_fix = {
       finding_id: { type: 'string', minLength: 1, maxLength: 256 },
       confirm: { type: 'boolean' },
       dry_run: { type: 'boolean' },
+      patch: {
+        type: 'object',
+        additionalProperties: { type: 'string', maxLength: 500_000 },
+        minProperties: 1, maxProperties: 8,
+      },
     },
     required: ['finding_id', 'confirm'],
   },
-  async handler({ finding_id, confirm, dry_run = false }, ctx) {
+  async handler({ finding_id, confirm, dry_run = false, patch = null }, ctx) {
     if (confirm !== true) {
       return { _meta: META, applied: false, reason: 'apply_fix requires confirm: true.' };
     }
@@ -515,6 +521,74 @@ export const apply_fix = {
     if (f._shadow === true) {
       return { _meta: META, applied: false, reason: 'shadow findings cannot be auto-applied' };
     }
+
+    // #3 — verifier-approved patch path. When the caller supplies `patch` (a
+    // files map, same shape as verify_fix), apply_fix re-runs the verifier
+    // INLINE and writes only if it passes: the original finding's stableId is
+    // gone, no new ≥medium finding was introduced, and lint is clean. This lets
+    // a deterministic OR LLM-synthesized patch be applied for the ~100% of
+    // findings that ship only a template/description (no stored fix.replacement).
+    // Security: all existing gates hold (confirm, last-scan HMAC, reserved
+    // paths, confinement, fix-history backup + attempt budget); the write is
+    // additionally gated on a FRESH verification, so a stale/forged patch can't
+    // slip through — there is no token to replay, the verify runs here and now.
+    if (patch && typeof patch === 'object' && Object.keys(patch).length) {
+      if (!f.stableId) {
+        return { _meta: META, applied: false, reason: 'finding has no stableId — cannot verify a patch against it' };
+      }
+      const confinedAbs = {};
+      for (const [rel, content] of Object.entries(patch)) {
+        let abs;
+        try { abs = _confine(ctx.sessionRoot, rel, 'patch key'); }
+        catch (e) { return { _meta: META, applied: false, reason: `path-escape refused: ${e.message}` }; }
+        if (_isReservedWritePath(ctx.sessionRoot, abs)) {
+          return { _meta: META, applied: false, reason: `reserved path refused: ${rel}` };
+        }
+        confinedAbs[rel] = { abs, content: String(content) };
+      }
+      // Inline re-verify — the load-bearing gate. Must pass to write.
+      let verdict;
+      try {
+        const verifyFixCore = await getVerifyFixCore();
+        verdict = await verifyFixCore({
+          scanRoot: ctx.sessionRoot,
+          originalFindingStableId: f.stableId,
+          files: Object.fromEntries(Object.entries(confinedAbs).map(([rel, v]) => [rel, v.content])),
+        });
+      } catch (e) {
+        return { _meta: META, applied: false, reason: `patch verification failed: ${e.message}` };
+      }
+      if (!verdict.ok) {
+        return {
+          _meta: META, applied: false,
+          reason: `patch rejected by verifier: ${verdict.summary || verdict.rescan?.reason || 'did not verify'}`,
+          verify: { rescan: verdict.rescan, lint: { runner: verdict.lint?.runner, ok: verdict.lint?.ok } },
+        };
+      }
+      if (dry_run) {
+        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary };
+      }
+      const written = [];
+      try {
+        for (const [rel, v] of Object.entries(confinedAbs)) {
+          const originalContent = fs.existsSync(v.abs) ? await fsp.readFile(v.abs, 'utf8') : '';
+          const entry = await applyFixHistory({
+            scanRoot: ctx.sessionRoot, file: rel, originalContent, newContent: v.content,
+            findingId: f.id, stableId: f.stableId, ruleId: f.rule || null, vuln: f.vuln || f.title || null,
+          });
+          written.push({ file: rel, historyId: entry.id, backupPath: entry.backupPath });
+        }
+      } catch (e) {
+        if (e && e.name === 'FixAttemptBudgetExceededError') {
+          return { _meta: META, applied: false, reason: `budget-exceeded: ${e.message}`, budgetExceeded: true, attempts: e.attempts, maxAttempts: e.max, key: e.key };
+        }
+        throw e;
+      }
+      let acceptance = null;
+      try { acceptance = fixAcceptanceRate(ctx.sessionRoot); } catch { /* best-effort */ }
+      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary }, acceptance };
+    }
+
     if (typeof f.fix?.replacement !== 'string') {
       // Premortem #2: templates are patch-shaped text. Same reasoning as
       // the replacement path — do NOT pass through redactString here.
@@ -678,6 +752,20 @@ export const synthesize_fix = {
       locDelta = Math.abs(fix.replacement.split('\n').length - orig.split('\n').length);
     }
     const oversized = touchedFiles > 3 || locDelta > 100;
+    // #1 — deterministic autofix: for classes with a safe context-independent
+    // swap (weak hash, TLS verify-off), materialize a full-file patch from the
+    // live file. The agent passes `autofix.patch` straight to apply_fix, which
+    // re-verifies it (rescan-clean + no new ≥medium + lint) before writing — so
+    // even a mis-attributed swap can't land a bad edit. No stored replacement,
+    // no per-finding bloat in last-scan.json.
+    let autofix = null;
+    if (!hasReplacement) {
+      try {
+        const abs = _confine(ctx.sessionRoot, f.file, 'finding.file');
+        const det = synthesizeDeterministicPatch(f, fs.readFileSync(abs, 'utf8'));
+        if (det) autofix = { deterministic: true, ruleId: det.ruleId, patch: det.patch };
+      } catch { /* best-effort — no file / no rule → no autofix */ }
+    }
     // Premortem #2: `replacement` is a *patch* (the code we'll write to disk),
     // not a finding excerpt. Running it through redactString silently corrupts
     // valid patches whose content happens to match a secret-shape (e.g. a
@@ -694,9 +782,15 @@ export const synthesize_fix = {
       hasReplacement,
       replacement: hasReplacement ? fix.replacement : null,
       template: fix.code || null,
+      autofix,
+      // #15 — the regression test the scan annotator already generated for this
+      // finding (present when a PoC was built). Surfaced here so the fix flow
+      // writes the test alongside the patch; fix-verify-loop then runs it, so an
+      // applied fix ships with a test that fails pre-fix and passes post-fix.
+      regression_test: f.regression_test || null,
       remediation: typeof fix.description === 'string' ? fix.description : (typeof fix === 'string' ? fix : null),
       patchBounds: { touchedFiles, locDelta, oversized },
-      recommendsFixPlan: oversized && !hasReplacement,
+      recommendsFixPlan: oversized && !hasReplacement && !autofix,
     };
   },
 };

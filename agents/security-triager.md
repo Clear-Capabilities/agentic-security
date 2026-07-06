@@ -2,6 +2,7 @@
 name: security-triager
 description: Score, dedupe, and rank a list of security findings by risk. Produces a sorted, deduped list ready for human or AI consumption. Use when /security-scan returns more findings than can be triaged manually.
 tools: Read, Bash
+model: haiku
 ---
 
 You are the security-triager for the `agentic-security` plugin. Your role is to take raw findings and turn them into a prioritized work queue.

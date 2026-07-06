@@ -1,7 +1,7 @@
 // 0.8.0 Feat-11: MTTR / finding-age tracking tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stampFindingTimestamps, buildBaselineMap, findingsExceedingSLA, computeMTTR } from '../src/posture/mttr.js';
+import { stampFindingTimestamps, buildBaselineMap, findingsExceedingSLA, computeMTTR, renderSlaSummary } from '../src/posture/mttr.js';
 
 test('MTTR — first scan stamps firstSeenAt = lastSeenAt = now and ageDays = 0', () => {
   const findings = [{ kind: 'sast', vuln: 'XSS', file: 'a.js', line: 10 }];
@@ -45,4 +45,23 @@ test('MTTR — computeMTTR returns mean/median for fixed findings', () => {
   assert.equal(Math.round(m.medianDays), 20);
   assert.equal(m.perSeverity.high.count, 2);
   assert.equal(m.perSeverity.high.meanDays, 15);
+});
+
+test('renderSlaSummary (#10): flags findings past SLA with per-severity counts + median age', () => {
+  const findings = [
+    { severity: 'critical', ageDays: 10 }, // > 7d critical SLA → breach
+    { severity: 'high', ageDays: 40 },     // > 30d high SLA → breach
+    { severity: 'high', ageDays: 5 },      // within SLA
+    { severity: 'low', ageDays: 1 },       // within SLA
+  ];
+  const s = renderSlaSummary(findings);
+  assert.match(s, /2 finding\(s\) past remediation SLA/);
+  assert.match(s, /1 critical/);
+  assert.match(s, /1 high/);
+  assert.match(s, /median open age/);
+});
+
+test('renderSlaSummary: null when nothing is past SLA', () => {
+  assert.equal(renderSlaSummary([{ severity: 'high', ageDays: 5 }]), null);
+  assert.equal(renderSlaSummary([]), null);
 });

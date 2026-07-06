@@ -63,6 +63,31 @@ export function findingsExceedingSLA(findings, slaDays = null) {
   });
 }
 
+// Median age (days) of the currently-open findings — a single-scan proxy for
+// "how long has this debt been sitting". True MTTR (computeMTTR) needs the set
+// of findings that were FIXED; this reports the open backlog's median age so a
+// scan can show whether debt is getting older. Returns null on empty input.
+// Local — surfaced only through renderSlaSummary (its sole consumer).
+function medianOpenAgeDays(findings) {
+  const ages = (findings || []).map(f => f.ageDays || 0).sort((a, b) => a - b);
+  if (!ages.length) return null;
+  return ages[Math.floor(ages.length / 2)];
+}
+
+// One-line SLA-breach summary for surfacing after a scan (#10). Returns null
+// when nothing is past its per-severity SLA. Pairs with medianOpenAgeDays for a
+// "is my security debt aging" readout that the vibecoder can act on.
+export function renderSlaSummary(findings, slaDays = null) {
+  const breached = findingsExceedingSLA(findings || [], slaDays);
+  if (!breached.length) return null;
+  const bySev = {};
+  for (const f of breached) bySev[f.severity] = (bySev[f.severity] || 0) + 1;
+  const parts = ['critical', 'high', 'medium', 'low', 'info'].filter(s => bySev[s]).map(s => `${bySev[s]} ${s}`);
+  const median = medianOpenAgeDays(findings);
+  const ageNote = median != null ? ` (median open age ${median}d)` : '';
+  return `${breached.length} finding(s) past remediation SLA: ${parts.join(', ')}${ageNote}`;
+}
+
 // Compute MTTR statistics from a series of saved scans (each with firstSeen/lastSeen).
 // Useful for trend reporting.
 export function computeMTTR(removedFindings) {

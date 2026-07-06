@@ -72,11 +72,13 @@ function pendingFixPlans(relFile) {
   } catch { return []; }
 }
 
-(async () => {
-  const payload = await readStdinJSON();
+// Build the file-context block for a PreToolUse payload, or null when there's
+// nothing to inject. Importable so the single PreToolUse dispatcher (#24) can
+// run it in-process. stdout of this string is appended to the model's context.
+function buildContextOutput(payload) {
   // tool_input shape varies: Edit/Write have file_path; MultiEdit has it too.
   const filePath = payload?.tool_input?.file_path || payload?.tool_input?.path || null;
-  if (!filePath) { process.exit(0); }
+  if (!filePath) return null;
   const rel = relativizeToCwd(filePath);
 
   const scan = readJSON(path.join(stateDir, 'last-scan.json'));
@@ -84,9 +86,7 @@ function pendingFixPlans(relFile) {
   const fixes = recentFixHistory(rel);
   const plans = pendingFixPlans(rel);
 
-  if (findings.length === 0 && fixes.length === 0 && plans.length === 0) {
-    process.exit(0);
-  }
+  if (findings.length === 0 && fixes.length === 0 && plans.length === 0) return null;
 
   const lines = [];
   lines.push(`agentic-security context for ${rel}:`);
@@ -111,10 +111,16 @@ function pendingFixPlans(relFile) {
     for (const p of plans) lines.push(`  · ${path.basename(p)}`);
   }
   // Truncate to budget.
-  const out = lines.slice(0, 30).join('\n');
-  // Claude Code PreToolUse hook output schema: stdout is appended to the
-  // model's context. We prefix with a short tag so the model knows where it
-  // came from.
-  process.stdout.write(out + '\n');
-  process.exit(0);
-})().catch(() => process.exit(0));
+  return lines.slice(0, 30).join('\n');
+}
+
+if (require.main === module) {
+  (async () => {
+    const payload = await readStdinJSON();
+    const out = buildContextOutput(payload);
+    if (out) process.stdout.write(out + '\n');
+    process.exit(0);
+  })().catch(() => process.exit(0));
+}
+
+module.exports = { buildContextOutput };

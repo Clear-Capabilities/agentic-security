@@ -26,9 +26,11 @@ function money(n) {
 
 // Per-1M-token rates (input / output). Mirror hooks/model-cost-advisor.js MODELS.
 const MODEL_RATES = {
-  opus:   { label: 'Opus 4.8',   in: 5, out: 25 },
-  sonnet: { label: 'Sonnet 4.6', in: 3, out: 15 },
-  haiku:  { label: 'Haiku 4.5',  in: 1, out: 5 },
+  fable:   { label: 'Fable 5',    in: 10, out: 50 },
+  opus:    { label: 'Opus 4.8',   in: 5,  out: 25 },
+  sonnet5: { label: 'Sonnet 5',   in: 3,  out: 15 },
+  sonnet:  { label: 'Sonnet 4.6', in: 3,  out: 15 },
+  haiku:   { label: 'Haiku 4.5',  in: 1,  out: 5 },
 };
 const CACHE_READ_MULT = 0.1;   // cache read ≈ 0.1× input
 const CACHE_WRITE_MULT = 1.25; // 5-minute cache write ≈ 1.25× input
@@ -40,8 +42,9 @@ const TTL_MS = 5 * 60 * 1000;
 function rateFor(model) {
   if (typeof model !== 'string') return null;
   const s = model.toLowerCase();
+  if (s.includes('fable') || s.includes('mythos')) return MODEL_RATES.fable;
   if (s.includes('haiku')) return MODEL_RATES.haiku;
-  if (s.includes('sonnet')) return MODEL_RATES.sonnet;
+  if (s.includes('sonnet')) return (s.includes('sonnet-5') || s.includes('sonnet 5')) ? MODEL_RATES.sonnet5 : MODEL_RATES.sonnet;
   if (s.includes('opus')) return MODEL_RATES.opus;
   return null;
 }

@@ -15,6 +15,8 @@ import {
   _resetCapabilityCacheForTests,
 } from '../src/ir/parser-py-cst.js';
 import { parsePythonFile as parsePythonFileRegex } from '../src/ir/parser-py.js';
+import { buildProjectIR } from '../src/ir/index.js';
+import { runDeepAnalysis } from '../src/dataflow/index.js';
 
 const cap = probePythonAvailable();
 const cstAvailable = cap.ok;
@@ -110,6 +112,33 @@ def upper_all(req):
   const assignNode = nodes.find(n => n.kind === 'assign' && n.target === 'result');
   assert.ok(assignNode, 'expected an assign node for the comprehension result');
   assert.equal(assignNode.source.kind, 'array');
+});
+
+// #16 — end-to-end TAINT FLOW through constructs the docs once listed as "not
+// modelled". The parser lowers them AND taint reaches the sink through them.
+// (A variable-bound source → sink is the flow the deep engine resolves.)
+_maybe('#16 taint flows through a match case body to a sink', () => {
+  const code = `
+def route(req):
+    match req.path:
+        case _:
+            c = req.args.get("cmd")
+            __import__("os").system(c)
+`;
+  const { perFile, callGraph } = buildProjectIR({ 'app.py': code });
+  const f = runDeepAnalysis(perFile, callGraph, {});
+  assert.ok(f.length >= 1, `expected a finding through the match case body, got ${f.length}`);
+});
+
+_maybe('#16 taint flows through a walrus binding to a sink', () => {
+  const code = `
+def h(req):
+    if (c := req.args.get("x")):
+        __import__("os").system(c)
+`;
+  const { perFile, callGraph } = buildProjectIR({ 'app.py': code });
+  const f = runDeepAnalysis(perFile, callGraph, {});
+  assert.ok(f.length >= 1, `expected a finding through the walrus binding, got ${f.length}`);
 });
 
 _maybe('CST parser captures nested function defs', () => {

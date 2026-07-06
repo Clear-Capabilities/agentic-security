@@ -86,11 +86,12 @@ function lastTurnAgeMs(opts = {}) {
 
 // Actual $ spent so far this session (for F6 cache-budget biasing). Prices the
 // real per-turn tokens: cache read ≈0.1×, write ≈1.25×, plus fresh in/out.
-const RATE = { haiku: { in: 1, out: 5 }, sonnet: { in: 3, out: 15 }, opus: { in: 5, out: 25 } };
+const RATE = { fable: { in: 10, out: 50 }, haiku: { in: 1, out: 5 }, sonnet5: { in: 3, out: 15 }, sonnet: { in: 3, out: 15 }, opus: { in: 5, out: 25 } };
 function rateFor(model) {
   const s = String(model || '').toLowerCase();
+  if (s.includes('fable') || s.includes('mythos')) return RATE.fable;
   if (s.includes('haiku')) return RATE.haiku;
-  if (s.includes('sonnet')) return RATE.sonnet;
+  if (s.includes('sonnet')) return (s.includes('sonnet-5') || s.includes('sonnet 5')) ? RATE.sonnet5 : RATE.sonnet;
   if (s.includes('opus')) return RATE.opus;
   return null;
 }

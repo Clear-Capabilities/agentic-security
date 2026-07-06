@@ -2,12 +2,31 @@
 // request per 100 CVEs instead of one per CVE.
 //
 // The engine has its own disk-backed sessionStorage shim under
-// ~/.claude/agentic-security/osv-cache/. To avoid that cache returning
-// stale data from prior runs, every test uses a unique CVE-id range
-// keyed off process.pid + Date.now().
+// ~/.claude/agentic-security/osv-cache/, with no TTL — a cache entry a prior
+// test run wrote is still there, and stays there, on the next run. So every
+// test uses a CVE-id range that is genuinely unique per invocation.
+//
+// A prior version of this file claimed to key off "process.pid + Date.now()"
+// but only actually used the last 3 digits of process.pid (1,000 possible
+// values). PIDs get reused by the OS across separate test invocations, so a
+// re-used PID suffix collided with an id a previous run had already cached —
+// _enrichWithEPSS correctly saw a cache hit and skipped the fetch, and the
+// "exactly one request" assertions intermittently failed with 0. That was a
+// test-isolation bug, not a bug in the EPSS/SCA code (cache-first is the
+// intended production behavior).
+//
+// Fix: derive the namespace from Date.now() + process.pid (unique across
+// repeated invocations — a collision would need two test runs to start in the
+// same millisecond under the same OS-recycled pid), and delete every cache
+// file this file writes once its tests finish, so it can never leave a
+// residue for a *future* run to collide with either.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 
 // Track every fetch call so we can assert on batching.
 let fetchCalls = [];
@@ -28,14 +47,26 @@ delete process.env.AGENTIC_SECURITY_OFFLINE;
 const { _enrichWithEPSS, _fetchEPSSBatch } = await import('../src/engine.js');
 
 // Per-run-unique CVE namespace so we never collide with a prior run's cache.
-// Format: CVE-9{run}-{seq6}. The leading 9 in year position ensures we never
-// collide with a real CVE id, and {run} disambiguates across test invocations.
-const RUN_ID = String(process.pid).slice(-3).padStart(3, '0');
+// Format: CVE-9999-{run}{seq6}. Year 9999 never collides with a real CVE
+// (years are always ≤ the current real year); {run} is the actual
+// process.pid + Date.now() combination the old comment claimed to use.
+const RUN_ID = `${Date.now()}${process.pid}`;
+// Every CVE id this file ever mints, so the cleanup pass below can delete
+// exactly the cache files this run created — never more, never less.
+const _mintedCveIds = [];
 function cveId(seq) {
-  return `CVE-9${RUN_ID}-${String(seq).padStart(6, '0')}`;
+  const id = `CVE-9999-${RUN_ID}${String(seq).padStart(6, '0')}`;
+  _mintedCveIds.push(id);
+  return id;
 }
 function makeFinding(cve, name) {
   return { type: 'vulnerable_dep', name: name || 'pkg', cveAliases: [cve] };
+}
+
+function _cacheFilePathFor(cve) {
+  const cacheDir = path.join(os.homedir(), '.claude', 'agentic-security', 'osv-cache');
+  const key = 'osv_epss:' + cve.toUpperCase();
+  return path.join(cacheDir, crypto.createHash('sha256').update(key).digest('hex') + '.json');
 }
 
 test('EPSS: single CVE → one batched request', async () => {
@@ -107,4 +138,15 @@ test('_fetchEPSSBatch: empty input is a no-op', async () => {
   const out = await _fetchEPSSBatch([]);
   assert.equal(fetchCalls.length, 0);
   assert.equal(out.size, 0);
+});
+
+// Cleanup — runs last (node:test runs tests in registration order within a
+// file). Deletes every disk-cache entry this run wrote so it can never
+// collide with a future run. Best-effort: a file that was never created
+// (e.g. the offline-mode test's ids, which never hit the network) is simply
+// absent, not an error.
+test('cleanup: remove this run\'s disk-cache entries', () => {
+  for (const cve of _mintedCveIds) {
+    try { fs.unlinkSync(_cacheFilePathFor(cve)); } catch { /* never existed — fine */ }
+  }
 });

@@ -92,10 +92,45 @@ Reply now with the JSON object on the last line of your response. Nothing else a
 `;
 
 function endpointConfig() {
+  // Explicit BYO endpoint always wins (unchanged behaviour).
   const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
-  const apiKey = process.env.AGENTIC_SECURITY_LLM_API_KEY;
-  const model = process.env.AGENTIC_SECURITY_LLM_MODEL || 'unknown';
-  return endpoint ? { endpoint, apiKey, model } : null;
+  if (endpoint) {
+    return { endpoint, apiKey: process.env.AGENTIC_SECURITY_LLM_API_KEY, model: process.env.AGENTIC_SECURITY_LLM_MODEL || 'unknown', preset: null };
+  }
+  // #18 — first-class Anthropic preset. Opt-in via AGENTIC_SECURITY_LLM_PRESET=anthropic
+  // + a key (AGENTIC_SECURITY_LLM_API_KEY or ANTHROPIC_API_KEY): makes the FP-suppression
+  // validator reachable with just a key — no BYO endpoint URL or request-shape wrangling.
+  // Offline-degrading: no key → null (validator no-ops; no runtime cloud call by default).
+  if ((process.env.AGENTIC_SECURITY_LLM_PRESET || '').toLowerCase() === 'anthropic') {
+    const apiKey = process.env.AGENTIC_SECURITY_LLM_API_KEY || process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return null;
+    return {
+      endpoint: 'https://api.anthropic.com/v1/messages',
+      apiKey,
+      model: process.env.AGENTIC_SECURITY_LLM_MODEL || 'claude-haiku-4-5',
+      preset: 'anthropic',
+    };
+  }
+  return null;
+}
+
+// Shape the request for the target: the Anthropic Messages API needs an
+// x-api-key header (added by the caller), an anthropic-version header, and a
+// {model, max_tokens, messages:[…]} body with the reply in content[].text. The
+// generic path posts {prompt, model} with a Bearer header. Pure — no I/O.
+function buildRequest(model, prompt, preset) {
+  if (preset === 'anthropic') {
+    return {
+      headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
+      body: { model, max_tokens: 512, messages: [{ role: 'user', content: prompt }] },
+      extractText: (j) => (Array.isArray(j?.content) ? j.content.filter(b => b?.type === 'text').map(b => b.text || '').join('') : ''),
+    };
+  }
+  return {
+    headers: { 'Content-Type': 'application/json' },
+    body: { prompt, model },
+    extractText: (j) => (j && (j.response || j.text || j.content || j.output || j.choices?.[0]?.message?.content || j.message?.content)) || '',
+  };
 }
 
 function ensureCacheDir(scanRoot) {
@@ -179,17 +214,17 @@ function renderPrompt(finding, fileContents, challenge, nonce) {
     .replace('{{context}}', sterileContext || '(no surrounding code available)');
 }
 
-async function callEndpoint(endpoint, apiKey, model, prompt) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-  const body = { prompt, model };
+async function callEndpoint(endpoint, apiKey, model, prompt, preset = null) {
+  const { headers, body, extractText } = buildRequest(model, prompt, preset);
+  if (apiKey) {
+    if (preset === 'anthropic') headers['x-api-key'] = apiKey;
+    else headers['Authorization'] = `Bearer ${apiKey}`;
+  }
   try {
     const r = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
     if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
     const j = await r.json().catch(() => null);
-    const text = (j && (j.response || j.text || j.content || j.output ||
-      j.choices?.[0]?.message?.content || j.message?.content)) || '';
-    return { ok: true, text: String(text) };
+    return { ok: true, text: String(extractText(j) || '') };
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -329,7 +364,7 @@ export async function validateOne(finding, fileContents, scanRoot) {
   const challenge = crypto.randomBytes(8).toString('hex');
   const nonce     = crypto.randomBytes(8).toString('hex');
   const prompt = renderPrompt(finding, fileContents, challenge, nonce);
-  const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt);
+  const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt, cfg.preset);
   if (!resp.ok) {
     finding.validator_verdict = 'unvalidated';
     finding.unvalidated = true;
@@ -436,4 +471,4 @@ export function applyValidatorVerdicts(findings) {
   return { kept, dropped };
 }
 
-export const _internal = { PROMPT_VERSION, renderPrompt, parseLastJsonObject, validateResponse, sanitizeReasoning, cacheKey };
+export const _internal = { PROMPT_VERSION, renderPrompt, parseLastJsonObject, validateResponse, sanitizeReasoning, cacheKey, endpointConfig, buildRequest };

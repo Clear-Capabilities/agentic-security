@@ -10,7 +10,7 @@
 // Anything that needs a live number must read it here and treat `sourcedAt` as
 // the staleness signal; refresh from each provider's pricing/models API (or the
 // claude-api skill for Anthropic) at implementation time. No network at runtime.
-export const SOURCED_AT = '2026-06-29';
+export const SOURCED_AT = '2026-07-05';
 
 // $/1M tokens. `cached` = effective cached-input rate (Anthropic = read multiplier
 // applied to `in`; others publish a cached-input price directly).
@@ -18,13 +18,17 @@ export const PROVIDERS = {
   anthropic: {
     label: 'Anthropic (Claude)',
     importMarkers: [/@anthropic-ai\b/, /\banthropic\b/, /\bClaude\b/],
-    modelMarkers: [/\bclaude-/i, /\bopus\b/i, /\bsonnet\b/i, /\bhaiku\b/i],
+    modelMarkers: [/\bclaude-/i, /\bfable\b/i, /\bopus\b/i, /\bsonnet\b/i, /\bhaiku\b/i],
     depth: { knob: 'effort', cheap: 'low', expensive: ['high', 'xhigh', 'max'], levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
     cache: { kind: 'explicit', readMult: 0.1, writeMult: 1.25, minPrefixTokens: 1024, modelScoped: true, manualControl: true },
+    // The /sonnet/i row prices both Sonnet 4.6 and Sonnet 5 ($3/$15). Fable 5 is
+    // the current flagship (above Opus) at $10/$50 — a distinct rate, so it gets
+    // its own top-tier row so the over-provisioned rule can suggest Opus/Sonnet.
     models: [
-      { id: 'claude-haiku-4-5',  match: /haiku/i,  tier: 0, in: 1, out: 5,  cached: 0.10 },
-      { id: 'claude-sonnet-4-6', match: /sonnet/i, tier: 1, in: 3, out: 15, cached: 0.30 },
-      { id: 'claude-opus-4-8',   match: /opus/i,   tier: 2, in: 5, out: 25, cached: 0.50 },
+      { id: 'claude-haiku-4-5',  match: /haiku/i,        tier: 0, in: 1,  out: 5,  cached: 0.10 },
+      { id: 'claude-sonnet-4-6', match: /sonnet/i,       tier: 1, in: 3,  out: 15, cached: 0.30 },
+      { id: 'claude-opus-4-8',   match: /opus/i,         tier: 2, in: 5,  out: 25, cached: 0.50 },
+      { id: 'claude-fable-5',    match: /fable|mythos/i, tier: 3, in: 10, out: 50, cached: 1.00 },
     ],
   },
   openai: {

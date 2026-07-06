@@ -63,12 +63,17 @@
                      Hash-chained audit log; OWASP MCP top-10 hardened.
          lsp/        Language-Server-Protocol — powers JetBrains, Neovim, and
                      VS Code plugins via textDocument/publishDiagnostics.
-         hooks/      4 Claude Code hook event types: SessionStart,
-                     PreToolUse (bodyguard + destructive-guard),
-                     PostToolUse (post-edit scan), Stop (drift check).
+         hooks/      5 Claude Code hook event types: SessionStart,
+                     UserPromptSubmit (alias redirect + model-cost advisor,
+                     one dispatcher process), PreToolUse (bodyguard +
+                     conversation-context + cache-invalidator, one dispatcher
+                     process — the security-critical bodyguard block runs
+                     first and short-circuits the advisory hooks),
+                     PostToolUse (post-edit scan, offers a one-tap fix),
+                     Stop (drift check).
          agents/     8 sub-agents: poc-generator, fixer, triager, chain-
                      synthesizer, logic-reviewer, material-change, malware
                      -analyst, refactor-cleaner.
 ```
 
-The whole engine ships as a single 2.6 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node >= 24. No native deps. No daemon. No background process.
+The whole engine ships as a single 3.58 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node >= 24. No native deps. No daemon by default — `scan --watch` opts into a long-running incremental-rescan process.
