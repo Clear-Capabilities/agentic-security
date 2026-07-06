@@ -2,7 +2,7 @@
 
 Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, SARIF ingest, and compliance attestation (NIST AI 600-1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.126.0  
+**Version:** 0.127.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -86,6 +86,7 @@ Several releases (v0.106.0–v0.107.1) shipped broken or false because work was 
 - **Bench-shape isolation.** Answer-key reading (Juliet folder names, OWASP template markers) lives under `sast/bench-shape/` and is OFF by default. `AGENTIC_SECURITY_BENCH_SHAPE=1` enables; `AGENTIC_SECURITY_BLIND_BENCH=1` overrides to force off.
 - **Shadow mode.** Custom rules with `shadow: true` write to `.agentic-security/shadow-findings.json` and are excluded from CI gates — for experimental rules not yet ready to block.
 - **Test fixtures.** New rules need a minimal `vulnerable/` + `clean/` pair under `scanner/test/fixtures/<rule-name>/`. Smoke must detect in `vulnerable/`, must pass on `clean/`.
+- **Sub-agent model/effort override (interactive cost advisor).** If `.agentic-security/model-optimizer-state.json` has a `subagentOverride: {model, effort, setAt}` for the *current* session (not a stale one from a prior session — it's cleared at every `SessionStart`), apply that `model`/`effort` when dispatching cost-sensitive, delegable Agent/Task subagent calls — **unless** the specific subagent already pins its own `model:` in its frontmatter (e.g. `agents/security-triager.md`, `agents/sca-triager.md` — always respect a static pin over the override), or the task clearly needs more capability than the override provides (the override is a cost preference, not a ceiling on judgment). This override only exists when the user explicitly opted into `interactive: true` (see `hooks/model-cost-advisor.js`'s header comment and `docs/MODEL_COST_OPTIMIZATION.md`) and then chose it via an `AskUserQuestion` prompt raised by that hook's `additionalContext` directive — if you see that directive, follow it (call `AskUserQuestion`, then persist the answer to the same state file yourself, per the directive's exact instructions) rather than silently ignoring it.
 
 ---
 

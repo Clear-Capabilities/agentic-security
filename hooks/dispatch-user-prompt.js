@@ -6,7 +6,13 @@
 // in-process, and emits a single merged hook output. Both sub-hooks are purely
 // advisory (neither can block a prompt), so the merge is a plain union:
 //   • legacy-alias-redirect → hookSpecificOutput.additionalContext
-//   • model-cost-advisor    → systemMessage (never additionalContext → 0 tokens)
+//   • model-cost-advisor    → systemMessage (free) by default; ALSO
+//     hookSpecificOutput.additionalContext (billed) when the advisor's
+//     `interactive` config is opted in and a recommendation qualifies — see
+//     model-cost-advisor.js's header comment. Both sub-hooks can set
+//     additionalContext on the SAME prompt (an alias redirect and an
+//     interactive advisor directive are independent triggers), so the merge
+//     below joins them instead of letting one clobber the other.
 //
 // Halving the per-prompt process spawns (2 → 1) removes a latency tax paid on
 // every single user turn. Behaviour is otherwise identical to the two standalone
@@ -28,25 +34,29 @@ function readStdinJSON() {
 
 // Pure merge — importable for tests. Given the two sub-hook results, produce the
 // single UserPromptSubmit hook-output object (or {} when neither fired).
-function mergeOutputs({ aliasHit, tip }) {
+// `adviceOut` is model-cost-advisor's advise() result: {systemMessage?, additionalContext?} | null.
+function mergeOutputs({ aliasHit, adviceOut }) {
   const out = {};
-  if (aliasHit) {
+  const contexts = [];
+  if (aliasHit) contexts.push(buildContext(aliasHit));
+  if (adviceOut && adviceOut.additionalContext) contexts.push(adviceOut.additionalContext);
+  if (contexts.length) {
     out.hookSpecificOutput = {
       hookEventName: 'UserPromptSubmit',
-      additionalContext: buildContext(aliasHit),
+      additionalContext: contexts.join('\n\n'),
     };
   }
-  if (tip) out.systemMessage = tip;
+  if (adviceOut && adviceOut.systemMessage) out.systemMessage = adviceOut.systemMessage;
   return out;
 }
 
 async function main() {
   const input = await readStdinJSON();
   let aliasHit = null;
-  let tip = null;
+  let adviceOut = null;
   try { aliasHit = resolveAlias(input.prompt || ''); } catch { /* best-effort */ }
-  try { tip = await advise(input); } catch { /* best-effort */ }
-  const out = mergeOutputs({ aliasHit, tip });
+  try { adviceOut = await advise(input); } catch { /* best-effort */ }
+  const out = mergeOutputs({ aliasHit, adviceOut });
   if (Object.keys(out).length) process.stdout.write(JSON.stringify(out));
   process.exit(0);
 }

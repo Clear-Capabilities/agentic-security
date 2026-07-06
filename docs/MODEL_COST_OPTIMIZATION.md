@@ -137,6 +137,8 @@ as your real spend approaches it.
 | `subagentAdvice` | `true` | suggest a Haiku subagent for cache-blocked one-offs |
 | `sessionBudgetUsd` | `null` | soft session budget; biases the dial cheaper as spend nears it |
 | `assumedModel` | `"claude-opus-4-8"` | fallback when the session model is unknown |
+| `interactive` | `false` | opt-in: let you choose via a prompt instead of just reading a tip — see below |
+| `interactiveCooldownTurns` | `3` | don't re-raise an unanswered interactive prompt within N turns |
 
 ---
 
@@ -160,19 +162,58 @@ the optimizer only ever prices it as your starting point, not a downgrade.
 
 ---
 
+## Interactive mode (opt-in)
+
+By default the advisor only ever shows you a tip — you read it, then decide whether
+to run `/model`/`/effort` yourself. Set `"interactive": true` to go one step
+further: on a prompt where a cheaper option qualifies, the hook hands the
+recommendation to Claude (via `additionalContext` — see the cost note below), and
+Claude asks you directly with three options:
+
+```
+(a) Keep current settings — no action.
+(b) Show me the /model command — Claude replies with the exact command to run
+    yourself. Claude can't switch its own model, so this is still a manual step.
+(c) Use the cheaper model for delegated sub-agent work this session — Claude
+    genuinely CAN do this one directly: for the rest of the session, any
+    Task/Agent-tool sub-agent it dispatches for cost-sensitive, delegable work
+    uses the cheaper model/effort, unless that sub-agent already pins its own
+    model (e.g. the triager sub-agents are pinned to Haiku already) or the
+    specific task clearly needs more capability.
+```
+
+Whatever you pick is **sticky for the session** — Claude won't ask again until a
+new session starts (`.agentic-security/model-optimizer-state.json` is reset at
+every `SessionStart`, which is what clears the choice). If Claude doesn't act on
+a raised prompt at all (e.g. a non-interactive/scripted invocation), the hook
+waits `interactiveCooldownTurns` turns before raising it again, rather than
+repeating the cost on every subsequent qualifying prompt.
+
+**The trade-off:** this is the one path in this whole feature that costs real
+tokens. `additionalContext` (unlike the free `systemMessage` tip) is injected
+into Claude's own context and billed as input tokens — and it only fires on
+prompts that already qualify for a tip, at most once per cooldown window, and
+only for projects that explicitly opt in. Every other install of this plugin
+keeps the zero-token guarantee below unchanged.
+
+---
+
 ## FAQ
 
 **Why can't it just switch the model for me?**
-Because Claude Code doesn't let any hook do that. The hook system exposes the
-current model and effort as read-only; there is no output field to *set* them. So
-the honest design is to advise and let you tap `/model` / `/effort`. Anything that
-claimed to auto-switch — or to "quietly handle it for you" — would be lying about
-what took effect.
+Because Claude Code doesn't let any hook do that for the *main session* — the
+hook system exposes the current model and effort as read-only; there is no
+output field to *set* them. So the honest default is to advise and let you tap
+`/model` / `/effort`. The one place Claude genuinely can act directly is on its
+own delegated sub-agent dispatches, via `"interactive": true` above — and even
+there, it's your explicit choice via `AskUserQuestion`, not something applied
+silently.
 
 **Does the optimizer itself cost tokens?**
-No. The classification is plain local logic (length, code blocks, keywords) — zero
-LLM calls, zero network. And the tip is delivered out-of-band to you, not injected
-into Claude's context, so it never enters your token bill.
+By default, no. The classification is plain local logic (length, code blocks,
+keywords) — zero LLM calls, zero network — and the tip is delivered out-of-band
+to you, not injected into Claude's context, so it never enters your token bill.
+The one exception is `"interactive": true` (opt-in, off by default) — see above.
 
 **How do I make the tips stop?**
 You're seeing them because your default is pricier than your typical prompt needs.

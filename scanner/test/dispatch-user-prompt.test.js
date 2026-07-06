@@ -10,25 +10,50 @@ const { mergeOutputs } = require('../../hooks/dispatch-user-prompt.js');
 const { summarizeAdvisorLedger } = require('../../hooks/model-cost-advisor.js');
 
 test('mergeOutputs: alias-only → additionalContext, no systemMessage', () => {
-  const out = mergeOutputs({ aliasHit: { alias: 'status', replacement: '/posture --status', rest: '' }, tip: null });
+  const out = mergeOutputs({ aliasHit: { alias: 'status', replacement: '/posture --status', rest: '' }, adviceOut: null });
   assert.equal(out.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
   assert.match(out.hookSpecificOutput.additionalContext, /\/posture --status/);
   assert.equal(out.systemMessage, undefined);
 });
 
-test('mergeOutputs: tip-only → systemMessage, no additionalContext', () => {
-  const out = mergeOutputs({ aliasHit: null, tip: '\u{1F4A1} try haiku' });
+test('mergeOutputs: tip-only (legacy shape, interactive off) → systemMessage, no additionalContext', () => {
+  const out = mergeOutputs({ aliasHit: null, adviceOut: { systemMessage: '\u{1F4A1} try haiku' } });
   assert.equal(out.systemMessage, '\u{1F4A1} try haiku');
   assert.equal(out.hookSpecificOutput, undefined);
 });
 
-test('mergeOutputs: both fire → union of the two hook outputs', () => {
-  const out = mergeOutputs({ aliasHit: { alias: 'harden', replacement: '/fix --harden', rest: 'x' }, tip: 'tip' });
+test('mergeOutputs: alias fires + advisor tip-only → union of the two hook outputs', () => {
+  const out = mergeOutputs({
+    aliasHit: { alias: 'harden', replacement: '/fix --harden', rest: 'x' },
+    adviceOut: { systemMessage: 'tip' },
+  });
   assert.ok(out.hookSpecificOutput && out.systemMessage);
 });
 
 test('mergeOutputs: neither fires → empty object (dispatcher writes nothing)', () => {
-  assert.deepEqual(mergeOutputs({ aliasHit: null, tip: null }), {});
+  assert.deepEqual(mergeOutputs({ aliasHit: null, adviceOut: null }), {});
+});
+
+test('mergeOutputs: alias AND the interactive advisor BOTH set additionalContext on the same prompt → joined, not clobbered', () => {
+  const out = mergeOutputs({
+    aliasHit: { alias: 'status', replacement: '/posture --status', rest: '' },
+    adviceOut: { systemMessage: 'tip', additionalContext: '[model-advisor] call AskUserQuestion...' },
+  });
+  assert.equal(out.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+  assert.match(out.hookSpecificOutput.additionalContext, /\/posture --status/);
+  assert.match(out.hookSpecificOutput.additionalContext, /model-advisor/);
+  assert.match(out.hookSpecificOutput.additionalContext, /AskUserQuestion/);
+  assert.equal(out.systemMessage, 'tip');
+});
+
+test('mergeOutputs: interactive advisor additionalContext only (no alias) → still surfaced under hookSpecificOutput', () => {
+  const out = mergeOutputs({
+    aliasHit: null,
+    adviceOut: { systemMessage: 'tip', additionalContext: '[model-advisor] call AskUserQuestion...' },
+  });
+  assert.equal(out.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+  assert.match(out.hookSpecificOutput.additionalContext, /model-advisor/);
+  assert.equal(out.systemMessage, 'tip');
 });
 
 test('summarizeAdvisorLedger (#12): aggregates predicted savings + tier counts', () => {

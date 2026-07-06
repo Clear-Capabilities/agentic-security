@@ -7,19 +7,32 @@
 // shows a one-line tip with the estimated token-cost savings.
 //
 // HARD LIMITS (see docs/MODEL_COST_OPTIMIZATION_PRD.md §2):
-//   • A hook CANNOT switch the model or effort. There is no output field for
-//     it anywhere in the Claude Code hook schema. So this is advisory only:
-//     it suggests, the user taps /model + /effort.
-//   • The tip is emitted via `systemMessage` (shown to the user, out-of-band)
-//     and NEVER via `additionalContext` (which would be injected into Claude's
-//     context and BILLED as input tokens — defeating the whole point).
+//   • A hook CANNOT switch the model or effort, and CANNOT pause for
+//     interactive input — there is no output field for either anywhere in the
+//     Claude Code hook schema. So BY DEFAULT this is advisory only: it
+//     suggests, the user taps /model + /effort.
+//   • The tip is emitted via `systemMessage` (shown to the user, out-of-band,
+//     free) and NEVER via `additionalContext` (injected into Claude's own
+//     context and BILLED as input tokens) — UNLESS `interactive: true` is
+//     explicitly opted into below. When it is, a QUALIFYING prompt's
+//     recommendation is ALSO handed to the ACTING CLAUDE via
+//     `additionalContext`, which then offers the user a real choice via
+//     AskUserQuestion: keep defaults, get the `/model` command to run
+//     themselves, or apply the cheaper model/effort to this session's own
+//     delegated sub-agent (Task-tool) dispatches — the one axis Claude
+//     genuinely can act on directly (it cannot change its own running
+//     model/effort; that's a hard platform limit, no exception). This trades
+//     the zero-token guarantee for a real interactive choice, ONLY on
+//     prompts that qualify, ONLY when explicitly enabled.
 //
 // Behavior controlled by .agentic-security/model-optimizer.json:
 //   { "mode": "off" | "advise",
 //     "costQualityTradeoff": 7,        // 0 = pure quality (never downgrade) … 10 = cheapest
 //     "minSavingsUsd": 0.01,           // absolute anti-noise floor
 //     "assumedModel": "claude-opus-4-8",
-//     "assumedCachedTokens": null }    // null → grow estimate with session turns
+//     "assumedCachedTokens": null,     // null → grow estimate with session turns
+//     "interactive": false,            // opt-in: let the user choose (costs tokens on qualifying prompts)
+//     "interactiveCooldownTurns": 3 }  // don't re-fire an unanswered directive within N turns
 //   Default mode: "advise" (correct pricing incl. Fable 5 + measured savings;
 //   disable per-project via model-optimizer.json mode:"off" or the kill switch).
 //   Kill switch: env AGENTIC_SECURITY_MODEL_OPTIMIZER=off.
@@ -130,13 +143,30 @@ function readCfg() {
   const defaults = { mode: 'advise', costQualityTradeoff: 7, minSavingsUsd: 0.01,
     assumedModel: 'claude-opus-4-8', assumedCachedTokens: null,
     ttlSeconds: 300, breakEvenMaxTurns: 6, depthFirstMargin: 0.25,
-    subagentAdvice: true, sessionBudgetUsd: null, models: null };
+    subagentAdvice: true, sessionBudgetUsd: null, models: null,
+    interactive: false, interactiveCooldownTurns: 3 };
   try {
     const parsed = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
     return { ...defaults, ...parsed };
   } catch { return defaults; }
 }
 
+// ── .agentic-security/model-optimizer-state.json — full shape ──────────────
+//   { model: string|null,              // captured by session-start-model-capture.js
+//     capturedAt: string,              // ″
+//     turns: number,                   // advised-turn counter, this file
+//     savingsLedger: [...],            // appendLedger() below
+//     subagentOverride: {model, effort, setAt} | absent,   // interactive mode
+//     subagentOverrideDeclined: true | absent,              // interactive mode
+//     lastDirectiveTurn: number | absent }                  // interactive cooldown
+// `subagentOverride`/`subagentOverrideDeclined` are written EXTERNALLY by the
+// ACTING CLAUDE (not this module) via its own Read/Write tools, after it calls
+// AskUserQuestion in response to the `additionalContext` directive built below
+// — this hook has already exited by the time that answer arrives, so there is
+// no writer function for those two fields here, only a reader. The whole file
+// is bare-overwritten (not merged) by session-start-model-capture.js at every
+// SessionStart, which is what makes an interactive decision "sticky for the
+// session" rather than sticky forever.
 function readSessionModel() {
   try {
     const s = JSON.parse(fs.readFileSync(statePath, 'utf8'));
@@ -161,6 +191,55 @@ function bumpTurns(prev) {
     fs.mkdirSync(stateDir, { recursive: true });
     fs.writeFileSync(statePath, JSON.stringify(s));
   } catch { /* best-effort */ }
+}
+
+// Has the user already decided, this session, whether to apply a cheaper
+// model to delegated sub-agent work? Returns the accepted override object,
+// the string 'declined', or null (undecided). An override naming a model id
+// not in MODELS is treated as undecided — never trust a corrupted/unknown id.
+function readSubagentOverride() {
+  try {
+    const s = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    if (s.subagentOverrideDeclined === true) return 'declined';
+    if (s.subagentOverride && typeof s.subagentOverride.model === 'string' && MODELS[s.subagentOverride.model]) {
+      return s.subagentOverride;
+    }
+    return null;
+  } catch { return null; }
+}
+
+function readLastDirectiveTurn() {
+  try {
+    const s = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    return Number.isInteger(s.lastDirectiveTurn) ? s.lastDirectiveTurn : null;
+  } catch { return null; }
+}
+function writeLastDirectiveTurn(turn) {
+  try {
+    let s = {};
+    try { s = JSON.parse(fs.readFileSync(statePath, 'utf8')); } catch {}
+    s.lastDirectiveTurn = turn;
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(statePath, JSON.stringify(s));
+  } catch { /* best-effort */ }
+}
+
+// Compact directive telling the ACTING CLAUDE to offer the user a real choice,
+// and exactly what state to persist for each answer. Billed as input tokens
+// (additionalContext) — kept terse on purpose; only built when advise() has
+// already decided to fire (see the interactive branch below).
+function buildInteractiveDirective({ tier, reco, table }) {
+  const rec = table[reco.model] || MODELS[reco.model];
+  const effortClause = reco.effort ? ` and effort:"${reco.effort}"` : '';
+  const effortFlag = reco.effort ? ` /effort ${reco.effort}` : '';
+  return `[model-advisor] A cheaper option exists for this ${tier} turn. Before your main response, call AskUserQuestion: `
+    + `question "Handle model cost for this session?", options `
+    + `(a) "Keep current settings" — no action; `
+    + `(b) "Show me the /model command" — reply with the exact command \`/model ${rec.short}${effortFlag}\` for the user to run themselves (you cannot change your own model); `
+    + `(c) "Use ${rec.label} for delegated sub-agent work this session" — for the rest of this session, dispatch cost-sensitive Agent/Task subagent calls with model:"${reco.model}"${effortClause}, unless that subagent already pins its own \`model:\` in its frontmatter or the task clearly needs more capability. `
+    + `After the answer, persist it yourself: on (a), read .agentic-security/model-optimizer-state.json (or start from {} if absent), merge in {"subagentOverrideDeclined": true}, write it back. `
+    + `On (c), merge in {"subagentOverride": {"model": "${reco.model}", "effort": ${reco.effort ? `"${reco.effort}"` : 'null'}, "setAt": "<ISO timestamp now>"}}, write it back. `
+    + `On (b), write nothing. If you cannot prompt interactively right now, skip this and just mention the /model tip in your response.`;
 }
 
 function readStdinJSON() {
@@ -386,9 +465,10 @@ function summarizeAdvisorLedger(ledger) {
 }
 
 // ── Core advisory ───────────────────────────────────────────────────────────
-// input → tip string (or null). No stdin/exit — importable so the single
-// UserPromptSubmit dispatcher (#24) can run it in-process alongside the alias
-// redirect. Records the decision to the ledger (#12) and advances the turn est.
+// input → { systemMessage?, additionalContext? } | null. No stdin/exit —
+// importable so the single UserPromptSubmit dispatcher (#24) can run it
+// in-process alongside the alias redirect. Records the decision to the
+// ledger (#12) and advances the turn estimate.
 async function advise(input) {
   if (process.env.AGENTIC_SECURITY_MODEL_OPTIMIZER === 'off') return null; // kill switch
   const cfg = readCfg();
@@ -438,17 +518,46 @@ async function advise(input) {
   });
 
   bumpTurns(turns); // advance the session's cached-context estimate
-  return tip;
+
+  if (!cfg.interactive) {
+    return tip ? { systemMessage: tip } : null;
+  }
+
+  // Interactive mode (opt-in — see header comment). Let the user choose, via
+  // the acting Claude, instead of just reading a tip.
+  const override = readSubagentOverride();
+  if (override === 'declined') return null; // already said no this session — don't nag
+  if (override) {
+    // Already accepted an override earlier this session — cheap
+    // re-confirmation only, no repeated additionalContext spend.
+    return tip
+      ? { systemMessage: `${tip} (already applying ${(MODELS[override.model] || {}).label || override.model} to subagent dispatches this session.)` }
+      : null;
+  }
+  if (!tip) return null; // nothing to offer — never fire a directive for nothing
+
+  // Cooldown: don't re-fire additionalContext if an unanswered directive fired
+  // recently (Claude may have ignored it, or this is a non-interactive run).
+  const lastDirectiveTurn = readLastDirectiveTurn();
+  const cooldown = Number.isFinite(cfg.interactiveCooldownTurns) ? cfg.interactiveCooldownTurns : 3;
+  if (lastDirectiveTurn != null && (turns - lastDirectiveTurn) < cooldown) {
+    return { systemMessage: tip };
+  }
+
+  writeLastDirectiveTurn(turns);
+  const tier = classifyTier(prompt);
+  const reco = TIER_RECO[tier];
+  return {
+    systemMessage: tip,
+    additionalContext: buildInteractiveDirective({ tier, reco, table: cfg.models || MODELS }),
+  };
 }
 
 // ── Entry point (standalone CLI form) ───────────────────────────────────────
 async function main() {
   const input = await readStdinJSON();
-  const tip = await advise(input);
-  if (tip) {
-    // systemMessage ONLY — never additionalContext (that would cost tokens).
-    process.stdout.write(JSON.stringify({ systemMessage: tip }));
-  }
+  const out = await advise(input);
+  if (out) process.stdout.write(JSON.stringify(out));
   process.exit(0);
 }
 
@@ -461,4 +570,5 @@ module.exports = {
   modelKey, classifyTier, estimateCost, effortMult, roundUsd, buildAdvice,
   cacheRewarmPenalty, savingsFractionFloor, effortRank, biasedDial,
   advise, summarizeAdvisorLedger,
+  readSubagentOverride, buildInteractiveDirective,
 };

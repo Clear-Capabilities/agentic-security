@@ -1,6 +1,6 @@
 {
   "name": "@clear-capabilities/agentic-security-scanner",
-  "version": "0.126.0",
+  "version": "0.127.0",
   "description": "Scanner engine for the agentic-security Claude Code plugin — SAST, SCA (function-level reachability + CISA KEV), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, business logic, toxic-combinations scoring, SBOM, SARIF ingest, pipeline integrity, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -66,7 +66,7 @@
     "test:mcp": "node --test test/mcp.test.js test/mcp-audit.test.js test/audit-cli.test.js test/mcp-scratchpad.test.js test/mcp-offload.test.js test/sca-upgrade.test.js",
     "test:report": "node --test test/sarif-ingest.test.js test/junit.test.js test/ci.test.js test/poc-generator.test.js test/verifier.test.js test/verifier-target.test.js test/annotator-errors.test.js test/grader-calibration.test.js test/pr-delta-gate.test.js test/vex.test.js test/report-render.test.js",
     "test:bench-modules": "node --test test/phase4-harness.test.js test/pipeline.test.js",
-    "test:lifecycle": "node --test test/dead-code.test.js test/no-dead-modules.test.js test/stop-hook.test.js test/plugin-self-check.test.js test/skills-registry.test.js test/bodyguard.test.js test/cache-invalidator-guard.test.js test/dispatch-pre-tool.test.js test/dispatch-user-prompt.test.js && node ../scripts/lint-command-descriptions.mjs",
+    "test:lifecycle": "node --test test/dead-code.test.js test/no-dead-modules.test.js test/stop-hook.test.js test/plugin-self-check.test.js test/skills-registry.test.js test/bodyguard.test.js test/cache-invalidator-guard.test.js test/dispatch-pre-tool.test.js test/dispatch-user-prompt.test.js test/session-start-model-capture.test.js && node ../scripts/lint-command-descriptions.mjs",
     "test:eval": "node --test test/independent-eval.test.js",
     "eval:independent": "node ../bench/independent-eval/runner.mjs",
     "eval:independent:gate": "node ../bench/independent-eval/runner.mjs --gate default",

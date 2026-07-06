@@ -48,7 +48,15 @@ function readStdinJSON() {
 
   try {
     fs.mkdirSync(stateDir, { recursive: true });
-    // turns: 0 resets the advisor's per-session cached-context estimate.
+    // turns: 0 resets the advisor's per-session cached-context estimate. This
+    // is a BARE overwrite (not a merge), so it also clears any
+    // subagentOverride/subagentOverrideDeclined/lastDirectiveTurn fields the
+    // interactive advisor flow (model-cost-advisor.js) wrote last session —
+    // that's what makes an interactive choice "sticky for the session" and
+    // not sticky forever. Caveat inherited from the guard above: if the
+    // harness omits `input.model` this SessionStart, we exit before this
+    // write runs, so a stale override could in that rare case survive into
+    // the new session.
     fs.writeFileSync(statePath, JSON.stringify({ model, capturedAt: new Date().toISOString(), turns: 0 }) + '\n');
   } catch { /* best-effort; never break the session */ }
   process.exit(0);

@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.127.0 — cost advisor: an actual choice, not just a tip
+
+The model-cost advisor (`hooks/model-cost-advisor.js`) has always been advisory
+only — a `systemMessage` tip you read and act on yourself, by design, because a
+`UserPromptSubmit` hook cannot pause for interactive input or change the model/
+effort (verified against the current Claude Code hooks reference before writing
+any of this, not assumed from the hook's own pre-existing comments). This
+release adds a real choice on top of that hard limit, without giving up the
+zero-token guarantee for anyone who doesn't opt in.
+
+- **New opt-in `"interactive": true`** (`.agentic-security/model-optimizer.json`,
+  default `false`). On a qualifying prompt, the hook now additionally emits
+  `hookSpecificOutput.additionalContext` — billed as input tokens, unlike the
+  free `systemMessage` — directing Claude to call `AskUserQuestion` with three
+  options: keep current defaults; get the exact `/model`/`/effort` command to
+  run yourself (Claude cannot switch its own running model — no exception
+  exists); or apply the cheaper model/effort to Claude's own delegated
+  Task/Agent-tool sub-agent dispatches for the rest of the session — the one
+  axis Claude can genuinely act on directly. Every other install keeps today's
+  zero-token behavior unchanged; only projects that explicitly opt in pay for
+  the interactive path, and only on prompts that already qualify for a tip.
+- The chosen sub-agent override is **sticky for the session** — persisted to
+  `.agentic-security/model-optimizer-state.json` (extending the existing state
+  file rather than adding a new one) and cleared at the next `SessionStart`,
+  which already does a bare overwrite of that file. A cooldown
+  (`interactiveCooldownTurns`, default 3) stops the directive from re-firing
+  its token cost if Claude doesn't act on it (e.g. a non-interactive/scripted
+  invocation).
+- Fixed a real bug the new shape would otherwise have hit: `dispatch-user-
+  prompt.js`'s `mergeOutputs` previously let the legacy-alias-redirect's
+  `additionalContext` and the advisor's new `additionalContext` clobber each
+  other if both fired on the same prompt (independent triggers, so this can
+  genuinely co-occur) — now joined instead of last-write-wins.
+- `commands/setup.md`'s `--model-optimizer` gained a matching `--interactive`
+  flag; `CLAUDE.md` documents the durable instruction for applying a saved
+  sub-agent override on future dispatches, respecting existing static
+  `model:` frontmatter pins (`security-triager.md`, `sca-triager.md`) and the
+  "task needs more capability" carve-out.
+
+Also added `SECURITY.md` (vulnerability disclosure policy).
+
 ## 0.126.0 — closing the find→fix loop: verified auto-fix, CWE-434/306, Fable 5 pricing
 
 The largest remediation-side release to date. Prior to this, findings could be
