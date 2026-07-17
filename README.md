@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.126.0-blue)]()
-[![Bundle](https://img.shields.io/badge/bundle-3.58MB-orange)]()
+[![Version](https://img.shields.io/badge/version-0.128.0-blue)]()
+[![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
 
@@ -99,18 +99,16 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 **Find and fix problems**
 - **`find-and-fix-everything`** — One-shot scan + fix every severity in one command. The "just make it safe" path for **vibecoders** (people building with an AI agent doing most of the typing).
 - **`scan`** — Run the scanner. Modes: full / diff / watch / baseline / archaeology / scanner-meta. `--watch` re-scans incrementally on every file change and prints a live risk-delta.
-- **`triage`** — Decide on findings. Modes: id / show / explain / validate / tournament / red-team / exploit / query.
+- **`triage`** — Decide on findings. Modes: id / show / explain / validate / tournament / red-team / exploit / query / deep (red/blue/auditor deep-dive on one finding).
 - **`fix`** — Remediation. Modes: id / all / pr / sca / compliance / rotate-secret / vault / harden / trim / generate. Every patch — deterministic or agent-composed — is re-verified (rescan-clean + no new ≥medium + lint) before it's written; `--all` runs independent findings in parallel and never halts on the first failure.
 
 **Reporting and audits**
 - **`posture`** — Posture + reporting. Modes: status / report-card / harness / trend / threat / playbook / mgmt / cache.
 - **`compliance`** — Compliance + auditor flows. Modes: report / walkthrough / attestation / audit / pr.
 - **`supply`** — Supply chain. Modes: check / sbom / cve-alerts / license.
-- **`three-agent-review`** — Deep-dive one finding with a red team / blue team / auditor trio. `--finding <id>`.
 
 **Set up guardrails**
-- **`setup`** — Workflow installers + guards. Modes: hooks / ci / bodyguard / destructive-guard / model-optimizer.
-- **`ci`** — CI/deploy security gates: workflow generation, pre-deploy gate, git hooks.
+- **`setup`** — Workflow installers + guards. Modes: hooks / ci / predeploy / bodyguard / destructive-guard / model-optimizer. `--ci` generates a multi-provider CI gate; `--predeploy` blocks vercel/fly/wrangler deploys on critical findings.
 
 **Experimental**
 - **`labs`** — Experimental + AI-driven. Modes: claude-audit / model-rescan / synthesize-rule / cross-repo / risk-dollars / time-to-fix / llm.
@@ -130,6 +128,9 @@ Every command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:
 - **SARIF codeFlows for taint traces.** Multi-step source-to-sink paths rendered natively in GitHub Code Scanning, DefectDojo, and VS Code SARIF Viewer.
 - **One-command fix, always verified.** Every patch is previewed, backed up, and revertible — see [Fixes are verified, not trusted](#fixes-are-verified-not-trusted) below.
 - **Auto-baseline for legacy codebases.** `--set-baseline` snapshots existing findings; `--since-baseline` shows only what's new. Day-one usable on any project.
+- **Refutes its own findings.** A default falsification pass takes each candidate and tries to *disprove* it — looking for the control that would actually block it (a context-matched sanitizer, a dominating guard) and demoting the ones it can. What surfaces is what survived scrutiny. Recall-preserving: nothing is silently dropped.
+- **Coverage you can audit.** Enumerates every attacker-reachable entry point — HTTP handlers, queue consumers, cron jobs, CLI args, uploads — and reports the disposition of each, so you can see it looked at your whole attack surface, not just where a finding happened to fire. A confirmed finding then triggers a repo-wide sweep for sibling instances the detectors missed, with honest "N found / M candidate / K mitigated" accounting.
+- **Hardens itself against the code it scans.** A tested threat model treats attacker-authored finding text as untrusted input everywhere it reaches an LLM prompt or a rendered PR/issue report — so the tool can't be turned against you by the repo it's auditing.
 
 Deep engine details — [architecture](docs/ARCHITECTURE.md).
 
@@ -144,6 +145,7 @@ Every patch — whether it's a rule's stored fix, a zero-LLM deterministic swap,
 - **Regression tests ship with the fix.** When the scan built a PoC for a finding, the generated test comes along — it fails before the patch and passes after.
 - **Parallel, and it doesn't stop at the first flake.** Independent findings fix concurrently; a single failing test doesn't halt the batch — every finding gets a fixed/skipped/refused verdict, and the loop reports its own **acceptance rate**.
 - **You can see your security debt aging.** Every scan stamps each finding's age and flags anything past its remediation SLA (critical: 7 days, high: 30, …).
+- **Every fix carries an honest completeness tier.** FULL / MITIGATION / WORKAROUND, computed from mechanical signals (did the sink change? are all callers routed through the fix? does a test flip from fail to pass?) — and a residual-risk guard rejects hand-wavy "adequately handled" claims, so a partial fix can never masquerade as a complete one.
 
 ---
 

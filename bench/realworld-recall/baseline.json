@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-07-17",
+  "corpus": "EXAMPLE.json",
+  "total": 4,
+  "detected": 2,
+  "detectionRate": 0.5,
+  "entries": {
+    "EX-001": "detected",
+    "EX-002": "detected",
+    "EX-003": "missed",
+    "EX-004": "missed"
+  }
+}

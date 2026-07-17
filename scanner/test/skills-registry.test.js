@@ -69,9 +69,10 @@ const skills = _listSkills();
 const commandNames = _listCommandNames();
 
 test('skills/ directory has at least the expected core surface', () => {
-  // The seven trigger-based skills + threat-model-first + privacy-data-flow
-  // + add-scan-rule = 10 minimum.
-  assert.ok(skills.length >= 10, `expected at least 10 skills, got ${skills.length}`);
+  // Post-consolidation core surface: secure-coding-guard + security-explain
+  // + privacy-data-flow + security-fix-finding + security-rotate-leak
+  // + security-scan-on-deploy + add-scan-rule = 7, so 6 is the floor.
+  assert.ok(skills.length >= 6, `expected at least 6 skills, got ${skills.length}`);
 });
 
 test('every skill carries frontmatter with name + description', () => {

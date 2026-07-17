@@ -17,6 +17,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
 import { buildJiraIssue } from './index.js';
+import { escapeMarkdown } from '../util/untrusted.js';
 
 function statePath(scanRoot) {
   return path.join(scanRoot, '.agentic-security', 'tickets.json');
@@ -32,7 +33,10 @@ function writeState(scanRoot, state) {
 }
 
 function findingTitle(f) {
-  return `[${(f.severity || 'medium').toUpperCase()}] ${f.vuln || f.title || 'security finding'} at ${f.file}:${f.line}`;
+  // vuln/title are lifted from the (untrusted) scanned code — escape before
+  // they land in an issue title. See docs/AGENT_THREAT_MODEL.md path #1.
+  const label = escapeMarkdown(f.vuln) || escapeMarkdown(f.title) || 'security finding';
+  return `[${(f.severity || 'medium').toUpperCase()}] ${label} at ${f.file}:${f.line}`;
 }
 function findingBody(f) {
   const br = f.blastRadius;
@@ -43,9 +47,11 @@ function findingBody(f) {
     f.cwe ? `**CWE:** ${f.cwe}` : null,
     f.epss != null ? `**EPSS:** ${f.epss.toFixed(4)} (percentile ${(f.epssPercentile * 100).toFixed(1)}%)` : null,
     exploited,
-    f.description ? `\n${f.description}` : null,
+    f.description ? `\n${escapeMarkdown(f.description)}` : null,
     br?.narrative ? `\n**Blast radius:** ${br.narrative}` : null,
-    f.snippet ? `\n\`\`\`\n${f.snippet}\n\`\`\`` : null,
+    // snippet is attacker-authored code; escape so a crafted ``` fence or
+    // <img>/[x](url) inside it cannot break out of the code block.
+    f.snippet ? `\n\`\`\`\n${escapeMarkdown(f.snippet)}\n\`\`\`` : null,
     f.remediation ? `\n**Remediation:** ${f.remediation}` : null,
     `\n---\n_Surfaced by agentic-security · finding id: ${f.id}_`,
   ].filter(Boolean).join('\n');

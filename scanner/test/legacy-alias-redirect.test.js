@@ -9,7 +9,7 @@ const { ALIAS_MAP, resolveAlias, buildContext } = require('../../hooks/legacy-al
 
 test('every removed alias maps to a dispatcher mode', () => {
   // 44 aliases were removed in v0.86.0.
-  assert.equal(Object.keys(ALIAS_MAP).length, 44);
+  assert.equal(Object.keys(ALIAS_MAP).length, 46);
   for (const [alias, repl] of Object.entries(ALIAS_MAP)) {
     assert.match(repl, /^\/(secure|scan|triage|fix|posture|compliance|supply|setup|labs)\b/, `${alias} -> ${repl}`);
   }

@@ -18,6 +18,7 @@ const ALIAS_MAP = {
   'archaeology':         '/scan --archaeology',
   'audit':               '/compliance --audit',
   'auditor-walkthrough': '/compliance --walkthrough',
+  'ci':                  '/setup --ci',
   'claude-vuln-audit':   '/labs --claude-audit',
   'compliance-fix':      '/fix --compliance',
   'compliance-report':   '/compliance --report',
@@ -51,6 +52,7 @@ const ALIAS_MAP = {
   'status':              '/posture --status',
   'supply-chain-check':  '/supply --check',
   'synthesize-rule':     '/labs --synthesize-rule',
+  'three-agent-review':  '/triage --deep',
   'threat':              '/posture --threat',
   'time-to-fix':         '/labs --time-to-fix',
   'trim':                '/fix --trim',
@@ -80,8 +82,8 @@ function resolveAlias(prompt) {
 function buildContext({ alias, replacement, rest }) {
   const full = rest ? `${replacement} ${rest}` : replacement;
   return [
-    `The user typed \`/${alias}\`, which was a legacy alias removed in `,
-    `agentic-security v0.86.0. Its capability now lives at \`${replacement}\`. `,
+    `The user typed \`/${alias}\`, which is a legacy alias consolidated into a `,
+    `dispatcher command. Its capability now lives at \`${replacement}\`. `,
     `Run \`${full}\` to fulfil the request, and mention the new path once so `,
     `the user learns it (e.g. "\`/${alias}\` is now \`${replacement}\`").`,
   ].join('');

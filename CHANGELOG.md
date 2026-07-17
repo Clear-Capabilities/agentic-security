@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.128.0 — the agentic methodology layer + a simpler command surface
+
+Two things landed together this release: a set of default-on **methodology annotators** that
+layer agentic-hunter discipline on top of the deterministic engine, and a **consolidation** of
+the command and skill surface so there's less to remember.
+
+**Methodology layer (7 additions, all v1, all tested — see `docs/AGENTIC_METHODOLOGY_PRD.md`):**
+
+- **Default falsification pass** (`posture/falsification.js`) — for each taint finding it tries
+  to *disprove* the finding by locating a context-matched control on the path, and demotes +
+  quarantines the ones it can block. Recall-preserving (never removes a finding, never touches
+  severity — like the proof gate); genuine cve-replay `pre` vulns still fire (0 false blocks,
+  corpus 185/185 intact). Opt out with `AGENTIC_SECURITY_NO_FALSIFICATION=1`.
+- **Attack-surface completeness inventory** (`posture/entrypoint-inventory.js`) — enumerates
+  every entry point (HTTP / queue / cron / CLI / env / upload / webhook) with a disposition
+  each, on `scan.entrypointInventory`.
+- **Root-cause sweep** (`posture/root-cause-sweep.js`) — from a confirmed finding, searches the
+  repo for sibling instances detectors missed, with a `found = candidates + mitigated`
+  accounting invariant, on `scan.rootCauseSweep`.
+- **Meta-security hardening** (`util/untrusted.js` + `docs/AGENT_THREAT_MODEL.md`) — a tested
+  threat model treating attacker-authored finding text as untrusted input; escaping wired into
+  the PR/issue/ticket render paths.
+- **Capability-based model routing** (`posture/model-routing.js`) — stamps `finding.dispatchModel`
+  (strongest for crypto/auth/critical, mid for injection, cheapest for low-sev hardening) for
+  cost-sensitive subagent dispatch.
+- **Self-improving recall harness** (`bench/realworld-recall/`) — LLM-judged (offline-degrading)
+  recall on real repos + a miss-analyzer that names the pipeline stage that dropped a finding
+  and proposes the fix. Bench-only; never in the product scan path.
+- **Deterministic fix-honesty gates** (`posture/fix-honesty-gate.js`) — a residual-risk
+  hand-wave guard, a cited-file:line requirement for FP/safe verdicts, and FULL/MITIGATION/
+  WORKAROUND completeness tiers; the previously-orphaned test loop is now wired into
+  `apply_fix` behind `AGENTIC_SECURITY_FIX_RUN_TESTS=1`.
+
+**Simpler surface (no functionality removed — everything folds to a mode + alias):**
+
+- Commands **12 → 10**: `/ci` folded into `/setup --ci` (+ new `/setup --predeploy`), and
+  `/three-agent-review` into `/triage --deep`. Old names still resolve via the
+  legacy-alias-redirect hook.
+- Skills **11 → 7**: the four write-time guards merged into `secure-coding-guard`, and the two
+  explainers into `security-explain`.
+
+**Docs:** README + ARCHITECTURE + HARNESS_COMPATIBILITY refreshed with accurate surface counts
+(17 MCP tools, 10 commands, 7 skills, 5 hook events, 9 sub-agents); the SAST/SCA improvement PRD
+audited and marked (16 of 25 shipped, 9 partial). Full `npm test` green (1695 tests); cve-replay
+corpus 185/185, no drift.
+
 ## 0.127.0 — cost advisor: an actual choice, not just a tip
 
 The model-cost advisor (`hooks/model-cost-advisor.js`) has always been advisory

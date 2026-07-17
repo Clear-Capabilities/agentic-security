@@ -25,6 +25,8 @@
 // route through an LLM for richer prose when AGENTIC_SECURITY_LLM_ENDPOINT
 // is configured.
 
+import { escapeMarkdown } from './util/untrusted.js';
+
 const SEVERITY_GLYPH = {
   critical: '🟥',
   high:     '🟧',
@@ -136,7 +138,7 @@ export function renderPrComment(delta, { repoName, prNumber, prTitle } = {}) {
     const sev = SEVERITY_GLYPH[f.severity] || '⬜';
     const route = _route(f);
     const where = route ? `\`${route}\` (\`${f.file}:${f.line}\`)` : `\`${f.file}:${f.line}\``;
-    lines.push(`${sev} **${meta?.name || f.vuln}** — ${where}`);
+    lines.push(`${sev} **${meta?.name || escapeMarkdown(f.vuln)}** — ${where}`);
     if (meta) lines.push(`  > ${meta.why}`);
     if (f.remediation) {
       const onelineFix = String(f.remediation).split('\n')[0].slice(0, 240);

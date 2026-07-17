@@ -174,6 +174,10 @@ import { applyLearnedCalibration } from './posture/triage-learning.js';
 import { annotateFormalVerification } from './dataflow/formal-verify.js';
 import { annotatePathFeasibility } from './dataflow/smt-feasibility.js';
 import { annotateProofGate } from './dataflow/proof-gate.js';
+import { annotateFalsification } from './posture/falsification.js';
+import { routeModelForFinding } from './posture/model-routing.js';
+import { buildEntrypointInventory } from './posture/entrypoint-inventory.js';
+import { sweepRootCauses } from './posture/root-cause-sweep.js';
 import { computeAnalysisTiers, countUnmodeledSinkCandidates } from './posture/coverage-report.js';
 import { annotatePrivacyTaint, emitDpiaArtifact } from './dataflow/privacy-taint.js';
 import { buildThreatModel as buildAutoThreatModel, persistThreatModel as persistAutoThreatModel } from './posture/threat-model-auto.js';
@@ -7912,6 +7916,23 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   if (process.env.AGENTIC_SECURITY_NO_PROOF_GATE !== '1') {
     _runAnnotator("annotateProofGate", () => { annotateProofGate(finalFindings); });
   }
+  // Addition #1 — default falsification pass. Actively tries to DISPROVE each
+  // taint-style finding by locating a context-matched control on the path, and
+  // demotes + quarantines the ones it can block. Recall-preserving (never
+  // removes a finding, never touches severity — like the proof gate). Runs
+  // AFTER proof-gate so it layers on the same demotion channel. Deterministic by
+  // default; the LLM tier is only wired when an endpoint is configured. Opt out
+  // with AGENTIC_SECURITY_NO_FALSIFICATION=1.
+  if (process.env.AGENTIC_SECURITY_NO_FALSIFICATION !== '1') {
+    _runAnnotator("annotateFalsification", () => { annotateFalsification(finalFindings, fc); });
+  }
+  // Addition #5 — capability-based model routing. Stamp each finding with the
+  // model tier a cost-sensitive fixer/triager/PoC subagent should be dispatched
+  // on for THIS vuln class (crypto/auth/critical → strongest; injection → mid;
+  // low-sev hardening → cheapest). Advisory metadata consumed at dispatch time.
+  _runAnnotator("annotateDispatchModel", () => {
+    for (const f of finalFindings) { try { f.dispatchModel = routeModelForFinding(f).model; } catch { /* advisory only */ } }
+  });
   // v3 next-gen: production-aware context ingest (Pillar 9). Must run BEFORE
   // the mitigation composite, persona prioritization, and final why-fired
   // record so those see the demotion signals.
@@ -8542,7 +8563,12 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   try { _analysisTier = computeAnalysisTiers(Object.keys(fc)); } catch {}
   try { _unmodeledSinks = countUnmodeledSinkCandidates(fc, finalFindings); } catch {}
   const _scanMeta={filesScanned:files.length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length}};
-  return{routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
+  // Addition #2 — attack-surface completeness inventory (entry points → dispositions).
+  let _entrypointInventory = {}; try { _entrypointInventory = buildEntrypointInventory(fc, { routes: aR, findings: finalFindings }); } catch { _entrypointInventory = {}; }
+  // Addition #3 — root-cause sweep: from confirmed findings, find sibling instances
+  // detectors missed, with total-count accounting. Confirmed-only (cheap by default).
+  let _rootCauseSweep = null; try { _rootCauseSweep = sweepRootCauses(finalFindings, fc); } catch { _rootCauseSweep = null; }
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

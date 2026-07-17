@@ -55,8 +55,8 @@ Organize help by **what the user wants to do**, not by command name:
 | Prove compliance | `/compliance` (`--gap` for the worklist) |
 | Vet dependencies | `/supply` |
 | Install hooks / CI / guards | `/setup` (`--all` for one pass) |
-| Generate a CI gate | `/ci` |
-| Deep-dive one finding (red/blue/auditor) | `/three-agent-review` |
+| Generate a CI gate | `/setup --ci` |
+| Deep-dive one finding (red/blue/auditor) | `/triage --deep <id>` |
 | Experimental / AI-driven analyses | `/labs` |
 
 ### Legacy alias map (removed in v0.86.0)

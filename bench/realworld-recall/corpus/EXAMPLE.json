@@ -1,0 +1,46 @@
+{
+  "_comment": "BRING YOUR OWN CORPUS. This is a tiny SYNTHETIC ground-truth fixture that exercises the harness end-to-end (see ../README.md). It is NOT a real corpus and must NOT be cited as a recall number. Each entry is one KNOWN vulnerability the scanner is expected to surface; recall = the fraction it does. Point the runner at your own file with --corpus <path.json>. Schema per entry: { finding_id, repo, commit, type, location, root_cause, description }. The runner also accepts a bare top-level array of such entries.",
+  "corpus": "realworld-recall EXAMPLE (synthetic, bring-your-own)",
+  "entries": [
+    {
+      "finding_id": "EX-001",
+      "repo": "example/webapp",
+      "commit": "0000000000000000000000000000000000000001",
+      "type": "sql-injection",
+      "cwe": "CWE-89",
+      "location": "src/db/users.js:42",
+      "root_cause": "user-controlled `req.query.name` concatenated directly into a SQL string passed to db.query",
+      "description": "Login lookup builds its WHERE clause by string concatenation of an unvalidated request parameter."
+    },
+    {
+      "finding_id": "EX-002",
+      "repo": "example/webapp",
+      "commit": "0000000000000000000000000000000000000001",
+      "type": "command-injection",
+      "cwe": "CWE-78",
+      "location": "src/exec/run.js:88",
+      "root_cause": "user input interpolated into a shell string handed to child_process.exec",
+      "description": "The report-export endpoint shells out to a CLI with an attacker-controlled filename."
+    },
+    {
+      "finding_id": "EX-003",
+      "repo": "example/webapp",
+      "commit": "0000000000000000000000000000000000000001",
+      "type": "path-traversal",
+      "cwe": "CWE-22",
+      "location": "src/files/read.js:15",
+      "root_cause": "request path joined to a base dir without normalization, allowing ../ escape",
+      "description": "The file-download handler reads an arbitrary path derived from the request without canonicalization."
+    },
+    {
+      "finding_id": "EX-004",
+      "repo": "example/webapp",
+      "commit": "0000000000000000000000000000000000000001",
+      "type": "ssrf",
+      "cwe": "CWE-918",
+      "location": "src/net/fetch.js:20",
+      "root_cause": "server fetches a fully user-supplied URL with no allow-list, enabling internal-network access",
+      "description": "A link-preview feature fetches any URL the user provides, reachable to cloud metadata endpoints."
+    }
+  ]
+}

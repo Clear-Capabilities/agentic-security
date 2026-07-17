@@ -58,7 +58,7 @@
       /chain, /trend, /badge)    pipeline integrations      Linear / Jira)
 
        Sideband interfaces:
-         mcp/        JSON-RPC 2.0 server — 12 tools any MCP-speaking agent
+         mcp/        JSON-RPC 2.0 server — 17 tools any MCP-speaking agent
                      (Claude Code / Cursor / Cline / Aider / Codex) can call.
                      Hash-chained audit log; OWASP MCP top-10 hardened.
          lsp/        Language-Server-Protocol — powers JetBrains, Neovim, and
@@ -71,9 +71,19 @@
                      first and short-circuits the advisory hooks),
                      PostToolUse (post-edit scan, offers a one-tap fix),
                      Stop (drift check).
-         agents/     8 sub-agents: poc-generator, fixer, triager, chain-
-                     synthesizer, logic-reviewer, material-change, malware
-                     -analyst, refactor-cleaner.
+         agents/     9 sub-agents: poc-generator, fixer, triager, sca-
+                     triager, chain-synthesizer, logic-reviewer, material-
+                     change, malware-analyst, refactor-cleaner.
 ```
 
-The whole engine ships as a single 3.58 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node >= 24. No native deps. No daemon by default — `scan --watch` opts into a long-running incremental-rescan process.
+**Methodology layer.** On top of the deterministic engine, a set of default-on posture
+annotators add agentic-hunter discipline (see `docs/AGENTIC_METHODOLOGY_PRD.md`):
+`falsification` (refute each taint finding — demote the ones a control blocks, recall-
+preserving), `entrypoint-inventory` (attack-surface coverage ledger on `scan.entrypointInventory`),
+`root-cause-sweep` (find sibling instances of a confirmed bug, on `scan.rootCauseSweep`),
+`model-routing` (per-CWE dispatch-model hint on `finding.dispatchModel`), and `fix-honesty-gate`
+(residual-risk guard + FULL/MITIGATION/WORKAROUND completeness tiers on applied fixes). A
+`util/untrusted.js` helper plus `docs/AGENT_THREAT_MODEL.md` harden the agent surface against
+untrusted scanned content. A judged real-world recall harness lives at `bench/realworld-recall/`.
+
+The whole engine ships as a single ~3.6 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node >= 24. No native deps. No daemon by default — `scan --watch` opts into a long-running incremental-rescan process.

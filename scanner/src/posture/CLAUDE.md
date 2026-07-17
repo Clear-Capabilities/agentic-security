@@ -21,6 +21,13 @@ Annotators that run **after** every detector has emitted, plus state stores read
 
 **Agentic verification** — `verifier.js`, `verifier-target.js`, `verifier-ephemeral.js`, `harness-discovery.js`, `adversary-agent.js`, `defender-agent.js`, `auditor-agent.js`, `three-agent-pipeline.js`.
 
+**Methodology additions (`docs/AGENTIC_METHODOLOGY_PRD.md`)** — default-on annotators/artifacts that layer the agentic-hunter methodology on the deterministic engine:
+- `falsification.js` — default falsification pass. For each taint-style finding, tries to DISPROVE it (locate a context-matched control on the path, reusing `dataflow/sanitizer-proof.js`'s shape rules read-only); a blocked finding is demoted + `quarantined`, never removed and never severity-touched (recall-preserving, like `proof-gate`). Wired after `annotateProofGate`. Opt out: `AGENTIC_SECURITY_NO_FALSIFICATION=1`. Optional LLM tier over survivors when an endpoint is configured.
+- `entrypoint-inventory.js` — attack-surface completeness ledger. Enumerates every entry point (HTTP/queue/cron/CLI/env/upload/webhook) with a disposition each; on `scan.entrypointInventory`.
+- `root-cause-sweep.js` — from confirmed findings, finds sibling instances detectors missed with total-count accounting (`found === candidates + mitigated`); on `scan.rootCauseSweep`.
+- `model-routing.js` — capability-based CWE/severity→model policy; stamps `finding.dispatchModel` (strongest for crypto/auth/critical, mid for injection, cheapest for low-sev hardening) for cost-sensitive subagent dispatch.
+- `fix-honesty-gate.js` — deterministic honesty gates on fix output: a residual-risk hand-wave guard, a cited-file:line requirement for any FP/safe verdict, and FULL/MITIGATION/WORKAROUND completeness tiers. Consumed by `fix-verify.js` when the caller supplies fix metadata; the closed-loop test leg (`fix-verify-loop.js`) is wired into `mcp/apply_fix` behind `AGENTIC_SECURITY_FIX_RUN_TESTS=1`.
+
 **Integrity + signing** — `integrity.js` (per-install HMAC for `last-scan.json`), `rule-pack-signing.js`. The HMAC key lives at `$XDG_CONFIG_HOME/agentic-security/scan-key`; override via `$AGENTIC_SECURITY_HMAC_KEY`. Premortem-derived; do not regress to hostname-derived.
 
 **Rule lifecycle** — `custom-rules.js` (YAML pattern DSL), `rule-overrides.js` (`disable:` gated on signature), `rule-packs.js`, `rule-synthesis.js` (proposes suppressions from triage feedback), `ruleset-version.js`.

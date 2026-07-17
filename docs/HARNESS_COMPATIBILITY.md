@@ -11,7 +11,7 @@ The MCP server is harness-agnostic — same binary, different manifest:
 
 ## What you get per harness
 
-- **Claude Code**: full surface — 12 MCP tools, 38 slash commands, 11 auto-activating skills, 4 hooks, 8 subagents, the full audit log + scratchpad + AGENTS.md continual-learning ladder.
-- **Codex / Cursor / Gemini**: the 12 MCP tools (deterministic write toolchain, scan, find, lookup) wired directly into the harness's agent. Slash commands + skill activation are Claude-Code-specific today; the underlying MCP behavior is identical across all four harnesses.
+- **Claude Code**: full surface — 17 MCP tools, 10 slash commands, 7 auto-activating skills, 5 hook events, 9 subagents, the full audit log + scratchpad + AGENTS.md continual-learning ladder.
+- **Codex / Cursor / Gemini**: the 17 MCP tools (deterministic write toolchain, scan, find, lookup) wired directly into the harness's agent. Slash commands + skill activation are Claude-Code-specific today; the underlying MCP behavior is identical across all four harnesses.
 
 If you want a harness not listed here, the MCP server speaks the standard JSON-RPC-over-NDJSON protocol — any MCP-aware client can use it.

@@ -1,6 +1,6 @@
 # PRD — Making `/scan --all` the best SAST/SCA engine available
 
-**Status:** Draft for review
+**Status:** Partially shipped — **16 of 25 shipped, 9 partial, 0 open** (verified against current code, 2026-07-17). See the status dashboard in §4.1. This remains the backlog/rationale; the "gap" wording in each item describes the state *before* it shipped.
 **Version:** 1.0
 **Date:** 2026-05-31
 **Author:** Ross Young / Clear Capabilities Inc.
@@ -18,6 +18,13 @@ This is a planning document. Nothing here is implemented by this PRD; it is the 
 ---
 
 ## 2. Methodology & honesty preface
+
+> **Update (2026-07-17):** the two honesty points below have since moved. **(1)** The deep
+> interprocedural taint engine is now **default-on** for local scans (R1 shipped —
+> `bin/agentic-security.js`), so the "default scan is shallower" caveat no longer holds by
+> default. **(2)** Independent-corpus measurement (R16) is still **partial** — the harness
+> exists but the real corpus isn't wired, so the "superiority claims are aspirational" point
+> stands. The original text is kept below as the rationale that motivated the work.
 
 This assessment came from a direct read of the pipeline, not from the marketing surface. Two things must be stated up front because they shape every recommendation:
 
@@ -67,6 +74,46 @@ The 25 recommendations cluster into five themes:
 - **E. Performance, scale & workflow** — adoption gates: speed, PR-native, autofix (R23–R25).
 
 Each item below uses a fixed template: **Gap · Evidence · Recommendation · Why it wins · Effort · Success metric.**
+
+---
+
+## 4.1 Status dashboard (verified against current code, 2026-07-17)
+
+**16 shipped · 9 partial · 0 open.** Each verdict was checked against the actual module + test
+in the tree; a ✅ means the gap is closed, 🟡 means the capability shipped for a subset of the
+recommendation's scope (a "finish what's built" item). The item text in §5 is the *original*
+gap, retained as rationale.
+
+| R# | Recommendation | Status | Evidence / remaining scope |
+|----|----------------|--------|-----------------------------|
+| R1 | Deep taint default-on | ✅ Shipped | `bin/agentic-security.js` sets `AGENTIC_SECURITY_DEEP=1` for local (non-CI) scans |
+| R2 | k>1 call-string + access-path entry | 🟡 Partial | field-sensitive lattice + `k2-summary-cache.js` shipped; call-string still k=1, opt-in (rec asked k=2) |
+| R3 | Go/PHP/Ruby/C#/Kotlin flow parity | 🟡 Partial | Go + Kotlin flow-taint (`test/flow-parity.test.js`); PHP/Ruby/C# still structural |
+| R4 | Implicit / collection-element taint | ✅ Shipped | `dataflow/index.js` + `test/collection-taint.test.js` |
+| R5 | Context-aware sanitizer adequacy | 🟡 Partial | `sast/wrong-context-sanitizer.js` covers ~3 classes; not the ≥6-class context lattice |
+| R6 | Non-HTTP entrypoint discovery | ✅ Shipped | `sast/event-entrypoint.js` + `posture/entrypoint-inventory.js` |
+| R7 | Call-graph SCA reachability | ✅ Shipped | `sca/import-reachability.js` (JS/TS/Py/Java; others still regex fallback) |
+| R8 | Container image + OS-pkg CVE | 🟡 Partial | `sca/image-packages.js` (dpkg/apk→OSV); no OCI/tarball layer reader yet |
+| R9 | Static malicious install-script | ✅ Shipped | `sca/install-script-analysis.js` + `test/install-script.test.js` |
+| R10 | Gradle transitive graph | ✅ Shipped | `_parseGradleDependencies` (consent-based; `sca/CLAUDE.md` doc stale) |
+| R11 | VEX / OpenVEX / CSAF output | 🟡 Partial | `report/index.js#toVex` emits OpenVEX; no ingest/round-trip yet |
+| R12 | SCA decision-first verdict | ✅ Shipped | `posture/sca-verdict.js` default-on (5-verdict enum) |
+| R13 | Provably-safe first-class | ✅ Shipped | `dataflow/proof-gate.js` `provablySafe` + `test/proof-safe.test.js` |
+| R14 | DAST-lite PoC execution | 🟡 Partial | `posture/verifier-ephemeral.js` has real docker exec but is unwired into scan/commands |
+| R15 | Live secret + git-history sweep | ✅ Shipped | `secret-live-check.js` + `secret-history.js` (both opt-in, not default) |
+| R16 | Independent corpus + held-out calibration | 🟡 Partial | harness shipped (`bench/independent-eval/`, `holdout-eval.js`); real corpus not wired (smoke fixture) |
+| R17 | Provenance dedup / corroboration | ✅ Shipped | `posture/provenance.js` (corroborationCount / multiSignal) |
+| R18 | Semantic IaC | 🟡 Partial | Terraform var-resolution shipped; no CloudFormation/Bicep/Helm, no `terraform plan` JSON |
+| R19 | OWASP API Top-10 (BOLA/BFLA) | ✅ Shipped | `sast/api-authz.js` default-on over the route inventory |
+| R20 | Agentic/LLM loop taint | ✅ Shipped | `sast/agent-untrusted-flow.js` (untrusted→priv-sink, mediation defuses) |
+| R21 | AuthZ / RBAC-tier model | ✅ Shipped | `sast/rbac-consistency.js` |
+| R22 | Cross-service dataflow | ✅ Shipped | `sast/cross-service.js` (client→route edge inference, contract-free) |
+| R23 | Incremental + parallel default | 🟡 Partial | incremental default only for diff-scoped; `engine-parallel.js` unwired (parallel not default) |
+| R24 | PR-native diff-scoped | ✅ Shipped | `pr-delta.js` + `--pr`/`--changed-since`; whole-repo still the zero-flag default |
+| R25 | Closed-loop autofix + build-verified SCA | ✅ Shipped | `fix-verify-loop.js` wired into `mcp/apply_fix` (this session) + `sca-upgrade.js` (test-gate+rollback) |
+
+The 9 partials are honest "finish what's built" gaps — the machinery shipped for a subset of the
+scope the recommendation named. None of the 25 is fully open.
 
 ---
 
@@ -285,6 +332,10 @@ Each item below uses a fixed template: **Gap · Evidence · Recommendation · Wh
 ---
 
 ## 6. Prioritization
+
+> **Update (2026-07-17):** most of the do-first set has landed — R1, R7, R12, R17, R20, R24 are
+> ✅ shipped; R16 and R23 are 🟡 partial (the highest-value remaining "finish what's built" work).
+> See the §4.1 dashboard. The ranking below is kept as the original rationale.
 
 Impact × effort, biased toward "turn on / finish what exists." **Do-first (highest impact-per-unit-effort):**
 

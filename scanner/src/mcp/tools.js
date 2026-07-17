@@ -549,12 +549,23 @@ export const apply_fix = {
       // Inline re-verify — the load-bearing gate. Must pass to write.
       let verdict;
       try {
-        const verifyFixCore = await getVerifyFixCore();
-        verdict = await verifyFixCore({
-          scanRoot: ctx.sessionRoot,
-          originalFindingStableId: f.stableId,
-          files: Object.fromEntries(Object.entries(confinedAbs).map(([rel, v]) => [rel, v.content])),
-        });
+        const _files = Object.fromEntries(Object.entries(confinedAbs).map(([rel, v]) => [rel, v.content]));
+        if (process.env.AGENTIC_SECURITY_FIX_RUN_TESTS === '1') {
+          // Addition #7 — connect the closed-loop verifier: add the project test
+          // suite as a fourth verification leg (scan + lint + tests). Opt-in
+          // because many repos have no runner and we must not fail-closed by
+          // default. Normalized to the scan+lint verdict shape used below.
+          const { verifyFixWithTests } = await import('../posture/fix-verify-loop.js');
+          const t = await verifyFixWithTests({ scanRoot: ctx.sessionRoot, originalFindingStableId: f.stableId, files: _files });
+          verdict = { ok: t.ok, summary: t.summary, rescan: t.legs?.scan?.detail, lint: t.legs?.lint?.detail, tests: t.legs?.tests, testVerdict: t.verdict };
+        } else {
+          const verifyFixCore = await getVerifyFixCore();
+          verdict = await verifyFixCore({
+            scanRoot: ctx.sessionRoot,
+            originalFindingStableId: f.stableId,
+            files: _files,
+          });
+        }
       } catch (e) {
         return { _meta: META, applied: false, reason: `patch verification failed: ${e.message}` };
       }

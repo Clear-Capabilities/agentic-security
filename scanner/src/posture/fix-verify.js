@@ -15,6 +15,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runFullScan } from '../engine.js';
+import { gateFixOutput } from './fix-honesty-gate.js';
 
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
@@ -110,21 +111,35 @@ function runLinter(cwd, cmd, args) {
 
 // Top-level verify: re-scan + lint. Returns the combined verdict + a
 // human-readable summary string suitable for surfacing to the user.
+// Addition #7 — deterministic honesty gates on fix output. When the caller
+// supplies `fixMeta` ({ residual, verdict, evidence, signals }) — e.g. the
+// security-fixer agent's residual-risk text + completeness signals — the fix's
+// claims are checked mechanically (no hand-wave residual prose, a cited
+// file:line for any FP/safe verdict, and a FULL/MITIGATION/WORKAROUND tier). A
+// dishonest or over-claiming fix fails the gate. When `fixMeta` is absent
+// (the deterministic MCP write path, which has no claims to check) the honesty
+// gate is skipped and behavior is unchanged.
 export async function verifyFix({
   scanRoot,
   originalFindingStableId,
   files,
   depFileContents,
+  fixMeta,
 } = {}) {
   const rescan = await verifyPatch({ scanRoot, originalFindingStableId, files, depFileContents });
   const lint = runProjectLinter(scanRoot, Object.keys(files || {}));
-  const ok = rescan.ok && (lint.ok || lint.skipped);
+  let honesty = null;
+  if (fixMeta && typeof fixMeta === 'object') {
+    try { honesty = gateFixOutput(fixMeta); } catch { honesty = null; }
+  }
+  const ok = rescan.ok && (lint.ok || lint.skipped) && (honesty ? honesty.ok : true);
   const summary = [
     `re-scan: ${rescan.ok ? 'PASS' : 'FAIL — ' + rescan.reason}`,
     `linter:  ${lint.runner === 'none' ? 'skipped (no linter config)'
               : lint.skipped ? `${lint.runner} not installed`
               : lint.ok ? `${lint.runner} PASS`
               : `${lint.runner} FAIL (exit ${lint.exitCode})`}`,
-  ].join('\n');
-  return { ok, rescan, lint, summary };
+    honesty ? `honesty: ${honesty.ok ? `PASS (${honesty.tier})` : 'FAIL — ' + honesty.violations.join('; ')}` : null,
+  ].filter(Boolean).join('\n');
+  return { ok, rescan, lint, honesty, summary };
 }

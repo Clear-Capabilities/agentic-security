@@ -129,8 +129,105 @@ Tournament mode produces the same final state (`triage-feedback.json` + cross-re
 | `--exploit` | Build PoC in chosen format. `--format curl|jest|pytest|burp|sqlmap` |
 | `--query` | Write a security check in natural language; emits YAML rule + preview |
 | `--tournament` | Ranked walk-through |
+| `--deep` | Full **red-team → blue-team → auditor** cascade on ONE finding — the deepest single-finding review. Hash-chained transcript trio; auditor verdict is canonical. `--target <url>`, `--max-calls`, `--max-wall-ms` |
 
 Add `--json` to any mode for machine-readable output.
+
+## Deep review — red / blue / auditor (`--deep`)
+
+`/triage --deep <finding-id>` runs the full red-team → blue-team → auditor cascade on a
+single finding — the deepest review the plugin offers. Each phase emits a hash-chained
+transcript; the auditor's verdict is canonical (`exploit-confirmed` / `exploit-mitigable` /
+`exploit-uncertain` / `exploit-rejected`). Without `--target` the red team runs dry (static
+reasoning only); without `AGENTIC_SECURITY_LLM_ENDPOINT` every phase short-circuits to its
+static-analysis equivalent — still a useful verdict, offline.
+
+This is the most expensive command in the plugin — it honors a call/wall budget.
+
+```bash
+FINDING=""; TARGET=""; MAX_CALLS="30"; MAX_WALL_MS="480000"; NEXT=""
+for arg in "$@"; do
+  case "$NEXT" in
+    finding) FINDING="$arg"; NEXT=""; continue ;;
+    target) TARGET="$arg"; NEXT=""; continue ;;
+    max-calls) MAX_CALLS="$arg"; NEXT=""; continue ;;
+    max-wall-ms) MAX_WALL_MS="$arg"; NEXT=""; continue ;;
+  esac
+  case "$arg" in
+    --deep) ;;
+    --finding) NEXT="finding" ;;
+    --target) NEXT="target" ;;
+    --max-calls) NEXT="max-calls" ;;
+    --max-wall-ms) NEXT="max-wall-ms" ;;
+    --*) ;;
+    *) [ -z "$FINDING" ] && FINDING="$arg" ;;   # positional finding id
+  esac
+done
+
+if [ -z "$FINDING" ]; then
+  echo "Usage: /triage --deep <finding-id> [--target <url>] [--max-calls 30] [--max-wall-ms 480000]"
+  echo "Without --target the red team runs dry (static reasoning only)."
+  exit 1
+fi
+
+mkdir -p .agentic-security/three-agent-transcripts
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  triage --deep · budget for this run"
+echo "    Finding:        ${FINDING}"
+echo "    Max LLM calls:  ${MAX_CALLS}  (red + blue + auditor, combined)"
+echo "    Max wall time:  $((MAX_WALL_MS / 1000))s"
+echo "    Target:         ${TARGET:-(none — red team runs dry/static)}"
+echo "  Each phase short-circuits to static analysis without an LLM endpoint."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+node -e "
+const fs = require('fs');
+const path = require('path');
+const { runThreeAgentReview } = require('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/three-agent-pipeline.js');
+let scan;
+try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json','utf8')); }
+catch { console.log('No scan yet. Run /scan first.'); process.exit(0); }
+const id = process.env.FINDING;
+const target = process.env.TARGET;
+const maxCalls = parseInt(process.env.MAX_CALLS || '30', 10);
+const maxWallMs = parseInt(process.env.MAX_WALL_MS || '480000', 10);
+const f = (scan.findings || []).find(x => x.id === id || x.stableId === id);
+if (!f) { console.log('No finding matches ' + id); process.exit(0); }
+const W = (s,c) => process.stdout.isTTY ? '\x1b['+c+'m'+s+'\x1b[0m' : s;
+const BOLD='1', DIM='2', RED='31', YELLOW='33', GREEN='32', CYAN='36';
+(async () => {
+  console.log('');
+  console.log(W('Three-agent review', BOLD));
+  console.log(W('  Finding: ' + (f.vuln || '') + '  ' + f.file + ':' + f.line, DIM));
+  console.log(W('  Target:  ' + (target || '(none — dry-run)'), DIM));
+  const result = await runThreeAgentReview(f, { target, maxCalls, maxWallMs });
+  console.log(W('▼ Phase 1 — Red Team', RED));
+  console.log('  outcome:        ' + result.red.outcome);
+  console.log('  transcript:     ' + result.red.transcriptHead);
+  console.log(W('▼ Phase 2 — Blue Team (defender)', CYAN));
+  console.log('  mode:           ' + result.blue.mode);
+  for (const r of result.blue.recommendations) console.log('    • ' + r);
+  const VC = result.auditor.verdict === 'exploit-confirmed' ? RED
+           : result.auditor.verdict === 'exploit-mitigable' ? YELLOW
+           : result.auditor.verdict === 'exploit-rejected' ? GREEN : DIM;
+  console.log(W('▼ Phase 3 — Auditor', BOLD));
+  console.log('  ' + W('VERDICT: ' + result.auditor.verdict, VC + ';' + BOLD));
+  console.log('  rationale: ' + result.auditor.rationale);
+  const out = path.join('.agentic-security', 'three-agent-transcripts', (f.stableId || f.id || 'transcript') + '.json');
+  fs.writeFileSync(out, JSON.stringify(result, null, 2));
+  console.log(W('Full envelope: ' + out, DIM));
+})();
+" FINDING=\"$FINDING\" TARGET=\"$TARGET\" MAX_CALLS=\"$MAX_CALLS\" MAX_WALL_MS=\"$MAX_WALL_MS\"
+```
+
+| Auditor verdict | Meaning |
+|---|---|
+| `exploit-confirmed` | Red team reached data-exfil / priv-esc / account-takeover AND no static hardening exists. Manual remediation required. |
+| `exploit-mitigable` | Red team confirmed but blue team's recommendations would close it. Apply + re-run. |
+| `exploit-uncertain` | Red team did not reach business impact (aborted-budget / timeout / no LLM endpoint). Re-run longer or with a live target. |
+| `exploit-rejected` | Defense appears adequate against the modeled attacker. |
+
+Use it before promoting a finding to "blocker," or after a `/fix` to confirm the auditor flips to `exploit-rejected`.
 
 ## FP-first ordering
 

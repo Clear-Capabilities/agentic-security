@@ -1,0 +1,3 @@
+# Cross-run history is generated + local (mirrors bench/cve-replay/results being
+# gitignored). The committed baseline.json is the gate; history is advisory.
+results/
