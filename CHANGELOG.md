@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.128.1 — patch dependency vulnerabilities (11 Dependabot alerts → 0)
+
+Security maintenance. Cleared all 11 open Dependabot alerts by updating the two lockfiles to
+patched versions (all within-major bumps, no breakage):
+
+- **`scanner/`** — `js-yaml` 4.1 → 4.3.0 (GHSA-h67p-54hq-rp68, quadratic-complexity DoS via merge
+  keys). `js-yaml` is inlined into the shipped bundle, so `dist/agentic-security.mjs` was rebuilt;
+  full gate re-run green (`npm test` 1695/0, cve-replay 185/185).
+- **`ide/vscode/`** — `undici` → 7.28.0 (incl. one high), `form-data` → 4.0.6 (high),
+  `markdown-it` → 14.3.0, `esbuild` → 0.28.1, `js-yaml` → 4.3.0. All transitive under
+  `@vscode/vsce`/`esbuild`; lockfile-only, `npm audit` now reports 0.
+
+`npm audit` is clean (0 vulnerabilities) in both packages.
+
 ## 0.128.0 — the agentic methodology layer + a simpler command surface
 
 Two things landed together this release: a set of default-on **methodology annotators** that
