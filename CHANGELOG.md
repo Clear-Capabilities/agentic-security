@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.128.2 — compliance attestation accuracy + quieter self-scans
+
+Two fixes surfaced while dogfooding the compliance flow on this repo:
+
+- **Fixed a compliance-attestation path bug** (`posture/auditor-walkthrough.js`). Three
+  evidence checks (`mcp-tools`, `security-fixer`, `pre-edit-bodyguard`) carried a literal
+  `.../` placeholder path that `path.join(scanRoot, STATE, '.../x')` could never resolve, so
+  they read **"not present" for every project** — falsely dragging OWASP LLM08/LLM09 (and any
+  framework mapping to those modules) to "manual/not-present". A `.../` sentinel now resolves
+  against the scan root itself. On a self-attestation this flips LLM09 → satisfied and makes
+  LLM08 honestly partial.
+- **Repo `ignorePaths` for meaningful self-scans** (`.agentic-security/rules.yml`). Added
+  `bench/**` and `scanner/test/fixtures/**` so a repo-root `/scan` no longer counts the ~600
+  intentionally-vulnerable benchmark corpora and test fixtures as findings. Safe: `rules.yml`
+  is loaded from the exact scan root only, so the cve-replay runner (which scans each
+  pre/post fixture as its own root) and the unit tests are unaffected — corpus gate stays
+  185/185.
+
+`npm test` 1695/0; cve-replay 185/185.
+
 ## 0.128.1 — patch dependency vulnerabilities (11 Dependabot alerts → 0)
 
 Security maintenance. Cleared all 11 open Dependabot alerts by updating the two lockfiles to

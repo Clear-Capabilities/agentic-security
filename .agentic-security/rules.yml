@@ -8,8 +8,20 @@ ignorePaths:
   # Scanner source — rule libraries contain detection pattern strings,
   # fix-message snippets, and example vulnerable code that the engine
   # misidentifies as real vulnerabilities.
-  # NOTE: scanner/test/** is intentionally NOT excluded — test fixtures are
-  # scanned by unit tests and must remain reachable.
+  # Benchmark corpora — bench/ holds intentionally-vulnerable CVE-replay and
+  # polyglot samples that MUST fire for the regression gate; in a repo-root
+  # self-scan they are pure noise (~600 findings). Safe to exclude here:
+  # rules.yml is loaded from the EXACT scan root only (statePath(scanRoot)),
+  # and the cve-replay runner scans each pre/post fixture as its own root, so
+  # this repo-root rule never reaches — and cannot mask — the corpus fixtures.
+  - bench/**
+  # Test fixtures — intentionally-vulnerable/clean pairs the unit tests assert
+  # on. Excluded from repo-root self-scans only; unit tests scan each fixture
+  # sub-path with its OWN scan root, so they stay fully reachable to the tests.
+  - scanner/test/fixtures/**
+  # Absolute-path variant: cross-language contract analyzers (openapi/graphql)
+  # emit absolute finding paths, which the relative glob above misses.
+  - '**/scanner/test/fixtures/**'
   - scanner/src/**
   - scanner/dist/**
   - scanner/bin/**

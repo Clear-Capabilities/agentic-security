@@ -161,11 +161,20 @@ export function evaluateFramework(scanRoot, fw, scan) {
           'mcp-tools':            '.../scanner/src/mcp/tools.js',
         };
         const target = ARTIFACT[mod];
-        if (target && fs.existsSync(path.join(scanRoot, STATE, target))) {
-          obs.push(`✓ ${mod}: ${target} present.`);
+        // A '.../' sentinel marks a source-relative artifact (project source,
+        // e.g. a hook or agent file) — resolve it against the scan root itself.
+        // Everything else is a runtime artifact under the STATE dir. Without
+        // this, `path.join(scanRoot, STATE, '.../x')` never resolves and the
+        // control falsely reads "not present" for every project.
+        const resolved = !target ? null
+          : target.startsWith('.../') ? path.join(scanRoot, target.slice(4))
+          : path.join(scanRoot, STATE, target);
+        const label = target ? target.replace(/^\.\.\.\//, '') : '(unmapped)';
+        if (resolved && fs.existsSync(resolved)) {
+          obs.push(`✓ ${mod}: ${label} present.`);
           anySignal = true;
         } else {
-          obs.push(`✗ ${mod}: expected ${target || '(unmapped)'} not present.`);
+          obs.push(`✗ ${mod}: expected ${label} not present.`);
           allCleared = false;
         }
       } else if (m.startsWith('rule:')) {
