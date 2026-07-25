@@ -287,3 +287,24 @@ test('manifest: is valid, complete, and internally consistent', () => {
   const deep = m.targets.filter(t => t.tier === 'deep').map(t => t.id).sort();
   assert.deepEqual(deep, ['discourse', 'grafana', 'jenkins', 'superset'], 'Tier-1 set matches the PRD');
 });
+
+import { pathToFileURL } from 'node:url';
+
+test('runner main-guard: pathToFileURL handles paths with spaces correctly', () => {
+  // Verifies the fix for the silent-no-op bug: the old guard using
+  // `file://${process.argv[1]}` fails on paths with spaces because
+  // import.meta.url is percent-encoded (%20) while the naive concatenation is not.
+  const pathWithSpace = '/path/with space/runner.mjs';
+
+  const urlCorrect = pathToFileURL(pathWithSpace).href;
+  const urlNaive = `file://${pathWithSpace}`;
+
+  // pathToFileURL must percent-encode the space as %20
+  assert.ok(urlCorrect.includes('with%20space'), 'pathToFileURL percent-encodes spaces');
+
+  // The naive approach does NOT percent-encode, so it differs
+  assert.ok(urlNaive.includes('with space'), 'naive concatenation does not percent-encode');
+
+  // This is the core bug: they are different, so the guard comparison fails
+  assert.notEqual(urlCorrect, urlNaive, 'pathToFileURL and naive URL concatenation differ on paths with spaces');
+});

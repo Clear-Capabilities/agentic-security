@@ -68,8 +68,8 @@ being function-free (`functionless`) — exactly the kind of file the old
 metric miscounted as a failure. There was no Python IR parser bug to
 investigate; the earlier "known gap" and its stated follow-up
 ("investigating the Python IR parser's failure modes") were chasing a number
-that measured the wrong thing. Superset now clears the plan's 85% acceptance
-bar (`docs/PROOF_CORPUS_PRD.md` §11.2) on every language in scope.
+that measured the wrong thing. Superset now clears the PRD's 85% acceptance
+bar (`docs/PROOF_CORPUS_PRD.md` §12 acceptance criterion 2) on every language in scope.
 
 ### Known gaps surfaced by this run
 
@@ -102,7 +102,7 @@ bar (`docs/PROOF_CORPUS_PRD.md` §11.2) on every language in scope.
   repositories.
 - **Peak RSS is high on both targets** (~3.35 GB ghost, ~2.89 GB superset),
   reflecting the cost of building IR for parse-coverage measurement across a
-  large repository, as anticipated in the plan's accepted-cost note.
+  large repository.
 
 The remaining eight targets are in the manifest but unpinned; Phase 2 brings
 them online.

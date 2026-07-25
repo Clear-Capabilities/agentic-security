@@ -22,7 +22,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { ensureClone, resolveRef, repoDir } from './lib/clone.mjs';
 import { detectLicence } from './lib/licence.mjs';
@@ -200,7 +200,7 @@ async function main() {
 
 // Guarded so importing this module (e.g. from a test that only wants
 // parseArgs/rawDirFor) never triggers a real bench run as a side effect.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().then(c => process.exit(c)).catch(err => {
     process.stderr.write(`fatal: ${err && err.stack}\n`);
     process.exit(2);
