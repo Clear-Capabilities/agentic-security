@@ -6,9 +6,11 @@
       "id": "ghost",
       "url": "https://github.com/TryGhost/Ghost.git",
       "ref": "main",
-      "commit": null,
+      "commit": "7da28a03b9c72fa2cc656f5f926230bae09fd684",
       "tier": "breadth",
-      "expectedLanguages": ["javascript"],
+      "expectedLanguages": [
+        "javascript"
+      ],
       "timeBudgetS": 1800,
       "scope": null
     },
@@ -16,9 +18,12 @@
       "id": "superset",
       "url": "https://github.com/apache/superset.git",
       "ref": "master",
-      "commit": null,
+      "commit": "e1ffa53d9b4926f2ac7fe8c83c5f890fd621f3c8",
       "tier": "deep",
-      "expectedLanguages": ["python", "javascript"],
+      "expectedLanguages": [
+        "python",
+        "javascript"
+      ],
       "timeBudgetS": 1800,
       "scope": null
     },
@@ -28,7 +33,10 @@
       "ref": "main",
       "commit": null,
       "tier": "deep",
-      "expectedLanguages": ["go", "javascript"],
+      "expectedLanguages": [
+        "go",
+        "javascript"
+      ],
       "timeBudgetS": 2400,
       "scope": null
     },
@@ -38,7 +46,10 @@
       "ref": "master",
       "commit": null,
       "tier": "breadth",
-      "expectedLanguages": ["python", "javascript"],
+      "expectedLanguages": [
+        "python",
+        "javascript"
+      ],
       "timeBudgetS": 2400,
       "scope": null
     },
@@ -48,7 +59,10 @@
       "ref": "main",
       "commit": null,
       "tier": "deep",
-      "expectedLanguages": ["ruby", "javascript"],
+      "expectedLanguages": [
+        "ruby",
+        "javascript"
+      ],
       "timeBudgetS": 2400,
       "scope": null
     },
@@ -58,7 +72,9 @@
       "ref": "master",
       "commit": null,
       "tier": "breadth",
-      "expectedLanguages": ["csharp"],
+      "expectedLanguages": [
+        "csharp"
+      ],
       "timeBudgetS": 1800,
       "scope": null
     },
@@ -68,7 +84,10 @@
       "ref": "master",
       "commit": null,
       "tier": "breadth",
-      "expectedLanguages": ["go", "javascript"],
+      "expectedLanguages": [
+        "go",
+        "javascript"
+      ],
       "timeBudgetS": 2400,
       "scope": null
     },
@@ -78,7 +97,9 @@
       "ref": "master",
       "commit": null,
       "tier": "deep",
-      "expectedLanguages": ["java"],
+      "expectedLanguages": [
+        "java"
+      ],
       "timeBudgetS": 2400,
       "scope": null
     },
@@ -88,7 +109,10 @@
       "ref": "master",
       "commit": null,
       "tier": "breadth",
-      "expectedLanguages": ["php", "javascript"],
+      "expectedLanguages": [
+        "php",
+        "javascript"
+      ],
       "timeBudgetS": 3600,
       "scope": null
     },
@@ -98,9 +122,17 @@
       "ref": "master",
       "commit": null,
       "tier": "breadth",
-      "expectedLanguages": ["cpp"],
+      "expectedLanguages": [
+        "cpp"
+      ],
       "timeBudgetS": 3600,
-      "scope": ["core", "modules", "scene", "servers", "editor"]
+      "scope": [
+        "core",
+        "modules",
+        "scene",
+        "servers",
+        "editor"
+      ]
     }
   ]
 }
