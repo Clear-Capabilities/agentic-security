@@ -8161,6 +8161,16 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   // Built ahead of the deep-mode gate so coverage is measurable without paying
   // for taint analysis, and stashed in _sharedIR so the deep block below reuses
   // it rather than parsing the project twice.
+  //
+  // NOTE (affects instrumented runs only, i.e. AGENTIC_SECURITY_IR_STATS set):
+  // when this block runs, buildProjectIR() happens here, BEFORE the deep-mode
+  // budget timer (t0) below is started. On an uninstrumented run, IR
+  // construction instead happens inside the timed block via the
+  // `_sharedIR || (_sharedIR = buildProjectIR(fc))` line, so its cost counts
+  // against AGENTIC_SECURITY_DEEP_TIMEOUT_MS. That means the deep budget does
+  // NOT account for parse time when stats are enabled — an instrumented run
+  // gets strictly more wall-clock for the taint analysis itself than an
+  // uninstrumented run with the same budget.
   let _sharedIR = null;
   const _irStatsTarget = irStatsTarget();
   if (_irStatsTarget) {

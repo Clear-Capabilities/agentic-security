@@ -53,16 +53,22 @@ export function collectIrStats(fileContents, perFile, callGraph) {
     const lang = languageOfFile(file);
     if (!lang) continue;
     if (!languages[lang]) {
-      languages[lang] = { inScope: 0, parsed: 0, functions: 0, failures: [] };
+      languages[lang] = { inScope: 0, parsed: 0, functionless: 0, functions: 0, failures: [] };
       failuresByLang[lang] = [];
     }
     const bucket = languages[lang];
     bucket.inScope++;
     const rec = ir[file];
-    const fnCount = rec && Array.isArray(rec.functions) ? rec.functions.length : 0;
-    if (fnCount > 0) {
+    // "parsed" means an IR record exists for the file — the parser returned
+    // something — independent of whether that file happens to declare any
+    // functions. A file with zero functions (an `__init__.py`, a constants
+    // module) is NOT a parse failure; it is parsed-but-functionless. Only the
+    // absence of an IR record at all is a genuine parse failure.
+    if (rec) {
       bucket.parsed++;
+      const fnCount = Array.isArray(rec.functions) ? rec.functions.length : 0;
       bucket.functions += fnCount;
+      if (fnCount === 0) bucket.functionless++;
     } else {
       failuresByLang[lang].push(file);
     }

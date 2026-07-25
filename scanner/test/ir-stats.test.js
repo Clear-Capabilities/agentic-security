@@ -60,14 +60,29 @@ test('collectIrStats: counts in-scope vs parsed per language', () => {
   assert.ok(!('txt' in stats.languages), 'unknown extensions are not tracked');
 });
 
-test('collectIrStats: a file with an empty function list counts as a failure', () => {
+test('collectIrStats: a file with an empty function list counts as parsed+functionless, not a failure', () => {
   const stats = collectIrStats(
     { 'a.js': 'x' },
     { 'a.js': { file: 'a.js', functions: [] } },
     null,
   );
-  assert.equal(stats.languages.javascript.parsed, 0);
-  assert.deepEqual(stats.languages.javascript.failures, ['a.js']);
+  assert.equal(stats.languages.javascript.parsed, 1);
+  assert.equal(stats.languages.javascript.functionless, 1);
+  assert.deepEqual(stats.languages.javascript.failures, []);
+});
+
+test('collectIrStats: distinguishes an IR record with no functions from no IR record at all', () => {
+  const fileContents = { 'a.js': 'x', 'b.js': 'y' };
+  const perFile = {
+    // a.js parsed successfully but declares no functions (e.g. a constants module).
+    'a.js': { file: 'a.js', functions: [] },
+    // b.js has no entry at all — the parser produced nothing for it.
+  };
+  const stats = collectIrStats(fileContents, perFile, null);
+  assert.equal(stats.languages.javascript.inScope, 2);
+  assert.equal(stats.languages.javascript.parsed, 1, 'a.js counts as parsed despite zero functions');
+  assert.equal(stats.languages.javascript.functionless, 1, 'a.js is the functionless one');
+  assert.deepEqual(stats.languages.javascript.failures, ['b.js'], 'only the file with no IR record is a failure');
 });
 
 test('collectIrStats: summarises call-graph size and resolution', () => {

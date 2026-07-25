@@ -163,7 +163,7 @@ Each repo declares in the manifest:
 
 | Metric | Definition | Proves |
 |---|---|---|
-| **Parse coverage** | files that produced an IR record with ≥1 function ÷ files in scope for that extension | *Actual* language support, as distinct from extension recognition. The headline metric. |
+| **Parse coverage** | files for which the parser returned an IR record (regardless of function count) ÷ files in scope for that extension | *Actual* language support, as distinct from extension recognition. The headline metric. A file with an IR record but zero functions (an `__init__.py`, a constants module) is parsed, not a failure — it is tracked separately as `functionless` so it can't be mistaken for one. |
 | Support tier | Deep IR / Structural IR / Syntactic / Opt-in AST, per language (§2.3) | Honest framing of every other number |
 | Language mix | LOC and file count per language | That the target exercises the languages claimed |
 | Licence | detected SPDX identifier(s) + source of detection | Licence-regime breadth |
@@ -175,7 +175,7 @@ Each repo declares in the manifest:
 | Determinism | two consecutive runs → byte-identical SARIF | The `--deterministic` contract holds on real input |
 | Exit code | captured explicitly | Gate-ability |
 
-**Parse coverage requires a scanner change.** No current flag exposes per-file IR success. Phase 0 adds `AGENTIC_SECURITY_IR_STATS=<path>`, which writes a per-language `{inScope, parsed, functions, callGraphNodes, failures[]}` sidecar. This is a small, additive, default-off instrumentation surface — and it is independently useful beyond this bench, since it is also the acceptance instrument for Workstream B.
+**Parse coverage requires a scanner change.** No current flag exposes per-file IR success. Phase 0 adds `AGENTIC_SECURITY_IR_STATS=<path>`, which writes a per-language `{inScope, parsed, functionless, functions, failures[]}` sidecar (plus a top-level `callGraph: {functions, edges, resolvedEdges, unresolvedEdges}`, not a per-language field). This is a small, additive, default-off instrumentation surface — and it is independently useful beyond this bench, since it is also the acceptance instrument for Workstream B.
 
 ---
 

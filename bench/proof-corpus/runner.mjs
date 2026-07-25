@@ -12,7 +12,12 @@
 //     --only a,b        run just these target ids
 //     --refresh-pins    resolve each target's ref to a SHA and rewrite the manifest
 //     --no-determinism  skip the second scan used for the byte-identical check
-//     --out <dir>       results directory (default bench/proof-corpus/results)
+//     --out <dir>       where summary.json is written (default bench/proof-corpus/results).
+//                       Raw artifacts (findings, SARIF, ir-stats.json — up to 200 real
+//                       third-party source paths) are ALWAYS written under the fixed
+//                       bench/proof-corpus/results/raw/ regardless of --out, because that
+//                       is the only path .gitignore covers. --out never relocates raw
+//                       artifacts — see PROOF_CORPUS_PRD.md §9.1.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -26,8 +31,12 @@ import { verifyBundle, runRepoScan } from './lib/scan.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MANIFEST = path.join(HERE, 'manifest.json');
+// Fixed regardless of --out: this is the only path bench/proof-corpus/.gitignore
+// covers. Raw artifacts carry real third-party source paths and must never be
+// stageable in git — see PROOF_CORPUS_PRD.md §9.1 and the runner's --out help text.
+const RAW_DIR = path.join(HERE, 'results', 'raw');
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const out = { only: null, refreshPins: false, determinism: true, outDir: path.join(HERE, 'results') };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -38,6 +47,15 @@ function parseArgs(argv) {
   }
   return out;
 }
+
+// Exported so tests can assert containment without spawning the CLI: the raw
+// artifact directory for a target id is always under the fixed RAW_DIR,
+// independent of whatever --out resolved to.
+export function rawDirFor(targetId) {
+  return path.join(RAW_DIR, targetId);
+}
+
+export { RAW_DIR };
 
 function loadManifest() {
   return JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
@@ -68,7 +86,7 @@ async function runTarget(t, opts) {
     status: 'pending', scope: t.scope, timeBudgetS: t.timeBudgetS,
   };
 
-  const rawDir = path.join(opts.outDir, 'raw', t.id);
+  const rawDir = path.join(RAW_DIR, t.id);
   fs.mkdirSync(rawDir, { recursive: true });
 
   try {
@@ -180,7 +198,11 @@ async function main() {
   return summary.failed === 0 ? 0 : 1;
 }
 
-main().then(c => process.exit(c)).catch(err => {
-  process.stderr.write(`fatal: ${err && err.stack}\n`);
-  process.exit(2);
-});
+// Guarded so importing this module (e.g. from a test that only wants
+// parseArgs/rawDirFor) never triggers a real bench run as a side effect.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().then(c => process.exit(c)).catch(err => {
+    process.stderr.write(`fatal: ${err && err.stack}\n`);
+    process.exit(2);
+  });
+}

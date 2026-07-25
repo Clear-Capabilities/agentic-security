@@ -1,5 +1,5 @@
 {
-  "bundleSha": "91285c385aa193ba6b1c075d9cd8b9fb18b746516cfdf7cc8d7b4c0e94248c0c",
+  "bundleSha": "d9f347d67794a157a1330c9f8c32bd5eaf237a762d81a9ad031facd4d5fe7165",
   "targetCount": 2,
   "ok": 2,
   "failed": 0,
@@ -12,7 +12,7 @@
       "status": "ok",
       "scope": null,
       "timeBudgetS": 1800,
-      "cached": false,
+      "cached": true,
       "licence": {
         "spdx": "MIT",
         "source": "file",
@@ -21,15 +21,16 @@
       "scannedPath": ".",
       "scan": {
         "exitCode": 3,
-        "wallMs": 99680,
+        "wallMs": 61555,
         "timedOut": false,
-        "peakRssKb": 2862000
+        "peakRssKb": 3433040
       },
       "coverage": {
         "byLanguage": {
           "javascript": {
             "inScope": 4271,
             "parsed": 4023,
+            "functionless": 0,
             "functions": 34135,
             "pct": 94
           }
@@ -48,8 +49,8 @@
       },
       "determinism": {
         "checked": true,
-        "identical": true,
-        "secondRunWallMs": 62358
+        "identical": false,
+        "secondRunWallMs": 58661
       }
     },
     {
@@ -60,7 +61,7 @@
       "status": "ok",
       "scope": null,
       "timeBudgetS": 1800,
-      "cached": false,
+      "cached": true,
       "licence": {
         "spdx": "Apache-2.0",
         "source": "file",
@@ -69,29 +70,31 @@
       "scannedPath": ".",
       "scan": {
         "exitCode": 3,
-        "wallMs": 76649,
+        "wallMs": 72640,
         "timedOut": false,
-        "peakRssKb": 3159472
+        "peakRssKb": 2962880
       },
       "coverage": {
         "byLanguage": {
           "javascript": {
             "inScope": 2616,
             "parsed": 2613,
+            "functionless": 0,
             "functions": 25419,
             "pct": 100
           },
           "python": {
             "inScope": 1470,
-            "parsed": 1081,
+            "parsed": 1470,
+            "functionless": 389,
             "functions": 5286,
-            "pct": 74
+            "pct": 100
           }
         },
         "totals": {
           "inScope": 4086,
-          "parsed": 3694,
-          "pct": 90
+          "parsed": 4083,
+          "pct": 100
         },
         "callGraph": {
           "functions": 27107,
@@ -103,7 +106,7 @@
       "determinism": {
         "checked": true,
         "identical": true,
-        "secondRunWallMs": 70948
+        "secondRunWallMs": 71097
       }
     }
   ]

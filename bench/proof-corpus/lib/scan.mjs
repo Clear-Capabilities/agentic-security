@@ -98,6 +98,12 @@ export function runRepoScan(opts) {
       ...extraEnv,
     };
     if (statsPath) env.AGENTIC_SECURITY_IR_STATS = statsPath;
+    // Determinism run B passes statsPath=null deliberately (no need to re-measure
+    // coverage twice). Without this, an ambient AGENTIC_SECURITY_IR_STATS the
+    // operator happened to have set in their shell would still be inherited via
+    // the `...process.env` spread above, silently writing a sidecar to whatever
+    // path they left set — not the deterministic-only run this is supposed to be.
+    else delete env.AGENTIC_SECURITY_IR_STATS;
 
     // Scan state accumulates inside the scanned tree and can mask results on a
     // re-run — CLAUDE.md's "wipe scan state before benchmarking" rule. The

@@ -173,6 +173,19 @@ test('coverageSummary: computes rounded percentages per language', () => {
   assert.equal(s.callGraph.resolvedEdges, 20);
 });
 
+test('coverageSummary: surfaces functionless per language without folding it into pct', () => {
+  const stats = {
+    languages: {
+      python: { inScope: 100, parsed: 74, functionless: 30, functions: 200, failures: [] },
+    },
+    callGraph: { functions: 0, edges: 0, resolvedEdges: 0, unresolvedEdges: 0 },
+    totals: { inScope: 100, parsed: 74, functions: 200 },
+  };
+  const s = coverageSummary(stats);
+  assert.equal(s.byLanguage.python.functionless, 30);
+  assert.equal(s.byLanguage.python.pct, 74, 'pct stays parsed/inScope, unaffected by functionless');
+});
+
 test('coverageSummary: pct is null when a language has no files in scope', () => {
   const s = coverageSummary({ languages: { ruby: { inScope: 0, parsed: 0, functions: 0, failures: [] } } });
   assert.equal(s.byLanguage.ruby.pct, null);

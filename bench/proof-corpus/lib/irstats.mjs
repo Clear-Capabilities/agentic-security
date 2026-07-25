@@ -32,6 +32,7 @@ export function coverageSummary(stats) {
     byLanguage[name] = {
       inScope,
       parsed,
+      functionless: l.functionless || 0,
       functions: l.functions || 0,
       pct: _pct(parsed, inScope),
     };
