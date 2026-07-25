@@ -143,6 +143,7 @@ import { annotateNarration } from './posture/flow-narration.js';
 import { applyPathConstraints } from './posture/path-predicates.js';
 // Phase 3 (Sentinel-parity Layer 1 + 2) — IR + interprocedural taint engine.
 import { buildProjectIR } from './ir/index.js';
+import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
 // v3 next-gen — Pillars 1, 4, 5, 6, 8, 9.
 import { annotateCloneClusters, findCloneOutliers } from './posture/semantic-clone.js';
@@ -8156,6 +8157,23 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   //   - Global timeout via AGENTIC_SECURITY_DEEP_TIMEOUT_MS (default 300_000 = 5 min)
   //   - Auto-disabled in CI unless AGENTIC_SECURITY_DEEP_IN_CI=1 is also set,
   //     so a pathological file can't hang the whole pipeline.
+  // ── IR parse-coverage sidecar (proof-corpus instrumentation, default off) ──
+  // Built ahead of the deep-mode gate so coverage is measurable without paying
+  // for taint analysis, and stashed in _sharedIR so the deep block below reuses
+  // it rather than parsing the project twice.
+  let _sharedIR = null;
+  const _irStatsTarget = irStatsTarget();
+  if (_irStatsTarget) {
+    try {
+      _sharedIR = buildProjectIR(fc);
+      writeIrStats(_irStatsTarget, collectIrStats(fc, _sharedIR.perFile, _sharedIR.callGraph));
+    } catch (e) {
+      // Instrumentation must never fail a scan. Surface only when debugging.
+      if (process.env.AGENTIC_SECURITY_IR_STATS_DEBUG === '1') {
+        process.stderr.write(`ir-stats: ${e && e.message}\n`);
+      }
+    }
+  }
   const _deepRequested = process.env.AGENTIC_SECURITY_DEEP === '1';
   const _inCi = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI ||
                    process.env.BUILDKITE || process.env.CIRCLECI || process.env.JENKINS_URL);
@@ -8165,7 +8183,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
     const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
     const t0 = Date.now();
     try {
-      const { perFile, callGraph } = buildProjectIR(fc);
+      const { perFile, callGraph } = _sharedIR || (_sharedIR = buildProjectIR(fc));
       // The runDeepAnalysis call is synchronous in this codebase; we can't
       // truly interrupt it without re-architecting the worklist. We pass a
       // deadlineMs hint that the inner loops check; if absent, we still cap
