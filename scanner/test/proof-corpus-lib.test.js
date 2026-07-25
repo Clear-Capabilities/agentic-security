@@ -90,3 +90,48 @@ test('detectLicence: reports none for a repo with no licence and never throws', 
   fs.rmSync(dir, { recursive: true, force: true });
   assert.equal(detectLicence('/nonexistent/path/xyz').source, 'none');
 });
+
+import { cacheRoot, repoDir, currentCommit, ensureClone } from '../../bench/proof-corpus/lib/clone.mjs';
+
+test('cacheRoot: honours the env override', () => {
+  const prev = process.env.AGENTIC_SECURITY_PROOF_CACHE;
+  try {
+    process.env.AGENTIC_SECURITY_PROOF_CACHE = '/tmp/custom-cache';
+    assert.equal(cacheRoot(), '/tmp/custom-cache');
+    delete process.env.AGENTIC_SECURITY_PROOF_CACHE;
+    assert.ok(cacheRoot().endsWith(path.join('.claude', 'agentic-security', 'proof-corpus-cache')));
+  } finally {
+    if (prev === undefined) delete process.env.AGENTIC_SECURITY_PROOF_CACHE;
+    else process.env.AGENTIC_SECURITY_PROOF_CACHE = prev;
+  }
+});
+
+test('repoDir: places each target in its own directory under the cache root', () => {
+  const prev = process.env.AGENTIC_SECURITY_PROOF_CACHE;
+  try {
+    process.env.AGENTIC_SECURITY_PROOF_CACHE = '/tmp/custom-cache';
+    assert.equal(repoDir('ghost'), path.join('/tmp/custom-cache', 'ghost'));
+  } finally {
+    if (prev === undefined) delete process.env.AGENTIC_SECURITY_PROOF_CACHE;
+    else process.env.AGENTIC_SECURITY_PROOF_CACHE = prev;
+  }
+});
+
+test('repoDir: rejects ids that would escape the cache root', () => {
+  assert.throws(() => repoDir('../escape'), /invalid target id/i);
+  assert.throws(() => repoDir('a/b'), /invalid target id/i);
+  assert.throws(() => repoDir(''), /invalid target id/i);
+});
+
+test('currentCommit: returns null for a directory that is not a git repo', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notgit-'));
+  assert.equal(currentCommit(dir), null);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('ensureClone: refuses an unpinned target and names the fix', () => {
+  assert.throws(
+    () => ensureClone({ id: 'ghost', url: 'https://example.invalid/x.git', commit: null }),
+    /--refresh-pins/,
+  );
+});
