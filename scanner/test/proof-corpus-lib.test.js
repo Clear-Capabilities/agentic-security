@@ -27,6 +27,26 @@ test('detectLicenceText: identifies source-available licences', () => {
   assert.equal(detectLicenceText('Functional Source License, Version 1.1, ALv2 Future License'), 'FSL-1.1');
 });
 
+test('detectLicenceText: identifies LGPL licences', () => {
+  assert.equal(detectLicenceText('GNU LESSER GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007'), 'LGPL-3.0');
+  assert.equal(detectLicenceText('GNU LESSER GENERAL PUBLIC LICENSE\nVersion 2.1, February 1999'), 'LGPL-2.1');
+});
+
+test('detectLicenceText: distinguishes BSD-3-Clause from BSD-2-Clause', () => {
+  const bsd3 = 'Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: 1. Redistributions of source code must retain the above copyright notice. 2. Redistributions in binary form must reproduce the above copyright notice. 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.';
+  assert.equal(detectLicenceText(bsd3), 'BSD-3-Clause');
+  const bsd2 = 'Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: 1. Redistributions of source code must retain the above copyright notice. 2. Redistributions in binary form must reproduce the above copyright notice.';
+  assert.equal(detectLicenceText(bsd2), 'BSD-2-Clause');
+});
+
+test('detectLicenceText: identifies ISC licence', () => {
+  assert.equal(detectLicenceText('ISC License\n\nPermission to use, copy, modify, and/or distribute this software'), 'ISC');
+});
+
+test('detectLicenceText: identifies MPL-2.0', () => {
+  assert.equal(detectLicenceText('Mozilla Public License Version 2.0\n\n1. Definitions'), 'MPL-2.0');
+});
+
 test('detectLicenceText: returns null on unrecognised or empty text', () => {
   assert.equal(detectLicenceText('This is a readme about cats.'), null);
   assert.equal(detectLicenceText(''), null);

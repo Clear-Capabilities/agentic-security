@@ -8,8 +8,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-// Order matters: AGPL must be tested before GPL because its title contains
-// "GENERAL PUBLIC LICENSE" as a substring.
+// Order matters: patterns with more specific version or keyword constraints are
+// tested first. BSD-3-Clause must precede BSD-2-Clause because BSD-3 adds the
+// "Neither the name of ... may be used to endorse" clause, and its pattern
+// matches that substring.
 const PATTERNS = [
   { spdx: 'AGPL-3.0', re: /GNU AFFERO GENERAL PUBLIC LICENSE\s*\n?\s*Version 3/i },
   { spdx: 'LGPL-3.0', re: /GNU LESSER GENERAL PUBLIC LICENSE\s*\n?\s*Version 3/i },
