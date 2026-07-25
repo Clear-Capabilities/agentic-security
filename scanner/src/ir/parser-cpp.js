@@ -69,7 +69,12 @@ function _blank(src) {
       const quote = c;
       i++;
       while (i < n) {
-        if (src[i] === '\\') { out[i] = ' '; if (i + 1 < n) out[i + 1] = ' '; i += 2; continue; }
+        if (src[i] === '\\') {
+          out[i] = ' ';
+          if (i + 1 < n && src[i + 1] !== '\n') out[i + 1] = ' ';
+          i += 2;
+          continue;
+        }
         if (src[i] === quote) { out[i] = ' '; i++; break; }
         if (src[i] !== '\n') out[i] = ' ';
         i++;
@@ -197,7 +202,7 @@ function _findFunctions(blank, classSpans) {
       else if (blank[j] === ')') depth--;
       j++;
     }
-    if (depth !== 0) break;
+    if (depth !== 0) { i++; continue; }
     const paramText = blank.slice(i + 1, j - 1);
     const name = _nameBefore(blank, i);
     if (!name) { i++; continue; }

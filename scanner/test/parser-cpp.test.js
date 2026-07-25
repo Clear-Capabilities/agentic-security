@@ -158,3 +158,40 @@ test('parseCppFile: an unterminated body does not hang or throw', () => {
   const ir = parseCppFile('u.cpp', 'void f() {\n int x = 1;\n');
   assert.ok(ir, 'must return a record rather than throwing');
 });
+
+test('parseCppFile: a backslash-newline continuation inside a string does not corrupt line numbers', () => {
+  // Line-by-line (counting the literal template rows):
+  //   1: '' (blank line right after the opening backtick)
+  //   2: const char* s = "abc\        <- backslash immediately followed by a
+  //                                      real newline: valid C++ line-continuation
+  //   3: def";
+  //   4: void f() {
+  //   5:   int x = 1;
+  //   6: }
+  //   7: '' (trailing)
+  const code = `
+const char* s = "abc\\
+def";
+void f() {
+  int x = 1;
+}
+`;
+  const ir = parseCppFile('cont.cpp', code);
+  assert.equal(ir.functions.length, 1);
+  assert.equal(ir.functions[0].name, 'f');
+  assert.equal(ir.functions[0].line, 4,
+    'the real newline inside the string continuation must not be blanked away, ' +
+    'or every line number after it undercounts by one');
+});
+
+test('parseCppFile: an unmatched paren does not truncate scanning of the rest of the file', () => {
+  const code = `
+void bad(int a
+void f() {
+  int x = 1;
+}
+`;
+  const ir = parseCppFile('unmatched.cpp', code);
+  assert.equal(ir.functions.length, 1, 'the unmatched "(" must be skipped, not abort the scan');
+  assert.equal(ir.functions[0].name, 'f');
+});
