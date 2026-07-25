@@ -67,6 +67,7 @@ function _blank(src) {
     }
     if (c === '"' || c === "'") {
       const quote = c;
+      out[i] = ' '; // blank the opening quote too, symmetric with the closing one below
       i++;
       while (i < n) {
         if (src[i] === '\\') {
@@ -274,6 +275,12 @@ export function parseCppFile(file, code) {
     const ownerClass = explicitScope ? explicitScope.split('::').pop() : enclosing;
     const tail = ownerClass ? `${ownerClass}.${bare}` : bare;
     const bodyText = f.isDeclaration ? '' : code.slice(f.bodyStart, f.bodyEnd);
+    // Structure (statement/brace/paren boundaries) is decided from the
+    // blanked body so a brace or paren inside a string/comment can't
+    // silently swallow the statements that follow it; the matching RAW
+    // slice (same offsets — `_blank` preserves length) is what actually
+    // gets lowered, so identifiers and call names still survive.
+    const blankBodyText = f.isDeclaration ? '' : blank.slice(f.bodyStart, f.bodyEnd);
 
     functions.push({
       qid: _qid(file, tail, f.line, bodyText || `${qname}@decl`),
@@ -283,7 +290,7 @@ export function parseCppFile(file, code) {
       params: _parseParams(f.paramText),
       file,
       isDeclaration: f.isDeclaration,
-      cfg: _buildCfg(bodyText, f.line),
+      cfg: _buildCfg(bodyText, blankBodyText, f.line),
     });
   }
 
@@ -379,51 +386,84 @@ function _lowerExpr(text) {
 
 // ── statement splitting ─────────────────────────────────────────────────────
 
-// Split a body into top-level statements. Blocks (`{...}`) are returned whole
-// so the caller can recurse into them. Each returned item carries the line
-// number of its first non-whitespace character, computed by counting
-// newlines as we scan — this is what lets the CFG builder process an entire
-// (possibly multi-line) body in one pass instead of splitting on '\n' first.
-// A prior line-per-chunk approach silently dropped any statement whose
-// opening brace and body lived on different physical lines (e.g. `if (x) {`
-// on one line, the body on the next) because a lone `{` or a lone
+// Split a (blanked) body into top-level statements, returning character
+// OFFSETS rather than text. The caller slices the same offsets out of both
+// the blanked text (for further structural decisions) and the raw text (for
+// content to lower) — see `_buildCfg`'s "structure from blank, content from
+// raw" split. Operating on the blanked text means a `{`, `(`, `}` or `)`
+// that only exists inside a string literal or comment in the RAW source
+// (already turned to spaces by `_blank`) cannot be mistaken for real
+// structure and swallow the statements that follow it.
+//
+// Blocks (`{...}`) are returned whole so the caller can recurse into them.
+// A prior line-per-chunk approach (pre-splitting on '\n' before this
+// function ran) silently dropped any statement whose opening brace and body
+// lived on different physical lines, because a lone `{` or a lone
 // continuation fragment doesn't round-trip through the statement grammar.
-// Dropping a statement is a missed vulnerability; a slightly-off line number
-// on a multi-line statement is cosmetic — so this trades the latter risk
-// away entirely by never splitting on '\n' in the first place.
+// This function is handed the WHOLE body in one call for exactly that
+// reason — never split on '\n' first.
 function _splitStatements(body) {
   const out = [];
   // `depth` tracks braces (statement/block boundaries); `parenDepth` tracks
   // parens separately so the `;` separators inside a `for (init; test; step)`
   // header don't get mistaken for statement terminators.
-  let depth = 0, parenDepth = 0, buf = '', line = 1, stmtLine = 1, atStart = true;
+  let depth = 0, parenDepth = 0, buf = '', atStart = true, stmtStart = 0;
   for (let i = 0; i < body.length; i++) {
     const c = body[i];
-    if (atStart && /\s/.test(c)) {
-      if (c === '\n') line++;
-      continue;
-    }
-    if (atStart) { stmtLine = line; atStart = false; }
-    if (c === '\n') line++;
+    if (atStart && /\s/.test(c)) continue;
+    if (atStart) { atStart = false; stmtStart = i; }
     if (c === '(') parenDepth++;
     else if (c === ')') parenDepth = Math.max(0, parenDepth - 1);
     if (c === '{') depth++;
     if (c === '}') {
       depth--;
       buf += c;
-      if (depth === 0) { out.push({ text: buf, line: stmtLine }); buf = ''; atStart = true; }
+      if (depth === 0) { out.push({ start: stmtStart, end: i + 1 }); buf = ''; atStart = true; }
       continue;
     }
     if (c === ';' && depth === 0 && parenDepth === 0) {
-      const t = buf.trim();
-      if (t) out.push({ text: t, line: stmtLine });
+      if (buf.trim()) out.push({ start: stmtStart, end: i });
       buf = '';
       atStart = true;
       continue;
     }
     buf += c;
   }
-  if (buf.trim()) out.push({ text: buf.trim(), line: stmtLine });
+  if (buf.trim()) out.push({ start: stmtStart, end: body.length });
+  return out;
+}
+
+// Find the index of the delimiter in `openCh`/`closeCh` that matches the one
+// at `openIdx`, respecting nesting. Returns -1 if unmatched (caller must
+// treat that as "give up gracefully", never hang or throw).
+function _matchDelim(text, openIdx, openCh, closeCh) {
+  let depth = 0;
+  for (let i = openIdx; i < text.length; i++) {
+    if (text[i] === openCh) depth++;
+    else if (text[i] === closeCh) {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+// Split `blankText`/`rawText` (same length, index-aligned — same contract as
+// the blank/raw pairing everywhere else in this file) on a top-level
+// occurrence of `sepChar`, deciding nesting depth from `blankText` so a
+// separator character hidden inside a blanked string/comment in the raw
+// text can't be mistaken for a real one. Returns the corresponding RAW
+// substrings — used for the `for (init; test; step)` header split.
+function _splitTopLevelAligned(blankText, rawText, sepChar) {
+  const out = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < blankText.length; i++) {
+    const ch = blankText[i];
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    if (depth === 0 && ch === sepChar) { out.push(rawText.slice(start, i)); start = i + 1; }
+  }
+  out.push(rawText.slice(start));
   return out;
 }
 
@@ -462,7 +502,14 @@ function _lowerStmt(stmt, line) {
 
 // ── CFG construction ────────────────────────────────────────────────────────
 
-function _buildCfg(bodyText, startLine) {
+// `rawBody` and `blankBody` are the same function body, index-aligned:
+// `blankBody` (comments/strings replaced with spaces, same length) decides
+// STRUCTURE — where statements/blocks/parens begin and end; `rawBody` is
+// sliced at those same offsets to provide the CONTENT that actually gets
+// lowered into expressions. This is what stops a brace, paren, or semicolon
+// that only exists inside a string literal from being mistaken for real
+// code structure and swallowing (or mis-splitting) the statements after it.
+function _buildCfg(rawBody, blankBody, startLine) {
   const nodes = {
     entry: { kind: 'entry', line: startLine, succ: [], pred: [] },
     exit: { kind: 'exit', line: startLine, succ: [], pred: [] },
@@ -475,35 +522,64 @@ function _buildCfg(bodyText, startLine) {
     prev = id;
   };
 
-  // Emit statements linearly. Control-flow headers become `if` nodes and their
-  // blocks are recursed into, so bodies are never dropped — the same
+  // Emit statements linearly. Control-flow headers become `if` nodes and
+  // their blocks are recursed into, so bodies are never dropped — the same
   // straight-line treatment parser-go.js and parser-cs.js use.
   //
-  // The whole body is handed to `_splitStatements` in one call (never
-  // pre-split by '\n'), because a control-flow header and its body commonly
-  // live on different lines and a naive per-line split breaks the brace
-  // matching that keeps statements intact. `_splitStatements` tracks line
-  // numbers internally, so this costs nothing in accuracy for the common
-  // single-line-statement case and fixes the multi-line one.
-  const emit = (text, depth) => {
+  // `baseAbs` is the absolute offset of `blankText[0]` within the top-level
+  // `blankBody`. Every node's line number is computed from that absolute
+  // offset via `_lineAt(blankBody, ...)` rather than from a per-recursion
+  // relative counter, so nested blocks get their true physical line instead
+  // of one measured from the function's start line regardless of nesting
+  // depth (a counter that restarts per recursion compounds error as nesting
+  // gets deeper).
+  const emit = (blankText, rawText, baseAbs, depth) => {
     if (depth > 12) return;
-    for (const { text: stmt, line: relLine } of _splitStatements(text)) {
-      const line = startLine + relLine - 1;
-      const head = stmt.match(/^\s*(if|while|for|switch|else\s+if|else|do|try|catch)\b\s*(?:\((.*?)\))?\s*([\s\S]*)$/);
-      if (head) {
-        const kw = head[1].trim();
-        const cond = head[2];
-        const rest = head[3] || '';
-        if (cond !== undefined && cond !== null && /^(?:if|while|for|switch|else if)$/.test(kw)) {
+    for (const { start, end } of _splitStatements(blankText)) {
+      const blankStmt = blankText.slice(start, end);
+      const rawStmt = rawText.slice(start, end);
+      const absStart = baseAbs + start;
+      const line = startLine + _lineAt(blankBody, absStart) - 1;
+
+      const hm = blankStmt.match(/^(if|while|for|switch|else\s+if|else|do|try|catch)\b/);
+      if (hm) {
+        const kwNorm = hm[1].replace(/\s+/g, ' ').trim();
+        let p = hm[0].length;
+        while (p < blankStmt.length && /\s/.test(blankStmt[p])) p++;
+
+        // A parenthesised group directly follows most of these keywords
+        // (`if (`, `while (`, `for (`, `switch (`, `catch (Type& e)`); find
+        // its TRUE matching close paren via a balanced scan (not a
+        // non-greedy regex, which stops at the first `)` and truncates on
+        // any nested call like `fgets(buf, sizeof(buf), stdin)`).
+        let condBlank = null, condRaw = null, afterHeader = p;
+        if (blankStmt[p] === '(') {
+          const closeIdx = _matchDelim(blankStmt, p, '(', ')');
+          if (closeIdx !== -1) {
+            condBlank = blankStmt.slice(p + 1, closeIdx);
+            condRaw = rawStmt.slice(p + 1, closeIdx);
+            afterHeader = closeIdx + 1;
+          }
+        }
+
+        const needsCond = /^(?:if|while|for|switch|else if)$/.test(kwNorm);
+        if (needsCond && condRaw !== null) {
+          let condForNode = condRaw;
+          let initRaw = null;
+          if (kwNorm === 'for') {
+            // `for (init; test; step)` — surface the test as the condition
+            // and the init as a leading assignment, splitting on the
+            // BLANKED cond so a `;` inside a string literal in the header
+            // can't be mistaken for a header separator.
+            const parts = _splitTopLevelAligned(condBlank, condRaw, ';');
+            condForNode = parts.length > 1 ? parts[1] : condRaw;
+            initRaw = parts[0];
+          }
           const id = `n${counter++}`;
-          // `for (init; test; step)` — surface the test as the condition.
-          const condText = kw === 'for' ? (_splitTopLevel(cond, ';')[1] || cond) : cond;
-          nodes[id] = { kind: 'if', line, cond: _lowerExpr(condText), succ: [], pred: [] };
+          nodes[id] = { kind: 'if', line, cond: _lowerExpr(condForNode), succ: [], pred: [] };
           link(id);
-          // `for` init is an assignment worth capturing.
-          if (kw === 'for') {
-            const init = _splitTopLevel(cond, ';')[0];
-            const initNode = init && _lowerStmt(init, line);
+          if (kwNorm === 'for' && initRaw) {
+            const initNode = _lowerStmt(initRaw, line);
             if (initNode && initNode.kind === 'assign') {
               const iid = `n${counter++}`;
               nodes[iid] = { ...initNode, succ: [], pred: [] };
@@ -511,14 +587,33 @@ function _buildCfg(bodyText, startLine) {
             }
           }
         }
-        const block = rest.match(/\{([\s\S]*)\}\s*$/);
-        if (block) emit(block[1], depth + 1);
-        else if (rest.trim()) emit(rest, depth + 1);
+
+        const restBlank = blankText.slice(start + afterHeader, end);
+        const restRaw = rawText.slice(start + afterHeader, end);
+        const lead = restBlank.match(/^\s*/)[0].length;
+        if (restBlank[lead] === '{') {
+          const closeRel = _matchDelim(restBlank, lead, '{', '}');
+          if (closeRel !== -1) {
+            const innerStart = lead + 1;
+            emit(restBlank.slice(innerStart, closeRel), restRaw.slice(innerStart, closeRel),
+              baseAbs + start + afterHeader + innerStart, depth + 1);
+          }
+        } else if (restBlank.trim()) {
+          emit(restBlank, restRaw, baseAbs + start + afterHeader, depth + 1);
+        }
         continue;
       }
-      const bare = stmt.match(/^\{([\s\S]*)\}$/);
-      if (bare) { emit(bare[1], depth + 1); continue; }
-      const node = _lowerStmt(stmt, line);
+
+      const bare = blankStmt.match(/^\{([\s\S]*)\}$/);
+      if (bare) {
+        emit(blankStmt.slice(1, -1), rawStmt.slice(1, -1), baseAbs + start + 1, depth + 1);
+        continue;
+      }
+      // Leaf statement: structure has been fully resolved by the blanked
+      // split above, so content lowering uses the RAW text — identifiers,
+      // call names and string-literal detection all need the real
+      // characters, not the blanked-out ones.
+      const node = _lowerStmt(rawStmt, line);
       if (!node) continue;
       const id = `n${counter++}`;
       nodes[id] = { ...node, succ: [], pred: [] };
@@ -526,7 +621,7 @@ function _buildCfg(bodyText, startLine) {
     }
   };
 
-  if (bodyText) emit(bodyText, 0);
+  if (rawBody) emit(blankBody, rawBody, 0, 0);
 
   nodes[prev].succ.push('exit');
   nodes.exit.pred.push(prev);
@@ -537,4 +632,5 @@ export const _internals = {
   _blank, _splitTopLevelCommas, _parseParams, _extractBody,
   _lineAt, _qid, _findFunctions, _findClasses, _nameBefore,
   _lowerExpr, _lowerStmt, _splitStatements, _buildCfg,
+  _matchDelim, _splitTopLevelAligned,
 };

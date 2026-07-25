@@ -287,3 +287,53 @@ test('lowering: a declaration has an empty but valid CFG', () => {
   assert.equal(cfg.entry, 'entry');
   assert.equal(cfg.nodes.entry.succ[0], 'exit');
 });
+
+// ── regression: structure must come from the blanked body, not the raw one ──
+// (a brace or paren inside a string literal must not swallow later code)
+
+test('lowering regression: a brace inside a string literal does not swallow the following call', () => {
+  const ir = parseCppFile('a.cpp', 'void f(char* u) {\n  printf("}");\n  system(u);\n}\n');
+  const calls = nodesOf(ir).filter(n => n.kind === 'call').map(n => n.callee).sort();
+  assert.deepEqual(calls, ['printf', 'system'],
+    'the "}" inside the string must not be read as the function\'s closing brace');
+});
+
+test('lowering regression: a stray "(" inside a string literal does not swallow the following call', () => {
+  const ir = parseCppFile('a.cpp', 'void f(char* x) {\n  printf("(");\n  system(x);\n}\n');
+  const calls = nodesOf(ir).filter(n => n.kind === 'call').map(n => n.callee).sort();
+  assert.deepEqual(calls, ['printf', 'system'],
+    'the "(" inside the string must not desynchronize paren-depth tracking for later statements');
+});
+
+// ── regression: condition/header extraction must balance nested parens ─────
+
+test('lowering regression: a while condition with nested calls is captured whole, not truncated at the first ")"', () => {
+  const ir = parseCppFile('a.cpp', 'void f(char* buf) {\n  while (fgets(buf, sizeof(buf), stdin)) {\n    sink(buf);\n  }\n}\n');
+  const ns = nodesOf(ir);
+  const iff = ns.find(n => n.kind === 'if');
+  assert.ok(iff, 'expected an if node for the while');
+  assert.equal(iff.cond.kind, 'call');
+  assert.equal(iff.cond.callee, 'fgets', 'fgets must not be lost to the non-greedy-regex truncation bug');
+  assert.ok(ns.some(n => n.kind === 'call' && n.callee === 'sink'),
+    'the loop body must still be lowered, not dropped');
+});
+
+test('lowering regression: a brace-less for header with a nested-paren test still lowers its body', () => {
+  const ir = parseCppFile('a.cpp', 'void f(char* s) {\n  for (int i = 0; i < strlen(s); i++) sink(s);\n}\n');
+  const ns = nodesOf(ir);
+  assert.ok(ns.some(n => n.kind === 'assign' && n.target === 'i'), 'the for-init must be lowered');
+  assert.ok(ns.some(n => n.kind === 'call' && n.callee === 'sink'),
+    'the brace-less body must be lowered, not absorbed into the header');
+});
+
+// ── regression: nested-block statements must report their true physical line ──
+
+test('lowering regression: statements nested inside an if-block report their real line number, not the function start line', () => {
+  const ir = parseCppFile('a.cpp', 'void f(){\n if(n){\n int a=n;\n system(a);\n}}');
+  const ns = nodesOf(ir);
+  const assign = ns.find(n => n.kind === 'assign' && n.target === 'a');
+  const call = ns.find(n => n.kind === 'call' && n.callee === 'system');
+  assert.ok(assign && call);
+  assert.equal(assign.line, 3, '"int a=n;" is on physical line 3');
+  assert.equal(call.line, 4, '"system(a);" is on physical line 4');
+});
