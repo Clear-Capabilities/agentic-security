@@ -19,8 +19,10 @@ export function bundlePath() {
   return path.join(_SCANNER_DIR, 'dist', 'agentic-security.mjs');
 }
 
-export function verifyBundle() {
-  const bundle = bundlePath();
+// Pure comparison, factored out of verifyBundle() so it can be pointed at a
+// temp-dir copy in tests without touching the committed bundle. verifyBundle()
+// itself keeps its fixed-path, no-argument public signature.
+export function _verifyBundleAt(bundle) {
   let buf;
   try {
     buf = fs.readFileSync(bundle);
@@ -38,6 +40,10 @@ export function verifyBundle() {
     return { ok: false, reason: 'bundle does not match its sha256 sidecar — run "npm run build"', sha };
   }
   return { ok: true, reason: null, sha };
+}
+
+export function verifyBundle() {
+  return _verifyBundleAt(bundlePath());
 }
 
 // Poll the child's RSS. process.resourceUsage() only covers this process, and
@@ -76,6 +82,15 @@ export function runRepoScan(opts) {
     //    identical deterministic behaviour without the lockfile coupling.
     const args = ['scan', dir, '--format', 'sarif'];
 
+    // The two determinism vars are defaults set here rather than via the CLI's
+    // `--deterministic` flag, which calls verifyLockfile() and exits 4 WITHOUT
+    // SCANNING on any tree without a committed rules lockfile — every
+    // third-party target. `...process.env` is spread first, so a stray ambient
+    // shell variable can never override these two defaults. `...extraEnv` is
+    // spread last and deliberately CAN override them: a later caller in this
+    // series re-enables network access (unsets AGENTIC_SECURITY_OFFLINE) to run
+    // supply-chain analysis against the same targets, and needs this as the
+    // escape hatch. Do not reorder the spreads.
     const env = {
       ...process.env,
       AGENTIC_SECURITY_DETERMINISTIC: '1',
@@ -118,25 +133,32 @@ export function runRepoScan(opts) {
       if (stderr.length > 64_000) stderr = stderr.slice(-64_000);
     });
 
-    child.on('close', (code) => {
+    // Wait for the SARIF write to flush before resolving, on every exit path —
+    // a determinism hash read against a truncated file reports a spurious
+    // mismatch. Both the close and error paths route through this so a future
+    // third exit path can't reintroduce the dangling-stream bug by accident.
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
       clearInterval(poll);
       clearTimeout(timer);
-      const finish = () => resolve({
+      if (sarifStream) sarifStream.end(() => resolve(result));
+      else resolve(result);
+    };
+
+    child.on('close', (code) => {
+      settle({
         exitCode: code,
         wallMs: Date.now() - started,
         timedOut,
         peakRssKb,
         stderrTail: stderr.slice(-4000),
       });
-      // Wait for the SARIF write to flush, or the determinism hash reads a
-      // truncated file and reports a spurious mismatch.
-      if (sarifStream) sarifStream.end(finish); else finish();
     });
 
     child.on('error', (err) => {
-      clearInterval(poll);
-      clearTimeout(timer);
-      resolve({
+      settle({
         exitCode: null,
         wallMs: Date.now() - started,
         timedOut,

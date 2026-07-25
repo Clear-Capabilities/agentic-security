@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectLicenceText, detectLicence } from '../../bench/proof-corpus/lib/licence.mjs';
-import { bundlePath, verifyBundle, runRepoScan } from '../../bench/proof-corpus/lib/scan.mjs';
+import { bundlePath, verifyBundle, runRepoScan, _verifyBundleAt } from '../../bench/proof-corpus/lib/scan.mjs';
 
 function tmpRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'proofcorpus-'));
@@ -193,6 +193,26 @@ test('verifyBundle: the committed bundle matches its sha256 sidecar', () => {
   const r = verifyBundle();
   assert.equal(r.ok, true, `bundle verification failed: ${r.reason} — run "npm run build"`);
   assert.match(r.sha, /^[0-9a-f]{64}$/);
+});
+
+test('_verifyBundleAt: detects a corrupted sidecar against a copied bundle', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proofbundle-'));
+  const bundle = path.join(dir, 'agentic-security.mjs');
+  fs.copyFileSync(bundlePath(), bundle);
+  fs.copyFileSync(bundlePath() + '.sha256', bundle + '.sha256');
+
+  // Sanity check: the untouched copy must verify clean before we corrupt it.
+  const clean = _verifyBundleAt(bundle);
+  assert.equal(clean.ok, true);
+
+  // Corrupt the sidecar (flip its recorded hash) and confirm detection.
+  fs.writeFileSync(bundle + '.sha256', '0'.repeat(64) + '  agentic-security.mjs\n');
+  const corrupted = _verifyBundleAt(bundle);
+  assert.equal(corrupted.ok, false);
+  assert.match(corrupted.reason, /npm run build/, 'reason must point at the fix (rebuilding)');
+  assert.match(corrupted.sha, /^[0-9a-f]{64}$/, 'still reports the actual sha it computed');
+
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('runRepoScan: scans a fixture, emits SARIF, and reports metrics', async () => {
