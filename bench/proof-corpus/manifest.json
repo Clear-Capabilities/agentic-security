@@ -1,0 +1,106 @@
+{
+  "version": "1.0.0",
+  "description": "Proof-corpus targets. Commits are pinned SHAs resolved from `ref` via --refresh-pins; a null commit means the target is unpinned and will be refused by the runner.",
+  "targets": [
+    {
+      "id": "ghost",
+      "url": "https://github.com/TryGhost/Ghost.git",
+      "ref": "main",
+      "commit": null,
+      "tier": "breadth",
+      "expectedLanguages": ["javascript"],
+      "timeBudgetS": 1800,
+      "scope": null
+    },
+    {
+      "id": "superset",
+      "url": "https://github.com/apache/superset.git",
+      "ref": "master",
+      "commit": null,
+      "tier": "deep",
+      "expectedLanguages": ["python", "javascript"],
+      "timeBudgetS": 1800,
+      "scope": null
+    },
+    {
+      "id": "grafana",
+      "url": "https://github.com/grafana/grafana.git",
+      "ref": "main",
+      "commit": null,
+      "tier": "deep",
+      "expectedLanguages": ["go", "javascript"],
+      "timeBudgetS": 2400,
+      "scope": null
+    },
+    {
+      "id": "sentry",
+      "url": "https://github.com/getsentry/sentry.git",
+      "ref": "master",
+      "commit": null,
+      "tier": "breadth",
+      "expectedLanguages": ["python", "javascript"],
+      "timeBudgetS": 2400,
+      "scope": null
+    },
+    {
+      "id": "discourse",
+      "url": "https://github.com/discourse/discourse.git",
+      "ref": "main",
+      "commit": null,
+      "tier": "deep",
+      "expectedLanguages": ["ruby", "javascript"],
+      "timeBudgetS": 2400,
+      "scope": null
+    },
+    {
+      "id": "jellyfin",
+      "url": "https://github.com/jellyfin/jellyfin.git",
+      "ref": "master",
+      "commit": null,
+      "tier": "breadth",
+      "expectedLanguages": ["csharp"],
+      "timeBudgetS": 1800,
+      "scope": null
+    },
+    {
+      "id": "mattermost",
+      "url": "https://github.com/mattermost/mattermost.git",
+      "ref": "master",
+      "commit": null,
+      "tier": "breadth",
+      "expectedLanguages": ["go", "javascript"],
+      "timeBudgetS": 2400,
+      "scope": null
+    },
+    {
+      "id": "jenkins",
+      "url": "https://github.com/jenkinsci/jenkins.git",
+      "ref": "master",
+      "commit": null,
+      "tier": "deep",
+      "expectedLanguages": ["java"],
+      "timeBudgetS": 2400,
+      "scope": null
+    },
+    {
+      "id": "nextcloud",
+      "url": "https://github.com/nextcloud/server.git",
+      "ref": "master",
+      "commit": null,
+      "tier": "breadth",
+      "expectedLanguages": ["php", "javascript"],
+      "timeBudgetS": 3600,
+      "scope": null
+    },
+    {
+      "id": "godot",
+      "url": "https://github.com/godotengine/godot.git",
+      "ref": "master",
+      "commit": null,
+      "tier": "breadth",
+      "expectedLanguages": ["cpp"],
+      "timeBudgetS": 3600,
+      "scope": ["core", "modules", "scene", "servers", "editor"]
+    }
+  ]
+}

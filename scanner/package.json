@@ -87,7 +87,9 @@
     "bench:bigquery:smoke": "node ../bench/bigquery-github/bin/run-cycle.mjs --smoke",
     "bench:bigquery": "node ../bench/bigquery-github/bin/run-cycle.mjs",
     "bench:agent-tasks": "node ../bench/agent-tasks/security-fixer/runner.mjs",
-    "bench:polyglot": "node ../bench/polyglot/runner.mjs"
+    "bench:polyglot": "node ../bench/polyglot/runner.mjs",
+    "bench:proof-corpus": "node ../bench/proof-corpus/runner.mjs",
+    "bench:proof-corpus:pins": "node ../bench/proof-corpus/runner.mjs --refresh-pins"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
   "license": "PolyForm-Internal-Use-1.0.0"

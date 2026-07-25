@@ -251,3 +251,26 @@ test('runRepoScan: reports a timeout rather than hanging', async () => {
   const r = await runRepoScan({ dir: fixture, timeoutMs: 1 });
   assert.equal(r.timedOut, true);
 });
+
+test('manifest: is valid, complete, and internally consistent', () => {
+  const manifestPath = path.resolve('../bench/proof-corpus/manifest.json');
+  const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  assert.equal(m.targets.length, 10, 'the corpus is ten targets');
+
+  const ids = m.targets.map(t => t.id);
+  assert.equal(new Set(ids).size, 10, 'target ids are unique');
+
+  for (const t of m.targets) {
+    assert.match(t.id, /^[a-z0-9][a-z0-9._-]*$/, `${t.id}: id must be cache-path safe`);
+    assert.match(t.url, /^https:\/\/github\.com\/.+\.git$/, `${t.id}: url must be an https git url`);
+    assert.ok(typeof t.ref === 'string' && t.ref.length > 0, `${t.id}: ref required`);
+    assert.ok(t.commit === null || /^[0-9a-f]{40}$/.test(t.commit), `${t.id}: commit must be null or a full SHA`);
+    assert.ok(['breadth', 'deep'].includes(t.tier), `${t.id}: tier must be breadth or deep`);
+    assert.ok(Array.isArray(t.expectedLanguages) && t.expectedLanguages.length > 0, `${t.id}: expectedLanguages required`);
+    assert.ok(Number.isInteger(t.timeBudgetS) && t.timeBudgetS > 0, `${t.id}: timeBudgetS required`);
+    assert.ok(t.scope === null || Array.isArray(t.scope), `${t.id}: scope must be null or an array`);
+  }
+
+  const deep = m.targets.filter(t => t.tier === 'deep').map(t => t.id).sort();
+  assert.deepEqual(deep, ['discourse', 'grafana', 'jenkins', 'superset'], 'Tier-1 set matches the PRD');
+});
