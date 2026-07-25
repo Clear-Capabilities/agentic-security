@@ -6,6 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectLicenceText, detectLicence } from '../../bench/proof-corpus/lib/licence.mjs';
+import { bundlePath, verifyBundle, runRepoScan } from '../../bench/proof-corpus/lib/scan.mjs';
 
 function tmpRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'proofcorpus-'));
@@ -182,4 +183,51 @@ test('coverageSummary: tolerates null input', () => {
   assert.deepEqual(s.byLanguage, {});
   assert.equal(s.totals.pct, null);
   assert.equal(s.callGraph.functions, 0);
+});
+
+test('bundlePath: points at the committed bundle', () => {
+  assert.ok(bundlePath().endsWith(path.join('scanner', 'dist', 'agentic-security.mjs')));
+});
+
+test('verifyBundle: the committed bundle matches its sha256 sidecar', () => {
+  const r = verifyBundle();
+  assert.equal(r.ok, true, `bundle verification failed: ${r.reason} — run "npm run build"`);
+  assert.match(r.sha, /^[0-9a-f]{64}$/);
+});
+
+test('runRepoScan: scans a fixture, emits SARIF, and reports metrics', async () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'proofscan-'));
+  const statsPath = path.join(out, 'stats.json');
+  const sarifPath = path.join(out, 'run.sarif');
+  const fixture = path.resolve('test/fixtures/vulnerable-js');
+  const r = await runRepoScan({ dir: fixture, statsPath, sarifPath, timeoutMs: 180_000 });
+  assert.equal(r.timedOut, false);
+  assert.ok(typeof r.exitCode === 'number');
+  // Exit 4 is the lockfile-verification refusal. Seeing it here means someone
+  // reintroduced --deterministic, which never scans on an unlocked tree.
+  assert.notEqual(r.exitCode, 4, `scan refused before running: ${r.stderrTail}`);
+  assert.ok(r.wallMs > 0);
+  assert.ok(fs.existsSync(statsPath), 'the scan must produce the IR-stats sidecar');
+  const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+  assert.ok(stats.languages.javascript.parsed >= 1);
+  const sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf8'));
+  assert.ok(Array.isArray(sarif.runs), 'SARIF must be captured whole from stdout');
+  fs.rmSync(out, { recursive: true, force: true });
+});
+
+test('runRepoScan: produces byte-identical SARIF across two runs', async () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'proofdet-'));
+  const fixture = path.resolve('test/fixtures/vulnerable-js');
+  const a = path.join(out, 'a.sarif');
+  const b = path.join(out, 'b.sarif');
+  await runRepoScan({ dir: fixture, sarifPath: a, timeoutMs: 180_000 });
+  await runRepoScan({ dir: fixture, sarifPath: b, timeoutMs: 180_000 });
+  assert.equal(fs.readFileSync(a, 'utf8'), fs.readFileSync(b, 'utf8'));
+  fs.rmSync(out, { recursive: true, force: true });
+});
+
+test('runRepoScan: reports a timeout rather than hanging', async () => {
+  const fixture = path.resolve('test/fixtures/vulnerable-js');
+  const r = await runRepoScan({ dir: fixture, timeoutMs: 1 });
+  assert.equal(r.timedOut, true);
 });
