@@ -295,17 +295,246 @@ export function parseCppFile(file, code) {
   };
 }
 
-// Statement lowering arrives in Task 2; for now every body yields a
-// well-formed entry→exit CFG so the IR shape contract holds from the start.
-function _buildCfg(_bodyText, line) {
+// ── expression lowering ─────────────────────────────────────────────────────
+
+// Split on a top-level binary operator, respecting nesting.
+function _splitTopLevel(s, op) {
+  const out = [];
+  let depth = 0, buf = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    if (depth === 0 && ch === op) { out.push(buf); buf = ''; continue; }
+    buf += ch;
+  }
+  out.push(buf);
+  return out;
+}
+
+// Normalise `a->b->c` and `a.b.c` to dotted form; `::` is preserved as scope.
+function _normaliseCallee(s) {
+  return s.replace(/->/g, '.').trim();
+}
+
+function _lowerExpr(text) {
+  const s = String(text || '').trim().replace(/;$/, '').trim();
+  if (!s) return { kind: 'unknown' };
+
+  // String concatenation — checked before the literal rule, or `"a" + x`
+  // would be swallowed whole as a literal and taint could not flow.
+  if (s.includes('+')) {
+    const parts = _splitTopLevel(s, '+');
+    if (parts.length > 1 && parts.every(p => p.trim())) {
+      return { kind: 'tpl', parts: parts.map(_lowerExpr) };
+    }
+  }
+  if (/^"/.test(s) || /^'/.test(s)) return { kind: 'literal', value: s };
+  if (/^-?\d/.test(s)) return { kind: 'literal', value: s };
+  if (/^(?:true|false|nullptr|NULL)$/.test(s)) return { kind: 'literal', value: s };
+
+  // Cast: `(char*)expr` → lower the inner expression.
+  const cast = s.match(/^\(\s*[A-Za-z_][\w:\s*&<>]*\)\s*(.+)$/s);
+  if (cast && !/^\(\s*\)/.test(s)) return _lowerExpr(cast[1]);
+
+  // Call: name(args) / a.b(args) / a->b(args) / ns::f(args)
+  const call = s.match(/^([A-Za-z_][\w:.]*(?:->[A-Za-z_]\w*)*)\s*\((.*)\)$/s);
+  if (call) {
+    const callee = _normaliseCallee(call[1]);
+    const bare = callee.split(/[.:]/).pop();
+    if (!_NON_FN_KEYWORDS.has(bare)) {
+      return { kind: 'call', callee, args: _splitTopLevelCommas(call[2]).map(_lowerExpr) };
+    }
+  }
+
+  // Address-of / dereference: taint passes through transparently.
+  const unary = s.match(/^[&*]\s*(.+)$/s);
+  if (unary) return _lowerExpr(unary[1]);
+
+  // Member read: a.b / a->b / ns::CONST
+  if (/^[A-Za-z_][\w:.]*(?:->[A-Za-z_]\w*)*$/.test(s) && /[.:>]/.test(s)) {
+    const d = _normaliseCallee(s);
+    const idx = d.lastIndexOf('.');
+    if (idx > 0) {
+      return { kind: 'member', object: _lowerExpr(d.slice(0, idx)), prop: d.slice(idx + 1) };
+    }
+    return { kind: 'ident', name: d };
+  }
+
+  // Array index: `buf[i]` → treat as the base identifier.
+  const idxm = s.match(/^([A-Za-z_]\w*)\s*\[.*\]$/s);
+  if (idxm) return { kind: 'ident', name: idxm[1] };
+
+  if (/^[A-Za-z_]\w*$/.test(s)) return { kind: 'ident', name: s };
+
+  // Comparison / arithmetic — keep both sides so taint survives.
+  for (const op of ['==', '!=', '<=', '>=', '<', '>', '-', '*', '/', '%']) {
+    const parts = _splitTopLevel(s, op.length === 1 ? op : '\u0000');
+    if (op.length === 1 && parts.length > 1 && parts.every(p => p.trim())) {
+      return { kind: 'binary', op, left: _lowerExpr(parts[0]), right: _lowerExpr(parts.slice(1).join(op)) };
+    }
+  }
+  return { kind: 'unknown' };
+}
+
+// ── statement splitting ─────────────────────────────────────────────────────
+
+// Split a body into top-level statements. Blocks (`{...}`) are returned whole
+// so the caller can recurse into them. Each returned item carries the line
+// number of its first non-whitespace character, computed by counting
+// newlines as we scan — this is what lets the CFG builder process an entire
+// (possibly multi-line) body in one pass instead of splitting on '\n' first.
+// A prior line-per-chunk approach silently dropped any statement whose
+// opening brace and body lived on different physical lines (e.g. `if (x) {`
+// on one line, the body on the next) because a lone `{` or a lone
+// continuation fragment doesn't round-trip through the statement grammar.
+// Dropping a statement is a missed vulnerability; a slightly-off line number
+// on a multi-line statement is cosmetic — so this trades the latter risk
+// away entirely by never splitting on '\n' in the first place.
+function _splitStatements(body) {
+  const out = [];
+  // `depth` tracks braces (statement/block boundaries); `parenDepth` tracks
+  // parens separately so the `;` separators inside a `for (init; test; step)`
+  // header don't get mistaken for statement terminators.
+  let depth = 0, parenDepth = 0, buf = '', line = 1, stmtLine = 1, atStart = true;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (atStart && /\s/.test(c)) {
+      if (c === '\n') line++;
+      continue;
+    }
+    if (atStart) { stmtLine = line; atStart = false; }
+    if (c === '\n') line++;
+    if (c === '(') parenDepth++;
+    else if (c === ')') parenDepth = Math.max(0, parenDepth - 1);
+    if (c === '{') depth++;
+    if (c === '}') {
+      depth--;
+      buf += c;
+      if (depth === 0) { out.push({ text: buf, line: stmtLine }); buf = ''; atStart = true; }
+      continue;
+    }
+    if (c === ';' && depth === 0 && parenDepth === 0) {
+      const t = buf.trim();
+      if (t) out.push({ text: t, line: stmtLine });
+      buf = '';
+      atStart = true;
+      continue;
+    }
+    buf += c;
+  }
+  if (buf.trim()) out.push({ text: buf.trim(), line: stmtLine });
+  return out;
+}
+
+function _lowerStmt(stmt, line) {
+  const s = stmt.trim();
+  if (!s || s === '{' || s === '}') return null;
+
+  if (/^return\b/.test(s)) {
+    const v = s.replace(/^return\b/, '').trim();
+    return { kind: 'return', line, value: v ? _lowerExpr(v) : null };
+  }
+  if (/^throw\b/.test(s)) {
+    return { kind: 'throw', line, value: _lowerExpr(s.replace(/^throw\b/, '')) };
+  }
+  if (/^(?:break|continue|goto\b)/.test(s)) return { kind: 'noop', line };
+
+  // Assignment. The type prefix is optional: `int x = e`, `x = e`, `a->b = e`.
+  // `==`, `!=`, `<=`, `>=` must not match, hence the negative lookarounds.
+  const asg = s.match(/^(?:[A-Za-z_][\w:<>,*&\s]*?\s+)?([A-Za-z_][\w:.\->\[\]]*?)\s*(?<![=!<>+\-*/%])=(?!=)\s*(.+)$/s);
+  if (asg) {
+    const target = _normaliseCallee(asg[1]).replace(/\[.*\]$/, '');
+    return { kind: 'assign', line, target, source: _lowerExpr(asg[2]) };
+  }
+
+  // Statement-form call.
+  const call = s.match(/^([A-Za-z_][\w:.]*(?:->[A-Za-z_]\w*)*)\s*\((.*)\)$/s);
+  if (call) {
+    const callee = _normaliseCallee(call[1]);
+    const bare = callee.split(/[.:]/).pop();
+    if (!_NON_FN_KEYWORDS.has(bare)) {
+      return { kind: 'call', line, callee, args: _splitTopLevelCommas(call[2]).map(_lowerExpr) };
+    }
+  }
+  return { kind: 'unknown', line, text: s.slice(0, 200) };
+}
+
+// ── CFG construction ────────────────────────────────────────────────────────
+
+function _buildCfg(bodyText, startLine) {
   const nodes = {
-    entry: { kind: 'entry', line, succ: ['exit'], pred: [] },
-    exit: { kind: 'exit', line, succ: [], pred: ['entry'] },
+    entry: { kind: 'entry', line: startLine, succ: [], pred: [] },
+    exit: { kind: 'exit', line: startLine, succ: [], pred: [] },
   };
+  let counter = 0;
+  let prev = 'entry';
+  const link = (id) => {
+    nodes[prev].succ.push(id);
+    nodes[id].pred.push(prev);
+    prev = id;
+  };
+
+  // Emit statements linearly. Control-flow headers become `if` nodes and their
+  // blocks are recursed into, so bodies are never dropped — the same
+  // straight-line treatment parser-go.js and parser-cs.js use.
+  //
+  // The whole body is handed to `_splitStatements` in one call (never
+  // pre-split by '\n'), because a control-flow header and its body commonly
+  // live on different lines and a naive per-line split breaks the brace
+  // matching that keeps statements intact. `_splitStatements` tracks line
+  // numbers internally, so this costs nothing in accuracy for the common
+  // single-line-statement case and fixes the multi-line one.
+  const emit = (text, depth) => {
+    if (depth > 12) return;
+    for (const { text: stmt, line: relLine } of _splitStatements(text)) {
+      const line = startLine + relLine - 1;
+      const head = stmt.match(/^\s*(if|while|for|switch|else\s+if|else|do|try|catch)\b\s*(?:\((.*?)\))?\s*([\s\S]*)$/);
+      if (head) {
+        const kw = head[1].trim();
+        const cond = head[2];
+        const rest = head[3] || '';
+        if (cond !== undefined && cond !== null && /^(?:if|while|for|switch|else if)$/.test(kw)) {
+          const id = `n${counter++}`;
+          // `for (init; test; step)` — surface the test as the condition.
+          const condText = kw === 'for' ? (_splitTopLevel(cond, ';')[1] || cond) : cond;
+          nodes[id] = { kind: 'if', line, cond: _lowerExpr(condText), succ: [], pred: [] };
+          link(id);
+          // `for` init is an assignment worth capturing.
+          if (kw === 'for') {
+            const init = _splitTopLevel(cond, ';')[0];
+            const initNode = init && _lowerStmt(init, line);
+            if (initNode && initNode.kind === 'assign') {
+              const iid = `n${counter++}`;
+              nodes[iid] = { ...initNode, succ: [], pred: [] };
+              link(iid);
+            }
+          }
+        }
+        const block = rest.match(/\{([\s\S]*)\}\s*$/);
+        if (block) emit(block[1], depth + 1);
+        else if (rest.trim()) emit(rest, depth + 1);
+        continue;
+      }
+      const bare = stmt.match(/^\{([\s\S]*)\}$/);
+      if (bare) { emit(bare[1], depth + 1); continue; }
+      const node = _lowerStmt(stmt, line);
+      if (!node) continue;
+      const id = `n${counter++}`;
+      nodes[id] = { ...node, succ: [], pred: [] };
+      link(id);
+    }
+  };
+
+  if (bodyText) emit(bodyText, 0);
+
+  nodes[prev].succ.push('exit');
+  nodes.exit.pred.push(prev);
   return { entry: 'entry', exit: 'exit', nodes };
 }
 
 export const _internals = {
   _blank, _splitTopLevelCommas, _parseParams, _extractBody,
   _lineAt, _qid, _findFunctions, _findClasses, _nameBefore,
+  _lowerExpr, _lowerStmt, _splitStatements, _buildCfg,
 };
