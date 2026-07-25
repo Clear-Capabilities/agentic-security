@@ -135,3 +135,51 @@ test('ensureClone: refuses an unpinned target and names the fix', () => {
     /--refresh-pins/,
   );
 });
+
+import { readIrStats, coverageSummary } from '../../bench/proof-corpus/lib/irstats.mjs';
+
+test('readIrStats: returns null for a missing or malformed file', () => {
+  assert.equal(readIrStats('/nonexistent/stats.json'), null);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'irread-'));
+  const bad = path.join(dir, 'bad.json');
+  fs.writeFileSync(bad, '{not json');
+  assert.equal(readIrStats(bad), null);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('readIrStats: round-trips a written sidecar', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'irread-'));
+  const f = path.join(dir, 'stats.json');
+  fs.writeFileSync(f, JSON.stringify({ languages: { go: { inScope: 3, parsed: 2, functions: 9, failures: [] } } }));
+  const s = readIrStats(f);
+  assert.equal(s.languages.go.parsed, 2);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('coverageSummary: computes rounded percentages per language', () => {
+  const stats = {
+    languages: {
+      javascript: { inScope: 10, parsed: 9, functions: 40, failures: [] },
+      cpp: { inScope: 500, parsed: 0, functions: 0, failures: [] },
+    },
+    callGraph: { functions: 12, edges: 30, resolvedEdges: 20, unresolvedEdges: 10 },
+    totals: { inScope: 510, parsed: 9, functions: 40 },
+  };
+  const s = coverageSummary(stats);
+  assert.equal(s.byLanguage.javascript.pct, 90);
+  assert.equal(s.byLanguage.cpp.pct, 0, 'a supported-on-paper language at 0% must read as 0, not null');
+  assert.equal(s.totals.pct, 2);
+  assert.equal(s.callGraph.resolvedEdges, 20);
+});
+
+test('coverageSummary: pct is null when a language has no files in scope', () => {
+  const s = coverageSummary({ languages: { ruby: { inScope: 0, parsed: 0, functions: 0, failures: [] } } });
+  assert.equal(s.byLanguage.ruby.pct, null);
+});
+
+test('coverageSummary: tolerates null input', () => {
+  const s = coverageSummary(null);
+  assert.deepEqual(s.byLanguage, {});
+  assert.equal(s.totals.pct, null);
+  assert.equal(s.callGraph.functions, 0);
+});
