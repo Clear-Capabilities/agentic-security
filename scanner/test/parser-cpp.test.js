@@ -337,3 +337,28 @@ test('lowering regression: statements nested inside an if-block report their rea
   assert.equal(assign.line, 3, '"int a=n;" is on physical line 3');
   assert.equal(call.line, 4, '"system(a);" is on physical line 4');
 });
+
+// ── performance regression: line-number lookup must not be O(n) per statement ──
+// A per-statement rescan-from-zero for line numbers made _buildCfg quadratic
+// in function-body size (fine for many small functions, catastrophic for one
+// huge one — generated code, big switch tables, unity builds). This must
+// stay comfortably sub-quadratic: a bound picked to be generous enough not
+// to flake on a loaded machine, but tight enough that a regression back to
+// O(n^2) behavior fails loudly rather than merely showing up in a benchmark
+// nobody runs in CI.
+test('lowering performance: a large function body parses in near-linear time, not quadratic', () => {
+  const STATEMENTS = 8000;
+  let body = 'void f(int n) {\n';
+  for (let i = 0; i < STATEMENTS; i++) body += `  int x${i} = n;\n`;
+  body += '}\n';
+
+  const t0 = Date.now();
+  const ir = parseCppFile('perf.cpp', body);
+  const elapsedMs = Date.now() - t0;
+
+  const assigns = nodesOf(ir).filter(n => n.kind === 'assign');
+  assert.equal(assigns.length, STATEMENTS, 'every statement must still be lowered, not just fast');
+  assert.ok(elapsedMs < 5000,
+    `expected 8000 statements to parse in well under 5s (quadratic behavior took ~3.6s at 5000 ` +
+    `statements pre-fix and would take tens of seconds here); took ${elapsedMs}ms`);
+});

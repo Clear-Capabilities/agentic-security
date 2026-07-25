@@ -93,6 +93,31 @@ function _lineAt(src, idx) {
   return line;
 }
 
+// Build a sorted array of line-start offsets for `text` (index 0 holds the
+// start of line 1, i.e. always 0). Used with `_lineForOffset` to turn a
+// character offset into a line number in O(log n) instead of O(n) — a
+// per-statement `_lineAt` rescan from offset 0 is O(n) per call and O(n^2)
+// over a whole function body, which is exactly the "hangs on a huge
+// generated/unity-build source file" failure mode this parser must avoid.
+function _lineStarts(text) {
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') starts.push(i + 1);
+  }
+  return starts;
+}
+
+// Binary search `lineStarts` (as built by `_lineStarts`) for the 1-based
+// line number containing offset `idx`.
+function _lineForOffset(lineStarts, idx) {
+  let lo = 0, hi = lineStarts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (lineStarts[mid] <= idx) lo = mid; else hi = mid - 1;
+  }
+  return lo + 1;
+}
+
 function _qid(file, tail, line, body) {
   const sha = crypto.createHash('sha256').update(body).digest('hex').slice(0, 8);
   return `${file}::${tail}@${line}#${sha}`;
@@ -522,24 +547,29 @@ function _buildCfg(rawBody, blankBody, startLine) {
     prev = id;
   };
 
+  // Built once per function body (O(n)); looked up per statement in
+  // O(log n) via `_lineForOffset` — see that helper's comment for why a
+  // per-statement `_lineAt` rescan is unacceptable here.
+  const lineStarts = _lineStarts(blankBody);
+
   // Emit statements linearly. Control-flow headers become `if` nodes and
   // their blocks are recursed into, so bodies are never dropped — the same
   // straight-line treatment parser-go.js and parser-cs.js use.
   //
   // `baseAbs` is the absolute offset of `blankText[0]` within the top-level
   // `blankBody`. Every node's line number is computed from that absolute
-  // offset via `_lineAt(blankBody, ...)` rather than from a per-recursion
-  // relative counter, so nested blocks get their true physical line instead
-  // of one measured from the function's start line regardless of nesting
-  // depth (a counter that restarts per recursion compounds error as nesting
-  // gets deeper).
+  // offset via `_lineForOffset(lineStarts, ...)` rather than from a
+  // per-recursion relative counter, so nested blocks get their true
+  // physical line instead of one measured from the function's start line
+  // regardless of nesting depth (a counter that restarts per recursion
+  // compounds error as nesting gets deeper).
   const emit = (blankText, rawText, baseAbs, depth) => {
     if (depth > 12) return;
     for (const { start, end } of _splitStatements(blankText)) {
       const blankStmt = blankText.slice(start, end);
       const rawStmt = rawText.slice(start, end);
       const absStart = baseAbs + start;
-      const line = startLine + _lineAt(blankBody, absStart) - 1;
+      const line = startLine + _lineForOffset(lineStarts, absStart) - 1;
 
       const hm = blankStmt.match(/^(if|while|for|switch|else\s+if|else|do|try|catch)\b/);
       if (hm) {
@@ -632,5 +662,5 @@ export const _internals = {
   _blank, _splitTopLevelCommas, _parseParams, _extractBody,
   _lineAt, _qid, _findFunctions, _findClasses, _nameBefore,
   _lowerExpr, _lowerStmt, _splitStatements, _buildCfg,
-  _matchDelim, _splitTopLevelAligned,
+  _matchDelim, _splitTopLevelAligned, _lineStarts, _lineForOffset,
 };
