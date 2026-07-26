@@ -22,10 +22,24 @@ const LANGS = [
 // and the taint originated in a different function. The engine labels IR-derived
 // findings with parser 'IR-TAINT'; anything else came from a syntactic rule and
 // does not demonstrate the engine working.
+//
+// `irTaint` is the raw IR-TAINT count. It is NOT the same thing as the number
+// of distinct interprocedural flows found: the catalog matches a sink by its
+// bare callee name (e.g. "exec"), and a single call site collides with every
+// same-named entry in the 200+ entry catalog (PDO::exec, Kernel.exec,
+// Runtime.exec, ...) — pre-existing duplication, unrelated to this phase,
+// that was already present in intraprocedural findings before this work.
+// `interprocedural` dedupes those down to distinct flows by `file:line` (or
+// `stableId` when every finding carries one) so the headline number reflects
+// "how many distinct source-in-one-function-sink-in-another flows were
+// found", not "how many catalog entries happened to match the same line".
 function classify(scan) {
   const all = [...(scan.findings || []), ...(scan.logicVulns || [])];
   const irTaint = all.filter(f => (f.parser || '') === 'IR-TAINT');
-  return { total: all.length, irTaint: irTaint.length, interprocedural: irTaint.length };
+  const haveStableId = irTaint.length > 0 && irTaint.every(f => f.stableId);
+  const keyOf = haveStableId ? (f => f.stableId) : (f => `${f.file}:${f.line}`);
+  const distinctFlows = new Set(irTaint.map(keyOf));
+  return { total: all.length, irTaint: irTaint.length, interprocedural: distinctFlows.size };
 }
 
 async function main() {

@@ -93,6 +93,24 @@ function _flattenCalleeName(calleeExpr) {
   return null;
 }
 
+// Narrower than _flattenCalleeName: the name to hand to callGraph.resolve().
+// Only a bare identifier call (`helper()`) — or a pre-flattened STRING, which
+// is how the Go/PHP/Ruby/Python/C++ parsers already emit call targets —
+// genuinely identifies one resolvable function. A JS/TS *member* call
+// (`loader.read()`) does not: resolve()'s generic dotted-name fallback
+// strips a dotted name to its last segment and matches ANY same-named
+// function project-wide, inventing a call edge that may not exist (found in
+// engine-reconnect review — `loader.read()` resolved to an unrelated local
+// `read()`, producing 8 false positives on this repo's own hooks/scripts).
+// A missing edge here is a false negative; a wrong edge invents a data-flow
+// path that isn't there — refuse to guess.
+function _resolvableCalleeName(calleeExpr) {
+  if (!calleeExpr) return null;
+  if (typeof calleeExpr === 'string') return calleeExpr;
+  if (calleeExpr.kind === 'ident') return calleeExpr.name || null;
+  return null;
+}
+
 function exprTaint(expr, state) {
   if (expr && (expr.kind === 'member' || expr.kind === 'call') && exprIsSource(expr)) return true;
   if (!expr) return false;
@@ -252,7 +270,10 @@ function step(node, stateIn, callContext) {
         ? _flattenCalleeName(node.source.callee) : null;
       if (target && calleeName && callContext._summaryCache && callContext._callGraph) {
         const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-        const resolved = callContext._callGraph.resolve ? callContext._callGraph.resolve(calleeName, _callerFile) : null;
+        const _resolvableName = node.source && node.source.kind === 'call'
+          ? _resolvableCalleeName(node.source.callee) : null;
+        const resolved = (_resolvableName && callContext._callGraph.resolve)
+          ? callContext._callGraph.resolve(_resolvableName, _callerFile) : null;
         const fn  = functionRecord(callContext._callGraph, resolved);
         const qid = resolved && (resolved.qid || resolved);
         if (typeof qid === 'string') {
@@ -360,8 +381,9 @@ function step(node, stateIn, callContext) {
       const _plainCallCalleeName = _flattenCalleeName(node.callee);
       if (callContext._summaryCache && callContext._callGraph && _plainCallCalleeName) {
         const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-        const resolved = callContext._callGraph.resolve
-          ? callContext._callGraph.resolve(_plainCallCalleeName, _callerFile) : null;
+        const _resolvableName = _resolvableCalleeName(node.callee);
+        const resolved = (_resolvableName && callContext._callGraph.resolve)
+          ? callContext._callGraph.resolve(_resolvableName, _callerFile) : null;
         const fn  = functionRecord(callContext._callGraph, resolved);
         const qid = resolved && (resolved.qid || resolved);
         if (typeof qid === 'string' && fn && Array.isArray(fn.params)) {

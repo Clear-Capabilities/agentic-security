@@ -100,3 +100,20 @@ test('interprocedural: the same holds for C++', async () => {
   const findings = await scanFixture('cpp');
   assert.ok(findings.filter(f => (f.parser || '') === 'IR-TAINT').length >= 1);
 });
+
+// Finding 1 (engine-reconnect review): a member call's flattened name
+// (`loader.read()` -> "loader.read") must NOT be handed to
+// callGraph.resolve() — resolve()'s generic dotted-name fallback strips it
+// to the last segment ("read") and matches ANY same-named function
+// project-wide, inventing a call edge that does not exist. Here `read()` is
+// a wholly unrelated local function; `loader.read()` should produce no
+// interprocedural finding at all (a missing edge, not a wrong one).
+test('engine: a member call does not resolve to an unrelated same-named local function', () => {
+  const code = 'function read(){ return getenv("CMD"); }\n'
+    + 'function f(){ const c = loader.read(); require("child_process").exec(c); }\n';
+  const { perFile, callGraph } = buildProjectIR({ 'app.js': code });
+  const findings = runTaintEngine(perFile, callGraph, { fnLimit: 5000, deadlineMs: Date.now() + 30000 });
+  const ir = findings.filter(f => (f.parser || '') === 'IR-TAINT');
+  assert.equal(ir.length, 0,
+    `expected no IR-TAINT finding for an unrelated member call; got ${ir.length}: ${JSON.stringify(ir.map(f => f.vuln))}`);
+});

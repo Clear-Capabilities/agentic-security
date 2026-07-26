@@ -45,6 +45,21 @@ sanitizedDemoted=0
 
 `sanitizedDemoted`: 0
 
+## Metric definition (updated post-review)
+
+`interprocedural` counts **distinct flows**, deduplicated by `file:line` (or by
+`stableId` when every finding in the set carries one) — not a raw count of
+`IR-TAINT` findings. The catalog matches a sink by its bare callee name (e.g.
+`exec`), so one call site collides with every same-named catalog entry
+(`PDO::exec`, `Kernel.exec`, `Runtime.exec`, ...); that duplication predates
+this phase and is unrelated to it. `irTaint` (the raw count) is still reported
+alongside `interprocedural` so the duplication stays visible rather than
+hidden. This baseline's `interprocedural` figures are unaffected by the
+redefinition: `irTaint` was already 0 in every language pre-fix, so 0 distinct
+flows and 0 raw findings coincide here. The distinction only matters once
+`irTaint` goes non-zero — see `.superpowers/sdd/2026-07-25-engine-reconnect-phase1/task-2-report.md`
+for the post-fix figures under both definitions.
+
 ## Central claim check
 
 **`interprocedural` is 0 for all three languages before any fix has landed** — consistent with the plan's premise that interprocedural taint currently produces zero findings across languages. This is not contradicted.
