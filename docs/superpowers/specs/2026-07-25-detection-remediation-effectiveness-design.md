@@ -64,7 +64,7 @@ Two gaps limit what it can be trusted to do:
 
 ### Goals
 
-- **G1** — Interprocedural taint findings actually produced, for at least JS, Python and Java.
+- **G1** — Interprocedural taint findings actually produced, for at least JS, Python and C++. *(Corrected 2026-07-26: this goal originally named **Java** rather than C++. Java was never capable of satisfying it — its IR frontend produces function names with an empty CFG, no parameters and `line: 0`, so interprocedural taint is impossible for it regardless of the defects this phase fixed. Phase 1 measured JS, Python and C++; Java was never measured. See `docs/superpowers/specs/2026-07-26-java-ir-frontend-notes.md`.)*
 - **G2** — The regression corpus exercises the IR and taint stack, so the above cannot silently break again.
 - **G3** — Sanitizers suppress correctly-sanitized flows, reducing false positives.
 - **G4** — A fix cannot be written unless the project's tests still pass.
