@@ -344,6 +344,14 @@ function _collectCallExprs(expr, out) {
 // `char* p = getenv("CMD")` is exactly the source-introducing shape the
 // taint engine needs to see and must not be missed just because it isn't a
 // bare statement).
+//
+// Known boundaries (not modeled): a call in a `for`-loop's step expression
+// (`for (;; advance(p))`) is not surfaced — the CFG only lowers the loop's
+// test into the `if` node's `cond`; a call as an assignment's LHS/target
+// (not a real C++ shape but a malformed one a fuzz input could produce) is
+// never inspected, only `source`; and a `kind: 'unknown'` statement (a
+// construct `_lowerStmt` couldn't classify) contributes no call sites even
+// if it textually contains one.
 function _callSitesFromCfg(cfg) {
   const sites = [];
   for (const [nodeId, node] of Object.entries((cfg && cfg.nodes) || {})) {

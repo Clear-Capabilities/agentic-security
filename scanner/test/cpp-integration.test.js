@@ -79,6 +79,30 @@ test('call graph: a free function resolves across files by qualified name', () =
   assert.ok(callGraph.edges.some(e => e.callee), 'namespaced free function must resolve');
 });
 
+test('call graph: a JS call must not resolve to a same-named C++ function (no cross-language binding)', () => {
+  const files = {
+    'native.cpp': 'class File {\npublic:\n  void read(char* buf) {\n    int n = 1;\n  }\n};\n',
+    'app.js': 'function handle(req) {\n  const f = getFile();\n  f.read(req.query.p);\n}\n',
+  };
+  const { callGraph } = buildProjectIR(files);
+  const jsCallSites = callGraph.edges.filter(e => e.calleeName === 'f.read');
+  assert.ok(jsCallSites.length >= 1, 'the JS call site must be present in the graph');
+  assert.ok(jsCallSites.every(e => e.callee === null),
+    'a JS call must never resolve to a C++ definition just because the bare method name collides');
+});
+
+test('call graph: two same-named unqualified C definitions in different files refuse to resolve', () => {
+  const files = {
+    'a.cpp': 'void helper(char* s) {\n  int n = 1;\n}\n',
+    'b.cpp': 'void helper(char* s) {\n  int n = 2;\n}\n',
+    'main.cpp': 'void go(char* p) {\n  helper(p);\n}\n',
+  };
+  const { callGraph } = buildProjectIR(files);
+  const call = callGraph.edges.find(e => e.calleeName === 'helper');
+  assert.ok(call, 'the call site must be present');
+  assert.equal(call.callee, null, 'an ambiguous unqualified name must not resolve to either definition');
+});
+
 test('parseCppFile: fn.calls is populated with the parser-js-documented shape, including assignment-position calls', () => {
   const code = 'void run(char* out) {\n  char* p = getenv("CMD");\n  memcpy(out, p, 8);\n}\n';
   const ir = parseCppFile('a.cpp', code);

@@ -43,15 +43,42 @@ export function buildCallGraph(perFileIR, fileContents) {
   // Project-wide qualified-name index. C++ splits declaration from definition
   // (`Foo::bar` declared in a header, defined in a .cpp), so a file-local
   // lookup resolves almost nothing. Definitions take precedence over
-  // declarations, which are indexed only as a fallback.
+  // declarations, which are indexed only as a fallback. Two DISTINCT
+  // definitions sharing one qname (unqualified `static`/internal-linkage
+  // helpers with the same name in different .cpp files are common in C) must
+  // refuse to resolve rather than pick whichever was indexed first — a wrong
+  // edge invents a data-flow path that doesn't exist, which is worse than a
+  // missing one.
+  //
+  // Also tracks which files actually emit `qname` (C/C++ today) so resolution
+  // below can require the CALLING function to be from a qname-bearing file —
+  // otherwise a JS/Python/etc. call site whose bare name happens to collide
+  // with a C++ method (`f.read(...)` vs `File::read`) would fabricate a
+  // cross-language edge that has no relationship to the real callee.
   const byQname = new Map();
-  for (const ir of Object.values(perFileIR || {})) {
+  const qnameFiles = new Set();
+  for (const [file, ir] of Object.entries(perFileIR || {})) {
     for (const fn of (ir && ir.functions) || []) {
       if (!fn.qname) continue;
+      qnameFiles.add(file);
       const existing = byQname.get(fn.qname);
-      if (!existing || (existing.isDeclaration && !fn.isDeclaration)) {
+      if (existing === undefined) {
         byQname.set(fn.qname, fn);
+      } else if (existing === null) {
+        // Already flagged ambiguous by an earlier collision — stays refused.
+      } else if (existing.isDeclaration && !fn.isDeclaration) {
+        // Declaration seen first, this is its definition — the normal
+        // header/source pairing, not ambiguity.
+        byQname.set(fn.qname, fn);
+      } else if (!existing.isDeclaration && fn.isDeclaration) {
+        // Definition already indexed; a later declaration changes nothing.
+      } else if (!existing.isDeclaration && !fn.isDeclaration && existing.qid !== fn.qid) {
+        // Two distinct definitions under the same qname — refuse to guess.
+        byQname.set(fn.qname, null);
       }
+      // (Two declarations with no definition yet: leave the first: neither
+      // resolves anyway since `isDeclaration` blocks the direct-key return.)
+
       // Also index the bare method name so `b->fill(p)` — which carries no
       // class qualification at the call site — can still find `Buffer::fill`,
       // but only when that bare name is unambiguous project-wide.
@@ -104,8 +131,11 @@ export function buildCallGraph(perFileIR, fileContents) {
                        classMethods.get(c.callee) ||
                        // 2. ClassName.method form
                        (c.callee.includes('.') ? classMethods.get(c.callee) : null) ||
-                       // 3. Cross-TU qualified-name index (C++ header/source pairing).
-                       resolveQname(c.callee) ||
+                       // 3. Cross-TU qualified-name index (C++ header/source
+                       // pairing) — gated on the CALLER carrying a `qname`
+                       // (only parser-cpp.js emits one) so a same-named call
+                       // in another language's file can never bind here.
+                       (fn.qname ? resolveQname(c.callee) : null) ||
                        null;
       edges.push({ caller: fn.qid, site: c.site, callee: resolved, calleeName: c.callee, line: c.line });
     }
@@ -154,9 +184,15 @@ export function buildCallGraph(perFileIR, fileContents) {
       }
     }
     // Cross-TU qualified-name index (C++ header/source pairing) — runs after
-    // all existing rules and only matches functions carrying a `qname`.
-    const viaQname = resolveQname(name);
-    if (viaQname) return viaQname;
+    // all existing rules and only matches functions carrying a `qname`. Gated
+    // on the CALLER's file, not just the candidate: only resolve when
+    // `callerFile` is itself a file that emits `qname` (C/C++ today), so a
+    // same-named call from a different language can never bind to a C++
+    // definition just because the candidate index has an entry.
+    if (callerFile && qnameFiles.has(callerFile)) {
+      const viaQname = resolveQname(name);
+      if (viaQname) return viaQname;
+    }
     return null;
   }
   return { functions, edges, callersOf, resolve };
