@@ -249,7 +249,11 @@ export function buildPointsTo(perFileIR, callGraph) {
     for (const nid of Object.keys(fn.cfg.nodes)) {
       const node = fn.cfg.nodes[nid];
       if (!node || node.kind !== 'call') continue;
-      const resolved = callGraph.resolve ? callGraph.resolve(node.callee) : null;
+      // resolveKnownCallee (not resolve): never invent an edge from a dotted
+      // name's last segment. `fn.file` enables the same-file preference — a
+      // bare `handler` would otherwise bind to whichever file iterates first.
+      const resolved = callGraph.resolveKnownCallee
+        ? callGraph.resolveKnownCallee(node.callee, fn && fn.file) : null;
       const target = functionRecord(callGraph, resolved);
       if (!target || !Array.isArray(target.params)) continue;
       const args = node.args || [];

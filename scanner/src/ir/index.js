@@ -11,6 +11,9 @@ import {
   parsePythonFile as parsePythonFileCst,
   parsePythonFilesBatch as parsePythonFilesBatchCst,
   probePythonAvailable,
+  noteParserDegradation,
+  pythonParserDegradation,
+  resetPythonParserDegradation,
 } from './parser-py-cst.js';
 import { parseJavaFile } from './parser-java.js';
 import { parseGoFile } from './parser-go.js';
@@ -87,7 +90,11 @@ export function _resetIrParseFailures() {
 // corpus has run clean for two consecutive releases.
 function _chooseParser() {
   const choice = (process.env.AGENTIC_SECURITY_PY_PARSER || 'auto').toLowerCase();
-  if (choice === 'regex') return { parser: 'regex' };
+  // Explicitly forced regex is still a loss of `fn.calls` (no interprocedural
+  // Python taint). Record it so a caller that REQUIRES the CST path — the
+  // CVE-replay corpus gate — reports an environment error instead of scoring
+  // the resulting miss as a detection regression.
+  if (choice === 'regex') { noteParserDegradation('forced-regex-parser'); return { parser: 'regex' }; }
   if (choice === 'cst') {
     const cap = probePythonAvailable();
     if (!cap.ok) {
@@ -95,9 +102,14 @@ function _chooseParser() {
     }
     return { parser: 'cst' };
   }
-  // auto: prefer cst when capability is present.
+  // auto: prefer cst when capability is present. A regex selection here is a
+  // DEGRADATION, not a neutral choice — the regex parser emits no `fn.calls`,
+  // so Python loses interprocedural taint for this run. Record it so callers
+  // that require the CST path (the CVE-replay corpus gate) can distinguish an
+  // environment failure from a detection regression.
   const cap = probePythonAvailable();
-  return { parser: cap.ok ? 'cst' : 'regex' };
+  if (!cap.ok) { noteParserDegradation(`python-unavailable:${cap.reason}`); return { parser: 'regex' }; }
+  return { parser: 'cst' };
 }
 
 function _parsePythonFiles(pyEntries) {
@@ -111,6 +123,7 @@ function _parsePythonFiles(pyEntries) {
     if (process.env.AGENTIC_SECURITY_PY_PARSER_DEBUG === '1') {
       process.stderr.write('parser-py-cst: batch failed; falling back to regex parser\n');
     }
+    noteParserDegradation('batch-fallback-to-regex');
   }
   // Regex per-file parse — matches the old behavior exactly.
   return pyEntries.map(({ file, content }) => parsePythonFileRegex(file, content)).filter(Boolean);
@@ -244,4 +257,4 @@ export function parsePythonFile(file, code) {
   return parsePythonFileRegex(file, code);
 }
 
-export { parseJsFile, parseJavaFile, parseCSharpFile, parseKotlinFile, parseGoFile, parsePhpFile, parseRubyFile, parseCppFile, buildCallGraph, buildClassHierarchy, computeSSA, isSSAEnabled, probePythonAvailable };
+export { parseJsFile, parseJavaFile, parseCSharpFile, parseKotlinFile, parseGoFile, parsePhpFile, parseRubyFile, parseCppFile, buildCallGraph, buildClassHierarchy, computeSSA, isSSAEnabled, probePythonAvailable, pythonParserDegradation, resetPythonParserDegradation };

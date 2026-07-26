@@ -41,15 +41,39 @@ const HELPER_PATH = path.join(HERE, 'parser-py.helper.py');
 //   { ok: false, reason: '...' }                                   on failure
 let _capability = null;
 
+// Degradation record (BLOCKER 1 — corpus-gate flakiness).
+//
+// A CST→regex fallback is invisible to callers but silently removes Python
+// interprocedural analysis for that run (`parser-py.js` emits no `fn.calls`
+// — see ./CLAUDE.md). That turned a loaded machine into a phantom detection
+// regression in the CVE-replay gate. Callers that care (the corpus runner)
+// reset this before a scan and check it after, so a degraded parser is
+// reported as an ENVIRONMENT error rather than scored as a false negative.
+let _degradation = null;
+export function noteParserDegradation(reason) { if (!_degradation) _degradation = reason; }
+export function pythonParserDegradation() { return _degradation; }
+export function resetPythonParserDegradation() { _degradation = null; }
+
+// Probe timeout. 1500 ms was too tight: on a machine still busy from a prior
+// test run, `python3 --version` genuinely took >1.5 s, the probe failed, and
+// because the result is cached process-wide EVERY later scan in that process
+// silently used the regex parser. Timeouts are also no longer cached (see
+// below), so a transient spike can't poison the whole process.
+const PROBE_TIMEOUT_MS = Number(process.env.AGENTIC_SECURITY_PY_PROBE_TIMEOUT_MS || 5000);
+
 export function probePythonAvailable() {
   if (_capability) return _capability;
+  let sawTimeout = false;
   // Try the canonical names in order. macOS / most Linux have python3;
   // some Linuxes only have python. We don't accept python2 (no f-strings).
   for (const bin of ['python3', 'python']) {
     let r;
     try {
-      r = cp.spawnSync(bin, ['--version'], { encoding: 'utf8', timeout: 1500 });
+      r = cp.spawnSync(bin, ['--version'], { encoding: 'utf8', timeout: PROBE_TIMEOUT_MS });
     } catch { continue; }
+    // spawnSync sets .error (ETIMEDOUT) and a null status when the timeout
+    // fires. That is a load symptom, not "python is missing" — don't cache it.
+    if (r.error && (r.error.code === 'ETIMEDOUT' || r.signal)) { sawTimeout = true; continue; }
     if (r.status !== 0) continue;
     // Output format: "Python 3.12.2" (or 2.x — reject those).
     const m = /Python\s+(\d+)\.(\d+)\.(\d+)/.exec(r.stdout || r.stderr || '');
@@ -59,6 +83,10 @@ export function probePythonAvailable() {
     if (major < 3 || (major === 3 && minor < 8)) continue;
     _capability = { ok: true, python: bin, version: `${m[1]}.${m[2]}.${m[3]}` };
     return _capability;
+  }
+  if (sawTimeout) {
+    // Uncached: the next call re-probes once the machine is less busy.
+    return { ok: false, reason: 'probe-timeout', transient: true };
   }
   _capability = { ok: false, reason: 'no-python3-on-path' };
   return _capability;
@@ -87,8 +115,8 @@ export function parsePythonFile(file, raw) {
 export function parsePythonFilesBatch(entries) {
   if (!Array.isArray(entries) || entries.length === 0) return [];
   const cap = probePythonAvailable();
-  if (!cap.ok) return null;
-  if (!fs.existsSync(HELPER_PATH)) return null;
+  if (!cap.ok) { noteParserDegradation(`python-unavailable:${cap.reason}`); return null; }
+  if (!fs.existsSync(HELPER_PATH)) { noteParserDegradation('helper-script-missing'); return null; }
   const filtered = entries.filter(e =>
     e && typeof e.file === 'string' && /\.py$/i.test(e.file) &&
     typeof e.content === 'string' && e.content.length <= 1_000_000
@@ -96,29 +124,34 @@ export function parsePythonFilesBatch(entries) {
   if (filtered.length === 0) return [];
   let payload;
   try { payload = JSON.stringify(filtered); }
-  catch { return null; }
+  catch { noteParserDegradation('payload-serialize-failed'); return null; }
   let r;
   try {
     r = cp.spawnSync(cap.python, [HELPER_PATH], {
       input: payload,
       encoding: 'utf8',
-      // 10 s for a whole batch. The helper itself processes files in a
-      // simple linear loop; on a 100-file repo a single-digit-second
-      // budget is plenty. If a customer hits the timeout, the regex
-      // parser fallback catches them.
-      timeout: 10_000,
+      // 30 s for a whole batch. The helper processes files in a simple
+      // linear loop; single-digit seconds is plenty on a 100-file repo, but
+      // the budget has to survive a machine that is busy with something else
+      // (this was one half of the corpus-gate flakiness — a loaded box blew
+      // the old 10 s budget and silently dropped to the regex parser).
+      // Tunable for constrained runners.
+      timeout: Number(process.env.AGENTIC_SECURITY_PY_BATCH_TIMEOUT_MS || 30_000),
       maxBuffer: 64 * 1024 * 1024,
     });
   } catch (e) {
     if (process.env.AGENTIC_SECURITY_PY_PARSER_DEBUG === '1') {
       process.stderr.write(`parser-py-cst: spawn failed — ${e.message}\n`);
     }
+    noteParserDegradation(`helper-spawn-failed:${e.message}`);
     return null;
   }
   if (r.status !== 0 || !r.stdout) {
     if (process.env.AGENTIC_SECURITY_PY_PARSER_DEBUG === '1') {
       process.stderr.write(`parser-py-cst: helper exit=${r.status} stderr=${r.stderr || ''}\n`);
     }
+    noteParserDegradation(r.error && (r.error.code === 'ETIMEDOUT' || r.signal)
+      ? 'helper-batch-timeout' : `helper-exit-${r.status}`);
     return null;
   }
   let out;
@@ -127,6 +160,7 @@ export function parsePythonFilesBatch(entries) {
     if (process.env.AGENTIC_SECURITY_PY_PARSER_DEBUG === '1') {
       process.stderr.write(`parser-py-cst: helper output not JSON — ${e.message}\n`);
     }
+    noteParserDegradation('helper-output-not-json');
     return null;
   }
   return _annotateCalls(out);

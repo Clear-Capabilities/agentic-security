@@ -30,8 +30,14 @@
 // Sinks: anywhere a CFG node calls a catalog-registered sink with a tainted
 // argument, we emit a finding.
 //
-// Sanitizers: a call to a catalog-registered sanitizer kills the taint on its
-// argument (the call's return value is treated as clean).
+// Sanitizers: NOT consulted by this walk. `matchSinkOrSanitizer()` returns
+// catalog hits of both kinds, but every consumer in this directory keeps only
+// `e.kind === 'sink'`; no `'sanitizer'` branch exists anywhere in dataflow/*.
+// Taint dies here only when a variable is re-assigned from a clean expression
+// (removePathAndDescendants, below) — which is orthogonal to whether the RHS
+// happens to be a catalog sanitizer. Recognising sanitizer entries at a call
+// site is open work; until it lands, treat the catalog's sanitizer half as
+// documentation consumed by other layers, not by this engine.
 
 import { matchSource, matchSinkOrSanitizer } from './catalog.js';
 import { functionRecord } from '../ir/callgraph.js';

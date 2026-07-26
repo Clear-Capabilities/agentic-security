@@ -49,7 +49,7 @@ export function enumerateSinks(perFileIR, callGraph) {
     for (const nid of Object.keys(cfg.nodes)) {
       const node = cfg.nodes[nid];
       if (!node || node.kind !== 'call') continue;
-      const cat = matchSinkOrSanitizer(node.callee);
+      const cat = matchSinkOrSanitizer(node.callee, fn.file || null);
       if (!cat) continue;
       for (const e of cat) {
         if (e.kind !== 'sink') continue;

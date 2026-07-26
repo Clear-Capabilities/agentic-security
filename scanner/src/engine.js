@@ -7921,14 +7921,19 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
     // (xss/url/cmd, not just sql) so the proof gate below can demote them the
     // same way it demotes proven-clean SQL. `sanitizersOnPath` would need to
     // be `{ [findingId]: string[] of sanitizer callees observed on that
-    // finding's flow }` — the taint engine (dataflow/engine.js) currently
-    // KILLS taint at a sanitizer call site (removePathAndDescendants) without
-    // recording which callee did it anywhere reachable from the finished
-    // finding, so there is no such map to build without a new traversal.
-    // Per the task brief, we do not invent one: this is `{}`, making the gate
-    // a documented no-op until that plumbing exists (it would need to live in
-    // dataflow/engine.js's per-finding emission path, threading the sanitizer
-    // callee name alongside the trace/chain that proven-clean.js already reads).
+    // finding's flow }`. There is nothing to build that map from: the live
+    // taint walk in dataflow/engine.js does NOT consult sanitizer catalog
+    // entries at all. `matchSinkOrSanitizer()` returns every catalog hit for
+    // a callee, but every consumer in dataflow/*.js selects only
+    // `e.kind === 'sink'` — there is no `'sanitizer'` branch anywhere in that
+    // tree. Taint is killed only by clean re-assignment of a variable
+    // (removePathAndDescendants, engine.js:374), which happens regardless of
+    // whether the RHS call is a catalog sanitizer.
+    // So this is `{}` and the gate below is INERT — not "awaiting plumbing"
+    // but awaiting the sanitizer walk itself. Making it live needs two things:
+    // (1) dataflow/engine.js honouring `kind === 'sanitizer'` at a call site,
+    // and (2) that call site's callee name threaded onto the finding
+    // alongside the trace/chain that proven-clean.js already reads.
     const sanitizersOnPath = {};
     _runAnnotator("applySanitizerGate", () => { applySanitizerGate(finalFindings, { sanitizersOnPath }); });
     _runAnnotator("annotateProofGate", () => { annotateProofGate(finalFindings); });

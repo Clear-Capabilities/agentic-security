@@ -130,10 +130,10 @@ function _exprAccessPath(expr) {
 
 // Sink detection at call nodes. Returns a list of sink-finding records
 // {sinkId, vuln, severity, cwe, line} when `fact` reaches a sink arg.
-function _detectSinkAtCall(node, fact) {
+function _detectSinkAtCall(node, fact, file = null) {
   if (!node || node.kind !== 'call') return [];
   if (fact === ZERO) return [];
-  const cat = matchSinkOrSanitizer(node.callee);
+  const cat = matchSinkOrSanitizer(node.callee, file);
   if (!cat) return [];
   const findings = [];
   const args = node.args || [];
@@ -252,13 +252,17 @@ export class IFDSSolver {
     if (!node) return;
     // Emit findings if this is a sink.
     if (node.kind === 'call') {
-      for (const f of _detectSinkAtCall(node, currentFact)) {
+      for (const f of _detectSinkAtCall(node, currentFact, fn && fn.file)) {
         this.findings.push({ ...f, _fnQid: fn.qid, _entryFact: entryFact });
       }
       // v0.73 — interprocedural call: if the callee is resolved AND we
       // can derive an entry fact for it, look up (or queue) its summary
       // and apply the resulting exit facts at the return site.
-      const resolved = this.callGraph.resolve ? this.callGraph.resolve(node.callee) : null;
+      // resolveKnownCallee (not resolve): never invent an edge from a dotted
+      // name's last segment. `fn.file` enables the same-file preference — a
+      // bare `handler` would otherwise bind to whichever file iterates first.
+      const resolved = this.callGraph.resolveKnownCallee
+        ? this.callGraph.resolveKnownCallee(node.callee, fn && fn.file) : null;
       const callee = functionRecord(this.callGraph, resolved);
       if (callee && callee.cfg) {
         const calleeEntryFact = _entryFactForCall(node, currentFact, callee);

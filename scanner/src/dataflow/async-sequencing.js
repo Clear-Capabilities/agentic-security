@@ -71,7 +71,7 @@ export function describeChain(callExpr, opts = {}) {
   let isPromise = isPromiseRoot(cur);
   if (!isPromise && opts.summaryCache && opts.callGraph && cur && cur.kind === 'call') {
     const name = typeof cur.callee === 'string' ? cur.callee : (cur.callee?.name || null);
-    if (name) isPromise = isAsyncSourceFromSummary(name, opts.summaryCache, opts.callGraph);
+    if (name) isPromise = isAsyncSourceFromSummary(name, opts.summaryCache, opts.callGraph, opts.callerFile || null);
   }
   return { ops, rootCallee: cur, isPromise };
 }
@@ -91,9 +91,14 @@ function isPromiseRoot(expr) {
   return false;
 }
 
-export function isAsyncSourceFromSummary(calleeName, summaryCache, callGraph) {
+// `callerFile` is the file the call site lives in. Passing it enables the
+// call graph's same-file preference — without it a bare name (`handler`)
+// binds to whichever file's Map iterates first.
+export function isAsyncSourceFromSummary(calleeName, summaryCache, callGraph, callerFile = null) {
   if (!calleeName || !summaryCache || !callGraph) return false;
-  const resolved = callGraph.resolve ? callGraph.resolve(calleeName) : null;
+  // resolveKnownCallee, never the permissive resolve(): a guessed bare-tail
+  // edge fabricates a dataflow path that does not exist.
+  const resolved = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(calleeName, callerFile) : null;
   const qid = resolved && (resolved.qid || resolved);
   if (typeof qid !== 'string') return false;
   const sum = summaryCache.get(qid, new Set());

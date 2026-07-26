@@ -82,11 +82,40 @@ built from the real AST, so:
 - `python3` / `python` not on PATH
 - Python version < 3.8
 - helper script's stdin JSON corruption
-- helper subprocess timeout (10 s for the whole batch — generous)
+- helper subprocess timeout (30 s for the whole batch — generous;
+  `AGENTIC_SECURITY_PY_BATCH_TIMEOUT_MS`)
+- capability probe timeout (5 s; `AGENTIC_SECURITY_PY_PROBE_TIMEOUT_MS`)
 - helper output isn't parseable JSON
 
 Each of these is a real failure mode; the regex fallback keeps the scan
 producing findings instead of returning empty.
+
+### Fallbacks are recorded, not silent
+
+Every fallback above calls `noteParserDegradation(reason)`. Read it with
+`pythonParserDegradation()` and clear it with `resetPythonParserDegradation()`
+(both re-exported from `./index.js`).
+
+This exists because a silent fallback is indistinguishable from a detection
+regression: no `fn.calls` means no interprocedural Python taint, so a test
+that *depends* on interprocedural analysis just stops finding anything. The
+CVE-replay corpus gate (`bench/cve-replay/runner.mjs`) resets the record
+before each deep Python entry and checks it after, reporting `env-error` and
+exiting 3 instead of scoring a phantom `pre:FN`. It had already produced a
+real flake: exit 1 `REGRESSED` then exit 0 on the same clean tree, minutes
+apart, purely from machine load.
+
+Two hardening changes back this:
+- The probe timeout is **not cached**. `spawnSync` reports a timeout via
+  `r.error.code === 'ETIMEDOUT'` with a null status — that is a load symptom,
+  not "python is missing", so it does not poison `_capability` for the rest
+  of the process. Only a genuine `no-python3-on-path` is cached.
+- Budgets were raised (1.5 s → 5 s probe, 10 s → 30 s batch) and made
+  env-tunable for constrained runners.
+
+If you add a new caller that requires the CST path, check
+`pythonParserDegradation()` rather than assuming the parse you got is the
+parse you asked for.
 
 ### What CST models (and the one remaining limit)
 
