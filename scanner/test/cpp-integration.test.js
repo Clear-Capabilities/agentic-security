@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildProjectIR, buildProjectIRAsync } from '../src/ir/index.js';
 import { parseCppFile } from '../src/ir/parser-cpp.js';
+import { buildClassHierarchy, resolveMethod } from '../src/ir/class-hierarchy.js';
 
 test('buildProjectIR: dispatches every C/C++ extension', () => {
   const files = {
@@ -141,4 +142,52 @@ test('parseCppFile: fn.calls is populated with the parser-js-documented shape, i
   assert.equal(fn.cfg.nodes[getenvCall.site].source.callee, 'getenv', 'callee must match the assign node\'s call source');
   assert.equal(typeof getenvCall.line, 'number');
   assert.ok(getenvCall.line > 0);
+});
+
+test('class hierarchy: recovers C++ classes and their base classes', () => {
+  const { perFile } = buildProjectIR({
+    'a.cpp': 'class Base {\npublic:\n  int run() { return 1; }\n};\nclass Derived : public Base {\npublic:\n  int extra() { return 2; }\n};\n',
+  });
+  const cha = buildClassHierarchy(perFile);
+  assert.ok(cha.classes.get('Base'), 'Base must be recovered');
+  assert.ok(cha.classes.get('Derived'), 'Derived must be recovered');
+  assert.equal(cha.classes.get('Derived').extends, 'Base');
+});
+
+test('class hierarchy: the recovered method name is bare, not suffixed', () => {
+  // Regression guard. class-hierarchy.js recovers methodName as
+  // tail.slice(dotIdx + 1), which for a qid tail of `Class.method@line#sha`
+  // yields `method@line#sha`. Class recovery was always correct; method
+  // recovery was not, which silently broke every resolveMethod() lookup.
+  const { perFile } = buildProjectIR({
+    'a.cpp': 'class Base {\npublic:\n  int run() { return 1; }\n};\n',
+  });
+  const cha = buildClassHierarchy(perFile);
+  const methods = [...cha.classes.get('Base').methods];
+  assert.deepEqual(methods, ['run'],
+    'method names must be bare — no @line#sha suffix');
+});
+
+test('class hierarchy: an inherited method resolves through the extends chain', () => {
+  const { perFile } = buildProjectIR({
+    'a.cpp': 'class Base {\npublic:\n  int run() { return 1; }\n};\nclass Derived : public Base {\npublic:\n  int extra() { return 2; }\n};\n',
+  });
+  const cha = buildClassHierarchy(perFile);
+  const hit = resolveMethod(cha, 'Derived', 'run');
+  assert.ok(hit, 'run must resolve on Derived via Base');
+  assert.equal(hit.className, 'Base');
+});
+
+test('class hierarchy: multiple inheritance keeps the first base and does not throw', () => {
+  const { perFile } = buildProjectIR({
+    'a.cpp': 'class A { public: int m() { return 1; } };\nclass B { public: int n() { return 2; } };\nclass C : public A, public B { public: int o() { return 3; } };\n',
+  });
+  const cha = buildClassHierarchy(perFile);
+  assert.ok(['A', 'B'].includes(cha.classes.get('C').extends));
+});
+
+test('class hierarchy: languages without ir.classes are unaffected', () => {
+  const { perFile } = buildProjectIR({ 'b.js': 'class Foo { bar(){ return 1; } }\n' });
+  const cha = buildClassHierarchy(perFile);
+  assert.ok(cha.classes instanceof Map, 'still returns the documented shape');
 });

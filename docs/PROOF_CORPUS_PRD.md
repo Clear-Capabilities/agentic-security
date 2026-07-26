@@ -276,9 +276,9 @@ Rule: maintain a project-wide qualified-name index (`Ns::Class::method` → defi
 
 ### 6.8 Class hierarchy
 
-`class-hierarchy.js` today walks Babel ASTs and is JS/TS-only. C++ needs its own extractor feeding the same `classDefs` / `methodOwners` / `typeOfVar` maps: `class D : public B` for inheritance, member declarations for `typeOfVar`, and `D d;` / `auto d = D()` / `B* p = new D()` for assignment-time type inference.
+`class-hierarchy.js` is already language-neutral: `buildClassHierarchy` reads `perFileIR` and recovers class names from the qid tail's `Class.method` shape, which any parser can emit. What it lacked was any population of `extends` — the field was set to `null` at creation and nothing, for any language, ever wrote it, leaving `resolveMethod`'s inheritance walk dead code. C++ doesn't need its own extractor for this; it needs the existing module to accept a language-neutral input: an optional `ir.classes = [{ name, bases, line }]` array on the per-file IR record, which `parser-cpp.js` populates from `class D : public B` declarations.
 
-With CHA populated, a virtual call `p->f()` resolves to the set of `f` overrides in the hierarchy rather than to nothing — the same over-approximation the JS and Java paths already use. Multiple inheritance is flattened into the union of base classes; this is deliberately imprecise and is recorded as such.
+With `extends` populated, a virtual call `p->f()` resolves to `f` on the declared class or, failing that, up the `extends` chain — the same over-approximation the JS and Java paths already use for direct definitions. Multiple inheritance is flattened to the first listed base, not the union of bases; this is a deliberate simplification (the CHA walk in `resolveMethod` follows a single chain) and is recorded as such.
 
 ### 6.9 Sources and sinks
 

@@ -41,7 +41,27 @@ export function buildClassHierarchy(perFileIR) {
   }
 
   for (const [file, ir] of Object.entries(perFileIR)) {
-    if (!ir || !Array.isArray(ir.functions)) continue;
+    if (!ir) continue;
+    // Language-neutral inheritance input. A parser may attach a `classes`
+    // array to its IR record; parser-cpp.js does. Nothing else populates
+    // `extends`, for any language, so this is purely additive.
+    if (Array.isArray(ir.classes)) {
+      for (const c of ir.classes) {
+        if (!c || !c.name) continue;
+        let cls = classes.get(c.name);
+        if (!cls) {
+          cls = { name: c.name, file, line: c.line || 0, methods: new Set(), extends: null };
+          classes.set(c.name, cls);
+        }
+        // v1 keeps a single base: the CHA walk in resolveMethod follows one
+        // chain. Multiple inheritance is flattened to the first base, which is
+        // a deliberate over-simplification recorded in PRD §6.8.
+        if (!cls.extends && Array.isArray(c.bases) && c.bases.length) {
+          cls.extends = c.bases[0];
+        }
+      }
+    }
+    if (!Array.isArray(ir.functions)) continue;
     // Recover class names from method qids of the shape
     //   <file>::<scope>::<className.method>
     // Many of our existing parsers emit class methods as `Foo.bar` in qid.
@@ -51,7 +71,7 @@ export function buildClassHierarchy(perFileIR) {
       const dotIdx = tail.indexOf('.');
       if (dotIdx <= 0) continue;
       const className = tail.slice(0, dotIdx);
-      const methodName = tail.slice(dotIdx + 1);
+      const methodName = tail.slice(dotIdx + 1).replace(/@\d+#[0-9a-f]+$/, '');
       methodOwners.set(fn.qid, className);
       let cls = classes.get(className);
       if (!cls) {
