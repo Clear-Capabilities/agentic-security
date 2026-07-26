@@ -18,9 +18,20 @@
 //   0  clean — fresh measurement matches BASELINE.json exactly, per file.
 //   1  drift — a file's count changed, appeared, or disappeared. This is the
 //      "your commit changed detection behavior" case.
-//   2  could not measure — usage error, missing/unreadable baseline, or the
-//      measurement run itself threw. NOT a drift finding; fix the runner or
-//      the invocation and re-run.
+//   2  could not measure — usage error, missing/unreadable baseline, the
+//      measurement run itself threw, OR a preflight check failed (a target
+//      directory the baseline expects is missing/unreadable, or a target the
+//      baseline says has findings came back completely empty). NOT a drift
+//      finding; fix the runner/environment and re-run.
+//
+// The preflight exists because `measure.mjs` -> `runScan` does not throw on
+// a missing target directory — it just returns { total: 0, byFile: {} } —
+// so without it, a renamed-away `hooks/` looks identical to "every finding
+// in hooks disappeared" and gets reported as drift (exit 1) instead of as
+// the environment problem it actually is. This is the same failure mode the
+// CVE-replay gate hit with a degraded Python parser: a missing capability
+// silently looked like a detection regression until it got its own exit
+// code. Same fix here.
 //
 // Usage:
 //   node bench/self-scan/check.mjs                 # gate: exit 0/1/2
@@ -75,6 +86,51 @@ function fail(code, msg) {
   process.exit(code);
 }
 
+// Verify the environment can actually produce a meaningful measurement
+// before trusting a diff against it. Returns null if everything checks out,
+// or a human-readable message naming the specific problem otherwise.
+//
+// Two independent checks, because either alone can be fooled:
+//   1. Every target directory the baseline knows about (plus the polyglot
+//      fixture directory) must exist and be a readable directory. Catches a
+//      renamed/deleted/relocated target outright.
+//   2. Even if a directory exists, a target the baseline says has findings
+//      must not come back with zero. Catches the case where the directory
+//      is present but empty, unreadable in a way that doesn't throw, or
+//      otherwise fails to produce the files the baseline expects — without
+//      relying solely on the path check above.
+function preflight(baseline, now) {
+  const baseTargets = baseline.targets || {};
+  for (const t of Object.keys(baseTargets)) {
+    const dir = path.join(REPO, t);
+    let st;
+    try {
+      st = fs.statSync(dir);
+    } catch {
+      return `target directory missing or unreadable: ${path.relative(process.cwd(), dir)} (baselined target "${t}")`;
+    }
+    if (!st.isDirectory()) {
+      return `target path is not a directory: ${path.relative(process.cwd(), dir)} (baselined target "${t}")`;
+    }
+  }
+
+  const polyDir = path.join(HERE, 'fixtures', 'polyglot');
+  if (!fs.existsSync(polyDir) || !fs.statSync(polyDir).isDirectory()) {
+    return `polyglot fixture directory missing or unreadable: ${path.relative(process.cwd(), polyDir)}`;
+  }
+
+  const nowTargets = now.targets || {};
+  for (const t of Object.keys(baseTargets)) {
+    const baseTotal = (baseTargets[t] && baseTargets[t].total) || 0;
+    const nowTotal = (nowTargets[t] && nowTargets[t].total) || 0;
+    if (baseTotal > 0 && nowTotal === 0) {
+      return `target "${t}" (${path.relative(process.cwd(), path.join(REPO, t))}) has a baseline of ${baseTotal} finding(s) but the fresh scan returned 0 — this looks like a missing/misconfigured target, not a genuine fix of every finding.`;
+    }
+  }
+
+  return null;
+}
+
 async function main() {
   const updateBaseline = process.argv.includes('--update-baseline');
 
@@ -120,6 +176,12 @@ async function main() {
     baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
   } catch (e) {
     fail(2, `✗ could not measure — BASELINE.json is not valid JSON: ${e && e.message}`);
+    return;
+  }
+
+  const envProblem = preflight(baseline, now);
+  if (envProblem) {
+    fail(2, `✗ could not measure — environment problem, NOT drift: ${envProblem}\n  Fix the environment (restore the missing path, check permissions) and re-run.`);
     return;
   }
 
