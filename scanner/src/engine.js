@@ -175,6 +175,7 @@ import { applyLearnedCalibration } from './posture/triage-learning.js';
 import { annotateFormalVerification } from './dataflow/formal-verify.js';
 import { annotatePathFeasibility } from './dataflow/smt-feasibility.js';
 import { annotateProofGate } from './dataflow/proof-gate.js';
+import { applySanitizerGate } from './dataflow/sanitizer-gate.js';
 import { annotateFalsification } from './posture/falsification.js';
 import { routeModelForFinding } from './posture/model-routing.js';
 import { buildEntrypointInventory } from './posture/entrypoint-inventory.js';
@@ -7915,6 +7916,21 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   // on; opt out with AGENTIC_SECURITY_NO_PROOF_GATE=1. Demotes proven-clean /
   // proven-infeasible flows (confidence + tiers only, never severity).
   if (process.env.AGENTIC_SECURITY_NO_PROOF_GATE !== '1') {
+    // Generalised sanitizer consumption (dataflow/sanitizer-gate.js): labels
+    // findings whose flow passes a catalog sanitizer matching their family
+    // (xss/url/cmd, not just sql) so the proof gate below can demote them the
+    // same way it demotes proven-clean SQL. `sanitizersOnPath` would need to
+    // be `{ [findingId]: string[] of sanitizer callees observed on that
+    // finding's flow }` — the taint engine (dataflow/engine.js) currently
+    // KILLS taint at a sanitizer call site (removePathAndDescendants) without
+    // recording which callee did it anywhere reachable from the finished
+    // finding, so there is no such map to build without a new traversal.
+    // Per the task brief, we do not invent one: this is `{}`, making the gate
+    // a documented no-op until that plumbing exists (it would need to live in
+    // dataflow/engine.js's per-finding emission path, threading the sanitizer
+    // callee name alongside the trace/chain that proven-clean.js already reads).
+    const sanitizersOnPath = {};
+    _runAnnotator("applySanitizerGate", () => { applySanitizerGate(finalFindings, { sanitizersOnPath }); });
     _runAnnotator("annotateProofGate", () => { annotateProofGate(finalFindings); });
   }
   // Addition #1 — default falsification pass. Actively tries to DISPROVE each

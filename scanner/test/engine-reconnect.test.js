@@ -220,3 +220,41 @@ test('python: fn.calls is populated with the documented shape', () => {
   assert.ok(Array.isArray(c.args), 'args must be an array');
   assert.ok(typeof c.line === 'number' && c.line > 0, 'line must be set');
 });
+
+import { applySanitizerGate, _sanitizerFamilies } from '../src/dataflow/sanitizer-gate.js';
+
+test('sanitizer gate: families beyond sql are recognised', () => {
+  const fams = _sanitizerFamilies();
+  for (const f of ['sql', 'xss', 'url', 'cmd']) {
+    assert.ok(fams.includes(f), `${f} must be a recognised sanitizer family`);
+  }
+});
+
+test('sanitizer gate: a sanitized finding is labelled, never removed', () => {
+  const findings = [
+    { id: 'a', vuln: 'Reflected XSS', cwe: 'CWE-79', file: 'a.js', line: 3, severity: 'high' },
+  ];
+  const out = applySanitizerGate(findings, {
+    sanitizersOnPath: { a: ['escapeHtml'] },
+  });
+  assert.equal(out.length, 1, 'the finding must never be dropped');
+  assert.equal(out[0].sanitized, true);
+  assert.deepEqual(out[0].sanitizerProof.sanitizers, ['escapeHtml']);
+  assert.equal(out[0].sanitizerProof.family, 'xss');
+});
+
+test('sanitizer gate: a mismatched family does not mark the finding', () => {
+  const findings = [
+    { id: 'a', vuln: 'SQL Injection', cwe: 'CWE-89', file: 'a.js', line: 3, severity: 'critical' },
+  ];
+  const out = applySanitizerGate(findings, { sanitizersOnPath: { a: ['escapeHtml'] } });
+  assert.equal(out[0].sanitized, undefined,
+    'an xss sanitizer must not clear a sql finding');
+});
+
+test('sanitizer gate: tolerates missing context without throwing', () => {
+  const findings = [{ id: 'a', vuln: 'X', cwe: 'CWE-1', file: 'a.js', line: 1 }];
+  assert.equal(applySanitizerGate(findings, {}).length, 1);
+  assert.equal(applySanitizerGate(findings, null).length, 1);
+  assert.equal(applySanitizerGate(null, null).length, 0);
+});
