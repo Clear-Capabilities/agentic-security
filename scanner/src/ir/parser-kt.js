@@ -21,6 +21,7 @@
 // gradle helper) is the upgrade path.
 
 import * as crypto from 'node:crypto';
+import { callSitesFromCfg } from './call-sites.js';
 
 const FUN_RE = new RegExp(
   '(?:^|[\\s;{}])(?:public|private|internal|protected|inline|suspend|tailrec|operator|infix|open|abstract|override|final|external)?' +
@@ -247,10 +248,12 @@ export function parseKotlinFile(file, code) {
     }
     nodes[prev].succ.push('exit');
     nodes.exit.pred.push(prev);
+    const cfg = { entry: 'entry', exit: 'exit', nodes };
     functions.push({
       qid: _qid(file, name, startLine, extracted.body),
       name, line: startLine, params, file,
-      cfg: { entry: 'entry', exit: 'exit', nodes },
+      cfg,
+      calls: callSitesFromCfg(cfg),
     });
     FUN_RE.lastIndex = extracted.end + 1;
   }

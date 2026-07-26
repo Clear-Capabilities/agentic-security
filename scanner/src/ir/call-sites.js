@@ -10,6 +10,11 @@
 
 // Recursively collect every 'call' subexpression inside a lowered expr tree
 // (a call's own args can themselves contain calls, e.g. `foo(bar(x))`).
+// `elements` (array literals) and `props` (object literals) are walked too —
+// added when parser-py-cst.js's own copy of this walker was folded in here,
+// so that e.g. `xs = [foo(x), bar(y)]` still surfaces both call sites for
+// Python. Harmless for other languages: those fields are simply absent from
+// their expr shapes.
 function _collectCallExprs(expr, out) {
   if (!expr || typeof expr !== 'object') return;
   if (expr.kind === 'call') {
@@ -19,6 +24,8 @@ function _collectCallExprs(expr, out) {
   }
   if (Array.isArray(expr.parts)) for (const p of expr.parts) _collectCallExprs(p, out);
   if (Array.isArray(expr.branches)) for (const b of expr.branches) _collectCallExprs(b, out);
+  if (Array.isArray(expr.elements)) for (const e of expr.elements) _collectCallExprs(e, out);
+  if (Array.isArray(expr.props)) for (const p of expr.props) _collectCallExprs(p && p.value, out);
   if (expr.left) _collectCallExprs(expr.left, out);
   if (expr.right) _collectCallExprs(expr.right, out);
   if (expr.object) _collectCallExprs(expr.object, out);
