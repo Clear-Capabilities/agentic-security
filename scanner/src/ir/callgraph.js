@@ -148,6 +148,22 @@ export function buildCallGraph(perFileIR, fileContents) {
     if (!callersOf.has(e.callee)) callersOf.set(e.callee, []);
     callersOf.get(e.callee).push(e);
   }
+  // A candidate qid is cross-language-unsafe for a given caller when it
+  // carries a `qname` (only parser-cpp.js emits one) and the caller cannot
+  // itself be established as a qname-bearing (C/C++) file. Without this, the
+  // GENERIC fallbacks below — which predate the qname index and were built
+  // for same-language bare-name collisions (Roadmap #3) — would let a
+  // same-named call from any other language bind to a C++ definition just
+  // because both happen to share a bare identifier (`f.read()` in JS vs.
+  // `File::read` in C++): a fabricated cross-language edge, reached through
+  // these older, coarser lookups BEFORE the qname-specific gate further down
+  // is ever consulted.
+  function isCrossLanguageUnsafe(qid, callerFile) {
+    const cand = qid && functions.get(qid);
+    if (!cand || !cand.qname) return false;
+    return !(callerFile && qnameFiles.has(callerFile));
+  }
+
   // Premortem #7: expose a name→qid resolver so the taint engine can ask
   // the call graph for the callee's qid at the assign-from-call site.
   // Same precedence as the edge resolution above (same-file ident wins,
@@ -161,25 +177,30 @@ export function buildCallGraph(perFileIR, fileContents) {
     // defines the name, that is overwhelmingly the intended callee — prefer
     // it. Backward-compatible: with no callerFile (or no local match) the
     // original resolution order is unchanged, so no edge is ever dropped.
+    // (No cross-language guard needed here: a same-file match means the
+    // candidate and caller share one file, hence one parser — if the
+    // candidate carries a `qname`, callerFile is necessarily a qname file.)
     if (callerFile) {
       const local = byNameInFile.get(callerFile);
       if (local && local.has(name)) return local.get(name);
     }
     for (const m of byNameInFile.values()) {
-      if (m.has(name)) return m.get(name);
+      if (m.has(name) && !isCrossLanguageUnsafe(m.get(name), callerFile)) return m.get(name);
     }
-    if (classMethods.has(name)) return classMethods.get(name);
+    if (classMethods.has(name) && !isCrossLanguageUnsafe(classMethods.get(name), callerFile)) {
+      return classMethods.get(name);
+    }
     if (name.includes('.')) {
       const tail = name.split('.').slice(-1)[0];
       for (const m of byNameInFile.values()) {
-        if (m.has(tail)) return m.get(tail);
+        if (m.has(tail) && !isCrossLanguageUnsafe(m.get(tail), callerFile)) return m.get(tail);
       }
     }
     // Follow re-exports: if name was re-exported from another file, resolve there
     for (const [key, { sourceName }] of reexportMap) {
       if (key.endsWith(`::${name}`) || (sourceName === name)) {
         for (const m of byNameInFile.values()) {
-          if (m.has(sourceName)) return m.get(sourceName);
+          if (m.has(sourceName) && !isCrossLanguageUnsafe(m.get(sourceName), callerFile)) return m.get(sourceName);
         }
       }
     }

@@ -91,6 +91,19 @@ test('call graph: a JS call must not resolve to a same-named C++ function (no cr
     'a JS call must never resolve to a C++ definition just because the bare method name collides');
 });
 
+test('call graph: resolve() with no callerFile must not leak a C++ definition to an unrelated bare name', () => {
+  const files = {
+    'native.cpp': 'class File {\npublic:\n  void read(char* buf) {\n    int n = 1;\n  }\n};\n',
+    'app.js': 'function handle(req) {\n  const f = getFile();\n  f.read(req.query.p);\n}\n',
+  };
+  const { callGraph } = buildProjectIR(files);
+  // No callerFile at all — the taint-engine call sites that omit it
+  // (ifds.js, async-sequencing.js, points-to.js) must not fabricate a
+  // cross-language edge just because a bare/tail name happens to collide.
+  assert.equal(callGraph.resolve('read'), null, 'bare "read" with no caller context must not resolve to the C++ definition');
+  assert.equal(callGraph.resolve('f.read'), null, 'dotted "f.read" with no caller context must not resolve to the C++ definition');
+});
+
 test('call graph: two same-named unqualified C definitions in different files refuse to resolve', () => {
   const files = {
     'a.cpp': 'void helper(char* s) {\n  int n = 1;\n}\n',
