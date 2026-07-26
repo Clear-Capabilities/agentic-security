@@ -138,13 +138,22 @@ export const CATALOG = [
   { kind: 'source', id: 'py-flask-request-headers',language: 'py', framework: 'flask',   match: { type: 'member', object: 'request', prop: 'headers' }, label: 'request.headers' },
   { kind: 'source', id: 'py-flask-request-data',   language: 'py', framework: 'flask',   match: { type: 'member', object: 'request', prop: 'data'    }, label: 'request.data' },
   // Call-shaped variant of the member sources above — `request.args.get(...)`
-  // (and Flask's `.form`/`.values`, Django's `.GET`/`.POST`) is at least as
-  // common in real Flask/Django code as the bare-member form, but matchSource
-  // only recognized the member itself. Gated by `match.receiver` (checked by
-  // matchSource via _receiverAllowed, same mechanism matchSinkOrSanitizer
-  // already uses for sinks) so a plain `dict.get(...)`/`config.get(...)`
-  // elsewhere in the file does not also fire.
-  { kind: 'source', id: 'py-flask-args-get',       language: 'py', framework: 'flask',   match: { type: 'call', callee: 'get', receiver: '^(?:args|form|values|GET|POST)$' }, label: 'request.args/form/values.get() (Flask/Django)', provenance: 'url-param' },
+  // (and Flask's `.form`/`.values`/`.headers`/`.cookies`/`.json`/`.data`,
+  // Django's `.GET`/`.POST`/`.FILES`/`.META`) is at least as common in real
+  // Flask/Django code as the bare-member form, but matchSource only
+  // recognized the member itself. The alternation covers every request
+  // property this catalog already trusts as a member source
+  // (py-flask-request-args/form/json/values/cookies/headers/data above) so
+  // the `.get()` chain restores the same recall the member form has, rather
+  // than a subset of it — a first cut here covered only args/form/values and
+  // silently left request.headers.get()/cookies.get()/json.get() undetected
+  // (measured 4→0 against the pre-scoping cross-language leak, vs. 4→2 for
+  // args/form/values; see phase2-scoping.test.js's shape-by-shape A/B test).
+  // Gated by `match.receiver` (checked by matchSource via _receiverAllowed,
+  // same mechanism matchSinkOrSanitizer already uses for sinks) so a plain
+  // `dict.get(...)`/`config.get(...)` elsewhere in the file does not also
+  // fire.
+  { kind: 'source', id: 'py-flask-args-get',       language: 'py', framework: 'flask',   match: { type: 'call', callee: 'get', receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values/headers/cookies/json/data.get() (Flask/Django)', provenance: 'url-param' },
   { kind: 'source', id: 'py-fastapi-request-query',language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Query'                  }, label: 'fastapi.Query()' },
   { kind: 'source', id: 'py-fastapi-request-body', language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Body'                   }, label: 'fastapi.Body()' },
   { kind: 'source', id: 'py-fastapi-form',         language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Form'                   }, label: 'fastapi.Form()' },
@@ -826,11 +835,22 @@ function _receiverSegments(calleeExpr) {
 }
 function _receiverAllowed(entry, calleeExpr) {
   const pat = entry.match && entry.match.receiver;
-  if (!pat) return true;
+  // `receiverBase` (optional, additive) requires a SECOND, independent
+  // segment match — e.g. `receiver` pins the property name (`headers`,
+  // `args`) while `receiverBase` pins the object it hangs off (`request`,
+  // `req`). Both are satisfied independently against the segment set (order
+  // doesn't matter — `self.request.args.get()` has `request` in the chain
+  // just like `request.args.get()` does), so a bare `args.get(...)` on an
+  // unrelated local (`args = parse(); args.get("cmd")`) fails the base check
+  // even though it still matches `receiver` on its own. Existing entries
+  // that only set `receiver` are unaffected.
+  const basePat = entry.match && entry.match.receiverBase;
+  if (!pat && !basePat) return true;
   const segs = _receiverSegments(calleeExpr);
   if (!segs.length) return false;      // bare `write(x)` — not a DOM call
-  const re = new RegExp(pat);
-  return segs.some((s) => re.test(String(s)));
+  if (pat && !segs.some((s) => new RegExp(pat).test(String(s)))) return false;
+  if (basePat && !segs.some((s) => new RegExp(basePat).test(String(s)))) return false;
+  return true;
 }
 // Merge the expanded sanitizer catalog. We dedupe on `id` (case-insensitive)
 // so a base-catalog entry always wins over a same-id expanded one — the base
