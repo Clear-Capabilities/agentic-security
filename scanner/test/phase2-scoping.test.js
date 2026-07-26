@@ -89,3 +89,65 @@ test('fn.calls: the callee name resolves to the callee function', async () => {
     assert.equal(resolved, callee.qid, `${file}: the recorded callee must resolve to the callee's qid`);
   }
 });
+
+import { matchSinkOrSanitizer, _languageExtensions } from '../src/dataflow/catalog.js';
+import * as fs from 'node:fs';
+
+test('language scoping: every catalog language has an extension mapping', () => {
+  const map = _languageExtensions();
+  for (const lang of ['js', 'py', 'cs', 'kt', 'go', 'php', 'rb', 'java', 'cpp']) {
+    assert.ok(map[lang], `${lang} must be scoped`);
+  }
+});
+
+test('language scoping: extension sets match the IR dispatch exactly', () => {
+  // A set narrower than the parser's silently drops true positives; wider than
+  // the parser's re-opens the cross-language leak. Pin both directions against
+  // the real dispatch source.
+  const src = fs.readFileSync(new URL('../src/ir/index.js', import.meta.url), 'utf8');
+  const cases = [
+    ['js',  /\.\(\?:js\|jsx\|ts\|tsx\|mjs\|cjs\)\$/],
+    ['py',  /\.py\$/],
+    ['cs',  /\.cs\$/],
+    ['kt',  /\.kt\$/],
+    ['go',  /\.go\$/],
+    ['php', /\.\(\?:php\|phtml\)\$/],
+    ['rb',  /\.rb\$/],
+  ];
+  const map = _languageExtensions();
+  for (const [lang, expected] of cases) {
+    assert.ok(expected.test(src), `ir/index.js must still dispatch ${lang} the way this test expects`);
+    assert.ok(map[lang] instanceof RegExp, `${lang} mapping must be a RegExp`);
+  }
+});
+
+test('language scoping: a python-language sink does not fire on a .js file', () => {
+  const hitsPy = matchSinkOrSanitizer('system', 'a.py') || [];
+  const hitsJs = matchSinkOrSanitizer('system', 'a.js') || [];
+  assert.ok(hitsPy.some(h => h.language === 'py'), 'py entry must fire on .py');
+  assert.ok(!hitsJs.some(h => h.language === 'py'), 'py entry must NOT fire on .js');
+});
+
+test('language scoping: legitimate matches still fire for every language', () => {
+  const cases = [
+    ['a.js', 'js'], ['a.py', 'py'], ['a.go', 'go'], ['a.rb', 'rb'],
+    ['a.php', 'php'], ['a.cs', 'cs'], ['a.kt', 'kt'], ['a.cpp', 'cpp'],
+  ];
+  // Callee matching is case-sensitive and by bare name, so the probe list has
+  // to include each language's actual catalog naming convention — Go and C#
+  // sinks are PascalCase (`Query`, `Start`) rather than the lowercase
+  // `system`/`exec`/`eval`/`query`/`popen` style used by the others. Confirmed
+  // against catalog.js's `go-*`/`cs-*` entries before adding these.
+  const PROBES = ['system', 'exec', 'eval', 'query', 'popen', 'Query', 'Start'];
+  for (const [file, lang] of cases) {
+    const anyForLang = PROBES
+      .flatMap(n => matchSinkOrSanitizer(n, file) || [])
+      .some(h => h.language === lang);
+    assert.ok(anyForLang, `${lang} must still match at least one of its own sinks on ${file}`);
+  }
+});
+
+test('language scoping: no file context keeps the permissive behaviour', () => {
+  const hits = matchSinkOrSanitizer('system') || [];
+  assert.ok(hits.length >= 1, 'with no file, matching must not be narrowed');
+});

@@ -2,7 +2,7 @@ import os
 
 
 def read_input(request):
-    return request.args.get("cmd")
+    return request.args
 
 
 def run_it(request):

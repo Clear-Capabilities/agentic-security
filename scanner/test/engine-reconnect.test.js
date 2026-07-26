@@ -74,10 +74,20 @@ test('engine: an object-shaped (JS) callee still resolves for interprocedural ta
 // entire body is `return <source-call>(...)` therefore never had its summary
 // marked returnTainted. Isolated here as a direct return-of-call-source case,
 // independent of Blocker A (this snippet's callees are still plain idents).
+//
+// Uses a Python fixture (`os.getenv`, catalogued as `py-os-getenv`) rather
+// than the original bare `getenv("CMD")` tagged as `app.js`: the catalog has
+// no call-shaped JS source at all, so that original fixture only ever
+// "passed" because `getenv` matched cross-language (py/java/kt/cpp all
+// declare a `getenv` source and, before Phase 2's table-driven
+// `_languageAllowed`, none of those non-js/cpp entries were scoped by file
+// extension). Now that every catalog language is scoped, the mechanism this
+// test guards needs a fixture where the source is genuinely catalogued for
+// the language it's tagged as.
 test('engine: a call-shaped source returned from a helper taints the caller (Blocker B)', () => {
-  const code = 'function readEnv(){ return getenv("CMD"); }\n'
-    + 'function runIt(){ const cmd = readEnv(); require("child_process").exec(cmd); }\n';
-  const { perFile, callGraph } = buildProjectIR({ 'app.js': code });
+  const code = 'def read_env():\n    return os.getenv("CMD")\n\n'
+    + 'def run_it():\n    cmd = read_env()\n    __import__("os").system(cmd)\n';
+  const { perFile, callGraph } = buildProjectIR({ 'app.py': code });
   const findings = runTaintEngine(perFile, callGraph, { fnLimit: 5000, deadlineMs: Date.now() + 30000 });
   const ir = findings.filter(f => (f.parser || '') === 'IR-TAINT');
   assert.ok(ir.length >= 1,

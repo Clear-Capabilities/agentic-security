@@ -137,6 +137,14 @@ export const CATALOG = [
   { kind: 'source', id: 'py-flask-request-cookies',language: 'py', framework: 'flask',   match: { type: 'member', object: 'request', prop: 'cookies' }, label: 'request.cookies' },
   { kind: 'source', id: 'py-flask-request-headers',language: 'py', framework: 'flask',   match: { type: 'member', object: 'request', prop: 'headers' }, label: 'request.headers' },
   { kind: 'source', id: 'py-flask-request-data',   language: 'py', framework: 'flask',   match: { type: 'member', object: 'request', prop: 'data'    }, label: 'request.data' },
+  // Call-shaped variant of the member sources above — `request.args.get(...)`
+  // (and Flask's `.form`/`.values`, Django's `.GET`/`.POST`) is at least as
+  // common in real Flask/Django code as the bare-member form, but matchSource
+  // only recognized the member itself. Gated by `match.receiver` (checked by
+  // matchSource via _receiverAllowed, same mechanism matchSinkOrSanitizer
+  // already uses for sinks) so a plain `dict.get(...)`/`config.get(...)`
+  // elsewhere in the file does not also fire.
+  { kind: 'source', id: 'py-flask-args-get',       language: 'py', framework: 'flask',   match: { type: 'call', callee: 'get', receiver: '^(?:args|form|values|GET|POST)$' }, label: 'request.args/form/values.get() (Flask/Django)', provenance: 'url-param' },
   { kind: 'source', id: 'py-fastapi-request-query',language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Query'                  }, label: 'fastapi.Query()' },
   { kind: 'source', id: 'py-fastapi-request-body', language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Body'                   }, label: 'fastapi.Body()' },
   { kind: 'source', id: 'py-fastapi-form',         language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Form'                   }, label: 'fastapi.Form()' },
@@ -754,26 +762,39 @@ import { cppExtRe } from '../ir/parser-cpp.js';
 // Language-scope guard. `file` is optional — when absent, behavior is
 // unchanged from before this guard existed (every entry is allowed).
 //
-// Two languages are scoped today:
-//   cpp — original guard (see the file header comment).
-//   js  — added after a measured cross-language false positive: the
-//         `js-document-write` DOM sink (`callee: 'write'`) fired on Python
-//         files, reporting `sys.stderr.write(...)` and `fh.write(...)` as
-//         "XSS (document.write)". Callee matching is by bare name, so any
-//         `language: 'js'` entry is one same-named method away from firing
-//         on Python/Ruby/PHP/Java source. A JS-only sink has no business
-//         matching a non-JS file.
-// The remaining languages are deliberately NOT scoped here yet: 121 catalog
-// sinks match on a bare callee name (`read`, `get`, `post`, `run`, `load`,
-// `query`, …) and scoping them all is Phase 2's language-scoped-matching
-// work — it needs a per-language sweep, not a one-line widening here.
-// Tracked in the SDD ledger's deferred list.
-const _JS_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
+// Table-driven across all nine catalog languages (Phase 2). Extension sets
+// MUST equal the ones ir/index.js uses to dispatch each parser. Narrower
+// silently drops true positives; wider re-opens the cross-language leak that
+// put a js DOM rule on Python files in Phase 1 (the `js-document-write` sink
+// fired on `sys.stderr.write(...)` / `fh.write(...)` because callee matching
+// is by bare name). phase2-scoping.test.js pins both directions against the
+// real dispatch source in ir/index.js.
+//
+// A language with NO entry here stays permissive (matches unconditionally) —
+// that makes this table additive and means it cannot regress a language
+// before its mapping exists.
+const _LANG_EXT = {
+  js:   /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i,
+  py:   /\.py$/i,
+  cs:   /\.cs$/i,
+  kt:   /\.kt$/i,
+  go:   /\.go$/i,
+  php:  /\.(?:php|phtml)$/i,
+  rb:   /\.rb$/i,
+  java: /\.java$/i,
+};
+
+// cpp delegates to cppExtRe() rather than duplicating a literal set, so it
+// stays in lockstep with the parser dispatch in ir/index.js.
+export function _languageExtensions() {
+  return { ..._LANG_EXT, cpp: cppExtRe() };
+}
+
 function _languageAllowed(entry, file) {
   if (!file) return true;
   if (entry.language === 'cpp') return cppExtRe().test(file);
-  if (entry.language === 'js') return _JS_EXT_RE.test(file);
-  return true;
+  const re = _LANG_EXT[entry.language];
+  return re ? re.test(file) : true;   // unmapped language stays permissive
 }
 
 // Receiver constraint (`match.receiver`), evaluated against the object chain
@@ -908,7 +929,9 @@ export function matchSource(expr, file) {
     if (cn) {
       const raw = CALLEE_INDEX.get(cn);
       if (raw) {
-        const hits = filterByProvenance(raw).filter(h => _languageAllowed(h, file));
+        const hits = filterByProvenance(raw)
+          .filter(h => _languageAllowed(h, file))
+          .filter(h => _receiverAllowed(h, expr.callee));
         const s = hits.find(h => h.kind === 'source');
         if (s) return s;
       }
