@@ -18,7 +18,7 @@ In practice, a handful of small plumbing defects prevent most of it from ever ex
 
 | # | Defect | Location | Consequence |
 |---|---|---|---|
-| 1 | `callGraph.resolve()` returns a **qid string**; call sites test `resolved && resolved.qid` | `engine.js:235`, `:344`, `:795` | Always false. Callee-summary blocks never execute; `:809` unreachable. **No language produces interprocedural taint findings.** Verified identical on JS, Python and C++. |
+| 1 | `callGraph.resolve()` returns a **qid string**; five call sites test `resolved && resolved.qid` | `dataflow/engine.js:235`, `:344`, `:795`; `ifds.js:261`; `points-to.js:251` | The record is always `null`. Consequences differ per site and are spelled out in §1.1. Net effect, verified identical on JS, Python and C++: **no language produces interprocedural taint findings.** |
 | 2 | `fn.calls` emitted by only 3 of 8 parsers | `parser-js.js`, `parser-rb.js`, `parser-cpp.js` emit; Go, C#, Kotlin, PHP, Python do not | Those five languages cannot do interprocedural analysis even after #1 is fixed. |
 | 3 | `fn.calls` entries (objects) used as object keys | `dataflow/index.js:175-176` | Every entry collapses to the string `"[object Object]"`. |
 | 4 | `callersOf` keyed by source-level name; worklist looks up qids | `tabulation.js:86-88` | The IFDS caller lookup can never match. |
@@ -27,6 +27,26 @@ In practice, a handful of small plumbing defects prevent most of it from ever ex
 | 7 | The CVE-replay runner calls `runScan()` in-process and never sets `AGENTIC_SECURITY_DEEP` | `bench/cve-replay/runner.mjs` | All **193** corpus entries pass via syntactic regexes. The corpus exercises **zero** IR or taint code, so none of the above was ever caught. |
 
 Item 7 explains items 1–6: the regression gate cannot see the machinery it is supposed to protect.
+
+### 1.1 Defect 1 in precise terms
+
+An early draft of this document said the callee-summary blocks "never execute." That is too coarse, and the real behaviour matters because it determines the fix. Reading `dataflow/engine.js:235-263`:
+
+```js
+const fn  = resolved && resolved.qid ? resolved : null;   // always null
+const qid = resolved && (resolved.qid || resolved);       // correctly the string
+if (typeof qid === 'string') { … }
+```
+
+The **qid** line already tolerates a string, so a *cached* summary lookup does proceed. What `fn === null` actually costs:
+
+- `const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : []` — formal parameters are never bound to actual arguments, so the entry state carries no argument taint.
+- `if (!sum && fn && fn.cfg) { … analyzeFunction(fn, entry, inner) … }` — **a summary is never computed on demand.** Only a pre-existing cached summary can ever be found, and nothing populates that cache for the callee.
+- At `:795`, `if (!cbFn || !cbFn.params || !cbFn.params.length) continue;` — the higher-order/callback path is **fully dead**, and `:809` is genuinely unreachable.
+
+So the precise statement is: parameter binding is empty, on-demand summary computation never happens, and the callback path never runs. That is consistent with the observed end state — zero interprocedural findings in every language tested — and it means the fix is to hand these sites the function *record*, not to change `resolve()`'s contract.
+
+**Fix direction.** `callgraph.js:36` does `functions.set(fn.qid, fn)`, so the record is one map lookup away. Changing `resolve()` to return the record instead would alter a contract that `edges[].callee` and the C/C++ qualified-name path both rely on being a qid string. Resolving the record at the five call sites is therefore the smaller, safer change.
 
 **Consequence for prioritisation.** Fixing roughly six small defects plausibly unlocks more real detection capability than months of new rules would. New rules layered on a disconnected engine inherit the disconnection.
 
