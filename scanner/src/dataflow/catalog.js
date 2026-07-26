@@ -681,6 +681,41 @@ export const CATALOG = [
   { kind: 'sanitizer', id: 'kt-int-toIntOrNull',language: 'kt', match: { type: 'call', callee: 'toIntOrNull' }, effect: 'strip', appliesTo: ['*'] },
   { kind: 'sanitizer', id: 'kt-path-canonical',language: 'kt', match: { type: 'call', callee: 'canonicalFile' },effect: 'taintIf-not-pinned', appliesTo: ['path'] },
   { kind: 'sanitizer', id: 'kt-jdbc-setstring',language: 'kt', match: { type: 'call', callee: 'setString' },    effect: 'strip', appliesTo: ['sql'] },
+
+  // ─── SOURCES (C / C++) ─────────────────────────────────────────────────────
+  { kind: 'source', id: 'cpp-getenv',  language: 'cpp', framework: null, match: { type: 'call', callee: 'getenv'  }, label: 'getenv()',  provenance: 'env' },
+  { kind: 'source', id: 'cpp-recv',    language: 'cpp', framework: null, match: { type: 'call', callee: 'recv'    }, label: 'recv()',    provenance: 'network' },
+  { kind: 'source', id: 'cpp-recvfrom',language: 'cpp', framework: null, match: { type: 'call', callee: 'recvfrom'}, label: 'recvfrom()',provenance: 'network' },
+  { kind: 'source', id: 'cpp-read',    language: 'cpp', framework: null, match: { type: 'call', callee: 'read'    }, label: 'read()',    provenance: 'file-read' },
+  { kind: 'source', id: 'cpp-fread',   language: 'cpp', framework: null, match: { type: 'call', callee: 'fread'   }, label: 'fread()',   provenance: 'file-read' },
+  { kind: 'source', id: 'cpp-fgets',   language: 'cpp', framework: null, match: { type: 'call', callee: 'fgets'   }, label: 'fgets()',   provenance: 'file-read' },
+  { kind: 'source', id: 'cpp-gets',    language: 'cpp', framework: null, match: { type: 'call', callee: 'gets'    }, label: 'gets()',    provenance: 'stdin' },
+  { kind: 'source', id: 'cpp-scanf',   language: 'cpp', framework: null, match: { type: 'call', callee: 'scanf'   }, label: 'scanf()',   provenance: 'stdin' },
+
+  // ─── SINKS (C / C++) ───────────────────────────────────────────────────────
+  { kind: 'sink', id: 'cpp-system', language: 'cpp', framework: null, match: { type: 'call', callee: 'system' }, argIndex: 0,
+    vuln: { name: 'Command injection via system()', severity: 'critical', cwe: 'CWE-78', remediation: 'Use execve() with an argument vector instead of passing a shell string; never interpolate untrusted input into a command.' } },
+  { kind: 'sink', id: 'cpp-popen', language: 'cpp', framework: null, match: { type: 'call', callee: 'popen' }, argIndex: 0,
+    vuln: { name: 'Command injection via popen()', severity: 'critical', cwe: 'CWE-78', remediation: 'Use a pipe with execve() and an argument vector rather than a shell command string.' } },
+  { kind: 'sink', id: 'cpp-execl', language: 'cpp', framework: null, match: { type: 'call', callee: 'execl' }, argIndex: 0,
+    vuln: { name: 'Command injection via execl()', severity: 'critical', cwe: 'CWE-78', remediation: 'Validate the executable path against an allow-list; never build it from untrusted input.' } },
+  { kind: 'sink', id: 'cpp-strcpy', language: 'cpp', framework: null, match: { type: 'call', callee: 'strcpy' }, argIndex: 1,
+    vuln: { name: 'Buffer overflow via strcpy()', severity: 'high', cwe: 'CWE-120', remediation: 'Use strncpy() or snprintf() with an explicit destination size.' } },
+  { kind: 'sink', id: 'cpp-strcat', language: 'cpp', framework: null, match: { type: 'call', callee: 'strcat' }, argIndex: 1,
+    vuln: { name: 'Buffer overflow via strcat()', severity: 'high', cwe: 'CWE-120', remediation: 'Use strncat() or snprintf() with an explicit destination size.' } },
+  { kind: 'sink', id: 'cpp-sprintf', language: 'cpp', framework: null, match: { type: 'call', callee: 'sprintf' }, argIndex: 'all',
+    vuln: { name: 'Buffer overflow via sprintf()', severity: 'high', cwe: 'CWE-120', remediation: 'Use snprintf() with an explicit destination size.' } },
+  { kind: 'sink', id: 'cpp-memcpy', language: 'cpp', framework: null, match: { type: 'call', callee: 'memcpy' }, argIndex: 2,
+    vuln: { name: 'Buffer overflow via unchecked memcpy() length', severity: 'high', cwe: 'CWE-787', remediation: 'Bound the copy length by the destination size before copying.' } },
+  { kind: 'sink', id: 'cpp-fopen', language: 'cpp', framework: null, match: { type: 'call', callee: 'fopen' }, argIndex: 0,
+    vuln: { name: 'Path traversal via fopen()', severity: 'high', cwe: 'CWE-22', remediation: 'Canonicalise with realpath() and confirm the result stays within an allowed base directory.' } },
+  { kind: 'sink', id: 'cpp-dlopen', language: 'cpp', framework: null, match: { type: 'call', callee: 'dlopen' }, argIndex: 0,
+    vuln: { name: 'Untrusted library load via dlopen()', severity: 'critical', cwe: 'CWE-114', remediation: 'Load only from a fixed, trusted path; never build the library path from untrusted input.' } },
+
+  // ─── SANITIZERS (C / C++) ──────────────────────────────────────────────────
+  { kind: 'sanitizer', id: 'cpp-realpath', language: 'cpp', framework: null, match: { type: 'call', callee: 'realpath' }, effect: 'strip' },
+  { kind: 'sanitizer', id: 'cpp-snprintf', language: 'cpp', framework: null, match: { type: 'call', callee: 'snprintf' }, effect: 'strip' },
+  { kind: 'sanitizer', id: 'cpp-strncpy',  language: 'cpp', framework: null, match: { type: 'call', callee: 'strncpy'  }, effect: 'strip' },
 ];
 
 // ─── Expanded sanitizer catalog (v0.65.0) ────────────────────────────────

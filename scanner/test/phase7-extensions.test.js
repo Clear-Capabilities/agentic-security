@@ -57,7 +57,7 @@ test('catalog: every JS source has a provenance label', () => {
 });
 
 test('catalog: provenance values come from a known set', () => {
-  const KNOWN = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'env', 'cli', 'file-read', 'stdin', 'url-fragment']);
+  const KNOWN = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'env', 'cli', 'file-read', 'stdin', 'url-fragment', 'network']);
   for (const e of CATALOG) {
     if (e.kind !== 'source' || !e.provenance) continue;
     assert.ok(KNOWN.has(e.provenance), `unknown provenance '${e.provenance}' on ${e.id}`);

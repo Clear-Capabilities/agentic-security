@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { buildProjectIR, buildProjectIRAsync } from '../src/ir/index.js';
 import { parseCppFile } from '../src/ir/parser-cpp.js';
 import { buildClassHierarchy, resolveMethod } from '../src/ir/class-hierarchy.js';
+import { matchSource, matchSinkOrSanitizer, CATALOG } from '../src/dataflow/catalog.js';
 
 test('buildProjectIR: dispatches every C/C++ extension', () => {
   const files = {
@@ -190,4 +191,101 @@ test('class hierarchy: languages without ir.classes are unaffected', () => {
   const { perFile } = buildProjectIR({ 'b.js': 'class Foo { bar(){ return 1; } }\n' });
   const cha = buildClassHierarchy(perFile);
   assert.ok(cha.classes instanceof Map, 'still returns the documented shape');
+});
+
+// Helper: find the C-specific entry for a callee. Asserting on `cpp-` ids is
+// what keeps these tests non-vacuous — `getenv`, `system`, `popen` and
+// `realpath` already match via other languages' entries, so a bare
+// "something matched" assertion would pass with no new code at all.
+function cppEntry(callee, kind) {
+  return CATALOG.find(e =>
+    e.language === 'cpp' &&
+    e.kind === kind &&
+    e.match && e.match.type === 'call' && e.match.callee === callee);
+}
+
+test('catalog: C/C++ sources exist as C-specific entries', () => {
+  for (const callee of ['getenv', 'recv', 'recvfrom', 'read', 'fread', 'fgets', 'gets', 'scanf']) {
+    const e = cppEntry(callee, 'source');
+    assert.ok(e, `a cpp source entry for ${callee} must exist`);
+    assert.ok(e.id.startsWith('cpp-'), `${callee} entry id must be namespaced cpp-`);
+    assert.ok(e.provenance, `${callee} must declare a provenance`);
+  }
+});
+
+test('catalog: non-colliding C sources are returned by matchSource', () => {
+  // These four have no pre-existing entry under another language, so the C
+  // entry is the one matchSource returns — a real end-to-end check.
+  for (const callee of ['recv', 'recvfrom', 'fread', 'fgets']) {
+    const hit = matchSource({ kind: 'call', callee, args: [] });
+    assert.ok(hit, `${callee} must be a recognised source`);
+    assert.equal(hit.kind, 'source');
+    assert.equal(hit.language, 'cpp', `${callee} must resolve to the C entry`);
+  }
+});
+
+test('catalog: C/C++ sinks exist as C-specific entries with the right CWE', () => {
+  const cases = [
+    ['system', 'CWE-78'], ['popen', 'CWE-78'], ['execl', 'CWE-78'],
+    ['strcpy', 'CWE-120'], ['strcat', 'CWE-120'], ['sprintf', 'CWE-120'],
+    ['memcpy', 'CWE-787'], ['fopen', 'CWE-22'], ['dlopen', 'CWE-114'],
+  ];
+  for (const [callee, cwe] of cases) {
+    const e = cppEntry(callee, 'sink');
+    assert.ok(e, `a cpp sink entry for ${callee} must exist`);
+    assert.equal(e.vuln.cwe, cwe, `${callee} must carry ${cwe}`);
+  }
+});
+
+test('catalog: the C sink is reachable through matchSinkOrSanitizer', () => {
+  // matchSinkOrSanitizer returns ALL hits, so the C entry must be among them
+  // even for a callee another language already claims.
+  for (const callee of ['system', 'strcpy', 'memcpy']) {
+    const hits = matchSinkOrSanitizer(callee);
+    assert.ok(hits, `${callee} must match`);
+    assert.ok(hits.some(h => h.language === 'cpp' && h.kind === 'sink'),
+      `the cpp sink for ${callee} must be among the returned hits`);
+  }
+});
+
+test('catalog: every C/C++ sink carries a complete vuln descriptor', () => {
+  const cppSinks = CATALOG.filter(e => e.language === 'cpp' && e.kind === 'sink');
+  assert.ok(cppSinks.length >= 9, 'expected at least nine C/C++ sinks');
+  for (const s of cppSinks) {
+    for (const key of ['name', 'severity', 'cwe', 'remediation']) {
+      assert.ok(s.vuln && s.vuln[key], `${s.id}: vuln.${key} is required by the findings schema`);
+    }
+    assert.ok(['critical', 'high', 'medium', 'low', 'info'].includes(s.vuln.severity),
+      `${s.id}: severity must be one of the five documented values`);
+    assert.ok('argIndex' in s, `${s.id}: argIndex is required so the engine knows which argument matters`);
+  }
+});
+
+test('catalog: C/C++ sanitizers exist and declare an effect', () => {
+  for (const callee of ['realpath', 'snprintf', 'strncpy']) {
+    const e = cppEntry(callee, 'sanitizer');
+    assert.ok(e, `a cpp sanitizer entry for ${callee} must exist`);
+    assert.ok(e.effect, `${callee} must declare an effect`);
+  }
+});
+
+test('end-to-end: taint flows from a C++ source to a sink across the call graph', () => {
+  const files = {
+    'util.h': 'class Util {\npublic:\n  void execute(char* cmd);\n};\n',
+    'util.cpp': 'void Util::execute(char* cmd) {\n  system(cmd);\n}\n',
+    'main.cpp': 'void run(Util* u) {\n  char* p = getenv("CMD");\n  u->execute(p);\n}\n',
+  };
+  const { perFile, callGraph } = buildProjectIR(files);
+  // The source is recognised at the assignment RHS.
+  const runFn = perFile['main.cpp'].functions.find(f => f.name === 'run');
+  const asg = Object.values(runFn.cfg.nodes).find(n => n.kind === 'assign' && n.target === 'p');
+  assert.ok(matchSource(asg.source), 'getenv must be recognised as a source');
+  // The sink is recognised inside the callee.
+  const execFn = perFile['util.cpp'].functions[0];
+  const sinkCall = Object.values(execFn.cfg.nodes).find(n => n.kind === 'call' && n.callee === 'system');
+  assert.ok(sinkCall, 'system(cmd) must be lowered as a call node');
+  assert.ok(matchSinkOrSanitizer(sinkCall.callee), 'system must be a catalog sink');
+  // The two are connected by a resolved call-graph edge.
+  const edge = callGraph.edges.find(e => e.callee === execFn.qid);
+  assert.ok(edge, 'the call from run() to Util::execute must resolve across files');
 });
