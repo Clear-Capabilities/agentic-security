@@ -7,6 +7,21 @@
 //
 // Per-FILE counts, not one total: a finding moving between files matters even
 // when the total is unchanged.
+//
+// Coverage note (Phase 2 / task 3, 2026-07-26): `hooks/` and `scripts/` are
+// JS/Python only, so they cannot detect a precision change in any other
+// language's interprocedural analysis. `fixtures/polyglot/` is the only part
+// of this bench that can, and only for the languages it contains a genuine
+// caller->callee chain for: each of `app.go`, `App.cs`, `App.kt`, `app.php`
+// is a two-function `identity(x) -> emit()` chain where the callee returns
+// its argument and the caller passes the result to a sink, with the value
+// originating from a hardcoded local literal (not argv/env/network/request)
+// — so the correct polyglot total is 0, and a nonzero result there is a real
+// false positive on an interprocedural chain over untainted data, not noise
+// to tune away. `app.js`/`app.py`/`app.rb` remain single-function, sink-only
+// fixtures (no caller), so this bench still cannot see an interprocedural
+// change in JS/Python/Ruby, and it has no fixture at all for Java (Task 7).
+// Do not over-trust a 0 here as proof nothing moved outside what's listed.
 
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';

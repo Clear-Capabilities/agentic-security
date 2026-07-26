@@ -1,7 +1,11 @@
 class App {
-    public void Emit(string payload) {
+    public string Identity(string payload) {
+        return payload;
+    }
+    public void Emit() {
+        var msg = Identity("status: ok");
         var w = new System.IO.StreamWriter("/tmp/out.log");
-        w.Write(payload);
+        w.Write(msg);
         w.Close();
     }
 }

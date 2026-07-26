@@ -1,6 +1,10 @@
 <?php
-function emit($payload) {
+function identity($payload) {
+    return $payload;
+}
+function emit() {
+    $msg = identity("status: ok");
     $fh = fopen("/tmp/out.log", "w");
-    fwrite($fh, $payload);
+    fwrite($fh, $msg);
     fclose($fh);
 }
