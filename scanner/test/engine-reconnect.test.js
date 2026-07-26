@@ -117,3 +117,22 @@ test('engine: a member call does not resolve to an unrelated same-named local fu
   assert.equal(ir.length, 0,
     `expected no IR-TAINT finding for an unrelated member call; got ${ir.length}: ${JSON.stringify(ir.map(f => f.vuln))}`);
 });
+
+test('reverse call map: keys are qids, not stringified objects', () => {
+  const { perFile, callGraph } = buildProjectIR({
+    'a.js': 'function helper(x){ return x; }\nfunction main(r){ return helper(r.query.q); }\n',
+  });
+  const helperQid = perFile['a.js'].functions.find(f => f.name === 'helper').qid;
+  const callers = {};
+  for (const fn of callGraph.functions.values()) {
+    for (const c of (fn.calls || [])) {
+      const key = c && c.callee ? (callGraph.resolve(c.callee, fn.file) || null) : null;
+      if (!key) continue;
+      (callers[key] = callers[key] || []).push(fn.qid);
+    }
+  }
+  assert.ok(!Object.keys(callers).includes('[object Object]'),
+    'an entry object must never be used as a key');
+  assert.ok(callers[helperQid] && callers[helperQid].length >= 1,
+    'helper must have at least one recorded caller, keyed by qid');
+});

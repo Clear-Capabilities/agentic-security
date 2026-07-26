@@ -84,8 +84,15 @@ export function reachabilitySliceFromSinks(sinks, callGraph, maxCallerDepth = MA
   const callersOf = new Map();
   for (const fn of callGraph.functions.values()) {
     for (const callee of (fn.calls || [])) {
-      if (!callersOf.has(callee.callee)) callersOf.set(callee.callee, []);
-      callersOf.get(callee.callee).push(fn.qid);
+      // callee.callee is a SOURCE-LEVEL name ("b.fill"); the worklist below
+      // looks this map up by qid, so keying by the name means the lookup can
+      // never match. Resolve to a qid first.
+      const name = callee && typeof callee === 'object' ? callee.callee : callee;
+      if (!name) continue;
+      const qid = callGraph.resolve ? callGraph.resolve(name, fn.file) : null;
+      if (!qid) continue;
+      if (!callersOf.has(qid)) callersOf.set(qid, []);
+      callersOf.get(qid).push(fn.qid);
     }
   }
 
