@@ -1,0 +1,42 @@
+{
+  "generatedAt": "2026-07-26T17:38:18Z",
+  "commit": "68802aeb878f91226954c8a8f82343477f47f5db",
+  "targets": {
+    "hooks": {
+      "total": 24,
+      "byFile": {
+        "cache-invalidator-guard.js": 1,
+        "conversation-context.js": 1,
+        "lib/transcript.js": 1,
+        "mascot.js": 1,
+        "model-cost-advisor.js": 2,
+        "post-edit-scan.js": 2,
+        "pre-bash-guard.js": 3,
+        "pre-edit-bodyguard.js": 4,
+        "session-start-self-check.js": 4,
+        "session-stop-drift-check.js": 2,
+        "session-welcome.js": 3
+      }
+    },
+    "scripts": {
+      "total": 24,
+      "byFile": {
+        "_compliance_lib.py": 1,
+        "apply-command-trim.mjs": 2,
+        "calibration-expand.mjs": 2,
+        "detector-fuzz-runner.mjs": 3,
+        "ghsa-to-hints.mjs": 3,
+        "llm-cost-ceiling.py": 2,
+        "nist-compliance/scan.py": 2,
+        "rotate-key-auto.py": 1,
+        "self-test-runner.mjs": 2,
+        "synthesize-detector.mjs": 5,
+        "trust-page.py": 1
+      }
+    }
+  },
+  "polyglot": {
+    "total": 0,
+    "byLanguage": {}
+  }
+}
