@@ -101,10 +101,6 @@ const ALLOWLIST = new Set([
   'suppressions.js::validateProSuppression',
   'validator-metrics.js::getLatest',
   'validator-metrics.js::checkFloors',
-  // Phase-6 taint: buildProjectIRAsync is the async variant for callers
-  // that need Java IR (which requires async java-parser import). Wired
-  // up in v2 once Java IR matures; kept as exported public API.
-  'ir/index.js::buildProjectIRAsync',
   // Phase-8 — numeric-domain lattice ordering. Standard lattice API; future
   // widening operators will need it. Kept for API symmetry.
   'numeric-domain.js::leq',
