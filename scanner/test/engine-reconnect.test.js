@@ -204,3 +204,19 @@ test('shared guard: a genuine cross-file bare-name call still registers its call
   assert.ok(callers[fillQid] && callers[fillQid].includes(fFn.qid),
     'a genuine cross-file bare-name call must still produce a caller edge, keyed by qid');
 });
+
+test('python: fn.calls is populated with the documented shape', () => {
+  const { perFile } = buildProjectIR({
+    'a.py': 'def helper(x):\n    return x\n\n\ndef main(r):\n    v = helper(r)\n    return v\n',
+  });
+  const ir = perFile['a.py'];
+  assert.ok(ir, 'the Python file must produce IR');
+  const main = ir.functions.find(f => f.name === 'main');
+  assert.ok(Array.isArray(main.calls) && main.calls.length >= 1,
+    'main must record its call to helper');
+  const c = main.calls.find(x => x.callee === 'helper');
+  assert.ok(c, 'the callee name must be recorded');
+  assert.ok(c.site && main.cfg.nodes[c.site], 'site must reference a real CFG node id');
+  assert.ok(Array.isArray(c.args), 'args must be an array');
+  assert.ok(typeof c.line === 'number' && c.line > 0, 'line must be set');
+});

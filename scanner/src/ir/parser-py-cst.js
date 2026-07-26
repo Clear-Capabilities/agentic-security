@@ -129,7 +129,67 @@ export function parsePythonFilesBatch(entries) {
     }
     return null;
   }
-  return out;
+  return _annotateCalls(out);
+}
+
+// Recursively collect every 'call' subexpression inside a lowered expr tree
+// (a call's own args can themselves contain calls, e.g. `foo(bar(x))`).
+// Mirrors parser-cpp.js's `_collectCallExprs`.
+function _collectCallExprs(expr, out) {
+  if (!expr || typeof expr !== 'object') return;
+  if (expr.kind === 'call') {
+    out.push(expr);
+    for (const a of expr.args || []) _collectCallExprs(a, out);
+    return;
+  }
+  if (Array.isArray(expr.parts)) for (const p of expr.parts) _collectCallExprs(p, out);
+  if (Array.isArray(expr.branches)) for (const b of expr.branches) _collectCallExprs(b, out);
+  if (Array.isArray(expr.elements)) for (const e of expr.elements) _collectCallExprs(e, out);
+  if (Array.isArray(expr.props)) for (const p of expr.props) _collectCallExprs(p && p.value, out);
+  if (expr.left) _collectCallExprs(expr.left, out);
+  if (expr.right) _collectCallExprs(expr.right, out);
+  if (expr.object) _collectCallExprs(expr.object, out);
+}
+
+// Build the `fn.calls` list documented at parser-js.js:19 —
+// `[{ site, callee, args, line }]` — from the CFG the helper already
+// produced. The helper's wire format is left alone (contract stability);
+// this derives `calls` the same way parser-cpp.js's `_callSitesFromCfg`
+// does, so a call at statement position (its own 'call' node) or embedded
+// in another node's expression — an assignment's RHS (`v = helper(r)`,
+// exactly the source-introducing shape the taint engine needs), a
+// return/throw value, or an if condition — is all surfaced.
+function _callSitesFromCfg(cfg) {
+  const sites = [];
+  for (const [nodeId, node] of Object.entries((cfg && cfg.nodes) || {})) {
+    if (!node) continue;
+    let root = null;
+    if (node.kind === 'call') root = { kind: 'call', callee: node.callee, args: node.args };
+    else if (node.kind === 'assign') root = node.source;
+    else if (node.kind === 'return' || node.kind === 'throw') root = node.value;
+    else if (node.kind === 'if') root = node.cond;
+    if (!root) continue;
+    const found = [];
+    _collectCallExprs(root, found);
+    for (const c of found) {
+      sites.push({ site: nodeId, callee: c.callee, args: c.args, line: node.line });
+    }
+  }
+  return sites;
+}
+
+// Populate `fn.calls` (post-parse, from the CFG) on every function of every
+// file entry the helper returned. Done here rather than in the helper
+// itself — see module comment above `_callSitesFromCfg`.
+function _annotateCalls(entries) {
+  if (!Array.isArray(entries)) return entries;
+  for (const entry of entries) {
+    if (!entry || !Array.isArray(entry.functions)) continue;
+    for (const fn of entry.functions) {
+      if (fn && fn.cfg) fn.calls = _callSitesFromCfg(fn.cfg);
+    }
+  }
+  return entries;
 }
 
 // Reset the cache — for tests.
