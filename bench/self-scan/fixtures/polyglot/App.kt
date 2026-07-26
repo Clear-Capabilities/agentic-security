@@ -3,7 +3,7 @@ fun identity(payload: String): String {
 }
 
 fun emit() {
-    val msg = identity("status: ok")
-    val f = java.io.File("/tmp/out.log")
-    f.writeText(msg)
+    val cmd = identity("status: ok")
+    val rt = Runtime.getRuntime()
+    rt.exec(cmd)
 }

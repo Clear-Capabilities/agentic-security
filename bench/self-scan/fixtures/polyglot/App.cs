@@ -3,9 +3,7 @@ class App {
         return payload;
     }
     public void Emit() {
-        var msg = Identity("status: ok");
-        var w = new System.IO.StreamWriter("/tmp/out.log");
-        w.Write(msg);
-        w.Close();
+        var path = Identity("/tmp/out.log");
+        System.IO.File.WriteAllText(path, "content");
     }
 }

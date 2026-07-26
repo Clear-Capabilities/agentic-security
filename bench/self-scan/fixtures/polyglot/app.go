@@ -7,8 +7,6 @@ func identity(payload string) string {
 }
 
 func emit() {
-	msg := identity("status: ok")
-	f, _ := os.Create("/tmp/out.log")
-	f.Write([]byte(msg))
-	f.Close()
+	path := identity("/tmp/out.log")
+	os.Open(path)
 }

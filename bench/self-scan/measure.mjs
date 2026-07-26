@@ -22,6 +22,23 @@
 // fixtures (no caller), so this bench still cannot see an interprocedural
 // change in JS/Python/Ruby, and it has no fixture at all for Java (Task 7).
 // Do not over-trust a 0 here as proof nothing moved outside what's listed.
+//
+// Verification note (same task, follow-up): the first version of this fixture
+// set used sinks the dataflow catalog (`scanner/src/dataflow/catalog.js`)
+// does not actually recognise for that language (Go's `f.Write`, C#'s
+// `w.Write`, Kotlin's `f.writeText`) or wired the sink through an assignment
+// (`f, _ := os.Open(path)`), which this engine's `case 'assign'` handling
+// does NOT check as a sink at all — only a bare `case 'call'` statement node
+// is checked against the catalog. Both mistakes silently produced a
+// permanent, uninformative 0. Each fixture was rebuilt around a sink the
+// catalog genuinely matches, called as its own statement (not an
+// assignment target), and each was live-fire tested by temporarily swapping
+// the local literal for a cataloged source, confirming the total went
+// non-zero, then reverting — see task-3-report.md for the per-language
+// entry ids and a caveat about `match.type: 'global'` catalog entries
+// (PHP's own $_GET/$_POST/$_REQUEST/$_SERVER, Ruby's rails params/session,
+// JS's `location`) being unreachable in `matchSource()` regardless of this
+// fixture — a separate, pre-existing gap, not something this task fixed.
 
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
