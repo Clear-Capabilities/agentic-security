@@ -139,6 +139,10 @@ Demonstrated by commands run in the same session as the claim:
 
 ---
 
+## Phase 2 outcome
+
+Measured in `bench/self-scan/RESULTS.md` (Task 8, 2026-07-26). **Verdict: Phase 2 shipped as designed — Go/C#/Kotlin/PHP gained interprocedural `fn.calls`, self-scan and proof-corpus precision held exactly at baseline (byte-identical proof-corpus SARIF output before/after), and no recall loss was found across 197 CVE-replay corpus entries or per-language sink-matching tests.**
+
 ## Appendix — provenance
 
 Every figure in §1 and §2 was produced by running the code on 2026-07-26 on branch `feat/engine-reconnect`: the `fn.calls` inventory by invoking each parser through `buildProjectIR`/`buildProjectIRAsync`; the 120-of-121 bare-name count by filtering `CATALOG`; and the Java stub evidence by parsing a conventional Java class and printing each function's `qid`, `line`, `params` and CFG node ids.
