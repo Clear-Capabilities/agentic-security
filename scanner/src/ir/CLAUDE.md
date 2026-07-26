@@ -43,8 +43,9 @@ every dropped function.
 The CST parser (`parser-py-cst.js`) shells out to a small Python helper
 script (`parser-py.helper.py`) that uses the stdlib `ast` module — zero
 external dependencies, ships with every Python 3.8+ install. The helper
-emits the same IR shape (`{functions[{qid,name,line,params,cfg,file}],
-topLevel}`) as the regex parser. The CFG is built from the real AST, so:
+emits the same core IR shape (`{functions[{qid,name,line,params,cfg,file}],
+topLevel}`) as the regex parser, **with one exception below.** The CFG is
+built from the real AST, so:
 
 - decorators don't drop the function record
 - async def is recognized
@@ -54,6 +55,16 @@ topLevel}`) as the regex parser. The CFG is built from the real AST, so:
   `[x for x in untrusted]`
 - nested function defs become separate entries in `functions[]`
 - `def f(x=Foo(1,2))` and `db.execute(sanitize(x))` parse correctly
+- **`fn.calls` (CST path only)** — `parser-py-cst.js` derives
+  `calls: [{site, callee, args, line}]` from the CFG after parsing (statement-
+  position calls, plus calls embedded in an assign's RHS, a return/throw
+  value, or an if condition). **The regex parser (`parser-py.js`) does not
+  emit `fn.calls` at all.** In practice: a scan that falls back to the regex
+  parser (no `python3` on PATH, too old, or the helper failing) still
+  produces findings, but Python loses cross-function (interprocedural) taint
+  tracking for that run — `tabulation.js`, `dataflow/index.js` and
+  `callgraph.js` all read `fn.calls`, and an absent/empty array there means a
+  function's call sites are invisible to them, same as if it called nothing.
 
 ### Cost
 
@@ -177,3 +188,7 @@ down enterprise runners sometimes don't. Targets for retirement:
   via the optional telemetry surface.
 - Or, the `AGENTIC_SECURITY_PY_PARSER` env defaults to `cst` (strict
   mode) for one release with no customer complaint tickets filed.
+- The `fn.calls` gap above is a concrete, ongoing argument for retirement:
+  every fallback to the regex parser is now also a silent loss of Python
+  interprocedural analysis, not just the older, vaguer "some constructs get
+  dropped" cost.
