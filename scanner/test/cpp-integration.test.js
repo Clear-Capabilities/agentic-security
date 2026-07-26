@@ -262,10 +262,18 @@ test('catalog: every C/C++ sink carries a complete vuln descriptor', () => {
 });
 
 test('catalog: C/C++ sanitizers exist and declare an effect', () => {
-  for (const callee of ['realpath', 'snprintf', 'strncpy']) {
+  // Only realpath() is listed — it genuinely canonicalises a path. snprintf()
+  // and strncpy() bound copy LENGTH, not content, so they are deliberately
+  // NOT sanitizers (see the comment above the C/C++ sanitizer block in
+  // catalog.js): marking them so would make a truncated-but-still-malicious
+  // payload read as sanitized.
+  for (const callee of ['realpath']) {
     const e = cppEntry(callee, 'sanitizer');
     assert.ok(e, `a cpp sanitizer entry for ${callee} must exist`);
     assert.ok(e.effect, `${callee} must declare an effect`);
+  }
+  for (const callee of ['snprintf', 'strncpy']) {
+    assert.ok(!cppEntry(callee, 'sanitizer'), `${callee} must NOT be marked as a sanitizer`);
   }
 });
 
@@ -284,8 +292,73 @@ test('end-to-end: taint flows from a C++ source to a sink across the call graph'
   const execFn = perFile['util.cpp'].functions[0];
   const sinkCall = Object.values(execFn.cfg.nodes).find(n => n.kind === 'call' && n.callee === 'system');
   assert.ok(sinkCall, 'system(cmd) must be lowered as a call node');
-  assert.ok(matchSinkOrSanitizer(sinkCall.callee), 'system must be a catalog sink');
+  const sinkHits = matchSinkOrSanitizer(sinkCall.callee);
+  assert.ok(sinkHits, 'system must be a catalog sink');
+  // `system` also matches other languages' entries (php-system, rb-system,
+  // py-os-system*), so this task's own contribution is only proven by
+  // requiring the cpp-language sink specifically to be among the hits.
+  assert.ok(sinkHits.some(h => h.language === 'cpp' && h.kind === 'sink'),
+    'the cpp-language sink for system must be among the returned hits');
   // The two are connected by a resolved call-graph edge.
   const edge = callGraph.edges.find(e => e.callee === execFn.qid);
   assert.ok(edge, 'the call from run() to Util::execute must resolve across files');
+});
+
+// ─── Regression: C entries must not fire on non-C/C++ files ────────────────
+// A prior version of these catalog entries matched purely on callee name with
+// no file-extension guard, so `getenv`/`system`/etc. matching a JS/PHP/Python
+// call of the same name (already true for cross-language collisions like
+// getenv/system/popen/realpath) is expected and fine — but the C-only names
+// (`read`, `memcpy`, `sprintf`, `fopen`, `gets`, `scanf`, ...) have no
+// pre-existing entry from another language, so before the file-scope guard
+// they turned every `.read()` call in a JS file, or every `sprintf()`/
+// `fopen()` call in ordinary PHP, into a recognised C source/sink. That is
+// the false-positive regression this block guards against.
+test('catalog language scoping: a JS .read() call is not treated as a C source', () => {
+  const hit = matchSource({ kind: 'call', callee: 'read', args: [] }, 'stream.js');
+  assert.equal(hit, null, 'read() in a .js file must not match the cpp source entry');
+});
+
+test('catalog language scoping: a .c file calling read() still matches the C source', () => {
+  const hit = matchSource({ kind: 'call', callee: 'read', args: [] }, 'io.c');
+  assert.ok(hit, 'read() in a .c file must still be recognised as a source');
+  assert.equal(hit.language, 'cpp');
+});
+
+test('catalog language scoping: PHP sprintf() is not treated as a C buffer-overflow sink', () => {
+  const hits = matchSinkOrSanitizer('sprintf', 'template.php');
+  const cppHit = hits && hits.find(h => h.language === 'cpp' && h.kind === 'sink');
+  assert.ok(!cppHit, 'sprintf() in a .php file must not match the cpp sink entry');
+});
+
+test('catalog language scoping: a .cpp file calling sprintf() still matches the C sink', () => {
+  const hits = matchSinkOrSanitizer('sprintf', 'format.cpp');
+  const cppHit = hits && hits.find(h => h.language === 'cpp' && h.kind === 'sink');
+  assert.ok(cppHit, 'sprintf() in a .cpp file must still match the cpp sink entry');
+  assert.equal(cppHit.vuln.cwe, 'CWE-120');
+});
+
+test('catalog language scoping: no file argument preserves prior unscoped behavior', () => {
+  // Callers that don't pass a file (or older call sites not yet updated) must
+  // see exactly the same result as before this guard existed.
+  const hit = matchSource({ kind: 'call', callee: 'read', args: [] });
+  assert.ok(hit, 'omitting the file argument must not suppress the cpp source match');
+  assert.equal(hit.language, 'cpp');
+});
+
+test('end-to-end regression: an ordinary JS stream.read() produces no C-sourced finding', () => {
+  // The exact snippet from the regression report. Before the file-scope
+  // guard, cpp-read matched this and taint flowed into exec() as a
+  // C-sourced finding even though nothing here is C/C++.
+  const files = {
+    'app.js': 'function g(stream){ const d = stream.read(); require("child_process").exec(d); }',
+  };
+  const { perFile } = buildProjectIR(files);
+  const fn = perFile['app.js'].functions.find(f => f.name === 'g');
+  const asg = fn && Object.values(fn.cfg.nodes).find(n => n.kind === 'assign' && n.target === 'd');
+  if (asg) {
+    const hit = matchSource(asg.source, 'app.js');
+    assert.ok(!hit || hit.language !== 'cpp',
+      'stream.read() in a .js file must not resolve to the cpp source entry');
+  }
 });
