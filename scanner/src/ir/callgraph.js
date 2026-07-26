@@ -8,6 +8,26 @@
 //   4. Anything else → unresolved; the dataflow engine treats the callee as
 //      an opaque sink for taint.
 
+// Resolve whatever a caller has — a qid string or an already-resolved record —
+// into the function record.
+//
+// `resolve()` returns a qid STRING (edges[].callee holds qids, and the C/C++
+// qualified-name path depends on that), but several dataflow call sites want the
+// record so they can bind parameters and compute a summary on demand. Those
+// sites previously tested `resolved && resolved.qid`, which is never true for a
+// string, so the record was always null: parameters never bound, summaries were
+// never computed, and the callback path never ran. This helper is the bridge.
+//
+// Tolerant of a record so a future caller that already has one still works.
+export function functionRecord(callGraph, resolved) {
+  if (!resolved || !callGraph) return null;
+  if (typeof resolved === 'object') return resolved.qid ? resolved : null;
+  if (typeof resolved !== 'string') return null;
+  const fns = callGraph.functions;
+  if (!fns || typeof fns.get !== 'function') return null;
+  return fns.get(resolved) || null;
+}
+
 export function buildCallGraph(perFileIR, fileContents) {
   const functions = new Map();
   const byNameInFile = new Map();

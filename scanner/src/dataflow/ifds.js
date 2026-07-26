@@ -28,6 +28,7 @@
 // engine is gated on the CVE-replay regression corpus.
 
 import { matchSource, matchSinkOrSanitizer } from './catalog.js';
+import { functionRecord } from '../ir/callgraph.js';
 
 // Special bottom fact: "no taint yet, but reachable." Every node propagates
 // 0̂ → 0̂ to mark reachability, then layers domain facts on top.
@@ -258,7 +259,7 @@ export class IFDSSolver {
       // can derive an entry fact for it, look up (or queue) its summary
       // and apply the resulting exit facts at the return site.
       const resolved = this.callGraph.resolve ? this.callGraph.resolve(node.callee) : null;
-      const callee = resolved && resolved.qid ? resolved : null;
+      const callee = functionRecord(this.callGraph, resolved);
       if (callee && callee.cfg) {
         const calleeEntryFact = _entryFactForCall(node, currentFact, callee);
         // Seed the callee at its entry with the derived fact.
