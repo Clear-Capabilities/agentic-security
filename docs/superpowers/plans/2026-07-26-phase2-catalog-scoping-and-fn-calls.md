@@ -43,7 +43,7 @@ Each confirmed by running the code on 2026-07-26. Do not assume otherwise.
 | `match.receiver` already exists and works | `catalog.js:779-806`, applied to exactly one entry (`js-document-write`) |
 | Catalog `language` values in use | `cpp, cs, go, java, js, kt, php, py, rb` |
 | `ir/index.js` dispatch extensions | js `(js\|jsx\|ts\|tsx\|mjs\|cjs)`, py `py`, cs `cs`, kt `kt`, go `go`, php `(php\|phtml)`, rb `rb`, cpp `cppExtRe()`, java `java` |
-| Phase 1 post-fix self-scan counts | `hooks/` 0, `scripts/` 1 (the survivor is a genuine `language:'js'` entry on a real `.mjs` file) |
+| Phase 1 post-fix self-scan counts | **IR-TAINT findings:** `hooks/` 0, `scripts/` 1 (`synthesize-detector.mjs:125`, a genuine `language:'js'` entry on a real `.mjs` file). **Total findings:** `hooks/` 24, `scripts/` 24. Phase 1's "2→0, 4→1" figures were the IR-TAINT subcount, not totals — 26−2 and 27−3 reconcile. Judge precision on **both**: the total catches broad regressions, the IR-TAINT subcount catches taint-specific ones. |
 
 ---
 

@@ -130,7 +130,7 @@ Folding it into this phase would mean one plan whose first four tasks are mechan
 
 Demonstrated by commands run in the same session as the claim:
 
-1. `hooks/` and `scripts/` self-scan finding counts are at or below their Phase 1 post-fix values (0 and 1), with the remaining finding still explained.
+1. `hooks/` and `scripts/` self-scan counts are at or below their Phase 1 post-fix values on **both** measures — total findings (24 and 24) and IR-TAINT findings (0 and 1) — with the one remaining IR-TAINT finding still explained. The two measures answer different questions: the total catches a broad precision regression, the IR-TAINT subcount catches a taint-specific one. An earlier draft of this section quoted 0 and 1 as if they were totals; that conflated the subcount with the total and is corrected here.
 2. Go, C#, Kotlin and PHP each produce a cross-function interprocedural finding in a fixture where the source is in one function and the sink in another.
 3. A polyglot fixture shows no catalog entry firing on a file whose language it does not target.
 4. Per-language before/after finding counts show no recall loss on the proof-corpus targets.
