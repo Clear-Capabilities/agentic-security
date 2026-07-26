@@ -72,12 +72,38 @@ function refreshPins(manifest, targets) {
   process.stdout.write(`manifest updated: ${MANIFEST}\n`);
 }
 
-function sha256File(file) {
+// Hash AND validate a captured SARIF.
+//
+// Hashing alone is not a gate. Godot's two captures were both exactly 65,536
+// bytes (one OS pipe buffer) and both ended mid-token, so comparing their
+// digests compared two identical truncated prefixes and reported
+// `identical: true` — a check that could not fail. The capture bug is fixed
+// in lib/scan.mjs, and this refuses to report determinism from any file that
+// does not parse as a SARIF document with a `runs[]` array, so a future
+// truncation surfaces as a failure instead of a pass.
+export function sarifDigest(file) {
+  let buf;
   try {
-    return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-  } catch {
-    return null;
+    buf = fs.readFileSync(file);
+  } catch (e) {
+    return { ok: false, reason: `unreadable: ${(e && e.code) || String(e && e.message)}`, sha: null, bytes: 0, results: null };
   }
+  const sha = crypto.createHash('sha256').update(buf).digest('hex');
+  let doc;
+  try {
+    doc = JSON.parse(buf.toString('utf8'));
+  } catch {
+    return {
+      ok: false,
+      reason: `not parseable as JSON (${buf.length} bytes) — a truncated or interleaved capture`,
+      sha, bytes: buf.length, results: null,
+    };
+  }
+  if (!doc || !Array.isArray(doc.runs) || doc.runs.length === 0) {
+    return { ok: false, reason: 'parsed as JSON but has no SARIF runs[]', sha, bytes: buf.length, results: null };
+  }
+  const results = doc.runs.reduce((n, r) => n + ((r && Array.isArray(r.results) && r.results.length) || 0), 0);
+  return { ok: true, reason: null, sha, bytes: buf.length, results };
 }
 
 // A target's declared `scope` can list several first-party subtrees (e.g.
@@ -160,11 +186,17 @@ async function runTarget(t, opts) {
       const b = await runRepoScan({
         dir: scanDir, sarifPath: sarifB, timeoutMs: t.timeBudgetS * 1000,
       });
-      const ha = sha256File(sarifA);
-      const hb = sha256File(sarifB);
+      const da = sarifDigest(sarifA);
+      const db = sarifDigest(sarifB);
+      // `identical` requires BOTH captures to be valid whole SARIF documents.
+      // A truncated capture can never report determinism again.
       record.determinism = {
         checked: true,
-        identical: ha !== null && ha === hb,
+        valid: da.ok && db.ok,
+        invalidReason: da.ok ? (db.ok ? null : `run-b: ${db.reason}`) : `run-a: ${da.reason}`,
+        identical: da.ok && db.ok && da.sha === db.sha,
+        bytes: { runA: da.bytes, runB: db.bytes },
+        results: da.ok ? da.results : null,
         secondRunWallMs: b.wallMs,
       };
     } else {

@@ -70,7 +70,7 @@ stays **Syntactic** in this table because §6.12 criterion 4 (an actual interpro
 finding) was not demonstrated by any run in this session, and criterion 4 is named as tier-gating.
 See §6.12 for the measured numbers and the root-cause note on why criterion 4 didn't materialize.
 
-**2.4 C++ today is better than "nothing" and worse than "supported" — v1.0 of this PRD got this wrong.** The earlier revision claimed C++ had no support at all. The accurate inventory is in §6.1: there are real, tested C/C++ assets (a banned-API detector, five intra-procedural memory-safety detectors, a preprocessor). What does not exist is a `parser-cpp.js` emitting the IR shape contract, which is the thing that connects a language to the Layer-2 taint engine, the cross-file call graph, class-hierarchy analysis, SSA, and reachability annotation. C++ is therefore *detected* but not *analysed*. Workstream B closes that specific gap and nothing wider.
+**2.4 C++ today is better than "nothing" and worse than "supported" — v1.0 of this PRD got this wrong.** The earlier revision claimed C++ had no support at all. The accurate inventory is in §6.1: there are real, tested C/C++ assets (a banned-API detector, five intra-procedural memory-safety detectors, a preprocessor). What did not exist *when this section was written* — and now does, see §6.12 — was a `parser-cpp.js` emitting the IR shape contract, which is the thing that connects a language to the Layer-2 taint engine, the cross-file call graph, class-hierarchy analysis, SSA, and reachability annotation. C++ was therefore *detected* but not *analysed*. Workstream B has since closed that specific gap and nothing wider: `scanner/src/ir/parser-cpp.js` exists, is dispatched from both `buildProjectIR` and `buildProjectIRAsync`, and is measured in §6.12.
 
 ---
 
@@ -201,9 +201,13 @@ An accurate inventory, verified against the source tree:
 
 This is a genuine, tested foundation. `cpp-dataflow.js`'s `_findFunctions` in particular is a brace-counting translation-unit splitter written specifically because a regex approach exhibited catastrophic backtracking on real headers — that hard-won component is directly reusable.
 
-### 6.2 The gap, precisely
+### 6.2 The gap, precisely (as of PRD v1.1 — CLOSED, see §6.12)
 
-There is no `parser-cpp.js` producing the IR shape contract documented in `src/ir/CLAUDE.md`:
+*Historical statement of the gap Workstream B was written to close. `parser-cpp.js`
+now exists and both dispatch loops route C/C++ to it; the present tense below is
+retained only because the rest of the section reasons from it.*
+
+There was no `parser-cpp.js` producing the IR shape contract documented in `src/ir/CLAUDE.md`:
 
 ```
 { file, functions: [{ qid, name, line, params, file, cfg: { entry, exit, nodes } }], topLevel }
@@ -317,7 +321,7 @@ Running Godot to test a parser change is a terrible development loop. The inner 
 Every one of these must be demonstrated by a command run in the same session as the claim:
 
 1. `parser-cpp.js` produces contract-conformant IR; `npm run test:dataflow` passes.
-2. Parse coverage on Godot's first-party C++ tree **≥ 85%**, measured by `AGENTIC_SECURITY_IR_STATS`, up from the Phase-2 baseline. Files that fail to parse are enumerated in `GAPS.md`.
+2. Parse coverage on Godot's first-party C++ tree **≥ 85%**, measured by `AGENTIC_SECURITY_IR_STATS`, up from the Phase-2 baseline. Files that fail to parse are enumerated in `bench/proof-corpus/GAPS.md`.
 3. Call graph on Godot resolves a non-trivial fraction of cross-TU calls — the pairing rule in §6.7 demonstrably working, reported as an absolute number against the Phase-2 baseline of effectively zero.
 4. At least one end-to-end interprocedural C++ taint finding: source in one translation unit, sink in another, flowing through the call graph. This is the single claim that distinguishes Structural IR from Syntactic.
 5. ≥ 10 C/C++ `bench/cve-replay/` entries scoring `pre:TP post:TN`, baseline regenerated and committed.
@@ -326,33 +330,53 @@ Every one of these must be demonstrated by a command run in the same session as 
 
 If criterion 2 or 4 fails, C++ is reported as remaining at Syntactic tier and the scorecard says so. **A missed target is published, not hidden.**
 
-**Measured result (2026-07-25, Godot @ `159701651ad44335691dcbd632d8074307074c7b`, deep mode
-confirmed active — no CI env var was set):**
+**Measured result (Godot @ `159701651ad44335691dcbd632d8074307074c7b`, deep mode
+confirmed active — no CI env var was set). Re-measured 2026-07-25 after the parser fix wave
+(digit separators, raw strings, the two performance cliffs) and after fixing the SARIF capture
+truncation described under criterion 7; every figure below is from that re-run's
+`bench/proof-corpus/results/summary.json`:**
 
-1. **PASS.** `npm run test:dataflow` — 410/410 green.
+1. **PASS.** `npm run test:dataflow` — 418/418 green.
 2. **PASS, decisively.** C++ parse coverage on the full five-directory scope: **3012/3012 = 100%**
    (152 functionless), up from a clean same-scope baseline of 0/3012 = 0% (dispatch branch
-   disabled — structurally zero, not a sampling artifact). See `bench/proof-corpus/README.md`.
-3. **PASS, decisively.** Call graph resolves **130,692 of 321,800 edges** (≈40.6%) on Godot,
+   disabled — structurally zero, not a sampling artifact). C++ functions rose from 103,047 to
+   **103,285** in the re-run: the digit-separator and raw-string fixes recovered functions that
+   the blanker had been silently deleting from files that still counted as parsed. The other 8
+   unparsed files in scope are C# (298/306), enumerated in `bench/proof-corpus/GAPS.md`.
+   See `bench/proof-corpus/README.md`.
+3. **PASS, decisively.** Call graph resolves **131,422 of 322,871 edges** (≈40.7%) on Godot,
    against a same-scope baseline of 11 resolved edges (all non-C++; C++ contributed zero
    functions and zero edges pre-parser).
 4. **NOT DEMONSTRATED — published as a shortfall, not a pass.** No `ir-taint:` finding for a
    cross-TU C++ flow appeared in the live Godot scan, nor in a minimal reproduction of the
    Task 6 test's own fixture (`Util::execute` in one file, called from `run()` in another,
    `getenv` source → `system()` sink) run through the actual assembled pipeline
-   (`buildProjectIR` → `runDeepAnalysis`) rather than asserted piecewise. Root cause traced to
-   `src/dataflow/engine.js`: at both the assign-position and plain-call-position call sites, the
-   context-sensitive callee summary computed under a tainted entry state discards the callee's
-   own findings (`findings: []` in the returned summary object) — only the higher-order/callback
-   invocation path forwards `inner._findings` to the caller. This is **not C++-specific**: an
+   (`buildProjectIR` → `runDeepAnalysis`) rather than asserted piecewise.
+
+   **Corrected root cause (the earlier explanation in this section was wrong).** The blocker is
+   one step earlier than "the callee summary discards findings". `callGraph.resolve()` in
+   `src/ir/callgraph.js` returns a **qid string**, but all three call sites in
+   `src/dataflow/engine.js` — `:235` (assign position), `:344` (plain-call position) and `:795`
+   (higher-order) — do `const fn = resolved && resolved.qid ? resolved : null`. A string has no
+   `.qid`, so `fn` is **always null**. Consequences, verified by execution:
+   `resolve('execute', 'main.cpp')` returns the string `util.cpp::Util.execute@1#…` and
+   `!!(r && r.qid)` is `false`; at `:235` the lazy summary computation is guarded by
+   `!sum && fn && fn.cfg` and therefore never runs; at `:344` the whole block is guarded by
+   `fn && Array.isArray(fn.params)` and is skipped; at `:795` `if (!cbFn …) continue` fires every
+   iteration, which also makes the `findings: []` line at `:809` **unreachable**. So the callee
+   is never analysed at all — nothing is computed and then discarded, and the previous claim that
+   "only the higher-order path forwards them" was false for the same reason. This is **not
+   C++-specific**: an
    equivalent JS fixture (`helper(taintedArg)` where the sink lives inside `helper`, called at
    statement position) reproduces the identical empty result, and the project's own
    `test/fixtures/ir-taint/interproc/app.js` fixture comment already documents the limitation for
    JS ("we don't fully implement summary-based propagation across functions yet ... to exercise
    the cross-function story, the helper takes a tainted arg and the route writes the result into
-   a sink in the SAME function"). The Task 6 integration test (`cpp-integration.test.js`, "end-to-end:
-   taint flows from a C++ source to a sink across the call graph") proves the three components this
-   workstream owns — source recognition, sink recognition, cross-file call-graph edge resolution —
+   a sink in the SAME function"). JS, Python and C++ all show intraprocedural findings and no
+   interprocedural ones, exactly as this single shared defect predicts. The Task 6 integration
+   test (`cpp-integration.test.js`, since renamed to "IR + catalog wiring: a C++ source, a cpp
+   sink and the call-graph edge between them are each recognised", because its old name claimed
+   an end-to-end taint flow it never asserted) proves the three components this workstream owns — source recognition, sink recognition, cross-file call-graph edge resolution —
    are correctly wired, to the same standard as every other Structural-IR language. What it does not
    prove, and what no live run in this session could produce for any language, is a materialized
    finding through the shared engine's plain-call summary path. Fixing that is a change to the
@@ -367,16 +391,34 @@ confirmed active — no CI env var was set):**
 6. **PASS.** `npm test`: all suites green (see `bench:cve-replay:check` output below: 193/193
    baselined entries, no drift). `npm run bench:cve-replay:check`: exit 0, "no drift — 193/193
    baselined entries still pass."
-7. **PASS.** Wall time 106s against a 3600s budget; `timedOut: false`.
+7. **PASS.** Wall time 107s against a 3600s budget; `timedOut: false`; peak RSS 1176 MB.
+
+**Determinism on Godot — re-measured, previously not validly measured.** The earlier run's
+`identical: true` for Godot was **not evidence**: both captured SARIFs were exactly 65,536 bytes
+(one OS pipe buffer) and ended mid-token, because the CLI ends with `process.exit()` while a
+piped stdout write is still draining, so the runner sha256'd two identical truncated prefixes —
+a gate that could not fail. `bench/proof-corpus/lib/scan.mjs` now hands the child a file
+descriptor instead of a pipe (writes to a regular file are synchronous, so `process.exit` is
+flush-safe), and `runner.mjs`'s comparison refuses to report determinism from any capture that
+does not parse as a SARIF document with a `runs[]` array. On the re-run, Godot's two SARIFs are
+**183,978 bytes each, both valid, byte-identical (145 results)** — so the determinism claim now
+holds on real evidence. Same session, same fix: Ghost (1,364,169 vs 1,364,186 bytes) and
+Superset (1,275,554 vs 1,275,555 bytes) are **not** byte-identical; Superset's previously
+reported `identical: true` did not reproduce. Both are pre-existing scanner nondeterminism, not
+a bench defect — see `bench/proof-corpus/README.md`.
 
 **Net tier decision: C/C++ stays at Syntactic tier.** Criteria 2, 3 and 7 are met decisively —
 parse coverage and call-graph connectivity are Structural-IR-grade — but criterion 4 is the one
 this section's own rule names as tier-gating, and it was not demonstrated by any run in this
 session. Per the rule above, a missed target on criterion 2 *or* 4 keeps C/C++ at Syntactic and
 says so plainly, rather than promoting on the two criteria that passed. The gap is precisely
-scoped (§6.12 criterion 4's root-cause note above) rather than a vague "taint didn't work" —
-closing it means fixing the shared engine's callee-finding propagation, which is real, tractable
-follow-up work, not a re-do of this workstream.
+scoped (§6.12 criterion 4's corrected root-cause note above) rather than a vague "taint didn't
+work" — closing it means making the three `resolved.qid` call sites in `src/dataflow/engine.js`
+accept the qid string that `callGraph.resolve()` actually returns (and looking the function
+record up from it), which is real, tractable follow-up work on the shared engine, not a re-do of
+this workstream. **It is deliberately NOT fixed in this wave:** it is a product-wide behaviour
+change affecting every language and needs its own tracked issue, its own fixtures and its own
+false-positive review. See the known-issue register in `bench/proof-corpus/README.md`.
 
 ---
 
@@ -427,7 +469,7 @@ All are **generated**, never hand-edited. A hand-edited scorecard is a fabricate
 
 ### 8.2 Gap register
 
-`docs/proof/GAPS.md`, also generated: every miss, every timeout, every low-coverage language, every unparsed C++ file, every repo where advisory filtering yielded nothing. This file existing and being non-empty is a feature. A campaign of this size that reports zero gaps has a broken harness, not a perfect scanner.
+`bench/proof-corpus/GAPS.md` (the Phase-1/4 file that exists today, generated from each target's `results/raw/<id>/ir-stats.json` `failures[]` array; the ten-repo campaign version is planned at `docs/proof/GAPS.md`): every miss, every timeout, every low-coverage language, every unparsed C++ file, every repo where advisory filtering yielded nothing. This file existing and being non-empty is a feature. A campaign of this size that reports zero gaps has a broken harness, not a perfect scanner.
 
 ### 8.3 Gating
 
@@ -492,7 +534,7 @@ One generated evidence base, four framings — none of which introduce a claim t
 |---|---|---|
 | Customers | `docs/proof/SCORECARD.md` — language × licence × scale matrix | "It runs on code like yours, whatever you write it in" |
 | Investors | Replay results + the C++ before/after delta, plus §2's honest framing | "It finds real, disclosed vulnerabilities in real production code — and when we found a gap, we closed it and measured the difference" |
-| Internal quality | `GAPS.md` + the gated baseline | Prioritised, evidence-backed rule and performance backlog |
+| Internal quality | `bench/proof-corpus/GAPS.md` + the gated baseline | Prioritised, evidence-backed rule and performance backlog |
 | Marketing | Per-repo case studies | Ten concrete, named, verifiable reference points |
 
 The investor framing is deliberately the one that leads with the limitation. A scorecard that lists its misses is far more credible than one that does not — and it is the only version consistent with §2. The C++ workstream strengthens this rather than weakening it: "we measured, found C++ shallow, built a parser, and re-measured" is a more compelling story about engineering discipline than a uniformly green table would have been.
@@ -534,11 +576,11 @@ Plus `test/parser-cpp.test.js` added to the existing `test:dataflow` scope.
 The campaign is complete when all of the following are **verified by a command run in the same session as the claim** (root `CLAUDE.md` verification discipline applies in full):
 
 1. 10/10 repos have a recorded terminal outcome; ≥ 8/10 scan successfully within budget, unscoped or with a declared scope.
-2. Parse coverage ≥ 85% for every language on a first-class IR parser, measured on a real repo — **including C++ on Godot** once Workstream B lands. Languages below that threshold are listed in `GAPS.md` with the failing files.
+2. Parse coverage ≥ 85% for every language on a first-class IR parser, measured on a real repo — **including C++ on Godot** once Workstream B lands. Languages below that threshold are listed in `bench/proof-corpus/GAPS.md` with the failing files.
 3. 10/10 repos produce byte-identical SARIF across two consecutive runs.
 4. 10/10 repos have an auto-detected licence and language mix in the scorecard.
 5. ≥ 8 replay cases executed across the 4 Tier-1 repos, each with a recorded `pre` and `post` verdict. **The pass rate is reported, not required** — a low pass rate is a valid, publishable, honest outcome that generates backlog.
-6. All seven Workstream B acceptance criteria in §6.12 are individually demonstrated, or the shortfall is published in the scorecard and `GAPS.md`.
+6. All seven Workstream B acceptance criteria in §6.12 are individually demonstrated, or the shortfall is published in the scorecard and `bench/proof-corpus/GAPS.md`.
 7. `bench:proof-corpus:check` demonstrated to exit 0 on a clean run and non-zero on a deliberately corrupted baseline.
 8. `npm test` and `bench:cve-replay:check` are green after all `scanner/src/` changes.
 9. Eleven generated documents exist and contain no hand-written numbers.

@@ -362,3 +362,85 @@ test('lowering performance: a large function body parses in near-linear time, no
     `expected 8000 statements to parse in well under 5s (quadratic behavior took ~3.6s at 5000 ` +
     `statements pre-fix and would take tens of seconds here); took ${elapsedMs}ms`);
 });
+
+// ── regression: C++14 digit separators must not be read as char literals ─────
+// `'` was unconditionally a char-literal opener, so `1'000'000` started a
+// "literal" that blanked everything up to the next quote anywhere later in
+// the file — silently deleting whole functions while the file still counted
+// as parsed. Measured on Godot's editor/editor_node.cpp: 298 functions with
+// the bug, 302 with it fixed (and 302 for a control copy with the separators
+// textually removed).
+test('parseCppFile: a C++14 digit separator does not swallow the functions that follow it', () => {
+  const code = [
+    "int limit = 1'000'000;",
+    "int mask = 0xFF'FF;",
+    'void handle(char* p) {',
+    '  system(p);',
+    '}',
+  ].join('\n');
+  const ir = parseCppFile('sep.cpp', code);
+  assert.deepEqual(ir.functions.map(f => f.name), ['handle'],
+    'the function after a digit-separated literal must still be found');
+  assert.ok(nodesOf(ir).some(n => n.kind === 'call' && n.callee === 'system'),
+    'its body must lower normally too');
+});
+
+test('parseCppFile: an ordinary char literal is still blanked as a literal', () => {
+  const code = "void f(char c) {\n  if (c == '\"') { g(c); }\n}\n";
+  const ir = parseCppFile('chr.cpp', code);
+  assert.deepEqual(ir.functions.map(f => f.name), ['f']);
+});
+
+// ── regression: raw string literals must not desynchronise the blanker ──────
+// `R"delim(...)delim"` was not modelled, so a raw string containing a `"` or
+// `'` blanked from there to the next quote and yielded ZERO functions for the
+// whole file.
+test('parseCppFile: a raw string literal containing quotes does not lose the file', () => {
+  const code = [
+    'const char* q = R"(he said "hi" and it\'s fine)";',
+    'void g(char* p) {',
+    '  system(p);',
+    '}',
+  ].join('\n');
+  const ir = parseCppFile('raw.cpp', code);
+  assert.deepEqual(ir.functions.map(f => f.name), ['g'],
+    'the function after a raw string must still be found');
+});
+
+test('parseCppFile: a delimited / prefixed raw string is handled too', () => {
+  const code = [
+    'const char* a = R"sql(SELECT ")sql";',
+    'const char* b = u8R"(x")";',
+    'void h(char* p) { system(p); }',
+  ].join('\n');
+  const ir = parseCppFile('raw2.cpp', code);
+  assert.deepEqual(ir.functions.map(f => f.name), ['h']);
+});
+
+// ── performance regression: paren scanning and expression lowering ──────────
+// Both bounds are wall-clock and generous; they exist so a return to the
+// pre-fix algorithms fails loudly rather than being noticed only in a
+// multi-million-line customer tree.
+test('parseCppFile performance: unmatched parens do not go quadratic', () => {
+  // Pre-fix: each `(` rescanned to EOF looking for its close, so 200k
+  // unmatched parens took 32.9s. `_MAX_FUNCTIONS` does not bound this because
+  // an unmatched paren pushes nothing into the result.
+  const src = '('.repeat(200_000);
+  const t0 = Date.now();
+  parseCppFile('parens.cpp', src);
+  const elapsedMs = Date.now() - t0;
+  assert.ok(elapsedMs < 3000,
+    `200k unmatched parens must parse in well under 3s (32.9s pre-fix); took ${elapsedMs}ms`);
+});
+
+test('parseCppFile performance: a long binary chain does not blow the stack', () => {
+  // Pre-fix: `_lowerExpr` recursed once per term, so this threw RangeError
+  // after 11.4s — the crash class ir/index.js's per-file guard now swallows.
+  const chain = Array(20_000).fill('a').join('-');
+  const t0 = Date.now();
+  const ir = parseCppFile('chain.cpp', `void f(int a) {\n  int x = ${chain};\n}\n`);
+  const elapsedMs = Date.now() - t0;
+  assert.equal(ir.functions.length, 1, 'the function must survive, not be dropped by a thrown parse');
+  assert.ok(elapsedMs < 3000,
+    `a 20,000-term chain must lower in well under 3s (RangeError after 11.4s pre-fix); took ${elapsedMs}ms`);
+});

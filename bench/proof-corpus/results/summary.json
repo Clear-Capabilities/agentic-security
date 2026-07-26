@@ -1,5 +1,5 @@
 {
-  "bundleSha": "28bde2e6fdb618616e5a5ee5e7c0bf4bf9a9b065f9f063b158daa83bde1b23ac",
+  "bundleSha": "4b740305633ca5a38ceb81349dfc497dfdee892168eacf4bb92ee52485f5546a",
   "targetCount": 3,
   "ok": 3,
   "failed": 0,
@@ -21,9 +21,9 @@
       "scannedPath": ".",
       "scan": {
         "exitCode": 3,
-        "wallMs": 61555,
+        "wallMs": 63540,
         "timedOut": false,
-        "peakRssKb": 3433040
+        "peakRssKb": 3394800
       },
       "coverage": {
         "byLanguage": {
@@ -49,8 +49,15 @@
       },
       "determinism": {
         "checked": true,
+        "valid": true,
+        "invalidReason": null,
         "identical": false,
-        "secondRunWallMs": 58661
+        "bytes": {
+          "runA": 1364169,
+          "runB": 1364186
+        },
+        "results": 1124,
+        "secondRunWallMs": 59543
       }
     },
     {
@@ -70,9 +77,9 @@
       "scannedPath": ".",
       "scan": {
         "exitCode": 3,
-        "wallMs": 72640,
+        "wallMs": 77421,
         "timedOut": false,
-        "peakRssKb": 2962880
+        "peakRssKb": 3570480
       },
       "coverage": {
         "byLanguage": {
@@ -105,8 +112,15 @@
       },
       "determinism": {
         "checked": true,
-        "identical": true,
-        "secondRunWallMs": 71097
+        "valid": true,
+        "invalidReason": null,
+        "identical": false,
+        "bytes": {
+          "runA": 1275554,
+          "runB": 1275555
+        },
+        "results": 860,
+        "secondRunWallMs": 72284
       }
     },
     {
@@ -132,9 +146,9 @@
       "scannedPath": "core, modules, scene, servers, editor",
       "scan": {
         "exitCode": 3,
-        "wallMs": 105866,
+        "wallMs": 106573,
         "timedOut": false,
-        "peakRssKb": 1207040
+        "peakRssKb": 1203728
       },
       "coverage": {
         "byLanguage": {
@@ -142,7 +156,7 @@
             "inScope": 3012,
             "parsed": 3012,
             "functionless": 152,
-            "functions": 103047,
+            "functions": 103285,
             "pct": 100
           },
           "csharp": {
@@ -173,16 +187,23 @@
           "pct": 100
         },
         "callGraph": {
-          "functions": 104993,
-          "edges": 321800,
-          "resolvedEdges": 130692,
-          "unresolvedEdges": 191108
+          "functions": 105231,
+          "edges": 322871,
+          "resolvedEdges": 131422,
+          "unresolvedEdges": 191449
         }
       },
       "determinism": {
         "checked": true,
+        "valid": true,
+        "invalidReason": null,
         "identical": true,
-        "secondRunWallMs": 94926
+        "bytes": {
+          "runA": 183978,
+          "runB": 183978
+        },
+        "results": 145,
+        "secondRunWallMs": 96829
       }
     }
   ]

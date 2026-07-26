@@ -26,6 +26,19 @@
 //   - pointer aliasing beyond direct assignment
 //   - function-like macros, token pasting, conditional-compilation selection
 //   - goto, multiple-inheritance vtable layout, placement new
+//   - raw string literals are BLANKED but their delimiter grammar is only
+//     partially modelled: `R"delim(...)delim"` is recognised (including the
+//     u8/u/U/L encoding prefixes) and blanked whole; an unterminated raw
+//     string blanks to end-of-file, which is what a compiler sees too. A
+//     malformed opener (no `(`, or a delimiter containing whitespace/parens/
+//     backslash) falls back to the ordinary string rule.
+//   - C++14 digit separators (`1'000'000`) are recognised as separators, not
+//     as char-literal quotes, by a local token test (see `_isDigitSeparator`);
+//     a pathological `'` that is neither is still treated as a quote.
+//   - an expression chain of more than `_MAX_BINARY_TERMS` top-level binary
+//     terms is lowered to a FLAT `tpl` of its first 32 terms rather than a
+//     deep binary tree (see `_lowerExpr`) — taint still flows through those
+//     terms, but the tree shape is not faithful.
 
 import * as crypto from 'node:crypto';
 
@@ -40,12 +53,59 @@ const _NON_FN_KEYWORDS = new Set([
 // Guard rails so a pathological file cannot dominate a scan.
 const _MAX_FUNCTIONS = 5000;
 const _LOOKBACK = 400;
+// Longest `R"delim(` delimiter the standard allows is 16 characters.
+const _MAX_RAW_DELIM = 16;
+// Above this many top-level terms in one binary chain, `_lowerExpr` emits a
+// flat node instead of a nested tree. A nested tree of depth N is built by N
+// recursive calls AND re-walked recursively by every consumer
+// (`_collectCallExprs`, the dataflow engine), so an N-term chain in a
+// generated source file is a stack-overflow bomb. 32 terms is far beyond any
+// hand-written expression while keeping the tree depth trivially safe.
+const _MAX_BINARY_TERMS = 32;
 
 export function cppExtRe() { return CPP_EXT_RE; }
 
 // ── comment / string blanking ───────────────────────────────────────────────
 // Replace comment and string bodies with spaces, preserving length and line
 // structure so every index and line number computed later stays valid.
+//
+// Two C++ literal forms below are here because getting them wrong is SILENT:
+// the file still counts as "parsed" in the coverage metric while functions
+// vanish from its IR.
+//
+//  - C++14 digit separators (`1'000'000`). Treating that `'` as a char-literal
+//    opener blanks everything up to the next quote anywhere later in the file.
+//    Measured on a real corpus file (Godot's editor/editor_node.cpp): 298
+//    functions with the bug, 302 with the separators stripped.
+//  - Raw strings (`R"(...)"`). A raw string containing a lone `"` or `'`
+//    desynchronises the blanker for the remainder of the file, which yielded
+//    ZERO functions for the whole translation unit.
+
+// True when the `'` at `src[i]` is a C++14 digit separator rather than a
+// char-literal opener: it sits between two hex digits AND the token it is
+// embedded in starts with a decimal digit (so `1'000` and `0xFF'FF` are
+// separators, while `x'a'` — not legal C++ anyway — is still a quote).
+function _isDigitSeparator(src, i) {
+  const prev = src[i - 1], next = src[i + 1];
+  if (!prev || !next) return false;
+  if (!/[0-9a-fA-F]/.test(prev) || !/[0-9a-fA-F]/.test(next)) return false;
+  let k = i - 1;
+  while (k > 0 && /[0-9A-Za-z_.']/.test(src[k - 1])) k--;
+  return /[0-9]/.test(src[k]);
+}
+
+// True when the `"` at `src[i]` opens a raw string literal — i.e. it is
+// preceded by `R`, optionally prefixed by one of the encoding prefixes
+// (`u8R"`, `uR"`, `UR"`, `LR"`), and not by a longer identifier that merely
+// happens to end in `R`.
+function _isRawStringOpen(src, i) {
+  if (src[i - 1] !== 'R') return false;
+  let j = i - 2, pre = '';
+  while (j >= 0 && /[0-9A-Za-z_]/.test(src[j]) && pre.length < 2) { pre = src[j] + pre; j--; }
+  if (j >= 0 && /[0-9A-Za-z_]/.test(src[j])) return false;
+  return pre === '' || pre === 'L' || pre === 'u' || pre === 'U' || pre === 'u8';
+}
+
 function _blank(src) {
   const out = src.split('');
   let i = 0;
@@ -64,6 +124,22 @@ function _blank(src) {
       }
       if (i < n) { out[i] = ' '; out[i + 1] = ' '; i += 2; }
       continue;
+    }
+    if (c === "'" && _isDigitSeparator(src, i)) { i++; continue; }
+    if (c === '"' && _isRawStringOpen(src, i)) {
+      const open = src.indexOf('(', i + 1);
+      const delim = open > i ? src.slice(i + 1, open) : null;
+      if (delim !== null && delim.length <= _MAX_RAW_DELIM && !/[\s()\\]/.test(delim)) {
+        const close = src.indexOf(`)${delim}"`, open + 1);
+        // Unterminated raw string: blank to EOF, which is what a compiler
+        // sees. Losing the tail of a file whose raw string never closes beats
+        // desynchronising the blanker and losing the file's whole IR.
+        const end = close === -1 ? n : close + delim.length + 2;
+        for (let k = i; k < end && k < n; k++) if (src[k] !== '\n') out[k] = ' ';
+        i = end;
+        continue;
+      }
+      // Malformed opener — fall through to the ordinary string rule below.
     }
     if (c === '"' || c === "'") {
       const quote = c;
@@ -256,22 +332,36 @@ function _enclosingNamespace(nsSpans, idx) {
   return best ? best.full : null;
 }
 
+// Pre-compute, in ONE linear pass, the index of the `)` that closes each `(`
+// (-1 when it never closes). The previous inline rescan-to-EOF per `(` was
+// O(n^2) whenever parens don't match — and preprocessor-heavy C++ produces
+// unmatched parens routinely, since `#if`-guarded halves of a construct are
+// both present in the raw text. Measured before this change: a file with
+// 200,000 unmatched `(` took 32.9 s, and `_MAX_FUNCTIONS` did not bound it
+// because unmatched parens push nothing into `found`.
+function _matchParens(blank) {
+  const match = new Int32Array(blank.length).fill(-1);
+  const stack = [];
+  for (let i = 0; i < blank.length; i++) {
+    const ch = blank[i];
+    if (ch === '(') stack.push(i);
+    else if (ch === ')' && stack.length) match[stack.pop()] = i;
+  }
+  return match;
+}
+
 // Find every function definition (with body) and declaration (no body).
 function _findFunctions(blank, classSpans) {
   const found = [];
   const n = blank.length;
+  const closeOf = _matchParens(blank);
   let i = 0;
   while (i < n && found.length < _MAX_FUNCTIONS) {
     const ch = blank[i];
     if (ch !== '(') { i++; continue; }
-    // Match the closing paren for this `(`.
-    let depth = 1, j = i + 1;
-    while (j < n && depth > 0) {
-      if (blank[j] === '(') depth++;
-      else if (blank[j] === ')') depth--;
-      j++;
-    }
-    if (depth !== 0) { i++; continue; }
+    const close = closeOf[i];
+    if (close < 0) { i++; continue; }
+    const j = close + 1;
     const paramText = blank.slice(i + 1, j - 1);
     const name = _nameBefore(blank, i);
     if (!name) { i++; continue; }
@@ -507,7 +597,21 @@ function _lowerExpr(text) {
   for (const op of ['==', '!=', '<=', '>=', '<', '>', '-', '*', '/', '%']) {
     const parts = _splitTopLevel(s, op.length === 1 ? op : '\u0000');
     if (op.length === 1 && parts.length > 1 && parts.every(p => p.trim())) {
-      return { kind: 'binary', op, left: _lowerExpr(parts[0]), right: _lowerExpr(parts.slice(1).join(op)) };
+      // ITERATIVE left fold. The previous shape re-entered `_lowerExpr` with
+      // `parts.slice(1).join(op)`, i.e. once per remaining term, so an N-term
+      // chain recursed N deep: `a-a-a-…` with N=20,000 threw RangeError after
+      // 11.4 s. Beyond `_MAX_BINARY_TERMS` the result is a FLAT `tpl`,
+      // because even an iteratively built N-deep tree overflows the stack in
+      // the recursive consumers that read it (`_collectCallExprs`, the
+      // dataflow engine's expression walkers).
+      if (parts.length > _MAX_BINARY_TERMS) {
+        return { kind: 'tpl', parts: parts.slice(0, _MAX_BINARY_TERMS).map(p => _lowerExpr(p)) };
+      }
+      let node = _lowerExpr(parts[0]);
+      for (let k = 1; k < parts.length; k++) {
+        node = { kind: 'binary', op, left: node, right: _lowerExpr(parts[k]) };
+      }
+      return node;
     }
   }
   return { kind: 'unknown' };

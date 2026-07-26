@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   languageOfFile,
   collectIrStats,
@@ -144,4 +145,46 @@ test('writeIrStats: writes sorted, timestamp-free JSON and creates parent dirs',
   writeIrStats(target, stats);
   assert.equal(fs.readFileSync(target, 'utf8'), raw, 'two writes of equal stats are byte-identical');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// ── per-file parse-failure observability (ir/index.js) ──────────────────────
+// The per-file try/catch in buildProjectIR is load-bearing (one RangeError
+// must not abort IR for the whole project) but, bare, it made a systematic
+// parser failure look identical to "this language isn't in the tree". These
+// cover the counter and the env-gated stderr line that fix that.
+
+test('irParseFailures: counts per-file parse failures by language', async () => {
+  const m = await import('../src/ir/index.js');
+  m._resetIrParseFailures();
+  assert.deepEqual(m.irParseFailures(), { count: 0, byLanguage: {}, firstError: null });
+
+  m._noteParseFailure('a/b.cs', new RangeError('Maximum call stack size exceeded'));
+  m._noteParseFailure('a/c.cs', new RangeError('Maximum call stack size exceeded'));
+  m._noteParseFailure('a/d.cpp', new Error('boom'));
+
+  const f = m.irParseFailures();
+  assert.equal(f.count, 3);
+  assert.deepEqual(f.byLanguage, { cs: 2, cpp: 1 });
+  assert.equal(f.firstError.file, 'a/b.cs');
+  assert.match(f.firstError.message, /call stack/);
+  m._resetIrParseFailures();
+  assert.equal(m.irParseFailures().count, 0);
+});
+
+test('irParseFailures: stderr line is silent by default and emitted under AGENTIC_SECURITY_IR_PARSE_DEBUG=1', () => {
+  const script = `
+    import { _noteParseFailure } from ${JSON.stringify(path.resolve('src/ir/index.js'))};
+    _noteParseFailure('x/y.cs', new RangeError('Maximum call stack size exceeded'));
+  `;
+  const run = (env) => spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    encoding: 'utf8', env: { ...process.env, ...env },
+  });
+
+  const quiet = run({ AGENTIC_SECURITY_IR_PARSE_DEBUG: '' });
+  assert.equal(quiet.status, 0, quiet.stderr);
+  assert.equal(quiet.stderr.trim(), '', 'must stay silent unless explicitly enabled');
+
+  const loud = run({ AGENTIC_SECURITY_IR_PARSE_DEBUG: '1' });
+  assert.equal(loud.status, 0, loud.stderr);
+  assert.match(loud.stderr, /\[ir\] parse failed \(cs\): x\/y\.cs: RangeError: Maximum call stack size exceeded/);
 });

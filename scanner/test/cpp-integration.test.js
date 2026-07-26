@@ -277,7 +277,13 @@ test('catalog: C/C++ sanitizers exist and declare an effect', () => {
   }
 });
 
-test('end-to-end: taint flows from a C++ source to a sink across the call graph', () => {
+// NOT an end-to-end taint test: it asserts the three PREREQUISITES for one
+// separately — the source is recognised at the assignment, the sink is
+// recognised in the callee, and a call-graph edge connects the two. The
+// dataflow engine is never run and no finding is asserted, because no
+// language currently produces an interprocedural taint finding (see the
+// `resolved.qid` known issue in bench/proof-corpus/README.md).
+test('IR + catalog wiring: a C++ source, a cpp sink and the call-graph edge between them are each recognised', () => {
   const files = {
     'util.h': 'class Util {\npublic:\n  void execute(char* cmd);\n};\n',
     'util.cpp': 'void Util::execute(char* cmd) {\n  system(cmd);\n}\n',
