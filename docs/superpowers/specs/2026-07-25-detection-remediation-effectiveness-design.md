@@ -140,6 +140,18 @@ For Phase 1, all of the following demonstrated by commands run in the same sessi
 4. At least 5 new deep-tier corpus entries pass that provably could not pass before, and the whole existing 193-entry tier remains green.
 5. Finding counts before and after on Ghost and Superset are recorded, so any precision regression is visible rather than discovered later.
 
+## Phase 1 outcome
+
+Measured and recorded in `bench/engine-reconnect/RESULTS.md`. **The thesis
+held: `interprocedural` moved from zero to non-zero in JS, Python and C++ in
+the same session's harness run**, via three engine defects rather than the
+one originally hypothesized; the deep tier gained 4 of the asked-for 5
+entries (a corpus-format limitation, not a detection gap) and the sanitizer
+gate ships wired but intentionally inert; the one precision comparison
+available (Ghost, indicative rather than same-commit) showed no finding-count
+increase, so Phase 2 proceeds with its precision work as the standing next
+priority rather than an emergency reprioritization.
+
 ---
 
 ## Appendix — provenance of every claim
