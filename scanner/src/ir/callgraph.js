@@ -188,7 +188,24 @@ export function buildCallGraph(perFileIR, fileContents) {
   // the call graph for the callee's qid at the assign-from-call site.
   // Same precedence as the edge resolution above (same-file ident wins,
   // ClassName.method falls back).
-  function resolve(name, callerFile) {
+  //
+  // `allowTailGuess` gates the ONE step in this precedence chain that is a
+  // genuine guess rather than an exact or qualified match: given a dotted
+  // name with no other match, strip it to its last segment and match ANY
+  // same-named function project-wide (`loader.read()` -> `read`). That
+  // invents a call edge with no real relationship to the call site — a
+  // false positive, which is worse than the false negative of skipping it.
+  // Every OTHER branch here (same-file, ClassName.method, re-export,
+  // cross-TU qualified name) is an exact or intentionally-qualified match,
+  // never a bare-name guess, so they run regardless of the flag.
+  //
+  // This one function is the single source of truth for both behaviours —
+  // `resolve()` and `resolveKnownCallee()` below are thin wrappers over it —
+  // so a caller can never drift from the rule by re-implementing it (this
+  // recurred once already: two dataflow call sites reintroduced the guess
+  // that `dataflow/engine.js` had already been fixed to avoid, simply
+  // because the guard lived only in that one file's helper instead of here).
+  function _resolveImpl(name, callerFile, allowTailGuess) {
     if (!name || typeof name !== 'string') return null;
     // Roadmap #3: same-file preference. A bare name (`handler`, `save`,
     // `query`) defined in several files would otherwise resolve to whichever
@@ -210,7 +227,7 @@ export function buildCallGraph(perFileIR, fileContents) {
     if (classMethods.has(name) && !isCrossLanguageUnsafe(classMethods.get(name), callerFile)) {
       return classMethods.get(name);
     }
-    if (name.includes('.')) {
+    if (allowTailGuess && name.includes('.')) {
       const tail = name.split('.').slice(-1)[0];
       for (const m of byNameInFile.values()) {
         if (m.has(tail) && !isCrossLanguageUnsafe(m.get(tail), callerFile)) return m.get(tail);
@@ -236,5 +253,19 @@ export function buildCallGraph(perFileIR, fileContents) {
     }
     return null;
   }
-  return { functions, edges, callersOf, resolve };
+  // Permissive: includes the bare-tail guess. Existing callers that already
+  // accept that tradeoff (or pre-date this split) keep this name.
+  function resolve(name, callerFile) {
+    return _resolveImpl(name, callerFile, true);
+  }
+  // Safe-by-default: every match is exact or explicitly qualified; never
+  // invents an edge by guessing from a dotted name's last segment. This is
+  // the entry point new callers should reach for — anything resolving a
+  // callee purely to build/query a reverse call graph (who calls whom) has
+  // no use for a guessed edge, since a wrong one fabricates a dataflow path
+  // that does not exist.
+  function resolveKnownCallee(name, callerFile) {
+    return _resolveImpl(name, callerFile, false);
+  }
+  return { functions, edges, callersOf, resolve, resolveKnownCallee };
 }

@@ -89,7 +89,11 @@ export function reachabilitySliceFromSinks(sinks, callGraph, maxCallerDepth = MA
       // never match. Resolve to a qid first.
       const name = callee && typeof callee === 'object' ? callee.callee : callee;
       if (!name) continue;
-      const qid = callGraph.resolve ? callGraph.resolve(name, fn.file) : null;
+      // resolveKnownCallee (not resolve): callee.callee may be a flattened
+      // member-call string ("loader.read"); the plain resolve() would guess
+      // via its bare-tail fallback and invent an edge to an unrelated
+      // same-named function. See callgraph.js.
+      const qid = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, fn.file) : null;
       if (!qid) continue;
       if (!callersOf.has(qid)) callersOf.set(qid, []);
       callersOf.get(qid).push(fn.qid);

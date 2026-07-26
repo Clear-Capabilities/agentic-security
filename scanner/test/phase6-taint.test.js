@@ -272,8 +272,13 @@ test('tabulation: reachabilitySliceFromSinks walks reverse call graph', () => {
     // Reverse-map keying now resolves the callee NAME to a qid (fixing the
     // bug where callersOf was keyed by the raw source-level name); mirror
     // that here with a minimal resolver so the mock matches real callGraph
-    // shape instead of relying on name === qid by coincidence.
+    // shape instead of relying on name === qid by coincidence. tabulation.js
+    // calls resolveKnownCallee specifically (the guess-free entry point), so
+    // the mock must provide that name too, not just resolve().
     resolve(name) {
+      return this.functions.has(name) ? name : null;
+    },
+    resolveKnownCallee(name) {
       return this.functions.has(name) ? name : null;
     },
   };

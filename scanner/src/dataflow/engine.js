@@ -272,8 +272,13 @@ function step(node, stateIn, callContext) {
         const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
         const _resolvableName = node.source && node.source.kind === 'call'
           ? _resolvableCalleeName(node.source.callee) : null;
-        const resolved = (_resolvableName && callContext._callGraph.resolve)
-          ? callContext._callGraph.resolve(_resolvableName, _callerFile) : null;
+        // resolveKnownCallee: never guess via resolve()'s bare-tail
+        // fallback. _resolvableCalleeName already refuses JS member
+        // expressions, but a pre-flattened STRING callee (Go/PHP/Ruby/
+        // C++/Python parsers) can still be dotted, and only the resolver
+        // itself can tell — see callgraph.js.
+        const resolved = (_resolvableName && callContext._callGraph.resolveKnownCallee)
+          ? callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile) : null;
         const fn  = functionRecord(callContext._callGraph, resolved);
         const qid = resolved && (resolved.qid || resolved);
         if (typeof qid === 'string') {
@@ -382,8 +387,11 @@ function step(node, stateIn, callContext) {
       if (callContext._summaryCache && callContext._callGraph && _plainCallCalleeName) {
         const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
         const _resolvableName = _resolvableCalleeName(node.callee);
-        const resolved = (_resolvableName && callContext._callGraph.resolve)
-          ? callContext._callGraph.resolve(_resolvableName, _callerFile) : null;
+        // resolveKnownCallee: see the comment at the sibling call site above
+        // — a pre-flattened dotted STRING callee must not be guessed via
+        // resolve()'s bare-tail fallback.
+        const resolved = (_resolvableName && callContext._callGraph.resolveKnownCallee)
+          ? callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile) : null;
         const fn  = functionRecord(callContext._callGraph, resolved);
         const qid = resolved && (resolved.qid || resolved);
         if (typeof qid === 'string' && fn && Array.isArray(fn.params)) {
@@ -834,7 +842,11 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       if (Date.now() > deadlineMs) break;
       const inv = hoInvocations[hi];
       if (!inv.callee || !inv.taintedParam) continue;
-      const resolved = callGraph.resolve ? callGraph.resolve(inv.callee, fn && fn.file) : null;
+      // inv.callee is always a bare ident (only cb.kind === 'ident' pushes a
+      // higher-order invocation — see the push site above), so resolve()'s
+      // bare-tail guess never triggers here either way; resolveKnownCallee
+      // for consistency with the other call-graph lookups in this file.
+      const resolved = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(inv.callee, fn && fn.file) : null;
       const cbFn = functionRecord(callGraph, resolved);
       if (!cbFn || !cbFn.params || !cbFn.params.length) continue;
       const cbEntry = new Set([cbFn.params[inv.paramIndex || 0]]);

@@ -180,7 +180,11 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
           // this map is queryable by the qids the worklist actually uses.
           const name = c && typeof c === 'object' ? c.callee : c;
           if (!name) continue;
-          const qid = callGraph.resolve ? callGraph.resolve(name, fn.file) : null;
+          // resolveKnownCallee (not resolve): a raw fn.calls name may be a
+          // flattened member-call string ("loader.read"); the plain
+          // resolve() would guess via its bare-tail fallback and invent an
+          // edge to an unrelated same-named function. See callgraph.js.
+          const qid = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, fn.file) : null;
           if (!qid) continue;
           if (!callers[qid]) callers[qid] = [];
           callers[qid].push(fn.qid);
