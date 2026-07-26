@@ -63,6 +63,13 @@ Four things must be stated before any of the design, because they define what th
 | **Syntactic** | Pattern/brace detectors, no CFG, no call graph | **C/C++** |
 | **Opt-in AST** | tree-sitter, off by default, optional deps | Rust, Solidity, Swift, Dart, C/C++ |
 
+**Post-Workstream-B update (Godot measurement, §6.12):** C/C++ now has a first-class parser
+(`parser-cpp.js`), 100% parse coverage and 130,692 resolved cross-TU call-graph edges measured on
+Godot — the parser and call-graph legs of Structural IR are real and measured at scale. The tier
+stays **Syntactic** in this table because §6.12 criterion 4 (an actual interprocedural taint
+finding) was not demonstrated by any run in this session, and criterion 4 is named as tier-gating.
+See §6.12 for the measured numbers and the root-cause note on why criterion 4 didn't materialize.
+
 **2.4 C++ today is better than "nothing" and worse than "supported" — v1.0 of this PRD got this wrong.** The earlier revision claimed C++ had no support at all. The accurate inventory is in §6.1: there are real, tested C/C++ assets (a banned-API detector, five intra-procedural memory-safety detectors, a preprocessor). What does not exist is a `parser-cpp.js` emitting the IR shape contract, which is the thing that connects a language to the Layer-2 taint engine, the cross-file call graph, class-hierarchy analysis, SSA, and reachability annotation. C++ is therefore *detected* but not *analysed*. Workstream B closes that specific gap and nothing wider.
 
 ---
@@ -319,6 +326,58 @@ Every one of these must be demonstrated by a command run in the same session as 
 
 If criterion 2 or 4 fails, C++ is reported as remaining at Syntactic tier and the scorecard says so. **A missed target is published, not hidden.**
 
+**Measured result (2026-07-25, Godot @ `159701651ad44335691dcbd632d8074307074c7b`, deep mode
+confirmed active — no CI env var was set):**
+
+1. **PASS.** `npm run test:dataflow` — 410/410 green.
+2. **PASS, decisively.** C++ parse coverage on the full five-directory scope: **3012/3012 = 100%**
+   (152 functionless), up from a clean same-scope baseline of 0/3012 = 0% (dispatch branch
+   disabled — structurally zero, not a sampling artifact). See `bench/proof-corpus/README.md`.
+3. **PASS, decisively.** Call graph resolves **130,692 of 321,800 edges** (≈40.6%) on Godot,
+   against a same-scope baseline of 11 resolved edges (all non-C++; C++ contributed zero
+   functions and zero edges pre-parser).
+4. **NOT DEMONSTRATED — published as a shortfall, not a pass.** No `ir-taint:` finding for a
+   cross-TU C++ flow appeared in the live Godot scan, nor in a minimal reproduction of the
+   Task 6 test's own fixture (`Util::execute` in one file, called from `run()` in another,
+   `getenv` source → `system()` sink) run through the actual assembled pipeline
+   (`buildProjectIR` → `runDeepAnalysis`) rather than asserted piecewise. Root cause traced to
+   `src/dataflow/engine.js`: at both the assign-position and plain-call-position call sites, the
+   context-sensitive callee summary computed under a tainted entry state discards the callee's
+   own findings (`findings: []` in the returned summary object) — only the higher-order/callback
+   invocation path forwards `inner._findings` to the caller. This is **not C++-specific**: an
+   equivalent JS fixture (`helper(taintedArg)` where the sink lives inside `helper`, called at
+   statement position) reproduces the identical empty result, and the project's own
+   `test/fixtures/ir-taint/interproc/app.js` fixture comment already documents the limitation for
+   JS ("we don't fully implement summary-based propagation across functions yet ... to exercise
+   the cross-function story, the helper takes a tainted arg and the route writes the result into
+   a sink in the SAME function"). The Task 6 integration test (`cpp-integration.test.js`, "end-to-end:
+   taint flows from a C++ source to a sink across the call graph") proves the three components this
+   workstream owns — source recognition, sink recognition, cross-file call-graph edge resolution —
+   are correctly wired, to the same standard as every other Structural-IR language. What it does not
+   prove, and what no live run in this session could produce for any language, is a materialized
+   finding through the shared engine's plain-call summary path. Fixing that is a change to the
+   cross-language taint engine, not to the C++ frontend, and is out of scope for this workstream.
+5. **Shortfall, published as such — 8 of the required ≥10.** Task 7 landed 8 C/C++ corpus entries,
+   all `pre:TP post:TN`, but all passing via **pre-existing syntactic rules** in `src/sast/cpp.js` —
+   none exercises the IR parser, call graph, or taint catalog added by this workstream, because
+   the `bench/cve-replay/` runner never enables deep mode and two of the catalog's C sinks
+   (`fopen`/path-traversal, `dlopen`/untrusted-library-load) have no syntactic-rule fallback in
+   `cpp.js` to fire without it. This is the verified reason two omissions remain below 10, not an
+   oversight.
+6. **PASS.** `npm test`: all suites green (see `bench:cve-replay:check` output below: 193/193
+   baselined entries, no drift). `npm run bench:cve-replay:check`: exit 0, "no drift — 193/193
+   baselined entries still pass."
+7. **PASS.** Wall time 106s against a 3600s budget; `timedOut: false`.
+
+**Net tier decision: C/C++ stays at Syntactic tier.** Criteria 2, 3 and 7 are met decisively —
+parse coverage and call-graph connectivity are Structural-IR-grade — but criterion 4 is the one
+this section's own rule names as tier-gating, and it was not demonstrated by any run in this
+session. Per the rule above, a missed target on criterion 2 *or* 4 keeps C/C++ at Syntactic and
+says so plainly, rather than promoting on the two criteria that passed. The gap is precisely
+scoped (§6.12 criterion 4's root-cause note above) rather than a vague "taint didn't work" —
+closing it means fixing the shared engine's callee-finding propagation, which is real, tractable
+follow-up work, not a re-do of this workstream.
+
 ---
 
 ## 7. Workstream C — Tier-1 CVE replay
@@ -403,6 +462,13 @@ Godot and Nextcloud are large enough that timeout or memory exhaustion is a plau
 The realistic failure mode is not "it doesn't work" but "it parses 60% of files and resolves few cross-TU calls," leaving C++ closer to Syntactic than Structural. Real C++ is macro-heavy and template-heavy in ways the §6.5 scope deliberately does not model.
 
 **Mitigation:** the phasing measures the Phase-2 baseline before any parser work, so partial progress is still quantified progress rather than a binary pass/fail. §6.12 criterion 2 sets a specific numeric bar, and §6.12's closing sentence commits in advance to publishing a miss. The scope list in §6.5 is a contract precisely so that "templates aren't modelled" is a known limitation rather than a discovered disappointment.
+
+**Measured outcome:** the realistic failure mode described above did not materialize — Godot
+measured 100% parse coverage and 130,692 resolved call-graph edges (§6.12). The actual shortfall
+was different from the one anticipated here: criterion 4 (an interprocedural taint finding), not
+criterion 2 (parse coverage). See §6.12's criterion-4 note for the root cause, which is a
+pre-existing, general limitation in the shared taint engine's callee-finding propagation, not a
+C++-specific parsing gap.
 
 ### 9.5 C++ false-positive blowup
 

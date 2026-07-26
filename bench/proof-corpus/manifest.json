@@ -120,7 +120,7 @@
       "id": "godot",
       "url": "https://github.com/godotengine/godot.git",
       "ref": "master",
-      "commit": null,
+      "commit": "159701651ad44335691dcbd632d8074307074c7b",
       "tier": "breadth",
       "expectedLanguages": [
         "cpp"

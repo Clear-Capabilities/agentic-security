@@ -80,6 +80,29 @@ function sha256File(file) {
   }
 }
 
+// A target's declared `scope` can list several first-party subtrees (e.g.
+// Godot's core/modules/scene/servers/editor). The scanner CLI takes a single
+// root directory, so scanning "just scope[0]" silently narrows the measured
+// scope to one subtree while the manifest and scorecard keep claiming all of
+// them — exactly the "single most dishonest thing this bench could do" that
+// PROOF_CORPUS_PRD.md §5.3 calls out. Instead, materialize every scope entry
+// as a top-level sibling under one staging root (via a real recursive copy,
+// not a symlink — readTree() walks with followSymbolicLinks:false) so a
+// single scan pass covers the full declared scope, sees cross-directory calls
+// for the call graph, and excludes everything NOT listed (thirdparty/, tests/,
+// platform/, etc.) simply by never being copied in.
+function materializeScope(dir, scope, stagingDir) {
+  fs.rmSync(stagingDir, { recursive: true, force: true });
+  fs.mkdirSync(stagingDir, { recursive: true });
+  const missing = [];
+  for (const entry of scope) {
+    const src = path.join(dir, entry);
+    if (!fs.existsSync(src)) { missing.push(entry); continue; }
+    fs.cpSync(src, path.join(stagingDir, entry), { recursive: true });
+  }
+  return { stagingDir, missing };
+}
+
 async function runTarget(t, opts) {
   const record = {
     id: t.id, url: t.url, commit: t.commit, tier: t.tier,
@@ -98,10 +121,24 @@ async function runTarget(t, opts) {
 
     const statsPath = path.join(rawDir, 'ir-stats.json');
     const sarifA = path.join(rawDir, 'run-a.sarif');
-    const scanDir = Array.isArray(t.scope) && t.scope.length
-      ? path.join(dir, t.scope[0])
-      : dir;
-    record.scannedPath = path.relative(dir, scanDir) || '.';
+    let scanDir;
+    if (Array.isArray(t.scope) && t.scope.length > 1) {
+      const stagingDir = path.join(rawDir, 'scope-root');
+      const { missing } = materializeScope(dir, t.scope, stagingDir);
+      if (missing.length) {
+        record.status = 'error';
+        record.error = `scope entries missing from checkout: ${missing.join(', ')}`;
+        return record;
+      }
+      scanDir = stagingDir;
+      record.scannedPath = t.scope.join(', ');
+    } else if (Array.isArray(t.scope) && t.scope.length === 1) {
+      scanDir = path.join(dir, t.scope[0]);
+      record.scannedPath = t.scope[0];
+    } else {
+      scanDir = dir;
+      record.scannedPath = '.';
+    }
 
     const a = await runRepoScan({
       dir: scanDir, statsPath, sarifPath: sarifA, timeoutMs: t.timeBudgetS * 1000,

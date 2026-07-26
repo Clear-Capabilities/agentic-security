@@ -106,3 +106,89 @@ bar (`docs/PROOF_CORPUS_PRD.md` §12 acceptance criterion 2) on every language i
 
 The remaining eight targets are in the manifest but unpinned; Phase 2 brings
 them online.
+
+## Phase-4 status — Godot (C/C++ IR parser acceptance test)
+
+Godot pinned at commit `159701651ad44335691dcbd632d8074307074c7b` (`master`),
+scoped per the manifest to `core, modules, scene, servers, editor` (thirdparty/
+and everything else excluded). Deep mode was confirmed active for every run
+below — none of `CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`,
+`JENKINS_URL` was set in the shell that ran them, so the CLI's default-on
+deep-mode rule applied (`bin/agentic-security.js:385-391`).
+
+**A runner scope bug was found and fixed as part of this run.** The runner
+previously scanned only `scope[0]` of a multi-entry `scope` array while
+reporting the full array as the declared scope — Godot would have been
+measured on `core/` alone (416 C++ files) while the scorecard claimed five
+subsystems. `bench/proof-corpus/runner.mjs` now materializes every `scope`
+entry as a sibling under one staging root (a real recursive copy, since
+`readTree()` does not follow symlinks) so a single scan pass covers the full
+declared scope and `scannedPath` names what was actually measured.
+
+**A second, unrelated bug surfaced by running on a real multi-million-line
+tree**: `buildProjectIR`/`buildProjectIRAsync` had no per-file exception
+guard, so one pathological file (a deeply-nested C# expression tree in
+Godot's `editor/` Mono tooling, hitting `parser-cs.js`'s recursive-descent
+expression lowerer) threw `RangeError: Maximum call stack size exceeded` and
+aborted IR construction for the **entire** project — silently, since the
+call site is wrapped in a broad try/catch for instrumentation. `scanner/src/ir/index.js`
+now wraps each per-file dispatch branch individually so one file's parse
+failure degrades to "unparsed" for that file only, exactly like a parser
+returning `null`. This is a general engine fix, not C++-specific, and is
+covered by the existing `test:dataflow` suite (410/410 green after the change).
+
+### Before / after: C++ parse coverage and call-graph resolution
+
+| | Before (dispatch removed) | After (parser enabled) |
+|---|---|---|
+| C++ files in scope | 3012 | 3012 |
+| C++ files parsed | 0 | 3012 |
+| C++ parse coverage | **0%** | **100%** |
+| Call-graph functions | 1,946 (non-C++ only) | 104,993 |
+| Call-graph edges | 227 | 321,800 |
+| Resolved edges | 11 (all non-C++) | **130,692** |
+
+**Denominator note, stated plainly:** the very first baseline attempt scanned
+`core/` only (416 files, 0 parsed, 0 edges) before the runner's scope bug
+above was found and fixed. The "before" figures in this table are a *clean
+re-run* over the same full five-directory scope as "after" (3012 files in
+both), so the two rows share a denominator and the delta is directly
+comparable. Either way — 416 or 3012 — the "before" parse count is
+structurally zero: with the C++ dispatch branch disabled, `buildProjectIR`
+never produces a single C++ IR record at any scope, so 0% is not a sampling
+artifact.
+
+### Full scan metrics (post-parser, official run)
+
+| Metric | Value |
+|---|---|
+| Scanned path | `core, modules, scene, servers, editor` (declared == measured) |
+| Exit code | 3 (critical-severity findings present — a verdict, not an error) |
+| Timed out | **false** (wall 106s of a 3600s budget) |
+| Peak RSS | 1179 MB |
+| Determinism | **identical: true** — two scans of the same commit produced byte-identical SARIF (contrast with Ghost's pre-existing, unrelated determinism gap above) |
+| C++ functionless | 152 (parsed, zero-function files — headers, forward-decl-only, etc.; not a parse failure) |
+| C++ functions | 103,047 |
+
+### What this run does and does not prove
+
+The corpus entries added in Task 7 (`bench/cve-replay/capability/cpp-*`, 8
+entries, all `pre:TP post:TN`) all pass via **pre-existing syntactic rules**
+in `src/sast/cpp.js` — the cve-replay runner never enables deep mode, so none
+of those 8 entries exercises the IR parser, call graph, or taint catalog
+added in this workstream. **This Godot run is therefore the only evidence in
+the repository that the IR/call-graph/taint work does anything at scale.**
+
+A direct check of the interprocedural taint engine on both the Task 6 test
+fixture and Godot's live run found **no materialized `ir-taint:` finding**
+for a cross-translation-unit source→sink flow, despite the call-graph edge
+resolving correctly. Tracing it: the engine's context-sensitive callee-summary
+computation (used at both assign-position and plain-call-position call
+sites in `src/dataflow/engine.js`) discards the callee's inner findings —
+only the higher-order/callback invocation path forwards them to the caller's
+finding list. This reproduces identically on an equivalent JS fixture, so it
+is a pre-existing, language-agnostic gap in the shared taint engine, not
+something introduced by or specific to the C++ parser. It is out of scope
+to fix here; it is recorded as a discovered limitation. See
+`docs/PROOF_CORPUS_PRD.md` §6.12 for how this affects the criterion-4
+judgement.

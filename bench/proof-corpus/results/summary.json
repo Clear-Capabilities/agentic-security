@@ -1,7 +1,7 @@
 {
-  "bundleSha": "d9f347d67794a157a1330c9f8c32bd5eaf237a762d81a9ad031facd4d5fe7165",
-  "targetCount": 2,
-  "ok": 2,
+  "bundleSha": "28bde2e6fdb618616e5a5ee5e7c0bf4bf9a9b065f9f063b158daa83bde1b23ac",
+  "targetCount": 3,
+  "ok": 3,
   "failed": 0,
   "targets": [
     {
@@ -107,6 +107,82 @@
         "checked": true,
         "identical": true,
         "secondRunWallMs": 71097
+      }
+    },
+    {
+      "id": "godot",
+      "url": "https://github.com/godotengine/godot.git",
+      "commit": "159701651ad44335691dcbd632d8074307074c7b",
+      "tier": "breadth",
+      "status": "ok",
+      "scope": [
+        "core",
+        "modules",
+        "scene",
+        "servers",
+        "editor"
+      ],
+      "timeBudgetS": 3600,
+      "cached": true,
+      "licence": {
+        "spdx": "MIT",
+        "source": "file",
+        "file": "LICENSE.txt"
+      },
+      "scannedPath": "core, modules, scene, servers, editor",
+      "scan": {
+        "exitCode": 3,
+        "wallMs": 105866,
+        "timedOut": false,
+        "peakRssKb": 1207040
+      },
+      "coverage": {
+        "byLanguage": {
+          "cpp": {
+            "inScope": 3012,
+            "parsed": 3012,
+            "functionless": 152,
+            "functions": 103047,
+            "pct": 100
+          },
+          "csharp": {
+            "inScope": 306,
+            "parsed": 298,
+            "functionless": 130,
+            "functions": 1514,
+            "pct": 97
+          },
+          "javascript": {
+            "inScope": 4,
+            "parsed": 4,
+            "functionless": 0,
+            "functions": 189,
+            "pct": 100
+          },
+          "python": {
+            "inScope": 77,
+            "parsed": 77,
+            "functionless": 0,
+            "functions": 246,
+            "pct": 100
+          }
+        },
+        "totals": {
+          "inScope": 3399,
+          "parsed": 3391,
+          "pct": 100
+        },
+        "callGraph": {
+          "functions": 104993,
+          "edges": 321800,
+          "resolvedEdges": 130692,
+          "unresolvedEdges": 191108
+        }
+      },
+      "determinism": {
+        "checked": true,
+        "identical": true,
+        "secondRunWallMs": 94926
       }
     }
   ]
