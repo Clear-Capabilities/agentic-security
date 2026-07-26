@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildProjectIR, buildProjectIRAsync } from '../src/ir/index.js';
+import { parseCppFile } from '../src/ir/parser-cpp.js';
 
 test('buildProjectIR: dispatches every C/C++ extension', () => {
   const files = {
@@ -76,4 +77,31 @@ test('call graph: a free function resolves across files by qualified name', () =
   };
   const { callGraph } = buildProjectIR(files);
   assert.ok(callGraph.edges.some(e => e.callee), 'namespaced free function must resolve');
+});
+
+test('parseCppFile: fn.calls is populated with the parser-js-documented shape, including assignment-position calls', () => {
+  const code = 'void run(char* out) {\n  char* p = getenv("CMD");\n  memcpy(out, p, 8);\n}\n';
+  const ir = parseCppFile('a.cpp', code);
+  const fn = ir.functions[0];
+  assert.ok(Array.isArray(fn.calls) && fn.calls.length >= 2,
+    'both the assignment-position call and the statement-position call must be captured');
+
+  // Statement-position call: memcpy(out, p, 8).
+  const memcpyCall = fn.calls.find(c => c.callee === 'memcpy');
+  assert.ok(memcpyCall, 'statement-position call must be present');
+  assert.ok(fn.cfg.nodes[memcpyCall.site], 'site must be a real CFG node id');
+  assert.equal(fn.cfg.nodes[memcpyCall.site].callee, 'memcpy', 'callee must match the node it points at');
+  assert.equal(typeof memcpyCall.line, 'number');
+  assert.ok(memcpyCall.line > 0);
+
+  // Assignment-position call: char* p = getenv("CMD") — the source-introducing
+  // shape the taint engine needs; must not be missed just because it sits on
+  // an assignment's RHS rather than being its own statement.
+  const getenvCall = fn.calls.find(c => c.callee === 'getenv');
+  assert.ok(getenvCall, 'assignment-position call must be present');
+  assert.ok(fn.cfg.nodes[getenvCall.site], 'site must be a real CFG node id');
+  assert.equal(fn.cfg.nodes[getenvCall.site].kind, 'assign');
+  assert.equal(fn.cfg.nodes[getenvCall.site].source.callee, 'getenv', 'callee must match the assign node\'s call source');
+  assert.equal(typeof getenvCall.line, 'number');
+  assert.ok(getenvCall.line > 0);
 });

@@ -93,28 +93,10 @@ export function buildCallGraph(perFileIR, fileContents) {
     return null;
   }
 
-  // Deviation from the literal Task 4 brief: the C++ parser (Task 2) never
-  // populates `fn.calls` — call sites live only as `kind: 'call'` CFG nodes
-  // (`callee` is the dotted string, e.g. `b.fill`, or `util::helper`). Every
-  // other parser here does emit `fn.calls`, so bridge only for functions that
-  // carry a `qname` (C++-only today) and have no `calls` array of their own,
-  // rather than changing behavior for any existing language.
-  function callSitesOf(fn) {
-    if (Array.isArray(fn.calls) && fn.calls.length) return fn.calls;
-    if (!fn.qname || !fn.cfg || !fn.cfg.nodes) return fn.calls || [];
-    const sites = [];
-    for (const [nodeId, node] of Object.entries(fn.cfg.nodes)) {
-      if (node && node.kind === 'call' && node.callee) {
-        sites.push({ site: nodeId, callee: node.callee, args: node.args, line: node.line });
-      }
-    }
-    return sites;
-  }
-
   // Resolve each call site.
   const edges = []; // { caller, site, callee, ambiguous? }
   for (const fn of functions.values()) {
-    for (const c of callSitesOf(fn)) {
+    for (const c of (fn.calls || [])) {
       if (!c.callee) { edges.push({ caller: fn.qid, site: c.site, callee: null, line: c.line }); continue; }
       // 1. Direct name in same file
       const sameFileMap = byNameInFile.get(fn.file);

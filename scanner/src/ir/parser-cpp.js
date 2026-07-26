@@ -321,6 +321,48 @@ function _findFunctions(blank, classSpans) {
   return found;
 }
 
+// Recursively collect every 'call' subexpression inside a lowered expr tree
+// (a call's own args can themselves contain calls, e.g. `foo(bar(x))`).
+function _collectCallExprs(expr, out) {
+  if (!expr || typeof expr !== 'object') return;
+  if (expr.kind === 'call') {
+    out.push(expr);
+    for (const a of expr.args || []) _collectCallExprs(a, out);
+    return;
+  }
+  if (Array.isArray(expr.parts)) for (const p of expr.parts) _collectCallExprs(p, out);
+  if (Array.isArray(expr.branches)) for (const b of expr.branches) _collectCallExprs(b, out);
+  if (expr.left) _collectCallExprs(expr.left, out);
+  if (expr.right) _collectCallExprs(expr.right, out);
+  if (expr.object) _collectCallExprs(expr.object, out);
+}
+
+// Build the `fn.calls` list documented at parser-js.js:19 —
+// `[{ site, callee, args, line }]` — from the CFG. A call can appear at
+// statement position (its own 'call' node) or embedded in another node's
+// expression (an assignment's RHS, a return/throw value, an if condition —
+// `char* p = getenv("CMD")` is exactly the source-introducing shape the
+// taint engine needs to see and must not be missed just because it isn't a
+// bare statement).
+function _callSitesFromCfg(cfg) {
+  const sites = [];
+  for (const [nodeId, node] of Object.entries((cfg && cfg.nodes) || {})) {
+    if (!node) continue;
+    let root = null;
+    if (node.kind === 'call') root = { kind: 'call', callee: node.callee, args: node.args };
+    else if (node.kind === 'assign') root = node.source;
+    else if (node.kind === 'return' || node.kind === 'throw') root = node.value;
+    else if (node.kind === 'if') root = node.cond;
+    if (!root) continue;
+    const found = [];
+    _collectCallExprs(root, found);
+    for (const c of found) {
+      sites.push({ site: nodeId, callee: c.callee, args: c.args, line: node.line });
+    }
+  }
+  return sites;
+}
+
 export function parseCppFile(file, code) {
   if (typeof file !== 'string' || typeof code !== 'string') return null;
   const blank = _blank(code);
@@ -358,6 +400,7 @@ export function parseCppFile(file, code) {
     // slice (same offsets — `_blank` preserves length) is what actually
     // gets lowered, so identifiers and call names still survive.
     const blankBodyText = f.isDeclaration ? '' : blank.slice(f.bodyStart, f.bodyEnd);
+    const cfg = _buildCfg(bodyText, blankBodyText, f.line);
 
     functions.push({
       qid: _qid(file, tail, f.line, bodyText || `${qname}@decl`),
@@ -367,7 +410,8 @@ export function parseCppFile(file, code) {
       params: _parseParams(f.paramText),
       file,
       isDeclaration: f.isDeclaration,
-      cfg: _buildCfg(bodyText, blankBodyText, f.line),
+      cfg,
+      calls: _callSitesFromCfg(cfg),
     });
   }
 
