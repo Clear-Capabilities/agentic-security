@@ -89,7 +89,8 @@
     "bench:agent-tasks": "node ../bench/agent-tasks/security-fixer/runner.mjs",
     "bench:polyglot": "node ../bench/polyglot/runner.mjs",
     "bench:proof-corpus": "node ../bench/proof-corpus/runner.mjs",
-    "bench:proof-corpus:pins": "node ../bench/proof-corpus/runner.mjs --refresh-pins"
+    "bench:proof-corpus:pins": "node ../bench/proof-corpus/runner.mjs --refresh-pins",
+    "bench:engine-reconnect": "node ../bench/engine-reconnect/measure.mjs"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
   "license": "PolyForm-Internal-Use-1.0.0"
