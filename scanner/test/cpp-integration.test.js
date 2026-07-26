@@ -41,3 +41,39 @@ test('buildProjectIR: C++ does not disturb other languages', () => {
   assert.ok(perFile['b.py']);
   assert.ok(perFile['c.go']);
 });
+
+test('call graph: resolves a cross-translation-unit method call', () => {
+  const files = {
+    'buf.h': 'class Buffer {\npublic:\n  void fill(char* src);\n};\n',
+    'buf.cpp': 'void Buffer::fill(char* src) {\n  int n = 1;\n}\n',
+    'main.cpp': 'void run(Buffer* b, char* p) {\n  b->fill(p);\n}\n',
+  };
+  const { callGraph } = buildProjectIR(files);
+  const resolved = callGraph.edges.filter(e => e.callee);
+  assert.ok(resolved.length >= 1, 'at least one edge must resolve across files');
+  const target = callGraph.functions.get(resolved[0].callee);
+  assert.ok(target, 'the resolved callee must be a known function');
+});
+
+test('call graph: a definition wins over a header declaration', () => {
+  const files = {
+    'buf.h': 'class Buffer {\npublic:\n  void fill(char* src);\n};\n',
+    'buf.cpp': 'void Buffer::fill(char* src) {\n  int n = 1;\n}\n',
+    'main.cpp': 'void run(Buffer* b, char* p) {\n  b->fill(p);\n}\n',
+  };
+  const { perFile, callGraph } = buildProjectIR(files);
+  const defQid = perFile['buf.cpp'].functions[0].qid;
+  const declQid = perFile['buf.h'].functions[0].qid;
+  const edge = callGraph.edges.find(e => e.callee);
+  assert.equal(edge.callee, defQid, 'must resolve to the definition');
+  assert.notEqual(edge.callee, declQid, 'must not resolve to the declaration');
+});
+
+test('call graph: a free function resolves across files by qualified name', () => {
+  const files = {
+    'util.cpp': 'namespace util {\nvoid helper(char* s) {\n  int n = 1;\n}\n}\n',
+    'main.cpp': 'void go(char* p) {\n  util::helper(p);\n}\n',
+  };
+  const { callGraph } = buildProjectIR(files);
+  assert.ok(callGraph.edges.some(e => e.callee), 'namespaced free function must resolve');
+});

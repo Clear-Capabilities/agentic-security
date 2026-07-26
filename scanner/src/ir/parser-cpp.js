@@ -213,6 +213,49 @@ function _findClasses(blank) {
   return spans;
 }
 
+// Collect `namespace foo { ... }` spans (including nested), resolving each to
+// its fully-qualified path (`outer::inner`) so a free function or method
+// defined inline inside a namespace block — with no `::` written at the
+// definition site — still gets a project-wide-unique qname. Explicit
+// out-of-line qualification (`void Ns::Class::method()`) is handled
+// separately by the caller and takes precedence.
+function _findNamespaces(blank) {
+  const re = /\bnamespace\s+([A-Za-z_]\w*)\s*\{/g;
+  const spans = [];
+  let m;
+  while ((m = re.exec(blank)) !== null) {
+    const open = m.index + m[0].length - 1;
+    const body = _extractBody(blank, open);
+    if (!body) continue;
+    spans.push({ name: m[1], open, close: body.end, full: null });
+  }
+  const fullName = (s, seen) => {
+    if (s.full) return s.full;
+    seen.add(s);
+    let parent = null;
+    for (const other of spans) {
+      if (other === s || seen.has(other)) continue;
+      if (s.open > other.open && s.close < other.close) {
+        if (!parent || other.open > parent.open) parent = other;
+      }
+    }
+    s.full = parent ? `${fullName(parent, seen)}::${s.name}` : s.name;
+    return s.full;
+  };
+  for (const s of spans) fullName(s, new Set());
+  return spans;
+}
+
+function _enclosingNamespace(nsSpans, idx) {
+  let best = null;
+  for (const s of nsSpans) {
+    if (idx > s.open && idx < s.close) {
+      if (!best || s.open > best.open) best = s;
+    }
+  }
+  return best ? best.full : null;
+}
+
 // Find every function definition (with body) and declaration (no body).
 function _findFunctions(blank, classSpans) {
   const found = [];
@@ -282,6 +325,7 @@ export function parseCppFile(file, code) {
   if (typeof file !== 'string' || typeof code !== 'string') return null;
   const blank = _blank(code);
   const classSpans = _findClasses(blank);
+  const namespaceSpans = _findNamespaces(blank);
   const raw = _findFunctions(blank, classSpans);
 
   const functions = [];
@@ -291,10 +335,18 @@ export function parseCppFile(file, code) {
       ? f.name.slice(0, f.name.lastIndexOf('::'))
       : null;
     const enclosing = _enclosingClass(classSpans, f.nameIdx);
-    // Fully-qualified name for the cross-TU index.
-    const qname = explicitScope
-      ? `${explicitScope}::${bare}`
-      : (enclosing ? `${enclosing}::${bare}` : bare);
+    const enclosingNs = _enclosingNamespace(namespaceSpans, f.nameIdx);
+    // Fully-qualified name for the cross-TU index. A definition can be
+    // qualified two ways: explicitly at the definition site (`void
+    // Ns::Class::method()`) or implicitly by sitting inside a `namespace {}`
+    // block with an unqualified name. Prefer the explicit form; only prepend
+    // the enclosing namespace when the written scope doesn't already carry it
+    // (avoids doubling `core::` when both are present).
+    let scope = explicitScope || enclosing || null;
+    if (enclosingNs && !(scope && scope === enclosingNs || scope && scope.startsWith(`${enclosingNs}::`))) {
+      scope = scope ? `${enclosingNs}::${scope}` : enclosingNs;
+    }
+    const qname = scope ? `${scope}::${bare}` : bare;
     // The class used in the qid tail is the IMMEDIATE class — the last scope
     // segment — because class-hierarchy.js splits the tail on its first dot.
     const ownerClass = explicitScope ? explicitScope.split('::').pop() : enclosing;

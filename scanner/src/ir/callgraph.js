@@ -40,10 +40,81 @@ export function buildCallGraph(perFileIR, fileContents) {
     }
   }
 
+  // Project-wide qualified-name index. C++ splits declaration from definition
+  // (`Foo::bar` declared in a header, defined in a .cpp), so a file-local
+  // lookup resolves almost nothing. Definitions take precedence over
+  // declarations, which are indexed only as a fallback.
+  const byQname = new Map();
+  for (const ir of Object.values(perFileIR || {})) {
+    for (const fn of (ir && ir.functions) || []) {
+      if (!fn.qname) continue;
+      const existing = byQname.get(fn.qname);
+      if (!existing || (existing.isDeclaration && !fn.isDeclaration)) {
+        byQname.set(fn.qname, fn);
+      }
+      // Also index the bare method name so `b->fill(p)` — which carries no
+      // class qualification at the call site — can still find `Buffer::fill`,
+      // but only when that bare name is unambiguous project-wide.
+      const bare = fn.qname.includes('::') ? fn.qname.split('::').pop() : null;
+      if (bare) {
+        const key = `~bare~${bare}`;
+        if (byQname.has(key)) {
+          const cur = byQname.get(key);
+          if (cur !== null && cur.qname !== fn.qname) {
+            byQname.set(key, null); // ambiguous — refuse to guess
+          } else if (cur && cur.isDeclaration && !fn.isDeclaration) {
+            // Same method, declaration seen first — a later definition must
+            // still win, exactly as the direct qname index above.
+            byQname.set(key, fn);
+          }
+        } else {
+          byQname.set(key, fn);
+        }
+      }
+    }
+  }
+
+  // Qualified-name resolution (C++ header/source pairing). Try the name as
+  // written, then its dotted form re-expressed with `::`, then the
+  // unambiguous bare name. Returns a qid or null — never a bodiless
+  // declaration's qid, and never a guess when a bare name is ambiguous.
+  function resolveQname(name) {
+    if (!name) return null;
+    const direct = byQname.get(name);
+    if (direct && !direct.isDeclaration) return direct.qid;
+    const colonised = name.replace(/\./g, '::');
+    const viaColon = byQname.get(colonised);
+    if (viaColon && !viaColon.isDeclaration) return viaColon.qid;
+    const bare = name.includes('.') || name.includes('::')
+      ? name.split(/[.:]+/).pop()
+      : name;
+    const viaBare = byQname.get(`~bare~${bare}`);
+    if (viaBare && !viaBare.isDeclaration) return viaBare.qid;
+    return null;
+  }
+
+  // Deviation from the literal Task 4 brief: the C++ parser (Task 2) never
+  // populates `fn.calls` — call sites live only as `kind: 'call'` CFG nodes
+  // (`callee` is the dotted string, e.g. `b.fill`, or `util::helper`). Every
+  // other parser here does emit `fn.calls`, so bridge only for functions that
+  // carry a `qname` (C++-only today) and have no `calls` array of their own,
+  // rather than changing behavior for any existing language.
+  function callSitesOf(fn) {
+    if (Array.isArray(fn.calls) && fn.calls.length) return fn.calls;
+    if (!fn.qname || !fn.cfg || !fn.cfg.nodes) return fn.calls || [];
+    const sites = [];
+    for (const [nodeId, node] of Object.entries(fn.cfg.nodes)) {
+      if (node && node.kind === 'call' && node.callee) {
+        sites.push({ site: nodeId, callee: node.callee, args: node.args, line: node.line });
+      }
+    }
+    return sites;
+  }
+
   // Resolve each call site.
   const edges = []; // { caller, site, callee, ambiguous? }
   for (const fn of functions.values()) {
-    for (const c of (fn.calls || [])) {
+    for (const c of callSitesOf(fn)) {
       if (!c.callee) { edges.push({ caller: fn.qid, site: c.site, callee: null, line: c.line }); continue; }
       // 1. Direct name in same file
       const sameFileMap = byNameInFile.get(fn.file);
@@ -51,6 +122,8 @@ export function buildCallGraph(perFileIR, fileContents) {
                        classMethods.get(c.callee) ||
                        // 2. ClassName.method form
                        (c.callee.includes('.') ? classMethods.get(c.callee) : null) ||
+                       // 3. Cross-TU qualified-name index (C++ header/source pairing).
+                       resolveQname(c.callee) ||
                        null;
       edges.push({ caller: fn.qid, site: c.site, callee: resolved, calleeName: c.callee, line: c.line });
     }
@@ -98,6 +171,10 @@ export function buildCallGraph(perFileIR, fileContents) {
         }
       }
     }
+    // Cross-TU qualified-name index (C++ header/source pairing) — runs after
+    // all existing rules and only matches functions carrying a `qname`.
+    const viaQname = resolveQname(name);
+    if (viaQname) return viaQname;
     return null;
   }
   return { functions, edges, callersOf, resolve };
