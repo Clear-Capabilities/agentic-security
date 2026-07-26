@@ -41,6 +41,7 @@
 //     terms, but the tree shape is not faithful.
 
 import * as crypto from 'node:crypto';
+import { callSitesFromCfg as _callSitesFromCfg } from './call-sites.js';
 
 const CPP_EXT_RE = /\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/i;
 
@@ -411,55 +412,9 @@ function _findFunctions(blank, classSpans) {
   return found;
 }
 
-// Recursively collect every 'call' subexpression inside a lowered expr tree
-// (a call's own args can themselves contain calls, e.g. `foo(bar(x))`).
-function _collectCallExprs(expr, out) {
-  if (!expr || typeof expr !== 'object') return;
-  if (expr.kind === 'call') {
-    out.push(expr);
-    for (const a of expr.args || []) _collectCallExprs(a, out);
-    return;
-  }
-  if (Array.isArray(expr.parts)) for (const p of expr.parts) _collectCallExprs(p, out);
-  if (Array.isArray(expr.branches)) for (const b of expr.branches) _collectCallExprs(b, out);
-  if (expr.left) _collectCallExprs(expr.left, out);
-  if (expr.right) _collectCallExprs(expr.right, out);
-  if (expr.object) _collectCallExprs(expr.object, out);
-}
-
-// Build the `fn.calls` list documented at parser-js.js:19 —
-// `[{ site, callee, args, line }]` — from the CFG. A call can appear at
-// statement position (its own 'call' node) or embedded in another node's
-// expression (an assignment's RHS, a return/throw value, an if condition —
-// `char* p = getenv("CMD")` is exactly the source-introducing shape the
-// taint engine needs to see and must not be missed just because it isn't a
-// bare statement).
-//
-// Known boundaries (not modeled): a call in a `for`-loop's step expression
-// (`for (;; advance(p))`) is not surfaced — the CFG only lowers the loop's
-// test into the `if` node's `cond`; a call as an assignment's LHS/target
-// (not a real C++ shape but a malformed one a fuzz input could produce) is
-// never inspected, only `source`; and a `kind: 'unknown'` statement (a
-// construct `_lowerStmt` couldn't classify) contributes no call sites even
-// if it textually contains one.
-function _callSitesFromCfg(cfg) {
-  const sites = [];
-  for (const [nodeId, node] of Object.entries((cfg && cfg.nodes) || {})) {
-    if (!node) continue;
-    let root = null;
-    if (node.kind === 'call') root = { kind: 'call', callee: node.callee, args: node.args };
-    else if (node.kind === 'assign') root = node.source;
-    else if (node.kind === 'return' || node.kind === 'throw') root = node.value;
-    else if (node.kind === 'if') root = node.cond;
-    if (!root) continue;
-    const found = [];
-    _collectCallExprs(root, found);
-    for (const c of found) {
-      sites.push({ site: nodeId, callee: c.callee, args: c.args, line: node.line });
-    }
-  }
-  return sites;
-}
+// `fn.calls` (`[{ site, callee, args, line }]`, documented at parser-js.js:19)
+// is built by the shared `callSitesFromCfg` in ./call-sites.js — see that
+// module's header for why it is shared rather than a local copy.
 
 export function parseCppFile(file, code) {
   if (typeof file !== 'string' || typeof code !== 'string') return null;
