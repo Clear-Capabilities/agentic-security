@@ -91,7 +91,9 @@
     "bench:proof-corpus": "node ../bench/proof-corpus/runner.mjs",
     "bench:proof-corpus:pins": "node ../bench/proof-corpus/runner.mjs --refresh-pins",
     "bench:engine-reconnect": "node ../bench/engine-reconnect/measure.mjs",
-    "bench:self-scan": "node ../bench/self-scan/measure.mjs"
+    "bench:self-scan": "node ../bench/self-scan/measure.mjs",
+    "bench:self-scan:check": "node ../bench/self-scan/check.mjs",
+    "bench:self-scan:update-baseline": "node ../bench/self-scan/check.mjs --update-baseline"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
   "license": "PolyForm-Internal-Use-1.0.0"
