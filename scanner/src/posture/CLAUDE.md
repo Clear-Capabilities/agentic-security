@@ -9,6 +9,8 @@ Annotators that run **after** every detector has emitted, plus state stores read
 
 **Calibration + held-out evaluation** — `calibration.js`, `calibration-drift.js`, `validator-metrics.js`, `holdout-eval.js`. The seed corpus lives at `calibration-seed.json`; held-out labels are taken via `loadLabeledJsonl`. Brier and ECE both live in `holdout-eval.js`; never reintroduce a "fit-on-the-table" version.
 
+**Published accuracy scorecard (R3)** — `accuracy-scorecard.js`. Pure aggregation + markdown/JSON rendering for `docs/SCORECARD.md`; the impure driver that performs the corpus and self-scan runs is `scripts/scorecard.mjs` (`npm run scorecard`). Every rate is carried as `{n, d}` and rendered through `formatRate()` so a percentage can never appear without its denominator; entries a run could not score are excluded from every denominator *and* disclosed by name. No F1 is emitted — see the module header for why, and don't add one without a labelled real-world population to measure precision over.
+
 **Cross-language taint** — `cross-lang-{openapi,grpc,graphql,orm,queues,meta}.js`. Each parses a contract artifact (`openapi.json`, `*.proto`, `*.graphql`, queue config) and emits a chain finding when the same data crosses a language boundary into another module's finding.
 
 **Risk amplification** — `epss.js`, `kev` (in `version.js`), `blast-radius.js`, `crown-jewels.js`, `exploitability.js`, `bounty-prediction.js`, `risk-in-dollars` (lives in `scripts/`, not here).
