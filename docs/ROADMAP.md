@@ -64,6 +64,39 @@ connection, fork bomb, wall-clock overrun) are each proven blocked by an
 executing test, and the both-direction gate holds: the guard refuses the bad
 case and permits the good one.
 
+**Status: landed, partially verified.** `scanner/src/sandbox/` ships a single
+entry point (`runConfined`/`sandboxAvailable`) dispatching to one of three
+backends. On the macOS development host, the userspace backend is **verified
+by execution**: writes outside the sandbox root are blocked (no file
+created), outbound network is blocked, and benign in-root work still
+succeeds — proven in both directions. A wall-clock overrun stops the process
+this module spawned but **does not kill the process tree** on this platform: a
+backgrounded grandchild demonstrably outlives the `'timeout'` result (survivors
+stay confined, but they keep running). A confinement denial is reported
+distinctly from an ordinary non-zero exit (`status:'blocked'` + `denied`, vs
+`'nonzero'`) — but the denial signal is read from the confined process's
+stderr, so `denied:false` means "no denial observed", never "no denial
+occurred". The parent environment is not forwarded to confined code; a minimal
+env is constructed instead. Fork-storm
+containment on this platform is **weak**: the process cap is a per-uid,
+system-wide limit, not per-tree, so it only bounds a storm to
+"ambient + margin" rather than to a small absolute number — documented, not
+overstated, in `scanner/src/sandbox/CLAUDE.md`. Address-space capping is
+**not enforceable** on the macOS family and is reported in `unsupported`
+rather than emitted as a silent no-op. The kernel-namespace backend (Linux
+family) is **implemented but not verified** — no Linux host was available in
+this development environment, so its escape tests skip with a recorded
+reason. It also confines **less** than that phrasing implies: it has no
+remount, bind mount or `pivot_root`, only a `cd`, so **it does not confine
+writes at all** — network egress (via the empty network namespace) and the
+resource limits are the whole of its confinement, and on a Linux host that
+backend is selected automatically. Fail-closed holds throughout: with no
+confinement primitive detected,
+execution is refused, never run unconfined. R2 must not treat the
+kernel-namespace backend as trustworthy until it has been verified on a Linux
+host with the same both-direction escape tests used for the userspace
+backend; R2 is not unblocked beyond what has actually been executed here.
+
 ### R2. Execution-verified exploitability
 
 **Problem.** Findings are asserted, never proven. `verify_fix` executes tests
