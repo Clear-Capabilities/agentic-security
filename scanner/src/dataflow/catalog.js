@@ -137,6 +137,23 @@ export const CATALOG = [
   { kind: 'source', id: 'py-flask-request-cookies',language: 'py', framework: 'flask',   match: { type: 'member', object: 'request', prop: 'cookies' }, label: 'request.cookies' },
   { kind: 'source', id: 'py-flask-request-headers',language: 'py', framework: 'flask',   match: { type: 'member', object: 'request', prop: 'headers' }, label: 'request.headers' },
   { kind: 'source', id: 'py-flask-request-data',   language: 'py', framework: 'flask',   match: { type: 'member', object: 'request', prop: 'data'    }, label: 'request.data' },
+  // Call-shaped variant of the member sources above — `request.args.get(...)`
+  // (and Flask's `.form`/`.values`/`.headers`/`.cookies`/`.json`/`.data`,
+  // Django's `.GET`/`.POST`/`.FILES`/`.META`) is at least as common in real
+  // Flask/Django code as the bare-member form, but matchSource only
+  // recognized the member itself. The alternation covers every request
+  // property this catalog already trusts as a member source
+  // (py-flask-request-args/form/json/values/cookies/headers/data above) so
+  // the `.get()` chain restores the same recall the member form has, rather
+  // than a subset of it — a first cut here covered only args/form/values and
+  // silently left request.headers.get()/cookies.get()/json.get() undetected
+  // (measured 4→0 against the pre-scoping cross-language leak, vs. 4→2 for
+  // args/form/values; see phase2-scoping.test.js's shape-by-shape A/B test).
+  // Gated by `match.receiver` (checked by matchSource via _receiverAllowed,
+  // same mechanism matchSinkOrSanitizer already uses for sinks) so a plain
+  // `dict.get(...)`/`config.get(...)` elsewhere in the file does not also
+  // fire.
+  { kind: 'source', id: 'py-flask-args-get',       language: 'py', framework: 'flask',   match: { type: 'call', callee: 'get', receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values/headers/cookies/json/data.get() (Flask/Django)', provenance: 'url-param' },
   { kind: 'source', id: 'py-fastapi-request-query',language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Query'                  }, label: 'fastapi.Query()' },
   { kind: 'source', id: 'py-fastapi-request-body', language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Body'                   }, label: 'fastapi.Body()' },
   { kind: 'source', id: 'py-fastapi-form',         language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Form'                   }, label: 'fastapi.Form()' },
@@ -754,26 +771,79 @@ import { cppExtRe } from '../ir/parser-cpp.js';
 // Language-scope guard. `file` is optional — when absent, behavior is
 // unchanged from before this guard existed (every entry is allowed).
 //
-// Two languages are scoped today:
-//   cpp — original guard (see the file header comment).
-//   js  — added after a measured cross-language false positive: the
-//         `js-document-write` DOM sink (`callee: 'write'`) fired on Python
-//         files, reporting `sys.stderr.write(...)` and `fh.write(...)` as
-//         "XSS (document.write)". Callee matching is by bare name, so any
-//         `language: 'js'` entry is one same-named method away from firing
-//         on Python/Ruby/PHP/Java source. A JS-only sink has no business
-//         matching a non-JS file.
-// The remaining languages are deliberately NOT scoped here yet: 121 catalog
-// sinks match on a bare callee name (`read`, `get`, `post`, `run`, `load`,
-// `query`, …) and scoping them all is Phase 2's language-scoped-matching
-// work — it needs a per-language sweep, not a one-line widening here.
-// Tracked in the SDD ledger's deferred list.
-const _JS_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
+// Table-driven across all nine catalog languages (Phase 2). Extension sets
+// MUST equal the ones ir/index.js uses to dispatch each parser. Narrower
+// silently drops true positives; wider re-opens the cross-language leak that
+// put a js DOM rule on Python files in Phase 1 (the `js-document-write` sink
+// fired on `sys.stderr.write(...)` / `fh.write(...)` because callee matching
+// is by bare name). phase2-scoping.test.js pins both directions against the
+// real dispatch source in ir/index.js.
+//
+// A language with NO entry here stays permissive (matches unconditionally) —
+// that makes this table additive and means it cannot regress a language
+// before its mapping exists.
+const _LANG_EXT = {
+  js:   /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i,
+  py:   /\.py$/i,
+  cs:   /\.cs$/i,
+  kt:   /\.kt$/i,
+  go:   /\.go$/i,
+  php:  /\.(?:php|phtml)$/i,
+  rb:   /\.rb$/i,
+  java: /\.java$/i,
+};
+
+// cpp delegates to cppExtRe() rather than duplicating a literal set, so it
+// stays in lockstep with the parser dispatch in ir/index.js.
+export function _languageExtensions() {
+  return { ..._LANG_EXT, cpp: cppExtRe() };
+}
+
+// ─── Runtime families ─────────────────────────────────────────────────────
+// A catalog `language` names a catalog *dialect*, not a file type. The two are
+// usually the same thing, but not always: `java` and `kt` are two dialects over
+// ONE runtime with ONE library surface. Kotlin code calls the Java standard
+// library, JDBC, Hibernate and the servlet API constantly, and Java code can
+// call Kotlin stdlib extensions — so scoping each dialect to its own extension
+// alone silently deletes real detections in both directions.
+//
+// It did exactly that: after the per-language scoping landed, `.kt` files
+// stopped matching 12 `java`-language sinks (executeUpdate, execute,
+// prepareStatement, addBatch, createQuery, createSQLQuery, createNativeQuery,
+// File, search, compile, sendRedirect, parse) and 4 `java` sources
+// (getCookies, getInputStream, getReader, getProperty), and `.java` files
+// stopped matching `readText`. A `.kt` file with
+// `val q = req.getParameter("q"); stmt.executeUpdate(q)` went from 1 IR-TAINT
+// finding to 0 — JDBC/Hibernate SQLi, servlet open-redirect and XXE going
+// silent in Kotlin.
+//
+// So scoping is by FAMILY, not by dialect: an entry may match any file
+// extension belonging to any dialect in its family. A dialect absent from this
+// map is its own family (the common case). Keep this a declarative map rather
+// than a conditional in `_languageAllowed` — the whole point is that the next
+// person reading it sees "these dialects share a runtime" without having to
+// reverse-engineer a special case. `phase2-scoping.test.js` pins the
+// cross-family behaviour directly (executeUpdate on .kt, readText on .java);
+// the extension-set equality test cannot catch a family error, because the
+// extension sets were never wrong — the one-dialect-one-file-type assumption
+// was.
+const _LANG_FAMILY = {
+  java: ['java', 'kt'],   // JVM
+  kt:   ['java', 'kt'],   // JVM
+};
+
+// Extension regexes a given catalog language is allowed to match against.
+export function _languageFamilyExtensions(language) {
+  const all = _languageExtensions();
+  const dialects = _LANG_FAMILY[language] || [language];
+  return dialects.map(d => all[d]).filter(Boolean);
+}
+
 function _languageAllowed(entry, file) {
   if (!file) return true;
-  if (entry.language === 'cpp') return cppExtRe().test(file);
-  if (entry.language === 'js') return _JS_EXT_RE.test(file);
-  return true;
+  const res = _languageFamilyExtensions(entry.language);
+  if (!res.length) return true;       // unmapped language stays permissive
+  return res.some(re => re.test(file));
 }
 
 // Receiver constraint (`match.receiver`), evaluated against the object chain
@@ -805,11 +875,22 @@ function _receiverSegments(calleeExpr) {
 }
 function _receiverAllowed(entry, calleeExpr) {
   const pat = entry.match && entry.match.receiver;
-  if (!pat) return true;
+  // `receiverBase` (optional, additive) requires a SECOND, independent
+  // segment match — e.g. `receiver` pins the property name (`headers`,
+  // `args`) while `receiverBase` pins the object it hangs off (`request`,
+  // `req`). Both are satisfied independently against the segment set (order
+  // doesn't matter — `self.request.args.get()` has `request` in the chain
+  // just like `request.args.get()` does), so a bare `args.get(...)` on an
+  // unrelated local (`args = parse(); args.get("cmd")`) fails the base check
+  // even though it still matches `receiver` on its own. Existing entries
+  // that only set `receiver` are unaffected.
+  const basePat = entry.match && entry.match.receiverBase;
+  if (!pat && !basePat) return true;
   const segs = _receiverSegments(calleeExpr);
   if (!segs.length) return false;      // bare `write(x)` — not a DOM call
-  const re = new RegExp(pat);
-  return segs.some((s) => re.test(String(s)));
+  if (pat && !segs.some((s) => new RegExp(pat).test(String(s)))) return false;
+  if (basePat && !segs.some((s) => new RegExp(basePat).test(String(s)))) return false;
+  return true;
 }
 // Merge the expanded sanitizer catalog. We dedupe on `id` (case-insensitive)
 // so a base-catalog entry always wins over a same-id expanded one — the base
@@ -908,7 +989,9 @@ export function matchSource(expr, file) {
     if (cn) {
       const raw = CALLEE_INDEX.get(cn);
       if (raw) {
-        const hits = filterByProvenance(raw).filter(h => _languageAllowed(h, file));
+        const hits = filterByProvenance(raw)
+          .filter(h => _languageAllowed(h, file))
+          .filter(h => _receiverAllowed(h, expr.callee));
         const s = hits.find(h => h.kind === 'source');
         if (s) return s;
       }

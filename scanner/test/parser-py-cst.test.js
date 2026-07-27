@@ -118,11 +118,20 @@ def upper_all(req):
 // modelled". The parser lowers them AND taint reaches the sink through them.
 // (A variable-bound source → sink is the flow the deep engine resolves.)
 _maybe('#16 taint flows through a match case body to a sink', () => {
+  // Uses `request.args` (the catalogued Flask member source: py-flask-args)
+  // rather than a chained `req.args.get("cmd")` call. The chained-call form
+  // previously only "worked" because matchSource's bare-callee-name lookup
+  // had no language scope: any language's `.get()`-callee source (here,
+  // PHP's `php-symfony-get`) matched regardless of file extension. Phase 2's
+  // table-driven `_languageAllowed` correctly closes that cross-language
+  // leak, and there is no genuine `py` catalog source for a `.get()` call —
+  // so this fixture now exercises a real, scoped python source instead of
+  // a lucky miss.
   const code = `
 def route(req):
     match req.path:
         case _:
-            c = req.args.get("cmd")
+            c = request.args
             __import__("os").system(c)
 `;
   const { perFile, callGraph } = buildProjectIR({ 'app.py': code });
@@ -131,9 +140,12 @@ def route(req):
 });
 
 _maybe('#16 taint flows through a walrus binding to a sink', () => {
+  // See the comment on the match-case-body test above: `request.args` is a
+  // genuinely catalogued py source; the previous `req.args.get(...)` form
+  // relied on an unscoped cross-language leak from a PHP catalog entry.
   const code = `
 def h(req):
-    if (c := req.args.get("x")):
+    if (c := request.args):
         __import__("os").system(c)
 `;
   const { perFile, callGraph } = buildProjectIR({ 'app.py': code });

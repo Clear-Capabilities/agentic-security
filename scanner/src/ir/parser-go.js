@@ -21,6 +21,7 @@
 //   - struct field assignments (x.Field = val) beyond simple dotted targets
 
 import * as crypto from 'node:crypto';
+import { callSitesFromCfg } from './call-sites.js';
 
 const FUNC_RE = new RegExp(
   '(?:^|[\\n;{}])\\s*func\\s+' +
@@ -400,10 +401,12 @@ export function parseGoFile(file, code) {
     const exit = _addNode(nodes, { kind: 'exit', line: startLine });
     const tail = _buildCfg(extracted.body, nodes, entry, startLine + 1);
     _link(nodes, tail, exit);
+    const cfg = { entry, exit, nodes };
     functions.push({
       qid: _qid(file, name, startLine, extracted.body),
       name, line: startLine, params, file,
-      cfg: { entry, exit, nodes },
+      cfg,
+      calls: callSitesFromCfg(cfg),
     });
     FUNC_RE.lastIndex = extracted.end + 1;
   }

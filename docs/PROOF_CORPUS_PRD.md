@@ -54,13 +54,13 @@ Four things must be stated before any of the design, because they define what th
 
 **2.2 A new bench, not an extension of the existing one.** `bench/cve-replay/` entries are deliberately minimal — `CONTRIBUTING.md` requires "one to three files" per entry and the runner reads each as a tiny project. Its own manifest concedes that synthetic shapes "overestimate how well we'd do on the real CVE because the real CVE often had distracting context the synthetic doesn't." Real repositories are exactly that distracting context. Mixing million-line trees into a corpus whose gate assumes minimal fixtures would break the gate's meaning and its runtime. Therefore: `bench/proof-corpus/` is a sibling bench with its own manifest, runner, and baseline. Nothing in `bench/cve-replay/` changes — except that Workstream B adds C++ *fixture* entries to it, which is exactly what that corpus is for (§6.11).
 
-**2.3 Language support is not uniform, and the bench must say so.** The IR tree has first-class parsers for JS/TS, Python, Java, Kotlin, Go, PHP, Ruby, and C# (`scanner/src/ir/parser-*.js`), but flow-engine maturity is genuinely deep only for JS, Python, and Java; the rest are primarily structural. The scorecard reports a per-language **support tier** alongside every number, so no reader can mistake "we produced findings" for "we have deep flow analysis here." The tiers:
+**2.3 Language support is not uniform, and the bench must say so.** The IR tree has first-class parsers for JS/TS, Python, Java, Kotlin, Go, PHP, Ruby, and C# (`scanner/src/ir/parser-*.js`), but flow-engine maturity is genuinely deep only for JS and Python; the rest are primarily structural or, in Java's case, weaker than that. The scorecard reports a per-language **support tier** alongside every number, so no reader can mistake "we produced findings" for "we have deep flow analysis here." The tiers:
 
 | Tier | Meaning | Languages (before Workstream B) |
 |---|---|---|
-| **Deep IR** | First-class parser + proven interprocedural taint | JS/TS, Python, Java |
+| **Deep IR** | First-class parser + proven interprocedural taint | JS/TS, Python |
 | **Structural IR** | First-class parser, CFG produced, flow proven shallowly | Kotlin, Go, PHP, Ruby, C# |
-| **Syntactic** | Pattern/brace detectors, no CFG, no call graph | **C/C++** |
+| **Syntactic** | Pattern/brace detectors, no CFG, no call graph | **C/C++, Java**[^java-tier] |
 | **Opt-in AST** | tree-sitter, off by default, optional deps | Rust, Solidity, Swift, Dart, C/C++ |
 
 **Post-Workstream-B update (Godot measurement, §6.12):** C/C++ now has a first-class parser
@@ -69,6 +69,8 @@ Godot — the parser and call-graph legs of Structural IR are real and measured 
 stays **Syntactic** in this table because §6.12 criterion 4 (an actual interprocedural taint
 finding) was not demonstrated by any run in this session, and criterion 4 is named as tier-gating.
 See §6.12 for the measured numbers and the root-cause note on why criterion 4 didn't materialize.
+
+[^java-tier]: **Java was corrected out of Deep IR after runtime measurement, not moved on suspicion.** A conventional two-method class run through `buildProjectIRAsync` in this session produced, for both functions: a CFG containing only `entry`/`exit` nodes (`{"nodes":["jn1","jn2"]}` — `parser-java.js`'s `buildCfgFromBody`, called at line 274, has no CST navigation that reaches statement nodes), `params: []` (hardcoded at `parser-java.js:266` behind the comment `// params extraction deferred`), `line: 0` on every function, and a `qid` of the form `T.java::T::helper` — missing the `@line#sha` suffix every other parser in this table emits, which `class-hierarchy.js` and the `stableId` machinery both depend on. No interprocedural call (`helper` called from `main2`, itself calling `Runtime.exec`) can be tracked through that shape regardless of what `fn.calls` reports. Full defect list and evidence: `docs/superpowers/specs/2026-07-26-java-ir-frontend-notes.md`.
 
 **2.4 C++ today is better than "nothing" and worse than "supported" — v1.0 of this PRD got this wrong.** The earlier revision claimed C++ had no support at all. The accurate inventory is in §6.1: there are real, tested C/C++ assets (a banned-API detector, five intra-procedural memory-safety detectors, a preprocessor). What did not exist *when this section was written* — and now does, see §6.12 — was a `parser-cpp.js` emitting the IR shape contract, which is the thing that connects a language to the Layer-2 taint engine, the cross-file call graph, class-hierarchy analysis, SSA, and reachability annotation. C++ was therefore *detected* but not *analysed*. Workstream B has since closed that specific gap and nothing wider: `scanner/src/ir/parser-cpp.js` exists, is dispatched from both `buildProjectIR` and `buildProjectIRAsync`, and is measured in §6.12.
 
@@ -99,11 +101,11 @@ See §6.12 for the measured numbers and the root-cause note on why criterion 4 d
 
 ### 4.1 Tier 1 — deep dive (4 repos)
 
-Chosen for language spread across the three deepest-supported flow-engine languages plus the newest parser tier, and for having substantial public advisory history:
+Chosen for language spread across the deepest-supported flow-engine languages plus the newest parser tier, and for having substantial public advisory history. Jenkins stays in Tier 1 for its advisory history and codebase scale, not for flow depth: Java is Syntactic tier (§2.3), so this repo will not produce interprocedural findings until the frontend is rebuilt.
 
 | Repo | Language proved | Why this one |
 |---|---|---|
-| jenkinsci/jenkins | Java | Deepest Java flow support; long, well-documented advisory history with clean fix tags |
+| jenkinsci/jenkins | Java | Long, well-documented advisory history with clean fix tags; parser and call-graph coverage only — no interprocedural taint (§2.3) |
 | grafana/grafana | Go + TypeScript | Proves the Go parser on a large production codebase; dual-language repo |
 | apache/superset | Python + TypeScript | Deepest Python flow support; foundation governance; well-tagged releases |
 | discourse/discourse | Ruby | Exercises the least-proven first-class parser; strongest signal per unit of effort |

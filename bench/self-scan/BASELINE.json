@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-07-26T23:22:16.985Z",
+  "commit": "85909ef35dcf4c572a09feda091b7751dd8b4e9a",
+  "targets": {
+    "hooks": {
+      "total": 24,
+      "byFile": {
+        "cache-invalidator-guard.js": 1,
+        "conversation-context.js": 1,
+        "lib/transcript.js": 1,
+        "mascot.js": 1,
+        "model-cost-advisor.js": 2,
+        "post-edit-scan.js": 2,
+        "pre-bash-guard.js": 3,
+        "pre-edit-bodyguard.js": 4,
+        "session-start-self-check.js": 4,
+        "session-stop-drift-check.js": 2,
+        "session-welcome.js": 3
+      }
+    },
+    "scripts": {
+      "total": 24,
+      "byFile": {
+        "_compliance_lib.py": 1,
+        "apply-command-trim.mjs": 2,
+        "calibration-expand.mjs": 2,
+        "detector-fuzz-runner.mjs": 3,
+        "ghsa-to-hints.mjs": 3,
+        "llm-cost-ceiling.py": 2,
+        "nist-compliance/scan.py": 2,
+        "rotate-key-auto.py": 1,
+        "self-test-runner.mjs": 2,
+        "synthesize-detector.mjs": 5,
+        "trust-page.py": 1
+      }
+    }
+  },
+  "polyglot": {
+    "total": 0,
+    "byLanguage": {}
+  },
+  "_notes": [
+    "Phase 2 / task 3 (2026-07-26): app.go/App.cs/App.kt/app.php were rewritten from single-function sink-only fixtures into genuine identity(x)->emit() caller/callee chains so this bench can actually exercise the newly-wired fn.calls interprocedural path for those four languages; the value is a hardcoded local literal (not argv/env/network/request), so 0 remains the correct total. See measure.mjs header for what this bench can and cannot detect.",
+    "Phase 2 / task 3 (2026-07-26): parser-php.js's function-boundary regex was also fixed for two latent bugs (missing <?php/short-tag anchor, and an off-by-one that dropped a second same-line declaration including class methods). This widens PHP IR coverage — files that previously produced zero function records (or dropped a second declaration) may now produce findings that did not exist in any earlier baseline. Any precision comparison against a pre-task-3 PHP baseline must account for this coverage change, not attribute new findings solely to scoping work."
+  ]
+}

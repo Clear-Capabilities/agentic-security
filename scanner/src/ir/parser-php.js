@@ -18,9 +18,10 @@
 //   - control flow (if/for/while/switch) — body is straight-line
 
 import * as crypto from 'node:crypto';
+import { callSitesFromCfg } from './call-sites.js';
 
 const FUNC_RE = new RegExp(
-  '(?:^|[\\n;{}])\\s*' +
+  '(?:^|[\\n;{}]|<\\?php|<\\?)\\s*' +
   '(?:(?:public|private|protected|static|abstract|final)\\s+)*' +
   'function\\s+' +
   '([A-Za-z_]\\w*)' +                  // function name (g1)
@@ -319,12 +320,18 @@ export function parsePhpFile(file, code) {
     const exit = _addNode(nodes, { kind: 'exit', line: startLine });
     const tail = _buildCfg(extracted.body, nodes, entry, startLine + 1);
     _linkNodes(nodes, tail, exit);
+    const cfg = { entry, exit, nodes };
     functions.push({
       qid: _qid(file, name, startLine, extracted.body),
       name, line: startLine, params, file,
-      cfg: { entry, exit, nodes },
+      cfg,
+      calls: callSitesFromCfg(cfg),
     });
-    FUNC_RE.lastIndex = extracted.end + 1;
+    // Don't skip past the closing brace: for `<?php function h(){...} function m(){...}`
+    // that brace is the only boundary character available to anchor the next
+    // function's match (there's no newline/semicolon between them), and advancing
+    // past it here would make the following function declaration unmatchable.
+    FUNC_RE.lastIndex = extracted.end;
   }
   return functions.length ? { file, functions, topLevel: null } : null;
 }
