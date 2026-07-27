@@ -180,6 +180,11 @@ export function normalizeFindings(scan){
         paramKeyConfidence: f.poc.paramKeyConfidence || null,
         paramKeyInferred: typeof f.poc.paramKeyInferred === 'boolean' ? f.poc.paramKeyInferred : null,
       } : null,
+      // R2: execution-proof tier — copied through only when the annotator
+      // (posture/proof-tier.js) actually attached it. Never synthesised here;
+      // a finding with no proof backing simply omits these fields.
+      ...(f.proofTier !== undefined ? { proofTier: f.proofTier } : {}),
+      ...(f.proofEvidence !== undefined ? { proofEvidence: f.proofEvidence } : {}),
       // Phase-1 next-gen P1.3 (FR-UX-1, FR-UX-2): calibrated probability +
       // 95% Wilson CI + sample size. Null when N < MIN_SAMPLES_FOR_CALIBRATION
       // for this family; `calibration_reason` explains why.
