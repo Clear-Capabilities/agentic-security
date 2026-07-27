@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.129.0 — closing two taint-engine recall gaps
+
+Two defects were found by execution on the merged tree, each silencing real findings across
+every supported language. Both are now fixed, measured, and gated.
+
+- **Sinks are matched on assignment right-hand sides** (`dataflow/engine.js`). The engine only
+  ever sink-matched in statement position, so `db.query(tainted)` was reported while
+  `const rows = db.query(tainted)` was silent — in every language. The sink-matching logic is
+  now extracted into shared helpers called from both `case 'call'` and `case 'assign'` rather
+  than duplicated, and the pre-existing statement-position path is unchanged (measured control:
+  `1/1` before and after; assignment position `0/0 -> 1/1`).
+- **`match.type:'global'` catalog entries are indexed and reachable** (`dataflow/catalog.js`).
+  All 10 global entries were unreachable from `matchSource()` — including `$_GET`/`$_POST`/
+  `$_REQUEST`, the canonical PHP taint sources, in a language that already had interprocedural
+  analysis. A new `GLOBAL_INDEX`, plus lookup-side sigil normalization (`_globalKey()`) so PHP's
+  `$` prefix matches sigil-free catalog keys, takes catalog reachability `0/10 -> 10/10` with
+  language scoping preserved.
+- **Seven self-scan false positives eliminated at source.** Raising sink recall exposed
+  pre-existing catalog imprecision: `py-yaml-load`/`py-pickle-load` matched bare callee `load`
+  with no receiver constraint, so ordinary `json.load(fh)` was flagged as unsafe deserialization.
+  Each finding was inspected individually and all seven were false positives; the entries are now
+  pinned to their receiver. **Nothing was baselined** — `bench/self-scan/BASELINE.json` is
+  unchanged and the gate is green on the source fix.
+- **New**: `bench/engine-recall` before/after harness (`npm run bench:engine-recall`) and
+  `bench/engine-recall/RESULTS.md`, the full measurement record including what the fixes cost.
+- **Corpus 197 -> 199**: two deep-tier entries, each verified missed-before / found-after against
+  its specific fix.
+
+Known trade, recorded rather than papered over: pinning the receiver drops `import yaml as y;
+y.load(f)` and `from yaml import load; load(x)`, which are now covered at no layer. A corpus guard
+was attempted and deliberately withheld because it would score `pre:TN`; closing it needs
+import-alias resolution in the Python IR. Separately, `10/10` is catalog reachability, not
+end-to-end recall — only PHP is proven end to end; Ruby's deep engine does not complete those
+flows (pre-existing). Both are documented in `RESULTS.md` §3 and §8.
+
+`npm test` 1854/0; cve-replay 199/199; self-scan no drift.
+
 ## 0.128.2 — compliance attestation accuracy + quieter self-scans
 
 Two fixes surfaced while dogfooding the compliance flow on this repo:
