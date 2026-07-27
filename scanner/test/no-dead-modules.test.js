@@ -89,7 +89,8 @@ const ALLOWLIST = new Set([
   'rule-overrides.js::runCustomRules',
   'rule-pack-signing.js::BUNDLED_OFFICIAL_KEYS',
   'ruleset-version.js::readPinned',
-  'ruleset-version.js::effectiveVersion',
+  // effectiveVersion is no longer dead — the CLI calls it to stamp the ruleset
+  // version into the R4 run attestation. Entry removed (4R-6 decay rule).
   'security-trend.js::computeTrend',
   'stable-id.js::computeStableId',
   'streak.js::loadStreak',
@@ -252,6 +253,28 @@ test('every export in posture/llm-validator/dataflow/lsp/ir/mcp has a call site'
     `or (c) delete the export.`);
 });
 
+// Both guards match by bare symbol NAME, so two modules exporting the same
+// name are indistinguishable to a regex. When a candidate call site explicitly
+// imports that name from a DIFFERENT module, the reference is provably about
+// the other symbol and is not evidence that the allowlisted one came alive.
+// (Concrete case: `learning.js::recordVerdict` vs
+// `verification-separation.js::recordVerdict` — same name, unrelated modules.)
+function importsSameNameFromOtherModule(content, name, fileKey) {
+  const wantBase = path.basename(fileKey);
+  // A file that DECLARES its own symbol of the same name is talking about its
+  // own symbol, not the allowlisted one.
+  if (extractExports(content).some(e => e.name === name)) return true;
+  const re = /import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+  let m, sawOther = false;
+  while ((m = re.exec(content))) {
+    const bound = m[1].split(',').map(s => s.trim().split(/\s+as\s+/).pop().trim());
+    if (!bound.includes(name)) continue;
+    if (path.basename(m[2]) === wantBase) return false; // imported from the allowlisted module itself
+    sawOther = true;
+  }
+  return sawOther;
+}
+
 // Premortem 4R-6: an allowlist that never decays is worse than no allowlist —
 // it papers over real call sites that get added later and hides the next
 // "is this still actually dead?" question. This sister test asserts every
@@ -291,7 +314,8 @@ test('allowlisted symbols are still dead (no stale exceptions)', async () => {
     const ref = all.find(s =>
       s.path !== sourcePath &&
       !/no-dead-modules\.test\.js$/.test(s.path) &&
-      re.test(s.content)
+      re.test(s.content) &&
+      !importsSameNameFromOtherModule(s.content, name, fileKey)
     );
     if (ref) {
       obsolete.push(`${key} — now referenced from ${path.relative(process.cwd(), ref.path)}; remove from ALLOWLIST.`);

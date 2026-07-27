@@ -16,6 +16,10 @@
 // the deterministic core runs fully offline.
 
 import { isValidSanitizerFor } from '../dataflow/sanitizer-proof.js';
+import {
+  recordProducer, assertSeparation, recordVerdict, consensusOf, producerIdOf,
+  VERIFIER_FALSIFICATION, VERIFIER_LLM_REVIEW,
+} from './verification-separation.js';
 
 const DEMOTE_FACTOR = 0.4;               // mirror proof-gate.js
 const TIERS = ['low', 'medium', 'high']; // confidence / exploitability tier order
@@ -76,6 +80,15 @@ export function classifyFinding(finding, fileContents) {
   return { verdict: 'survived', reasons: ['no context-matched control found between source and sink'] };
 }
 
+// Map a falsification-style verdict onto the verification vocabulary.
+// 'blocked'/'refuted' = the finding was disproved on this lens; 'survived' =
+// the attempt to disprove it failed, so the finding stands on this lens.
+function _verdictFor(v) {
+  if (v === 'blocked' || v === 'refuted' || v === 'false-positive') return 'refuted';
+  if (v === 'survived' || v === 'upheld' || v === 'true-positive') return 'upheld';
+  return 'undecided';
+}
+
 /**
  * Default-on annotator. Adds `finding.falsification = { verdict, reasons }` to
  * every taint-style finding; demotes + quarantines the ones falsified as blocked.
@@ -95,6 +108,23 @@ export function annotateFalsification(findings, fileContents, opts = {}) {
     catch { res = { verdict: 'unproven', reasons: ['classification error'] }; }
     f.falsification = { verdict: res.verdict, reasons: res.reasons };
 
+    // R7 — enforced separation. The detector produced this finding; the
+    // falsification pass is a *different* party, and records its verdict only
+    // after the separation check passes. Recall-preserving: a 'refuted'
+    // verdict is recorded, never acted on by deletion or severity change.
+    try {
+      recordProducer(f, producerIdOf(f));
+      if (assertSeparation(f, VERIFIER_FALSIFICATION).ok) {
+        recordVerdict(f, {
+          verifierId: VERIFIER_FALSIFICATION,
+          lens: 'control-flow',
+          verdict: _verdictFor(res.verdict),
+          reason: res.reasons && res.reasons[0],
+        });
+      }
+      f.verification.consensus = consensusOf(f);
+    } catch { /* verification bookkeeping is advisory; never break the scan */ }
+
     if (res.verdict === 'blocked') {
       f.quarantined = true;
       if (typeof f.confidence === 'number') {
@@ -113,7 +143,21 @@ export function annotateFalsification(findings, fileContents, opts = {}) {
     for (const f of survivors) {
       try {
         const llm = opts.llmReview(f);
-        if (llm) f.falsification.llm = llm;
+        if (llm) {
+          f.falsification.llm = llm;
+          // A second, independently-identified verifier arguing the opposing
+          // case — this is what makes a contested finding visible as contested
+          // rather than resolved by whoever spoke last.
+          if (assertSeparation(f, VERIFIER_LLM_REVIEW).ok) {
+            recordVerdict(f, {
+              verifierId: VERIFIER_LLM_REVIEW,
+              lens: 'llm-review',
+              verdict: _verdictFor(llm.verdict),
+              reason: llm.reason,
+            });
+            f.verification.consensus = consensusOf(f);
+          }
+        }
       } catch { /* the LLM tier is advisory; never let it break the scan */ }
     }
   }
