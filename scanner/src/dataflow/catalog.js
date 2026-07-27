@@ -385,10 +385,19 @@ export const CATALOG = [
             remediation: 'When the first arg is "/bin/sh" or "bash" with a -c string built from user input, the shell parses it. Pass argv array values directly to exec.Command.' } },
 
   // ─── SINKS (deserialization) ──────────────────────────────────────────────
-  { kind: 'sink', id: 'py-pickle-loads',  language: 'py', framework: 'pickle', match: { type: 'call', callee: 'loads' },     argIndex: 0,
+  // `load`/`loads` are among the most overloaded names in Python: `json.load`,
+  // `json.loads`, `tomllib.load` and `configparser`-style readers all share
+  // them and none of them are deserialization sinks. Bare-name matching made
+  // every one of those fire once sinks began matching in assignment position
+  // (`rules = json.load(fh)`), so the pyyaml/pickle entries are pinned to
+  // their own receiver — the same `match.receiver` mechanism `py-flask-args-get`
+  // already uses. Cost: a `from yaml import load; load(x)` import-style call no
+  // longer matches (no receiver segment); that is the accepted trade, and the
+  // dotted form is by far the dominant shape in real code.
+  { kind: 'sink', id: 'py-pickle-loads',  language: 'py', framework: 'pickle', match: { type: 'call', callee: 'loads', receiver: '^(?:pickle|cPickle|_pickle|dill|jsonpickle)$' },     argIndex: 0,
     vuln: { name: 'Insecure Deserialization (pickle.loads)', severity: 'critical', cwe: 'CWE-502',
             remediation: 'Never pickle-load attacker-controlled data. Use JSON / msgpack with an explicit schema.' } },
-  { kind: 'sink', id: 'py-yaml-load',     language: 'py', framework: 'pyyaml', match: { type: 'call', callee: 'load' },      argIndex: 0,
+  { kind: 'sink', id: 'py-yaml-load',     language: 'py', framework: 'pyyaml', match: { type: 'call', callee: 'load', receiver: '^(?:yaml|ruamel)$' },      argIndex: 0,
     vuln: { name: 'Insecure Deserialization (yaml.load)', severity: 'critical', cwe: 'CWE-502',
             remediation: 'Use yaml.safe_load.' } },
   { kind: 'sink', id: 'java-ois-readObject', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'readObject' }, argIndex: 'all',
@@ -584,13 +593,15 @@ export const CATALOG = [
     vuln: { name: 'Code Injection (compile)', severity: 'high', cwe: 'CWE-95',
             remediation: 'compile() followed by exec is equivalent to eval. Avoid on untrusted input.' } },
   // Deserialization.
-  { kind: 'sink', id: 'py-pickle-loads-v2', language: 'py', framework: 'std', match: { type: 'call', callee: 'loads' }, argIndex: 0,
+  // Receiver-pinned for the same reason as the base-catalog pyyaml/pickle
+  // entries above — see the comment there.
+  { kind: 'sink', id: 'py-pickle-loads-v2', language: 'py', framework: 'std', match: { type: 'call', callee: 'loads', receiver: '^(?:pickle|cPickle|_pickle|dill|jsonpickle)$' }, argIndex: 0,
     vuln: { name: 'Unsafe Deserialization (pickle.loads)', severity: 'critical', cwe: 'CWE-502',
             remediation: 'pickle.loads on untrusted data is RCE. Use JSON / msgpack with explicit schema.' } },
-  { kind: 'sink', id: 'py-pickle-load', language: 'py', framework: 'std', match: { type: 'call', callee: 'load' }, argIndex: 0,
+  { kind: 'sink', id: 'py-pickle-load', language: 'py', framework: 'std', match: { type: 'call', callee: 'load', receiver: '^(?:pickle|cPickle|_pickle|dill|jsonpickle)$' }, argIndex: 0,
     vuln: { name: 'Unsafe Deserialization (pickle.load)', severity: 'critical', cwe: 'CWE-502',
             remediation: 'pickle.load on untrusted streams is RCE.' } },
-  { kind: 'sink', id: 'py-yaml-load-v2', language: 'py', framework: 'yaml', match: { type: 'call', callee: 'load' }, argIndex: 0,
+  { kind: 'sink', id: 'py-yaml-load-v2', language: 'py', framework: 'yaml', match: { type: 'call', callee: 'load', receiver: '^(?:yaml|ruamel)$' }, argIndex: 0,
     vuln: { name: 'Unsafe Deserialization (yaml.load)', severity: 'high', cwe: 'CWE-502',
             remediation: 'Use yaml.safe_load instead of yaml.load on untrusted YAML.' } },
   // SSRF / HTTP-out.
