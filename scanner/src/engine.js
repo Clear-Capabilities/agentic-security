@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as crypto from 'node:crypto';
-import * as yaml from 'js-yaml';
+import * as yaml from './util/yaml.js';
 import { createRequire } from 'node:module';
 const _require = createRequire(import.meta.url);
 import { scanLLM } from './sast/llm.js';
@@ -987,7 +987,7 @@ function performASTAnalysis(fp, code) {
     try {
         babelTransformSync(code, {
             filename: fp,
-            presets: [presetReact, [presetTypescript, { isTSX: true, allExtensions: true }]],
+            presets: [presetReact, [presetTypescript, { ignoreExtensions: true }]],
             plugins: [astTaintTrackerPlugin],
             ast: false, code: false,
             babelrc: false, configFile: false,
@@ -4633,7 +4633,7 @@ function _buildCallGraphAST(fp, code){
 
     babelTransformSync(code, {
       filename: fp,
-      presets: [presetReact, [presetTypescript, { isTSX: true, allExtensions: true }]],
+      presets: [presetReact, [presetTypescript, { ignoreExtensions: true }]],
       plugins: [callTrackerPlugin],
       ast: false, code: false,
       babelrc: false, configFile: false,

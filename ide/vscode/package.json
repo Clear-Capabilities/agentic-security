@@ -6,8 +6,13 @@
   "publisher": "clearcapabilities",
   "repository": "https://github.com/Clear-Capabilities/agentic-security",
   "license": "PolyForm-Internal-Use-1.0.0",
-  "engines": { "vscode": "^1.95.0" },
-  "categories": ["Linters", "Other"],
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
   "main": "./dist/extension.js",
   "activationEvents": [
     "onLanguage:javascript",
@@ -19,8 +24,14 @@
   ],
   "contributes": {
     "commands": [
-      { "command": "agenticSecurity.scanWorkspace", "title": "Agentic Security: Scan workspace" },
-      { "command": "agenticSecurity.scanCurrentFile", "title": "Agentic Security: Scan current file" }
+      {
+        "command": "agenticSecurity.scanWorkspace",
+        "title": "Agentic Security: Scan workspace"
+      },
+      {
+        "command": "agenticSecurity.scanCurrentFile",
+        "title": "Agentic Security: Scan current file"
+      }
     ],
     "configuration": {
       "title": "Agentic Security",
@@ -37,7 +48,13 @@
         },
         "agenticSecurity.minSeverity": {
           "type": "string",
-          "enum": ["critical", "high", "medium", "low", "info"],
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
           "default": "medium",
           "description": "Minimum severity to surface as a VS Code diagnostic."
         }
@@ -49,9 +66,9 @@
     "package": "vsce package"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@types/vscode": "^1.120.0",
-    "@vscode/vsce": "^3.9.1",
-    "esbuild": "^0.28.0"
+    "@types/node": "^26.1.1",
+    "@types/vscode": "^1.125.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1"
   }
 }

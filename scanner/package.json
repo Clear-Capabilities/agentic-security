@@ -35,21 +35,21 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
-    "@babel/core": "^7.29.7",
-    "@babel/preset-react": "^7.29.7",
-    "@babel/preset-typescript": "^7.29.7",
+    "@babel/core": "^8.0.1",
+    "@babel/preset-react": "^8.0.1",
+    "@babel/preset-typescript": "^8.0.1",
     "fast-glob": "^3.3.3",
     "java-parser": "^3.0.1",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^5.2.2",
     "safe-regex": "^2.1.1"
   },
   "optionalDependencies": {
-    "web-tree-sitter": "0.20.8",
-    "tree-sitter-wasms": "0.1.13"
+    "tree-sitter-wasms": "0.1.13",
+    "web-tree-sitter": "0.20.8"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@vercel/ncc": "^0.38.3"
+    "@types/node": "^26.1.1",
+    "@vercel/ncc": "^0.44.1"
   },
   "overrides": {
     "lodash": "^4.18.1",
