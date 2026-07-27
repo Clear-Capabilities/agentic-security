@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as crypto from 'node:crypto';
-import * as yaml from 'js-yaml';
+import * as yaml from './util/yaml.js';
 import { createRequire } from 'node:module';
 const _require = createRequire(import.meta.url);
 import { scanLLM } from './sast/llm.js';

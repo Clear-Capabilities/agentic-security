@@ -12,7 +12,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as yaml from 'js-yaml';
+import * as yaml from '../util/yaml.js';
 import { statePath } from '../posture/state-dir.js';
 
 function _configPath(scanRoot) {

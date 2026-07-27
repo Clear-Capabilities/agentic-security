@@ -23,7 +23,7 @@
 // name is the GitHub slug ('owner/name'); specPath is relative within
 // that repo; specContent is the raw YAML/JSON.
 
-import * as yaml from 'js-yaml';
+import * as yaml from '../util/yaml.js';
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
 

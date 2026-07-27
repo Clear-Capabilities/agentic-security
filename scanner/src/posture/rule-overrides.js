@@ -9,7 +9,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as yaml from 'js-yaml';
+import * as yaml from '../util/yaml.js';
 import { verifyLastScan } from './integrity.js';
 import { statePath } from './state-dir.js';
 

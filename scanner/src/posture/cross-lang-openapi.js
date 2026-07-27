@@ -16,7 +16,7 @@ import { isChainWorthy, familyForBoundary } from './cross-lang-meta.js';
 // Out of scope (deferred to a follow-up): gRPC .proto introspection, GraphQL
 // resolver-to-resolver tracking, SQL/ORM round-trip, message queues.
 
-import * as yaml from 'js-yaml';
+import * as yaml from '../util/yaml.js';
 
 function loadOpenAPI(fileContents) {
   for (const [fp, c] of Object.entries(fileContents || {})) {
