@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.130.0 — the roadmap's first ten: provable security over orchestration parity
+
+A capability roadmap (`docs/ROADMAP.md`) plus its first ten items, derived from a
+survey of the current agentic security-review field. The strategic call: that
+field cannot state a false-positive rate or prove it did not regress, because its
+core is a model call. This project's core is a deterministic engine behind three
+gates, so the work doubles down on provable, measurable, reproducible.
+
+- **Execution sandbox** (`src/sandbox/`) — fail-closed confined execution. Verified
+  by execution: writes outside the sandbox root blocked, network blocked, wall-clock
+  overrun terminated, benign work still succeeds. With no confinement primitive
+  available, execution is REFUSED, never run unconfined.
+- **Execution-verified findings** (`posture/execution-proof.js`) — a finding can be
+  promoted to `execution-proven` by running its proof-of-concept in the sandbox.
+  Proof is a marker file, never an exit code, because the sandbox cannot reliably
+  distinguish a denied run from a clean exit. `proof-failed` is a triage signal,
+  NOT a false-positive verdict.
+- **Published accuracy scorecard** (`npm run scorecard`) — detection and correct-
+  silence rates sliced by language and CWE, every figure with its denominator,
+  regeneration-stable. F1 deliberately omitted: no labelled real-world population
+  exists to measure precision over, and the document says so.
+- **Determinism attestation** (`posture/attestation.js`) — an order-independent
+  signed digest. Cross-machine reproducibility is explicitly NOT claimed.
+- **Fixes must pass your tests** (`posture/test-runner.js`) — `verifyFix` previously
+  proved only that the finding disappeared, which deleting the feature also
+  achieves. It now runs the project's own suite, and says so when the suite ran
+  against unpatched code.
+- **Relevance ranking** (`posture/relevance.js`) — re-ranks by entry-point
+  reachability. Recall-preserving: nothing deleted, severity never touched,
+  `unreachable` only on positive evidence.
+- **Enforced verification separation** (`posture/verification-separation.js`) — a
+  verifier cannot rubber-stamp its own finding.
+- **Resumable scans** (`posture/scan-checkpoint.js`) — opt-in via
+  `AGENTIC_SECURITY_RESUME=1`, crash-safe, conservatively invalidated.
+- **Secret redaction** (`llm-validator/redact.js`) — credentials removed before any
+  code leaves the machine; ordinary code passes through byte-unchanged.
+
+Also: dependencies updated to latest (Babel 7→8 with the removed preset options
+migrated, js-yaml 4→5 with an empty-input shim). One dependency deliberately held
+back: bumping the grammar runtime silently drops all six long-tail language
+grammars, so it stays pinned and the reason is documented.
+
+`npm test` 1989/0; cve-replay 199/199; self-scan no drift.
+
 ## 0.129.0 — closing two taint-engine recall gaps
 
 Two defects were found by execution on the merged tree, each silencing real findings across

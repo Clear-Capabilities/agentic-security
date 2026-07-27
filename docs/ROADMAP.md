@@ -148,6 +148,9 @@ run that produced it.
 **Done when.** The scorecard regenerates reproducibly, is committed per release,
 and any figure in it can be re-derived from a named command.
 
+
+**Status: landed.** `npm run scorecard` emits `docs/SCORECARD.md` + `docs/scorecard.json`. Every rate carries its numerator and denominator; F1 and any precision rate are deliberately omitted for want of a labelled real-world population, and the document says so in its body.
+
 ### R4. Determinism as a contract
 
 **Problem.** Determinism is an implementation property today, not a guarantee
@@ -161,6 +164,9 @@ ASVS, OWASP LLM Top 10, EU AI Act) — a combination nothing else in the field h
 
 **Done when.** Two runs on different machines produce byte-identical output and
 a verifiable attestation, proven by an executing test.
+
+
+**Status: partially landed.** `posture/attestation.js` gives an order-independent signed digest; shuffled order and differing timestamps yield the same digest, a changed severity or removed finding do not. **The cross-machine criterion is NOT met** — only one machine was available — and the artifact carries an inline proves/doesNotProve statement saying so.
 
 ### R5. Measured fix loop
 
@@ -180,12 +186,18 @@ when the tests or the PoC fail.
 
 Places where the field is ahead. Highest precision-per-effort available.
 
+
+**Status: partially landed.** `verifyFix` now runs the project test suite when detectable; undetectable is skipped, a failing suite fails verification, a timeout is a failure. Stage duration is measured. Outstanding: aggregating those durations into a reported distribution.
+
 ### R6. Threat-model-first scoping
 
 Build a persistent, living threat model *before* scanning; use it to scope
 analysis and re-rank exploitability. This kills false positives by *relevance*
 rather than by pattern — a different axis from every precision mechanism
 currently in the engine. Highest-leverage precision win on this list.
+
+
+**Status: landed.** `posture/relevance.js` re-ranks exploitability by entry-point reachability. Recall-preserving: nothing deleted, severity never touched, `unreachable` only on positive evidence. Corpus held at 199/199.
 
 ### R7. Adversarial verification with enforced separation
 
@@ -195,23 +207,33 @@ for contested findings. `security-triager` scores; it does not refute. This is
 the same pattern that caught a real dead-fix defect during v0.129.0 development
 — an independent reviewer *executing* the claim rather than restating it.
 
+
+**Status: landed.** `posture/verification-separation.js` refuses a verifier that is the producer, and records per-lens verdicts with a consensus. A refuted finding is neither deleted nor severity-touched.
+
 ### R8. Sandboxed resumability and checkpointing
 
 Checkpoint long scans so they resume rather than restart, degrade gracefully
 when model quota is exhausted, and fan work across workers. Currently caps
 usable repository size.
 
+
+**Status: landed.** `posture/scan-checkpoint.js`, opt-in via `AGENTIC_SECURITY_RESUME=1`, append-and-fsync with conservative run-key invalidation. Verified by hard-killing a scan mid-run and comparing the resumed result against an uninterrupted one across ten output channels.
+
 ### R9. Attack-surface-forward analysis
 
 Start at attacker-reachable entry points and reason forward, complementing the
 existing sink-driven taint. Composes directly with R6.
 
+
+**Status: landed** alongside R6 in `posture/relevance.js`. Limits recorded honestly: reachability is file-granular, and an unresolved import graph yields `unknown` rather than a guess.
+
 ---
 
 ## Tier 2 — Worth having
 
-- **R10. Secret redaction before any model call.** Cheap; removes an obvious
-  enterprise objection given the existing no-runtime-cloud-calls posture.
+- **R10. Secret redaction before any model call.** **Landed** — `llm-validator/redact.js`
+  redacts at the single prompt-building choke point; values replaced, structure kept,
+  ordinary code passes through byte-unchanged.
 - **R11. Local/offline model path.** Fits the existing offline-degradation design.
 - **R12. Hard cost ceiling.** A cost *advisor* exists; a cap does not.
 - **R13. Multi-model routing with measured trust.** Route to a cheaper model only
