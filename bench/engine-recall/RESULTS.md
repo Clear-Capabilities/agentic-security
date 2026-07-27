@@ -47,6 +47,26 @@ Language distribution of the 10 global entries is unchanged: `{"js":1,"rb":4,"ph
 Both sigil forms of the PHP superglobal resolve; no entry leaks across a
 language boundary.
 
+**Catalog reachability is not end-to-end taint recall.** The `0/10 → 10/10`
+row above is `matchSource()` called directly on a unit node — it proves the
+catalog entry is indexable, not that the deep engine reports a finding on real
+code. Verified directly this session: a Ruby fixture with Rails' implicit
+`params[:c]` (not a method argument) flowing into `system(c)` produces **zero**
+IR-TAINT findings in both statement and assignment position — only the REGEX
+layer fires. That is a pre-existing Ruby deep-engine limitation (the engine
+does not track the bare `params`/`session`/`ENV` globals as taint sources
+outside the catalog-unit check), not a regression from this branch. End-to-end
+taint recall is proven only for PHP, via the new corpus entry
+`php-superglobal-cmdi-shape` (see §2); it is not established for Ruby.
+
+**The harness figure is catalog-side, not a regression guard.** `matchSource()`
+in `measure.mjs:67-70` is probed with synthetic `{kind:'ident', name}` nodes
+built from the catalog itself, so it would still print `10/10` even if the
+real PHP `$`-sigil parsing path regressed — which is exactly the round-1 bug
+that shipped in this branch and had to be caught by a later task. The actual
+regression guard is `scanner/test/engine-recall.test.js`'s parser-driven
+probes; this harness number should not be trusted alone.
+
 ## 2. Corpus
 
 `npm run bench:cve-replay:check` → **exit 0**, `199/199 baselined entries still
@@ -324,9 +344,15 @@ target first, and it needs a pinned Ruby proof-corpus target to measure against.
 1. **Assignment-position sinks detected?** Yes — `0/0 → 1/1`. The
    statement-position control is unchanged at `1/1`, so the extraction did not
    disturb the one path that already worked.
-2. **All 10 global sources reachable, and language-scoped?** Yes — `0/10 →
-   10/10`, and the per-language matrix in §1 shows no cross-language leakage;
-   PHP resolves with and without the `$` sigil.
+2. **All 10 global sources reachable, and language-scoped?** Yes, as a catalog
+   metric — `0/10 → 10/10`, and the per-language matrix in §1 shows no
+   cross-language leakage; PHP resolves with and without the `$` sigil.
+   Catalog reachability is not end-to-end taint recall, though: only PHP has
+   verified end-to-end proof (`php-superglobal-cmdi-shape`, §2). Ruby's
+   `params[:c] → system(c)` produces no IR-TAINT finding at all (REGEX only) —
+   a pre-existing deep-engine limitation, not introduced by this branch — so
+   the 5 Ruby globals are catalog-reachable but not shown to be recall-complete
+   end to end.
 3. **Did precision hold?** Yes, and it improved. The self-scan gate is green
    with the baseline untouched; polyglot is unchanged at F1 100%; the corpus is
    199/199; ghost is byte-identical before and after; superset lost 3 findings
@@ -403,3 +429,54 @@ run in the revision-1 session:
 | `npm test` | 0 — 1854 tests, 1854 pass, 0 fail |
 | `npm run bench:cve-replay:check` | 0 — 199/199, baseline untouched |
 | `npm run bench:self-scan:check` | 0 — no drift, `BASELINE.json` untouched |
+
+---
+
+## Appendix B — revision 2 (2026-07-27), fix wave from the whole-branch review
+
+Documentation-only. `scanner/src/` was not touched; the bundle is unchanged.
+This appendix records the fix wave applied after the final whole-branch review
+(branch `fix/engine-recall-gaps`, reviewed at `d1f7603`, verdict MERGE, no
+Critical/Important findings) resolved two Minor claim-accuracy issues.
+
+**Finding A — "reachable" read as "end-to-end recall."** §1 and §8 answer 2
+originally let `0/10 → 10/10` (a `matchSource()` unit metric) be read as proof
+that all 10 globals produce an end-to-end finding. Verified directly this
+session before writing anything: a Ruby fixture using Rails' implicit
+`params[:c]` (not a method argument) flowing into `system(c)` produces **zero**
+IR-TAINT findings in either statement or assignment position — only the REGEX
+layer fires (`node -e` probe against `runScan()` on two constructed `.rb`
+fixtures, both under `AGENTIC_SECURITY_DEEP=1`/`AGENTIC_SECURITY_DEEP_IN_CI=1`).
+This is a pre-existing Ruby deep-engine limitation, not a regression from this
+branch. §1 and §8 now distinguish *catalog reachability* (what `0/10 → 10/10`
+measures) from *end-to-end taint recall* (proven only for PHP, via
+`php-superglobal-cmdi-shape`; not established for Ruby), and name the cause.
+The core claims — assignment sinks `0/0 → 1/1`, globals catalog-reachable
+`0/10 → 10/10`, PHP proven end-to-end, precision held and improved — are
+unchanged and still stand.
+
+**Finding B — the committed harness figure is weaker than its headline
+number.** `bench/engine-recall/measure.mjs:67-70` probes globals with
+synthetic `{kind:'ident', name}` nodes built from the catalog itself, so it
+would still print `10/10` even if the real PHP `$`-sigil parsing path
+regressed — the exact class of bug that shipped in round 1 of this branch and
+had to be caught by a later task. §1 now records that this harness number is a
+catalog-side metric, and that `scanner/test/engine-recall.test.js`'s
+parser-driven probes are the actual regression guard.
+
+The `prop:'x'` field in the same `measure.mjs` probe (not read by the
+member-root lookup) was triaged as cosmetic and left unchanged, per the
+review's disposition.
+
+**Gates re-run for revision 2** — every number from a command executed in the
+revision-2 session, exit codes captured standalone:
+
+| command | exit | result |
+|---|---|---|
+| `npm test` | 0 | 1854 tests, 1854 pass, 0 fail |
+| `npm run bench:cve-replay:check` | 0 | no drift — 199/199 baselined entries still pass |
+| `npm run bench:self-scan:check` | 0 | no drift — hooks 24/24, scripts 24/24, polyglot 0/0 |
+
+`git status --porcelain` shows only `bench/engine-recall/RESULTS.md` modified;
+`bench/self-scan/BASELINE.json` and `bench/cve-replay/corpus-baseline.json` are
+untouched (`git diff --stat` on both is empty).
