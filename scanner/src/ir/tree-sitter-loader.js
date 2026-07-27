@@ -1,7 +1,19 @@
 // Tree-sitter parser loader (roadmap #8) — OPTIONAL, runtime-lazy, degrades.
 //
 // web-tree-sitter + tree-sitter-wasms are OPTIONAL dependencies (pinned to an
-// ABI-matched pair: web-tree-sitter 0.20.8 ↔ tree-sitter-wasms 0.1.13). They
+// ABI-matched pair: web-tree-sitter 0.20.8 ↔ tree-sitter-wasms 0.1.13).
+//
+// DO NOT bump web-tree-sitter on its own. Verified 2026-07-27 against 0.26.11:
+// every grammar in tree-sitter-wasms 0.1.13 fails to instantiate (empty Error
+// from Language.load), because the prebuilt grammars target the older grammar
+// ABI. 0.1.13 is the newest tree-sitter-wasms published, so there is no matched
+// pair to upgrade TO — bumping the runtime silently drops all tree-sitter
+// language support (rust, solidity, go, swift, cpp, c) rather than failing loudly.
+// Revisit only when tree-sitter-wasms publishes grammars built for the newer ABI.
+//
+// 0.25+ also moved Language off the Parser class to a top-level named export, so
+// that migration needs _ensureRuntime/getParserFor updated together with the pin.
+// They
 // are NOT bundled into dist (the build marks them `--external`), so the
 // committed bundle stays self-contained and small; this loader requires them
 // lazily at runtime and returns null when they're absent. That keeps the
