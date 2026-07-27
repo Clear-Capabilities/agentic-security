@@ -93,7 +93,8 @@
     "bench:engine-reconnect": "node ../bench/engine-reconnect/measure.mjs",
     "bench:self-scan": "node ../bench/self-scan/measure.mjs",
     "bench:self-scan:check": "node ../bench/self-scan/check.mjs",
-    "bench:self-scan:update-baseline": "node ../bench/self-scan/check.mjs --update-baseline"
+    "bench:self-scan:update-baseline": "node ../bench/self-scan/check.mjs --update-baseline",
+    "bench:engine-recall": "node ../bench/engine-recall/measure.mjs"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
   "license": "PolyForm-Internal-Use-1.0.0"
