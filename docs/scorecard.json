@@ -1,0 +1,550 @@
+{
+  "schema": "agentic-security/accuracy-scorecard@1",
+  "provenance": {
+    "engineVersion": "0.129.0",
+    "bundleSha256": "f420ed270cba8b0430e8e1c030c287687ed7607611cb8bc08161b59704fa2d2c",
+    "commit": "ed93fb286328b16f970d9f687f015ac6e0216062",
+    "worktreeClean": true,
+    "nodeVersion": "v24.16.0",
+    "generatedAt": "2026-07-27T20:35:39.189Z"
+  },
+  "methodology": {
+    "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
+    "detectionRateMeans": "share of known-vulnerable fixtures where the expected finding fired",
+    "silenceRateMeans": "share of fixed counterparts where the same finding correctly did not fire",
+    "notGeneralRecall": true,
+    "notGeneralFalsePositiveRate": true,
+    "f1Emitted": false,
+    "f1OmissionReason": "no labelled real-world population is available to measure precision over, so any F1 would combine denominators that do not describe the same population"
+  },
+  "corpus": {
+    "measuredThisRun": true,
+    "totalEntries": 199,
+    "scoredEntries": 199,
+    "notScored": [],
+    "overall": {
+      "detection": {
+        "n": 199,
+        "d": 199
+      },
+      "silence": {
+        "n": 199,
+        "d": 199
+      }
+    },
+    "byLanguage": [
+      {
+        "key": "c",
+        "entries": 1,
+        "detection": {
+          "n": 1,
+          "d": 1
+        },
+        "silence": {
+          "n": 1,
+          "d": 1
+        }
+      },
+      {
+        "key": "cpp",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      },
+      {
+        "key": "csharp",
+        "entries": 20,
+        "detection": {
+          "n": 20,
+          "d": 20
+        },
+        "silence": {
+          "n": 20,
+          "d": 20
+        }
+      },
+      {
+        "key": "go",
+        "entries": 21,
+        "detection": {
+          "n": 21,
+          "d": 21
+        },
+        "silence": {
+          "n": 21,
+          "d": 21
+        }
+      },
+      {
+        "key": "java",
+        "entries": 23,
+        "detection": {
+          "n": 23,
+          "d": 23
+        },
+        "silence": {
+          "n": 23,
+          "d": 23
+        }
+      },
+      {
+        "key": "javascript",
+        "entries": 34,
+        "detection": {
+          "n": 34,
+          "d": 34
+        },
+        "silence": {
+          "n": 34,
+          "d": 34
+        }
+      },
+      {
+        "key": "kotlin",
+        "entries": 20,
+        "detection": {
+          "n": 20,
+          "d": 20
+        },
+        "silence": {
+          "n": 20,
+          "d": 20
+        }
+      },
+      {
+        "key": "php",
+        "entries": 22,
+        "detection": {
+          "n": 22,
+          "d": 22
+        },
+        "silence": {
+          "n": 22,
+          "d": 22
+        }
+      },
+      {
+        "key": "python",
+        "entries": 31,
+        "detection": {
+          "n": 31,
+          "d": 31
+        },
+        "silence": {
+          "n": 31,
+          "d": 31
+        }
+      },
+      {
+        "key": "ruby",
+        "entries": 19,
+        "detection": {
+          "n": 19,
+          "d": 19
+        },
+        "silence": {
+          "n": 19,
+          "d": 19
+        }
+      }
+    ],
+    "byCwe": [
+      {
+        "key": "CWE-113",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      },
+      {
+        "key": "CWE-120",
+        "entries": 3,
+        "detection": {
+          "n": 3,
+          "d": 3
+        },
+        "silence": {
+          "n": 3,
+          "d": 3
+        }
+      },
+      {
+        "key": "CWE-1321",
+        "entries": 3,
+        "detection": {
+          "n": 3,
+          "d": 3
+        },
+        "silence": {
+          "n": 3,
+          "d": 3
+        }
+      },
+      {
+        "key": "CWE-1333",
+        "entries": 7,
+        "detection": {
+          "n": 7,
+          "d": 7
+        },
+        "silence": {
+          "n": 7,
+          "d": 7
+        }
+      },
+      {
+        "key": "CWE-22",
+        "entries": 14,
+        "detection": {
+          "n": 14,
+          "d": 14
+        },
+        "silence": {
+          "n": 14,
+          "d": 14
+        }
+      },
+      {
+        "key": "CWE-327",
+        "entries": 10,
+        "detection": {
+          "n": 10,
+          "d": 10
+        },
+        "silence": {
+          "n": 10,
+          "d": 10
+        }
+      },
+      {
+        "key": "CWE-329",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      },
+      {
+        "key": "CWE-338",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      },
+      {
+        "key": "CWE-352",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      },
+      {
+        "key": "CWE-502",
+        "entries": 10,
+        "detection": {
+          "n": 10,
+          "d": 10
+        },
+        "silence": {
+          "n": 10,
+          "d": 10
+        }
+      },
+      {
+        "key": "CWE-601",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      },
+      {
+        "key": "CWE-611",
+        "entries": 10,
+        "detection": {
+          "n": 10,
+          "d": 10
+        },
+        "silence": {
+          "n": 10,
+          "d": 10
+        }
+      },
+      {
+        "key": "CWE-643",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      },
+      {
+        "key": "CWE-78",
+        "entries": 22,
+        "detection": {
+          "n": 22,
+          "d": 22
+        },
+        "silence": {
+          "n": 22,
+          "d": 22
+        }
+      },
+      {
+        "key": "CWE-787",
+        "entries": 1,
+        "detection": {
+          "n": 1,
+          "d": 1
+        },
+        "silence": {
+          "n": 1,
+          "d": 1
+        }
+      },
+      {
+        "key": "CWE-79",
+        "entries": 11,
+        "detection": {
+          "n": 11,
+          "d": 11
+        },
+        "silence": {
+          "n": 11,
+          "d": 11
+        }
+      },
+      {
+        "key": "CWE-798",
+        "entries": 11,
+        "detection": {
+          "n": 11,
+          "d": 11
+        },
+        "silence": {
+          "n": 11,
+          "d": 11
+        }
+      },
+      {
+        "key": "CWE-89",
+        "entries": 13,
+        "detection": {
+          "n": 13,
+          "d": 13
+        },
+        "silence": {
+          "n": 13,
+          "d": 13
+        }
+      },
+      {
+        "key": "CWE-90",
+        "entries": 10,
+        "detection": {
+          "n": 10,
+          "d": 10
+        },
+        "silence": {
+          "n": 10,
+          "d": 10
+        }
+      },
+      {
+        "key": "CWE-916",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      },
+      {
+        "key": "CWE-918",
+        "entries": 10,
+        "detection": {
+          "n": 10,
+          "d": 10
+        },
+        "silence": {
+          "n": 10,
+          "d": 10
+        }
+      },
+      {
+        "key": "CWE-94",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      }
+    ],
+    "byTier": [
+      {
+        "key": "capability",
+        "entries": 190,
+        "detection": {
+          "n": 190,
+          "d": 190
+        },
+        "silence": {
+          "n": 190,
+          "d": 190
+        }
+      },
+      {
+        "key": "deep",
+        "entries": 6,
+        "detection": {
+          "n": 6,
+          "d": 6
+        },
+        "silence": {
+          "n": 6,
+          "d": 6
+        }
+      },
+      {
+        "key": "regression",
+        "entries": 3,
+        "detection": {
+          "n": 3,
+          "d": 3
+        },
+        "silence": {
+          "n": 3,
+          "d": 3
+        }
+      }
+    ]
+  },
+  "selfScan": {
+    "measuredThisRun": true,
+    "targets": {
+      "hooks": {
+        "total": 24,
+        "byFile": {
+          "cache-invalidator-guard.js": 1,
+          "conversation-context.js": 1,
+          "lib/transcript.js": 1,
+          "mascot.js": 1,
+          "model-cost-advisor.js": 2,
+          "post-edit-scan.js": 2,
+          "pre-bash-guard.js": 3,
+          "pre-edit-bodyguard.js": 4,
+          "session-start-self-check.js": 4,
+          "session-stop-drift-check.js": 2,
+          "session-welcome.js": 3
+        }
+      },
+      "scripts": {
+        "total": 24,
+        "byFile": {
+          "_compliance_lib.py": 1,
+          "apply-command-trim.mjs": 2,
+          "calibration-expand.mjs": 2,
+          "detector-fuzz-runner.mjs": 3,
+          "ghsa-to-hints.mjs": 3,
+          "llm-cost-ceiling.py": 2,
+          "nist-compliance/scan.py": 2,
+          "rotate-key-auto.py": 1,
+          "self-test-runner.mjs": 2,
+          "synthesize-detector.mjs": 5,
+          "trust-page.py": 1
+        }
+      }
+    },
+    "polyglot": {
+      "total": 0,
+      "byLanguage": {}
+    }
+  },
+  "committedInputs": {
+    "corpusBaseline": {
+      "source": "bench/cve-replay/corpus-baseline.json",
+      "generatedAt": "2026-07-27",
+      "total": 199,
+      "passing": 199
+    },
+    "proofCorpus": {
+      "source": "bench/proof-corpus/results/summary.json",
+      "bundleSha": "4b740305633ca5a38ceb81349dfc497dfdee892168eacf4bb92ee52485f5546a",
+      "targetCount": 3,
+      "ok": 3,
+      "failed": 0,
+      "targets": [
+        {
+          "id": "ghost",
+          "commit": "7da28a03b9c72fa2cc656f5f926230bae09fd684",
+          "status": "ok",
+          "filesInScope": 4271,
+          "filesParsed": 4023,
+          "determinismChecked": true,
+          "determinismIdentical": false,
+          "resultsEmitted": 1124
+        },
+        {
+          "id": "godot",
+          "commit": "159701651ad44335691dcbd632d8074307074c7b",
+          "status": "ok",
+          "filesInScope": 3399,
+          "filesParsed": 3391,
+          "determinismChecked": true,
+          "determinismIdentical": true,
+          "resultsEmitted": 145
+        },
+        {
+          "id": "superset",
+          "commit": "e1ffa53d9b4926f2ac7fe8c83c5f890fd621f3c8",
+          "status": "ok",
+          "filesInScope": 4086,
+          "filesParsed": 4083,
+          "determinismChecked": true,
+          "determinismIdentical": false,
+          "resultsEmitted": 860
+        }
+      ]
+    }
+  }
+}
