@@ -89,7 +89,8 @@ const ALLOWLIST = new Set([
   'rule-overrides.js::runCustomRules',
   'rule-pack-signing.js::BUNDLED_OFFICIAL_KEYS',
   'ruleset-version.js::readPinned',
-  'ruleset-version.js::effectiveVersion',
+  // effectiveVersion is no longer dead — the CLI calls it to stamp the ruleset
+  // version into the R4 run attestation. Entry removed (4R-6 decay rule).
   'security-trend.js::computeTrend',
   'stable-id.js::computeStableId',
   'streak.js::loadStreak',

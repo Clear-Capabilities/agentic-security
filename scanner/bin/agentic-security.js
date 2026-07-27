@@ -274,6 +274,21 @@ function renderV3Blocks(scan, flags) {
 }
 
 // Always-on machine output (R2). Vibecoder gets JSON only; pro gets JSON+SARIF+CSV.
+// SHA-256 of the running bundle, read from the sidecar `npm run build` emits
+// NEXT TO the bundle. Running from source (bin/ + src/) yields 'unavailable'
+// rather than the checkout's dist hash: src and a previously-built dist can
+// disagree, and attesting a bundle that did not produce this run would be a
+// false claim.
+function _bundleSha() {
+  const here = path.dirname(new URL(import.meta.url).pathname);
+  try {
+    const raw = fs.readFileSync(path.join(here, 'agentic-security.mjs.sha256'), 'utf8').trim();
+    const m = /^([0-9a-f]{64})\b/.exec(raw);
+    if (m) return m[1];
+  } catch { /* not running from the bundle */ }
+  return 'unavailable';
+}
+
 async function writeMachineOutput(targetAbs, scan, meta, profile) {
   const stateDir = path.join(targetAbs, '.agentic-security');
   const { isSafeStateDir: _isSafe } = await import('../src/posture/state-dir.js');
@@ -552,6 +567,24 @@ async function cmdScan(args) {
 
   // Deterministic post-process: stable-sort findings + zero out timing.
   if (isDeterministic()) makeDeterministic(scan, meta);
+
+  // R4 — determinism as a contract. Bind the PUBLISHED finding set (the same
+  // normalization every report format emits) to the engine version, ruleset
+  // version and bundle hash that produced it, via an order-independent digest.
+  // Runs after every filter above so it attests what actually ships. Metadata
+  // only — a failure here must never fail a scan.
+  try {
+    const { computeRunAttestation } = await import('../src/posture/attestation.js');
+    const { effectiveVersion } = await import('../src/posture/ruleset-version.js');
+    scan.attestation = computeRunAttestation({
+      findings: normalizeFindings(scan),
+      engineVersion: PKG_VERSION,
+      rulesetVersion: effectiveVersion(targetAbs).version,
+      bundleSha: _bundleSha(),
+      root: targetAbs,
+      sign: true,
+    });
+  } catch { /* attestation is metadata; never fail a scan over it */ }
 
   // R2: Always emit machine-readable artifacts to .agentic-security/.
   await writeMachineOutput(targetAbs, scan, meta, profile);

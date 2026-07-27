@@ -406,6 +406,12 @@ export function toJSON(scan, meta={}, opts={}){
     // threw and were skipped. The findings still ship; downstream consumers
     // see the gap.
     annotatorErrors: Array.isArray(scan.annotatorErrors) ? scan.annotatorErrors : [],
+    // R4 — run attestation: a stable, order-independent digest over this
+    // finding set bound to the engine/ruleset/bundle that produced it.
+    // Attached by the CLI (posture/attestation.js); null when not computed.
+    // It carries its own `proves` / `doesNotProve` statement — do not quote
+    // the digest as cross-machine reproducibility, which it is not.
+    attestation: scan.attestation || null,
     _scanMeta: scan._scanMeta || null,
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];
