@@ -34,6 +34,19 @@ Annotators that run **after** every detector has emitted, plus state stores read
 
 Its contract is **recall-preserving, same precedent as `falsification.js` / `dataflow/proof-gate.js`**: it never removes a finding, never touches `severity`, and never asserts `unreachable` without positive evidence — a negative verdict additionally requires the intra-repo import graph to be hole-free *along the reachable set* (an unresolved relative import or a non-literal `require(x)` in a reachable file hides a possible edge, so every would-be `unreachable` degrades to `unknown`). `null`/`'unknown'` is a first-class state and is **not** the same as `false`. Wired in `engine.js` after the entry-point inventory is built and after every finding has been appended (multi-sink and cross-language chains included) so nothing escapes annotation; this is the one annotator that deliberately runs after `why-fired`.
 
+**Enforced verification separation (R7)** — `verification-separation.js`. The falsification pass could already try to *disprove* a finding; what it could not do was prove the checker was not the producer. This module supplies that structural guarantee:
+
+- `recordProducer(finding, producerId)` stamps provenance **write-once** — a later party cannot re-stamp itself as producer to manufacture separation.
+- `assertSeparation(finding, verifierId)` refuses when verifier === producer, and **fails closed** when no producer was recorded (unestablishable separation is not separation).
+- `recordVerdict(finding, {verifierId, lens, verdict, reason})` runs that check itself, so there is no path to a recorded verdict that skips it. `lens` is the perspective (`'control-flow'`, `'reachability'`, `'data-shape'`, `'llm-review'`); `verdict ∈ 'upheld'|'refuted'|'undecided'`. One verifier gets one vote per lens — a re-vote replaces rather than stuffs.
+- `consensusOf(finding) -> {verdict, upheld, refuted, undecided, lenses[]}` — majority, `'undecided'` on a tie or on no verdicts.
+
+Producer ids are namespaced `detector:<parser>`, verifier ids `verifier:<name>`, so the two spaces cannot collide. **Nothing throws** (posture convention): every entry point returns `{ok:false, refused:true, reason}`.
+
+Contract is **recall-preserving, same precedent as `falsification.js` / `proof-gate.js`**: a `refuted` verdict never removes a finding and never touches `severity`. It is a triage signal, not a deletion.
+
+Wired in `falsification.js`: the detector is stamped as producer, the falsification pass records under `VERIFIER_FALSIFICATION` on the `control-flow` lens, and the optional LLM tier records separately under `VERIFIER_LLM_REVIEW` on the `llm-review` lens — which is what makes a contested finding legible *as contested* (upheld vs refuted → consensus `undecided`) instead of resolved by whoever spoke last. Result lands on `finding.verification = {producer, verdicts[], consensus}`.
+
 **Integrity + signing** — `integrity.js` (per-install HMAC for `last-scan.json`), `rule-pack-signing.js`. The HMAC key lives at `$XDG_CONFIG_HOME/agentic-security/scan-key`; override via `$AGENTIC_SECURITY_HMAC_KEY`. Premortem-derived; do not regress to hostname-derived.
 
 **Rule lifecycle** — `custom-rules.js` (YAML pattern DSL), `rule-overrides.js` (`disable:` gated on signature), `rule-packs.js`, `rule-synthesis.js` (proposes suppressions from triage feedback), `ruleset-version.js`.
