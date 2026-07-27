@@ -928,6 +928,7 @@ for (const e of CATALOG) {
 // filter runs per-match by reading the env each call.
 const CALLEE_INDEX = new Map();
 const MEMBER_INDEX = new Map();
+const GLOBAL_INDEX = new Map();
 for (const e of CATALOG) {
   if (!e.match) continue;
   if (e.match.type === 'call' && e.match.callee && e.match.callee !== '*') {
@@ -938,6 +939,14 @@ for (const e of CATALOG) {
     const k = `${e.match.object}.${e.match.prop}`;
     if (!MEMBER_INDEX.has(k)) MEMBER_INDEX.set(k, []);
     MEMBER_INDEX.get(k).push(e);
+  } else if (e.match.type === 'global' && e.match.name) {
+    // Globals (PHP superglobals, rails params/session, JS location) were
+    // indexed nowhere, so matchSource could never return one — every entry
+    // declared this way was dead. Keyed by the bare name the source appears
+    // under in code.
+    const k = e.match.name;
+    if (!GLOBAL_INDEX.has(k)) GLOBAL_INDEX.set(k, []);
+    GLOBAL_INDEX.get(k).push(e);
   }
 }
 
@@ -971,6 +980,24 @@ export function matchSource(expr, file) {
   // Member sources (req.query): the original path — unchanged.
   if (expr.kind === 'member' && expr.object?.kind === 'ident') {
     const raw = MEMBER_INDEX.get(`${expr.object.name}.${expr.prop}`);
+    if (raw) {
+      const hits = filterByProvenance(raw).filter(h => _languageAllowed(h, file));
+      const s = hits.find(h => h.kind === 'source');
+      if (s) return s;
+    }
+    // Global sources reached as a member read off the global itself:
+    // $_GET['x'], params[:id]. Match on the member's root, not the pair.
+    const rawGlobal = GLOBAL_INDEX.get(expr.object.name);
+    if (rawGlobal) {
+      const hits = filterByProvenance(rawGlobal).filter(h => _languageAllowed(h, file));
+      const s = hits.find(h => h.kind === 'source');
+      if (s) return s;
+    }
+  }
+  // Bare-identifier globals: PHP superglobals, Rails params/session/cookies,
+  // Ruby ENV, JS location — referenced directly without a member access.
+  if (expr.kind === 'ident' && expr.name) {
+    const raw = GLOBAL_INDEX.get(expr.name);
     if (raw) {
       const hits = filterByProvenance(raw).filter(h => _languageAllowed(h, file));
       const s = hits.find(h => h.kind === 'source');
