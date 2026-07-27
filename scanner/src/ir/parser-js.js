@@ -397,7 +397,11 @@ export function parseJsFile(file, code) {
   try {
     babelTransformSync(code, {
       filename: file,
-      presets: [presetReact, [presetTypescript, { isTSX: true, allExtensions: true }]],
+      // Babel 8 removed preset-typescript's .isTSX/.allExtensions. ignoreExtensions
+      // is the documented replacement: parse every file with the same TS grammar
+      // regardless of extension. JSX stays enabled via preset-react, so .js files
+      // containing JSX still parse — which .isTSX/.allExtensions guaranteed before.
+      presets: [presetReact, [presetTypescript, { ignoreExtensions: true }]],
       plugins: [plugin],
       ast: false, code: false, babelrc: false, configFile: false,
     });

@@ -987,7 +987,7 @@ function performASTAnalysis(fp, code) {
     try {
         babelTransformSync(code, {
             filename: fp,
-            presets: [presetReact, [presetTypescript, { isTSX: true, allExtensions: true }]],
+            presets: [presetReact, [presetTypescript, { ignoreExtensions: true }]],
             plugins: [astTaintTrackerPlugin],
             ast: false, code: false,
             babelrc: false, configFile: false,
@@ -4633,7 +4633,7 @@ function _buildCallGraphAST(fp, code){
 
     babelTransformSync(code, {
       filename: fp,
-      presets: [presetReact, [presetTypescript, { isTSX: true, allExtensions: true }]],
+      presets: [presetReact, [presetTypescript, { ignoreExtensions: true }]],
       plugins: [callTrackerPlugin],
       ast: false, code: false,
       babelrc: false, configFile: false,
