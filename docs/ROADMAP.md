@@ -116,6 +116,25 @@ then permanently defends against its own regression — a compounding asset.
 **Done when.** A finding is demonstrated to move between tiers on real evidence,
 a proven finding lands in the corpus, and the corpus gate fails if it regresses.
 
+**Status: partially landed, not done.** The tier vocabulary (`execution-proven`
+/ `proof-failed` / `taint-proven` / `unproven`), the promotion path
+(`proveFinding` runs a finding's PoC inside R1's sandbox and demotes anything
+that did not actually run), and report surfacing (`proofTier` +
+`proofEvidence` pass through `normalizeFindings` only when attached) are
+implemented and covered by `scanner/test/execution-proof.test.js`. Verified on
+this development host on the `userspace` backend: a PoC that produces the
+predicted marker promotes to `execution-proven`; one that runs without
+producing it lands at `proof-failed`; a finding with no PoC or an unsupported
+PoC language stays at its static tier. The kernel-namespace backend remains
+unverified (see R1) and confines writes not at all, so `execution-proven`
+evidence recorded on that backend is weaker than the same tier on `userspace`
+until that backend gets the same escape-test treatment on a real Linux host.
+**Not landed:** the differentiator described above — auto-enrolling an
+execution-proven finding as a corpus entry. That needs a corpus-entry
+generator plus the same `pre:TP post:TN` verification loop the existing
+corpus gate enforces, and is scoped as its own follow-on plan, not part of
+this one. R2 should not be marked done until that lands.
+
 ### R3. Published precision/recall scorecard
 
 **Problem.** The measurement machinery exists (proof corpus, self-scan gate,

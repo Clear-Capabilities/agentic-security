@@ -44,6 +44,50 @@ Annotators that run **after** every detector has emitted, plus state stores read
 - **No throwing.** Every annotation in `engine.js` is wrapped `try { … } catch (_) {}`. Your annotator must degrade gracefully — set `null` on the field and continue.
 - **Dead-module test.** `npm run test:lifecycle` fails the build if you export a public symbol from a posture module that no other source file imports. Wire it in `engine.js` (or allowlist it with a written reason in `test/no-dead-modules.test.js`).
 
+## Execution-proof tiers (R2)
+
+`proof-tier.js` + `execution-proof.js` add a fourth axis to a finding's
+credibility, orthogonal to `confidence`/`exploitability`: whether the bug was
+*run*, not just reasoned about.
+
+**The four tiers** (`PROOF_TIERS`, most-proven first):
+
+- `execution-proven` — a generated PoC ran inside the sandbox and the sandbox
+  observed the predicted effect (a marker file the PoC's payload should have
+  written showed up). The strongest claim the pipeline can make.
+- `proof-failed` — a PoC ran and the marker did **not** appear. This is a
+  **triage signal, not a false-positive verdict**. Absence of proof is not
+  proof of absence: the PoC may be wrong, the param key may be misinferred,
+  or the vulnerable path may need state the single-shot PoC didn't set up.
+  Never auto-close or downgrade severity off `proof-failed` alone.
+- `taint-proven` — the analyser's static reasoning (`IR-TAINT`/`MULTI-SINK`)
+  found it; nothing executed. This is `proofTierOf()`'s default when no
+  execution evidence has been attached.
+- `unproven` — no analyser backing recorded at all (e.g. `REGEX` parser).
+
+**Why a marker file, not an exit code.** The sandbox cannot reliably
+distinguish "the payload was denied by confinement" from "the payload ran
+and happened to exit 0" — both look like a clean exit from the parent
+process's point of view. A marker file the PoC only writes *if its exploit
+path actually executes* turns that ambiguity into a directly observable
+fact: the file exists, or it doesn't. Exit code alone is used only for
+timeout/crash detection, never as the proof signal itself.
+
+**The backend is recorded in every evidence object** (`proofEvidence.backend`,
+e.g. `'userspace'`) because not all confinement backends carry the same
+guarantee. The kernel-namespace backend is unverified on this host and, even
+where available, only confines network — it does **not** confine writes.
+Treat `execution-proven` evidence from a non-`userspace` backend as weaker
+than the same tier from `userspace` until that backend's write confinement
+is independently verified. `attachProofTier()` also enforces the demotion
+guard: `ran:false` can never yield `execution-proven` or `proof-failed`,
+regardless of what tier was requested — it falls back to the finding's
+static standing (`proofTierOf`).
+
+`proofTier`/`proofEvidence` are copied through `report/index.js`'s
+`normalizeFindings()` only when the annotator actually attached them —
+never synthesised at the report layer.
+
 ## Gotchas
 
 - The seed `calibration-seed.json` is small (n < 30 for several families). Don't treat it as a held-out set — that's `holdout-eval.js`'s job, against an externally-supplied JSONL.

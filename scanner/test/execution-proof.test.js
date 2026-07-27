@@ -93,3 +93,28 @@ describe('proveFinding', () => {
     assert.ok(typeof f.proofEvidence.backend === 'string' && f.proofEvidence.backend.length > 0);
   });
 });
+
+import { normalizeFindings } from '../src/report/index.js';
+
+describe('report surfacing', () => {
+  test('proof tier and evidence survive report normalisation', () => {
+    const out = normalizeFindings({ findings: [{
+      id: 'z', severity: 'high', file: 'a.js', line: 1, vuln: 'X', cwe: 'CWE-1',
+      description: 'd', remediation: 'r', parser: 'IR-TAINT', family: 'f',
+      proofTier: 'execution-proven',
+      proofEvidence: { tier: 'execution-proven', backend: 'userspace', ran: true, observed: 'marker', reason: null, exitCode: 0, timedOut: false, at: '2026-07-27T00:00:00.000Z' },
+    }] });
+    const f = out.find(x => x.id === 'z') || out[0];
+    assert.equal(f.proofTier, 'execution-proven');
+    assert.equal(f.proofEvidence.backend, 'userspace');
+  });
+
+  test('a finding without proof fields normalises without inventing them', () => {
+    const out = normalizeFindings({ findings: [{
+      id: 'y', severity: 'low', file: 'b.js', line: 2, vuln: 'Y', cwe: 'CWE-2',
+      description: 'd', remediation: 'r', parser: 'REGEX', family: 'f',
+    }] });
+    const f = out.find(x => x.id === 'y') || out[0];
+    assert.ok(f.proofTier === undefined || f.proofTier === 'unproven');
+  });
+});
