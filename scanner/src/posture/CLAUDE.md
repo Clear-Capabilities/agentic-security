@@ -115,6 +115,50 @@ static standing (`proofTierOf`).
 `normalizeFindings()` only when the annotator actually attached them —
 never synthesised at the report layer.
 
+## Scan checkpointing / resume (R8)
+
+`scan-checkpoint.js` lets an interrupted scan resume instead of restarting, which
+is what caps usable repository size today. **Opt-in only**: `AGENTIC_SECURITY_RESUME=1`
+(or `runScan(root, {resume:true})`). Default behaviour is byte-for-byte unchanged
+and nothing is written.
+
+**What is checkpointed.** Only the per-file loop in `engine.js#runFullScan` — the
+one place per-file work happens. Each completed file's *entire* contribution is
+persisted (routes, findings, taint sources/sinks/sanitizers, logic vulns, secrets,
+at-rest/in-transit ciphers, the suppression-log delta, and the per-file taint
+result the cross-file pass reads), not just its findings. Everything after the
+loop — cross-file taint, gadget detection, the whole annotation pipeline — re-runs
+from scratch, so nothing that depends on the global picture can be stale by
+construction. On replay, `pfr[p]`'s arrays are rebuilt as slices of the aggregate
+arrays, so object identity between the two matches an uninterrupted run exactly.
+
+**The property.** A resumed scan must produce the same finding set as an
+uninterrupted one; a checkpoint that silently drops findings turns a slow scan
+into a quietly incomplete one, which is worse than no checkpoint. `test/scan-checkpoint.test.js`
+asserts this end-to-end: a child process is hard-exited (`process.exit`, no
+unwinding) partway through a real scan, the resumed scan is compared against a
+genuinely uninterrupted one, and the fixture is asserted to exercise every
+channel inside the replayed prefix so a dropped channel cannot go unnoticed.
+
+**Invalidation is deliberately blunt.** The run key covers engine version,
+ruleset version, bundle SHA, a content hash of every scanned and dependency file
+(which subsumes mtime), and every `AGENTIC_SECURITY_*` env switch. If any of it
+moved, the checkpoint is discarded and the scan starts clean. Redoing work is
+slow; resuming stale work is a correctness bug.
+
+**Crash safety: append-and-fsync.** JSONL — one header line pinning the run key,
+then one record per file carrying a SHA-256 of its own payload, each written with
+a single `writeSync` and `fsyncSync`'d before the next file is analysed. Recovery
+reads forward while records verify and truncates at the last byte that did, so a
+torn or tampered tail is dropped rather than resumed into. Nothing is rewritten
+in place. Values JSON cannot round-trip (Date/RegExp/Map/function/…) are refused
+rather than recorded lossily — that file just gets rescanned. On clean completion
+the checkpoint is removed, so the next run cannot resume consumed state.
+
+State lives at `<scanRoot>/.agentic-security/scan-checkpoint.jsonl`; like every
+other module here, nothing throws — a failure to open, read or append degrades to
+"no checkpoint", i.e. a normal full scan.
+
 ## Gotchas
 
 - The seed `calibration-seed.json` is small (n < 30 for several families). Don't treat it as a held-out set — that's `holdout-eval.js`'s job, against an externally-supplied JSONL.

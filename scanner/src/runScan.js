@@ -122,7 +122,9 @@ export async function runScan(rootDir, opts = {}) {
     }
   }
 
-  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root }, opts.onProgress || (()=>{}));
+  // R8: `resume` is opt-in. Left undefined here, runFullScan falls back to the
+  // AGENTIC_SECURITY_RESUME=1 env var, which is off by default.
+  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume }, opts.onProgress || (()=>{}));
   // Premortem 2R4.2: stamp ruleset version + source on the scan result, and
   // notify if the operator pinned a different version than what's installed.
   try { stampScan(root, scan); } catch {}

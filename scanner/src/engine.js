@@ -215,6 +215,13 @@ import { buildTrustBoundaryDiagram } from './posture/trust-boundary-diagram.js';
 import { scanConcurrency } from './posture/concurrency-checker.js';
 import { annotateBountyPrediction } from './posture/bounty-prediction.js';
 import { annotateAttackPlaybooks } from './posture/attack-playbooks.js';
+// R8: opt-in scan checkpointing/resume for the per-file loop.
+import {
+  openCheckpoint, recordFileDone, completedFiles, resumeFindings, closeCheckpoint,
+  computeRunKey, bundleShaForRunKey,
+} from './posture/scan-checkpoint.js';
+import { SCANNER_VERSION as _ENGINE_VERSION } from './posture/version.js';
+import { effectiveVersion as _effectiveRulesetVersion } from './posture/ruleset-version.js';
 
 // Disk-backed cache replacing browser sessionStorage. One JSON blob per key under ~/.claude/agentic-security/osv-cache/.
 const _CACHE_DIR = path.join(os.homedir(), '.claude', 'agentic-security', 'osv-cache');
@@ -2269,6 +2276,10 @@ function _isFalsePositiveCredential(fp, snippet, fullMatch){
 // Module-level suppression log; cleared at the start of each runFullScan invocation.
 const _suppressionLog = [];
 function _resetSuppressions(){ _suppressionLog.length = 0; }
+// R8: the per-file taint result minus the four arrays that are also appended
+// wholesale to the aggregates. Resume rebuilds those from the aggregate slices
+// so pfr[p] and the aggregates share object identity, exactly as in a normal run.
+function _pfrMetaOnly(ta){ if(!ta||typeof ta!=='object')return {}; const o={}; for(const k of Object.keys(ta)){ if(k==='findings'||k==='sources'||k==='sinks'||k==='sanitizers')continue; o[k]=ta[k]; } return o; }
 function _getSuppressions(){ return [..._suppressionLog]; }
 
 // FP-9 / Feat-4: custom rules loaded from .agentic-security/rules.{yml,yaml,json}
@@ -7392,7 +7403,7 @@ async function queryRegistries(components){
 
 // Node port: takes { fileContents, depFileContents } maps directly instead of a JSZip object.
 // fileContents = code files keyed by relative path; depFileContents = manifest/lockfiles keyed by relative path.
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
   // defined in OTHER files (Juliet's DataflowThruInnerClass / Vector / Stream
@@ -7402,7 +7413,75 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   const _perFileTimeoutMs = parseInt(process.env.AGENTIC_SECURITY_PER_FILE_TIMEOUT_MS || '10000', 10);
   const _fileTimings = [];
   let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0;
-  const files=Object.keys(fileContents).filter(f=>shouldScan(f) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];let i=0;for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aF.push(...scanAliasedSinks(p,c));aF.push(...scanJavaSAST(p,c));aF.push(...scanJavaBenchExtras(p,c));aLogic.push(...scanMiddlewareOrdering(p,c));aLogic.push(...scanReDoS(p,c));if(/\.(?:java|cs|kt|py|php|phtml)$/i.test(p)){try{aLogic.push(...scanRegexReDoS(p,c));}catch(_){}}aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));aF.push(...scanIaC(p,c));aF.push(...scanTerraform(p,c));
+  const files=Object.keys(fileContents).filter(f=>shouldScan(f) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];
+  // ---- R8: opt-in per-file checkpointing (AGENTIC_SECURITY_RESUME=1, or
+  // runScan({resume:true})). Default OFF, so existing behaviour is untouched.
+  // Only this loop is checkpointed; every cross-file pass below re-runs, so
+  // nothing that depends on the whole tree can be stale on resume.
+  const _ckptEnabled = (resume === undefined ? process.env.AGENTIC_SECURITY_RESUME === '1' : !!resume) && !!scanRoot;
+  let _ckpt = null; const _ckptPayloads = new Map(); let _ckptDone = new Set(); let _ckptResumed = 0, _ckptWrites = 0;
+  const _ckptAbortAfter = parseInt(process.env.AGENTIC_SECURITY_CHECKPOINT_ABORT_AFTER || '0', 10) || 0;
+  if (_ckptEnabled) {
+    try {
+      const _runKey = computeRunKey({
+        engineVersion: _ENGINE_VERSION,
+        rulesetVersion: (_effectiveRulesetVersion(scanRoot) || {}).version,
+        bundleSha: bundleShaForRunKey(),
+        fileContents, depFileContents,
+      });
+      _ckpt = openCheckpoint(scanRoot, { runKey: _runKey });
+      for (const r of resumeFindings(_ckpt)) { if (r && r.findings) _ckptPayloads.set(r.file, r.findings); }
+      _ckptDone = completedFiles(_ckpt);
+    } catch (_) { _ckpt = null; }
+  }
+  // Replay a checkpointed file's ENTIRE contribution, in the same array order
+  // and with the same object identities between pfr[p] and the aggregate arrays
+  // that an uninterrupted run would have produced.
+  const _ckptReplay = (p) => {
+    const d = _ckptPayloads.get(p);
+    if (!d) return false;
+    const c = fileContents[p]; if (!c) return false;
+    fc[p] = c;
+    const f0 = aF.length, s0 = aSrc.length, k0 = aSink.length, n0 = aSan.length;
+    for (const x of (d.findings || [])) aF.push(x);
+    for (const x of (d.routes || [])) aR.push(x);
+    for (const x of (d.sources || [])) aSrc.push(x);
+    for (const x of (d.sinks || [])) aSink.push(x);
+    for (const x of (d.sanitizers || [])) aSan.push(x);
+    for (const x of (d.logic || [])) aLogic.push(x);
+    for (const x of (d.secrets || [])) aSecrets.push(x);
+    for (const x of (d.ciphersRest || [])) aCiphersRest.push(x);
+    for (const x of (d.ciphersTransit || [])) aCiphersTransit.push(x);
+    for (const x of (d.suppressions || [])) _suppressionLog.push(x);
+    const ta = Object.assign({}, d.pfr || {});
+    ta.findings = aF.slice(f0, f0 + (d.pfrFindings || 0));
+    ta.sources = aSrc.slice(s0); ta.sinks = aSink.slice(k0); ta.sanitizers = aSan.slice(n0);
+    pfr[p] = ta;
+    _fileTimings.push({ file: p, ms: d.ms || 0 });
+    _ckptResumed++;
+    return true;
+  };
+  const _ckptRecord = (p, mk, ms, ta) => {
+    if (!_ckpt || !_ckpt.enabled) return;
+    recordFileDone(_ckpt, p, {
+      routes: aR.slice(mk.aR), findings: aF.slice(mk.aF),
+      sources: aSrc.slice(mk.aSrc), sinks: aSink.slice(mk.aSink), sanitizers: aSan.slice(mk.aSan),
+      logic: aLogic.slice(mk.aLogic), secrets: aSecrets.slice(mk.aSecrets),
+      ciphersRest: aCiphersRest.slice(mk.aCR), ciphersTransit: aCiphersTransit.slice(mk.aCT),
+      suppressions: _suppressionLog.slice(mk.sup),
+      pfr: _pfrMetaOnly(ta),
+      pfrFindings: (ta && Array.isArray(ta.findings)) ? ta.findings.length : 0,
+      ms,
+    });
+    _ckptWrites++;
+    // Fault injection for the resume test: a hard exit with no unwinding, which
+    // is what the checkpoint format has to survive. Never set in normal use.
+    if (_ckptAbortAfter > 0 && _ckptWrites >= _ckptAbortAfter) process.exit(137);
+  };
+  let i=0;for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});
+    if(_ckptDone.has(p)&&_ckptReplay(p))continue;
+    const _mk={aR:aR.length,aF:aF.length,aSrc:aSrc.length,aSink:aSink.length,aSan:aSan.length,aLogic:aLogic.length,aSecrets:aSecrets.length,aCR:aCiphersRest.length,aCT:aCiphersTransit.length,sup:_suppressionLog.length};
+    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aF.push(...scanAliasedSinks(p,c));aF.push(...scanJavaSAST(p,c));aF.push(...scanJavaBenchExtras(p,c));aLogic.push(...scanMiddlewareOrdering(p,c));aLogic.push(...scanReDoS(p,c));if(/\.(?:java|cs|kt|py|php|phtml)$/i.test(p)){try{aLogic.push(...scanRegexReDoS(p,c));}catch(_){}}aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));aF.push(...scanIaC(p,c));aF.push(...scanTerraform(p,c));
       aF.push(...scanLLM(p,c));
       aF.push(...scanLLMOwasp(p,c));
       aF.push(...scanLlmCost(p,c));
@@ -7507,6 +7586,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
       const _ftElapsed=Date.now()-_ft0;
       if(_ftElapsed>_perFileTimeoutMs){aF.push({id:`file-timeout:${p}`,file:p,line:0,vuln:`File analysis exceeded ${_perFileTimeoutMs}ms (${_ftElapsed}ms)`,severity:'info',parser:'ENGINE',confidence:0.5,_timeout:true});_filesTimedOut++;}
       _fileTimings.push({file:p,ms:_ftElapsed});
+      _ckptRecord(p,_mk,_ftElapsed,ta);
       }catch(_){_fileTimings.push({file:p,ms:Date.now()-_ft0,error:true});}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
   // Deserialization-gadget detector runs once with full-tree context (it needs
   // manifest contents to know which gadget libs are on the classpath).
@@ -8612,7 +8692,10 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   let _analysisTier = null, _unmodeledSinks = null;
   try { _analysisTier = computeAnalysisTiers(Object.keys(fc)); } catch {}
   try { _unmodeledSinks = countUnmodeledSinkCandidates(fc, finalFindings); } catch {}
-  const _scanMeta={filesScanned:files.length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length}};
+  const _scanMeta={filesScanned:files.length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length}};
+  // R8: the scan completed, so the checkpoint has been fully consumed — remove
+  // it. Anything that threw before this point leaves it in place to resume from.
+  try { closeCheckpoint(_ckpt, { complete: true }); } catch (_) {}
   // Addition #2 — attack-surface completeness inventory (entry points → dispositions).
   let _entrypointInventory = {}; try { _entrypointInventory = buildEntrypointInventory(fc, { routes: aR, findings: finalFindings }); } catch { _entrypointInventory = {}; }
   // R9 + R6 — relevance scoping. Runs HERE, after every finding has been
