@@ -72,12 +72,61 @@ function refreshPins(manifest, targets) {
   process.stdout.write(`manifest updated: ${MANIFEST}\n`);
 }
 
-function sha256File(file) {
+// Hash AND validate a captured SARIF.
+//
+// Hashing alone is not a gate. Godot's two captures were both exactly 65,536
+// bytes (one OS pipe buffer) and both ended mid-token, so comparing their
+// digests compared two identical truncated prefixes and reported
+// `identical: true` — a check that could not fail. The capture bug is fixed
+// in lib/scan.mjs, and this refuses to report determinism from any file that
+// does not parse as a SARIF document with a `runs[]` array, so a future
+// truncation surfaces as a failure instead of a pass.
+export function sarifDigest(file) {
+  let buf;
   try {
-    return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-  } catch {
-    return null;
+    buf = fs.readFileSync(file);
+  } catch (e) {
+    return { ok: false, reason: `unreadable: ${(e && e.code) || String(e && e.message)}`, sha: null, bytes: 0, results: null };
   }
+  const sha = crypto.createHash('sha256').update(buf).digest('hex');
+  let doc;
+  try {
+    doc = JSON.parse(buf.toString('utf8'));
+  } catch {
+    return {
+      ok: false,
+      reason: `not parseable as JSON (${buf.length} bytes) — a truncated or interleaved capture`,
+      sha, bytes: buf.length, results: null,
+    };
+  }
+  if (!doc || !Array.isArray(doc.runs) || doc.runs.length === 0) {
+    return { ok: false, reason: 'parsed as JSON but has no SARIF runs[]', sha, bytes: buf.length, results: null };
+  }
+  const results = doc.runs.reduce((n, r) => n + ((r && Array.isArray(r.results) && r.results.length) || 0), 0);
+  return { ok: true, reason: null, sha, bytes: buf.length, results };
+}
+
+// A target's declared `scope` can list several first-party subtrees (e.g.
+// Godot's core/modules/scene/servers/editor). The scanner CLI takes a single
+// root directory, so scanning "just scope[0]" silently narrows the measured
+// scope to one subtree while the manifest and scorecard keep claiming all of
+// them — exactly the "single most dishonest thing this bench could do" that
+// PROOF_CORPUS_PRD.md §5.3 calls out. Instead, materialize every scope entry
+// as a top-level sibling under one staging root (via a real recursive copy,
+// not a symlink — readTree() walks with followSymbolicLinks:false) so a
+// single scan pass covers the full declared scope, sees cross-directory calls
+// for the call graph, and excludes everything NOT listed (thirdparty/, tests/,
+// platform/, etc.) simply by never being copied in.
+function materializeScope(dir, scope, stagingDir) {
+  fs.rmSync(stagingDir, { recursive: true, force: true });
+  fs.mkdirSync(stagingDir, { recursive: true });
+  const missing = [];
+  for (const entry of scope) {
+    const src = path.join(dir, entry);
+    if (!fs.existsSync(src)) { missing.push(entry); continue; }
+    fs.cpSync(src, path.join(stagingDir, entry), { recursive: true });
+  }
+  return { stagingDir, missing };
 }
 
 async function runTarget(t, opts) {
@@ -98,10 +147,24 @@ async function runTarget(t, opts) {
 
     const statsPath = path.join(rawDir, 'ir-stats.json');
     const sarifA = path.join(rawDir, 'run-a.sarif');
-    const scanDir = Array.isArray(t.scope) && t.scope.length
-      ? path.join(dir, t.scope[0])
-      : dir;
-    record.scannedPath = path.relative(dir, scanDir) || '.';
+    let scanDir;
+    if (Array.isArray(t.scope) && t.scope.length > 1) {
+      const stagingDir = path.join(rawDir, 'scope-root');
+      const { missing } = materializeScope(dir, t.scope, stagingDir);
+      if (missing.length) {
+        record.status = 'error';
+        record.error = `scope entries missing from checkout: ${missing.join(', ')}`;
+        return record;
+      }
+      scanDir = stagingDir;
+      record.scannedPath = t.scope.join(', ');
+    } else if (Array.isArray(t.scope) && t.scope.length === 1) {
+      scanDir = path.join(dir, t.scope[0]);
+      record.scannedPath = t.scope[0];
+    } else {
+      scanDir = dir;
+      record.scannedPath = '.';
+    }
 
     const a = await runRepoScan({
       dir: scanDir, statsPath, sarifPath: sarifA, timeoutMs: t.timeBudgetS * 1000,
@@ -123,11 +186,17 @@ async function runTarget(t, opts) {
       const b = await runRepoScan({
         dir: scanDir, sarifPath: sarifB, timeoutMs: t.timeBudgetS * 1000,
       });
-      const ha = sha256File(sarifA);
-      const hb = sha256File(sarifB);
+      const da = sarifDigest(sarifA);
+      const db = sarifDigest(sarifB);
+      // `identical` requires BOTH captures to be valid whole SARIF documents.
+      // A truncated capture can never report determinism again.
       record.determinism = {
         checked: true,
-        identical: ha !== null && ha === hb,
+        valid: da.ok && db.ok,
+        invalidReason: da.ok ? (db.ok ? null : `run-b: ${db.reason}`) : `run-a: ${da.reason}`,
+        identical: da.ok && db.ok && da.sha === db.sha,
+        bytes: { runA: da.bytes, runB: db.bytes },
+        results: da.ok ? da.results : null,
         secondRunWallMs: b.wallMs,
       };
     } else {

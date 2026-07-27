@@ -308,3 +308,34 @@ test('runner main-guard: pathToFileURL handles paths with spaces correctly', () 
   // This is the core bug: they are different, so the guard comparison fails
   assert.notEqual(urlCorrect, urlNaive, 'pathToFileURL and naive URL concatenation differ on paths with spaces');
 });
+
+// ── regression: SARIF capture must not truncate at the OS pipe buffer ───────
+// The capture used to pipe the CLI's stdout into a write stream. The CLI ends
+// every command with `process.exit(code)`, and pipe writes are asynchronous,
+// so everything past the 64 KiB OS pipe buffer was discarded: Godot's two
+// proof-corpus SARIFs came out both exactly 65,536 bytes, both ending
+// mid-token, and the determinism check compared two identical truncated
+// prefixes and passed. The capture now writes to a file descriptor (fs writes
+// are synchronous, so exit is flush-safe). This test deliberately produces
+// MORE than 65,536 bytes of SARIF — the single-copy fixture emits ~64 KB,
+// just under the buffer, which is why the bug survived the existing tests.
+test('runRepoScan: captures SARIF larger than the 64 KiB pipe buffer whole', async () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'proofbig-'));
+  const tree = path.join(out, 'tree');
+  const fixture = path.resolve('test/fixtures/vulnerable-js');
+  for (const copy of ['c1', 'c2', 'c3']) {
+    fs.cpSync(fixture, path.join(tree, copy), { recursive: true });
+  }
+  const sarifPath = path.join(out, 'big.sarif');
+  const r = await runRepoScan({ dir: tree, sarifPath, timeoutMs: 180_000 });
+  assert.equal(r.timedOut, false);
+  assert.notEqual(r.exitCode, 4, `scan refused before running: ${r.stderrTail}`);
+
+  const size = fs.statSync(sarifPath).size;
+  assert.ok(size > 65_536,
+    `this test is only meaningful above the 64 KiB pipe buffer; got ${size} bytes`);
+  assert.notEqual(size, 65_536, 'exactly one pipe buffer is the signature of the truncation bug');
+  const sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf8')); // throws if truncated
+  assert.ok(Array.isArray(sarif.runs) && sarif.runs.length > 0);
+  fs.rmSync(out, { recursive: true, force: true });
+});

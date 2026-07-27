@@ -113,13 +113,27 @@ export function runRepoScan(opts) {
     } catch { /* nothing to clear */ }
 
     const started = Date.now();
-    const sarifStream = sarifPath ? fs.createWriteStream(sarifPath) : null;
+    // SARIF capture goes to a FILE DESCRIPTOR, not a pipe.
+    //
+    // The CLI ends every command with `process.exit(code)`. Writes to a pipe
+    // are asynchronous, so `process.exit` discards whatever has not yet
+    // drained — the OS pipe buffer is 64 KiB, which is exactly the size both
+    // of Godot's captured SARIFs came out as (65,536 bytes, truncated
+    // mid-token). Because the runner then sha256'd two identically truncated
+    // prefixes, the determinism check reported `identical: true` from a gate
+    // that could not fail. Reproduced and fixed in this session: a child that
+    // writes 1,000,001 bytes then exits yields 65,536 bytes through a pipe
+    // and 1,000,001 through an fd.
+    //
+    // Writes to a regular file are synchronous in Node, so handing the child
+    // an fd for stdout makes `process.exit` flush-safe without changing the
+    // CLI. Do not "simplify" this back to a pipe + createWriteStream.
+    const sarifFd = sarifPath ? fs.openSync(sarifPath, 'w') : null;
     const child = spawn(process.execPath, [bundlePath(), ...args], {
       cwd: dir,
       env,
-      stdio: ['ignore', sarifStream ? 'pipe' : 'ignore', 'pipe'],
+      stdio: ['ignore', sarifFd !== null ? sarifFd : 'ignore', 'pipe'],
     });
-    if (sarifStream) child.stdout.pipe(sarifStream);
 
     let peakRssKb = null;
     const poll = setInterval(() => {
@@ -139,18 +153,18 @@ export function runRepoScan(opts) {
       if (stderr.length > 64_000) stderr = stderr.slice(-64_000);
     });
 
-    // Wait for the SARIF write to flush before resolving, on every exit path —
-    // a determinism hash read against a truncated file reports a spurious
-    // mismatch. Both the close and error paths route through this so a future
-    // third exit path can't reintroduce the dangling-stream bug by accident.
+    // Close the SARIF fd on every exit path — both the close and error paths
+    // route through this so a future third exit path can't leak the
+    // descriptor. The child owns its own dup of the fd, so the bytes are on
+    // disk by the time it exits; this close is the parent's copy.
     let settled = false;
     const settle = (result) => {
       if (settled) return;
       settled = true;
       clearInterval(poll);
       clearTimeout(timer);
-      if (sarifStream) sarifStream.end(() => resolve(result));
-      else resolve(result);
+      if (sarifFd !== null) { try { fs.closeSync(sarifFd); } catch { /* already closed */ } }
+      resolve(result);
     };
 
     child.on('close', (code) => {

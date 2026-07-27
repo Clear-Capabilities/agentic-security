@@ -64,6 +64,13 @@ function _addPathAliasAware(state, path, callContext) {
 }
 
 let _activeConstantVars = null;
+// The file of the function currently being analyzed. Set at the top of
+// analyzeFunction (same context-threading pattern as _activeConstantVars
+// above) so exprIsSource/exprTaint/step can pass it to matchSource /
+// matchSinkOrSanitizer without plumbing it through every call signature.
+// It scopes language-specific catalog entries (currently just `cpp`) to
+// files of that language — see the header comment in catalog.js.
+let _currentFile = null;
 
 function exprTaint(expr, state) {
   if (expr && expr.kind === 'member' && exprIsSource(expr)) return true;
@@ -155,14 +162,14 @@ function _sourcesReachingExpr(expr, _state, taintSources) {
 function exprIsSource(expr) {
   if (!expr) return null;
   if (expr.kind === 'member') {
-    const hit = matchSource(expr);
+    const hit = matchSource(expr, _currentFile);
     if (hit) return hit;
   }
   // R3 (PRD §5): call-shaped sources (r.FormValue(), r.URL.Query(), c.Query()).
   // Previously only member reads were recognized, so Go's call-style sources
   // never tainted the assignment target. matchSource now resolves call sources.
   if (expr.kind === 'call') {
-    const hit = matchSource(expr);
+    const hit = matchSource(expr, _currentFile);
     if (hit) return hit;
   }
   if (expr.kind === 'member' && expr.object) {
@@ -325,7 +332,7 @@ function step(node, stateIn, callContext) {
 
     case 'call': {
       // 1. Catalog match: sanitizer, sink, or just an external/unresolved call.
-      const cat = matchSinkOrSanitizer(node.callee);
+      const cat = matchSinkOrSanitizer(node.callee, _currentFile);
       const argTaints = (node.args || []).map(a => exprTaint(a, state));
       // v0.66 — apply mutated-param taint at plain (non-assign) call sites.
       // Object.assign(target, tainted) → target becomes tainted in caller.
@@ -526,6 +533,7 @@ function analyzeFunction(fn, entryState, callContext) {
   inStates.set(fn.cfg.entry, new Set(entryState));
   work.push(fn.cfg.entry);
   _activeConstantVars = new Map();
+  _currentFile = fn.file || null;
   // v0.70 #2 — points-to context for the step() transfer. Setting it here
   // (instead of plumbing through step's signature) keeps the worklist loop
   // unchanged and lets `step` consult `aliasesForVar` when callContext._pointsTo
@@ -583,7 +591,7 @@ function analyzeFunction(fn, entryState, callContext) {
       for (const [nid, ctx] of ictx) {
         const node = nodes[nid];
         if (!node || node.kind !== 'call') continue;
-        const cat = matchSinkOrSanitizer(node.callee);
+        const cat = matchSinkOrSanitizer(node.callee, _currentFile);
         const sink = cat && cat.find((e) => e.kind === 'sink');
         if (!sink) continue;
         const inS = inStates.get(nid) || new Set();

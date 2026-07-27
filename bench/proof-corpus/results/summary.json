@@ -1,7 +1,7 @@
 {
-  "bundleSha": "d9f347d67794a157a1330c9f8c32bd5eaf237a762d81a9ad031facd4d5fe7165",
-  "targetCount": 2,
-  "ok": 2,
+  "bundleSha": "4b740305633ca5a38ceb81349dfc497dfdee892168eacf4bb92ee52485f5546a",
+  "targetCount": 3,
+  "ok": 3,
   "failed": 0,
   "targets": [
     {
@@ -21,9 +21,9 @@
       "scannedPath": ".",
       "scan": {
         "exitCode": 3,
-        "wallMs": 61555,
+        "wallMs": 63540,
         "timedOut": false,
-        "peakRssKb": 3433040
+        "peakRssKb": 3394800
       },
       "coverage": {
         "byLanguage": {
@@ -49,8 +49,15 @@
       },
       "determinism": {
         "checked": true,
+        "valid": true,
+        "invalidReason": null,
         "identical": false,
-        "secondRunWallMs": 58661
+        "bytes": {
+          "runA": 1364169,
+          "runB": 1364186
+        },
+        "results": 1124,
+        "secondRunWallMs": 59543
       }
     },
     {
@@ -70,9 +77,9 @@
       "scannedPath": ".",
       "scan": {
         "exitCode": 3,
-        "wallMs": 72640,
+        "wallMs": 77421,
         "timedOut": false,
-        "peakRssKb": 2962880
+        "peakRssKb": 3570480
       },
       "coverage": {
         "byLanguage": {
@@ -105,8 +112,98 @@
       },
       "determinism": {
         "checked": true,
+        "valid": true,
+        "invalidReason": null,
+        "identical": false,
+        "bytes": {
+          "runA": 1275554,
+          "runB": 1275555
+        },
+        "results": 860,
+        "secondRunWallMs": 72284
+      }
+    },
+    {
+      "id": "godot",
+      "url": "https://github.com/godotengine/godot.git",
+      "commit": "159701651ad44335691dcbd632d8074307074c7b",
+      "tier": "breadth",
+      "status": "ok",
+      "scope": [
+        "core",
+        "modules",
+        "scene",
+        "servers",
+        "editor"
+      ],
+      "timeBudgetS": 3600,
+      "cached": true,
+      "licence": {
+        "spdx": "MIT",
+        "source": "file",
+        "file": "LICENSE.txt"
+      },
+      "scannedPath": "core, modules, scene, servers, editor",
+      "scan": {
+        "exitCode": 3,
+        "wallMs": 106573,
+        "timedOut": false,
+        "peakRssKb": 1203728
+      },
+      "coverage": {
+        "byLanguage": {
+          "cpp": {
+            "inScope": 3012,
+            "parsed": 3012,
+            "functionless": 152,
+            "functions": 103285,
+            "pct": 100
+          },
+          "csharp": {
+            "inScope": 306,
+            "parsed": 298,
+            "functionless": 130,
+            "functions": 1514,
+            "pct": 97
+          },
+          "javascript": {
+            "inScope": 4,
+            "parsed": 4,
+            "functionless": 0,
+            "functions": 189,
+            "pct": 100
+          },
+          "python": {
+            "inScope": 77,
+            "parsed": 77,
+            "functionless": 0,
+            "functions": 246,
+            "pct": 100
+          }
+        },
+        "totals": {
+          "inScope": 3399,
+          "parsed": 3391,
+          "pct": 100
+        },
+        "callGraph": {
+          "functions": 105231,
+          "edges": 322871,
+          "resolvedEdges": 131422,
+          "unresolvedEdges": 191449
+        }
+      },
+      "determinism": {
+        "checked": true,
+        "valid": true,
+        "invalidReason": null,
         "identical": true,
-        "secondRunWallMs": 71097
+        "bytes": {
+          "runA": 183978,
+          "runB": 183978
+        },
+        "results": 145,
+        "secondRunWallMs": 96829
       }
     }
   ]

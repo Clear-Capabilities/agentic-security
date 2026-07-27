@@ -16,9 +16,65 @@ import { parseJavaFile } from './parser-java.js';
 import { parseGoFile } from './parser-go.js';
 import { parsePhpFile } from './parser-php.js';
 import { parseRubyFile } from './parser-rb.js';
+import { parseCppFile, cppExtRe } from './parser-cpp.js';
 import { buildCallGraph } from './callgraph.js';
 import { buildClassHierarchy } from './class-hierarchy.js';
 import { computeSSA, isSSAEnabled } from './ssa.js';
+
+// ── per-file parse-failure observability ────────────────────────────────────
+// Both dispatch loops below wrap every language's parser in a bare try/catch
+// so one pathological file cannot abort IR construction for the whole project
+// (the load-bearing case: a RangeError out of parser-cs.js on real Godot C#
+// sources). Bare, that makes a SYSTEMATIC parser failure indistinguishable
+// from "this language isn't present in the tree" — coverage just reads 0.
+//
+// So the failures are counted, and are printed on stderr when
+// AGENTIC_SECURITY_IR_PARSE_DEBUG=1, following the precedent set by
+// parser-py-cst.js's AGENTIC_SECURITY_PY_PARSER_DEBUG and
+// sast/cpp-dataflow.js's `_parseErrorCount`. The counter is cumulative for
+// the process and readable via `irParseFailures()`.
+const _parseFailures = { count: 0, byLanguage: Object.create(null), firstError: null };
+
+function _langOf(file) {
+  const m = /\.([A-Za-z0-9+]+)$/.exec(String(file || ''));
+  return m ? m[1].toLowerCase() : 'unknown';
+}
+
+// Exported under a `_`-prefixed name for tests: every parser in the tree is
+// hardened enough that synthesising a real throw from outside is unreliable,
+// so the counter/stderr behaviour is asserted directly against this helper
+// (the two catch sites below are its only production callers).
+export function _noteParseFailure(file, err) {
+  const lang = _langOf(file);
+  _parseFailures.count++;
+  _parseFailures.byLanguage[lang] = (_parseFailures.byLanguage[lang] || 0) + 1;
+  const msg = String((err && (err.message || err)) || 'unknown error');
+  if (!_parseFailures.firstError) _parseFailures.firstError = { file, message: msg };
+  if (process.env.AGENTIC_SECURITY_IR_PARSE_DEBUG === '1') {
+    process.stderr.write(
+      `[ir] parse failed (${lang}): ${file}: ${(err && err.name) || 'Error'}: ${msg.split('\n')[0]}\n`,
+    );
+  }
+}
+
+// Cumulative per-process view of files whose parser threw. Exported so a
+// caller (bench harness, ir-stats sidecar, a future telemetry surface) can
+// tell "no findings because the language is absent" apart from "no findings
+// because every file of that language failed to parse".
+export function irParseFailures() {
+  return {
+    count: _parseFailures.count,
+    byLanguage: { ..._parseFailures.byLanguage },
+    firstError: _parseFailures.firstError ? { ..._parseFailures.firstError } : null,
+  };
+}
+
+// Test-only reset so a counter assertion doesn't inherit another test's state.
+export function _resetIrParseFailures() {
+  _parseFailures.count = 0;
+  _parseFailures.byLanguage = Object.create(null);
+  _parseFailures.firstError = null;
+}
 
 // Pick the Python parser based on env + capability probe.
 //   AGENTIC_SECURITY_PY_PARSER=cst   — force AST parser; error if unavailable
@@ -67,28 +123,39 @@ export function buildProjectIR(fileContents) {
   const perFile = {};
   const pyBatch = [];
   for (const [file, code] of Object.entries(fileContents || {})) {
-    if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(file)) {
-      const ir = parseJsFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.py$/i.test(file)) {
-      // Defer Python files to a single batched subprocess call.
-      pyBatch.push({ file, content: code });
-    } else if (/\.cs$/i.test(file)) {
-      const ir = parseCSharpFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.kt$/i.test(file)) {
-      const ir = parseKotlinFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.go$/i.test(file)) {
-      const ir = parseGoFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.(?:php|phtml)$/i.test(file)) {
-      const ir = parsePhpFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.rb$/i.test(file)) {
-      const ir = parseRubyFile(file, code);
-      if (ir) perFile[file] = ir;
-    }
+    // Each branch is wrapped so one pathological file (e.g. a deeply nested
+    // expression tree that blows the regex-parser's recursive descent, seen
+    // in practice on real-world C# under Godot's proof-corpus run) can never
+    // abort IR construction for the entire project. A single parser failure
+    // degrades to "unparsed" for that file, exactly like a parser returning
+    // null — it does not zero out every other language's coverage.
+    try {
+      if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(file)) {
+        const ir = parseJsFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (/\.py$/i.test(file)) {
+        // Defer Python files to a single batched subprocess call.
+        pyBatch.push({ file, content: code });
+      } else if (/\.cs$/i.test(file)) {
+        const ir = parseCSharpFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (/\.kt$/i.test(file)) {
+        const ir = parseKotlinFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (/\.go$/i.test(file)) {
+        const ir = parseGoFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (/\.(?:php|phtml)$/i.test(file)) {
+        const ir = parsePhpFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (/\.rb$/i.test(file)) {
+        const ir = parseRubyFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (cppExtRe().test(file)) {
+        const ir = parseCppFile(file, code);
+        if (ir) perFile[file] = ir;
+      }
+    } catch (err) { _noteParseFailure(file, err); /* skip this file; never abort the batch */ }
   }
   if (pyBatch.length) {
     for (const ir of _parsePythonFiles(pyBatch)) {
@@ -112,32 +179,39 @@ export async function buildProjectIRAsync(fileContents) {
   const perFile = {};
   const pyBatch = [];
   for (const [file, code] of Object.entries(fileContents || {})) {
-    if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(file)) {
-      const ir = parseJsFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.py$/i.test(file)) {
-      pyBatch.push({ file, content: code });
-    } else if (/\.cs$/i.test(file)) {
-      const ir = parseCSharpFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.kt$/i.test(file)) {
-      const ir = parseKotlinFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.java$/i.test(file)) {
-      try {
-        const ir = await parseJavaFile(file, code);
+    // See buildProjectIR's comment: per-file try/catch so one pathological
+    // file can't abort IR construction for the whole project.
+    try {
+      if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(file)) {
+        const ir = parseJsFile(file, code);
         if (ir) perFile[file] = ir;
-      } catch { /* skip */ }
-    } else if (/\.go$/i.test(file)) {
-      const ir = parseGoFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.(?:php|phtml)$/i.test(file)) {
-      const ir = parsePhpFile(file, code);
-      if (ir) perFile[file] = ir;
-    } else if (/\.rb$/i.test(file)) {
-      const ir = parseRubyFile(file, code);
-      if (ir) perFile[file] = ir;
-    }
+      } else if (/\.py$/i.test(file)) {
+        pyBatch.push({ file, content: code });
+      } else if (/\.cs$/i.test(file)) {
+        const ir = parseCSharpFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (/\.kt$/i.test(file)) {
+        const ir = parseKotlinFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (/\.java$/i.test(file)) {
+        try {
+          const ir = await parseJavaFile(file, code);
+          if (ir) perFile[file] = ir;
+        } catch (err) { _noteParseFailure(file, err); }
+      } else if (/\.go$/i.test(file)) {
+        const ir = parseGoFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (/\.(?:php|phtml)$/i.test(file)) {
+        const ir = parsePhpFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (/\.rb$/i.test(file)) {
+        const ir = parseRubyFile(file, code);
+        if (ir) perFile[file] = ir;
+      } else if (cppExtRe().test(file)) {
+        const ir = parseCppFile(file, code);
+        if (ir) perFile[file] = ir;
+      }
+    } catch (err) { _noteParseFailure(file, err); /* skip this file; never abort the batch */ }
   }
   if (pyBatch.length) {
     for (const ir of _parsePythonFiles(pyBatch)) {
@@ -170,4 +244,4 @@ export function parsePythonFile(file, code) {
   return parsePythonFileRegex(file, code);
 }
 
-export { parseJsFile, parseJavaFile, parseCSharpFile, parseKotlinFile, parseGoFile, parsePhpFile, parseRubyFile, buildCallGraph, buildClassHierarchy, computeSSA, isSSAEnabled, probePythonAvailable };
+export { parseJsFile, parseJavaFile, parseCSharpFile, parseKotlinFile, parseGoFile, parsePhpFile, parseRubyFile, parseCppFile, buildCallGraph, buildClassHierarchy, computeSSA, isSSAEnabled, probePythonAvailable };

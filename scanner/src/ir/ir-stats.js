@@ -16,9 +16,10 @@ import * as path from 'node:path';
 // Mirrors the dispatch in ./index.js. When a language is added there, add it
 // here or its files silently report as out of scope.
 //
-// C/C++ is intentionally present even though ./index.js does NOT yet dispatch
-// it: that is the point. It reports inScope>0 / parsed=0 today, which is the
-// baseline the C++ parser workstream is measured against.
+// C/C++ was originally listed here BEFORE ./index.js dispatched it, so the
+// pre-parser baseline (inScope>0 / parsed=0) was measurable. ./index.js now
+// dispatches C/C++ via parser-cpp.js in both buildProjectIR and
+// buildProjectIRAsync, so these extensions report real parse coverage.
 const EXT_TO_LANG = {
   js: 'javascript', jsx: 'javascript', ts: 'javascript', tsx: 'javascript',
   mjs: 'javascript', cjs: 'javascript',

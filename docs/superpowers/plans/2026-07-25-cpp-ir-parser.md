@@ -1366,6 +1366,20 @@ test('class hierarchy: recovers C++ classes and their base classes', () => {
   assert.equal(cha.classes.get('Derived').extends, 'Base');
 });
 
+test('class hierarchy: the recovered method name is bare, not suffixed', () => {
+  // Regression guard. class-hierarchy.js recovers methodName as
+  // tail.slice(dotIdx + 1), which for a qid tail of `Class.method@line#sha`
+  // yields `method@line#sha`. Class recovery was always correct; method
+  // recovery was not, which silently broke every resolveMethod() lookup.
+  const { perFile } = buildProjectIR({
+    'a.cpp': 'class Base {\npublic:\n  int run() { return 1; }\n};\n',
+  });
+  const cha = buildClassHierarchy(perFile);
+  const methods = [...cha.classes.get('Base').methods];
+  assert.deepEqual(methods, ['run'],
+    'method names must be bare — no @line#sha suffix');
+});
+
 test('class hierarchy: an inherited method resolves through the extends chain', () => {
   const { perFile } = buildProjectIR({
     'a.cpp': 'class Base {\npublic:\n  int run() { return 1; }\n};\nclass Derived : public Base {\npublic:\n  int extra() { return 2; }\n};\n',
@@ -1399,7 +1413,23 @@ cd /Users/ross/code/agentic-security/scanner && node --test test/cpp-integration
 
 Expected: the `extends` assertions FAIL (currently always `null`).
 
-- [ ] **Step 3: Consume `ir.classes` in `buildClassHierarchy`**
+- [ ] **Step 3a: Fix the polluted method name**
+
+This is a pre-existing defect surfaced by Task 1's review, and it must be fixed here or the inheritance test above cannot pass. `class-hierarchy.js` recovers the method name from the qid tail as:
+
+```javascript
+      const methodName = tail.slice(dotIdx + 1);
+```
+
+For a qid tail of `Class.method@line#sha` that yields `method@line#sha`, so `cls.methods` fills with suffixed garbage and `resolveMethod`'s `cls.methods.has(methodName)` can never match a bare name. Class-name recovery was always correct; method-name recovery never was.
+
+No existing parser emits a dot in its qid tail today, so this code path is currently dead for every other language and the fix cannot regress them — but confirm that claim yourself with a grep before relying on it. Change the line to strip the suffix:
+
+```javascript
+      const methodName = tail.slice(dotIdx + 1).replace(/@\d+#[0-9a-f]+$/, '');
+```
+
+- [ ] **Step 3b: Consume `ir.classes` in `buildClassHierarchy`**
 
 In `scanner/src/ir/class-hierarchy.js`, inside the `for (const [file, ir] of Object.entries(perFileIR))` loop, add this block **before** the existing qid-based method loop:
 

@@ -1,5 +1,21 @@
 // Sources / sinks / sanitizers catalog.
 //
+// Premortem (post-C/C++ taint catalog review): CALLEE_INDEX is keyed by
+// callee name ALONE, with no language filter at match time. That's fine for
+// most of the catalog because cross-language name collisions are rare and
+// even beneficial (a Python entry matching a Go call of the same name still
+// carries a real vuln). It is NOT fine for the C/C++ entries below, whose
+// names are generic libc calls (`read`, `memcpy`, `sprintf`, `fopen`, `gets`,
+// `scanf`) that also appear as ordinary, unrelated method/function names in
+// JS/Python/PHP/Java source (`stream.read()`, a user-defined `memcpy()`
+// polyfill, PHP's own `sprintf`/`fopen`). Matching those unconditionally
+// turned every `.read()` in a JS file into a recognized C source and every
+// PHP `sprintf`/`fopen` call into a C buffer-overflow/path-traversal sink.
+// `matchSource`/`matchSinkOrSanitizer` therefore accept an optional `file`
+// argument; when present, any candidate entry whose `language === 'cpp'` is
+// dropped unless `file` has a C/C++ extension. Every other entry (all other
+// languages, or a `cpp` entry when no file is supplied) is completely
+// unaffected — this is intentionally NOT general language filtering.
 // Each entry describes a callable or member-access pattern. The taint engine
 // consults this catalog when it sees a call site or a property read.
 //
@@ -681,6 +697,47 @@ export const CATALOG = [
   { kind: 'sanitizer', id: 'kt-int-toIntOrNull',language: 'kt', match: { type: 'call', callee: 'toIntOrNull' }, effect: 'strip', appliesTo: ['*'] },
   { kind: 'sanitizer', id: 'kt-path-canonical',language: 'kt', match: { type: 'call', callee: 'canonicalFile' },effect: 'taintIf-not-pinned', appliesTo: ['path'] },
   { kind: 'sanitizer', id: 'kt-jdbc-setstring',language: 'kt', match: { type: 'call', callee: 'setString' },    effect: 'strip', appliesTo: ['sql'] },
+
+  // ─── SOURCES (C / C++) ─────────────────────────────────────────────────────
+  { kind: 'source', id: 'cpp-getenv',  language: 'cpp', framework: null, match: { type: 'call', callee: 'getenv'  }, label: 'getenv()',  provenance: 'env' },
+  { kind: 'source', id: 'cpp-recv',    language: 'cpp', framework: null, match: { type: 'call', callee: 'recv'    }, label: 'recv()',    provenance: 'network' },
+  { kind: 'source', id: 'cpp-recvfrom',language: 'cpp', framework: null, match: { type: 'call', callee: 'recvfrom'}, label: 'recvfrom()',provenance: 'network' },
+  { kind: 'source', id: 'cpp-read',    language: 'cpp', framework: null, match: { type: 'call', callee: 'read'    }, label: 'read()',    provenance: 'file-read' },
+  { kind: 'source', id: 'cpp-fread',   language: 'cpp', framework: null, match: { type: 'call', callee: 'fread'   }, label: 'fread()',   provenance: 'file-read' },
+  { kind: 'source', id: 'cpp-fgets',   language: 'cpp', framework: null, match: { type: 'call', callee: 'fgets'   }, label: 'fgets()',   provenance: 'file-read' },
+  { kind: 'source', id: 'cpp-gets',    language: 'cpp', framework: null, match: { type: 'call', callee: 'gets'    }, label: 'gets()',    provenance: 'stdin' },
+  { kind: 'source', id: 'cpp-scanf',   language: 'cpp', framework: null, match: { type: 'call', callee: 'scanf'   }, label: 'scanf()',   provenance: 'stdin' },
+
+  // ─── SINKS (C / C++) ───────────────────────────────────────────────────────
+  { kind: 'sink', id: 'cpp-system', language: 'cpp', framework: null, match: { type: 'call', callee: 'system' }, argIndex: 0,
+    vuln: { name: 'Command injection via system()', severity: 'critical', cwe: 'CWE-78', remediation: 'Use execve() with an argument vector instead of passing a shell string; never interpolate untrusted input into a command.' } },
+  { kind: 'sink', id: 'cpp-popen', language: 'cpp', framework: null, match: { type: 'call', callee: 'popen' }, argIndex: 0,
+    vuln: { name: 'Command injection via popen()', severity: 'critical', cwe: 'CWE-78', remediation: 'Use a pipe with execve() and an argument vector rather than a shell command string.' } },
+  { kind: 'sink', id: 'cpp-execl', language: 'cpp', framework: null, match: { type: 'call', callee: 'execl' }, argIndex: 0,
+    vuln: { name: 'Command injection via execl()', severity: 'critical', cwe: 'CWE-78', remediation: 'Validate the executable path against an allow-list; never build it from untrusted input.' } },
+  { kind: 'sink', id: 'cpp-strcpy', language: 'cpp', framework: null, match: { type: 'call', callee: 'strcpy' }, argIndex: 1,
+    vuln: { name: 'Buffer overflow via strcpy()', severity: 'high', cwe: 'CWE-120', remediation: 'Use strncpy() or snprintf() with an explicit destination size.' } },
+  { kind: 'sink', id: 'cpp-strcat', language: 'cpp', framework: null, match: { type: 'call', callee: 'strcat' }, argIndex: 1,
+    vuln: { name: 'Buffer overflow via strcat()', severity: 'high', cwe: 'CWE-120', remediation: 'Use strncat() or snprintf() with an explicit destination size.' } },
+  { kind: 'sink', id: 'cpp-sprintf', language: 'cpp', framework: null, match: { type: 'call', callee: 'sprintf' }, argIndex: 'all',
+    vuln: { name: 'Buffer overflow via sprintf()', severity: 'high', cwe: 'CWE-120', remediation: 'Use snprintf() with an explicit destination size.' } },
+  { kind: 'sink', id: 'cpp-memcpy', language: 'cpp', framework: null, match: { type: 'call', callee: 'memcpy' }, argIndex: 2,
+    vuln: { name: 'Buffer overflow via unchecked memcpy() length', severity: 'high', cwe: 'CWE-787', remediation: 'Bound the copy length by the destination size before copying.' } },
+  { kind: 'sink', id: 'cpp-fopen', language: 'cpp', framework: null, match: { type: 'call', callee: 'fopen' }, argIndex: 0,
+    vuln: { name: 'Path traversal via fopen()', severity: 'high', cwe: 'CWE-22', remediation: 'Canonicalise with realpath() and confirm the result stays within an allowed base directory.' } },
+  { kind: 'sink', id: 'cpp-dlopen', language: 'cpp', framework: null, match: { type: 'call', callee: 'dlopen' }, argIndex: 0,
+    vuln: { name: 'Untrusted library load via dlopen()', severity: 'critical', cwe: 'CWE-114', remediation: 'Load only from a fixed, trusted path; never build the library path from untrusted input.' } },
+
+  // ─── SANITIZERS (C / C++) ──────────────────────────────────────────────────
+  { kind: 'sanitizer', id: 'cpp-realpath', language: 'cpp', framework: null, match: { type: 'call', callee: 'realpath' }, effect: 'strip' },
+  // Deliberately NOT listed as sanitizers: snprintf() and strncpy() bound the
+  // COPY LENGTH, they do not touch the CONTENT. `snprintf(buf, n, "ls %s",
+  // user); system(buf);` is still command injection — truncating the string
+  // doesn't remove shell metacharacters. Nothing in the engine consumes
+  // `effect` for a non-'sql' appliesTo today, so marking them 'strip' was
+  // inert, but a future sanitizer consumer would silently turn this into a
+  // false negative. realpath() stays: it genuinely canonicalises a path,
+  // which is the property CWE-22 sinks care about.
 ];
 
 // ─── Expanded sanitizer catalog (v0.65.0) ────────────────────────────────
@@ -688,6 +745,15 @@ export const CATALOG = [
 // Lives in catalog-expanded.js to keep the diff reviewable. Merged into
 // the main CATALOG below so the indexer treats them identically.
 import { EXPANDED_SANITIZERS } from './catalog-expanded.js';
+import { cppExtRe } from '../ir/parser-cpp.js';
+
+// Language-scope guard used only for `language: 'cpp'` entries (see the file
+// header comment). `file` is optional — when absent, behavior is unchanged
+// from before this guard existed.
+function _languageAllowed(entry, file) {
+  if (!file || entry.language !== 'cpp') return true;
+  return cppExtRe().test(file);
+}
 // Merge the expanded sanitizer catalog. We dedupe on `id` (case-insensitive)
 // so a base-catalog entry always wins over a same-id expanded one — the base
 // catalog is the curated/blessed surface; the expansion is additive coverage.
@@ -762,13 +828,13 @@ function filterByProvenance(entries) {
   return list;
 }
 
-export function matchSource(expr) {
+export function matchSource(expr, file) {
   if (!expr) return null;
   // Member sources (req.query): the original path — unchanged.
   if (expr.kind === 'member' && expr.object?.kind === 'ident') {
     const raw = MEMBER_INDEX.get(`${expr.object.name}.${expr.prop}`);
     if (raw) {
-      const hits = filterByProvenance(raw);
+      const hits = filterByProvenance(raw).filter(h => _languageAllowed(h, file));
       const s = hits.find(h => h.kind === 'source');
       if (s) return s;
     }
@@ -785,7 +851,7 @@ export function matchSource(expr) {
     if (cn) {
       const raw = CALLEE_INDEX.get(cn);
       if (raw) {
-        const hits = filterByProvenance(raw);
+        const hits = filterByProvenance(raw).filter(h => _languageAllowed(h, file));
         const s = hits.find(h => h.kind === 'source');
         if (s) return s;
       }
@@ -794,7 +860,7 @@ export function matchSource(expr) {
   return null;
 }
 
-export function matchSinkOrSanitizer(calleeExpr) {
+export function matchSinkOrSanitizer(calleeExpr, file) {
   if (!calleeExpr) return null;
   let calleeName = null;
   // R3 (PRD §5): the Go IR (and other string-callee parsers) represent a call
@@ -806,7 +872,7 @@ export function matchSinkOrSanitizer(calleeExpr) {
   if (!calleeName) return null;
   const raw = CALLEE_INDEX.get(calleeName);
   if (!raw) return null;
-  const hits = filterByProvenance(raw);
+  const hits = filterByProvenance(raw).filter(h => _languageAllowed(h, file));
   return hits.length ? hits : null;
 }
 
