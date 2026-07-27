@@ -6,6 +6,10 @@
 //   1. The original finding's stableId no longer fires on the patched file.
 //   2. No new findings at severity ≥ medium were introduced by the patch.
 //   3. The project's existing linter (when present) passes on the patched file.
+//   4. The project's own test suite (when detectable) still passes. This is
+//      the R5 gap-closer: a patch that silently deletes the feature would
+//      satisfy (1) and (2) just as well as a real fix — only running the
+//      tests catches that. See `test-runner.js` for detection + execution.
 //
 // If any of those fail, the caller is expected to NOT apply the patch and
 // instead surface a "fix plan" — a numbered list of steps the engineer can
@@ -16,6 +20,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runFullScan } from '../engine.js';
 import { gateFixOutput } from './fix-honesty-gate.js';
+import { runProjectTests } from './test-runner.js';
 
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
@@ -119,27 +124,49 @@ function runLinter(cwd, cmd, args) {
 // dishonest or over-claiming fix fails the gate. When `fixMeta` is absent
 // (the deterministic MCP write path, which has no claims to check) the honesty
 // gate is skipped and behavior is unchanged.
+// R5 (partial) — the test-suite stage. Runs the target project's own tests,
+// in the target project's own directory, against whatever is currently on
+// disk there. See `test-runner.js`'s header comment for why that run is
+// deliberately NOT routed through the R1 PoC-confinement sandbox: this is
+// the project's own already-trusted suite, not untrusted synthesized code.
+//
+// Caveat that matters for callers: `verifyPatch` above re-scans the
+// candidate patch purely in memory (no write to disk), but a test runner
+// needs real files — there is no cheap way to hand a runner an in-memory
+// overlay. So this leg reports on the CURRENT on-disk tree, not the
+// candidate `files` map, when `verifyFix` is used as a pre-write preview
+// (e.g. the `verify_fix` MCP tool). Callers that apply the patch first and
+// then re-verify get the strongest signal; that ordering is not enforced
+// here — it's the caller's responsibility, same as it already is for the
+// closed-loop `fix-verify-loop.js` path.
 export async function verifyFix({
   scanRoot,
   originalFindingStableId,
   files,
   depFileContents,
   fixMeta,
+  testTimeoutMs,
 } = {}) {
   const rescan = await verifyPatch({ scanRoot, originalFindingStableId, files, depFileContents });
   const lint = runProjectLinter(scanRoot, Object.keys(files || {}));
+  const tests = runProjectTests(scanRoot, testTimeoutMs != null ? { timeoutMs: testTimeoutMs } : {});
+  const testsOk = tests.skipped ? true : tests.passed === true;
   let honesty = null;
   if (fixMeta && typeof fixMeta === 'object') {
     try { honesty = gateFixOutput(fixMeta); } catch { honesty = null; }
   }
-  const ok = rescan.ok && (lint.ok || lint.skipped) && (honesty ? honesty.ok : true);
+  const ok = rescan.ok && (lint.ok || lint.skipped) && testsOk && (honesty ? honesty.ok : true);
   const summary = [
     `re-scan: ${rescan.ok ? 'PASS' : 'FAIL — ' + rescan.reason}`,
     `linter:  ${lint.runner === 'none' ? 'skipped (no linter config)'
               : lint.skipped ? `${lint.runner} not installed`
               : lint.ok ? `${lint.runner} PASS`
               : `${lint.runner} FAIL (exit ${lint.exitCode})`}`,
+    `tests:   ${tests.skipped ? `skipped (${tests.reason})`
+              : tests.timedOut ? 'FAIL (timed out)'
+              : tests.passed ? 'PASS'
+              : `FAIL (exit ${tests.exitCode})`}`,
     honesty ? `honesty: ${honesty.ok ? `PASS (${honesty.tier})` : 'FAIL — ' + honesty.violations.join('; ')}` : null,
   ].filter(Boolean).join('\n');
-  return { ok, rescan, lint, honesty, summary };
+  return { ok, rescan, lint, tests, honesty, summary };
 }
