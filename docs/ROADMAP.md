@@ -64,6 +64,26 @@ connection, fork bomb, wall-clock overrun) are each proven blocked by an
 executing test, and the both-direction gate holds: the guard refuses the bad
 case and permits the good one.
 
+**Status: landed, partially verified.** `scanner/src/sandbox/` ships a single
+entry point (`runConfined`/`sandboxAvailable`) dispatching to one of three
+backends. On the macOS development host, the userspace backend is **verified
+by execution**: writes outside the sandbox root are blocked (no file
+created), outbound network is blocked, wall-clock overruns are terminated,
+and benign in-root work still succeeds — proven in both directions. Fork-storm
+containment on this platform is **weak**: the process cap is a per-uid,
+system-wide limit, not per-tree, so it only bounds a storm to
+"ambient + margin" rather than to a small absolute number — documented, not
+overstated, in `scanner/src/sandbox/CLAUDE.md`. Address-space capping is
+**not enforceable** on the macOS family and is reported in `unsupported`
+rather than emitted as a silent no-op. The kernel-namespace backend (Linux
+family) is **implemented but not verified** — no Linux host was available in
+this development environment, so its escape tests skip with a recorded
+reason. Fail-closed holds throughout: with no confinement primitive detected,
+execution is refused, never run unconfined. R2 must not treat the
+kernel-namespace backend as trustworthy until it has been verified on a Linux
+host with the same both-direction escape tests used for the userspace
+backend; R2 is not unblocked beyond what has actually been executed here.
+
 ### R2. Execution-verified exploitability
 
 **Problem.** Findings are asserted, never proven. `verify_fix` executes tests

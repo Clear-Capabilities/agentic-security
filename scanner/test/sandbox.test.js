@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { detectBackend, resetCapabilityCache } from '../src/sandbox/capabilities.js';
 import { runDisabled } from '../src/sandbox/backend-disabled.js';
 import { buildLimitPrelude } from '../src/sandbox/limits.js';
+import { runConfined, sandboxAvailable } from '../src/sandbox/index.js';
 
 describe('capability detection', () => {
   test('returns one of the three known backends', () => {
@@ -81,5 +82,25 @@ describe('resource limit prelude', () => {
     // Good direction: a single process under the cap succeeds.
     const ok = execFileSync('/bin/sh', ['-c', `${prelude} /bin/echo fine`], { encoding: 'utf8', timeout: 15000 });
     assert.match(ok, /fine/);
+  });
+});
+
+describe('runConfined dispatch', () => {
+  test('reports availability consistently with the detected backend', () => {
+    assert.equal(sandboxAvailable(), detectBackend() !== 'disabled');
+  });
+
+  test('forcing the disabled backend refuses to execute, whatever the host supports', () => {
+    const r = runConfined(['/bin/echo', 'nope'], { root: os.tmpdir(), force: 'disabled' });
+    assert.equal(r.status, 'disabled');
+    assert.equal(r.stdout, '');
+  });
+
+  test('on a host WITH a sandbox, a benign command runs and returns its output', { skip: !sandboxAvailable() }, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-e2e-'));
+    const r = runConfined(['/bin/echo', 'hello-confined'], { root });
+    assert.equal(r.status, 'ok', r.stderr);
+    assert.match(r.stdout, /hello-confined/);
+    assert.notEqual(r.backend, 'disabled');
   });
 });
