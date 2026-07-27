@@ -57,6 +57,8 @@ All scoped scripts are defined in `scanner/package.json`. Pick the one closest t
 
 After any change to `scanner/src/` or `scanner/bin/`, run `npm run build` before relying on the bundle. Unit tests run against `src/` directly and do not require a rebuild.
 
+When cutting a release, run `npm run scorecard` (regenerates `docs/SCORECARD.md` + `docs/scorecard.json`), review the numbers, and commit the result — `npm run scorecard:check` enforces this at publish time (wired into `prepublishOnly`) by failing when the committed scorecard's `engineVersion` doesn't match `scanner/package.json`'s version; it checks, it does not regenerate.
+
 ---
 
 ## Verification discipline (read before you claim anything works)
