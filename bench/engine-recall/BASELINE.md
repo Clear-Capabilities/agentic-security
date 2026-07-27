@@ -27,7 +27,12 @@ missed when its result is assigned to a variable.
 ## Defect 2: `match.type: 'global'` catalog sources are unreachable
 
 `matchSource()` was probed with both an `ident` AST node and a `member`
-node (root identifier) for every catalog entry declared `match.type: 'global'`.
+node (root identifier) for every catalog entry declared `match.type: 'global'`,
+using a probe filename matched to that entry's own `language` (`a.js` for
+`js`, `a.rb` for `rb`, `a.php` for `php`, etc. — see `PROBE_FILE_BY_LANG` in
+`measure.mjs`) so a non-PHP entry isn't rejected by `_languageAllowed()`'s
+extension check for the wrong reason. Confirmed via `_languageFamilyExtensions()`
+that every entry's chosen filename passes its own language's extension check.
 
 - Total `global`-type entries in `CATALOG`: 10
 - Reachable via `matchSource()`: 0

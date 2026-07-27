@@ -42,18 +42,41 @@ function f(req) { const c = h(req); const out = exec(c); return out; }
 module.exports = { f };
 `;
 
-function globalSourceReach() {
+// Probe filename per catalog dialect, so a `js`- or `rb`-tagged global entry
+// isn't tested against a `.php` file and rejected by _languageAllowed() for
+// the wrong reason (extension mismatch vs. the real defect, which is that
+// match.type:'global' entries aren't indexed at all — see below). Falls back
+// to `a.<language>` for any dialect not listed here.
+const PROBE_FILE_BY_LANG = {
+  js: 'a.js', py: 'a.py', cs: 'a.cs', kt: 'a.kt', go: 'a.go',
+  php: 'a.php', rb: 'a.rb', java: 'a.java', cpp: 'a.cpp',
+};
+
+function probeFileFor(language) {
+  return PROBE_FILE_BY_LANG[language] || `a.${language}`;
+}
+
+function globalSourceReach({ verbose = false } = {}) {
   const globals = CATALOG.filter(e => e && e.match && e.match.type === 'global');
   const byLanguage = {};
   let reachable = 0;
+  const probes = [];
   for (const e of globals) {
     byLanguage[e.language] = (byLanguage[e.language] || 0) + 1;
-    const asIdent = matchSource({ kind: 'ident', name: e.match.name }, 'a.php');
+    const file = probeFileFor(e.language);
+    const asIdent = matchSource({ kind: 'ident', name: e.match.name }, file);
     const asMemberRoot = matchSource(
-      { kind: 'member', object: { kind: 'ident', name: e.match.name }, prop: 'x' }, 'a.php');
-    if ((asIdent && asIdent.id === e.id) || (asMemberRoot && asMemberRoot.id === e.id)) reachable++;
+      { kind: 'member', object: { kind: 'ident', name: e.match.name }, prop: 'x' }, file);
+    const hit = (asIdent && asIdent.id === e.id) || (asMemberRoot && asMemberRoot.id === e.id);
+    if (hit) reachable++;
+    probes.push({ id: e.id, language: e.language, file, reachable: !!hit });
   }
-  return { total: globals.length, reachable, byLanguage };
+  if (verbose) {
+    for (const p of probes) {
+      process.stderr.write(`  global-probe id=${p.id} language=${p.language} file=${p.file} reachable=${p.reachable}\n`);
+    }
+  }
+  return { total: globals.length, reachable, byLanguage, probes };
 }
 
 async function main() {
@@ -65,8 +88,13 @@ async function main() {
       statement: await scanSnippet('app.js', STATEMENT),
       assignment: await scanSnippet('app.js', ASSIGNMENT),
     },
-    globalSources: globalSourceReach(),
+    globalSources: globalSourceReach({ verbose: process.argv.includes('--verbose') }),
   };
+  // `probes` is diagnostic (per-entry probe filename + hit), not part of the
+  // committed `{ assignSink, globalSources: { total, reachable, byLanguage } }`
+  // interface — kept off stdout by default, dumped with --show-probes.
+  const probes = out.globalSources.probes;
+  delete out.globalSources.probes;
 
   if (process.argv.includes('--json')) process.stdout.write(JSON.stringify(out, null, 2) + '\n');
   else {
@@ -75,6 +103,11 @@ async function main() {
     process.stdout.write(`assign-sink  assignment: total=${a.assignment.total} irTaint=${a.assignment.irTaint}\n`);
     const g = out.globalSources;
     process.stdout.write(`global-sources reachable=${g.reachable}/${g.total} ${JSON.stringify(g.byLanguage)}\n`);
+  }
+  if (process.argv.includes('--show-probes')) {
+    for (const p of probes) {
+      process.stdout.write(`  probe id=${p.id} language=${p.language} file=${p.file} reachable=${p.reachable}\n`);
+    }
   }
   return 0;
 }
