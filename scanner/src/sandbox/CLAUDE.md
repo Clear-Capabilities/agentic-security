@@ -161,9 +161,11 @@ needs the same Linux-host verification as everything else on that backend.
 
 ## Known limitation, deliberately accepted: reads are not confined
 
-The userspace policy allows `(allow file-read*)` globally — every backend in
-this module confines **writes**, network egress, and resource use, but **not
-reads**. A confined command can read any file on the host the OS-level
+The userspace policy allows `(allow file-read*)` globally — that backend
+confines **writes**, network egress, and resource use, but **not reads**. (The
+kernel-namespace backend confines *less* than that: per the section above, it
+implements network isolation only and does **not** confine writes at all.)
+A confined command can read any file on the host the OS-level
 permissions allow, including outside the sandbox root. Exfiltration of
 readable host files (writing what was read to network or to a location the
 attacker later reads through some other channel) is **out of scope for this
