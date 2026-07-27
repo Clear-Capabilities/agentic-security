@@ -139,6 +139,24 @@ function runLinter(cwd, cmd, args) {
 // then re-verify get the strongest signal; that ordering is not enforced
 // here — it's the caller's responsibility, same as it already is for the
 // closed-loop `fix-verify-loop.js` path.
+// Does the caller's candidate patch differ from what is on disk right now?
+// If so, any test run necessarily exercised the pre-patch tree. Compared by
+// content so a patch that happens to match disk (already applied) is correctly
+// treated as NOT pre-patch.
+function _candidateDiffersFromDisk(scanRoot, files) {
+  if (!files || typeof files !== 'object') return false;
+  for (const [rel, content] of Object.entries(files)) {
+    if (typeof content !== 'string') continue;
+    try {
+      const abs = path.resolve(scanRoot, rel);
+      if (fs.readFileSync(abs, 'utf8') !== content) return true;
+    } catch {
+      return true; // candidate file absent on disk -> definitely not applied
+    }
+  }
+  return false;
+}
+
 export async function verifyFix({
   scanRoot,
   originalFindingStableId,
@@ -150,6 +168,10 @@ export async function verifyFix({
   const rescan = await verifyPatch({ scanRoot, originalFindingStableId, files, depFileContents });
   const lint = runProjectLinter(scanRoot, Object.keys(files || {}));
   const tests = runProjectTests(scanRoot, testTimeoutMs != null ? { timeoutMs: testTimeoutMs } : {});
+  // True when a candidate patch was supplied but has not been written, so the
+  // suite necessarily ran against the pre-patch tree. Surfaced in the summary
+  // and on the result so a caller cannot mistake it for a verified patch.
+  const _testedPrePatch = !tests.skipped && _candidateDiffersFromDisk(scanRoot, files);
   const testsOk = tests.skipped ? true : tests.passed === true;
   let honesty = null;
   if (fixMeta && typeof fixMeta === 'object') {
@@ -162,11 +184,15 @@ export async function verifyFix({
               : lint.skipped ? `${lint.runner} not installed`
               : lint.ok ? `${lint.runner} PASS`
               : `${lint.runner} FAIL (exit ${lint.exitCode})`}`,
+    // Say which tree the suite actually ran against. `files` is a candidate
+    // patch held in memory; the runner needs real files, so it sees whatever is
+    // on disk. Reporting a bare "PASS" here would let a caller believe the
+    // PATCH passed the tests when the suite may have run on unpatched code.
     `tests:   ${tests.skipped ? `skipped (${tests.reason})`
               : tests.timedOut ? 'FAIL (timed out)'
-              : tests.passed ? 'PASS'
+              : tests.passed ? `PASS${_testedPrePatch ? ' — on the CURRENT on-disk tree, NOT the candidate patch' : ''}`
               : `FAIL (exit ${tests.exitCode})`}`,
     honesty ? `honesty: ${honesty.ok ? `PASS (${honesty.tier})` : 'FAIL — ' + honesty.violations.join('; ')}` : null,
   ].filter(Boolean).join('\n');
-  return { ok, rescan, lint, tests, honesty, summary };
+  return { ok, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, summary };
 }
