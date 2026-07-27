@@ -975,6 +975,27 @@ function filterByProvenance(entries) {
   return list;
 }
 
+// Round-1 fix follow-up: the PHP IR frontend (parser-php.js `_lowerExpr`)
+// keeps the `$` sigil on variable idents — `$_GET['cmd']` lowers to
+// `{ kind:'member', object:{ kind:'ident', name:'$_GET' }, prop:'cmd' }` —
+// but the catalog's global entries are keyed without it (`_GET`). Every
+// real PHP superglobal therefore missed GLOBAL_INDEX even after it was
+// indexed, and the earlier synthetic-ident unit tests (which built their
+// own sigil-free `{ kind:'ident', name:'_GET' }` nodes) could not catch
+// this because they never exercised the real parser's output.
+//
+// Fixed by normalizing at the lookup, not by re-keying all five PHP
+// entries with a `$`: the catalog's `match.name` is the single spot that
+// already reads naturally for every other language (Ruby `params`, JS
+// `location` carry no sigil), and a lookup-side strip keeps that uniform
+// — a future language whose IR *does* prefix variables doesn't need its
+// own catalog dialect. Ruby (`params`, `cookies`, `session`, `ENV`) and JS
+// (`location`) were checked against their real parsers in this round and
+// need no such stripping — confirmed no sigil or other prefix there.
+function _globalKey(name) {
+  return typeof name === 'string' && name.charCodeAt(0) === 36 /* '$' */ ? name.slice(1) : name;
+}
+
 export function matchSource(expr, file) {
   if (!expr) return null;
   // Member sources (req.query): the original path — unchanged.
@@ -987,7 +1008,7 @@ export function matchSource(expr, file) {
     }
     // Global sources reached as a member read off the global itself:
     // $_GET['x'], params[:id]. Match on the member's root, not the pair.
-    const rawGlobal = GLOBAL_INDEX.get(expr.object.name);
+    const rawGlobal = GLOBAL_INDEX.get(_globalKey(expr.object.name));
     if (rawGlobal) {
       const hits = filterByProvenance(rawGlobal).filter(h => _languageAllowed(h, file));
       const s = hits.find(h => h.kind === 'source');
@@ -997,7 +1018,7 @@ export function matchSource(expr, file) {
   // Bare-identifier globals: PHP superglobals, Rails params/session/cookies,
   // Ruby ENV, JS location — referenced directly without a member access.
   if (expr.kind === 'ident' && expr.name) {
-    const raw = GLOBAL_INDEX.get(expr.name);
+    const raw = GLOBAL_INDEX.get(_globalKey(expr.name));
     if (raw) {
       const hits = filterByProvenance(raw).filter(h => _languageAllowed(h, file));
       const s = hits.find(h => h.kind === 'source');
