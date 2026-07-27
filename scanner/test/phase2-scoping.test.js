@@ -146,6 +146,53 @@ test('language scoping: extension sets match the IR dispatch exactly', () => {
   assert.equal(map.cpp.source, cppExpected.source, "catalog.js's cpp extension set must equal parser-cpp.js's cppExtRe()");
 });
 
+// ─── JVM family (regression guard) ────────────────────────────────────────
+// The extension-set equality test above CANNOT catch this class of bug: the
+// extension sets were never wrong, the assumption that a catalog language maps
+// one-to-one onto a file-extension family was. `java` and `kt` are two catalog
+// dialects over one runtime with one library surface — Kotlin calls JDBC,
+// Hibernate and the servlet API constantly. Scoping each dialect to its own
+// extension silently deleted 12 `java` sinks and 4 `java` sources on `.kt`,
+// and `readText` on `.java`. These tests pin the BEHAVIOUR (which names match
+// which file), not regex equality, so a future re-narrowing fails here.
+test('JVM family: java-language sinks still match on a .kt file', () => {
+  const JAVA_SINKS_ON_KT = [
+    'executeUpdate', 'execute', 'prepareStatement', 'addBatch',
+    'createQuery', 'createSQLQuery', 'createNativeQuery',
+    'File', 'search', 'compile', 'sendRedirect', 'parse',
+  ];
+  for (const name of JAVA_SINKS_ON_KT) {
+    const hits = matchSinkOrSanitizer(name, 'A.kt') || [];
+    assert.ok(hits.some(h => h.language === 'java' && h.kind === 'sink'),
+      `java sink '${name}' must match on a .kt file — Kotlin calls the Java library surface`);
+  }
+});
+
+test('JVM family: java-language sources still match on a .kt file', () => {
+  for (const callee of ['getCookies', 'getInputStream', 'getReader', 'getProperty']) {
+    const expr = { kind: 'call', callee: { kind: 'member', prop: callee, object: { kind: 'ident', name: 'request' } }, args: [] };
+    const s = matchSource(expr, 'A.kt');
+    assert.ok(s && s.language === 'java', `java source '${callee}' must match on a .kt file, got ${JSON.stringify(s)}`);
+  }
+});
+
+test('JVM family: a kt-language sink still matches on a .java file', () => {
+  const hits = matchSinkOrSanitizer('readText', 'A.java') || [];
+  assert.ok(hits.some(h => h.language === 'kt' && h.kind === 'sink'),
+    "kt sink 'readText' must match on a .java file — the JVM is one family in both directions");
+});
+
+test('JVM family: the family does not leak beyond the JVM', () => {
+  for (const file of ['a.py', 'a.go', 'a.js', 'a.rb', 'a.php', 'a.cs']) {
+    const hits = matchSinkOrSanitizer('executeUpdate', file) || [];
+    assert.ok(!hits.some(h => h.language === 'java'),
+      `a java sink must not fire on ${file} — widening is JVM-only`);
+    const kt = matchSinkOrSanitizer('readText', file) || [];
+    assert.ok(!kt.some(h => h.language === 'kt'),
+      `a kt sink must not fire on ${file}`);
+  }
+});
+
 test('language scoping: a python-language sink does not fire on a .js file', () => {
   const hitsPy = matchSinkOrSanitizer('system', 'a.py') || [];
   const hitsJs = matchSinkOrSanitizer('system', 'a.js') || [];

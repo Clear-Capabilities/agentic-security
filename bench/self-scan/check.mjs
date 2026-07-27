@@ -22,7 +22,11 @@
 //      measurement run itself threw, OR a preflight check failed (a target
 //      directory the baseline expects is missing/unreadable, or a target the
 //      baseline says has findings came back completely empty). NOT a drift
-//      finding; fix the runner/environment and re-run.
+//      finding. The missing-path cases are certain environment faults — fix
+//      the environment and re-run. The came-back-empty case is ambiguous:
+//      it is equally the signature of every finding in that target genuinely
+//      being fixed, and the remedy for that reading is `--update-baseline`,
+//      not an environment fix. The message says so.
 //
 // The preflight exists because `measure.mjs` -> `runScan` does not throw on
 // a missing target directory — it just returns { total: 0, byFile: {} } —
@@ -93,12 +97,20 @@ function fail(code, msg) {
 // Two independent checks, because either alone can be fooled:
 //   1. Every target directory the baseline knows about (plus the polyglot
 //      fixture directory) must exist and be a readable directory. Catches a
-//      renamed/deleted/relocated target outright.
+//      renamed/deleted/relocated target outright. This one IS a certain
+//      environment fault — a path the baseline names is simply not there.
 //   2. Even if a directory exists, a target the baseline says has findings
 //      must not come back with zero. Catches the case where the directory
 //      is present but empty, unreadable in a way that doesn't throw, or
 //      otherwise fails to produce the files the baseline expects — without
-//      relying solely on the path check above.
+//      relying solely on the path check above. This one is AMBIGUOUS: the
+//      identical signal is produced by someone genuinely fixing every finding
+//      in a target, and telling them to go fix their environment leaves them
+//      with a gate that can never go green. Reported as `kind: 'ambiguous'`
+//      so the caller presents both readings and names `--update-baseline`.
+//
+// Returns null when everything checks out, otherwise
+// `{ kind: 'environment' | 'ambiguous', msg }`.
 function preflight(baseline, now) {
   const baseTargets = baseline.targets || {};
   for (const t of Object.keys(baseTargets)) {
@@ -107,16 +119,16 @@ function preflight(baseline, now) {
     try {
       st = fs.statSync(dir);
     } catch {
-      return `target directory missing or unreadable: ${path.relative(process.cwd(), dir)} (baselined target "${t}")`;
+      return { kind: 'environment', msg: `target directory missing or unreadable: ${path.relative(process.cwd(), dir)} (baselined target "${t}")` };
     }
     if (!st.isDirectory()) {
-      return `target path is not a directory: ${path.relative(process.cwd(), dir)} (baselined target "${t}")`;
+      return { kind: 'environment', msg: `target path is not a directory: ${path.relative(process.cwd(), dir)} (baselined target "${t}")` };
     }
   }
 
   const polyDir = path.join(HERE, 'fixtures', 'polyglot');
   if (!fs.existsSync(polyDir) || !fs.statSync(polyDir).isDirectory()) {
-    return `polyglot fixture directory missing or unreadable: ${path.relative(process.cwd(), polyDir)}`;
+    return { kind: 'environment', msg: `polyglot fixture directory missing or unreadable: ${path.relative(process.cwd(), polyDir)}` };
   }
 
   const nowTargets = now.targets || {};
@@ -124,7 +136,7 @@ function preflight(baseline, now) {
     const baseTotal = (baseTargets[t] && baseTargets[t].total) || 0;
     const nowTotal = (nowTargets[t] && nowTargets[t].total) || 0;
     if (baseTotal > 0 && nowTotal === 0) {
-      return `target "${t}" (${path.relative(process.cwd(), path.join(REPO, t))}) has a baseline of ${baseTotal} finding(s) but the fresh scan returned 0 — this looks like a missing/misconfigured target, not a genuine fix of every finding.`;
+      return { kind: 'ambiguous', msg: `target "${t}" (${path.relative(process.cwd(), path.join(REPO, t))}) has a baseline of ${baseTotal} finding(s) but the fresh scan returned 0. Two things produce this signal and this gate cannot tell them apart:\n    (a) the target is missing/misconfigured, or the scan did not see the files the baseline was built from — check the path, the file list, and that the scan actually ran;\n    (b) every finding in that target was genuinely fixed — a real outcome, and the right one. If so this is not an error: re-run with \`--update-baseline\` to record the new zero, review the regenerated BASELINE.json, and commit it.\n    Confirm which by scanning the target directly before deciding.` };
     }
   }
 
@@ -179,9 +191,13 @@ async function main() {
     return;
   }
 
-  const envProblem = preflight(baseline, now);
-  if (envProblem) {
-    fail(2, `✗ could not measure — environment problem, NOT drift: ${envProblem}\n  Fix the environment (restore the missing path, check permissions) and re-run.`);
+  const problem = preflight(baseline, now);
+  if (problem) {
+    if (problem.kind === 'ambiguous') {
+      fail(2, `✗ could not measure — cannot distinguish an environment problem from a genuine fix:\n  ${problem.msg}`);
+    } else {
+      fail(2, `✗ could not measure — environment problem, NOT drift: ${problem.msg}\n  Fix the environment (restore the missing path, check permissions) and re-run.`);
+    }
     return;
   }
 

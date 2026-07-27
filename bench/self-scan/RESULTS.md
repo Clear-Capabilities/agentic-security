@@ -5,6 +5,12 @@ branch `feat/phase2-precision`, against the built bundle
 (`npm run build` re-run first). Where a figure could not be produced in this
 session it is marked **not measured**, not guessed.
 
+> **Two sessions now.** §1–§4 are the original Task 8 measurement session.
+> §5 Q3 carries a **correction** added in the later fix-wave session
+> (2026-07-26), which found a recall regression the original measurement
+> reported as absent, and §6 records the review's remaining follow-ups. Where
+> the fix wave re-measured something, it says so and gives the fresh number.
+
 ## 1. Self-scan precision (this repository's own code)
 
 `npm run bench:self-scan -- --json`, re-run this session:
@@ -161,6 +167,11 @@ posture 556/556, dataflow 451/451, mcp 80/80, report 85/85, bench-modules
 67/67, lifecycle 64/64, eval 22/22, plus the standalone C++ dataflow suite
 26/26 — 0 failures across all scopes.
 
+**Re-run in the fix-wave session (2026-07-26), after the JVM-family fix:** all
+three gates exit 0 again, plus `npm run build` exit 0. Only the dataflow scope
+moved — 451 → **455**, the 4 new cross-family tests. Full figures in the §5 Q3
+correction.
+
 ## 5. Answers
 
 **Q1 — Did Go, C#, Kotlin and PHP gain interprocedural analysis?**
@@ -182,6 +193,89 @@ found no remaining cross-language false positives to constrain — not
 because the work was skipped.
 
 **Q3 — Did anything lose recall? This is the one to be skeptical about.**
+
+> **CORRECTION (fix wave, 2026-07-26). The original answer below said "No
+> loss found." That was false as written.** A recall regression *was* present
+> at the time that answer was recorded; the final whole-branch review found it
+> afterwards, by hand, against the parent branch. The original evidence list is
+> preserved verbatim beneath this correction because the most useful thing in
+> this document for the next reader is not the corrected conclusion — it is the
+> fact that a five-bullet, deliberately-skeptical measurement returned a
+> confident "no loss" and was wrong, and *why each bullet failed to see it*.
+
+**What was lost.** `catalog.js` scoped `java` and `kt` as separate `_LANG_EXT`
+keys. They are separate *catalog dialects*, but the JVM is **one runtime with
+one library surface** — Kotlin calls the Java standard library, JDBC,
+Hibernate and the servlet API constantly. Measured against the parent branch,
+`.kt` files stopped matching 12 `java`-language sinks — `executeUpdate`,
+`execute`, `prepareStatement`, `addBatch`, `createQuery`, `createSQLQuery`,
+`createNativeQuery`, `File`, `search`, `compile`, `sendRedirect`, `parse` —
+and 4 `java` sources — `getCookies`, `getInputStream`, `getReader`,
+`getProperty`. Symmetrically, `.java` files stopped matching `readText`
+(`kt-file-readtext` / `kt-url-readtext`). In plain terms: JDBC and Hibernate
+SQL injection, servlet open-redirect and XXE went silent in Kotlin.
+
+**Measured, single-file demonstration.** A `.kt` file containing
+
+```kotlin
+val q = req.getParameter("q")
+stmt.executeUpdate(q)
+```
+
+produced **1** IR-TAINT finding on the parent branch, **0** on this branch
+before the fix (re-measured in the fix-wave session with
+`AGENTIC_SECURITY_DEEP=1`), and **1** again after the fix
+(`SQL Injection (Statement.executeUpdate)`, App.kt:2).
+
+**Why the pinning test could not catch it.** `phase2-scoping.test.js`'s
+"extension sets match the IR dispatch exactly" test was not weak and was not
+wrong: the extension sets genuinely *do* equal `ir/index.js`'s dispatch
+regexes, and still do after the fix. The defective assumption was one level
+above the thing being pinned — that a *catalog language* maps one-to-one onto
+a *file-extension family*. No amount of regex-equality assertion can detect a
+family error, because no regex was ever unequal. The fix therefore adds tests
+that pin the **cross-family behaviour** directly rather than regex equality:
+all 12 `java` sink names must match on `.kt`, all 4 `java` source names must
+match on `.kt`, `readText` must match on `.java`, and (the guard against
+over-correcting) none of those may fire on `.py`/`.go`/`.js`/`.rb`/`.php`/`.cs`.
+Verified to fail without the fix: with the JVM family map emptied, exactly
+those 3 new cross-family tests fail (17 pass / 3 fail) while every other test
+in the file, including both extension-set tests, stays green — which is
+precisely the blind spot, reproduced.
+
+**Why the corpus could not catch it either.** 197/197 green was **not**
+evidence of Kotlin recall. Two reasons, both measured:
+- Of the corpus's 20 Kotlin entries, most use only `kt-*`-catalogued sinks
+  (`readText`, `exec`, `executeQuery`, `readObject`), which were never scoped
+  away from `.kt`.
+- The handful that *do* use `java`-only sinks are still scored `pre:TP`
+  because a corpus verdict asks "did **anything** detect this?", not "did the
+  taint engine detect this?". `CVE-2020-5247-kotlin-open-redirect/pre` uses
+  `sendRedirect`; scanned in this session it returns exactly one finding, from
+  the `OPEN-REDIRECT` regex detector — so the IR-TAINT loss is structurally
+  invisible to that verdict. A corpus of `pre:TP post:TN` pairs measures
+  *detection*, not *per-detector recall*, and cannot be cited as the latter.
+
+**Post-fix position (re-measured this session, every number from a run in the
+fix-wave session).** Scoping is now by **runtime family**, not dialect: a
+declarative `_LANG_FAMILY` map in `catalog.js` puts `java` and `kt` in one JVM
+family, and `_languageAllowed` accepts a file matching any dialect in the
+entry's family. A dialect absent from the map is its own family, so every
+other language is untouched. Gates re-run after the fix: `npm test` exit 0
+(dataflow scope 455/455, up from 451 by the 4 new cross-family tests; smoke
+28, sast 465, posture 556, mcp 80, report 85, bench-modules 67, lifecycle 64,
+eval 22, C++ dataflow 26 — 0 failures anywhere), `bench:cve-replay:check`
+exit 0 (197/197, no drift), `bench:self-scan:check` exit 0 (hooks 24,
+scripts 24, polyglot 0, no per-file drift), `npm run build` exit 0. The
+`.kt` `executeUpdate` case is detected again. **This is a re-measurement, not
+a re-assertion — but note that the previous answer was also a measurement.**
+The corpus and the self-scan gate still cannot see per-detector Kotlin recall;
+the new cross-family tests are what covers it now.
+
+---
+
+*Original answer, preserved as written:*
+
 No loss found, and here is what was actually checked, not just "tests are
 green":
 - **CVE-replay corpus verdicts**: all 197 baselined entries still pass with
@@ -212,3 +306,40 @@ green":
 No entry, language, or target showed a `pre:TP`→`post:FN` transition, a
 coverage drop, or a byte-level finding-set change. The recall-loss check
 comes back clean.
+
+*(End of the original answer. Every bullet above is individually still true;
+together they were still not sufficient, for the reasons given in the
+correction.)*
+
+## 6. Recorded follow-ups — known, deliberately NOT fixed in the fix wave
+
+Found by the final whole-branch review. Each is real and each was left alone
+on purpose, so that the fix wave stayed scoped to the regression it existed to
+close. Listed roughly in the order the review recommends taking them.
+
+1. **`engine.js`'s `case 'assign'` never sink-matches its own RHS.** `exec(c)`
+   at statement position yields 1 finding; `const out = exec(c)` yields 0. The
+   assignment path handles the call as a *summary application* and never asks
+   whether the callee is itself a catalog sink. This silences
+   `const rows = db.query(tainted)` — the single most idiomatic shape there
+   is — **in every language**. Pre-existing (not introduced by this branch);
+   the review recommends it as the next phase's first item.
+2. **The nine-language list in `phase2-scoping.test.js` is hardcoded**
+   (`['js','py','cs','kt','go','php','rb','java','cpp']`) rather than derived
+   from `CATALOG`. A newly added catalog language silently falls back to
+   permissive matching and re-opens the cross-language leak with the test
+   still green. Derive the list from the distinct `language` values in
+   `CATALOG` instead.
+3. **The extension pin is one-directional.** It asserts catalog ⊆/= dispatch
+   by comparing against literals written *in the test*. Adding a new dispatch
+   branch to `ir/index.js` (say `.mts`) leaves the test green while the
+   catalog silently stays narrower than the parser.
+4. **All `match.type: 'global'` entries remain unreachable from
+   `matchSource()`.** `matchSource` handles only `member` and `call` shapes,
+   so PHP superglobals (`$_GET`/`$_POST`/`$_REQUEST`/`$_COOKIE`/`$_SERVER`),
+   Rails `params`/`session`/`cookies`/`ENV`, and JS `location` are catalogued
+   but never matched by the taint engine. Separately, Go still has no
+   environment or argv source at all (`os.Getenv`, `os.Args`).
+5. **`parser-kt.js` mis-lowers fluent chains**, so multi-segment Kotlin
+   builder/fluent expressions do not reach the engine with the shape the
+   catalog expects.

@@ -799,11 +799,51 @@ export function _languageExtensions() {
   return { ..._LANG_EXT, cpp: cppExtRe() };
 }
 
+// ─── Runtime families ─────────────────────────────────────────────────────
+// A catalog `language` names a catalog *dialect*, not a file type. The two are
+// usually the same thing, but not always: `java` and `kt` are two dialects over
+// ONE runtime with ONE library surface. Kotlin code calls the Java standard
+// library, JDBC, Hibernate and the servlet API constantly, and Java code can
+// call Kotlin stdlib extensions — so scoping each dialect to its own extension
+// alone silently deletes real detections in both directions.
+//
+// It did exactly that: after the per-language scoping landed, `.kt` files
+// stopped matching 12 `java`-language sinks (executeUpdate, execute,
+// prepareStatement, addBatch, createQuery, createSQLQuery, createNativeQuery,
+// File, search, compile, sendRedirect, parse) and 4 `java` sources
+// (getCookies, getInputStream, getReader, getProperty), and `.java` files
+// stopped matching `readText`. A `.kt` file with
+// `val q = req.getParameter("q"); stmt.executeUpdate(q)` went from 1 IR-TAINT
+// finding to 0 — JDBC/Hibernate SQLi, servlet open-redirect and XXE going
+// silent in Kotlin.
+//
+// So scoping is by FAMILY, not by dialect: an entry may match any file
+// extension belonging to any dialect in its family. A dialect absent from this
+// map is its own family (the common case). Keep this a declarative map rather
+// than a conditional in `_languageAllowed` — the whole point is that the next
+// person reading it sees "these dialects share a runtime" without having to
+// reverse-engineer a special case. `phase2-scoping.test.js` pins the
+// cross-family behaviour directly (executeUpdate on .kt, readText on .java);
+// the extension-set equality test cannot catch a family error, because the
+// extension sets were never wrong — the one-dialect-one-file-type assumption
+// was.
+const _LANG_FAMILY = {
+  java: ['java', 'kt'],   // JVM
+  kt:   ['java', 'kt'],   // JVM
+};
+
+// Extension regexes a given catalog language is allowed to match against.
+export function _languageFamilyExtensions(language) {
+  const all = _languageExtensions();
+  const dialects = _LANG_FAMILY[language] || [language];
+  return dialects.map(d => all[d]).filter(Boolean);
+}
+
 function _languageAllowed(entry, file) {
   if (!file) return true;
-  if (entry.language === 'cpp') return cppExtRe().test(file);
-  const re = _LANG_EXT[entry.language];
-  return re ? re.test(file) : true;   // unmapped language stays permissive
+  const res = _languageFamilyExtensions(entry.language);
+  if (!res.length) return true;       // unmapped language stays permissive
+  return res.some(re => re.test(file));
 }
 
 // Receiver constraint (`match.receiver`), evaluated against the object chain
