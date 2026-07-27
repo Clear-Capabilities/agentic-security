@@ -1,10 +1,21 @@
 // Userspace confinement backend (macOS family). Applies a deny-by-default
 // policy profile: reads allowed, writes confined to the sandbox root, no
 // network egress unless explicitly opted in.
+//
+// TIMEOUT SCOPE — read before trusting `status:'timeout'`. The wall-clock
+// timeout is `spawnSync`'s, which signals only the DIRECT child. Verified by
+// execution on this platform: with `timeoutMs: 1200`, a command that
+// backgrounded a 4-second child returned `status:'timeout'` while the
+// grandchild survived the timeout and completed its work afterwards. So
+// 'timeout' means "we stopped waiting and killed the process we spawned", NOT
+// "the process tree was terminated". Anything left running is still inside the
+// policy profile (its writes and network stay confined), but it is still
+// running. Callers that need a hard tree kill must supply it themselves.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import { CONFINE_BIN_USERSPACE } from './capabilities.js';
+import { resolveUserspaceBin } from './capabilities.js';
 import { buildLimitPrelude } from './limits.js';
+import { buildResult, errorResult, buildConfinedEnv } from './result.js';
 
 // `ulimit -u` (RLIMIT_NPROC) is a per-uid, system-wide cap on this platform,
 // not a per-process-tree cap (verified by execution in Task 2). A fixed
@@ -40,40 +51,50 @@ export function runUserspace(argv, {
   timeoutMs = 10000,
   allowNetwork = false,
   limits = {},
+  env = {},
   maxBuffer = 8 * 1024 * 1024,
 } = {}) {
-  if (!root) throw new Error('runUserspace requires a sandbox root');
+  // Documented shape, never a throw: a caller that wraps this in try/catch and
+  // "falls back" is a classic route to unconfined execution.
+  if (!root) return errorResult('userspace', 'runUserspace requires a sandbox root');
 
-  // Resolve symlinks (e.g. macOS /var -> /private/var) so the profile's
-  // subpath param matches the path the kernel actually sees.
-  const resolvedRoot = fs.realpathSync(root);
+  const bin = resolveUserspaceBin();
+  if (!bin) return errorResult('userspace', 'no userspace confinement binary found on this host');
+
+  let resolvedRoot;
+  try {
+    // Resolve symlinks (e.g. macOS /var -> /private/var) so the profile's
+    // subpath param matches the path the kernel actually sees.
+    resolvedRoot = fs.realpathSync(root);
+  } catch (e) {
+    return errorResult('userspace', `sandbox root is not usable: ${e.message}`);
+  }
 
   const effectiveLimits = {
     ...limits,
     maxProcs: limits.maxProcs ?? (_ambientProcCount() + 64),
   };
-  const { prelude, unsupported } = buildLimitPrelude(effectiveLimits);
+
+  let prelude, unsupported;
+  try {
+    ({ prelude, unsupported } = buildLimitPrelude(effectiveLimits));
+  } catch (e) {
+    return errorResult('userspace', `invalid resource limit: ${e.message}`);
+  }
   const inner = `${prelude}exec "$@"`;
 
   const r = spawnSync(
-    CONFINE_BIN_USERSPACE,
+    bin,
     ['-p', _profile({ allowNetwork }), '-D', `ROOT=${resolvedRoot}`,
      '/bin/sh', '-c', inner, '_sbx', ...argv],
-    { encoding: 'utf8', timeout: timeoutMs, maxBuffer, cwd: resolvedRoot, env: { ...process.env, ROOT: resolvedRoot } },
+    {
+      encoding: 'utf8',
+      timeout: timeoutMs,
+      maxBuffer,
+      cwd: resolvedRoot,
+      env: buildConfinedEnv({ root: resolvedRoot, env }),
+    },
   );
 
-  const timedOut = r.error?.code === 'ETIMEDOUT';
-  let status = 'ok';
-  if (timedOut) status = 'timeout';
-  else if (r.error) status = 'error';
-  else if (r.status !== 0) status = 'blocked';
-
-  return {
-    status,
-    stdout: r.stdout ?? '',
-    stderr: (r.stderr ?? '') + (unsupported.length ? `\n[sandbox] limits not enforceable here: ${unsupported.join(', ')}` : ''),
-    exitCode: r.status,
-    timedOut,
-    backend: 'userspace',
-  };
+  return buildResult({ backend: 'userspace', spawnResult: r, unsupported });
 }

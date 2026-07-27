@@ -4,6 +4,7 @@
 export function runDisabled(_argv, _opts) {
   return {
     status: 'disabled',
+    denied: false,
     stdout: '',
     stderr: 'agentic-security: refusing to execute — no confinement primitive available on this host.',
     exitCode: null,

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { detectBackend } from '../src/sandbox/capabilities.js';
 import { runUserspace } from '../src/sandbox/backend-userspace.js';
 import { runNamespace } from '../src/sandbox/backend-namespace.js';
+import { runDisabled } from '../src/sandbox/backend-disabled.js';
 
 const ACTIVE = detectBackend();
 const skip = ACTIVE !== 'userspace'
@@ -30,8 +31,51 @@ describe('userspace confinement — escape attempts', { skip }, () => {
   test('BAD: a write outside the sandbox root is blocked and creates no file', () => {
     const target = path.join(outside, 'escape.txt');
     const r = runUserspace(['/bin/sh', '-c', `echo bad > ${target}`], { root });
-    assert.notEqual(r.exitCode, 0, 'write outside root unexpectedly succeeded');
+    assert.equal(r.denied, true, 'denial was not observed');
+    assert.equal(r.status, 'blocked');
     assert.equal(fs.existsSync(target), false, 'ESCAPED: file was created outside the sandbox root');
+  });
+
+  test('BAD: a DENIED write is not reported as a clean run even when the command exits 0', () => {
+    // The regression this locks down: status used to come purely from the exit
+    // code, so a command whose out-of-root write was refused but which still
+    // exited 0 was reported status:'ok', exitCode:0 — indistinguishable from a
+    // run where nothing was refused at all. That is exactly the misread a
+    // downstream execution-verification tier must not make.
+    const target = path.join(outside, 'escape-exit0.txt');
+    const r = runUserspace(['/bin/sh', '-c', `echo bad > ${target}; exit 0`], { root });
+    assert.equal(r.exitCode, 0, 'precondition: the command must exit 0 for this test to mean anything');
+    assert.equal(fs.existsSync(target), false, 'ESCAPED: file was created outside the sandbox root');
+    assert.equal(r.denied, true, 'the denial was invisible to the caller');
+    assert.notEqual(r.status, 'ok', 'a denied run was reported as a clean run');
+    assert.equal(r.status, 'blocked');
+  });
+
+  test('GOOD: an ordinary non-zero exit is "nonzero", never "blocked"', () => {
+    // Converse of the above: a program that ran fine and chose to exit 3 is a
+    // program failure, not a confinement event.
+    const r = runUserspace(['/bin/sh', '-c', 'exit 3'], { root });
+    assert.equal(r.exitCode, 3);
+    assert.equal(r.denied, false);
+    assert.equal(r.status, 'nonzero', 'ordinary failure mislabelled as a confinement block');
+  });
+
+  test('BAD: the parent environment is not handed to the confined command', () => {
+    // Env-borne credentials are a distinct exposure from the accepted
+    // "reads are not confined" scope cut — the sandbox would be handing them
+    // over, not merely failing to hide them.
+    process.env.SBX_PARENT_SECRET = 'leaked-value-should-not-appear';
+    try {
+      const r = runUserspace(['/bin/sh', '-c', 'echo "[${SBX_PARENT_SECRET}]"'], { root });
+      assert.equal(r.status, 'ok', r.stderr);
+      assert.doesNotMatch(r.stdout, /leaked-value-should-not-appear/,
+        'LEAKED: a parent environment variable reached the confined command');
+      // Opt-in still works, one variable at a time.
+      const r2 = runUserspace(['/bin/sh', '-c', 'echo "[$EXPLICIT]"'], { root, env: { EXPLICIT: 'passed-in' } });
+      assert.match(r2.stdout, /passed-in/);
+    } finally {
+      delete process.env.SBX_PARENT_SECRET;
+    }
   });
 
   test('BAD: outbound network is blocked', () => {
@@ -39,10 +83,31 @@ describe('userspace confinement — escape attempts', { skip }, () => {
     assert.notEqual(r.exitCode, 0, 'outbound connection unexpectedly succeeded inside the sandbox');
   });
 
-  test('BAD: a wall-clock overrun is terminated', () => {
+  test('BAD: a wall-clock overrun stops the direct child', () => {
     const r = runUserspace(['/bin/sh', '-c', 'sleep 30'], { root, timeoutMs: 1500 });
     assert.equal(r.timedOut, true);
     assert.equal(r.status, 'timeout');
+  });
+
+  test('KNOWN GAP: the timeout does not kill the process tree on this platform', () => {
+    // This asserts a LIMITATION, on purpose. The wall-clock timeout is
+    // spawnSync's, which signals only the direct child, so a backgrounded
+    // grandchild outlives the 'timeout' result. The module guide says exactly
+    // this; the test exists so the claim stays true by execution rather than
+    // by memory. If a future change really does kill the tree, this test will
+    // fail — and the guide's "Timeout does not kill the process tree" section
+    // must be corrected in the same commit.
+    const marker = path.join(root, 'survivor.marker');
+    if (fs.existsSync(marker)) fs.unlinkSync(marker);
+    const r = runUserspace(
+      ['/bin/sh', '-c', '( /bin/sleep 3; /usr/bin/touch "$ROOT/survivor.marker" ) & sleep 30'],
+      { root, timeoutMs: 1200 });
+    assert.equal(r.status, 'timeout');
+    assert.equal(fs.existsSync(marker), false, 'precondition: nothing should have been written yet');
+    // Wait past the survivor's own sleep, then look again.
+    execFileSync('/bin/sleep', ['4']);
+    assert.equal(fs.existsSync(marker), true,
+      'the backgrounded child did NOT survive — tree termination now works; update the guide');
   });
 
   test('BAD (weak): a fork storm is contained only relative to ambient load, not absolutely', () => {
@@ -92,6 +157,10 @@ const nsSkip = detectBackend() !== 'namespace'
   ? 'skipped: kernel-namespace backend unavailable on this host — implemented but NOT verified here'
   : false;
 
+// These skip on a non-Linux host — that is expected, and it is also why none
+// of the namespace claims may be stated as verified. They exist so that the
+// FIRST run on a Linux host asserts the same both-direction contract the
+// userspace backend already meets, rather than discovering the gap later.
 describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, () => {
   test('GOOD: a write inside the sandbox root succeeds', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
@@ -100,15 +169,58 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     assert.match(r.stdout, /ok/);
   });
 
-  test('BAD: a wall-clock overrun is terminated', () => {
+  test('KNOWN GAP: a write outside the sandbox root is NOT confined by this backend', () => {
+    // Asserts the documented reality, not a wish. This backend has no
+    // remount/bind/pivot_root — only a `cd` — so an absolute out-of-root write
+    // succeeds. The guide says so; this test makes the claim executable on the
+    // first Linux host that runs it. If write confinement is later
+    // implemented, this test WILL fail, and the guide's namespace section must
+    // be rewritten in the same commit.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-out-'));
+    const target = path.join(outside, 'escape.txt');
+    runNamespace(['/bin/sh', '-c', `echo bad > ${target}`], { root });
+    assert.equal(fs.existsSync(target), true,
+      'write confinement now appears to work — verify it properly and update the guide');
+  });
+
+  test('BAD: outbound network is blocked by the empty network namespace', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const r = runNamespace(['/bin/sh', '-c', 'exec 3<>/dev/tcp/1.1.1.1/443'], { root, timeoutMs: 15000 });
+    assert.notEqual(r.exitCode, 0, 'outbound connection unexpectedly succeeded inside the sandbox');
+  });
+
+  test('BAD: a wall-clock overrun stops the direct child', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
     const r = runNamespace(['/bin/sh', '-c', 'sleep 30'], { root, timeoutMs: 1500 });
     assert.equal(r.timedOut, true);
+    assert.equal(r.status, 'timeout');
   });
 });
 
-test('the namespace backend exports the same result shape as the userspace backend', () => {
-  // Shape contract is checkable without executing the backend.
-  assert.equal(typeof runNamespace, 'function');
-  assert.equal(runNamespace.length >= 1, true);
+test('the namespace backend returns the same result shape as every other backend', () => {
+  // Asserted against a REAL returned object, not just the function's type and
+  // arity — the old version passed even if the backend returned nothing. A
+  // missing root returns the documented error shape without executing
+  // anything, so this is checkable on any host.
+  const r = runNamespace(['/bin/echo', 'never-runs'], {});
+  const expected = ['status', 'denied', 'stdout', 'stderr', 'exitCode', 'timedOut', 'backend'];
+  assert.deepEqual(Object.keys(r).sort(), [...expected].sort());
+  assert.equal(r.status, 'error', 'a missing root must not throw — it must return the documented shape');
+  assert.equal(r.backend, 'namespace');
+  assert.equal(r.exitCode, null);
+  assert.equal(r.denied, false);
+  // Same key set as the disabled backend, which every host can execute.
+  assert.deepEqual(Object.keys(runDisabled(['/bin/echo'], {})).sort(), [...expected].sort());
+});
+
+test('a missing sandbox root returns status error rather than throwing', () => {
+  // A caller that has to try/catch is a caller that might catch and "fall
+  // back" to running the command unconfined.
+  for (const [name, fn] of [['userspace', runUserspace], ['namespace', runNamespace]]) {
+    const r = fn(['/bin/echo', 'never-runs'], {});
+    assert.equal(r.status, 'error', `${name} backend did not return the documented error shape`);
+    assert.equal(r.backend, name);
+    assert.match(r.stderr, /sandbox root/i);
+  }
 });
