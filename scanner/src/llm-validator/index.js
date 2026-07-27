@@ -45,6 +45,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { statePath, ensureStateDir, safeWriteState } from '../posture/state-dir.js';
+import { redactSecrets } from './redact.js';
 
 // Bump on every prompt change so the cache invalidates. Exported as a
 // stable public symbol (premortem 4R-15) so the validator-cache GC subcommand
@@ -195,12 +196,18 @@ function renderPrompt(finding, fileContents, challenge, nonce) {
     : `${finding.file}:${finding.line} [single-point detection, no cross-file path]`;
   // Defensive: strip the delimiter literally from the untrusted excerpt so
   // an attacker can't close it early by embedding our token.
-  const sterileContext = String(context || '')
+  let sterileContext = String(context || '')
     .replace(/BEGIN-UNTRUSTED-CODE-EXCERPT-[a-f0-9]+/gi, '[stripped-delimiter]')
     .replace(/END-UNTRUSTED-CODE-EXCERPT-[a-f0-9]+/gi, '[stripped-delimiter]');
-  const sterileSnippet = String(finding.snippet || '')
+  let sterileSnippet = String(finding.snippet || '')
     .replace(/[\r\n]+/g, ' ')
     .slice(0, 400);
+  // R10 — redact likely live credentials (API keys, tokens, private keys,
+  // connection-string passwords, ...) out of BOTH excerpts before anything
+  // leaves the machine. This is the last choke point before the prompt is
+  // assembled — everything downstream sees only redacted text.
+  sterileContext = redactSecrets(sterileContext).text;
+  sterileSnippet = redactSecrets(sterileSnippet).text;
   return PROMPT_TEMPLATE
     .replace(/\{\{nonce\}\}/g, nonce)
     .replace(/\{\{challenge\}\}/g, challenge)
