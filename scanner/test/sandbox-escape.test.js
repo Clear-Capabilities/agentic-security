@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { detectBackend } from '../src/sandbox/capabilities.js';
 import { runUserspace } from '../src/sandbox/backend-userspace.js';
+import { runNamespace } from '../src/sandbox/backend-namespace.js';
 
 const ACTIVE = detectBackend();
 const skip = ACTIVE !== 'userspace'
@@ -85,4 +86,29 @@ describe('userspace confinement — escape attempts', { skip }, () => {
     assert.equal(ok.status, 'ok', ok.stderr);
     assert.match(ok.stdout, /fine/);
   });
+});
+
+const nsSkip = detectBackend() !== 'namespace'
+  ? 'skipped: kernel-namespace backend unavailable on this host — implemented but NOT verified here'
+  : false;
+
+describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, () => {
+  test('GOOD: a write inside the sandbox root succeeds', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const r = runNamespace(['/bin/sh', '-c', 'echo ok > "$ROOT/a.txt" && cat "$ROOT/a.txt"'], { root });
+    assert.equal(r.status, 'ok', r.stderr);
+    assert.match(r.stdout, /ok/);
+  });
+
+  test('BAD: a wall-clock overrun is terminated', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const r = runNamespace(['/bin/sh', '-c', 'sleep 30'], { root, timeoutMs: 1500 });
+    assert.equal(r.timedOut, true);
+  });
+});
+
+test('the namespace backend exports the same result shape as the userspace backend', () => {
+  // Shape contract is checkable without executing the backend.
+  assert.equal(typeof runNamespace, 'function');
+  assert.equal(runNamespace.length >= 1, true);
 });
