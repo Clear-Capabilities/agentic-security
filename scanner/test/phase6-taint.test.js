@@ -266,9 +266,21 @@ test('tabulation: enumerateSinks finds sink calls in the IR', () => {
 test('tabulation: reachabilitySliceFromSinks walks reverse call graph', () => {
   const cg = {
     functions: new Map([
-      ['caller', { qid: 'caller', calls: [{ callee: 'callee' }], cfg: { nodes: {} } }],
-      ['callee', { qid: 'callee', calls: [], cfg: { nodes: {} } }],
+      ['caller', { qid: 'caller', file: 'a.js', calls: [{ callee: 'callee' }], cfg: { nodes: {} } }],
+      ['callee', { qid: 'callee', file: 'a.js', calls: [], cfg: { nodes: {} } }],
     ]),
+    // Reverse-map keying now resolves the callee NAME to a qid (fixing the
+    // bug where callersOf was keyed by the raw source-level name); mirror
+    // that here with a minimal resolver so the mock matches real callGraph
+    // shape instead of relying on name === qid by coincidence. tabulation.js
+    // calls resolveKnownCallee specifically (the guess-free entry point), so
+    // the mock must provide that name too, not just resolve().
+    resolve(name) {
+      return this.functions.has(name) ? name : null;
+    },
+    resolveKnownCallee(name) {
+      return this.functions.has(name) ? name : null;
+    },
   };
   const sinks = [{ fnQid: 'callee' }];
   const reachable = reachabilitySliceFromSinks(sinks, cg);

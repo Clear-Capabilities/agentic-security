@@ -173,9 +173,21 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
     if (callGraph && callGraph.functions) {
       for (const fn of callGraph.functions.values()) {
         if (!Array.isArray(fn.calls)) continue;
-        for (const callee of fn.calls) {
-          if (!callers[callee]) callers[callee] = [];
-          callers[callee].push(fn.qid);
+        for (const c of fn.calls) {
+          // fn.calls entries are objects ({site, callee, args, line}); using one
+          // as an object key stringifies it to "[object Object]" and collapses
+          // every entry into a single bogus bucket. Key by the RESOLVED qid so
+          // this map is queryable by the qids the worklist actually uses.
+          const name = c && typeof c === 'object' ? c.callee : c;
+          if (!name) continue;
+          // resolveKnownCallee (not resolve): a raw fn.calls name may be a
+          // flattened member-call string ("loader.read"); the plain
+          // resolve() would guess via its bare-tail fallback and invent an
+          // edge to an unrelated same-named function. See callgraph.js.
+          const qid = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, fn.file) : null;
+          if (!qid) continue;
+          if (!callers[qid]) callers[qid] = [];
+          callers[qid].push(fn.qid);
         }
       }
     }

@@ -49,7 +49,7 @@ export function enumerateSinks(perFileIR, callGraph) {
     for (const nid of Object.keys(cfg.nodes)) {
       const node = cfg.nodes[nid];
       if (!node || node.kind !== 'call') continue;
-      const cat = matchSinkOrSanitizer(node.callee);
+      const cat = matchSinkOrSanitizer(node.callee, fn.file || null);
       if (!cat) continue;
       for (const e of cat) {
         if (e.kind !== 'sink') continue;
@@ -84,8 +84,19 @@ export function reachabilitySliceFromSinks(sinks, callGraph, maxCallerDepth = MA
   const callersOf = new Map();
   for (const fn of callGraph.functions.values()) {
     for (const callee of (fn.calls || [])) {
-      if (!callersOf.has(callee.callee)) callersOf.set(callee.callee, []);
-      callersOf.get(callee.callee).push(fn.qid);
+      // callee.callee is a SOURCE-LEVEL name ("b.fill"); the worklist below
+      // looks this map up by qid, so keying by the name means the lookup can
+      // never match. Resolve to a qid first.
+      const name = callee && typeof callee === 'object' ? callee.callee : callee;
+      if (!name) continue;
+      // resolveKnownCallee (not resolve): callee.callee may be a flattened
+      // member-call string ("loader.read"); the plain resolve() would guess
+      // via its bare-tail fallback and invent an edge to an unrelated
+      // same-named function. See callgraph.js.
+      const qid = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, fn.file) : null;
+      if (!qid) continue;
+      if (!callersOf.has(qid)) callersOf.set(qid, []);
+      callersOf.get(qid).push(fn.qid);
     }
   }
 

@@ -8,6 +8,26 @@
 //   4. Anything else → unresolved; the dataflow engine treats the callee as
 //      an opaque sink for taint.
 
+// Resolve whatever a caller has — a qid string or an already-resolved record —
+// into the function record.
+//
+// `resolve()` returns a qid STRING (edges[].callee holds qids, and the C/C++
+// qualified-name path depends on that), but several dataflow call sites want the
+// record so they can bind parameters and compute a summary on demand. Those
+// sites previously tested `resolved && resolved.qid`, which is never true for a
+// string, so the record was always null: parameters never bound, summaries were
+// never computed, and the callback path never ran. This helper is the bridge.
+//
+// Tolerant of a record so a future caller that already has one still works.
+export function functionRecord(callGraph, resolved) {
+  if (!resolved || !callGraph) return null;
+  if (typeof resolved === 'object') return resolved.qid ? resolved : null;
+  if (typeof resolved !== 'string') return null;
+  const fns = callGraph.functions;
+  if (!fns || typeof fns.get !== 'function') return null;
+  return fns.get(resolved) || null;
+}
+
 export function buildCallGraph(perFileIR, fileContents) {
   const functions = new Map();
   const byNameInFile = new Map();
@@ -168,7 +188,24 @@ export function buildCallGraph(perFileIR, fileContents) {
   // the call graph for the callee's qid at the assign-from-call site.
   // Same precedence as the edge resolution above (same-file ident wins,
   // ClassName.method falls back).
-  function resolve(name, callerFile) {
+  //
+  // `allowTailGuess` gates the ONE step in this precedence chain that is a
+  // genuine guess rather than an exact or qualified match: given a dotted
+  // name with no other match, strip it to its last segment and match ANY
+  // same-named function project-wide (`loader.read()` -> `read`). That
+  // invents a call edge with no real relationship to the call site — a
+  // false positive, which is worse than the false negative of skipping it.
+  // Every OTHER branch here (same-file, ClassName.method, re-export,
+  // cross-TU qualified name) is an exact or intentionally-qualified match,
+  // never a bare-name guess, so they run regardless of the flag.
+  //
+  // This one function is the single source of truth for both behaviours —
+  // `resolve()` and `resolveKnownCallee()` below are thin wrappers over it —
+  // so a caller can never drift from the rule by re-implementing it (this
+  // recurred once already: two dataflow call sites reintroduced the guess
+  // that `dataflow/engine.js` had already been fixed to avoid, simply
+  // because the guard lived only in that one file's helper instead of here).
+  function _resolveImpl(name, callerFile, allowTailGuess) {
     if (!name || typeof name !== 'string') return null;
     // Roadmap #3: same-file preference. A bare name (`handler`, `save`,
     // `query`) defined in several files would otherwise resolve to whichever
@@ -190,7 +227,7 @@ export function buildCallGraph(perFileIR, fileContents) {
     if (classMethods.has(name) && !isCrossLanguageUnsafe(classMethods.get(name), callerFile)) {
       return classMethods.get(name);
     }
-    if (name.includes('.')) {
+    if (allowTailGuess && name.includes('.')) {
       const tail = name.split('.').slice(-1)[0];
       for (const m of byNameInFile.values()) {
         if (m.has(tail) && !isCrossLanguageUnsafe(m.get(tail), callerFile)) return m.get(tail);
@@ -216,5 +253,19 @@ export function buildCallGraph(perFileIR, fileContents) {
     }
     return null;
   }
-  return { functions, edges, callersOf, resolve };
+  // Permissive: includes the bare-tail guess. Existing callers that already
+  // accept that tradeoff (or pre-date this split) keep this name.
+  function resolve(name, callerFile) {
+    return _resolveImpl(name, callerFile, true);
+  }
+  // Safe-by-default: every match is exact or explicitly qualified; never
+  // invents an edge by guessing from a dotted name's last segment. This is
+  // the entry point new callers should reach for — anything resolving a
+  // callee purely to build/query a reverse call graph (who calls whom) has
+  // no use for a guessed edge, since a wrong one fabricates a dataflow path
+  // that does not exist.
+  function resolveKnownCallee(name, callerFile) {
+    return _resolveImpl(name, callerFile, false);
+  }
+  return { functions, edges, callersOf, resolve, resolveKnownCallee };
 }

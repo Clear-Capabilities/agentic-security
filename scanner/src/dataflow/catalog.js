@@ -86,7 +86,11 @@ export const CATALOG = [
   // XSS / DOM sinks (assignment-form, not match).
   // innerHTML and outerHTML are handled in the engine via assignment LHS matching.
   // DOM sinks.
-  { kind: 'sink', id: 'js-document-write', language: 'js', framework: 'dom', match: { type: 'call', callee: 'write' }, argIndex: 0,
+  // `receiver` is required here: a bare `write` callee is overwhelmingly
+  // `process.stdout.write` / `stream.write` / `fh.write`, not a DOM write.
+  // Only a document-ish or window-ish receiver chain qualifies.
+  { kind: 'sink', id: 'js-document-write', language: 'js', framework: 'dom',
+    match: { type: 'call', callee: 'write', receiver: '^(?:[A-Za-z_$][\\w$]*[Dd]ocument|document|doc|window|win|top|parent|self|frames|iframe|frame)$' }, argIndex: 0,
     vuln: { name: 'XSS (document.write)', severity: 'high', cwe: 'CWE-79',
             remediation: 'document.write is universally unsafe — use textContent or a typed templating engine.' } },
   // SSRF / HTTP-client sinks: matched by callee; rich-CWE classification in engine.
@@ -747,12 +751,65 @@ export const CATALOG = [
 import { EXPANDED_SANITIZERS } from './catalog-expanded.js';
 import { cppExtRe } from '../ir/parser-cpp.js';
 
-// Language-scope guard used only for `language: 'cpp'` entries (see the file
-// header comment). `file` is optional — when absent, behavior is unchanged
-// from before this guard existed.
+// Language-scope guard. `file` is optional — when absent, behavior is
+// unchanged from before this guard existed (every entry is allowed).
+//
+// Two languages are scoped today:
+//   cpp — original guard (see the file header comment).
+//   js  — added after a measured cross-language false positive: the
+//         `js-document-write` DOM sink (`callee: 'write'`) fired on Python
+//         files, reporting `sys.stderr.write(...)` and `fh.write(...)` as
+//         "XSS (document.write)". Callee matching is by bare name, so any
+//         `language: 'js'` entry is one same-named method away from firing
+//         on Python/Ruby/PHP/Java source. A JS-only sink has no business
+//         matching a non-JS file.
+// The remaining languages are deliberately NOT scoped here yet: 121 catalog
+// sinks match on a bare callee name (`read`, `get`, `post`, `run`, `load`,
+// `query`, …) and scoping them all is Phase 2's language-scoped-matching
+// work — it needs a per-language sweep, not a one-line widening here.
+// Tracked in the SDD ledger's deferred list.
+const _JS_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
 function _languageAllowed(entry, file) {
-  if (!file || entry.language !== 'cpp') return true;
-  return cppExtRe().test(file);
+  if (!file) return true;
+  if (entry.language === 'cpp') return cppExtRe().test(file);
+  if (entry.language === 'js') return _JS_EXT_RE.test(file);
+  return true;
+}
+
+// Receiver constraint (`match.receiver`), evaluated against the object chain
+// of a member-call callee. Exists because callee matching is by bare NAME:
+// `js-document-write` matches `write`, which is `document.write` (a real DOM
+// XSS sink) but equally `process.stdout.write`, `fh.write`, `stream.write`.
+// An entry that declares `receiver` only fires when some segment of its
+// receiver chain matches — a bare `write(x)` with no receiver never fires.
+//
+// Segments are collected from both expression callees (member chains) and
+// string callees (dotted names from the Go / C++ parsers).
+function _receiverSegments(calleeExpr) {
+  const segs = [];
+  if (typeof calleeExpr === 'string') {
+    const parts = calleeExpr.split('.');
+    parts.pop();                       // drop the method name itself
+    return parts;
+  }
+  if (!calleeExpr || calleeExpr.kind !== 'member') return segs;
+  let cur = calleeExpr.object;
+  let depth = 0;
+  while (cur && depth++ < 8) {
+    if (cur.kind === 'ident') { segs.push(cur.name); break; }
+    if (cur.kind === 'member') { if (typeof cur.prop === 'string') segs.push(cur.prop); cur = cur.object; continue; }
+    if (cur.kind === 'call') { cur = cur.callee; continue; }
+    break;
+  }
+  return segs;
+}
+function _receiverAllowed(entry, calleeExpr) {
+  const pat = entry.match && entry.match.receiver;
+  if (!pat) return true;
+  const segs = _receiverSegments(calleeExpr);
+  if (!segs.length) return false;      // bare `write(x)` — not a DOM call
+  const re = new RegExp(pat);
+  return segs.some((s) => re.test(String(s)));
 }
 // Merge the expanded sanitizer catalog. We dedupe on `id` (case-insensitive)
 // so a base-catalog entry always wins over a same-id expanded one — the base
@@ -872,7 +929,9 @@ export function matchSinkOrSanitizer(calleeExpr, file) {
   if (!calleeName) return null;
   const raw = CALLEE_INDEX.get(calleeName);
   if (!raw) return null;
-  const hits = filterByProvenance(raw).filter(h => _languageAllowed(h, file));
+  const hits = filterByProvenance(raw)
+    .filter(h => _languageAllowed(h, file))
+    .filter(h => _receiverAllowed(h, calleeExpr));
   return hits.length ? hits : null;
 }
 

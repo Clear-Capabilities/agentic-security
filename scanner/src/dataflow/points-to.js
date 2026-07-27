@@ -1,3 +1,5 @@
+import { functionRecord } from '../ir/callgraph.js';
+
 // Steensgaard points-to / alias analysis (v0.70 #2).
 //
 // Unification-based, near-linear pointer analysis. The classical reference
@@ -247,8 +249,12 @@ export function buildPointsTo(perFileIR, callGraph) {
     for (const nid of Object.keys(fn.cfg.nodes)) {
       const node = fn.cfg.nodes[nid];
       if (!node || node.kind !== 'call') continue;
-      const resolved = callGraph.resolve ? callGraph.resolve(node.callee) : null;
-      const target = resolved && resolved.qid ? resolved : null;
+      // resolveKnownCallee (not resolve): never invent an edge from a dotted
+      // name's last segment. `fn.file` enables the same-file preference — a
+      // bare `handler` would otherwise bind to whichever file iterates first.
+      const resolved = callGraph.resolveKnownCallee
+        ? callGraph.resolveKnownCallee(node.callee, fn && fn.file) : null;
+      const target = functionRecord(callGraph, resolved);
       if (!target || !Array.isArray(target.params)) continue;
       const args = node.args || [];
       for (let i = 0; i < target.params.length && i < args.length; i++) {

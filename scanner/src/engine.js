@@ -175,6 +175,7 @@ import { applyLearnedCalibration } from './posture/triage-learning.js';
 import { annotateFormalVerification } from './dataflow/formal-verify.js';
 import { annotatePathFeasibility } from './dataflow/smt-feasibility.js';
 import { annotateProofGate } from './dataflow/proof-gate.js';
+import { applySanitizerGate } from './dataflow/sanitizer-gate.js';
 import { annotateFalsification } from './posture/falsification.js';
 import { routeModelForFinding } from './posture/model-routing.js';
 import { buildEntrypointInventory } from './posture/entrypoint-inventory.js';
@@ -7915,6 +7916,26 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   // on; opt out with AGENTIC_SECURITY_NO_PROOF_GATE=1. Demotes proven-clean /
   // proven-infeasible flows (confidence + tiers only, never severity).
   if (process.env.AGENTIC_SECURITY_NO_PROOF_GATE !== '1') {
+    // Generalised sanitizer consumption (dataflow/sanitizer-gate.js): labels
+    // findings whose flow passes a catalog sanitizer matching their family
+    // (xss/url/cmd, not just sql) so the proof gate below can demote them the
+    // same way it demotes proven-clean SQL. `sanitizersOnPath` would need to
+    // be `{ [findingId]: string[] of sanitizer callees observed on that
+    // finding's flow }`. There is nothing to build that map from: the live
+    // taint walk in dataflow/engine.js does NOT consult sanitizer catalog
+    // entries at all. `matchSinkOrSanitizer()` returns every catalog hit for
+    // a callee, but every consumer in dataflow/*.js selects only
+    // `e.kind === 'sink'` — there is no `'sanitizer'` branch anywhere in that
+    // tree. Taint is killed only by clean re-assignment of a variable
+    // (removePathAndDescendants, engine.js:374), which happens regardless of
+    // whether the RHS call is a catalog sanitizer.
+    // So this is `{}` and the gate below is INERT — not "awaiting plumbing"
+    // but awaiting the sanitizer walk itself. Making it live needs two things:
+    // (1) dataflow/engine.js honouring `kind === 'sanitizer'` at a call site,
+    // and (2) that call site's callee name threaded onto the finding
+    // alongside the trace/chain that proven-clean.js already reads.
+    const sanitizersOnPath = {};
+    _runAnnotator("applySanitizerGate", () => { applySanitizerGate(finalFindings, { sanitizersOnPath }); });
     _runAnnotator("annotateProofGate", () => { annotateProofGate(finalFindings); });
   }
   // Addition #1 — default falsification pass. Actively tries to DISPROVE each

@@ -30,10 +30,17 @@
 // Sinks: anywhere a CFG node calls a catalog-registered sink with a tainted
 // argument, we emit a finding.
 //
-// Sanitizers: a call to a catalog-registered sanitizer kills the taint on its
-// argument (the call's return value is treated as clean).
+// Sanitizers: NOT consulted by this walk. `matchSinkOrSanitizer()` returns
+// catalog hits of both kinds, but every consumer in this directory keeps only
+// `e.kind === 'sink'`; no `'sanitizer'` branch exists anywhere in dataflow/*.
+// Taint dies here only when a variable is re-assigned from a clean expression
+// (removePathAndDescendants, below) — which is orthogonal to whether the RHS
+// happens to be a catalog sanitizer. Recognising sanitizer entries at a call
+// site is open work; until it lands, treat the catalog's sanitizer half as
+// documentation consumed by other layers, not by this engine.
 
 import { matchSource, matchSinkOrSanitizer } from './catalog.js';
+import { functionRecord } from '../ir/callgraph.js';
 import { accessPathOf, isCoveredBy, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual } from './access-paths.js';
 import { aliasesForVar } from './points-to.js';
 import { higherOrderTaintFlow } from './higher-order.js';
@@ -72,8 +79,46 @@ let _activeConstantVars = null;
 // files of that language — see the header comment in catalog.js.
 let _currentFile = null;
 
+// Flatten a callee — which may be a plain dotted STRING (Go/PHP/Ruby/C++/
+// Python parsers all emit call targets this way) or an expression object
+// (JS/TS's `exprOf`-shaped `{kind:'ident',name}` / `{kind:'member',...}`) —
+// into a name `callGraph.resolve()` can look up. Mirrors the normalisation
+// catalog.js's matchSinkOrSanitizer/matchSource already apply to callees, so
+// the interprocedural resolve path and the catalog match agree on shape.
+// The string path is returned unchanged — languages that already flatten to
+// a string at parse time must keep working exactly as before.
+function _flattenCalleeName(calleeExpr) {
+  if (!calleeExpr) return null;
+  if (typeof calleeExpr === 'string') return calleeExpr;
+  if (calleeExpr.kind === 'ident') return calleeExpr.name || null;
+  if (calleeExpr.kind === 'member' && calleeExpr.prop) {
+    return (calleeExpr.object && calleeExpr.object.kind === 'ident')
+      ? `${calleeExpr.object.name}.${calleeExpr.prop}`
+      : calleeExpr.prop;
+  }
+  return null;
+}
+
+// Narrower than _flattenCalleeName: the name to hand to callGraph.resolve().
+// Only a bare identifier call (`helper()`) — or a pre-flattened STRING, which
+// is how the Go/PHP/Ruby/Python/C++ parsers already emit call targets —
+// genuinely identifies one resolvable function. A JS/TS *member* call
+// (`loader.read()`) does not: resolve()'s generic dotted-name fallback
+// strips a dotted name to its last segment and matches ANY same-named
+// function project-wide, inventing a call edge that may not exist (found in
+// engine-reconnect review — `loader.read()` resolved to an unrelated local
+// `read()`, producing 8 false positives on this repo's own hooks/scripts).
+// A missing edge here is a false negative; a wrong edge invents a data-flow
+// path that isn't there — refuse to guess.
+function _resolvableCalleeName(calleeExpr) {
+  if (!calleeExpr) return null;
+  if (typeof calleeExpr === 'string') return calleeExpr;
+  if (calleeExpr.kind === 'ident') return calleeExpr.name || null;
+  return null;
+}
+
 function exprTaint(expr, state) {
-  if (expr && expr.kind === 'member' && exprIsSource(expr)) return true;
+  if (expr && (expr.kind === 'member' || expr.kind === 'call') && exprIsSource(expr)) return true;
   if (!expr) return false;
   // Constant propagation: variables assigned from literals are never tainted
   if (expr.kind === 'ident' && _activeConstantVars && _activeConstantVars.has(expr.name)) return false;
@@ -227,12 +272,20 @@ function step(node, stateIn, callContext) {
       // the return is tainted, taint the assignment target. This makes the
       // simplest cross-function flow (helper reads req.body and returns it)
       // visible to the engine — the case the cache was built for.
-      const calleeName = node.source && node.source.kind === 'call' && typeof node.source.callee === 'string'
-        ? node.source.callee : null;
+      const calleeName = node.source && node.source.kind === 'call'
+        ? _flattenCalleeName(node.source.callee) : null;
       if (target && calleeName && callContext._summaryCache && callContext._callGraph) {
         const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-        const resolved = callContext._callGraph.resolve ? callContext._callGraph.resolve(calleeName, _callerFile) : null;
-        const fn  = resolved && resolved.qid ? resolved : null;
+        const _resolvableName = node.source && node.source.kind === 'call'
+          ? _resolvableCalleeName(node.source.callee) : null;
+        // resolveKnownCallee: never guess via resolve()'s bare-tail
+        // fallback. _resolvableCalleeName already refuses JS member
+        // expressions, but a pre-flattened STRING callee (Go/PHP/Ruby/
+        // C++/Python parsers) can still be dotted, and only the resolver
+        // itself can tell — see callgraph.js.
+        const resolved = (_resolvableName && callContext._callGraph.resolveKnownCallee)
+          ? callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile) : null;
+        const fn  = functionRecord(callContext._callGraph, resolved);
         const qid = resolved && (resolved.qid || resolved);
         if (typeof qid === 'string') {
           // v0.66 — context-sensitive lookup. Build the entry-state from
@@ -336,12 +389,16 @@ function step(node, stateIn, callContext) {
       const argTaints = (node.args || []).map(a => exprTaint(a, state));
       // v0.66 — apply mutated-param taint at plain (non-assign) call sites.
       // Object.assign(target, tainted) → target becomes tainted in caller.
-      if (callContext._summaryCache && callContext._callGraph
-          && typeof node.callee === 'string') {
+      const _plainCallCalleeName = _flattenCalleeName(node.callee);
+      if (callContext._summaryCache && callContext._callGraph && _plainCallCalleeName) {
         const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-        const resolved = callContext._callGraph.resolve
-          ? callContext._callGraph.resolve(node.callee, _callerFile) : null;
-        const fn  = resolved && resolved.qid ? resolved : null;
+        const _resolvableName = _resolvableCalleeName(node.callee);
+        // resolveKnownCallee: see the comment at the sibling call site above
+        // — a pre-flattened dotted STRING callee must not be guessed via
+        // resolve()'s bare-tail fallback.
+        const resolved = (_resolvableName && callContext._callGraph.resolveKnownCallee)
+          ? callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile) : null;
+        const fn  = functionRecord(callContext._callGraph, resolved);
         const qid = resolved && (resolved.qid || resolved);
         if (typeof qid === 'string' && fn && Array.isArray(fn.params)) {
           const paramNames = fn.params;
@@ -383,7 +440,7 @@ function step(node, stateIn, callContext) {
       // Built-in mutation functions: Object.assign(target, ...sources),
       // _.merge(target, ...sources), etc. When any source arg is tainted,
       // taint the target in the caller's scope.
-      const calleeName = typeof node.callee === 'string' ? node.callee : null;
+      const calleeName = _plainCallCalleeName;
       if (calleeName && /^(?:Object\.assign|_\.merge|_\.extend|_\.defaultsDeep|_\.defaults|Object\.defineProperties?)$/.test(calleeName)) {
         const targetArg = (node.args || [])[0];
         const sourceArgsTainted = argTaints.slice(1).some(Boolean);
@@ -459,7 +516,7 @@ function step(node, stateIn, callContext) {
       const hoFlow = (() => {
         // Heuristic receiver-tainted check: if the callee string is
         // "<recv>.<method>", check whether <recv> is in state.
-        const callee = typeof node.callee === 'string' ? node.callee : null;
+        const callee = _plainCallCalleeName;
         if (!callee) return null;
         const dot = callee.lastIndexOf('.');
         if (dot <= 0) return null;
@@ -791,8 +848,12 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       if (Date.now() > deadlineMs) break;
       const inv = hoInvocations[hi];
       if (!inv.callee || !inv.taintedParam) continue;
-      const resolved = callGraph.resolve ? callGraph.resolve(inv.callee, fn && fn.file) : null;
-      const cbFn = resolved && resolved.qid ? resolved : null;
+      // inv.callee is always a bare ident (only cb.kind === 'ident' pushes a
+      // higher-order invocation — see the push site above), so resolve()'s
+      // bare-tail guess never triggers here either way; resolveKnownCallee
+      // for consistency with the other call-graph lookups in this file.
+      const resolved = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(inv.callee, fn && fn.file) : null;
+      const cbFn = functionRecord(callGraph, resolved);
       if (!cbFn || !cbFn.params || !cbFn.params.length) continue;
       const cbEntry = new Set([cbFn.params[inv.paramIndex || 0]]);
       let cbSummary = summaryCache.get(cbFn.qid, cbEntry);

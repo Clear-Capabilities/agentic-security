@@ -48,6 +48,13 @@ export function verdictForFinding(f) {
     const sanitizers = (f.provenanceProof && f.provenanceProof.sanitizers) || [];
     return { verdict: 'proven-clean', reason: sanitizers.length ? `parameterized via ${sanitizers.join(', ')}` : 'sql-parameterizer-on-path' };
   }
+  // sanitizer-gate.js — same "proven-clean" demotion, generalised beyond SQL to
+  // every family the catalog's `appliesTo` tags cover (xss, url, cmd, ...).
+  // Purely additive: it never overrides f.provenClean above.
+  if (f.sanitized === true) {
+    const sanitizers = (f.sanitizerProof && f.sanitizerProof.sanitizers) || [];
+    return { verdict: 'proven-clean', reason: sanitizers.length ? `sanitized via ${sanitizers.join(', ')}` : 'sanitizer-on-path' };
+  }
   if (f._provenUnreachable === true) {
     return { verdict: 'proven-infeasible', reason: f._provenUnreachableReason || 'sanitizer-excludes-metacharacters' };
   }
