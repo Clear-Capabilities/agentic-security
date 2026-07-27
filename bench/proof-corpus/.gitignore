@@ -1,0 +1,6 @@
+# Raw findings never enter git — they are unreviewed results against live
+# third-party projects (PROOF_CORPUS_PRD.md §9.1). Only aggregate summary.json
+# is committed.
+results/raw/
+results/*.tmp
+*.sarif

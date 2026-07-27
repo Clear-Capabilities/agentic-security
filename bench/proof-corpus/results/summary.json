@@ -1,0 +1,113 @@
+{
+  "bundleSha": "d9f347d67794a157a1330c9f8c32bd5eaf237a762d81a9ad031facd4d5fe7165",
+  "targetCount": 2,
+  "ok": 2,
+  "failed": 0,
+  "targets": [
+    {
+      "id": "ghost",
+      "url": "https://github.com/TryGhost/Ghost.git",
+      "commit": "7da28a03b9c72fa2cc656f5f926230bae09fd684",
+      "tier": "breadth",
+      "status": "ok",
+      "scope": null,
+      "timeBudgetS": 1800,
+      "cached": true,
+      "licence": {
+        "spdx": "MIT",
+        "source": "file",
+        "file": "LICENSE"
+      },
+      "scannedPath": ".",
+      "scan": {
+        "exitCode": 3,
+        "wallMs": 61555,
+        "timedOut": false,
+        "peakRssKb": 3433040
+      },
+      "coverage": {
+        "byLanguage": {
+          "javascript": {
+            "inScope": 4271,
+            "parsed": 4023,
+            "functionless": 0,
+            "functions": 34135,
+            "pct": 94
+          }
+        },
+        "totals": {
+          "inScope": 4271,
+          "parsed": 4023,
+          "pct": 94
+        },
+        "callGraph": {
+          "functions": 28711,
+          "edges": 118356,
+          "resolvedEdges": 5819,
+          "unresolvedEdges": 112537
+        }
+      },
+      "determinism": {
+        "checked": true,
+        "identical": false,
+        "secondRunWallMs": 58661
+      }
+    },
+    {
+      "id": "superset",
+      "url": "https://github.com/apache/superset.git",
+      "commit": "e1ffa53d9b4926f2ac7fe8c83c5f890fd621f3c8",
+      "tier": "deep",
+      "status": "ok",
+      "scope": null,
+      "timeBudgetS": 1800,
+      "cached": true,
+      "licence": {
+        "spdx": "Apache-2.0",
+        "source": "file",
+        "file": "LICENSE.txt"
+      },
+      "scannedPath": ".",
+      "scan": {
+        "exitCode": 3,
+        "wallMs": 72640,
+        "timedOut": false,
+        "peakRssKb": 2962880
+      },
+      "coverage": {
+        "byLanguage": {
+          "javascript": {
+            "inScope": 2616,
+            "parsed": 2613,
+            "functionless": 0,
+            "functions": 25419,
+            "pct": 100
+          },
+          "python": {
+            "inScope": 1470,
+            "parsed": 1470,
+            "functionless": 389,
+            "functions": 5286,
+            "pct": 100
+          }
+        },
+        "totals": {
+          "inScope": 4086,
+          "parsed": 4083,
+          "pct": 100
+        },
+        "callGraph": {
+          "functions": 27107,
+          "edges": 69959,
+          "resolvedEdges": 4004,
+          "unresolvedEdges": 65955
+        }
+      },
+      "determinism": {
+        "checked": true,
+        "identical": true,
+        "secondRunWallMs": 71097
+      }
+    }
+  ]
+}
