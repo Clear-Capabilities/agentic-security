@@ -246,6 +246,78 @@ function literalSkeletonMatchesFamily(expr, cwe) {
   return true;
 }
 
+// Shared sink-matching logic for a call expression, regardless of whether
+// that call appears in statement position (`case 'call'`) or on an
+// assignment's right-hand side (`case 'assign'`). Split into two parts
+// (compute, then emit) so `case 'call'` can compute `cat`/`argTaints` at its
+// original position — BEFORE the mutated-param / Object.assign / array-taint
+// passes that follow it read and rely on those values, and that themselves
+// mutate `state` and `callContext._taintSources` in ways the finding-emission
+// step (further below, unchanged position) must observe — while still
+// sharing the actual matching + emission code with `case 'assign'`, which has
+// no such ordering constraint. Extracted rather than duplicated: this
+// repository has twice had a rule implemented at one call site and re-broken
+// by the next change.
+
+// calleeExpr / argExprs: the IR nodes for the call's callee and arguments.
+// state: the taint-state Set to evaluate argument taint against.
+// Returns { cat, argTaints }.
+function _matchCallCatalog(calleeExpr, argExprs, state) {
+  const cat = matchSinkOrSanitizer(calleeExpr, _currentFile);
+  const argTaints = (argExprs || []).map(a => exprTaint(a, state));
+  return { cat, argTaints };
+}
+
+// cat / argTaints: the result of _matchCallCatalog (computed by the caller,
+// at whatever point in its case is appropriate for its own state-mutation
+// ordering).
+// state: used only to attribute reaching sources to the tainted argument
+// expression (via callContext._taintSources, not the state Set itself).
+// line: source line to attach to any emitted finding.
+// Returns { findings }.
+function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callContext, line) {
+  const findings = [];
+  if (cat) {
+    for (const e of cat) {
+      if (e.kind === 'sink' && (
+        e.argIndex === 'all' ? argTaints.some(Boolean) :
+        (typeof e.argIndex === 'number' && argTaints[e.argIndex])
+      )) {
+        const taintedArgIdx = e.argIndex === 'all'
+          ? argTaints.findIndex(Boolean) : e.argIndex;
+        const taintedArgExpr = (argExprs || [])[taintedArgIdx];
+        // String content analysis: skip if literal skeleton doesn't match injection family
+        if (e.vuln && taintedArgExpr && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
+        // Premortem #10: attribute the source for THIS sink to the
+        // source(s) that taint the actual argument expression — not the
+        // first source the worklist happened to record. We walk the
+        // expression's free vars / access paths against the recorded
+        // _taintSources and keep entries whose root variable still
+        // covers something in the expression.
+        const reachingSources = _sourcesReachingExpr(taintedArgExpr, state, callContext._taintSources);
+        const traceForThisFinding = reachingSources.length
+          ? reachingSources.slice(0, 5)
+          // Fallback: better to surface "no precise source" than the wrong source.
+          : [];
+        findings.push({
+          kind: 'taint',
+          sinkId: e.id,
+          vuln: e.vuln?.name || 'Tainted Sink',
+          severity: e.vuln?.severity || 'high',
+          cwe: e.vuln?.cwe || null,
+          remediation: e.vuln?.remediation || null,
+          line,
+          argIndex: taintedArgIdx,
+          callee: calleeExpr,
+          sourceProvenance: (traceForThisFinding[0]?.provenance) || null,
+          trace: traceForThisFinding,
+        });
+      }
+    }
+  }
+  return { findings };
+}
+
 // Apply a CFG node to a taint-state. Returns the new state + any finding emitted.
 function step(node, stateIn, callContext) {
   const state = new Set(stateIn);
@@ -261,6 +333,21 @@ function step(node, stateIn, callContext) {
     case 'assign': {
       const src = exprIsSource(node.source);
       const target = typeof node.target === 'string' ? node.target : null;
+      // Sink matching is additive to this case's existing source/target/taint
+      // handling below: an assignment's RHS can itself be a sink call (e.g.
+      // `const rows = db.query(tainted)`), which previously went unreported
+      // because this case never consulted the catalog at all. Computed here,
+      // against the incoming (pre-mutation) `state`, mirroring how `case
+      // 'call'` computes its own cat/argTaints before its mutation passes —
+      // and pushed into the shared `findings` array so it survives every
+      // return path below, including the early interprocedural returns.
+      if (node.source && node.source.kind === 'call') {
+        const { cat: _sinkCat, argTaints: _sinkArgTaints } =
+          _matchCallCatalog(node.source.callee, node.source.args, state);
+        findings.push(..._sinkFindingsForCall(
+          node.source.callee, node.source.args, _sinkCat, _sinkArgTaints,
+          state, callContext, node.line).findings);
+      }
       // Constant propagation: track variables assigned from literals
       if (target && _activeConstantVars) {
         if (node.source && node.source.kind === 'literal') _activeConstantVars.set(target, node.source.value);
@@ -337,7 +424,7 @@ function step(node, stateIn, callContext) {
               sum, paramNames, callArgs, callerTainted);
             for (const v of mutated.mutated) newState = addPath(newState, v);
           }
-          if (sum && sum.returnTainted) return { state: newState, findings: [] };
+          if (sum && sum.returnTainted) return { state: newState, findings };
         } else if (target && calleeName) {
           // Fallback: check builtin summaries for unresolved external calls
           const builtin = lookupBuiltinSummary(calleeName);
@@ -346,7 +433,7 @@ function step(node, stateIn, callContext) {
               newState = _addPathAliasAware(newState, target, callContext);
             } else if (!builtin.returnTainted) {
               newState = removePathAndDescendants(newState, target);
-              return { state: newState, findings: [] };
+              return { state: newState, findings };
             }
             if (builtin.mutatedParams && builtin.mutatedParams.size) {
               for (const idx of builtin.mutatedParams) {
@@ -385,8 +472,10 @@ function step(node, stateIn, callContext) {
 
     case 'call': {
       // 1. Catalog match: sanitizer, sink, or just an external/unresolved call.
-      const cat = matchSinkOrSanitizer(node.callee, _currentFile);
-      const argTaints = (node.args || []).map(a => exprTaint(a, state));
+      // Computed here (before the mutation passes below) so that argTaints
+      // reflects the pre-mutation state, exactly as before this logic was
+      // extracted into _matchCallCatalog/_sinkFindingsForCall.
+      const { cat, argTaints } = _matchCallCatalog(node.callee, node.args, state);
       // v0.66 — apply mutated-param taint at plain (non-assign) call sites.
       // Object.assign(target, tainted) → target becomes tainted in caller.
       const _plainCallCalleeName = _flattenCalleeName(node.callee);
@@ -469,44 +558,7 @@ function step(node, stateIn, callContext) {
         const _arrRecv = accessPathOf(node.callee.object);
         if (_arrRecv) state.add(_arrRecv);
       }
-      if (cat) {
-        for (const e of cat) {
-          if (e.kind === 'sink' && (
-            e.argIndex === 'all' ? argTaints.some(Boolean) :
-            (typeof e.argIndex === 'number' && argTaints[e.argIndex])
-          )) {
-            const taintedArgIdx = e.argIndex === 'all'
-              ? argTaints.findIndex(Boolean) : e.argIndex;
-            const taintedArgExpr = (node.args || [])[taintedArgIdx];
-            // String content analysis: skip if literal skeleton doesn't match injection family
-            if (e.vuln && taintedArgExpr && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
-            // Premortem #10: attribute the source for THIS sink to the
-            // source(s) that taint the actual argument expression — not the
-            // first source the worklist happened to record. We walk the
-            // expression's free vars / access paths against the recorded
-            // _taintSources and keep entries whose root variable still
-            // covers something in the expression.
-            const reachingSources = _sourcesReachingExpr(taintedArgExpr, state, callContext._taintSources);
-            const traceForThisFinding = reachingSources.length
-              ? reachingSources.slice(0, 5)
-              // Fallback: better to surface "no precise source" than the wrong source.
-              : [];
-            findings.push({
-              kind: 'taint',
-              sinkId: e.id,
-              vuln: e.vuln?.name || 'Tainted Sink',
-              severity: e.vuln?.severity || 'high',
-              cwe: e.vuln?.cwe || null,
-              remediation: e.vuln?.remediation || null,
-              line: node.line,
-              argIndex: taintedArgIdx,
-              callee: node.callee,
-              sourceProvenance: (traceForThisFinding[0]?.provenance) || null,
-              trace: traceForThisFinding,
-            });
-          }
-        }
-      }
+      findings.push(..._sinkFindingsForCall(node.callee, node.args, cat, argTaints, state, callContext, node.line).findings);
       // 2. P1.3 — higher-order taint flow. When the call is `arr.map(fn)` or
       //    `promise.then(fn)` and the receiver is tainted, propagate taint
       //    into the callback's first parameter. v1: we propagate AT THE
