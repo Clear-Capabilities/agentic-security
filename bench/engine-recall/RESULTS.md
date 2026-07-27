@@ -115,11 +115,102 @@ after:  json.load → (none)      json.loads → (none)
         pickle.loads → py-pickle-loads, py-pickle-loads-v2 (TP kept)
 ```
 
-Known cost of the receiver pin: an import-style `from yaml import load;
-load(x)` has no receiver segment and no longer matches. That is the accepted
-trade — `_receiverAllowed` returns false when the segment list is empty — and
-the dotted form is the dominant shape in real code. It did not cost a single
-corpus entry (199/199 still pass).
+### Why a receiver pin rather than a `json` deny-list
+
+The obvious cheaper fix is to keep the bare-name match and refuse a `json`
+receiver. The superset evidence in §5 rules that out: the three false positives
+there are
+
+```python
+self.execute_model_schema.load(request.json)
+```
+
+a marshmallow schema whose receiver is `execute_model_schema` — a
+project-specific attribute name. No deny-list of module names could have
+enumerated it, and the next codebase would supply a different one. An
+allow-list of the receivers that *are* deserialization modules is the only form
+of the constraint that is closed rather than open-ended, which is why the fix
+takes that shape.
+
+### The accepted trade, at its true scope
+
+The pin is an allow-list, so it drops **every** `load`/`loads` call whose
+receiver is not one of the enumerated modules — not just the receiver-less
+import form. Measured on a fixture where `request.args.get()` flows into each
+call, run against the pre-pin tree (`2767a70`) and the post-pin tree:
+
+| shape | IR-TAINT before → after | other layer after | net |
+|---|---|---|---|
+| `yaml.load(p)` (dotted) | 3 → 1 | REGEX `yaml-unsafe-load` + PY-SAST | retained (and de-duplicated) |
+| `pickle.load(p)` (dotted) | 3 → 1 | REGEX `pickle-load` + PY-SAST | retained (and de-duplicated) |
+| `import yaml as y; y.load(p)` | 3 → 0 | **none** | **lost at every layer** |
+| `import pickle as pk; pk.load(p)` | 3 → 0 | **none** | **lost at every layer** |
+| `from yaml import load; load(p)` | 3 → 0 | **none** | **lost at every layer** |
+| `torch.load(p)` | 3 → 0 | REGEX `torch-load-unsafe` | still reported |
+| `joblib.load(p)` | 3 → 0 | REGEX `joblib-load` | still reported |
+| `np.load(p)` | 3 → 0 | none (see below) | precision gain, not a loss |
+
+The `torch`/`joblib`/`np` rows were never intentional taint-catalog coverage —
+they were collateral hits of the bare-name match. `torch` and `joblib` keep a
+dedicated SAST rule (`scanner/src/sast/model-load.js`), so only the taint-layer
+path is gone. `np.load` has a SAST rule that requires a literal
+`allow_pickle=True` (`numpy-allow-pickle`); a plain `np.load(p)` is not RCE, so
+losing the taint-layer hit there removes a finding that should not have existed.
+
+The three genuinely-lost shapes are lost **at every layer**: verified by
+scanning the fixture with the full pipeline (not just the taint engine) and
+getting zero findings on those lines. The SAST backstops are all dotted-form
+with a fixed module name — `scanner/src/sast/model-load.js` (`\bpickle\.`,
+`\byaml\.`), `scanner/src/sast/python-sinks.js` (`\bpickle\s*\.`,
+`\byaml\s*\.`), `scanner/src/sast/deserialization-gadgets.js`
+(`\b(?:pickle|cPickle|dill|marshal)\s*\.`) — so none of them can see an alias.
+
+Not a regression, for the record: `from yaml import load as yload; yload(p)`
+produced **zero** findings on the pre-pin tree too. The alias renames the callee
+itself, so bare-name matching never covered it either. That gap is unchanged by
+this work.
+
+The pin cost no corpus entry (199/199 still pass), and no test in the suite
+(1854/1854 pass).
+
+**How common is the dotted form?** Counted on the two pinned proof-corpus
+targets already on disk: superset has 5 dotted `yaml.load`/`pickle.load(s)`
+call sites, 0 `import yaml/pickle as …` aliases and 0
+`from yaml/pickle import load` imports; ghost has 0 of all three (it has no
+Python). That is 5/5 dotted on the only Python target available — supporting,
+but n=5 on one repository. The broader claim that the dotted form dominates
+Python generally is a **judgement, not a finding**; it is not measured here and
+should not be read as one.
+
+### Regression guard for the shape given up — attempted, not added
+
+A `pre:TP post:TN` corpus entry for the aliased form would make this trade
+auditable. It was attempted and it **cannot pass**, which is the honest
+outcome, so no entry was added and `bench/cve-replay/corpus-baseline.json` is
+untouched at 199 entries.
+
+Candidate `pre/` tree — a Flask route taking `request.args.get("cfg")` into
+`y.load(blob)` after `import yaml as y` — scanned with the committed bundle in
+deep mode:
+
+```
+findings 0    (CLI exit 0)
+```
+
+Zero findings means the entry would score `pre:TN`, not `pre:TP`, so adding it
+would either fail the corpus gate or require weakening the fixture until it
+tested something else. Per the corpus contract (never add an entry that does
+not genuinely score `pre:TP post:TN`), it is recorded here instead:
+
+> **Known uncovered shape.** Tainted data reaching an *aliased* or
+> *bare-imported* Python deserialization call — `import yaml as y; y.load(x)`,
+> `import pickle as pk; pk.load(x)`, `from yaml import load; load(x)` — is
+> detected by no layer of this scanner. The taint catalog's receiver pin
+> excludes it by construction; every SAST backstop is dotted-form with a
+> fixed module name. Closing it needs import-alias resolution in the Python IR
+> (resolving `y` → `yaml` at the call site) so the receiver constraint can be
+> evaluated against the *resolved* module rather than the written identifier.
+> That is the correct fix and it is out of scope here.
 
 ## 4. Precision — polyglot fixture
 
@@ -241,13 +332,74 @@ target first, and it needs a pinned Ruby proof-corpus target to measure against.
    199/199; ghost is byte-identical before and after; superset lost 3 findings
    and every one was a verified false positive. The seven findings that turned
    the gate red were all false positives and all were fixed at source rather
-   than baselined.
+   than baselined. The fix is not free: it gives up taint-layer detection of
+   aliased and bare-imported Python `load`/`loads` calls, three shapes that no
+   other layer covers — see §3 for the measured scope and the recorded gap.
 
 ## 9. What was measured vs inferred
 
-Measured: everything in §§1–7 and the deltas in §8. Inferred: that the deep
-engine's low contribution to the default-settings proof-corpus runs is caused
-by the 5000-function cap — consistent with the raised-limit runs surfacing
-extra IR-TAINT findings, but the cap was not instrumented directly. Not
-measured: any Ruby or PHP third-party codebase at scale (no pinned target
+Measured: everything in §§1–7 and the deltas in §8, including every row of the
+§3 trade table (each scanned on both the pre-pin tree `2767a70` and the
+post-pin tree, full pipeline, not just the taint engine) and the zero-finding
+result for the candidate corpus entry.
+
+Inferred: that the deep engine's low contribution to the default-settings
+proof-corpus runs is caused by the 5000-function cap — consistent with the
+raised-limit runs surfacing extra IR-TAINT findings, but the cap was not
+instrumented directly.
+
+Judgement, explicitly not a finding: that the dotted `yaml.load` /
+`pickle.load` form dominates Python code generally. The only measurement behind
+it is 5 dotted call sites and 0 aliased/bare-import sites on superset (§3), the
+sole Python target on disk.
+
+Not measured: any Ruby or PHP third-party codebase at scale (no pinned target
 exists), so the §6 verdict rests on constructed probes plus ghost's JS evidence.
+
+---
+
+## Appendix A — revision 1 (2026-07-26)
+
+Revision 1 corrects a disclosure defect in this document. No engine behaviour
+changed; `scanner/src/` was not touched, so the bundle is unchanged.
+
+**What was wrong.** The first revision disclosed the cost of the receiver pin
+as only the receiver-less import form (`from yaml import load; load(x)`). The
+pin is an allow-list, so its real cost is every `load`/`loads` call whose
+receiver is not an enumerated module — including aliased imports
+(`import yaml as y; y.load(x)`) and the incidental `torch`/`joblib`/`np`
+coverage the bare-name match used to provide. It also justified the design as
+an "accepted trade" without using the superset marshmallow evidence that
+actually rules out the cheaper alternative, and it asserted that the dotted
+form dominates real code with no run behind the claim.
+
+**What changed in §3.**
+
+- Added *Why a receiver pin rather than a `json` deny-list*, grounded in the
+  measured `self.execute_model_schema.load(request.json)` false positive: a
+  project-specific receiver name that no deny-list could enumerate.
+- Replaced the one-line cost statement with a measured eight-row table, each
+  row scanned through the full pipeline on both the pre-pin tree (`2767a70`)
+  and the post-pin tree. Three shapes are lost at **every** layer (aliased
+  yaml, aliased pickle, bare-imported yaml); `torch`/`joblib` keep their SAST
+  rules; `np.load` without `allow_pickle=True` was never a real sink, so
+  dropping it is a precision gain.
+- Recorded that `from yaml import load as yload; yload(x)` scored zero on the
+  pre-pin tree as well — a pre-existing gap, not a regression from this work.
+- Added the corpus-guard outcome: a `pre:TP` entry for the aliased shape was
+  attempted and **cannot pass** (candidate tree scores zero findings, CLI exit
+  0), so no entry was added, the baseline stays at 199, and the uncovered
+  shape is recorded in prose with the fix it would need (import-alias
+  resolution in the Python IR).
+- Labelled the dotted-form-dominance claim a judgement, and gave the only
+  measurement behind it (superset: 5 dotted, 0 aliased, 0 bare-import; ghost:
+  no Python).
+
+**Gates re-run for revision 1** — exit codes captured standalone, each from a
+run in the revision-1 session:
+
+| command | exit |
+|---|---|
+| `npm test` | 0 — 1854 tests, 1854 pass, 0 fail |
+| `npm run bench:cve-replay:check` | 0 — 199/199, baseline untouched |
+| `npm run bench:self-scan:check` | 0 — no drift, `BASELINE.json` untouched |
