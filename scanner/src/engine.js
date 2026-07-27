@@ -179,6 +179,7 @@ import { applySanitizerGate } from './dataflow/sanitizer-gate.js';
 import { annotateFalsification } from './posture/falsification.js';
 import { routeModelForFinding } from './posture/model-routing.js';
 import { buildEntrypointInventory } from './posture/entrypoint-inventory.js';
+import { annotateRelevance } from './posture/relevance.js';
 import { sweepRootCauses } from './posture/root-cause-sweep.js';
 import { computeAnalysisTiers, countUnmodeledSinkCandidates } from './posture/coverage-report.js';
 import { annotatePrivacyTaint, emitDpiaArtifact } from './dataflow/privacy-taint.js';
@@ -8614,6 +8615,20 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null},
   const _scanMeta={filesScanned:files.length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length}};
   // Addition #2 — attack-surface completeness inventory (entry points → dispositions).
   let _entrypointInventory = {}; try { _entrypointInventory = buildEntrypointInventory(fc, { routes: aR, findings: finalFindings }); } catch { _entrypointInventory = {}; }
+  // R9 + R6 — relevance scoping. Runs HERE, after every finding has been
+  // appended (multi-sink chains, cross-language chains) and after the
+  // entry-point inventory exists, so no finding escapes annotation and the
+  // attack surface it is scored against is the complete one. Recall-
+  // preserving: never removes a finding, never touches severity, and only
+  // asserts `unreachable` on positive evidence (see posture/relevance.js).
+  _runAnnotator("annotateRelevance", () => {
+    annotateRelevance(finalFindings, {
+      fileContents: fc,
+      entrypointInventory: _entrypointInventory,
+      routes: aR,
+      threatModel: _v3 && _v3.threatModel,
+    });
+  });
   // Addition #3 — root-cause sweep: from confirmed findings, find sibling instances
   // detectors missed, with total-count accounting. Confirmed-only (cheap by default).
   let _rootCauseSweep = null; try { _rootCauseSweep = sweepRootCauses(finalFindings, fc); } catch { _rootCauseSweep = null; }
