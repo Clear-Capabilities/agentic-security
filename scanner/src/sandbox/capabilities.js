@@ -27,7 +27,18 @@ export const CONFINE_BIN_NAMESPACE = CONFINE_BINS_NAMESPACE[0];
 
 let _cached = null;
 
-export function resetCapabilityCache() { _cached = null; }
+// Which namespace-flag variant actually works on this host, keyed by the
+// requested confinement shape. Probing costs a process spawn, so it is done
+// once; `undefined` means "not probed yet", `null` means "probed and nothing
+// worked" (which the backend turns into a fail-closed error, never a run).
+const _nsVariant = new Map();
+
+export function resetCapabilityCache() { _cached = null; _nsVariant.clear(); }
+
+export function cachedNamespaceVariant(key) {
+  return _nsVariant.has(key) ? _nsVariant.get(key) : undefined;
+}
+export function cacheNamespaceVariant(key, value) { _nsVariant.set(key, value); }
 
 /** First executable candidate, or null when none of them exists. */
 export function resolveConfineBin(candidates) {

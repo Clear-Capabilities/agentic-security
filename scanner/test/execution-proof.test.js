@@ -88,6 +88,24 @@ describe('proveFinding', () => {
     assert.match(f.proofEvidence.reason, /unsupported/i);
   });
 
+  test('a sandbox that could not start is NOT reported as a failed exploit attempt', { skip: noSbx }, async () => {
+    // Force the backend belonging to the OTHER platform family: its confinement
+    // binary cannot exist here, so runConfined returns status:'error' WITHOUT
+    // ever executing the PoC. A PoC that never ran must not be labelled
+    // 'proof-failed' — that tier means "ran and did not demonstrate the bug".
+    const unavailable = process.platform === 'darwin' ? 'namespace' : 'userspace';
+    const f = await proveFinding({
+      id: 'g', parser: 'IR-TAINT',
+      poc: { lang: 'js', code: `import fs from 'node:fs'; fs.writeFileSync('PROVEN', 'yes');` },
+    }, { force: unavailable });
+    assert.equal(f.proofEvidence.ran, false);
+    assert.notEqual(f.proofTier, 'proof-failed');
+    assert.notEqual(f.proofTier, 'execution-proven');
+    // Left at its static standing, with the real cause named.
+    assert.equal(f.proofTier, 'taint-proven');
+    assert.match(f.proofEvidence.reason, /sandbox could not start/i);
+  });
+
   test('the sandbox backend is recorded in the evidence', { skip: noSbx }, async () => {
     const f = await proveFinding({ id: 'f', parser: 'IR-TAINT', poc: { lang: 'js', code: `console.log(1);` } });
     assert.ok(typeof f.proofEvidence.backend === 'string' && f.proofEvidence.backend.length > 0);

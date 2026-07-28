@@ -10,6 +10,7 @@ import {
 } from '../src/sandbox/capabilities.js';
 import { detectDenial, buildResult } from '../src/sandbox/result.js';
 import { runDisabled } from '../src/sandbox/backend-disabled.js';
+import { resolveNamespaceArgs } from '../src/sandbox/backend-namespace.js';
 import { buildLimitPrelude } from '../src/sandbox/limits.js';
 import { runConfined, sandboxAvailable } from '../src/sandbox/index.js';
 
@@ -37,6 +38,38 @@ describe('capability detection', () => {
     // when none exists — checkable without depending on this host's layout.
     assert.equal(resolveConfineBin(['/nonexistent/a', '/nonexistent/b']), null);
     assert.equal(resolveConfineBin(['/nonexistent/a', '/bin/sh']), '/bin/sh');
+  });
+});
+
+describe('namespace privilege-variant selection', () => {
+  // Executable on any platform: the probe is driven with stand-in binaries, so
+  // these assert the SELECTION contract, not this host's kernel behaviour.
+  const alwaysOk = ['/usr/bin/true', '/bin/true'].find((p) => fs.existsSync(p));
+  const alwaysFails = ['/usr/bin/false', '/bin/false'].find((p) => fs.existsSync(p));
+
+  test('the chosen variant always carries the confinement flags, network included', () => {
+    resetCapabilityCache();
+    const args = resolveNamespaceArgs(alwaysOk, false);
+    assert.ok(Array.isArray(args), 'no variant chosen even though the probe succeeded');
+    for (const flag of ['--mount', '--pid', '--ipc', '--uts', '--fork', '--net']) {
+      assert.ok(args.includes(flag), `chosen variant dropped ${flag}`);
+    }
+    // Unprivileged operation is preferred: a user namespace is tried first.
+    assert.ok(args.includes('--user'), 'the unprivileged user-namespace variant is not tried first');
+  });
+
+  test('allowNetwork is the ONLY way --net is absent', () => {
+    resetCapabilityCache();
+    assert.ok(!resolveNamespaceArgs(alwaysOk, true).includes('--net'));
+    resetCapabilityCache();
+    assert.ok(resolveNamespaceArgs(alwaysOk, false).includes('--net'));
+  });
+
+  test('when no variant works the backend fails closed rather than relaxing flags', () => {
+    resetCapabilityCache();
+    // Every probe exits non-zero => namespace creation is unavailable here.
+    assert.equal(resolveNamespaceArgs(alwaysFails, false), null,
+      'a variant was selected even though namespace creation never succeeded');
   });
 });
 
