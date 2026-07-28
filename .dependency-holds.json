@@ -1,0 +1,13 @@
+{
+  "$schema-note": "Live exceptions to the dependency-currency release gate (check 11, scripts/dependency-currency.mjs). Every entry must carry package, tree, heldAt, reason, addedAt and reviewBy. A hold whose reviewBy has passed fails the gate; so does a hold for a package that is no longer outdated, and so does a hold with an empty reason. Holds apply ONLY to the outdated half of the check — a known vulnerability at moderate severity or above is never holdable.",
+  "holds": [
+    {
+      "package": "web-tree-sitter",
+      "tree": "scanner",
+      "heldAt": "0.20.8",
+      "reason": "Pinned as an ABI-matched pair with tree-sitter-wasms 0.1.13. Verified 2026-07-27 against web-tree-sitter 0.26.11: every prebuilt grammar in 0.1.13 fails to instantiate (empty Error from Language.load) because those grammars target the older grammar ABI, and 0.1.13 is the newest grammar bundle published. Upgrading the runtime alone therefore silently drops all six long-tail language grammars (rust, solidity, go, swift, cpp, c) with no error surfaced to the user. There is no matched pair to upgrade to; revisit when a grammar bundle built for the newer ABI is published. See scanner/src/ir/tree-sitter-loader.js.",
+      "addedAt": "2026-07-28",
+      "reviewBy": "2027-01-31"
+    }
+  ]
+}
