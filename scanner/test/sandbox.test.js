@@ -1,11 +1,11 @@
-import { test, describe } from 'node:test';
+import { test, describe, after } from 'node:test';
 import assert from 'node:assert';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import {
-  detectBackend, resetCapabilityCache, resolveConfineBin,
+  detectBackend, resetCapabilityCache, resolveConfineBin, backendCandidates, defaultProbes,
   CONFINE_BINS_USERSPACE, CONFINE_BINS_NAMESPACE,
 } from '../src/sandbox/capabilities.js';
 import { detectDenial, buildResult } from '../src/sandbox/result.js';
@@ -38,6 +38,135 @@ describe('capability detection', () => {
     // when none exists — checkable without depending on this host's layout.
     assert.equal(resolveConfineBin(['/nonexistent/a', '/nonexistent/b']), null);
     assert.equal(resolveConfineBin(['/nonexistent/a', '/bin/sh']), '/bin/sh');
+  });
+});
+
+describe('capability detection is FUNCTIONAL, not presence-based', () => {
+  // The defect this locks down: detection used to conclude "available" from
+  // `the confinement binary is executable`. On a host that ships the binary but
+  // whose kernel refuses the confinement (e.g. a distribution that restricts
+  // unprivileged user-namespace creation), every real run then fails while
+  // `sandboxAvailable()` reports true. `sandboxAvailable()` is the signal
+  // callers use to decide whether it is safe to execute untrusted code, so
+  // answering "the tool is installed" when the honest answer is "confinement
+  // does not work here" is false assurance of exactly the kind this module
+  // exists to prevent.
+  after(() => resetCapabilityCache());
+
+  test('a backend whose probe FAILS is not reported as available', () => {
+    resetCapabilityCache();
+    const b = detectBackend({ candidates: ['userspace'], probes: { userspace: () => false } });
+    assert.equal(b, 'disabled', 'a backend that cannot actually confine was reported as available');
+  });
+
+  test('a probe that throws is treated as a failure, not as success', () => {
+    resetCapabilityCache();
+    const b = detectBackend({
+      candidates: ['namespace'],
+      probes: { namespace: () => { throw new Error('kernel said no'); } },
+    });
+    assert.equal(b, 'disabled');
+  });
+
+  test('a failing candidate falls through to the next, in order', () => {
+    resetCapabilityCache();
+    const seen = [];
+    const b = detectBackend({
+      candidates: ['userspace', 'namespace'],
+      probes: {
+        userspace: () => { seen.push('userspace'); return false; },
+        namespace: () => { seen.push('namespace'); return true; },
+      },
+    });
+    assert.equal(b, 'namespace');
+    assert.deepEqual(seen, ['userspace', 'namespace'], 'candidates were not probed in order');
+  });
+
+  test('when NOTHING probes successfully the result is disabled', () => {
+    resetCapabilityCache();
+    const b = detectBackend({
+      candidates: ['userspace', 'namespace'],
+      probes: { userspace: () => false, namespace: () => false },
+    });
+    assert.equal(b, 'disabled');
+    // Fail-closed all the way through dispatch: no execution, no side effect.
+    const marker = path.join(os.tmpdir(), `sbx-probe-failclosed-${process.pid}.marker`);
+    if (fs.existsSync(marker)) fs.unlinkSync(marker);
+    const r = runConfined(['/bin/sh', '-c', `touch ${marker}`], { root: os.tmpdir() });
+    assert.equal(r.status, 'disabled');
+    assert.equal(fs.existsSync(marker), false, 'a command ran even though no backend could confine it');
+  });
+
+  test('the probe result is cached per process and resetCapabilityCache clears it', () => {
+    // Probing costs a process spawn and detection sits on the path of ordinary
+    // scans, so it must happen once — not once per call.
+    resetCapabilityCache();
+    let probes = 0;
+    const p = { userspace: () => { probes += 1; return true; } };
+    assert.equal(detectBackend({ candidates: ['userspace'], probes: p }), 'userspace');
+    detectBackend({ candidates: ['userspace'], probes: p });
+    detectBackend({ candidates: ['userspace'], probes: p });
+    assert.equal(probes, 1, 'the probe re-ran instead of using the cached result');
+
+    resetCapabilityCache();
+    detectBackend({ candidates: ['userspace'], probes: p });
+    assert.equal(probes, 2, 'resetCapabilityCache did not clear the probe result');
+  });
+
+  test('a NEGATIVE probe result is cached too, not retried on every call', () => {
+    resetCapabilityCache();
+    let probes = 0;
+    const p = { namespace: () => { probes += 1; return false; } };
+    assert.equal(detectBackend({ candidates: ['namespace'], probes: p }), 'disabled');
+    assert.equal(detectBackend({ candidates: ['namespace'], probes: p }), 'disabled');
+    assert.equal(probes, 1, 'a failing probe re-ran on every call — that is a spawn per scan');
+  });
+
+  test('force still bypasses probing entirely', () => {
+    resetCapabilityCache();
+    let probed = false;
+    const b = detectBackend({
+      force: 'disabled',
+      candidates: ['userspace'],
+      probes: { userspace: () => { probed = true; return true; } },
+    });
+    assert.equal(b, 'disabled');
+    assert.equal(probed, false, 'force did not bypass the probe');
+  });
+
+  test('candidates are platform-scoped and never include an unrelated backend', () => {
+    assert.deepEqual(backendCandidates('darwin'), ['userspace']);
+    assert.deepEqual(backendCandidates('linux'), ['namespace']);
+    assert.deepEqual(backendCandidates('sunos'), []);
+  });
+
+  test('the default probe runs a trivial command through the REAL backend path', () => {
+    // Executed, not asserted from flags: this is the whole point of the fix.
+    const probes = defaultProbes();
+    assert.equal(typeof probes.userspace, 'function');
+    assert.equal(typeof probes.namespace, 'function');
+    resetCapabilityCache();
+    if (process.platform === 'darwin') {
+      assert.equal(probes.userspace(), true, 'the userspace backend could not run a trivial confined command here');
+      // The other family's tool does not exist on this platform, so its probe
+      // must say so rather than reporting the binary check it never made.
+      assert.equal(probes.namespace(), false);
+    } else {
+      // Whatever this host answers, it must be a boolean verdict about a real
+      // run — never a throw and never an availability claim we cannot back.
+      assert.equal(typeof probes.userspace(), 'boolean');
+      assert.equal(typeof probes.namespace(), 'boolean');
+    }
+    resetCapabilityCache();
+  });
+
+  test('a detected backend is one that just demonstrably ran a command', () => {
+    resetCapabilityCache();
+    const b = detectBackend();
+    if (b === 'disabled') return; // honest answer on a host without confinement
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-probe-'));
+    const r = runConfined(['/bin/echo', 'live'], { root });
+    assert.equal(r.status, 'ok', `detectBackend reported '${b}' but a trivial confined run failed: ${r.stderr}`);
   });
 });
 

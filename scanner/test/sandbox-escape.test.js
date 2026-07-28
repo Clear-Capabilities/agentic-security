@@ -10,9 +10,17 @@ import { runUserspace } from '../src/sandbox/backend-userspace.js';
 import { runNamespace } from '../src/sandbox/backend-namespace.js';
 import { runDisabled } from '../src/sandbox/backend-disabled.js';
 
+// A skip here is NOT a pass. Detection is functional (capabilities.js): the
+// backend is reported only when it just ran a trivial command under real
+// confinement, so `disabled` means confinement is genuinely unavailable on this
+// host — not that the check was lenient. Nothing below is verified when these
+// skip, and no assertion is relaxed to keep the suite green: the escape
+// contract is asserted where confinement works, and declared unverified where
+// it does not.
 const ACTIVE = detectBackend();
 const skip = ACTIVE !== 'userspace'
-  ? `skipped: active backend is '${ACTIVE}', not 'userspace' — cannot verify on this host`
+  ? `SKIPPED, NOT PASSED: userspace confinement is unavailable on this host `
+    + `(functional probe selected backend '${ACTIVE}'); the userspace escape contract is UNVERIFIED here`
   : false;
 
 describe('userspace confinement — escape attempts', { skip }, () => {
@@ -154,7 +162,10 @@ describe('userspace confinement — escape attempts', { skip }, () => {
 });
 
 const nsSkip = detectBackend() !== 'namespace'
-  ? 'skipped: kernel-namespace backend unavailable on this host — implemented but NOT verified here'
+  ? 'SKIPPED, NOT PASSED: kernel-namespace confinement is unavailable on this host — either the tool is '
+    + 'absent, or it is present but the host refuses the namespaces (functional probe failed, so the '
+    + 'backend reports unavailable and execution features are disabled rather than degraded). '
+    + 'Implemented but UNVERIFIED here.'
   : false;
 
 // These skip on a non-Linux host — that is expected, and it is also why none

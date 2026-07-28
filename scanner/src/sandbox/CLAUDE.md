@@ -50,27 +50,68 @@ verification tier) must not read `'ok'` as "ran unimpeded". The reliable
 negative evidence remains the one the escape tests use: check for the side
 effect (the out-of-root file does not exist), not the status.
 
-## Backend selection (`capabilities.js`)
+## Backend selection (`capabilities.js`) — functional, not presence-based
 
-`detectBackend({ force })` probes for one confinement primitive, cached after
-the first call (`resetCapabilityCache()` clears it, used between tests):
+`detectBackend({ force })` selects a backend by **executing a trivial command
+(`exit 0`) through that backend's real code path** and reporting the backend
+only if that run succeeds. Availability means "confinement demonstrably works
+here", never "the confinement binary is installed".
 
-| Platform | Primitive checked | Backend selected |
+| Platform | Candidate backend | Selected when |
 |---|---|---|
-| macOS family | userspace confinement binary present and executable | `'userspace'` |
-| Linux family | kernel-namespace tool present and executable | `'namespace'` |
-| neither found | — | `'disabled'` |
+| macOS family | `'userspace'` | a trivial command ran confined and returned `status:'ok'` |
+| Linux family | `'namespace'` | a trivial command ran confined and returned `status:'ok'` |
+| any | `'disabled'` | no candidate's probe succeeded |
 
-Each primitive is probed across a **candidate list** of plausible install
-paths (`CONFINE_BINS_USERSPACE` / `CONFINE_BINS_NAMESPACE`), not a single
-hardcoded path. A miss still fails closed to `'disabled'`, which is safe — but
-a single path would be a false negative on any distribution that installs the
-binary elsewhere, silently costing that host its sandbox. The backends run the
-resolved path, not the canonical one.
+A candidate whose probe fails is **skipped**, detection falls through to the
+next candidate, and with nothing left the answer is `'disabled'`. The probe is
+never allowed to pass by weakening confinement: there is no branch that drops a
+flag to get a green run, because a backend that can only succeed unconfined is
+not an available backend.
+
+**Why presence was the wrong question.** Verified on a Linux CI runner: the
+kernel-namespace tool is installed and executable, but the distribution
+restricts unprivileged user-namespace creation, so every privilege variant in
+`backend-namespace.js` fails and no confined command can start. Presence-based
+detection reported `'namespace'` and `sandboxAvailable()` answered `true` while
+every actual run failed. `sandboxAvailable()` is the signal callers use to
+decide whether it is safe to **execute untrusted code**; answering "the tool is
+installed" when the honest answer is "confinement does not work here" is false
+assurance of exactly the kind this module exists to prevent.
+
+**On a host that restricts unprivileged namespace creation, the backend
+therefore reports unavailable and the execution features that depend on it are
+DISABLED — not degraded.** `detectBackend()` returns `'disabled'`,
+`sandboxAvailable()` returns `false`, `runConfined` refuses to execute, and
+`execution-proof.js` leaves findings at their static tier with a reason naming
+the sandbox. Nothing runs unconfined and no weaker confinement is substituted.
+The sandbox-dependent tests in `sandbox-escape.test.js` and
+`execution-proof.test.js` skip there, each with an explicit
+"SKIPPED, NOT PASSED … UNVERIFIED here" reason — a skip is a declared gap in
+verification, never a pass.
+
+**Cost and bounds.** The probe costs one spawn and its result (positive *and*
+negative) is cached for the process, so ordinary scans pay it at most once;
+`resetCapabilityCache()` clears it. The probe runs with a short timeout
+(4 s default, `AGENTIC_SECURITY_SANDBOX_PROBE_TIMEOUT_MS` to override) and a
+throw is treated as a failure, so a capability check can never hang a scan.
+`force` bypasses probing entirely.
+
+`detectBackend` also accepts `{ probes, candidates }` — a test seam that drives
+the selection contract with stand-ins on any platform. It cannot produce
+unconfined execution: dispatch in `index.js` still goes to the real backend.
+
+Each primitive's binary is resolved across a **candidate list** of plausible
+install paths (`CONFINE_BINS_USERSPACE` / `CONFINE_BINS_NAMESPACE`), not a
+single hardcoded path, and that lookup now serves only as a cheap fast-negative
+before the real probe. A miss still fails closed to `'disabled'`, which is safe
+— but a single path would be a false negative on any distribution that installs
+the binary elsewhere, silently costing that host its sandbox. The backends run
+the resolved path, not the canonical one.
 
 ## Fail-closed rule
 
-If no primitive is found, `detectBackend` returns `'disabled'` and
+If no candidate backend's functional probe succeeds, `detectBackend` returns `'disabled'` and
 `runConfined` dispatches to `backend-disabled.js`, which **refuses to execute
 the command at all** — it returns `status: 'disabled'` without ever spawning
 a process. There is no code path in this module that runs target code
@@ -156,10 +197,12 @@ path outside the root (a home directory, a system config path) will
 namespace isolates mount-table *changes* made by the confined process; it does
 not make the host filesystem read-only.
 
-On a Linux host `detectBackend()` selects this backend automatically, so a
-caller there gets network isolation and resource limits and **no write
-confinement at all**. Do not run anything on that path that must not touch the
-host filesystem. Closing the gap means implementing a read-only remount (or
+On a Linux host where the probe succeeds, `detectBackend()` selects this
+backend automatically, so a caller there gets network isolation and resource
+limits and **no write confinement at all**. Do not run anything on that path
+that must not touch the host filesystem. (Where the probe fails — a host
+restricting unprivileged namespace creation — the answer is `'disabled'` and
+nothing runs at all, which is the safe side of this gap.) Closing the gap means implementing a read-only remount (or
 equivalent) *and* verifying it by execution on a Linux host with both-direction
 escape tests — the guide must not claim write confinement here before both
 have happened.
