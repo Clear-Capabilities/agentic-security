@@ -237,6 +237,16 @@ export function evaluateDependencyCurrency({ trees, holdsDoc, holdsReadError, no
   // ---- per-tree facts -------------------------------------------------------
   const heldSeen = new Set();
   for (const t of trees) {
+    // An uninstalled tree answers "nothing outdated, nothing vulnerable" for
+    // the same reason an empty room is quiet. Name that cause specifically —
+    // "the registry did not answer" would send the reader after the wrong fault.
+    if (t.uninstalled) {
+      errors.push(`${t.id}: dependencies are not installed, so both advisories and ` +
+        'outdated versions are UNVERIFIED — the registry commands only report on what ' +
+        'is on disk, and an empty answer here is indistinguishable from a clean one. ' +
+        'Remedy: install this tree\'s dependencies, then re-run.');
+      continue;
+    }
     // Half A — advisories. No opt-out, by design.
     if (!t.audit) {
       errors.push(`${t.id}: the advisory query did not return usable results, so known ` +
@@ -338,9 +348,40 @@ function npmJson(args, cwd) {
 }
 
 /** Gather the registry + manifest facts for one package tree. */
+/**
+ * Is this tree actually installed? `npm outdated`/`audit` only see installed
+ * packages, so without node_modules they report an empty document that reads
+ * exactly like a clean bill of health. Requiring one declared dependency to be
+ * present on disk distinguishes "nothing is outdated" from "nothing was looked
+ * at". A manifest with no dependencies at all is legitimately verifiable.
+ */
+export function dependenciesInstalled(cwd, manifest) {
+  const declared = [
+    ...Object.keys(manifest?.dependencies || {}),
+    ...Object.keys(manifest?.devDependencies || {}),
+    ...Object.keys(manifest?.optionalDependencies || {}),
+  ];
+  if (declared.length === 0) return true;
+  return declared.some((name) => {
+    try {
+      return fs.statSync(path.join(cwd, 'node_modules', name)).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function gatherTreeFacts({ id, rel }, repo = REPO) {
   const cwd = path.join(repo, rel);
   const manifest = parseNpmJson(readTextOrNull(path.join(cwd, 'package.json')));
+  // Both registry commands report on INSTALLED packages. With no install
+  // present they answer "{}" — indistinguishable from "everything is current".
+  // That is the gate's worst failure mode: a silent pass on a tree nobody
+  // checked. An uninstalled tree is unverified, so say so and let the
+  // evaluator fail it, exactly as an unreachable registry does.
+  if (!dependenciesInstalled(cwd, manifest)) {
+    return { id, audit: null, outdated: null, uninstalled: true };
+  }
   // Both commands exit non-zero in ordinary success cases (npm outdated exits
   // 1 when anything is outdated; the advisory command exits non-zero when it
   // finds something), so the exit code says nothing useful here — the presence
