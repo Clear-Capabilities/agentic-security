@@ -23,7 +23,8 @@
 //     unproven. A gate that degrades to a pass under adverse conditions is
 //     decoration.
 //  2. The fast path must never be the publish path. `--fast` skips the
-//     three slow gates (checks 6-8) so a maintainer can iterate; the
+//     slow gates (checks 6-8, and check 11 which is a registry round-trip)
+//     so a maintainer can iterate; the
 //     `prepublishOnly` wiring in scanner/package.json calls this script
 //     with NO flags, so publishing always runs the full set. If you are
 //     tempted to put `--fast` in prepublishOnly, the correct fix is to make
@@ -39,7 +40,7 @@
 //
 // Usage:
 //   node scripts/release-check.mjs                      # full gate
-//   node scripts/release-check.mjs --fast               # skip checks 6-8
+//   node scripts/release-check.mjs --fast               # skip the slow checks
 //   node scripts/release-check.mjs --allow-unverified-ci
 // Exit: 0 all planned checks passed / 1 one or more failed.
 
@@ -49,6 +50,7 @@ import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { evaluateScorecardFreshness } from './scorecard-check.mjs';
+import { runDependencyCurrencyCheck } from './dependency-currency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -132,6 +134,19 @@ export const CHECKS = [
     remedy: 'Wait for hosted CI to finish and go green for this exact commit. If the ' +
       'forge CLI is unavailable, authenticate it — or pass --allow-unverified-ci ' +
       'deliberately, accepting that hosted CI went unproven.',
+  },
+  {
+    id: 'dependency-currency',
+    title: 'Dependencies free of advisories and on their latest versions',
+    // Slow: two registry round-trips per package tree, four in all. --fast is
+    // for local iteration; prepublishOnly passes no flags, so a publish always
+    // runs this. See scripts/dependency-currency.mjs for the full rationale.
+    slow: true,
+    remedy: 'Upgrade the named packages. A known vulnerability at moderate severity or ' +
+      'above can never be waived. An upgrade that is verifiably unsafe goes in ' +
+      '.dependency-holds.json with a reason and a reviewBy date; an expired, stale or ' +
+      'unjustified hold fails too. If the registry was unreachable, the check is ' +
+      'unverified — restore access and re-run.',
   },
 ];
 
@@ -518,6 +533,12 @@ function main(argv) {
 
   evaluate('remote-ci-green', () =>
     evaluateRemoteCi({ ...remoteCiFacts(headSha), allowUnverified, headSha }));
+
+  evaluate('dependency-currency', () => {
+    process.stderr.write('  querying the package registry for advisories and newer ' +
+      'versions (this is one of the slow gates) …\n');
+    return runDependencyCurrencyCheck(REPO);
+  });
 
   // ---- summary ----
   const out = process.stderr;

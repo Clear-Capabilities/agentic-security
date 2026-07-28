@@ -286,16 +286,16 @@ test('release-gate — a gated command exiting 0 passes, non-zero fails', () => 
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all ten checks in order', () => {
+test('release-gate — full run plans all eleven checks in order', () => {
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 10);
+  assert.equal(ids.length, 11);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
-test('release-gate — --fast skips only the slow gates (6-8), keeping 1-5 and 9-10', () => {
+test('release-gate — --fast skips only the slow gates, keeping 1-5 and 9-10', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
-  assert.equal(slowIds.length, 3);
+  assert.equal(slowIds.length, 4);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
   assert.equal(ids.length, 7);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
@@ -309,11 +309,22 @@ test('release-gate — --fast skips only the slow gates (6-8), keeping 1-5 and 9
   }
 });
 
-test('release-gate — the slow checks are exactly the three command gates', () => {
+test('release-gate — the slow checks are the three command gates plus the registry gate', () => {
   assert.deepEqual(
     CHECKS.filter(c => c.slow).map(c => c.id),
-    ['test-suite', 'corpus-gate', 'self-scan-gate']
+    ['test-suite', 'corpus-gate', 'self-scan-gate', 'dependency-currency']
   );
+});
+
+// The dependency-currency gate is skipped by --fast because it is four
+// registry round-trips, but prepublishOnly passes no flags — so a publish can
+// never skip it. This pins that: it must be slow, and it must be in the set.
+test('release-gate — dependency currency is registered, slow, and in the full run', () => {
+  const check = CHECKS.find(c => c.id === 'dependency-currency');
+  assert.ok(check, 'dependency-currency must be a registered check');
+  assert.equal(check.slow, true);
+  assert.ok(plannedCheckIds({ fast: false }).includes('dependency-currency'));
+  assert.ok(!plannedCheckIds({ fast: true }).includes('dependency-currency'));
 });
 
 test('release-gate — every check declares a remedy', () => {

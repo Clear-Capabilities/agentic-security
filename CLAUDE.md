@@ -92,6 +92,17 @@ Several releases (v0.106.0–v0.107.1) shipped broken or false because work was 
 
 ---
 
+## Dependency currency + the hold list
+
+Release gate check 11 (`scripts/dependency-currency.mjs`) keeps both package trees — `scanner/` and `ide/vscode/` — free of known-vulnerable and stale dependencies. It has two halves, and they are deliberately unequal:
+
+- **Known advisories — no opt-out.** Any advisory at **moderate severity or above**, in either tree, fails the gate. There is no flag, no hold, no waiver. A dependency with a published vulnerability is never an acceptable release state.
+- **Outdated dependencies — holdable.** Anything behind its latest published version fails *unless* it is listed in `.dependency-holds.json` at the repo root. Each entry carries `package`, `tree`, `heldAt`, `reason`, `addedAt`, `reviewBy`. The list exists because "always latest" is occasionally wrong: `web-tree-sitter` is pinned at `0.20.8` because the newer runtime cannot load any grammar in the newest published prebuilt bundle (older grammar ABI), silently dropping six long-tail languages — see `scanner/src/ir/tree-sitter-loader.js`.
+
+Three anti-rot rules stop "temporarily pinned" from becoming permanent — each **fails** the gate: (1) a hold whose `reviewBy` has passed; (2) a hold for a package that is no longer outdated (stale — delete it); (3) a hold with a missing or empty `reason`. Dev-only and runtime dependencies are both reported, tagged `[dev]` / `[runtime]` / `[optional]` so the reader can tell a stale build tool from a stale shipped library. An unreachable registry means the check is **unverified, which is not a pass** — it fails, same as the hosted-CI check. It is classified slow (`--fast` skips it); `prepublishOnly` passes no flags, so a publish always runs it.
+
+---
+
 ## Adding a new scan rule
 
 See the **`scanner/src/sast/CLAUDE.md`** local guide. (Moved out of root per the Claude-Code-at-scale guidance: reusable expertise belongs next to the code it applies to, not in the every-session root file.)
