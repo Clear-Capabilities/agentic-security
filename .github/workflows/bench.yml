@@ -91,29 +91,34 @@ jobs:
         with:
           path: scanner/test/benchmark/realworld/.bench-cache
           key: bench-cache-${{ hashFiles('scanner/test/benchmark/realworld/manifest.json') }}
-      # Explicit heap ceiling. Without one, V8 sizes max-old-space from the
-      # runner's memory and lands on ~4 GB; the job then dies with exit 134
-      # ("Ineffective mark-compacts near heap limit") partway through the
-      # sard-juliet-java scan — the largest target in the manifest by an
-      # order of magnitude (~28k Java files, 13,366 expected true positives
-      # in a single in-process scan). The evidence says this is a legitimately
-      # large workload rather than a leak: the OOM lands inside ONE app's
-      # scan, not after several, so the obvious leak shape (per-app results
-      # accumulating across the --all loop) is ruled out, and the app scanned
-      # immediately before it finishes in ~26s well under the cap. 6 GB on a
-      # ~7 GB runner leaves room for the OS and V8's off-heap allocations.
+      # `--all` runs one child process per app (see the PROCESS MODEL note at
+      # the top of bench-realworld.js). Peak memory is therefore bounded by the
+      # LARGEST SINGLE APP rather than the sum of all of them, which is what
+      # previously killed this job: everything shared one heap, so the sweep
+      # was hostage to the manifest's biggest target (~28k Java files, 13,366
+      # expected true positives — an order of magnitude beyond anything else).
+      # Raising the ceiling was tried and did not help; isolating the workload
+      # is the structural fix, and the 6 GB ceiling below is now a per-app
+      # bound rather than a whole-sweep one.
       #
-      # This ceiling is also a measurement: if the job still OOMs at 6 GB,
-      # that IS the leak signal, because no honest per-file working set for
-      # this corpus grows 50% between runs. Do not raise it again without
-      # profiling — a bigger heap is how a real leak stays hidden.
+      # Do not raise this number. If ONE app alone cannot finish under it, that
+      # is a leak or an unbounded accumulator inside that app's scan, and the
+      # answer is a profile — a bigger heap is how a real leak stays hidden.
+      #
+      # The bench exits non-zero if any app fails, but we defer that to the
+      # enforcement step below so the results still get printed and uploaded.
+      # A failure you can read beats a failure you can only infer from $?.
       - name: Run realworld bench (JSON)
         working-directory: scanner
         env:
           NODE_OPTIONS: --max-old-space-size=6144
         run: |
+          set +e
           node test/benchmark/realworld/bench-realworld.js --all --json > /tmp/realworld.json
-          cat /tmp/realworld.json | head -200
+          echo "$?" > /tmp/realworld.exit
+          set -e
+          head -200 /tmp/realworld.json
+          echo "bench exit code: $(cat /tmp/realworld.exit)"
       - name: Enforce per-app F1 floors
         run: |
           node -e '
@@ -138,10 +143,30 @@ jobs:
               "sard-juliet-java": 0.95,
             };
             let failed = false;
+            // A crashed or errored app fails the run whether or not it
+            // declares an F1 floor. Checking this BEFORE the floor lookup is
+            // the point: an app nobody set a floor for is exactly the app
+            // whose crash would otherwise pass unnoticed, and a silently
+            // missing app is worse than a loudly failing one.
+            for (const res of r.results) {
+              if (res.error) { console.error(`FAIL ${res.name}: ERROR ${res.error}`); failed = true; }
+            }
+            // The bench exit code is authoritative for "did every app run".
+            const benchExit = parseInt(fs.readFileSync("/tmp/realworld.exit","utf8").trim(), 10);
+            if (benchExit !== 0) {
+              console.error(`FAIL benchmark process exited ${benchExit}`);
+              failed = true;
+            }
+            // Every floored app must be PRESENT. A floor on an app that never
+            // appears in the results enforces nothing at all.
+            const present = new Set(r.results.map(x => x.name));
+            for (const name of Object.keys(FLOORS)) {
+              if (!present.has(name)) { console.error(`FAIL ${name}: absent from results`); failed = true; }
+            }
             for (const res of r.results) {
               const floor = FLOORS[res.name];
               if (floor == null) continue;
-              if (res.error) { console.error(`${res.name}: ERROR ${res.error}`); failed = true; continue; }
+              if (res.error) continue; // already counted above
               const f1 = res.f1 || 0;
               const ok = f1 + 1e-6 >= floor;
               const tag = ok ? "PASS" : "FAIL";

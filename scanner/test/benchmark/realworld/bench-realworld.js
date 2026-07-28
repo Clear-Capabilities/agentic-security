@@ -6,14 +6,35 @@
 // Usage:
 //   node bench-realworld.js --all                  # all apps in manifest
 //   node bench-realworld.js --app nodegoat         # one app
+//   node bench-realworld.js --app nodegoat,pygoat  # a subset
 //   node bench-realworld.js --app nodegoat --refresh-cache
 //   node bench-realworld.js --json                 # machine-readable
+//   node bench-realworld.js --all --in-process     # legacy single-process loop
 //
 // Reports per-app precision and recall with raw TP/FP/FN counts. Per-app,
 // never combined — different apps test different rule families and any
 // macro-averaged summary number hides where the engine is weak.
+//
+// PROCESS MODEL. Any multi-app run (`--all`, or `--app a,b`) is an
+// ORCHESTRATOR, not a loop: it spawns one child process per app
+// (`--app <name> --json`) and aggregates the children's JSON into the same
+// `{ results: [...] }` envelope the single-process loop used to emit. Two
+// properties come from that:
+//   1. Peak memory is bounded by the LARGEST SINGLE APP rather than the sum of
+//      all of them. The manifest's biggest target is an order of magnitude
+//      larger than the rest, and running everything in one heap made the whole
+//      sweep hostage to that one app's high-water mark.
+//   2. One app crashing (OOM, parser blowup, anything) can no longer destroy
+//      the whole sweep. A dead child is recorded as `{ name, error, crashed }`
+//      and the remaining apps still run.
+// A crashed app is ALWAYS present in `results` with an `error` and ALWAYS
+// makes the process exit non-zero. Silently dropping it would let a crash
+// masquerade as a clean sweep, which is strictly worse than a loud failure:
+// a missing app is a result nobody reads, a failing app is one everybody does.
+// `--in-process` restores the old single-heap loop for local A/B measurement.
 
 import * as path from 'node:path';
+import * as os from 'node:os';
 import * as fs from 'node:fs/promises';
 import * as cp from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -73,9 +94,13 @@ const STRIP_ALL_COMMENTS = flag('--strip-all-comments');
 // can't leak in.
 const SCRAMBLE_IDENTIFIERS = flag('--scramble-identifiers');
 const BLIND = _BLIND_RAW || STRIP_ALL_COMMENTS || SCRAMBLE_IDENTIFIERS;
+// --in-process: run every --all target inside THIS process, the way the bench
+// worked before per-app isolation. Kept so the memory characteristics of the
+// two modes can be compared directly; not for CI.
+const IN_PROCESS = flag('--in-process');
 
 if (!ALL && !APP) {
-  console.error('Usage: bench-realworld.js [--all | --app <name>] [--refresh-cache] [--json] [--verbose] [--no-wildcards] [--blind] [--strip-all-comments]');
+  console.error('Usage: bench-realworld.js [--all | --app <name>] [--refresh-cache] [--json] [--verbose] [--no-wildcards] [--blind] [--strip-all-comments] [--in-process]');
   process.exit(2);
 }
 
@@ -1032,6 +1057,16 @@ async function runOne(name, app, vulnFamilyMap) {
     expected = await buildCvefixesExpected(repoRoot, app.groundTruth, extractRoot);
     scanRoot = extractRoot;
     if (Array.isArray(app.wildcardFamilies)) wildcardFamilies = app.wildcardFamilies;
+  } else if (app.groundTruth.kind === 'negative') {
+    // Clean-code corpora: there is nothing to find, so the ground truth is the
+    // empty set and every emission is a false positive. These carry no
+    // groundTruth.path, so they used to fall through to the curated loader and
+    // throw on `path === undefined` — an error the old single-process loop
+    // caught and buried, since exit status ignored per-app failures and the
+    // F1 floors only look at apps that declare a floor. Per-app isolation
+    // makes any failure fatal, so the latent break had to be repaired rather
+    // than inherited.
+    expected = [];
   } else {
     const curated = await loadCuratedExpected(name, app.groundTruth.path);
     if (Array.isArray(curated)) { expected = curated; }
@@ -1132,8 +1167,16 @@ async function runOne(name, app, vulnFamilyMap) {
   }
 
   const auditorVerifiedSource = (app.groundTruth && app.groundTruth.auditorVerifiedSource) || null;
+  // Peak resident set for the process that ran this app. Under per-app
+  // isolation (the --all default) each app owns a fresh process, so this is
+  // that app's true high-water mark and the number that decides what heap
+  // ceiling the sweep actually needs. libuv normalizes maxRSS to kilobytes on
+  // every platform. Under --in-process this is cumulative across apps and
+  // therefore only an upper bound for the app that happened to run last.
+  const peakRssMb = Math.round((process.resourceUsage().maxRSS / 1024) * 10) / 10;
   return {
     name, language: app.language, scanned: actual.length,
+    peakRssMb,
     tp, fp, fn, precision, recall, f1: fOne,
     tpr, fpr, specificity, youden,
     negativesTotal: negatives.length, negTN: negTotalTN, negFP: negTotalFP,
@@ -1156,7 +1199,8 @@ function printResult(r) {
   } else {
     console.log(`  Youden Index: n/a (no declared negative class in this corpus)`);
   }
-  console.log(`  TP: ${r.tp} / FP: ${r.fp} / FN: ${r.fn}   (expected: ${r.expectedTotal}, scan emitted: ${r.scanned}, ${r.elapsedSec}s)`);
+  const rssTag = r.peakRssMb != null ? `, peak RSS ${r.peakRssMb} MB` : '';
+  console.log(`  TP: ${r.tp} / FP: ${r.fp} / FN: ${r.fn}   (expected: ${r.expectedTotal}, scan emitted: ${r.scanned}, ${r.elapsedSec}s${rssTag})`);
   if (Object.keys(r.perFamily).length) {
     console.log(`  per-family:`);
     for (const [fam, s] of Object.entries(r.perFamily).sort()) {
@@ -1205,6 +1249,91 @@ function printResult(r) {
   }
 }
 
+const SELF_PATH = fileURLToPath(import.meta.url);
+
+// Argv for a child that should benchmark exactly one app. Every flag the
+// parent was given is forwarded verbatim (--blind, --no-wildcards,
+// --refresh-cache, --verbose, …) so an isolated sweep measures precisely what
+// the same flags would have measured in one process. The three flags that
+// select the process model itself are not forwarded.
+function childArgsFor(name) {
+  const out = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--all' || a === '--json' || a === '--in-process') continue;
+    if (a === '--app') { i++; continue; } // drop the flag AND its value
+    out.push(a);
+  }
+  out.push('--app', name, '--json');
+  return out;
+}
+
+// Run one app in its own process and return its result object.
+//
+// stdout is wired straight to a file rather than a pipe: a single app's JSON
+// (with full fps[]/fns[] arrays) runs to tens of megabytes, which is exactly
+// the sort of thing a default pipe buffer truncates. stderr is piped so the
+// parent can forward it live — CI needs to see progress — while retaining the
+// tail, so that when a child dies we can say WHY rather than just print a
+// number.
+//
+// Any non-zero exit, any signal, and any unparseable/mismatched payload all
+// return an error result. There is no path through this function that returns
+// nothing: the caller always gets exactly one entry per app.
+async function runOneIsolated(name, tmpDir) {
+  const outPath = path.join(tmpDir, `${name.replace(/[^\w.-]/g, '_')}.json`);
+  const STDERR_TAIL_MAX = 8192;
+  let tail = '';
+  const fh = await fs.open(outPath, 'w');
+  let status, signal;
+  try {
+    ({ status, signal } = await new Promise((resolve, reject) => {
+      const child = cp.spawn(process.execPath, [SELF_PATH, ...childArgsFor(name)], {
+        stdio: ['ignore', fh.fd, 'pipe'],
+      });
+      child.stderr.on('data', (chunk) => {
+        process.stderr.write(chunk);
+        tail = (tail + chunk.toString('utf8')).slice(-STDERR_TAIL_MAX);
+      });
+      child.on('error', reject);
+      child.on('close', (code, sig) => resolve({ status: code, signal: sig }));
+    }));
+  } catch (e) {
+    return { name, error: `could not spawn benchmark child: ${e.message}`, crashed: true };
+  } finally {
+    await fh.close();
+  }
+
+  if (status !== 0 || signal) {
+    // V8 prints its heap-exhaustion banner immediately before aborting, so the
+    // retained stderr tail is the reliable signal; 134 is the same abort seen
+    // through a shell that folded the signal into an exit code. Name it,
+    // because "exited 134" is the most misread number in this benchmark. A
+    // bare SIGABRT with no banner is NOT called an OOM — plenty of other
+    // things abort.
+    const oom = status === 134 || /heap out of memory|Ineffective mark-compacts/i.test(tail);
+    const how = signal ? `killed by signal ${signal}` : `exited with code ${status}`;
+    return {
+      name,
+      error: `benchmark child ${how}${oom ? ' — out of memory' : ''}`,
+      crashed: true,
+      outOfMemory: oom,
+      stderrTail: tail.slice(-2000),
+    };
+  }
+
+  let parsed;
+  try { parsed = JSON.parse(await fs.readFile(outPath, 'utf8')); }
+  catch (e) {
+    return { name, error: `benchmark child produced unreadable JSON: ${e.message}`, crashed: true, stderrTail: tail.slice(-2000) };
+  }
+  const r = parsed && Array.isArray(parsed.results) ? parsed.results[0] : null;
+  if (!r || r.name !== name) {
+    return { name, error: `benchmark child returned no result for ${name}`, crashed: true, stderrTail: tail.slice(-2000) };
+  }
+  return r;
+}
+
 async function main() {
   // Bench-shape mode: enable answer-key readers (OWASP template suppressors,
   // Juliet folder-name suppressors, @WebServlet category extractor) when NOT
@@ -1222,28 +1351,54 @@ async function main() {
   const familyMap = await loadFamilyMap();
   const apps = manifest.apps;
   const INCLUDE_QUARANTINED = flag('--include-quarantined');
+  // --app accepts a comma-separated list, so a subset can be swept without
+  // pulling in every corpus in the manifest. A multi-app request gets the same
+  // per-process isolation --all does; a single-app request is the leaf case
+  // that actually performs a scan (and is what each spawned child runs).
   const targets = ALL
     ? Object.keys(apps).filter(name => INCLUDE_QUARANTINED || !apps[name]._quarantined)
-    : [APP];
+    : APP.split(',').map(s => s.trim()).filter(Boolean);
   for (const t of targets) {
     if (!apps[t]) { console.error(`unknown app: ${t} (have: ${Object.keys(apps).join(', ')})`); process.exit(2); }
   }
 
   const results = [];
-  for (const t of targets) {
-    try {
-      const r = await runOne(t, apps[t], familyMap);
+  const ISOLATED = !IN_PROCESS && targets.length > 1;
+  let tmpDir = null;
+  if (ISOLATED) tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'realworld-bench-'));
+  try {
+    for (const t of targets) {
+      let r;
+      if (ISOLATED) {
+        r = await runOneIsolated(t, tmpDir);
+      } else {
+        try {
+          r = await runOne(t, apps[t], familyMap);
+        } catch (e) {
+          console.error(`  FAILED: ${e.message}`);
+          r = { name: t, error: e.message };
+        }
+      }
+      // Manifest-derived metadata is stamped by the parent regardless of where
+      // the result came from, so a crashed app still carries it.
       r.quarantined = !!apps[t]._quarantined;
-      r.mode = apps[t].mode || 'strict';
+      if (!r.error) r.mode = apps[t].mode || 'strict';
+      if (r.error) console.error(`  FAILED: ${t}: ${r.error}`);
       results.push(r);
-    } catch (e) {
-      console.error(`  FAILED: ${e.message}`);
-      results.push({ name: t, error: e.message, quarantined: !!apps[t]._quarantined });
     }
+  } finally {
+    if (tmpDir) { try { await fs.rm(tmpDir, { recursive: true, force: true }); } catch { /* best effort */ } }
+  }
+  // Invariant the whole isolation design rests on: one result per target, no
+  // exceptions. A crash must show up as a failing app, never as an absent one.
+  if (results.length !== targets.length) {
+    throw new Error(`internal: ${results.length} results for ${targets.length} targets`);
   }
   // Persist per-CWE precision/recall to .agentic-security/validator-metrics.json
   // so /security-trend and /report-card can show benchmark trajectory.
-  try {
+  // Skipped under per-app isolation: each child already recorded its own run
+  // before exiting, so doing it again here would double-count every app.
+  if (!ISOLATED) try {
     const { recordRun } = await import('../../src/posture/validator-metrics.js');
     const projectRoot = path.resolve(__dirname, '..', '..', '..');
     const blindTag = BLIND ? 'blind' : 'non-blind';
@@ -1295,6 +1450,15 @@ async function main() {
       }
       console.log(`auditorVerifiedSource flags the provenance of each corpus's ground truth (e.g. "upstream-csv", "upstream-juliet-folders"). It is NOT an external sign-off — see docs/audit/README.md for the path to external auditor confirmation. Per-corpus numbers are for local validation only; do not publish single-corpus scores.`);
     }
+  }
+
+  // A failed app fails the run. This is set AFTER the results have been
+  // emitted so the JSON still reaches whatever the caller redirected it to —
+  // a failure you can read beats a failure you can only infer from $?.
+  const failed = results.filter(r => r.error);
+  if (failed.length) {
+    console.error(`\n${failed.length} of ${targets.length} app(s) failed: ${failed.map(r => r.name).join(', ')}`);
+    process.exitCode = 1;
   }
 }
 
