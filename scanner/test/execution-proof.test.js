@@ -44,7 +44,16 @@ describe('proof tier vocabulary', () => {
 import { proveFinding } from '../src/posture/execution-proof.js';
 import { sandboxAvailable } from '../src/sandbox/index.js';
 
-const noSbx = !sandboxAvailable() ? 'skipped: no confinement primitive on this host' : false;
+// A skip is NOT a pass. `sandboxAvailable()` is now a functional verdict: it is
+// false only when a trivial command could not actually be run under
+// confinement on this host (binary absent, or present but the host refuses the
+// confinement). When that happens the execution-proof feature is DISABLED, not
+// degraded — nothing below runs unconfined, and none of these guarantees is
+// verified on this host.
+const noSbx = !sandboxAvailable()
+  ? 'SKIPPED, NOT PASSED: confinement is unavailable on this host (a trivial command could not be run '
+    + 'under any backend), so execution proof is disabled and these guarantees are UNVERIFIED here'
+  : false;
 
 describe('proveFinding', () => {
   test('a PoC that demonstrates the bug is execution-proven', { skip: noSbx }, async () => {
