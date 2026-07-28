@@ -17,8 +17,14 @@ jobs:
       run:
         working-directory: scanner
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # setup-node v5 added automatic package-manager caching, but it only
+      # engages when package.json declares `packageManager` (or
+      # devEngines.packageManager) as npm. This repo declares neither, so the
+      # v4 -> v7 bump is behaviour-preserving here and no `package-manager-cache`
+      # input is needed. If a `packageManager` field is ever added, revisit:
+      # auto-caching would then start looking for a lockfile.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - run: npm install
@@ -32,8 +38,8 @@ jobs:
   corpus:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - run: npm install
