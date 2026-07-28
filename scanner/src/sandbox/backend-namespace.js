@@ -25,11 +25,69 @@
 // expected to take the whole namespace's processes with it — better than the
 // userspace backend, where a backgrounded grandchild demonstrably survives.
 // "Expected", not verified: like everything else here it needs a Linux host.
+//
+// PRIVILEGE. Creating mount/PID/IPC/UTS/network namespaces directly requires
+// CAP_SYS_ADMIN, which an ordinary CI account does not have — asking for them
+// bare fails with a permission error and the backend cannot start at all. The
+// unprivileged route is to create a USER namespace first and take the
+// requested namespaces inside it, where the invoking user holds the
+// capabilities. So the flag set is chosen by PROBE, not assumed: each variant
+// below is executed with a trivial command and the first one that actually
+// succeeds is used (and cached). Fail-closed: if no variant works the backend
+// returns status 'error' and nothing runs. The confinement flags are NEVER
+// relaxed to make a run succeed — dropping `--net` would remove the only
+// confinement this backend implements, so `--net` is part of every probed
+// variant when `allowNetwork` is false.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import { resolveNamespaceBin } from './capabilities.js';
+import { resolveNamespaceBin, cachedNamespaceVariant, cacheNamespaceVariant } from './capabilities.js';
 import { buildLimitPrelude } from './limits.js';
 import { buildResult, errorResult, buildConfinedEnv } from './result.js';
+
+// Ordered most-portable-first. Each entry is only the PRIVILEGE-acquisition
+// prefix; the namespace flags themselves are appended identically to all of
+// them by `_nsArgs`, so no variant can quietly confine less than another.
+//
+//   1. user namespace with the invoking user mapped to root inside it — the
+//      unprivileged route, and the one a standard CI runner needs.
+//   2. user namespace with the invoking user mapped to itself — for hosts
+//      whose policy permits a user namespace but not the root mapping.
+//   3. no prefix — the direct route, which needs CAP_SYS_ADMIN (i.e. root).
+//      Last so an unprivileged host never pays for a doomed attempt first.
+const NS_PRIVILEGE_VARIANTS = Object.freeze([
+  Object.freeze(['--user', '--map-root-user']),
+  Object.freeze(['--user', '--map-current-user']),
+  Object.freeze([]),
+]);
+
+function _nsArgs(privilegeFlags, allowNetwork) {
+  const a = [...privilegeFlags, '--mount', '--pid', '--ipc', '--uts', '--fork'];
+  if (!allowNetwork) a.push('--net');
+  return a;
+}
+
+/**
+ * The first privilege variant under which the requested namespaces can
+ * actually be created on this host, or null when none can. Probed by running
+ * a trivial command — a reasoned expectation about which flags "should" work
+ * is exactly what made this backend unusable on an unprivileged runner.
+ */
+export function resolveNamespaceArgs(bin, allowNetwork, { probeTimeoutMs = 5000 } = {}) {
+  const key = `${bin}:${allowNetwork ? 'net' : 'nonet'}`;
+  const cached = cachedNamespaceVariant(key);
+  if (cached !== undefined) return cached;
+
+  let chosen = null;
+  for (const variant of NS_PRIVILEGE_VARIANTS) {
+    const args = _nsArgs(variant, allowNetwork);
+    const probe = spawnSync(bin, [...args, '/bin/sh', '-c', 'exit 0'], {
+      encoding: 'utf8', timeout: probeTimeoutMs, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (!probe.error && probe.status === 0) { chosen = args; break; }
+  }
+  cacheNamespaceVariant(key, chosen);
+  return chosen;
+}
 
 export function runNamespace(argv, {
   root,
@@ -64,8 +122,13 @@ export function runNamespace(argv, {
   // the header note.
   const inner = `${prelude}cd "$ROOT" && exec "$@"`;
 
-  const nsArgs = ['--mount', '--pid', '--ipc', '--uts', '--fork'];
-  if (!allowNetwork) nsArgs.push('--net');
+  // Fail closed: no usable variant means the confinement cannot be
+  // established, so nothing is executed. There is deliberately no path that
+  // drops confinement flags and runs anyway.
+  const nsArgs = resolveNamespaceArgs(bin, allowNetwork);
+  if (!nsArgs) {
+    return errorResult('namespace', 'kernel namespaces could not be created on this host (unprivileged user-namespace creation appears to be denied); refusing to execute unconfined');
+  }
 
   const r = spawnSync(
     bin,

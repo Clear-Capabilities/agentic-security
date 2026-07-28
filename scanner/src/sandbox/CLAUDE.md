@@ -120,6 +120,29 @@ execution anywhere. It must be verified on a Linux host — with the same
 both-direction escape-attempt tests used for the userspace backend — before
 anything downstream (e.g. an R2 execution-verification tier) relies on it.
 
+**Privilege: the namespaces are acquired unprivileged, and the flag set is
+probed rather than assumed.** Creating mount/PID/IPC/UTS/network namespaces
+directly requires `CAP_SYS_ADMIN`; an ordinary CI account does not have it, so
+asking for them bare fails with a permission error and the backend cannot start
+at all. `resolveNamespaceArgs()` therefore tries an ordered list of
+privilege-acquisition prefixes — user namespace with the invoking user mapped
+to root inside it, then user namespace with the user mapped to itself, then no
+prefix (which needs root) — and **executes a trivial command under each**,
+selecting the first that actually succeeds. The result is cached per
+binary/network shape and cleared by `resetCapabilityCache()`.
+
+The confinement flags are identical across every variant and are **never
+relaxed to make a run succeed**: `--net` is present in every probed variant
+whenever `allowNetwork` is false, because network egress is the only
+confinement this backend implements — dropping it to get a green run would
+leave nothing confined. If no variant succeeds the backend returns
+`status: 'error'` and **nothing is executed**, the same fail-closed rule as the
+disabled backend. The selection contract (flags always present, `allowNetwork`
+the only way `--net` is absent, `null` when every probe fails) is asserted by
+executing tests in `sandbox.test.js` driven with stand-in binaries, so it holds
+on any platform; whether a given kernel actually grants the namespaces is a
+per-host fact only that host can answer.
+
 **And it confines less than "unverified" suggests. Writes are NOT confined on
 this backend — that is false by inspection, not merely undemonstrated.** The
 backend enters new mount/PID/IPC/UTS namespaces and, by default, an empty

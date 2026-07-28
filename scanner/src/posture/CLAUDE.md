@@ -111,6 +111,14 @@ guard: `ran:false` can never yield `execution-proven` or `proof-failed`,
 regardless of what tier was requested — it falls back to the finding's
 static standing (`proofTierOf`).
 
+**`ran` means the PoC executed, not that `runConfined` returned.** A sandbox
+that could not start (`status:'error'` — confinement binary missing, namespaces
+denied) and a refusal (`status:'disabled'`) both leave the PoC unexecuted, so
+`execution-proof.js` records `ran:false` and a reason naming the sandbox
+failure, leaving the finding at its static tier. Calling that `proof-failed`
+would report a broken sandbox as a failed exploit attempt — a claim about the
+*finding* derived from evidence that only concerns the *host*.
+
 `proofTier`/`proofEvidence` are copied through `report/index.js`'s
 `normalizeFindings()` only when the annotator actually attached them —
 never synthesised at the report layer.
