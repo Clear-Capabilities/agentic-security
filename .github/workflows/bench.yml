@@ -33,9 +33,11 @@ on:
 permissions:
   contents: read
 
-# Opt JavaScript actions (upload-artifact, setup-node, etc.) onto Node 24
-# before GitHub's June 16, 2026 forced migration. Silences the Node 20
-# deprecation warning surfaced by actions/upload-artifact@v5.
+# The actions/* pins below are all on majors that declare `runs.using:
+# node24` natively (checkout v7, setup-node v7, cache v6, upload-artifact
+# v7), so they no longer need this opt-in. It is kept as a backstop for any
+# action reached indirectly that still declares node20, ahead of GitHub's
+# June 16, 2026 forced migration; drop it once nothing in this file warns.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -45,8 +47,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 'lts/*' }
       - name: Install scanner deps
         working-directory: scanner
@@ -62,7 +64,7 @@ jobs:
         run: node test/benchmark/bench.js --strict-no-unknown
       - name: Upload synthetic FP/FN registry
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: bench-synthetic-${{ github.run_id }}
           path: |
@@ -76,8 +78,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 'lts/*' }
       - name: Install scanner deps
         working-directory: scanner
@@ -85,12 +87,30 @@ jobs:
       # Cache the cloned benchmark repos across runs (keyed on the manifest
       # SHA — bumping any pinned commit invalidates the cache).
       - name: Cache benchmark repos
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: scanner/test/benchmark/realworld/.bench-cache
           key: bench-cache-${{ hashFiles('scanner/test/benchmark/realworld/manifest.json') }}
+      # Explicit heap ceiling. Without one, V8 sizes max-old-space from the
+      # runner's memory and lands on ~4 GB; the job then dies with exit 134
+      # ("Ineffective mark-compacts near heap limit") partway through the
+      # sard-juliet-java scan — the largest target in the manifest by an
+      # order of magnitude (~28k Java files, 13,366 expected true positives
+      # in a single in-process scan). The evidence says this is a legitimately
+      # large workload rather than a leak: the OOM lands inside ONE app's
+      # scan, not after several, so the obvious leak shape (per-app results
+      # accumulating across the --all loop) is ruled out, and the app scanned
+      # immediately before it finishes in ~26s well under the cap. 6 GB on a
+      # ~7 GB runner leaves room for the OS and V8's off-heap allocations.
+      #
+      # This ceiling is also a measurement: if the job still OOMs at 6 GB,
+      # that IS the leak signal, because no honest per-file working set for
+      # this corpus grows 50% between runs. Do not raise it again without
+      # profiling — a bigger heap is how a real leak stays hidden.
       - name: Run realworld bench (JSON)
         working-directory: scanner
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: |
           node test/benchmark/realworld/bench-realworld.js --all --json > /tmp/realworld.json
           cat /tmp/realworld.json | head -200
@@ -132,7 +152,7 @@ jobs:
           '
       - name: Upload realworld results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: bench-realworld-${{ github.run_id }}
           path: /tmp/realworld.json
