@@ -44,7 +44,7 @@ function writeThrottle(t) { try { fs.mkdirSync(stateDir, { recursive: true }); f
 
   if (!fs.existsSync(bundle)) process.exit(0);
 
-  // Scan the file's parent directory; the bundle handles fast-glob etc. internally.
+  // Scan the file's parent directory; the bundle handles tree discovery internally.
   const scanRoot = path.dirname(file);
   const result = cp.spawnSync('node', [bundle, 'scan', scanRoot, '--no-network', '--format', 'json'], {
     encoding: 'utf8', timeout: 12000, maxBuffer: 8 * 1024 * 1024,

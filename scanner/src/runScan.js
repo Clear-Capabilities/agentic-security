@@ -3,7 +3,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
-import fg from 'fast-glob';
+import { listFiles } from './util/glob.js';
 import { runFullScan, shouldScan } from './engine.js';
 import { appendScanSnapshot } from './posture/security-trend.js';
 import { recover as recoverFixHistory } from './posture/fix-history.js';
@@ -26,11 +26,7 @@ const DEFAULT_IGNORE = [
 ];
 
 export async function readTree(root, { ignore = [] } = {}) {
-  const entries = await fg('**/*', {
-    cwd: root, dot: true, onlyFiles: true,
-    ignore: [...DEFAULT_IGNORE, ...ignore], followSymbolicLinks: false,
-    suppressErrors: true,
-  });
+  const entries = await listFiles(root, { ignore: [...DEFAULT_IGNORE, ...ignore] });
   const fileContents = {};
   const depFileContents = {};
   for (const rel of entries) {

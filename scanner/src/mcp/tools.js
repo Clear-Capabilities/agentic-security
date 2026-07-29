@@ -22,8 +22,8 @@ import { verifyLastScan } from '../posture/integrity.js';
 import { analyzeTranscript, formatCacheReport, renderCacheStatusLine } from '../posture/cache-economics.js';
 import { redactString, redactFinding } from './redact.js';
 
-// Lazy-loaded: these transitively pull in npm packages (fast-glob,
-// @babel/core) that aren't available in the plugin-cache install path
+// Lazy-loaded: these transitively pull in npm packages (@babel/core and
+// friends) that aren't available in the plugin-cache install path
 // (no node_modules). Deferring keeps the MCP server bootable everywhere;
 // the import only runs when a tool that needs them is actually called.
 let _runScan;

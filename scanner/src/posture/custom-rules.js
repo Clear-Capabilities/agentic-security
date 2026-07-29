@@ -30,7 +30,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
-import fg from 'fast-glob';
+import { globFiles } from '../util/glob.js';
 import { loadTrustedKeys, verifyRulePack } from './rule-pack-signing.js';
 
 const LANG_EXTS = {
@@ -337,7 +337,7 @@ export async function runRuleTests(scanRoot, fixtureGlob) {
     console.log(`No custom rules found in ${rulesDir(scanRoot)}`);
     return { ok: true, rules: 0, fired: 0 };
   }
-  const files = await fg(fixtureGlob, { dot: false, onlyFiles: true });
+  const files = await globFiles(fixtureGlob);
   console.log(`Loaded ${rules.length} rule(s); testing against ${files.length} file(s).\n`);
   let fired = 0;
   for (const fp of files) {
