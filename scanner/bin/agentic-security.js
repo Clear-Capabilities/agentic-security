@@ -28,7 +28,7 @@ import { syncTickets } from '../src/integrations/tickets.js';
 import { decide as decideNextAction, explain as explainDecision } from '../src/posture/router.js';
 import * as triage from '../src/posture/triage.js';
 import { buildSlackDigest, buildDiscordDigest, postWebhook, buildJiraIssue, buildPrComment, buildSiemEvent, loadIntegrationConfig } from '../src/integrations/index.js';
-import fg from 'fast-glob';
+import { globFiles } from '../src/util/glob.js';
 
 // last-scan.json integrity helpers — implementation in posture/integrity.js
 // so the MCP server tools can share verification.
@@ -483,7 +483,7 @@ async function cmdScan(args) {
   // fingerprint and tracking provenance via sources[].
   if (args.flags['ingest-sarif']) {
     const glob = args.flags['ingest-sarif'];
-    const paths = await fg(glob, { dot: false, onlyFiles: true });
+    const paths = await globFiles(glob);
     if (paths.length) {
       const r = ingestAndMerge(scan, paths);
       if (process.stderr.isTTY) process.stderr.write(`[ingest] merged ${r.merged} / added ${r.added} findings from ${paths.length} SARIF file(s)\n`);
