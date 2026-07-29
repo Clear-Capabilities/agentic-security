@@ -28,6 +28,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `commands/` | Slash-command markdown files. 10 dispatchers: `secure`, `find-and-fix-everything`, `scan`, `triage`, `fix`, `posture`, `compliance`, `supply`, `setup`, `labs`. Every capability is a mode of a dispatcher (e.g. CI gates live at `/setup --ci`, the red/blue/auditor deep-dive at `/triage --deep`); the legacy single-purpose aliases redirect via `hooks/legacy-alias-redirect.js`. |  |
 | `agents/` | Sub-agent system prompts. Edit-capable agents follow `agents/_CONFINEMENT.md`. |  |
 | `hooks/` | Claude Code hook scripts + `hooks.json`. |  |
+| `.githooks/` | Committed **git** hooks (distinct from `hooks/` above, which is editor integration). Currently `pre-push`, a shim over `scripts/pre-push-gate.mjs`. Activated per clone via `core.hooksPath` — see "Pre-push gate". |  |
 | `scripts/` | Compliance + helper scripts + CI templates (`scripts/ci-templates/`). |  |
 | `docs/POSITIONING.md` | ICP statement: vibecoder-first; pro follow-on. |  |
 | `docs/HARNESS_ASSESSMENT_SPEC.md` | Six-domain rubric for scoring an AI agent harness (PRD-derived, versioned). |  |
@@ -56,6 +57,18 @@ npm run smoke          # bundle smoke: CLI vs vulnerable-js fixture
 All scoped scripts are defined in `scanner/package.json`. Pick the one closest to what you touched; `scanner/CLAUDE.md` documents which test files are in which scope.
 
 After any change to `scanner/src/` or `scanner/bin/`, run `npm run build` before relying on the bundle. Unit tests run against `src/` directly and do not require a rebuild.
+
+### Pre-push gate
+
+`git push` is gated locally so broken code cannot reach the remote and be discovered afterwards by hosted CI. `.githooks/pre-push` is a committed shim over `scripts/pre-push-gate.mjs` (`npm run gate:prepush` in `scanner/`).
+
+- **Activation.** `core.hooksPath` is per-clone local config, so a fresh clone starts ungated. `npm install` in `scanner/` activates it — the `prepare` script runs `node ../scripts/pre-push-gate.mjs --install-hook`, which sets `git config core.hooksPath .githooks` and prints a one-line confirmation. To do it by hand: `git config core.hooksPath .githooks`. If someone never runs the setup step, **nothing gates their pushes**; the gate prints a loud WARNING whenever it notices it is running in a clone where `core.hooksPath` is not `.githooks`.
+- **What it runs**, in cheapest-fail-first order, stopping at the first failure: bundle vs its SHA-256 sidecar (in-process, fails in well under a second — this is what catches "edited `src/`, forgot to rebuild"), then `npm test`, `npm run bench:cve-replay:check`, `npm run bench:self-scan:check`.
+- **Cost:** roughly 2.5–3.5 min for a full pass (measured 201 s on the maintainer's machine); a failure at the bundle check costs 0 s and a failing test aborts in ~20 s.
+- **Scope.** Refs come from the hook's stdin. A ref deletion and a ref with no new commits are not gated; a brand-new branch is.
+- **Bypass:** `git push --no-verify` skips every hook. That cannot be prevented and is the intended escape hatch. On success the gate prints one `pre-push gate PASSED` line, so its *absence* from a push's output is the visible sign it was bypassed.
+- **Deliberately excluded:** the network-dependent checks — dependency currency and hosted-CI status. They are slow, they describe the state of the world rather than the code, and an offline developer must still be able to push. They run at publish time via `npm run release:check` (`prepublishOnly`), which remains the full set.
+- An unrunnable check (missing script, spawn failure) is a **FAILURE**, never a skip.
 
 When cutting a release, run `npm run scorecard` (regenerates `docs/SCORECARD.md` + `docs/scorecard.json`), review the numbers, and commit the result — `npm run scorecard:check` enforces this at publish time (wired into `prepublishOnly`) by failing when the committed scorecard's `engineVersion` doesn't match `scanner/package.json`'s version; it checks, it does not regenerate.
 

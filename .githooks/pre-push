@@ -1,0 +1,33 @@
+#!/bin/sh
+# Pre-push gate — committed hook. Activated per clone with:
+#     git config core.hooksPath .githooks
+# which scanner/'s npm `prepare` script does for you on `npm install`.
+#
+# This file is intentionally a thin shim: all decision logic lives in
+# scripts/pre-push-gate.mjs so it can be unit-tested. Git feeds this hook one
+# line per ref on stdin — `<local ref> <local sha> <remote ref> <remote sha>` —
+# and that stdin is passed straight through so the gate can decide whether the
+# push actually carries new code (a delete, or a ref with no new commits,
+# needs no gate).
+#
+# A non-zero exit aborts the push. `git push --no-verify` bypasses this hook
+# entirely — that is the deliberate escape hatch and cannot be prevented.
+#
+# NOTE: this is unrelated to the `hooks/` directory at the repo root, which
+# holds the plugin's editor-integration hooks.
+
+set -u
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "pre-push gate: cannot locate the repository root — refusing to push." >&2
+  echo "  An unrunnable gate is not a passing gate. Bypass: git push --no-verify" >&2
+  exit 1
+}
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-push gate: node is not on PATH — the gate cannot run, so the push is" >&2
+  echo "  refused rather than silently ungated. Bypass: git push --no-verify" >&2
+  exit 1
+fi
+
+exec node "$REPO_ROOT/scripts/pre-push-gate.mjs" "$@"
