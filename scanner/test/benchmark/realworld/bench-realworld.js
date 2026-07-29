@@ -98,6 +98,22 @@ const BLIND = _BLIND_RAW || STRIP_ALL_COMMENTS || SCRAMBLE_IDENTIFIERS;
 // worked before per-app isolation. Kept so the memory characteristics of the
 // two modes can be compared directly; not for CI.
 const IN_PROCESS = flag('--in-process');
+// --mem-trace: print RSS / heap / external at every phase boundary of a
+// single-app run (ground-truth build, scan, score, aggregate). This is how the
+// harness's own memory profile is attributed rather than guessed — a corpus
+// that OOMs tells you nothing about WHICH phase spent the memory unless the
+// phases are instrumented. Off by default; costs a forced GC per boundary when
+// --expose-gc is available, so it is a diagnostic, not a CI flag.
+const MEM_TRACE = flag('--mem-trace');
+
+function memTrace(label) {
+  if (!MEM_TRACE) return;
+  if (typeof globalThis.gc === 'function') globalThis.gc();
+  const m = process.memoryUsage();
+  const peak = Math.round(process.resourceUsage().maxRSS / 1024);
+  const mb = (n) => String(Math.round(n / 1048576)).padStart(6);
+  console.error(`  [mem] ${pad(label, 22)} rss:${mb(m.rss)}MB heap:${mb(m.heapUsed)}MB ext:${mb(m.external)}MB peakRss:${String(peak).padStart(6)}MB`);
+}
 
 if (!ALL && !APP) {
   console.error('Usage: bench-realworld.js [--all | --app <name>] [--refresh-cache] [--json] [--verbose] [--no-wildcards] [--blind] [--strip-all-comments] [--in-process]');
@@ -1013,6 +1029,7 @@ async function runOne(name, app, vulnFamilyMap) {
   // markers-only blind.
   const blindLabel = BLIND ? (STRIP_ALL_COMMENTS ? ' [BLIND+STRIP-ALL-COMMENTS]' : ' [BLIND]') : '';
   console.error(`\n=== ${name} (${app.language})${blindLabel} ===`);
+  memTrace('start');
   const originalRoot = await ensureClone(name, app.repo, app.sha);
   // In blind mode, materialize a sanitized copy with answer-key markers
   // stripped, then point repoRoot at the blinded copy. The GT builders
@@ -1097,10 +1114,12 @@ async function runOne(name, app, vulnFamilyMap) {
   // --blind: same — blind mode implies strict scoring.
   if (NO_WILDCARDS || BLIND) wildcardFamilies = [];
 
+  memTrace('after ground-truth');
   console.error(`  scanning ${scanRoot} (expected: ${expected.length} TPs)`);
   const t0 = Date.now();
   const { scan } = await runScan(scanRoot);
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  memTrace('after scan');
   if (rulesPath) { try { await fs.rm(path.dirname(rulesPath), { recursive: true, force: true }); } catch {} }
 
   const actual = [
@@ -1110,8 +1129,11 @@ async function runOne(name, app, vulnFamilyMap) {
     ...(scan.supplyChain || []),
   ];
 
+  memTrace('after actual[] merge');
   const { tps, fps, fns } = score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies);
+  memTrace('after score');
   const tp = tps.length, fp = fps.length, fn = fns.length;
+  if (MEM_TRACE) console.error(`  [mem] counts actual:${actual.length} expected:${expected.length} tp:${tp} fp:${fp} fn:${fn}`);
   const precision = tp+fp === 0 ? 1 : tp/(tp+fp);
   const recall    = tp+fn === 0 ? 1 : tp/(tp+fn);
   const fOne      = f1(precision, recall);
@@ -1174,6 +1196,7 @@ async function runOne(name, app, vulnFamilyMap) {
   // every platform. Under --in-process this is cumulative across apps and
   // therefore only an upper bound for the app that happened to run last.
   const peakRssMb = Math.round((process.resourceUsage().maxRSS / 1024) * 10) / 10;
+  memTrace('after aggregate');
   return {
     name, language: app.language, scanned: actual.length,
     peakRssMb,
