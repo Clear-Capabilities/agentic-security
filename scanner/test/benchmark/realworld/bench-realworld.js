@@ -1117,8 +1117,39 @@ async function runOne(name, app, vulnFamilyMap) {
   memTrace('after ground-truth');
   console.error(`  scanning ${scanRoot} (expected: ${expected.length} TPs)`);
   const t0 = Date.now();
-  const { scan } = await runScan(scanRoot);
+  // Under --mem-trace, ride the engine's own progress callback to attribute
+  // RSS to the phase that spent it. Phase boundaries around runScan() can only
+  // say "the scan did it"; the engine announces "Scanning" / "Linking" /
+  // annotator phases as it goes, and sampling RSS on those announcements is
+  // what turns "the scan did it" into "this phase did it". Sampled at most
+  // every 250 ms so the syscall cost is negligible across ~40k callbacks.
+  // maxRSS is monotonic, so recording it at each phase's LAST callback turns
+  // the sequence into "how much had been spent by the end of each phase" —
+  // and the gap between the last phase and the post-scan reading is what the
+  // un-instrumented tail (the annotation pipeline, which announces no
+  // progress) spent. Deltas, not absolute values, are what attribute cost.
+  let phaseRss = null, onProgress;
+  if (MEM_TRACE) {
+    phaseRss = new Map();
+    let lastSample = 0;
+    onProgress = (p) => {
+      const now = Date.now();
+      const phase = (p && p.phase) || 'unknown';
+      if (now - lastSample < 250 && phaseRss.has(phase)) return;
+      lastSample = now;
+      const maxRss = process.resourceUsage().maxRSS / 1024;
+      const cur = phaseRss.get(phase);
+      if (!cur) phaseRss.set(phase, { peak: maxRss, first: now, last: now });
+      else { cur.peak = maxRss; cur.last = now; }
+    };
+  }
+  const { scan } = await runScan(scanRoot, onProgress ? { onProgress } : {});
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  if (phaseRss) {
+    for (const [phase, v] of phaseRss) {
+      console.error(`  [mem] phase ${pad(phase, 18)} peakRssByEnd:${String(Math.round(v.peak)).padStart(6)}MB  span:${((v.last - v.first) / 1000).toFixed(1)}s`);
+    }
+  }
   memTrace('after scan');
   if (rulesPath) { try { await fs.rm(path.dirname(rulesPath), { recursive: true, force: true }); } catch {} }
 
