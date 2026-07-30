@@ -313,8 +313,24 @@ async function ensureClone(name, repo, sha) {
     if (isHead) {
       sh('git', ['clone', '--quiet', '--depth', '1', repo, dest]);
     } else if (isFullSha) {
-      sh('git', ['clone', '--quiet', '--depth', '100', repo, dest]);
-      sh('git', ['-C', dest, 'checkout', '--quiet', sha]);
+      // Fetch the pinned commit ITSELF rather than guessing a depth. The old
+      // `clone --depth 100 && checkout <sha>` silently failed with "unable to
+      // read tree" whenever the pin sat more than 100 commits behind the
+      // default branch — which it does for every actively-developed corpus, so
+      // those apps could never be benchmarked at all. Fetching by SHA is both
+      // correct and cheaper: one commit instead of a hundred.
+      sh('git', ['init', '--quiet', dest]);
+      sh('git', ['-C', dest, 'remote', 'add', 'origin', repo]);
+      try {
+        sh('git', ['-C', dest, 'fetch', '--quiet', '--depth', '1', 'origin', sha]);
+        sh('git', ['-C', dest, 'checkout', '--quiet', 'FETCH_HEAD']);
+      } catch (_) {
+        // Some hosts refuse to serve an arbitrary SHA. Fall back to a full
+        // clone, which always has the object, at the cost of the whole history.
+        await fs.rm(dest, { recursive: true, force: true });
+        sh('git', ['clone', '--quiet', repo, dest]);
+        sh('git', ['-C', dest, 'checkout', '--quiet', sha]);
+      }
     } else {
       // Branch or tag name. Use --branch to clone directly at the ref.
       try {
