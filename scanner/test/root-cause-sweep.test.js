@@ -54,6 +54,66 @@ test('sweepRootCauses: total-count accounting (found === candidates + mitigated)
   assert.deepEqual(result.totals, { found: 3, candidates: 2, mitigated: 1 });
 });
 
+// The instance list is a bounded SAMPLE; the counts are not. A sweep whose
+// siblings run into the thousands must still report how many there really are —
+// truncating the list while letting `found`/`candidates`/`remaining` shrink to
+// the sample size would under-report the work outstanding, which is the exact
+// dishonesty the total-count accounting exists to prevent.
+test('sweepRootCauses: instances are bounded but counts stay exact and truncation is disclosed', () => {
+  const LIMIT = _internals.INSTANCE_SAMPLE_LIMIT;
+  const siblings = LIMIT * 3;
+  const fileContents = { 'origin.js': 'db.query(userInput)\n' };
+  for (let i = 0; i < siblings; i++) fileContents[`s${i}.js`] = `db.query(v${i})\n`;
+  const findings = [{ id: 'F1', file: 'origin.js', line: 1, confirmed: true,
+    vuln: 'SQL Injection', cwe: 'CWE-89', sink: { snippet: 'db.query(userInput)' } }];
+
+  const s = sweepRootCauses(findings, fileContents).sweeps[0];
+
+  assert.equal(s.found, siblings, 'every sibling is counted, not just the sampled ones');
+  assert.equal(s.candidates, siblings);
+  assert.equal(s.remaining, siblings, 'remaining reflects the true outstanding population');
+  assert.equal(s.found, s.candidates + s.mitigated, 'accounting invariant survives truncation');
+  assert.equal(s.instances.length, LIMIT, 'the materialised list is capped');
+  assert.equal(s.instancesTruncated, true, 'truncation is disclosed, never silent');
+  assert.equal(s.instances.find(i => i.file === 'origin.js'), undefined, 'origin still excluded');
+
+  // Under the cap, nothing is truncated and the flag says so.
+  const small = { 'origin.js': 'db.query(userInput)\n', 'a.js': 'db.query(a)\n' };
+  const t = sweepRootCauses(findings, small).sweeps[0];
+  assert.equal(t.found, 1);
+  assert.equal(t.instances.length, 1);
+  assert.equal(t.instancesTruncated, false);
+});
+
+// Two findings can share a sink pattern (one corpus walk serves both) while
+// sitting at different sites, and two findings at the SAME site can derive
+// different patterns. The own-site exclusion must be resolved per pattern
+// group; resolving it globally credits a finding an exclusion its own pattern
+// never matched and drives the counts negative.
+test('sweepRootCauses: own-site exclusion is per pattern group, never global', () => {
+  const findings = [
+    { id: 'A', file: 'a.js', line: 1, confirmed: true, vuln: 'SQL Injection',
+      sink: { snippet: 'db.query(x)' } },
+    { id: 'B', file: 'b.js', line: 1, confirmed: true, vuln: 'Command Injection',
+      sink: { snippet: 'exec(cmd)' } },
+  ];
+  const fileContents = {
+    'a.js': 'db.query(x)\n',
+    'b.js': 'exec(cmd)\n',
+    'c.js': 'db.query(y)\nexec(z)\n',
+  };
+  const result = sweepRootCauses(findings, fileContents);
+  for (const s of result.sweeps) {
+    assert.ok(s.found >= 0, `${s.fromFindingId}: found must never go negative`);
+    assert.ok(s.candidates >= 0 && s.mitigated >= 0, `${s.fromFindingId}: counts must never go negative`);
+    assert.equal(s.found, s.candidates + s.mitigated, `${s.fromFindingId}: accounting invariant`);
+    assert.equal(s.found, s.instances.length, 'small corpus: nothing truncated');
+  }
+  // Each finding sees only c.js — its own site is excluded, the other's is not
+  // its pattern.
+  assert.deepEqual(result.sweeps.map(s => [s.fromFindingId, s.found]), [['A', 1], ['B', 1]]);
+});
+
 test('sweepRootCauses: accepts a Map for fileContents (as well as an object)', () => {
   const findings = [{ id: 'F1', file: 'origin.js', line: 1, confidenceTier: 'high',
     sink: { snippet: 'db.query(userInput)' } }];
