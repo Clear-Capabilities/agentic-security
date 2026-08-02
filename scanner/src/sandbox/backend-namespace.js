@@ -52,9 +52,9 @@
 //
 // FAIL-CLOSED, AND VERIFIED PER RUN RATHER THAN ASSUMED. Every step that
 // establishes confinement aborts the run on failure: no namespace variant, no
-// filesystem-attach utility, a root that cannot be rebound read-write, a mount
-// tree that cannot be made read-only — each returns `status:'error'` with
-// nothing executed. Beyond that, the confinement is PROVEN by execution on
+// filesystem-attach utility, a mount tree that cannot be made read-only, a
+// sandbox root that turns out not to be writable — each returns
+// `status:'error'` with nothing executed. Beyond that, the confinement is PROVEN by execution on
 // every single run: the parent creates a canary path OUTSIDE the sandbox root,
 // and the confined shell — already in its final, deprivileged state —
 // attempts to create it. If that write succeeds, confinement is not in force
@@ -90,7 +90,7 @@ import {
   resolveNamespaceBin, resolveMountBin, resolvePrivDropBin,
   cachedNamespaceVariant, cacheNamespaceVariant,
 } from './capabilities.js';
-import { buildLimitPrelude } from './limits.js';
+import { buildLimitPrelude, ambientRelativeMaxProcs } from './limits.js';
 import { buildResult, errorResult, buildConfinedEnv } from './result.js';
 
 // Ordered most-portable-first. Each entry is only the PRIVILEGE-acquisition
@@ -151,7 +151,10 @@ for _mp in $_mps; do
   "$SBX_MOUNT" -o remount,bind,ro "$_mp" 2>/dev/null || true
 done
 "$SBX_MOUNT" -o remount,bind,ro / || _fail "the root filesystem could not be rebound read-only"
-"$SBX_MOUNT" -o remount,bind,rw "$ROOT" || _fail "the sandbox root could not be rebound writable"
+# Belt and braces: the root was bound before the read-only pass and skipped by
+# it, so this is normally a no-op. Its return code is NOT the gate — the
+# executed in-root write check in $SBX_FINAL is, and that one fails closed.
+"$SBX_MOUNT" -o remount,bind,rw "$ROOT" 2>/dev/null || true
 if [ -n "$SBX_PRIVDROP" ] && "$SBX_PRIVDROP" --securebits=+noroot,+noroot_locked --bounding-set=-all --inh-caps=-all /bin/sh -c 'exit 0' 2>/dev/null; then
   exec "$SBX_PRIVDROP" --securebits=+noroot,+noroot_locked --bounding-set=-all --inh-caps=-all /bin/sh -c "$SBX_FINAL" _sbx "$@"
 fi
@@ -245,9 +248,15 @@ export function runNamespace(argv, {
     return errorResult('namespace', `sandbox root is not usable: ${e.message}`);
   }
 
+  // Same per-uid RLIMIT_NPROC trap as the userspace backend, and worse here:
+  // the confined shell has to fork several helpers to BUILD its confinement,
+  // so a fixed cap below the ambient count for this uid makes the setup itself
+  // fail and the sandbox look broken. See `ambientRelativeMaxProcs`.
+  const effectiveLimits = { ...limits, maxProcs: limits.maxProcs ?? ambientRelativeMaxProcs() };
+
   let prelude, unsupported;
   try {
-    ({ prelude, unsupported } = buildLimitPrelude(limits));
+    ({ prelude, unsupported } = buildLimitPrelude(effectiveLimits));
   } catch (e) {
     return errorResult('namespace', `invalid resource limit: ${e.message}`);
   }
