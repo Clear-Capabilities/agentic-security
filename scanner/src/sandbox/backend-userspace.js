@@ -14,25 +14,8 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { resolveUserspaceBin } from './capabilities.js';
-import { buildLimitPrelude } from './limits.js';
+import { buildLimitPrelude, ambientRelativeMaxProcs } from './limits.js';
 import { buildResult, errorResult, buildConfinedEnv } from './result.js';
-
-// `ulimit -u` (RLIMIT_NPROC) is a per-uid, system-wide cap on this platform,
-// not a per-process-tree cap (verified by execution in Task 2). A fixed
-// default like the 64 in buildLimitPrelude() breaks ordinary, non-adversarial
-// runs on any host whose user already has more than ~64 ambient processes —
-// which is common. So unless the caller passes an explicit maxProcs, we
-// compute one relative to the ambient count for this uid, the same
-// workaround Task 2 used in its own test, to keep default behavior usable
-// without pretending a low fixed cap is real containment.
-function _ambientProcCount() {
-  try {
-    const out = spawnSync('/bin/sh', ['-c', 'ps -U "$(id -un)" -o pid= | wc -l'], { encoding: 'utf8' });
-    return Number(String(out.stdout || '').trim()) || 200;
-  } catch {
-    return 200;
-  }
-}
 
 function _profile({ allowNetwork }) {
   return [
@@ -72,7 +55,7 @@ export function runUserspace(argv, {
 
   const effectiveLimits = {
     ...limits,
-    maxProcs: limits.maxProcs ?? (_ambientProcCount() + 64),
+    maxProcs: limits.maxProcs ?? ambientRelativeMaxProcs(),
   };
 
   let prelude, unsupported;

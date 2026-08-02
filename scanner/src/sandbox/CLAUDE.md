@@ -152,14 +152,28 @@ other.
   silently do nothing — an unenforced limit must never look like an enforced
   one.
 
-**Kernel-namespace backend (Linux family) — implemented, NOT verified on this
-platform.** The required namespace tool is absent on the macOS development
-host, so `backend-namespace.js`'s escape tests skip with a recorded reason
-rather than being asserted against. Nothing in this guide should be read as a
-claim that the namespace backend's isolation has been demonstrated by
-execution anywhere. It must be verified on a Linux host — with the same
-both-direction escape-attempt tests used for the userspace backend — before
-anything downstream (e.g. an R2 execution-verification tier) relies on it.
+**Kernel-namespace backend (Linux family) — implemented, NOT verified.** The
+required namespace tool is absent on the macOS development host, so
+`backend-namespace.js`'s escape tests skip there with a recorded reason rather
+than being asserted against. Nothing in this guide should be read as a claim
+that the namespace backend's isolation has been demonstrated by execution
+anywhere. It must be verified on a Linux host — with the same both-direction
+escape-attempt tests used for the userspace backend — before anything
+downstream (e.g. an R2 execution-verification tier) relies on it.
+
+**How it gets verified: the `sandbox-linux` CI job.** Hosted runners restrict
+unprivileged user-namespace creation at the kernel's access-control layer, so
+the functional probe fails there and the escape suite skips — which is why
+this backend went unverified for so long. The `sandbox-linux` job in
+`.github/workflows/ci.yml` relaxes that **host policy** for itself (it has
+passwordless root) and then runs the existing suite unchanged. It relaxes a
+restriction on creating namespaces; it does not relax a single assertion or
+confinement flag. `scripts/sandbox-linux-verify.mjs` then prints the selected
+backend and `RAN`/`SKIPPED` for every test and **exits non-zero unless the
+kernel-namespace suite actually ran**, so a skip cannot be mistaken for a pass
+in a green job. Whether the relaxation works on the current runner image is
+itself a fact only a CI log can settle — until that log exists, everything in
+the next section is "implemented, unverified".
 
 **Privilege: the namespaces are acquired unprivileged, and the flag set is
 probed rather than assumed.** Creating mount/PID/IPC/UTS/network namespaces
@@ -174,9 +188,9 @@ binary/network shape and cleared by `resetCapabilityCache()`.
 
 The confinement flags are identical across every variant and are **never
 relaxed to make a run succeed**: `--net` is present in every probed variant
-whenever `allowNetwork` is false, because network egress is the only
-confinement this backend implements — dropping it to get a green run would
-leave nothing confined. If no variant succeeds the backend returns
+whenever `allowNetwork` is false, and `--mount` unconditionally, because the
+write confinement is built inside that mount namespace — dropping either to
+get a green run would remove a confinement. If no variant succeeds the backend returns
 `status: 'error'` and **nothing is executed**, the same fail-closed rule as the
 disabled backend. The selection contract (flags always present, `allowNetwork`
 the only way `--net` is absent, `null` when every probe fails) is asserted by
@@ -184,28 +198,58 @@ executing tests in `sandbox.test.js` driven with stand-in binaries, so it holds
 on any platform; whether a given kernel actually grants the namespaces is a
 per-host fact only that host can answer.
 
-**And it confines less than "unverified" suggests. Writes are NOT confined on
-this backend — that is false by inspection, not merely undemonstrated.** The
-backend enters new mount/PID/IPC/UTS namespaces and, by default, an empty
-network namespace. The empty network namespace is the *only* confinement it
-implements: it has no route anywhere, which denies egress. For the
-filesystem there is **no remount, no bind mount and no `pivot_root`** — only a
-`cd` into the sandbox root. `cd` sets the working directory; it does not
-restrict where a process may write. A confined command writing to an absolute
-path outside the root (a home directory, a system config path) will
-**succeed**, subject only to ordinary filesystem permissions. The new mount
-namespace isolates mount-table *changes* made by the confined process; it does
-not make the host filesystem read-only.
+**Write confinement: implemented, unverified.** This backend used to confine
+network egress and nothing else — no remount, no bind mount, no `pivot_root`,
+just a `cd` — so an absolute out-of-root write succeeded. That gap is now
+closed in code:
 
-On a Linux host where the probe succeeds, `detectBackend()` selects this
-backend automatically, so a caller there gets network isolation and resource
-limits and **no write confinement at all**. Do not run anything on that path
-that must not touch the host filesystem. (Where the probe fails — a host
-restricting unprivileged namespace creation — the answer is `'disabled'` and
-nothing runs at all, which is the safe side of this gap.) Closing the gap means implementing a read-only remount (or
-equivalent) *and* verifying it by execution on a Linux host with both-direction
-escape tests — the guide must not claim write confinement here before both
-have happened.
+1. A **private mount namespace** in which every mount point present at setup
+   time is rebound **read-only**, and only the sandbox root is rebound
+   read-write. An out-of-root write therefore fails with `EROFS`, whose error
+   text is one of `result.js`'s denial patterns — so an escape attempt
+   surfaces as `status:'blocked'` + `denied:true`, the same shape the
+   userspace backend produces for the same attempt.
+2. A **capability drop** (whole bounding + inheritable set, plus the `noroot`
+   secure bits so uid 0 stops implying privilege) applied *after* the mounts
+   and *before* the caller's command. Without it the payload would hold
+   `CAP_SYS_ADMIN` over its own mount namespace — the namespaces are acquired
+   via a user namespace — and could simply rebind the tree writable again.
+3. A **per-run proof by execution**, not a reasoned expectation. The parent
+   seeds a canary path *outside* the sandbox root; the confined shell, already
+   in its final deprivileged state, attempts to create it and refuses to
+   `exec` the caller's command if that write succeeds. The parent then
+   re-checks the canary from outside, so the verdict does not depend on the
+   confined shell being honest about its own exit code.
+
+**Why read-only rebind and not `pivot_root`.** `pivot_root` is the stronger
+primitive — after detaching the old root, out-of-root paths are absent from
+the mount namespace rather than merely read-only. It was rejected for three
+concrete reasons. (a) It requires materialising a system tree (shell, C
+library, whatever a PoC invokes) inside the *caller's* sandbox root, polluting
+a directory the caller owns and reads back. (b) It changes path semantics —
+`$ROOT` becomes `/` — so the two backends stop being interchangeable for the
+same caller input. (c) An out-of-root write would then fail with `ENOENT`,
+indistinguishable from an ordinary missing path, which destroys the `denied`
+signal exactly where it matters most. The read-only rebind keeps paths, keeps
+the denial signal, and keeps both backends answering the same way.
+
+**Fail-closed throughout.** No namespace variant, no filesystem-attach
+utility, a mount tree that cannot be rebound read-only, a sandbox root that
+cannot be rebound writable, or a canary that turns out writable — each returns
+`status:'error'` with **nothing executed**. There is no branch that proceeds
+with the filesystem open.
+
+**The one hardening that can be absent, and it is declared.** If the
+privilege-dropping utility is not on the host, the command still runs under
+the read-only mount tree but the result carries `privilegeDrop` in the
+`unsupported` list (surfaced on stderr as `[sandbox] not enforceable here:
+privilegeDrop`), the same mechanism `limits.js` uses for an unenforceable
+limit. It is never silently skipped, and the escape test that covers the
+rebind attack fails if it is missing rather than quietly passing.
+
+**None of the above has been executed anywhere yet.** It is asserted by
+`sandbox-escape.test.js`'s kernel-namespace suite, which skips on macOS. Until
+a CI log shows that suite `RAN`, this section describes code, not evidence.
 
 ## Timeout does not kill the process tree
 
@@ -229,8 +273,8 @@ needs the same Linux-host verification as everything else on that backend.
 
 The userspace policy allows `(allow file-read*)` globally — that backend
 confines **writes**, network egress, and resource use, but **not reads**. (The
-kernel-namespace backend confines *less* than that: per the section above, it
-implements network isolation only and does **not** confine writes at all.)
+kernel-namespace backend has the same cut: per the section above its mount
+tree is rebound read-only, not detached, so everything on it stays readable.)
 A confined command can read any file on the host the OS-level
 permissions allow, including outside the sandbox root. Exfiltration of
 readable host files (writing what was read to network or to a location the

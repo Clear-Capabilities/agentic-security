@@ -4,6 +4,27 @@
 // verified by execution. We therefore DECLARE it unsupported rather than
 // emitting a limit that silently does nothing, which would be a false
 // assurance of containment.
+import { spawnSync } from 'node:child_process';
+
+// `ulimit -u` (RLIMIT_NPROC) is charged per *uid*, system-wide, on both
+// platforms this module supports — it is not a per-process-tree cap. A fixed
+// default like the 64 below therefore breaks ordinary, non-adversarial runs on
+// any host whose user already owns more than ~64 processes, which is most of
+// them: the confined shell cannot even fork the helpers it needs to set itself
+// up, and the failure looks like a broken sandbox rather than a cap doing its
+// job. So unless a caller passes an explicit `maxProcs`, both real backends
+// derive one from the ambient count for this uid. That keeps default behaviour
+// usable without pretending a low fixed cap is real containment — see the
+// "fork-storm containment is weak" note in the module guide.
+export function ambientRelativeMaxProcs(headroom = 64) {
+  let ambient = 200;
+  try {
+    const out = spawnSync('/bin/sh', ['-c', 'ps -U "$(id -un)" -o pid= | wc -l'], { encoding: 'utf8' });
+    ambient = Number(String(out.stdout || '').trim()) || 200;
+  } catch { /* fall through to the conservative default */ }
+  return ambient + headroom;
+}
+
 export function buildLimitPrelude({
   maxProcs = 64,
   maxFileSizeKb = 65536,
