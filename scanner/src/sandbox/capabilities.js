@@ -42,6 +42,31 @@ export const CONFINE_BINS_NAMESPACE = Object.freeze([
   '/usr/sbin/unshare',
 ]);
 
+// The filesystem-attach utility used by the namespace backend to establish
+// write confinement (read-only rebind of the whole mount tree, read-write
+// rebind of the sandbox root). Resolved by path for the same reason as the
+// others. Absent => the namespace backend cannot establish write confinement
+// and fails closed; it never runs a command with the filesystem open.
+export const CONFINE_BINS_MOUNT = Object.freeze([
+  '/usr/bin/mount',
+  '/bin/mount',
+  '/sbin/mount',
+  '/usr/sbin/mount',
+]);
+
+// The privilege-dropping utility used to remove CAP_SYS_ADMIN (and everything
+// else) from the confined process *after* the mounts are in place, so the
+// payload cannot simply undo the read-only rebinds. Best-effort hardening on
+// top of the mount confinement, not the confinement itself: when it is absent
+// the run still happens under the read-only mount tree and the result declares
+// `privilegeDrop` unenforced rather than staying silent about it.
+export const CONFINE_BINS_PRIVDROP = Object.freeze([
+  '/usr/bin/setpriv',
+  '/bin/setpriv',
+  '/sbin/setpriv',
+  '/usr/sbin/setpriv',
+]);
+
 // Back-compat single-path exports: the first (canonical) candidate.
 export const CONFINE_BIN_USERSPACE = CONFINE_BINS_USERSPACE[0];
 export const CONFINE_BIN_NAMESPACE = CONFINE_BINS_NAMESPACE[0];
@@ -69,6 +94,8 @@ export function resolveConfineBin(candidates) {
 
 export function resolveUserspaceBin() { return resolveConfineBin(CONFINE_BINS_USERSPACE); }
 export function resolveNamespaceBin() { return resolveConfineBin(CONFINE_BINS_NAMESPACE); }
+export function resolveMountBin() { return resolveConfineBin(CONFINE_BINS_MOUNT); }
+export function resolvePrivDropBin() { return resolveConfineBin(CONFINE_BINS_PRIVDROP); }
 
 // Bounded on purpose: a capability check must never hang a scan. The probe is
 // a single `exit 0` under confinement, so anything beyond a couple of seconds

@@ -172,38 +172,108 @@ const nsSkip = detectBackend() !== 'namespace'
 // of the namespace claims may be stated as verified. They exist so that the
 // FIRST run on a Linux host asserts the same both-direction contract the
 // userspace backend already meets, rather than discovering the gap later.
+//
+// A shell with a network-connection primitive built in, used for the egress
+// test. The default shell on several distributions has no such primitive, so
+// a test written against it would "pass" everywhere including on a host with
+// no confinement at all — a contrived pass, which is worse than a skip. When
+// the primitive is unavailable the egress test skips with a reason instead.
+const NET_SHELL = ['/bin/bash', '/usr/bin/bash'].find((p) => fs.existsSync(p)) || null;
+const NET_PROBE = 'exec 3<>/dev/tcp/1.1.1.1/443';
+
 describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, () => {
   test('GOOD: a write inside the sandbox root succeeds', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
     const r = runNamespace(['/bin/sh', '-c', 'echo ok > "$ROOT/a.txt" && cat "$ROOT/a.txt"'], { root });
     assert.equal(r.status, 'ok', r.stderr);
     assert.match(r.stdout, /ok/);
+    assert.equal(fs.existsSync(path.join(root, 'a.txt')), true,
+      'the in-root write did not reach the caller-visible sandbox root');
   });
 
-  test('KNOWN GAP: a write outside the sandbox root is NOT confined by this backend', () => {
-    // Asserts the documented reality, not a wish. This backend has no
-    // remount/bind/pivot_root — only a `cd` — so an absolute out-of-root write
-    // succeeds. The guide says so; this test makes the claim executable on the
-    // first Linux host that runs it. If write confinement is later
-    // implemented, this test WILL fail, and the guide's namespace section must
-    // be rewritten in the same commit.
+  test('BAD: a write outside the sandbox root is blocked and creates no file', () => {
+    // The gate this backend previously did not have at all. Both directions
+    // are asserted: the caller is told the write was refused, AND the file
+    // does not exist afterwards. The second half is the load-bearing one —
+    // per the module guide, the side effect is the reliable evidence, the
+    // status is derived from the child's own stderr.
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-out-'));
     const target = path.join(outside, 'escape.txt');
-    runNamespace(['/bin/sh', '-c', `echo bad > ${target}`], { root });
-    assert.equal(fs.existsSync(target), true,
-      'write confinement now appears to work — verify it properly and update the guide');
+    const r = runNamespace(['/bin/sh', '-c', `echo bad > ${target}`], { root });
+    assert.equal(fs.existsSync(target), false, 'ESCAPED: file was created outside the sandbox root');
+    assert.equal(r.denied, true, `denial was not observed; stderr=${r.stderr}`);
+    assert.equal(r.status, 'blocked');
   });
 
-  test('BAD: outbound network is blocked by the empty network namespace', () => {
+  test('BAD: a DENIED write is not reported as a clean run even when the command exits 0', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
-    const r = runNamespace(['/bin/sh', '-c', 'exec 3<>/dev/tcp/1.1.1.1/443'], { root, timeoutMs: 15000 });
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-out-'));
+    const target = path.join(outside, 'escape-exit0.txt');
+    const r = runNamespace(['/bin/sh', '-c', `echo bad > ${target}; exit 0`], { root });
+    assert.equal(r.exitCode, 0, 'precondition: the command must exit 0 for this test to mean anything');
+    assert.equal(fs.existsSync(target), false, 'ESCAPED: file was created outside the sandbox root');
+    assert.equal(r.denied, true, 'the denial was invisible to the caller');
+    assert.notEqual(r.status, 'ok', 'a denied run was reported as a clean run');
+  });
+
+  test('BAD: the confined process cannot rebind the filesystem writable again', () => {
+    // The specific attack the read-only rebind invites: the namespaces are
+    // acquired through a user namespace, so without the capability drop the
+    // payload would hold CAP_SYS_ADMIN over its own mount namespace and could
+    // simply undo the confinement. This asserts it cannot.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-out-'));
+    const target = path.join(outside, 'reescape.txt');
+    const r = runNamespace(
+      ['/bin/sh', '-c', `mount -o remount,bind,rw / 2>&1; echo bad > ${target}`],
+      { root },
+    );
+    assert.equal(fs.existsSync(target), false,
+      'ESCAPED: the payload rebound the tree writable and wrote outside the sandbox root');
+    assert.ok(!/privilegeDrop/.test(r.stderr),
+      'the capability drop did not apply on this host; the rebind defence is unenforced here');
+  });
+
+  test('GOOD: an ordinary non-zero exit is "nonzero", never "blocked"', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const r = runNamespace(['/bin/sh', '-c', 'exit 3'], { root });
+    assert.equal(r.exitCode, 3);
+    assert.equal(r.denied, false);
+    assert.equal(r.status, 'nonzero', 'ordinary failure mislabelled as a confinement block');
+  });
+
+  test('BAD: the parent environment is not handed to the confined command', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    process.env.SBX_PARENT_SECRET = 'leaked-value-should-not-appear';
+    try {
+      const r = runNamespace(['/bin/sh', '-c', 'echo "[${SBX_PARENT_SECRET}]"'], { root });
+      assert.equal(r.status, 'ok', r.stderr);
+      assert.doesNotMatch(r.stdout, /leaked-value-should-not-appear/,
+        'LEAKED: a parent environment variable reached the confined command');
+    } finally {
+      delete process.env.SBX_PARENT_SECRET;
+    }
+  });
+
+  test('BAD: outbound network is blocked by the empty network namespace', {
+    skip: NET_SHELL ? false : 'SKIPPED, NOT PASSED: no shell with a built-in connection primitive on this host, '
+      + 'so a confined-egress assertion could not be distinguished from the shell simply lacking the feature',
+  }, () => {
+    // Meaningfulness first: the same command must SUCCEED unconfined. Without
+    // this control the assertion below would also hold on a host with no
+    // egress at all, i.e. it would prove nothing about the sandbox.
+    const control = execFileSync(NET_SHELL, ['-c', `${NET_PROBE} && echo REACHABLE`], { encoding: 'utf8' });
+    assert.match(control, /REACHABLE/, 'precondition: outbound egress must work unconfined for this test to mean anything');
+
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const r = runNamespace([NET_SHELL, '-c', NET_PROBE], { root, timeoutMs: 15000 });
     assert.notEqual(r.exitCode, 0, 'outbound connection unexpectedly succeeded inside the sandbox');
   });
 
   test('BAD: a wall-clock overrun stops the direct child', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
-    const r = runNamespace(['/bin/sh', '-c', 'sleep 30'], { root, timeoutMs: 1500 });
+    const r = runNamespace(['/bin/sh', '-c', 'sleep 30'], { root, timeoutMs: 3000 });
     assert.equal(r.timedOut, true);
     assert.equal(r.status, 'timeout');
   });

@@ -35,6 +35,79 @@ jobs:
       - name: Verify committed bundle matches source
         run: git diff --exit-code dist/agentic-security.mjs dist/agentic-security.mjs.sha256
 
+  # Exercises the kernel-namespace confinement backend for real.
+  #
+  # Hosted runners ship with unprivileged user-namespace creation restricted by
+  # the kernel's access-control layer, which is why the backend's functional
+  # probe fails there and its escape tests skip. Runners do have passwordless
+  # root, so this job relaxes the restriction for itself and then runs the
+  # existing escape suite unchanged. Nothing about the tests or the confinement
+  # is weakened to make them run — the only thing changed is the HOST policy
+  # that forbids an unprivileged process from creating the namespaces at all.
+  #
+  # The job prints the selected backend and RAN/SKIPPED per test, and the
+  # runner script exits non-zero if the namespace suite skipped. A skip can
+  # therefore never be mistaken for a pass here.
+  sandbox-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm install
+        working-directory: scanner
+
+      - name: Host state before relaxing the restriction
+        run: |
+          uname -a
+          echo "--- namespace-related knobs (before) ---"
+          for k in kernel.apparmor_restrict_unprivileged_userns \
+                   kernel.unprivileged_userns_clone \
+                   user.max_user_namespaces; do
+            sysctl "$k" 2>&1 || true
+          done
+          echo "--- can an unprivileged process create the namespaces? (before) ---"
+          if unshare --user --map-root-user --mount --pid --ipc --uts --net --fork /bin/sh -c 'exit 0' 2>&1; then
+            echo "EXIT_BEFORE=0"
+          else
+            echo "EXIT_BEFORE=$?"
+          fi
+
+      - name: Relax the unprivileged user-namespace restriction for this job
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
+
+      - name: Host state after relaxing the restriction
+        run: |
+          echo "--- namespace-related knobs (after) ---"
+          for k in kernel.apparmor_restrict_unprivileged_userns \
+                   kernel.unprivileged_userns_clone \
+                   user.max_user_namespaces; do
+            sysctl "$k" 2>&1 || true
+          done
+          echo "--- can an unprivileged process create the namespaces? (after) ---"
+          if unshare --user --map-root-user --mount --pid --ipc --uts --net --fork /bin/sh -c 'exit 0' 2>&1; then
+            echo "EXIT_AFTER=0"
+          else
+            echo "EXIT_AFTER=$?"
+          fi
+
+      - name: Control — outbound egress succeeds UNCONFINED
+        # Without this, "egress was blocked inside the sandbox" would also hold
+        # on a runner with no egress at all, i.e. it would prove nothing.
+        run: |
+          if bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>&1; then
+            echo "EXIT_UNCONFINED_EGRESS=0"
+          else
+            echo "EXIT_UNCONFINED_EGRESS=$?"
+          fi
+
+      - name: Sandbox escape suite (fails if the namespace suite SKIPPED)
+        run: node scripts/sandbox-linux-verify.mjs
+
   corpus:
     runs-on: ubuntu-latest
     steps:

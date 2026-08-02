@@ -63,7 +63,7 @@ export function buildResult({ backend, spawnResult, unsupported = [] }) {
     status,
     denied,
     stdout: r.stdout ?? '',
-    stderr: rawStderr + (unsupported.length ? `\n[sandbox] limits not enforceable here: ${unsupported.join(', ')}` : ''),
+    stderr: rawStderr + (unsupported.length ? `\n[sandbox] not enforceable here: ${unsupported.join(', ')}` : ''),
     exitCode: r.status ?? null,
     timedOut,
     backend,
