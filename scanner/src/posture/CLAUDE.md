@@ -102,11 +102,13 @@ timeout/crash detection, never as the proof signal itself.
 
 **The backend is recorded in every evidence object** (`proofEvidence.backend`,
 e.g. `'userspace'`) because not all confinement backends carry the same
-guarantee. The kernel-namespace backend is unverified on this host and, even
-where available, only confines network — it does **not** confine writes.
+guarantee. The kernel-namespace backend now implements write confinement as
+well as network isolation (read-only rebind of the mount tree, read-write
+rebind of the sandbox root, capability drop before exec), but that is
+**implemented, unverified** — no Linux run has executed its escape suite yet.
 Treat `execution-proven` evidence from a non-`userspace` backend as weaker
-than the same tier from `userspace` until that backend's write confinement
-is independently verified. `attachProofTier()` also enforces the demotion
+than the same tier from `userspace` until that backend's escape suite has
+RUN (not skipped) on a Linux host. `attachProofTier()` also enforces the demotion
 guard: `ran:false` can never yield `execution-proven` or `proof-failed`,
 regardless of what tier was requested — it falls back to the finding's
 static standing (`proofTierOf`).

@@ -83,19 +83,34 @@ system-wide limit, not per-tree, so it only bounds a storm to
 "ambient + margin" rather than to a small absolute number — documented, not
 overstated, in `scanner/src/sandbox/CLAUDE.md`. Address-space capping is
 **not enforceable** on the macOS family and is reported in `unsupported`
-rather than emitted as a silent no-op. The kernel-namespace backend (Linux
-family) is **implemented but not verified** — no Linux host was available in
-this development environment, so its escape tests skip with a recorded
-reason. It also confines **less** than that phrasing implies: it has no
-remount, bind mount or `pivot_root`, only a `cd`, so **it does not confine
-writes at all** — network egress (via the empty network namespace) and the
-resource limits are the whole of its confinement, and on a Linux host that
-backend is selected automatically. Fail-closed holds throughout: with no
-confinement primitive detected,
-execution is refused, never run unconfined. R2 must not treat the
-kernel-namespace backend as trustworthy until it has been verified on a Linux
-host with the same both-direction escape tests used for the userspace
-backend; R2 is not unblocked beyond what has actually been executed here.
+rather than emitted as a silent no-op.
+
+The kernel-namespace backend (Linux family) is **implemented, unverified**.
+Two things changed. First, it no longer confines network egress only: it now
+builds write confinement inside its mount namespace — every mount point
+present at setup is rebound **read-only**, only the sandbox root is rebound
+read-write, the whole capability set is dropped before the caller's command
+runs (so the payload cannot rebind the tree writable again), and each run
+*proves* the confinement by attempting an out-of-root canary write from inside
+and refusing to execute anything if it succeeds. `pivot_root` was considered
+and rejected: it would have to materialise a system tree inside the caller's
+sandbox root, would change `$ROOT` semantics between backends, and would turn
+an out-of-root write into an `ENOENT` that cannot be reported as a
+confinement denial. Second, CI can now try to exercise it: the `sandbox-linux`
+job relaxes the **host** restriction on unprivileged user-namespace creation
+(no test or confinement flag is relaxed) and runs the escape suite unchanged,
+with `scripts/sandbox-linux-verify.mjs` printing the selected backend and
+`RAN`/`SKIPPED` per test and failing the job if the namespace suite skipped.
+
+**Unverified means unverified**: no Linux host was available in this
+development environment, so the namespace escape suite has never executed
+anywhere, and whether the CI relaxation actually works on the current runner
+image is a fact only a CI log can settle. Fail-closed holds throughout: with
+no confinement primitive detected — or with the write confinement unprovable
+on the host — execution is refused, never run unconfined. R2 must not treat
+the kernel-namespace backend as trustworthy until a CI log shows its escape
+suite RAN (not skipped) and passed; R2 is not unblocked beyond what has
+actually been executed.
 
 ### R2. Execution-verified exploitability
 
@@ -125,10 +140,10 @@ implemented and covered by `scanner/test/execution-proof.test.js`. Verified on
 this development host on the `userspace` backend: a PoC that produces the
 predicted marker promotes to `execution-proven`; one that runs without
 producing it lands at `proof-failed`; a finding with no PoC or an unsupported
-PoC language stays at its static tier. The kernel-namespace backend remains
-unverified (see R1) and confines writes not at all, so `execution-proven`
-evidence recorded on that backend is weaker than the same tier on `userspace`
-until that backend gets the same escape-test treatment on a real Linux host.
+PoC language stays at its static tier. The kernel-namespace backend now
+implements write confinement too (see R1) but remains **unverified**, so
+`execution-proven` evidence recorded on that backend is weaker than the same
+tier on `userspace` until its escape suite has RUN on a Linux host.
 **Not landed:** the differentiator described above — auto-enrolling an
 execution-proven finding as a corpus entry. That needs a corpus-entry
 generator plus the same `pre:TP post:TN` verification loop the existing
