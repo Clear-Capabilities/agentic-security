@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.131.0 — decorated files stop vanishing; the Linux sandbox is verified
+
+Two correctness fixes, both found by pushing measurement further than the last
+release did.
+
+- **Decorator syntax is now accepted by the IR frontend.** The parser was told
+  about TypeScript and JSX but not decorators, so it rejected the ENTIRE file on
+  the first `@tracked` it met — no error, no warning, just findings that never
+  existed. Measured on a live third-party target: **4,023 of 4,271 JavaScript
+  files parsed before, 4,262 after** — 239 files, roughly 6% of that project,
+  were invisible to the scanner and are now analysed. `decorators-legacy` plus
+  `decoratorAutoAccessors` was chosen over the modern `decorators` variant
+  because the modern one cannot parse TypeScript parameter decorators; it would
+  have swapped one blind spot for another. No new dependency. Guarded by a
+  regression test proven in both directions — 5/5 pass with the fix, 4 fail
+  without it.
+- **The kernel-namespace sandbox now confines writes, and is verified.** It
+  previously confined network only and had never been executed. It now enters a
+  private mount namespace, rebinds every mount read-only except the sandbox
+  root, and drops the entire capability set before exec so a payload cannot
+  rebind the tree writable. A CI job relaxes the host restriction on
+  unprivileged user namespaces and runs the real escape suite: a write outside
+  the root is blocked with no file created, and outbound egress is blocked. The
+  verifier exits non-zero unless that suite actually RAN, so a skip can never be
+  read as a pass. Execution-proof on Linux no longer rests on an unexercised
+  backend.
+
+Also in this release:
+
+- **A quadratic blowup in the root-cause sweep**, which ran on every full scan:
+  it re-split the whole corpus into lines once per finding and kept a record per
+  finding x matching line. The largest benchmark corpus went from dying after
+  55+ minutes to **exit 0, 933 MB peak, 330s** — smaller and roughly ten times
+  faster, with metrics identical before and after.
+- **Benchmark corpora are fetched by pinned commit** instead of guessing a clone
+  depth; six corpora had never been scoreable because their pin sat more than
+  100 commits back.
+- **A pre-push gate** runs bundle integrity, the full suite, the corpus baseline
+  and the precision baseline before anything leaves the machine, plus branch
+  protection requiring green checks to merge.
+- **A dependency-currency release gate**: any advisory at moderate or above
+  fails with no opt-out; anything behind latest fails unless explicitly held
+  with a stated reason and a review date that expires.
+- **The glob dependency was replaced by the platform built-in** — 92 to 73
+  production packages — after a differential over 320 trees and 1,419,229 paths
+  showed zero differences.
+
+`npm test` 2072/0; cve-replay 199/199; self-scan no drift; proof corpus
+ghost/superset/godot all 100% parse coverage.
+
 ## 0.130.0 — the roadmap's first ten: provable security over orchestration parity
 
 A capability roadmap (`docs/ROADMAP.md`) plus its first ten items, derived from a

@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.130.0",
-    "bundleSha256": "dd72d7c2dcc4df5e96f24285cf531a6476881867a330000427a6a8edaf71b06e",
-    "commit": "9569f461c38dcac9578c81cd1efb2eaa63bacda7",
-    "worktreeClean": true,
+    "engineVersion": "0.131.0",
+    "bundleSha256": "0ba4abbe57dd8124d15c252d22a56d7efc80e9f59690e1c49a95a4b55e0a68a4",
+    "commit": "c4789f91563761380df207dc6e94d80a5e0d6b65",
+    "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-07-27T22:08:21.408Z"
+    "generatedAt": "2026-08-03T04:41:35.483Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -20,16 +20,24 @@
   "corpus": {
     "measuredThisRun": true,
     "totalEntries": 199,
-    "scoredEntries": 199,
-    "notScored": [],
+    "scoredEntries": 198,
+    "notScored": [
+      {
+        "cve": "py-interproc-cmdi-shape",
+        "tier": "deep",
+        "language": "python",
+        "status": "env-error",
+        "error": "python-cst-parser-degraded (helper-batch-timeout)"
+      }
+    ],
     "overall": {
       "detection": {
-        "n": 199,
-        "d": 199
+        "n": 198,
+        "d": 198
       },
       "silence": {
-        "n": 199,
-        "d": 199
+        "n": 198,
+        "d": 198
       }
     },
     "byLanguage": [
@@ -131,14 +139,14 @@
       },
       {
         "key": "python",
-        "entries": 31,
+        "entries": 30,
         "detection": {
-          "n": 31,
-          "d": 31
+          "n": 30,
+          "d": 30
         },
         "silence": {
-          "n": 31,
-          "d": 31
+          "n": 30,
+          "d": 30
         }
       },
       {
@@ -313,14 +321,14 @@
       },
       {
         "key": "CWE-78",
-        "entries": 22,
+        "entries": 21,
         "detection": {
-          "n": 22,
-          "d": 22
+          "n": 21,
+          "d": 21
         },
         "silence": {
-          "n": 22,
-          "d": 22
+          "n": 21,
+          "d": 21
         }
       },
       {
@@ -435,14 +443,14 @@
       },
       {
         "key": "deep",
-        "entries": 6,
+        "entries": 5,
         "detection": {
-          "n": 6,
-          "d": 6
+          "n": 5,
+          "d": 5
         },
         "silence": {
-          "n": 6,
-          "d": 6
+          "n": 5,
+          "d": 5
         }
       },
       {
@@ -509,19 +517,29 @@
     },
     "proofCorpus": {
       "source": "bench/proof-corpus/results/summary.json",
-      "bundleSha": "4b740305633ca5a38ceb81349dfc497dfdee892168eacf4bb92ee52485f5546a",
-      "targetCount": 3,
+      "bundleSha": "0ba4abbe57dd8124d15c252d22a56d7efc80e9f59690e1c49a95a4b55e0a68a4",
+      "targetCount": 10,
       "ok": 3,
-      "failed": 0,
+      "failed": 7,
       "targets": [
+        {
+          "id": "discourse",
+          "commit": null,
+          "status": "error",
+          "filesInScope": null,
+          "filesParsed": null,
+          "determinismChecked": null,
+          "determinismIdentical": null,
+          "resultsEmitted": null
+        },
         {
           "id": "ghost",
           "commit": "7da28a03b9c72fa2cc656f5f926230bae09fd684",
           "status": "ok",
           "filesInScope": 4271,
-          "filesParsed": 4023,
+          "filesParsed": 4262,
           "determinismChecked": true,
-          "determinismIdentical": false,
+          "determinismIdentical": true,
           "resultsEmitted": 1124
         },
         {
@@ -532,16 +550,76 @@
           "filesParsed": 3391,
           "determinismChecked": true,
           "determinismIdentical": true,
-          "resultsEmitted": 145
+          "resultsEmitted": 144
+        },
+        {
+          "id": "grafana",
+          "commit": null,
+          "status": "error",
+          "filesInScope": null,
+          "filesParsed": null,
+          "determinismChecked": null,
+          "determinismIdentical": null,
+          "resultsEmitted": null
+        },
+        {
+          "id": "jellyfin",
+          "commit": null,
+          "status": "error",
+          "filesInScope": null,
+          "filesParsed": null,
+          "determinismChecked": null,
+          "determinismIdentical": null,
+          "resultsEmitted": null
+        },
+        {
+          "id": "jenkins",
+          "commit": null,
+          "status": "error",
+          "filesInScope": null,
+          "filesParsed": null,
+          "determinismChecked": null,
+          "determinismIdentical": null,
+          "resultsEmitted": null
+        },
+        {
+          "id": "mattermost",
+          "commit": null,
+          "status": "error",
+          "filesInScope": null,
+          "filesParsed": null,
+          "determinismChecked": null,
+          "determinismIdentical": null,
+          "resultsEmitted": null
+        },
+        {
+          "id": "nextcloud",
+          "commit": null,
+          "status": "error",
+          "filesInScope": null,
+          "filesParsed": null,
+          "determinismChecked": null,
+          "determinismIdentical": null,
+          "resultsEmitted": null
+        },
+        {
+          "id": "sentry",
+          "commit": null,
+          "status": "error",
+          "filesInScope": null,
+          "filesParsed": null,
+          "determinismChecked": null,
+          "determinismIdentical": null,
+          "resultsEmitted": null
         },
         {
           "id": "superset",
           "commit": "e1ffa53d9b4926f2ac7fe8c83c5f890fd621f3c8",
           "status": "ok",
           "filesInScope": 4086,
-          "filesParsed": 4083,
+          "filesParsed": 4080,
           "determinismChecked": true,
-          "determinismIdentical": false,
+          "determinismIdentical": true,
           "resultsEmitted": 860
         }
       ]

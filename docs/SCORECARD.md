@@ -9,13 +9,13 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.130.0 |
-| Bundle SHA-256 | `dd72d7c2dcc4df5e96f24285cf531a6476881867a330000427a6a8edaf71b06e` |
-| Commit | `9569f461c38dcac9578c81cd1efb2eaa63bacda7` |
-| Worktree at measurement time | clean |
+| Engine version | 0.131.0 |
+| Bundle SHA-256 | `0ba4abbe57dd8124d15c252d22a56d7efc80e9f59690e1c49a95a4b55e0a68a4` |
+| Commit | `c4789f91563761380df207dc6e94d80a5e0d6b65` |
+| Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
-| Corpus entries | 199 (199 scored) |
-| Generated (UTC) | 2026-07-27T22:08:21.408Z |
+| Corpus entries | 199 (198 scored) |
+| Generated (UTC) | 2026-08-03T04:41:35.483Z |
 
 ## What these numbers are, and what they are not
 
@@ -54,10 +54,13 @@ cannot defend would cost more credibility than the number is worth.
 
 | Population | Detected / correctly silent |
 | --- | --- |
-| Vulnerable fixtures (`pre/`) — detection | 199/199 (100.0%) |
-| Fixed counterparts (`post/`) — correct silence | 199/199 (100.0%) |
+| Vulnerable fixtures (`pre/`) — detection | 198/198 (100.0%) |
+| Fixed counterparts (`post/`) — correct silence | 198/198 (100.0%) |
 
-All corpus entries scored; no entry was excluded.
+**1 corpus entry could not be scored.** Excluded from every
+denominator above rather than counted as a miss:
+
+- `py-interproc-cmdi-shape` (python): env-error — python-cst-parser-degraded (helper-batch-timeout)
 
 ### By language
 
@@ -71,7 +74,7 @@ All corpus entries scored; no entry was excluded.
 | javascript | 34 | 34/34 (100.0%) | 34/34 (100.0%) |
 | kotlin | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
 | php | 22 | 22/22 (100.0%) | 22/22 (100.0%) |
-| python | 31 | 31/31 (100.0%) | 31/31 (100.0%) |
+| python | 30 | 30/30 (100.0%) | 30/30 (100.0%) |
 | ruby | 19 | 19/19 (100.0%) | 19/19 (100.0%) |
 
 ### By CWE
@@ -91,7 +94,7 @@ All corpus entries scored; no entry was excluded.
 | CWE-601 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-611 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-643 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-78 | 22 | 22/22 (100.0%) | 22/22 (100.0%) |
+| CWE-78 | 21 | 21/21 (100.0%) | 21/21 (100.0%) |
 | CWE-787 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-79 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
 | CWE-798 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
@@ -106,7 +109,7 @@ All corpus entries scored; no entry was excluded.
 | Tier | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
 | capability | 190 | 190/190 (100.0%) | 190/190 (100.0%) |
-| deep | 6 | 6/6 (100.0%) | 6/6 (100.0%) |
+| deep | 5 | 5/5 (100.0%) | 5/5 (100.0%) |
 | regression | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 
 ## Precision-side signal: self-scan (measured this run)
@@ -132,15 +135,22 @@ Per-file counts are in `docs/scorecard.json`.
   `npm run bench:cve-replay:check` fails the build on any drift from it.
   The rates above are computed from this run, not from this file.
 - **Third-party repository run** (*committed artifact*, `bench/proof-corpus/results/summary.json`,
-  bundle `4b740305633ca5a38ceb81349dfc497dfdee892168eacf4bb92ee52485f5546a`): 3/3 targets completed.
+  bundle `0ba4abbe57dd8124d15c252d22a56d7efc80e9f59690e1c49a95a4b55e0a68a4`): 3/10 targets completed.
   Reported for scale and parse coverage only — these repositories have no
   vulnerability ground truth, so no accuracy rate is derived from them.
 
 | Repository | Commit | Status | Files parsed / in scope | Results emitted | Deterministic re-run |
 | --- | --- | --- | --- | --- | --- |
-| ghost | `7da28a03b9c7` | ok | 4023/4271 (94.2%) | 1124 | checked, not byte-identical |
-| godot | `159701651ad4` | ok | 3391/3399 (99.8%) | 145 | identical |
-| superset | `e1ffa53d9b49` | ok | 4083/4086 (99.9%) | 860 | checked, not byte-identical |
+| discourse | `` | error | 0/0 (n/a) | n/a | not checked |
+| ghost | `7da28a03b9c7` | ok | 4262/4271 (99.8%) | 1124 | identical |
+| godot | `159701651ad4` | ok | 3391/3399 (99.8%) | 144 | identical |
+| grafana | `` | error | 0/0 (n/a) | n/a | not checked |
+| jellyfin | `` | error | 0/0 (n/a) | n/a | not checked |
+| jenkins | `` | error | 0/0 (n/a) | n/a | not checked |
+| mattermost | `` | error | 0/0 (n/a) | n/a | not checked |
+| nextcloud | `` | error | 0/0 (n/a) | n/a | not checked |
+| sentry | `` | error | 0/0 (n/a) | n/a | not checked |
+| superset | `e1ffa53d9b49` | ok | 4080/4086 (99.9%) | 860 | identical |
 
 ## Reproducing any figure here
 

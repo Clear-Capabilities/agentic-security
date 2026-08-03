@@ -1,8 +1,8 @@
 {
-  "bundleSha": "4b740305633ca5a38ceb81349dfc497dfdee892168eacf4bb92ee52485f5546a",
-  "targetCount": 3,
+  "bundleSha": "0ba4abbe57dd8124d15c252d22a56d7efc80e9f59690e1c49a95a4b55e0a68a4",
+  "targetCount": 10,
   "ok": 3,
-  "failed": 0,
+  "failed": 7,
   "targets": [
     {
       "id": "ghost",
@@ -21,43 +21,43 @@
       "scannedPath": ".",
       "scan": {
         "exitCode": 3,
-        "wallMs": 63540,
+        "wallMs": 78938,
         "timedOut": false,
-        "peakRssKb": 3394800
+        "peakRssKb": 3059168
       },
       "coverage": {
         "byLanguage": {
           "javascript": {
             "inScope": 4271,
-            "parsed": 4023,
+            "parsed": 4262,
             "functionless": 0,
-            "functions": 34135,
-            "pct": 94
+            "functions": 35980,
+            "pct": 100
           }
         },
         "totals": {
           "inScope": 4271,
-          "parsed": 4023,
-          "pct": 94
+          "parsed": 4262,
+          "pct": 100
         },
         "callGraph": {
-          "functions": 28711,
-          "edges": 118356,
-          "resolvedEdges": 5819,
-          "unresolvedEdges": 112537
+          "functions": 30551,
+          "edges": 121014,
+          "resolvedEdges": 5262,
+          "unresolvedEdges": 115752
         }
       },
       "determinism": {
         "checked": true,
         "valid": true,
         "invalidReason": null,
-        "identical": false,
+        "identical": true,
         "bytes": {
-          "runA": 1364169,
-          "runB": 1364186
+          "runA": 1369685,
+          "runB": 1369685
         },
         "results": 1124,
-        "secondRunWallMs": 59543
+        "secondRunWallMs": 73971
       }
     },
     {
@@ -77,17 +77,17 @@
       "scannedPath": ".",
       "scan": {
         "exitCode": 3,
-        "wallMs": 77421,
+        "wallMs": 80262,
         "timedOut": false,
-        "peakRssKb": 3570480
+        "peakRssKb": 2878624
       },
       "coverage": {
         "byLanguage": {
           "javascript": {
             "inScope": 2616,
-            "parsed": 2613,
+            "parsed": 2610,
             "functionless": 0,
-            "functions": 25419,
+            "functions": 25018,
             "pct": 100
           },
           "python": {
@@ -100,28 +100,98 @@
         },
         "totals": {
           "inScope": 4086,
-          "parsed": 4083,
+          "parsed": 4080,
           "pct": 100
         },
         "callGraph": {
-          "functions": 27107,
-          "edges": 69959,
-          "resolvedEdges": 4004,
-          "unresolvedEdges": 65955
+          "functions": 26799,
+          "edges": 69519,
+          "resolvedEdges": 3570,
+          "unresolvedEdges": 65949
         }
       },
       "determinism": {
         "checked": true,
         "valid": true,
         "invalidReason": null,
-        "identical": false,
+        "identical": true,
         "bytes": {
-          "runA": 1275554,
-          "runB": 1275555
+          "runA": 1277013,
+          "runB": 1277013
         },
         "results": 860,
-        "secondRunWallMs": 72284
+        "secondRunWallMs": 77706
       }
+    },
+    {
+      "id": "grafana",
+      "url": "https://github.com/grafana/grafana.git",
+      "commit": null,
+      "tier": "deep",
+      "status": "error",
+      "scope": null,
+      "timeBudgetS": 2400,
+      "error": "target \"grafana\" has no pinned commit — run the runner with --refresh-pins to resolve it"
+    },
+    {
+      "id": "sentry",
+      "url": "https://github.com/getsentry/sentry.git",
+      "commit": null,
+      "tier": "breadth",
+      "status": "error",
+      "scope": null,
+      "timeBudgetS": 2400,
+      "error": "target \"sentry\" has no pinned commit — run the runner with --refresh-pins to resolve it"
+    },
+    {
+      "id": "discourse",
+      "url": "https://github.com/discourse/discourse.git",
+      "commit": null,
+      "tier": "deep",
+      "status": "error",
+      "scope": null,
+      "timeBudgetS": 2400,
+      "error": "target \"discourse\" has no pinned commit — run the runner with --refresh-pins to resolve it"
+    },
+    {
+      "id": "jellyfin",
+      "url": "https://github.com/jellyfin/jellyfin.git",
+      "commit": null,
+      "tier": "breadth",
+      "status": "error",
+      "scope": null,
+      "timeBudgetS": 1800,
+      "error": "target \"jellyfin\" has no pinned commit — run the runner with --refresh-pins to resolve it"
+    },
+    {
+      "id": "mattermost",
+      "url": "https://github.com/mattermost/mattermost.git",
+      "commit": null,
+      "tier": "breadth",
+      "status": "error",
+      "scope": null,
+      "timeBudgetS": 2400,
+      "error": "target \"mattermost\" has no pinned commit — run the runner with --refresh-pins to resolve it"
+    },
+    {
+      "id": "jenkins",
+      "url": "https://github.com/jenkinsci/jenkins.git",
+      "commit": null,
+      "tier": "deep",
+      "status": "error",
+      "scope": null,
+      "timeBudgetS": 2400,
+      "error": "target \"jenkins\" has no pinned commit — run the runner with --refresh-pins to resolve it"
+    },
+    {
+      "id": "nextcloud",
+      "url": "https://github.com/nextcloud/server.git",
+      "commit": null,
+      "tier": "breadth",
+      "status": "error",
+      "scope": null,
+      "timeBudgetS": 3600,
+      "error": "target \"nextcloud\" has no pinned commit — run the runner with --refresh-pins to resolve it"
     },
     {
       "id": "godot",
@@ -146,9 +216,9 @@
       "scannedPath": "core, modules, scene, servers, editor",
       "scan": {
         "exitCode": 3,
-        "wallMs": 106573,
+        "wallMs": 102574,
         "timedOut": false,
-        "peakRssKb": 1203728
+        "peakRssKb": 1186416
       },
       "coverage": {
         "byLanguage": {
@@ -188,9 +258,9 @@
         },
         "callGraph": {
           "functions": 105231,
-          "edges": 322871,
-          "resolvedEdges": 131422,
-          "unresolvedEdges": 191449
+          "edges": 324410,
+          "resolvedEdges": 131632,
+          "unresolvedEdges": 192778
         }
       },
       "determinism": {
@@ -199,11 +269,11 @@
         "invalidReason": null,
         "identical": true,
         "bytes": {
-          "runA": 183978,
-          "runB": 183978
+          "runA": 187273,
+          "runB": 187273
         },
-        "results": 145,
-        "secondRunWallMs": 96829
+        "results": 144,
+        "secondRunWallMs": 103280
       }
     }
   ]
