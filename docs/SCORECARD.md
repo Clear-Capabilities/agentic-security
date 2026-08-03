@@ -11,11 +11,11 @@ that produced them.
 | --- | --- |
 | Engine version | 0.131.0 |
 | Bundle SHA-256 | `0ba4abbe57dd8124d15c252d22a56d7efc80e9f59690e1c49a95a4b55e0a68a4` |
-| Commit | `c4789f91563761380df207dc6e94d80a5e0d6b65` |
-| Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
+| Commit | `14841dd33249d5a1c3d58bc2a9735673e8b3dc64` |
+| Worktree at measurement time | clean |
 | Node | v24.16.0 |
-| Corpus entries | 199 (198 scored) |
-| Generated (UTC) | 2026-08-03T04:41:35.483Z |
+| Corpus entries | 199 (199 scored) |
+| Generated (UTC) | 2026-08-03T11:57:36.662Z |
 
 ## What these numbers are, and what they are not
 
@@ -54,13 +54,10 @@ cannot defend would cost more credibility than the number is worth.
 
 | Population | Detected / correctly silent |
 | --- | --- |
-| Vulnerable fixtures (`pre/`) — detection | 198/198 (100.0%) |
-| Fixed counterparts (`post/`) — correct silence | 198/198 (100.0%) |
+| Vulnerable fixtures (`pre/`) — detection | 199/199 (100.0%) |
+| Fixed counterparts (`post/`) — correct silence | 199/199 (100.0%) |
 
-**1 corpus entry could not be scored.** Excluded from every
-denominator above rather than counted as a miss:
-
-- `py-interproc-cmdi-shape` (python): env-error — python-cst-parser-degraded (helper-batch-timeout)
+All corpus entries scored; no entry was excluded.
 
 ### By language
 
@@ -74,7 +71,7 @@ denominator above rather than counted as a miss:
 | javascript | 34 | 34/34 (100.0%) | 34/34 (100.0%) |
 | kotlin | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
 | php | 22 | 22/22 (100.0%) | 22/22 (100.0%) |
-| python | 30 | 30/30 (100.0%) | 30/30 (100.0%) |
+| python | 31 | 31/31 (100.0%) | 31/31 (100.0%) |
 | ruby | 19 | 19/19 (100.0%) | 19/19 (100.0%) |
 
 ### By CWE
@@ -94,7 +91,7 @@ denominator above rather than counted as a miss:
 | CWE-601 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-611 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-643 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-78 | 21 | 21/21 (100.0%) | 21/21 (100.0%) |
+| CWE-78 | 22 | 22/22 (100.0%) | 22/22 (100.0%) |
 | CWE-787 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-79 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
 | CWE-798 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
@@ -109,7 +106,7 @@ denominator above rather than counted as a miss:
 | Tier | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
 | capability | 190 | 190/190 (100.0%) | 190/190 (100.0%) |
-| deep | 5 | 5/5 (100.0%) | 5/5 (100.0%) |
+| deep | 6 | 6/6 (100.0%) | 6/6 (100.0%) |
 | regression | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 
 ## Precision-side signal: self-scan (measured this run)

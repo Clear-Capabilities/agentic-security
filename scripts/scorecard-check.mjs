@@ -91,6 +91,31 @@ export function evaluateScorecardFreshness({
     }
   }
 
+  // A scorecard that could not score every corpus entry is an INCOMPLETE
+  // measurement, and publishing it would present a partial result as an
+  // authoritative one. The generator deliberately still writes it — excluding
+  // an unscoreable entry from the denominator and naming it is the honest thing
+  // to do while iterating — but a release must not ship it.
+  //
+  // This is nearly always transient and environmental (a language helper
+  // exceeding its budget on a loaded machine), which is exactly why it must
+  // block: it means the published figure would silently depend on how busy the
+  // machine was when someone last ran it.
+  const corpus = scorecardJson && scorecardJson.corpus;
+  const notScored = (corpus && Array.isArray(corpus.notScored)) ? corpus.notScored : [];
+  if (notScored.length) {
+    const named = notScored
+      .map((n) => `${n.cve || '(unnamed)'}${n.error ? ` — ${n.error}` : ''}`)
+      .join('; ');
+    errors.push(
+      `docs/scorecard.json scored only ${corpus.scoredEntries}/${corpus.totalEntries} corpus ` +
+      `entries; ${notScored.length} could not be scored: ${named}. An incomplete measurement ` +
+      'must not be published as an accuracy figure. Remedy: re-run `npm run scorecard` — these ' +
+      'failures are usually a language helper exceeding its time budget under load, so raising ' +
+      'the relevant *_TIMEOUT_MS budget and re-running normally yields a full score.'
+    );
+  }
+
   return { ok: errors.length === 0, errors, warnings };
 }
 
