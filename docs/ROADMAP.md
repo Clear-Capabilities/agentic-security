@@ -64,7 +64,7 @@ connection, fork bomb, wall-clock overrun) are each proven blocked by an
 executing test, and the both-direction gate holds: the guard refuses the bad
 case and permits the good one.
 
-**Status: landed, partially verified.** `scanner/src/sandbox/` ships a single
+**Status: landed and verified on both platforms.** `scanner/src/sandbox/` ships a single
 entry point (`runConfined`/`sandboxAvailable`) dispatching to one of three
 backends. On the macOS development host, the userspace backend is **verified
 by execution**: writes outside the sandbox root are blocked (no file
