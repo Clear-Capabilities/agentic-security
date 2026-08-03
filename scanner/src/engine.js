@@ -996,6 +996,14 @@ function performASTAnalysis(fp, code) {
         babelTransformSync(code, {
             filename: fp,
             presets: [presetReact, [presetTypescript, { ignoreExtensions: true }]],
+      // Decorators are SYNTAX we must accept, never transform — without them the
+      // parser rejects the whole file and every finding in it silently disappears.
+      // Measured on one real target: 201 JS files unparseable, all decorator-using
+      // framework code. 'decorators-legacy' covers the framework and TypeScript
+      // parameter forms; 'decoratorAutoAccessors' adds the modern `accessor` field.
+      // The modern 'decorators' variant was rejected: it cannot parse TS parameter
+      // decorators, so it would trade one blind spot for another.
+      parserOpts: { plugins: ['decorators-legacy', 'decoratorAutoAccessors'] },
             plugins: [astTaintTrackerPlugin],
             ast: false, code: false,
             babelrc: false, configFile: false,
@@ -4646,6 +4654,14 @@ function _buildCallGraphAST(fp, code){
     babelTransformSync(code, {
       filename: fp,
       presets: [presetReact, [presetTypescript, { ignoreExtensions: true }]],
+      // Decorators are SYNTAX we must accept, never transform — without them the
+      // parser rejects the whole file and every finding in it silently disappears.
+      // Measured on one real target: 201 JS files unparseable, all decorator-using
+      // framework code. 'decorators-legacy' covers the framework and TypeScript
+      // parameter forms; 'decoratorAutoAccessors' adds the modern `accessor` field.
+      // The modern 'decorators' variant was rejected: it cannot parse TS parameter
+      // decorators, so it would trade one blind spot for another.
+      parserOpts: { plugins: ['decorators-legacy', 'decoratorAutoAccessors'] },
       plugins: [callTrackerPlugin],
       ast: false, code: false,
       babelrc: false, configFile: false,
