@@ -655,6 +655,23 @@ async function cmdScan(args) {
           if (sla) process.stderr.write(`⏰ agentic-security: ${sla}\n`);
         }
       } catch { /* MTTR is best-effort — never block a scan write */ }
+
+      // R5 — report the observed time-to-validated-fix distribution from the
+      // fix attempts recorded by `verifyFix`. This is measurement, not
+      // estimation: it says nothing until fixes have actually been verified in
+      // this project, and it prints nothing when there is nothing measured.
+      // Skipped under --deterministic for the same reason MTTR is: the
+      // durations are wall-clock and would break byte-identical state.
+      try {
+        const { fixDurationReport, renderFixDurationSummary } = await import('../src/posture/fix-metrics.js');
+        const fixMetrics = fixDurationReport(path.resolve(target));
+        if (fixMetrics.attempts > 0) {
+          persistedScan.fixMetrics = fixMetrics;
+          const isJsonFmt = format === 'json' || format === 'sarif' || format === 'cyclonedx' || format === 'sbom' || format === 'spdx' || format === 'vex' || format === 'openvex' || format === 'pbom' || format === 'aibom';
+          const line = renderFixDurationSummary(fixMetrics);
+          if (!isJsonFmt && line) process.stderr.write(`🔧 agentic-security: ${line}\n`);
+        }
+      } catch { /* fix metrics are best-effort — never block a scan write */ }
     }
     // #22 — live-secret validation (opt-in, offline-degrading). Label each
     // detected secret live | dead | unknown via a read-only provider "whoami".

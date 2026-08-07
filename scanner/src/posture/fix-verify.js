@@ -21,6 +21,7 @@ import * as path from 'node:path';
 import { runFullScan } from '../engine.js';
 import { gateFixOutput } from './fix-honesty-gate.js';
 import { runProjectTests } from './test-runner.js';
+import { recordFixAttempt } from './fix-metrics.js';
 
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
@@ -164,10 +165,23 @@ export async function verifyFix({
   depFileContents,
   fixMeta,
   testTimeoutMs,
+  recordMetrics = true,
+  poc,
 } = {}) {
+  // R5 (reporting half) — time each stage as it runs. Measured here rather
+  // than inside each stage because only this function knows the boundaries of
+  // one verification ATTEMPT, which is the unit the distribution is over.
+  const stages = {};
+  const t0 = Date.now();
+  let mark = t0;
+  const _lap = (name) => { const now = Date.now(); stages[name] = now - mark; mark = now; };
+
   const rescan = await verifyPatch({ scanRoot, originalFindingStableId, files, depFileContents });
+  _lap('rescan');
   const lint = runProjectLinter(scanRoot, Object.keys(files || {}));
+  _lap('lint');
   const tests = runProjectTests(scanRoot, testTimeoutMs != null ? { timeoutMs: testTimeoutMs } : {});
+  _lap('tests');
   // True when a candidate patch was supplied but has not been written, so the
   // suite necessarily ran against the pre-patch tree. Surfaced in the summary
   // and on the result so a caller cannot mistake it for a verified patch.
@@ -177,7 +191,39 @@ export async function verifyFix({
   if (fixMeta && typeof fixMeta === 'object') {
     try { honesty = gateFixOutput(fixMeta); } catch { honesty = null; }
   }
-  const ok = rescan.ok && (lint.ok || lint.skipped) && testsOk && (honesty ? honesty.ok : true);
+  _lap('honesty');
+
+  // R5 — the PoC leg. Re-run the finding's proof-of-concept against the
+  // CANDIDATE patch inside R1's sandbox. A patch that still lets the PoC
+  // demonstrate the predicted effect has not fixed anything, however green the
+  // re-scan looks: the re-scan only proves the DETECTOR stopped firing, which
+  // a cosmetic edit can achieve. Execution is the stronger claim.
+  //
+  // Direction matters and is asymmetric on purpose. `execution-proven` after
+  // the patch is a hard FAIL. Anything else is NOT a pass — a PoC that failed
+  // to run, or a sandbox that could not start, is recorded as `inconclusive`
+  // and left out of the verdict entirely. Treating "could not prove it" as
+  // "fixed" is exactly the false confidence this leg exists to prevent.
+  let pocLeg = { status: 'not-requested', reason: null, tier: null };
+  if (poc?.code) {
+    try {
+      const { proveFinding } = await import('./execution-proof.js');
+      const proved = await proveFinding({ ...(poc.finding || {}), poc }, { files });
+      const tier = proved.proofTier;
+      pocLeg = tier === 'execution-proven'
+        ? { status: 'still-exploitable', tier, reason: proved.proofEvidence?.observed || null }
+        : proved.proofEvidence?.ran
+          ? { status: 'no-longer-proven', tier, reason: proved.proofEvidence?.reason || null }
+          : { status: 'inconclusive', tier, reason: proved.proofEvidence?.reason || null };
+    } catch (e) {
+      pocLeg = { status: 'inconclusive', tier: null, reason: `proof harness error: ${e.message}` };
+    }
+  }
+  _lap('poc');
+  const pocOk = pocLeg.status !== 'still-exploitable';
+
+  const ok = rescan.ok && (lint.ok || lint.skipped) && testsOk && pocOk && (honesty ? honesty.ok : true);
+  const durations = { ...stages, totalMs: Date.now() - t0 };
   const summary = [
     `re-scan: ${rescan.ok ? 'PASS' : 'FAIL — ' + rescan.reason}`,
     `linter:  ${lint.runner === 'none' ? 'skipped (no linter config)'
@@ -193,6 +239,34 @@ export async function verifyFix({
               : tests.passed ? `PASS${_testedPrePatch ? ' — on the CURRENT on-disk tree, NOT the candidate patch' : ''}`
               : `FAIL (exit ${tests.exitCode})`}`,
     honesty ? `honesty: ${honesty.ok ? `PASS (${honesty.tier})` : 'FAIL — ' + honesty.violations.join('; ')}` : null,
+    // Never render `inconclusive` as a pass — say plainly that nothing was proven.
+    pocLeg.status === 'not-requested' ? null
+      : pocLeg.status === 'still-exploitable' ? `poc:     FAIL — the proof-of-concept still demonstrates the vulnerability against the patch`
+      : pocLeg.status === 'no-longer-proven' ? 'poc:     PASS (ran against the patch and no longer demonstrates the vulnerability)'
+      : `poc:     inconclusive — not counted either way (${pocLeg.reason || 'no detail reported'})`,
   ].filter(Boolean).join('\n');
-  return { ok, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, summary };
+  // Persist the attempt so the distribution can be reported from real runs.
+  // `testsRan` is the load-bearing field: it is what keeps "verified with no
+  // test suite to run" out of the headline time-to-validated-fix bucket.
+  // A patch that was never written to disk is recorded too, but flagged — its
+  // suite ran against the pre-patch tree, so its timing is real while its
+  // verdict is about a different tree.
+  if (recordMetrics && scanRoot) {
+    recordFixAttempt(scanRoot, {
+      at: new Date().toISOString(),
+      stableId: originalFindingStableId || null,
+      ok,
+      testsRan: !tests.skipped,
+      testsPassed: tests.skipped ? null : tests.passed === true,
+      testedPrePatch: _testedPrePatch,
+      lintRan: !(lint.skipped || lint.runner === 'none'),
+      honestyGated: honesty != null,
+      pocStatus: pocLeg.status,
+      files: Object.keys(files || {}).length,
+      stages,
+      totalMs: durations.totalMs,
+    });
+  }
+
+  return { ok, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary };
 }

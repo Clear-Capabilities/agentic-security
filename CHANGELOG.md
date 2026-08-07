@@ -1,5 +1,77 @@
 # Changelog
 
+## 0.132.0 — a proven exploit becomes a permanent regression test
+
+The corpus stops being only a regression net and starts being fed by the engine
+itself. Every claim below was verified by a command in the session that made it.
+
+- **Execution-proven findings auto-enrol as corpus entries.** This was R2's
+  differentiator and the last missing piece of it. A finding whose
+  proof-of-concept RAN in the sandbox and produced the predicted effect can now
+  be turned into a permanent `pre:TP post:TN` corpus entry, so every exploit
+  proved once is defended against its own regression forever. Demonstrated end
+  to end rather than in a unit test: a real command-injection finding was proved
+  in the sandbox, its fix supplied the `post/` tree, and the entry was enrolled
+  and scored by the real gate — **the baseline moved 199 → 200**. Proven in the
+  other direction too: with the entry's `pre/` neutered the gate reports
+  `REGRESSED (1)` and exits non-zero.
+- **Nothing reaches the corpus unscored.** The entry is built in a temporary
+  directory, `pre/` and `post/` are scanned, and it is moved into the corpus
+  only on `pre:TP post:TN`. There is no force flag, and the scoring function is
+  unexported so no caller can score by one route and write by another — the
+  v0.106.0 mistake (fixtures committed without verifying they score) is the one
+  thing an automated writer must never industrialise. Scoring itself now lives
+  in one module shared by the enroller and the corpus runner, so the two cannot
+  drift apart; the refactor was proven behaviour-preserving at 199/199, no drift.
+  New entries land in `capability/`, never the CI-gated `regression/` tier — a
+  machine must not decide what blocks everyone's build.
+- **`verify_fix` now runs the proof-of-concept against the candidate patch.** A
+  re-scan only proves the DETECTOR stopped firing, which a cosmetic edit
+  achieves; re-running the exploit proves the hole is shut. Still-exploitable
+  after the patch is a hard failure. Deliberately asymmetric: a PoC that could
+  not run is recorded `inconclusive` and excluded from the verdict, because
+  reading "could not prove it" as "fixed" is exactly the false confidence this
+  leg exists to prevent. Both directions were executed against the real sandbox.
+- **Time-to-validated-fix is now measured and reported**, closing R5. Every
+  verification stage is timed and appended to a per-project log, and the
+  reported distribution is deliberately hard to flatter: failed attempts never
+  enter the validated median (they short-circuit, so blending them makes a worse
+  pipeline look faster), "no test suite to run" is bucketed apart from "tests
+  passed", and per-stage timings come from validated runs only. Percentiles are
+  nearest-rank — every figure shown is a duration some run actually took — and
+  are flagged unreliable below n=10 rather than quoted as settled.
+- **Cross-machine determinism now has a gate behind it.** A dependency-free
+  fixture is scanned on two operating systems and the run-attestation digests
+  must match. The comparator refuses every route to a meaningless pass: fewer
+  than two attestations, two runs from the same platform, a zero-finding digest,
+  mismatched canonicalisations, unparseable input. Each refusal was fired
+  deliberately and confirmed to exit non-zero.
+
+Honest limits, stated rather than implied:
+
+- The enrolment loop is **not yet automatic end to end**. Nothing in the scan
+  pipeline attaches a proof-of-concept to a finding or promotes proof tiers, so
+  a scan never produces an `execution-proven` finding on its own; PoCs come from
+  the generator and are proved at enrol time. Automatic attachment during a scan
+  is the remaining work.
+- The cross-machine determinism jobs have **not yet run in CI**, so no second
+  machine has actually been compared. Same-machine repeatability is verified.
+  The attestation's own "does not prove" statement is unchanged and stays
+  correct either way: one attestation is one run on one machine.
+- The sandbox wall-clock timeout stops the **direct child, not the process
+  tree**, on both backends. No test asserts a backgrounded grandchild dies.
+
+Also in this release:
+
+- **Documentation corrected against evidence.** The roadmap and the sandbox and
+  posture guides still described the kernel-namespace backend as "implemented,
+  unverified" after CI had already proved otherwise; they now cite the run
+  (Ubuntu 24.04, kernel 6.17.0-1020-azure, 41 assertions, 0 failures, all eight
+  escape cases). The corpus entry count was three tiers and 14 entries out of
+  date.
+- **Dependency advisories cleared** in the extension tree and `@types/node`
+  brought current in both trees.
+
 ## 0.131.0 — decorated files stop vanishing; the Linux sandbox is verified
 
 Two correctness fixes, both found by pushing measurement further than the last

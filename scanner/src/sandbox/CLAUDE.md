@@ -152,28 +152,39 @@ other.
   silently do nothing — an unenforced limit must never look like an enforced
   one.
 
-**Kernel-namespace backend (Linux family) — implemented, NOT verified.** The
+**Kernel-namespace backend (Linux family) — verified by execution in CI.** The
 required namespace tool is absent on the macOS development host, so
 `backend-namespace.js`'s escape tests skip there with a recorded reason rather
-than being asserted against. Nothing in this guide should be read as a claim
-that the namespace backend's isolation has been demonstrated by execution
-anywhere. It must be verified on a Linux host — with the same both-direction
-escape-attempt tests used for the userspace backend — before anything
-downstream (e.g. an R2 execution-verification tier) relies on it.
+than being asserted against. The verification therefore lives in CI, and it has
+now run: on the `sandbox-linux` job the functional probe selected the
+`namespace` backend and the full escape suite executed and passed (Ubuntu
+24.04, kernel `6.17.0-1020-azure`, 41 assertions, 0 failures). All eight
+escape-attempt cases are asserted on that host in both directions — in-root
+write succeeds, out-of-root write is blocked and creates no file, a denied
+write is not reported as a clean run, the confined process cannot rebind the
+filesystem writable again, an ordinary non-zero exit stays `nonzero` rather
+than `blocked`, the parent environment is not handed over, outbound network is
+blocked, and a wall-clock overrun stops the direct child.
 
-**How it gets verified: the `sandbox-linux` CI job.** Hosted runners restrict
+Two limits carry over unchanged and are **not** claims this verification
+retires. The wall-clock case stops the *direct child*, not the process tree —
+the same caveat the userspace backend carries. And this is one kernel and one
+image: a different kernel is a different host fact, which is exactly why the
+job runs per push rather than being recorded once and trusted forever.
+
+**How it stays verified: the `sandbox-linux` CI job.** Hosted runners restrict
 unprivileged user-namespace creation at the kernel's access-control layer, so
-the functional probe fails there and the escape suite skips — which is why
-this backend went unverified for so long. The `sandbox-linux` job in
-`.github/workflows/ci.yml` relaxes that **host policy** for itself (it has
-passwordless root) and then runs the existing suite unchanged. It relaxes a
+the functional probe fails by default and the escape suite would skip — which
+is why this backend went unverified for as long as it did. The `sandbox-linux`
+job in `.github/workflows/ci.yml` relaxes that **host policy** for itself (it
+has passwordless root) and then runs the existing suite unchanged. It relaxes a
 restriction on creating namespaces; it does not relax a single assertion or
 confinement flag. `scripts/sandbox-linux-verify.mjs` then prints the selected
 backend and `RAN`/`SKIPPED` for every test and **exits non-zero unless the
-kernel-namespace suite actually ran**, so a skip cannot be mistaken for a pass
-in a green job. Whether the relaxation works on the current runner image is
-itself a fact only a CI log can settle — until that log exists, everything in
-the next section is "implemented, unverified".
+kernel-namespace suite actually ran**, so a skip can never be mistaken for a
+pass in a green job. That guard is what makes the verification durable rather
+than a one-time observation: if a future runner image re-tightens the policy,
+the job fails rather than quietly reverting to "skipped, green".
 
 **Privilege: the namespaces are acquired unprivileged, and the flag set is
 probed rather than assumed.** Creating mount/PID/IPC/UTS/network namespaces
@@ -198,7 +209,8 @@ executing tests in `sandbox.test.js` driven with stand-in binaries, so it holds
 on any platform; whether a given kernel actually grants the namespaces is a
 per-host fact only that host can answer.
 
-**Write confinement: implemented, unverified.** This backend used to confine
+**Write confinement: implemented and verified in CI** (see the escape-suite
+result above; cases 1–4 are exactly this mechanism). This backend used to confine
 network egress and nothing else — no remount, no bind mount, no `pivot_root`,
 just a `cd` — so an absolute out-of-root write succeeded. That gap is now
 closed in code:

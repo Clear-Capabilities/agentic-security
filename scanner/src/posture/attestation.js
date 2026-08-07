@@ -60,10 +60,13 @@ const PROVES =
   '(same rule id, severity, file, line, cwe, vuln, and multiplicity) produced by the same ' +
   'engine version, ruleset version, and bundle — regardless of emission order.';
 const DOES_NOT_PROVE =
-  'It does not prove cross-machine reproducibility: no run on a second machine, OS, or Node ' +
-  'version is compared here, and some detectors are environment-sensitive. A signature, when ' +
-  'present, is a symmetric per-install HMAC — tamper-evidence for this install, not ' +
-  'third-party non-repudiation.';
+  'It does not prove cross-machine reproducibility: this attestation is one run on one machine, ' +
+  'nothing here compares a second machine, OS, or Node version, and some detectors are ' +
+  'environment-sensitive. That property is tested separately by the determinism-attest / ' +
+  'determinism-compare CI jobs, which run the same commit on two operating systems and fail ' +
+  'unless the digests match — evidence about the ENGINE, not about this attestation. ' +
+  'A signature, when present, is a symmetric per-install HMAC — tamper-evidence for this ' +
+  'install, not third-party non-repudiation.';
 
 function _str(v) { return v === undefined || v === null ? '' : String(v); }
 

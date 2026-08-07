@@ -168,10 +168,12 @@ const nsSkip = detectBackend() !== 'namespace'
     + 'Implemented but UNVERIFIED here.'
   : false;
 
-// These skip on a non-Linux host — that is expected, and it is also why none
-// of the namespace claims may be stated as verified. They exist so that the
-// FIRST run on a Linux host asserts the same both-direction contract the
-// userspace backend already meets, rather than discovering the gap later.
+// These skip on a non-Linux host — that is expected, and it is why a green run
+// HERE is not evidence for the namespace backend. They are not hypothetical any
+// more: the `sandbox-linux` CI job runs exactly this suite on a Linux runner,
+// where it asserts the same both-direction contract the userspace backend
+// meets, and that job fails if the suite skips instead of running. A skip here
+// means "verified elsewhere, not here" — never "assumed to pass".
 //
 // A shell with a network-connection primitive built in, used for the egress
 // test. The default shell on several distributions has no such primitive, so

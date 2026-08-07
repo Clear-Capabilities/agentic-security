@@ -20,7 +20,7 @@ This project's core is not a model call. It is a deterministic multi-layer
 engine — 110+ SAST modules, a nine-language IR, an IFDS/k-CFA taint engine —
 behind three gates that already run on every change:
 
-- a **199-entry regression corpus**, baseline-gated, each entry proven to fail
+- a **200-entry regression corpus**, baseline-gated, each entry proven to fail
   without its fix;
 - a **per-file precision gate** over this repository's own findings;
 - **held-out calibration** with byte-identical deterministic output.
@@ -85,8 +85,8 @@ overstated, in `scanner/src/sandbox/CLAUDE.md`. Address-space capping is
 **not enforceable** on the macOS family and is reported in `unsupported`
 rather than emitted as a silent no-op.
 
-The kernel-namespace backend (Linux family) is **implemented, unverified**.
-Two things changed. First, it no longer confines network egress only: it now
+The kernel-namespace backend (Linux family) is **implemented and verified by
+execution in CI**. Two things changed. First, it no longer confines network egress only: it now
 builds write confinement inside its mount namespace — every mount point
 present at setup is rebound **read-only**, only the sandbox root is rebound
 read-write, the whole capability set is dropped before the caller's command
@@ -102,15 +102,21 @@ job relaxes the **host** restriction on unprivileged user-namespace creation
 with `scripts/sandbox-linux-verify.mjs` printing the selected backend and
 `RAN`/`SKIPPED` per test and failing the job if the namespace suite skipped.
 
-**Unverified means unverified**: no Linux host was available in this
-development environment, so the namespace escape suite has never executed
-anywhere, and whether the CI relaxation actually works on the current runner
-image is a fact only a CI log can settle. Fail-closed holds throughout: with
-no confinement primitive detected — or with the write confinement unprovable
-on the host — execution is refused, never run unconfined. R2 must not treat
-the kernel-namespace backend as trustworthy until a CI log shows its escape
-suite RAN (not skipped) and passed; R2 is not unblocked beyond what has
-actually been executed.
+**That CI log now exists.** On the `sandbox-linux` job the functional probe
+selected the `namespace` backend and the escape suite executed and passed —
+Ubuntu 24.04, kernel `6.17.0-1020-azure`, 41 assertions, 0 failures, with the
+userspace suite correctly reporting `SKIP` (not pass) on that host. All eight
+escape cases hold in both directions there: in-root write succeeds, out-of-root
+write is blocked and creates no file, a denied write is never reported as a
+clean run, the payload cannot rebind the tree writable again, an ordinary
+non-zero exit stays `nonzero`, the parent environment is not forwarded,
+outbound network is blocked, and a wall-clock overrun stops the direct child.
+The wall-clock caveat is unchanged from macOS — *direct child*, not process
+tree. Fail-closed holds throughout: with no confinement primitive detected — or
+with the write confinement unprovable on the host — execution is refused, never
+run unconfined. The `sandbox-linux` job fails if the suite ever skips rather
+than runs, so this stays verified per push instead of being a one-time
+observation. **R1 is done; R2 is unblocked on both backends.**
 
 ### R2. Execution-verified exploitability
 
@@ -131,7 +137,7 @@ then permanently defends against its own regression — a compounding asset.
 **Done when.** A finding is demonstrated to move between tiers on real evidence,
 a proven finding lands in the corpus, and the corpus gate fails if it regresses.
 
-**Status: partially landed, not done.** The tier vocabulary (`execution-proven`
+**Status: landed.** The tier vocabulary (`execution-proven`
 / `proof-failed` / `taint-proven` / `unproven`), the promotion path
 (`proveFinding` runs a finding's PoC inside R1's sandbox and demotes anything
 that did not actually run), and report surfacing (`proofTier` +
@@ -141,14 +147,37 @@ this development host on the `userspace` backend: a PoC that produces the
 predicted marker promotes to `execution-proven`; one that runs without
 producing it lands at `proof-failed`; a finding with no PoC or an unsupported
 PoC language stays at its static tier. The kernel-namespace backend now
-implements write confinement too (see R1) but remains **unverified**, so
-`execution-proven` evidence recorded on that backend is weaker than the same
-tier on `userspace` until its escape suite has RUN on a Linux host.
-**Not landed:** the differentiator described above — auto-enrolling an
-execution-proven finding as a corpus entry. That needs a corpus-entry
-generator plus the same `pre:TP post:TN` verification loop the existing
-corpus gate enforces, and is scoped as its own follow-on plan, not part of
-this one. R2 should not be marked done until that lands.
+implements write confinement too and its escape suite has **RUN and passed on a
+Linux host in CI** (see R1), so `execution-proven` evidence recorded on either
+backend now stands on an executed escape contract.
+**The differentiator has now landed.** `posture/corpus-enroll.js` turns an
+execution-proven finding into a corpus entry, and `posture/corpus-match.js`
+holds the scoring that enrolment and the gate now *share* —
+`bench/cve-replay/runner.mjs` imports it, so the two cannot drift apart and
+enrolment cannot verify a candidate with a matcher the gate does not use.
+Nothing is written that has not been scored: the entry is built in a temp
+directory, `pre/` and `post/` are scanned, and it moves into the corpus only on
+`pre:TP post:TN`. There is no force flag, and the scoring function is
+unexported so no caller can score by one route and write by another.
+
+Demonstrated end to end, not just in unit tests: a real command-injection
+finding in a scanned project was proved by executing its PoC in the sandbox
+(`userspace` backend, marker observed), its fix supplied the `post/` tree, and
+`scripts/enroll-proven-finding.mjs` enrolled it as
+`capability/proven-command-injection-c15fc43c4198ae40`. The full gate then
+scored the committed entry `pre:TP post:TN` and the baseline moved 199 → 200.
+The gate was proven in the other direction too: with the entry's `pre/`
+neutered, `npm run bench:cve-replay:check` reports it REGRESSED and exits
+non-zero. Enrolment lands in `capability/`, never `regression/` — an automated
+writer must not decide what blocks everyone's build, and the existing
+five-snapshot graduation policy still governs promotion.
+
+**Known limit, stated rather than papered over:** the loop is not yet
+automatic end to end. The scan pipeline does not attach a `poc` to findings or
+promote proof tiers on its own, so `last-scan.json` never contains an
+`execution-proven` finding by itself — PoCs come from the PoC generator, and
+the enrolment script proves them at enrol time. Automatic PoC attachment during
+a scan is the remaining piece.
 
 ### R3. Published precision/recall scorecard
 
@@ -181,7 +210,13 @@ ASVS, OWASP LLM Top 10, EU AI Act) — a combination nothing else in the field h
 a verifiable attestation, proven by an executing test.
 
 
-**Status: partially landed.** `posture/attestation.js` gives an order-independent signed digest; shuffled order and differing timestamps yield the same digest, a changed severity or removed finding do not. **The cross-machine criterion is NOT met** — only one machine was available — and the artifact carries an inline proves/doesNotProve statement saying so.
+**Status: landed locally; the cross-machine leg awaits its first CI run.** `posture/attestation.js` gives an order-independent signed digest; shuffled order and differing timestamps yield the same digest, a changed severity or removed finding do not.
+
+The cross-machine criterion now has machinery behind it rather than a disclaimer. `scripts/attest-fixture.mjs` scans a committed, dependency-free fixture (`bench/determinism/fixture/`) and prints the run attestation digest; the `determinism-attest` CI job runs it on ubuntu-latest **and** macos-latest, and `determinism-compare` fails unless every digest matches. The comparison is between live runs of the same commit rather than against a checked-in reference digest — a committed digest would need refreshing on every commit that legitimately changes a finding, which turns a gate into a chore.
+
+The comparator refuses every way it could go green without having compared anything: fewer than two attestations (a silently failed upload), two runs from the same platform (repeatability, not cross-machine), a zero-finding digest (every machine agrees on an empty set), mismatched canonicalisations, and unparseable input. All of those, plus the disagreement case, are asserted by executing tests in `test/determinism-cross-machine.test.js`, and the fixture's non-emptiness guard was fired deliberately to confirm it exits non-zero.
+
+**What is NOT yet true:** no CI run of these jobs exists yet, so no second machine has actually been compared. Same-machine repeatability is verified here (three consecutive runs, identical digest); the cross-machine claim holds only once a CI log shows it. The attestation's own `doesNotProve` text is unchanged and stays correct either way — a single attestation is one run on one machine no matter how green CI is; it now points at where the engine-level evidence lives.
 
 ### R5. Measured fix loop
 
@@ -195,6 +230,12 @@ execute the covering tests and the PoC before reporting success.
 **Done when.** The metric is emitted from real runs, and `verify_fix` fails
 when the tests or the PoC fail.
 
+**Status: landed.** `verifyFix` runs the project test suite when detectable; undetectable is skipped, a failing suite fails verification, a timeout is a failure.
+
+Both halves of the done-when now hold. **The PoC leg:** `verifyFix` accepts the finding's proof-of-concept and re-runs it against the *candidate patch* inside R1's sandbox, failing verification when the PoC still demonstrates the vulnerability. The direction is asymmetric on purpose — `execution-proven` after the patch is a hard FAIL, while a PoC that could not run is recorded `inconclusive` and left out of the verdict entirely, because treating "could not prove it" as "fixed" is the false confidence this leg exists to prevent. A re-scan alone only proves the *detector* stopped firing, which a cosmetic edit achieves. Both directions are asserted against the real sandbox in `test/fix-verify-tests.test.js` and ran (not skipped) on the development host.
+
+**The distribution:** `posture/fix-metrics.js` records one append-only record per verification attempt with every stage timed, and reports the observed time-to-validated-fix — surfaced on `scan.fixMetrics` and as a one-line stderr summary. Three bucketing rules keep the headline honest and each is asserted: failed attempts never enter the validated distribution (they short-circuit, so blending them makes a worse pipeline look faster); "tests skipped" is bucketed apart from "tests passed"; and per-stage timings come from validated runs only. Percentiles are nearest-rank, so every figure reported is a duration some run actually took, and are flagged unreliable below n=10 rather than hidden or quoted as settled.
+
 ---
 
 ## Tier 1 — Genuine gaps
@@ -202,7 +243,6 @@ when the tests or the PoC fail.
 Places where the field is ahead. Highest precision-per-effort available.
 
 
-**Status: partially landed.** `verifyFix` now runs the project test suite when detectable; undetectable is skipped, a failing suite fails verification, a timeout is a failure. Stage duration is measured. Outstanding: aggregating those durations into a reported distribution.
 
 ### R6. Threat-model-first scoping
 

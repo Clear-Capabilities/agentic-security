@@ -120,3 +120,54 @@ jobs:
       - name: CVE-replay corpus baseline check (fails on any drift)
         run: npm run bench:cve-replay:check
         working-directory: scanner
+
+  # R4 — determinism as a contract, cross-machine half.
+  #
+  # The attestation module already proves that emission order, timestamps and
+  # run ids cannot move the digest. What it could NOT prove is the claim people
+  # actually care about: that a different machine, running the same commit,
+  # reaches the same answer. That needs two machines, so it lives here.
+  #
+  # The comparison is between LIVE runs of the same commit, not against a
+  # committed reference digest. A checked-in digest would need refreshing on
+  # every commit that legitimately changes a finding, which turns the gate into
+  # a chore and trains reviewers to rubber-stamp it. Comparing runs has no such
+  # drift and tests exactly the claimed property.
+  #
+  # The fixture is dependency-free on purpose: an SCA finding depends on the
+  # OSV/KEV cache, so a cold cache on one runner would surface as a determinism
+  # failure that is really a network difference. `attest-fixture.mjs` also
+  # exits non-zero if the fixture yields zero findings — every machine agrees
+  # on an empty set, and that agreement is worth nothing.
+  determinism-attest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm install
+        working-directory: scanner
+      - name: Compute run attestation
+        run: node scripts/attest-fixture.mjs --json | tee "attestation-${{ matrix.os }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: attestation-${{ matrix.os }}
+          path: attestation-${{ matrix.os }}.json
+
+  determinism-compare:
+    needs: determinism-attest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: attestation-*
+          merge-multiple: true
+          path: attestations
+      - name: All machines must agree on the digest
+        run: node scripts/determinism-compare.mjs attestations

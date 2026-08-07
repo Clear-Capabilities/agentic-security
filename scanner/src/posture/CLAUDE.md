@@ -21,6 +21,27 @@ Annotators that run **after** every detector has emitted, plus state stores read
 
 **Fix lifecycle** — `fix-history.js` (apply + backup + recover), `fix-verify.js` (closed-loop re-scan + lint), `fix-plan.js` (oversized-patch fallback), `regression-test-gen.js`, `deterministic-fix.js` (safe context-independent literal-swap patch synthesis — md5/sha1→sha256, TLS verify-off→on — materialized on demand by `mcp/synthesize_fix`; every patch still passes through `apply_fix`'s inline verify before it lands).
 
+**Measured fix loop (R5)** — `fix-metrics.js`. `verifyFix` times each stage
+(`rescan`/`lint`/`tests`/`honesty`) and appends one record per attempt to
+`.agentic-security/fix-metrics.jsonl`; `summarizeFixDurations` turns those into
+the reported distribution, surfaced on `scan.fixMetrics` and as a stderr line
+on human formats. Distinguish it from `time-to-fix.js`, which *estimates*
+engineering hours from family and patch shape before anything runs — this
+module reports only what was observed.
+
+Three bucketing rules are load-bearing and each has a test that fails if
+relaxed: **failed attempts never enter the validated distribution** (a failed
+verification short-circuits, so blending them makes a worse pipeline look
+faster); **"tests skipped" is bucketed apart from "tests passed"**
+(`validatedWithoutTests`, since a project with no detectable suite reaches
+`ok:true` on a weaker and much cheaper check); and **per-stage timings come
+from validated runs only** (a failed run truncates every stage after the
+failure point). Buckets partition the attempts, so the counts always sum.
+Percentiles are nearest-rank — every figure reported is a duration some run
+actually took — and are flagged `reliable:false` below n=10 rather than hidden
+or quoted as settled. Recording goes through `isSafeStateDir`, so it declines
+rather than creating a stray state dir outside a project.
+
 **Agentic verification** — `verifier.js`, `verifier-target.js`, `verifier-ephemeral.js`, `harness-discovery.js`, `adversary-agent.js`, `defender-agent.js`, `auditor-agent.js`, `three-agent-pipeline.js`.
 
 **Methodology additions (`docs/AGENTIC_METHODOLOGY_PRD.md`)** — default-on annotators/artifacts that layer the agentic-hunter methodology on the deterministic engine:
@@ -102,13 +123,18 @@ timeout/crash detection, never as the proof signal itself.
 
 **The backend is recorded in every evidence object** (`proofEvidence.backend`,
 e.g. `'userspace'`) because not all confinement backends carry the same
-guarantee. The kernel-namespace backend now implements write confinement as
-well as network isolation (read-only rebind of the mount tree, read-write
-rebind of the sandbox root, capability drop before exec), but that is
-**implemented, unverified** — no Linux run has executed its escape suite yet.
-Treat `execution-proven` evidence from a non-`userspace` backend as weaker
-than the same tier from `userspace` until that backend's escape suite has
-RUN (not skipped) on a Linux host. `attachProofTier()` also enforces the demotion
+guarantee. Two backends now carry a verified-by-execution escape contract:
+`userspace` (verified on the macOS development host) and `namespace`, which
+implements write confinement as well as network isolation (read-only rebind of
+the mount tree, read-write rebind of the sandbox root, capability drop before
+exec) and whose escape suite has now **RUN and passed on a Linux host in CI** —
+see `sandbox/CLAUDE.md` for the host and the eight cases. `execution-proven`
+evidence from either of those backends stands on an executed escape contract.
+The `disabled` backend never produces evidence at all: it refuses to run,
+which is why the tier stays static rather than becoming `proof-failed`.
+Keep reading `proofEvidence.backend` anyway — it is what makes a tier
+re-auditable when a backend's contract changes, and a backend added later
+starts out unverified by default. `attachProofTier()` also enforces the demotion
 guard: `ran:false` can never yield `execution-proven` or `proof-failed`,
 regardless of what tier was requested — it falls back to the finding's
 static standing (`proofTierOf`).
@@ -124,6 +150,47 @@ would report a broken sandbox as a failed exploit attempt — a claim about the
 `proofTier`/`proofEvidence` are copied through `report/index.js`'s
 `normalizeFindings()` only when the annotator actually attached them —
 never synthesised at the report layer.
+
+## Corpus auto-enrolment (R2's differentiator)
+
+`corpus-enroll.js` + `corpus-match.js` turn an execution-proven finding into a
+permanent CVE-replay corpus entry, so every exploit the pipeline proves once is
+defended by the baseline gate forever.
+
+**`corpus-match.js` is shared with the gate on purpose.** `bench/cve-replay/runner.mjs`
+imports `matcherFor`/`preHit`/`postHit` from it. If enrolment verified a
+candidate with a different matcher than the gate scores with, it would commit
+entries that fail CI. The pre/post asymmetry (pre matches `vuln` OR `family`
+and regex-tests `cwe`; post is strict on `vuln` and exact on `cwe`) is
+reproduced verbatim from the runner — `bench/cve-replay/CONTRIBUTING.md` records
+it as known imprecision, and changing it would re-verdict the whole committed
+baseline, which is a corpus migration rather than a refactor.
+
+**Nothing is written that has not been scored.** `enrollProvenFinding` builds
+the entry in a temp dir, scans `pre/` and `post/`, and moves it into the corpus
+only on `pre:TP post:TN`. There is no force flag, and `scoreCandidate` is
+deliberately unexported so no caller can score by one route and write by
+another — that unscored-write path is the v0.106.0 mistake this module would
+otherwise automate. Refusals also cover: a tier that disagrees with its own
+`proofEvidence`, `ran !== true`, an `execution-proven` tier with nothing
+observed, a missing `post/` (never synthesised by deleting the vulnerable
+line — it would pass for the wrong reason), a `post/` identical to `pre/`, a
+path escaping the entry dir, a `pre/` not containing the finding's file, and a
+duplicate id. The manifest's `vuln_match` is regex-escaped so an unrelated
+detector cannot satisfy the entry.
+
+**New entries land in `capability/`, never `regression/`.** `regression/` is
+the CI-gated tier and graduation into it is a human decision with a stated
+policy; an automated writer must not decide what blocks everyone's build.
+
+**Operator entry point:** `scripts/enroll-proven-finding.mjs <project>`
+(`--dry-run` scores without writing). It proves findings itself — the scan
+pipeline does **not** attach a `poc` to findings or promote proof tiers, so
+`last-scan.json` never contains an `execution-proven` finding on its own. PoCs
+come from the PoC-generator. Enrolment additionally needs fixed content
+(`finding.fix.patch`) for `post/`; a proven finding with no fix is reported as
+skipped, not dropped. After enrolling, refresh the baseline
+(`npm run bench:cve-replay:update-baseline`) and commit it.
 
 ## Scan checkpointing / resume (R8)
 

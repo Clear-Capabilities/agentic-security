@@ -25,7 +25,33 @@ function _evidence(over = {}) {
 // its static tier rather than manufacturing a failed exploit attempt.
 const _DID_NOT_EXECUTE = new Set(['disabled', 'error']);
 
-export async function proveFinding(finding, { timeoutMs = 10000, force } = {}) {
+// Materialise caller-supplied files into the sandbox root so a PoC can import
+// the code it is supposed to exploit. Paths are confined to the root: an
+// absolute path or one that climbs out is refused rather than clamped, because
+// silently rewriting a path would put a file somewhere the caller did not ask
+// for and the PoC would then exercise the wrong code.
+function _materialise(root, files) {
+  for (const [rel, content] of Object.entries(files || {})) {
+    if (typeof content !== 'string') continue;
+    const abs = path.resolve(root, rel);
+    if (abs !== root && !abs.startsWith(root + path.sep)) {
+      return `refusing to write '${rel}': it resolves outside the sandbox root`;
+    }
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, content, 'utf8');
+  }
+  return null;
+}
+
+/**
+ * @param {object} finding    carries `poc: {lang, code}`
+ * @param {object} [opts]
+ * @param {object} [opts.files]  rel→content written into the sandbox root before
+ *   the PoC runs. This is what lets the SAME PoC be run against a candidate
+ *   patch: pass the patched contents and a still-`execution-proven` verdict
+ *   means the fix did not close the hole.
+ */
+export async function proveFinding(finding, { timeoutMs = 10000, force, files } = {}) {
   const poc = finding?.poc;
   if (!poc?.code) {
     return attachProofTier(finding, _evidence({ tier: proofTierOf(finding), reason: 'no proof-of-concept attached' }));
@@ -39,6 +65,10 @@ export async function proveFinding(finding, { timeoutMs = 10000, force } = {}) {
 
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proof-')));
   try {
+    const badPath = _materialise(root, files);
+    if (badPath) {
+      return attachProofTier(finding, _evidence({ tier: proofTierOf(finding), reason: badPath }));
+    }
     fs.writeFileSync(path.join(root, 'poc.mjs'), poc.code, 'utf8');
     const r = runConfined([process.execPath, 'poc.mjs'], { root, timeoutMs, force });
     const proven = fs.existsSync(path.join(root, PROOF_MARKER));
