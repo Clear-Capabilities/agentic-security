@@ -216,7 +216,9 @@ The cross-machine criterion now has machinery behind it rather than a disclaimer
 
 The comparator refuses every way it could go green without having compared anything: fewer than two attestations (a silently failed upload), two runs from the same platform (repeatability, not cross-machine), a zero-finding digest (every machine agrees on an empty set), mismatched canonicalisations, and unparseable input. All of those, plus the disagreement case, are asserted by executing tests in `test/determinism-cross-machine.test.js`, and the fixture's non-emptiness guard was fired deliberately to confirm it exits non-zero.
 
-**What is NOT yet true:** no CI run of these jobs exists yet, so no second machine has actually been compared. Same-machine repeatability is verified here (three consecutive runs, identical digest); the cross-machine claim holds only once a CI log shows it. The attestation's own `doesNotProve` text is unchanged and stays correct either way — a single attestation is one run on one machine no matter how green CI is; it now points at where the engine-level evidence lives.
+**The cross-machine criterion is now MET, and a CI log settles it.** On the ci run for `62f78e80`, `determinism-attest` ran on both runners and `determinism-compare` reported two platforms — `darwin-arm64` and `linux-x64`, both node v24.18.0 — producing the identical digest `d7150a9ac88a6897fec2f1f058b86ef43e94210f508ec018261a157eb1ade77a` over 11 findings. Two machines, two operating systems, two architectures, same commit, same answer.
+
+The attestation's own `doesNotProve` text is deliberately unchanged, because it is still correct: a single attestation is one run on one machine no matter how green CI is. It now points at where the engine-level evidence lives instead of claiming the property is untested.
 
 ### R5. Measured fix loop
 

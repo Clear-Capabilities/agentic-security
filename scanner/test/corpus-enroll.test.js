@@ -276,14 +276,21 @@ test('dryRun scores without writing', async () => {
 // Exploits the injection by appending a shell command that creates the proof
 // marker. `> PROVEN` is a shell redirect, not a program, so it works under the
 // sandbox's minimal environment where PATH lookups may fail.
+// The safety timer is `unref`'d deliberately. Without that it keeps the event
+// loop alive for its full duration even after the exploit has already landed,
+// and on a loaded machine the PoC process then outlives `proveFinding`'s
+// budget. That path is not a false pass — `attachProofTier` demotes anything
+// with `ran:false`, so a written marker plus a timeout still yields
+// `taint-proven` — but it turns a real proof into a skipped test, which is a
+// silently weaker suite. Exit as soon as the handler responds.
 const REAL_POC = {
   lang: 'js',
   code: [
     "import handler from './handler.js';",
     'await new Promise((resolve) => {',
-    "  const res = { send: () => resolve(), status: () => ({ send: () => resolve() }) };",
+    '  const res = { send: () => resolve(), status: () => ({ send: () => resolve() }) };',
     "  try { handler({ query: { host: 'x; > PROVEN' } }, res); } catch { resolve(); }",
-    '  setTimeout(resolve, 5000);',
+    '  setTimeout(resolve, 4000).unref();',
     '});',
   ].join('\n'),
 };
