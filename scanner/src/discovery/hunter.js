@@ -20,12 +20,12 @@ function appendEntry(transcript, entry) {
   return transcript;
 }
 
-function extractJson(raw) {
-  if (typeof raw !== 'string') return null;
+function extractJsonWithFlag(raw) {
+  if (typeof raw !== 'string') return { parsed: null, found: false };
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
-  try { return JSON.parse(raw.slice(start, end + 1)); } catch { return null; }
+  if (start < 0 || end <= start) return { parsed: null, found: false };
+  try { return { parsed: JSON.parse(raw.slice(start, end + 1)), found: true }; } catch { return { parsed: null, found: false }; }
 }
 
 function candidateId(focusAreaId, lensKey, file, line, title) {
@@ -35,7 +35,7 @@ function candidateId(focusAreaId, lensKey, file, line, title) {
 }
 
 export function parseCandidates(raw, focusArea, lens) {
-  const parsed = extractJson(raw);
+  const { parsed } = extractJsonWithFlag(raw);
   const list = Array.isArray(parsed?.candidates) ? parsed.candidates : [];
   const out = [];
   for (const c of list) {
@@ -74,7 +74,8 @@ async function defaultLlmInvoke(prompt) {
 
 export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   const transcript = [];
-  const base = { focusAreaId: focusArea.id, lens: lens.key, transcript };
+  const lensKey = lens?.key || 'unknown';
+  const base = { focusAreaId: focusArea.id, lens: lensKey, transcript };
   const llmInvoke = opts.llmInvoke
     || (process.env.AGENTIC_SECURITY_LLM_ENDPOINT ? defaultLlmInvoke : null);
 
@@ -84,7 +85,15 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
     return { ...base, candidates: [], degraded: true, reason };
   }
 
-  const prompt = buildHunterPrompt(focusArea, lens, ctx);
+  let prompt;
+  try {
+    prompt = buildHunterPrompt(focusArea, lens, ctx);
+  } catch (err) {
+    const reason = `failed to build hunter prompt: ${err?.message || String(err)}`;
+    appendEntry(transcript, { phase: 'prompt_error', reason });
+    return { ...base, candidates: [], degraded: true, reason };
+  }
+
   appendEntry(transcript, { phase: 'prompt', promptChars: prompt.length, files: focusArea.files.length });
 
   let raw;
@@ -93,6 +102,13 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   } catch (err) {
     const reason = `hunter llm call failed: ${err?.message || String(err)}`;
     appendEntry(transcript, { phase: 'error', reason });
+    return { ...base, candidates: [], degraded: true, reason };
+  }
+
+  const { found } = extractJsonWithFlag(raw);
+  if (!found) {
+    const reason = 'hunter output was not parseable JSON';
+    appendEntry(transcript, { phase: 'parse_error', reason });
     return { ...base, candidates: [], degraded: true, reason };
   }
 

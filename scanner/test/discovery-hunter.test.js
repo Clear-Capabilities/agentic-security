@@ -63,3 +63,29 @@ test('runHunter survives an llmInvoke that throws', async () => {
   assert.deepEqual(r.candidates, []);
   assert.match(r.reason, /429/);
 });
+
+test('runHunter degrades when llmInvoke returns non-JSON prose (FINDING 1)', async () => {
+  const llmInvoke = async () => 'I looked but found nothing of note.';
+  const r = await runHunter(AREA, LENS, CTX, { llmInvoke });
+  assert.equal(r.degraded, true);
+  assert(r.reason !== null, 'reason must be set');
+  assert.match(r.reason, /parseable JSON/);
+  assert.deepEqual(r.candidates, []);
+});
+
+test('runHunter does NOT degrade when llmInvoke returns empty JSON candidates (FINDING 1)', async () => {
+  const llmInvoke = async () => '{"candidates":[]}';
+  const r = await runHunter(AREA, LENS, CTX, { llmInvoke });
+  assert.equal(r.degraded, false);
+  assert.equal(r.reason, null);
+  assert.deepEqual(r.candidates, []);
+});
+
+test('runHunter degrades when lens is null/undefined (FINDING 2)', async () => {
+  const llmInvoke = async () => '{"candidates":[]}';
+  const r = await runHunter(AREA, null, CTX, { llmInvoke });
+  assert.equal(r.degraded, true);
+  assert(r.reason !== null, 'reason must be set');
+  assert.match(r.reason, /prompt/);
+  assert.deepEqual(r.candidates, []);
+});
