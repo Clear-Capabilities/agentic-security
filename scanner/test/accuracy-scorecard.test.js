@@ -205,3 +205,71 @@ test('accuracy scorecard — input ordering does not change the output', () => {
   assert.equal(JSON.stringify(a.byCwe), JSON.stringify(b.byCwe));
   assert.equal(JSON.stringify(a.overall), JSON.stringify(b.overall));
 });
+
+// --- reviewed vs unreviewed self-scan targets ------------------------------
+//
+// The defect this pins, found by adversarial review of a green scorecard: the
+// self-scan table sat under one sentence — "this repository's own hand-reviewed
+// source" — and when `scanner/src` was added to the gate, its 594 findings
+// silently inherited a review claim that was true of the previous 48 and false
+// of these. Widening a gate must never upgrade what its numbers assert.
+
+function withTargets(targets) {
+  const inputs = fixtureInputs();
+  inputs.selfScan = { targets, polyglot: { total: 0, byLanguage: {} } };
+  return renderScorecardMarkdown(buildScorecard(inputs));
+}
+
+test('accuracy scorecard — an unreviewed target is not published as hand-reviewed', () => {
+  const md = withTargets({
+    hooks: { total: 3, byFile: { 'a.js': 3 } },
+    'scanner/src': { total: 594, byFile: { 'x.js': 594 } },
+  });
+  assert.match(md, /### Hand-reviewed targets/);
+  assert.match(md, /### Drift tripwire — NOT hand-reviewed, NOT a precision signal/);
+
+  // The load-bearing assertion: the large unreviewed count must not appear in
+  // the hand-reviewed table.
+  const reviewedBlock = md.slice(
+    md.indexOf('### Hand-reviewed targets'),
+    md.indexOf('### Drift tripwire'),
+  );
+  assert.doesNotMatch(reviewedBlock, /scanner\/src/,
+    'an unreviewed target appeared under the hand-reviewed heading');
+  assert.doesNotMatch(reviewedBlock, /594/);
+
+  const tripwireBlock = md.slice(md.indexOf('### Drift tripwire'));
+  assert.match(tripwireBlock, /scanner\/src/);
+  assert.match(tripwireBlock, /Nobody has adjudicated them/);
+});
+
+test('accuracy scorecard — the self-referential caveat is stated, not implied', () => {
+  // A scanner's own source contains sink patterns as data. Without saying so,
+  // the count reads as a false-positive tally.
+  const md = withTargets({ 'scanner/src': { total: 594, byFile: { 'x.js': 594 } } });
+  assert.match(md, /sink patterns as DATA/);
+  assert.match(md, /self-referential/);
+  assert.match(md, /never as a quality figure/);
+});
+
+test('accuracy scorecard — with only reviewed targets, no tripwire section appears', () => {
+  const md = withTargets({ hooks: { total: 3, byFile: { 'a.js': 3 } } });
+  assert.match(md, /### Hand-reviewed targets/);
+  assert.doesNotMatch(md, /Drift tripwire/,
+    'an empty tripwire section would imply an unreviewed target that does not exist');
+});
+
+test('accuracy scorecard — a NEW target defaults to unreviewed, not reviewed', () => {
+  // The failure mode repeating: someone adds a target and it lands under the
+  // review claim by default. Only an explicit allowlist counts as reviewed.
+  const md = withTargets({
+    hooks: { total: 3, byFile: { 'a.js': 3 } },
+    'some/new/target': { total: 42, byFile: { 'y.js': 42 } },
+  });
+  const reviewedBlock = md.slice(
+    md.indexOf('### Hand-reviewed targets'),
+    md.indexOf('### Drift tripwire'),
+  );
+  assert.doesNotMatch(reviewedBlock, /some\/new\/target/);
+  assert.match(md.slice(md.indexOf('### Drift tripwire')), /some\/new\/target/);
+});

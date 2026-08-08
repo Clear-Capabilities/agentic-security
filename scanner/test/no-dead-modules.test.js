@@ -69,7 +69,6 @@ const ALLOWLIST = new Set([
   'fix-plan.js::emitFixPlanFile',
   'fix-plan.js::shouldEmitFixPlan',
   'fix-verify.js::runProjectLinter',
-  'learning.js::loadFeedback',
   'learning.js::recordVerdict',
   'learning.js::saveFeedback',
   'material-change.js::parseDiff',

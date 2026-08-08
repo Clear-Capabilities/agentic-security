@@ -10,12 +10,12 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.132.0 |
-| Bundle SHA-256 | `b520ed6c3ce7942b89f8f8bc1f66228e401b86cb029daeeaca12938f68499fe0` |
-| Commit | `ca3765c90ee5a01fa61d871a85307a3cac996e97` |
+| Bundle SHA-256 | `d9f44867d2efd5ed47478d5620b33709938538d4af31ee52f3c42d63fc72f0d4` |
+| Commit | `ebfe74d77ef9969c188a28b8614053953c55698c` |
 | Worktree at measurement time | clean |
 | Node | v24.16.0 |
 | Corpus entries | 210 (210 scored) |
-| Generated (UTC) | 2026-08-08T02:57:15.077Z |
+| Generated (UTC) | 2026-08-08T03:39:49.258Z |
 
 ## What these numbers are, and what they are not
 
@@ -113,18 +113,37 @@ All corpus entries scored; no entry was excluded.
 
 ## Precision-side signal: self-scan (measured this run)
 
-The engine scanned this repository's own hand-reviewed source. These are
-absolute finding counts, not a rate — there is no labelled ground truth
-over this code, so no precision figure is derived from it. What it
-supports is a movement claim: any change in these counts between
-releases is a real change in what the engine reports on unchanged code.
+The engine scanned its own repository. These are absolute finding
+counts, not a rate — there is no labelled ground truth over this code,
+so no precision figure is derived from it. What it supports is a
+movement claim: any change in these counts between releases is a real
+change in what the engine reports on unchanged code.
+
+**The two halves are not the same kind of evidence, so they are not
+reported together.** `hooks/` and `scripts/` were reviewed by hand,
+finding by finding. `scanner/src` was not: it is the engine itself, at a
+scale no one has read line by line, and a scanner's own source contains
+sink patterns as DATA — rule tables, catalogs, remediation strings — so a
+large share of its findings are self-referential rather than defects.
+Treat it as a tripwire, never as a quality figure.
+
+### Hand-reviewed targets
 
 | Target | Findings |
 | --- | --- |
 | `hooks` | 24 |
-| `scanner/src` | 594 |
 | `scripts` | 26 |
 | `polyglot` fixture (expected 0) | 0 |
+
+### Drift tripwire — NOT hand-reviewed, NOT a precision signal
+
+| Target | Findings |
+| --- | --- |
+| `scanner/src` | 594 |
+
+These counts exist so that a rule which starts firing somewhere new is
+visible per file. Nobody has adjudicated them, and quoting the total as
+a false-positive count would be wrong in both directions.
 
 Per-file counts are in `docs/scorecard.json`.
 

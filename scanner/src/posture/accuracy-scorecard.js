@@ -263,17 +263,48 @@ export function renderScorecardMarkdown(m) {
   L.push('');
   L.push('## Precision-side signal: self-scan (measured this run)');
   L.push('');
-  L.push('The engine scanned this repository\'s own hand-reviewed source. These are');
-  L.push('absolute finding counts, not a rate — there is no labelled ground truth');
-  L.push('over this code, so no precision figure is derived from it. What it');
-  L.push('supports is a movement claim: any change in these counts between');
-  L.push('releases is a real change in what the engine reports on unchanged code.');
+  L.push('The engine scanned its own repository. These are absolute finding');
+  L.push('counts, not a rate — there is no labelled ground truth over this code,');
+  L.push('so no precision figure is derived from it. What it supports is a');
+  L.push('movement claim: any change in these counts between releases is a real');
+  L.push('change in what the engine reports on unchanged code.');
+  L.push('');
+  L.push('**The two halves are not the same kind of evidence, so they are not');
+  L.push('reported together.** `hooks/` and `scripts/` were reviewed by hand,');
+  L.push('finding by finding. `scanner/src` was not: it is the engine itself, at a');
+  L.push('scale no one has read line by line, and a scanner\'s own source contains');
+  L.push('sink patterns as DATA — rule tables, catalogs, remediation strings — so a');
+  L.push('large share of its findings are self-referential rather than defects.');
+  L.push('Treat it as a tripwire, never as a quality figure.');
+  L.push('');
+  // Split deliberately. Both halves used to sit under a single "hand-reviewed"
+  // sentence; when `scanner/src` was added to the gate its 594 findings
+  // inherited a review claim that was true of 48 findings and false of these.
+  // Widening a gate must not silently upgrade what its numbers assert.
+  const REVIEWED = new Set(['hooks', 'scripts']);
+  const entries = Object.entries(m.selfScan.targets);
+  const reviewed = entries.filter(([k]) => REVIEWED.has(k));
+  const unreviewed = entries.filter(([k]) => !REVIEWED.has(k));
+
+  L.push('### Hand-reviewed targets');
   L.push('');
   L.push('| Target | Findings |');
   L.push('| --- | --- |');
-  for (const [k, v] of Object.entries(m.selfScan.targets)) L.push(`| \`${k}\` | ${v.total} |`);
+  for (const [k, v] of reviewed) L.push(`| \`${k}\` | ${v.total} |`);
   L.push(`| \`polyglot\` fixture (expected 0) | ${m.selfScan.polyglot.total} |`);
   L.push('');
+  if (unreviewed.length) {
+    L.push('### Drift tripwire — NOT hand-reviewed, NOT a precision signal');
+    L.push('');
+    L.push('| Target | Findings |');
+    L.push('| --- | --- |');
+    for (const [k, v] of unreviewed) L.push(`| \`${k}\` | ${v.total} |`);
+    L.push('');
+    L.push('These counts exist so that a rule which starts firing somewhere new is');
+    L.push('visible per file. Nobody has adjudicated them, and quoting the total as');
+    L.push('a false-positive count would be wrong in both directions.');
+    L.push('');
+  }
   L.push('Per-file counts are in `docs/scorecard.json`.');
   L.push('');
   L.push('## Committed artifacts referenced (not re-run by this command)');

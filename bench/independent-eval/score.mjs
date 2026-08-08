@@ -126,6 +126,18 @@ export function checkGate(result, thresholds = {}) {
   if (thresholds.minSamples != null && result.n < thresholds.minSamples) {
     v.push(`samples ${result.n} < minSamples ${thresholds.minSamples}`);
   }
+  // Calibration targets were previously printed as advisory "notes" while the
+  // gate passed anyway, so a run reporting brier=0.240 against a 0.10 target
+  // still exited 0. A target nothing enforces is a wish. `cal` is attached by
+  // the runner from evaluateHeldOut(); absent it, a set threshold is a
+  // violation on the same rule as every other unmeasured metric.
+  const capped = (label, val, max) => {
+    if (max == null) return;
+    if (val == null) { v.push(`${label} is unmeasured (null) but threshold ${max} is set`); return; }
+    if (val > max) v.push(`${label}=${typeof val === 'number' ? val.toFixed(3) : val} > ${max}`);
+  };
+  capped('calibration.brier', result.cal?.brier, thresholds.maxBrier);
+  capped('calibration.ece', result.cal?.ece, thresholds.maxEce);
   cmp('aggregate.f1', result.aggregate?.f1, thresholds.aggregateF1);
   cmp('aggregate.precision', result.aggregate?.precision, thresholds.aggregatePrecision);
   cmp('aggregate.recall', result.aggregate?.recall, thresholds.aggregateRecall);

@@ -108,7 +108,14 @@ try {
   const range = process.env.CORPUS_PROVENANCE_RANGE || 'HEAD~1..HEAD';
   const changed = git(['diff', '--name-only', range]).split('\n').map(s => s.trim()).filter(Boolean);
   const addedEntries = changed.filter(f => /^bench\/cve-replay\/(regression|capability|deep)\/[^/]+\/manifest\.json$/.test(f));
-  const changedDetectors = changed.filter(f => /^scanner\/src\/(sast|dataflow)\//.test(f));
+  // Anything that can move a corpus verdict counts as a "detector" here, not
+  // just `sast/` and `dataflow/`. The first version watched only those two,
+  // which would have missed a change to `posture/relevance.js` (it demotes
+  // findings), to the IR parsers (they decide what is even analysable), or to
+  // `engine.js` (it wires the whole pipeline) — each of which can flip an entry
+  // from FN to TP just as surely as a rule edit.
+  const DETECTOR_PATHS = /^scanner\/src\/(sast|dataflow|posture|ir)\/|^scanner\/src\/engine\.js$/;
+  const changedDetectors = changed.filter(f => DETECTOR_PATHS.test(f));
   coupling = { range, addedEntries, changedDetectors };
   if (addedEntries.length && changedDetectors.length) {
     errors.push(

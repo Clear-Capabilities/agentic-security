@@ -90,7 +90,14 @@ export function applyFeedback(scanRoot, findings) {
   if (process.env.AGENTIC_SECURITY_LEARN !== '1') return { kept: findings, suppressed };
   const data = loadFeedback(scanRoot);
   if (!data.entries || !data.entries.length) return { kept: findings, suppressed };
-  const quorum = Math.max(1, parseInt(process.env.AGENTIC_SECURITY_LEARN_QUORUM || '2', 10));
+  // Floor of 2, not 1. A quorum of 1 means a SINGLE triage verdict suppresses a
+  // finding — and because suppression also matches on `family + filePattern`
+  // below, one verdict can silence a whole family across a path. That is
+  // precisely the case the root CLAUDE.md warns about ("think about what a
+  // malicious-PR-author could suppress"), and clamping to 1 let an env var
+  // request it. A value below 2 is now raised to 2 rather than honoured.
+  const _requested = parseInt(process.env.AGENTIC_SECURITY_LEARN_QUORUM || '2', 10);
+  const quorum = Number.isFinite(_requested) ? Math.max(2, _requested) : 2;
   // Keep the most recent 500 entries by `at`.
   const sorted = [...data.entries].sort((a, b) => String(a.at || '').localeCompare(String(b.at || ''))).slice(-500);
   const fpCountById = new Map();

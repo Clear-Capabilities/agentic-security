@@ -59,7 +59,19 @@ derive them.
   construction**. `npm run corpus:provenance` prints the composition and fails
   a commit that lands a detector together with the entries exercising it —
   which stops the loop tightening, but does not make the corpus independent.
-  Only an external, third-party-labelled population would.
+
+  **The harnesses for the honest measurement already exist; the data does not.**
+  `bench/independent-eval/` computes per-family precision/recall/F1 against a
+  corpus "we did not author" — its README frames the problem in the same terms,
+  "you cannot grade yourself on an exam you wrote" — and
+  `bench/realworld-recall/` is its recall counterpart, judging detection of
+  known real-world vulnerabilities semantically rather than by string match.
+  Both ship with **4-sample smoke fixtures**, and `npm run eval:independent:gate`
+  now REFUSES to emit a pass over the built-in fixture however the thresholds
+  are set. The remaining work is therefore **data acquisition, not
+  engineering** — a materially smaller and more concrete task than "build an
+  independent evaluation", and the single highest-value thing anyone could do
+  for the credibility of every number in this document.
 - **The drift gate is not a precision measurement.** A scanner's own source
   contains sink patterns as data, so many of its 642 findings are
   self-referential. It detects movement; it does not score correctness.

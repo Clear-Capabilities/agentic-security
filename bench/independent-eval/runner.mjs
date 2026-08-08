@@ -65,15 +65,24 @@ function loadManifest(fp) {
   return out;
 }
 
+// THESE ARE CALIBRATED TO THE CLAIM, NOT TO THE FIXTURE. They previously were
+// the other way round — `minSamples: 1`, chosen so "`--gate default` passes
+// today" — which meant `npm run eval:independent:gate` printed "✓ passed" on the
+// 4-sample smoke corpus, three lines below this harness's own warning that the
+// corpus "must not be cited as a quality number". A gate satisfiable by a
+// fixture the documentation disowns is not a gate; it is a green light wired to
+// nothing. Setting a floor below the current result is the same fit-to-test
+// mistake the corpus provenance check exists to prevent.
+//
+// So the floors are now the numbers the README and the PRD actually claim. They
+// FAIL on the shipped smoke fixture, and that failure is correct: it says the
+// independent corpus has not been acquired yet, which is true.
 const DEFAULT_THRESHOLDS = {
-  // #5 — the gate is now ACTIVE (was inert). These floors are calibrated below
-  // the current corpus result so `--gate default` passes today but fails on a
-  // regression. When a larger INDEPENDENT corpus is wired (see README — real
-  // CVE-fix pairs we did not author), raise these and add per-family bars; the
-  // enforcement mechanism (checkGate → exit 1) is already in place.
-  minSamples: 1,
-  aggregateF1: 0.70,      // current corpus aggregate F1 ≈ 0.80 → passes, catches drop
-  perFamilyRecall: 0.50,  // no detected family may fall below 50% recall
+  minSamples: 200,        // README's own figure for a citable run
+  aggregateF1: 0.70,
+  perFamilyRecall: 0.50,
+  maxBrier: 0.10,         // PRD calibration target — was reported as a "note"
+  maxEce: 0.05,           // ditto
 };
 
 function loadThresholds(val) {
@@ -183,8 +192,29 @@ async function main() {
   // ---- Gate ----
   if (args.gate) {
     const thresholds = loadThresholds(args.gate);
-    const g = checkGate(result, thresholds);
+    // Calibration metrics live on `cal`, not on `result`; without this the
+    // brier/ece thresholds would read as unmeasured and the gate would fail for
+    // the wrong reason.
+    const g = checkGate({ ...result, cal }, thresholds);
     process.stdout.write('\nGate (' + JSON.stringify(thresholds) + '):\n');
+
+    // Refuse to gate on the shipped smoke fixture at all, independently of the
+    // numbers. Even if someone lowers every threshold until it passes, a run
+    // over 4 hand-written samples cannot support the claim this gate exists to
+    // make, and a "✓ passed" printed under this harness's own "must not be
+    // cited" warning is worse than no gate.
+    const isSmoke = path.resolve(manifestPath)
+      === path.resolve(path.join(__dirname, 'corpus', 'manifest.jsonl'));
+    if (isSmoke) {
+      process.stdout.write(
+        '  ✗ FAILED: this is the built-in SMOKE fixture, not an independent corpus.\n'
+        + '    The harness works; the data does not exist yet. Wire a real corpus\n'
+        + '    (see README.md) and pass --manifest/--root, or run without --gate to\n'
+        + '    exercise the harness. Refusing to emit a pass over 4 self-authored\n'
+        + '    samples — that is the exam-you-wrote problem this bench exists to avoid.\n');
+      process.exit(1);
+    }
+
     if (g.pass) process.stdout.write('  ✓ passed\n');
     else {
       process.stdout.write('  ✗ FAILED:\n');
