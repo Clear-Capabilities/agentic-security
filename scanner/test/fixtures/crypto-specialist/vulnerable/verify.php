@@ -1,8 +1,9 @@
-const crypto = require('crypto');
-function verify(req) {
-  const signature = req.headers['x-signature'];
-  const expectedHmac = crypto.createHmac('sha256', process.env.K).update(req.rawBody).digest('hex');
-  if (signature === expectedHmac) return true;
-  return false;
+<?php
+function verify($request) {
+    $signature = $request['x-signature'];
+    $expected_hmac = hash_hmac('sha256', $request['body'], getenv('K'));
+    if ($signature === $expected_hmac) {
+        return true;
+    }
+    return false;
 }
-module.exports = { verify };

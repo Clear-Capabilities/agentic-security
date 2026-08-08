@@ -19,7 +19,7 @@ const read = (tier, f) => fs.readFileSync(path.join(FIXTURES, tier, f), 'utf8');
 // ---------------------------------------------------------- fixtures
 
 test('the vulnerable fixtures fire and the clean ones do not', () => {
-  for (const f of ['verify.js', 'Login.java', 'wipe.c']) {
+  for (const f of ['verify.php', 'Login.java', 'wipe.c']) {
     assert.ok(scanCryptoSpecialist(f, read('vulnerable', f)).length > 0, `${f} should fire`);
     assert.equal(scanCryptoSpecialist(f, read('clean', f)).length, 0, `clean ${f} must stay silent`);
   }
@@ -28,10 +28,28 @@ test('the vulnerable fixtures fire and the clean ones do not', () => {
 // ---------------------------------------------------------- CWE-208
 
 test('a secret compared with === is flagged', () => {
-  const r = scanTimingUnsafeComparison('a.js', 'if (signature === expectedHmac) { ok(); }');
+  const r = scanTimingUnsafeComparison('a.php', 'if ($signature === $expected_hmac) { ok(); }');
   assert.equal(r.length, 1);
   assert.equal(r[0].cwe, 'CWE-208');
-  assert.match(r[0].remediation, /timingSafeEqual/);
+  assert.match(r[0].remediation, /hash_equals/);
+});
+
+test('JavaScript is excluded — it is already covered twice elsewhere', () => {
+  // `sast/comparison-safety.js` and the engine's `Timing Oracle` rule both fire
+  // on JS. A third finding on the same line is noise: it regressed the
+  // synthetic F1 bench by 0.34pp and failed the strict gate.
+  assert.deepEqual(scanTimingUnsafeComparison('a.js', 'if (signature === expectedHmac) { ok(); }'), []);
+  assert.deepEqual(scanTimingUnsafeComparison('a.ts', 'if (signature === expectedHmac) { ok(); }'), []);
+});
+
+test('Python and Go are NOT excluded — nothing else covers this shape there', () => {
+  // Checked rather than assumed. `comparison-safety.js` nominally covers py/go,
+  // but its vocabulary is word-bounded (`\\btoken\\b`), so `access_token == secret`
+  // matches nothing — `token` is not on a word boundary inside `access_token`,
+  // and bare `secret` is not in its list. Excluding Python would have removed
+  // the only coverage of that shape.
+  assert.equal(scanTimingUnsafeComparison('a.py', 'if access_token == secret:').length, 1);
+  assert.equal(scanTimingUnsafeComparison('a.go', 'if signature == expectedMac {').length, 1);
 });
 
 test('the constant-time form on the same line never fires', () => {
@@ -96,7 +114,7 @@ test('memcmp on secret material is flagged for C', () => {
 test('one line yields at most one finding', () => {
   // The same line can match several patterns; reporting it twice would make the
   // class look noisier than it is.
-  const r = scanTimingUnsafeComparison('a.js', 'if (signature === expectedHmac && signature !== otherSecret) {}');
+  const r = scanTimingUnsafeComparison('a.php', 'if ($signature === $expected_hmac && $signature !== $other_secret) {}');
   assert.equal(r.length, 1);
 });
 
@@ -136,7 +154,7 @@ test('memset on a non-secret buffer is not flagged', () => {
 // ---------------------------------------------------------- shape
 
 test('findings carry the required schema fields', () => {
-  for (const f of scanCryptoSpecialist('verify.js', read('vulnerable', 'verify.js'))) {
+  for (const f of scanCryptoSpecialist('verify.php', read('vulnerable', 'verify.php'))) {
     for (const k of ['id', 'severity', 'file', 'line', 'vuln', 'cwe', 'description', 'remediation', 'family', 'parser']) {
       assert.ok(f[k], `finding is missing ${k}`);
     }
@@ -152,8 +170,8 @@ test('unknown languages and malformed input are ignored', () => {
 });
 
 test('line numbers survive comment blanking', () => {
-  const src = '// leading comment\n\n/* block\n   comment */\nif (signature === expectedHmac) {}\n';
-  const r = scanTimingUnsafeComparison('a.js', src);
+  const src = '// leading comment\n\n/* block\n   comment */\nif ($signature === $expected_hmac) {}\n';
+  const r = scanTimingUnsafeComparison('a.php', src);
   assert.equal(r.length, 1);
   assert.equal(r[0].line, 5, 'comment stripping must preserve line numbers');
 });

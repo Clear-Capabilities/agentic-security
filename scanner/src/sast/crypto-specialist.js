@@ -76,9 +76,27 @@ function _lineAt(text, index) {
 /**
  * CWE-208 — comparison of secret material in non-constant time.
  */
+// JavaScript is already covered TWICE — by `sast/comparison-safety.js` and by
+// the `Timing Oracle` rule in engine.js — so firing here made a third finding
+// on the same line. The synthetic F1 bench counted the duplicates as false
+// positives and the strict gate failed on a 0.34pp F1 regression. That is the
+// mistake this module's own header warns about: a noisy specialist rule is
+// worse than none.
+//
+// Excluded for JS ONLY, and the scope was checked rather than assumed. The
+// first attempt also excluded Python and Go on the theory that
+// `comparison-safety.js` covers them — it nominally does, but its
+// TIMING_SENSITIVE vocabulary uses word boundaries (`\btoken\b`), so
+// `access_token == secret` matches nothing: `token` is not on a word boundary
+// inside `access_token`, and bare `secret` is not in its list at all. Excluding
+// Python would therefore have removed the ONLY coverage of that shape. Verified
+// by scanning the fixture: zero findings without this rule.
+const ALREADY_COVERED_LANGS = new Set(['js']);
+
 export function scanTimingUnsafeComparison(file, content) {
   const lang = _lang(file);
   if (!lang || typeof content !== 'string') return [];
+  if (ALREADY_COVERED_LANGS.has(lang)) return [];
   const body = blankComments(content, file);
   const out = [];
   const seen = new Set();

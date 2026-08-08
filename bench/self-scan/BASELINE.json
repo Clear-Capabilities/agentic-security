@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-08T02:42:26.500Z",
-  "commit": "3fb91cadde5136cc1efc87429feda57cbc551f0d",
+  "generatedAt": "2026-08-08T14:39:24.846Z",
+  "commit": "7e4db2fe71b08a4b61d8492a1833d54cd9f4d1a4",
   "targets": {
     "hooks": {
       "total": 24,
@@ -35,7 +35,7 @@
       }
     },
     "scanner/src": {
-      "total": 594,
+      "total": 593,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -80,7 +80,6 @@
         "posture/aibom.js": 3,
         "posture/api-contract.js": 2,
         "posture/attack-playbooks.js": 2,
-        "posture/attestation.js": 1,
         "posture/auditor-walkthrough.js": 2,
         "posture/auth-posture-import.js": 3,
         "posture/blast-radius.js": 1,
