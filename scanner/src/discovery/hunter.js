@@ -34,8 +34,7 @@ function candidateId(focusAreaId, lensKey, file, line, title) {
     .digest('hex').slice(0, 12);
 }
 
-export function parseCandidates(raw, focusArea, lens) {
-  const { parsed } = extractJsonWithFlag(raw);
+function candidatesFromParsed(parsed, focusArea, lens) {
   const list = Array.isArray(parsed?.candidates) ? parsed.candidates : [];
   const out = [];
   for (const c of list) {
@@ -58,6 +57,11 @@ export function parseCandidates(raw, focusArea, lens) {
     });
   }
   return out;
+}
+
+export function parseCandidates(raw, focusArea, lens) {
+  const { parsed } = extractJsonWithFlag(raw);
+  return candidatesFromParsed(parsed, focusArea, lens);
 }
 
 async function defaultLlmInvoke(prompt) {
@@ -105,14 +109,14 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
     return { ...base, candidates: [], degraded: true, reason };
   }
 
-  const { found } = extractJsonWithFlag(raw);
+  const { parsed, found } = extractJsonWithFlag(raw);
   if (!found) {
     const reason = 'hunter output was not parseable JSON';
     appendEntry(transcript, { phase: 'parse_error', reason });
     return { ...base, candidates: [], degraded: true, reason };
   }
 
-  const candidates = parseCandidates(raw, focusArea, lens);
+  const candidates = candidatesFromParsed(parsed, focusArea, lens);
   appendEntry(transcript, { phase: 'result', candidateCount: candidates.length });
   return { ...base, candidates, degraded: false, reason: null };
 }
