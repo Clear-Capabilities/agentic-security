@@ -280,29 +280,39 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     assert.equal(r.status, 'timeout');
   });
 
-  test('BAD: a wall-clock overrun takes the whole process tree with it', () => {
-    // The counterpart to the userspace backend's KNOWN GAP test, and the
-    // reason it is a separate assertion rather than an assumption: on this
-    // backend the direct child is pid 1 of a new PID namespace (`--pid
-    // --fork`), so killing it SHOULD reap every process inside. That was
-    // documented as a reasoned expectation for a long time — "expected, not
-    // verified" — which is exactly the kind of claim this suite exists to
-    // convert into an executed fact.
+  test('KNOWN GAP: the timeout does not stop the payload on this backend either', () => {
+    // This asserted the OPPOSITE until CI ran it, and CI falsified it. The
+    // reasoned expectation was that because the direct child is pid 1 of a new
+    // PID namespace (`--pid --fork`), killing it would reap everything inside —
+    // "better than the userspace backend". It does not.
     //
-    // Deliberately fails loudly in BOTH directions. If the grandchild
-    // survives, tree-kill does not hold and the guides claiming it must be
-    // corrected. If it dies, the claim is real.
+    // What the first CI run actually showed, with timeoutMs 1200 against a
+    // payload that sleeps 30s: duration_ms 30057, and the backgrounded
+    // grandchild's marker already present the moment the call returned. So the
+    // payload ran to completion. The timeout does not merely fail to kill the
+    // TREE here; it does not stop the direct child promptly either — the call
+    // blocks until the command finishes on its own.
+    //
+    // That is a materially worse limitation than was documented, and it is why
+    // this test now pins the real behaviour. If a future change makes the
+    // timeout actually bite, this test fails — and the guides must be corrected
+    // in the same commit, in the other direction.
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-tree-'));
     const marker = path.join(root, 'survivor.marker');
+    const budgetMs = 1200;
+    const started = Date.now();
     const r = runNamespace(
-      ['/bin/sh', '-c', '( /bin/sleep 3; /usr/bin/touch "$ROOT/survivor.marker" ) & sleep 30'],
-      { root, timeoutMs: 1200 });
-    assert.equal(r.status, 'timeout');
-    assert.equal(fs.existsSync(marker), false, 'precondition: nothing should have been written yet');
-    execFileSync('/bin/sleep', ['4']);
-    assert.equal(fs.existsSync(marker), false,
-      'a backgrounded grandchild OUTLIVED the timeout — the PID namespace did not reap the tree, '
-      + 'so the tree-kill claim in sandbox/CLAUDE.md and backend-namespace.js is FALSE and must be corrected');
+      ['/bin/sh', '-c', '( /bin/sleep 3; /usr/bin/touch "$ROOT/survivor.marker" ) & sleep 12'],
+      { root, timeoutMs: budgetMs });
+    const elapsed = Date.now() - started;
+
+    assert.equal(r.timedOut, true, 'the result should still REPORT a timeout');
+    assert.ok(elapsed > budgetMs * 3,
+      `the call returned in ${elapsed}ms against a ${budgetMs}ms budget — if the timeout now stops the `
+      + 'payload promptly, that is an improvement, and sandbox/CLAUDE.md plus backend-namespace.js must '
+      + 'stop documenting this gap');
+    assert.equal(fs.existsSync(marker), true,
+      'the backgrounded grandchild did NOT survive — tree termination now works; update the guides');
   });
 });
 

@@ -62,19 +62,27 @@
 // expectation that "the remount should have worked" is exactly the class of
 // claim this module exists to refuse.
 //
-// TIMEOUT SCOPE. The wall-clock timeout is `spawnSync`'s, which signals only
-// the direct child. On this backend the direct child is the namespace tool
-// running as pid 1 of a new PID namespace (`--pid --fork`), so killing it is
-// expected to take the whole namespace's processes with it — better than the
-// userspace backend, where a backgrounded grandchild demonstrably survives.
-// There is now a test that asserts this rather than assuming it: "BAD: a
-// wall-clock overrun takes the whole process tree with it" in
-// `sandbox-escape.test.js` backgrounds a grandchild, lets the run time out,
-// waits past the grandchild's own sleep, and requires its marker to be absent.
-// It skips on non-Linux hosts, so the `sandbox-linux` CI job is what settles
-// it. Until a CI log shows that case RAN and passed, treat tree-kill as a
-// reasoned expectation rather than a guarantee — and if it fails, this comment
-// and `sandbox/CLAUDE.md` are what must change, not the test.
+// TIMEOUT SCOPE — MEASURED, AND WORSE THAN WAS ASSUMED. The wall-clock timeout
+// is `spawnSync`'s. It was documented here for a long time as an expectation
+// that killing the direct child would reap the whole namespace, since that
+// child is pid 1 of a new PID namespace (`--pid --fork`) — "better than the
+// userspace backend". A test was written to check it, CI ran it, and it is
+// FALSE.
+//
+// Observed on the first Linux CI run, with a 1200 ms budget against a payload
+// that sleeps 30 s: `duration_ms: 30057`, and a backgrounded grandchild's
+// marker already on disk the moment the call returned. The payload ran to
+// completion. So on this backend the timeout does not kill the tree, and does
+// not promptly stop the direct child either — `spawnSync` reports
+// `timedOut: true` while the command keeps running until it finishes on its
+// own.
+//
+// The confinement is unaffected: survivors stay inside the mount and network
+// namespaces, so they cannot write out of root or reach the network. What the
+// timeout does NOT provide here is a bound on how long confined code runs.
+// Anything relying on that bound — a proof harness, a CI budget — must impose
+// its own. Pinned by "KNOWN GAP: the timeout does not stop the payload on this
+// backend either" in `sandbox-escape.test.js`.
 //
 // PRIVILEGE. Creating mount/PID/IPC/UTS/network namespaces directly requires
 // CAP_SYS_ADMIN, which an ordinary CI account does not have — asking for them

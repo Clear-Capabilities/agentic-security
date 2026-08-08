@@ -150,15 +150,30 @@ test('a real scan-shaped run promotes a genuinely exploitable finding', async (t
   assert.match(renderProofSummary(s), /1 execution-proven of 1 attempted/);
 });
 
-test('an unsynthesizable finding is skipped, never attempted and never demoted', async () => {
+test('an unsynthesizable finding is skipped, never attempted and never demoted', async (t) => {
   const findings = [cmdi({ family: 'xss' })];
   const s = await annotateExecutionProofs(findings, {
     fileContents: { 'handler.js': VULN }, env: { AGENTIC_SECURITY_PROVE: '1' },
   });
+  // Host-independent, and the part that actually matters: a finding we cannot
+  // build a PoC for must keep its static standing on ANY host.
   assert.equal(s.attempted, 0);
-  assert.equal(s.skipped, 1);
   assert.equal(findings[0].proofTier, undefined,
     'a finding we cannot build a PoC for keeps its static standing');
+
+  // The per-candidate skip COUNT is only reached when a sandbox exists — with
+  // no confinement backend the annotator returns before it can classify
+  // anything, which is the correct fail-closed order. Asserting the count
+  // unconditionally made this test pass on the macOS dev host and fail on a CI
+  // runner that restricts unprivileged namespaces: a host-dependent assertion
+  // dressed up as a behavioural one.
+  if (!sandboxAvailable()) {
+    t.diagnostic('skip-count assertion not checked: no confinement backend on this host');
+    assert.equal(s.enabled, false);
+    assert.match(s.reason, /no confinement backend/);
+    return;
+  }
+  assert.equal(s.skipped, 1);
 });
 
 test('the per-scan cap is reported, not applied silently', async (t) => {

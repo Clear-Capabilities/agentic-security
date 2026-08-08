@@ -164,11 +164,29 @@ write succeeds, out-of-root write is blocked and creates no file, a denied
 write is not reported as a clean run, the confined process cannot rebind the
 filesystem writable again, an ordinary non-zero exit stays `nonzero` rather
 than `blocked`, the parent environment is not handed over, outbound network is
-blocked, and a wall-clock overrun stops the direct child.
+blocked, and the wall-clock behaviour is pinned as a KNOWN GAP (see below —
+the timeout does not actually stop the payload here).
 
-Two limits carry over unchanged and are **not** claims this verification
-retires. The wall-clock case stops the *direct child*, not the process tree —
-the same caveat the userspace backend carries. And this is one kernel and one
+**The timeout limit is worse than was documented, and CI is what proved it.**
+This guide previously carried the userspace caveat over verbatim — "stops the
+direct child, not the process tree" — and `backend-namespace.js` went further,
+reasoning that because the direct child is pid 1 of a new PID namespace,
+killing it would reap everything and be *better* than userspace. A test was
+added to check that, CI ran it, and it failed: with a 1200 ms budget against a
+payload sleeping 30 s, the call returned after `30057 ms` with the backgrounded
+grandchild's marker already on disk. The payload ran to completion. So on this
+backend the timeout kills neither the tree nor, promptly, the direct child —
+`spawnSync` reports `timedOut: true` while the command runs to its natural end.
+
+Confinement is unaffected by this: survivors remain inside the mount and
+network namespaces and can neither write out of root nor reach the network.
+What is missing is a BOUND ON RUNTIME. Any caller that needs one — a proof
+harness, a CI budget — must impose it itself and must not read `timedOut: true`
+as "the command stopped". The behaviour is pinned by "KNOWN GAP: the timeout
+does not stop the payload on this backend either" in `sandbox-escape.test.js`,
+which fails if it ever improves.
+
+One further limit is unchanged: this is one kernel and one
 image: a different kernel is a different host fact, which is exactly why the
 job runs per push rather than being recorded once and trusted forever.
 

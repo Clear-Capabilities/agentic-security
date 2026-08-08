@@ -110,9 +110,22 @@ escape cases hold in both directions there: in-root write succeeds, out-of-root
 write is blocked and creates no file, a denied write is never reported as a
 clean run, the payload cannot rebind the tree writable again, an ordinary
 non-zero exit stays `nonzero`, the parent environment is not forwarded,
-outbound network is blocked, and a wall-clock overrun stops the direct child.
-The wall-clock caveat is unchanged from macOS — *direct child*, not process
-tree. Fail-closed holds throughout: with no confinement primitive detected — or
+outbound network is blocked, and the wall-clock behaviour is now pinned as a
+KNOWN GAP.
+
+**One expectation was falsified, and that is the system working.** The
+wall-clock caveat was carried over from macOS as "stops the direct child, not
+the process tree", and `backend-namespace.js` reasoned it would be *better*
+there, since the direct child is pid 1 of a new PID namespace. A test was added
+to check rather than assume, CI ran it, and it failed: with a 1200 ms budget
+against a payload sleeping 30 s, the call returned after 30057 ms with the
+backgrounded grandchild's marker already written. The payload ran to
+completion, so the timeout kills neither the tree nor, promptly, the direct
+child — `spawnSync` reports `timedOut: true` while the command runs to its
+natural end. Confinement is unaffected (survivors stay inside the mount and
+network namespaces), but there is **no bound on runtime** here, and any caller
+needing one must impose it. The guides now say this, and a test fails if it
+ever improves. Fail-closed holds throughout: with no confinement primitive detected — or
 with the write confinement unprovable on the host — execution is refused, never
 run unconfined. The `sandbox-linux` job fails if the suite ever skips rather
 than runs, so this stays verified per push instead of being a one-time
