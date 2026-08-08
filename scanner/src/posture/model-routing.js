@@ -1,3 +1,4 @@
+import { applyMeasuredTrust } from './model-trust.js';
 // Capability-based model routing for cost-sensitive subagent dispatch.
 //
 // A declarative CWE/severity → model policy. When the orchestrator is about to
@@ -103,6 +104,31 @@ export function routeModelForFinding(finding) {
   // ── Tier 3: cheapest (Haiku, low effort) ──
   return { model: MODEL_CHEAPEST, effort: 'low',
     reason: `${cwe ? `${cwe} at ` : ''}${severity || 'low'} severity is a simple / hardening class — ${LABEL[MODEL_CHEAPEST]} at low effort.` };
+}
+
+// R13 — measured trust, layered over the capability policy above.
+//
+// The policy is a set of hand-written beliefs about which classes are hard.
+// This lets a class be downgraded to the cheapest model ONLY once that model's
+// measured miss rate clears a Wilson 95% upper bound for that class. The
+// capability route is the floor: measured evidence can permit a downgrade the
+// policy already allows, never promote a class the policy thinks is hard.
+//
+// Without a ledger the behaviour is byte-identical to before — no evidence is
+// not permission, and the default remains the stronger model.
+export function trustKeyFor(finding) {
+  return `${MODEL_CHEAPEST}::${parseCwe(finding?.cwe) || 'no-cwe'}::${(finding?.severity || 'unknown').toLowerCase()}`;
+}
+
+export function routeModelWithTrust(finding, ledger = null) {
+  const route = routeModelForFinding(finding);
+  if (!ledger || route.model === MODEL_CHEAPEST) return { ...route, trust: null };
+  return applyMeasuredTrust(
+    route,
+    { model: MODEL_CHEAPEST, effort: 'low' },
+    ledger,
+    trustKeyFor(finding),
+  );
 }
 
 // Route a list of findings. Returns [{ finding, model, effort, reason }, …].

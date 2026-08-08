@@ -50,6 +50,17 @@ import { redactSecrets } from './redact.js';
 // Bump on every prompt change so the cache invalidates. Exported as a
 // stable public symbol (premortem 4R-15) so the validator-cache GC subcommand
 // doesn't have to reach through the `_internal` underscore-prefixed export.
+import { createCostLedger, parseCapUsd, renderCostCeiling } from './cost-ceiling.js';
+import { localEndpointConfig } from './local-endpoint.js';
+
+// The output cap we request. Shared with the cost estimate so the ceiling
+// charges exactly what we permit the model to produce.
+const MAX_OUTPUT_TOKENS = 512;
+
+// Why the local preset declined, if it did. Surfaced on the batch so a refusal
+// reads as a refusal rather than as "no endpoint configured".
+let _localPresetRefusal = null;
+
 export const PROMPT_VERSION = 'v2.0-hardened';
 const CACHE_DIR = '.agentic-security/llm-cache';
 
@@ -93,6 +104,21 @@ Reply now with the JSON object on the last line of your response. Nothing else a
 `;
 
 function endpointConfig() {
+  // R11 — the local path is checked FIRST, ahead of the BYO endpoint, because
+  // it is the only mode that makes a promise about where data goes. If the
+  // operator asked for `local`, a stray AGENTIC_SECURITY_LLM_ENDPOINT pointing
+  // at a remote host must not quietly win: it is refused, and the tier stays
+  // off. Silently honouring it would break the one guarantee the preset exists
+  // to provide.
+  if ((process.env.AGENTIC_SECURITY_LLM_PRESET || '').toLowerCase() === 'local') {
+    const r = localEndpointConfig();
+    if (!r.ok) {
+      _localPresetRefusal = r.reason;
+      return null;
+    }
+    _localPresetRefusal = null;
+    return r.config;
+  }
   // Explicit BYO endpoint always wins (unchanged behaviour).
   const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
   if (endpoint) {
@@ -123,7 +149,7 @@ function buildRequest(model, prompt, preset) {
   if (preset === 'anthropic') {
     return {
       headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
-      body: { model, max_tokens: 512, messages: [{ role: 'user', content: prompt }] },
+      body: { model, max_tokens: MAX_OUTPUT_TOKENS, messages: [{ role: 'user', content: prompt }] },
       extractText: (j) => (Array.isArray(j?.content) ? j.content.filter(b => b?.type === 'text').map(b => b.text || '').join('') : ''),
     };
   }
@@ -322,7 +348,7 @@ export function validateResponse(obj, { challenge, file, line }) {
 // Pre-flight (premortem 2R2.2): findings WITHOUT a precise file:line cannot
 // be cross-checked against the LLM response (the model can trivially echo
 // empty/zero values). Such findings are marked unvalidated and KEPT.
-export async function validateOne(finding, fileContents, scanRoot) {
+export async function validateOne(finding, fileContents, scanRoot, ledger = null) {
   const cfg = endpointConfig();
   if (!cfg) {
     finding.validator_verdict = 'unvalidated';
@@ -371,7 +397,38 @@ export async function validateOne(finding, fileContents, scanRoot) {
   const challenge = crypto.randomBytes(8).toString('hex');
   const nonce     = crypto.randomBytes(8).toString('hex');
   const prompt = renderPrompt(finding, fileContents, challenge, nonce);
+
+  // R12 — the hard ceiling. Checked BEFORE the call, against a conservative
+  // estimate: input from the prompt we are about to send, output at the full
+  // max_tokens we allow. Charging the worst case is the only direction that
+  // cannot overshoot, and checking afterwards would let a call blow the cap
+  // and report the overrun as already spent.
+  const _est = {
+    inputTokens: Math.ceil(prompt.length / 4),
+    outputTokens: MAX_OUTPUT_TOKENS,
+  };
+  if (ledger) {
+    const afford = ledger.canAfford(_est);
+    if (!afford.ok) {
+      // Explicitly unvalidated, with the reason. NOT downgraded to a cheaper
+      // model and NOT treated as accepted — a finding nobody checked must not
+      // read like one that passed.
+      finding.validator_verdict = 'unvalidated';
+      finding.unvalidated = true;
+      finding.validator_skipped_reason = afford.reason;
+      return { verdict: 'unvalidated', error: 'cost-ceiling' };
+    }
+  }
+
   const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt, cfg.preset);
+  // Record actual usage when the endpoint reports it, else the estimate. An
+  // unreported call is never free.
+  if (ledger) {
+    const u = resp?.usage;
+    ledger.record(u && Number.isFinite(u.input_tokens)
+      ? { inputTokens: u.input_tokens, outputTokens: u.output_tokens || 0 }
+      : _est);
+  }
   if (!resp.ok) {
     finding.validator_verdict = 'unvalidated';
     finding.unvalidated = true;
@@ -420,7 +477,9 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
     for (const f of findings) {
       f.validator_verdict = 'unvalidated';
       f.unvalidated = true;
+      if (_localPresetRefusal) f.validator_skipped_reason = _localPresetRefusal;
     }
+    if (_localPresetRefusal) findings.localPathRefusal = _localPresetRefusal;
     return findings;
   }
   const candidates = findings.filter(f =>
@@ -432,11 +491,28 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
     const kb = (b.stableId || b.id || '');
     return ka < kb ? -1 : ka > kb ? 1 : 0;
   });
+  // R12 — one ledger for the whole batch. A per-call cap would be no cap at
+  // all: N calls each under the limit is how you get an N-times overrun.
+  let ledger = null;
+  try {
+    const capUsd = parseCapUsd();
+    if (capUsd != null) ledger = createCostLedger({ capUsd, model: cfg.model });
+  } catch (e) {
+    // A malformed cap is fatal for the tier, not ignored. Continuing with "no
+    // cap" would turn a typo into unlimited spend.
+    for (const f of findings) {
+      f.validator_verdict = 'unvalidated';
+      f.unvalidated = true;
+      f.validator_skipped_reason = e.message;
+    }
+    return findings;
+  }
+
   let i = 0;
   async function worker() {
     while (i < candidates.length) {
       const idx = i++;
-      try { await validateOne(candidates[idx], fileContents, scanRoot); }
+      try { await validateOne(candidates[idx], fileContents, scanRoot, ledger); }
       catch (e) {
         // FAIL-CLOSED on exception too.
         candidates[idx].validator_verdict = 'escalate';
@@ -445,6 +521,12 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
     }
   }
   await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => worker()));
+  if (ledger) {
+    // Surfaced on the batch so a report can state what was spent and, more
+    // importantly, what was NOT checked because the ceiling bound.
+    findings.costCeiling = ledger.state();
+    findings.costCeilingSummary = renderCostCeiling(ledger.state());
+  }
   for (const f of findings) {
     if (f.validator_verdict) continue;
     f.validator_verdict = 'unvalidated';

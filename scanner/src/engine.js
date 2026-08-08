@@ -90,6 +90,7 @@ import { scanOpenRedirect } from './sast/open-redirect.js';
 import { scanWrongContextSanitizer, scanSanitizerContextMismatch } from './sast/wrong-context-sanitizer.js';
 import { scanFrontendHygiene } from './sast/frontend-hygiene.js';
 import { scanCsvInjection } from './sast/csv-injection.js';
+import { scanCryptoSpecialist } from './sast/crypto-specialist.js';
 import { scanStoredTaint } from './sast/stored-taint.js';
 import { scanTreeSitterSinks } from './sast/tree-sitter-sinks.js';
 import { scanJavaStructural } from './sast/java-structural.js';
@@ -122,6 +123,7 @@ import { annotateConfidence } from './posture/confidence.js';
 import { backfillFindingDefaults } from './posture/finding-defaults.js';
 import { annotatePocs } from './posture/poc-generator.js';
 import { annotateExecutionProofs } from './posture/prove-findings.js';
+import { mineVulnHistory, annotateHistoricalRisk } from './posture/vuln-archaeology.js';
 import { annotateVerifierVerdicts } from './posture/verifier.js';
 import { annotateRegressionTests } from './posture/regression-test-gen.js';
 import { annotateCalibratedConfidence } from './posture/calibration.js';
@@ -7567,6 +7569,11 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       aF.push(...scanSanitizerContextMismatch(p,c));
       aF.push(...scanFrontendHygiene(p,c));
       aF.push(...scanCsvInjection(p,c));
+      // R16 — specialist crypto-hygiene classes (constant-time comparison,
+      // secret zeroization). Narrow by design: keyed on the secret-ness of the
+      // identifier, and silent whenever the correct constant-time or
+      // guaranteed-wipe API is already present.
+      aF.push(...scanCryptoSpecialist(p,c));
       aF.push(...scanStoredTaint(p,c));
       aF.push(...scanJavaStructural(p,c));
       aF.push(...scanCsharpStructural(p,c));
@@ -7987,7 +7994,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // Every catch in this block writes into _annotatorErrors so the operator
   // can tell "didn't run" from "ran cleanly." The array is surfaced as
   // scan.annotatorErrors in the report; an empty array means clean.
-  let _executionProofSummary = null;
+  let _executionProofSummary = null, _vulnHistory = null;
   const _annotatorErrors = [];
   const _runAnnotator = (phase, fn) => {
     try { return fn(); }
@@ -8204,6 +8211,16 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // unset, or with no confinement backend, nothing runs and no tier moves.
   // Awaited rather than fire-and-forget: a proof that lands after the report
   // is emitted is not evidence anyone sees.
+  // R14 — vulnerability archaeology. Mines git history for where this team has
+  // introduced security bugs before and attaches an ADVISORY per-file prior.
+  // Never a finding and never a severity change: those bugs are fixed, and a
+  // historical fix is not evidence of a present defect. Opt-in because it
+  // shells out to git over up to 500 commits.
+  _runAnnotator('annotateHistoricalRisk', () => {
+    if (process.env.AGENTIC_SECURITY_ARCHAEOLOGY !== '1' || !scanRoot) return;
+    _vulnHistory = mineVulnHistory(scanRoot);
+    annotateHistoricalRisk(finalFindings, _vulnHistory);
+  });
   try {
     _executionProofSummary = await annotateExecutionProofs(finalFindings, { fileContents: fc });
   } catch (e) {
@@ -8745,7 +8762,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // Addition #3 — root-cause sweep: from confirmed findings, find sibling instances
   // detectors missed, with total-count accounting. Confirmed-only (cheap by default).
   let _rootCauseSweep = null; try { _rootCauseSweep = sweepRootCauses(finalFindings, fc); } catch { _rootCauseSweep = null; }
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,vulnHistory:_vulnHistory,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.
