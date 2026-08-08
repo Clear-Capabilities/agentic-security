@@ -121,6 +121,7 @@ import { classifySecretCandidate as _entropyClassifySecret } from './sast/_secre
 import { annotateConfidence } from './posture/confidence.js';
 import { backfillFindingDefaults } from './posture/finding-defaults.js';
 import { annotatePocs } from './posture/poc-generator.js';
+import { annotateExecutionProofs } from './posture/prove-findings.js';
 import { annotateVerifierVerdicts } from './posture/verifier.js';
 import { annotateRegressionTests } from './posture/regression-test-gen.js';
 import { annotateCalibratedConfidence } from './posture/calibration.js';
@@ -7986,6 +7987,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // Every catch in this block writes into _annotatorErrors so the operator
   // can tell "didn't run" from "ran cleanly." The array is surfaced as
   // scan.annotatorErrors in the report; an empty array means clean.
+  let _executionProofSummary = null;
   const _annotatorErrors = [];
   const _runAnnotator = (phase, fn) => {
     try { return fn(); }
@@ -8195,6 +8197,18 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   _runAnnotator("annotatePocs", () => { annotatePocs(finalFindings, { routes: aR, fileContents: fc }); });
   // FR-VER-3: regression-test generator (builds on the PoC artifact).
   _runAnnotator("annotateRegressionTests", () => { annotateRegressionTests(finalFindings); });
+  // R2 — execution proof. Synthesizes a SANDBOX-RUNNABLE PoC (the HTTP PoCs
+  // above need a live server, so they can never be executed by the prover)
+  // and lets R1's sandbox decide the tier. Opt-in via AGENTIC_SECURITY_PROVE=1
+  // because it executes code derived from the scanned project; with the flag
+  // unset, or with no confinement backend, nothing runs and no tier moves.
+  // Awaited rather than fire-and-forget: a proof that lands after the report
+  // is emitted is not evidence anyone sees.
+  try {
+    _executionProofSummary = await annotateExecutionProofs(finalFindings, { fileContents: fc });
+  } catch (e) {
+    _annotatorErrors.push({ phase: 'annotateExecutionProofs', err: String((e && e.message) || e) });
+  }
   // Phase-1 next-gen P1.2 (FR-VER-3, FR-VER-6, FR-VER-7): per-finding
   // verifier verdict — verified-exploit (live PoC ran), verified-by-llm,
   // verified-sanitizer-absence, unverified-by-design, or cannot-verify.
@@ -8731,7 +8745,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // Addition #3 — root-cause sweep: from confirmed findings, find sibling instances
   // detectors missed, with total-count accounting. Confirmed-only (cheap by default).
   let _rootCauseSweep = null; try { _rootCauseSweep = sweepRootCauses(finalFindings, fc); } catch { _rootCauseSweep = null; }
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

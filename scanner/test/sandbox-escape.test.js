@@ -279,6 +279,31 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     assert.equal(r.timedOut, true);
     assert.equal(r.status, 'timeout');
   });
+
+  test('BAD: a wall-clock overrun takes the whole process tree with it', () => {
+    // The counterpart to the userspace backend's KNOWN GAP test, and the
+    // reason it is a separate assertion rather than an assumption: on this
+    // backend the direct child is pid 1 of a new PID namespace (`--pid
+    // --fork`), so killing it SHOULD reap every process inside. That was
+    // documented as a reasoned expectation for a long time — "expected, not
+    // verified" — which is exactly the kind of claim this suite exists to
+    // convert into an executed fact.
+    //
+    // Deliberately fails loudly in BOTH directions. If the grandchild
+    // survives, tree-kill does not hold and the guides claiming it must be
+    // corrected. If it dies, the claim is real.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-tree-'));
+    const marker = path.join(root, 'survivor.marker');
+    const r = runNamespace(
+      ['/bin/sh', '-c', '( /bin/sleep 3; /usr/bin/touch "$ROOT/survivor.marker" ) & sleep 30'],
+      { root, timeoutMs: 1200 });
+    assert.equal(r.status, 'timeout');
+    assert.equal(fs.existsSync(marker), false, 'precondition: nothing should have been written yet');
+    execFileSync('/bin/sleep', ['4']);
+    assert.equal(fs.existsSync(marker), false,
+      'a backgrounded grandchild OUTLIVED the timeout — the PID namespace did not reap the tree, '
+      + 'so the tree-kill claim in sandbox/CLAUDE.md and backend-namespace.js is FALSE and must be corrected');
+  });
 });
 
 test('the namespace backend returns the same result shape as every other backend', () => {

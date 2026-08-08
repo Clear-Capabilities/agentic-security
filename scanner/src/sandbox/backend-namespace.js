@@ -67,12 +67,14 @@
 // running as pid 1 of a new PID namespace (`--pid --fork`), so killing it is
 // expected to take the whole namespace's processes with it — better than the
 // userspace backend, where a backgrounded grandchild demonstrably survives.
-// "Expected", NOT verified, and this one did not clear with the rest: the
-// escape suite has now RUN and passed on a Linux runner, but its wall-clock
-// case asserts only that the DIRECT CHILD is stopped. No test observes whether
-// a backgrounded grandchild dies with the PID namespace, so tree-kill remains
-// a reasoned expectation. Do not state it as a guarantee until a test asserts
-// the grandchild is gone.
+// There is now a test that asserts this rather than assuming it: "BAD: a
+// wall-clock overrun takes the whole process tree with it" in
+// `sandbox-escape.test.js` backgrounds a grandchild, lets the run time out,
+// waits past the grandchild's own sleep, and requires its marker to be absent.
+// It skips on non-Linux hosts, so the `sandbox-linux` CI job is what settles
+// it. Until a CI log shows that case RAN and passed, treat tree-kill as a
+// reasoned expectation rather than a guarantee — and if it fails, this comment
+// and `sandbox/CLAUDE.md` are what must change, not the test.
 //
 // PRIVILEGE. Creating mount/PID/IPC/UTS/network namespaces directly requires
 // CAP_SYS_ADMIN, which an ordinary CI account does not have — asking for them
