@@ -27,6 +27,15 @@ const cmdi = (over = {}) => ({
   vuln: 'Command Injection (User-Controlled Input)', ...over,
 });
 
+// Sandbox proofs get a generous time budget in tests. The PoC itself runs in
+// ~120ms, but the release gate saturates the machine and a confined process can
+// take seconds just to start there — and a timed-out run has `ran:false`, which
+// correctly demotes a proof whose marker was already written. Raising the
+// budget does not weaken any assertion: the marker must still appear. The
+// PRODUCT default stays at 10s; only these tests ask for headroom, so what they
+// measure is the marker rather than the load average.
+const BUDGET = { timeoutMs: 45000 };
+
 // ------------------------------------------------------------ synthesis
 
 test('synthesizes a PoC for a shell-sink handler reading req.query', () => {
@@ -334,7 +343,7 @@ test('the guard actually holds when executed: no decision writes no marker', asy
   ].join('\n');
   const poc = synthesizeInProcessPoc(webhookFinding(), SILENT);
   assert.equal(poc.ok, true, poc.reason);
-  const r = await proveFinding({ ...webhookFinding(), poc: poc.poc }, { files: { 'hook.js': SILENT } });
+  const r = await proveFinding({ ...webhookFinding(), poc: poc.poc }, { files: { 'hook.js': SILENT }, ...BUDGET });
   assert.notEqual(r.proofTier, 'execution-proven',
     'a handler that never decided was reported as having accepted the request');
 });
@@ -375,7 +384,7 @@ test('the webhook class proves in the sandbox, and a fixed handler does not', as
 
   const vulnPoc = synthesizeInProcessPoc(webhookFinding(), WEBHOOK_VULN);
   const provenR = await proveFinding({ ...webhookFinding(), poc: vulnPoc.poc },
-    { files: { 'hook.js': WEBHOOK_VULN } });
+    { files: { 'hook.js': WEBHOOK_VULN }, ...BUDGET });
   assert.equal(provenR.proofTier, 'execution-proven', JSON.stringify(provenR.proofEvidence));
 
   // A handler that rejects unsigned requests must NOT prove. Settled by running
@@ -392,7 +401,7 @@ test('the webhook class proves in the sandbox, and a fixed handler does not', as
   const fixedPoc = synthesizeInProcessPoc(webhookFinding(), FIXED);
   assert.equal(fixedPoc.ok, true, 'the fixed handler should still be synthesizable — execution decides');
   const fixedR = await proveFinding({ ...webhookFinding(), poc: fixedPoc.poc },
-    { files: { 'hook.js': FIXED } });
+    { files: { 'hook.js': FIXED }, ...BUDGET });
   assert.notEqual(fixedR.proofTier, 'execution-proven',
     'a handler that rejects unsigned requests must never be reported as proven');
   assert.equal(fixedR.proofEvidence.ran, true, 'and the refusal must come from a RUN, not a skip');
@@ -461,7 +470,7 @@ test('SQL injection proves in the sandbox, and a parameterised query does not', 
   const vulnPoc = synthesizeInProcessPoc(sqli(), SQLI_VULN);
   assert.equal(vulnPoc.ok, true, vulnPoc.reason);
   const proven = await proveFinding({ ...sqli(), poc: vulnPoc.poc },
-    { files: mergePocFiles(vulnPoc.poc, SQLI_VULN) });
+    { files: mergePocFiles(vulnPoc.poc, SQLI_VULN), ...BUDGET });
   assert.equal(proven.proofTier, 'execution-proven', JSON.stringify(proven.proofEvidence));
 
   // The fixed handler is still SYNTHESIZABLE — execution decides, not a source
@@ -469,7 +478,7 @@ test('SQL injection proves in the sandbox, and a parameterised query does not', 
   const fixedPoc = synthesizeInProcessPoc(sqli(), SQLI_FIXED);
   assert.equal(fixedPoc.ok, true, 'a parameterised handler must still be attempted');
   const fixed = await proveFinding({ ...sqli(), poc: fixedPoc.poc },
-    { files: mergePocFiles(fixedPoc.poc, SQLI_FIXED) });
+    { files: mergePocFiles(fixedPoc.poc, SQLI_FIXED), ...BUDGET });
   assert.notEqual(fixed.proofTier, 'execution-proven',
     'a bound parameter must never be reported as SQL injection');
   assert.equal(fixed.proofEvidence.ran, true, 'and the refusal must come from a RUN, not a skip');
@@ -531,7 +540,7 @@ test('path traversal proves in the sandbox, and a basename guard does not', asyn
   const vulnPoc = synthesizeInProcessPoc(traversal(), TRAVERSAL_VULN);
   assert.equal(vulnPoc.ok, true, vulnPoc.reason);
   const proven = await proveFinding({ ...traversal(), poc: vulnPoc.poc },
-    { files: { 'files.js': TRAVERSAL_VULN } });
+    { files: { 'files.js': TRAVERSAL_VULN }, ...BUDGET });
   assert.equal(proven.proofTier, 'execution-proven', JSON.stringify(proven.proofEvidence));
 
   // Unlike the webhook class this template does NOT read the source for a
@@ -540,7 +549,7 @@ test('path traversal proves in the sandbox, and a basename guard does not', asyn
   const fixedPoc = synthesizeInProcessPoc(traversal(), TRAVERSAL_FIXED);
   assert.equal(fixedPoc.ok, true, 'a guarded handler must still be attempted');
   const fixed = await proveFinding({ ...traversal(), poc: fixedPoc.poc },
-    { files: { 'files.js': TRAVERSAL_FIXED } });
+    { files: { 'files.js': TRAVERSAL_FIXED }, ...BUDGET });
   assert.notEqual(fixed.proofTier, 'execution-proven',
     'a handler that strips the traversal must never be reported as proven');
   assert.equal(fixed.proofEvidence.ran, true);
@@ -575,7 +584,7 @@ test('a silent handler runs to completion so the marker check actually executes'
   ].join('\n');
   const poc = synthesizeInProcessPoc(webhookFinding(), SILENT);
   assert.equal(poc.ok, true);
-  const r = await proveFinding({ ...webhookFinding(), poc: poc.poc }, { files: { 'hook.js': SILENT } });
+  const r = await proveFinding({ ...webhookFinding(), poc: poc.poc }, { files: { 'hook.js': SILENT }, ...BUDGET });
   assert.notEqual(r.proofTier, 'execution-proven');
   // The positive control. With an unref'd timer Node exits code 13 with the
   // promise still pending and the marker check below the await NEVER RUNS —
