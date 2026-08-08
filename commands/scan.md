@@ -231,6 +231,14 @@ Map the choice to the corresponding flag and run it. This keeps the full surface
 | `--baseline` | Set / view / refresh the scan baseline |
 | `--archaeology` | Historical analysis — when was each line of code authored, by whom, against which prompt |
 | `--scanner-meta` | Scanner self-test / version diff / concurrency check / spec-drift check |
-| `--hunt` | LLM-driven discovery over the call-graph partition — seven lenses, deterministic confirmation, adversarial refutation. Advisory: never gates CI. Requires `AGENTIC_SECURITY_LLM_ENDPOINT`; without it, reports its own degradation and finds nothing. |
+
+## Discovery layer (not yet wired)
+
+The LLM-driven discovery engine lives at `scanner/src/discovery/` (seven hunting
+lenses, deterministic confirmation, adversarial refutation — see its local
+`CLAUDE.md`). It has no CLI entry point yet: `--hunt` is not a recognised flag
+of this command, so `/scan --hunt` today silently falls through to the default
+full scan (`--all`) rather than running discovery. Do not tell a user that
+`--hunt` works until this section is replaced with a real mode row.
 
 🛡  agentic-security · created by ClearCapabilities.Com
