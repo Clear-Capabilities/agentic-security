@@ -3,6 +3,7 @@ import * as crypto from 'node:crypto';
 import { _isCustomSuppressed } from '../engine.js';
 import { alertFace, approveFace } from './mascot.js';
 import { SCANNER_VERSION } from '../posture/version.js';
+import { proofBlock } from '../posture/proof-artifact.js';
 
 const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const SEV_TO_SARIF = { critical: 'error', high: 'error', medium: 'warning', low: 'note', info: 'none' };
@@ -709,6 +710,14 @@ export function toSARIF(scan, meta={}){
           // (verified | unsigned | pass-through). The legacy bool flags are
           // emitted alongside for one release of grace so existing dashboards
           // don't break; new integrations should switch to signatureStatus.
+          // PRD Epic 1.4 / 7.4 — the proof block. `proofLevel` is the
+          // reader-facing vocabulary (PROVEN / PROBABLE_FP / REACHABLE /
+          // PATTERN); `proofArtifactSha256` commits to the evidence that
+          // justified it, so a fix PR can reference the artifact it was
+          // reviewed against. Omitted entirely when the proof stage did not
+          // run — labelling every finding PATTERN would assert each was
+          // considered and found unprovable.
+          ...(proofBlock(f) || {}),
           signatureStatus: f.signatureStatus || (f._passThroughSigning ? 'pass-through' : (f._unsigned ? 'unsigned' : 'verified')),
           ...(f._unsigned ? { unsigned: true } : {}),
           ...(f._passThroughSigning ? { passThroughSigning: true } : {}),
