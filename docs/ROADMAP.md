@@ -20,7 +20,7 @@ This project's core is not a model call. It is a deterministic multi-layer
 engine — 110+ SAST modules, a nine-language IR, an IFDS/k-CFA taint engine —
 behind three gates that already run on every change:
 
-- a **200-entry regression corpus**, baseline-gated, each entry proven to fail
+- a **210-entry regression corpus**, baseline-gated, each entry proven to fail
   without its fix;
 - a **per-file precision gate** over this repository's own findings;
 - **held-out calibration** with byte-identical deterministic output.
@@ -172,12 +172,30 @@ non-zero. Enrolment lands in `capability/`, never `regression/` — an automated
 writer must not decide what blocks everyone's build, and the existing
 five-snapshot graduation policy still governs promotion.
 
-**Known limit, stated rather than papered over:** the loop is not yet
-automatic end to end. The scan pipeline does not attach a `poc` to findings or
-promote proof tiers on its own, so `last-scan.json` never contains an
-`execution-proven` finding by itself — PoCs come from the PoC generator, and
-the enrolment script proves them at enrol time. Automatic PoC attachment during
-a scan is the remaining piece.
+**The loop is now automatic through proving.** That known limit is closed:
+`posture/poc-inprocess.js` synthesizes a *sandbox-runnable* PoC — the existing
+generator emits HTTP PoCs that need a live server and so could never be
+executed by the prover, which is the concrete reason nothing in a scan ever
+reached `execution-proven` — and `posture/prove-findings.js` runs it during the
+scan. Opt-in via `AGENTIC_SECURITY_PROVE=1`, since it executes code derived
+from the scanned project; with the flag unset, or with no confinement backend,
+nothing runs and no tier moves. Verified end to end: a default scan promotes
+nothing, and the same scan with the flag reaches `execution-proven` on real
+sandbox evidence.
+
+The synthesizer refuses far more than it accepts, deliberately. A PoC that runs
+without proving anything yields `proof-failed`, which is a triage signal *about
+the finding*, so a template firing on a shape it cannot exploit manufactures
+evidence against real bugs. It refuses argv-form sinks (a shell payload would
+not execute there, so silence would say nothing), families whose exploitation is
+not marker-observable, one-argument exports, and handlers with no identifiable
+injection point.
+
+**What remains manual, and inherently so:** enrolment still needs a fix to
+supply `post/`, and for the provable families those fixes are agent-generated.
+A corpus entry without a fixed tree cannot score `post:TN`, and synthesising one
+by deleting the vulnerable line would pass for the wrong reason — so this is a
+boundary to state, not a gap to close.
 
 ### R3. Published precision/recall scorecard
 
@@ -291,18 +309,34 @@ existing sink-driven taint. Composes directly with R6.
 - **R10. Secret redaction before any model call.** **Landed** — `llm-validator/redact.js`
   redacts at the single prompt-building choke point; values replaced, structure kept,
   ordinary code passes through byte-unchanged.
-- **R11. Local/offline model path.** Fits the existing offline-degradation design.
-- **R12. Hard cost ceiling.** A cost *advisor* exists; a cap does not.
-- **R13. Multi-model routing with measured trust.** Route to a cheaper model only
-  once its measured miss rate clears a statistical bound (Wilson upper bound),
-  per decision class. Close in spirit to the existing calibration work.
-- **R14. Vulnerability archaeology.** Mine git history for vulnerability patterns;
-  currently only diffs are scored for material change.
+- **R11. Local/offline model path.** **Landed** — `llm-validator/local-endpoint.js`.
+  The `local` preset ENFORCES loopback on the host literal (not DNS, since a name
+  that resolves to 127.0.0.1 today can resolve elsewhere tomorrow) and beats a
+  stray remote endpoint rather than letting it win. The guarantee, not the
+  convenience, is the feature.
+- **R12. Hard cost ceiling.** **Landed** — `llm-validator/cost-ceiling.js`. Charged
+  on the worst-case estimate BEFORE each call, one ledger per batch, and it stops
+  rather than degrading quality to fit a budget. An unpriceable model with a cap
+  set refuses every call rather than spending unmetered.
+- **R13. Multi-model routing with measured trust.** **Landed** —
+  `posture/model-trust.js`. A class is downgraded only once its miss rate clears a
+  Wilson 95% *upper* bound; the bound rather than the point estimate is the whole
+  idea, since 0-misses-in-5 looks perfect and is consistent with a model that
+  misses half the time. Fails closed, and can only downgrade, never promote.
+- **R14. Vulnerability archaeology.** **Landed** — `posture/vuln-archaeology.js`.
+  Three evidence tiers reported separately rather than blended, and ranking is
+  churn-corrected by concentration: the raw count returned CLAUDE.md and
+  package.json as this repository's top hotspots, the corrected one returns
+  `rule-pack-signing.js` at 5 of 5 commits.
 - **R15. Binary / firmware / RTL reach.** Large scope expansion. **Deliberately
   deferred** — it is where the field is strongest and it is a large investment
   away from this project's differentiation.
-- **R16. Specialist audit classes.** Constant-time/side-channel, zeroization,
-  property-based testing, spec-to-code compliance. Narrow, high credibility.
+- **R16. Specialist audit classes.** **Partially landed** — `sast/crypto-specialist.js`
+  ships the two with an unambiguous correct form to point at: CWE-208
+  non-constant-time comparison and CWE-316 non-zeroizable secret material, with 10
+  corpus entries behind them. Property-based testing and spec-to-code compliance
+  are NOT started; both need a spec artifact to check against, which is a
+  different kind of input from anything the engine reads today.
 
 ---
 
