@@ -13,6 +13,8 @@
 // not vote, and is excluded from the denominator rather than counted as
 // agreement. If nobody votes the panel is `undecided` and the candidate
 // SURVIVES — an outage must not quietly delete findings.
+import { resolveLlmInvoke } from './llm-invoke.js';
+
 const DEFAULT_ANGLES = ['reachability', 'preconditions', 'sanitization'];
 export const REFUTE_ANGLES = Object.freeze([...DEFAULT_ANGLES]);
 
@@ -47,21 +49,9 @@ function parseVote(raw) {
   return { refuted: p.refuted, reason: typeof p.reason === 'string' ? p.reason : '' };
 }
 
-async function defaultLlmInvoke(prompt) {
-  const res = await fetch(process.env.AGENTIC_SECURITY_LLM_ENDPOINT, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-  });
-  if (!res.ok) throw new Error(`llm endpoint returned ${res.status}`);
-  const body = await res.json();
-  return typeof body === 'string' ? body : (body?.text ?? JSON.stringify(body));
-}
-
 export async function disproveCandidate(candidate, opts = {}) {
   const angles = Array.isArray(opts.angles) && opts.angles.length ? opts.angles : DEFAULT_ANGLES;
-  const llmInvoke = opts.llmInvoke
-    || (process.env.AGENTIC_SECURITY_LLM_ENDPOINT ? defaultLlmInvoke : null);
+  const llmInvoke = resolveLlmInvoke(opts);
 
   const votes = [];
   if (typeof llmInvoke === 'function') {

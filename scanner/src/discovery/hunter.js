@@ -11,6 +11,7 @@
 // discovery pass that cannot run must leave the rest of the scan intact.
 import * as crypto from 'node:crypto';
 import { buildHunterPrompt } from './lenses.js';
+import { resolveLlmInvoke } from './llm-invoke.js';
 
 function appendEntry(transcript, entry) {
   const prev = transcript.length ? transcript[transcript.length - 1].hash : null;
@@ -64,24 +65,11 @@ export function parseCandidates(raw, focusArea, lens) {
   return candidatesFromParsed(parsed, focusArea, lens);
 }
 
-async function defaultLlmInvoke(prompt) {
-  const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-  });
-  if (!res.ok) throw new Error(`llm endpoint returned ${res.status}`);
-  const body = await res.json();
-  return typeof body === 'string' ? body : (body?.text ?? JSON.stringify(body));
-}
-
 export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   const transcript = [];
   const lensKey = lens?.key || 'unknown';
   const base = { focusAreaId: focusArea.id, lens: lensKey, transcript };
-  const llmInvoke = opts.llmInvoke
-    || (process.env.AGENTIC_SECURITY_LLM_ENDPOINT ? defaultLlmInvoke : null);
+  const llmInvoke = resolveLlmInvoke(opts);
 
   if (typeof llmInvoke !== 'function') {
     const reason = 'no llmInvoke supplied and AGENTIC_SECURITY_LLM_ENDPOINT not set';
