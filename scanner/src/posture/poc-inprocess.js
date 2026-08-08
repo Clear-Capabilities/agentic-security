@@ -291,8 +291,11 @@ function _webhookPoc(finding, fileContent) {
     '      return { send: done, json: done, end: done }; },',
     '  };',
     '  const req = { headers: {}, body: { amount: 1, id: "poc" }, rawBody: "{}" };',
-    `  try { ${invoke}(req, res); } catch { decided = "threw"; done(); }`,
+    // Armed BEFORE the call. A handler that replies synchronously would
+    // otherwise clear a null handle and then arm a timer nobody cancels,
+    // holding the process open for the full budget after the work is done.
     '  timer = setTimeout(resolve, 3000);',
+    `  try { ${invoke}(req, res); } catch { decided = "threw"; done(); }`,
     '});',
     '// Only an observed acceptance proves the bypass. "No decision" is not',
     '// acceptance, and must not write the marker.',
@@ -415,8 +418,8 @@ function _sqlInjectionPoc(finding, fileContent) {
     '    status: () => ({ send: done, json: done, end: done }),',
     '  };',
     `  const req = { ${src.prop}: ${JSON.stringify({ [src.key]: payload })} };`,
+    '  timer = setTimeout(resolve, 3000);',   // armed before the call, see the webhook template
     `  try { ${invoke}(req, res); } catch { done(); }`,
-    '  timer = setTimeout(resolve, 3000);',
     '});',
     '',
     '// The whole decision, stated once: sentinel inside a SQL string is the bug;',
@@ -529,8 +532,8 @@ function _pathTraversalPoc(finding, fileContent) {
     '      setHeader: () => {}, type: () => res, set: () => res,',
     '    };',
     `    const req = { ${src.prop}: { ${JSON.stringify(src.key)}: candidate } };`,
+    '    timer = setTimeout(resolve, 3000);',   // armed before the call
     `    try { ${invoke}(req, res); } catch { done(); }`,
-    '    timer = setTimeout(resolve, 3000);',
     '  });',
     '  for (const v of seen) {',
     "    const s = Buffer.isBuffer(v) ? v.toString('utf8') : typeof v === 'string' ? v : JSON.stringify(v) || '';",

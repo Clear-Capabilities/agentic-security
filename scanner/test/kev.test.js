@@ -10,6 +10,25 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 
+// ISOLATE $HOME FIRST — before anything computes a cache path and before the
+// engine import below resolves.
+//
+// The engine's "sessionStorage" is a disk-backed cache under
+// `~/.claude/agentic-security/osv-cache/`, which is GLOBAL STATE SHARED BY
+// EVERY TEST IN THE RUN. Any other test that performs a real scan reaches SCA
+// enrichment, fetches the live CISA feed, and writes the real catalog over the
+// fake one primed here — after which this test asserts against real data that
+// will never contain a placeholder CVE, and fails. It failed in CI exactly that
+// way once enough concurrent scan-running tests existed to lose the race.
+//
+// Pointing HOME at a private temp directory gives this test its own cache, so
+// it is deterministic regardless of what else runs alongside it and regardless
+// of whether the machine has network. `os.homedir()` honours $HOME on POSIX
+// and USERPROFILE on Windows.
+const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'kev-home-'));
+process.env.HOME = HOME;
+process.env.USERPROFILE = HOME;
+
 // Prime the cache file directly. The engine's disk cache path is derived from
 // sha256 of the cache key.
 const CACHE_DIR = path.join(os.homedir(), '.claude', 'agentic-security', 'osv-cache');
