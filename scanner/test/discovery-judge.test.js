@@ -67,10 +67,27 @@ test('stableId collides across lines of the same lens and file — pinned delibe
   assert.equal(a.ruleId, 'discovery:injection');
 });
 
-test('file+line+family is the primary duplicate key, so a colliding id at a new line is fresh', () => {
-  const prior = { findings: [{ file: 'auth.js', line: 12, family: 'injection', stableId: null }] };
-  const r = judgeCandidates([cand({ id: 'c2', line: 99 })], prior, null);
+test('file+line+family is the primary duplicate key, so a different sink at a new line is fresh', () => {
+  // Prior finding at auth.js:12 with sink 'db.query'.
+  const priorFinding = toFindingShape(cand({ line: 12 }));
+  // New candidate at auth.js:99 with different sink — should be fresh even though
+  // same lens and file, because line is different and sink discriminates the id.
+  const r = judgeCandidates([cand({ id: 'c2', line: 99, sink: 'child_process.exec' })], { findings: [priorFinding] }, null);
   assert.equal(r.fresh.length, 1);
+  assert.equal(r.duplicates.length, 0);
+});
+
+test('regression: different sink at different line is not silently swallowed as duplicate', () => {
+  // Scenario: prior scan found SQLi at auth.js:12 via 'db.query'.
+  // Now judge a command-injection candidate at auth.js:400 via 'child_process.exec'.
+  // These are distinct vulnerabilities and must not collapse onto one id.
+  const sqliPrior = toFindingShape(cand({ line: 12, sink: 'db.query', title: 'SQLi in login' }));
+  const cmdInjCandidate = cand({
+    id: 'c2', line: 400, sink: 'child_process.exec', title: 'Command injection in shell',
+  });
+  const r = judgeCandidates([cmdInjCandidate], { findings: [sqliPrior] }, null);
+  assert.equal(r.fresh.length, 1, 'command injection should be fresh, not swallowed');
+  assert.equal(r.duplicates.length, 0);
 });
 
 test('every candidate lands in exactly one bucket', () => {

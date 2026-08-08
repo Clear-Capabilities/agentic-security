@@ -42,6 +42,9 @@ export function toFindingShape(candidate) {
     parser: 'DISCOVERY',
     family: candidate.family || 'other',
     ruleId: `discovery:${candidate.lens}`,
+    // snippet discriminates findings so computeStableId has material to hash. An empty
+    // snippet collapses distinct findings of the same lens in the same file onto one id.
+    snippet: candidate.sink || candidate.entryPoint || candidate.title || '',
   };
   return {
     ...base,
@@ -70,8 +73,10 @@ export function judgeCandidates(candidates, priorScan, triageFeedback) {
     const f = toFindingShape(c);
     if (feedback[f.stableId] === 'fp') { suppressed.push({ ...f, suppressedBy: 'triage-fp' }); continue; }
     const locKey = `${f.file}|${f.line}|${f.family}`;
-    if (priorIds.has(f.stableId)) { duplicates.push({ ...f, duplicateOf: f.stableId }); continue; }
+    // Location key is PRIMARY: same file, line, and family match existing findings.
     if (priorByLoc.has(locKey)) { duplicates.push({ ...f, duplicateOf: priorByLoc.get(locKey) }); continue; }
+    // stableId is SECONDARY: same lens, file, and sink at a moved line is likely the same bug.
+    if (priorIds.has(f.stableId)) { duplicates.push({ ...f, duplicateOf: f.stableId }); continue; }
     fresh.push(f);
   }
   return { fresh, duplicates, suppressed };
