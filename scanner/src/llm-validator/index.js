@@ -242,27 +242,40 @@ function _cacheSignable(value) {
   ].join('\u0000');
 }
 
+// A cache entry that EXISTS but does not verify is a different event from an
+// ordinary miss, and it must be countable. In CI the per-install key is
+// regenerated every run (nothing persists `$XDG_CONFIG_HOME`), so a restored
+// cache directory verifies against nothing and the hit rate is silently zero —
+// the operator pays for every call twice over and sees no signal. Fail-closed is
+// right; failing closed invisibly is not.
+const _cacheStats = { hits: 0, misses: 0, unverified: 0 };
+function cacheStats() { return { ..._cacheStats }; }
+function _resetCacheStatsForTests() { _cacheStats.hits = 0; _cacheStats.misses = 0; _cacheStats.unverified = 0; }
+
 function readCache(scanRoot, key) {
   const fp = statePath(scanRoot, 'llm-cache', key + '.json');
-  if (!fs.existsSync(fp)) return null;
+  if (!fs.existsSync(fp)) { _cacheStats.misses++; return null; }
   let raw;
-  try { raw = JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
-  if (!raw || typeof raw !== 'object') return null;
+  try { raw = JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { _cacheStats.unverified++; return null; }
+  if (!raw || typeof raw !== 'object') { _cacheStats.unverified++; return null; }
 
   // Verdict allowlist on READ, mirroring validateResponse. A cached verdict is
   // as much untrusted input as a model response is.
-  if (!['accept', 'reject', 'escalate'].includes(raw.verdict)) return null;
+  if (!['accept', 'reject', 'escalate'].includes(raw.verdict)) { _cacheStats.unverified++; return null; }
 
   const sig = typeof raw.sig === 'string' ? raw.sig : null;
-  if (!sig) return null;
+  if (!sig) { _cacheStats.unverified++; return null; }
   let expected;
-  try { expected = signLastScan(_cacheSignable(raw)); } catch { return null; }
+  try { expected = signLastScan(_cacheSignable(raw)); } catch { _cacheStats.unverified++; return null; }
   // Constant-time compare; length mismatch short-circuits before timingSafeEqual
   // (which throws on unequal lengths).
-  if (sig.length !== expected.length) return null;
+  if (sig.length !== expected.length) { _cacheStats.unverified++; return null; }
   try {
-    if (!crypto.timingSafeEqual(Buffer.from(sig, 'utf8'), Buffer.from(expected, 'utf8'))) return null;
-  } catch { return null; }
+    if (!crypto.timingSafeEqual(Buffer.from(sig, 'utf8'), Buffer.from(expected, 'utf8'))) {
+      _cacheStats.unverified++; return null;
+    }
+  } catch { _cacheStats.unverified++; return null; }
+  _cacheStats.hits++;
   return raw;
 }
 
@@ -616,6 +629,19 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
     findings.costCeiling = ledger.state();
     findings.costCeilingSummary = renderCostCeiling(ledger.state());
   }
+  const _cs = cacheStats();
+  findings.validatorCache = _cs;
+  if (_cs.unverified > 0) {
+    // Loud, because the common cause is structural rather than an attack: a CI
+    // runner that regenerates the per-install key every run can never verify a
+    // restored cache, so every call is re-paid silently.
+    try {
+      process.stderr.write(
+        `agentic-security: ${_cs.unverified} validator-cache entr(y/ies) present but UNVERIFIED `
+        + '(treated as misses). If this is CI, the per-install HMAC key is probably regenerated each '
+        + 'run — set AGENTIC_SECURITY_HMAC_KEY to a stable secret, or expect a permanent 0% hit rate.\n');
+    } catch {}
+  }
   for (const f of findings) {
     if (f.validator_verdict) continue;
     f.validator_verdict = 'unvalidated';
@@ -681,4 +707,4 @@ export function applyValidatorVerdicts(findings) {
   return { kept, dropped };
 }
 
-export const _internal = { PROMPT_VERSION, renderPrompt, parseLastJsonObject, validateResponse, sanitizeReasoning, cacheKey, endpointConfig, buildRequest, readCache, writeCache, ensureCacheDir };
+export const _internal = { PROMPT_VERSION, renderPrompt, parseLastJsonObject, validateResponse, sanitizeReasoning, cacheKey, endpointConfig, buildRequest, readCache, writeCache, ensureCacheDir, cacheStats, _resetCacheStatsForTests };

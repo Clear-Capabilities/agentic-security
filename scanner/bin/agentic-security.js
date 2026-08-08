@@ -17,7 +17,7 @@ import { recordScan, formatStreakLine, formatGradeDelta } from '../src/posture/s
 import { ingestAndMerge } from '../src/sca/sarif-ingest.js';
 import { loadProfile, saveProfile, detectProfile, renderAttributionLine, ATTRIBUTION, ATTRIBUTION_URL } from '../src/posture/profile.js';
 import { applySuppressions, addSoftAcceptance, expiredSoftAcceptances } from '../src/posture/suppressions.js';
-import { applyOverrides, validateOverrides } from '../src/posture/rule-overrides.js';
+import { applyOverrides, validateOverrides, suppressionReport, renderSuppressionSummary } from '../src/posture/rule-overrides.js';
 import { listPacks, loadPack, applyPacks } from '../src/posture/rule-packs.js';
 import { writeLockfile, verifyLockfile, makeDeterministic, isDeterministic } from '../src/posture/deterministic.js';
 import { enrichWithEPSS } from '../src/posture/epss.js';
@@ -512,6 +512,19 @@ async function cmdScan(args) {
   scan.findings    = applyOverrides(scan.findings    || [], targetAbs);
   scan.secrets     = applyOverrides(scan.secrets     || [], targetAbs);
   scan.logicVulns  = applyOverrides(scan.logicVulns  || [], targetAbs);
+  // Coverage reduction belongs in the ARTIFACT, not only in a log line. A
+  // `disable:` that takes effect otherwise produces findings that are simply
+  // absent, which is indistinguishable from clean code to whoever reads the
+  // report. Recorded whether the suppression was authorised or not — an
+  // authorised one still hides results.
+  try {
+    const _sup = suppressionReport(targetAbs);
+    if (_sup) {
+      scan.suppressedRules = _sup;
+      const _line = renderSuppressionSummary(_sup);
+      if (_line) process.stderr.write(`⚠️  agentic-security: ${_line}\n`);
+    }
+  } catch { /* reporting must never fail a scan */ }
 
   // Curated rule packs: --pack <name> (repeatable). Narrows findings to the
   // CWEs covered by the requested pack(s).
@@ -575,6 +588,7 @@ async function cmdScan(args) {
   // only — a failure here must never fail a scan.
   try {
     const { computeRunAttestation } = await import('../src/posture/attestation.js');
+    const { keyProvenance } = await import('../src/posture/integrity.js');
     const { effectiveVersion } = await import('../src/posture/ruleset-version.js');
     scan.attestation = computeRunAttestation({
       findings: normalizeFindings(scan),
@@ -584,6 +598,11 @@ async function cmdScan(args) {
       root: targetAbs,
       sign: true,
     });
+    // P1-3 — a signature is only as meaningful as the key behind it.
+    // `env` means whoever set the environment could have signed this;
+    // `ephemeral` means the key could not be persisted, so this signature will
+    // never verify on any later run. Neither is inferable from the digest.
+    if (scan.attestation) scan.attestation.keyProvenance = keyProvenance();
   } catch { /* attestation is metadata; never fail a scan over it */ }
 
   // R2: Always emit machine-readable artifacts to .agentic-security/.

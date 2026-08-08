@@ -412,6 +412,13 @@ export function toJSON(scan, meta={}, opts={}){
     // It carries its own `proves` / `doesNotProve` statement — do not quote
     // the digest as cross-machine reproducibility, which it is not.
     attestation: scan.attestation || null,
+    // Coverage reduction, surfaced in the ARTIFACT. `disable:` in rules.yml
+    // removes findings from the report, and a removed finding is
+    // indistinguishable from clean code unless the removal is stated. Null when
+    // nothing was suppressed, so consumers can omit the section rather than
+    // render an empty one. An AUTHORISED suppression is reported too — the
+    // signature proves who asked for it, not that the results are absent.
+    suppressedRules: scan.suppressedRules || null,
     _scanMeta: scan._scanMeta || null,
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];

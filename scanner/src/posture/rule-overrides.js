@@ -120,10 +120,71 @@ export function applyOverrides(findings, scanRoot) {
     disable = new Set();
   }
   const sevMap = o.severityOverrides || {};
-  return findings
-    .filter(f => !disable.has(f.vuln) && !disable.has(f.id))
-    .map(f => sevMap[f.vuln] ? { ...f, severity: sevMap[f.vuln] } : f);
+  const kept = [];
+  for (const f of findings) {
+    const key = disable.has(f.vuln) ? f.vuln : (disable.has(f.id) ? f.id : null);
+    if (key !== null) {
+      // RECORD the suppression. A `disable:` that takes effect otherwise
+      // produces findings that are simply absent — indistinguishable, in the
+      // artifact a human reads, from a clean scan. Coverage reduction must be
+      // visible where the results are, not only on a stderr line nobody keeps.
+      _recordSuppression(scanRoot, key, f);
+      continue;
+    }
+    kept.push(sevMap[f.vuln] ? { ...f, severity: sevMap[f.vuln] } : f);
+  }
+  return kept;
 }
+
+// Per-scanRoot ledger of what `disable:` removed, and under what authority.
+// Read by the CLI and attached to the scan output.
+const _suppressions = new Map();
+
+function _recordSuppression(scanRoot, key, finding) {
+  const root = String(scanRoot || '');
+  let e = _suppressions.get(root);
+  if (!e) { e = { rules: new Map(), total: 0 }; _suppressions.set(root, e); }
+  let r = e.rules.get(key);
+  if (!r) { r = { rule: key, count: 0, severities: {}, examples: [] }; e.rules.set(key, r); }
+  r.count++;
+  e.total++;
+  const sev = finding?.severity || 'unknown';
+  r.severities[sev] = (r.severities[sev] || 0) + 1;
+  // A bounded sample so a reader can see WHAT was removed, not just how much.
+  if (r.examples.length < 5 && finding?.file) {
+    r.examples.push(`${finding.file}${finding.line ? ':' + finding.line : ''}`);
+  }
+}
+
+/**
+ * What `disable:` removed from this scan, and under what authority.
+ *
+ * Returns null when nothing was suppressed — callers omit the section rather
+ * than rendering an empty one. `authority` is the reason the gate allowed it,
+ * so a reader can tell a signed suppression from an env-var opt-out.
+ */
+export function suppressionReport(scanRoot) {
+  const e = _suppressions.get(String(scanRoot || ''));
+  if (!e || !e.total) return null;
+  const gate = _disableAllowed(scanRoot);
+  return {
+    total: e.total,
+    authority: gate.reason,
+    rules: [...e.rules.values()].sort((a, b) => b.count - a.count || (a.rule < b.rule ? -1 : 1)),
+    note: 'These findings were REMOVED from the report by `disable:` in '
+      + '.agentic-security/rules.yml. They are not absent because the code is clean.',
+  };
+}
+
+/** One-line human summary; null when nothing was suppressed. */
+export function renderSuppressionSummary(rep) {
+  if (!rep) return null;
+  const top = rep.rules.slice(0, 3).map(r => `${r.rule} (${r.count})`).join(', ');
+  return `${rep.total} finding(s) SUPPRESSED by rules.yml disable: [${top}${rep.rules.length > 3 ? ', …' : ''}] `
+    + `— authority: ${rep.authority}. These are removed results, not clean code.`;
+}
+
+export function _resetSuppressionsForTests() { _suppressions.clear(); }
 
 // Cache: compiled custom rules per scanRoot. Validated at first call;
 // subsequent calls for the same scan reuse the compiled regexes.

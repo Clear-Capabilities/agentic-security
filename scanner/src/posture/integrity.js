@@ -33,16 +33,23 @@ function _keyDir() {
 }
 function _keyPath() { return path.join(_keyDir(), 'scan-key'); }
 
+// Where the active key came from. A signature is only as meaningful as the key
+// behind it, and `env` means "whoever set the environment could sign this" —
+// a reader of a scan artifact deserves to know which case they are in.
+let _keySource = null;
+export function keyProvenance() { return _keySource || 'unresolved'; }
+
 function _readOrGenerateKey() {
   const fromEnv = process.env.AGENTIC_SECURITY_HMAC_KEY;
   if (fromEnv && /^[0-9a-fA-F]{32,}$/.test(fromEnv.trim())) {
+    _keySource = 'env';
     return Buffer.from(fromEnv.trim(), 'hex');
   }
   const fp = _keyPath();
   try {
     if (fs.existsSync(fp)) {
       const hex = fs.readFileSync(fp, 'utf8').trim();
-      if (/^[0-9a-fA-F]{32,}$/.test(hex)) return Buffer.from(hex, 'hex');
+      if (/^[0-9a-fA-F]{32,}$/.test(hex)) { _keySource = 'per-install'; return Buffer.from(hex, 'hex'); }
     }
   } catch { /* fall through to generate */ }
   // Generate, mode 0600.
@@ -50,13 +57,39 @@ function _readOrGenerateKey() {
   try {
     fs.mkdirSync(_keyDir(), { recursive: true, mode: 0o700 });
     fs.writeFileSync(fp, buf.toString('hex') + '\n', { mode: 0o600 });
-  } catch { /* best-effort — fall back to in-memory key for the process */ }
+    _keySource = 'per-install-new';
+  } catch {
+    // Could not persist — this key lives for this process only, so nothing
+    // signed with it will verify on any later run. Callers must be able to see
+    // that, or a permanently-unverifiable signature looks like a valid one.
+    _keySource = 'ephemeral';
+  }
   return buf;
 }
 
-function _legacyHostnameKey() {
-  return crypto.createHash('sha256').update(`${_HMAC_SALT}:${os.hostname()}`).digest();
-}
+// REMOVED (2026-08-08): the legacy hostname-derived key.
+//
+// It was `sha256(_HMAC_SALT + ':' + os.hostname())`. `_HMAC_SALT` is a constant
+// in published, npm-shipped source and a hostname is not a secret — it appears
+// in CI logs, build artifacts and error messages. So the "signature" could be
+// forged by anyone who knew the target's hostname, which is to say by anyone.
+//
+// This was known. The 0.62.0 changelog introduced the per-install key precisely
+// because the old one was "hostname-derived and publicly forgeable in CI /
+// containers", and kept verification of the legacy key "for one release to
+// migrate existing signed scans". The comment here said "Remove after one minor
+// release." It was still accepted at 0.132.0 — SEVENTY minor releases later.
+//
+// What it cost: `rule-overrides.js` gates the `disable:` list on
+// `verifyLastScan`, so a forged signature silently switched off arbitrary
+// detectors and the scan reported clean. Demonstrated end to end before removal:
+// with a hostname-forged `rules.yml.sig`, a command-injection finding went from
+// 1 reported to 0.
+//
+// A migration window that nobody closes is not a migration window; it is the
+// vulnerability, kept on purpose. Signatures made under the legacy key no longer
+// verify — that is the intended consequence. Re-sign with `agentic-security
+// rules sign`.
 
 let _cachedKey = null;
 function _key() {
@@ -85,13 +118,13 @@ export function verifyLastScan(body, sigFile) {
       return crypto.timingSafeEqual(Buffer.from(stored, 'hex'), Buffer.from(expected, 'hex'));
     } catch { return false; }
   };
+  // ONE key. There is deliberately no fallback: a second accepted key is a
+  // second thing that can be forged, and the last one was forgeable by anyone
+  // who could read a hostname.
   if (tryKey(_key())) return true;
-  // Legacy hostname-key path — accepted for verification only, not for new
-  // signatures. Remove after one minor release.
-  if (tryKey(_legacyHostnameKey())) return true;
   return false;
 }
 
 // Test-only helpers (premortem-tracked):
-export function _resetKeyCacheForTests() { _cachedKey = null; }
+export function _resetKeyCacheForTests() { _cachedKey = null; _keySource = null; }
 export function _keyFilePathForTests() { return _keyPath(); }
