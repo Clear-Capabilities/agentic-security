@@ -102,3 +102,42 @@ test('regression: cwd in migrations subdir does NOT create nested .agentic-secur
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// A nested state directory inside an ALREADY-VALID state root must be writable.
+//
+// This was broken, silently, for as long as the guard existed: `isSafeStateDir`
+// looked for a project marker in the immediate parent, and `.agentic-security`
+// deliberately does not count as one — so `<project>/.agentic-security/llm-cache`
+// was refused, and `safeWriteState` returned false without writing. The
+// llm-validator's `writeCache` goes through that path, so the validator cache
+// never persisted a single entry while a `validator-cache stats|gc` subcommand
+// existed to manage it. Found by a positive-control test asserting a legitimately
+// written cache entry round-trips.
+test('nested state dirs inside a valid state root are writable', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'nested-'));
+  try {
+    fs.writeFileSync(path.join(d, 'package.json'), '{}');
+    for (const sub of ['llm-cache', 'fix-history', 'sbom-history']) {
+      const nested = path.join(d, '.agentic-security', sub);
+      assert.equal(isSafeStateDir(nested), true, `${sub} should be a safe state dir`);
+      assert.equal(safeWriteState(path.join(nested, 'x.json'), '{}'), true,
+        `${sub} write was refused`);
+      assert.equal(fs.existsSync(path.join(nested, 'x.json')), true,
+        `${sub} reported success but wrote nothing`);
+    }
+    // Deeper nesting too — the rule is "inside a valid state root", not "one level".
+    const deep = path.join(d, '.agentic-security', 'a', 'b', 'c');
+    assert.equal(safeWriteState(path.join(deep, 'y.json'), '{}'), true);
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('a nested state dir with NO project above it is still refused', () => {
+  // The guard's actual purpose — stopping state folders appearing in unrelated
+  // directories — must survive the fix.
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'bare-'));
+  try {
+    assert.equal(isSafeStateDir(path.join(bare, '.agentic-security', 'llm-cache')), false);
+    assert.equal(safeWriteState(path.join(bare, '.agentic-security', 'llm-cache', 'x.json'), '{}'), false);
+    assert.equal(isSafeStateDir(path.join(bare, 'somewhere', 'else')), false);
+  } finally { fs.rmSync(bare, { recursive: true, force: true }); }
+});

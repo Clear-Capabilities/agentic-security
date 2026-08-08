@@ -16,6 +16,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+const STATE_DIR_NAME = '.agentic-security';
+
 const PROJECT_MARKERS = [
   '.git',
   'package.json',
@@ -82,6 +84,29 @@ export function isSafeStateDir(dir) {
     try {
       if (fs.existsSync(path.join(parent, m))) return true;
     } catch { /* ignore */ }
+  }
+  // A directory NESTED inside an already-valid state root is safe too.
+  //
+  // Without this the check only ever accepted `<project>/.agentic-security`
+  // itself, because it looks for a project marker in the immediate parent and
+  // `.agentic-security` deliberately does not count as one. Every nested state
+  // directory — `llm-cache/`, `fix-history/`, `sbom-history/` — therefore
+  // failed, and `safeWriteState` silently refused to write there.
+  //
+  // The consequence was not theoretical: `llm-validator`'s `writeCache` goes
+  // through `safeWriteState`, so the validator cache never persisted a single
+  // entry. Every scan re-queried the model for every finding, while a
+  // `validator-cache stats|gc` subcommand existed to manage a cache that was
+  // always empty. Found by a positive-control test asserting that a
+  // legitimately written entry round-trips.
+  //
+  // This does not weaken the guard. Its purpose is to stop `.agentic-security/`
+  // being created in unrelated directories; a subdirectory of a state root that
+  // has already been validated is exactly the case it was never meant to catch.
+  const segments = path.resolve(dir).split(path.sep);
+  const idx = segments.lastIndexOf(STATE_DIR_NAME);
+  if (idx > 0 && idx < segments.length - 1) {
+    return isSafeStateDir(segments.slice(0, idx + 1).join(path.sep));
   }
   return false;
 }

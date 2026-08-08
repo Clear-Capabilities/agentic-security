@@ -59,9 +59,14 @@ function entries() {
     try { names = fs.readdirSync(dir); } catch { continue; }
     for (const name of names) {
       const mf = path.join(dir, name, 'manifest.json');
-      if (!fs.existsSync(mf)) continue;
+      // Single read inside try/catch, NOT existsSync-then-read. This project's
+      // own engine flags the check-then-use form as CWE-367 (TOCTOU) — it did,
+      // on this very file, which is how the omission was caught. A directory
+      // without a manifest is simply not an entry, and the throw says so.
+      let raw;
+      try { raw = fs.readFileSync(mf, 'utf8'); } catch { continue; }
       try {
-        out.push({ tier, id: name, manifest: JSON.parse(fs.readFileSync(mf, 'utf8')) });
+        out.push({ tier, id: name, manifest: JSON.parse(raw) });
       } catch {
         out.push({ tier, id: name, manifest: null });
       }

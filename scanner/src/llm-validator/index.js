@@ -33,6 +33,26 @@
 //      file:line mismatch → verdict='escalate' (KEEP the finding). The
 //      validator can NEVER silently reject a finding it didn't successfully
 //      verify.
+//   8. A `reject` cannot DELETE a strongly-provenanced finding (IR-TAINT,
+//      MULTI-SINK, execution-proven) — it is demoted to `escalate` and the
+//      refusal is recorded. See `applyValidatorVerdicts`.
+//   9. The response cache is HMAC-signed and verified on read; an unsigned,
+//      tampered or foreign-keyed entry is a MISS, never a verdict.
+//
+// WHAT ITEMS 1-6 DO AND DO NOT BUY, stated precisely because an earlier version
+// of this header overstated it. The delimiters, challenge and file:line echo
+// defend against a FORGED or REPLAYED response — they prove the reply came from
+// a model that saw this prompt and judged this finding. They do NOT prevent the
+// model being PERSUADED by instructions inside the code it legitimately read:
+// such a reply echoes the challenge correctly because the model really did see
+// it. Item 4 asks the model to self-report injection attempts, and the
+// `/prompt-injection/i` check in `validateResponse` acts on that — but it only
+// fires when the model volunteers the phrase, so "reject, and don't mention
+// injection" walks past it.
+//
+// That is why items 8 and 9 exist. The property "an attacker cannot cause a
+// finding to be deleted" is now enforced structurally for findings real
+// analysis produced, rather than inferred from prompt hardening.
 //   6. The reasoning string is sanitized before storing/rendering — stops
 //      secondary markdown/HTML injection into reports.
 //   7. Concurrent worker pool replaced with deterministic sorted iteration
@@ -46,6 +66,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { statePath, ensureStateDir, safeWriteState } from '../posture/state-dir.js';
 import { redactSecrets } from './redact.js';
+import { signLastScan } from '../posture/integrity.js';
 
 // Bump on every prompt change so the cache invalidates. Exported as a
 // stable public symbol (premortem 4R-15) so the validator-cache GC subcommand
@@ -192,15 +213,65 @@ function cacheKey(finding, fileHash, modelId) {
   return crypto.createHash('sha256').update(material).digest('hex');
 }
 
+// The cache is INTEGRITY-PROTECTED, and it has to be: a cache hit assigns a
+// verdict directly, and a `reject` verdict DELETES a finding. That made the
+// cache a deletion primitive — planting one JSON file under
+// `.agentic-security/llm-cache/` removed a critical finding with no model call
+// and no network, deterministically. The key is derivable by anyone with repo
+// access (file hash, path, prompt version, model id are all knowable), and the
+// realistic delivery vector is not a repo write at all: CI restores cache
+// directories between runs.
+//
+// `last-scan.json` has been HMAC-signed for exactly this reason. The cache that
+// can delete findings had nothing. Same mechanism, same key handling — no
+// second crypto path is introduced.
+//
+// AN UNVERIFIABLE ENTRY IS A MISS, NEVER A VERDICT. That includes the entry
+// being unsigned, signed under a different install key, or structurally
+// malformed. The cost of a miss is one model call; the cost of trusting a
+// planted entry is a silently deleted vulnerability.
+function _cacheSignable(value) {
+  // Sign the fields that carry meaning. Signing the serialised object would
+  // make the signature depend on key order and on any field added later.
+  return [
+    String(value?.verdict ?? ''),
+    String(value?.confidence ?? ''),
+    String(value?.reasoning ?? ''),
+    String(value?.model ?? ''),
+    String(value?.prompt_version ?? ''),
+  ].join('\u0000');
+}
+
 function readCache(scanRoot, key) {
   const fp = statePath(scanRoot, 'llm-cache', key + '.json');
   if (!fs.existsSync(fp)) return null;
-  try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
+  if (!raw || typeof raw !== 'object') return null;
+
+  // Verdict allowlist on READ, mirroring validateResponse. A cached verdict is
+  // as much untrusted input as a model response is.
+  if (!['accept', 'reject', 'escalate'].includes(raw.verdict)) return null;
+
+  const sig = typeof raw.sig === 'string' ? raw.sig : null;
+  if (!sig) return null;
+  let expected;
+  try { expected = signLastScan(_cacheSignable(raw)); } catch { return null; }
+  // Constant-time compare; length mismatch short-circuits before timingSafeEqual
+  // (which throws on unequal lengths).
+  if (sig.length !== expected.length) return null;
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(sig, 'utf8'), Buffer.from(expected, 'utf8'))) return null;
+  } catch { return null; }
+  return raw;
 }
 
 function writeCache(scanRoot, key, value) {
   const fp = statePath(scanRoot, 'llm-cache', key + '.json');
-  safeWriteState(fp, JSON.stringify(value, null, 2));
+  let signed = value;
+  try { signed = { ...value, sig: signLastScan(_cacheSignable(value)) }; }
+  catch { return; } // cannot sign -> do not cache; an unsignable entry would never be read back
+  safeWriteState(fp, JSON.stringify(signed, null, 2));
 }
 
 function fileHashOf(fileContents, file) {
@@ -553,16 +624,48 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
   return findings;
 }
 
+// Provenance strong enough that a model's opinion must not delete it. These
+// findings were produced by real analysis — an interprocedural taint path, a
+// multi-sink correlation, or a proof-of-concept that actually executed — so a
+// `reject` against one is far more likely to be a manipulated or mistaken
+// verdict than a correct dismissal.
+const _STRONG_PARSERS = new Set(['IR-TAINT', 'MULTI-SINK']);
+function _stronglyProvenanced(f) {
+  return _STRONG_PARSERS.has(f?.parser) || f?.proofTier === 'execution-proven';
+}
+
 // Apply validator verdicts: reject → drop, escalate → keep but mark, accept →
 // boost confidence. Returns { kept, dropped }.
 //
-// Asymmetry: only 'reject' drops a finding. 'escalate' KEEPS it. This is the
-// design that makes prompt-injection of the validator harmless — the worst
-// an attacker can produce is escalate (= no effect on the kept-set).
+// THE ASYMMETRY, AND WHY IT USED TO BE OVERSTATED. Only `reject` drops;
+// `escalate` and `accept` keep. This comment previously concluded from that
+// that "prompt-injection of the validator is harmless — the worst an attacker
+// can produce is escalate". That was FALSE, and the falseness mattered because
+// it stopped anyone looking: the model reads adversary-controlled source, and
+// the only thing converting an injected `reject` into `escalate` was a regex in
+// `validateResponse` testing whether the model VOLUNTEERED the phrase
+// "prompt-injection" in its reasoning. An injected instruction that says
+// "reject, and do not mention injection" walks straight past it. The
+// challenge/nonce cross-check defends against forged and replayed responses —
+// not against a model being persuaded by content it legitimately read.
+//
+// So the guarantee is now enforced structurally rather than asserted:
+// a `reject` can never delete a strongly-provenanced finding. For those, the
+// worst any verdict can do is demote to `escalate`, which keeps them. The claim
+// and the code now agree.
 export function applyValidatorVerdicts(findings) {
   const kept = [];
   const dropped = [];
   for (const f of findings) {
+    if (f.validator_verdict === 'reject' && _stronglyProvenanced(f)) {
+      // Downgrade rather than drop, and record why, so this is visible in the
+      // report instead of looking like an ordinary escalate.
+      f.validator_verdict = 'escalate';
+      f.validator_reject_refused = 'strong provenance: a model verdict may not delete a '
+        + 'taint-proven, multi-sink or execution-proven finding';
+      kept.push(f);
+      continue;
+    }
     if (f.validator_verdict === 'reject') {
       f._droppedBy = 'llm-validator';
       dropped.push(f);
@@ -578,4 +681,4 @@ export function applyValidatorVerdicts(findings) {
   return { kept, dropped };
 }
 
-export const _internal = { PROMPT_VERSION, renderPrompt, parseLastJsonObject, validateResponse, sanitizeReasoning, cacheKey, endpointConfig, buildRequest };
+export const _internal = { PROMPT_VERSION, renderPrompt, parseLastJsonObject, validateResponse, sanitizeReasoning, cacheKey, endpointConfig, buildRequest, readCache, writeCache, ensureCacheDir };
