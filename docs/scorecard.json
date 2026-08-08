@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.132.0",
-    "bundleSha256": "d9f44867d2efd5ed47478d5620b33709938538d4af31ee52f3c42d63fc72f0d4",
-    "commit": "ebfe74d77ef9969c188a28b8614053953c55698c",
+    "engineVersion": "0.133.0",
+    "bundleSha256": "65137af33bdedb5bc5d5de7dc5ae1ce28d1ad776165f035469d578db18bf7c76",
+    "commit": "a446ebad2d8d40e92262e24063d7b49a0d55bcf1",
     "worktreeClean": true,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-08T03:39:49.258Z"
+    "generatedAt": "2026-08-08T13:49:22.487Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -726,12 +726,11 @@
         }
       },
       "scripts": {
-        "total": 26,
+        "total": 24,
         "byFile": {
           "_compliance_lib.py": 1,
           "apply-command-trim.mjs": 2,
           "calibration-expand.mjs": 2,
-          "corpus-provenance-check.mjs": 2,
           "detector-fuzz-runner.mjs": 3,
           "ghsa-to-hints.mjs": 3,
           "llm-cost-ceiling.py": 2,

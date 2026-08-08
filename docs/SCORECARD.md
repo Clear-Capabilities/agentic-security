@@ -9,13 +9,13 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.132.0 |
-| Bundle SHA-256 | `d9f44867d2efd5ed47478d5620b33709938538d4af31ee52f3c42d63fc72f0d4` |
-| Commit | `ebfe74d77ef9969c188a28b8614053953c55698c` |
+| Engine version | 0.133.0 |
+| Bundle SHA-256 | `65137af33bdedb5bc5d5de7dc5ae1ce28d1ad776165f035469d578db18bf7c76` |
+| Commit | `a446ebad2d8d40e92262e24063d7b49a0d55bcf1` |
 | Worktree at measurement time | clean |
 | Node | v24.16.0 |
 | Corpus entries | 210 (210 scored) |
-| Generated (UTC) | 2026-08-08T03:39:49.258Z |
+| Generated (UTC) | 2026-08-08T13:49:22.487Z |
 
 ## What these numbers are, and what they are not
 
@@ -132,7 +132,7 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 24 |
-| `scripts` | 26 |
+| `scripts` | 24 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal

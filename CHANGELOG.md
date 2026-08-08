@@ -1,5 +1,130 @@
 # Changelog
 
+## 0.133.0 — two ways findings could be silently deleted, both closed
+
+Four rounds of adversarial premortem against this repository's own artifacts.
+Two rounds found working exploits in shipped code; both are fixed and both are
+pinned by tests that run the original attack. The rest is measurement honesty —
+several gates turned out to prove less than they claimed, including one defect
+this effort introduced and then caught.
+
+### Security
+
+- **A signature anyone could forge could disable any detector.**
+  `verifyLastScan` accepted a second key derived as
+  `sha256(<constant salt> + ':' + hostname)`. The salt is a constant in
+  published, npm-shipped source and a hostname is not a secret. Because the
+  `disable:` list in `rules.yml` is gated on that verification, a signature
+  forged from public information alone switched off arbitrary detectors and the
+  scan reported clean. Demonstrated end to end: a command-injection finding went
+  from 1 reported to 0, and back to 1 after the fix.
+
+  This had been known and fixed once already. The 0.62.0 entry below introduced
+  the per-install key precisely because the old one was "hostname-derived and
+  publicly forgeable in CI / containers", and kept legacy verification "for one
+  release to migrate existing signed scans". It was still accepted **seventy
+  minor releases later**. A migration window nobody closes is not a migration
+  window; it is the vulnerability, kept. Verification now accepts exactly one
+  key. Signatures made under the legacy key stop verifying — intended, and it
+  fails closed.
+
+- **The LLM validator cache was a finding-deletion primitive.** A cache hit
+  assigned a verdict directly, and a `reject` verdict drops a finding. The cache
+  was read with a bare `JSON.parse(readFileSync(...))`, so planting one file
+  under `.agentic-security/llm-cache/` deleted a critical finding with no model
+  call and no network. The key is derivable by anyone with repo access, and CI
+  restoring a cache directory between runs delivers it without a repo write at
+  all. Cache entries are now HMAC-signed with the same mechanism `last-scan.json`
+  already used; an unsigned, tampered or foreign-keyed entry is a MISS, never a
+  verdict.
+
+- **A `reject` can no longer delete a strongly-provenanced finding.** The code
+  asserted that prompt-injecting the validator was harmless because "the worst
+  an attacker can produce is escalate". That was false: the challenge/nonce
+  cross-check defends against forged and replayed responses, not against a model
+  persuaded by source it legitimately read. Findings from real analysis
+  (taint-proven, multi-sink, execution-proven) are now demoted to `escalate`
+  rather than dropped, so the guarantee is structural instead of asserted.
+
+- **Coverage reduction is now visible in the artifact.** A `disable:` that took
+  effect produced findings that were simply absent — indistinguishable from
+  clean code to whoever reads the report. `suppressedRules` now carries the
+  count, per-rule severity breakdown, example locations and the AUTHORITY the
+  suppression ran under, so a signed suppression reads differently from an
+  env-var opt-out. Authorised suppressions are reported too: a signature proves
+  who asked, not that the hidden findings stopped existing.
+
+- **Signatures carry key provenance** (`env` / `per-install` / `ephemeral`).
+  `env` means whoever set the environment could have signed the run; `ephemeral`
+  means the key could not be persisted and the signature will never verify
+  again. Neither was inferable from the digest.
+
+- **The suppression quorum has a floor of 2.** `AGENTIC_SECURITY_LEARN_QUORUM=1`
+  was honoured, so a single triage verdict could suppress a finding — and with
+  family+path matching, a whole family across a path. The root guidance warned
+  about exactly this; the code did not enforce it.
+
+### Measurement honesty
+
+- **The corpus is fitted to the detectors it measures, and now says so.** 98% of
+  entries are self-authored synthetic fixtures and none come from the
+  disclosed-PoC tier. `npm run corpus:provenance` prints the composition on every
+  run and fails a commit that lands a detector together with the corpus entries
+  exercising it — caught against real history, including one such commit in this
+  very effort. This stops the loop tightening; it does not make the corpus
+  independent, and the docs no longer imply otherwise.
+
+- **The precision gate covered 6% of the source.** It ran over `hooks/` and
+  `scripts/` — 22 files — while `scanner/src` (383 files, the entire product) sat
+  outside it. Now 240 files. The `scanner/src` count is published as a DRIFT
+  TRIPWIRE, explicitly not hand-reviewed and explicitly not a precision figure,
+  because a scanner's own source contains sink patterns as data.
+
+- **The determinism gate exercised only the layer that cannot vary.** The
+  original fixture produced findings from regex and structural detectors alone. A
+  second fixture now drives the interprocedural taint engine and the Python
+  parser, digests are compared per fixture so a divergence names the layer, and
+  the comparator fails if the deep fixture degraded to the syntactic layer on any
+  machine.
+
+- **The scorecard gate could not detect a stale scorecard.** It compared only the
+  engine version, so a document measured over 200 corpus entries passed while the
+  corpus held 210 — every published rate computed over a population that no
+  longer existed. It now compares the population too.
+
+- **The independent-evaluation gate passed on a 4-sample smoke fixture** its own
+  README says must never be cited, because its thresholds had been calibrated to
+  pass. It now uses the README's own figures, treats exceeded calibration targets
+  as violations rather than notes, and refuses to emit a pass over the built-in
+  fixture however the thresholds are set. It fails today, correctly.
+
+- **Claims re-scoped to what is measured.** The roadmap carries a "What the gates
+  do not prove" section, states outright that the false-positive-rate goal is not
+  met, and points at the two harnesses built for that gap — both of which need
+  data, not code. R13 is downgraded from "landed" to "mechanism landed, no
+  observation pipeline": nothing constructs its ledger, so it can never downgrade
+  anything.
+
+### Fixed along the way
+
+- **The validator cache had never persisted a single entry.** `safeWriteState`
+  refused every directory nested under `.agentic-security/`, so `llm-cache/`,
+  `fix-history/` and `sbom-history/` were all unwritable while a
+  `validator-cache stats|gc` subcommand managed a cache that was always empty.
+  Found by a positive-control test asserting a legitimately written entry
+  round-trips.
+
+- **Sandbox timeouts now use SIGKILL.** The kernel does not deliver
+  default-action signals to a PID namespace's pid 1 from outside it, so SIGTERM
+  was dropped and a payload ran to completion against a 1200 ms budget — measured
+  in CI at 30057 ms. Proof execution also gained its own aggregate wall-clock
+  budget, because a count cap bounds nothing in time.
+
+- **Cost reporting stopped presenting an estimate as spend.** The endpoint's
+  usage report was discarded, so the ledger always booked the pre-call worst
+  case. Usage is now plumbed through, and any estimated component renders as
+  "at most $X" with the reason.
+
 ## 0.132.0 — a proven exploit becomes a permanent regression test
 
 The corpus stops being only a regression net and starts being fed by the engine
