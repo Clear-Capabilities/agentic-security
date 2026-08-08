@@ -405,6 +405,41 @@ existing sink-driven taint. Composes directly with R6.
 
 ---
 
+## Definitive-harness PRD — status
+
+The seven-epic PRD ("the definitive AI-code security harness") is landed except
+where noted. Each epic's state, and what it would take to move the rest:
+
+- **Epic 1.1 — proof classes.** **Five landed** (`posture/poc-inprocess.js`):
+  command injection, code injection, webhook signature bypass, SQL injection,
+  path traversal. The last two arrived without the running-app harness the PRD
+  assumed, because the harness turned out not to be where the proof lives: SQL
+  injection is settled at the driver boundary (payload in the query text vs. a
+  bound parameter) and traversal is settled by what the handler hands back.
+  **Deliberately not attempted:** IDOR (needs two identities and a populated
+  store — a PoC built on invented state proves something about the invention),
+  SSRF (the sandbox denies egress by design, so a failed fetch is confinement
+  talking), XSS (a marker file cannot observe a DOM). These are decisions with
+  stated reasons, not a backlog.
+- **Epic 1.4 / 7.4 — proof artifacts.** Landed (`posture/proof-artifact.js`).
+- **Epic 3 — model-neutral provider seam.** Landed
+  (`llm-validator/providers.js`), local → BYO → vendor preset → off.
+- **Epic 4 — the autonomous loop.** Landed: `posture/autopilot.js` for the chain
+  and its gates, `scripts/autopilot.mjs` for the real stages. A fix is applied
+  only when the PoC that proved the bug stops firing AND the tests still pass.
+- **Epic 5 — fleet.** Landed (`posture/fleet.js`, `scripts/fleet.mjs`).
+- **Epic 6 — business-logic tier.** Landed. The deterministic half already
+  existed; `posture/logic-claims.js` adds the missing half — deterministic
+  lenses that can REFUTE a reviewing agent's prose claim (citation, quotation,
+  source corroboration), recorded under enforced producer/verifier separation.
+- **Epic 7.2 — head-to-head comparison.** Landed as a harness, not as a
+  published result (`posture/comparison.js`, `scripts/comparison.mjs`).
+  Participants are operator-supplied; this repository ships the harness and the
+  answer key and names no tool, which a test enforces. **No comparison figures
+  are published here** — running other vendors' tools and publishing the
+  numbers is a decision with licensing and fairness dimensions that belongs to
+  the operator, not to the harness.
+
 ## Sequencing
 
 ```

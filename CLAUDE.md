@@ -2,7 +2,7 @@
 
 Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, SARIF ingest, and compliance attestation (NIST AI 600-1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.133.0  
+**Version:** 0.134.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -94,7 +94,7 @@ Several releases (v0.106.0–v0.107.1) shipped broken or false because work was 
 - **ESM throughout.** All `scanner/src/` files use `import`/`export`. No CommonJS in the scanner tree.
 - **No runtime cloud calls.** OSV/KEV/EPSS data is fetched lazily and disk-cached under `~/.claude/agentic-security/osv-cache/`. New network dependencies must be opt-in and degrade gracefully when offline.
 - **Findings schema.** Every finding must include `{ id, severity, file, line, vuln, cwe, description, remediation, parser, family }`. Severity values: `critical`, `high`, `medium`, `low`, `info`. Phase-1 extends with `stableId`, `confidence` + `confidenceTier`, `exploitability` + `exploitabilityTier` + `exploitabilityFactors[]`, optionally `clusterSize` / `exampleFlows[]`, and `unreachable:true` for reachability-demoted. `parser` + `family` are required — `posture/finding-defaults.js` backfills, but detector-set values win.
-- **Suppression pragma.** `// agentic-security-ignore: <rule-id>` on the offending line.
+- **Suppression pragma.** `// agentic-security-ignore: <rule-id>` on the offending line (`#` and `/* */` forms work too). **Line-scoped**, matched against the finding's id, vuln, CWE or family; a bare pragma with no rule id suppresses every finding on that line. Every suppression is written to the same ledger custom rules use, so `--include-suppressed` and the suppression summary show it — a suppression nobody can see is indistinguishable from a finding that never fired. Implemented in `engine.js` (`_applyIgnorePragmas`), applied after dedupe and after every cross-file pass so it covers a finding whichever analysis produced it. It was documented and advertised for a long time before anything implemented it; `test/ignore-pragma.test.js` now pins it in both directions.
 - **Rules override is gated.** `.agentic-security/rules.yml` `disable:` entries take effect only when a sibling `.sig` verifies under the per-install HMAC key, or `AGENTIC_SECURITY_RULES_UNSIGNED=1` is set. `severityOverrides`, `custom:`, and `ignorePaths` are not gated (they don't reduce coverage).
 - **last-scan.json integrity.** Each write is accompanied by a `.sig` (HMAC-SHA256). The key is per-install (32 random bytes at `$XDG_CONFIG_HOME/agentic-security/scan-key`, mode 0600) — NOT the hostname. Override via `$AGENTIC_SECURITY_HMAC_KEY` (hex).
 - **Calibration is held-out-only.** The seed corpus is for *fitting* the calibration table; never compute Brier/ECE against the same labels. Use `posture/holdout-eval.js` with a separate JSONL.

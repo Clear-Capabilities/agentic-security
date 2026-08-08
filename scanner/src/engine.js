@@ -142,6 +142,7 @@ import { scanIacReachability } from './posture/iac-reachability.js';
 import { scanIamPolicies } from './posture/iam-policy.js';
 import { scanContainerRuntime } from './posture/container-runtime.js';
 import { scanBusinessLogic as scanBusinessLogicV2 } from './posture/business-logic.js';
+import { ingestLogicClaims } from './posture/logic-claims.js';
 import { annotateNarration } from './posture/flow-narration.js';
 import { applyPathConstraints } from './posture/path-predicates.js';
 // Phase 3 (Sentinel-parity Layer 1 + 2) — IR + interprocedural taint engine.
@@ -2292,6 +2293,63 @@ function _resetSuppressions(){ _suppressionLog.length = 0; }
 // so pfr[p] and the aggregates share object identity, exactly as in a normal run.
 function _pfrMetaOnly(ta){ if(!ta||typeof ta!=='object')return {}; const o={}; for(const k of Object.keys(ta)){ if(k==='findings'||k==='sources'||k==='sinks'||k==='sanitizers')continue; o[k]=ta[k]; } return o; }
 function _getSuppressions(){ return [..._suppressionLog]; }
+
+// ── inline suppression pragma ───────────────────────────────────────────────
+//
+// `// agentic-security-ignore: <rule-id>` on the offending line. This is
+// documented in the root CLAUDE.md and `pr-comment.js` tells every reviewer to
+// use it — and until now NOTHING implemented it. A suppression mechanism that
+// silently does nothing is worse than not having one: a developer writes the
+// pragma, sees the finding again, and concludes the scanner is noisy rather
+// than that the pragma is dead.
+//
+// MATCHED ON THE LINE, AND ON THE RULE. A bare pragma with no rule id
+// suppresses every finding on that line; with an id it suppresses only findings
+// whose id, vuln or CWE contains it. Line-scoped rather than file-scoped on
+// purpose — a file-wide opt-out is how a whole module quietly leaves coverage.
+//
+// EVERY SUPPRESSION IS LOGGED to the same ledger custom rules use, so
+// `--include-suppressed` and the suppression summary show them. A suppression
+// nobody can see is indistinguishable from a finding that never fired.
+const _IGNORE_PRAGMA_RE = /(?:\/\/|#|\/\*|<!--)\s*agentic-security-ignore\s*:?\s*([^\n*]*?)\s*(?:\*\/|-->)?\s*$/;
+
+function _pragmaOnLine(content, line){
+  if (typeof content !== 'string' || !Number.isInteger(line) || line < 1) return null;
+  const lines = content.split('\n');
+  if (line > lines.length) return null;
+  const m = lines[line - 1].match(_IGNORE_PRAGMA_RE);
+  if (!m) return null;
+  return { rule: (m[1] || '').trim() };
+}
+
+function _pragmaSuppresses(pragma, f){
+  if (!pragma) return false;
+  if (!pragma.rule) return true;              // bare pragma: this line, any rule
+  const want = pragma.rule.toLowerCase();
+  const hay = `${f.id || ''} ${f.vuln || ''} ${f.cwe || ''} ${f.family || ''}`.toLowerCase();
+  return hay.includes(want);
+}
+
+// Filter one findings array in place. Returns the number removed.
+function _applyIgnorePragmas(arr, fc){
+  if (!Array.isArray(arr)) return 0;
+  let removed = 0;
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const f = arr[i];
+    const file = f && (f.file || f.sink?.file);
+    const line = f && Number(f.line ?? f.sink?.line);
+    if (!file || !Number.isInteger(line)) continue;
+    const pragma = _pragmaOnLine(fc[file], line);
+    if (!_pragmaSuppresses(pragma, f)) continue;
+    _suppressionLog.push({
+      vuln: f.vuln, file, line, snippet: f.snippet || '',
+      reason: `inline pragma: agentic-security-ignore${pragma.rule ? ': ' + pragma.rule : ''}`,
+    });
+    arr.splice(i, 1);
+    removed++;
+  }
+  return removed;
+}
 
 // FP-9 / Feat-4: custom rules loaded from .agentic-security/rules.{yml,yaml,json}
 // at scan root. Mutates SOURCE/SINK/SANITIZER pattern arrays in place when active;
@@ -7894,6 +7952,12 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // AGENTIC_SECURITY_TREE_SITTER=1; degrades to no-op without the optional dep).
   if(process.env.AGENTIC_SECURITY_TREE_SITTER==='1'){try{aF.push(...await scanTreeSitterSinks(fc));}catch(_){}}
   let finalFindings;try{finalFindings=dedupeFindingsWithEvidence(aF);}catch(_){finalFindings=dd(aF,f=>f.id);}
+  // Inline `agentic-security-ignore` pragmas. Applied here — after dedupe and
+  // after every cross-file pass has appended — so a pragma covers the finding
+  // whichever analysis produced it, and applied to the logic and secrets
+  // buckets too, since those are the ones a developer is most likely to want to
+  // silence on a specific line.
+  try{ _applyIgnorePragmas(finalFindings, fc); _applyIgnorePragmas(aLogic, fc); _applyIgnorePragmas(aSecrets, fc); }catch(_){}
   // #1 — centralized SSRF/path guard recognition: drop CWE-918/CWE-22 findings
   // on code hardened by a host allow/deny check or a path containment guard,
   // regardless of which detector emitted them. Opt out: AGENTIC_SECURITY_NO_GUARD_RECOGNITION=1.
@@ -7995,6 +8059,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // can tell "didn't run" from "ran cleanly." The array is surfaced as
   // scan.annotatorErrors in the report; an empty array means clean.
   let _executionProofSummary = null, _vulnHistory = null;
+  let _logicClaims = null;
   const _annotatorErrors = [];
   const _runAnnotator = (phase, fn) => {
     try { return fn(); }
@@ -8465,6 +8530,25 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   catch (e) { _annotatorErrors.push({ phase: '_enrichWithScorecard', err: String((e && e.message) || e) }); }
   // 0.8.0 Feat-10: license policy
   try{const lp=loadLicensePolicy(scanRoot);if(lp){const lv=evaluateLicensePolicy(annotatedComponents,lp);aLogic.push(...lv);}}catch(_){}
+  // PRD Epic 6: business-logic claims from a reviewing agent, put through the
+  // deterministic refutation lenses before they are allowed anywhere near the
+  // report. A claim citing a file that was never scanned, misquoting the code,
+  // or contradicted by the handler it names comes back quarantined. Refuted
+  // claims are KEPT — the tier's contract is recall-preserving, same as
+  // falsification's — so the reader can see what the reviewer said and why no
+  // second party could corroborate it.
+  try {
+    if (scanRoot) {
+      const raw = fs.readFileSync(path.join(scanRoot, '.agentic-security', 'logic-claims.json'), 'utf8');
+      const parsed = JSON.parse(raw);
+      const incoming = Array.isArray(parsed) ? parsed : (parsed && parsed.claims) || [];
+      if (incoming.length) {
+        const r = ingestLogicClaims(incoming, { fileContents: fc });
+        _logicClaims = r.summary;
+        aLogic.push(...r.claims);
+      }
+    }
+  } catch(_) { /* absent or unreadable → the tier simply contributes nothing */ }
   // Phase 4 / Item 7 of the SCA improvement plan: load sca-policy.yml and
   // apply accept-risk / SLA / major-version-freeze rules. supplyChain
   // findings get suppressed/tagged in place.
@@ -8762,7 +8846,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // Addition #3 — root-cause sweep: from confirmed findings, find sibling instances
   // detectors missed, with total-count accounting. Confirmed-only (cheap by default).
   let _rootCauseSweep = null; try { _rootCauseSweep = sweepRootCauses(finalFindings, fc); } catch { _rootCauseSweep = null; }
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,vulnHistory:_vulnHistory,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

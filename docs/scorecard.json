@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.133.0",
-    "bundleSha256": "65137af33bdedb5bc5d5de7dc5ae1ce28d1ad776165f035469d578db18bf7c76",
-    "commit": "7e4db2fe71b08a4b61d8492a1833d54cd9f4d1a4",
+    "engineVersion": "0.134.0",
+    "bundleSha256": "4d27abb2329d4672652ccaed7258c254afb22499b51807283195dd8bfc83663f",
+    "commit": "155cb66fbd54bfe7f0000712bb8be8f08f0c8800",
     "worktreeClean": true,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-08T14:17:37.693Z"
+    "generatedAt": "2026-08-08T19:37:13.329Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -503,7 +503,7 @@
         }
       },
       "scanner/src": {
-        "total": 594,
+        "total": 596,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -548,9 +548,9 @@
           "posture/aibom.js": 3,
           "posture/api-contract.js": 2,
           "posture/attack-playbooks.js": 2,
-          "posture/attestation.js": 1,
           "posture/auditor-walkthrough.js": 2,
           "posture/auth-posture-import.js": 3,
+          "posture/autopilot.js": 1,
           "posture/blast-radius.js": 1,
           "posture/business-logic.js": 1,
           "posture/cache-economics.js": 1,
@@ -586,6 +586,7 @@
           "posture/fix-style-mirror.js": 3,
           "posture/fix-verify-loop.js": 2,
           "posture/fix-verify.js": 1,
+          "posture/fleet.js": 1,
           "posture/flow-narration.js": 2,
           "posture/grader-calibration.js": 4,
           "posture/harness-discovery.js": 1,
@@ -604,7 +605,7 @@
           "posture/model-rescan.js": 1,
           "posture/network-policy-import.js": 3,
           "posture/poc-generator.js": 3,
-          "posture/poc-inprocess.js": 4,
+          "posture/poc-inprocess.js": 5,
           "posture/policy-gate.js": 4,
           "posture/pqc-migration-plan.js": 1,
           "posture/pr-augment.js": 1,

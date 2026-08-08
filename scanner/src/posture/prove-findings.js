@@ -49,6 +49,28 @@ const DEFAULT_MAX = 25;
 // Aggregate wall-clock across all candidates in one scan.
 const DEFAULT_TOTAL_BUDGET_MS = 120000;
 
+/**
+ * The file set materialised into the sandbox root for one PoC.
+ *
+ * `requires` names the vulnerable source (the PoC imports it). `extraFiles`
+ * carries support files a template needs that are NOT that source — the SQL
+ * class ships a recording driver stub as `node_modules/<driver>/index.js`.
+ *
+ * `requires` WINS on a collision. Otherwise a template could name the
+ * vulnerable file in `extraFiles` and replace the very code the PoC is
+ * supposed to exploit with content of its own choosing, and the run would
+ * prove a fact about the template.
+ */
+export function mergePocFiles(poc, content) {
+  const files = {};
+  for (const rel of poc?.requires || []) files[rel] = content;
+  for (const [rel, c] of Object.entries(poc?.extraFiles || {})) {
+    if (rel in files) continue;
+    if (typeof c === 'string') files[rel] = c;
+  }
+  return files;
+}
+
 export function proveEnabled(env = process.env) {
   return env.AGENTIC_SECURITY_PROVE === '1';
 }
@@ -112,8 +134,7 @@ export async function annotateExecutionProofs(findings, {
     summary.attempted++;
     // The PoC imports the vulnerable file, so it must exist in the sandbox
     // root alongside it.
-    const files = {};
-    for (const rel of c.poc.requires || []) files[rel] = c.content;
+    const files = mergePocFiles(c.poc, c.content);
     let proved;
     try {
       proved = await proveFinding({ ...c.finding, poc: c.poc }, { files, timeoutMs });

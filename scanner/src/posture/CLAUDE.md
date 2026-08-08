@@ -98,6 +98,31 @@ Wired in `bin/agentic-security.js` after every filter and after `makeDeterminist
 credibility, orthogonal to `confidence`/`exploitability`: whether the bug was
 *run*, not just reasoned about.
 
+**The five proof classes** (`poc-inprocess.js`), and what each observes:
+
+| Family | Evidence |
+|---|---|
+| `command-injection`, `code-injection` | the injected payload itself writes the marker |
+| `webhook-missing-signature-verification` | the handler is observed *accepting* an unsigned request |
+| `sql-injection` | the payload reaches a stubbed driver inside the **SQL text** rather than as a bound parameter |
+| `path-traversal` | a sentinel planted outside the served directory comes back out of the handler |
+
+The last two need no running application, which is the point: the SQL question
+("text or bound parameter?") is settled where the query crosses into the driver,
+and the traversal question is settled by what the handler hands back. A
+parameterised query and a `basename`-guarded read both reach `proof-failed` by
+**execution**, not by a source pattern.
+
+Classes deliberately absent, with reasons, are listed in the module header —
+IDOR (needs two identities and a populated store; a PoC built on invented state
+proves something about the invention), SSRF (the sandbox denies egress, so a
+failed fetch is confinement talking), XSS (a marker file cannot observe a DOM).
+
+`extraFiles` on a PoC carries support files that are **not** the vulnerable
+source (the SQL driver stub). `mergePocFiles` merges it under `requires`, which
+always wins — otherwise a template could replace the code it is supposed to
+exploit and prove a fact about itself.
+
 **The four tiers** (`PROOF_TIERS`, most-proven first):
 
 - `execution-proven` — a generated PoC ran inside the sandbox and the sandbox
@@ -235,6 +260,57 @@ the checkpoint is removed, so the next run cannot resume consumed state.
 State lives at `<scanRoot>/.agentic-security/scan-checkpoint.jsonl`; like every
 other module here, nothing throws — a failure to open, read or append degrades to
 "no checkpoint", i.e. a normal full scan.
+
+## The autonomous loop, the fleet, and the two things that judge them
+
+**`autopilot.js`** is the chain — scan → prove → validate → fix → **re-verify** —
+and nothing else. Every stage is injected, so the orchestration is testable
+without an engine or a model; `scripts/autopilot.mjs` is where the real stages
+get wired (a real scan, a real sandboxed exploit, a deterministic-then-model fix,
+and the real gate).
+
+The rule that makes it safe to automate: a fix is applied **only** if the PoC
+that proved the bug no longer fires **and** the test suite still passes. Anything
+else is `NEEDS_REVIEW` and is not written. A re-scan proves the *detector* went
+quiet; only re-running the exploit proves the hole is shut. Gates are ON by
+default — `apply` is an explicit opt-in — and the outcome set (`OUTCOMES`) is
+closed, because the report groups on it and an undeclared value would vanish
+from every count. `maxFindings` is reported as `capped`, never applied silently.
+
+The CLI refuses to start with no confinement backend (the gate's verdict
+requires executing something) and refuses a dirty git tree by default (the test
+leg writes the candidate patch to disk and restores it in a `finally`, so a
+clean tree is what makes a crash recoverable). A VERIFIED_FIXED reached with no
+test runner detected is counted and reported separately — the exploit stopped
+firing, but nothing checked the application still works.
+
+**`fleet.js`** rolls many repositories into one offline page. `renderFleetHtml`
+emits no scripts and no external references, and a repo that FAILED to scan
+always forces a non-zero exit: an unscanned repo is unknown, not clean.
+
+**`logic-claims.js` (PRD Epic 6)** is the business-logic tier's other half. The
+deterministic side already existed (`sast/logic.js`, `posture/business-logic.js`);
+what did not was any way to be *wrong* about a claim from the reviewing agent,
+which is prose and was the only tier nothing could disagree with. Three offline
+lenses can refute one: `citation` (the file exists and the line is inside it),
+`quotation` (the quoted snippet is at the cited line ±3), and `corroboration`
+(for kinds that assert something checkable — "this route has no authentication"
+against a handler that plainly authenticates). Verdicts go through
+`verification-separation.js`, so a lens can never vote on a claim it produced.
+Recall-preserving: a refuted claim is `quarantined`, never deleted, never
+severity-touched. Wired in `engine.js`, which reads
+`.agentic-security/logic-claims.json` from the scan root and lands the results
+on `scan.logicVulns` with a summary at `scan.logicClaims`.
+
+**`comparison.js` (PRD Epic 7.2)** scores this engine head-to-head against
+participants **the operator supplies** — the repository ships the harness and the
+answer key, never a participant, and a test asserts no tool name appears in
+either file. Two properties are the whole module: every rate is computed over the
+**intersection** of entries *all* participants completed (two tools scored over
+different subsets are not comparable, and the difference is invisible in the
+output), and an entry a participant could not run is **unscored**, never counted
+as a miss. Matching is CWE-only so nobody is scored on this engine's vocabulary.
+Driver: `scripts/comparison.mjs`, over the CVE-replay corpus.
 
 ## Gotchas
 

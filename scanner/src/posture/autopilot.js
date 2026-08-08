@@ -73,7 +73,7 @@ function _save(stateFile, state) {
  */
 export async function runAutopilot({
   stages = {}, stateFile = null, resume = true, apply = false,
-  onStage = () => {}, severities = ['critical', 'high'],
+  onStage = () => {}, severities = ['critical', 'high'], maxFindings = Infinity,
 } = {}) {
   const required = ['scan'];
   for (const r of required) {
@@ -97,8 +97,14 @@ export async function runAutopilot({
 
   // Only the severities asked for reach the expensive stages. Reported, so a
   // reader can see what was in scope rather than assuming everything was.
-  const inScope = findings.filter(f => severities.includes(String(f.severity || '').toLowerCase()));
-  const outOfScope = findings.length - inScope.length;
+  const all = findings.filter(f => severities.includes(String(f.severity || '').toLowerCase()));
+  const outOfScope = findings.length - all.length;
+  // Every stage costs a sandboxed process and possibly a test-suite run, so the
+  // count is bounded. Reported, never silent: findings past the cap were NOT
+  // examined, and a run that quietly stopped at N would read as a run that
+  // found only N.
+  const inScope = all.slice(0, Number.isFinite(maxFindings) ? Math.max(0, maxFindings) : all.length);
+  const capped = all.length - inScope.length;
 
   const results = [];
   for (const f of inScope) {
@@ -187,15 +193,16 @@ export async function runAutopilot({
     onStage({ stage: 'reverify', key, outcome: rec.outcome });
   }
 
-  return { ok: true, results, skipped, outOfScope, summary: summarizeAutopilot(results, outOfScope) };
+  return { ok: true, results, skipped, outOfScope, capped, summary: summarizeAutopilot(results, outOfScope, capped) };
 }
 
-export function summarizeAutopilot(results, outOfScope = 0) {
+export function summarizeAutopilot(results, outOfScope = 0, capped = 0) {
   const byOutcome = Object.fromEntries(OUTCOMES.map(o => [o, 0]));
   for (const r of results) if (r.outcome in byOutcome) byOutcome[r.outcome]++;
   return {
     considered: results.length,
     outOfScope,
+    capped,
     byOutcome,
     applied: results.filter(r => r.applied).length,
   };
@@ -211,6 +218,7 @@ export function renderAutopilotSummary(s) {
   if (b.NO_FIX) bits.push(`${b.NO_FIX} with no patch`);
   if (b.UNPROVEN) bits.push(`${b.UNPROVEN} unproven (not dismissed — no PoC fired)`);
   if (s.outOfScope) bits.push(`${s.outOfScope} below the severity floor and not considered`);
+  if (s.capped) bits.push(`${s.capped} in scope but NOT examined (per-run cap) — unexamined, not clean`);
   return bits.join('; ') + '.';
 }
 

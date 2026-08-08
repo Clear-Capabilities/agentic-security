@@ -42,11 +42,32 @@ const SUPPORTED = new Set([
   'command-injection',
   'code-injection',
   'webhook-missing-signature-verification',
+  'sql-injection',
+  'path-traversal',
 ]);
 
 // Classes proven by observing the HANDLER's behaviour rather than a payload
-// side effect.
-const BEHAVIOURAL = new Set(['webhook-missing-signature-verification']);
+// side effect. Each has its own builder below; the shared refusals (language,
+// content, module system) are applied before dispatch.
+const BEHAVIOURAL = new Map([
+  ['webhook-missing-signature-verification', (f, c) => _webhookPoc(f, c)],
+  ['sql-injection', (f, c) => _sqlInjectionPoc(f, c)],
+  ['path-traversal', (f, c) => _pathTraversalPoc(f, c)],
+]);
+
+// Classes deliberately NOT here, with the reason, so the gap is a decision
+// rather than an oversight:
+//
+//   IDOR / broken-access-control — proving it means showing user A read user
+//     B's record, which requires two authenticated identities and a populated
+//     data store. A single-shot harness would have to invent both, and a PoC
+//     built on invented state proves something about the invention.
+//   SSRF — the proof is that the server fetched an attacker-named host. The
+//     sandbox denies egress (that is the point of R1), and binding a loopback
+//     listener is not guaranteed across backends, so a failed fetch would be
+//     confinement talking, not the finding.
+//   XSS — needs a browser to say whether the payload executed. A marker file
+//     cannot observe a DOM.
 
 const JS_EXT = /\.(js|cjs|mjs)$/i;
 
@@ -63,6 +84,37 @@ const NAMED_HANDLER_RES = [
   /(?:module\.)?exports\.(\w+)\s*=\s*(?:async\s+)?function\s*\w*\s*\(\s*(\w+)\s*,\s*(\w+)\s*\)/,
   /(?:module\.)?exports\.(\w+)\s*=\s*(?:async\s+)?\(\s*(\w+)\s*,\s*(\w+)\s*\)\s*=>/,
 ];
+
+// The exported handler, default form preferred over a named one. Shared by
+// every template — a template that found handlers its own way could accept a
+// shape the others refuse, and the refusals are the safety property here.
+function _findHandler(fileContent) {
+  for (const re of HANDLER_RES) {
+    const m = fileContent.match(re);
+    if (m) return { call: { kind: 'default', name: null }, reqIdent: m[1] };
+  }
+  for (const re of NAMED_HANDLER_RES) {
+    const m = fileContent.match(re);
+    if (m) return { call: { kind: 'named', name: m[1] }, reqIdent: m[2] };
+  }
+  return null;
+}
+
+const NO_HANDLER = {
+  ok: false,
+  reason: 'no exported two-argument (req, res) handler found — nothing to call without inventing an interface',
+};
+
+// Import/invoke lines for a located handler.
+function _binding(finding, call) {
+  const base = finding.file.split(/[\\/]/).pop();
+  return {
+    base,
+    importLine: `import ${call.kind === 'default' ? 'handler' : `{ ${call.name} }`} from './${base}';`,
+    invoke: call.kind === 'default' ? 'handler' : call.name,
+    handlerLabel: call.kind === 'default' ? 'module.exports' : `exports.${call.name}`,
+  };
+}
 
 // The request property the handler reads. Anchored to the request identifier
 // the export actually binds, so a file that reads `req.query` while exporting
@@ -104,7 +156,8 @@ export function synthesizeInProcessPoc(finding, fileContent) {
     return { ok: false, reason: 'ES-module source: the CommonJS handler shapes do not apply' };
   }
 
-  if (BEHAVIOURAL.has(finding.family)) return _webhookPoc(finding, fileContent);
+  const behavioural = BEHAVIOURAL.get(finding.family);
+  if (behavioural) return behavioural(finding, fileContent);
 
   if (!SHELL_SINK.test(fileContent)) {
     return {
@@ -180,7 +233,6 @@ export function synthesizeInProcessPoc(finding, fileContent) {
   };
 }
 
-export const _internals = { MARKER, SUPPORTED, _requestSource };
 
 
 // ── Webhook signature bypass ────────────────────────────────────────────────
@@ -196,20 +248,9 @@ export const _internals = { MARKER, SUPPORTED, _requestSource };
 // template therefore refuses any handler it cannot observe a decision from,
 // rather than letting "no reply" masquerade as "rejected".
 function _webhookPoc(finding, fileContent) {
-  let call = null, reqIdent = null;
-  for (const re of HANDLER_RES) {
-    const m = fileContent.match(re);
-    if (m) { call = { kind: 'default', name: null }; reqIdent = m[1]; break; }
-  }
-  if (!call) {
-    for (const re of NAMED_HANDLER_RES) {
-      const m = fileContent.match(re);
-      if (m) { call = { kind: 'named', name: m[1] }; reqIdent = m[2]; break; }
-    }
-  }
-  if (!call) {
-    return { ok: false, reason: 'no exported two-argument (req, res) handler found — nothing to call without inventing an interface' };
-  }
+  const found = _findHandler(fileContent);
+  if (!found) return NO_HANDLER;
+  const { call, reqIdent } = found;
   // The handler must actually read the body, or "it accepted an unsigned
   // request" is not a statement about a webhook at all.
   const esc = reqIdent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -223,30 +264,35 @@ function _webhookPoc(finding, fileContent) {
     return { ok: false, reason: 'the file already references signature verification; whether it guards this path is a static question, not one this PoC can answer' };
   }
 
-  const base = finding.file.split(/[\\/]/).pop();
-  const imported = call.kind === 'default' ? 'handler' : `{ ${call.name} }`;
-  const invoke = call.kind === 'default' ? 'handler' : call.name;
+  const { base, importLine, invoke, handlerLabel } = _binding(finding, call);
 
   const code = [
     `// Auto-generated proof for ${finding.file}.`,
     '// Sends a webhook payload with NO signature header. If the handler replies',
     `// with success, it accepted an unsigned request — the marker '${MARKER}' is`,
     '// written only on that observation.',
-    `import ${imported} from './${base}';`,
+    importLine,
     "import fs from 'node:fs';",
     'let decided = null;',
     'const ok = () => { if (decided === null) decided = "accepted"; };',
     'const rejected = () => { if (decided === null) decided = "rejected"; };',
     'await new Promise((resolve) => {',
+    // The timer is REF'D and cleared on decision, not unref'd. The marker write
+    // below happens AFTER this await, so an unref'd timer lets Node exit with
+    // the promise still pending the moment a handler declines to reply — the
+    // check never runs, and the test asserting "no decision writes no marker"
+    // would pass without ever reaching the line it is testing.
+    '  let timer = null;',
+    '  const done = () => { clearTimeout(timer); resolve(); };',
     '  const res = {',
-    '    send: () => { ok(); resolve(); }, json: () => { ok(); resolve(); }, end: () => { ok(); resolve(); },',
+    '    send: () => { ok(); done(); }, json: () => { ok(); done(); }, end: () => { ok(); done(); },',
     '    // A 4xx/5xx is a rejection, whatever the body says.',
     '    status: (c) => { if (c >= 400) rejected(); else ok();',
-    '      return { send: () => resolve(), json: () => resolve(), end: () => resolve() }; },',
+    '      return { send: done, json: done, end: done }; },',
     '  };',
     '  const req = { headers: {}, body: { amount: 1, id: "poc" }, rawBody: "{}" };',
-    `  try { ${invoke}(req, res); } catch { decided = "threw"; resolve(); }`,
-    '  setTimeout(resolve, 4000).unref();',
+    `  try { ${invoke}(req, res); } catch { decided = "threw"; done(); }`,
+    '  timer = setTimeout(resolve, 3000);',
     '});',
     '// Only an observed acceptance proves the bypass. "No decision" is not',
     '// acceptance, and must not write the marker.',
@@ -257,9 +303,262 @@ function _webhookPoc(finding, fileContent) {
     ok: true,
     poc: {
       lang: 'js', kind: 'in-process', family: finding.family, cwe: finding.cwe || null,
-      marker: MARKER, handler: call.kind === 'default' ? 'module.exports' : `exports.${call.name}`,
+      marker: MARKER, handler: handlerLabel,
       observes: 'handler accepted an unsigned webhook payload',
       requires: [base], code,
     },
   };
 }
+
+
+// ── SQL injection, proven at the driver boundary ────────────────────────────
+//
+// There is no database in the sandbox and there is not going to be one. What
+// there IS, and what actually settles the question, is the moment the query
+// crosses into the driver: either the user's payload arrives inside the SQL
+// TEXT, or it arrives as a bound parameter. The first is the vulnerability by
+// definition; the second is the fix by definition. Nothing about schema, rows,
+// or a live server is needed to tell them apart.
+//
+// So the PoC stubs the driver package with a recorder, calls the handler with a
+// payload carrying a sentinel, and writes the marker only if the sentinel shows
+// up inside a string that is recognisably SQL. A parameterised call records the
+// sentinel in the params array and the marker is not written — which is the
+// correct outcome, reached by execution rather than by reading the source.
+//
+// This is why the class needed no running app: the proof was never at the
+// database, it was at the boundary.
+
+const SQL_DRIVERS = ['mysql2', 'mysql', 'pg', 'sqlite3', 'better-sqlite3', 'mssql', 'oracledb'];
+const SQL_SENTINEL = 'PROVEN_SQLI';
+const SQL_LOG = 'driver-calls.jsonl';
+
+// A universal recording stub. The drivers differ in surface (`createConnection`
+// vs `new Pool` vs `new Database`), so rather than model each one, every
+// property access yields a callable/constructible proxy that records its string
+// and array arguments and drives any callback. `then` is undefined so an
+// `await` on a result does not hang.
+const DRIVER_STUB = [
+  "const fs = require('fs');",
+  'function record(args) {',
+  '  const strings = [], arrays = [];',
+  '  for (const a of args) {',
+  "    if (typeof a === 'string') strings.push(a);",
+  '    else if (Array.isArray(a)) arrays.push(a.map((x) => String(x)));',
+  // mysql's `query({sql, values})` form, and pg's `query({text, values})`.
+  "    else if (a && typeof a === 'object') {",
+  "      if (typeof a.sql === 'string') strings.push(a.sql);",
+  "      if (typeof a.text === 'string') strings.push(a.text);",
+  '      if (Array.isArray(a.values)) arrays.push(a.values.map((x) => String(x)));',
+  '    }',
+  '  }',
+  '  if (strings.length || arrays.length) {',
+  `    try { fs.appendFileSync(${JSON.stringify(SQL_LOG)}, JSON.stringify({ strings, arrays }) + '\\n'); } catch {}`,
+  '  }',
+  '}',
+  'const mk = () => new Proxy(function () {}, {',
+  "  get(t, p) { if (typeof p === 'symbol' || p === 'then' || p === 'inspect') return undefined; return mk(); },",
+  '  apply(t, self, args) {',
+  '    record(args);',
+  "    for (const a of args) if (typeof a === 'function') { try { a(null, []); } catch {} }",
+  '    return mk();',
+  '  },',
+  '  construct(t, args) { record(args); return mk(); },',
+  '});',
+  'module.exports = mk();',
+].join('\n');
+
+// Compiled once at load rather than per call. Building these from a template
+// inside the function meant a fresh RegExp per driver per finding, and it read
+// as a dynamically-assembled pattern to anything analysing this file — this
+// engine included, which flagged it.
+const SQL_DRIVER_RES = SQL_DRIVERS.map((d) => [
+  d,
+  new RegExp(`require\\s*\\(\\s*['"\`]${d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]`),
+]);
+
+function _sqlInjectionPoc(finding, fileContent) {
+  const driver = (SQL_DRIVER_RES.find(([, re]) => re.test(fileContent)) || [])[0];
+  if (!driver) {
+    return {
+      ok: false,
+      reason: `no recognised database driver is required by this file, so there is no boundary to observe the query at (looked for: ${SQL_DRIVERS.join(', ')})`,
+    };
+  }
+  const found = _findHandler(fileContent);
+  if (!found) return NO_HANDLER;
+  const { call, reqIdent } = found;
+
+  const src = _requestSource(fileContent, reqIdent);
+  if (!src) {
+    return { ok: false, reason: `the handler does not read query/body/params off '${reqIdent}', so the injection point is unknown` };
+  }
+
+  const { base, importLine, invoke, handlerLabel } = _binding(finding, call);
+  // Carries SQL syntax AND the sentinel: the sentinel alone would also appear
+  // in a correctly parameterised call, and matching on it would call a fixed
+  // handler vulnerable.
+  const payload = `1' OR '1'='1' -- ${SQL_SENTINEL}`;
+
+  const code = [
+    `// Auto-generated proof for ${finding.file}.`,
+    `// Stubs the '${driver}' driver with a recorder and calls the handler with a`,
+    '// payload carrying SQL syntax. The marker is written only if the payload',
+    '// arrived inside the QUERY TEXT — a bound parameter proves the opposite.',
+    importLine,
+    "import fs from 'node:fs';",
+    'await new Promise((resolve) => {',
+    '  let timer = null;',
+    '  const done = () => { clearTimeout(timer); resolve(); };',
+    '  const res = {',
+    '    send: done, json: done, end: done,',
+    '    status: () => ({ send: done, json: done, end: done }),',
+    '  };',
+    `  const req = { ${src.prop}: ${JSON.stringify({ [src.key]: payload })} };`,
+    `  try { ${invoke}(req, res); } catch { done(); }`,
+    '  timer = setTimeout(resolve, 3000);',
+    '});',
+    '',
+    '// The whole decision, stated once: sentinel inside a SQL string is the bug;',
+    '// sentinel inside a params array is the fix.',
+    'let proven = false;',
+    'try {',
+    `  for (const line of fs.readFileSync(${JSON.stringify(SQL_LOG)}, 'utf8').split('\\n')) {`,
+    '    if (!line.trim()) continue;',
+    '    const rec = JSON.parse(line);',
+    '    for (const s of rec.strings) {',
+    `      if (s.includes(${JSON.stringify(SQL_SENTINEL)}) && /\\b(?:select|insert|update|delete|from|where)\\b/i.test(s)) proven = true;`,
+    '    }',
+    '  }',
+    '} catch {}',
+    `if (proven) fs.writeFileSync('${MARKER}', 'x');`,
+  ].join('\n');
+
+  return {
+    ok: true,
+    poc: {
+      lang: 'js', kind: 'in-process', family: finding.family, cwe: finding.cwe || null,
+      marker: MARKER, paramKey: src.key, paramSource: src.prop, handler: handlerLabel,
+      driver,
+      observes: 'the request payload reached the database driver inside the SQL text rather than as a bound parameter',
+      requires: [base],
+      // The stub replaces the real package. Resolution finds `index.js` in a
+      // package directory with no package.json, which is why no manifest is
+      // written — one more file that could disagree with itself.
+      extraFiles: { [`node_modules/${driver}/index.js`]: DRIVER_STUB },
+      code,
+    },
+  };
+}
+
+
+// ── Path traversal, proven by reading a file outside the served directory ───
+//
+// The proof is a specific observable fact: content the handler had no business
+// serving came back out of it. The PoC plants a sentinel file at the sandbox
+// root, asks the handler for it by a path that has to climb out of the served
+// directory to reach it, and writes the marker only if the sentinel's own
+// content (or, for `sendFile`, the sentinel's resolved path) comes back.
+//
+// NO SOURCE-INSPECTION REFUSAL HERE, unlike the webhook class. There, a file
+// mentioning signature verification left a question execution could not settle,
+// so the template refused. Here execution settles it completely: a handler that
+// normalises the path returns nothing, and that is a real `proof-failed` about
+// the finding rather than a harness artefact. The template only refuses shapes
+// whose FAILURE would be about the harness.
+const TRAVERSAL_SENTINEL = 'PROVEN_TRAVERSAL_SENTINEL_CONTENT';
+const READ_SINK = /\b(?:readFile|readFileSync|sendFile|readFileAsync)\s*\(/;
+
+function _pathTraversalPoc(finding, fileContent) {
+  const found = _findHandler(fileContent);
+  if (!found) return NO_HANDLER;
+  const { call, reqIdent } = found;
+
+  // Checked BEFORE the read-sink refusal: a streamed handler reads its file
+  // through `createReadStream`, so the generic "no read sink" message would be
+  // both wrong and the one the reader sees.
+  //
+  // A streamed response is written to a real socket. The fake response object
+  // cannot be piped into, so the PoC would fail for harness reasons — which
+  // would be recorded as `proof-failed`, a claim about the finding.
+  if (/\.pipe\s*\(|createReadStream\s*\(/.test(fileContent)) {
+    return { ok: false, reason: 'the response is streamed; a failure against the in-process response object would be the harness talking, not the finding' };
+  }
+  if (!READ_SINK.test(fileContent)) {
+    return { ok: false, reason: 'no readFile/sendFile sink in the file, so there is no served content to observe coming back' };
+  }
+  const src = _requestSource(fileContent, reqIdent);
+  if (!src) {
+    return { ok: false, reason: `the handler does not read query/body/params off '${reqIdent}', so the traversal point is unknown` };
+  }
+
+  const { base, importLine, invoke, handlerLabel } = _binding(finding, call);
+
+  const code = [
+    `// Auto-generated proof for ${finding.file}.`,
+    '// Plants a sentinel file outside the served directory and asks the handler',
+    `// for it. The marker '${MARKER}' is written only if the sentinel's own`,
+    '// content — or the path it resolves to — comes back out of the handler.',
+    importLine,
+    "import fs from 'node:fs';",
+    "import path from 'node:path';",
+    `const SENTINEL = ${JSON.stringify(TRAVERSAL_SENTINEL)};`,
+    "const file = 'traversal-sentinel.txt';",
+    'fs.writeFileSync(file, SENTINEL);',
+    'const target = path.resolve(file);',
+    '',
+    '// Both shapes a vulnerable handler falls to: an absolute path (string',
+    "// concatenation, or a read with no join at all) and a climb out of the",
+    '// served directory. The depth is unknown, so a few are tried; every one of',
+    '// them resolves inside the sandbox root or fails harmlessly.',
+    'const candidates = [target];',
+    "for (let i = 1; i <= 6; i++) candidates.push('../'.repeat(i) + file);",
+    '',
+    'let proven = false;',
+    'for (const candidate of candidates) {',
+    '  if (proven) break;',
+    '  const seen = [];',
+    '  await new Promise((resolve) => {',
+    '    let timer = null;',
+    '    const done = () => { clearTimeout(timer); resolve(); };',
+    '    const capture = (v) => { if (v !== undefined && v !== null) seen.push(v); done(); };',
+    '    const res = {',
+    '      send: capture, json: capture, end: capture, write: capture,',
+    '      sendFile: capture, download: capture,',
+    '      status: () => ({ send: capture, json: capture, end: capture }),',
+    '      setHeader: () => {}, type: () => res, set: () => res,',
+    '    };',
+    `    const req = { ${src.prop}: { ${JSON.stringify(src.key)}: candidate } };`,
+    `    try { ${invoke}(req, res); } catch { done(); }`,
+    '    timer = setTimeout(resolve, 3000);',
+    '  });',
+    '  for (const v of seen) {',
+    "    const s = Buffer.isBuffer(v) ? v.toString('utf8') : typeof v === 'string' ? v : JSON.stringify(v) || '';",
+    '    // Content coming back is the direct proof.',
+    '    if (s.includes(SENTINEL)) { proven = true; break; }',
+    '    // `sendFile` hands back a path, not content: the handler resolving the',
+    '    // request to the sentinel OUTSIDE its directory is the same fact.',
+    '    try { if (s && path.resolve(s) === target) { proven = true; break; } } catch {}',
+    '  }',
+    '}',
+    `if (proven) fs.writeFileSync('${MARKER}', 'x');`,
+  ].join('\n');
+
+  return {
+    ok: true,
+    poc: {
+      lang: 'js', kind: 'in-process', family: finding.family, cwe: finding.cwe || null,
+      marker: MARKER, paramKey: src.key, paramSource: src.prop, handler: handlerLabel,
+      observes: 'the handler returned a file from outside the directory it serves',
+      requires: [base], code,
+    },
+  };
+}
+
+
+// Exported last: the template constants below are `const` in TDZ until their
+// declarations are evaluated.
+export const _internals = {
+  MARKER, SUPPORTED, _requestSource, SQL_DRIVERS, SQL_SENTINEL, TRAVERSAL_SENTINEL,
+  behaviouralFamilies: () => [...BEHAVIOURAL.keys()],
+};

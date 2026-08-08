@@ -1,5 +1,108 @@
 # Changelog
 
+## 0.134.0 — the loop closes, and the logic tier learns how to be wrong
+
+The remaining PRD epics. Two of them are new capability; the other two are the
+same idea applied twice — a claim nobody can disagree with is the weakest thing
+this engine emits, so both new tiers ship with the machinery to refute
+themselves.
+
+### Two more proof classes, and neither needed a running application
+
+`sql-injection` and `path-traversal` join the three existing classes. The PRD
+assumed both would wait on a running-app harness; they did not, because the
+harness was never where the proof lived.
+
+- **SQL injection is settled at the driver boundary.** Either the payload
+  arrives inside the query TEXT or it arrives as a bound parameter — the first
+  is the vulnerability by definition and the second is the fix by definition,
+  and no schema, rows or live server are needed to tell them apart. The PoC
+  stubs the driver with a recorder and writes the marker only when the payload
+  shows up inside something recognisably SQL. A parameterised query reaches
+  `proof-failed` by **execution**, not by reading the source.
+- **Path traversal is settled by what comes back.** A sentinel is planted
+  outside the served directory and the marker is written only if its content —
+  or, for `sendFile`, its resolved path — comes back out of the handler. A
+  `basename` guard is refuted by running it.
+
+Both directions are pinned by tests that execute in the real sandbox. Classes
+still absent (IDOR, SSRF, XSS) are now documented as decisions with reasons
+rather than gaps: a PoC built on invented application state proves something
+about the invention.
+
+Fixed along the way: the webhook PoC wrote its marker after a top-level `await`
+guarded by an **unref'd** timer, so a handler that never replied let Node exit
+with the promise pending and the marker check never ran. The test asserting
+"no decision writes no marker" had been passing without reaching the line it
+was testing. Timer is now ref'd and cleared, with a positive control asserting
+the process reaches exit 0.
+
+### The autonomous loop, wired to real stages
+
+`scripts/autopilot.mjs` connects the loop to a real scan, a real sandboxed
+exploit, a deterministic-then-model fix, and the real gate. End-to-end tests run
+the whole thing against a live HTTP endpoint, including the one that matters: a
+patch that changes the file, reads like a fix, and would satisfy any "did the
+scanner go quiet?" check is **refused and never written**, because the exploit
+still fires against it.
+
+The CLI refuses to start without a confinement backend (the verdict requires
+executing something) and refuses a dirty git tree by default (the test leg
+writes the candidate patch to disk and restores it in a `finally`; a clean tree
+is what makes a crash recoverable). A verified fix reached with no test runner
+detected is counted and reported separately — the exploit stopped firing, but
+nothing checked the application still works.
+
+### The business-logic tier learns how to be wrong
+
+The deterministic half already existed. The reviewing agent's half was prose:
+it asserted that a handler lets one user act on another's resource, and nothing
+in the finding gave a second party anything to disagree with. It was the only
+tier in this engine with no way to be wrong.
+
+`posture/logic-claims.js` adds three offline lenses that can refute one —
+citation (the file exists and the line is inside it), quotation (the quoted
+snippet is at the cited line), corroboration (a "no authentication" claim
+against a handler that plainly authenticates). Verdicts go through the existing
+producer/verifier separation, so a lens can never vote on a claim it produced;
+that is why the lenses are deterministic code and not another prompt. Refuted
+claims are quarantined, never deleted and never severity-touched.
+
+### A comparison harness that ships no opinion about who the competition is
+
+`posture/comparison.js` + `scripts/comparison.mjs` score this engine
+head-to-head against participants **the operator supplies**. The repository
+ships the harness and the answer key and names no tool — a test enforces that.
+
+Two properties are the entire module. Every rate is computed over the
+**intersection** of corpus entries *all* participants completed, because a tool
+that crashed on the forty hardest entries and was scored over the remaining
+hundred and seventy looks like it beat one that completed everything, and the
+difference is invisible in the output. And an entry a participant could not run
+is **unscored**, never counted as a miss: counting a crash as a false negative
+penalises a tool for a harness problem, counting it as a pass rewards it for
+one. Matching is CWE-only so nobody is scored on this engine's vocabulary.
+
+No comparison figures are published in this repository. Running other vendors'
+tools and publishing the numbers is the operator's call, not the harness's.
+
+### The suppression pragma never worked
+
+Found while suppressing a false positive in this release's own new code.
+`// agentic-security-ignore: <rule-id>` is documented in `CLAUDE.md` and
+`pr-comment.js` tells every reviewer to use it — and **nothing implemented it**.
+It has been advertised and inert. A dead suppression mechanism is worse than an
+absent one: the developer writes the pragma, sees the finding again, and
+concludes the scanner is noisy rather than that the pragma is dead.
+
+Now implemented in `engine.js`, applied after dedupe and after every cross-file
+pass so it covers a finding whichever analysis produced it. Line-scoped, matched
+against the finding's id / vuln / CWE / family, and **logged** to the same
+ledger custom rules use so `--include-suppressed` can show it. Every test
+carries a positive control — the same file without the pragma must still
+produce the finding, or "0 findings" would prove the suppression works and
+equally prove the detector stopped firing.
+
 ## 0.133.0 — two ways findings could be silently deleted, both closed
 
 Four rounds of adversarial premortem against this repository's own artifacts.

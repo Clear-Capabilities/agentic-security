@@ -397,3 +397,190 @@ test('the webhook class proves in the sandbox, and a fixed handler does not', as
     'a handler that rejects unsigned requests must never be reported as proven');
   assert.equal(fixedR.proofEvidence.ran, true, 'and the refusal must come from a RUN, not a skip');
 });
+
+
+// ── SQL injection: proven at the driver boundary ────────────────────────────
+//
+// The point of this class is that it needed no running database. The question
+// "was the payload SQL text or a bound parameter?" is fully answered where the
+// query crosses into the driver, so that is where the PoC observes.
+
+const SQLI_VULN = [
+  "const mysql = require('mysql');",
+  'const db = mysql.createConnection({ host: "localhost" });',
+  'module.exports = function handler(req, res) {',
+  '  db.query("SELECT * FROM users WHERE id = \'" + req.query.id + "\'", (e, rows) => res.json(rows));',
+  '};',
+].join('\n');
+
+const SQLI_FIXED = [
+  "const mysql = require('mysql');",
+  'const db = mysql.createConnection({ host: "localhost" });',
+  'module.exports = function handler(req, res) {',
+  '  db.query("SELECT * FROM users WHERE id = ?", [req.query.id], (e, rows) => res.json(rows));',
+  '};',
+].join('\n');
+
+const sqli = (over = {}) => ({
+  family: 'sql-injection', cwe: 'CWE-89', file: 'users.js',
+  vuln: 'SQL Injection (String Concatenation)', ...over,
+});
+
+test('the SQL class ships a driver stub as a support file, not as the source', () => {
+  const r = synthesizeInProcessPoc(sqli(), SQLI_VULN);
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.poc.driver, 'mysql');
+  assert.deepEqual(r.poc.requires, ['users.js']);
+  assert.ok(r.poc.extraFiles['node_modules/mysql/index.js'], 'no driver stub was emitted');
+});
+
+test('a file with no recognised driver is refused — there is no boundary to watch', () => {
+  const noDriver = [
+    'module.exports = function handler(req, res) {',
+    '  res.json(lookup("SELECT * FROM users WHERE id = \'" + req.query.id + "\'"));',
+    '};',
+  ].join('\n');
+  const r = synthesizeInProcessPoc(sqli(), noDriver);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /no recognised database driver/);
+});
+
+test('the SQL payload carries syntax, not just a sentinel', () => {
+  // Matching on a bare sentinel would also match a correctly parameterised
+  // call, which would report a fixed handler as vulnerable.
+  const r = synthesizeInProcessPoc(sqli(), SQLI_VULN);
+  assert.match(r.poc.code, /OR '1'='1'/);
+  assert.match(r.poc.code, /select\|insert\|update\|delete/i);
+});
+
+test('SQL injection proves in the sandbox, and a parameterised query does not', async (t) => {
+  if (!sandboxAvailable()) { t.skip('SKIPPED, NOT PASSED: no confinement backend'); return; }
+  const { proveFinding } = await import('../src/posture/execution-proof.js');
+  const { mergePocFiles } = await import('../src/posture/prove-findings.js');
+
+  const vulnPoc = synthesizeInProcessPoc(sqli(), SQLI_VULN);
+  assert.equal(vulnPoc.ok, true, vulnPoc.reason);
+  const proven = await proveFinding({ ...sqli(), poc: vulnPoc.poc },
+    { files: mergePocFiles(vulnPoc.poc, SQLI_VULN) });
+  assert.equal(proven.proofTier, 'execution-proven', JSON.stringify(proven.proofEvidence));
+
+  // The fixed handler is still SYNTHESIZABLE — execution decides, not a source
+  // pattern. This is the direction that catches a template matching too loosely.
+  const fixedPoc = synthesizeInProcessPoc(sqli(), SQLI_FIXED);
+  assert.equal(fixedPoc.ok, true, 'a parameterised handler must still be attempted');
+  const fixed = await proveFinding({ ...sqli(), poc: fixedPoc.poc },
+    { files: mergePocFiles(fixedPoc.poc, SQLI_FIXED) });
+  assert.notEqual(fixed.proofTier, 'execution-proven',
+    'a bound parameter must never be reported as SQL injection');
+  assert.equal(fixed.proofEvidence.ran, true, 'and the refusal must come from a RUN, not a skip');
+});
+
+
+// ── Path traversal ──────────────────────────────────────────────────────────
+
+const TRAVERSAL_VULN = [
+  "const fs = require('fs');",
+  "const path = require('path');",
+  'module.exports = function handler(req, res) {',
+  "  const p = path.join('public', req.query.file);",
+  "  res.send(fs.readFileSync(p, 'utf8'));",
+  '};',
+].join('\n');
+
+const TRAVERSAL_FIXED = [
+  "const fs = require('fs');",
+  "const path = require('path');",
+  'module.exports = function handler(req, res) {',
+  "  const p = path.join('public', path.basename(req.query.file));",
+  "  try { res.send(fs.readFileSync(p, 'utf8')); } catch { res.status(404).send('no'); }",
+  '};',
+].join('\n');
+
+const traversal = (over = {}) => ({
+  family: 'path-traversal', cwe: 'CWE-22', file: 'files.js',
+  vuln: 'Path Traversal (User-Controlled Path)', ...over,
+});
+
+test('a streamed response is refused — its failure would be the harness talking', () => {
+  const streamed = [
+    "const fs = require('fs');",
+    'module.exports = function handler(req, res) {',
+    '  fs.createReadStream(req.query.file).pipe(res);',
+    '};',
+  ].join('\n');
+  const r = synthesizeInProcessPoc(traversal(), streamed);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /harness talking/);
+});
+
+test('a file with no read sink is refused', () => {
+  const noRead = [
+    'module.exports = function handler(req, res) {',
+    '  res.send(req.query.file);',
+    '};',
+  ].join('\n');
+  const r = synthesizeInProcessPoc(traversal(), noRead);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /no readFile\/sendFile sink/);
+});
+
+test('path traversal proves in the sandbox, and a basename guard does not', async (t) => {
+  if (!sandboxAvailable()) { t.skip('SKIPPED, NOT PASSED: no confinement backend'); return; }
+  const { proveFinding } = await import('../src/posture/execution-proof.js');
+
+  const vulnPoc = synthesizeInProcessPoc(traversal(), TRAVERSAL_VULN);
+  assert.equal(vulnPoc.ok, true, vulnPoc.reason);
+  const proven = await proveFinding({ ...traversal(), poc: vulnPoc.poc },
+    { files: { 'files.js': TRAVERSAL_VULN } });
+  assert.equal(proven.proofTier, 'execution-proven', JSON.stringify(proven.proofEvidence));
+
+  // Unlike the webhook class this template does NOT read the source for a
+  // guard — it runs the guarded handler and lets the absence of the sentinel
+  // settle it.
+  const fixedPoc = synthesizeInProcessPoc(traversal(), TRAVERSAL_FIXED);
+  assert.equal(fixedPoc.ok, true, 'a guarded handler must still be attempted');
+  const fixed = await proveFinding({ ...traversal(), poc: fixedPoc.poc },
+    { files: { 'files.js': TRAVERSAL_FIXED } });
+  assert.notEqual(fixed.proofTier, 'execution-proven',
+    'a handler that strips the traversal must never be reported as proven');
+  assert.equal(fixed.proofEvidence.ran, true);
+});
+
+
+// ── the file set materialised into the sandbox ──────────────────────────────
+
+test('a support file can never replace the vulnerable source', async () => {
+  // Otherwise a template could swap out the code the PoC is supposed to
+  // exploit and prove a fact about itself.
+  const { mergePocFiles } = await import('../src/posture/prove-findings.js');
+  const files = mergePocFiles(
+    { requires: ['app.js'], extraFiles: { 'app.js': 'ATTACKER', 'node_modules/x/index.js': 'stub' } },
+    'REAL SOURCE',
+  );
+  assert.equal(files['app.js'], 'REAL SOURCE');
+  assert.equal(files['node_modules/x/index.js'], 'stub');
+});
+
+
+// ── the webhook guard is REACHED, not just satisfied ────────────────────────
+
+test('a silent handler runs to completion so the marker check actually executes', async (t) => {
+  if (!sandboxAvailable()) { t.skip('SKIPPED, NOT PASSED: no confinement backend'); return; }
+  const { proveFinding } = await import('../src/posture/execution-proof.js');
+  const SILENT = [
+    'module.exports = function handler(req, res) {',
+    '  const payload = req.body;',
+    '  void payload; // never replies',
+    '};',
+  ].join('\n');
+  const poc = synthesizeInProcessPoc(webhookFinding(), SILENT);
+  assert.equal(poc.ok, true);
+  const r = await proveFinding({ ...webhookFinding(), poc: poc.poc }, { files: { 'hook.js': SILENT } });
+  assert.notEqual(r.proofTier, 'execution-proven');
+  // The positive control. With an unref'd timer Node exits code 13 with the
+  // promise still pending and the marker check below the await NEVER RUNS —
+  // "no marker" would then be true for a reason that has nothing to do with
+  // the guard, and the assertion above would pass vacuously.
+  assert.equal(r.proofEvidence.exitCode, 0,
+    'the PoC must run to completion, or the guard was never evaluated');
+});
