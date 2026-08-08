@@ -149,7 +149,25 @@ export function scanTimingUnsafeComparison(file, content) {
 
 // Java-family immutable secret storage. `String` cannot be overwritten, so a
 // password held in one survives until GC and appears in heap dumps.
-const JAVA_STRING_SECRET = /\bString\s+([A-Za-z_$][\w$]*)\s*(?:=|;)/g;
+//
+// NARROWED after the real-world bench measured the cost of the broad form. The
+// first version matched ANY `String <secretish> = …`, including a hardcoded
+// literal — which is the single most common shape in a large public Java
+// vulnerability corpus (its hard-coded-password cases number in the thousands).
+// Every one produced a CWE-316 finding, dropping that corpus's F1 to 89.2%
+// against a 95% floor. A Java-heavy benchmark WITHOUT that shape scored 99.6%
+// in the same run, which is what isolated the cause.
+//
+// Two reasons the literal case must not fire here. It is already the
+// hardcoded-secret detectors' job, so this was a duplicate — the same mistake
+// as the JS timing rule. And the CWE-316 claim is about secret material living
+// in memory that cannot be wiped; a literal is in the class file either way, so
+// `char[]` buys nothing. The defect only exists when a RUNTIME secret is loaded
+// into an immutable String.
+const JAVA_STRING_SECRET = /\bString\s+([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+);/g;
+
+// Initializers that actually load a secret at runtime.
+const RUNTIME_SECRET_SOURCE = /\b(?:System\s*\.\s*getenv|System\s*\.\s*getProperty|readPassword|readLine|getPassword|getSecret|getToken|getApiKey|getCredential|vault|keystore|getConnectionPassword)\b/i;
 
 // C-family zeroization that the compiler is permitted to delete. A `memset`
 // whose buffer is never read afterwards is a dead store, and optimisers remove
@@ -171,7 +189,10 @@ export function scanMissingZeroization(file, content) {
     const rx = new RegExp(JAVA_STRING_SECRET.source, JAVA_STRING_SECRET.flags);
     while ((m = rx.exec(body))) {
       const name = m[1];
+      const init = m[2] || '';
       if (!SECRET_IDENT.test(name)) continue;
+      // A literal is the hardcoded-secret detectors' finding, not this one.
+      if (!RUNTIME_SECRET_SOURCE.test(init)) continue;
       const line = _lineAt(body, m.index);
       out.push({
         id: `non-zeroizable-secret-${file}-${line}`,
