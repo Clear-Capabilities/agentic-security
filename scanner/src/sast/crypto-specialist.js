@@ -39,8 +39,9 @@ const CONSTANT_TIME = /\b(?:timingSafeEqual|compare_digest|ConstantTimeCompare|h
 const UNSAFE_COMPARE = [
   // JS/TS, Python, Go, PHP, Ruby: ==, ===, !=, !==
   { re: /([A-Za-z_$][\w$.\[\]'"]*)\s*(?:===|==|!==|!=)\s*([A-Za-z_$][\w$.\[\]'"()]*)/g, form: 'equality operator' },
-  // Java/C#/Kotlin/Scala: a.equals(b)
-  { re: /([A-Za-z_$][\w$.]*)\s*\.\s*equals\s*\(\s*([A-Za-z_$][\w$.()]*)\s*\)/g, form: '.equals()' },
+  // Java/C#/Kotlin/Scala: a.equals(b) / a.Equals(b). The capital form is the
+  // .NET spelling and was a real miss — a C# fixture scored pre:FN on it.
+  { re: /([A-Za-z_$][\w$.]*)\s*\.\s*[Ee]quals\s*\(\s*([A-Za-z_$][\w$.()]*)\s*\)/g, form: '.equals()' },
   // C/C++: memcmp / strcmp / strncmp
   { re: /\b(?:mem|str|strn)cmp\s*\(\s*([A-Za-z_][\w.\->\[\]]*)\s*,\s*([A-Za-z_][\w.\->\[\]]*)/g, form: 'memcmp/strcmp' },
 ];

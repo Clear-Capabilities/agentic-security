@@ -23,7 +23,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `scanner/src/lsp/` | LSP server wrapping `runScan`. Ships with the JetBrains + Neovim plugins. |  |
 | `scanner/src/llm-validator/` | Layer-3 LLM validator (opt-in via `AGENTIC_SECURITY_LLM_VALIDATE=1`). |  |
 | `scanner/test/` | Node test runner suite. Scoped via `npm run test:{smoke,sast,posture,dataflow,mcp,report,lifecycle}` — see `scanner/CLAUDE.md`. |  |
-| `bench/cve-replay/` | Real-CVE replay corpus + runner. 200 entries (3 regression + 191 capability + 6 deep), all `pre:TP post:TN`; target 500. Execution-proven findings can auto-enrol via `npm run corpus:enroll` — see `scanner/src/posture/CLAUDE.md`. Baseline-gated via `npm run bench:cve-replay:check` (`bench/cve-replay/CONTRIBUTING.md`). |  |
+| `bench/cve-replay/` | Real-CVE replay corpus + runner. 210 entries (3 regression + 201 capability + 6 deep), all `pre:TP post:TN`; target 500. Execution-proven findings can auto-enrol via `npm run corpus:enroll` — see `scanner/src/posture/CLAUDE.md`. Baseline-gated via `npm run bench:cve-replay:check` (`bench/cve-replay/CONTRIBUTING.md`). |  |
 | `bench/owasp-benchmark-v1.2/`, `bench/sard-juliet-java/`, `bench/polyglot/` | External benches (gitignored, regenerated). |  |
 | `commands/` | Slash-command markdown files. 10 dispatchers: `secure`, `find-and-fix-everything`, `scan`, `triage`, `fix`, `posture`, `compliance`, `supply`, `setup`, `labs`. Every capability is a mode of a dispatcher (e.g. CI gates live at `/setup --ci`, the red/blue/auditor deep-dive at `/triage --deep`); the legacy single-purpose aliases redirect via `hooks/legacy-alias-redirect.js`. |  |
 | `agents/` | Sub-agent system prompts. Edit-capable agents follow `agents/_CONFINEMENT.md`. |  |
