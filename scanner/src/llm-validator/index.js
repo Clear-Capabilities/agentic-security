@@ -73,6 +73,7 @@ import { signLastScan } from '../posture/integrity.js';
 // doesn't have to reach through the `_internal` underscore-prefixed export.
 import { createCostLedger, parseCapUsd, renderCostCeiling } from './cost-ceiling.js';
 import { localEndpointConfig } from './local-endpoint.js';
+import { resolveProvider, buildProviderRequest, providerMatrix } from './providers.js';
 
 // The output cap we request. Shared with the cost estimate so the ceiling
 // charges exactly what we permit the model to produce.
@@ -124,49 +125,36 @@ Snippet (single line, trusted from scanner output): {{snippet}}
 Reply now with the JSON object on the last line of your response. Nothing else after it.
 `;
 
+// Delegates to the provider seam (PRD Epic 3). Kept as a thin adapter rather
+// than deleted: every call site, test and cost-ceiling path already speaks this
+// shape, and changing a seam and all its consumers at once is how a refactor
+// becomes a regression. `_localPresetRefusal` still carries a REFUSAL
+// distinctly from "nothing configured" — the local preset declining a remote
+// endpoint must not read as an absent config.
 function endpointConfig() {
-  // R11 — the local path is checked FIRST, ahead of the BYO endpoint, because
-  // it is the only mode that makes a promise about where data goes. If the
-  // operator asked for `local`, a stray AGENTIC_SECURITY_LLM_ENDPOINT pointing
-  // at a remote host must not quietly win: it is refused, and the tier stays
-  // off. Silently honouring it would break the one guarantee the preset exists
-  // to provide.
-  if ((process.env.AGENTIC_SECURITY_LLM_PRESET || '').toLowerCase() === 'local') {
-    const r = localEndpointConfig();
-    if (!r.ok) {
-      _localPresetRefusal = r.reason;
-      return null;
-    }
-    _localPresetRefusal = null;
-    return r.config;
-  }
-  // Explicit BYO endpoint always wins (unchanged behaviour).
-  const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
-  if (endpoint) {
-    return { endpoint, apiKey: process.env.AGENTIC_SECURITY_LLM_API_KEY, model: process.env.AGENTIC_SECURITY_LLM_MODEL || 'unknown', preset: null };
-  }
-  // #18 — first-class Anthropic preset. Opt-in via AGENTIC_SECURITY_LLM_PRESET=anthropic
-  // + a key (AGENTIC_SECURITY_LLM_API_KEY or ANTHROPIC_API_KEY): makes the FP-suppression
-  // validator reachable with just a key — no BYO endpoint URL or request-shape wrangling.
-  // Offline-degrading: no key → null (validator no-ops; no runtime cloud call by default).
-  if ((process.env.AGENTIC_SECURITY_LLM_PRESET || '').toLowerCase() === 'anthropic') {
-    const apiKey = process.env.AGENTIC_SECURITY_LLM_API_KEY || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return null;
-    return {
-      endpoint: 'https://api.anthropic.com/v1/messages',
-      apiKey,
-      model: process.env.AGENTIC_SECURITY_LLM_MODEL || 'claude-haiku-4-5',
-      preset: 'anthropic',
-    };
-  }
-  return null;
+  const r = resolveProvider({ role: 'validate' });
+  if (!r.ok) { _localPresetRefusal = r.reason || null; return null; }
+  _localPresetRefusal = null;
+  const c = r.config;
+  return {
+    endpoint: c.endpoint,
+    apiKey: c.apiKey,
+    model: c.model,
+    preset: c.provider === 'anthropic' ? 'anthropic' : (c.provider === 'local' ? 'local' : null),
+    provider: c.provider,
+    egress: c.egress,
+    _shape: c.shape,
+  };
 }
 
 // Shape the request for the target: the Anthropic Messages API needs an
 // x-api-key header (added by the caller), an anthropic-version header, and a
 // {model, max_tokens, messages:[…]} body with the reply in content[].text. The
 // generic path posts {prompt, model} with a Bearer header. Pure — no I/O.
-function buildRequest(model, prompt, preset) {
+function buildRequest(model, prompt, preset, shape) {
+  // A resolved provider carries its own wire shape; use it. The hand-written
+  // branches below remain for callers that pass only a preset string.
+  if (shape) return buildProviderRequest({ shape, model, apiKey: null }, prompt, MAX_OUTPUT_TOKENS);
   if (preset === 'anthropic') {
     return {
       headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
@@ -347,8 +335,8 @@ function renderPrompt(finding, fileContents, challenge, nonce) {
     .replace('{{context}}', sterileContext || '(no surrounding code available)');
 }
 
-async function callEndpoint(endpoint, apiKey, model, prompt, preset = null) {
-  const { headers, body, extractText, extractUsage } = buildRequest(model, prompt, preset);
+async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shape = null) {
+  const { headers, body, extractText, extractUsage } = buildRequest(model, prompt, preset, shape);
   if (apiKey) {
     if (preset === 'anthropic') headers['x-api-key'] = apiKey;
     else headers['Authorization'] = `Bearer ${apiKey}`;
@@ -520,7 +508,7 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
     }
   }
 
-  const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt, cfg.preset);
+  const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt, cfg.preset, cfg._shape);
   // Record actual usage when the endpoint reports it, else the estimate. An
   // unreported call is never free — but the two are recorded DISTINCTLY, so
   // the reported spend can say which it is. Presenting an upper bound as a
@@ -629,6 +617,8 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
     findings.costCeiling = ledger.state();
     findings.costCeilingSummary = renderCostCeiling(ledger.state());
   }
+  // Which provider each role would use. No keys, ever — this is reported.
+  findings.providerMatrix = providerMatrix();
   const _cs = cacheStats();
   findings.validatorCache = _cs;
   if (_cs.unverified > 0) {

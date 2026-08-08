@@ -71,6 +71,24 @@ const SHAPES = {
       return Number.isFinite(inputTokens) ? { inputTokens, outputTokens } : null;
     },
   },
+  // The LEGACY generic shape: `{prompt, model}` with a permissive extractor.
+  // This is what BYO endpoints and local servers have always been sent, and
+  // existing deployments speak it. Assuming OpenAI-compatibility here would
+  // silently break every one of them, so the OpenAI shape is used ONLY when the
+  // operator explicitly asks for the openai preset.
+  generic: {
+    headers: () => ({ 'Content-Type': 'application/json' }),
+    auth: (h, key) => { if (key) h.Authorization = `Bearer ${key}`; },
+    body: (model, prompt) => ({ prompt, model }),
+    text: (j) => (j && (j.response || j.text || j.content || j.output
+      || j.choices?.[0]?.message?.content || j.message?.content)) || '',
+    usage: (j) => {
+      const u = j?.usage; if (!u) return null;
+      const inputTokens = u.prompt_tokens ?? u.input_tokens;
+      const outputTokens = u.completion_tokens ?? u.output_tokens ?? 0;
+      return Number.isFinite(inputTokens) ? { inputTokens, outputTokens } : null;
+    },
+  },
   gemini: {
     headers: () => ({ 'Content-Type': 'application/json' }),
     // Gemini takes the key on the query string; the caller appends it, so the
@@ -131,14 +149,30 @@ export function resolveProvider({ role = 'validate', env = process.env } = {}) {
     return {
       ok: true,
       config: {
-        provider: 'local', shape: SHAPES.openai, endpoint: r.config.endpoint,
+        provider: 'local', shape: SHAPES.generic, endpoint: r.config.endpoint,
         apiKey: r.config.apiKey, model: model || r.config.model,
         egress: 'loopback-only', role,
       },
     };
   }
 
-  // 2. Explicit vendor presets.
+  // 2. Explicit BYO endpoint — checked BEFORE the vendor presets because that
+  //    is the documented precedence: an operator who names an endpoint means
+  //    that endpoint, even with a preset also set. Reversing it would silently
+  //    redirect traffic to a vendor.
+  const byoEndpoint = _forRole(env, role, 'ENDPOINT');
+  if (byoEndpoint) {
+    return {
+      ok: true,
+      config: {
+        provider: 'byo', shape: SHAPES.generic, endpoint: byoEndpoint,
+        apiKey: _forRole(env, role, 'API_KEY') || null,
+        model: model || 'unknown', egress: 'remote', role,
+      },
+    };
+  }
+
+  // 3. Explicit vendor presets.
   if (explicit === 'anthropic' || explicit === 'openai' || explicit === 'gemini') {
     const apiKey = _forRole(env, role, 'API_KEY')
       || (explicit === 'anthropic' ? env.ANTHROPIC_API_KEY
@@ -148,7 +182,7 @@ export function resolveProvider({ role = 'validate', env = process.env } = {}) {
     // anthropic preset has always had.
     if (!apiKey) return { ok: false, reason: null };
     const m = model || DEFAULT_MODEL[explicit];
-    const endpoint = _forRole(env, role, 'ENDPOINT') || (
+    const endpoint = (
       explicit === 'anthropic' ? 'https://api.anthropic.com/v1/messages'
         : explicit === 'openai' ? 'https://api.openai.com/v1/chat/completions'
           : `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(apiKey)}`
@@ -158,20 +192,6 @@ export function resolveProvider({ role = 'validate', env = process.env } = {}) {
       config: {
         provider: explicit, shape: SHAPES[explicit], endpoint,
         apiKey: explicit === 'gemini' ? null : apiKey, model: m, egress: 'remote', role,
-      },
-    };
-  }
-
-  // 3. BYO endpoint — unchanged behaviour, and still the escape hatch for any
-  //    server not covered above. Assumed OpenAI-compatible.
-  const endpoint = _forRole(env, role, 'ENDPOINT');
-  if (endpoint) {
-    return {
-      ok: true,
-      config: {
-        provider: 'byo', shape: SHAPES.openai, endpoint,
-        apiKey: _forRole(env, role, 'API_KEY') || null,
-        model: model || 'unknown', egress: 'remote', role,
       },
     };
   }

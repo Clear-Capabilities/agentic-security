@@ -47,6 +47,7 @@ test('each shape can build a request and read text back', () => {
     anthropic: { content: [{ type: 'text', text: 'hello' }], usage: { input_tokens: 5, output_tokens: 2 } },
     openai: { choices: [{ message: { content: 'hello' } }], usage: { prompt_tokens: 5, completion_tokens: 2 } },
     gemini: { candidates: [{ content: { parts: [{ text: 'hello' }] } }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2 } },
+    generic: { response: 'hello', usage: { prompt_tokens: 5, completion_tokens: 2 } },
   };
   for (const [name, shape] of Object.entries(_internals.SHAPES)) {
     const req = buildProviderRequest({ shape, model: 'm', apiKey: 'k' }, 'prompt', 512);
@@ -147,9 +148,36 @@ test('the matrix covers every declared role and says why a role is off', () => {
   }
 });
 
-test('BYO endpoint still works and is treated as OpenAI-compatible', () => {
+test('BYO keeps the LEGACY wire shape, not OpenAI\'s', () => {
+  // Existing BYO servers speak `{prompt, model}`. Assuming OpenAI-compatibility
+  // would have silently broken every one of them — caught by the default-on
+  // test, whose fake endpoint reads body.prompt and returns {response}.
   const r = resolveProvider({ env: { AGENTIC_SECURITY_LLM_ENDPOINT: 'https://internal.example/v1/chat' } });
   assert.equal(r.ok, true);
   assert.equal(r.config.provider, 'byo');
-  assert.equal(r.config.endpoint, 'https://internal.example/v1/chat');
+  const req = buildProviderRequest(r.config, 'PROMPT', 512);
+  assert.equal(req.body.prompt, 'PROMPT', 'BYO body must carry `prompt`');
+  assert.equal(req.extractText({ response: 'hi' }), 'hi');
+});
+
+test('a BYO endpoint WINS over a vendor preset', () => {
+  // Documented precedence: naming an endpoint means that endpoint. Reversing it
+  // would silently redirect traffic to a vendor.
+  const r = resolveProvider({ env: {
+    AGENTIC_SECURITY_LLM_ENDPOINT: 'http://byo/x',
+    AGENTIC_SECURITY_LLM_PRESET: 'anthropic', ANTHROPIC_API_KEY: 'k',
+  } });
+  assert.equal(r.config.endpoint, 'http://byo/x');
+  assert.equal(r.config.provider, 'byo');
+});
+
+test('the local preset still wins over a BYO endpoint', () => {
+  // Local is the only mode that makes a promise about egress; BYO precedence
+  // must not override it.
+  const r = resolveProvider({ env: {
+    AGENTIC_SECURITY_LLM_PRESET: 'local',
+    AGENTIC_SECURITY_LLM_ENDPOINT: 'http://127.0.0.1:11434/v1',
+  } });
+  assert.equal(r.config.provider, 'local');
+  assert.equal(r.config.egress, 'loopback-only');
 });
