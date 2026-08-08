@@ -210,7 +210,7 @@ ASVS, OWASP LLM Top 10, EU AI Act) — a combination nothing else in the field h
 a verifiable attestation, proven by an executing test.
 
 
-**Status: landed locally; the cross-machine leg awaits its first CI run.** `posture/attestation.js` gives an order-independent signed digest; shuffled order and differing timestamps yield the same digest, a changed severity or removed finding do not.
+**Status: landed, both legs verified.** `posture/attestation.js` gives an order-independent signed digest; shuffled order and differing timestamps yield the same digest, a changed severity or removed finding do not.
 
 The cross-machine criterion now has machinery behind it rather than a disclaimer. `scripts/attest-fixture.mjs` scans a committed, dependency-free fixture (`bench/determinism/fixture/`) and prints the run attestation digest; the `determinism-attest` CI job runs it on ubuntu-latest **and** macos-latest, and `determinism-compare` fails unless every digest matches. The comparison is between live runs of the same commit rather than against a checked-in reference digest — a committed digest would need refreshing on every commit that legitimately changes a finding, which turns a gate into a chore.
 
