@@ -53,11 +53,14 @@ if (!reposArg) {
 // and credentials, so it is left to the caller to produce a list.
 let repos = [];
 try {
-  const st = fs.statSync(reposArg);
-  if (st.isDirectory()) {
-    repos = fs.readdirSync(reposArg)
-      .map(d => path.join(reposArg, d))
-      .filter(p => { try { return fs.statSync(p).isDirectory(); } catch { return false; } });
+  // Attempt the directory read FIRST and let it fail, rather than stat-then-use.
+  // The check-then-use form is CWE-367 (TOCTOU) and this project's own engine
+  // flags it — it did, on this file. `withFileTypes` also removes the per-entry
+  // stat, so there is exactly one syscall per decision.
+  let entries = null;
+  try { entries = fs.readdirSync(reposArg, { withFileTypes: true }); } catch { entries = null; }
+  if (entries) {
+    repos = entries.filter(e => e.isDirectory()).map(e => path.join(reposArg, e.name));
   } else {
     repos = fs.readFileSync(reposArg, 'utf8').split('\n')
       .map(l => l.replace(/#.*$/, '').trim()).filter(Boolean);

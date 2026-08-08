@@ -30,7 +30,23 @@ const MARKER = 'PROVEN';
 // Only families where "the injected payload ran" is observable from a marker
 // file. Others (XSS, weak crypto) need a browser or a judgement call about
 // output, and a marker-file proof would be a category error.
-const SUPPORTED = new Set(['command-injection', 'code-injection']);
+// Families whose exploitation is observable from inside a sandbox.
+//
+// Injection classes are observable because the payload itself writes the
+// marker. Webhook-signature bypass is observable for a different reason: the
+// defect IS the handler accepting a request it should have rejected, so the
+// PoC observes the acceptance and records it. Both are execution-based — code
+// ran and behaved insecurely — but they are proven by different evidence, and
+// conflating them is how a template ends up asserting something it never saw.
+const SUPPORTED = new Set([
+  'command-injection',
+  'code-injection',
+  'webhook-missing-signature-verification',
+]);
+
+// Classes proven by observing the HANDLER's behaviour rather than a payload
+// side effect.
+const BEHAVIOURAL = new Set(['webhook-missing-signature-verification']);
 
 const JS_EXT = /\.(js|cjs|mjs)$/i;
 
@@ -87,6 +103,8 @@ export function synthesizeInProcessPoc(finding, fileContent) {
   if (/^\s*(?:import|export)\s/m.test(fileContent) && !/module\.exports/.test(fileContent)) {
     return { ok: false, reason: 'ES-module source: the CommonJS handler shapes do not apply' };
   }
+
+  if (BEHAVIOURAL.has(finding.family)) return _webhookPoc(finding, fileContent);
 
   if (!SHELL_SINK.test(fileContent)) {
     return {
@@ -163,3 +181,85 @@ export function synthesizeInProcessPoc(finding, fileContent) {
 }
 
 export const _internals = { MARKER, SUPPORTED, _requestSource };
+
+
+// ── Webhook signature bypass ────────────────────────────────────────────────
+//
+// The proof is that an UNSIGNED request is processed. So the PoC calls the
+// handler with no signature header and watches what the handler does with the
+// response object: a success reply means the payload was accepted, and the
+// marker is written only then.
+//
+// REFUSALS MATTER MORE HERE THAN FOR INJECTION. A handler that rejects the
+// request produces no marker, which is correct — but a handler that never
+// replies at all also produces no marker, and those are different facts. The
+// template therefore refuses any handler it cannot observe a decision from,
+// rather than letting "no reply" masquerade as "rejected".
+function _webhookPoc(finding, fileContent) {
+  let call = null, reqIdent = null;
+  for (const re of HANDLER_RES) {
+    const m = fileContent.match(re);
+    if (m) { call = { kind: 'default', name: null }; reqIdent = m[1]; break; }
+  }
+  if (!call) {
+    for (const re of NAMED_HANDLER_RES) {
+      const m = fileContent.match(re);
+      if (m) { call = { kind: 'named', name: m[1] }; reqIdent = m[2]; break; }
+    }
+  }
+  if (!call) {
+    return { ok: false, reason: 'no exported two-argument (req, res) handler found — nothing to call without inventing an interface' };
+  }
+  // The handler must actually read the body, or "it accepted an unsigned
+  // request" is not a statement about a webhook at all.
+  const esc = reqIdent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!new RegExp(`\\b${esc}\\.(?:body|rawBody)\\b`).test(fileContent)) {
+    return { ok: false, reason: `the handler does not read '${reqIdent}.body', so it is not processing a webhook payload` };
+  }
+  // If the file verifies a signature somewhere, this template cannot tell
+  // whether the check is reachable on this path — that is a taint question, not
+  // an execution one. Refuse rather than guess.
+  if (/\b(?:createHmac|timingSafeEqual|verifySignature|constructEvent|hash_equals|X-Hub-Signature|stripe-signature)\b/i.test(fileContent)) {
+    return { ok: false, reason: 'the file already references signature verification; whether it guards this path is a static question, not one this PoC can answer' };
+  }
+
+  const base = finding.file.split(/[\\/]/).pop();
+  const imported = call.kind === 'default' ? 'handler' : `{ ${call.name} }`;
+  const invoke = call.kind === 'default' ? 'handler' : call.name;
+
+  const code = [
+    `// Auto-generated proof for ${finding.file}.`,
+    '// Sends a webhook payload with NO signature header. If the handler replies',
+    `// with success, it accepted an unsigned request — the marker '${MARKER}' is`,
+    '// written only on that observation.',
+    `import ${imported} from './${base}';`,
+    "import fs from 'node:fs';",
+    'let decided = null;',
+    'const ok = () => { if (decided === null) decided = "accepted"; };',
+    'const rejected = () => { if (decided === null) decided = "rejected"; };',
+    'await new Promise((resolve) => {',
+    '  const res = {',
+    '    send: () => { ok(); resolve(); }, json: () => { ok(); resolve(); }, end: () => { ok(); resolve(); },',
+    '    // A 4xx/5xx is a rejection, whatever the body says.',
+    '    status: (c) => { if (c >= 400) rejected(); else ok();',
+    '      return { send: () => resolve(), json: () => resolve(), end: () => resolve() }; },',
+    '  };',
+    '  const req = { headers: {}, body: { amount: 1, id: "poc" }, rawBody: "{}" };',
+    `  try { ${invoke}(req, res); } catch { decided = "threw"; resolve(); }`,
+    '  setTimeout(resolve, 4000).unref();',
+    '});',
+    '// Only an observed acceptance proves the bypass. "No decision" is not',
+    '// acceptance, and must not write the marker.',
+    `if (decided === "accepted") fs.writeFileSync('${MARKER}', 'x');`,
+  ].join('\n');
+
+  return {
+    ok: true,
+    poc: {
+      lang: 'js', kind: 'in-process', family: finding.family, cwe: finding.cwe || null,
+      marker: MARKER, handler: call.kind === 'default' ? 'module.exports' : `exports.${call.name}`,
+      observes: 'handler accepted an unsigned webhook payload',
+      requires: [base], code,
+    },
+  };
+}

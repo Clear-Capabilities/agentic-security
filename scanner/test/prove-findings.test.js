@@ -277,3 +277,123 @@ test('a generous budget does not interfere', async (t) => {
   assert.equal(s.budgetExhausted, 0);
   assert.equal(s.proven, 1);
 });
+
+// --- webhook signature bypass (PRD Epic 1.1) -------------------------------
+//
+// A different KIND of evidence from the injection classes: nothing is injected,
+// so nothing writes the marker on its own. The defect is the handler accepting
+// a request it should have rejected, so the PoC observes the acceptance and
+// records it. Conflating the two is how a template asserts something it never
+// saw, which is why the "no decision" case below matters.
+
+const WEBHOOK_VULN = [
+  'module.exports = function handler(req, res) {',
+  '  const evt = req.body;',
+  '  recordPayment(evt.amount);',
+  "  res.send('ok');",
+  '};',
+  'function recordPayment(){}',
+].join('\n');
+
+const webhookFinding = (over = {}) => ({
+  family: 'webhook-missing-signature-verification', cwe: 'CWE-345', file: 'hook.js',
+  vuln: 'Webhook — Missing Signature Verification', severity: 'high', ...over,
+});
+
+test('a webhook handler with no verification synthesizes a behavioural PoC', () => {
+  const r = synthesizeInProcessPoc(webhookFinding(), WEBHOOK_VULN);
+  assert.equal(r.ok, true, r.reason);
+  assert.match(r.poc.observes, /accepted an unsigned webhook/);
+  assert.match(r.poc.code, /decided === "accepted"/,
+    'the marker must be written ONLY on an observed acceptance');
+});
+
+test('the marker write is GUARDED by an observed acceptance', () => {
+  // "No reply" is not "rejected", and neither is an acceptance. The only line
+  // that writes the marker must sit behind the acceptance check — an
+  // unconditional write would report every handler as proven.
+  const r = synthesizeInProcessPoc(webhookFinding(), WEBHOOK_VULN);
+  const writes = r.poc.code.split('\n').filter(l => l.includes('writeFileSync'));
+  assert.equal(writes.length, 1, 'exactly one marker write is expected');
+  assert.match(writes[0], /if \(decided === "accepted"\)/,
+    'the marker write is not guarded by the acceptance observation');
+  assert.match(r.poc.code, /let decided = null/, 'the initial state must be "no decision"');
+});
+
+test('the guard actually holds when executed: no decision writes no marker', async (t) => {
+  // Asserted by RUNNING it, because the property is about behaviour and a
+  // source-shape check can only suggest it. A handler that never replies is the
+  // case a naive template gets wrong.
+  if (!sandboxAvailable()) { t.skip('SKIPPED, NOT PASSED: no confinement backend'); return; }
+  const { proveFinding } = await import('../src/posture/execution-proof.js');
+  const SILENT = [
+    'module.exports = function handler(req, res) {',
+    '  const evt = req.body;',
+    '  // never replies at all',
+    '};',
+  ].join('\n');
+  const poc = synthesizeInProcessPoc(webhookFinding(), SILENT);
+  assert.equal(poc.ok, true, poc.reason);
+  const r = await proveFinding({ ...webhookFinding(), poc: poc.poc }, { files: { 'hook.js': SILENT } });
+  assert.notEqual(r.proofTier, 'execution-proven',
+    'a handler that never decided was reported as having accepted the request');
+});
+
+test('a 4xx reply is a rejection whatever the body says', () => {
+  const r = synthesizeInProcessPoc(webhookFinding(), WEBHOOK_VULN);
+  assert.match(r.poc.code, /c >= 400/, 'status codes must decide acceptance, not the body');
+});
+
+test('a handler that does not read the body is refused', () => {
+  // Then "it accepted an unsigned request" is not a statement about a webhook.
+  const noBody = "module.exports = function handler(req, res) { res.send('ok'); };";
+  const r = synthesizeInProcessPoc(webhookFinding(), noBody);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /does not read/);
+});
+
+test('a file that already verifies signatures is refused, not guessed at', () => {
+  // Whether the check guards THIS path is a static question; an execution
+  // template must not answer it by assumption.
+  const verified = [
+    "const crypto = require('crypto');",
+    'module.exports = function handler(req, res) {',
+    "  const mac = crypto.createHmac('sha256', KEY).update(req.rawBody).digest('hex');",
+    '  if (mac !== req.headers.sig) return res.status(401).send("no");',
+    '  recordPayment(req.body.amount);',
+    "  res.send('ok');",
+    '};',
+  ].join('\n');
+  const r = synthesizeInProcessPoc(webhookFinding(), verified);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /static question/);
+});
+
+test('the webhook class proves in the sandbox, and a fixed handler does not', async (t) => {
+  if (!sandboxAvailable()) { t.skip('SKIPPED, NOT PASSED: no confinement backend'); return; }
+  const { proveFinding } = await import('../src/posture/execution-proof.js');
+
+  const vulnPoc = synthesizeInProcessPoc(webhookFinding(), WEBHOOK_VULN);
+  const provenR = await proveFinding({ ...webhookFinding(), poc: vulnPoc.poc },
+    { files: { 'hook.js': WEBHOOK_VULN } });
+  assert.equal(provenR.proofTier, 'execution-proven', JSON.stringify(provenR.proofEvidence));
+
+  // A handler that rejects unsigned requests must NOT prove. Settled by running
+  // it, not by pattern-matching the source.
+  const FIXED = [
+    'module.exports = function handler(req, res) {',
+    "  const sig = req.headers['x-signature'];",
+    "  if (!sig || sig !== 'expected') return res.status(401).send('bad signature');",
+    '  recordPayment(req.body.amount);',
+    "  res.send('ok');",
+    '};',
+    'function recordPayment(){}',
+  ].join('\n');
+  const fixedPoc = synthesizeInProcessPoc(webhookFinding(), FIXED);
+  assert.equal(fixedPoc.ok, true, 'the fixed handler should still be synthesizable — execution decides');
+  const fixedR = await proveFinding({ ...webhookFinding(), poc: fixedPoc.poc },
+    { files: { 'hook.js': FIXED } });
+  assert.notEqual(fixedR.proofTier, 'execution-proven',
+    'a handler that rejects unsigned requests must never be reported as proven');
+  assert.equal(fixedR.proofEvidence.ran, true, 'and the refusal must come from a RUN, not a skip');
+});
