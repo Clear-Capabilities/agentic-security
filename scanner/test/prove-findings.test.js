@@ -224,3 +224,56 @@ test('the marker payload writes only inside the sandbox root', () => {
   assert.doesNotMatch(r.poc.code, /https?:|curl|wget|rm\s|\/etc\/|\.\.\//);
   assert.equal(_internals.MARKER, 'PROVEN');
 });
+
+// --- aggregate time budget ------------------------------------------------
+//
+// A count cap bounds nothing in time, and CI proved the backend's own timeout
+// could not be taken on faith. `now` is injected so the budget can be tested
+// without burning wall-clock.
+
+test('the aggregate budget stops the loop and reports what it did not attempt', async () => {
+  const findings = [cmdi(), cmdi(), cmdi(), cmdi()];
+  // A clock that jumps past the budget after the first candidate.
+  let t = 0;
+  const now = () => { t += 60_000; return t; };
+  const s = await annotateExecutionProofs(findings, {
+    fileContents: { 'handler.js': VULN },
+    env: { AGENTIC_SECURITY_PROVE: '1' },
+    totalBudgetMs: 100_000,
+    now,
+  });
+  if (!s.enabled) return; // no sandbox on this host; nothing to bound
+  assert.ok(s.attempted < findings.length, 'the budget must actually stop the loop');
+  assert.equal(s.attempted + s.budgetExhausted, findings.length,
+    'every candidate must be either attempted or reported as unattempted');
+  assert.match(renderProofSummary(s), /aggregate time budget exhausted/);
+  assert.match(renderProofSummary(s), /unattempted, not unprovable/);
+});
+
+test('findings left unattempted by the budget keep their static tier', async () => {
+  const findings = [cmdi(), cmdi()];
+  let t = 0;
+  const now = () => { t += 60_000; return t; };
+  const s = await annotateExecutionProofs(findings, {
+    fileContents: { 'handler.js': VULN },
+    env: { AGENTIC_SECURITY_PROVE: '1' },
+    totalBudgetMs: 1,
+    now,
+  });
+  if (!s.enabled) return;
+  assert.equal(s.attempted, 0, 'an already-exhausted budget must attempt nothing');
+  assert.equal(s.budgetExhausted, 2);
+  for (const f of findings) {
+    assert.equal(f.proofTier, undefined, 'an unattempted finding must not be demoted');
+  }
+});
+
+test('a generous budget does not interfere', async (t) => {
+  if (!sandboxAvailable()) { t.skip('SKIPPED, NOT PASSED: no confinement backend'); return; }
+  const findings = [cmdi()];
+  const s = await annotateExecutionProofs(findings, {
+    fileContents: { 'handler.js': VULN }, env: { AGENTIC_SECURITY_PROVE: '1' },
+  });
+  assert.equal(s.budgetExhausted, 0);
+  assert.equal(s.proven, 1);
+});

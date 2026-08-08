@@ -151,12 +151,28 @@ function buildRequest(model, prompt, preset) {
       headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
       body: { model, max_tokens: MAX_OUTPUT_TOKENS, messages: [{ role: 'user', content: prompt }] },
       extractText: (j) => (Array.isArray(j?.content) ? j.content.filter(b => b?.type === 'text').map(b => b.text || '').join('') : ''),
+      // R12 — real token usage, so the cost ledger books what was actually
+      // spent instead of the worst case it had to assume beforehand.
+      extractUsage: (j) => (j?.usage && Number.isFinite(j.usage.input_tokens)
+        ? { inputTokens: j.usage.input_tokens, outputTokens: j.usage.output_tokens || 0 }
+        : null),
     };
   }
   return {
     headers: { 'Content-Type': 'application/json' },
     body: { prompt, model },
     extractText: (j) => (j && (j.response || j.text || j.content || j.output || j.choices?.[0]?.message?.content || j.message?.content)) || '',
+    // OpenAI-compatible servers (and most local ones) report usage in this
+    // shape. A server that reports nothing yields null, and the ledger then
+    // records an ESTIMATE and says so — it never silently presents one as the
+    // other.
+    extractUsage: (j) => {
+      const u = j?.usage;
+      if (!u) return null;
+      const inputTokens = u.prompt_tokens ?? u.input_tokens;
+      const outputTokens = u.completion_tokens ?? u.output_tokens ?? 0;
+      return Number.isFinite(inputTokens) ? { inputTokens, outputTokens } : null;
+    },
   };
 }
 
@@ -248,7 +264,7 @@ function renderPrompt(finding, fileContents, challenge, nonce) {
 }
 
 async function callEndpoint(endpoint, apiKey, model, prompt, preset = null) {
-  const { headers, body, extractText } = buildRequest(model, prompt, preset);
+  const { headers, body, extractText, extractUsage } = buildRequest(model, prompt, preset);
   if (apiKey) {
     if (preset === 'anthropic') headers['x-api-key'] = apiKey;
     else headers['Authorization'] = `Bearer ${apiKey}`;
@@ -257,7 +273,7 @@ async function callEndpoint(endpoint, apiKey, model, prompt, preset = null) {
     const r = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
     if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
     const j = await r.json().catch(() => null);
-    return { ok: true, text: String(extractText(j) || '') };
+    return { ok: true, text: String(extractText(j) || ''), usage: extractUsage ? extractUsage(j) : null };
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -422,12 +438,14 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
 
   const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt, cfg.preset);
   // Record actual usage when the endpoint reports it, else the estimate. An
-  // unreported call is never free.
+  // unreported call is never free — but the two are recorded DISTINCTLY, so
+  // the reported spend can say which it is. Presenting an upper bound as a
+  // measurement is the defect this distinction exists to prevent: the estimate
+  // charges the full max_tokens for output, which most replies never reach.
   if (ledger) {
     const u = resp?.usage;
-    ledger.record(u && Number.isFinite(u.input_tokens)
-      ? { inputTokens: u.input_tokens, outputTokens: u.output_tokens || 0 }
-      : _est);
+    if (u) ledger.record(u, { measured: true });
+    else ledger.record(_est, { measured: false });
   }
   if (!resp.ok) {
     finding.validator_verdict = 'unvalidated';

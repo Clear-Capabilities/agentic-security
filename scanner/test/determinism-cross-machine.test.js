@@ -28,8 +28,14 @@ function compare(files) {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
+// Per-fixture shape. The gate attests TWO fixtures — the regex/structural one
+// and a deep one that must reach the taint engine — so agreement is checked
+// per fixture and a divergence names the layer.
 const att = (over = {}) => ({
   digest: 'a'.repeat(64), findingCount: 11, engineVersion: '0.131.0',
+  digests: { basic: 'a'.repeat(64), deep: 'b'.repeat(64) },
+  findingCounts: { basic: 11, deep: 3 },
+  parsers: { basic: ['REGEX'], deep: ['IR-TAINT', 'PY-SAST'] },
   canonicalisation: 'agentic-security/run-attestation-canon-v1',
   platform: 'linux-x64', nodeVersion: 'v24.0.0', ...over,
 });
@@ -40,10 +46,54 @@ test('two platforms agreeing on a non-empty digest passes', () => {
   assert.match(r.out, /VERIFIED/);
 });
 
-test('a disagreement fails', () => {
-  const r = compare({ 'a.json': att(), 'b.json': att({ platform: 'darwin-arm64', digest: 'b'.repeat(64) }) });
+test('a disagreement on the basic fixture fails and names it', () => {
+  const r = compare({
+    'a.json': att(),
+    'b.json': att({ platform: 'darwin-arm64', digests: { basic: 'c'.repeat(64), deep: 'b'.repeat(64) } }),
+  });
   assert.equal(r.code, 1);
-  assert.match(r.out, /machines disagree/);
+  assert.match(r.out, /fixture 'basic': machines disagree/);
+});
+
+test('a disagreement on the DEEP fixture fails and names it', () => {
+  // The case the single-fixture gate could never have caught: the taint engine
+  // and the Python parser diverging while the regex detectors agree.
+  const r = compare({
+    'a.json': att(),
+    'b.json': att({ platform: 'darwin-arm64', digests: { basic: 'a'.repeat(64), deep: 'd'.repeat(64) } }),
+  });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /fixture 'deep': machines disagree/);
+});
+
+test('a deep fixture that degraded to the syntactic layer fails', () => {
+  // Agreement reached because the taint engine did not run is agreement for
+  // the wrong reason, and it would silently hollow out the whole gate.
+  const r = compare({
+    'a.json': att(),
+    'b.json': att({ platform: 'darwin-arm64', parsers: { basic: ['REGEX'], deep: ['JS-FW'] } }),
+  });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /degraded to the syntactic layer/);
+});
+
+test('a fixture missing from one machine is not silently skipped', () => {
+  const r = compare({
+    'a.json': att(),
+    'b.json': att({ platform: 'darwin-arm64', digests: { basic: 'a'.repeat(64) } }),
+  });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /fixture 'deep' is missing/);
+});
+
+test('attestations predating the multi-fixture gate are refused, not compared', () => {
+  const legacy = att();
+  delete legacy.digests;
+  const other = att({ platform: 'darwin-arm64' });
+  delete other.digests;
+  const r = compare({ 'a.json': legacy, 'b.json': other });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /predate the multi-fixture gate/);
 });
 
 test('one attestation is not a cross-machine comparison', () => {
@@ -64,6 +114,15 @@ test('agreement on an empty finding set is not evidence', () => {
   const r = compare({
     'a.json': att({ findingCount: 0 }),
     'b.json': att({ platform: 'darwin-arm64', findingCount: 0 }),
+  });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /proves nothing/);
+});
+
+test('an empty DEEP fixture is not evidence either', () => {
+  const r = compare({
+    'a.json': att({ findingCounts: { basic: 11, deep: 0 } }),
+    'b.json': att({ platform: 'darwin-arm64', findingCounts: { basic: 11, deep: 0 } }),
   });
   assert.equal(r.code, 1);
   assert.match(r.out, /proves nothing/);

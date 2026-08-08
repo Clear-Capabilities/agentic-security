@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.132.0",
-    "bundleSha256": "a1f581521eaab4f89f26aa9f06af557e9443dbea7a8411da5ecd904f3b94acd3",
-    "commit": "2af3c309a75aa63d2e14063a586b9da6abe5795c",
+    "bundleSha256": "b520ed6c3ce7942b89f8f8bc1f66228e401b86cb029daeeaca12938f68499fe0",
+    "commit": "ca3765c90ee5a01fa61d871a85307a3cac996e97",
     "worktreeClean": true,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-07T21:41:18.353Z"
+    "generatedAt": "2026-08-08T02:57:15.077Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -19,17 +19,17 @@
   },
   "corpus": {
     "measuredThisRun": true,
-    "totalEntries": 200,
-    "scoredEntries": 200,
+    "totalEntries": 210,
+    "scoredEntries": 210,
     "notScored": [],
     "overall": {
       "detection": {
-        "n": 200,
-        "d": 200
+        "n": 210,
+        "d": 210
       },
       "silence": {
-        "n": 200,
-        "d": 200
+        "n": 210,
+        "d": 210
       }
     },
     "byLanguage": [
@@ -47,30 +47,18 @@
       },
       {
         "key": "cpp",
-        "entries": 8,
+        "entries": 10,
         "detection": {
-          "n": 8,
-          "d": 8
+          "n": 10,
+          "d": 10
         },
         "silence": {
-          "n": 8,
-          "d": 8
+          "n": 10,
+          "d": 10
         }
       },
       {
         "key": "csharp",
-        "entries": 20,
-        "detection": {
-          "n": 20,
-          "d": 20
-        },
-        "silence": {
-          "n": 20,
-          "d": 20
-        }
-      },
-      {
-        "key": "go",
         "entries": 21,
         "detection": {
           "n": 21,
@@ -82,27 +70,39 @@
         }
       },
       {
-        "key": "java",
-        "entries": 23,
+        "key": "go",
+        "entries": 22,
         "detection": {
-          "n": 23,
-          "d": 23
+          "n": 22,
+          "d": 22
         },
         "silence": {
-          "n": 23,
-          "d": 23
+          "n": 22,
+          "d": 22
+        }
+      },
+      {
+        "key": "java",
+        "entries": 25,
+        "detection": {
+          "n": 25,
+          "d": 25
+        },
+        "silence": {
+          "n": 25,
+          "d": 25
         }
       },
       {
         "key": "javascript",
-        "entries": 35,
+        "entries": 36,
         "detection": {
-          "n": 35,
-          "d": 35
+          "n": 36,
+          "d": 36
         },
         "silence": {
-          "n": 35,
-          "d": 35
+          "n": 36,
+          "d": 36
         }
       },
       {
@@ -119,38 +119,38 @@
       },
       {
         "key": "php",
-        "entries": 22,
+        "entries": 23,
         "detection": {
-          "n": 22,
-          "d": 22
+          "n": 23,
+          "d": 23
         },
         "silence": {
-          "n": 22,
-          "d": 22
+          "n": 23,
+          "d": 23
         }
       },
       {
         "key": "python",
-        "entries": 31,
+        "entries": 32,
         "detection": {
-          "n": 31,
-          "d": 31
+          "n": 32,
+          "d": 32
         },
         "silence": {
-          "n": 31,
-          "d": 31
+          "n": 32,
+          "d": 32
         }
       },
       {
         "key": "ruby",
-        "entries": 19,
+        "entries": 20,
         "detection": {
-          "n": 19,
-          "d": 19
+          "n": 20,
+          "d": 20
         },
         "silence": {
-          "n": 19,
-          "d": 19
+          "n": 20,
+          "d": 20
         }
       }
     ],
@@ -204,6 +204,18 @@
         }
       },
       {
+        "key": "CWE-208",
+        "entries": 8,
+        "detection": {
+          "n": 8,
+          "d": 8
+        },
+        "silence": {
+          "n": 8,
+          "d": 8
+        }
+      },
+      {
         "key": "CWE-22",
         "entries": 14,
         "detection": {
@@ -213,6 +225,18 @@
         "silence": {
           "n": 14,
           "d": 14
+        }
+      },
+      {
+        "key": "CWE-316",
+        "entries": 2,
+        "detection": {
+          "n": 2,
+          "d": 2
+        },
+        "silence": {
+          "n": 2,
+          "d": 2
         }
       },
       {
@@ -423,14 +447,14 @@
     "byTier": [
       {
         "key": "capability",
-        "entries": 191,
+        "entries": 201,
         "detection": {
-          "n": 191,
-          "d": 191
+          "n": 201,
+          "d": 201
         },
         "silence": {
-          "n": 191,
-          "d": 191
+          "n": 201,
+          "d": 201
         }
       },
       {
@@ -478,12 +502,236 @@
           "session-welcome.js": 3
         }
       },
+      "scanner/src": {
+        "total": 594,
+        "byFile": {
+          "badge.js": 3,
+          "dataflow/cross-service-taint.js": 5,
+          "dataflow/exploit-prover.js": 2,
+          "dataflow/ifds-precise.js": 3,
+          "dataflow/incremental.js": 7,
+          "dataflow/polyglot.js": 2,
+          "dataflow/privacy-taint.js": 1,
+          "dataflow/sanitizer-proof.js": 1,
+          "dataflow/string-domain.js": 2,
+          "history-scan.js": 2,
+          "integrations/index.js": 11,
+          "integrations/tickets.js": 8,
+          "ir/cpp-preprocessor.js": 2,
+          "ir/ir-stats.js": 1,
+          "ir/parser-cpp.js": 6,
+          "ir/parser-cs.js": 2,
+          "ir/parser-go.js": 5,
+          "ir/parser-kt.js": 2,
+          "ir/parser-php.js": 7,
+          "ir/parser-py-cst.js": 1,
+          "ir/parser-py.helper.py": 1,
+          "ir/parser-py.js": 2,
+          "ir/parser-rb.js": 3,
+          "ir/type-stubs.js": 6,
+          "ir/universal-ir.js": 1,
+          "leaderboard.js": 3,
+          "llm-validator/consistency.js": 1,
+          "llm-validator/cost-ceiling.js": 1,
+          "llm-validator/index.js": 4,
+          "llm-validator/redact.js": 2,
+          "lsp/server.js": 3,
+          "mcp/audit.js": 7,
+          "mcp/redact.js": 1,
+          "mcp/server.js": 1,
+          "mcp/tools.js": 7,
+          "poc-video.js": 1,
+          "posture/adversarial-self-test.js": 1,
+          "posture/adversary-agent.js": 5,
+          "posture/agents-memory.js": 8,
+          "posture/ai-code-fingerprint.js": 2,
+          "posture/aibom.js": 3,
+          "posture/api-contract.js": 2,
+          "posture/attack-playbooks.js": 2,
+          "posture/attestation.js": 1,
+          "posture/auditor-walkthrough.js": 2,
+          "posture/auth-posture-import.js": 3,
+          "posture/blast-radius.js": 1,
+          "posture/business-logic.js": 1,
+          "posture/cache-economics.js": 1,
+          "posture/calibration-drift.js": 3,
+          "posture/calibration.js": 1,
+          "posture/claude-authorship.js": 1,
+          "posture/compliance-policy.js": 5,
+          "posture/concurrency-checker.js": 3,
+          "posture/container-runtime.js": 3,
+          "posture/corpus-enroll.js": 2,
+          "posture/cross-lang-graphql.js": 5,
+          "posture/cross-lang-grpc.js": 1,
+          "posture/cross-lang-orm.js": 1,
+          "posture/cross-lang-queues.js": 5,
+          "posture/cross-repo-memory.js": 2,
+          "posture/custom-rules.js": 2,
+          "posture/cve-alert-daemon.js": 6,
+          "posture/cve-lookup.js": 4,
+          "posture/dead-code.js": 2,
+          "posture/dep-add-guard.js": 8,
+          "posture/deploy-platform.js": 1,
+          "posture/deterministic-fix.js": 1,
+          "posture/deterministic.js": 3,
+          "posture/epss.js": 4,
+          "posture/execution-proof.js": 1,
+          "posture/exploitability-probability.js": 3,
+          "posture/feature-flags.js": 3,
+          "posture/federated-learning.js": 7,
+          "posture/findings-memory.js": 1,
+          "posture/fix-history.js": 12,
+          "posture/fix-metrics.js": 1,
+          "posture/fix-plan.js": 1,
+          "posture/fix-style-mirror.js": 3,
+          "posture/fix-verify-loop.js": 2,
+          "posture/fix-verify.js": 1,
+          "posture/flow-narration.js": 2,
+          "posture/grader-calibration.js": 4,
+          "posture/harness-discovery.js": 1,
+          "posture/holdout-eval.js": 3,
+          "posture/iac-reachability.js": 2,
+          "posture/integrity.js": 6,
+          "posture/intent-context.js": 2,
+          "posture/learning.js": 3,
+          "posture/license-attributions.js": 1,
+          "posture/license-graph.js": 3,
+          "posture/license-policy.js": 3,
+          "posture/llm-redteam-prompts.js": 6,
+          "posture/llm-redteam.js": 1,
+          "posture/material-change.js": 1,
+          "posture/mitigation-composite.js": 1,
+          "posture/model-rescan.js": 1,
+          "posture/network-policy-import.js": 3,
+          "posture/poc-generator.js": 3,
+          "posture/poc-inprocess.js": 4,
+          "posture/policy-gate.js": 4,
+          "posture/pqc-migration-plan.js": 1,
+          "posture/pr-augment.js": 1,
+          "posture/pre-incident-archaeology.js": 1,
+          "posture/profile.js": 4,
+          "posture/realtime-cve-monitor.js": 5,
+          "posture/relevance.js": 1,
+          "posture/risk-dollars.js": 4,
+          "posture/root-cause-sweep.js": 1,
+          "posture/router.js": 3,
+          "posture/rule-overrides.js": 5,
+          "posture/rule-pack-signing.js": 8,
+          "posture/rule-synthesis.js": 3,
+          "posture/ruleset-version.js": 3,
+          "posture/runtime-correlation.js": 1,
+          "posture/sbom-diff.js": 2,
+          "posture/sca-policy.js": 3,
+          "posture/sca-upgrade.js": 4,
+          "posture/sca-verdict.js": 1,
+          "posture/scan-checkpoint.js": 2,
+          "posture/secret-live-check.js": 1,
+          "posture/security-trend.js": 1,
+          "posture/semantic-clone.js": 1,
+          "posture/specification-mining.js": 1,
+          "posture/stack-playbook.js": 1,
+          "posture/state-dir.js": 1,
+          "posture/streak.js": 1,
+          "posture/suppressions.js": 4,
+          "posture/telemetry-ingest.js": 3,
+          "posture/test-runner.js": 2,
+          "posture/threat-model-auto.js": 1,
+          "posture/threat-model-grounding.js": 1,
+          "posture/time-to-fix.js": 3,
+          "posture/triage-learning.js": 3,
+          "posture/triage-memory.js": 3,
+          "posture/triage.js": 4,
+          "posture/validator-metrics.js": 3,
+          "posture/verifier-ephemeral.js": 1,
+          "posture/verifier-target.js": 5,
+          "posture/verifier.js": 2,
+          "posture/version.js": 3,
+          "posture/waf-ingest.js": 5,
+          "posture/workflow-installer.js": 2,
+          "pr-comment.js": 1,
+          "report/index.js": 3,
+          "runScan.js": 1,
+          "sandbox/backend-namespace.js": 1,
+          "sast/_secret-entropy.js": 1,
+          "sast/agent-untrusted-flow.js": 2,
+          "sast/authz.js": 2,
+          "sast/cache-poisoning.js": 1,
+          "sast/claude-hook-injection.js": 1,
+          "sast/claude-md-prompt-injection.js": 7,
+          "sast/claude-settings.js": 1,
+          "sast/client-side.js": 3,
+          "sast/cloud-iam.js": 1,
+          "sast/cpp-dataflow.js": 6,
+          "sast/cpp.js": 4,
+          "sast/cross-service.js": 1,
+          "sast/crypto-protocol.js": 18,
+          "sast/csharp-structural.js": 1,
+          "sast/csrf.js": 1,
+          "sast/dapp-frontend.js": 1,
+          "sast/db-taint.js": 2,
+          "sast/defi-deep.js": 2,
+          "sast/env-hygiene.js": 1,
+          "sast/event-entrypoint.js": 2,
+          "sast/fastapi-hardening.js": 2,
+          "sast/file-upload.js": 1,
+          "sast/host-header.js": 1,
+          "sast/iac-terraform.js": 1,
+          "sast/java-bench-extras.js": 8,
+          "sast/java-constant-fold.js": 2,
+          "sast/java-deserialization.js": 2,
+          "sast/java-structural.js": 1,
+          "sast/juliet-shape.js": 1,
+          "sast/k8s-admission.js": 1,
+          "sast/laravel-hardening.js": 1,
+          "sast/llm-app.js": 7,
+          "sast/llm-cost-advisor.js": 1,
+          "sast/llm-owasp.js": 13,
+          "sast/logic.js": 5,
+          "sast/mcp-audit.js": 2,
+          "sast/ml-supply-chain.js": 1,
+          "sast/mobile-manifest.js": 1,
+          "sast/model-load.js": 1,
+          "sast/mutation-xss.js": 1,
+          "sast/null-byte-injection.js": 1,
+          "sast/open-redirect.js": 4,
+          "sast/php.js": 2,
+          "sast/pipeline.js": 1,
+          "sast/post-quantum-crypto.js": 1,
+          "sast/prompt-firewall.js": 1,
+          "sast/rate-limit.js": 2,
+          "sast/response-splitting.js": 3,
+          "sast/rust.js": 1,
+          "sast/sensitive-data-logging.js": 2,
+          "sast/solidity.js": 2,
+          "sast/springboot-hardening.js": 1,
+          "sast/ssrf-cloud-metadata.js": 2,
+          "sast/stored-taint.js": 6,
+          "sast/weak-password-hash.js": 3,
+          "sast/weak-randomness.js": 4,
+          "sast/wrong-context-sanitizer.js": 3,
+          "sast/xss-reflected-multilang.js": 1,
+          "sast/xxe.js": 1,
+          "sast/zip-slip.js": 1,
+          "sca/binary-metadata.js": 6,
+          "sca/container.js": 4,
+          "sca/dep-confusion.js": 3,
+          "sca/import-reachability.js": 1,
+          "sca/install-script-analysis.js": 1,
+          "sca/llm-function-extract.js": 1,
+          "sca/py-package-functions.js": 1,
+          "sca/sarif-ingest.js": 1,
+          "sca/sigstore-verify.js": 7,
+          "sca/vendor-detect.js": 1,
+          "util/untrusted.js": 3
+        }
+      },
       "scripts": {
-        "total": 24,
+        "total": 26,
         "byFile": {
           "_compliance_lib.py": 1,
           "apply-command-trim.mjs": 2,
           "calibration-expand.mjs": 2,
+          "corpus-provenance-check.mjs": 2,
           "detector-fuzz-runner.mjs": 3,
           "ghsa-to-hints.mjs": 3,
           "llm-cost-ceiling.py": 2,
@@ -503,9 +751,9 @@
   "committedInputs": {
     "corpusBaseline": {
       "source": "bench/cve-replay/corpus-baseline.json",
-      "generatedAt": "2026-08-07",
-      "total": 200,
-      "passing": 200
+      "generatedAt": "2026-08-08",
+      "total": 210,
+      "passing": 210
     },
     "proofCorpus": {
       "source": "bench/proof-corpus/results/summary.json",

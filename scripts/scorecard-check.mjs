@@ -19,6 +19,13 @@
 //     bump with no matching scorecard run means the published figures
 //     describe a previous release.
 //   · docs/scorecard.json / docs/SCORECARD.md missing or unparseable → fail.
+//   · docs/scorecard.json corpus.totalEntries must equal the number of entries
+//     actually on disk. This closes a real hole: the version check alone let a
+//     scorecard reporting 200 entries pass while the corpus held 210, because
+//     entries had been added without a version bump. The corpus is the
+//     population every corpus figure is computed over, so a scorecard
+//     describing a different population is not stale in a cosmetic way — its
+//     denominators are wrong.
 //
 // What is a WARNING, not a failure, and why:
 //   · docs/scorecard.json provenance.bundleSha256 vs. the current
@@ -59,6 +66,7 @@ export function evaluateScorecardFreshness({
   scorecardJson,
   scorecardMdPresent,
   currentBundleSha256,
+  actualCorpusEntries = null,
 }) {
   const errors = [];
   const warnings = [];
@@ -102,6 +110,23 @@ export function evaluateScorecardFreshness({
   // block: it means the published figure would silently depend on how busy the
   // machine was when someone last ran it.
   const corpus = scorecardJson && scorecardJson.corpus;
+
+  // The corpus is the POPULATION every corpus rate is computed over. A
+  // scorecard describing a different population has wrong denominators, not
+  // merely a stale timestamp — so this is an error, not a warning. Skipped
+  // when the count could not be determined, because guessing would be worse
+  // than not checking.
+  if (corpus && actualCorpusEntries != null) {
+    const declared = corpus.totalEntries;
+    if (declared !== actualCorpusEntries) {
+      errors.push(
+        `docs/scorecard.json was measured over ${declared} corpus entries, but ${actualCorpusEntries} ` +
+        'are present on disk. Every corpus rate in the scorecard is computed over that population, ' +
+        `so the published denominators describe a corpus that no longer exists. ${REMEDY}`
+      );
+    }
+  }
+
   const notScored = (corpus && Array.isArray(corpus.notScored)) ? corpus.notScored : [];
   if (notScored.length) {
     const named = notScored
@@ -150,12 +175,28 @@ function main() {
     currentBundleSha256 = raw.trim().split(/\s+/)[0] || null;
   } catch { /* bundle not built — nothing to compare against, not an error here */ }
 
+  // Count the corpus the same way the runner enumerates it: a directory is an
+  // entry iff it carries a manifest.json. Counting directories alone would
+  // drift from the runner's own definition and could disagree with it.
+  let actualCorpusEntries = null;
+  try {
+    let n = 0;
+    for (const tier of ['regression', 'capability', 'deep']) {
+      const dir = path.join(REPO, 'bench', 'cve-replay', tier);
+      for (const e of fs.readdirSync(dir)) {
+        if (fs.existsSync(path.join(dir, e, 'manifest.json'))) n++;
+      }
+    }
+    actualCorpusEntries = n;
+  } catch { /* corpus unreadable — skip the check rather than guess */ }
+
   if (!pkgVersion) {
     process.stderr.write('✗ scorecard-check: could not read scanner/package.json version\n');
     process.exit(1);
   }
 
   const result = evaluateScorecardFreshness({
+    actualCorpusEntries,
     pkgVersion,
     scorecardJson,
     scorecardMdPresent,

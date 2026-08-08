@@ -49,7 +49,10 @@ for (const f of files) {
 
 console.log('=== run attestations ===');
 for (const r of runs) {
-  console.log(`  ${r.platform}  node ${r.nodeVersion}  findings=${r.findingCount}  ${r.digest}`);
+  const per = r.digests
+    ? Object.entries(r.digests).map(([k, v]) => `${k}=${v.slice(0, 12)}`).join(' ')
+    : `${r.digest}`;
+  console.log(`  ${r.platform}  node ${r.nodeVersion}  ${per}`);
 }
 
 if (runs.length < 2) {
@@ -72,12 +75,47 @@ if (zero) {
   fail(`${zero.file} reports 0 findings — every machine agrees on an empty set, which proves nothing.`);
 }
 
-const digests = new Set(runs.map(r => r.digest));
-if (digests.size > 1) {
-  fail(
-    `machines disagree — ${digests.size} distinct digests across ${runs.length} runs. `
-    + 'The same commit produced different findings on different machines.',
-  );
+// Compare PER FIXTURE. One combined digest would say "the machines disagree"
+// without saying which layer diverged, and the whole reason a second fixture
+// exists is that the interesting divergence lives in the taint engine and the
+// Python parser rather than in the regex detectors.
+const fixtureNames = [...new Set(runs.flatMap(r => Object.keys(r.digests || {})))].sort();
+if (!fixtureNames.length) {
+  fail('no per-fixture digests found — these attestations predate the multi-fixture gate and cannot be compared');
+}
+for (const name of fixtureNames) {
+  const missing = runs.filter(r => !r.digests || !r.digests[name]);
+  if (missing.length) {
+    fail(`fixture '${name}' is missing from ${missing.map(m => m.platform).join(', ')} — nothing to compare for it`);
+  }
+  const d = new Set(runs.map(r => r.digests[name]));
+  if (d.size > 1) {
+    const detail = runs.map(r => `${r.platform}=${r.digests[name].slice(0, 12)}`).join(' ');
+    fail(
+      `fixture '${name}': machines disagree — ${d.size} distinct digests across ${runs.length} runs (${detail}). `
+      + 'The same commit produced different findings on different machines.',
+    );
+  }
+  const counts = new Set(runs.map(r => r.findingCounts?.[name]));
+  if (counts.size > 1) {
+    fail(`fixture '${name}': finding counts differ across machines (${[...counts].join(', ')})`);
+  }
+  if (runs.some(r => !r.findingCounts?.[name])) {
+    fail(`fixture '${name}' reports 0 findings — every machine agrees on an empty set, which proves nothing.`);
+  }
+}
+
+// The deep fixture is only worth anything if it actually reached the taint
+// engine on EVERY machine. A host where it silently degraded to the syntactic
+// layer would agree with the others for the wrong reason.
+for (const r of runs) {
+  const p = r.parsers?.deep;
+  if (p && !p.includes('IR-TAINT')) {
+    fail(
+      `on ${r.platform} the deep fixture produced no IR-TAINT finding (parsers: ${p.join(', ') || 'none'}) — `
+      + 'it degraded to the syntactic layer there, so its agreement is not evidence about the taint engine.',
+    );
+  }
 }
 
 const canon = new Set(runs.map(r => r.canonicalisation));
@@ -87,6 +125,9 @@ if (canon.size > 1) {
 
 console.log(
   `\n✓ VERIFIED: ${runs.length} runs across ${platforms.size} platforms `
-  + `(${[...platforms].join(', ')}) produced the identical digest ${runs[0].digest} `
-  + `over ${runs[0].findingCount} findings.\n`,
+  + `(${[...platforms].join(', ')}) agreed on every fixture:\n`
+  + fixtureNames.map(n =>
+    `    ${n.padEnd(6)} ${runs[0].digests[n]} over ${runs[0].findingCounts[n]} findings`
+    + `${runs[0].parsers?.[n] ? ` [${runs[0].parsers[n].join('/')}]` : ''}`).join('\n')
+  + '\n',
 );

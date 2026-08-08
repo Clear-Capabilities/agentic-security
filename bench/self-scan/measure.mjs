@@ -8,6 +8,23 @@
 // Per-FILE counts, not one total: a finding moving between files matters even
 // when the total is unchanged.
 //
+// SCOPE CORRECTION (2026-08-08, from an adversarial review of this gate). For a
+// long time the targets were `hooks/` and `scripts/` only — 22 files and 48
+// findings — while `docs/ROADMAP.md` described this as "a per-file precision
+// gate over this repository's own findings". That reads as the repository. It
+// was not: `scanner/src` (383 JS files, i.e. the entire product) was outside
+// the gate, so a new detector could fire arbitrarily across the engine and this
+// bench would stay green and say nothing. A detector added that day did exactly
+// that, and the gate passing told us nothing.
+//
+// `scanner/src` is now a target. WHAT ITS COUNT IS AND IS NOT: a scanner's own
+// source contains sink patterns as DATA — rule tables, catalogs, remediation
+// strings — so a large share of its findings are self-referential rather than
+// real defects. The number is therefore a DRIFT DETECTOR, not a precision
+// figure, and must never be quoted as one. What makes it valuable is exactly
+// what makes the rest of this bench valuable: per-file counts, so a rule that
+// starts firing somewhere new is visible even when the total is unchanged.
+//
 // Coverage note (Phase 2 / task 3, 2026-07-26): `hooks/` and `scripts/` are
 // JS/Python only, so they cannot detect a precision change in any other
 // language's interprocedural analysis. `fixtures/polyglot/` is the only part
@@ -46,7 +63,7 @@ import { runScan } from '../../scanner/src/runScan.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
-const TARGETS = ['hooks', 'scripts'];
+const TARGETS = ['hooks', 'scripts', 'scanner/src'];
 
 function countByFile(scan) {
   const all = [...(scan.findings || []), ...(scan.logicVulns || [])];

@@ -76,6 +76,13 @@ export function costOf({ inputTokens = 0, outputTokens = 0 }, price) {
 export function createCostLedger({ capUsd = null, model = 'unknown', env = process.env } = {}) {
   const price = priceFor(model, env);
   let spentUsd = 0, calls = 0, refusals = 0;
+  // How much of `spentUsd` came from ESTIMATES rather than reported usage.
+  // Tracked separately because the two are not the same kind of number: the
+  // estimate charges the full permitted output length, which most replies
+  // never reach, so a ledger fed only estimates reports an upper bound. That
+  // is fine for ENFORCEMENT (it can only stop early, never late) and wrong for
+  // REPORTING. Callers get told which they are looking at.
+  let estimatedUsd = 0, estimatedCalls = 0;
 
   const enforcing = capUsd != null;
 
@@ -120,13 +127,26 @@ export function createCostLedger({ capUsd = null, model = 'unknown', env = proce
       return { ok: true };
     },
 
-    /** Record actual usage after a call. */
-    record({ inputTokens = 0, outputTokens = 0 } = {}) {
+    /**
+     * Record usage after a call.
+     * @param {object} usage {inputTokens, outputTokens}
+     * @param {object} [opts]
+     * @param {boolean} [opts.measured] true when the figures came from the
+     *   provider's own usage report; false when they are our pre-call
+     *   estimate. Defaults to false — the conservative reading, so a caller
+     *   that forgets to say cannot accidentally upgrade an estimate into a
+     *   measurement.
+     */
+    record({ inputTokens = 0, outputTokens = 0 } = {}, { measured = false } = {}) {
       calls++;
       const c = costOf({ inputTokens, outputTokens }, price);
       // Unpriceable usage is not free. With no cap it is simply not tracked;
       // with a cap, `canAfford` already refused, so this branch cannot spend.
       if (c != null) spentUsd += c;
+      if (!measured) {
+        estimatedCalls++;
+        if (c != null) estimatedUsd += c;
+      }
       return spentUsd;
     },
 
@@ -142,6 +162,12 @@ export function createCostLedger({ capUsd = null, model = 'unknown', env = proce
         remainingUsd: enforcing ? Number(Math.max(0, capUsd - spentUsd).toFixed(6)) : null,
         calls,
         refusals,
+        // Disclosure, not decoration. `spentUsd` is an UPPER BOUND to the
+        // extent these are non-zero, and a reader has no way to know that
+        // without being told.
+        estimatedCalls,
+        estimatedUsd: Number(estimatedUsd.toFixed(6)),
+        fullyMeasured: estimatedCalls === 0,
       };
     },
   };
@@ -153,10 +179,21 @@ export function renderCostCeiling(s) {
   if (!s.priceable) {
     return `LLM cost ceiling: ENFORCED but model '${s.model}' is unpriceable — ${s.refusals} call(s) refused, nothing spent.`;
   }
-  const base = `LLM spend $${s.spentUsd.toFixed(4)} of $${s.capUsd.toFixed(4)} cap across ${s.calls} call(s)`;
-  return s.refusals
-    ? `${base}; ${s.refusals} call(s) REFUSED at the ceiling — those findings are unvalidated, not validated.`
-    : `${base}.`;
+  // Say "at most" whenever any part of the figure is an estimate. The word is
+  // the whole point: without it an upper bound reads as a measurement.
+  const qualifier = s.fullyMeasured ? '' : 'at most ';
+  const base = `LLM spend ${qualifier}$${s.spentUsd.toFixed(4)} of $${s.capUsd.toFixed(4)} cap across ${s.calls} call(s)`;
+  const parts = [base];
+  if (!s.fullyMeasured) {
+    parts.push(
+      `${s.estimatedCalls} of those call(s) reported no token usage, so their cost is ESTIMATED at the `
+      + 'full permitted output length — the true spend is lower',
+    );
+  }
+  if (s.refusals) {
+    parts.push(`${s.refusals} call(s) REFUSED at the ceiling — those findings are unvalidated, not validated`);
+  }
+  return parts.join('; ') + '.';
 }
 
 export const _internals = { PRICES };

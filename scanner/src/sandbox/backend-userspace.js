@@ -73,6 +73,10 @@ export function runUserspace(argv, {
     {
       encoding: 'utf8',
       timeout: timeoutMs,
+      // Match the namespace backend: SIGKILL cannot be ignored, SIGTERM can.
+      // A payload that installs a SIGTERM handler would otherwise outlive its
+      // own budget while the caller is told it timed out.
+      killSignal: 'SIGKILL',
       maxBuffer,
       cwd: resolvedRoot,
       env: buildConfinedEnv({ root: resolvedRoot, env }),

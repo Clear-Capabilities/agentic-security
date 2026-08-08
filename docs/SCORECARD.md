@@ -10,12 +10,12 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.132.0 |
-| Bundle SHA-256 | `a1f581521eaab4f89f26aa9f06af557e9443dbea7a8411da5ecd904f3b94acd3` |
-| Commit | `2af3c309a75aa63d2e14063a586b9da6abe5795c` |
+| Bundle SHA-256 | `b520ed6c3ce7942b89f8f8bc1f66228e401b86cb029daeeaca12938f68499fe0` |
+| Commit | `ca3765c90ee5a01fa61d871a85307a3cac996e97` |
 | Worktree at measurement time | clean |
 | Node | v24.16.0 |
-| Corpus entries | 200 (200 scored) |
-| Generated (UTC) | 2026-08-07T21:41:18.353Z |
+| Corpus entries | 210 (210 scored) |
+| Generated (UTC) | 2026-08-08T02:57:15.077Z |
 
 ## What these numbers are, and what they are not
 
@@ -54,8 +54,8 @@ cannot defend would cost more credibility than the number is worth.
 
 | Population | Detected / correctly silent |
 | --- | --- |
-| Vulnerable fixtures (`pre/`) — detection | 200/200 (100.0%) |
-| Fixed counterparts (`post/`) — correct silence | 200/200 (100.0%) |
+| Vulnerable fixtures (`pre/`) — detection | 210/210 (100.0%) |
+| Fixed counterparts (`post/`) — correct silence | 210/210 (100.0%) |
 
 All corpus entries scored; no entry was excluded.
 
@@ -64,15 +64,15 @@ All corpus entries scored; no entry was excluded.
 | Language | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
 | c | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
-| cpp | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| csharp | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
-| go | 21 | 21/21 (100.0%) | 21/21 (100.0%) |
-| java | 23 | 23/23 (100.0%) | 23/23 (100.0%) |
-| javascript | 35 | 35/35 (100.0%) | 35/35 (100.0%) |
+| cpp | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
+| csharp | 21 | 21/21 (100.0%) | 21/21 (100.0%) |
+| go | 22 | 22/22 (100.0%) | 22/22 (100.0%) |
+| java | 25 | 25/25 (100.0%) | 25/25 (100.0%) |
+| javascript | 36 | 36/36 (100.0%) | 36/36 (100.0%) |
 | kotlin | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
-| php | 22 | 22/22 (100.0%) | 22/22 (100.0%) |
-| python | 31 | 31/31 (100.0%) | 31/31 (100.0%) |
-| ruby | 19 | 19/19 (100.0%) | 19/19 (100.0%) |
+| php | 23 | 23/23 (100.0%) | 23/23 (100.0%) |
+| python | 32 | 32/32 (100.0%) | 32/32 (100.0%) |
+| ruby | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
 
 ### By CWE
 
@@ -82,7 +82,9 @@ All corpus entries scored; no entry was excluded.
 | CWE-120 | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 | CWE-1321 | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 | CWE-1333 | 7 | 7/7 (100.0%) | 7/7 (100.0%) |
+| CWE-208 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-22 | 14 | 14/14 (100.0%) | 14/14 (100.0%) |
+| CWE-316 | 2 | 2/2 (100.0%) | 2/2 (100.0%) |
 | CWE-327 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-329 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-338 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
@@ -105,7 +107,7 @@ All corpus entries scored; no entry was excluded.
 
 | Tier | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
-| capability | 191 | 191/191 (100.0%) | 191/191 (100.0%) |
+| capability | 201 | 201/201 (100.0%) | 201/201 (100.0%) |
 | deep | 6 | 6/6 (100.0%) | 6/6 (100.0%) |
 | regression | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 
@@ -120,15 +122,16 @@ releases is a real change in what the engine reports on unchanged code.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 24 |
-| `scripts` | 24 |
+| `scanner/src` | 594 |
+| `scripts` | 26 |
 | `polyglot` fixture (expected 0) | 0 |
 
 Per-file counts are in `docs/scorecard.json`.
 
 ## Committed artifacts referenced (not re-run by this command)
 
-- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-08-07):
-  200/200 entries recorded as passing. The gate
+- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-08-08):
+  210/210 entries recorded as passing. The gate
   `npm run bench:cve-replay:check` fails the build on any drift from it.
   The rates above are computed from this run, not from this file.
 - **Third-party repository run** (*committed artifact*, `bench/proof-corpus/results/summary.json`,

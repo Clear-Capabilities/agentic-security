@@ -128,3 +128,65 @@ test('the built-in price table is small and dated on purpose', () => {
   assert.ok(Object.keys(_internals.PRICES).length <= 3,
     'the built-in table grew — price data belongs with the operator, not the engine');
 });
+
+// --- measured vs estimated ------------------------------------------------
+//
+// The defect these close, found by adversarial review: `callEndpoint` returned
+// only {ok, text}, discarding the provider's usage report, so the ledger ALWAYS
+// booked the pre-call worst case — full max_tokens of output, which most
+// replies never reach — while `renderCostCeiling` printed it as "LLM spend $X".
+// An upper bound presented as a measurement.
+
+test('an estimated call is disclosed as an upper bound, not as spend', () => {
+  const l = createCostLedger({ capUsd: 10, model: MODEL });
+  l.record({ inputTokens: 1000, outputTokens: 512 }, { measured: false });
+  const s = l.state();
+  assert.equal(s.fullyMeasured, false);
+  assert.equal(s.estimatedCalls, 1);
+  assert.ok(s.estimatedUsd > 0);
+  const line = renderCostCeiling(s);
+  assert.match(line, /at most/, 'an estimated figure must not read as a measurement');
+  assert.match(line, /ESTIMATED at the full permitted output length/);
+  assert.match(line, /true spend is lower/);
+});
+
+test('a fully measured ledger says so and drops the qualifier', () => {
+  const l = createCostLedger({ capUsd: 10, model: MODEL });
+  l.record({ inputTokens: 1000, outputTokens: 40 }, { measured: true });
+  const s = l.state();
+  assert.equal(s.fullyMeasured, true);
+  assert.equal(s.estimatedCalls, 0);
+  assert.equal(s.estimatedUsd, 0);
+  const line = renderCostCeiling(s);
+  assert.doesNotMatch(line, /at most/);
+  assert.doesNotMatch(line, /ESTIMATED/);
+});
+
+test('one estimated call taints the whole figure', () => {
+  // Mixing measured and estimated yields a number that is still an upper
+  // bound, so the qualifier must survive the majority being measured.
+  const l = createCostLedger({ capUsd: 10, model: MODEL });
+  for (let i = 0; i < 9; i++) l.record({ inputTokens: 100, outputTokens: 10 }, { measured: true });
+  l.record({ inputTokens: 100, outputTokens: 512 }, { measured: false });
+  const s = l.state();
+  assert.equal(s.fullyMeasured, false);
+  assert.equal(s.estimatedCalls, 1);
+  assert.match(renderCostCeiling(s), /at most/);
+});
+
+test('record() defaults to estimated when the caller does not say', () => {
+  // The conservative default: forgetting the flag must not silently upgrade an
+  // estimate into a measurement.
+  const l = createCostLedger({ capUsd: 10, model: MODEL });
+  l.record({ inputTokens: 100, outputTokens: 10 });
+  assert.equal(l.state().fullyMeasured, false);
+});
+
+test('measured usage still enforces the cap', () => {
+  // Disclosure must not weaken enforcement.
+  const price = priceFor(MODEL, {});
+  const call = { inputTokens: 1_000_000, outputTokens: 0 };
+  const l = createCostLedger({ capUsd: costOf(call, price) * 1.5, model: MODEL });
+  l.record(call, { measured: true });
+  assert.equal(l.canAfford(call).ok, false);
+});

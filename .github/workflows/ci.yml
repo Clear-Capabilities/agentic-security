@@ -121,6 +121,15 @@ jobs:
         run: npm run bench:cve-replay:check
         working-directory: scanner
 
+      # Reports the corpus's provenance mix on every run — 98% self-authored
+      # synthetic fixtures — and fails when a commit lands a detector together
+      # with the corpus entries exercising it. Keeping the composition in the
+      # log is the point: a detection rate at the ceiling means something very
+      # different for a self-authored corpus than for a sampled one.
+      - name: Corpus provenance (composition + detector/entry coupling)
+        run: npm run corpus:provenance
+        working-directory: scanner
+
   # R4 — determinism as a contract, cross-machine half.
   #
   # The attestation module already proves that emission order, timestamps and

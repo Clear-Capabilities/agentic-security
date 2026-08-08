@@ -29,6 +29,14 @@
 // costs triage time; one that misses real vulnerabilities costs a breach. Only
 // the second gates routing.
 
+// STATUS — MECHANISM ONLY. Nothing in `src/` or `bin/` constructs a ledger, and
+// nothing calls `record()`: there is no adjudication source comparing a cheap
+// model's verdicts against a trusted model's, so no class ever accumulates
+// evidence. The consequence is benign, because the design fails closed — with
+// no observations every class stays on the stronger model — but this is a
+// mechanism waiting for data, not a working routing capability. Do not describe
+// it as one until something feeds it.
+
 import { wilsonInterval } from './calibration.js';
 
 // The default bar a cheap model must clear: its true miss rate must be below

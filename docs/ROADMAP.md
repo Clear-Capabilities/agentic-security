@@ -21,9 +21,12 @@ engine — 110+ SAST modules, a nine-language IR, an IFDS/k-CFA taint engine —
 behind three gates that already run on every change:
 
 - a **210-entry regression corpus**, baseline-gated, each entry proven to fail
-  without its fix;
-- a **per-file precision gate** over this repository's own findings;
-- **held-out calibration** with byte-identical deterministic output.
+  without its fix — and **98% self-authored synthetic fixtures**, so it is a
+  regression net, not a recall measurement (see "What the gates do not prove");
+- a **per-file drift gate** over this repository's own source — 240 files
+  across `hooks/`, `scripts/` and `scanner/src`;
+- **held-out calibration** with deterministic output, verified byte-identical
+  across two operating systems in CI.
 
 That is the moat. This roadmap does not chase orchestration parity. It doubles
 down on *provable, measurable, reproducible* security — claims a model-call
@@ -35,6 +38,37 @@ field is genuinely ahead: **runtime proof of exploitability** and
 
 Be the only harness that can state its false-positive rate, prove a finding by
 execution, and guarantee the same answer twice.
+
+**Two of those three are met today; the first is not.** Findings can be proven
+by execution (R2), and the same answer twice is verified across two operating
+systems in CI (R4). Stating a false-positive rate requires a labelled
+real-world population that does not exist yet — `docs/SCORECARD.md` declines to
+publish an F1 for exactly that reason. Until that population is acquired, this
+line is a goal, not a description.
+
+### What the gates do not prove
+
+Written down because an adversarial review of these artifacts found the claims
+above outrunning them, and a reader deserves the limits without having to
+derive them.
+
+- **The corpus is fitted to the detectors it measures.** 98% of entries are
+  self-authored synthetic fixtures; none come from the "disclosed PoC" tier
+  `bench/cve-replay/CONTRIBUTING.md` calls highest-signal. An entry is admitted
+  only once it scores, so the detection rate sits at the ceiling **by
+  construction**. `npm run corpus:provenance` prints the composition and fails
+  a commit that lands a detector together with the entries exercising it —
+  which stops the loop tightening, but does not make the corpus independent.
+  Only an external, third-party-labelled population would.
+- **The drift gate is not a precision measurement.** A scanner's own source
+  contains sink patterns as data, so many of its 642 findings are
+  self-referential. It detects movement; it does not score correctness.
+- **Determinism is proven over two fixtures, not over the engine.** One
+  exercises the regex/structural layer, one the interprocedural taint engine
+  and the Python parser. SCA is deliberately excluded because it depends on a
+  network cache. A determinism bug in an unexercised path would not be caught.
+- **The sandbox bounds filesystem and network, and now bounds runtime only
+  because a CI failure exposed that it did not.** See R1.
 
 ---
 
@@ -331,7 +365,13 @@ existing sink-driven taint. Composes directly with R6.
   on the worst-case estimate BEFORE each call, one ledger per batch, and it stops
   rather than degrading quality to fit a budget. An unpriceable model with a cap
   set refuses every call rather than spending unmetered.
-- **R13. Multi-model routing with measured trust.** **Landed** —
+- **R13. Multi-model routing with measured trust.** **Mechanism landed; no
+  observation pipeline.** `createTrustLedger` is constructed nowhere in `src/`
+  or `bin/`, and nothing calls `record()` — there is no adjudication source
+  comparing a cheap model's output against a trusted one, and building that is
+  the actual remaining work. The consequence is benign (fail-closed: with no
+  evidence, nothing is ever downgraded) but it is not a working capability, and
+  calling it landed overstated it. The module is —
   `posture/model-trust.js`. A class is downgraded only once its miss rate clears a
   Wilson 95% *upper* bound; the bound rather than the point estimate is the whole
   idea, since 0-misses-in-5 looks perfect and is consistent with a model that

@@ -303,6 +303,19 @@ export function runNamespace(argv, {
       {
         encoding: 'utf8',
         timeout: timeoutMs,
+        // SIGKILL, not the SIGTERM default, and this is the whole reason the
+        // timeout did not work here. The direct child is pid 1 of a new PID
+        // namespace (`--pid --fork`), and the kernel does not deliver
+        // default-action signals to a namespace's pid 1 from outside it — a
+        // process with no handler installed for SIGTERM simply does not die.
+        // SIGKILL is the one signal that cannot be ignored or blocked, so it
+        // is the only signal that can bound a payload here.
+        //
+        // Found by CI, not by reasoning: the first Linux run of the tree-kill
+        // test recorded duration_ms 30057 against a 1200 ms budget with the
+        // payload run to completion. The comment above this function used to
+        // claim the opposite.
+        killSignal: 'SIGKILL',
         maxBuffer,
         cwd: resolvedRoot,
         env: {

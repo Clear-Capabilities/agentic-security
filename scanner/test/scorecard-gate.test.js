@@ -69,3 +69,50 @@ test('scorecard-gate — bundle unbuilt (no dist) → does not warn or fail on t
   assert.equal(r.ok, true);
   assert.deepEqual(r.warnings, []);
 });
+
+// --- corpus population ----------------------------------------------------
+//
+// The hole these close, found by adversarial review of a green gate: the
+// version check alone let a scorecard reporting 200 corpus entries pass while
+// the corpus held 210. Entries had been added without a version bump, so
+// nothing noticed. Every corpus rate is computed over that population, so the
+// published denominators described a corpus that no longer existed.
+
+const withCorpus = (total, extra = {}) => baseInputs({
+  scorecardJson: {
+    provenance: { engineVersion: '1.2.3', bundleSha256: 'abc123' },
+    corpus: { totalEntries: total, scoredEntries: total, notScored: [] },
+  },
+  ...extra,
+});
+
+test('scorecard-gate — corpus grew since the scorecard was measured → FAIL', () => {
+  const r = evaluateScorecardFreshness({ ...withCorpus(200), actualCorpusEntries: 210 });
+  assert.equal(r.ok, false, 'a scorecard measured over a different population must not publish');
+  assert.ok(r.errors.some(e => /200 corpus entries, but 210/.test(e)), r.errors.join('; '));
+});
+
+test('scorecard-gate — corpus shrank since the scorecard was measured → FAIL', () => {
+  // Entries deleted without re-measuring is the same defect in the other
+  // direction, and it inflates every rate rather than deflating it.
+  const r = evaluateScorecardFreshness({ ...withCorpus(210), actualCorpusEntries: 200 });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some(e => /210 corpus entries, but 200/.test(e)));
+});
+
+test('scorecard-gate — corpus population matches → pass', () => {
+  const r = evaluateScorecardFreshness({ ...withCorpus(210), actualCorpusEntries: 210 });
+  assert.equal(r.ok, true, r.errors.join('; '));
+});
+
+test('scorecard-gate — uncountable corpus skips the check rather than guessing', () => {
+  // A wrong guess would either block every release or silently pass, and both
+  // are worse than declining to check.
+  const r = evaluateScorecardFreshness({ ...withCorpus(200), actualCorpusEntries: null });
+  assert.equal(r.ok, true);
+});
+
+test('scorecard-gate — a scorecard with no corpus section is not failed by this check', () => {
+  const r = evaluateScorecardFreshness({ ...baseInputs(), actualCorpusEntries: 210 });
+  assert.equal(r.ok, true);
+});

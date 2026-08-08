@@ -18,16 +18,36 @@
 //     PoC that RAN and produced the marker yields `execution-proven`;
 //     `attachProofTier` enforces that independently of anything here.
 //
-// BOUNDED. `maxCandidates` caps how many findings are proved in one scan, and
-// the cap is REPORTED rather than applied silently — a scan that quietly proved
-// the first N findings and said nothing would look like a scan that found only
-// N provable ones.
+// BOUNDED TWICE, BECAUSE ONE BOUND WAS NOT ENOUGH. `maxCandidates` caps how
+// many findings are proved in one scan, and the cap is REPORTED rather than
+// applied silently — a scan that quietly proved the first N findings and said
+// nothing would look like a scan that found only N provable ones.
+//
+// A count cap alone bounds nothing in time, though, and a per-run timeout is
+// only as good as the backend's ability to enforce it — which CI proved is not
+// something to take on faith (the namespace backend's timeout did not stop a
+// payload at all until `killSignal: 'SIGKILL'` landed). So there is also an
+// AGGREGATE wall-clock budget checked between candidates. It cannot interrupt a
+// call already in flight (`spawnSync` blocks the thread), but it bounds the
+// total and stops the loop rather than letting a slow host multiply one bad
+// case by `maxCandidates`.
+//
+// WHAT THIS ACTUALLY EXECUTES, STATED PLAINLY. The generated PoC does
+// `import handler from './<target file>'`, and an ES module import runs the
+// target file's ENTIRE TOP-LEVEL BODY before any handler is called. So enabling
+// this on a repository you do not trust executes that repository's top-level
+// code. Confinement contains what it can — no filesystem writes outside the
+// sandbox root, no network egress, both verified by executing tests on each
+// backend — but CPU and wall-clock are bounded only by the budgets here. Do not
+// enable this on untrusted code without accepting that.
 
 import { synthesizeInProcessPoc } from './poc-inprocess.js';
 import { proveFinding } from './execution-proof.js';
 import { sandboxAvailable } from '../sandbox/index.js';
 
 const DEFAULT_MAX = 25;
+// Aggregate wall-clock across all candidates in one scan.
+const DEFAULT_TOTAL_BUDGET_MS = 120000;
 
 export function proveEnabled(env = process.env) {
   return env.AGENTIC_SECURITY_PROVE === '1';
@@ -40,11 +60,12 @@ export function proveEnabled(env = process.env) {
  * @returns {object} a summary suitable for surfacing on the scan
  */
 export async function annotateExecutionProofs(findings, {
-  fileContents = null, maxCandidates = DEFAULT_MAX, timeoutMs = 10000, env = process.env,
+  fileContents = null, maxCandidates = DEFAULT_MAX, timeoutMs = 10000,
+  totalBudgetMs = DEFAULT_TOTAL_BUDGET_MS, env = process.env, now = Date.now,
 } = {}) {
   const summary = {
     enabled: false, attempted: 0, proven: 0, failed: 0, inconclusive: 0,
-    skipped: 0, capped: 0, reason: null,
+    skipped: 0, capped: 0, budgetExhausted: 0, reason: null,
   };
   if (!Array.isArray(findings) || !findings.length) return summary;
   if (!proveEnabled(env)) {
@@ -79,7 +100,15 @@ export async function annotateExecutionProofs(findings, {
     candidates.length = maxCandidates;
   }
 
+  const startedAt = now();
   for (const c of candidates) {
+    // Checked BEFORE each call, since a call in flight cannot be interrupted.
+    // Reported, never silent: findings left unproven because the budget ran out
+    // are a different statement from findings that could not be proved.
+    if (now() - startedAt >= totalBudgetMs) {
+      summary.budgetExhausted = candidates.length - summary.attempted;
+      break;
+    }
     summary.attempted++;
     // The PoC imports the vulnerable file, so it must exist in the sandbox
     // root alongside it.
@@ -109,7 +138,11 @@ export function renderProofSummary(s) {
   if (s.failed) bits.push(`${s.failed} ran without demonstrating the bug (triage signal, NOT a false-positive verdict)`);
   if (s.inconclusive) bits.push(`${s.inconclusive} inconclusive`);
   if (s.capped) bits.push(`${s.capped} eligible finding(s) NOT attempted (per-scan cap)`);
+  if (s.budgetExhausted) {
+    bits.push(`${s.budgetExhausted} eligible finding(s) NOT attempted (aggregate time budget exhausted) — `
+      + 'unproven here means unattempted, not unprovable');
+  }
   return bits.join('; ') + '.';
 }
 
-export const _internals = { DEFAULT_MAX };
+export const _internals = { DEFAULT_MAX, DEFAULT_TOTAL_BUDGET_MS };

@@ -39,8 +39,69 @@ const { runScan } = await import(path.join(REPO, 'scanner', 'src', 'runScan.js')
 const { normalizeFindings } = await import(path.join(REPO, 'scanner', 'src', 'report', 'index.js'));
 const { computeRunAttestation } = await import(path.join(REPO, 'scanner', 'src', 'posture', 'attestation.js'));
 
-const { scan } = await runScan(FIXTURE);
-const findings = normalizeFindings(scan);
+// TWO fixtures, deliberately. The first version of this gate attested only the
+// dependency-free JS fixture, whose findings come entirely from regex and
+// structural detectors — the layer that essentially cannot vary between
+// machines. Adversarial review caught that: the gate proved determinism over
+// the subset chosen for having no variance, which is close to proving nothing.
+//
+// `fixture-deep` exercises the layers that genuinely could differ: the
+// interprocedural taint engine (iteration order over Maps/Sets, cross-file
+// walk) and the Python parser (stdlib `ast` subprocess vs. the regex fallback).
+// The Python case is pointed: the two parsers produce different `parser`
+// attribution, and `attestation.js` excludes `parser` from canonicalisation for
+// that reason — so this fixture asks the sharper question of whether the
+// FINDINGS agree even when the machinery underneath them may not.
+//
+// A per-fixture digest, not one combined one, so a divergence names the layer.
+const FIXTURES = [
+  { name: 'basic', dir: FIXTURE, deep: false },
+  { name: 'deep', dir: path.join(REPO, 'bench', 'determinism', 'fixture-deep'), deep: true },
+];
+
+async function attestFixture({ dir, deep }) {
+  const saved = { d: process.env.AGENTIC_SECURITY_DEEP, c: process.env.AGENTIC_SECURITY_DEEP_IN_CI };
+  if (deep) {
+    // Both are required: the engine auto-disables deep mode under CI unless the
+    // second is set too, and a silent fall back to the syntactic layer would
+    // make this fixture agree for the wrong reason.
+    process.env.AGENTIC_SECURITY_DEEP = '1';
+    process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+  }
+  try {
+    const { scan } = await runScan(dir);
+    return normalizeFindings(scan);
+  } finally {
+    if (deep) {
+      if (saved.d === undefined) delete process.env.AGENTIC_SECURITY_DEEP;
+      else process.env.AGENTIC_SECURITY_DEEP = saved.d;
+      if (saved.c === undefined) delete process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+      else process.env.AGENTIC_SECURITY_DEEP_IN_CI = saved.c;
+    }
+  }
+}
+
+const digests = {};
+const findingCounts = {};
+const parsers = {};
+for (const f of FIXTURES) {
+  const found = await attestFixture(f);
+  const a = computeRunAttestation({
+    findings: found,
+    engineVersion: PKG_VERSION,
+    rulesetVersion: 'fixture-pinned',
+    bundleSha256: 'fixture-pinned',
+    root: f.dir,
+    sign: false,
+  });
+  digests[f.name] = a.digest;
+  findingCounts[f.name] = a.findingCount;
+  // Recorded so a reader can confirm the deep fixture really went through the
+  // taint engine rather than silently falling back to the syntactic layer.
+  parsers[f.name] = [...new Set(found.map(x => x.parser).filter(Boolean))].sort();
+}
+
+const findings = await attestFixture(FIXTURES[0]);
 
 const att = computeRunAttestation({
   findings,
@@ -57,6 +118,29 @@ const att = computeRunAttestation({
 
 // A digest over zero findings is identical on every machine for the wrong
 // reason. Fail loudly rather than reporting a vacuous pass.
+for (const [name, n] of Object.entries(findingCounts)) {
+  if (n === 0) {
+    process.stderr.write(
+      `ERROR: determinism fixture '${name}' produced NO findings. An empty finding set makes every `
+      + 'machine agree trivially, which is not evidence of anything. Fix the fixture or the '
+      + 'detectors before trusting this job.\n',
+    );
+    process.exit(2);
+  }
+}
+
+// The deep fixture must actually reach the taint engine. If it degrades to the
+// syntactic layer the digests would still match across machines — for the wrong
+// reason, and the gate would be back to proving nothing.
+if (!parsers.deep.includes('IR-TAINT')) {
+  process.stderr.write(
+    `ERROR: the deep determinism fixture did not produce any IR-TAINT finding (parsers: `
+    + `${parsers.deep.join(', ') || 'none'}). It has fallen back to the syntactic layer, so it is no `
+    + 'longer testing the layer it exists to test.\n',
+  );
+  process.exit(2);
+}
+
 if (att.findingCount === 0) {
   process.stderr.write(
     'ERROR: the determinism fixture produced NO findings. An empty finding set '
@@ -69,6 +153,9 @@ if (att.findingCount === 0) {
 const out = {
   digest: att.digest,
   findingCount: att.findingCount,
+  digests,
+  findingCounts,
+  parsers,
   engineVersion: att.engineVersion,
   canonicalisation: att.canonicalisation,
   platform: `${process.platform}-${process.arch}`,
@@ -78,7 +165,8 @@ const out = {
 if (process.argv.includes('--json')) {
   process.stdout.write(JSON.stringify(out, null, 2) + '\n');
 } else {
-  process.stdout.write(`digest:       ${out.digest}\n`);
-  process.stdout.write(`findingCount: ${out.findingCount}\n`);
+  for (const name of Object.keys(digests)) {
+    process.stdout.write(`${name.padEnd(6)} digest: ${digests[name]}  (${findingCounts[name]} findings, ${parsers[name].join('/')})\n`);
+  }
   process.stdout.write(`platform:     ${out.platform}  node ${out.nodeVersion}\n`);
 }

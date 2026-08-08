@@ -280,23 +280,27 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     assert.equal(r.status, 'timeout');
   });
 
-  test('KNOWN GAP: the timeout does not stop the payload on this backend either', () => {
-    // This asserted the OPPOSITE until CI ran it, and CI falsified it. The
-    // reasoned expectation was that because the direct child is pid 1 of a new
-    // PID namespace (`--pid --fork`), killing it would reap everything inside —
-    // "better than the userspace backend". It does not.
+  test('BAD: a wall-clock overrun takes the whole process tree with it', () => {
+    // HISTORY, because this assertion has now been wrong in both directions
+    // and the record is the useful part.
     //
-    // What the first CI run actually showed, with timeoutMs 1200 against a
-    // payload that sleeps 30s: duration_ms 30057, and the backgrounded
-    // grandchild's marker already present the moment the call returned. So the
-    // payload ran to completion. The timeout does not merely fail to kill the
-    // TREE here; it does not stop the direct child promptly either — the call
-    // blocks until the command finishes on its own.
+    // It first asserted tree-kill on the reasoning that the direct child is
+    // pid 1 of a new PID namespace (`--pid --fork`), so killing it should reap
+    // the namespace. CI falsified that: duration_ms 30057 against a 1200 ms
+    // budget, payload run to completion. The assertion was flipped to pin the
+    // gap.
     //
-    // That is a materially worse limitation than was documented, and it is why
-    // this test now pins the real behaviour. If a future change makes the
-    // timeout actually bite, this test fails — and the guides must be corrected
-    // in the same commit, in the other direction.
+    // The ROOT CAUSE turned out to be the signal, not the namespace: node's
+    // spawnSync defaults to SIGTERM, and the kernel does not deliver
+    // default-action signals to a PID namespace's pid 1 from outside it — with
+    // no handler installed, SIGTERM is simply dropped. The backend now passes
+    // `killSignal: 'SIGKILL'`, which cannot be ignored, and killing pid 1 of a
+    // PID namespace reaps every process inside it.
+    //
+    // So this asserts the strong property again. It is UNCONFIRMED until a CI
+    // log shows it; if it fails once more, the fix is wrong and both this test
+    // and the guides must move back — do not weaken the assertion to make it
+    // green.
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-tree-'));
     const marker = path.join(root, 'survivor.marker');
     const budgetMs = 1200;
@@ -306,13 +310,16 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
       { root, timeoutMs: budgetMs });
     const elapsed = Date.now() - started;
 
-    assert.equal(r.timedOut, true, 'the result should still REPORT a timeout');
-    assert.ok(elapsed > budgetMs * 3,
-      `the call returned in ${elapsed}ms against a ${budgetMs}ms budget — if the timeout now stops the `
-      + 'payload promptly, that is an improvement, and sandbox/CLAUDE.md plus backend-namespace.js must '
-      + 'stop documenting this gap');
-    assert.equal(fs.existsSync(marker), true,
-      'the backgrounded grandchild did NOT survive — tree termination now works; update the guides');
+    assert.equal(r.status, 'timeout');
+    assert.ok(elapsed < 8000,
+      `the call took ${elapsed}ms against a ${budgetMs}ms budget — SIGKILL did not bound the payload, `
+      + 'so the timeout still provides no runtime bound and the guides must say so');
+    assert.equal(fs.existsSync(marker), false, 'precondition: nothing written at return time');
+    // Wait past the survivor's own sleep, then look again.
+    execFileSync('/bin/sleep', ['4']);
+    assert.equal(fs.existsSync(marker), false,
+      'a backgrounded grandchild OUTLIVED the SIGKILL of its PID-namespace init — tree termination '
+      + 'does not hold, and sandbox/CLAUDE.md plus backend-namespace.js must document that');
   });
 });
 
