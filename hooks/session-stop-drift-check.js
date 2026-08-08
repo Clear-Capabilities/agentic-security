@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Stop hook: at session end, diff the working tree against HEAD and surface
-// any new modules under scanner/src/{sast,posture,dataflow}/ that aren't yet
-// mentioned in the relevant subdir CLAUDE.md.
+// any new modules under scanner/src/{sast,posture,dataflow,discovery}/ that
+// aren't yet mentioned in the relevant subdir CLAUDE.md.
 //
 // The point isn't to block the session — it's to prevent the "ship a module,
 // forget to index it" failure that the dead-modules guard only catches at
@@ -34,6 +34,7 @@ const WATCHED = [
   ['scanner/src/posture/',  'scanner/src/posture/CLAUDE.md'],
   ['scanner/src/dataflow/', 'scanner/src/dataflow/CLAUDE.md'],
   ['scanner/src/mcp/',      'scanner/src/mcp/CLAUDE.md'],
+  ['scanner/src/discovery/', 'scanner/src/discovery/CLAUDE.md'],
 ];
 
 function gitNewFiles() {

@@ -231,5 +231,6 @@ Map the choice to the corresponding flag and run it. This keeps the full surface
 | `--baseline` | Set / view / refresh the scan baseline |
 | `--archaeology` | Historical analysis — when was each line of code authored, by whom, against which prompt |
 | `--scanner-meta` | Scanner self-test / version diff / concurrency check / spec-drift check |
+| `--hunt` | LLM-driven discovery over the call-graph partition — seven lenses, deterministic confirmation, adversarial refutation. Advisory: never gates CI. Requires `AGENTIC_SECURITY_LLM_ENDPOINT`; without it, reports its own degradation and finds nothing. |
 
 🛡  agentic-security · created by ClearCapabilities.Com

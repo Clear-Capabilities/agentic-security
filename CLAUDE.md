@@ -18,6 +18,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `scanner/src/sast/` | SAST detector modules. 60+ files. Adding a rule? Read here. | `scanner/src/sast/CLAUDE.md` |
 | `scanner/src/posture/` | Annotation pipeline + state stores. 90+ modules. | `scanner/src/posture/CLAUDE.md` |
 | `scanner/src/dataflow/` | Layer-2 taint engine (k=1 monovariant return-taint; see local file for what is and isn't modelled). | `scanner/src/dataflow/CLAUDE.md` |
+| `scanner/src/discovery/` | LLM candidate discovery, gated by the deterministic engine. Propose → confirm → refute → judge. | `scanner/src/discovery/CLAUDE.md` |
 | `scanner/src/mcp/` | MCP server. Six tools; OWASP MCP Top 10 hardened. | `scanner/src/mcp/CLAUDE.md` |
 | `scanner/src/ir/` | Layer-1 IR: Babel-based JS/TS; Python via stdlib `ast` subprocess (default, when python3 available) with regex fallback; `java-parser`-based Java. | `scanner/src/ir/CLAUDE.md` |
 | `scanner/src/lsp/` | LSP server wrapping `runScan`. Ships with the JetBrains + Neovim plugins. |  |
