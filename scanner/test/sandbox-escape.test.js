@@ -280,27 +280,26 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     assert.equal(r.status, 'timeout');
   });
 
-  test('BAD: a wall-clock overrun takes the whole process tree with it', () => {
-    // HISTORY, because this assertion has now been wrong in both directions
-    // and the record is the useful part.
+  test('KNOWN GAP: the timeout bounds the direct child but does NOT reap the tree', () => {
+    // Two CI runs, two corrections. The record matters more than the assertion.
     //
-    // It first asserted tree-kill on the reasoning that the direct child is
-    // pid 1 of a new PID namespace (`--pid --fork`), so killing it should reap
-    // the namespace. CI falsified that: duration_ms 30057 against a 1200 ms
-    // budget, payload run to completion. The assertion was flipped to pin the
-    // gap.
+    // 1. Originally asserted tree-kill by reasoning: the direct child is pid 1
+    //    of a new PID namespace (`--pid --fork`), so killing it should reap
+    //    everything. CI falsified it — duration_ms 30057 against a 1200 ms
+    //    budget, payload run to completion.
+    // 2. Root-caused to the SIGNAL: node's spawnSync defaults to SIGTERM, and
+    //    the kernel drops default-action signals sent to a PID namespace's
+    //    pid 1 from outside. Switched to SIGKILL and re-asserted tree-kill.
+    // 3. CI falsified THAT too — but only partly, and the partial result is the
+    //    useful one. With SIGKILL the call now returns in ~1.2 s instead of
+    //    running the full 30 s, so the direct child IS bounded. The
+    //    backgrounded grandchild still survived and wrote its marker.
     //
-    // The ROOT CAUSE turned out to be the signal, not the namespace: node's
-    // spawnSync defaults to SIGTERM, and the kernel does not deliver
-    // default-action signals to a PID namespace's pid 1 from outside it — with
-    // no handler installed, SIGTERM is simply dropped. The backend now passes
-    // `killSignal: 'SIGKILL'`, which cannot be ignored, and killing pid 1 of a
-    // PID namespace reaps every process inside it.
-    //
-    // So this asserts the strong property again. It is UNCONFIRMED until a CI
-    // log shows it; if it fails once more, the fix is wrong and both this test
-    // and the guides must move back — do not weaken the assertion to make it
-    // green.
+    // Settled behaviour: SIGKILL bounds the DIRECT CHILD promptly; it does not
+    // reap the process tree. Identical to the userspace backend's limitation,
+    // not better than it as this module claimed for a long time. Survivors stay
+    // inside the mount and network namespaces, so confinement holds — what is
+    // missing is a bound on how long descendants run.
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-tree-'));
     const marker = path.join(root, 'survivor.marker');
     const budgetMs = 1200;
@@ -311,15 +310,16 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     const elapsed = Date.now() - started;
 
     assert.equal(r.status, 'timeout');
+    // The gain SIGKILL bought, pinned so a regression to SIGTERM is caught: the
+    // call must not run the payload to completion.
     assert.ok(elapsed < 8000,
-      `the call took ${elapsed}ms against a ${budgetMs}ms budget — SIGKILL did not bound the payload, `
-      + 'so the timeout still provides no runtime bound and the guides must say so');
-    assert.equal(fs.existsSync(marker), false, 'precondition: nothing written at return time');
-    // Wait past the survivor's own sleep, then look again.
+      `the call took ${elapsed}ms against a ${budgetMs}ms budget — the direct child is no longer `
+      + 'bounded, which is the SIGTERM behaviour returning');
     execFileSync('/bin/sleep', ['4']);
-    assert.equal(fs.existsSync(marker), false,
-      'a backgrounded grandchild OUTLIVED the SIGKILL of its PID-namespace init — tree termination '
-      + 'does not hold, and sandbox/CLAUDE.md plus backend-namespace.js must document that');
+    assert.equal(fs.existsSync(marker), true,
+      'the backgrounded grandchild did NOT survive — tree termination now works. That is an '
+      + 'improvement, and sandbox/CLAUDE.md plus backend-namespace.js must be corrected in the '
+      + 'same commit rather than this assertion being flipped quietly.');
   });
 });
 

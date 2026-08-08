@@ -62,27 +62,32 @@
 // expectation that "the remount should have worked" is exactly the class of
 // claim this module exists to refuse.
 //
-// TIMEOUT SCOPE — MEASURED, AND WORSE THAN WAS ASSUMED. The wall-clock timeout
-// is `spawnSync`'s. It was documented here for a long time as an expectation
-// that killing the direct child would reap the whole namespace, since that
-// child is pid 1 of a new PID namespace (`--pid --fork`) — "better than the
-// userspace backend". A test was written to check it, CI ran it, and it is
-// FALSE.
+// TIMEOUT SCOPE — SETTLED BY TWO CI RUNS, AFTER TWO WRONG CLAIMS.
 //
-// Observed on the first Linux CI run, with a 1200 ms budget against a payload
-// that sleeps 30 s: `duration_ms: 30057`, and a backgrounded grandchild's
-// marker already on disk the moment the call returned. The payload ran to
-// completion. So on this backend the timeout does not kill the tree, and does
-// not promptly stop the direct child either — `spawnSync` reports
-// `timedOut: true` while the command keeps running until it finishes on its
-// own.
+// This comment asserted for a long time that killing the direct child would
+// reap the whole namespace, since that child is pid 1 of a new PID namespace
+// (`--pid --fork`) — and that this made the backend BETTER than the userspace
+// one. A test was written to check rather than assume. What CI actually found,
+// in two rounds:
 //
-// The confinement is unaffected: survivors stay inside the mount and network
-// namespaces, so they cannot write out of root or reach the network. What the
-// timeout does NOT provide here is a bound on how long confined code runs.
-// Anything relying on that bound — a proof harness, a CI budget — must impose
-// its own. Pinned by "KNOWN GAP: the timeout does not stop the payload on this
-// backend either" in `sandbox-escape.test.js`.
+//   1. With the default SIGTERM the timeout did nothing at all: a 1200 ms
+//      budget against a payload sleeping 30 s returned after `30057 ms`, having
+//      run the payload to completion. The kernel does not deliver
+//      default-action signals to a PID namespace's pid 1 from outside it, so
+//      with no handler installed SIGTERM is simply dropped.
+//   2. With `killSignal: 'SIGKILL'` — which cannot be ignored — the call
+//      returns in about 1.2 s. The DIRECT CHILD is bounded. But a backgrounded
+//      grandchild still outlived it and wrote its marker, so the PID namespace
+//      does NOT reap the tree here.
+//
+// Settled: SIGKILL bounds the direct child promptly; it does not kill the tree.
+// That is the SAME limitation the userspace backend carries, not an improvement
+// on it. Confinement is unaffected — survivors remain inside the mount and
+// network namespaces and can neither write out of root nor reach the network —
+// but there is no bound on how long descendants run, and any caller needing one
+// must impose it (see `posture/prove-findings.js`, which does). Pinned by
+// "KNOWN GAP: the timeout bounds the direct child but does NOT reap the tree"
+// in `sandbox-escape.test.js`, which fails in both directions.
 //
 // PRIVILEGE. Creating mount/PID/IPC/UTS/network namespaces directly requires
 // CAP_SYS_ADMIN, which an ordinary CI account does not have — asking for them

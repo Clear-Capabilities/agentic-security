@@ -1,15 +1,21 @@
 // Guards against fitting the corpus to the detectors it measures.
 //
-// Both directions are exercised against REAL commit ranges from this
-// repository's history rather than synthetic input, because the rule is about
-// what actually happened: `3b491db..3a05f4d` is the commit pair where a
-// detector (`sast/crypto-specialist.js`) and the ten corpus entries exercising
-// it landed together, and two of those entries only passed after the detector
-// was changed to make them pass.
+// The rule is about something that actually happened: a detector
+// (`sast/crypto-specialist.js`) and the ten corpus entries exercising it landed
+// in one commit, and two of those entries only passed after the DETECTOR was
+// changed to make them pass.
+//
+// The coupling cases are driven against purpose-built repos rather than that
+// real commit range. An earlier version pinned the real SHAs and passed locally
+// while failing in CI, where a shallow clone does not contain them: the check
+// degraded to "history unavailable" and the assertion failed for a reason
+// unrelated to the logic. A rule worth gating on must be testable anywhere.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -33,26 +39,83 @@ test('reports the provenance mix, and does not hide how synthetic it is', () => 
   assert.match(r.out, /ceiling\s*\n?\s*by construction/);
 });
 
+// A purpose-built repo, so the coupling rule is exercised anywhere — including
+// a shallow CI clone, which does not contain this project's own history. The
+// earlier version of these tests pinned real SHAs and failed in CI for a reason
+// that had nothing to do with the logic under test.
+function repoWith(commits) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prov-'));
+  const g = (...a) => spawnSync('git', ['-C', dir, ...a], { encoding: 'utf8' });
+  spawnSync('git', ['init', '-q', dir], { encoding: 'utf8' });
+  g('config', 'user.email', 't@example.com');
+  g('config', 'user.name', 'T');
+  g('config', 'commit.gpgsign', 'false');
+  for (const files of commits) {
+    for (const f of files) {
+      const abs = path.join(dir, f);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, `x${Math.random()}`);
+      g('add', f);
+    }
+    g('commit', '-q', '-m', 'c');
+  }
+  return dir;
+}
+
+const DETECTOR = 'scanner/src/sast/example.js';
+const ENTRY = 'bench/cve-replay/capability/EX-1/manifest.json';
+
 test('a detector and its corpus entries landing together FAILS', () => {
-  // The real occurrence, not a hypothetical.
-  const r = run({ CORPUS_PROVENANCE_RANGE: '3b491db..3a05f4d' });
-  assert.equal(r.code, 1, r.out);
-  assert.match(r.out, /changes 1 detector file\(s\) AND adds\/changes 10 corpus entr/);
-  assert.match(r.out, /crypto-specialist\.js/);
-  assert.match(r.out, /Land the detector\s*\n?\s*first/);
+  const dir = repoWith([['README.md'], [DETECTOR, ENTRY]]);
+  try {
+    const r = run({ CORPUS_PROVENANCE_GIT_DIR: dir, CORPUS_PROVENANCE_RANGE: 'HEAD~1..HEAD' });
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /detector file\(s\) AND adds\/changes/);
+    assert.match(r.out, /Land the detector\s*\n?\s*first/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('a range with entries but no detector change passes', () => {
-  // The corpus-only commit: entries were added, no detector moved with them.
-  const r = run({ CORPUS_PROVENANCE_RANGE: '3a05f4d..468938c' });
-  assert.equal(r.code, 0, r.out);
+test('the coupling rule covers posture, ir and engine — not just sast', () => {
+  // A change to relevance.js (which demotes findings) or to a parser can flip a
+  // corpus verdict as surely as a rule edit.
+  for (const detector of [
+    'scanner/src/posture/relevance.js',
+    'scanner/src/ir/parser-py-cst.js',
+    'scanner/src/engine.js',
+    'scanner/src/dataflow/engine.js',
+  ]) {
+    const dir = repoWith([['README.md'], [detector, ENTRY]]);
+    try {
+      const r = run({ CORPUS_PROVENANCE_GIT_DIR: dir, CORPUS_PROVENANCE_RANGE: 'HEAD~1..HEAD' });
+      assert.equal(r.code, 1, `${detector} was not treated as a detector change`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
+});
+
+test('a corpus-only commit passes', () => {
+  const dir = repoWith([['README.md'], [ENTRY]]);
+  try {
+    const r = run({ CORPUS_PROVENANCE_GIT_DIR: dir, CORPUS_PROVENANCE_RANGE: 'HEAD~1..HEAD' });
+    assert.equal(r.code, 0, r.out);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a detector-only commit passes', () => {
+  const dir = repoWith([['README.md'], [DETECTOR]]);
+  try {
+    const r = run({ CORPUS_PROVENANCE_GIT_DIR: dir, CORPUS_PROVENANCE_RANGE: 'HEAD~1..HEAD' });
+    assert.equal(r.code, 0, r.out);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('--report never fails the build, but still says what it found', () => {
-  const r = run({ CORPUS_PROVENANCE_RANGE: '3b491db..3a05f4d' }, ['--report']);
-  assert.equal(r.code, 0, 'report mode must not gate');
-  assert.match(r.out, /report only/);
-  assert.match(r.out, /detector file\(s\) AND adds\/changes/);
+  const dir = repoWith([['README.md'], [DETECTOR, ENTRY]]);
+  try {
+    const r = run({ CORPUS_PROVENANCE_GIT_DIR: dir, CORPUS_PROVENANCE_RANGE: 'HEAD~1..HEAD' }, ['--report']);
+    assert.equal(r.code, 0, 'report mode must not gate');
+    assert.match(r.out, /report only/);
+    assert.match(r.out, /detector file\(s\) AND adds\/changes/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('an unreadable history degrades rather than failing the build', () => {

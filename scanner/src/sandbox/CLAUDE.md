@@ -167,24 +167,28 @@ than `blocked`, the parent environment is not handed over, outbound network is
 blocked, and the wall-clock behaviour is pinned as a KNOWN GAP (see below —
 the timeout does not actually stop the payload here).
 
-**The timeout limit is worse than was documented, and CI is what proved it.**
-This guide previously carried the userspace caveat over verbatim — "stops the
-direct child, not the process tree" — and `backend-namespace.js` went further,
-reasoning that because the direct child is pid 1 of a new PID namespace,
-killing it would reap everything and be *better* than userspace. A test was
-added to check that, CI ran it, and it failed: with a 1200 ms budget against a
-payload sleeping 30 s, the call returned after `30057 ms` with the backgrounded
-grandchild's marker already on disk. The payload ran to completion. So on this
-backend the timeout kills neither the tree nor, promptly, the direct child —
-`spawnSync` reports `timedOut: true` while the command runs to its natural end.
+**The timeout: two wrong claims, settled by two CI runs.** This guide once
+carried the userspace caveat verbatim ("stops the direct child, not the process
+tree") and `backend-namespace.js` went further, reasoning that killing pid 1 of a
+PID namespace would reap everything and beat userspace. A test was added to check
+rather than assume, and CI corrected it twice:
 
-Confinement is unaffected by this: survivors remain inside the mount and
-network namespaces and can neither write out of root nor reach the network.
-What is missing is a BOUND ON RUNTIME. Any caller that needs one — a proof
-harness, a CI budget — must impose it itself and must not read `timedOut: true`
-as "the command stopped". The behaviour is pinned by "KNOWN GAP: the timeout
-does not stop the payload on this backend either" in `sandbox-escape.test.js`,
-which fails if it ever improves.
+1. With the default **SIGTERM** the timeout did nothing: a 1200 ms budget against
+   a payload sleeping 30 s returned after `30057 ms`, payload run to completion.
+   The kernel drops default-action signals sent to a PID namespace's pid 1 from
+   outside it.
+2. With **SIGKILL** — which cannot be ignored — the call returns in about 1.2 s,
+   so the direct child IS bounded. A backgrounded grandchild still survived and
+   wrote its marker.
+
+**Settled behaviour: SIGKILL bounds the direct child promptly; it does not reap
+the process tree.** That is the same limitation the userspace backend carries —
+not better, which is what this module claimed for a long time. Confinement is
+unaffected: survivors stay inside the mount and network namespaces and can
+neither write out of root nor reach the network. What is missing is a bound on
+how long descendants run, so a caller needing one must impose it itself
+(`posture/prove-findings.js` does). Pinned by "KNOWN GAP: the timeout bounds the
+direct child but does NOT reap the tree", which fails in both directions.
 
 One further limit is unchanged: this is one kernel and one
 image: a different kernel is a different host fact, which is exactly why the

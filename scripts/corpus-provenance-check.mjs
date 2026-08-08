@@ -75,8 +75,15 @@ function entries() {
   return out;
 }
 
+// The repository the COUPLING check reads history from. Overridable so the rule
+// can be exercised against a purpose-built repo: the tests previously pinned
+// real commit SHAs from this project's history, which a shallow CI clone does
+// not have — the check silently degraded to "history unavailable" and the test
+// asserting its output failed for a reason unrelated to the logic.
+const GIT_DIR = process.env.CORPUS_PROVENANCE_GIT_DIR || REPO;
+
 function git(args) {
-  return execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  return execFileSync('git', ['-C', GIT_DIR, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
 }
 
 const errors = [];
