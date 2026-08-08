@@ -56,22 +56,45 @@ async function runDeepAnalysisSafe(perFileIR, callGraph) {
 // perFileIR (see scanner/src/ir/index.js).
 export async function runDiscovery(ctx = {}, opts = {}) {
   const areas = partitionCallGraph(ctx.callGraph, { maxAreas: opts.maxAreas ?? 8 });
-  const lensKeys = Array.isArray(opts.lenses) && opts.lenses.length ? opts.lenses : LENSES.map(l => l.key);
-  const lenses = lensKeys.map(lensByKey).filter(Boolean);
+
+  const reasons = [];
+
+  // An explicit array (including an empty one) is honoured exactly — a caller
+  // narrowing a run to no lenses must get no lenses, not a silent fallback to
+  // all seven. Only an absent/non-array value falls back to the full set.
+  const lensKeys = Array.isArray(opts.lenses) ? opts.lenses : LENSES.map(l => l.key);
+
+  const lenses = [];
+  for (const key of lensKeys) {
+    const lens = lensByKey(key);
+    // An unknown key must degrade visibly, not vanish via a silent filter.
+    if (lens) lenses.push(lens);
+    else reasons.push(`unresolved lens key: "${key}"`);
+  }
+  if (lenses.length === 0) {
+    reasons.push('no lenses resolved for this run (empty or fully-unresolved lens selection); nothing was hunted');
+  }
 
   const runs = [];
-  const reasons = [];
   let candidates = [];
+  // areasHunted: areas where AT LEAST ONE lens run completed without degrading.
   const hunted = new Set();
+  // areasFullyHunted: areas where EVERY lens run completed without degrading.
+  // Distinct from areasHunted so a partially-degraded area (e.g. 6 of 7 lenses
+  // failed) cannot be read as fully covered from a single number.
+  const fullyHunted = new Set();
 
   for (const area of areas) {
+    let areaDegradedCount = 0;
     for (const lens of lenses) {
       const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {} }, { llmInvoke: opts.llmInvoke });
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
-      if (!run.degraded) hunted.add(area.id);
+      if (run.degraded) areaDegradedCount += 1;
+      else hunted.add(area.id);
       candidates = candidates.concat(run.candidates);
     }
+    if (lenses.length > 0 && areaDegradedCount === 0) fullyHunted.add(area.id);
   }
 
   const taintProbe = makeTaintProbe(ctx.perFileIR, ctx.callGraph);
@@ -89,7 +112,11 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     refuted,
     coverage: {
       areasPlanned: areas.length,
+      // At least one lens run completed for the area. Does NOT mean every
+      // lens succeeded there — see areasFullyHunted for that stronger claim.
       areasHunted: hunted.size,
+      // Every lens run for the area completed without degrading.
+      areasFullyHunted: fullyHunted.size,
       lensesPerArea: lenses.length,
       degradedRuns: runs.filter(r => r.degraded).length,
       reasons,

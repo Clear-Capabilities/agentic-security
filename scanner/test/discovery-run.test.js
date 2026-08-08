@@ -63,3 +63,29 @@ test('makeTaintProbe returns null rather than throwing on an unanalysable input'
   const probe = makeTaintProbe({}, null);
   assert.equal(await probe({ file: 'a.js', line: 1 }), null);
 });
+
+test('an explicitly empty lens selection hunts nothing and says so', async () => {
+  const llmInvoke = async () => '{"candidates":[]}';
+  const r = await runDiscovery(CTX, { lenses: [], llmInvoke });
+  assert.equal(r.runs.length, 0);
+  assert.deepEqual(r.fresh, []);
+  assert.ok(r.coverage.reasons.length > 0, 'empty lens selection must be disclosed');
+  assert.ok(r.coverage.reasons.some(x => /empty|no lenses/i.test(x)));
+});
+
+test('an unknown lens key is recorded in coverage.reasons and does not abort the run', async () => {
+  const llmInvoke = async () => '{"candidates":[]}';
+  const r = await runDiscovery(CTX, { lenses: ['injection', 'not-a-real-lens'], llmInvoke });
+  assert.equal(r.runs.length, 1);
+  assert.ok(r.coverage.reasons.some(x => x.includes('not-a-real-lens')));
+});
+
+test('partial degradation within an area: areasHunted and areasFullyHunted diverge', async () => {
+  const llmInvoke = async (p) => {
+    if (/authz/i.test(p) || p.includes('Authorization')) throw new Error('simulated failure');
+    return '{"candidates":[]}';
+  };
+  const r = await runDiscovery(CTX, { lenses: ['injection', 'authz'], llmInvoke });
+  assert.equal(r.coverage.areasHunted, 1);
+  assert.equal(r.coverage.areasFullyHunted, 0);
+});
