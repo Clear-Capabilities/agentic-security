@@ -557,7 +557,7 @@ function main(argv) {
     out.write(`${r.ok ? 'PASS' : 'FAIL'}  ${check.title}\n`);
     for (const w of r.warnings || []) out.write(`      ⚠ ${w}\n`);
     for (const e of r.errors || []) out.write(`      ✗ ${e}\n`);
-    if (!r.ok) failed.push(check);
+    if (!r.ok) failed.push({ ...check, errors: r.errors || [] });
   }
 
   const unverifiedWarnings = [...results.values()]
@@ -576,7 +576,22 @@ function main(argv) {
   }
 
   out.write(`\n✗ Release gate FAILED — ${failed.length} check(s) did not pass:\n`);
-  for (const c of failed) out.write(`   · ${c.title}\n     remedy: ${c.remedy}\n`);
+  // Repeat WHY each check failed, not just what to do about it. The detail is
+  // printed inline above, but npm surfaces only the tail of a failed
+  // prepublishOnly, so a summary carrying "commit your changes" without naming
+  // the offending paths sends the reader hunting for a dirty file they cannot
+  // see. Indent-preserving: the evaluators embed newlines in their messages.
+  for (const c of failed) {
+    out.write(`   · ${c.title}\n`);
+    const errors = c.errors || [];
+    for (const e of errors) out.write(`     ${String(e).replace(/\n/g, '\n     ')}\n`);
+    // Several evaluators already end their message with their own "Remedy:"
+    // line. Printing the registry's remedy underneath it too says the same
+    // thing twice, which reads like two different instructions.
+    if (!errors.some(e => /\bRemedy:/i.test(String(e)))) {
+      out.write(`     remedy: ${c.remedy}\n`);
+    }
+  }
   return 1;
 }
 

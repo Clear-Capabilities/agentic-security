@@ -69,3 +69,11 @@ scanner/aibom.md
 
 # Local report dumps from interactive runs of the scanner.
 scanner/reports/
+
+# Agent worktrees. Created inside the repo by the harness's worktree tooling,
+# which does not add its own ignore rule. Left untracked they are indistinguish-
+# able from real work: `release-check`'s working-tree-clean gate fails and
+# `npm publish` aborts with nothing obviously wrong. Note this ignores ONLY the
+# worktrees directory — `.claude/settings.json` is the team's committed
+# read-deny list and must stay tracked.
+.claude/worktrees/
