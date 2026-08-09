@@ -87,6 +87,23 @@ line of detector code. The diagnosis came from the per-CWE breakdown: on the
 diff-only population, CWE-22 (path traversal) and CWE-918 (SSRF) each scored
 0/3, and both need a request source that lives outside the changed file.
 
+### Per-CWE recall (n=40) — the actionable view
+
+The 32.5% aggregate hides the only thing worth acting on: two families are at
+100% and one is at 0%.
+
+| CWE | n | Recall |
+| --- | --- | --- |
+| CWE-22 path traversal | 3 | 3/3 |
+| CWE-79 XSS | 3 | 3/3 |
+| CWE-94 code injection | 6 | **0/6** |
+| CWE-184 incomplete denylist | 3 | 0/3 |
+| CWE-918 SSRF | 3 | 1/3 |
+| CWE-200 info exposure | 3 | 1/3 |
+| 15 others (n=1 each) | 15 | 2/15 |
+
+Plan: `docs/RECALL_IMPROVEMENT_PRD.md`.
+
 ### Still a lower bound, and now for one clear reason
 
 The scope is the largest ancestor directory of the changed files that fits a
