@@ -43,6 +43,34 @@ const FORGE_CLI = 'gh';
 // be a true positive and would quietly depress recall.
 const SOURCE_EXT = /\.(?:js|jsx|mjs|cjs|ts|tsx|py|java|cs|kt|go|php|rb)$/i;
 
+// Paths that are NOT the implementation, and must never become an entry's
+// vulnerable file.
+//
+// A security fix commit almost always touches the fix AND its regression test,
+// and often a rebuilt bundle. Taking the first modified source file therefore
+// picked a spec file or `dist/` output about a third of the time — measured on
+// the first population: 4 of 12 entries had a test or build artifact as their
+// PRIMARY file, and 15 of 34 files overall were non-implementation.
+//
+// That is not a small bias. The vulnerability is in the implementation; a test
+// asserts the fix and a bundle is generated. Scoring the engine on either
+// grades it against code that was never supposed to contain the bug, and every
+// such entry is a guaranteed false negative that looks like a detection
+// failure. Recall was being depressed by the sampling, not by the engine.
+const NON_IMPLEMENTATION = new RegExp([
+  '\\.test\\.', '\\.spec\\.',              // foo.test.ts, foo.spec.js
+  '__tests__/', '__mocks__/',
+  '(^|/)tests?/',                            // test/ or tests/ at any depth
+  '(^|/)e2e/', '(^|/)fixtures?/',
+  '\\.d\\.ts$',                              // type declarations carry no logic
+  '(^|/)dist/', '(^|/)build/', '(^|/)vendor/',
+  '\\.min\\.js$', '\\.bundle\\.js$',
+].join('|'), 'i');
+
+export function isImplementationFile(file) {
+  return SOURCE_EXT.test(file) && !NON_IMPLEMENTATION.test(file);
+}
+
 const LANG_BY_EXT = {
   js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
   ts: 'typescript', tsx: 'typescript', py: 'python', java: 'java',
@@ -112,9 +140,12 @@ async function main() {
         if (!parent) continue;
 
         const files = (commit.files || [])
-          .filter(f => f.status === 'modified' && SOURCE_EXT.test(f.filename || ''))
+          .filter(f => f.status === 'modified' && isImplementationFile(f.filename || ''))
           .map(f => f.filename)
           .slice(0, 5); // a sprawling fix is a poor single-CWE test case
+        // An advisory whose fix touched only tests or build output tells us
+        // nothing about detection and is skipped entirely rather than admitted
+        // with a file that cannot contain the bug.
         if (files.length === 0) continue;
 
         added.push({

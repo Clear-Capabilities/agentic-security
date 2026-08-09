@@ -58,30 +58,51 @@ sits at the ceiling. `bench/independent/` is the other instrument: real upstream
 code at the commit where a vulnerability really existed, with the CWE assigned by
 a public advisory database rather than by this project.
 
-First measurement, 2026-08-09, **n=12**. That clears the runner's reliability
-floor of 10, but only just — twelve entries is a demonstration that the
-instrument works, not a population anyone should quote a percentage from:
+**Current measurement, 2026-08-09, n=40:**
 
 | | |
 | --- | --- |
-| Precision | 50.0% (2/4) |
-| Recall | 16.7% (2/12) |
-| F1 | 0.250 |
-| Raw | TP=2 FP=2 FN=10 TN=10 |
+| Precision | 50.0% (13/26) |
+| Recall | 32.5% (13/40) |
+| F1 | 0.394 |
+| Raw | TP=13 FP=13 FN=27 TN=27 |
 
 Against 100% on the curated corpus. **That gap is the most useful number in this
 document**, and publishing it is the point of the exercise.
 
-Two things make this a LOWER BOUND rather than a verdict, both documented in
-`bench/independent/README.md`:
+### How this figure has moved, and why
 
-1. The trees contain only the files the fix commit changed, so an
-   interprocedural finding that needs a caller in another file cannot be made —
-   even where the engine would find it on the whole repository.
-2. Advisories carrying a single fix commit skew towards long-tail weakness
-   classes rather than the injection families a SAST engine targets first.
+The number changed twice, both times because the *measurement* was wrong rather
+than because the engine changed. Recording that here, because a benchmark whose
+history is invisible is a benchmark nobody can audit.
 
-Reproduce with `npm run bench:independent:fetch && npm run bench:independent`.
+| Population | Recall | F1 | What was wrong |
+| --- | --- | --- | --- |
+| n=12, changed files only | 16.7% | 0.250 | first attempt |
+| n=40, test files excluded | 12.5% | 0.200 | 4 of 12 entries had a **test file or `dist/` artifact** as the vulnerable file — a fix commit touches the fix *and* its regression test, and the miner was picking the test |
+| n=40, package-scope context | **32.5%** | **0.394** | trees held only the diff, so an interprocedural engine was graded on fragments with no callers |
+
+Materialising the surrounding package **raised recall 2.6×** without touching a
+line of detector code. The diagnosis came from the per-CWE breakdown: on the
+diff-only population, CWE-22 (path traversal) and CWE-918 (SSRF) each scored
+0/3, and both need a request source that lives outside the changed file.
+
+### Still a lower bound, and now for one clear reason
+
+The scope is the largest ancestor directory of the changed files that fits a
+400-source-file cap — in practice the containing package (median 185 files). A
+vulnerability whose source sits in a *different* package remains unreachable, so
+recall is still understated by an unmeasured margin.
+
+**Precision carries its own caveat, in the opposite direction.** With a wider
+scope, an unrelated instance of the same CWE elsewhere in the package now counts
+as a false positive against the advisory's label. Some of the 13 FPs are
+therefore likely to be real findings that simply are not *this* advisory's bug.
+Precision of 50% should be read as a floor too, not a verdict.
+
+Reproduce with `npm run bench:independent:materialise && npm run bench:independent`.
+Expect roughly 8 minutes to materialise and 10+ to score — the honest
+measurement is an order of magnitude slower than the dishonest one.
 
 ## Corpus results (measured this run)
 

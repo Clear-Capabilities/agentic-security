@@ -21,8 +21,17 @@ Entries are mined from published security advisories. For each one:
 - the **CWE** is assigned by the advisory database and its maintainers, not by
   us;
 - the **fix commit** is the one the upstream project shipped;
-- `pre/` is the changed files at the fix commit's **parent**, `post/` is the same
-  files at the **fix commit**.
+- `pre/` is the package containing the changed files at the fix commit's
+  **parent**, `post/` is the same scope at the **fix commit** (see "Honest
+  limits" for exactly how that scope is chosen).
+
+**Implementation files only.** A fix commit almost always touches the fix *and*
+its regression test, and often a rebuilt bundle. Test files, `__tests__/`,
+`.d.ts` declarations, `dist/` and `build/` output are excluded from entry
+selection: the vulnerability lives in the implementation, and scoring the engine
+on a spec file or a generated bundle is a guaranteed miss that looks like a
+detection failure. This was measured, not assumed — before the filter, 4 of 12
+entries had a test or artifact as their vulnerable file.
 
 So a true positive means: we found the labelled weakness class in real code that
 really had it, at the commit where it really existed. Nobody on this side of the
@@ -76,36 +85,46 @@ failure as if it were a detection failure.
 - **Small n is reported as small n.** Rates from a handful of entries are noise;
   the runner labels them unreliable rather than printing a confident percentage.
 
-- **⚠ The trees contain only the CHANGED files, and that penalises us.** This is
-  the most important limitation on this page. `pre/` and `post/` hold the files
-  the fix commit touched — not the repository. An interprocedural taint engine
-  needs the caller, the route registration, the sanitiser it might have passed
-  through; none of that is present. A finding that requires a source in one file
-  and a sink in another cannot be made here **even when the engine would find it
-  on the real repository**.
+- **Scope is the containing package, not the whole repository.** `pre/` and
+  `post/` hold the largest ancestor directory of the changed files that fits a
+  400-source-file cap — in practice the package containing the fix (median 185
+  files). A vulnerability whose source sits in a DIFFERENT package is still
+  unreachable, so recall remains a lower bound.
 
-  So the recall figure is a **lower bound**, and the gap between it and reality
-  is unmeasured. Do not read it as "the engine finds 1 in 6 real bugs". Read it
-  as "the engine finds 1 in 6 real bugs *when shown only the diff's files*".
+  The first version held only the changed files, and that was much worse:
+  materialising the package raised recall from 12.5% to 32.5% with no detector
+  change at all. Whole-repo would be better still and is not free — downloading
+  is cheap, scanning is not, and at a useful population size it turns the
+  benchmark into something nobody runs.
 
-  Fixing this means materialising whole repositories at both commits, which is
-  orders of magnitude more disk and network. That is the obvious next step and
-  it is deliberately not in the first version — a lower bound you can defend
-  beats a better number you cannot yet produce.
+- **Precision is understated in the OPPOSITE direction.** With a package-wide
+  scope, an unrelated instance of the same CWE elsewhere in the package counts
+  as a false positive against this advisory's label. Some FPs are therefore
+  real findings that simply are not this advisory's bug.
 
-- **The CWE mix is long-tail by construction.** Advisories that carry a single
-  fix commit skew towards specific, well-described weaknesses — cache leakage,
-  origin validation, observable discrepancy — rather than the injection classes
-  a SAST engine targets first. That is a property of the sampling frame, not of
-  the engine, and it is another reason the headline rate understates.
+- **The sampling frame is narrow.** Entries are advisories carrying exactly one
+  repository fix commit and a CWE. The current 40 entries come from only 9
+  distinct repositories, so per-project idiosyncrasies are over-represented, and
+  the language mix is entirely JavaScript and TypeScript. Report the CWE and
+  repository distribution alongside any rate quoted from this population.
 
 ## Running it
 
 ```bash
-npm run bench:independent:fetch    # materialise pre/post from upstream (network)
-npm run bench:independent          # score and print
+npm run bench:independent:mine          # add entries from public advisories
+npm run bench:independent:materialise   # rebuild pre/post WITH package context
+npm run bench:independent               # score and print
 npm run bench:independent -- --json
 ```
+
+`bench:independent:fetch` is the older changed-files-only path. It is kept
+because it is fast enough for a smoke test, but **it is not the measurement** —
+it understates recall by roughly 2.6× and anything quoted must come from
+`materialise`.
+
+Budget roughly 8 minutes to materialise 40 entries and 10+ to score them. The
+honest measurement is an order of magnitude slower than the dishonest one, which
+is why the scope is capped rather than whole-repo.
 
 Fetched source is cached under `bench/independent/cache/` and is **gitignored**:
 this repository does not vendor other people's code. The manifest pins exact

@@ -111,7 +111,8 @@
     "gate:prepush:install": "node ../scripts/pre-push-gate.mjs --install-hook",
     "bench:independent": "node ../bench/independent/runner.mjs",
     "bench:independent:fetch": "node ../bench/independent/fetch.mjs",
-    "bench:independent:mine": "node ../bench/independent/mine.mjs"
+    "bench:independent:mine": "node ../bench/independent/mine.mjs",
+    "bench:independent:materialise": "node ../bench/independent/materialise-cli.mjs"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
   "license": "PolyForm-Internal-Use-1.0.0"

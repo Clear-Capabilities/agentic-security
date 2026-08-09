@@ -12,11 +12,44 @@
       "fixCommit": "82712fc02c24b1dcf5b25d7a52129cd8455f04f5",
       "parentCommit": "b27c82f9c6896d7127a4023a8b1868c68e4a27b9",
       "files": [
-        "packages/kit/src/utils/http.js",
-        "packages/kit/src/utils/http.spec.js"
+        "packages/kit/src/utils/http.js"
       ],
       "language": "javascript",
-      "minedAt": "2026-08-09T17:24:32.856Z"
+      "minedAt": "2026-08-09T18:46:02.778Z"
+    },
+    {
+      "id": "GHSA-2gx6-7gx2-wwcf",
+      "cve": "CVE-2026-70588",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Cross-Site Scripting in Universal Import",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "a8bea3a4ceec4c852b880f4885119453c3d8588e",
+      "parentCommit": "fbaa92327e52607036a1e42204c9eadcc751d82c",
+      "files": [
+        "apps/ember-admin/app/components/modal-post-history.js",
+        "ghost/core/core/frontend/services/proxy.js",
+        "ghost/core/core/server/data/importer/importers/json-to-html.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:15.679Z"
+    },
+    {
+      "id": "GHSA-3769-jgqc-cxm7",
+      "cve": "CVE-2026-69254",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flowise: RCE via NodeVM Sandbox Escape in executeJavaScriptCode() nodeVMOptions Override",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "3086cb7e323bb96c5a581d3232ef975b0d92183d",
+      "parentCommit": "133aacf1d5475be747431939fa26a286ae4ec47e",
+      "files": [
+        "packages/components/src/utils.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:24.889Z"
     },
     {
       "id": "GHSA-3rrr-jr9j-h3q3",
@@ -29,13 +62,60 @@
       "fixCommit": "99af3fc35ef0a9a9c8c6314521344d67523ddccf",
       "parentCommit": "2337f7ecd629c8e777684a2edff341976230ad67",
       "files": [
-        "packages/mermaid/src/diagrams/architecture/architecture.spec.ts",
         "packages/mermaid/src/diagrams/architecture/architectureDb.ts",
         "packages/mermaid/src/diagrams/architecture/architectureRenderer.ts",
         "packages/mermaid/src/diagrams/architecture/architectureTypes.ts"
       ],
       "language": "typescript",
-      "minedAt": "2026-08-09T17:24:35.018Z"
+      "minedAt": "2026-08-09T18:46:04.931Z"
+    },
+    {
+      "id": "GHSA-4j8x-x6v7-w9rq",
+      "cve": "CVE-2026-69264",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flowise: RCE via CSVAgent csvFile data URI base64 segment is interpolated into Python source without validation",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "f4e2794f6a576b94578f2fdafbf49c2fb304626c",
+      "parentCommit": "42d593f8ca854471059051a7fdd89bf8d8ab7c12",
+      "files": [
+        "packages/components/src/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:19.713Z"
+    },
+    {
+      "id": "GHSA-4wx2-7gvj-qfq3",
+      "cve": "CVE-2026-70589",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Archived Offers can be Redeemed",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "d91c0fc52dfc987d71a9803dbcbe6447d21b92fb",
+      "parentCommit": "377890db22b0167347374cd50afb9f814f0ffa9a",
+      "files": [
+        "ghost/core/core/server/services/members/members-api/controllers/router-controller.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:14.446Z"
+    },
+    {
+      "id": "GHSA-52fh-8v99-63c2",
+      "cve": "CVE-2026-70470",
+      "cwe": "CWE-184",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flowise: Pyodide validator Unicode homoglyph bypass leads to RCE",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "f4e2794f6a576b94578f2fdafbf49c2fb304626c",
+      "parentCommit": "42d593f8ca854471059051a7fdd89bf8d8ab7c12",
+      "files": [
+        "packages/components/src/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:20.775Z"
     },
     {
       "id": "GHSA-54fx-42gc-7vw4",
@@ -48,11 +128,10 @@
       "fixCommit": "f70e2c31684387b3231cc38512a31df6ca76a1c7",
       "parentCommit": "93fc250d8b4df58ea542cb945171de8013d5e6d5",
       "files": [
-        "src/middleware/language/index.test.ts",
         "src/middleware/language/language.ts"
       ],
       "language": "typescript",
-      "minedAt": "2026-08-09T17:24:32.351Z"
+      "minedAt": "2026-08-09T18:46:02.264Z"
     },
     {
       "id": "GHSA-55q2-fjhq-7xh7",
@@ -65,14 +144,44 @@
       "fixCommit": "3067f774676975de12306effd6db6ad7a9a8c17f",
       "parentCommit": "a9ca1e537422319a557a9a2aa61f003b23b4a197",
       "files": [
-        "dist/purify.cjs.d.ts",
-        "dist/purify.cjs.js",
-        "dist/purify.es.mjs",
-        "dist/purify.js",
-        "dist/purify.min.js"
+        "src/purify.ts"
       ],
       "language": "typescript",
-      "minedAt": "2026-08-09T17:24:33.522Z"
+      "minedAt": "2026-08-09T18:46:03.433Z"
+    },
+    {
+      "id": "GHSA-5xvg-pmgg-3mxr",
+      "cve": "CVE-2026-70477",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flowise: CSV Agent Prompt Injection Remote Code Execution Vulnerability",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "f4e2794f6a576b94578f2fdafbf49c2fb304626c",
+      "parentCommit": "42d593f8ca854471059051a7fdd89bf8d8ab7c12",
+      "files": [
+        "packages/components/src/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:16.396Z"
+    },
+    {
+      "id": "GHSA-6vh2-wg4h-4vwj",
+      "cve": "CVE-2026-69258",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: Unauthenticated Property Injection into Flow Execution Context via Ungated `overrideConfig` Spread in Prediction API",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "23b997ee5ef9e269b628bad0f56f1ecb86bd2fca",
+      "parentCommit": "c0ed0e62e49423faa57e3c80ad04e13939f084ed",
+      "files": [
+        "packages/server/src/utils/buildAgentflow.ts",
+        "packages/server/src/utils/buildChatflow.ts",
+        "packages/server/src/utils/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:22.867Z"
     },
     {
       "id": "GHSA-79qm-7rj5-m7r9",
@@ -85,11 +194,76 @@
       "fixCommit": "720b566290793d4358bf39843adcb7cf4da4548f",
       "parentCommit": "f70e2c31684387b3231cc38512a31df6ca76a1c7",
       "files": [
-        "src/helper/proxy/index.test.ts",
         "src/helper/proxy/index.ts"
       ],
       "language": "typescript",
-      "minedAt": "2026-08-09T17:24:31.832Z"
+      "minedAt": "2026-08-09T18:46:01.794Z"
+    },
+    {
+      "id": "GHSA-7mpp-r37j-x5wh",
+      "cve": "CVE-2026-70594",
+      "cwe": "CWE-384",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Session Fixation in Ghost Admin",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "6b1c85c30dd0bacb4d5ffe64fc675ac9342d800c",
+      "parentCommit": "a8bea3a4ceec4c852b880f4885119453c3d8588e",
+      "files": [
+        "ghost/core/core/server/services/auth/session/session-service.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:10.104Z"
+    },
+    {
+      "id": "GHSA-88pr-878c-24wf",
+      "cve": null,
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: Authenticated arbitrary file write in the `S3 Directory` document loader via unsanitized S3 object keys                                                ",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "571b5d6218b1c129588ac625c8f20e30905a67cb",
+      "parentCommit": "d07186844263bad057008863037466aff7c3390f",
+      "files": [
+        "packages/components/nodes/documentloaders/S3Directory/S3Directory.ts",
+        "packages/components/nodes/documentloaders/S3File/S3File.ts",
+        "packages/components/src/validator.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:20.231Z"
+    },
+    {
+      "id": "GHSA-8gj2-2cvc-6xx7",
+      "cve": null,
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Flowise: Unauthenticated Credential Abuse via Text-to-Speech Endpoint Allows Unauthorized Use of Private Chatflow TTS Credentials",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "dbec8f9fd3c42faab49416fe81ff1774a5344cba",
+      "parentCommit": "e816d26a7d35bf91a78a9e1562bee3caca5ff817",
+      "files": [
+        "packages/server/src/controllers/text-to-speech/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:17.551Z"
+    },
+    {
+      "id": "GHSA-944x-pm95-3jpr",
+      "cve": "CVE-2026-53948",
+      "cwe": "CWE-434",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: File Upload Content-Type Spoofing",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "d659e752d6636144d75b9aa94062cdbc88a16b21",
+      "parentCommit": "ba692df7f27162d0440d57487f16c530416a8eb2",
+      "files": [
+        "ghost/core/core/server/api/endpoints/files.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:15.112Z"
     },
     {
       "id": "GHSA-9pf5-hg6p-4pwp",
@@ -105,7 +279,39 @@
         "spec/api-session-spec.ts"
       ],
       "language": "typescript",
-      "minedAt": "2026-08-09T17:24:36.131Z"
+      "minedAt": "2026-08-09T18:46:05.955Z"
+    },
+    {
+      "id": "GHSA-c6xh-wv4j-ppv5",
+      "cve": "CVE-2026-69257",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: SSRF Protection Bypass via IPv4-Mapped IPv6 Addresses",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "0fc769208395641c1411ccdb9c81416e54802155",
+      "parentCommit": "b7a2005fd7b394ba7874aded744fe3730d59ccb3",
+      "files": [
+        "packages/components/src/httpSecurity.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:23.371Z"
+    },
+    {
+      "id": "GHSA-ch52-px8q-f22j",
+      "cve": "CVE-2026-53945",
+      "cwe": "CWE-367",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Server-side request forgery via DNS rebinding in external request handling",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "07d604100eb3df5c9b382fce6232928c96329448",
+      "parentCommit": "52c33e33268224a92730a210f560a7c7a00bed92",
+      "files": [
+        "ghost/core/core/server/lib/request-external.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:13.419Z"
     },
     {
       "id": "GHSA-chgm-3698-jm42",
@@ -120,12 +326,64 @@
       "files": [
         "apps/portal/src/components/pages/magic-link-page.js",
         "apps/portal/src/utils/errors.js",
-        "apps/portal/test/data-attributes.test.js",
-        "ghost/core/core/server/services/members/members-api/controllers/router-controller.js",
-        "ghost/core/test/e2e-api/members/send-magic-link.test.js"
+        "ghost/core/core/server/services/members/members-api/controllers/router-controller.js"
       ],
       "language": "javascript",
-      "minedAt": "2026-08-09T17:24:38.695Z"
+      "minedAt": "2026-08-09T18:46:09.127Z"
+    },
+    {
+      "id": "GHSA-chm3-vqcf-52rx",
+      "cve": "CVE-2026-70472",
+      "cwe": "CWE-285",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: Cross-workspace credential IDOR in openai-assistants-vector-store",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "d81483b70c997ddf981acc9c49fbd9a02fa345cd",
+      "parentCommit": "700137738bcaebefd4709021f6d6b0abcd7df0ac",
+      "files": [
+        "packages/server/src/controllers/chat-messages/index.ts",
+        "packages/server/src/controllers/chatflows/index.ts",
+        "packages/server/src/controllers/documentstore/index.ts",
+        "packages/server/src/controllers/internal-predictions/index.ts",
+        "packages/server/src/controllers/leads/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:19.192Z"
+    },
+    {
+      "id": "GHSA-cj62-hvv2-2q5h",
+      "cve": "CVE-2026-70592",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Database Backup Path Traversal",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "f466c300191a609ed36c8d7c5d1e33ccd440786b",
+      "parentCommit": "ad50490a27797c00cb5d6eb4a1998415aeb54a52",
+      "files": [
+        "ghost/core/core/server/api/endpoints/db.js",
+        "ghost/core/core/server/data/exporter/export-filename.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:11.155Z"
+    },
+    {
+      "id": "GHSA-cjc9-q5gf-327p",
+      "cve": "CVE-2026-70593",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Theme Upload Path Traversal",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "fbaa92327e52607036a1e42204c9eadcc751d82c",
+      "parentCommit": "f466c300191a609ed36c8d7c5d1e33ccd440786b",
+      "files": [
+        "ghost/core/core/server/adapters/storage/LocalStorageBase.ts",
+        "ghost/core/core/server/services/themes/storage.js"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:10.628Z"
     },
     {
       "id": "GHSA-f23p-vx2j-j53r",
@@ -138,11 +396,136 @@
       "fixCommit": "0c45036d6b0ddf42ab2fa44639dc8710825d5c0f",
       "parentCommit": "720b566290793d4358bf39843adcb7cf4da4548f",
       "files": [
-        "src/jsx/base.ts",
-        "src/jsx/index.test.tsx"
+        "src/jsx/base.ts"
       ],
       "language": "typescript",
-      "minedAt": "2026-08-09T17:24:31.302Z"
+      "minedAt": "2026-08-09T18:46:01.279Z"
+    },
+    {
+      "id": "GHSA-fm2f-4339-4p2f",
+      "cve": "CVE-2026-70475",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: Missing Authorization on Execution Update Endpoint",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "96a9b23b5a103b362a0ee1368d04636755be1bed",
+      "parentCommit": "f4e2794f6a576b94578f2fdafbf49c2fb304626c",
+      "files": [
+        "packages/server/src/enterprise/rbac/Permissions.ts",
+        "packages/server/src/routes/executions/index.ts",
+        "packages/ui/src/views/agentexecutions/ExecutionDetails.jsx",
+        "packages/ui/src/views/agentexecutions/ShareExecutionDialog.jsx"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:18.078Z"
+    },
+    {
+      "id": "GHSA-fr6g-7cq8-fg82",
+      "cve": "CVE-2026-70473",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: Information Disclosure in GET /api/v1/upsert-history returns the entire server-wide upsert history",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "d81483b70c997ddf981acc9c49fbd9a02fa345cd",
+      "parentCommit": "700137738bcaebefd4709021f6d6b0abcd7df0ac",
+      "files": [
+        "packages/server/src/controllers/chat-messages/index.ts",
+        "packages/server/src/controllers/chatflows/index.ts",
+        "packages/server/src/controllers/documentstore/index.ts",
+        "packages/server/src/controllers/internal-predictions/index.ts",
+        "packages/server/src/controllers/leads/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:18.688Z"
+    },
+    {
+      "id": "GHSA-g366-23fw-ggp6",
+      "cve": "CVE-2026-53946",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Mobiledoc image-size fetch SSRF",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "ba692df7f27162d0440d57487f16c530416a8eb2",
+      "parentCommit": "9b7f2212970fade08ecbec543b405190471e38d4",
+      "files": [
+        "ghost/core/core/server/lib/mobiledoc.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:12.809Z"
+    },
+    {
+      "id": "GHSA-gcvv-72q8-9v76",
+      "cve": "CVE-2026-70591",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Server-Side Request Forgery in Image Fetching",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "5eff2de0f477b11c88f20bceb9d184c0d3b8a62e",
+      "parentCommit": "63c31fad7e473caa62d8fbb4651a04a2a62b5d00",
+      "files": [
+        "ghost/core/core/server/lib/image/image-size.js",
+        "ghost/core/core/server/lib/image/image-utils.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:11.677Z"
+    },
+    {
+      "id": "GHSA-gmmw-qg98-6j6p",
+      "cve": "CVE-2026-70476",
+      "cwe": "CWE-284",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: Broken Access Control in Stripe Subscription Endpoints Allows Cross-Tenant Billing Manipulation",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "4d7899d02ca370a5510406be5c91483085a412f9",
+      "parentCommit": "e9bf04ac748dbcd9b7db6616bfee8080e0190739",
+      "files": [
+        "packages/server/src/enterprise/controllers/organization.controller.ts",
+        "packages/server/src/enterprise/utils/tenantRequestGuards.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:16.990Z"
+    },
+    {
+      "id": "GHSA-jm22-3w23-5q7w",
+      "cve": "CVE-2026-70590",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Blind Password Hash Disclosure in Ghost Admin API",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "63c31fad7e473caa62d8fbb4651a04a2a62b5d00",
+      "parentCommit": "04ecfa84a1ad541d0a0792568f43dab27f9f36b9",
+      "files": [
+        "ghost/core/core/server/api/endpoints/pages.js",
+        "ghost/core/core/server/api/endpoints/posts.js",
+        "ghost/core/core/server/services/posts/posts-exporter.js",
+        "ghost/core/core/server/services/posts/posts-service.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:12.202Z"
+    },
+    {
+      "id": "GHSA-p5w8-m249-4r4v",
+      "cve": "CVE-2026-69262",
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: `DELETE /api/v1/chatflows/:id` does not validate resource type, allowing `agentflows:delete` and `chatflows:delete` to delete each other’s flow type",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "2f528ceced74afaa95fc7a282965e7788796448b",
+      "parentCommit": "bc22bf8baec95b6a3d6e1b3563b4f03491cd6fbb",
+      "files": [
+        "packages/server/src/controllers/chatflows/index.ts",
+        "packages/server/src/routes/chatflows/index.ts",
+        "packages/server/src/services/chatflows/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:21.816Z"
     },
     {
       "id": "GHSA-pr22-p9rp-2cqv",
@@ -156,13 +539,11 @@
       "parentCommit": "fbaa92327e52607036a1e42204c9eadcc751d82c",
       "files": [
         "apps/ember-admin/app/components/modal-post-history.js",
-        "apps/ember-admin/tests/acceptance/editor/post-revisions-test.js",
         "ghost/core/core/frontend/services/proxy.js",
-        "ghost/core/core/server/data/importer/importers/json-to-html.js",
-        "ghost/core/test/unit/frontend/services/proxy.test.js"
+        "ghost/core/core/server/data/importer/importers/json-to-html.js"
       ],
       "language": "javascript",
-      "minedAt": "2026-08-09T17:24:37.702Z"
+      "minedAt": "2026-08-09T18:46:08.204Z"
     },
     {
       "id": "GHSA-rg76-677x-56q9",
@@ -178,7 +559,7 @@
         "src/core.js"
       ],
       "language": "javascript",
-      "minedAt": "2026-08-09T17:24:30.836Z"
+      "minedAt": "2026-08-09T18:46:00.826Z"
     },
     {
       "id": "GHSA-rhh3-jpg6-66xh",
@@ -191,11 +572,26 @@
       "fixCommit": "59b22fad2b3bb04f87a476c84a8a2b24679e607e",
       "parentCommit": "99af3fc35ef0a9a9c8c6314521344d67523ddccf",
       "files": [
-        "packages/mermaid/src/diagrams/radar/db.ts",
-        "packages/mermaid/src/diagrams/radar/radar.spec.ts"
+        "packages/mermaid/src/diagrams/radar/db.ts"
       ],
       "language": "typescript",
-      "minedAt": "2026-08-09T17:24:34.477Z"
+      "minedAt": "2026-08-09T18:46:04.446Z"
+    },
+    {
+      "id": "GHSA-vmv7-4m6c-3cg5",
+      "cve": "CVE-2026-69255",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flowise: CSV Agent Remote Code Execution via Pyodide Code Injection — Root Shell Verified",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "f4e2794f6a576b94578f2fdafbf49c2fb304626c",
+      "parentCommit": "42d593f8ca854471059051a7fdd89bf8d8ab7c12",
+      "files": [
+        "packages/components/src/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:24.366Z"
     },
     {
       "id": "GHSA-wm8w-6qjm-cv43",
@@ -213,7 +609,78 @@
         "packages/nitro-server/src/runtime/utils/cache.ts"
       ],
       "language": "typescript",
-      "minedAt": "2026-08-09T17:24:35.524Z"
+      "minedAt": "2026-08-09T18:46:05.386Z"
+    },
+    {
+      "id": "GHSA-wvp2-4qqp-4h3r",
+      "cve": "CVE-2026-53944",
+      "cwe": "CWE-184",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Private IP filtering bypass to make server-side requests to internal services",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "9b7f2212970fade08ecbec543b405190471e38d4",
+      "parentCommit": "292bdc3581739bbefafeeed86f616027c261f710",
+      "files": [
+        "ghost/core/core/server/lib/request-external.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T18:46:13.980Z"
+    },
+    {
+      "id": "GHSA-x3hf-7cj6-3r4m",
+      "cve": "CVE-2026-69259",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flowise RCE via SQLite Record Manager Node",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "d07186844263bad057008863037466aff7c3390f",
+      "parentCommit": "3f257bdc8196082a178da7134a075824401b13b9",
+      "files": [
+        "packages/components/nodes/chains/SqlDatabaseChain/SqlDatabaseChain.ts",
+        "packages/components/nodes/memory/AgentMemory/AgentMemory.ts",
+        "packages/components/nodes/memory/AgentMemory/MySQLAgentMemory/MySQLAgentMemory.ts",
+        "packages/components/nodes/memory/AgentMemory/PostgresAgentMemory/PostgresAgentMemory.ts",
+        "packages/components/nodes/memory/AgentMemory/SQLiteAgentMemory/SQLiteAgentMemory.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:22.358Z"
+    },
+    {
+      "id": "GHSA-x6vm-w76m-8j7g",
+      "cve": "CVE-2026-69256",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flowise: Remote Code Execution Vulnerability in CSVAgent",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "c79fe56a6c249850e96bce9b4859f7a0083e4507",
+      "parentCommit": "3d69baed4032bce98c8f81294211f9b357b13fc9",
+      "files": [
+        "packages/components/nodes/agents/CSVAgent/CSVAgent.ts",
+        "packages/components/src/pythonCodeValidator.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:23.868Z"
+    },
+    {
+      "id": "GHSA-xc48-889x-5qmw",
+      "cve": "CVE-2026-69263",
+      "cwe": "CWE-184",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: CVE-2025-8943 Patch Bypass: npm_config_yes bypasses MCP environment variable blocklist (Unauthenticated RCE)",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "a4c4e4988cded15edf725e762560575b889ae351",
+      "parentCommit": "746d203a5cf517b86e983be0f2c52e06caa40f37",
+      "files": [
+        "packages/components/nodes/tools/MCP/CustomMCP/CustomMCP.ts",
+        "packages/components/nodes/tools/MCP/core.ts",
+        "packages/server/src/commands/base.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T18:46:21.247Z"
     }
   ]
 }
