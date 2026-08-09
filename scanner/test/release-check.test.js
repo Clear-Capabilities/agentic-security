@@ -429,7 +429,19 @@ test('release-check — the long benchmarks are informational, the correctness g
   for (const n of ['realworld-bench', 'synthetic-bench']) {
     assert.ok(tiers.informational.includes(n), `${n} must be informational`);
   }
-  for (const n of ['ci', 'corpus', 'sandbox-linux', 'determinism-compare']) {
+  for (const n of ['test', 'corpus', 'sandbox-linux', 'determinism-compare']) {
     assert.ok(tiers.blocking.includes(n), `${n} must be blocking`);
+  }
+});
+
+test('release-check — the tier file lists check-RUN names, never workflow names', () => {
+  // The first draft listed 'ci' and 'codeql', which are workflow names. They
+  // never appear as check runs, so they matched nothing — and branch protection
+  // configured from that list would have hung every PR on contexts that never
+  // report. Names must come from the check-runs API, not from the workflow file.
+  const tiers = readCheckTiers();
+  for (const bad of ['ci', 'codeql', 'Scanner F1 benchmark']) {
+    assert.ok(!tiers.blocking.includes(bad) && !tiers.informational.includes(bad),
+      `"${bad}" is a workflow name, not a check-run name`);
   }
 });

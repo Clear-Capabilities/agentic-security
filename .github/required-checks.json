@@ -23,22 +23,27 @@
     "ignorable.",
     "",
     "Adding a job? Put it in a list deliberately. The default is blocking, because a",
-    "check nobody classified is a check nobody thought about."
+    "check nobody classified is a check nobody thought about.",
+    "",
+    "THESE ARE CHECK-RUN NAMES (jobs), NOT WORKFLOW NAMES. The first draft of this",
+    "file listed 'ci' and 'codeql', which are workflow names and never appear as",
+    "check runs — they would have matched nothing here, and if branch protection had",
+    "been configured from this list, pull requests would have hung forever waiting on",
+    "contexts that never report. The names below were read from",
+    "`gh api repos/OWNER/REPO/commits/main/check-runs`. Verify the same way before",
+    "adding one."
   ],
   "blocking": [
-    "ci",
     "test",
     "corpus",
     "sandbox-linux",
     "determinism-compare",
     "determinism-attest (ubuntu-latest)",
     "determinism-attest (macos-latest)",
-    "analyze (javascript-typescript)",
-    "codeql"
+    "analyze (javascript-typescript)"
   ],
   "informational": [
     "realworld-bench",
-    "synthetic-bench",
-    "Scanner F1 benchmark"
+    "synthetic-bench"
   ]
 }
