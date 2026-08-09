@@ -26,14 +26,27 @@ import { computeStableId } from '../posture/stable-id.js';
 
 const SEVERITY_BY_TIER = { 'taint-confirmed': 'high', 'sink-adjacent': 'medium', 'unconfirmed': 'low' };
 
+// Guards against a malformed candidate producing a schema-invalid finding
+// (root CLAUDE.md requires { id, severity, file, line, vuln, cwe, ... } on
+// every finding). `hunter.js` already filters out candidates with no usable
+// file/line before they reach here, so this should never trigger in the
+// normal pipeline — but toFindingShape is exported and callable directly, and
+// degrading with `null` (rather than throwing) matches this subsystem's
+// degrade-don't-throw style everywhere else. Callers must skip a `null`.
 export function toFindingShape(candidate) {
+  const file = typeof candidate?.file === 'string' && candidate.file ? candidate.file : null;
+  const line = Number.isInteger(candidate?.line) ? candidate.line : null;
+  if (!file || line === null) return null;
+
   const tier = candidate?.confirmation?.tier || 'unconfirmed';
+  const lensTitle = candidate?.lens ? `${candidate.lens} candidate` : 'discovery candidate';
+  const title = typeof candidate?.title === 'string' && candidate.title ? candidate.title : lensTitle;
   const base = {
     id: `discovery-${candidate.lens}-${candidate.id}`,
     severity: SEVERITY_BY_TIER[tier] || 'low',
-    file: candidate.file,
-    line: candidate.line,
-    vuln: candidate.title,
+    file,
+    line,
+    vuln: title,
     cwe: candidate.cwe || 'CWE-710',
     description: candidate.rationale
       ? `${candidate.rationale} (entry point: ${candidate.entryPoint || 'unstated'}; sink: ${candidate.sink || 'unstated'})`
@@ -71,6 +84,7 @@ export function judgeCandidates(candidates, priorScan, triageFeedback) {
   const fresh = [], duplicates = [], suppressed = [];
   for (const c of candidates || []) {
     const f = toFindingShape(c);
+    if (!f) continue; // malformed candidate (no usable file/line) — degrade by skipping, never throw
     if (feedback[f.stableId] === 'fp') { suppressed.push({ ...f, suppressedBy: 'triage-fp' }); continue; }
     const locKey = `${f.file}|${f.line}|${f.family}`;
     // Location key is PRIMARY: same file, line, and family match existing findings.

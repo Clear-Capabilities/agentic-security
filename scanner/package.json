@@ -69,7 +69,7 @@
     "test:bench-modules": "node --test test/phase4-harness.test.js test/pipeline.test.js test/proof-corpus-lib.test.js test/proof-corpus-runner.test.js",
     "test:lifecycle": "node --test test/dead-code.test.js test/no-dead-modules.test.js test/stop-hook.test.js test/plugin-self-check.test.js test/skills-registry.test.js test/bodyguard.test.js test/cache-invalidator-guard.test.js test/dispatch-pre-tool.test.js test/dispatch-user-prompt.test.js test/session-start-model-capture.test.js test/sandbox.test.js test/sandbox-escape.test.js && node ../scripts/lint-command-descriptions.mjs",
     "test:eval": "node --test test/independent-eval.test.js test/realworld-recall.test.js",
-    "test:discovery": "node --test test/discovery-partition.test.js test/discovery-lenses.test.js test/discovery-hunter.test.js test/discovery-confirm.test.js test/discovery-disprove.test.js test/discovery-judge.test.js test/discovery-run.test.js test/discovery-wiring.test.js",
+    "test:discovery": "node --test test/discovery-partition.test.js test/discovery-lenses.test.js test/discovery-hunter.test.js test/discovery-confirm.test.js test/discovery-disprove.test.js test/discovery-judge.test.js test/discovery-run.test.js test/discovery-wiring.test.js test/discovery-llm-invoke.test.js",
     "eval:independent": "node ../bench/independent-eval/runner.mjs",
     "eval:independent:gate": "node ../bench/independent-eval/runner.mjs --gate default",
     "smoke": "node bin/agentic-security.js scan test/fixtures/vulnerable-js",

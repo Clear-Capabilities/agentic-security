@@ -13,8 +13,12 @@ panel · `judge.js` shapes findings and dedupes against the prior scan ·
 
 ## Rules
 
-- **A hunter proposes; it never decides.** Nothing reaches a report without
-  passing `confirm.js` and surviving `disprove.js`.
+- **A hunter proposes; it never decides.** `confirm.js` sets a confirmation
+  tier and never filters — an `unconfirmed` candidate still proceeds, because
+  the taint engine models only a subset of the program and the absence of
+  corroboration must never be laundered into a false-positive verdict.
+  `disprove.js` is the only stage that removes a candidate: nothing reaches a
+  report without surviving refutation there.
 - **Every LLM call is an injected `llmInvoke`.** No module may import an SDK or
   hard-code an endpoint. Absence of an LLM degrades to an empty, well-formed
   result — it never throws and never blocks a scan.

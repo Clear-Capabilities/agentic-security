@@ -5,11 +5,15 @@
 // other does not, the bug stays buried in one direction.
 //
 
-export async function defaultLlmInvoke(prompt) {
+const DEFAULT_TIMEOUT_MS = 60000;
+
+export async function defaultLlmInvoke(prompt, opts = {}) {
+  const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : DEFAULT_TIMEOUT_MS;
   const res = await fetch(process.env.AGENTIC_SECURITY_LLM_ENDPOINT, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ prompt }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`llm endpoint returned ${res.status}`);
   const body = await res.json();
@@ -17,6 +21,7 @@ export async function defaultLlmInvoke(prompt) {
 }
 
 export function resolveLlmInvoke(opts = {}) {
-  return opts.llmInvoke
-    || (process.env.AGENTIC_SECURITY_LLM_ENDPOINT ? defaultLlmInvoke : null);
+  if (opts.llmInvoke) return opts.llmInvoke;
+  if (!process.env.AGENTIC_SECURITY_LLM_ENDPOINT) return null;
+  return (prompt) => defaultLlmInvoke(prompt, { timeoutMs: opts.timeoutMs });
 }

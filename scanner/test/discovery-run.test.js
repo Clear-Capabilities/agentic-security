@@ -56,7 +56,7 @@ test('a refuted candidate never reaches fresh', async () => {
   };
   const r = await runDiscovery(CTX, { llmInvoke, lenses: ['injection'] });
   assert.equal(r.fresh.length, 0);
-  assert.equal(r.refuted.length, 1);
+  assert.equal(r.refutedCandidates.length, 1);
 });
 
 test('makeTaintProbe returns null rather than throwing on an unanalysable input', async () => {
@@ -78,6 +78,47 @@ test('an unknown lens key is recorded in coverage.reasons and does not abort the
   const r = await runDiscovery(CTX, { lenses: ['injection', 'not-a-real-lens'], llmInvoke });
   assert.equal(r.runs.length, 1);
   assert.ok(r.coverage.reasons.some(x => x.includes('not-a-real-lens')));
+});
+
+test('coverage.confirmedByTier and coverage.panelsRun/undecidedPanels reflect the confirm and disprove stages', async () => {
+  const llmInvoke = async (p) => {
+    if (/REFUTE/.test(p)) return '{"refuted":false,"reason":"looks real"}';
+    return '{"candidates":[{"title":"SQLi","file":"auth.js","line":1,"rationale":"concat","entryPoint":"u","sink":"db.query"}]}';
+  };
+  const r = await runDiscovery(CTX, { llmInvoke, lenses: ['injection'] });
+  assert.equal(r.fresh.length, 1);
+  // No taintProbe corroboration configured for this candidate's file/line in
+  // this fixture's callGraph coverage, so it lands unconfirmed.
+  const total = r.coverage.confirmedByTier['taint-confirmed'] + r.coverage.confirmedByTier['sink-adjacent'] + r.coverage.confirmedByTier['unconfirmed'];
+  assert.equal(total, 1);
+  assert.equal(r.coverage.panelsRun, 1);
+  assert.equal(r.coverage.undecidedPanels, 0, 'a real vote was cast, so this panel is not undecided');
+});
+
+test('coverage reports a reason when confirmation corroborates nothing', async () => {
+  const llmInvoke = async (p) => {
+    if (/REFUTE/.test(p)) return '{"refuted":false,"reason":"looks real"}';
+    return '{"candidates":[{"title":"SQLi","file":"auth.js","line":1,"rationale":"concat"}]}';
+  };
+  const r = await runDiscovery(CTX, { llmInvoke, lenses: ['injection'] });
+  assert.equal(r.coverage.confirmedByTier['unconfirmed'], 1);
+  assert.ok(r.coverage.reasons.some(x => /confirmation stage corroborated nothing/.test(x)));
+});
+
+test('coverage reports a reason when the refutation panel is undecided for every candidate', async () => {
+  // No REFUTE-matching branch: llmInvoke returns unparseable garbage for
+  // refutation prompts, so every vote is excluded and every panel is undecided.
+  const llmInvoke = async (p) => {
+    if (/REFUTE/.test(p)) return 'not json';
+    return '{"candidates":[{"title":"SQLi","file":"auth.js","line":1,"rationale":"concat"}]}';
+  };
+  const r = await runDiscovery(CTX, { llmInvoke, lenses: ['injection'] });
+  assert.equal(r.coverage.panelsRun, 1);
+  assert.equal(r.coverage.undecidedPanels, 1);
+  assert.ok(r.coverage.reasons.some(x => /refutation panel returned no votes/.test(x)));
+  // And the finding still survives — an outage must not quietly delete it —
+  // which is exactly why the coverage reason above matters: it is uncorroborated.
+  assert.equal(r.fresh.length, 1);
 });
 
 test('partial degradation within an area: areasHunted and areasFullyHunted diverge', async () => {

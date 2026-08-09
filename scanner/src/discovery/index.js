@@ -102,6 +102,28 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke: opts.llmInvoke });
   const { fresh, duplicates, suppressed } = judgeCandidates(survivors, ctx.priorScan, ctx.triageFeedback);
 
+  // Coverage must not stop at the hunter stage. `confirm.js` correctly never
+  // lowers a candidate below `unconfirmed`, and `disprove.js` correctly lets
+  // a candidate survive when no voter votes — each rule is right on its own,
+  // but composed, a run where BOTH later stages died silently would still
+  // report clean hunter coverage while 100% of raw, uncorroborated model
+  // output landed in `fresh`. These counters and reasons make that visible.
+  const confirmedByTier = { 'taint-confirmed': 0, 'sink-adjacent': 0, 'unconfirmed': 0 };
+  for (const c of confirmed) {
+    const tier = c?.confirmation?.tier;
+    if (tier && Object.prototype.hasOwnProperty.call(confirmedByTier, tier)) confirmedByTier[tier] += 1;
+  }
+  if (confirmed.length > 0 && confirmedByTier['taint-confirmed'] === 0 && confirmedByTier['sink-adjacent'] === 0) {
+    reasons.push(`confirmation stage corroborated nothing for ${confirmed.length} candidate(s) — all remain "unconfirmed"; the deterministic gate may not have run, and the findings below are uncorroborated, not vetted`);
+  }
+
+  const panelled = [...survivors, ...refuted];
+  const panelsRun = panelled.length;
+  const undecidedPanels = panelled.filter(c => c?.refutation?.undecided === true).length;
+  if (panelsRun > 0 && undecidedPanels === panelsRun) {
+    reasons.push(`refutation panel returned no votes for any of ${panelsRun} candidate(s) — every finding below survived unrefuted, not because it withstood scrutiny`);
+  }
+
   return {
     schema: 'agentic-security/discovery@1',
     focusAreas: areas.map(a => ({ id: a.id, label: a.label, files: a.files.length, size: a.size })),
@@ -109,7 +131,13 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     fresh,
     duplicates,
     suppressed,
-    refuted,
+    // `refutedCandidates` holds RAW candidates straight from `disprovePanel`,
+    // NOT findings — no `vuln`, `severity`, `parser`, or `stableId`. It is
+    // deliberately not run through `toFindingShape`: a refuted candidate is
+    // deliberately not promoted to a finding, and giving it finding shape
+    // would misrepresent it as one. Unlike `fresh`/`duplicates`/`suppressed`,
+    // do not iterate this array as if it were finding-shaped.
+    refutedCandidates: refuted,
     coverage: {
       areasPlanned: areas.length,
       // At least one lens run completed for the area. Does NOT mean every
@@ -119,6 +147,12 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       areasFullyHunted: fullyHunted.size,
       lensesPerArea: lenses.length,
       degradedRuns: runs.filter(r => r.degraded).length,
+      // Per-tier count of every candidate that went through confirm.js.
+      confirmedByTier,
+      // How many candidates went through the refutation panel, and how many
+      // of those came back with no votes at all (undecided, not refuted).
+      panelsRun,
+      undecidedPanels,
       reasons,
     },
   };

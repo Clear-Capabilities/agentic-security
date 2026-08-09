@@ -101,3 +101,30 @@ test('missing prior scan and feedback are tolerated', () => {
   const r = judgeCandidates([cand()], undefined, undefined);
   assert.equal(r.fresh.length, 1);
 });
+
+test('toFindingShape returns null for a candidate with no usable file', () => {
+  assert.equal(toFindingShape(cand({ file: null })), null);
+  assert.equal(toFindingShape(cand({ file: '' })), null);
+  assert.equal(toFindingShape(cand({ file: undefined })), null);
+});
+
+test('toFindingShape returns null for a candidate with a non-integer line', () => {
+  assert.equal(toFindingShape(cand({ line: null })), null);
+  assert.equal(toFindingShape(cand({ line: 'twelve' })), null);
+  assert.equal(toFindingShape(cand({ line: 1.5 })), null);
+  assert.equal(toFindingShape(cand({ line: undefined })), null);
+});
+
+test('toFindingShape falls back to a lens-derived title when title is missing', () => {
+  const f = toFindingShape(cand({ title: undefined }));
+  assert.equal(f.vuln, 'injection candidate');
+  const f2 = toFindingShape(cand({ title: '' }));
+  assert.equal(f2.vuln, 'injection candidate');
+});
+
+test('judgeCandidates silently skips a malformed candidate rather than throwing', () => {
+  const malformed = cand({ file: null });
+  const r = judgeCandidates([malformed, cand({ id: 'c2', line: 99 })], null, null);
+  assert.equal(r.fresh.length, 1);
+  assert.equal(r.fresh.length + r.duplicates.length + r.suppressed.length, 1);
+});

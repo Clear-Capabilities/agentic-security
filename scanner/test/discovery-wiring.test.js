@@ -18,9 +18,11 @@ test('the discovery subsystem has a local CLAUDE.md', () => {
   assert.ok(fs.existsSync(path.join(SCANNER, 'src', 'discovery', 'CLAUDE.md')));
 });
 
-test('the scan command documents the --hunt mode', () => {
+test('the scan command documents that --hunt is not yet wired', () => {
   const md = fs.readFileSync(path.join(REPO, 'commands', 'scan.md'), 'utf8');
-  assert.match(md, /--hunt/);
+  assert.match(md, /not yet wired/);
+  const hasHuntModeRow = md.split('\n').some(line => /^\|\s/.test(line) && line.includes('`--hunt`'));
+  assert.ok(!hasHuntModeRow, '--hunt must not appear as a documented mode row in the modes table');
 });
 
 test('the repository layout table lists the discovery subsystem', () => {
