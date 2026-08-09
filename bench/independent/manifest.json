@@ -1,0 +1,219 @@
+{
+  "schema": "agentic-security/independent-population@1",
+  "entries": [
+    {
+      "id": "GHSA-29g2-3rmr-qm68",
+      "cve": "CVE-2026-66062",
+      "cwe": "CWE-1333",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "SvelteKit: ReDoS (O(n^2)) in content negotiation — unauthenticated DoS via the Accept header",
+      "repo": "sveltejs/kit",
+      "fixCommit": "82712fc02c24b1dcf5b25d7a52129cd8455f04f5",
+      "parentCommit": "b27c82f9c6896d7127a4023a8b1868c68e4a27b9",
+      "files": [
+        "packages/kit/src/utils/http.js",
+        "packages/kit/src/utils/http.spec.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T17:24:32.856Z"
+    },
+    {
+      "id": "GHSA-3rrr-jr9j-h3q3",
+      "cve": "CVE-2026-71437",
+      "cwe": "CWE-1321",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Mermaid Architecture diagrams are vulnerable to prototype pollution",
+      "repo": "mermaid-js/mermaid",
+      "fixCommit": "99af3fc35ef0a9a9c8c6314521344d67523ddccf",
+      "parentCommit": "2337f7ecd629c8e777684a2edff341976230ad67",
+      "files": [
+        "packages/mermaid/src/diagrams/architecture/architecture.spec.ts",
+        "packages/mermaid/src/diagrams/architecture/architectureDb.ts",
+        "packages/mermaid/src/diagrams/architecture/architectureRenderer.ts",
+        "packages/mermaid/src/diagrams/architecture/architectureTypes.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T17:24:35.018Z"
+    },
+    {
+      "id": "GHSA-54fx-42gc-7vw4",
+      "cve": "CVE-2026-71848",
+      "cwe": "CWE-407",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Hono: Algorithmic Complexity DoS in Language Middleware",
+      "repo": "honojs/hono",
+      "fixCommit": "f70e2c31684387b3231cc38512a31df6ca76a1c7",
+      "parentCommit": "93fc250d8b4df58ea542cb945171de8013d5e6d5",
+      "files": [
+        "src/middleware/language/index.test.ts",
+        "src/middleware/language/language.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T17:24:32.351Z"
+    },
+    {
+      "id": "GHSA-55q2-fjhq-7xh7",
+      "cve": null,
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "DOMPurify: IN_PLACE hook removal leaves a detached subtree executable, causing XSS",
+      "repo": "cure53/DOMPurify",
+      "fixCommit": "3067f774676975de12306effd6db6ad7a9a8c17f",
+      "parentCommit": "a9ca1e537422319a557a9a2aa61f003b23b4a197",
+      "files": [
+        "dist/purify.cjs.d.ts",
+        "dist/purify.cjs.js",
+        "dist/purify.es.mjs",
+        "dist/purify.js",
+        "dist/purify.min.js"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T17:24:33.522Z"
+    },
+    {
+      "id": "GHSA-79qm-7rj5-m7r9",
+      "cve": "CVE-2026-71849",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Hono: Proxy Helper does not remove response headers listed in the `Connection` header",
+      "repo": "honojs/hono",
+      "fixCommit": "720b566290793d4358bf39843adcb7cf4da4548f",
+      "parentCommit": "f70e2c31684387b3231cc38512a31df6ca76a1c7",
+      "files": [
+        "src/helper/proxy/index.test.ts",
+        "src/helper/proxy/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T17:24:31.832Z"
+    },
+    {
+      "id": "GHSA-9pf5-hg6p-4pwp",
+      "cve": "CVE-2026-70599",
+      "cwe": "CWE-346",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Electron: Permission Check Handler Receives Main Frame Origin Instead of Requesting Iframe Origin",
+      "repo": "electron/electron",
+      "fixCommit": "0cbdf2f0375466d701aa393c92e0ec29eb89ea6c",
+      "parentCommit": "5442f1d7fb7722819eb949e3fecbd58ac110c9b6",
+      "files": [
+        "spec/api-session-spec.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T17:24:36.131Z"
+    },
+    {
+      "id": "GHSA-chgm-3698-jm42",
+      "cve": "CVE-2026-53947",
+      "cwe": "CWE-204",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Member existence leak via magic link sign-in response",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "fb2bb634653d99de68fc42d415721d755284fe30",
+      "parentCommit": "07d604100eb3df5c9b382fce6232928c96329448",
+      "files": [
+        "apps/portal/src/components/pages/magic-link-page.js",
+        "apps/portal/src/utils/errors.js",
+        "apps/portal/test/data-attributes.test.js",
+        "ghost/core/core/server/services/members/members-api/controllers/router-controller.js",
+        "ghost/core/test/e2e-api/members/send-magic-link.test.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T17:24:38.695Z"
+    },
+    {
+      "id": "GHSA-f23p-vx2j-j53r",
+      "cve": "CVE-2026-71850",
+      "cwe": "CWE-488",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Hono: `memo()` retains SSR output across requests, leading to cross-user data disclosure",
+      "repo": "honojs/hono",
+      "fixCommit": "0c45036d6b0ddf42ab2fa44639dc8710825d5c0f",
+      "parentCommit": "720b566290793d4358bf39843adcb7cf4da4548f",
+      "files": [
+        "src/jsx/base.ts",
+        "src/jsx/index.test.tsx"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T17:24:31.302Z"
+    },
+    {
+      "id": "GHSA-pr22-p9rp-2cqv",
+      "cve": "CVE-2026-70596",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Ghost: Cross-Site Scripting in Feature Image Captions",
+      "repo": "TryGhost/Ghost",
+      "fixCommit": "a8bea3a4ceec4c852b880f4885119453c3d8588e",
+      "parentCommit": "fbaa92327e52607036a1e42204c9eadcc751d82c",
+      "files": [
+        "apps/ember-admin/app/components/modal-post-history.js",
+        "apps/ember-admin/tests/acceptance/editor/post-revisions-test.js",
+        "ghost/core/core/frontend/services/proxy.js",
+        "ghost/core/core/server/data/importer/importers/json-to-html.js",
+        "ghost/core/test/unit/frontend/services/proxy.test.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T17:24:37.702Z"
+    },
+    {
+      "id": "GHSA-rg76-677x-56q9",
+      "cve": "CVE-2026-71851",
+      "cwe": "CWE-331",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "crypto-js: Insufficient Entropy in Cryptographic Secret Generation via Vulnerable CryptoJS Dependency Chain",
+      "repo": "brix/crypto-js",
+      "fixCommit": "b405ff597fb3ac76a7bdfbc72dca10ba1079b1d5",
+      "parentCommit": "8e6d15bf2e26d6ff0af5277df2604ca12b60a718",
+      "files": [
+        "src/core.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T17:24:30.836Z"
+    },
+    {
+      "id": "GHSA-rhh3-jpg6-66xh",
+      "cve": "CVE-2026-71439",
+      "cwe": "CWE-606",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Mermaid radar diagrams are vulnerable to DoS",
+      "repo": "mermaid-js/mermaid",
+      "fixCommit": "59b22fad2b3bb04f87a476c84a8a2b24679e607e",
+      "parentCommit": "99af3fc35ef0a9a9c8c6314521344d67523ddccf",
+      "files": [
+        "packages/mermaid/src/diagrams/radar/db.ts",
+        "packages/mermaid/src/diagrams/radar/radar.spec.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T17:24:34.477Z"
+    },
+    {
+      "id": "GHSA-wm8w-6qjm-cv43",
+      "cve": "CVE-2026-71316",
+      "cwe": "CWE-524",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Nuxt runtime payload cache discloses another user's SSR data across users and to unauthenticated clients",
+      "repo": "nuxt/nuxt",
+      "fixCommit": "ac9b41a36b62296a117862254ee7d2b21a2a5203",
+      "parentCommit": "4e35ae9babd94be53246e31200232d48438bb34e",
+      "files": [
+        "packages/nitro-server/src/index.ts",
+        "packages/nitro-server/src/runtime/handlers/renderer.ts",
+        "packages/nitro-server/src/runtime/utils/cache.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T17:24:35.524Z"
+    }
+  ]
+}

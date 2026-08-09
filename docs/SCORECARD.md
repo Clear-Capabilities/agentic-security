@@ -50,6 +50,39 @@ counts on this repository's own non-fixture source, where every count is
 reviewed by hand and any movement is a real change. Publishing a number we
 cannot defend would cost more credibility than the number is worth.
 
+## Independent evaluation population
+
+The corpus below is a **regression net**, not an accuracy measurement — its
+fixtures and its labels are both written here, which is why its detection rate
+sits at the ceiling. `bench/independent/` is the other instrument: real upstream
+code at the commit where a vulnerability really existed, with the CWE assigned by
+a public advisory database rather than by this project.
+
+First measurement, 2026-08-09, **n=12**. That clears the runner's reliability
+floor of 10, but only just — twelve entries is a demonstration that the
+instrument works, not a population anyone should quote a percentage from:
+
+| | |
+| --- | --- |
+| Precision | 50.0% (2/4) |
+| Recall | 16.7% (2/12) |
+| F1 | 0.250 |
+| Raw | TP=2 FP=2 FN=10 TN=10 |
+
+Against 100% on the curated corpus. **That gap is the most useful number in this
+document**, and publishing it is the point of the exercise.
+
+Two things make this a LOWER BOUND rather than a verdict, both documented in
+`bench/independent/README.md`:
+
+1. The trees contain only the files the fix commit changed, so an
+   interprocedural finding that needs a caller in another file cannot be made —
+   even where the engine would find it on the whole repository.
+2. Advisories carrying a single fix commit skew towards long-tail weakness
+   classes rather than the injection families a SAST engine targets first.
+
+Reproduce with `npm run bench:independent:fetch && npm run bench:independent`.
+
 ## Corpus results (measured this run)
 
 | Population | Detected / correctly silent |

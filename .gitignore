@@ -80,3 +80,6 @@ scanner/reports/
 
 # Gate verdict cache (PRD R1) — per-machine, never shared, never committed.
 .agentic-security/gate-verdicts.json
+
+# Independent evaluation population: upstream source is FETCHED, never vendored.
+bench/independent/cache/
