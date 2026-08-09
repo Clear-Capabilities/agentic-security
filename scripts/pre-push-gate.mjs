@@ -73,6 +73,22 @@ export const BYPASS_HINT =
 
 export const CHECKS = [
   {
+    id: 'worktree-matches-push',
+    title: 'Working tree matches the commit being pushed',
+    remedy: 'Commit or stash your changes so the suites run against the same ' +
+      'tree you are pushing. Every check below tests the WORKING TREE; if it ' +
+      'differs from the pushed commit, a green gate describes code you are ' +
+      'not uploading.',
+  },
+  {
+    id: 'push-blast-radius',
+    title: 'Push does not delete an implausible number of tracked files',
+    remedy: 'Inspect `git diff --stat <base>..HEAD`. If the deletion is real ' +
+      'and intended, push with --no-verify and say so in the commit message. ' +
+      'If it is not, your history has been rewritten by something you did not ' +
+      'intend — check `git reflog` before doing anything else.',
+  },
+  {
     id: 'bundle-integrity',
     title: 'Built bundle matches its SHA-256 sidecar',
     remedy: 'Run `npm run build` in scanner/ and commit both ' +
@@ -116,6 +132,102 @@ function result(errors = [], warnings = []) {
 // ---------------------------------------------------------------------------
 
 const ZERO_SHA = /^0+$/;
+
+/**
+ * THE GATE TESTS THE WORKING TREE. IT PUSHES REFS. THOSE ARE NOT THE SAME THING.
+ *
+ * This is not a hypothetical. A run of this gate once passed all four checks in
+ * 184s on a branch whose committed tree was missing 421 files and 90,282 lines
+ * of scanner/src — because those files still existed on disk as untracked, so
+ * every suite imported them and went green while the refs being uploaded did
+ * not contain them. The push succeeded and shipped a gutted tree.
+ *
+ * So: before spending minutes on suites, confirm the thing they are about to
+ * measure is the thing being sent.
+ *
+ * Tracked modifications or deletions FAIL. A dirty tracked tree means the
+ * verdict provably describes different content than the commit.
+ *
+ * Untracked files FAIL past a small threshold. A couple of scratch files are
+ * ordinary; a large body of them means the suites may be exercising code that
+ * is absent from the pushed commit, which is exactly the shape of the incident
+ * above. Below the threshold they are reported as warnings so they stay visible
+ * without becoming noise.
+ *
+ * `.gitignore`d paths never appear in `git status --porcelain` output, so
+ * node_modules and generated state do not count toward anything here.
+ */
+export function evaluateWorktreeMatchesPush(porcelain, opts = {}) {
+  const maxUntracked = Number.isInteger(opts.maxUntracked) ? opts.maxUntracked : 20;
+  const lines = String(porcelain ?? '').split('\n').map(l => l.replace(/\s+$/, '')).filter(Boolean);
+
+  const untracked = [];
+  const trackedChanges = [];
+  for (const line of lines) {
+    if (line.startsWith('??')) untracked.push(line.slice(3));
+    else trackedChanges.push(line);
+  }
+
+  const errors = [];
+  const warnings = [];
+
+  if (trackedChanges.length > 0) {
+    const shown = trackedChanges.slice(0, 10).map(l => `      ${l}`).join('\n');
+    errors.push(
+      `${trackedChanges.length} tracked file(s) differ from HEAD, so the suites ` +
+      'would test content that is not in the commit being pushed:\n' + shown +
+      (trackedChanges.length > 10 ? `\n      … and ${trackedChanges.length - 10} more` : ''));
+  }
+
+  if (untracked.length > maxUntracked) {
+    errors.push(
+      `${untracked.length} untracked files are present (threshold ${maxUntracked}). ` +
+      'The suites may be importing files that the pushed commit does not contain. ' +
+      'This is the signature of a history that was rewritten underneath a working ' +
+      'tree — check `git log --oneline -5` and `git reflog` before pushing.');
+  } else if (untracked.length > 0) {
+    warnings.push(`${untracked.length} untracked file(s) present (under the ${maxUntracked} threshold): ` +
+      untracked.slice(0, 5).join(', ') + (untracked.length > 5 ? ', …' : ''));
+  }
+
+  return result(errors, warnings);
+}
+
+/**
+ * A push that deletes most of the source tree is almost never intentional, and
+ * it is exactly what a runaway process or a mis-resolved rebase produces. This
+ * measures the refs being pushed rather than the working tree, so it is the one
+ * check that cannot be fooled by files that exist only on disk.
+ *
+ * `measured: false` (no base commit to diff against — a genuinely first push)
+ * passes with a warning rather than failing. That is a deliberate exception to
+ * this file's unrunnable-is-a-failure rule: "there is no previous state" is a
+ * real, legitimate state, not a broken check, and failing it would make the
+ * first push of any new repository impossible.
+ */
+export function evaluatePushBlastRadius(input = {}) {
+  const { measured = true, filesDeleted = 0, filesInBase = 0, base = null } = input;
+  const maxDeleted = Number.isInteger(input.maxDeleted) ? input.maxDeleted : 50;
+  const maxFraction = typeof input.maxFraction === 'number' ? input.maxFraction : 0.10;
+
+  if (!measured) {
+    return result([], ['no base commit to compare against, so deletion blast radius ' +
+      'was NOT measured for this push (a brand-new branch with no shared ancestor).']);
+  }
+
+  const errors = [];
+  const fraction = filesInBase > 0 ? filesDeleted / filesInBase : 0;
+  const where = base ? ` vs ${String(base).slice(0, 12)}` : '';
+
+  if (filesDeleted > maxDeleted) {
+    errors.push(`this push deletes ${filesDeleted} tracked file(s)${where}, over the ` +
+      `${maxDeleted}-file threshold.`);
+  } else if (filesInBase > 0 && fraction > maxFraction) {
+    errors.push(`this push deletes ${filesDeleted} of ${filesInBase} tracked file(s)${where} ` +
+      `(${(fraction * 100).toFixed(1)}%), over the ${(maxFraction * 100).toFixed(0)}% threshold.`);
+  }
+  return result(errors);
+}
 
 /**
  * Parse the hook's stdin. Git writes one line per ref being pushed:
@@ -338,6 +450,42 @@ function runNpmGate(script) {
   return evaluateCheckOutcome({ label, exitCode: r.status });
 }
 
+/** `git status --porcelain` for the repo, or null when it cannot be read. */
+function porcelainStatus() {
+  const r = run('git', ['status', '--porcelain'], { cwd: REPO, env: envWithoutGitContext() });
+  return r.status === 0 ? r.stdout : null;
+}
+
+/**
+ * Resolve the commit to measure a push against: the remote's current tip when
+ * it has one, otherwise the fork point from the default branch. Returns
+ * `{ measured:false }` when neither exists.
+ */
+function pushBase(gatedRefs) {
+  const ref = (gatedRefs || [])[0];
+  if (!ref) return { measured: false };
+  const remote = String(ref.remoteSha || '');
+  if (remote && !ZERO_SHA.test(remote)) {
+    const exists = run('git', ['cat-file', '-e', `${remote}^{commit}`], { cwd: REPO, env: envWithoutGitContext() });
+    if (exists.status === 0) return { measured: true, base: remote };
+  }
+  for (const candidate of ['origin/main', 'origin/master', 'main', 'master']) {
+    const mb = run('git', ['merge-base', candidate, ref.localSha], { cwd: REPO, env: envWithoutGitContext() });
+    if (mb.status === 0 && mb.stdout.trim()) return { measured: true, base: mb.stdout.trim() };
+  }
+  return { measured: false };
+}
+
+/** Count tracked files deleted between `base` and `head`, and the base's size. */
+function deletionStats(base, head) {
+  const changed = run('git', ['diff', '--name-status', `${base}..${head}`], { cwd: REPO, env: envWithoutGitContext() });
+  if (changed.status !== 0) return null;
+  const filesDeleted = changed.stdout.split('\n').filter(l => /^D\s/.test(l)).length;
+  const all = run('git', ['ls-tree', '-r', '--name-only', base], { cwd: REPO, env: envWithoutGitContext() });
+  const filesInBase = all.status === 0 ? all.stdout.split('\n').filter(Boolean).length : 0;
+  return { filesDeleted, filesInBase };
+}
+
 function readStdin() {
   try {
     // fd 0; returns '' when stdin is a tty with nothing piped.
@@ -429,9 +577,31 @@ export function main(argv = []) {
 
   const entries = [];
   for (const check of CHECKS) {
-    const r = check.id === 'bundle-integrity'
-      ? evaluateBundleIntegrity(bundleHashes())
-      : runNpmGate(check.npmScript);
+    let r;
+    if (check.id === 'worktree-matches-push') {
+      const porcelain = porcelainStatus();
+      // Cannot read status => cannot know what is being tested. Rule 1 applies.
+      r = porcelain === null
+        ? result(['`git status --porcelain` could not be read, so it is unknown whether ' +
+          'the suites would test the same content as the pushed commit — an ' +
+          'unverifiable gate is not a passing gate.'])
+        : evaluateWorktreeMatchesPush(porcelain);
+    } else if (check.id === 'push-blast-radius') {
+      const b = pushBase(scope.gated);
+      if (!b.measured) {
+        r = evaluatePushBlastRadius({ measured: false });
+      } else {
+        const stats = deletionStats(b.base, 'HEAD');
+        r = stats === null
+          ? result([`could not diff HEAD against ${String(b.base).slice(0, 12)} to measure ` +
+            'how much this push deletes — an unverifiable gate is not a passing gate.'])
+          : evaluatePushBlastRadius({ ...stats, base: b.base });
+      }
+    } else if (check.id === 'bundle-integrity') {
+      r = evaluateBundleIntegrity(bundleHashes());
+    } else {
+      r = runNpmGate(check.npmScript);
+    }
     entries.push({ ...check, result: r });
     if (!r.ok) break; // fastest-fail-first: no point burning minutes after a failure.
   }

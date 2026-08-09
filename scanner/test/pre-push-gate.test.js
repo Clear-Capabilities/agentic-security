@@ -18,6 +18,8 @@ import {
   summarize,
   HOOKS_PATH,
   envWithoutGitContext,
+  evaluateWorktreeMatchesPush,
+  evaluatePushBlastRadius,
 } from '../../scripts/pre-push-gate.mjs';
 
 const ZERO = '0'.repeat(40);
@@ -100,9 +102,14 @@ test('pre-push-gate — no refs at all means nothing to push, so nothing to gate
 });
 
 // ------------------------------------------------------------ ordering
-test('pre-push-gate — checks run cheapest-first: bundle integrity precedes the suites', () => {
+test('pre-push-gate — checks run cheapest-first: the guards and bundle integrity precede the suites', () => {
+  // The two leading guards answer "is the thing I am about to spend two minutes
+  // measuring actually the thing being pushed?", so they come before everything.
   const ids = orderedCheckIds();
-  assert.deepEqual(ids, ['bundle-integrity', 'test-suite', 'corpus-gate', 'self-scan-gate']);
+  assert.deepEqual(ids, [
+    'worktree-matches-push', 'push-blast-radius',
+    'bundle-integrity', 'test-suite', 'corpus-gate', 'self-scan-gate',
+  ]);
 });
 
 test('pre-push-gate — every check declares a title and a remedy', () => {
@@ -240,4 +247,77 @@ test('envWithoutGitContext does not mutate the source environment', () => {
   const source = { GIT_DIR: '/repo/.git', PATH: '/usr/bin' };
   envWithoutGitContext(source);
   assert.equal(source.GIT_DIR, '/repo/.git', 'process.env must not be modified in place');
+});
+
+// --- the gate must verify what it is PUSHING, not just what is on disk -------
+//
+// A run of this gate once passed all four checks in 184s on a branch whose
+// committed tree was missing 421 files and 90,282 lines of scanner/src. The
+// files still existed on disk as untracked, so every suite imported them and
+// went green while the refs being uploaded did not contain them. These two
+// checks exist so that cannot happen silently again; either one catches it.
+
+test('worktree check fails when tracked files differ from HEAD', () => {
+  const r = evaluateWorktreeMatchesPush(' M scanner/src/engine.js\nD  scanner/src/gone.js\n');
+  assert.equal(r.ok, false);
+  assert.match(r.errors[0], /2 tracked file\(s\) differ/);
+  assert.match(r.errors[0], /not in the commit being pushed/);
+});
+
+test('worktree check passes on a clean tree', () => {
+  const r = evaluateWorktreeMatchesPush('');
+  assert.equal(r.ok, true);
+  assert.equal(r.warnings.length, 0);
+});
+
+test('worktree check tolerates a few untracked files but says so', () => {
+  const r = evaluateWorktreeMatchesPush('?? notes.md\n?? scratch.txt\n');
+  assert.equal(r.ok, true);
+  assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings[0], /2 untracked/);
+});
+
+test('worktree check fails on a flood of untracked files — the incident signature', () => {
+  // The real incident looked exactly like this: the history was rewritten
+  // underneath the working tree, so the whole project read as untracked.
+  const porcelain = Array.from({ length: 40 }, (_, i) => `?? src/file${i}.js`).join('\n');
+  const r = evaluateWorktreeMatchesPush(porcelain);
+  assert.equal(r.ok, false);
+  assert.match(r.errors[0], /40 untracked files/);
+  assert.match(r.errors[0], /reflog/);
+});
+
+test('blast-radius check fails on a mass deletion, quoting both counts', () => {
+  const r = evaluatePushBlastRadius({ filesDeleted: 421, filesInBase: 900, base: 'abc123def456' });
+  assert.equal(r.ok, false);
+  assert.match(r.errors[0], /421 tracked file/);
+});
+
+test('blast-radius check fails on a large FRACTION even under the absolute cap', () => {
+  // 30 of 100 is only 30 files — under the 50-file cap — but a third of the
+  // repository. The fraction rule is what catches a small project.
+  const r = evaluatePushBlastRadius({ filesDeleted: 30, filesInBase: 100 });
+  assert.equal(r.ok, false);
+  assert.match(r.errors[0], /30\.0%/);
+});
+
+test('blast-radius check passes an ordinary deletion', () => {
+  const r = evaluatePushBlastRadius({ filesDeleted: 3, filesInBase: 900 });
+  assert.equal(r.ok, true);
+});
+
+test('blast-radius check warns rather than fails when there is no base to measure', () => {
+  // A genuinely first push has no previous state. That is a real condition,
+  // not a broken check, so it must not block — but it must be visible.
+  const r = evaluatePushBlastRadius({ measured: false });
+  assert.equal(r.ok, true);
+  assert.match(r.warnings[0], /NOT measured/);
+});
+
+test('the two new guards run before the expensive suites', () => {
+  const ids = orderedCheckIds();
+  assert.equal(ids[0], 'worktree-matches-push');
+  assert.equal(ids[1], 'push-blast-radius');
+  assert.ok(ids.indexOf('test-suite') > ids.indexOf('push-blast-radius'),
+    'a guard that runs after the suites cannot save the minutes it exists to save');
 });
