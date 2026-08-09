@@ -1,0 +1,109 @@
+# Publish the scanner to npm, with provenance. PRD R6.
+#
+# WHY THIS EXISTS
+# ---------------
+# Publishing was manual and local, so the published package carried no
+# provenance attestation: a consumer could not verify that a given version was
+# built from this repository at a known commit. For a project that ships signed
+# scan attestations, a per-install HMAC over last-scan.json, and a
+# reproducibility scorecard, that was the least defensible gap in its own supply
+# chain. npm provenance requires a trusted CI publisher with OIDC, so it could
+# not be a flag — it needed this file.
+#
+# WHAT THIS DOES NOT REPLACE
+# --------------------------
+# The local path still works and is still fully gated: `npm publish` runs
+# prepublishOnly, which runs the same release-check. This adds a PREFERRED path,
+# it does not remove the existing one. Only this path produces provenance, and
+# the docs say so plainly rather than implying both are equivalent.
+#
+# WHY --no-cache
+# --------------
+# PRD R1 lets the release gate reuse a verdict the pre-push gate produced for
+# identical inputs. That cache is per-machine by design and must never cross to
+# CI: a runner is a different machine, and the whole point of hosted CI is to
+# prove the release works somewhere other than the maintainer's laptop. This job
+# always runs every check for real.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run the full gate but do not publish'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # required for npm provenance (OIDC)
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # release-check inspects history and origin/main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 'lts/*'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install scanner dependencies
+        working-directory: scanner
+        run: npm ci
+
+      # The tag is the release's identity. If it disagrees with the version being
+      # published, stop before anything is built — a mismatch here means the tag
+      # and the artifact would describe different releases forever.
+      - name: Tag must match the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./scanner/package.json').version")
+          echo "tag=$TAG package=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag v$TAG does not match scanner/package.json version $PKG"
+            exit 1
+          fi
+
+      - name: Build the bundle
+        working-directory: scanner
+        run: npm run build
+
+      - name: Sync scanner changelog
+        run: node scripts/sync-scanner-changelog.mjs
+
+      # The full gate, with caching disabled. A red gate stops the publish.
+      # --allow-unverified-ci is deliberately NOT passed: this job IS running in
+      # CI, and the hosted-CI check reads the status of the commit being
+      # released, which must already be green.
+      - name: Release gate
+        working-directory: scanner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENTIC_SECURITY_GATE_NO_CACHE: '1'
+        run: node ../scripts/release-check.mjs --no-cache
+
+      - name: Publish with provenance
+        if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
+        working-directory: scanner
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: Dry run — what would have been published
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') || inputs.dry_run == true }}
+        working-directory: scanner
+        run: |
+          echo "Dry run: the gate passed and the package would publish."
+          npm pack --dry-run

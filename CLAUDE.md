@@ -71,6 +71,13 @@ After any change to `scanner/src/` or `scanner/bin/`, run `npm run build` before
 - **Deliberately excluded:** the network-dependent checks — dependency currency and hosted-CI status. They are slow, they describe the state of the world rather than the code, and an offline developer must still be able to push. They run at publish time via `npm run release:check` (`prepublishOnly`), which remains the full set.
 - An unrunnable check (missing script, spawn failure) is a **FAILURE**, never a skip.
 
+### Two publish paths, and only one carries provenance
+
+- **Tag a release (preferred).** Push a `vX.Y.Z` tag. `.github/workflows/release.yml` runs the full gate with `--no-cache` on a clean runner and publishes with `npm publish --provenance`, so the artifact carries a verifiable link back to this repository and commit. Needs the `NPM_TOKEN` repository secret.
+- **Local `npm publish`.** Still supported and still fully gated by `prepublishOnly`. It produces **no provenance attestation** — npm requires a trusted CI publisher with OIDC for that. Use it when you must; prefer the tag.
+
+`workflow_dispatch` on the release workflow runs the gate and `npm pack --dry-run` without publishing, which is the cheapest way to check a release would go out cleanly.
+
 When cutting a release, run `npm run scorecard` (regenerates `docs/SCORECARD.md` + `docs/scorecard.json`), review the numbers, and commit the result — `npm run scorecard:check` enforces this at publish time (wired into `prepublishOnly`) by failing when the committed scorecard's `engineVersion` doesn't match `scanner/package.json`'s version; it checks, it does not regenerate.
 
 ---
