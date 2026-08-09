@@ -52,6 +52,11 @@ import { spawnSync } from 'node:child_process';
 import { evaluateScorecardFreshness } from './scorecard-check.mjs';
 import { runDependencyCurrencyCheck } from './dependency-currency.mjs';
 import { runPackageContentsCheck } from './package-contents-check.mjs';
+import { signLastScan } from '../scanner/src/posture/integrity.js';
+import {
+  gatherKeyParts, computeVerdictKey, loadCache, recordVerdict,
+  evaluateCachedVerdict, renderProvenance, cachingDisabled,
+} from './gate-verdict-cache.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -324,6 +329,10 @@ const CI_OK_CONCLUSIONS = new Set(['success', 'neutral', 'skipped']);
  * tiered is a job nobody thought about, and defaulting it to informational would
  * let a new correctness gate silently stop gating.
  */
+// Reuse the existing per-install HMAC rather than a second key mechanism. An
+// unsignable cache is unverifiable, loadCache discards it, and the checks run.
+function cacheSigner(body) { try { return signLastScan(body); } catch { return null; } }
+
 /** The committed blocking/informational classification (PRD R2), or null. */
 export const CHECK_TIERS_FILE = '.github/required-checks.json';
 
@@ -566,10 +575,50 @@ function main(argv) {
   const versionResult = evaluateVersionConsistency({ sources: versionSources });
   const version = versionResult.version;
 
+  // PRD R1 — this gate is the CONSUMER of the verdict cache. The pre-push gate
+  // ran these same three checks on this same commit minutes ago; re-deriving
+  // them is ~290s of work on byte-identical inputs. See
+  // scripts/gate-verdict-cache.mjs for the key and the safety rules.
+  const cacheCtx = (() => {
+    if (cachingDisabled(argv)) return { enabled: false, records: {}, key: null, why: '--no-cache' };
+    const parts = gatherKeyParts({ repo: REPO });
+    const key = computeVerdictKey(parts);
+    if (!key) return { enabled: false, records: {}, key: null, why: 'a cache-key input could not be read' };
+    const cache = loadCache(REPO, { signer: cacheSigner });
+    return { enabled: true, key, commitSha: parts.commitSha, records: cache.records, rejected: cache.rejected };
+  })();
+  // NOTE: deliberately NOT written here. `out` is initialised further down, and
+  // this line only executes when the cache is rejected — so a straight
+  // out.write() at this point was a latent ReferenceError that fired only on the
+  // tamper/corruption path, i.e. exactly the path that has to work. Deferred to
+  // the reporting section below.
+
+  // Only the three slow, inputs-determined gates. Everything else is either
+  // sub-second or inspects live state that is not in the key.
+  const CACHEABLE = new Set(['test-suite', 'corpus-gate', 'self-scan-gate']);
+  const cachedProvenance = new Map();
+
   const results = new Map();
   const evaluate = (id, fn) => {
     if (!planned.has(id)) return;
-    results.set(id, fn());
+    if (cacheCtx.enabled && CACHEABLE.has(id)) {
+      const rec = cacheCtx.records[id];
+      const verdict = evaluateCachedVerdict({ record: rec, key: cacheCtx.key, checkId: id });
+      if (verdict.usable) {
+        cachedProvenance.set(id, renderProvenance(rec));
+        results.set(id, { ok: true, errors: [], warnings: [] });
+        return;
+      }
+    }
+    const startedCheck = Date.now();
+    const r = fn();
+    if (r?.ok && cacheCtx.enabled && CACHEABLE.has(id)) {
+      recordVerdict(REPO, {
+        checkId: id, key: cacheCtx.key, commitSha: cacheCtx.commitSha,
+        by: 'release-check', durationMs: Date.now() - startedCheck,
+      }, { signer: cacheSigner });
+    }
+    results.set(id, r);
   };
 
   evaluate('working-tree-clean', () =>
@@ -624,6 +673,10 @@ function main(argv) {
     `${fast ? '  [--fast: slow gates skipped]' : ''}\n`);
   out.write(`${'='.repeat(64)}\n`);
 
+  if (cacheCtx.rejected) {
+    out.write(`  (verdict cache discarded: ${cacheCtx.rejected} — every check was run)\n`);
+  }
+
   const failed = [];
   for (const check of CHECKS) {
     const r = results.get(check.id);
@@ -632,6 +685,9 @@ function main(argv) {
       continue;
     }
     out.write(`${r.ok ? 'PASS' : 'FAIL'}  ${check.title}\n`);
+    // A reused verdict always says so. Skipping work silently would make a
+    // green gate indistinguishable from a gate that never ran.
+    if (cachedProvenance.has(check.id)) out.write(`      ↳ ${cachedProvenance.get(check.id)}\n`);
     for (const w of r.warnings || []) out.write(`      ⚠ ${w}\n`);
     for (const e of r.errors || []) out.write(`      ✗ ${e}\n`);
     if (!r.ok) failed.push({ ...check, errors: r.errors || [] });

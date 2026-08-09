@@ -77,3 +77,6 @@ scanner/reports/
 # worktrees directory — `.claude/settings.json` is the team's committed
 # read-deny list and must stay tracked.
 .claude/worktrees/
+
+# Gate verdict cache (PRD R1) — per-machine, never shared, never committed.
+.agentic-security/gate-verdicts.json

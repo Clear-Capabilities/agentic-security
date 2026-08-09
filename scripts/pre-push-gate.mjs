@@ -55,6 +55,11 @@ import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { runPackageContentsCheck } from './package-contents-check.mjs';
+import { signLastScan } from '../scanner/src/posture/integrity.js';
+import {
+  gatherKeyParts, computeVerdictKey, loadCache, recordVerdict,
+  evaluateCachedVerdict, renderProvenance, cachingDisabled,
+} from './gate-verdict-cache.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -458,6 +463,36 @@ function runNpmGate(script) {
   return evaluateCheckOutcome({ label, exitCode: r.status });
 }
 
+// --- PRD R1: verdict cache -------------------------------------------------
+//
+// This gate is the PRODUCER. It runs the slow checks for real and records each
+// PASS, so the release gate minutes later does not re-derive the same facts
+// about the same commit. It reads the cache too — repeated pushes of an
+// unchanged commit are common enough to be worth it — but the value is mostly
+// downstream. See scripts/gate-verdict-cache.mjs for why this is safe.
+function gateCacheContext(argv) {
+  if (cachingDisabled(argv)) return { enabled: false, key: null, records: {} };
+  const parts = gatherKeyParts({ repo: REPO });
+  const key = computeVerdictKey(parts);
+  // A null key means an input could not be read. That is "cannot cache", which
+  // resolves to "run everything" — never to a shared or partial key.
+  if (!key) return { enabled: false, key: null, records: {}, reason: 'one or more cache-key inputs unreadable' };
+  const cache = loadCache(REPO, { signer: cacheSigner });
+  return { enabled: true, key, commitSha: parts.commitSha, records: cache.records, rejected: cache.rejected };
+}
+
+// Sign with the existing per-install HMAC key rather than inventing a second
+// mechanism — posture/integrity.js is the same primitive last-scan.json uses.
+// An unsignable cache is an unverifiable cache, which loadCache discards, which
+// means the checks simply run. Failing to sign can never produce a skipped check.
+function cacheSigner(body) {
+  try {
+    return signLastScan(body);
+  } catch {
+    return null;
+  }
+}
+
 /** `git status --porcelain` for the repo, or null when it cannot be read. */
 function porcelainStatus() {
   const r = run('git', ['status', '--porcelain'], { cwd: REPO, env: envWithoutGitContext() });
@@ -583,8 +618,26 @@ export function main(argv = []) {
   for (const s of scope.skipped || []) out.write(`  (skipped ${s.ref}: ${s.why})\n`);
   out.write(`${'='.repeat(64)}\n`);
 
+  const cacheCtx = gateCacheContext(argv);
+  if (cacheCtx.rejected) {
+    out.write(`  (verdict cache discarded: ${cacheCtx.rejected} — checks will run)\n`);
+  }
+
   const entries = [];
   for (const check of CHECKS) {
+    // Only the slow, deterministic-on-inputs checks are cacheable. The two
+    // leading guards inspect the CURRENT working tree and refs, which are not
+    // in the key, so caching them would be wrong; bundle-integrity and
+    // package-contents are already sub-second.
+    const cacheable = Boolean(check.npmScript);
+    if (cacheable && cacheCtx.enabled) {
+      const rec = cacheCtx.records[check.id];
+      const verdict = evaluateCachedVerdict({ record: rec, key: cacheCtx.key, checkId: check.id });
+      if (verdict.usable) {
+        entries.push({ ...check, result: result(), cached: renderProvenance(rec) });
+        continue;
+      }
+    }
     let r;
     if (check.id === 'worktree-matches-push') {
       const porcelain = porcelainStatus();
@@ -610,7 +663,16 @@ export function main(argv = []) {
     } else if (check.id === 'package-contents') {
       r = runPackageContentsCheck(REPO);
     } else {
+      const startedCheck = Date.now();
       r = runNpmGate(check.npmScript);
+      // Record the PASS so the release gate does not re-derive it minutes later.
+      // Only a pass: a cached failure would strand a developer who has fixed it.
+      if (r.ok && cacheCtx.enabled) {
+        recordVerdict(REPO, {
+          checkId: check.id, key: cacheCtx.key, commitSha: cacheCtx.commitSha,
+          by: 'pre-push', durationMs: Date.now() - startedCheck,
+        }, { signer: cacheSigner });
+      }
     }
     entries.push({ ...check, result: r });
     if (!r.ok) break; // fastest-fail-first: no point burning minutes after a failure.
@@ -624,7 +686,16 @@ export function main(argv = []) {
   const elapsed = ((Date.now() - started) / 1000).toFixed(0);
 
   out.write(`\n${'='.repeat(64)}\n`);
-  for (const line of summary.lines) out.write(`${line}\n`);
+  // A reused verdict states its provenance directly under its own PASS line. A
+  // gate that silently skips work is indistinguishable from one that is not
+  // running, so this is not optional decoration.
+  const cachedById = new Map(entries.filter(e => e.cached).map(e => [e.title, e.cached]));
+  for (const line of summary.lines) {
+    out.write(`${line}\n`);
+    for (const [title, prov] of cachedById) {
+      if (line.includes(title)) out.write(`      ↳ ${prov}\n`);
+    }
+  }
   for (const c of notRun) out.write(`SKIP  ${c.title}  (an earlier check failed)\n`);
   out.write(`${'='.repeat(64)}\n`);
 
