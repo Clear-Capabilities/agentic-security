@@ -9,7 +9,11 @@ const DEFAULT_TIMEOUT_MS = 60000;
 
 export async function defaultLlmInvoke(prompt, opts = {}) {
   const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : DEFAULT_TIMEOUT_MS;
-  const res = await fetch(process.env.AGENTIC_SECURITY_LLM_ENDPOINT, {
+  // The URL is the operator's own configured endpoint, read from an environment
+  // variable they set. Reaching it is this module's entire purpose; no
+  // request-controlled input exists anywhere on this path, and an operator who
+  // can set this variable can already run code.
+  const res = await fetch(process.env.AGENTIC_SECURITY_LLM_ENDPOINT, { // agentic-security-ignore: CWE-918
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ prompt }),

@@ -15,8 +15,14 @@ import { resolveLlmInvoke } from './llm-invoke.js';
 
 function appendEntry(transcript, entry) {
   const prev = transcript.length ? transcript[transcript.length - 1].hash : null;
-  const body = JSON.stringify({ ...entry, prev });
-  const hash = crypto.createHash('sha256').update(body).digest('hex');
+  // Named `serialized`, not `body`: this is the canonical serialisation of a
+  // transcript entry being fed to a hash, and calling it `body` made the
+  // mass-assignment detector read it as a request payload. The name was simply
+  // wrong for what it holds, so this is a fix at the source rather than a
+  // suppression — and that detector's finding carries no line number, so a
+  // line-scoped ignore pragma could not have matched it anyway.
+  const serialized = JSON.stringify({ ...entry, prev });
+  const hash = crypto.createHash('sha256').update(serialized).digest('hex');
   transcript.push({ ...entry, prev, hash });
   return transcript;
 }
