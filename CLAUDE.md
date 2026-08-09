@@ -71,6 +71,15 @@ After any change to `scanner/src/` or `scanner/bin/`, run `npm run build` before
 - **Deliberately excluded:** the network-dependent checks — dependency currency and hosted-CI status. They are slow, they describe the state of the world rather than the code, and an offline developer must still be able to push. They run at publish time via `npm run release:check` (`prepublishOnly`), which remains the full set.
 - An unrunnable check (missing script, spawn failure) is a **FAILURE**, never a skip.
 
+### Signed, portable evidence (PRD D2)
+
+Run attestation (posture/attestation.js) is a per-install SYMMETRIC HMAC — tamper-evidence for the operator, not third-party non-repudiation. posture/evidence-bundle.js is the other half: an Ed25519-signed bundle per FINDING, verifiable by someone who has only the public key.
+
+- agentic-security attest [--id <finding>] — writes signed bundles to .agentic-security/attestations/
+- agentic-security verify-attestation <bundle.json> --public-key <path> — exits 0 valid, 1 invalid
+
+A bundle PROVES its contents are unmodified since signing. It does NOT prove the finding is real — both statements are carried inside the bundle and are covered by the signature, so neither can be dropped or softened in transit. The attack it defeats is silently promoting an unproven finding to execution-proven.
+
 ### Two publish paths, and only one carries provenance
 
 - **Tag a release (preferred).** Push a `vX.Y.Z` tag. `.github/workflows/release.yml` runs the full gate with `--no-cache` on a clean runner and publishes with `npm publish --provenance`, so the artifact carries a verifiable link back to this repository and commit. Needs the `NPM_TOKEN` repository secret.

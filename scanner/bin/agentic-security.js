@@ -1493,7 +1493,7 @@ const HUNT_IGNORE = ['node_modules/**', '.git/**', 'dist/**', 'build/**', 'vendo
 const HUNT_MAX_FILES = 2000;
 
 async function cmdHunt(args) {
-  const scanRoot = path.resolve(args.flags.root || args._[0] || '.');
+  const scanRoot = path.resolve(args.flags.root || args._[1] || '.');
   const { listFiles } = await import('../src/util/glob.js');
   const { buildProjectIR } = await import('../src/ir/index.js');
   const { runDiscovery } = await import('../src/discovery/index.js');
@@ -1578,6 +1578,87 @@ async function cmdHunt(args) {
   // Advisory by design: discovery never gates. Exit 0 unless the scope was bad.
   console.log('');
   console.log(`Lenses available: ${LENSES.map(l => l.key).join(', ')}  (--lens a,b to narrow)`);
+  return 0;
+}
+
+// PRD D2 — emit signed, per-finding evidence bundles, and verify them.
+//
+// `attest` needs our private key. `verify-attestation` needs ONLY a public key,
+// which is the entire point: a buyer or auditor checks the artefact without ever
+// having had access to anything of ours.
+async function cmdAttest(args) {
+  const scanRoot = path.resolve(args.flags.root || '.');
+  const {
+    ensureKeyPair, buildEvidenceBundle, signEvidenceBundle,
+  } = await import('../src/posture/evidence-bundle.js');
+
+  let scan;
+  try { scan = JSON.parse(fs.readFileSync(path.join(scanRoot, '.agentic-security', 'last-scan.json'), 'utf8')); }
+  catch { console.error('No .agentic-security/last-scan.json — run a scan first.'); return 2; }
+
+  const findings = scan.findings || [];
+  const wanted = args.flags.id;
+  const subset = wanted ? findings.filter(f => f.id === wanted || f.stableId === wanted) : findings;
+  if (!subset.length) {
+    console.error(wanted ? `No finding matching "${wanted}".` : 'No findings to attest.');
+    return 2;
+  }
+
+  const kp = ensureKeyPair();
+  if (kp.created) console.error(`Generated a new signing key at ${kp.privateKey} (public: ${kp.publicKey}).`);
+
+  const outDir = path.join(scanRoot, '.agentic-security', 'attestations');
+  fs.mkdirSync(outDir, { recursive: true });
+  const meta = {
+    engineVersion: scan.engineVersion || null,
+    rulesetVersion: scan.rulesetVersion || null,
+    bundleSha: scan.bundleSha || null,
+    commit: scan.commit || null,
+  };
+
+  let n = 0;
+  for (const f of subset) {
+    const bundle = signEvidenceBundle(buildEvidenceBundle(f, meta), kp.privateKeyPem);
+    const name = `${(f.stableId || f.id || `finding-${n}`)}.json`.replace(/[^\w.-]/g, '_');
+    fs.writeFileSync(path.join(outDir, name), JSON.stringify(bundle, null, 2) + '\n');
+    n++;
+  }
+  console.log(`Signed ${n} evidence bundle(s) → ${path.relative(scanRoot, outDir)}/`);
+  console.log(`Public key (share this with whoever verifies): ${kp.publicKey}`);
+  console.log('');
+  console.log('A bundle proves its contents are unmodified since signing. It does NOT');
+  console.log('prove the finding is real — read evidence.proofTier for that.');
+  return 0;
+}
+
+async function cmdVerifyAttestation(args) {
+  const { verifyEvidenceBundle, keyPaths } = await import('../src/posture/evidence-bundle.js');
+  // `args._[0]` is the command name itself — the same convention cmdScan uses.
+  const file = args.flags.bundle || args._[1];
+  if (!file) { console.error('Usage: agentic-security verify-attestation <bundle.json> [--public-key <path>]'); return 2; }
+
+  let bundle;
+  try { bundle = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8')); }
+  catch (e) { console.error(`Could not read bundle: ${e.message}`); return 2; }
+
+  const keyFile = args.flags['public-key'] || keyPaths().publicKey;
+  let publicKeyPem = null;
+  try { publicKeyPem = fs.readFileSync(path.resolve(keyFile), 'utf8'); }
+  catch { console.error(`Could not read public key at ${keyFile}. Pass --public-key <path>.`); return 2; }
+
+  const r = verifyEvidenceBundle(bundle, publicKeyPem);
+  if (!r.ok) {
+    console.error(`✗ INVALID — ${r.reason}`);
+    return 1;
+  }
+  const f = bundle.finding || {};
+  console.log('✓ VALID — the bundle is exactly what the signer attested.');
+  console.log('');
+  console.log(`  ${f.severity ? `[${f.severity}] ` : ''}${f.vuln || '(no title)'}  ${f.file || '?'}:${f.line ?? '?'}`);
+  console.log(`  cwe ${f.cwe || 'n/a'}   parser ${f.parser || 'n/a'}   proof tier ${bundle.evidence?.proofTier || 'n/a'}`);
+  console.log('');
+  console.log(`  proves:        ${bundle.proves}`);
+  console.log(`  does NOT prove: ${bundle.doesNotProve}`);
   return 0;
 }
 
@@ -1874,6 +1955,8 @@ async function main() {
       case 'verify':   process.exit(await cmdVerify(args));
       case 'reset':    process.exit(await cmdReset(args));
       case 'hunt':     process.exit(await cmdHunt(args));
+      case 'attest':   process.exit(await cmdAttest(args));
+      case 'verify-attestation': process.exit(await cmdVerifyAttestation(args));
       case 'rule-synth': process.exit(await cmdRuleSynth(args));
       case 'digest':   process.exit(await cmdDigest(args));
       case 'setup':    process.exit(await cmdSetup(args));

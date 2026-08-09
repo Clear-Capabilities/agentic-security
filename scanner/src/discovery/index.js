@@ -194,7 +194,23 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       `(cap ${maxCandidates}); they are neither findings nor cleared — they were not examined`);
   }
 
-  const taintProbe = makeTaintProbe(ctx.perFileIR, ctx.callGraph);
+  // PRD D3 — the hybrid-loop uplift measurement.
+  //
+  // `confirm: false` runs the pipeline with the deterministic gate switched OFF,
+  // so every candidate reaches the panel as `unconfirmed`. Running a population
+  // both ways and diffing the result isolates what the taint engine contributes
+  // on top of the model — a number no surveyed competitor can compute, because
+  // none of them has a deterministic layer to switch off.
+  //
+  // It exists ONLY to be measured against. It is not a performance switch, and
+  // a run with it disabled is strictly weaker: severity collapses to `low` for
+  // everything, since the confirmation tier is what sets it.
+  const confirmationEnabled = opts.confirm !== false;
+  const taintProbe = confirmationEnabled ? makeTaintProbe(ctx.perFileIR, ctx.callGraph) : null;
+  if (!confirmationEnabled) {
+    reasons.push('deterministic confirmation was DISABLED for this run (uplift measurement); ' +
+      'every candidate is reported unconfirmed and severity is not evidence-derived');
+  }
   const confirmed = await confirmAll(candidates, { taintProbe });
   const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke });
   const { fresh, duplicates, suppressed } = judgeCandidates(survivors, ctx.priorScan, ctx.triageFeedback);

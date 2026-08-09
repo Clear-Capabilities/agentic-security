@@ -211,3 +211,33 @@ test('makeBudget leaves a missing llmInvoke alone', async () => {
   assert.equal(budget.wrap(null), null);
   assert.equal(budget.wrap(undefined), undefined);
 });
+
+// --- PRD D3: the hybrid-loop uplift switch ----------------------------------
+//
+// `confirm: false` disables the deterministic gate so a population can be run
+// both ways and the difference attributed to the taint engine. It exists to be
+// measured against, never as a performance option: a run with it off is
+// strictly weaker, because the confirmation tier is what sets severity.
+
+test('confirmation is ON by default', async () => {
+  const r = await runDiscovery(manyFiles(1), { llmInvoke: alwaysProposes, maxLlmCalls: 100 });
+  assert.ok(!r.coverage.reasons.join('\n').includes('confirmation was DISABLED'));
+});
+
+test('confirm:false disables the deterministic gate and SAYS SO', async () => {
+  // Silently weakening the pipeline would make the uplift measurement itself
+  // dishonest — a reader must be able to tell which mode produced a report.
+  const r = await runDiscovery(manyFiles(1), { llmInvoke: alwaysProposes, maxLlmCalls: 100, confirm: false });
+  assert.match(r.coverage.reasons.join('\n'), /confirmation was DISABLED/);
+  const tiers = r.coverage.confirmedByTier;
+  assert.equal(tiers['taint-confirmed'], 0, 'nothing can be taint-confirmed with the probe off');
+  assert.equal(tiers['sink-adjacent'], 0);
+});
+
+test('with confirmation off, every surviving finding is unconfirmed and therefore low', async () => {
+  const r = await runDiscovery(manyFiles(1), { llmInvoke: alwaysProposes, maxLlmCalls: 100, confirm: false });
+  for (const f of r.fresh) {
+    assert.equal(f.discovery.confirmation.tier, 'unconfirmed');
+    assert.equal(f.severity, 'low', 'severity comes from the confirmation tier, so it must collapse');
+  }
+});
