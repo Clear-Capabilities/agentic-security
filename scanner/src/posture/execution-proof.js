@@ -51,7 +51,31 @@ function _materialise(root, files) {
  *   patch: pass the patched contents and a still-`execution-proven` verdict
  *   means the fix did not close the hole.
  */
-export async function proveFinding(finding, { timeoutMs = 10000, force, files } = {}) {
+// How long a proof-of-concept gets to write its marker.
+//
+// WHY THIS IS GENEROUS, AND WHY THAT IS NEARLY FREE. The budget is only ever
+// spent when a PoC is stuck: a working one writes its marker and exits in about
+// a second, so raising the ceiling costs nothing in the common path. What a
+// tight ceiling DOES cost is correctness — the budget covers spawning a
+// confined process and starting a Node runtime inside it, and on a loaded
+// machine that alone can eat several seconds. At 10s this timed out under
+// ordinary parallel test load and reported "re-verification did not execute",
+// which the release gate then surfaced as a failure. The measurement has to be
+// of the proof-of-concept, not of how busy the machine happened to be.
+//
+// A timeout is still never evidence about the finding: `proven` is decided by
+// the marker file, and a timed-out run falls back to the finding's static tier
+// rather than claiming `proof-failed`. This ceiling only decides how long we
+// wait before giving up, not what we conclude.
+//
+// Override on a slow or heavily-loaded runner, matching the convention used by
+// AGENTIC_SECURITY_PY_PROBE_TIMEOUT_MS and AGENTIC_SECURITY_DEEP_TIMEOUT_MS.
+export const DEFAULT_PROOF_TIMEOUT_MS =
+  Number(process.env.AGENTIC_SECURITY_PROOF_TIMEOUT_MS) > 0
+    ? Number(process.env.AGENTIC_SECURITY_PROOF_TIMEOUT_MS)
+    : 45000;
+
+export async function proveFinding(finding, { timeoutMs = DEFAULT_PROOF_TIMEOUT_MS, force, files } = {}) {
   const poc = finding?.poc;
   if (!poc?.code) {
     return attachProofTier(finding, _evidence({ tier: proofTierOf(finding), reason: 'no proof-of-concept attached' }));

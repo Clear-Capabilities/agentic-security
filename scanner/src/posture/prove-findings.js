@@ -42,7 +42,7 @@
 // enable this on untrusted code without accepting that.
 
 import { synthesizeInProcessPoc } from './poc-inprocess.js';
-import { proveFinding } from './execution-proof.js';
+import { proveFinding, DEFAULT_PROOF_TIMEOUT_MS } from './execution-proof.js';
 import { sandboxAvailable } from '../sandbox/index.js';
 
 const DEFAULT_MAX = 25;
@@ -82,7 +82,10 @@ export function proveEnabled(env = process.env) {
  * @returns {object} a summary suitable for surfacing on the scan
  */
 export async function annotateExecutionProofs(findings, {
-  fileContents = null, maxCandidates = DEFAULT_MAX, timeoutMs = 10000,
+  // Shares one ceiling with execution-proof.js so the two cannot drift; see the
+  // rationale on DEFAULT_PROOF_TIMEOUT_MS there. Bounded overall by
+  // maxCandidates, so a generous per-PoC budget cannot run away.
+  fileContents = null, maxCandidates = DEFAULT_MAX, timeoutMs = DEFAULT_PROOF_TIMEOUT_MS,
   totalBudgetMs = DEFAULT_TOTAL_BUDGET_MS, env = process.env, now = Date.now,
 } = {}) {
   const summary = {

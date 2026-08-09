@@ -145,3 +145,31 @@ describe('report surfacing', () => {
     assert.ok(f.proofTier === undefined || f.proofTier === 'unproven');
   });
 });
+
+// The proof budget. This was a fixed 10s, which is a measurement of the machine
+// as much as of the proof-of-concept: the budget covers spawning a confined
+// process and booting a Node runtime inside it, and under ordinary parallel test
+// load on a busy host that alone ate the allowance. The autopilot re-verification
+// then reported "proof-of-concept exceeded its time budget", the test suite
+// failed, and `npm publish` aborted — a release gate whose verdict depended on
+// how busy the laptop was.
+describe('proof timeout budget', () => {
+  test('the default is generous, because the budget is only spent when a PoC is stuck', async () => {
+    const { DEFAULT_PROOF_TIMEOUT_MS } = await import('../src/posture/execution-proof.js');
+    // A working PoC writes its marker in about a second, so a high ceiling costs
+    // nothing in the common path. What a low one costs is a false NEEDS_REVIEW.
+    assert.ok(DEFAULT_PROOF_TIMEOUT_MS >= 30000,
+      `expected a ceiling with real headroom, got ${DEFAULT_PROOF_TIMEOUT_MS}ms`);
+  });
+
+  test('a timeout is never evidence about the finding', () => {
+    // Guards the rule this budget sits on top of: a run that did not execute
+    // cannot claim `proof-failed`, however long it waited. Raising or lowering
+    // the ceiling changes how long we wait, never what we conclude.
+    const out = attachProofTier(
+      { parser: 'IR-TAINT' },
+      { tier: 'proof-failed', ran: false, timedOut: true },
+    );
+    assert.equal(out.proofTier, 'taint-proven');
+  });
+});
