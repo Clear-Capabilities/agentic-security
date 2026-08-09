@@ -1,7 +1,12 @@
 # Competitive Position PRD — becoming the harness that can prove it works
 
-**Status:** proposed · **Owner:** unassigned · **Created:** 2026-08-09
+**Status:** Phases 0–3 SHIPPED · Phase 4 undecided · **Created:** 2026-08-09
+**Revised:** 2026-08-09 after implementing Phases 0–3
 **Engine version at authoring:** 0.134.0
+
+> **Read §10 first.** It records what implementation taught us, including three
+> places where this document was wrong, and it supersedes the priorities in §4
+> where they disagree.
 
 > **Naming rule.** Ten competing agentic security harnesses published by major
 > technology companies, banks, and security vendors were surveyed to write this
@@ -348,3 +353,140 @@ Phase 0 (C3, C6) ──> Phase 1 (D1) ──> Phase 2 (D2, D3)
    exists to force that question rather than answer it by drift.
 4. **Should the uplift measurement (D3) be run per release** as a gate, or
    published per version as a figure? A gate risks tuning to it.
+
+---
+
+## 10. Revision 2 — what implementing Phases 0–3 taught us
+
+Written 2026-08-09, after shipping `4cf770f`, `c3e4d44`, `cf13255`, `0d71d4b`
+and `56c9472`. Where this section disagrees with §4 or §5, this section wins.
+
+### 10.1 Shipped
+
+| | Commit | Outcome |
+|---|---|---|
+| Phase 0 — C3 budget + candidate cap | `4cf770f` | 168 LLM calls on a six-file fixture, hard-stopped at any ceiling |
+| Phase 1 — D1 independent population | `c3e4d44` | 12 entries, first defensible accuracy figure |
+| Phase 2 — D2 signed evidence bundles | `cf13255` | third-party verification proven; TOCTOU fix in `0d71d4b` |
+| Phase 3 — C4/C2/C5 | `56c9472` | cross-run memory 8→2 calls; consensus; variant sweep wired |
+
+Phase 4 remains **undecided**, not deferred. See §10.6.
+
+### 10.2 The three things this document got wrong
+
+**1. C5 was already built, and nobody checked.** `posture/root-cause-sweep.js`
+already did variant analysis with exact `found === candidates + mitigated`
+accounting. The real gap was one wire: discovery findings never reached it.
+Phase 3's C5 was hours, not the week its placement implied.
+
+The error was structural. §1.3's capability table was assembled by asking *what
+do the competitors have that we lack* and never *what do we already have*.
+Every future gap claim must be checked against the tree before it earns a
+priority. This is the same failure mode as the release PRD's R3, where a 52 s
+figure measured under load sent a recommendation after a problem that did not
+exist — twice now, an unverified premise has driven a plan.
+
+**2. D3 is blocked on infrastructure this plan never provisioned.** The uplift
+measurement is written as a measurement task. It is not: it needs a working LLM
+endpoint the discovery layer can call, and nothing in Phases 0–3 provisions one.
+The harness shipped and the number did not. An honest plan names its
+dependencies; this one buried a hard blocker inside a deliverable.
+
+**3. Phase 0 was scoped as hygiene and is closer to load-bearing.** §5 framed the
+budget as "make the discovery layer safe to run". The measurement changed the
+picture: **six files produced 168 LLM calls**, because candidates multiply on top
+of areas × lenses. At the 2000-file cap the pre-C3 pipeline was not merely
+expensive, it was unbounded in a way no reviewer had quantified. C4's memory then
+took a repeat run from 8 calls to 2 — meaning cost control is not one workstream
+but a property that compounds across several, and it deserves a standing metric
+rather than a phase.
+
+### 10.3 The most important number, and why it is not yet quotable
+
+Recall **16.7% (2/12)**, precision **50.0% (2/4)**, F1 **0.250** — against 100%
+on the curated corpus. The gap is the point, and publishing it was the exercise.
+
+But the figure is a **lower bound with a known cause**, and that changes what to
+do next. `pre/` and `post/` contain only the files the fix commit touched, so an
+interprocedural finding needing a caller in another file cannot be made *even
+where the engine would find it on the whole repository*. We are measuring an
+interprocedural engine on isolated fragments.
+
+That makes the current number dangerous in a specific way: it is the first
+accuracy figure this project has ever published, it understates by an unmeasured
+margin, and it is now in `docs/SCORECARD.md` where it can be quoted back at us.
+Fixing the methodology is therefore not a refinement — it is the difference
+between a defensible number and a self-inflicted wound.
+
+### 10.4 What the work produced that the plan did not anticipate
+
+**A proof point for the thesis, from our own scanner.** The self-scan gate caught
+a genuine TOCTOU (CWE-367) on the Ed25519 **signing key** in the evidence-bundle
+module, minutes after it was written — check-then-read on the one file whose
+integrity the whole feature depends on. This belongs in the §4 differentiator
+argument as evidence rather than as an anecdote: the engine found a real
+vulnerability in its own newly-written security code, which is a claim about the
+engine that no marketing sentence can manufacture.
+
+**Tamper tests are non-optional for anything cryptographic.** D2's first
+canonicalisation used `JSON.stringify(obj, Object.keys(obj).sort())`, believing
+the array was a top-level field allowlist. It is a key filter applied at every
+nesting depth, so every nested object serialised as `{}` and the signature
+covered two prose strings. A bundle with its severity edited verified as
+authentic. Happy-path tests passed throughout. Any future signing, attestation
+or verification work carries a mandatory adversarial test: *modify the artefact
+and assert verification fails*.
+
+**The dead-module guard is the most valuable check we own.** It caught
+exported-but-uncalled symbols four times across Phases 0–3, every time
+correctly, including on the person extending it.
+
+### 10.5 What to do now — revised priorities
+
+Ordered by value, and different from §5 because of what §10.2–10.4 established.
+
+**P0 — N1. Make the independent measurement honest (whole-repo materialisation).**
+Replace changed-files-only trees with the repository at both commits, so the
+taint engine sees callers. Until this lands, every accuracy figure we publish
+understates by an unknown margin. Cost is disk and network, not cleverness:
+shallow-clone at two SHAs, cache, scan, discard. **This outranks growing the
+population**, because 150 entries measured wrongly is worse than 12 measured
+wrongly — it makes the error look authoritative.
+
+**P0 — N2. Grow the population to ≥150 entries.** Mechanical:
+`bench/independent/mine.mjs --limit N` across ecosystems. Ordered after N1 so the
+larger population is measured correctly from the start. Watch the sampling frame:
+advisories carrying a single fix commit skew long-tail, so report the CWE
+distribution alongside the rates and say plainly what the frame excludes.
+
+**P1 — N3. Provision an LLM endpoint and produce the D3 uplift figure.** The
+harness exists (`confirm: false`). This is the number no surveyed competitor can
+compute, and it is one configured endpoint away. It should be run over the N1/N2
+population, not the curated corpus.
+
+**P1 — N4. A standing cost metric, not a phase.** Report calls-per-finding and
+calls-per-run in the discovery report and track it release over release. C3
+bounded the worst case; C4 showed the typical case moves by 4× with memory. A
+number that only appears when someone goes looking will regress silently.
+
+**P2 — N5. C6 parallelism**, on the terms recorded in §5 — after the overshoot
+bound has been observed rather than reasoned about.
+
+**Explicitly not now:** Phase 4. See below.
+
+### 10.6 Phase 4 is undecided, and that is the correct state
+
+It was written gated on an ICP decision, and the gate has not been passed. It
+remains the largest capability gap versus the field — two of the ten surveyed
+harnesses are *entirely* this capability — and it remains close to orthogonal to
+the vibecoder positioning in `docs/POSITIONING.md`.
+
+Nothing learned in Phases 0–3 resolves that tension, so nothing here should be
+read as resolving it. What Phases 0–3 *did* establish is that the differentiator
+strategy pays: the independent population, the signed bundles and the self-caught
+TOCTOU are all worth more per unit of effort than another capability checkbox.
+That is an argument for finishing §10.5 before opening Phase 4, not for closing
+Phase 4.
+
+**Decide it deliberately or leave it open. Do not let it start by drift** — which
+is the sentence this section existed to protect from the beginning.
