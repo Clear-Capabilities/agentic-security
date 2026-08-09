@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-09T08:05:11.073Z",
-  "commit": "4f2983e86fea25e0740adff4f6993b8836547d4b",
+  "generatedAt": "2026-08-09T17:50:02.443Z",
+  "commit": "cf13255c72615bd4a2c9573fcfee703776ae934c",
   "targets": {
     "hooks": {
       "total": 24,
@@ -35,7 +35,7 @@
       }
     },
     "scanner/src": {
-      "total": 596,
+      "total": 598,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -107,6 +107,7 @@
         "posture/deterministic-fix.js": 1,
         "posture/deterministic.js": 3,
         "posture/epss.js": 4,
+        "posture/evidence-bundle.js": 2,
         "posture/execution-proof.js": 1,
         "posture/exploitability-probability.js": 3,
         "posture/feature-flags.js": 3,

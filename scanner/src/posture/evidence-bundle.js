@@ -72,7 +72,38 @@ export function keyPaths(dir = keyDir()) {
  */
 export function ensureKeyPair(dir = keyDir()) {
   const p = keyPaths(dir);
-  if (fs.existsSync(p.privateKey) && fs.existsSync(p.publicKey)) {
+
+  // NO existsSync-then-read. This project's own scanner flagged the first
+  // version of this function for TOCTOU (CWE-367) and it was right: between an
+  // existence check and the read, an attacker who can write this directory can
+  // swap the file, and the thing being swapped is a SIGNING KEY. Winning that
+  // race means we sign with a key the attacker controls, which defeats the
+  // entire point of the module. Read first and treat absence as the exceptional
+  // case — there is then no window between the check and the use, because there
+  // is no check.
+  try {
+    const privateKeyPem = fs.readFileSync(p.privateKey, 'utf8');
+    const publicKeyPem = fs.readFileSync(p.publicKey, 'utf8');
+    if (privateKeyPem && publicKeyPem) {
+      return { privateKeyPem, publicKeyPem, created: false, ...p };
+    }
+  } catch { /* missing or unreadable — fall through and generate */ }
+
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+  const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+
+  // `wx` — exclusive create. If another process generated a key between our
+  // failed read and this write, we must NOT clobber it: every bundle already
+  // signed with that key would silently stop verifying. On collision, re-read
+  // and use the winner's key.
+  try {
+    fs.writeFileSync(p.privateKey, privateKeyPem, { mode: 0o600, flag: 'wx' });
+    fs.writeFileSync(p.publicKey, publicKeyPem, { mode: 0o644, flag: 'w' });
+    return { privateKeyPem, publicKeyPem, created: true, ...p };
+  } catch (e) {
+    if (e.code !== 'EEXIST') throw e;
     return {
       privateKeyPem: fs.readFileSync(p.privateKey, 'utf8'),
       publicKeyPem: fs.readFileSync(p.publicKey, 'utf8'),
@@ -80,13 +111,6 @@ export function ensureKeyPair(dir = keyDir()) {
       ...p,
     };
   }
-  const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
-  const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
-  const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(p.privateKey, privateKeyPem, { mode: 0o600 });
-  fs.writeFileSync(p.publicKey, publicKeyPem, { mode: 0o644 });
-  return { privateKeyPem, publicKeyPem, created: true, ...p };
 }
 
 /**
