@@ -1547,7 +1547,8 @@ async function cmdHunt(args) {
   console.log(`Discovery — ${rels.length} file(s), ${c.areasPlanned} focus area(s), ${c.lensesPerArea} lens(es) each`);
   console.log(`  areas hunted: ${c.areasHunted}/${c.areasPlanned} (fully: ${c.areasFullyHunted})   degraded runs: ${c.degradedRuns}/${report.runs.length}`);
   console.log(`  budget: ${c.llmCalls}/${c.maxLlmCalls} LLM calls${c.budgetExhausted ? '  ← EXHAUSTED, run is incomplete' : ''}` +
-    `${c.candidatesCapped ? `   ${c.candidatesCapped} candidate(s) capped` : ''}`);
+    `${c.candidatesCapped ? `   ${c.candidatesCapped} candidate(s) capped` : ''}` +
+    `${c.callsPerFinding !== null && c.callsPerFinding !== undefined ? `   ${c.callsPerFinding} calls/finding` : ''}`);
   if (c.priorRuns !== null && c.priorRuns !== undefined) {
     console.log(`  memory: ${c.priorRuns} prior run(s)` +
       `${c.rememberedRefutals ? `, ${c.rememberedRefutals} candidate(s) skipped as already refuted` : ''}`);

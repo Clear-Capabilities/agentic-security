@@ -314,6 +314,15 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       nextWave: memory ? nextWavePlan(memory, areas.map(a => ({ id: a.id, label: a.label }))) : null,
       llmCalls: budget.calls,
       maxLlmCalls: budget.maxCalls,
+      // PRD N4 — the standing cost metric. C3 bounded the worst case and C4
+      // moved the typical case by 4x, so cost is a property that drifts across
+      // several workstreams rather than one that a phase finishes. A number
+      // that only appears when somebody goes looking regresses silently, so it
+      // is reported every run and carries its denominator like every other rate
+      // in this engine. `null` when nothing was found — dividing by zero
+      // findings would print Infinity and read as a catastrophe rather than as
+      // "there is nothing to divide".
+      callsPerFinding: fresh.length > 0 ? Number((budget.calls / fresh.length).toFixed(1)) : null,
       budgetExhausted: Boolean(budget.exhaustedReason),
       candidatesCapped,
       reasons,

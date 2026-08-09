@@ -241,3 +241,19 @@ test('with confirmation off, every surviving finding is unconfirmed and therefor
     assert.equal(f.severity, 'low', 'severity comes from the confirmation tier, so it must collapse');
   }
 });
+
+// --- PRD N4: the standing cost metric ---------------------------------------
+test('callsPerFinding is reported, with null rather than Infinity on no findings', async () => {
+  // Cost drifts across workstreams — C3 bounded the worst case, C4 moved the
+  // typical case 4x — so it is reported every run rather than measured when
+  // somebody remembers to look.
+  const none = await runDiscovery(manyFiles(1), { llmInvoke: async () => '{"candidates":[]}', maxLlmCalls: 50 });
+  assert.equal(none.fresh.length, 0);
+  assert.equal(none.coverage.callsPerFinding, null, 'no findings must not divide by zero');
+
+  const some = await runDiscovery(manyFiles(1), { llmInvoke: alwaysProposes, maxLlmCalls: 50 });
+  if (some.fresh.length > 0) {
+    assert.equal(typeof some.coverage.callsPerFinding, 'number');
+    assert.ok(some.coverage.callsPerFinding > 0);
+  }
+});

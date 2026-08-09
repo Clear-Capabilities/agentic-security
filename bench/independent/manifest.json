@@ -2,6 +2,77 @@
   "schema": "agentic-security/independent-population@1",
   "entries": [
     {
+      "id": "GHSA-22jq-vg5j-6vgg",
+      "cve": "CVE-2026-54272",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "ip-address: misclassification of IPv4-mapped/NAT64 IPv6 addresses can bypass SSRF and trust-boundary checks",
+      "repo": "beaugunderson/ip-address",
+      "fixCommit": "4a1f613f4c1bec915677dea923c10aaa09361ef9",
+      "parentCommit": "e82a6812ac9d16f1300d3c2051fe2cc88c5d9161",
+      "files": [
+        "src/ipv6.ts",
+        "src/v6/constants.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T21:46:51.174Z"
+    },
+    {
+      "id": "GHSA-22p9-r2f5-22mf",
+      "cve": "CVE-2026-54706",
+      "cwe": "CWE-59",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "OnionShare follows symlinks in shared directories, allowing unintended disclosure of local files",
+      "repo": "onionshare/onionshare",
+      "fixCommit": "48f31cfac077fcc9c04c67c2a6dbf87d956f5eec",
+      "parentCommit": "8cc75e1d7e88bd31f7276733449d412bf71c8999",
+      "files": [
+        "cli/onionshare_cli/web/send_base_mode.py",
+        "cli/onionshare_cli/web/share_mode.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:21.051Z"
+    },
+    {
+      "id": "GHSA-2364-jh4q-m9vm",
+      "cve": null,
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Flowise: IDOR vulnerability exists at the GET /api/v1/organization/customer-default-source endpoint",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "4d7899d02ca370a5510406be5c91483085a412f9",
+      "parentCommit": "e9bf04ac748dbcd9b7db6616bfee8080e0190739",
+      "files": [
+        "packages/server/src/enterprise/controllers/organization.controller.ts",
+        "packages/server/src/enterprise/utils/tenantRequestGuards.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T21:46:48.559Z"
+    },
+    {
+      "id": "GHSA-2956-977x-2w3r",
+      "cve": "CVE-2026-67429",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flyto2 Core: Arbitrary file write via image.download (and other file-writing modules)",
+      "repo": "flytohub/flyto-core",
+      "fixCommit": "d5f89d71303e3c1e6418d347c5c55fcd173cc8cc",
+      "parentCommit": "9103529c204cad3e698b726ed958b626bcfbc182",
+      "files": [
+        "src/core/engine/variable_resolver.py",
+        "src/core/module_policy.py",
+        "src/core/modules/atomic/ai/model.py",
+        "src/core/modules/atomic/browser/pagination.py",
+        "src/core/modules/atomic/document/excel_write.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:24.558Z"
+    },
+    {
       "id": "GHSA-29g2-3rmr-qm68",
       "cve": "CVE-2026-66062",
       "cwe": "CWE-1333",
@@ -16,6 +87,22 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:02.778Z"
+    },
+    {
+      "id": "GHSA-2f54-p244-32q6",
+      "cve": "CVE-2026-70493",
+      "cwe": "CWE-1333",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Open WebUI: Any authenticated user can stall a worker via a knowledge-search pattern that backtracks catastrophically",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "3ab2026262ef6f09810e4d235c5f9a9cb903e595",
+      "parentCommit": "147c3b6ac8b5e63b14933cd1e5fafb2c9804929a",
+      "files": [
+        "backend/open_webui/tools/knowledge_fs.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:05.852Z"
     },
     {
       "id": "GHSA-2gx6-7gx2-wwcf",
@@ -52,6 +139,71 @@
       "minedAt": "2026-08-09T18:46:24.889Z"
     },
     {
+      "id": "GHSA-386q-5hp3-95m9",
+      "cve": "CVE-2026-54653",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "`datamodel-code-generator` vulnerable to code injection in via attacker-controlled `default_factory` schema field",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "17fc235e234cbcfaaadef8c74cb72c9687db0d1d",
+      "parentCommit": "b73abb5cd703a50471b8950bbd3bd0b82ad71de7",
+      "files": [
+        "src/datamodel_code_generator/parser/jsonschema.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:28.916Z"
+    },
+    {
+      "id": "GHSA-3cg5-48j3-v4gv",
+      "cve": "CVE-2026-70494",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Open WebUI: A folder write-collaborator can permanently delete the owner's chats by deleting a shared subfolder",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "915ef7d0798d3175819cedbb2f62d7bf0db78c98",
+      "parentCommit": "305880f2e2aeb2dda2f4b2a18a20bdcd558f7134",
+      "files": [
+        "backend/open_webui/routers/folders.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:05.329Z"
+    },
+    {
+      "id": "GHSA-3f7w-8rr8-f37f",
+      "cve": null,
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "GitPython: Unguarded git option forwarding in IndexFile.checkout() and TagReference.create() enables arbitrary file overwrite and arbitrary file read",
+      "repo": "gitpython-developers/GitPython",
+      "fixCommit": "3af0c2516c5e18c829da30338614688f6b69b49c",
+      "parentCommit": "07e8055585491aa3d0b42f79c5bc2bdd027fa6c0",
+      "files": [
+        "git/index/base.py",
+        "git/refs/tag.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:16.858Z"
+    },
+    {
+      "id": "GHSA-3r7g-q6cg-q2vx",
+      "cve": "CVE-2026-70491",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Open WebUI: Tool source code disclosed to read-only users via the tool list and get endpoints",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "c05de13b4fca1ac8a17153782b46b3d0aacf491c",
+      "parentCommit": "9562f1a67d4296bbbc5bb2163b5929be0ceb6545",
+      "files": [
+        "backend/open_webui/routers/tools.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:06.899Z"
+    },
+    {
       "id": "GHSA-3rrr-jr9j-h3q3",
       "cve": "CVE-2026-71437",
       "cwe": "CWE-1321",
@@ -70,6 +222,88 @@
       "minedAt": "2026-08-09T18:46:04.931Z"
     },
     {
+      "id": "GHSA-3vf6-64vr-3g56",
+      "cve": "CVE-2026-70483",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Open WebUI: Any authenticated user can cancel another user's chat generation via the chat delete endpoint",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "4f93c3e36c1734342a32c312bdb0516c66d8e93c",
+      "parentCommit": "1ac8ef7853bc9f90be75da3688ff8c84f7769178",
+      "files": [
+        "backend/open_webui/routers/chats.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:11.091Z"
+    },
+    {
+      "id": "GHSA-442q-2j6p-642g",
+      "cve": "CVE-2026-55390",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "datamodel-code-generator vulnerable to arbitrary local file read via XSD `schemaLocation` (`xs:include`/`xs:import`) path traversal, with no remote-ref gate",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "d2d5cecd9fd3a2a6dbf148bf0740b83a11fc6820",
+      "parentCommit": "2ff4a72b4550a2b2069754c5b075b1655067e5fb",
+      "files": [
+        "src/datamodel_code_generator/parser/xmlschema.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:33.698Z"
+    },
+    {
+      "id": "GHSA-47pj-3jcm-6whg",
+      "cve": "CVE-2026-71433",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "LangGraph: Namespace prefix matching crosses segment boundaries in Postgres and SQLite stores",
+      "repo": "langchain-ai/langgraph",
+      "fixCommit": "66ebe1a0da921e73f0f9f879ba105d314c079f7c",
+      "parentCommit": "41341457342327166d72fc11952ab28fb61ec0bf",
+      "files": [
+        "libs/checkpoint-postgres/langgraph/store/postgres/base.py",
+        "libs/checkpoint-sqlite/langgraph/store/sqlite/aio.py",
+        "libs/checkpoint-sqlite/langgraph/store/sqlite/base.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:04.804Z"
+    },
+    {
+      "id": "GHSA-4cwx-7wf7-3272",
+      "cve": "CVE-2026-13697",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "undici vulnerable to cross-user information disclosure and parse-time crash via degenerate private cache directives",
+      "repo": "nodejs/undici",
+      "fixCommit": "4fe5bc5fefe5ac81a200fc8e1cf84b8bf8464451",
+      "parentCommit": "10d93fc332f2c8c161982dec3833201de29891b5",
+      "files": [
+        "lib/util/cache.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T21:46:51.703Z"
+    },
+    {
+      "id": "GHSA-4gmw-gg2m-w46p",
+      "cve": null,
+      "cwe": "CWE-88",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "GitPython: Unguarded git read-tree option forwarding in IndexFile.from_tree/reset/merge_tree enables arbitrary file overwrite",
+      "repo": "gitpython-developers/GitPython",
+      "fixCommit": "9b5dcaf85da5946dbf69dcd53f9edba08f760b32",
+      "parentCommit": "96a888f4d782cb2f80452148e48e60ce4af6d541",
+      "files": [
+        "git/index/base.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:03.751Z"
+    },
+    {
       "id": "GHSA-4j8x-x6v7-w9rq",
       "cve": "CVE-2026-69264",
       "cwe": "CWE-94",
@@ -84,6 +318,22 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:19.713Z"
+    },
+    {
+      "id": "GHSA-4jc5-g844-4x33",
+      "cve": "CVE-2026-67435",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "linuxfabrik-lib: fetch() forwards credential headers across a cross-origin redirect",
+      "repo": "Linuxfabrik/lib",
+      "fixCommit": "6573ff9347e541200305d278d2663d2e54e052ff",
+      "parentCommit": "dda087b0154718d8e9921959e4d2b148e65b5c58",
+      "files": [
+        "url.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:25.132Z"
     },
     {
       "id": "GHSA-4wx2-7gvj-qfq3",
@@ -102,6 +352,24 @@
       "minedAt": "2026-08-09T18:46:14.446Z"
     },
     {
+      "id": "GHSA-4xrf-jv44-h6hh",
+      "cve": "CVE-2026-69198",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "ip-address: a CIDR suffix on the parsed address suppresses special-use classification and can bypass SSRF and trust-boundary checks",
+      "repo": "beaugunderson/ip-address",
+      "fixCommit": "488fe9bc7c35363b4b090494fc38c266d217740d",
+      "parentCommit": "e86ab3e19588761ce18caf4820b26f01ac25043b",
+      "files": [
+        "src/common.ts",
+        "src/ipv4.ts",
+        "src/ipv6.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T21:46:50.659Z"
+    },
+    {
       "id": "GHSA-52fh-8v99-63c2",
       "cve": "CVE-2026-70470",
       "cwe": "CWE-184",
@@ -116,6 +384,22 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:20.775Z"
+    },
+    {
+      "id": "GHSA-539m-9xh6-q6rr",
+      "cve": null,
+      "cwe": "CWE-73",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "GitPython: Incomplete unsafe_git_archive_options denylist omits --add-file / --add-virtual-file, enabling arbitrary file read via Repo.archive()",
+      "repo": "gitpython-developers/GitPython",
+      "fixCommit": "7a4f5dcb7bf3cbcbf6e438017efcdfe0bc0d36ca",
+      "parentCommit": "3af0c2516c5e18c829da30338614688f6b69b49c",
+      "files": [
+        "git/repo/base.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:16.333Z"
     },
     {
       "id": "GHSA-54fx-42gc-7vw4",
@@ -134,6 +418,22 @@
       "minedAt": "2026-08-09T18:46:02.264Z"
     },
     {
+      "id": "GHSA-5578-w22f-pfx9",
+      "cve": "CVE-2026-55415",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "datamodel-code-generator vulnerable to code injection via `x-python-import` / `customTypePath` in generated import statements",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "577d49569c2254c371a97e495020ae2238a73b84",
+      "parentCommit": "46a9e674b8388a5ea2ecb5664b19f992453d81c5",
+      "files": [
+        "src/datamodel_code_generator/parser/jsonschema.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:31.069Z"
+    },
+    {
       "id": "GHSA-55q2-fjhq-7xh7",
       "cve": null,
       "cwe": "CWE-79",
@@ -150,6 +450,22 @@
       "minedAt": "2026-08-09T18:46:03.433Z"
     },
     {
+      "id": "GHSA-5vjc-7cxw-4w6j",
+      "cve": "CVE-2026-53504",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Thumbor has Regex Denial of Service (ReDoS) in `convolution` filter",
+      "repo": "thumbor/thumbor",
+      "fixCommit": "3f38fe1610d20168e91f76d432212de30727eb2e",
+      "parentCommit": "447e192e3fb92e64c12e5354a56a4a7133f69d73",
+      "files": [
+        "thumbor/filters/convolution.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:18.955Z"
+    },
+    {
       "id": "GHSA-5xvg-pmgg-3mxr",
       "cve": "CVE-2026-70477",
       "cwe": "CWE-94",
@@ -164,6 +480,22 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:16.396Z"
+    },
+    {
+      "id": "GHSA-6hr6-w5qg-qmwg",
+      "cve": "CVE-2026-71554",
+      "cwe": "CWE-444",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "h2: Duplicate Host header could facilitate request smuggling",
+      "repo": "python-hyper/h2",
+      "fixCommit": "292a40829feefda98c8509dcdbbb4a57af9bd6a6",
+      "parentCommit": "04d3b87cbc1db020d28c7cfb44fe194558efbdde",
+      "files": [
+        "src/h2/utilities.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:04.179Z"
     },
     {
       "id": "GHSA-6vh2-wg4h-4vwj",
@@ -184,6 +516,57 @@
       "minedAt": "2026-08-09T18:46:22.867Z"
     },
     {
+      "id": "GHSA-6x26-6r6f-m537",
+      "cve": "CVE-2026-53500",
+      "cwe": "CWE-1333",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Thumbor treats ALLOWED_SOURCES string patterns as unescaped regex, allowing hostname bypass via wildcard dot",
+      "repo": "thumbor/thumbor",
+      "fixCommit": "68876715350c6c8f49c324e5515e64908830aed7",
+      "parentCommit": "8b6250998baaf807d7a912e2e23dc25248d64f16",
+      "files": [
+        "thumbor/config.py",
+        "thumbor/loaders/__init__.py",
+        "thumbor/loaders/http_loader.py",
+        "thumbor/server.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:20.528Z"
+    },
+    {
+      "id": "GHSA-6xhv-rxhv-pwm4",
+      "cve": "CVE-2026-70487",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Open WebUI: Cross-user file content disclosure via request-scoped direct model knowledge metadata",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "305880f2e2aeb2dda2f4b2a18a20bdcd558f7134",
+      "parentCommit": "7801909d27b18331a9a2bc399e1d618ab99ba5bf",
+      "files": [
+        "backend/open_webui/main.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:07.944Z"
+    },
+    {
+      "id": "GHSA-73cq-mcgh-379c",
+      "cve": "CVE-2026-70489",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Open WebUI: Instance-wide stall via automation recurrence rules that force multi-second parsing",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "c4ae8c86786fed521960466f6d8eef8af22c2946",
+      "parentCommit": "48ee357156fd7f567ea13eb5ddba0a25701c0351",
+      "files": [
+        "backend/open_webui/utils/automations.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:07.420Z"
+    },
+    {
       "id": "GHSA-79qm-7rj5-m7r9",
       "cve": "CVE-2026-71849",
       "cwe": "CWE-200",
@@ -200,6 +583,23 @@
       "minedAt": "2026-08-09T18:46:01.794Z"
     },
     {
+      "id": "GHSA-7h3g-4w2f-fj2f",
+      "cve": "CVE-2026-54727",
+      "cwe": "CWE-668",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "proot-distro has a Container Isolation Bypass via Crafted Restore Archive",
+      "repo": "termux/proot-distro",
+      "fixCommit": "98aff324b7d8500ff75a8ca9ac087ee636be4716",
+      "parentCommit": "d6dff97aee4736e5940820c832866feb48c82428",
+      "files": [
+        "proot_distro/commands/help/pages.py",
+        "proot_distro/commands/restore.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:25.771Z"
+    },
+    {
       "id": "GHSA-7mpp-r37j-x5wh",
       "cve": "CVE-2026-70594",
       "cwe": "CWE-384",
@@ -214,6 +614,38 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:10.104Z"
+    },
+    {
+      "id": "GHSA-7p8r-x3mc-p8w7",
+      "cve": "CVE-2026-18446",
+      "cwe": "CWE-436",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "fast-uri vulnerable to host confusion via backslash authority introducer",
+      "repo": "fastify/fast-uri",
+      "fixCommit": "f3c6c905f47831007490f466c5945012e905cc52",
+      "parentCommit": "5e31a6b0f6408f79d7c23e8490b092aba4d873c5",
+      "files": [
+        "index.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T21:46:52.220Z"
+    },
+    {
+      "id": "GHSA-8359-h9fx-j6v9",
+      "cve": "CVE-2026-55389",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "datamodel-code-generator vulnerable to arbitrary local file read via JSON-Schema `$ref` (`file://` and `../` traversal), bypassing `--no-allow-remote-refs`",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "2ff4a72b4550a2b2069754c5b075b1655067e5fb",
+      "parentCommit": "2dbe5b5794472a4cad8e9286c942dffda7359816",
+      "files": [
+        "src/datamodel_code_generator/parser/jsonschema.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:28.392Z"
     },
     {
       "id": "GHSA-88pr-878c-24wf",
@@ -250,6 +682,55 @@
       "minedAt": "2026-08-09T18:46:17.551Z"
     },
     {
+      "id": "GHSA-8j4g-w8fx-2239",
+      "cve": "CVE-2026-69207",
+      "cwe": "CWE-1333",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Hono: ReDoS in CORS middleware via Access-Control-Request-Headers",
+      "repo": "honojs/hono",
+      "fixCommit": "93fc250d8b4df58ea542cb945171de8013d5e6d5",
+      "parentCommit": "51db3131d5e97076327edaa0afdb60ebb77c264f",
+      "files": [
+        "src/middleware/cors/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T21:46:49.693Z"
+    },
+    {
+      "id": "GHSA-8m8r-38jm-f355",
+      "cve": "CVE-2026-54656",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "`datamodel-code-generator` vulnerable to code execution on import via unescaped `validators` entries in --extra-template-data",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "a43d02906111a2fdcaf13ee5b62eb2da85376f19",
+      "parentCommit": "2c93c9b712f43391dcfa975a1e4aa0b7c93ccbba",
+      "files": [
+        "src/datamodel_code_generator/model/pydantic_v2/base_model.py",
+        "src/datamodel_code_generator/validators.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:30.001Z"
+    },
+    {
+      "id": "GHSA-8x5v-cpv7-8jjp",
+      "cve": "CVE-2026-70485",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Open WebUI: Any authenticated user can reach internal services and cloud metadata via NAT64-encoded URLs",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "1717b493d83c86afa82aa8bc50139250852dd2f3",
+      "parentCommit": "5c505c1119fec6170c1bc092ed162f86262a887e",
+      "files": [
+        "backend/open_webui/retrieval/web/utils.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:09.517Z"
+    },
+    {
       "id": "GHSA-944x-pm95-3jpr",
       "cve": "CVE-2026-53948",
       "cwe": "CWE-434",
@@ -264,6 +745,26 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:15.112Z"
+    },
+    {
+      "id": "GHSA-954p-556p-r752",
+      "cve": "CVE-2026-54690",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "datamodel-code-generator vulnerable to SSRF via JSON-Schema `$ref` to HTTP URL (silent by default)",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "5fdba4a09f2d7a9996a504975b7ef7d63e3715bb",
+      "parentCommit": "26933472f39c8f7af8776970cd07e3be4b4de6e1",
+      "files": [
+        "src/datamodel_code_generator/__init__.py",
+        "src/datamodel_code_generator/__main__.py",
+        "src/datamodel_code_generator/_types/generate_config_dict.py",
+        "src/datamodel_code_generator/_types/parser_config_dicts.py",
+        "src/datamodel_code_generator/arguments.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:30.556Z"
     },
     {
       "id": "GHSA-9pf5-hg6p-4pwp",
@@ -282,6 +783,57 @@
       "minedAt": "2026-08-09T18:46:05.955Z"
     },
     {
+      "id": "GHSA-9rj7-rf2p-w77r",
+      "cve": null,
+      "cwe": "CWE-88",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "GitPython: Unguarded git option forwarding in Repo.init enables arbitrary command execution via --template clone hooks",
+      "repo": "gitpython-developers/GitPython",
+      "fixCommit": "d9ddb55bdc66ffe8c9932fe460e6b8c8211e47c7",
+      "parentCommit": "9b5dcaf85da5946dbf69dcd53f9edba08f760b32",
+      "files": [
+        "git/repo/base.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:03.231Z"
+    },
+    {
+      "id": "GHSA-9xq3-3fqg-4vg7",
+      "cve": "CVE-2026-54574",
+      "cwe": "CWE-61",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "`proot-distro install` has a Symlink Escape (Arbitrary Host File Write) via Malicious Tar Archive",
+      "repo": "termux/proot-distro",
+      "fixCommit": "a96d7a9667f38e45d812614852ee3915d1c0ae45",
+      "parentCommit": "f5ff24beef945fcfe04831a913602169c17e97f6",
+      "files": [
+        "proot_distro/commands/restore.py",
+        "proot_distro/helpers/build_engine/copy_step.py",
+        "proot_distro/helpers/tar_extract.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:26.376Z"
+    },
+    {
+      "id": "GHSA-c5px-58j2-7fqp",
+      "cve": "CVE-2026-54785",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "gemini-bridge vulnerable to arbitrary local file read via consult_gemini_with_files inline mode",
+      "repo": "eLyiN/gemini-bridge",
+      "fixCommit": "8f3b85afd02b692c4bc974b5176e12fb277ea801",
+      "parentCommit": "bb3ad9e44dba04092abc2e2a8af83223f10402db",
+      "files": [
+        "src/__init__.py",
+        "src/mcp_server.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:17.507Z"
+    },
+    {
       "id": "GHSA-c6xh-wv4j-ppv5",
       "cve": "CVE-2026-69257",
       "cwe": "CWE-918",
@@ -296,6 +848,26 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:23.371Z"
+    },
+    {
+      "id": "GHSA-c9hr-64h3-gxpc",
+      "cve": "CVE-2026-67424",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flyto2 Core: Guarded HTTP modules follow redirects into internal space without per-hop SSRF revalidation",
+      "repo": "flytohub/flyto-core",
+      "fixCommit": "0a0a528520ec18f5a21f1ddf858a71cc1edfb6e9",
+      "parentCommit": "2471c6e774102fcca21c61eb66cae057c0f0cecf",
+      "files": [
+        "src/core/modules/atomic/ai/vision_analyze.py",
+        "src/core/modules/atomic/browser/proxy_rotate.py",
+        "src/core/modules/atomic/communication/slack_send.py",
+        "src/core/modules/atomic/graphql/mutation.py",
+        "src/core/modules/atomic/graphql/query.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:22.101Z"
     },
     {
       "id": "GHSA-ch52-px8q-f22j",
@@ -352,6 +924,22 @@
       "minedAt": "2026-08-09T18:46:19.192Z"
     },
     {
+      "id": "GHSA-cj54-hpcc-gj6h",
+      "cve": "CVE-2026-53502",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Thumbor has path traversal via post-validation URL decoding bypass in file_loader",
+      "repo": "thumbor/thumbor",
+      "fixCommit": "3b986d13677b30fe6651c8c72ebb25957ac0a40d",
+      "parentCommit": "471ef279700e9f79941d451acf88abe1601df875",
+      "files": [
+        "thumbor/loaders/file_loader.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:17.983Z"
+    },
+    {
       "id": "GHSA-cj62-hvv2-2q5h",
       "cve": "CVE-2026-70592",
       "cwe": "CWE-22",
@@ -386,6 +974,22 @@
       "minedAt": "2026-08-09T18:46:10.628Z"
     },
     {
+      "id": "GHSA-cqjp-jf4r-h5q9",
+      "cve": "CVE-2026-53503",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Thumbor convolution filter allows divide-by-zero in C extension leading to remote DoS",
+      "repo": "thumbor/thumbor",
+      "fixCommit": "447e192e3fb92e64c12e5354a56a4a7133f69d73",
+      "parentCommit": "2c716119de986cfc68c7071af52a98187e006023",
+      "files": [
+        "thumbor/filters/convolution.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:19.479Z"
+    },
+    {
       "id": "GHSA-f23p-vx2j-j53r",
       "cve": "CVE-2026-71850",
       "cwe": "CWE-488",
@@ -400,6 +1004,22 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:01.279Z"
+    },
+    {
+      "id": "GHSA-f42x-p2mx-hm8r",
+      "cve": "CVE-2026-50558",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Penelope unsafe tar extraction allows arbitrary local file write via crafted session archive",
+      "repo": "brightio/penelope",
+      "fixCommit": "a040afb5db32c7e80b5e8a2f9b2164cf911cfa62",
+      "parentCommit": "ef417fff6cfb2ab02f3303949fe60a4f163d0ed5",
+      "files": [
+        "penelope.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:27.350Z"
     },
     {
       "id": "GHSA-fm2f-4339-4p2f",
@@ -419,6 +1039,22 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:18.078Z"
+    },
+    {
+      "id": "GHSA-fp3f-mc75-235c",
+      "cve": "CVE-2026-71870",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "pypdf: Possible large memory usage for large /ToUnicode streams",
+      "repo": "py-pdf/pypdf",
+      "fixCommit": "afba8080e19d29a3c256a742b340995e695b35aa",
+      "parentCommit": "aa2f37da35627e831d3c97a26d21224f48c1f1ca",
+      "files": [
+        "pypdf/_cmap.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:46:59.967Z"
     },
     {
       "id": "GHSA-fr6g-7cq8-fg82",
@@ -441,6 +1077,38 @@
       "minedAt": "2026-08-09T18:46:18.688Z"
     },
     {
+      "id": "GHSA-fwg2-594c-jp42",
+      "cve": "CVE-2026-71852",
+      "cwe": "CWE-834",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "pypdf: Possible long runtimes/large memory usage for large CID font width ranges",
+      "repo": "py-pdf/pypdf",
+      "fixCommit": "51cb6acf9e8a35b77e90b4d87d28fe3e1416d7d7",
+      "parentCommit": "afba8080e19d29a3c256a742b340995e695b35aa",
+      "files": [
+        "pypdf/_font.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:00.488Z"
+    },
+    {
+      "id": "GHSA-fxqj-rqcc-2cmp",
+      "cve": "CVE-2026-69153",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+      "repo": "postcss/postcss",
+      "fixCommit": "7beca139e70f9075c6b19700fcb00dd8033e5da8",
+      "parentCommit": "decea51421682341401575b3740709fda0e12930",
+      "files": [
+        "lib/previous-map.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T21:46:52.625Z"
+    },
+    {
       "id": "GHSA-g366-23fw-ggp6",
       "cve": "CVE-2026-53946",
       "cwe": "CWE-918",
@@ -455,6 +1123,22 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:12.809Z"
+    },
+    {
+      "id": "GHSA-g423-grf7-98rv",
+      "cve": "CVE-2026-70484",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Open WebUI: Users denied the image-generation permission can still generate images via chat completions",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "897d69a35c65f8ab54583bb9ca8dc74eab7bcd29",
+      "parentCommit": "f65f893ff12859557b64ebebffd4ee3aa2f7eb73",
+      "files": [
+        "backend/open_webui/utils/middleware.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:10.042Z"
     },
     {
       "id": "GHSA-gcvv-72q8-9v76",
@@ -474,6 +1158,26 @@
       "minedAt": "2026-08-09T18:46:11.677Z"
     },
     {
+      "id": "GHSA-gm37-52c6-37mw",
+      "cve": "CVE-2026-67422",
+      "cwe": "CWE-1333",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "pymdown-extensions: exponential-backtracking ReDoS in caret, tilde, betterem, and magiclink inline processors",
+      "repo": "facelessuser/pymdown-extensions",
+      "fixCommit": "c68498598d7b13011bb4571350b6e3612a4ce44b",
+      "parentCommit": "6d0097b85a52468e7cd8eaceaa192ff3348c41e0",
+      "files": [
+        "pymdownx/__meta__.py",
+        "pymdownx/betterem.py",
+        "pymdownx/caret.py",
+        "pymdownx/magiclink.py",
+        "pymdownx/tilde.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:00.987Z"
+    },
+    {
       "id": "GHSA-gmmw-qg98-6j6p",
       "cve": "CVE-2026-70476",
       "cwe": "CWE-284",
@@ -489,6 +1193,44 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:16.990Z"
+    },
+    {
+      "id": "GHSA-hh9p-6wh2-4mfc",
+      "cve": null,
+      "cwe": "CWE-73",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "GitPython: Arbitrary file read via --pathspec-from-file in IndexFile.remove() and Head.checkout()",
+      "repo": "gitpython-developers/GitPython",
+      "fixCommit": "f2550b65bf60ca087190981e2c7b6865e201f40c",
+      "parentCommit": "d9ddb55bdc66ffe8c9932fe460e6b8c8211e47c7",
+      "files": [
+        "git/cmd.py",
+        "git/index/base.py",
+        "git/refs/head.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:02.706Z"
+    },
+    {
+      "id": "GHSA-hr7p-wg7r-hg9m",
+      "cve": "CVE-2026-67427",
+      "cwe": "CWE-522",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flyto2 Core: ${env.VAR} interpolation reads any env secret despite env.get being denylisted",
+      "repo": "flytohub/flyto-core",
+      "fixCommit": "d5f89d71303e3c1e6418d347c5c55fcd173cc8cc",
+      "parentCommit": "9103529c204cad3e698b726ed958b626bcfbc182",
+      "files": [
+        "src/core/engine/variable_resolver.py",
+        "src/core/module_policy.py",
+        "src/core/modules/atomic/ai/model.py",
+        "src/core/modules/atomic/browser/pagination.py",
+        "src/core/modules/atomic/document/excel_write.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:24.083Z"
     },
     {
       "id": "GHSA-jm22-3w23-5q7w",
@@ -510,6 +1252,174 @@
       "minedAt": "2026-08-09T18:46:12.202Z"
     },
     {
+      "id": "GHSA-jm78-9fvv-mhgr",
+      "cve": null,
+      "cwe": "CWE-74",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "GitPython: git-config OPTION-name injection via =/#/whitespace bypasses name validator, enabling forged core.sshCommand/hooksPath (RCE)",
+      "repo": "gitpython-developers/GitPython",
+      "fixCommit": "a495ccd3b547ccd60b2187215823b72a9c0188bf",
+      "parentCommit": "f4277fa65158681bd3948d5f47805578db905fab",
+      "files": [
+        "git/config.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:02.187Z"
+    },
+    {
+      "id": "GHSA-jx74-cqjv-2c67",
+      "cve": "CVE-2026-67426",
+      "cwe": "CWE-306",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flyto2 Core: Unauthenticated flyto-verification /run: callback_url SSRF and internal runner-secret exfiltration",
+      "repo": "flytohub/flyto-core",
+      "fixCommit": "0a0a528520ec18f5a21f1ddf858a71cc1edfb6e9",
+      "parentCommit": "2471c6e774102fcca21c61eb66cae057c0f0cecf",
+      "files": [
+        "src/core/modules/atomic/ai/vision_analyze.py",
+        "src/core/modules/atomic/browser/proxy_rotate.py",
+        "src/core/modules/atomic/communication/slack_send.py",
+        "src/core/modules/atomic/graphql/mutation.py",
+        "src/core/modules/atomic/graphql/query.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:23.152Z"
+    },
+    {
+      "id": "GHSA-jxc9-xmc4-gr23",
+      "cve": "CVE-2026-70488",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Open WebUI: Deletion of directories and file embeddings in other knowledge bases via sync cleanup",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "707efeaed7992dd9896d5928559458f228b9a539",
+      "parentCommit": "8710c448a993d4d15897b510b55a99b5c3b55bc2",
+      "files": [
+        "backend/open_webui/routers/knowledge.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:08.470Z"
+    },
+    {
+      "id": "GHSA-m34r-v34r-rf9q",
+      "cve": "CVE-2026-54655",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "`datamodel-code-generator` vulnerable to code execution on import via `x-python-type` JSON-Schema extension in datamodel-code-generator",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "2c93c9b712f43391dcfa975a1e4aa0b7c93ccbba",
+      "parentCommit": "17fc235e234cbcfaaadef8c74cb72c9687db0d1d",
+      "files": [
+        "src/datamodel_code_generator/parser/jsonschema.py",
+        "src/datamodel_code_generator/types.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:31.903Z"
+    },
+    {
+      "id": "GHSA-mfx4-hv73-q22v",
+      "cve": "CVE-2026-69243",
+      "cwe": "CWE-444",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "AIOHTTP: HTTP request smuggling via WebSocket upgrade",
+      "repo": "aio-libs/aiohttp",
+      "fixCommit": "6ae358f0983c3f4d6f67692b2f8e65dc8e091c98",
+      "parentCommit": "c852173947406e2eca65957535ff17d3a4035a03",
+      "files": [
+        "aiohttp/http_parser.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:14.763Z"
+    },
+    {
+      "id": "GHSA-mj5r-jf49-m3w7",
+      "cve": "CVE-2026-70481",
+      "cwe": "CWE-284",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Open WebUI: Any member with write access to a standard channel can edit or delete other members' messages",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "c609ec41154fa092fa0af80d9d365de06b666286",
+      "parentCommit": "c895490aa8d4f0af21a3ab8121cc1d965a3c7c2a",
+      "files": [
+        "backend/open_webui/routers/channels.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:11.615Z"
+    },
+    {
+      "id": "GHSA-mq44-7p77-q5h7",
+      "cve": "CVE-2026-59881",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "AIOHTTP: WebSocket client accepts compressed frames without negotiated permessage-deflate",
+      "repo": "aio-libs/aiohttp",
+      "fixCommit": "47fb6ae354d4fa22048f4dbe7dbf82b625f0a2f6",
+      "parentCommit": "c5293938af13b3efbcd77619d34501cbaa255c2a",
+      "files": [
+        "aiohttp/_websocket/reader_py.py",
+        "aiohttp/client.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:15.288Z"
+    },
+    {
+      "id": "GHSA-mw3h-qjxj-6xg9",
+      "cve": "CVE-2026-53501",
+      "cwe": "CWE-347",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Thumbor has HMAC validation bypass via multiple .replace() calls when removing URL signature",
+      "repo": "thumbor/thumbor",
+      "fixCommit": "e3ae3e2500537b4d735df4144129a649374bb70b",
+      "parentCommit": "68876715350c6c8f49c324e5515e64908830aed7",
+      "files": [
+        "thumbor/handlers/imaging.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:20.004Z"
+    },
+    {
+      "id": "GHSA-mwp4-54f8-5fhr",
+      "cve": "CVE-2026-69192",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "ip-address: Address4 decodes leading-zero octets as decimal while resolvers decode them as octal, allowing SSRF and trust-boundary bypass",
+      "repo": "beaugunderson/ip-address",
+      "fixCommit": "56368cb3d66c73ba0ee9b6b834fd31b22c2fd71e",
+      "parentCommit": "9ed7949438f3f522ad95daebc0bccc8c20c07d6d",
+      "files": [
+        "src/ipv4.ts",
+        "src/ipv6.ts",
+        "src/v4/constants.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T21:46:50.211Z"
+    },
+    {
+      "id": "GHSA-p538-c434-8v24",
+      "cve": null,
+      "cwe": "CWE-88",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "GitPython: Arbitrary file truncation via git rev-list --output argument injection in unguarded Commit.count",
+      "repo": "gitpython-developers/GitPython",
+      "fixCommit": "38553b6fddc7f6a667cdb45a6762343a08fc72b2",
+      "parentCommit": "be5031df99d8d499ea2a469e0312fe6cf7ec30a5",
+      "files": [
+        "git/objects/commit.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:15.810Z"
+    },
+    {
       "id": "GHSA-p5w8-m249-4r4v",
       "cve": "CVE-2026-69262",
       "cwe": "CWE-863",
@@ -528,6 +1438,42 @@
       "minedAt": "2026-08-09T18:46:21.816Z"
     },
     {
+      "id": "GHSA-pgwh-4jj4-qm8v",
+      "cve": "CVE-2026-67428",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flyto2 Core: Multiple HTTP-family modules fetch client-controlled URLs without the SSRF guard their siblings apply (SSRF to internal/metadata)",
+      "repo": "flytohub/flyto-core",
+      "fixCommit": "0a0a528520ec18f5a21f1ddf858a71cc1edfb6e9",
+      "parentCommit": "2471c6e774102fcca21c61eb66cae057c0f0cecf",
+      "files": [
+        "src/core/modules/atomic/ai/vision_analyze.py",
+        "src/core/modules/atomic/browser/proxy_rotate.py",
+        "src/core/modules/atomic/communication/slack_send.py",
+        "src/core/modules/atomic/graphql/mutation.py",
+        "src/core/modules/atomic/graphql/query.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:22.624Z"
+    },
+    {
+      "id": "GHSA-phj3-59pf-cp83",
+      "cve": "CVE-2026-53505",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Thumbor proportion filter allows unbounded post-transform resize leading to remote DoS",
+      "repo": "thumbor/thumbor",
+      "fixCommit": "2c716119de986cfc68c7071af52a98187e006023",
+      "parentCommit": "e3ae3e2500537b4d735df4144129a649374bb70b",
+      "files": [
+        "thumbor/filters/proportion.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:18.433Z"
+    },
+    {
       "id": "GHSA-pr22-p9rp-2cqv",
       "cve": "CVE-2026-70596",
       "cwe": "CWE-79",
@@ -544,6 +1490,96 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:08.204Z"
+    },
+    {
+      "id": "GHSA-qq9q-xgm3-xv9g",
+      "cve": "CVE-2026-67425",
+      "cwe": "CWE-201",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flyto2 Core: LLM/API keys leak to an attacker-controlled base_url",
+      "repo": "flytohub/flyto-core",
+      "fixCommit": "d5f89d71303e3c1e6418d347c5c55fcd173cc8cc",
+      "parentCommit": "9103529c204cad3e698b726ed958b626bcfbc182",
+      "files": [
+        "src/core/engine/variable_resolver.py",
+        "src/core/module_policy.py",
+        "src/core/modules/atomic/ai/model.py",
+        "src/core/modules/atomic/browser/pagination.py",
+        "src/core/modules/atomic/document/excel_write.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:23.675Z"
+    },
+    {
+      "id": "GHSA-r5vv-ff45-prp2",
+      "cve": "CVE-2026-55403",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "datamodel-code-generator: Authorization / request headers leaked to cross-origin redirect target when fetching remote schemas",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "a585c037c8307b7aae815de193b7fe1c4c44994b",
+      "parentCommit": "25c8b7e497419eb20b230fa3318c04f9bebc5a6f",
+      "files": [
+        "src/datamodel_code_generator/http.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:32.585Z"
+    },
+    {
+      "id": "GHSA-r745-8hwv-h473",
+      "cve": "CVE-2026-69250",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: Unauthenticated OAuth2 Refresh Enables Non-Blind SSRF and Secret Exfiltration",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "da8b251a9a4c59484ceaf6f71df7406aede7bef2",
+      "parentCommit": "d81483b70c997ddf981acc9c49fbd9a02fa345cd",
+      "files": [
+        "packages/server/src/commands/base.ts",
+        "packages/server/src/routes/oauth2/index.ts",
+        "packages/server/src/utils/constants.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T21:46:48.034Z"
+    },
+    {
+      "id": "GHSA-rffm-9q57-q649",
+      "cve": "CVE-2026-70480",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Open WebUI: Client-side SSRF via unrestricted external resource loading in Vega/Vega-Lite chart rendering",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "5278eb906ebecefc6538a19bc86df09d997e43e6",
+      "parentCommit": "4c2d864b3f4c1ae6c4c9bd93aea078d4bf520463",
+      "files": [
+        "src/lib/utils/index.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T21:47:10.572Z"
+    },
+    {
+      "id": "GHSA-rfr2-mq9m-x2qx",
+      "cve": "CVE-2026-54691",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "datamodel-code-generator vulnerable to SSRF via --url: no host/IP validation, follows redirects",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "5fdba4a09f2d7a9996a504975b7ef7d63e3715bb",
+      "parentCommit": "26933472f39c8f7af8776970cd07e3be4b4de6e1",
+      "files": [
+        "src/datamodel_code_generator/__init__.py",
+        "src/datamodel_code_generator/__main__.py",
+        "src/datamodel_code_generator/_types/generate_config_dict.py",
+        "src/datamodel_code_generator/_types/parser_config_dicts.py",
+        "src/datamodel_code_generator/arguments.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:33.111Z"
     },
     {
       "id": "GHSA-rg76-677x-56q9",
@@ -578,6 +1614,39 @@
       "minedAt": "2026-08-09T18:46:04.446Z"
     },
     {
+      "id": "GHSA-v833-3823-cmhp",
+      "cve": "CVE-2026-54707",
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "OnionShare Receive mode writes uploaded files even when file uploads are disabled",
+      "repo": "onionshare/onionshare",
+      "fixCommit": "a090e97193efc91fbeac9dace7793ea568b83cf5",
+      "parentCommit": "8cc75e1d7e88bd31f7276733449d412bf71c8999",
+      "files": [
+        "cli/onionshare_cli/web/receive_mode.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:21.576Z"
+    },
+    {
+      "id": "GHSA-v8fg-2rw7-q452",
+      "cve": "CVE-2026-69240",
+      "cwe": "CWE-89",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Sequelize: SQL Injection (Oracle DB)",
+      "repo": "sequelize/sequelize",
+      "fixCommit": "5deadd2410ae9136a21fb652db206d27bb715f26",
+      "parentCommit": "b9e71a7af57568dd85b8a2fdaac59b96ce0f0e95",
+      "files": [
+        "src/dialects/postgres/connection-manager.js",
+        "src/sql-string.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-09T21:46:49.113Z"
+    },
+    {
       "id": "GHSA-vmv7-4m6c-3cg5",
       "cve": "CVE-2026-69255",
       "cwe": "CWE-94",
@@ -592,6 +1661,94 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:24.366Z"
+    },
+    {
+      "id": "GHSA-vx7x-vcc2-c44g",
+      "cve": "CVE-2026-55391",
+      "cwe": "CWE-350",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "datamodel-code-generator vulnerable to SSRF protection bypass via DNS rebinding",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "25c8b7e497419eb20b230fa3318c04f9bebc5a6f",
+      "parentCommit": "922356a14793fad676763a0ba2657c5b6952bf2c",
+      "files": [
+        "src/datamodel_code_generator/http.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:29.508Z"
+    },
+    {
+      "id": "GHSA-w2rx-84hp-gg95",
+      "cve": "CVE-2026-70479",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Open WebUI: SSRF into internal services via unvalidated sub-resource requests in the Playwright web loader",
+      "repo": "open-webui/open-webui",
+      "fixCommit": "bef63a2ae915571d50d2722a635e8bfa753d7877",
+      "parentCommit": "df94268e892cbb66675170a6c78846aef23f6e89",
+      "files": [
+        "backend/open_webui/retrieval/web/utils.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:12.140Z"
+    },
+    {
+      "id": "GHSA-wchh-9x6h-7f6p",
+      "cve": null,
+      "cwe": "CWE-1395",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "olm dependency deprecation: CVE-2022-39255 and CVE-2024-45193",
+      "repo": "matrix-nio/matrix-nio",
+      "fixCommit": "71a1c808bc2ae6ea2a6e8effa7c11bd09796c626",
+      "parentCommit": "13e77bb8fce48c4abc6fa7f334f1a797bf33052c",
+      "files": [
+        "src/nio/crypto/__init__.py",
+        "src/nio/crypto/olm_machine.py",
+        "src/nio/crypto/sas.py",
+        "src/nio/crypto/sessions.py",
+        "src/nio/store/__init__.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:26.970Z"
+    },
+    {
+      "id": "GHSA-wg86-r78f-74mp",
+      "cve": "CVE-2026-69253",
+      "cwe": "CWE-95",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Flowise Sandbox Escape to RCE",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "3f257bdc8196082a178da7134a075824401b13b9",
+      "parentCommit": "96a9b23b5a103b362a0ee1368d04636755be1bed",
+      "files": [
+        "packages/components/nodes/agentflow/ExecuteFlow/ExecuteFlow.ts",
+        "packages/components/nodes/sequentialagents/ExecuteFlow/ExecuteFlow.ts",
+        "packages/components/nodes/tools/AgentAsTool/AgentAsTool.ts",
+        "packages/components/nodes/tools/ChatflowTool/ChatflowTool.ts",
+        "packages/components/src/utils.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T21:46:46.780Z"
+    },
+    {
+      "id": "GHSA-wjv6-jcfj-mf9r",
+      "cve": "CVE-2026-54654",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "`datamodel-code-generator` vulnerable to code injection via unescaped carriage return in `--extra-template-data` `comment` field",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "fixCommit": "b73abb5cd703a50471b8950bbd3bd0b82ad71de7",
+      "parentCommit": "bcfdf30660ac4a17ea54400351c9aa4f3391f60e",
+      "files": [
+        "src/datamodel_code_generator/model/base.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:27.868Z"
     },
     {
       "id": "GHSA-wm8w-6qjm-cv43",
@@ -612,6 +1769,24 @@
       "minedAt": "2026-08-09T18:46:05.386Z"
     },
     {
+      "id": "GHSA-wp74-f5hh-5f3r",
+      "cve": "CVE-2026-69252",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Flowise: Missing authorization on `/api/v1/files` allows low-privileged API keys to list and delete files across workspaces within the same organization",
+      "repo": "FlowiseAI/Flowise",
+      "fixCommit": "bc22bf8baec95b6a3d6e1b3563b4f03491cd6fbb",
+      "parentCommit": "0fc769208395641c1411ccdb9c81416e54802155",
+      "files": [
+        "packages/server/src/routes/index.ts",
+        "packages/server/src/utils/constants.ts",
+        "packages/ui/src/routes/MainRoutes.jsx"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-09T21:46:47.379Z"
+    },
+    {
       "id": "GHSA-wvp2-4qqp-4h3r",
       "cve": "CVE-2026-53944",
       "cwe": "CWE-184",
@@ -626,6 +1801,22 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:13.980Z"
+    },
+    {
+      "id": "GHSA-wvpp-8hx9-p66j",
+      "cve": null,
+      "cwe": "CWE-88",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "GitPython: Unsafe git option guard bypass via split_single_char_options=False short-option token smuggling enables command execution",
+      "repo": "gitpython-developers/GitPython",
+      "fixCommit": "96a888f4d782cb2f80452148e48e60ce4af6d541",
+      "parentCommit": "a495ccd3b547ccd60b2187215823b72a9c0188bf",
+      "files": [
+        "git/cmd.py"
+      ],
+      "language": "python",
+      "minedAt": "2026-08-09T21:47:01.659Z"
     },
     {
       "id": "GHSA-x3hf-7cj6-3r4m",
