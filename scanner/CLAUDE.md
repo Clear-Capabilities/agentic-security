@@ -30,7 +30,7 @@ Every test file under `test/*.test.js` should be assigned to one of these scoped
 - **Findings schema** — `{ id, severity, file, line, vuln, cwe, description, remediation, parser, family, … }`. `parser` + `family` are required; `posture/finding-defaults.js` backfills before confidence/calibration so detectors that forget to set them still calibrate correctly.
 - **No runtime cloud calls** — OSV/KEV data is fetched lazily and disk-cached under `~/.claude/agentic-security/osv-cache/`. Anything new that needs the network must be opt-in and degrade gracefully when offline.
 - **`scan.findings` is the SAST array.** Secrets live on `scan.secrets`, supply-chain on `scan.supplyChain`, business-logic on `scan.logicVulns`. The report `normalizeFindings` merges them; engine code should keep them separate.
-- **Suppression pragmas** — `// agentic-security-ignore: <rule-id>` on the offending line suppresses that rule for that line.
+- **Suppression pragmas** — `// agentic-security-ignore: <rule-id>` on the offending line suppresses that rule for that line. `_applyIgnorePragmas` runs twice in `engine.js`: once after the cross-file passes, once after the deep-mode IR append. If you add a stage that appends findings, it must run after your stage too, or pragmas will be inert for whatever it produces. A finding with no integer `line` cannot be suppressed at all — see the root `CLAUDE.md` bullet.
 - **Determinism** — `--deterministic` and `AGENTIC_SECURITY_LLM_VALIDATE` should produce byte-identical SARIF run-to-run. Sort outputs before emit; never use `Date.now()` in a finding ID.
 
 ## Subdirectory pointers

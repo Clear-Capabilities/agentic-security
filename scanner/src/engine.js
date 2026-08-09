@@ -2331,6 +2331,23 @@ function _pragmaSuppresses(pragma, f){
 }
 
 // Filter one findings array in place. Returns the number removed.
+// Filter one findings array in place against inline pragmas. Returns the count.
+//
+// CALLED TWICE per scan, deliberately: once after the cross-file passes and
+// again after deep-mode IR findings are appended. See both call sites.
+//
+// KNOWN LIMITATION — a finding with no integer `line` can never be suppressed.
+// The guard below skips it, because a line-scoped pragma has nothing to match
+// against. This is not hypothetical: `struct:` detectors emit findings with no
+// `line` property at all (the line survives only inside the id string, e.g.
+// `struct:app.js:22:Mass_Assignment`), so a false positive from one of those
+// cannot be silenced by a pragma and has to be fixed at the source instead.
+//
+// A file-scoped fallback was considered and REJECTED. Widening a line pragma to
+// a whole file would silently suppress findings the author never looked at, and
+// silent over-suppression in a security tool is worse than the gap it closes.
+// The real fix is for struct detectors to carry a `line`; that changes finding
+// output repo-wide, moves the self-scan baseline, and belongs in its own change.
 function _applyIgnorePragmas(arr, fc){
   if (!Array.isArray(arr)) return 0;
   let removed = 0;
@@ -7952,11 +7969,17 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // AGENTIC_SECURITY_TREE_SITTER=1; degrades to no-op without the optional dep).
   if(process.env.AGENTIC_SECURITY_TREE_SITTER==='1'){try{aF.push(...await scanTreeSitterSinks(fc));}catch(_){}}
   let finalFindings;try{finalFindings=dedupeFindingsWithEvidence(aF);}catch(_){finalFindings=dd(aF,f=>f.id);}
-  // Inline `agentic-security-ignore` pragmas. Applied here — after dedupe and
-  // after every cross-file pass has appended — so a pragma covers the finding
-  // whichever analysis produced it, and applied to the logic and secrets
-  // buckets too, since those are the ones a developer is most likely to want to
-  // silence on a specific line.
+  // Inline `agentic-security-ignore` pragmas, pass 1 of 2. This covers every
+  // finding that exists BY THIS POINT — the pattern detectors, the cross-file
+  // passes, and the logic and secrets buckets, which are the ones a developer
+  // is most likely to want silenced on a specific line.
+  //
+  // It does NOT cover deep-mode IR findings: those are appended much further
+  // down (search `finalFindings.push(...irFindings)`), so a second pass runs
+  // there. For years this call carried a comment claiming it ran "after every
+  // cross-file pass has appended", which was false for the deep path — a
+  // correctly-formed pragma on the exact line of an ir-taint finding did
+  // nothing, silently, in the mode the CLI actually uses.
   try{ _applyIgnorePragmas(finalFindings, fc); _applyIgnorePragmas(aLogic, fc); _applyIgnorePragmas(aSecrets, fc); }catch(_){}
   // #1 — centralized SSRF/path guard recognition: drop CWE-918/CWE-22 findings
   // on code hardened by a host allow/deny check or a path containment guard,
@@ -8437,6 +8460,18 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
         f.validator_verdict = 'unvalidated';
       }
       finalFindings.push(...irFindings);
+      // Pragma pass 2 of 2 — see the pass-1 comment far above. Deep-mode IR
+      // findings land here, long after pass 1 ran, so without this an
+      // `agentic-security-ignore` on an ir-taint finding is inert. Deep mode is
+      // what the CLI uses outside CI and taint findings are the ones users most
+      // want to silence, so the documented feature did nothing in the case that
+      // mattered most.
+      //
+      // Re-running over the already-filtered array is safe and does not
+      // double-log: pass 1's removals are gone from `finalFindings`, so only the
+      // newly-appended IR findings can match here, and each suppression reaches
+      // the ledger exactly once.
+      try{ _applyIgnorePragmas(finalFindings, fc); }catch(_){}
       // Java SCA enrichment: use deep-mode IR call graph to improve Java function reachability
       try {
         for (const sc of supplyChain) {
