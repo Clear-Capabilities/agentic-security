@@ -42,20 +42,39 @@ exactly those inputs (`posture/attestation.js`, `scan-checkpoint.js`'s run key).
 | `head-pushed`, `remote-ci-green` | network, seconds | |
 | `dependency-currency` | see §5 | measured 1 s only because it short-circuited |
 
-### 1.3 Inside the 210 s test suite
+### 1.3 Inside the test suite
 
-| Script | Cost | Files |
+> **CORRECTED 2026-08-09, after implementing R1.** The first version of this
+> table was measured while several subagents were running full suites
+> concurrently. Under that contention the figures were wrong by up to **170×**:
+> `test:glob` read as 52 s and is actually **321 ms**. Every number below was
+> re-measured on a quiet machine. The lesson is recorded in R3, because the
+> original numbers drove a recommendation that turned out to target a problem
+> that does not exist.
+
+Measured on an otherwise idle machine:
+
+| Script | Cost | Was reported as |
 |---|---|---|
-| `test:glob` | **52 s** | one file — `glob-compat.test.js` |
-| `test:sast` | 47 s | detector suite |
-| `test:posture` | 40 s | posture suite |
-| `test:smoke` | 30 s | one file — `smoke.test.js` |
-| all others combined | 35 s | |
+| `test:posture` | **40.5 s** | 40 s ✓ |
+| `test:sast` | **24.8 s** | 47 s ✗ |
+| `test:smoke` | **13.1 s** | 30 s ✗ |
+| `test:lifecycle` | 9.3 s | — |
+| `test:dataflow` | 8.7 s | — |
+| `test:report` | 4.9 s | — |
+| `test:mcp` | 2.2 s | — |
+| `test:discovery` | 0.4 s | — |
+| `test:glob` | **0.32 s** | **52 s ✗✗** |
+| **`npm test` total** | **173 s** | 210 s |
 
-Two are anomalies rather than large suites: `glob-compat.test.js` is 184 lines
-and 13 tests exercising a path-matching primitive, and `scanner/CLAUDE.md`
-describes `test:smoke` as "one-file fixture, fast" and the thing to run "after
-any change anywhere" — a description that has drifted from a 30 s reality.
+The scoped scripts sum to ~104 s against a 173 s total; the remainder is the
+trailing `cpp-dataflow` run plus roughly a second of npm start-up per script
+across ten sequential invocations.
+
+`glob-compat.test.js` is not an anomaly — its 13 tests total **16 ms** of actual
+assertion time. `scanner/CLAUDE.md` still describes `test:smoke` as "one-file
+fixture, fast" and the thing to run "after any change anywhere", which at 13 s
+is a stretch, though far less of one than the original 30 s figure suggested.
 
 ### 1.4 A publish blocked on a non-correctness signal
 
@@ -249,7 +268,48 @@ the blocking set.
 
 ## R3 — Make the test suite fast enough that R1 is a bonus
 
-**Priority:** P1 · **Est. saving:** target 210 s → < 90 s
+**Status:** ✅ **profiled; the premise was wrong. Closed without optimisation.**
+**Priority:** P1 (downgraded) · **Actual suite cost:** 173 s, not 210 s
+
+### Outcome — read this before the original plan below
+
+R3a said `glob-compat.test.js` took 52 s for 13 tests and was "almost certainly
+your cheapest large win". **It takes 321 ms**, and its assertions total 16 ms.
+The 52 s figure was measured while several subagents were running full test
+suites concurrently. So were `test:sast` (47 s reported, 24.8 s real) and
+`test:smoke` (30 s reported, 13.1 s real).
+
+There is no 52 s anomaly to fix. The suite's cost is simply where the tests are:
+`test:posture` 40.5 s and `test:sast` 24.8 s, which R3c had already put out of
+scope as genuinely large suites rather than defects.
+
+**What was actually done under R3:**
+
+- Profiled `glob-compat.test.js` per-test (R3a's acceptance criterion) — the
+  profile is what disproved the premise.
+- Corrected §1.3 and this section rather than leaving numbers that would send
+  the next reader after a phantom.
+- Corrected `scanner/CLAUDE.md`'s description of `test:smoke` (R3b's stated
+  alternative: make the doc agree with reality rather than force the code to).
+
+**What was deliberately NOT done:** any optimisation of `test:posture` or
+`test:sast`. Both are large suites doing real work, R3c already scoped them out,
+and with R1 landed the suite runs once per input set rather than three times —
+which removes most of the motivation. Chasing 173 s → 90 s now would be
+optimising the thing that no longer repeats.
+
+**Methodology note, worth more than the numbers.** Timing anything on a machine
+running other suites produced errors up to 170×. This is the same load
+sensitivity that produced the `autopilot-cli` failure fixed in `fb85213`. Any
+future benchmark of this repository must be taken on an idle machine, and R3d's
+requirement below — ten consecutive clean runs under load before enabling
+concurrency — is now supported by direct evidence rather than caution.
+
+---
+
+### Original plan (superseded by the outcome above)
+
+**Est. saving:** target 210 s → < 90 s
 
 ### Problem
 Four scripts are 169 s of 210 s. Two are single files doing far more work than

@@ -14,7 +14,7 @@ Node-only scan engine. ESM throughout, Node ≥ 24. The CLI bundle (`dist/agenti
 
 | Script | Covers | When to run |
 |--------|--------|-------------|
-| `npm run test:smoke` | The end-to-end vulnerable-js fixture | After any change anywhere |
+| `npm run test:smoke` | The end-to-end vulnerable-js fixture (~13 s: it runs a real scan, so it is the cheapest MEANINGFUL check, not an instant one) | After any change anywhere |
 | `npm run test:sast` | Detector modules in `src/sast/` | When editing a SAST rule |
 | `npm run test:posture` | Posture modules in `src/posture/` | When editing a posture annotator |
 | `npm run test:dataflow` | IR, taint engine, calibration, held-out evaluator | When editing `src/dataflow/`, `src/ir/`, or calibration |
