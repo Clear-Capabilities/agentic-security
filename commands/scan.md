@@ -249,6 +249,10 @@ node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs hunt --root .
 | `--root <dir>` | Scope of the hunt. Capped at 2000 source files; narrow the root rather than raising the cap. |
 | `--lens a,b` | Restrict to named lenses (`injection`, `authz`, `crypto`, `business-logic`, `feature-abuse`, `chained`, `wildcard`). |
 | `--max-areas <n>` | Cap the call-graph partition (default 8). |
+| `--max-llm-calls <n>` | Hard ceiling on LLM calls for the run (default 200). Exhaustion marks the run INCOMPLETE. |
+| `--max-candidates <n>` | Cap candidates entering confirmation and refutation (default 50). Each costs three more calls. |
+| `--max-wall-ms <n>` | Wall-clock ceiling for the run (default 15 min). |
+| `--max-cost-usd <n>` `--cost-per-call-usd <n>` | Dollar ceiling, converted to a call ceiling. Both are required — a dollar figure alone cannot be converted honestly. |
 
 **Requires `AGENTIC_SECURITY_LLM_ENDPOINT`.** Without it every hunter run
 degrades and the command says so in as many words — it never reports a clean

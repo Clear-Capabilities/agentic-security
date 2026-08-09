@@ -1,7 +1,7 @@
 // scanner/test/discovery-run.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runDiscovery, makeTaintProbe } from '../src/discovery/index.js';
+import { runDiscovery, makeTaintProbe, makeBudget } from '../src/discovery/index.js';
 
 const CTX = {
   perFileIR: {},
@@ -129,4 +129,85 @@ test('partial degradation within an area: areasHunted and areasFullyHunted diver
   const r = await runDiscovery(CTX, { lenses: ['injection', 'authz'], llmInvoke });
   assert.equal(r.coverage.areasHunted, 1);
   assert.equal(r.coverage.areasFullyHunted, 0);
+});
+
+// --- PRD Phase 0 / C3: the run budget ---------------------------------------
+//
+// This pipeline is multiplicative and shipped unbounded. Measured on a SIX-file
+// fixture: 6 areas × 7 lenses = 42 hunter calls, then 42 candidates × 3
+// refutation votes = 126 more. 168 LLM calls from six files, with nothing
+// capping any of it. The cost of a run was a function of repository size, which
+// is not a property anyone should discover from an invoice.
+
+const manyFiles = (n) => {
+  const fns = new Map();
+  const fileContents = {};
+  for (let i = 0; i < n; i++) {
+    fns.set(`f${i}.js::x@1`, { qid: `f${i}.js::x@1`, name: 'x', file: `f${i}.js` });
+    fileContents[`f${i}.js`] = 'function x(){ return 1; }';
+  }
+  return { perFileIR: {}, callGraph: { functions: fns, edges: [] }, fileContents };
+};
+const alwaysProposes = async (p) => (/REFUTE/.test(p)
+  ? '{"refuted":false}'
+  : '{"candidates":[{"title":"X","file":"f0.js","line":1,"sink":"eval"}]}');
+
+test('the LLM call budget is a hard ceiling, not a suggestion', async () => {
+  let actual = 0;
+  const counted = async (p) => { actual += 1; return alwaysProposes(p); };
+  const r = await runDiscovery(manyFiles(6), { llmInvoke: counted, maxLlmCalls: 5 });
+  assert.equal(r.coverage.llmCalls, 5);
+  assert.ok(actual <= 5, `the callback must never be invoked past the ceiling, got ${actual}`);
+  assert.equal(r.coverage.budgetExhausted, true);
+});
+
+test('an exhausted budget is reported as an INCOMPLETE run, not a clean one', async () => {
+  // The whole point: a run that stopped early must not read as "nothing found".
+  const r = await runDiscovery(manyFiles(6), { llmInvoke: alwaysProposes, maxLlmCalls: 3 });
+  const text = r.coverage.reasons.join('\n');
+  assert.match(text, /RUN INCOMPLETE/);
+  assert.match(text, /absence of a finding below is not evidence of absence/);
+});
+
+test('a run inside its budget is not marked exhausted', async () => {
+  const r = await runDiscovery(manyFiles(1), { llmInvoke: alwaysProposes, maxLlmCalls: 1000 });
+  assert.equal(r.coverage.budgetExhausted, false);
+  assert.ok(!r.coverage.reasons.join('\n').includes('RUN INCOMPLETE'));
+});
+
+test('the candidate cap bounds panel cost and is disclosed, never silent', async () => {
+  const r = await runDiscovery(manyFiles(6), { llmInvoke: alwaysProposes, maxLlmCalls: 1000, maxCandidates: 10 });
+  assert.ok(r.coverage.candidatesCapped > 0, 'the cap must have bitten for this to test anything');
+  assert.ok(r.coverage.panelsRun <= 10);
+  assert.match(r.coverage.reasons.join('\n'), /candidate cap/);
+  // "Neither findings nor cleared" is the load-bearing phrase: a capped
+  // candidate was not examined, which is different from being dismissed.
+  assert.match(r.coverage.reasons.join('\n'), /neither findings nor cleared/);
+});
+
+test('a dollar ceiling converts to calls only when a per-call cost is supplied', async () => {
+  // Without costPerCallUsd there is no honest conversion, so maxCostUsd alone
+  // must not silently become an unbounded run OR an arbitrary limit.
+  const b1 = makeBudget({ maxCostUsd: 1, costPerCallUsd: 0.1, maxLlmCalls: 1000 });
+  assert.equal(b1.maxCalls, 10);
+  const b2 = makeBudget({ maxCostUsd: 1, maxLlmCalls: 77 });
+  assert.equal(b2.maxCalls, 77, 'a dollar ceiling with no per-call cost must not change the call ceiling');
+});
+
+test('the wall-clock budget stops a run that is taking too long', async () => {
+  let t = 0;
+  const clock = () => t;
+  const budget = makeBudget({ maxWallMs: 100, maxLlmCalls: 1000 }, clock);
+  const wrapped = budget.wrap(async () => 'ok');
+  await wrapped('first');            // inside the window
+  t = 500;                            // time passes
+  await assert.rejects(() => wrapped('second'), /wall-clock budget spent/);
+});
+
+test('makeBudget leaves a missing llmInvoke alone', async () => {
+  // The degradation path depends on `null` staying null; wrapping it would turn
+  // "no endpoint configured" into a thrown error.
+  const budget = makeBudget({});
+  assert.equal(budget.wrap(null), null);
+  assert.equal(budget.wrap(undefined), undefined);
 });

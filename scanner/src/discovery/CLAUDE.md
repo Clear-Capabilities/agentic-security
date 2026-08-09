@@ -34,5 +34,15 @@ panel · `judge.js` shapes findings and dedupes against the prior scan ·
   This layer never emits `critical`.
 - **Ids are content digests.** No clock, no randomness, anywhere in an id, a
   digest, or a sort key.
+- **Bounded by default.** The pipeline is multiplicative — areas × lenses
+  hunter calls, then three refutation votes per surviving candidate. Six
+  files produced 168 LLM calls before C3. `makeBudget` in `index.js` wraps
+  `llmInvoke` so every call is counted against a ceiling, and `maxCandidates`
+  caps what reaches the panel. Never remove a bound without replacing it:
+  an unbounded run's cost is a function of repository size.
+- **An exhausted budget means INCOMPLETE, not clean.** Exhaustion arrives
+  through the same degradation path as a dead endpoint and lands in
+  `coverage.reasons`. A capped candidate is neither a finding nor cleared —
+  it was not examined, and the report says so.
 - **Coverage is reported.** Degraded runs and their reasons appear in every
   report. A half-failed pass must never read as a clean one.

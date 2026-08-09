@@ -54,10 +54,88 @@ async function runDeepAnalysisSafe(perFileIR, callGraph) {
 // where { perFileIR, callGraph } come from buildProjectIR(fileContents),
 // which returns { perFile, callGraph } — callers must pass perFile as
 // perFileIR (see scanner/src/ir/index.js).
+/**
+ * PRD Phase 0 / C3 — the run budget.
+ *
+ * This pipeline is multiplicative and was, until now, unbounded. Eight focus
+ * areas × seven lenses is 56 hunter calls before a single candidate exists, and
+ * every surviving candidate then costs three more calls in the refutation
+ * panel. Nothing capped any of it, so the cost of a run was a function of how
+ * large the repository happened to be — which is not a property you want to
+ * discover from an invoice.
+ *
+ * ENFORCED AT THE ONE SEAM EVERY CALL PASSES THROUGH. Rather than thread checks
+ * through the hunter and the panel, the budget wraps `llmInvoke` itself. When
+ * it is spent the wrapper throws, and both callers already treat a throwing
+ * llmInvoke as ordinary degradation with a stated reason. So exhaustion arrives
+ * through the same path as a rate limit or a dead endpoint, and lands in
+ * `coverage.reasons` like any other coverage gap. No new failure mode.
+ *
+ * CALLS AND WALL CLOCK, NOT TOKENS. `llmInvoke` is an injected callback that
+ * returns a string; it carries no usage metadata, so counting tokens here would
+ * mean inventing a number. Calls are exactly countable and wall clock is
+ * exactly observable. A caller who knows their per-call cost can pass
+ * `costPerCallUsd` and get a `maxCostUsd` ceiling expressed in calls, which is
+ * honest about being an estimate derived from their figure rather than ours.
+ */
+// Internal, not exported: the dead-module guard treats an export with no
+// external call site as shipped dead code, and these are read only by
+// makeBudget below. A consumer sets a ceiling by passing opts, not by importing
+// a constant.
+const DEFAULT_MAX_LLM_CALLS = 200;
+const DEFAULT_MAX_WALL_MS = 15 * 60 * 1000;
+const DEFAULT_MAX_CANDIDATES = 50;
+
+export function makeBudget(opts = {}, now = Date.now) {
+  const startedAt = now();
+  let maxCalls = Number.isInteger(opts.maxLlmCalls) && opts.maxLlmCalls >= 0
+    ? opts.maxLlmCalls : DEFAULT_MAX_LLM_CALLS;
+  // A dollar ceiling is only meaningful with a caller-supplied per-call cost.
+  // Converting it to a call count keeps one enforcement mechanism rather than
+  // two that can disagree.
+  if (Number.isFinite(opts.maxCostUsd) && Number.isFinite(opts.costPerCallUsd) && opts.costPerCallUsd > 0) {
+    maxCalls = Math.min(maxCalls, Math.floor(opts.maxCostUsd / opts.costPerCallUsd));
+  }
+  const maxWallMs = Number.isInteger(opts.maxWallMs) && opts.maxWallMs > 0
+    ? opts.maxWallMs : DEFAULT_MAX_WALL_MS;
+
+  let calls = 0;
+  let exhaustedReason = null;
+
+  const check = () => {
+    if (exhaustedReason) return exhaustedReason;
+    if (calls >= maxCalls) return (exhaustedReason = `LLM call budget spent (${calls}/${maxCalls} calls)`);
+    if (now() - startedAt >= maxWallMs) {
+      return (exhaustedReason = `wall-clock budget spent (${Math.round(maxWallMs / 1000)}s)`);
+    }
+    return null;
+  };
+
+  return {
+    get calls() { return calls; },
+    get maxCalls() { return maxCalls; },
+    get exhaustedReason() { return exhaustedReason; },
+    spent: () => check() !== null,
+    /** Wrap an llmInvoke so every call is counted and the ceiling is enforced. */
+    wrap(llmInvoke) {
+      if (typeof llmInvoke !== 'function') return llmInvoke;
+      return async (prompt) => {
+        const stop = check();
+        if (stop) throw new Error(`discovery budget exhausted: ${stop}`);
+        calls += 1;
+        return llmInvoke(prompt);
+      };
+    },
+  };
+}
+
 export async function runDiscovery(ctx = {}, opts = {}) {
   const areas = partitionCallGraph(ctx.callGraph, { maxAreas: opts.maxAreas ?? 8 });
 
   const reasons = [];
+  const budget = makeBudget(opts);
+  // Every LLM call in this pipeline goes through this one wrapped callback.
+  const llmInvoke = budget.wrap(opts.llmInvoke);
 
   // An explicit array (including an empty one) is honoured exactly — a caller
   // narrowing a run to no lenses must get no lenses, not a silent fallback to
@@ -87,7 +165,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   for (const area of areas) {
     let areaDegradedCount = 0;
     for (const lens of lenses) {
-      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {} }, { llmInvoke: opts.llmInvoke });
+      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {} }, { llmInvoke });
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
       if (run.degraded) areaDegradedCount += 1;
@@ -97,10 +175,37 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     if (lenses.length > 0 && areaDegradedCount === 0) fullyHunted.add(area.id);
   }
 
+  // PRD Phase 0 / C3.2 — the candidate cap.
+  //
+  // Every candidate that reaches the panel costs three more LLM calls, so an
+  // unusually productive hunt multiplies straight into spend. Cap it, and
+  // REPORT the cap rather than applying it silently: a run that quietly
+  // examined the first N candidates and said nothing would look identical to a
+  // run that found only N. Same precedent as prove-findings.js's `capped`.
+  const maxCandidates = Number.isInteger(opts.maxCandidates) && opts.maxCandidates >= 0
+    ? opts.maxCandidates : DEFAULT_MAX_CANDIDATES;
+  let candidatesCapped = 0;
+  if (candidates.length > maxCandidates) {
+    candidatesCapped = candidates.length - maxCandidates;
+    // Deterministic: candidates arrive in a stable (area, lens) order, so the
+    // cap keeps the same prefix on every run over the same inputs.
+    candidates = candidates.slice(0, maxCandidates);
+    reasons.push(`candidate cap: ${candidatesCapped} candidate(s) were NOT confirmed or refuted ` +
+      `(cap ${maxCandidates}); they are neither findings nor cleared — they were not examined`);
+  }
+
   const taintProbe = makeTaintProbe(ctx.perFileIR, ctx.callGraph);
   const confirmed = await confirmAll(candidates, { taintProbe });
-  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke: opts.llmInvoke });
+  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke });
   const { fresh, duplicates, suppressed } = judgeCandidates(survivors, ctx.priorScan, ctx.triageFeedback);
+
+  // A spent budget is a coverage gap, stated once at the top level rather than
+  // left to be inferred from N identical per-run degradation reasons.
+  if (budget.exhaustedReason) {
+    reasons.push(`RUN INCOMPLETE — ${budget.exhaustedReason}. Work remained when the budget ran ` +
+      'out, so absence of a finding below is not evidence of absence. Raise maxLlmCalls / ' +
+      'maxWallMs, or narrow the scope with --root or --lens, and re-run.');
+  }
 
   // Coverage must not stop at the hunter stage. `confirm.js` correctly never
   // lowers a candidate below `unconfirmed`, and `disprove.js` correctly lets
@@ -153,6 +258,14 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       // of those came back with no votes at all (undecided, not refuted).
       panelsRun,
       undecidedPanels,
+      // PRD Phase 0 / C3 — what the run cost and whether the budget stopped it.
+      // `budgetExhausted` true means the report is INCOMPLETE by construction:
+      // work remained and was not done. Reading it as a clean result is the
+      // exact misreading the coverage block exists to prevent.
+      llmCalls: budget.calls,
+      maxLlmCalls: budget.maxCalls,
+      budgetExhausted: Boolean(budget.exhaustedReason),
+      candidatesCapped,
       reasons,
     },
   };

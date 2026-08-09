@@ -1521,15 +1521,29 @@ async function cmdHunt(args) {
   try { triageFeedback = JSON.parse(fs.readFileSync(path.join(scanRoot, '.agentic-security', 'triage-feedback.json'), 'utf8')); } catch {}
 
   const lenses = args.flags.lens ? String(args.flags.lens).split(',').map(s => s.trim()).filter(Boolean) : undefined;
+  const intFlag = (name) => (args.flags[name] ? parseInt(args.flags[name], 10) : undefined);
+  const numFlag = (name) => (args.flags[name] ? Number(args.flags[name]) : undefined);
   const report = await runDiscovery(
     { perFileIR: perFile, callGraph, fileContents, priorScan, triageFeedback },
-    { lenses, maxAreas: args.flags['max-areas'] ? parseInt(args.flags['max-areas'], 10) : undefined },
+    {
+      lenses,
+      maxAreas: intFlag('max-areas'),
+      // PRD Phase 0 / C3. Defaults live in discovery/index.js so the library is
+      // bounded even when driven by something other than this CLI.
+      maxLlmCalls: intFlag('max-llm-calls'),
+      maxWallMs: intFlag('max-wall-ms'),
+      maxCandidates: intFlag('max-candidates'),
+      maxCostUsd: numFlag('max-cost-usd'),
+      costPerCallUsd: numFlag('cost-per-call-usd'),
+    },
   );
 
   const c = report.coverage;
   console.log('');
   console.log(`Discovery — ${rels.length} file(s), ${c.areasPlanned} focus area(s), ${c.lensesPerArea} lens(es) each`);
   console.log(`  areas hunted: ${c.areasHunted}/${c.areasPlanned} (fully: ${c.areasFullyHunted})   degraded runs: ${c.degradedRuns}/${report.runs.length}`);
+  console.log(`  budget: ${c.llmCalls}/${c.maxLlmCalls} LLM calls${c.budgetExhausted ? '  ← EXHAUSTED, run is incomplete' : ''}` +
+    `${c.candidatesCapped ? `   ${c.candidatesCapped} candidate(s) capped` : ''}`);
   console.log(`  confirmation: ${JSON.stringify(c.confirmedByTier)}   panels: ${c.panelsRun} (undecided ${c.undecidedPanels})`);
   console.log('');
 

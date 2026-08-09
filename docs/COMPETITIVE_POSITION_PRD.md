@@ -163,14 +163,34 @@ candidate, sequentially, with no token or currency cap. A 2000-file repo at the
 the cap in coverage (the precedent is `prove-findings.js`'s `capped` field,
 which is reported rather than applied silently).
 
-**C6 — Parallelism.** Only after C3. Hunter runs are independent per
-(area × lens). **Precondition, non-negotiable:** ten consecutive full-suite runs
-under artificial load with zero flakes. Timing this repository under contention
-has produced 170× measurement errors and one real release-blocking failure; see
-`docs/RELEASE_PIPELINE_PRD.md` §R3.
+**C6 — Parallelism. DEFERRED to Phase 3, deliberately.**
 
-**Exit:** a discovery run on a 2000-file repository completes under a declared
+The precondition originally written here — ten clean full-suite runs under load
+— was imported from `docs/RELEASE_PIPELINE_PRD.md` §R3d, where it governs *test*
+concurrency. It does not transfer: hunter runs are independent async calls
+through an injected callback, and the discovery tests never touch a real
+endpoint. Applying it here would have been cargo-culted rigour.
+
+The real objection is different and better. C3 enforces the ceiling at the
+`llmInvoke` seam, checked immediately before each dispatch. With N calls in
+flight, a run can overshoot by up to N−1 calls, because a call already dispatched
+cannot be recalled — the same limitation `posture/prove-findings.js` documents
+for its aggregate budget. That overshoot is bounded and acceptable, but it means
+parallelism weakens the guarantee this phase exists to establish.
+
+Phase 0's job is to make the layer **safe**, and stacking concurrency onto a
+budget introduced in the same change is how a subtle interaction gets shipped
+with confidence nobody has earned. Parallelism buys wall clock, not safety, so it
+belongs with the other performance work in Phase 3 — where the budget will have
+been exercised for a while and the overshoot bound can be stated from
+observation rather than from reading the code.
+
+**Exit:** a discovery run on a large repository completes under a declared
 budget, and the report states what the budget stopped it reaching.
+
+**Status: ✅ C3.1 and C3.2 implemented.** Verified on a six-file fixture: 168 LLM
+calls unbounded → hard-stopped at any ceiling, and 168 → 72 with a candidate cap
+of 10. Exhaustion and capping both surface as coverage reasons and on the CLI.
 
 ---
 
