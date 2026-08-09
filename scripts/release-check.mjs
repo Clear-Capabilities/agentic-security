@@ -316,9 +316,53 @@ export function evaluateHeadPushed({ headSha, remoteRefsContainingHead }) {
 
 const CI_OK_CONCLUSIONS = new Set(['success', 'neutral', 'skipped']);
 
-/** Check 10. `checkRuns` is [{ name, status, conclusion }] or null if unread. */
+/**
+ * Split observed check runs into the ones that gate a release and the ones that
+ * only inform it. PRD R2.
+ *
+ * An UNCLASSIFIED check is treated as BLOCKING and warned about. A job nobody
+ * tiered is a job nobody thought about, and defaulting it to informational would
+ * let a new correctness gate silently stop gating.
+ */
+/** The committed blocking/informational classification (PRD R2), or null. */
+export const CHECK_TIERS_FILE = '.github/required-checks.json';
+
+export function readCheckTiers(repo = REPO) {
+  // A missing or unreadable file yields null, and `evaluateRemoteCi` then treats
+  // every check as blocking — the pre-R2 behaviour. Failing to read the tier
+  // list must never be the thing that lets a red check through.
+  const raw = readTextOrNull(path.join(repo, CHECK_TIERS_FILE));
+  if (!raw) return null;
+  try {
+    const doc = JSON.parse(raw);
+    if (!Array.isArray(doc?.blocking) || !Array.isArray(doc?.informational)) return null;
+    return { blocking: doc.blocking, informational: doc.informational };
+  } catch {
+    return null;
+  }
+}
+
+export function partitionCheckRuns(checkRuns, tiers) {
+  const blocking = new Set(tiers?.blocking || []);
+  const informational = new Set(tiers?.informational || []);
+  const out = { blocking: [], informational: [], unclassified: [] };
+  for (const run of checkRuns || []) {
+    if (informational.has(run.name)) out.informational.push(run);
+    else if (blocking.has(run.name)) out.blocking.push(run);
+    else { out.unclassified.push(run); out.blocking.push(run); }
+  }
+  return out;
+}
+
+/**
+ * Check 10. `checkRuns` is [{ name, status, conclusion }] or null if unread.
+ *
+ * `tiers` is the parsed .github/required-checks.json. When it is absent every
+ * check is blocking — the pre-R2 behaviour — because a missing classification
+ * must never be the thing that lets a red check through.
+ */
 export function evaluateRemoteCi({
-  cliAvailable, authenticated, checkRuns, allowUnverified = false, headSha = 'HEAD',
+  cliAvailable, authenticated, checkRuns, allowUnverified = false, headSha = 'HEAD', tiers = null,
 }) {
   const errors = [];
   const warnings = [];
@@ -340,7 +384,14 @@ export function evaluateRemoteCi({
     errors.push(`No hosted CI check runs were reported for ${headSha} — nothing has proved this ` +
       'commit green. Remedy: confirm the workflows triggered for this commit.');
   }
-  for (const run of checkRuns) {
+  const split = partitionCheckRuns(checkRuns, tiers);
+
+  for (const run of split.unclassified) {
+    warnings.push(`Hosted CI check "${run.name}" is not listed in .github/required-checks.json ` +
+      'and is being treated as BLOCKING. Classify it deliberately.');
+  }
+
+  for (const run of split.blocking) {
     if (run.status !== 'completed') {
       errors.push(`Hosted CI check "${run.name}" is ${run.status}, not completed. ` +
         'Remedy: wait for it to finish.');
@@ -349,6 +400,18 @@ export function evaluateRemoteCi({
         'Remedy: fix it and push again before publishing.');
     }
   }
+
+  // Informational checks never gate — but a FAILING one is reported loudly. The
+  // point of the tier is that a trend job does not block a release, not that a
+  // trend regression becomes invisible. Pending ones are silent: waiting on a
+  // benchmark is the normal state and is exactly what R2 stopped blocking on.
+  for (const run of split.informational) {
+    if (run.status === 'completed' && !CI_OK_CONCLUSIONS.has(run.conclusion)) {
+      warnings.push(`INFORMATIONAL hosted CI check "${run.name}" concluded ${run.conclusion}. ` +
+        'This does NOT block the release, but it is a trend regression — investigate it.');
+    }
+  }
+
   return result(errors, warnings);
 }
 
@@ -546,7 +609,7 @@ function main(argv) {
     evaluateHeadPushed({ headSha, remoteRefsContainingHead: remoteRefsContainingHead() }));
 
   evaluate('remote-ci-green', () =>
-    evaluateRemoteCi({ ...remoteCiFacts(headSha), allowUnverified, headSha }));
+    evaluateRemoteCi({ ...remoteCiFacts(headSha), allowUnverified, headSha, tiers: readCheckTiers() }));
 
   evaluate('dependency-currency', () => {
     process.stderr.write('  querying the package registry for advisories and newer ' +
