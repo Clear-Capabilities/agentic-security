@@ -11,6 +11,25 @@ name: Scanner F1 benchmark
 # The bench output (bench-fps.json / bench-fns.json) is uploaded as an artifact
 # so reviewers can diff what changed.
 
+# PRD R2 — these are TREND jobs, not correctness gates, and they no longer run
+# on push to main.
+#
+# They used to. On 2026-08-09 a publish was blocked for 15+ minutes by
+# `realworld-bench` while 8 of 9 checks were green, because the release gate
+# required every check on the commit. A detection-rate measurement against
+# public vulnerable apps tells you whether the engine is getting better or
+# worse; it does not tell you whether THIS build is publishable. Blocking a
+# release on it conflates the two.
+#
+# What replaces the push trigger is a daily schedule, so drift is still caught
+# within a day and on a fixed cadence — which is a better shape for a trend
+# signal than a noisy per-commit sample anyway. Pull requests keep their
+# trigger: that is where a regression should be caught, and nothing is waiting
+# on a PR the way a publish waits on main.
+#
+# These jobs are listed as `informational` in .github/required-checks.json, so
+# even when they DO report on a commit, a failure warns loudly at publish time
+# rather than blocking. See scripts/release-check.mjs#evaluateRemoteCi.
 on:
   pull_request:
     paths:
@@ -18,13 +37,10 @@ on:
       - 'scanner/test/**'
       - 'scanner/package.json'
       - '.github/workflows/bench.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scanner/src/**'
-      - 'scanner/test/**'
-      - 'scanner/package.json'
-      - '.github/workflows/bench.yml'
+  schedule:
+    # 04:17 UTC daily. Off the hour on purpose — scheduled runs cluster on the
+    # hour across GitHub and get queued behind everyone else's cron.
+    - cron: '17 4 * * *'
   workflow_dispatch:
 
 # Least-privilege GITHUB_TOKEN. Both jobs only need to read the repo;

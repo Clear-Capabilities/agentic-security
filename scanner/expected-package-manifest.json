@@ -1,0 +1,20 @@
+{
+  "$comment": "Committed expectation for the package-contents release check (scripts/package-contents-check.mjs). Compares SHAPE, not bytes: the file COUNT here is a bounded tolerance, not an exact list — an exact list would need regenerating on every added source file, training people to refresh it without reading it. Update this file only when the package's actual shape changes on purpose, and say why in the commit message.",
+  "topLevelDirectories": ["bin", "dist", "src"],
+  "forbiddenPatterns": [
+    "**/.agentic-security/**",
+    "**/*.log",
+    "**/node_modules/**",
+    "**/.env*",
+    "**/.superpowers/**",
+    "**/.claude/**"
+  ],
+  "requiredFiles": [
+    "dist/agentic-security.mjs",
+    "dist/agentic-security.mjs.sha256"
+  ],
+  "fileCount": {
+    "expected": 461,
+    "tolerance": 50
+  }
+}

@@ -16,6 +16,8 @@ import {
   evaluateBundleIntegrity,
   evaluateHeadPushed,
   evaluateRemoteCi,
+  readCheckTiers,
+  CHECK_TIERS_FILE,
   evaluateCommandGate,
   extractVersionsFromSource,
 } from '../../scripts/release-check.mjs';
@@ -286,24 +288,25 @@ test('release-gate — a gated command exiting 0 passes, non-zero fails', () => 
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all eleven checks in order', () => {
+test('release-gate — full run plans all twelve checks in order', () => {
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 11);
+  assert.equal(ids.length, 12);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
-test('release-gate — --fast skips only the slow gates, keeping 1-5 and 9-10', () => {
+test('release-gate — --fast skips only the slow gates, keeping 1-5, package-contents, and 9-10', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 4);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 7);
+  assert.equal(ids.length, 8);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
-  // The four cheap correctness gates and both provenance gates must survive
-  // --fast: they are what make a fast run still meaningful.
+  // The four cheap correctness gates, package-contents, and both provenance
+  // gates must survive --fast: they are what make a fast run still meaningful.
   for (const keep of [
     'working-tree-clean', 'version-consistency', 'changelog-entry',
-    'bundle-integrity', 'scorecard-freshness', 'head-pushed', 'remote-ci-green',
+    'bundle-integrity', 'scorecard-freshness', 'package-contents',
+    'head-pushed', 'remote-ci-green',
   ]) {
     assert.ok(ids.includes(keep), `--fast must still run ${keep}`);
   }
@@ -327,9 +330,118 @@ test('release-gate — dependency currency is registered, slow, and in the full 
   assert.ok(!plannedCheckIds({ fast: true }).includes('dependency-currency'));
 });
 
+// package-contents is cheap and local (no network round-trip), so it is not
+// slow and must survive --fast — the only check that examines the actual
+// artifact should never be the one --fast quietly drops.
+test('release-gate — package-contents is registered, not slow, and in the full run', () => {
+  const check = CHECKS.find(c => c.id === 'package-contents');
+  assert.ok(check, 'package-contents must be a registered check');
+  assert.equal(check.slow, false);
+  assert.ok(plannedCheckIds({ fast: false }).includes('package-contents'));
+  assert.ok(plannedCheckIds({ fast: true }).includes('package-contents'));
+});
+
 test('release-gate — every check declares a remedy', () => {
   for (const c of CHECKS) {
     assert.equal(typeof c.remedy, 'string', `${c.id} needs a remedy`);
     assert.ok(c.remedy.length > 0, `${c.id} remedy must be non-empty`);
+  }
+});
+
+// ------------------------------------------- R2: blocking vs informational
+//
+// remote-ci-green required EVERY check on the commit. On 2026-08-09 a publish
+// was blocked 15+ minutes by `realworld-bench` while 8 of 9 checks were green.
+// That job measures detection rate against public vulnerable apps — a quality
+// trend, not a statement about whether this build is publishable. The same
+// over-broad requirement is why pushes to main were reporting "Bypassed rule
+// violations": protection demanded checks that are not correctness gates, so
+// the bypass became routine, and a routinely-bypassed rule is not a control.
+
+const TIERS = { blocking: ['ci', 'corpus'], informational: ['realworld-bench'] };
+const ciFacts = (checkRuns, tiers = TIERS) => ({
+  cliAvailable: true, authenticated: true, checkRuns, headSha: 'abc1234', tiers,
+});
+const done = (name, conclusion) => ({ name, status: 'completed', conclusion });
+
+test('release-check — a pending informational check does not block the release', () => {
+  // The exact case observed on 2026-08-09.
+  const r = evaluateRemoteCi(ciFacts([
+    done('ci', 'success'), done('corpus', 'success'),
+    { name: 'realworld-bench', status: 'in_progress', conclusion: null },
+  ]));
+  assert.equal(r.ok, true);
+});
+
+test('release-check — a pending BLOCKING check still blocks', () => {
+  const r = evaluateRemoteCi(ciFacts([
+    { name: 'ci', status: 'in_progress', conclusion: null }, done('corpus', 'success'),
+  ]));
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join('\n'), /"ci" is in_progress/);
+});
+
+test('release-check — a red blocking check blocks', () => {
+  const r = evaluateRemoteCi(ciFacts([done('ci', 'success'), done('corpus', 'failure')]));
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join('\n'), /"corpus" concluded failure/);
+});
+
+test('release-check — a FAILING informational check warns loudly but does not block', () => {
+  // The tier must not make a trend regression invisible; it must only stop it
+  // being a release blocker.
+  const r = evaluateRemoteCi(ciFacts([
+    done('ci', 'success'), done('corpus', 'success'), done('realworld-bench', 'failure'),
+  ]));
+  assert.equal(r.ok, true, 'an informational failure must not block');
+  assert.match(r.warnings.join('\n'), /INFORMATIONAL/);
+  assert.match(r.warnings.join('\n'), /realworld-bench/);
+  assert.match(r.warnings.join('\n'), /trend regression/i);
+});
+
+test('release-check — an unclassified check is treated as BLOCKING and warned about', () => {
+  // A job nobody tiered is a job nobody thought about. Defaulting it to
+  // informational would let a new correctness gate silently stop gating.
+  const r = evaluateRemoteCi(ciFacts([done('ci', 'success'), done('brand-new-job', 'failure')]));
+  assert.equal(r.ok, false);
+  assert.match(r.warnings.join('\n'), /brand-new-job/);
+  assert.match(r.warnings.join('\n'), /required-checks\.json/);
+});
+
+test('release-check — a missing tier file fails closed: everything blocks', () => {
+  const r = evaluateRemoteCi(ciFacts([done('realworld-bench', 'failure')], null));
+  assert.equal(r.ok, false, 'failing to read the classification must never let a red check through');
+});
+
+test('release-check — the committed tier file is well-formed and the two lists are disjoint', () => {
+  const tiers = readCheckTiers();
+  assert.ok(tiers, `${CHECK_TIERS_FILE} must exist and parse`);
+  assert.ok(tiers.blocking.length > 0);
+  assert.ok(tiers.informational.length > 0);
+  const overlap = tiers.blocking.filter(n => tiers.informational.includes(n));
+  assert.deepEqual(overlap, [], 'a check cannot be both blocking and informational');
+});
+
+test('release-check — the long benchmarks are informational, the correctness gates are not', () => {
+  // Pins the actual decision, so flipping a tier is a deliberate, reviewed diff
+  // rather than an edit nobody notices.
+  const tiers = readCheckTiers();
+  for (const n of ['realworld-bench', 'synthetic-bench']) {
+    assert.ok(tiers.informational.includes(n), `${n} must be informational`);
+  }
+  for (const n of ['test', 'corpus', 'sandbox-linux', 'determinism-compare']) {
+    assert.ok(tiers.blocking.includes(n), `${n} must be blocking`);
+  }
+});
+
+test('release-check — the tier file lists check-RUN names, never workflow names', () => {
+  // The first draft listed 'ci' and 'codeql', which are workflow names. They
+  // never appear as check runs, so they matched nothing — and branch protection
+  // configured from that list would have hung every PR on contexts that never
+  // report. Names must come from the check-runs API, not from the workflow file.
+  const tiers = readCheckTiers();
+  for (const bad of ['ci', 'codeql', 'Scanner F1 benchmark']) {
+    assert.ok(!tiers.blocking.includes(bad) && !tiers.informational.includes(bad),
+      `"${bad}" is a workflow name, not a check-run name`);
   }
 });

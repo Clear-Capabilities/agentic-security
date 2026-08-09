@@ -380,7 +380,33 @@ export function gatherTreeFacts({ id, rel }, repo = REPO) {
   // checked. An uninstalled tree is unverified, so say so and let the
   // evaluator fail it, exactly as an unreachable registry does.
   if (!dependenciesInstalled(cwd, manifest)) {
-    return { id, audit: null, outdated: null, uninstalled: true };
+    // PRD R4. Failing here is correct but it is a footgun: a publisher on a
+    // fresh clone hits a hard failure about their environment rather than their
+    // code, with a remedy they have to go and find. `ide/vscode` is the tree
+    // that actually bites, because nothing else in an ordinary workflow installs
+    // it. So try to make the tree verifiable before giving up on it.
+    //
+    // The RULE does not move — unverified is still never a pass. This only
+    // removes the reason the tree was unverifiable. If the install fails
+    // (offline, registry down, lockfile mismatch) the tree stays `uninstalled`
+    // and the evaluator fails it exactly as before.
+    //
+    // `npm ci` not `npm install`: it installs from the committed lockfile and
+    // will not silently rewrite it during a release gate.
+    //
+    // `--ignore-scripts` is not optional. This runs inside a release gate, and
+    // executing a dependency tree's install hooks to satisfy a security check
+    // would be a genuinely bad trade.
+    process.stderr.write(`  ${id}: dependencies are not installed — running ` +
+      `\`npm ci --ignore-scripts\` in ${rel} so this tree can be verified …\n`);
+    const install = spawnSync('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'],
+      { cwd, encoding: 'utf8', shell: false });
+    if (install.status !== 0 || !dependenciesInstalled(cwd, manifest)) {
+      const detail = String(install.stderr || install.error?.message || '').trim().split('\n').pop();
+      process.stderr.write(`  ${id}: install failed${detail ? ` (${detail})` : ''} — tree stays unverified.\n`);
+      return { id, audit: null, outdated: null, uninstalled: true };
+    }
+    process.stderr.write(`  ${id}: installed; continuing.\n`);
   }
   // Both commands exit non-zero in ordinary success cases (npm outdated exits
   // 1 when anything is outdated; the advisory command exits non-zero when it

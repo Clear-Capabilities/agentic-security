@@ -297,3 +297,33 @@ test('dependency-currency — a package already at latest is not reported outdat
   );
   assert.deepEqual(rows, []);
 });
+
+// ------------------------------------------- unverifiable is never a pass
+//
+// PRD R4 made `gatherTreeFacts` try `npm ci --ignore-scripts` when a tree has
+// no node_modules, because a publisher on a fresh clone otherwise hits a hard
+// failure about their environment rather than their code. That convenience sits
+// directly on top of this rule, and the rule had no test: an install that fails
+// must leave the tree `uninstalled`, and an uninstalled tree must FAIL.
+//
+// Without this, a future change to the auto-install could quietly turn a tree
+// nobody verified into a silent pass — which is the gate's worst failure mode,
+// since both registry commands answer "{}" for an uninstalled tree and "{}" is
+// indistinguishable from "everything is current".
+
+test('dependency-currency — an uninstalled tree FAILS, it is never a silent pass', () => {
+  const r = evaluateDependencyCurrency(facts({
+    trees: [{ id: 'ide/vscode', audit: null, outdated: null, uninstalled: true }],
+  }));
+  assert.equal(r.ok, false, 'an unverified tree must not pass');
+  assert.match(r.errors.join('\n'), /not installed/i);
+  assert.match(r.errors.join('\n'), /UNVERIFIED/,
+    'the message must say the tree was unverified, not merely that something is missing');
+});
+
+test('dependency-currency — one uninstalled tree fails even when the other is clean', () => {
+  const r = evaluateDependencyCurrency(facts({
+    trees: [tree(), { id: 'ide/vscode', audit: null, outdated: null, uninstalled: true }],
+  }));
+  assert.equal(r.ok, false);
+});

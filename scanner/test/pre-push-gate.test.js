@@ -108,7 +108,7 @@ test('pre-push-gate — checks run cheapest-first: the guards and bundle integri
   const ids = orderedCheckIds();
   assert.deepEqual(ids, [
     'worktree-matches-push', 'push-blast-radius',
-    'bundle-integrity', 'test-suite', 'corpus-gate', 'self-scan-gate',
+    'bundle-integrity', 'package-contents', 'test-suite', 'corpus-gate', 'self-scan-gate',
   ]);
 });
 
