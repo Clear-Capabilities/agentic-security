@@ -112,6 +112,7 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 
 **Experimental**
 - **`labs`** — Experimental + AI-driven. Modes: claude-audit / model-rescan / synthesize-rule / cross-repo / risk-dollars / time-to-fix / llm.
+- **`hunt`** — LLM discovery over the call-graph partition, gated by the deterministic engine (see [What makes it different](#what-makes-it-different)). Run it as `agentic-security hunt --root <dir>`; `--lens a,b` narrows the angles. Needs `AGENTIC_SECURITY_LLM_ENDPOINT`, is token-expensive, capped at 2000 files, and is advisory — it never gates a build and never writes to `last-scan.json`.
 
 Every command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:scan`). Every legacy single-purpose alias still works and is redirected to its new mode automatically.
 
@@ -130,6 +131,7 @@ Every command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:
 - **Auto-baseline for legacy codebases.** `--set-baseline` snapshots existing findings; `--since-baseline` shows only what's new. Day-one usable on any project.
 - **Refutes its own findings.** A default falsification pass takes each candidate and tries to *disprove* it — looking for the control that would actually block it (a context-matched sanitizer, a dominating guard) and demoting the ones it can. What surfaces is what survived scrutiny. Recall-preserving: nothing is silently dropped.
 - **Coverage you can audit.** Enumerates every attacker-reachable entry point — HTTP handlers, queue consumers, cron jobs, CLI args, uploads — and reports the disposition of each, so you can see it looked at your whole attack surface, not just where a finding happened to fire. A confirmed finding then triggers a repo-wide sweep for sibling instances the detectors missed, with honest "N found / M candidate / K mitigated" accounting.
+- **An LLM discovery layer the deterministic engine keeps honest.** `hunt` partitions your call graph into disjoint focus areas and sends each through seven independent lenses — injection, authorization, crypto, business logic, feature abuse, chained, wildcard — to propose the flaws no rule can encode. Nothing it proposes is taken on faith: every candidate is routed back through the taint engine for corroboration, then faces a three-angle panel prompted to *refute* it, and only a majority refutation drops it. Severity comes from the evidence tier, never from the model, so this layer cannot emit `critical`. If the endpoint is missing or the panel goes silent, the report says so in plain words rather than reporting a clean run it did not earn.
 - **Hardens itself against the code it scans.** A tested threat model treats attacker-authored finding text as untrusted input everywhere it reaches an LLM prompt or a rendered PR/issue report — so the tool can't be turned against you by the repo it's auditing.
 
 Deep engine details — [architecture](docs/ARCHITECTURE.md).

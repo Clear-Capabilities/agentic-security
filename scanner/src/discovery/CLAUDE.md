@@ -2,6 +2,10 @@
 
 LLM-driven candidate discovery, gated by the deterministic engine.
 
+User entry point: `agentic-security hunt --root <dir>` (`cmdHunt` in `bin/agentic-security.js`),
+documented in `commands/scan.md`. Advisory only — it never gates a build and its
+output does not enter `last-scan.json`.
+
 `partition.js` splits the call graph into disjoint focus areas · `lenses.js`
 holds the seven hunting lenses and the prompt builder · `hunter.js` runs one
 bounded (area × lens) pass · `confirm.js` routes each candidate back through

@@ -232,13 +232,32 @@ Map the choice to the corresponding flag and run it. This keeps the full surface
 | `--archaeology` | Historical analysis — when was each line of code authored, by whom, against which prompt |
 | `--scanner-meta` | Scanner self-test / version diff / concurrency check / spec-drift check |
 
-## Discovery layer (not yet wired)
+## Discovery layer (`hunt`)
 
-The LLM-driven discovery engine lives at `scanner/src/discovery/` (seven hunting
-lenses, deterministic confirmation, adversarial refutation — see its local
-`CLAUDE.md`). It has no CLI entry point yet: `--hunt` is not a recognised flag
-of this command, so `/scan --hunt` today silently falls through to the default
-full scan (`--all`) rather than running discovery. Do not tell a user that
-`--hunt` works until this section is replaced with a real mode row.
+The LLM-driven discovery engine at `scanner/src/discovery/` proposes candidates
+the rule engine cannot encode — business logic, authorization, feature abuse,
+multi-step chains — then routes every one back through the deterministic taint
+engine and an adversarial refutation panel before reporting it. Seven lenses;
+see `scanner/src/discovery/CLAUDE.md`.
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs hunt --root .
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--root <dir>` | Scope of the hunt. Capped at 2000 source files; narrow the root rather than raising the cap. |
+| `--lens a,b` | Restrict to named lenses (`injection`, `authz`, `crypto`, `business-logic`, `feature-abuse`, `chained`, `wildcard`). |
+| `--max-areas <n>` | Cap the call-graph partition (default 8). |
+
+**Requires `AGENTIC_SECURITY_LLM_ENDPOINT`.** Without it every hunter run
+degrades and the command says so in as many words — it never reports a clean
+result it did not earn. It is **advisory and never gates**: it always exits 0
+except on a scope error, and its output does not enter `last-scan.json`.
+
+Read the coverage block before the findings. `areasHunted`, `areasFullyHunted`
+and `degradedRuns` tell you how much of the scope was actually examined, and a
+finding whose confirmation tier is `unconfirmed` was not corroborated by the
+taint engine — it is a lead, not a verdict.
 
 🛡  agentic-security · created by ClearCapabilities.Com

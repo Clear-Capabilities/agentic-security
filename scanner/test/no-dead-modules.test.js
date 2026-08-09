@@ -30,7 +30,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = path.resolve(__dirname, '..', 'src');
 
 const SCAN_DIRS = [
-  'posture', 'llm-validator', 'dataflow', 'lsp', 'ir', 'mcp',
+  'posture', 'llm-validator', 'dataflow', 'lsp', 'ir', 'mcp', 'discovery',
 ];
 
 // Symbols allowed to be uncalled. Each MUST have a justification.
