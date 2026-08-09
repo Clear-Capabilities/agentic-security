@@ -13,6 +13,7 @@ import { runHunter } from './hunter.js';
 import { confirmAll } from './confirm.js';
 import { disprovePanel } from './disprove.js';
 import { judgeCandidates } from './judge.js';
+import { loadMemory, saveMemory, rememberRun, previouslyRefuted, nextWavePlan } from './memory.js';
 
 // Bridge a candidate to the deterministic layer. A taint finding at or within
 // two lines of the candidate corroborates it; a modelled sink on the line
@@ -134,6 +135,9 @@ export async function runDiscovery(ctx = {}, opts = {}) {
 
   const reasons = [];
   const budget = makeBudget(opts);
+  // PRD C4 — what previous runs already judged. scanRoot absent => no memory,
+  // which is the correct default for a library call with nowhere to persist.
+  const memory = opts.scanRoot ? loadMemory(opts.scanRoot) : null;
   // Every LLM call in this pipeline goes through this one wrapped callback.
   const llmInvoke = budget.wrap(opts.llmInvoke);
 
@@ -182,6 +186,21 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   // REPORT the cap rather than applying it silently: a run that quietly
   // examined the first N candidates and said nothing would look identical to a
   // run that found only N. Same precedent as prove-findings.js's `capped`.
+  // PRD C4 — drop what a previous run already refuted, BEFORE spending the
+  // panel's three calls per candidate on it again. Only refutals suppress: a
+  // candidate previously judged fresh is re-reported, because it was never
+  // fixed, which is the same asymmetry judge.js applies to tp/fp triage.
+  let rememberedRefutals = 0;
+  if (memory) {
+    const before = candidates.length;
+    candidates = candidates.filter(c => !previouslyRefuted(memory, c));
+    rememberedRefutals = before - candidates.length;
+    if (rememberedRefutals > 0) {
+      reasons.push(`${rememberedRefutals} candidate(s) were refuted by an earlier run and not re-examined ` +
+        '(clear with --forget-refuted if a model, ruleset or the code has changed since)');
+    }
+  }
+
   const maxCandidates = Number.isInteger(opts.maxCandidates) && opts.maxCandidates >= 0
     ? opts.maxCandidates : DEFAULT_MAX_CANDIDATES;
   let candidatesCapped = 0;
@@ -245,6 +264,16 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     reasons.push(`refutation panel returned no votes for any of ${panelsRun} candidate(s) — every finding below survived unrefuted, not because it withstood scrutiny`);
   }
 
+  // PRD C4 — fold this run into the memory so the next one can be additive
+  // rather than a repeat. Persistence failure is non-fatal: the report is still
+  // valid, it just will not inform the next run.
+  if (memory && opts.scanRoot) {
+    saveMemory(opts.scanRoot, rememberRun(memory, {
+      fresh, refutedCandidates: refuted,
+      areas: areas.map(a => ({ id: a.id, label: a.label, files: a.files.length, hunted: hunted.has(a.id) })),
+    }));
+  }
+
   return {
     schema: 'agentic-security/discovery@1',
     focusAreas: areas.map(a => ({ id: a.id, label: a.label, files: a.files.length, size: a.size })),
@@ -278,6 +307,11 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       // `budgetExhausted` true means the report is INCOMPLETE by construction:
       // work remained and was not done. Reading it as a clean result is the
       // exact misreading the coverage block exists to prevent.
+      // PRD C4 — what history contributed, and what to hunt next. A coverage
+      // report says what happened; `nextWave` says what to do about it.
+      rememberedRefutals,
+      priorRuns: memory ? memory.runs : null,
+      nextWave: memory ? nextWavePlan(memory, areas.map(a => ({ id: a.id, label: a.label }))) : null,
       llmCalls: budget.calls,
       maxLlmCalls: budget.maxCalls,
       budgetExhausted: Boolean(budget.exhaustedReason),

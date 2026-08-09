@@ -1534,6 +1534,10 @@ async function cmdHunt(args) {
       maxWallMs: intFlag('max-wall-ms'),
       maxCandidates: intFlag('max-candidates'),
       maxCostUsd: numFlag('max-cost-usd'),
+      // PRD C4 — persist and consult cross-run memory.
+      scanRoot: args.flags['no-memory'] ? undefined : scanRoot,
+      // PRD C2 — a comma-separated endpoint list turns on consensus.
+      endpoints: args.flags.endpoints,
       costPerCallUsd: numFlag('cost-per-call-usd'),
     },
   );
@@ -1544,6 +1548,11 @@ async function cmdHunt(args) {
   console.log(`  areas hunted: ${c.areasHunted}/${c.areasPlanned} (fully: ${c.areasFullyHunted})   degraded runs: ${c.degradedRuns}/${report.runs.length}`);
   console.log(`  budget: ${c.llmCalls}/${c.maxLlmCalls} LLM calls${c.budgetExhausted ? '  ← EXHAUSTED, run is incomplete' : ''}` +
     `${c.candidatesCapped ? `   ${c.candidatesCapped} candidate(s) capped` : ''}`);
+  if (c.priorRuns !== null && c.priorRuns !== undefined) {
+    console.log(`  memory: ${c.priorRuns} prior run(s)` +
+      `${c.rememberedRefutals ? `, ${c.rememberedRefutals} candidate(s) skipped as already refuted` : ''}`);
+    if (c.nextWave?.summary) console.log(`  next wave: ${c.nextWave.summary}`);
+  }
   console.log(`  confirmation: ${JSON.stringify(c.confirmedByTier)}   panels: ${c.panelsRun} (undecided ${c.undecidedPanels})`);
   console.log('');
 
@@ -1560,6 +1569,23 @@ async function cmdHunt(args) {
     console.log('');
     console.log(`  (${report.duplicates.length} already known, ${report.suppressed.length} previously marked false positive, ` +
       `${report.refutedCandidates.length} refuted by the panel)`);
+  }
+
+  // PRD C5 — variant analysis. A confirmed finding is rarely alone: the same
+  // root cause is usually copy-pasted, and the siblings often do not trip a
+  // rule. sweepRootCauses already does this with exact accounting for scan
+  // findings; discovery findings simply never reached it until now.
+  if (report.fresh.length && !args.flags['no-variants']) {
+    try {
+      const { sweepRootCauses, formatSweepLedger } = await import('../src/posture/root-cause-sweep.js');
+      const sweep = sweepRootCauses(report.fresh, fileContents, { confirmedOnly: false });
+      const ledger = formatSweepLedger(sweep);
+      if (ledger) {
+        console.log('');
+        console.log('Variant sweep (siblings of the findings above):');
+        console.log(`  ${ledger}`);
+      }
+    } catch { /* the sweep is additive; never let it sink the report */ }
   }
 
   // Degradation is part of the output. A half-failed hunt must never read as a

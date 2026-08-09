@@ -83,3 +83,6 @@ scanner/reports/
 
 # Independent evaluation population: upstream source is FETCHED, never vendored.
 bench/independent/cache/
+
+# Cross-run discovery memory (PRD C4) — per-project state, never committed.
+.agentic-security/discovery-memory.json

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-09T17:50:02.443Z",
-  "commit": "cf13255c72615bd4a2c9573fcfee703776ae934c",
+  "generatedAt": "2026-08-09T18:29:18.107Z",
+  "commit": "0d71d4b43351ec0983c0702573dc3c5cee6c4484",
   "targets": {
     "hooks": {
       "total": 24,
@@ -35,7 +35,7 @@
       }
     },
     "scanner/src": {
-      "total": 598,
+      "total": 599,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -46,6 +46,7 @@
         "dataflow/privacy-taint.js": 1,
         "dataflow/sanitizer-proof.js": 1,
         "dataflow/string-domain.js": 2,
+        "discovery/memory.js": 1,
         "history-scan.js": 2,
         "integrations/index.js": 11,
         "integrations/tickets.js": 8,
