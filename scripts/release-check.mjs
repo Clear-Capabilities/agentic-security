@@ -51,6 +51,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { evaluateScorecardFreshness } from './scorecard-check.mjs';
 import { runDependencyCurrencyCheck } from './dependency-currency.mjs';
+import { runPackageContentsCheck } from './package-contents-check.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -99,6 +100,17 @@ export const CHECKS = [
     title: 'Committed accuracy scorecard describes this version',
     slow: false,
     remedy: 'Run `npm run scorecard`, review the numbers, and commit the result.',
+  },
+  {
+    id: 'package-contents',
+    title: 'Package contents match the committed expectation',
+    // Local: one npm pack --dry-run and a git ls-files call, no network. Cheap
+    // enough to run even under --fast, and it is the only check that examines
+    // the artifact itself rather than the source that produces it.
+    slow: false,
+    remedy: 'Compare the printed diff against scanner/expected-package-manifest.json. Fix ' +
+      '`files` in scanner/package.json or remove the stray path; only update the committed ' +
+      'expectation file if the new shape is an intended, reviewed change to what ships.',
   },
   {
     id: 'test-suite',
@@ -523,6 +535,8 @@ function main(argv) {
     if (!version) return result(['Cannot check the scorecard: no version could be determined.']);
     return evaluateScorecardFreshness(scorecardFacts(version));
   });
+
+  evaluate('package-contents', () => runPackageContentsCheck(REPO));
 
   evaluate('test-suite', () => runNpmGate('test'));
   evaluate('corpus-gate', () => runNpmGate('bench:cve-replay:check'));

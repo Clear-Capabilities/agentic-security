@@ -54,6 +54,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { runPackageContentsCheck } from './package-contents-check.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -94,6 +95,13 @@ export const CHECKS = [
     remedy: 'Run `npm run build` in scanner/ and commit both ' +
       'dist/agentic-security.mjs and dist/agentic-security.mjs.sha256. ' +
       '(This is what catches "edited src/, forgot to rebuild".)',
+  },
+  {
+    id: 'package-contents',
+    title: 'Package contents match the committed expectation',
+    remedy: 'Compare the printed diff against scanner/expected-package-manifest.json. Fix ' +
+      '`files` in scanner/package.json or remove the stray path; only update the committed ' +
+      'expectation file if the new shape is an intended, reviewed change to what ships.',
   },
   {
     id: 'test-suite',
@@ -599,6 +607,8 @@ export function main(argv = []) {
       }
     } else if (check.id === 'bundle-integrity') {
       r = evaluateBundleIntegrity(bundleHashes());
+    } else if (check.id === 'package-contents') {
+      r = runPackageContentsCheck(REPO);
     } else {
       r = runNpmGate(check.npmScript);
     }

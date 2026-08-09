@@ -286,24 +286,25 @@ test('release-gate — a gated command exiting 0 passes, non-zero fails', () => 
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all eleven checks in order', () => {
+test('release-gate — full run plans all twelve checks in order', () => {
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 11);
+  assert.equal(ids.length, 12);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
-test('release-gate — --fast skips only the slow gates, keeping 1-5 and 9-10', () => {
+test('release-gate — --fast skips only the slow gates, keeping 1-5, package-contents, and 9-10', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 4);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 7);
+  assert.equal(ids.length, 8);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
-  // The four cheap correctness gates and both provenance gates must survive
-  // --fast: they are what make a fast run still meaningful.
+  // The four cheap correctness gates, package-contents, and both provenance
+  // gates must survive --fast: they are what make a fast run still meaningful.
   for (const keep of [
     'working-tree-clean', 'version-consistency', 'changelog-entry',
-    'bundle-integrity', 'scorecard-freshness', 'head-pushed', 'remote-ci-green',
+    'bundle-integrity', 'scorecard-freshness', 'package-contents',
+    'head-pushed', 'remote-ci-green',
   ]) {
     assert.ok(ids.includes(keep), `--fast must still run ${keep}`);
   }
@@ -325,6 +326,17 @@ test('release-gate — dependency currency is registered, slow, and in the full 
   assert.equal(check.slow, true);
   assert.ok(plannedCheckIds({ fast: false }).includes('dependency-currency'));
   assert.ok(!plannedCheckIds({ fast: true }).includes('dependency-currency'));
+});
+
+// package-contents is cheap and local (no network round-trip), so it is not
+// slow and must survive --fast — the only check that examines the actual
+// artifact should never be the one --fast quietly drops.
+test('release-gate — package-contents is registered, not slow, and in the full run', () => {
+  const check = CHECKS.find(c => c.id === 'package-contents');
+  assert.ok(check, 'package-contents must be a registered check');
+  assert.equal(check.slow, false);
+  assert.ok(plannedCheckIds({ fast: false }).includes('package-contents'));
+  assert.ok(plannedCheckIds({ fast: true }).includes('package-contents'));
 });
 
 test('release-gate — every check declares a remedy', () => {
