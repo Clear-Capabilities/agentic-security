@@ -102,6 +102,46 @@ unmodelled source, (c) a path the taint engine drops, or (d) genuinely
 out-of-scope. **Do not write code before that classification exists** — three of
 the four causes have different fixes, and one has no fix at all.
 
+### R-2 classification — DONE, and it says do not build these detectors
+
+Carried out 2026-08-09 on the materialised misses. The answer was not the
+expected one, which is why the rule to classify first exists.
+
+| Entry | Sink found by hand | Cause |
+|---|---|---|
+| Ghost `image-size.js` (918) | `this.request(imageUrl, …)` — a dependency-injected HTTP helper | **(c)** needs type resolution |
+| Ghost `mobiledoc.js` (918) | reaches the same injected helper indirectly | **(c)** |
+| Flowise `httpSecurity.ts` (918) | the file IS the SSRF defence: deny list, `dns.lookup`, redirects disabled | **(d)** incomplete *guard*, not a missing sink |
+| Flowise `index.ts` (184) | incomplete denylist by definition of the CWE | **(d)** |
+
+**None is an unmodelled sink.** Two need to know that `this.request` resolves to
+an HTTP client — type information a pattern cannot recover, and matching
+`.request(` unguarded would be catastrophically noisy in any real codebase. The
+other two are code that *already contains the control* and is vulnerable because
+the control is bypassable. Judging the sufficiency of an existing guard is a
+reasoning task; there is no sink to match because the developer already matched
+it.
+
+**Conclusion: R-2 is closed without new detectors.** The remaining CWE-918 and
+CWE-184 recall is not reachable by pattern matching, and forcing it would trade
+a real precision cost for a benchmark number — which is the failure mode §5
+warns about, arriving from the other direction.
+
+Two consequences for the rest of this plan:
+
+1. **The recall ceiling for pattern matching on this population is near.** R-1
+   closed the last large *sink* gap (0/6 → 5/6). What remains is dominated by
+   type-dependent flows and guard-sufficiency reasoning.
+2. **R-3 stops being one item among several and becomes the main line.** The
+   discovery layer is the only mechanism here that can reason about whether a
+   deny list is complete or whether an injected helper reaches the network. Its
+   blocker is a configured LLM endpoint, which is now the single highest-value
+   unblock in the document.
+
+The honest one-line summary: *the engine is good at the classes it targets, the
+next tranche of recall is not a detector problem, and we know exactly which
+mechanism addresses it.*
+
 ---
 
 ## 4. R-3 — The long tail needs the discovery layer, not detectors · P1
@@ -178,10 +218,17 @@ R-3 (long tail) ──> blocked on an LLM endpoint (D3)
 
 | Step | Recall | Basis |
 |---|---|---|
-| today | 32.5% (13/40) | measured |
-| + R-1 at 4/6 | ~42% | arithmetic on the same population |
-| + R-2 at 5/9 | ~50% | arithmetic |
-| + R-3 | unknown | needs D3 to measure at all |
+| starting point | 32.5% (13/40) | measured |
+| + R-1 (projected 4/6) | ~42% | arithmetic |
+| **+ R-1 (actual 5/6)** | **45.0% (18/40)** | **measured — projection held** |
+| + R-2 | **no change** | classified: not reachable by pattern matching |
+| + R-3 | unknown | blocked on an LLM endpoint; now the main line |
+
+R-1's projection was accurate because it was arithmetic on a real population
+rather than a guess. R-2's was not: it assumed the misses were missing sinks,
+and hand-classification showed none of them were. The projection was wrong in
+the direction that matters least — it promised work that turned out to be
+unnecessary rather than hiding work that turned out to be required.
 
 **These are projections on a 40-entry population and must be re-measured on the
 110, not carried forward as claims.** The projection is a planning aid; the only
