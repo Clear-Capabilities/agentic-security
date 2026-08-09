@@ -296,10 +296,45 @@ function configuredHooksPath() {
   return r.status === 0 ? r.stdout : null;
 }
 
+// Git exports GIT_DIR and friends into every hook it runs, and a hook that
+// spawns a test suite hands them straight down. Any test that builds a temp
+// repository and shells out to `git` then operates on THIS repository instead
+// of its own fixture.
+//
+// This is not theoretical and it is not merely a failed gate. Before this fix,
+// two blocked pushes from a linked worktree ran the suite under the hook, and
+// the history-mining tests committed their fixtures INTO the real branch: ~30
+// commits ("chore: release 1..19", "fix XSS in parser", …) that between them
+// deleted 421 files and 90,282 lines from scanner/src. The branch was then
+// pushed carrying that gutted tree.
+//
+// It only bites from a linked worktree, which is why it went unnoticed. In an
+// ordinary clone GIT_DIR is the relative string `.git`, which stops resolving
+// the moment a test chdirs into its temp directory, so git falls back to normal
+// discovery. In a worktree `git rev-parse --git-dir` is an ABSOLUTE path, so it
+// resolves from anywhere. Isolated to GIT_DIR by re-running the suite with one
+// variable set at a time.
+//
+// Scrub the whole redirecting family, not GIT_DIR alone: GIT_INDEX_FILE and
+// GIT_WORK_TREE misdirect writes the same way, and GIT_OBJECT_DIRECTORY would
+// send objects to the wrong store. GIT_AUTHOR_* is deliberately left alone —
+// it cannot change which repository a command targets, so this is a denylist of
+// redirectors, not a blanket GIT_ prefix match.
+const GIT_ENV_TO_SCRUB = [
+  'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_PREFIX', 'GIT_COMMON_DIR',
+];
+
+export function envWithoutGitContext(source = process.env) {
+  const env = { ...source };
+  for (const k of GIT_ENV_TO_SCRUB) delete env[k];
+  return env;
+}
+
 function runNpmGate(script) {
   const label = `npm run ${script}`;
   process.stderr.write(`  running ${label} …\n`);
-  const r = run('npm', ['run', script], { cwd: SCANNER, stdio: 'inherit' });
+  const r = run('npm', ['run', script], { cwd: SCANNER, stdio: 'inherit', env: envWithoutGitContext() });
   return evaluateCheckOutcome({ label, exitCode: r.status });
 }
 

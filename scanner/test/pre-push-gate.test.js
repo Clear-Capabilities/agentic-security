@@ -17,6 +17,7 @@ import {
   evaluateHookActivation,
   summarize,
   HOOKS_PATH,
+  envWithoutGitContext,
 } from '../../scripts/pre-push-gate.mjs';
 
 const ZERO = '0'.repeat(40);
@@ -190,4 +191,53 @@ test('pre-push-gate — a failure is reported with its remedy and the bypass esc
   assert.match(text, /FAIL {2}Tests/);
   assert.match(text, /Run `npm test` and fix the failures\./);
   assert.match(text, /--no-verify/);
+});
+
+// --- git context must not leak from the hook into the suites ------------------
+//
+// Git exports GIT_DIR into every hook. The gate spawns `npm test`, which
+// inherited it, so every test that builds a temp repository and shells out to
+// `git` operated on THIS repository instead of its fixture.
+//
+// The consequence was not a false failure. Two blocked pushes from a linked
+// worktree ran the suite under the hook and the history-mining tests committed
+// their fixtures into the real branch — ~30 commits that between them deleted
+// 421 files and 90,282 lines from scanner/src, which then got pushed. From an
+// ordinary clone GIT_DIR is the relative `.git` and stops resolving once a test
+// chdirs away, which is why this went unseen for so long.
+
+test('envWithoutGitContext strips every variable that could redirect a child git', () => {
+  const out = envWithoutGitContext({
+    GIT_DIR: '/repo/.git',
+    GIT_WORK_TREE: '/repo',
+    GIT_INDEX_FILE: '/repo/.git/index',
+    GIT_OBJECT_DIRECTORY: '/repo/.git/objects',
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: '/other/objects',
+    GIT_PREFIX: 'scanner/',
+    GIT_COMMON_DIR: '/repo/.git',
+  });
+  assert.deepEqual(Object.keys(out), [], 'no git-context variable may survive');
+});
+
+test('envWithoutGitContext preserves everything a child actually needs', () => {
+  // Over-scrubbing would break the spawn itself, failing the gate closed for a
+  // different and even more confusing reason.
+  const out = envWithoutGitContext({
+    PATH: '/usr/bin', HOME: '/home/x', NODE_ENV: 'test',
+    GIT_DIR: '/repo/.git', GIT_AUTHOR_NAME: 'keep me',
+  });
+  assert.equal(out.PATH, '/usr/bin');
+  assert.equal(out.HOME, '/home/x');
+  assert.equal(out.NODE_ENV, 'test');
+  assert.equal(out.GIT_DIR, undefined);
+  // GIT_AUTHOR_* cannot redirect which repository a command targets, so it is
+  // deliberately kept: the list is a denylist of redirectors, not a blanket
+  // "delete anything starting with GIT_".
+  assert.equal(out.GIT_AUTHOR_NAME, 'keep me');
+});
+
+test('envWithoutGitContext does not mutate the source environment', () => {
+  const source = { GIT_DIR: '/repo/.git', PATH: '/usr/bin' };
+  envWithoutGitContext(source);
+  assert.equal(source.GIT_DIR, '/repo/.git', 'process.env must not be modified in place');
 });
