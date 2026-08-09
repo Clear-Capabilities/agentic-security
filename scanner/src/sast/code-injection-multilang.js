@@ -64,6 +64,34 @@ function patternsFor(lang) {
         gate: /\b(?:DataTable|DataColumn|DataView)\b/ },
     ];
   }
+  if (lang === 'js') {
+    // Server-side JS code injection. Measured gap, not a speculative one: on the
+    // independent population CWE-94 scored 0/6, and the missed sink in
+    // GHSA-3769-jgqc-cxm7 was `vm.run(\`...${code}...\`)` — the NodeVM / vm2
+    // sandbox family. `eval` and `new Function` were already covered elsewhere
+    // (client-side.js, agent-untrusted-flow.js); a library whose entire purpose
+    // is executing supplied code was not covered anywhere.
+    //
+    // A SANDBOX IS NOT A CONTROL HERE. vm/vm2 are routinely reached for as the
+    // "safe" way to run untrusted code, and both have a long history of escapes.
+    // Running attacker-influenced source inside one is still code injection, so
+    // these fire on a non-literal argument exactly like every other sink in this
+    // module.
+    return [
+      // vm.run / NodeVM#run / VM#run — the vm2 and @n8n/vm2 family.
+      { key: 'vm-run', re: new RegExp(String.raw`\.\s*run\s*\(\s*${notLiteral}`, 'g'),
+        gate: /\b(?:NodeVM|VM|vm2|createContext|new\s+VM\b)\b/ },
+      // node:vm's own evaluators. runInNewContext takes the code first.
+      { key: 'vm-run-in-context',
+        re: new RegExp(String.raw`\.\s*(?:runInNewContext|runInThisContext|runInContext)\s*\(\s*${notLiteral}`, 'g') },
+      // new vm.Script(src) compiles before it runs; the injection is here.
+      { key: 'vm-script', re: new RegExp(String.raw`\bnew\s+(?:vm\s*\.\s*)?Script\s*\(\s*${notLiteral}`, 'g'),
+        gate: /\b(?:vm|node:vm)\b/ },
+      // Server-side eval / Function, which client-side.js only covers for browsers.
+      { key: 'js-eval', re: new RegExp(String.raw`(?:^|[^.\w])eval\s*\(\s*${notLiteral}`, 'gm') },
+      { key: 'js-new-function', re: new RegExp(String.raw`\bnew\s+Function\s*\(\s*${notLiteral}`, 'g') },
+    ];
+  }
   if (lang === 'go') {
     return [
       // yaegi / gomacro interpreter eval of a non-literal.
@@ -82,6 +110,7 @@ function _lang(fp) {
   if (/\.kt$/i.test(fp)) return 'kt';
   if (/\.cs$/i.test(fp)) return 'cs';
   if (/\.go$/i.test(fp)) return 'go';
+  if (/\.(?:js|jsx|mjs|cjs|ts|tsx)$/i.test(fp)) return 'js';
   return null;
 }
 

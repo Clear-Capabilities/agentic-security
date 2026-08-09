@@ -62,10 +62,10 @@ a public advisory database rather than by this project.
 
 | | |
 | --- | --- |
-| Precision | 50.0% (13/26) |
-| Recall | 32.5% (13/40) |
-| F1 | 0.394 |
-| Raw | TP=13 FP=13 FN=27 TN=27 |
+| Precision | 50.0% (18/36) |
+| Recall | **45.0% (18/40)** |
+| F1 | **0.474** |
+| Raw | TP=18 FP=18 FN=22 TN=22 |
 
 Against 100% on the curated corpus. **That gap is the most useful number in this
 document**, and publishing it is the point of the exercise.
@@ -80,7 +80,8 @@ history is invisible is a benchmark nobody can audit.
 | --- | --- | --- | --- |
 | n=12, changed files only | 16.7% | 0.250 | first attempt |
 | n=40, test files excluded | 12.5% | 0.200 | 4 of 12 entries had a **test file or `dist/` artifact** as the vulnerable file — a fix commit touches the fix *and* its regression test, and the miner was picking the test |
-| n=40, package-scope context | **32.5%** | **0.394** | trees held only the diff, so an interprocedural engine was graded on fragments with no callers |
+| n=40, package-scope context | 32.5% | 0.394 | trees held only the diff, so an interprocedural engine was graded on fragments with no callers |
+| n=40, + sandbox-VM sinks | **45.0%** | **0.474** | nothing wrong with the measurement — this one is the **engine improving**, see below |
 
 Materialising the surrounding package **raised recall 2.6×** without touching a
 line of detector code. The diagnosis came from the per-CWE breakdown: on the
@@ -96,13 +97,22 @@ The 32.5% aggregate hides the only thing worth acting on: two families are at
 | --- | --- | --- |
 | CWE-22 path traversal | 3 | 3/3 |
 | CWE-79 XSS | 3 | 3/3 |
-| CWE-94 code injection | 6 | **0/6** |
+| CWE-94 code injection | 6 | **5/6** (was 0/6) |
 | CWE-184 incomplete denylist | 3 | 0/3 |
 | CWE-918 SSRF | 3 | 1/3 |
 | CWE-200 info exposure | 3 | 1/3 |
 | 15 others (n=1 each) | 15 | 2/15 |
 
-Plan: `docs/RECALL_IMPROVEMENT_PRD.md`.
+Plan: `docs/RECALL_IMPROVEMENT_PRD.md`. Its R-1 has since landed: the missed
+sink was the NodeVM/vm2 sandbox family, not a conceptual gap. Adding it took
+CWE-94 from 0/6 to 5/6 and overall recall from 32.5% to 45.0%.
+
+**Precision did not move — it is 50.0% before and after.** Eighteen new true
+positives arrived with eighteen findings in the corresponding `post/` trees. That
+is consistent with the caveat below: at package scope, an unrelated instance of
+the same CWE elsewhere in the package scores as a false positive against this
+advisory's label. It is a reason to classify the FPs (plan §5) before treating
+50% as a defect rate, not a reason to celebrate an unchanged number.
 
 ### Still a lower bound, and now for one clear reason
 
