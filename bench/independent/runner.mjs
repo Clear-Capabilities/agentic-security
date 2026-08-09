@@ -35,10 +35,50 @@ const MANIFEST = path.join(HERE, 'manifest.json');
 export const MIN_RELIABLE_N = 10;
 
 /** Does any finding carry the labelled CWE? Normalised, exact on the number. */
-export function matchesCwe(findings, cwe) {
+export function matchesCwe(findings, cwe, files = null) {
   const want = String(cwe || '').toUpperCase().trim();
   if (!/^CWE-\d+$/.test(want)) return false;
-  return (findings || []).some(f => String(f.cwe || '').toUpperCase().trim() === want);
+  const scoped = localiseToAdvisory(findings, files);
+  return scoped.some(f => String(f.cwe || '').toUpperCase().trim() === want);
+}
+
+/**
+ * Restrict findings to the files the advisory's fix commit touched.
+ *
+ * WHY, WITH THE NUMBER THAT FORCED IT. Package-scope materialisation (N1) gave
+ * the taint engine the callers it needs, and recall rose 12.5% -> 32.5%. It also
+ * widened what counts as a false positive to the whole package: an entry could
+ * score FP because the same CWE appeared ANYWHERE in the scanned tree. Measured
+ * on the 110-entry run, several `post/` scopes contained over 1700 findings, so
+ * "a CWE-862 exists somewhere in 1735 findings" was being recorded as a false
+ * positive against one advisory about one file.
+ *
+ * That is not a precision defect, it is a scoping error in the benchmark, and
+ * leaving it in place would have invited exactly the wrong response — tuning
+ * detectors to suppress real findings in unrelated code in order to move a
+ * number.
+ *
+ * SYMMETRIC ON PURPOSE. The restriction applies to `pre` and `post` alike.
+ * Scoring the vulnerable side generously and the fixed side strictly would
+ * inflate both recall and precision, which is the shape of a benchmark built to
+ * flatter. Context still does its job — the engine reads the whole package to
+ * resolve the flow — but the CLAIM is anchored to the files the advisory is
+ * actually about.
+ *
+ * `files = null` disables the restriction, which is what the unit tests use.
+ */
+export function localiseToAdvisory(findings, files) {
+  if (!Array.isArray(files) || files.length === 0) return findings || [];
+  const wanted = new Set(files.map(f => String(f)));
+  return (findings || []).filter(f => {
+    const file = String(f.file || '');
+    // Findings carry paths relative to the scanned root, which is the scope
+    // directory — so compare by suffix rather than demanding an exact match.
+    for (const w of wanted) {
+      if (file === w || file.endsWith('/' + w) || w.endsWith('/' + file) || w.endsWith(file)) return true;
+    }
+    return false;
+  });
 }
 
 /** Precision/recall/F1 from raw counts, each carrying its {n, d}. */
@@ -57,11 +97,53 @@ function pct(r) {
   return `${(r.value * 100).toFixed(1)}% (${r.n}/${r.d})`;
 }
 
+/**
+ * Remove any scan state the engine wrote INTO a tree it scanned.
+ *
+ * THIS IS AN INTEGRITY CONTROL, NOT TIDINESS. A scan writes
+ * `.agentic-security/` into its own root — threat-model.json,
+ * exploit-bundles.json, scan-history.json — and those files CONTAIN CWE
+ * IDENTIFIERS from the previous run. Audited on this population: 220 polluted
+ * trees, 544 state files carrying `CWE-` strings.
+ *
+ * Left in place, the second scan of a tree reads the first scan's conclusions as
+ * if they were source code. That is the benchmark grading the engine on its own
+ * previous output — the precise definition of cheating, arrived at by accident
+ * rather than intent, which is the only way it ever shows up in practice.
+ *
+ * Purged BEFORE every scan, so each measurement sees exactly the upstream files
+ * and nothing this project produced. Purging only afterwards would still leave a
+ * window where an interrupted run poisons the next one.
+ */
+function purgeScanState(dir) {
+  let removed = 0;
+  const walk = (d, depth = 0) => {
+    if (depth > 12) return;
+    let entries;
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const p = path.join(d, e.name);
+      if (e.name === '.agentic-security') { fs.rmSync(p, { recursive: true, force: true }); removed++; continue; }
+      if (e.name === 'node_modules' || e.name === '.git') continue;
+      walk(p, depth + 1);
+    }
+  };
+  walk(dir);
+  return removed;
+}
+
 async function scanDir(dir) {
+  // Pristine input, every time. See purgeScanState.
+  purgeScanState(dir);
   const { runScan } = await import(path.join(REPO, 'scanner', 'src', 'runScan.js'));
   const { scan } = await runScan(dir);
   const { normalizeFindings } = await import(path.join(REPO, 'scanner', 'src', 'report', 'index.js'));
-  return normalizeFindings(scan) || [];
+  const findings = normalizeFindings(scan) || [];
+  // Defence in depth: even with a pristine input, refuse to score a finding
+  // whose path is inside our own state directory. A single guard that can be
+  // bypassed by a mid-run write is not a guard.
+  return findings.filter(f => !String(f.file || '').includes('.agentic-security'));
 }
 
 async function main() {
@@ -85,8 +167,8 @@ async function main() {
       unscored.push({ id: e.id, reason: `scan failed: ${err.message}` });
       continue;
     }
-    const hitPre = matchesCwe(preFindings, e.cwe);
-    const hitPost = matchesCwe(postFindings, e.cwe);
+    const hitPre = matchesCwe(preFindings, e.cwe, e.files);
+    const hitPost = matchesCwe(postFindings, e.cwe, e.files);
     perEntry.push({
       id: e.id, cwe: e.cwe, language: e.language, repo: e.repo,
       tp: hitPre ? 1 : 0, fn: hitPre ? 0 : 1,
@@ -119,6 +201,11 @@ async function main() {
       labelSources: [...new Set(manifest.entries.map(e => e.labelSource))],
     },
     reliable: perEntry.length >= MIN_RELIABLE_N,
+    // Per-entry rows, so a false positive can be OPENED rather than counted.
+    // Aggregates say precision is 50%; only these say which advisory produced
+    // the finding in `post/`, which is the difference between "18 defects" and
+    // "18 rows that need classifying". Plan R-4 depends on this existing.
+    perEntry,
     overall,
     byLanguage: group('language'),
     byCwe: group('cwe'),
