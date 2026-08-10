@@ -92,7 +92,7 @@ Measured in `bench/cve-replay/` right now:
 | Corpus trees containing `.agentic-security/` | **420** (every `pre/` and `post/`) |
 | State files | **5,231** |
 | State files containing `CWE-` strings | **510** |
-| Total state written into the corpus | **1.49 MB** |
+| Total state written into the corpus | **~20.8 MB** (corpus was 25 MB, 4.2 MB after cleanup) |
 | Distinct `sbom-history/<commit>.json` snapshots per tree | **9** |
 
 That last row is the one that matters. The snapshots are keyed by **git commit**,
@@ -236,7 +236,7 @@ just documents the holes. M4 is cleanup and can trail.
 | Unguarded state writers | 11 of 13 confirmed | **0**, over a hand-verified inventory |
 | Scan configurations proven to add zero paths | 1 | **6** (the matrix) |
 | Bench runners asserting byte-identity | 0 of 11 | **11** |
-| State files inside `bench/cve-replay/` | 5,231 (1.49 MB) | **0** |
+| State files inside `bench/cve-replay/` | 5,231 (~20.8 MB) | **0** |
 | New files added to the corpus per gate run | 420 | **0** |
 | Ledger entries | 55 | **0** |
 | Controls preventing benchmark self-contamination | 1 (`IGNORE_DIRS`) | **3** (ignore + no-state + byte-identity assert) |
@@ -273,3 +273,19 @@ of the last PRD that got postponed as lower priority. In the fortnight since,
 the gated corpus accumulated 5,231 state files and grows by 420 more on every
 push. The fix landed; the check that would have proven the fix held did not —
 and it is the check, not the fix, that keeps a defect from coming back.
+
+
+---
+
+## Appendix A — corrections to this document's own figures
+
+**"1.49 MB of state" was wrong; the real figure is ~20.8 MB.** It came from
+`find … -exec wc -c {} + | tail -1`, which prints one `total` line *per exec
+batch*; taking the last line reported only the final batch. Deleting the state
+took `bench/cve-replay/` from 25 MB to 4.2 MB, which is the measurement that
+settled it.
+
+The error understated the problem by 14x and would not have changed a single
+decision here — but it is recorded because the habit that produces it is the
+same one that produced the withdrawn recall figure: trusting a number a command
+printed without checking what the command actually counted.

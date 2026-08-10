@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../../scanner/src/runScan.js';
 
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 const CASES_DIR  = path.join(__dirname, 'cases');
@@ -205,6 +206,10 @@ async function runCase(caseName) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a benchmark must not mutate what it measures.
+  // Every runner disables state writing; runners with a well-defined corpus
+  // directory additionally assert byte-identity (see bench/cve-replay/runner.mjs).
+  await disableStateWrites();
   await fs.mkdir(RESULTS_DIR, { recursive: true });
   const all = await listCases();
   const targets = ONE_CASE ? [ONE_CASE] : all;

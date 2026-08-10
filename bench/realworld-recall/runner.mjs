@@ -38,6 +38,7 @@ import { matchExpected, scoreRecall, checkGate, sharesLocation, sharesClass } fr
 import { judgeDetection } from './judge.mjs';
 import { analyzeMiss, DEFAULT_STAGES } from './analyze-misses.mjs';
 
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const EXAMPLE_CORPUS = path.join(HERE, 'corpus', 'EXAMPLE.json');
 const BASELINE_PATH = path.join(HERE, 'baseline.json');
@@ -217,6 +218,10 @@ function recordHistory(ev) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a benchmark must not mutate what it measures.
+  // Every runner disables state writing; runners with a well-defined corpus
+  // directory additionally assert byte-identity (see bench/cve-replay/runner.mjs).
+  await disableStateWrites();
   const opts = parseArgs(process.argv.slice(2));
   const ev = await evaluate(opts);
 

@@ -27,6 +27,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { entryDir, entryComplete } from './fetch.mjs';
 
+import { snapshotTree, assertTreeUnchanged, disableStateWrites } from '../_lib/tree-integrity.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const MANIFEST = path.join(HERE, 'manifest.json');
@@ -136,10 +137,16 @@ function purgeScanState(dir) {
 async function scanDir(dir) {
   // Pristine input, every time. See purgeScanState.
   purgeScanState(dir);
+  // Snapshot AFTER the purge: the purge is a deliberate removal, so including
+  // it would guarantee a spurious "corpus changed" on every entry. What is
+  // being asserted is that the SCAN adds nothing, which is the claim that
+  // matters. (STATE_SEAM_COMPLETION_PRD M3)
+  const before = snapshotTree(dir);
   const { runScan } = await import(path.join(REPO, 'scanner', 'src', 'runScan.js'));
   const { scan } = await runScan(dir);
   const { normalizeFindings } = await import(path.join(REPO, 'scanner', 'src', 'report', 'index.js'));
   const findings = normalizeFindings(scan) || [];
+  assertTreeUnchanged(before, snapshotTree(dir), `independent entry ${path.basename(path.dirname(dir))}/${path.basename(dir)}`);
   // Defence in depth: even with a pristine input, refuse to score a finding
   // whose path is inside our own state directory. A single guard that can be
   // bypassed by a mid-run write is not a guard.
@@ -147,6 +154,8 @@ async function scanDir(dir) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — see scanDir for the per-entry assertion.
+  await disableStateWrites();
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
   const asJson = process.argv.includes('--json');
 

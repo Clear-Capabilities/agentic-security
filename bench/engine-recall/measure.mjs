@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { runScan } from '../../scanner/src/runScan.js';
 import { CATALOG, matchSource } from '../../scanner/src/dataflow/catalog.js';
 
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 async function scanSnippet(filename, src) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-recall-'));
   try {
@@ -80,6 +81,10 @@ function globalSourceReach({ verbose = false } = {}) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a benchmark must not mutate what it measures.
+  // Every runner disables state writing; runners with a well-defined corpus
+  // directory additionally assert byte-identity (see bench/cve-replay/runner.mjs).
+  await disableStateWrites();
   process.env.AGENTIC_SECURITY_DEEP = '1';
   process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
 

@@ -29,6 +29,7 @@ import { detectLicence } from './lib/licence.mjs';
 import { readIrStats, coverageSummary } from './lib/irstats.mjs';
 import { verifyBundle, runRepoScan } from './lib/scan.mjs';
 
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MANIFEST = path.join(HERE, 'manifest.json');
 // Fixed regardless of --out: this is the only path bench/proof-corpus/.gitignore
@@ -212,6 +213,10 @@ async function runTarget(t, opts) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a benchmark must not mutate what it measures.
+  // Every runner disables state writing; runners with a well-defined corpus
+  // directory additionally assert byte-identity (see bench/cve-replay/runner.mjs).
+  await disableStateWrites();
   const opts = parseArgs(process.argv.slice(2));
   const manifest = loadManifest();
   let targets = manifest.targets;

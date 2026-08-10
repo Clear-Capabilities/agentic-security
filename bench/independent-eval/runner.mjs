@@ -27,6 +27,7 @@ import { normalizeFindings } from '../../scanner/src/report/index.js';
 import { evaluateHeldOut, summarize, summarizePerLanguage } from '../../scanner/src/posture/holdout-eval.js';
 import { scoreCorpus, checkGate, normPath } from './score.mjs';
 
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function parseArgs(argv) {
@@ -99,6 +100,10 @@ function loadThresholds(val) {
 function fmt(n) { return n == null ? '  —  ' : n.toFixed(3); }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a benchmark must not mutate what it measures.
+  // Every runner disables state writing; runners with a well-defined corpus
+  // directory additionally assert byte-identity (see bench/cve-replay/runner.mjs).
+  await disableStateWrites();
   const args = parseArgs(process.argv.slice(2));
   const manifestPath = path.resolve(args.manifest || path.join(__dirname, 'corpus', 'manifest.jsonl'));
   const root = path.resolve(args.root || path.dirname(manifestPath));

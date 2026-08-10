@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../../scanner/src/runScan.js';
 
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LANGS = [
   { id: 'js', dir: 'fixtures/js' },
@@ -43,6 +44,10 @@ function classify(scan) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a benchmark must not mutate what it measures.
+  // Every runner disables state writing; runners with a well-defined corpus
+  // directory additionally assert byte-identity (see bench/cve-replay/runner.mjs).
+  await disableStateWrites();
   const json = process.argv.includes('--json');
   // Deep mode is what builds IR at all for an in-process caller.
   process.env.AGENTIC_SECURITY_DEEP = '1';

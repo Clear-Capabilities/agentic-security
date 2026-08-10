@@ -46,6 +46,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const MEASURE = path.join(HERE, 'measure.mjs');
@@ -144,6 +145,10 @@ function preflight(baseline, now) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a benchmark must not mutate what it measures.
+  // Every runner disables state writing; runners with a well-defined corpus
+  // directory additionally assert byte-identity (see bench/cve-replay/runner.mjs).
+  await disableStateWrites();
   const updateBaseline = process.argv.includes('--update-baseline');
 
   let now;

@@ -61,6 +61,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../../scanner/src/runScan.js';
 
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const TARGETS = ['hooks', 'scripts', 'scanner/src'];
@@ -75,6 +76,10 @@ function countByFile(scan) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a benchmark must not mutate what it measures.
+  // Every runner disables state writing; runners with a well-defined corpus
+  // directory additionally assert byte-identity (see bench/cve-replay/runner.mjs).
+  await disableStateWrites();
   // Deep mode is what the CLI uses outside CI, so measure what users get.
   process.env.AGENTIC_SECURITY_DEEP = '1';
   process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
