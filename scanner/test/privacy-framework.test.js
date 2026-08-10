@@ -292,6 +292,20 @@ test('CLI: human output always carries the not-evidence caveat', async () => {
   } finally { await fsp.rm(d, { recursive: true, force: true }); }
 });
 
+test('the build is idempotent — no nested compliance-frameworks/ directory', () => {
+  // `cp -R src dst` copies INTO dst when dst already exists, so the first build
+  // created dist/compliance-frameworks/ and the second created
+  // dist/compliance-frameworks/compliance-frameworks/. A duplicate set shipped
+  // before this was caught. The build now clears the directory first; this
+  // asserts the SHAPE rather than trusting the command.
+  const dir = path.join(HERE, '..', 'dist', 'compliance-frameworks');
+  if (!fs.existsSync(dir)) return;
+  const subdirs = fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory());
+  assert.deepEqual(subdirs.map(e => e.name), [],
+    'dist/compliance-frameworks/ must contain only .json files — a nested directory means a rebuild copied into itself');
+  assert.ok(fs.readdirSync(dir).every(f => f.endsWith('.json')));
+});
+
 test('the SHIPPED BUNDLE can see the frameworks, not just src/', async () => {
   // This caught a live defect. `auditor-walkthrough` resolves its data
   // directory from `import.meta.url`, which inside the bundle points at dist/ —
