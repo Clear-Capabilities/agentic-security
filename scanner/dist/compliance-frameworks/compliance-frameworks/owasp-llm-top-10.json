@@ -1,0 +1,69 @@
+{
+  "id": "owasp-llm-top-10",
+  "name": "OWASP Top 10 for LLM Applications 2025",
+  "publisher": "OWASP Foundation",
+  "license": "Creative Commons Attribution-ShareAlike 4.0",
+  "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+  "controls": [
+    {
+      "id": "LLM01",
+      "summary": "Prompt Injection — controls preventing injected instructions from overriding the system prompt.",
+      "evidence": ["Zero open findings in family prompt-injection / llm-app-security.", "Prompt-template integrity check passing."],
+      "mapsTo": ["family:prompt-injection", "family:llm-app-security", "family:prompt-integrity"]
+    },
+    {
+      "id": "LLM02",
+      "summary": "Insecure Output Handling — LLM output is not directly piped to dangerous sinks (eval/shell/SQL/HTML).",
+      "evidence": ["Zero open findings in subfamily llm-output-untrusted-sink."],
+      "mapsTo": ["family:llm-app-security:llm-output-untrusted-sink"]
+    },
+    {
+      "id": "LLM03",
+      "summary": "Training Data Poisoning — provenance and integrity controls on training/fine-tuning data.",
+      "evidence": ["No streaming-dataset-url findings.", "datasets.load_dataset uses pinned revisions."],
+      "mapsTo": ["family:streaming-dataset-url", "family:hf-datasets-rce"]
+    },
+    {
+      "id": "LLM04",
+      "summary": "Model Denial of Service — rate-limit / token-cap controls.",
+      "evidence": ["LLM API calls in source carry an explicit max_tokens cap (bodyguard rule no-max-tokens)."],
+      "mapsTo": ["rule:no-max-tokens"]
+    },
+    {
+      "id": "LLM05",
+      "summary": "Supply Chain — model & dataset supply-chain integrity.",
+      "evidence": ["No mlflow-untrusted-uri / model-format / hf-endpoint-override findings.", "Sigstore provenance verification configured if opt-in."],
+      "mapsTo": ["family:mlflow-untrusted-uri", "family:model-format", "family:hf-endpoint-override"]
+    },
+    {
+      "id": "LLM06",
+      "summary": "Sensitive Information Disclosure — output filters prevent leakage.",
+      "evidence": ["Zero findings in subfamily llm-credential-in-prompt.", "Redact module covers prompt + response."],
+      "mapsTo": ["family:llm-app-security:llm-credential-in-prompt"]
+    },
+    {
+      "id": "LLM07",
+      "summary": "Insecure Plugin / Tool Design — tools the LLM can invoke are narrowly scoped.",
+      "evidence": ["Zero llm-app-security:llm-tool-exec findings.", "Agent tool definitions reviewed for excessive agency."],
+      "mapsTo": ["family:agent-tool-exec", "family:llm-app-security:llm-tool-exec"]
+    },
+    {
+      "id": "LLM08",
+      "summary": "Excessive Agency — agent autonomy is bounded by explicit guards.",
+      "evidence": ["MCP server config limits write-tools to confirm:true + reserved-write-path refusal.", "Apply-fix path requires HMAC-verified scan."],
+      "mapsTo": ["module:mcp-tools", "module:apply-fix"]
+    },
+    {
+      "id": "LLM09",
+      "summary": "Overreliance — human review checkpoints exist.",
+      "evidence": ["security-fixer agent has Stop-on-verify-fail loop.", "PreToolUse bodyguard exists."],
+      "mapsTo": ["module:security-fixer", "module:pre-edit-bodyguard"]
+    },
+    {
+      "id": "LLM10",
+      "summary": "Model Theft — model access controls.",
+      "evidence": ["No private-key-in-frontend or rpc-key-inline findings in client code."],
+      "mapsTo": ["family:private-key-in-frontend", "family:rpc-key-inline"]
+    }
+  ]
+}

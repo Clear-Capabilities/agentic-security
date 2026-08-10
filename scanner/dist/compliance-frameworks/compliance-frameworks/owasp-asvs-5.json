@@ -1,0 +1,79 @@
+{
+  "id": "owasp-asvs-5",
+  "name": "OWASP Application Security Verification Standard 5.0",
+  "publisher": "OWASP Foundation",
+  "license": "Creative Commons Attribution-ShareAlike 4.0",
+  "url": "https://owasp.org/www-project-application-security-verification-standard/",
+  "controls": [
+    {
+      "id": "V2.1",
+      "category": "Authentication",
+      "summary": "Verify that authentication is performed for protected functions.",
+      "evidence": ["Zero open critical findings in family auth-missing on the current scan."],
+      "mapsTo": ["family:auth-missing"]
+    },
+    {
+      "id": "V2.7",
+      "category": "Authentication",
+      "summary": "Verify that MFA / secondary authentication is used for high-value operations.",
+      "evidence": ["aws-no-mfa-condition zero findings (if AWS in scope)."],
+      "mapsTo": ["family:aws-no-mfa"]
+    },
+    {
+      "id": "V4.1",
+      "category": "Access Control",
+      "summary": "Verify that authorization is enforced for every resource access.",
+      "evidence": ["Zero idor / authz findings."],
+      "mapsTo": ["family:idor", "family:authz"]
+    },
+    {
+      "id": "V5.1",
+      "category": "Input Validation",
+      "summary": "Verify input validation for type, length, and content.",
+      "evidence": ["Zero open critical findings in sqli/xss/command-injection/ldap-injection/xpath-injection."],
+      "mapsTo": ["family:sqli", "family:xss", "family:command-injection", "family:ldap-injection", "family:xpath-injection", "family:nosql-injection"]
+    },
+    {
+      "id": "V6.1",
+      "category": "Cryptography",
+      "summary": "Verify use of strong cryptography per a documented policy.",
+      "evidence": ["Zero open findings in crypto-weak-cipher / crypto-weak-hash / crypto-ecb / crypto-static-iv."],
+      "mapsTo": ["family:crypto-weak-cipher", "family:crypto-weak-hash", "family:crypto-ecb", "family:crypto-static-iv", "family:crypto-kdf-weak"]
+    },
+    {
+      "id": "V6.2",
+      "category": "Cryptography",
+      "summary": "Verify all transit data uses TLS ≥ 1.2.",
+      "evidence": ["Zero findings in crypto-tls-version / crypto-tls-no-verify."],
+      "mapsTo": ["family:crypto-tls-version", "family:crypto-tls-no-verify"]
+    },
+    {
+      "id": "V7.1",
+      "category": "Error Handling & Logging",
+      "summary": "Verify that error handling does not disclose sensitive information.",
+      "evidence": ["No findings in family data-exposure."],
+      "mapsTo": ["family:data-exposure"]
+    },
+    {
+      "id": "V8.1",
+      "category": "Data Protection",
+      "summary": "Verify that personal data is protected at rest and in transit.",
+      "evidence": ["DPIA artifact at .agentic-security/dpia.md.", "Zero pii-exposure findings."],
+      "mapsTo": ["family:pii-exposure", "family:training-data-pii"]
+    },
+    {
+      "id": "V10.1",
+      "category": "Malicious Code",
+      "summary": "Verify the application does not include known-malicious or compromised dependencies.",
+      "evidence": [".agentic-security/sbom-history snapshots clean.", "No dependency-confusion or dependency-drift findings."],
+      "mapsTo": ["family:vulnerable-dependency", "family:dependency-confusion", "family:dependency-drift"]
+    },
+    {
+      "id": "V14.1",
+      "category": "Configuration",
+      "summary": "Verify that build, deployment, and configuration are secure.",
+      "evidence": ["No findings in family iam-overpermissive / k8s-rbac-cluster-admin / k8s-pod-security-privileged."],
+      "mapsTo": ["family:iam-overpermissive", "family:k8s-rbac-cluster-admin", "family:k8s-pod-security-privileged"]
+    }
+  ]
+}

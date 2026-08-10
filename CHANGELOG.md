@@ -9,6 +9,81 @@
 > make the history less accurate, not more.
 
 
+## 0.136.0 — NIST Privacy Framework 1.1, and the frameworks that never shipped
+
+### A privacy compliance scan that says what it did not check
+
+All 104 PF 1.1 controls, assessed on every scan, artifacts at
+`.agentic-security/privacy-framework.{json,md}`. Each gap is emitted as an
+ordinary finding (`family: privacy-compliance`, `CWE-359`) carrying an actionable
+remediation, so `/fix` handles it like anything else.
+
+The design turns on one column in NIST's own workbook. PF 1.1 rates each control
+for code-testability — **23 yes, 33 partial, 48 no** — and that rating says a
+control *could* be assessed from source, not that this engine assesses it.
+Collapsing the two is how a privacy report marks "the organizational mission is
+communicated" as PASSED because no rule fired against it, and someone hands that
+to an auditor. So every control lands in exactly one stated bucket:
+
+| Bucket | Meaning |
+|---|---|
+| gap | mapped to an engine signal, and that signal is failing — the only bucket that emits a finding |
+| not assessed | NIST rates it code-testable, this engine has no signal — named, never a pass |
+| manual | NIST rates it not code-testable — governance, outside any scanner's reach |
+| satisfied | mapped, and the signal is clean |
+
+Measured on a live fixture: 9 gaps, 20 satisfied, 27 not assessed, 48 manual.
+The satisfied rate is reported over the **29 assessed** controls, never over 104.
+
+A **vacuous-satisfaction guard** was added after the module's own test caught it:
+a `family:`-mapped control clears when no findings of that family are open, which
+is equally true of a scan that read zero files. Pointing the tool at an empty
+directory was reporting privacy controls as satisfied on the strength of having
+looked at nothing. Now every mapped control degrades to *not assessed* and the
+summary says so.
+
+Findings are opt-in (`AGENTIC_SECURITY_PRIVACY_FRAMEWORK=1`). The assessment
+always runs and persists; appending findings by default would change every
+severity count and gate verdict downstream, and a compliance opinion should not
+silently become someone's build failure.
+
+### A real `compliance` subcommand
+
+```
+agentic-security compliance [--gap] [--list] [--walkthrough <id>]
+                            [--format cli|json|md] [--fail-on gap]
+```
+
+`/compliance --privacy` was documented as a mode with no binary behind it. It
+reads `last-scan.json` rather than re-scanning — a compliance answer is a
+statement about a scan that happened. With no scan to read it exits **2** rather
+than assessing an empty project. Exit codes: 0 report produced, 1 only with
+`--fail-on gap` and a failing control, 2 nothing to assess.
+
+### Every bundled framework had been invisible from the published artifact
+
+Running the new subcommand from the shipped bundle printed nothing and exited 0.
+`auditor-walkthrough` resolves its data directory from `import.meta.url` — inside
+the bundle that is `dist/`, and `dist/compliance-frameworks/` never existed
+because the build only emitted the `.mjs`. `listFrameworks` catches the readdir
+failure and returns `[]`.
+
+So GDPR, ASVS, NIST AI 600-1 — all nine — worked perfectly from source and were
+**silently absent from the npm package**. Nothing caught it because every test
+ran against `src/`. The build now copies the data next to the bundle, the data is
+tracked in git for the same reason the bundle is, and a test drives the BUNDLE so
+it cannot regress.
+
+Twice in this release, testing the shipped artifact rather than the source found
+something the whole suite was blind to.
+
+### Also
+
+Removed all remaining PRD documents, repairing 18 files that referenced them.
+`bench/proof-corpus`'s section-level citations (parse-coverage rule, acceptance
+criterion 2, criterion 4, the disclosure boundary) are now stated inline and
+owned by the files that depend on them — the rationale outlived the document.
+
 ## 0.135.0 — a scan stops modifying what it scans, and the benchmark stops flattering
 
 Two findings, one of which reverses something this project previously reported.
