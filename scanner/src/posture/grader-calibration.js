@@ -26,18 +26,17 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const TRIAGE_FILE = '.agentic-security/triage-feedback.json';
-const SCAN_FILE   = '.agentic-security/last-scan.json';
 
+import { statePath } from './state-dir.js';
 function _loadTriageFeedback(scanRoot) {
-  const fp = path.join(scanRoot, TRIAGE_FILE);
+  const fp = statePath(scanRoot, 'triage-feedback.json');
   if (!fs.existsSync(fp)) return [];
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')).entries || []; }
   catch { return []; }
 }
 
 function _loadScanVerdicts(scanRoot) {
-  const fp = path.join(scanRoot, SCAN_FILE);
+  const fp = statePath(scanRoot, 'last-scan.json');
   if (!fs.existsSync(fp)) return [];
   try {
     const scan = JSON.parse(fs.readFileSync(fp, 'utf8'));

@@ -13,7 +13,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const STATE = '.agentic-security';
+
+import { statePath } from './state-dir.js';
 const HISTORY_FILE = 'fix-history/log.json';
 
 // Family base estimates (hours). Tuned from typical patch shapes.
@@ -50,7 +51,7 @@ const FAMILY_BASE_HOURS = {
 };
 
 function _loadFixHistory(scanRoot) {
-  const fp = path.join(scanRoot, STATE, HISTORY_FILE);
+  const fp = statePath(scanRoot, HISTORY_FILE);
   if (!fs.existsSync(fp)) return [];
   try {
     const arr = JSON.parse(fs.readFileSync(fp, 'utf8'));

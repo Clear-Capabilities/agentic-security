@@ -27,7 +27,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const CANDIDATE_DIGEST = '.agentic-security/network-policy.json';
+
+import { statePath } from './state-dir.js';
 const K8S_DIRS = ['k8s', 'infra/k8s', 'deploy/k8s', 'kubernetes', 'manifests'];
 
 const INTERNAL_CIDRS = [
@@ -81,7 +82,7 @@ function parseKubeManifests(scanRoot) {
 
 export function loadNetworkPosture(scanRoot) {
   const root = scanRoot || process.cwd();
-  const digestPath = path.join(root, CANDIDATE_DIGEST);
+  const digestPath = statePath(root, 'network-policy.json');
   if (fs.existsSync(digestPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(digestPath, 'utf8'));

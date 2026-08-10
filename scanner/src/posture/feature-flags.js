@@ -21,6 +21,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 const FLAG_PATTERNS = [
   // LaunchDarkly
   [/\bldClient\.variation\s*\(\s*['"`]([^'"`]+)['"`]/g, 'launchdarkly'],
@@ -44,8 +45,8 @@ const FLAG_PATTERNS = [
 
 function loadRollouts(scanRoot) {
   const candidates = [
-    '.agentic-security/feature-flag-rollouts.json',
-    '.agentic-security/feature-flags.json',
+    'feature-flag-rollouts.json',
+    'feature-flags.json',
   ];
   for (const rel of candidates) {
     const fp = path.join(scanRoot || process.cwd(), rel);

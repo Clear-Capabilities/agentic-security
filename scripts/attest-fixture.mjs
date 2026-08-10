@@ -39,6 +39,13 @@ const { runScan } = await import(path.join(REPO, 'scanner', 'src', 'runScan.js')
 const { normalizeFindings } = await import(path.join(REPO, 'scanner', 'src', 'report', 'index.js'));
 const { computeRunAttestation } = await import(path.join(REPO, 'scanner', 'src', 'posture', 'attestation.js'));
 
+// STATE_SEAM_COMPLETION_PRD M3 — must run BEFORE the first scan. An earlier
+// revision inserted this after the last top-level `const`, which in this file
+// is the line that performs the scan — so it ran too late and the fixture was
+// still littered. Placement, not presence, is what mattered.
+const { disableStateWrites } = await import('../bench/_lib/tree-integrity.mjs');
+await disableStateWrites();
+
 // TWO fixtures, deliberately. The first version of this gate attested only the
 // dependency-free JS fixture, whose findings come entirely from regex and
 // structural detectors — the layer that essentially cannot vary between
@@ -102,6 +109,7 @@ for (const f of FIXTURES) {
 }
 
 const findings = await attestFixture(FIXTURES[0]);
+
 
 const att = computeRunAttestation({
   findings,

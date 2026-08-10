@@ -23,8 +23,7 @@ import * as fs from 'node:fs/promises';
 import * as fsSync from 'node:fs';
 import * as path from 'node:path';
 
-import { stateWritesEnabled } from './state-dir.js';
-const STATE = '.agentic-security';
+import { stateDir, statePath, stateWritesEnabled } from './state-dir.js';
 const STATUS_MD   = 'watch-status.md';
 const STATUS_JSON = 'watch-status.json';
 const DEBOUNCE_MS = 350;
@@ -86,7 +85,7 @@ export function renderStatusLine(delta) {
  * Persist watch-status.{md,json}. Cheap atomic write (write tmp, rename).
  */
 export function persistStatus(scanRoot, delta) {
-  const dir = path.join(scanRoot, STATE);
+  const dir = stateDir(scanRoot);
   if (!stateWritesEnabled()) return;
   try { fsSync.mkdirSync(dir, { recursive: true }); } catch {}
   const status = {
@@ -124,7 +123,7 @@ export function persistStatus(scanRoot, delta) {
  * Read the latest watch-status (returns null if none).
  */
 export function readStatus(scanRoot) {
-  return _readJsonSafe(path.join(scanRoot, STATE, STATUS_JSON));
+  return _readJsonSafe(statePath(scanRoot, STATUS_JSON));
 }
 
 /**

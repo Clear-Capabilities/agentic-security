@@ -35,6 +35,13 @@ const { runFleet, renderFleetHtml, renderFleetSummary } =
   await import(path.join(REPO, 'scanner', 'src', 'posture', 'fleet.js'));
 const { runScan } = await import(path.join(REPO, 'scanner', 'src', 'runScan.js'));
 
+// STATE_SEAM_COMPLETION_PRD M3 — placed immediately after the runScan import,
+// BEFORE anything can scan. Inserting it after the last top-level statement
+// (the first attempt) put it after the scan in attest-fixture.mjs, so the
+// fixture was still littered. Placement, not presence, is what matters.
+const { disableStateWrites } = await import('../bench/_lib/tree-integrity.mjs');
+await disableStateWrites();
+
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`);
   return i !== -1 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--')
@@ -123,6 +130,7 @@ if (res.rollup.failed > 0) {
 }
 
 const failOn = (arg('fail-on') || '').toLowerCase();
+
 if (failOn) {
   const order = ['info', 'low', 'medium', 'high', 'critical'];
   const idx = order.indexOf(failOn);

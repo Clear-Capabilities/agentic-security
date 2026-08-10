@@ -36,11 +36,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 const CANDIDATE_PATHS = [
-  '.agentic-security/waf-rules.json',
-  '.agentic-security/waf-rules.yml',
-  '.agentic-security/waf-rules.yaml',
-  '.agentic-security/waf-rules.conf',
+  'waf-rules.json',
+  'waf-rules.yml',
+  'waf-rules.yaml',
+  'waf-rules.conf',
   'waf/rules.json',
   'cloudflare-rules.json',
   'aws-waf.json',
@@ -134,7 +135,7 @@ function parseScalar(s) {
 export function loadWafRules(scanRoot) {
   const root = scanRoot || process.cwd();
   for (const rel of CANDIDATE_PATHS) {
-    const fp = path.join(root, rel);
+    const fp = statePath(root, rel);
     if (!fs.existsSync(fp)) continue;
     let text;
     try { text = fs.readFileSync(fp, 'utf8'); } catch { continue; }

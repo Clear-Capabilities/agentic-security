@@ -15,7 +15,19 @@ import {
   snapshotTree, diffSnapshots, assertTreeUnchanged, purgeScanState, formatDiff,
 } from '../../bench/_lib/tree-integrity.mjs';
 
-const HERE_BENCH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'bench');
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const HERE_BENCH = path.join(REPO_ROOT, 'bench');
+
+/**
+ * Scanning harnesses that write ON PURPOSE, with reasons.
+ *
+ * `autopilot` applies fixes and `enroll-proven-finding` writes corpus entries —
+ * mutation IS the job in both cases, and they run against a project the user
+ * explicitly pointed them at.
+ */
+const SCANNERS_THAT_WRITE_BY_DESIGN = new Set([
+  'scripts/autopilot.mjs', 'scripts/enroll-proven-finding.mjs',
+]);
 
 async function tmpTree() {
   const d = await fsp.mkdtemp(path.join(os.tmpdir(), 'tree-integrity-'));
@@ -129,19 +141,31 @@ test('no bench runner can scan without disabling state writes', () => {
   //
   // Scoped to runners that actually SCAN. A runner that never calls runScan
   // cannot litter, and demanding the call from it would be cargo cult.
-  const benchDir = path.resolve(HERE_BENCH);
-  const offenders = [];
-  for (const d of fs.readdirSync(benchDir, { withFileTypes: true })) {
+  // bench/*/ AND scripts/. The first sweep covered only bench/, and six
+  // scanning harnesses under scripts/ were still writing .agentic-security/
+  // into fixture trees — found by looking for stray directories after a clean
+  // run, not by the guard, which is why the guard now covers them.
+  const files = [];
+  for (const d of fs.readdirSync(HERE_BENCH, { withFileTypes: true })) {
     if (!d.isDirectory() || d.name === '_lib') continue;
-    for (const f of fs.readdirSync(path.join(benchDir, d.name))) {
-      if (!/\.(mjs|js)$/.test(f)) continue;
-      const rel = `${d.name}/${f}`;
+    for (const f of fs.readdirSync(path.join(HERE_BENCH, d.name))) {
+      if (/\.(mjs|js)$/.test(f)) files.push(['bench', `${d.name}/${f}`, path.join(HERE_BENCH, d.name, f)]);
+    }
+  }
+  for (const f of fs.readdirSync(path.join(REPO_ROOT, 'scripts'))) {
+    if (/\.(mjs|js)$/.test(f)) files.push(['scripts', `scripts/${f}`, path.join(REPO_ROOT, 'scripts', f)]);
+  }
+
+  const offenders = [];
+  {
+    for (const [, rel, abs] of files) {
+      if (SCANNERS_THAT_WRITE_BY_DESIGN.has(rel)) continue;
       // Comments stripped FIRST. Without it, a commented-out call still reads
       // as wired — the guard's own negative case proved that, and it is the
       // third time comment-blindness has defeated a guard in this repository
       // (the state-seam ledger guard hit it twice). Line comments before block
       // comments, for the reason documented in test/no-stray-state.test.js.
-      const src = fs.readFileSync(path.join(benchDir, d.name, f), 'utf8')
+      const src = fs.readFileSync(abs, 'utf8')
         .replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/\/\*[\s\S]*?\*\//g, '');
       if (!/\brunScan\b/.test(src)) continue;          // does not scan — cannot litter
       // Must CALL it, not merely import it. An earlier version of this guard

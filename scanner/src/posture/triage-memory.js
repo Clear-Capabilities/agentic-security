@@ -21,12 +21,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { stateWritesEnabled } from './state-dir.js';
-const STATE_DIR = '.agentic-security';
+import { stateDir, stateWritesEnabled } from './state-dir.js';
 const MEMORY_FILE = 'triage-memory.jsonl';
 const AGENTS_FILE = 'AGENTS.md';
 
-function _stateDir(scanRoot) { return path.join(scanRoot, STATE_DIR); }
+function _stateDir(scanRoot) { return stateDir(scanRoot); }
 function _memPath(scanRoot)  { return path.join(_stateDir(scanRoot), MEMORY_FILE); }
 function _agentsPath(scanRoot) { return path.join(_stateDir(scanRoot), AGENTS_FILE); }
 

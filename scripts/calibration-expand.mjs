@@ -19,6 +19,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { disableStateWrites } from '../bench/_lib/tree-integrity.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const SEED_PATH = path.join(ROOT, 'scanner/src/posture/calibration-seed.json');
@@ -100,6 +101,10 @@ function mergeSeed(existingSeed, newCounts) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a harness that scans must not write into
+  // what it scans. These scripts were outside bench/ and so outside the first
+  // sweep; they were still creating .agentic-security/ in fixture trees.
+  await disableStateWrites();
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const doOwasp = args.includes('--owasp') || args.length === 0;

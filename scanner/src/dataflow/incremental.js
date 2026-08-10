@@ -31,8 +31,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 
-import { stateWritesEnabled } from '../posture/state-dir.js';
-const STATE_DIR = '.agentic-security/incremental';
+import { statePath, stateWritesEnabled } from '../posture/state-dir.js';
+
 const FILES_PATH = 'files.json';
 const SUMMARIES_PATH = 'summaries.json';
 const VERSION_PATH = 'version.json';
@@ -45,7 +45,7 @@ export function hashFileContent(stripped) {
 
 /** Read the persisted state. Returns a fresh empty state on any error. */
 export function readIncrementalState(projectRoot) {
-  const dir = path.join(projectRoot, STATE_DIR);
+  const dir = statePath(projectRoot, 'incremental');
   try {
     const versionFp = path.join(dir, VERSION_PATH);
     if (!fs.existsSync(versionFp)) return _emptyState();
@@ -198,7 +198,7 @@ export function serializeSummaries(summaryCache) {
  */
 export function commitIncrementalState(projectRoot, state, currentVersion) {
   if (!projectRoot) return false;
-  const dir = path.join(projectRoot, STATE_DIR);
+  const dir = statePath(projectRoot, 'incremental');
   try {
     if (!stateWritesEnabled()) return;
   fs.mkdirSync(dir, { recursive: true });
@@ -217,7 +217,7 @@ export function commitIncrementalState(projectRoot, state, currentVersion) {
 
 /** Drop persisted state — used when a version mismatch is detected. */
 export function dropIncrementalState(projectRoot) {
-  const dir = path.join(projectRoot, STATE_DIR);
+  const dir = statePath(projectRoot, 'incremental');
   try {
     if (!fs.existsSync(dir)) return true;
     for (const fn of [VERSION_PATH, FILES_PATH, SUMMARIES_PATH]) {

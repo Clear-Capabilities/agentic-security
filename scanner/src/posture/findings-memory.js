@@ -15,10 +15,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const STATE = '.agentic-security';
 
+import { statePath } from './state-dir.js';
 function _read(scanRoot, name) {
-  try { return fs.readFileSync(path.join(scanRoot, STATE, name), 'utf8'); } catch { return null; }
+  try { return fs.readFileSync(statePath(scanRoot, name), 'utf8'); } catch { return null; }
 }
 
 function _readJson(scanRoot, name) {
@@ -99,7 +99,7 @@ export function queryFindingsMemory(scanRoot, query) {
 
   // 3. Scan history.
   try {
-    const histDir = path.join(scanRoot, STATE, 'scan-history');
+    const histDir = statePath(scanRoot, 'scan-history');
     if (fs.existsSync(histDir)) {
       const files = fs.readdirSync(histDir).filter(f => f.endsWith('.json')).slice(-10);
       for (const f of files) {

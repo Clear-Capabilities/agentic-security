@@ -26,9 +26,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 const CANDIDATE_PATHS = [
-  '.agentic-security/telemetry.json',
-  '.agentic-security/prod-telemetry.json',
+  'telemetry.json',
+  'prod-telemetry.json',
 ];
 
 const HOT_THRESHOLD = 1000;     // requests / window — promotes to hot
@@ -37,7 +38,7 @@ const COLD_THRESHOLD = 0;       // exactly zero requests → cold
 export function loadTelemetry(scanRoot) {
   const root = scanRoot || process.cwd();
   for (const rel of CANDIDATE_PATHS) {
-    const fp = path.join(root, rel);
+    const fp = statePath(root, rel);
     if (!fs.existsSync(fp)) continue;
     try {
       const data = JSON.parse(fs.readFileSync(fp, 'utf8'));

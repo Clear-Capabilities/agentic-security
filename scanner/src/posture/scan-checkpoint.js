@@ -44,6 +44,14 @@ import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { stateWritesEnabled } from './state-dir.js';
+
+// DELIBERATELY NOT routed through statePath(). `resolveProjectRoot()` falls
+// back to walking upward from process.cwd() when the given root does not exist
+// on disk, so `checkpointPath('/some/root')` resolved into the SCANNER'S OWN
+// SOURCE TREE — caught by the test that asserts a checkpoint is never written
+// there. A checkpoint must land in the root it was handed or nowhere; silently
+// relocating it into another directory is the exact failure this line of work
+// exists to prevent. The read-only switch above is still honoured.
 const STATE_DIR = '.agentic-security';
 const FILE_NAME = 'scan-checkpoint.jsonl';
 const FORMAT = 'agentic-security-scan-checkpoint/1';

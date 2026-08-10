@@ -15,11 +15,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { stateWritesEnabled } from './state-dir.js';
-const STATE = '.agentic-security';
+import { statePath, stateWritesEnabled } from './state-dir.js';
 
 function _readJson(scanRoot, name) {
-  try { return JSON.parse(fs.readFileSync(path.join(scanRoot, STATE, name), 'utf8')); } catch { return null; }
+  try { return JSON.parse(fs.readFileSync(statePath(scanRoot, name), 'utf8')); } catch { return null; }
 }
 
 /**
@@ -51,7 +50,7 @@ export function diffValidatorRuns(runA, runB) {
  * Persist a model-rescan report. Returns the file path.
  */
 export function persistRescanReport(scanRoot, from, to, changed) {
-  const dir = path.join(scanRoot, STATE, 'model-rescan');
+  const dir = statePath(scanRoot, 'model-rescan');
   if (!stateWritesEnabled()) return null;
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
   const safe = (s) => String(s || 'unknown').replace(/[^\w.-]/g, '-');

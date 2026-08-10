@@ -21,6 +21,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 const DOC_PATHS = [
   'CLAUDE.md',
   'docs/THREAT-MODEL.md',
@@ -31,7 +32,16 @@ const DOC_PATHS = [
 ];
 
 function _readDoc(scanRoot, rel) {
-  try { return fs.readFileSync(path.join(scanRoot, rel), 'utf8'); } catch { return ''; }
+  // DOC_PATHS is a MIXED list: most entries are ordinary repository paths
+  // (CLAUDE.md, docs/THREAT-MODEL.md) and exactly one lives under the state
+  // directory. Routing the whole list through statePath() made every document
+  // resolve to `.agentic-security/<name>` and broke threat-model loading
+  // entirely — five tests caught it. Only the state entry uses the seam.
+  const STATE_PREFIX = '.agentic-security/';
+  const fp = rel.startsWith(STATE_PREFIX)
+    ? statePath(scanRoot, rel.slice(STATE_PREFIX.length))
+    : path.join(scanRoot, rel);
+  try { return fs.readFileSync(fp, 'utf8'); } catch { return ''; }
 }
 
 function _allDocs(scanRoot) {

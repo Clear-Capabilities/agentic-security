@@ -34,9 +34,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { isSafeStateDir, stateWritesEnabled } from './state-dir.js';
+import { isSafeStateDir, stateDir, statePath, stateWritesEnabled } from './state-dir.js';
 
-const STATE_DIR = '.agentic-security';
 const LOG_FILE = 'fix-metrics.jsonl';
 
 // Below this many samples a percentile is an artifact of the sample, not a
@@ -49,7 +48,7 @@ const RELIABLE_N = 10;
 export const FIX_STAGES = Object.freeze(['rescan', 'lint', 'tests', 'honesty', 'poc']);
 
 function _logPath(scanRoot) {
-  return path.join(scanRoot, STATE_DIR, LOG_FILE);
+  return statePath(scanRoot, LOG_FILE);
 }
 
 /**
@@ -61,7 +60,7 @@ function _logPath(scanRoot) {
 export function recordFixAttempt(scanRoot, record) {
   if (!scanRoot || !record || typeof record !== 'object') return false;
   try {
-    const dir = path.join(scanRoot, STATE_DIR);
+    const dir = stateDir(scanRoot);
     if (!isSafeStateDir(dir)) return false;
     if (!stateWritesEnabled()) return;
   fs.mkdirSync(dir, { recursive: true });

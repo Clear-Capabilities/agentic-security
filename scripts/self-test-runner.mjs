@@ -16,6 +16,7 @@ import * as path from 'node:path';
 import { mutateSnippet, summarizeSelfTest } from '../scanner/src/posture/adversarial-self-test.js';
 import { runScan } from '../scanner/src/runScan.js';
 
+import { disableStateWrites } from '../bench/_lib/tree-integrity.mjs';
 function parseArgs(argv) {
   const opts = { fixtures: 'scanner/test/fixtures', output: 'self-test-results.json' };
   for (let i = 2; i < argv.length; i++) {
@@ -79,6 +80,10 @@ async function scanMutation(family, mutationCode) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a harness that scans must not write into
+  // what it scans. These scripts were outside bench/ and so outside the first
+  // sweep; they were still creating .agentic-security/ in fixture trees.
+  await disableStateWrites();
   const opts = parseArgs(process.argv);
   const root = path.resolve(opts.fixtures);
   const fixtures = discoverFixtures(root);

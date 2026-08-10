@@ -6,6 +6,15 @@ import { buildProjectIR } from '../src/ir/index.js';
 import { functionRecord } from '../src/ir/callgraph.js';
 import { runTaintEngine } from '../src/dataflow/engine.js';
 import { runScan } from '../src/runScan.js';
+import { setStateWritesEnabled } from '../src/posture/state-dir.js';
+
+// This suite scans fixture directories that live IN THE REPOSITORY. Without
+// this, every run left `.agentic-security/` inside
+// bench/engine-reconnect/fixtures/{js,py,cpp} — three directories that showed
+// up in a stray-state audit long after the bench runners themselves had been
+// fixed. A test that scans a tracked tree has the same obligation a benchmark
+// does: observe it, do not modify it.
+setStateWritesEnabled(false);
 import * as path from 'node:path';
 
 const FIXTURES = path.resolve('../bench/engine-reconnect/fixtures');

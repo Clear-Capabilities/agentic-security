@@ -32,10 +32,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { stateWritesEnabled } from './state-dir.js';
+import { statePath, stateWritesEnabled } from './state-dir.js';
 const BUNDLED_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), 'compliance-frameworks');
-const STATE = '.agentic-security';
-
 function _readJson(fp) {
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
 }
@@ -53,7 +51,7 @@ export function listFrameworks(scanRoot) {
     }
   } catch {}
   if (scanRoot) {
-    const projDir = path.join(scanRoot, STATE, 'compliance');
+    const projDir = statePath(scanRoot, 'compliance');
     if (fs.existsSync(projDir)) {
       try {
         for (const sub of fs.readdirSync(projDir)) {
@@ -74,7 +72,7 @@ export function listFrameworks(scanRoot) {
  */
 export function loadFramework(scanRoot, id) {
   if (scanRoot) {
-    const projFp = path.join(scanRoot, STATE, 'compliance', id, 'controls.json');
+    const projFp = statePath(scanRoot, 'compliance', id, 'controls.json');
     if (fs.existsSync(projFp)) return _readJson(projFp);
   }
   for (const fn of fs.readdirSync(BUNDLED_DIR)) {
@@ -165,11 +163,11 @@ export function evaluateFramework(scanRoot, fw, scan) {
         // A '.../' sentinel marks a source-relative artifact (project source,
         // e.g. a hook or agent file) — resolve it against the scan root itself.
         // Everything else is a runtime artifact under the STATE dir. Without
-        // this, `path.join(scanRoot, STATE, '.../x')` never resolves and the
+        // this, `statePath(scanRoot, '.../x')` never resolves and the
         // control falsely reads "not present" for every project.
         const resolved = !target ? null
           : target.startsWith('.../') ? path.join(scanRoot, target.slice(4))
-          : path.join(scanRoot, STATE, target);
+          : statePath(scanRoot, target);
         const label = target ? target.replace(/^\.\.\.\//, '') : '(unmapped)';
         if (resolved && fs.existsSync(resolved)) {
           obs.push(`✓ ${mod}: ${label} present.`);
@@ -252,7 +250,7 @@ export function renderWalkthrough(fw, evaluation, opts = {}) {
  * Persist the walkthrough at .agentic-security/auditor-walkthroughs/<id>.md
  */
 export function persistWalkthrough(scanRoot, fw, body) {
-  const dir = path.join(scanRoot, STATE, 'auditor-walkthroughs');
+  const dir = statePath(scanRoot, 'auditor-walkthroughs');
   if (!stateWritesEnabled()) return null;
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
   const fp = path.join(dir, `${fw.id}.md`);

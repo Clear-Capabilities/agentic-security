@@ -27,6 +27,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 const KNOWN_GOOD = new Set([
   'session+csrf', 'session+admin', 'session+claim', 'session',
   'jwt+verify', 'oauth+pkce', 'mtls',
@@ -41,15 +42,15 @@ const FAMILIES_GATEABLE_BY_AUTH = new Set([
 ]);
 
 const CANDIDATE_PATHS = [
-  '.agentic-security/auth-posture.json',
-  '.agentic-security/auth-posture.yml',
-  '.agentic-security/auth-posture.yaml',
+  'auth-posture.json',
+  'auth-posture.yml',
+  'auth-posture.yaml',
 ];
 
 export function loadAuthPosture(scanRoot) {
   const root = scanRoot || process.cwd();
   for (const rel of CANDIDATE_PATHS) {
-    const fp = path.join(root, rel);
+    const fp = statePath(root, rel);
     if (!fs.existsSync(fp)) continue;
     try {
       const text = fs.readFileSync(fp, 'utf8');

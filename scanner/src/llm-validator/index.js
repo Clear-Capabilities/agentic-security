@@ -64,7 +64,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
-import { statePath, ensureStateDir, safeWriteState } from '../posture/state-dir.js';
+import { ensureStateDir, safeWriteState, statePath } from '../posture/state-dir.js';
 import { redactSecrets } from './redact.js';
 import { signLastScan } from '../posture/integrity.js';
 
@@ -84,7 +84,6 @@ const MAX_OUTPUT_TOKENS = 512;
 let _localPresetRefusal = null;
 
 export const PROMPT_VERSION = 'v2.0-hardened';
-const CACHE_DIR = '.agentic-security/llm-cache';
 
 // System preamble — embeds a per-request challenge token the model MUST
 // echo, and a strict instruction-priority frame. {{challenge}} and {{nonce}}

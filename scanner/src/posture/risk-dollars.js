@@ -23,8 +23,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const STATE = '.agentic-security';
 
+import { statePath } from './state-dir.js';
 // Base rates per family (annual probability of at-least-one exploit given
 // an exposed instance). Rough industry estimates; tune via config.
 const FAMILY_BASE_PROB = {
@@ -79,7 +79,7 @@ const REACH_DISCOUNT = {
 };
 
 function _loadConfig(scanRoot) {
-  const fp = path.join(scanRoot, STATE, 'risk-config.yml');
+  const fp = statePath(scanRoot, 'risk-config.yml');
   if (!fs.existsSync(fp)) return null;
   try {
     const body = fs.readFileSync(fp, 'utf8');

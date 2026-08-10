@@ -20,6 +20,7 @@ import * as path from 'node:path';
 import { prepareFuzzCorpus, recordOutcome, summarize } from '../scanner/src/posture/detector-fuzz.js';
 import { runScan } from '../scanner/src/runScan.js';
 
+import { disableStateWrites } from '../bench/_lib/tree-integrity.mjs';
 function parseArgs(argv) {
   const opts = { fixtures: 'scanner/test/fixtures', threshold: 0.30, output: 'detector-fuzz-results.json' };
   for (let i = 2; i < argv.length; i++) {
@@ -80,6 +81,10 @@ async function scanMutationCode(family, code) {
 }
 
 async function main() {
+  // STATE_SEAM_COMPLETION_PRD M3 — a harness that scans must not write into
+  // what it scans. These scripts were outside bench/ and so outside the first
+  // sweep; they were still creating .agentic-security/ in fixture trees.
+  await disableStateWrites();
   const opts = parseArgs(process.argv);
   const fixtures = discoverFixtures(path.resolve(opts.fixtures));
   if (!fixtures.length) { process.stderr.write(`no fixtures under ${opts.fixtures}\n`); process.exit(2); }

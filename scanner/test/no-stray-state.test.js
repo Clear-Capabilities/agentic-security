@@ -1,4 +1,23 @@
-// State-write seam guard (NON_MUTATING_SCAN_PRD S2).
+// State-write seam guard.
+//
+// HISTORY, kept because the numbers are the argument. Two PRDs drove this work
+// (docs/NON_MUTATING_SCAN_PRD.md, then a completion PRD whose file was removed
+// once every workstream landed), so what they established lives here:
+//
+//   · 59 modules once built `.agentic-security` paths by hand against 5 that
+//     used the seam. The migration ledger below is now EMPTY.
+//   · A scan of a foreign tree wrote 10 files into it; it now writes none, in
+//     six different scan configurations.
+//   · The cve-replay corpus — behind the gate that runs on every push — held
+//     420 contaminated trees and ~20.8 MB of the engine's own output, growing
+//     by 420 files per run. It holds none.
+//   · The repository itself held 298 stray state directories, in docs/,
+//     commands/ and .github/workflows/, created by the self-scan harness.
+//
+// The recurring lesson, which is why these guards exist rather than a
+// convention: every one of those defects was invisible until something
+// asserted its absence, and `state-dir.js` — the correct fix — had existed the
+// whole time and was simply not used.
 //
 // WHY THIS EXISTS
 // ---------------
@@ -77,46 +96,61 @@ const DELIBERATELY_UNGUARDED = new Set([
   'bin/agentic-security-rule.js',
 ]);
 
+/**
+ * Occurrences that are NOT state-path construction, with reasons.
+ *
+ * The detector looks for a `.agentic-security` string literal. That is the
+ * right signal for "is this module building a state path by hand", and it also
+ * matches things that merely NAME the directory. Those are not migrations
+ * waiting to happen — routing them through the seam would be wrong, not late:
+ *
+ *  · src/engine.js                — `.agentic-security` inside IGNORE_DIRS is a
+ *      directory NAME in a skip-list, not a path being built.
+ *  · bin/agentic-security.js      — the remaining hits are console output, help
+ *      text, and prompt templates that TELL the user where state lives.
+ *  · posture/license-policy.js    — a finding's `file:` field, i.e. the location
+ *      shown to a human, not a path anything opens.
+ *  · posture/pr-augment.js        — likewise a `path:` field in emitted output.
+ *  · posture/rule-overrides.js    — prose inside a warning message.
+ *  · mcp/tools.js                 — the reserved-write denylist and the
+ *      scratchpad prefix are a security CONTROL over that directory; they are
+ *      compared against, never joined to a root.
+ *  · bin/agentic-security-rule.js — a confinement prefix check (`is this path
+ *      inside the state dir?`), same shape as above.
+ *  · posture/corpus-enroll.js     — locates state dirs in order to REMOVE them
+ *      while building a corpus entry.
+ *  · posture/scan-checkpoint.js   — documented in the module: statePath() falls
+ *      back to process.cwd() when the given root does not exist, which resolved
+ *      a checkpoint into the scanner's own source tree. Explicit join is the
+ *      safer construction here, and a test pins it.
+ *  · posture/threat-model-grounding.js — the prefix constant is the mechanism
+ *      that routes only the state entry of a MIXED path list through the seam.
+ *  · posture/agents-memory.js, discovery/memory.js, posture/verifier-target.js —
+ *      exported relative-path constants that document where the file lives and
+ *      are joined to a root by callers (including tests). The literal IS the
+ *      published location.
+ *
+ * This is NOT a second allowlist. Every entry is a place the string appears
+ * without a path being constructed, and the test below proves each one still
+ * exists so the list cannot rot into a dumping ground.
+ */
+const NOT_PATH_CONSTRUCTION = new Set([
+  'src/engine.js', 'bin/agentic-security.js', 'src/posture/license-policy.js',
+  'src/posture/pr-augment.js', 'src/posture/rule-overrides.js', 'src/mcp/tools.js',
+  'bin/agentic-security-rule.js', 'src/posture/corpus-enroll.js',
+  'src/posture/scan-checkpoint.js', 'src/posture/threat-model-grounding.js',
+  'src/posture/agents-memory.js', 'src/discovery/memory.js',
+  'src/posture/verifier-target.js',
+]);
+
 /** The seam itself, plus modules awaiting migration. NON-GROWING. */
 const ALLOWLIST = new Set([
   'src/posture/state-dir.js',       // the seam
-  // --- migration ledger, seeded 2026-08-09 with 59 modules; 51 remain ---
-  // 8 removed so far: 3 migrated to the seam (compliance-policy,
-  // license-attributions, pqc-migration-plan) and 5 that never violated at all —
-  // they only named `.agentic-security` in comments, and the original
-  // comment-blind detector counted prose as a violation.
-  // --- bin/, added when the guard was extended past src/ ---
-  // agentic-security.js: all three write sites now HONOUR the read-only switch
-  // (checked alongside the existing project-root refusal), but still build the
-  // path by hand rather than calling statePath(). Behaviour is correct; the
-  // seam is not yet the only route.
-  'bin/agentic-security.js',
-  // Not yet examined — these are subcommand entry points, not the scan path.
-  
-  'bin/agentic-security-rule.js',
-  
-  'src/dataflow/incremental.js', 'src/discovery/memory.js',
-  // engine.js: exploit-bundles.json now goes through the seam, but three read
-  // sites remain (custom rules, logic-claims.json) plus the dpia.md write.
-  'src/engine.js',
-  
-  'src/llm-validator/index.js', 'src/mcp/tools.js',
-  'src/posture/agents-memory.js', 'src/posture/auditor-walkthrough.js', 'src/posture/auth-posture-import.js',
-  'src/posture/corpus-enroll.js',
-  'src/posture/cve-alert-daemon.js', 
-  'src/posture/feature-flags.js',
-  'src/posture/findings-memory.js', 'src/posture/fix-metrics.js',
-  'src/posture/grader-calibration.js', 
-  'src/posture/learning.js',
-  'src/posture/license-policy.js', 'src/posture/model-rescan.js',
-  'src/posture/network-policy-import.js', 'src/posture/pr-augment.js',
-  'src/posture/risk-dollars.js', 'src/posture/rule-overrides.js',
-  'src/posture/ruleset-version.js',
-  
-  'src/posture/scan-checkpoint.js', 'src/posture/telemetry-ingest.js',
-  'src/posture/threat-model-grounding.js', 'src/posture/time-to-fix.js',
-  'src/posture/triage-memory.js', 'src/posture/verifier-target.js', 'src/posture/waf-ingest.js',
-  'src/posture/watch-mode.js', 
+  // --- migration ledger: seeded 2026-08-09 with 59 modules, now EMPTY ---
+  // Every module that built a state path by hand now routes through
+  // posture/state-dir.js. What remains under NOT_PATH_CONSTRUCTION above are
+  // occurrences where the string names the directory without constructing a
+  // path to it. Nothing goes back on this list.
 ]);
 
 /**
@@ -161,7 +195,7 @@ function offenders() {
 }
 
 test('no NEW module constructs a .agentic-security path outside the seam', () => {
-  const found = offenders().filter(f => !ALLOWLIST.has(f));
+  const found = offenders().filter(f => !ALLOWLIST.has(f) && !NOT_PATH_CONSTRUCTION.has(f));
   assert.deepEqual(found, [],
     'These modules build state paths directly instead of using posture/state-dir.js.\n' +
     'Route the write through stateDir()/statePath()/safeWriteState(), which enforce the\n' +
@@ -174,6 +208,12 @@ test('the allowlist is a shrinking ledger — it never lists a module that is al
   // migrated its entry MUST be removed, or the guard silently stops watching it.
   const current = new Set(offenders());
   const stale = [...ALLOWLIST].filter(f => f !== 'src/posture/state-dir.js' && !current.has(f));
+  // The same rule binds NOT_PATH_CONSTRUCTION: an entry whose literal is gone
+  // must be deleted, or the set silently stops covering a file it no longer
+  // describes.
+  const staleExempt = [...NOT_PATH_CONSTRUCTION].filter(f => !current.has(f));
+  assert.deepEqual(staleExempt, [],
+    'These NOT_PATH_CONSTRUCTION entries no longer contain the string at all — delete them.');
   assert.deepEqual(stale, [],
     'These allowlist entries no longer violate anything — delete them so the guard covers them again.');
 });
@@ -279,8 +319,11 @@ test('a ledger module that writes state either honours --no-state or is a declar
   // reading the files found ~30).
   const WRITE = /\b(writeFileSync|writeFile|appendFileSync|appendFile|createWriteStream|mkdirSync|mkdir|rmSync|renameSync|copyFileSync|unlinkSync|cpSync)\s*\(/;
   const SEAM = /stateWritesEnabled|safeWriteState|ensureStateDir/;
+  // Iterates every module that names the state directory — NOT the ledger.
+  // The ledger is now empty, and a guard that walks an empty list checks
+  // nothing; emptying a list must never be a way to switch a control off.
   const gaps = [];
-  for (const rel of ALLOWLIST) {
+  for (const rel of offenders()) {
     if (rel === 'src/posture/state-dir.js' || DELIBERATELY_UNGUARDED.has(rel)) continue;
     const src = stripComments(fs.readFileSync(path.join(SCANNER, rel), 'utf8'));
     if (!WRITE.test(src)) continue;      // cannot write — nothing to guard

@@ -29,7 +29,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { stateWritesEnabled } from './state-dir.js';
+import { statePath, stateWritesEnabled } from './state-dir.js';
 const MEMORY_FILE = '.agentic-security/AGENTS.md';
 const ARCHIVE_FILE = '.agentic-security/AGENTS.md.archive';
 const MAX_BYTES = 20 * 1024;
@@ -37,8 +37,8 @@ const MAX_ENTRY_BYTES = 2 * 1024;
 const ARCHIVE_MAX_BYTES = 200 * 1024;
 const HEADER = '# AGENTS.md\n\nAgent-authored continual-learning notes. Each entry: timestamp + agent name + one short paragraph. New entries appended at the bottom; oldest entries rotate to AGENTS.md.archive when this file exceeds 20 KB.\n\n';
 
-function _resolve(scanRoot) { return path.join(scanRoot, MEMORY_FILE); }
-function _archivePath(scanRoot) { return path.join(scanRoot, ARCHIVE_FILE); }
+function _resolve(scanRoot) { return statePath(scanRoot, 'AGENTS.md'); }
+function _archivePath(scanRoot) { return statePath(scanRoot, 'AGENTS.md.archive'); }
 
 export function readAgentsMemory(scanRoot) {
   const fp = _resolve(scanRoot);

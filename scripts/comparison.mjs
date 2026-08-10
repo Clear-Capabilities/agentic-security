@@ -46,6 +46,13 @@ const CORPUS = path.join(REPO, 'bench', 'cve-replay');
 const { compareParticipants, renderComparison } =
   await import(path.join(REPO, 'scanner', 'src', 'posture', 'comparison.js'));
 const { runScan } = await import(path.join(REPO, 'scanner', 'src', 'runScan.js'));
+
+// STATE_SEAM_COMPLETION_PRD M3 — placed immediately after the runScan import,
+// BEFORE anything can scan. Inserting it after the last top-level statement
+// (the first attempt) put it after the scan in attest-fixture.mjs, so the
+// fixture was still littered. Placement, not presence, is what matters.
+const { disableStateWrites } = await import('../bench/_lib/tree-integrity.mjs');
+await disableStateWrites();
 const { normalizeFindings } = await import(path.join(REPO, 'scanner', 'src', 'report', 'index.js'));
 
 const VALUED = new Set(['tools', 'limit', 'tier', 'json', 'md', 'timeout']);
@@ -209,6 +216,7 @@ if (mdOut) {
   process.stderr.write(`wrote ${mdOut}\n`);
 }
 const jsonOut = arg('json');
+
 if (jsonOut) {
   fs.mkdirSync(path.dirname(path.resolve(jsonOut)), { recursive: true });
   fs.writeFileSync(jsonOut, JSON.stringify({ comparison: cmp, raw: collected }, null, 2));

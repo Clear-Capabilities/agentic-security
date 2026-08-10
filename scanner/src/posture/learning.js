@@ -22,12 +22,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { stateWritesEnabled } from './state-dir.js';
-const FILE = '.agentic-security/triage-feedback.json';
+import { statePath, stateWritesEnabled } from './state-dir.js';
 
 export function loadFeedback(scanRoot) {
   if (!scanRoot) return { entries: [] };
-  const fp = path.join(scanRoot, FILE);
+  const fp = statePath(scanRoot, 'triage-feedback.json');
   if (!fs.existsSync(fp)) return { entries: [] };
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')) || { entries: [] }; }
   catch { return { entries: [] }; }
@@ -35,7 +34,7 @@ export function loadFeedback(scanRoot) {
 
 export function saveFeedback(scanRoot, data) {
   if (!scanRoot) return;
-  const fp = path.join(scanRoot, FILE);
+  const fp = statePath(scanRoot, 'triage-feedback.json');
   if (!stateWritesEnabled()) return;
   fs.mkdirSync(path.dirname(fp), { recursive: true });
   fs.writeFileSync(fp, JSON.stringify(data, null, 2));
