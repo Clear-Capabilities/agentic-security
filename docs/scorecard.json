@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.134.0",
-    "bundleSha256": "c30ab141dd65e53a762c16c7683bfc3195b677107a838a83fcfae541f0fe5e0e",
-    "commit": "fb85213cebaacd931c2607fc7564787a57069fe5",
+    "engineVersion": "0.135.0",
+    "bundleSha256": "c545729dda0201d7fbc00ec188e039538631c7a2b92d52e4108b3ffe37363d87",
+    "commit": "e2364a203515b577701fd01b4c53e1d3b0a8c6a4",
     "worktreeClean": true,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-09T14:28:16.241Z"
+    "generatedAt": "2026-08-10T02:50:51.570Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -15,7 +15,7 @@
     "notGeneralRecall": true,
     "notGeneralFalsePositiveRate": true,
     "f1Emitted": false,
-    "f1OmissionReason": "no labelled real-world population is available to measure precision over, so any F1 would combine denominators that do not describe the same population"
+    "f1OmissionReason": "the curated corpus authors both its vulnerable and its fixed fixtures, so an F1 over it would measure fixture design, not accuracy; F1 over the labelled third-party population is reported separately from bench/independent/RESULT.json"
   },
   "corpus": {
     "measuredThisRun": true,
@@ -487,7 +487,7 @@
     "measuredThisRun": true,
     "targets": {
       "hooks": {
-        "total": 24,
+        "total": 25,
         "byFile": {
           "cache-invalidator-guard.js": 1,
           "conversation-context.js": 1,
@@ -496,14 +496,14 @@
           "model-cost-advisor.js": 2,
           "post-edit-scan.js": 2,
           "pre-bash-guard.js": 3,
-          "pre-edit-bodyguard.js": 4,
+          "pre-edit-bodyguard.js": 5,
           "session-start-self-check.js": 4,
           "session-stop-drift-check.js": 2,
           "session-welcome.js": 3
         }
       },
       "scanner/src": {
-        "total": 596,
+        "total": 604,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -514,6 +514,7 @@
           "dataflow/privacy-taint.js": 1,
           "dataflow/sanitizer-proof.js": 1,
           "dataflow/string-domain.js": 2,
+          "discovery/memory.js": 1,
           "history-scan.js": 2,
           "integrations/index.js": 11,
           "integrations/tickets.js": 8,
@@ -575,6 +576,7 @@
           "posture/deterministic-fix.js": 1,
           "posture/deterministic.js": 3,
           "posture/epss.js": 4,
+          "posture/evidence-bundle.js": 2,
           "posture/execution-proof.js": 1,
           "posture/exploitability-probability.js": 3,
           "posture/feature-flags.js": 3,
@@ -595,7 +597,6 @@
           "posture/integrity.js": 6,
           "posture/intent-context.js": 2,
           "posture/learning.js": 3,
-          "posture/license-attributions.js": 1,
           "posture/license-graph.js": 3,
           "posture/license-policy.js": 3,
           "posture/llm-redteam-prompts.js": 6,
@@ -607,7 +608,6 @@
           "posture/poc-generator.js": 3,
           "posture/poc-inprocess.js": 5,
           "posture/policy-gate.js": 4,
-          "posture/pqc-migration-plan.js": 1,
           "posture/pr-augment.js": 1,
           "posture/pre-incident-archaeology.js": 1,
           "posture/profile.js": 4,
@@ -654,13 +654,13 @@
           "runScan.js": 1,
           "sandbox/backend-namespace.js": 1,
           "sast/_secret-entropy.js": 1,
-          "sast/agent-untrusted-flow.js": 2,
+          "sast/agent-untrusted-flow.js": 4,
           "sast/authz.js": 2,
           "sast/cache-poisoning.js": 1,
-          "sast/claude-hook-injection.js": 1,
+          "sast/claude-hook-injection.js": 2,
           "sast/claude-md-prompt-injection.js": 7,
           "sast/claude-settings.js": 1,
-          "sast/client-side.js": 3,
+          "sast/client-side.js": 6,
           "sast/cloud-iam.js": 1,
           "sast/cpp-dataflow.js": 6,
           "sast/cpp.js": 4,
@@ -684,7 +684,7 @@
           "sast/juliet-shape.js": 1,
           "sast/k8s-admission.js": 1,
           "sast/laravel-hardening.js": 1,
-          "sast/llm-app.js": 7,
+          "sast/llm-app.js": 8,
           "sast/llm-cost-advisor.js": 1,
           "sast/llm-owasp.js": 13,
           "sast/logic.js": 5,
@@ -754,6 +754,95 @@
       "generatedAt": "2026-08-08",
       "total": 210,
       "passing": 210
+    },
+    "independent": {
+      "source": "bench/independent/RESULT.json",
+      "measuredAt": "2026-08-09",
+      "engineVersion": "0.135.0",
+      "population": {
+        "totalEntries": 110,
+        "scoredEntries": 110,
+        "unscored": 0,
+        "labelSources": [
+          "github-security-advisory"
+        ]
+      },
+      "overall": {
+        "tp": 14,
+        "fp": 14,
+        "fn": 96,
+        "tn": 96,
+        "precision": {
+          "n": 14,
+          "d": 28,
+          "value": 0.5
+        },
+        "recall": {
+          "n": 14,
+          "d": 110,
+          "value": 0.12727272727272726
+        },
+        "f1": 0.2028985507246377
+      },
+      "wide": {
+        "tp": 37,
+        "fp": 37,
+        "fn": 73,
+        "tn": 73,
+        "precision": {
+          "n": 37,
+          "d": 74,
+          "value": 0.5
+        },
+        "recall": {
+          "n": 37,
+          "d": 110,
+          "value": 0.33636363636363636
+        },
+        "f1": 0.4021739130434782,
+        "meaning": "same scans, advisory-file restriction OFF — diagnostic only, never the claim"
+      },
+      "byLanguage": {
+        "javascript": {
+          "entries": 18,
+          "recall": {
+            "n": 4,
+            "d": 18,
+            "value": 0.2222222222222222
+          },
+          "precision": {
+            "n": 4,
+            "d": 8,
+            "value": 0.5
+          }
+        },
+        "python": {
+          "entries": 57,
+          "recall": {
+            "n": 7,
+            "d": 57,
+            "value": 0.12280701754385964
+          },
+          "precision": {
+            "n": 7,
+            "d": 14,
+            "value": 0.5
+          }
+        },
+        "typescript": {
+          "entries": 35,
+          "recall": {
+            "n": 3,
+            "d": 35,
+            "value": 0.08571428571428572
+          },
+          "precision": {
+            "n": 3,
+            "d": 6,
+            "value": 0.5
+          }
+        }
+      }
     },
     "proofCorpus": {
       "source": "bench/proof-corpus/results/summary.json",

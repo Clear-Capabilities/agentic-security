@@ -9,13 +9,13 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.134.0 |
-| Bundle SHA-256 | `c30ab141dd65e53a762c16c7683bfc3195b677107a838a83fcfae541f0fe5e0e` |
-| Commit | `fb85213cebaacd931c2607fc7564787a57069fe5` |
+| Engine version | 0.135.0 |
+| Bundle SHA-256 | `c545729dda0201d7fbc00ec188e039538631c7a2b92d52e4108b3ffe37363d87` |
+| Commit | `e2364a203515b577701fd01b4c53e1d3b0a8c6a4` |
 | Worktree at measurement time | clean |
 | Node | v24.16.0 |
 | Corpus entries | 210 (210 scored) |
-| Generated (UTC) | 2026-08-09T14:28:16.241Z |
+| Generated (UTC) | 2026-08-10T02:50:51.570Z |
 
 ## What these numbers are, and what they are not
 
@@ -49,87 +49,6 @@ signal reported instead is the self-scan section below: exact finding
 counts on this repository's own non-fixture source, where every count is
 reviewed by hand and any movement is a real change. Publishing a number we
 cannot defend would cost more credibility than the number is worth.
-
-## Independent evaluation population
-
-The corpus below is a **regression net**, not an accuracy measurement — its
-fixtures and its labels are both written here, which is why its detection rate
-sits at the ceiling. `bench/independent/` is the other instrument: real upstream
-code at the commit where a vulnerability really existed, with the CWE assigned by
-a public advisory database rather than by this project.
-
-**Current measurement, 2026-08-09, n=40:**
-
-| | |
-| --- | --- |
-| Precision | 50.0% (18/36) |
-| Recall | **45.0% (18/40)** |
-| F1 | **0.474** |
-| Raw | TP=18 FP=18 FN=22 TN=22 |
-
-Against 100% on the curated corpus. **That gap is the most useful number in this
-document**, and publishing it is the point of the exercise.
-
-### How this figure has moved, and why
-
-The number changed twice, both times because the *measurement* was wrong rather
-than because the engine changed. Recording that here, because a benchmark whose
-history is invisible is a benchmark nobody can audit.
-
-| Population | Recall | F1 | What was wrong |
-| --- | --- | --- | --- |
-| n=12, changed files only | 16.7% | 0.250 | first attempt |
-| n=40, test files excluded | 12.5% | 0.200 | 4 of 12 entries had a **test file or `dist/` artifact** as the vulnerable file — a fix commit touches the fix *and* its regression test, and the miner was picking the test |
-| n=40, package-scope context | 32.5% | 0.394 | trees held only the diff, so an interprocedural engine was graded on fragments with no callers |
-| n=40, + sandbox-VM sinks | **45.0%** | **0.474** | nothing wrong with the measurement — this one is the **engine improving**, see below |
-
-Materialising the surrounding package **raised recall 2.6×** without touching a
-line of detector code. The diagnosis came from the per-CWE breakdown: on the
-diff-only population, CWE-22 (path traversal) and CWE-918 (SSRF) each scored
-0/3, and both need a request source that lives outside the changed file.
-
-### Per-CWE recall (n=40) — the actionable view
-
-The 32.5% aggregate hides the only thing worth acting on: two families are at
-100% and one is at 0%.
-
-| CWE | n | Recall |
-| --- | --- | --- |
-| CWE-22 path traversal | 3 | 3/3 |
-| CWE-79 XSS | 3 | 3/3 |
-| CWE-94 code injection | 6 | **5/6** (was 0/6) |
-| CWE-184 incomplete denylist | 3 | 0/3 |
-| CWE-918 SSRF | 3 | 1/3 |
-| CWE-200 info exposure | 3 | 1/3 |
-| 15 others (n=1 each) | 15 | 2/15 |
-
-Plan: `docs/RECALL_IMPROVEMENT_PRD.md`. Its R-1 has since landed: the missed
-sink was the NodeVM/vm2 sandbox family, not a conceptual gap. Adding it took
-CWE-94 from 0/6 to 5/6 and overall recall from 32.5% to 45.0%.
-
-**Precision did not move — it is 50.0% before and after.** Eighteen new true
-positives arrived with eighteen findings in the corresponding `post/` trees. That
-is consistent with the caveat below: at package scope, an unrelated instance of
-the same CWE elsewhere in the package scores as a false positive against this
-advisory's label. It is a reason to classify the FPs (plan §5) before treating
-50% as a defect rate, not a reason to celebrate an unchanged number.
-
-### Still a lower bound, and now for one clear reason
-
-The scope is the largest ancestor directory of the changed files that fits a
-400-source-file cap — in practice the containing package (median 185 files). A
-vulnerability whose source sits in a *different* package remains unreachable, so
-recall is still understated by an unmeasured margin.
-
-**Precision carries its own caveat, in the opposite direction.** With a wider
-scope, an unrelated instance of the same CWE elsewhere in the package now counts
-as a false positive against the advisory's label. Some of the 13 FPs are
-therefore likely to be real findings that simply are not *this* advisory's bug.
-Precision of 50% should be read as a floor too, not a verdict.
-
-Reproduce with `npm run bench:independent:materialise && npm run bench:independent`.
-Expect roughly 8 minutes to materialise and 10+ to score — the honest
-measurement is an order of magnitude slower than the dishonest one.
 
 ## Corpus results (measured this run)
 
@@ -212,7 +131,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `hooks` | 24 |
+| `hooks` | 25 |
 | `scripts` | 24 |
 | `polyglot` fixture (expected 0) | 0 |
 
@@ -220,13 +139,46 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 596 |
+| `scanner/src` | 604 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
 a false-positive count would be wrong in both directions.
 
 Per-file counts are in `docs/scorecard.json`.
+
+## Independent evaluation population — the number that matters
+
+Everything above is a **regression net**: its fixtures and its labels are both
+written here, which is why its detection rate sits at the ceiling by
+construction. `bench/independent/` is the other instrument — real upstream code
+at the commit where a vulnerability really existed, with the CWE assigned by a
+public advisory database rather than by this project.
+
+**Measured 2026-08-09 on engine 0.135.0, n=110, 0 unscored** (*committed artifact*, `bench/independent/RESULT.json` — read, not re-run: scoring takes ~32 minutes).
+
+| | Advisory-local (**the claim**) | Wide (diagnostic) |
+| --- | --- | --- |
+| Precision | **14/28 (50.0%)** | 37/74 (50.0%) |
+| Recall | **14/110 (12.7%)** | 37/110 (33.6%) |
+| F1 | **0.203** | 0.402 |
+
+| Language | n | Recall | Precision |
+| --- | --- | --- | --- |
+| javascript | 18 | 4/18 (22.2%) | 4/8 (50.0%) |
+| python | 57 | 7/57 (12.3%) | 7/14 (50.0%) |
+| typescript | 35 | 3/35 (8.6%) | 3/6 (50.0%) |
+
+**Quote the advisory-local column.** "Wide" scores the same scans without
+restricting findings to the files the advisory's fix commit touched — it asks
+only whether the CWE appeared *anywhere* in the package. Over scopes holding up
+to 1740 findings that is close to asking whether the codebase contains the bug
+class at all, a question with a much easier yes. It is kept because it is the
+only way to tell whether a change moved the engine or moved the benchmark.
+
+Against ~100% on the curated corpus above. **That gap is the most useful number
+in this document**, and publishing it is the point of the exercise. The figure
+went DOWN when the benchmark was corrected, and is published that way.
 
 ## Committed artifacts referenced (not re-run by this command)
 
