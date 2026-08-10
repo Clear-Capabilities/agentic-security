@@ -9,6 +9,27 @@
 > make the history less accurate, not more.
 
 
+## 0.136.2 — authenticate the gate on the path that actually runs it
+
+0.136.1 removed the self-deadlock and the release workflow got further: every
+gate check passed, then `npm publish` failed with *"the forge CLI is not
+authenticated"*.
+
+The gate runs **twice** in that job. Once as an explicit `Release gate` step,
+which sets `GH_TOKEN` and passed. Then again inside `npm publish`, which
+triggers `prepublishOnly` — and that step set only `NODE_AUTH_TOKEN`. The second
+run had no token, could not read hosted CI, and refused.
+
+The gate was right to refuse: unverifiable is not green, and the remedy it
+suggests — `--allow-unverified-ci` — would have published without proving the
+commit was green at all. So the fix is to authenticate it, not to relax it.
+`checks: read` is now declared explicitly too; the gate passed without it on the
+default token, but depending on an undeclared default is how a tightened default
+becomes a mystery failure a year later.
+
+The same shape as the deadlock it follows: a control that works on the path
+that was tested, and fails on the path that actually ships.
+
 ## 0.136.1 — the release gate stops deadlocking on itself
 
 `npm publish` had been impossible since 0.135.0, and the cause was not the one I
