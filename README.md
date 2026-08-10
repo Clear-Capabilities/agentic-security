@@ -104,7 +104,7 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 
 **Reporting and audits**
 - **`posture`** — Posture + reporting. Modes: status / report-card / harness / trend / threat / playbook / mgmt / cache.
-- **`compliance`** — Compliance + auditor flows. Modes: report / walkthrough / attestation / audit / pr.
+- **`compliance`** — Compliance + auditor flows. Modes: report / walkthrough / attestation / audit / pr / privacy. Also a real CLI subcommand: `agentic-security compliance [--gap|--list|--walkthrough <id>] [--format cli|json|md] [--fail-on gap]`.
 - **`supply`** — Supply chain. Modes: check / sbom / cve-alerts / license.
 
 **Set up guardrails**
@@ -208,8 +208,10 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 
 ### NIST Privacy Framework 1.1 — and what it refuses to claim
 
-`/compliance --privacy` assesses all 104 PF 1.1 controls and writes
-`.agentic-security/privacy-framework.{json,md}`. Each gap carries an actionable
+`agentic-security compliance` (also `/compliance --privacy`) assesses all 104
+PF 1.1 controls and writes `.agentic-security/privacy-framework.{json,md}`. It
+reads the last scan rather than re-scanning, exits **2** if there is no scan to
+assess, and exits **1** only when you ask for it with `--fail-on gap`. Each gap carries an actionable
 remediation and is emitted as an ordinary finding (`family: privacy-compliance`,
 `CWE-359`), so `/fix` handles it like anything else. Findings are opt-in via
 `AGENTIC_SECURITY_PRIVACY_FRAMEWORK=1` — a compliance opinion shouldn't silently

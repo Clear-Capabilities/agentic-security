@@ -52,11 +52,26 @@ artifact is written either way.
 A scan that examined **no files** reports every control as *not assessed* rather
 than satisfied — a clean signal from a run that read nothing is not evidence.
 
+Backed by a real subcommand — `/compliance --privacy` runs it, and you can call
+it directly:
+
 ```bash
-/compliance --privacy                                   # assessment + gaps
-AGENTIC_SECURITY_PRIVACY_FRAMEWORK=1 scan .             # gaps as fixable findings
-/compliance --walkthrough nist-privacy-1-1              # auditor narrative
+agentic-security compliance                        # assessment + per-gap remediation
+agentic-security compliance --gap                  # only the failing controls
+agentic-security compliance --format json          # machine-readable
+agentic-security compliance --fail-on gap          # exit 1 when a control fails (CI)
+agentic-security compliance --list                 # bundled + BYO frameworks
+agentic-security compliance --walkthrough <id>     # auditor narrative, any framework
+AGENTIC_SECURITY_PRIVACY_FRAMEWORK=1 agentic-security scan .   # gaps as fixable findings
 ```
+
+It reads `.agentic-security/last-scan.json` rather than re-scanning: a compliance
+answer is a statement about a scan that happened. With no scan to read it exits
+**2** and says so, rather than assessing an empty project — which would report
+every control as unassessed and sits one careless flag away from looking clean.
+
+Exit codes: **0** report produced · **1** only with `--fail-on gap` and a failing
+control · **2** nothing to assess, or an unknown framework.
 
 ## `--format oscal` (machine-readable export)
 

@@ -200,3 +200,118 @@ test('never throws on junk input — posture modules degrade, they do not fail a
   assert.equal(r.summary.total, 104);
   assert.equal(r.summary.satisfied, 0, 'no project signal can be satisfied from a root that does not exist');
 });
+
+// ── The `compliance` CLI subcommand ─────────────────────────────────────────
+//
+// Exit codes are a contract other people wire into pipelines, so each is
+// asserted in both directions rather than only on the happy path.
+
+import { spawnSync } from 'node:child_process';
+
+const CLI = path.join(HERE, '..', 'bin', 'agentic-security.js');
+const run = (cwd, ...argv) => spawnSync(process.execPath, [CLI, 'compliance', ...argv], { cwd, encoding: 'utf8' });
+
+/** A project with a real scan behind it — the command reads last-scan.json. */
+async function scannedProject() {
+  const d = await fsp.mkdtemp(path.join(os.tmpdir(), 'pf11-cli-'));
+  await fsp.writeFile(path.join(d, 'package.json'), '{"name":"v","version":"1.0.0"}');
+  await fsp.writeFile(path.join(d, 'app.js'), [
+    "const https = require('https');",
+    'const agent = new https.Agent({ rejectUnauthorized: false });',
+    "app.get('/u', (req, res) => { res.send({ email: req.user.email }); });",
+  ].join('\n'));
+  const scan = spawnSync(process.execPath, [CLI, 'scan', '.', '--format', 'sarif'], { cwd: d, encoding: 'utf8' });
+  assert.equal(scan.error, undefined, 'fixture scan failed to spawn');
+  return d;
+}
+
+test('CLI: refuses to assess a project with no scan behind it', async () => {
+  // The dangerous alternative is assessing an empty project: every control
+  // reports "not assessed", which is correct, and one careless `--gap` away
+  // from looking like a clean bill of health.
+  const d = await fsp.mkdtemp(path.join(os.tmpdir(), 'pf11-noscan-'));
+  try {
+    await fsp.writeFile(path.join(d, 'package.json'), '{"name":"x","version":"1.0.0"}');
+    const r = run(d);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /run `agentic-security scan \.` first/);
+    assert.doesNotMatch(r.stdout, /satisfied/, 'must not print an assessment it could not make');
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});
+
+test('CLI: --fail-on gap is opt-in, and fires only when a control is failing', async () => {
+  const d = await scannedProject();
+  try {
+    // Default: reports, never fails the pipeline that merely wants to look.
+    assert.equal(run(d).status, 0, 'default must not fail a build');
+    // Opt in, with gaps present (the fixture disables TLS verification).
+    const gated = run(d, '--fail-on', 'gap');
+    assert.equal(gated.status, 1, 'must fail when asked to and a gap exists');
+    // Same flag, no gaps to find → the other direction of the same contract.
+    const json = JSON.parse(run(d, '--format', 'json').stdout);
+    assert.ok(json.summary.gap > 0, 'fixture must actually produce a gap for this to mean anything');
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});
+
+test('CLI: --gap narrows to failing controls without changing the verdict', async () => {
+  const d = await scannedProject();
+  try {
+    const all = JSON.parse(run(d, '--format', 'json').stdout);
+    const gaps = JSON.parse(run(d, '--gap', '--format', 'json').stdout);
+    assert.ok(gaps.controls.every(c => c.bucket === 'gap'));
+    assert.equal(gaps.controls.length, all.summary.gap);
+    // Filtering the VIEW must not alter the counts — otherwise `--gap` would
+    // quietly redefine the denominator the interpretation line is computed on.
+    assert.deepEqual(gaps.summary, all.summary);
+    assert.equal(gaps.interpretation, all.interpretation);
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});
+
+test('CLI: --list names the privacy framework; an unknown framework exits 2', async () => {
+  const d = await scannedProject();
+  try {
+    const list = run(d, '--list');
+    assert.equal(list.status, 0);
+    assert.match(list.stdout, new RegExp(PRIVACY_FRAMEWORK_ID));
+    const bad = run(d, '--walkthrough', 'no-such-framework');
+    assert.equal(bad.status, 2);
+    assert.match(bad.stderr, /Unknown framework/);
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});
+
+test('CLI: human output always carries the not-evidence caveat', async () => {
+  // The caveat is the whole point of the bucketing. If it can be lost by
+  // choosing a flag, a reader sees percentages with no disclosure attached.
+  const d = await scannedProject();
+  try {
+    for (const argv of [[], ['--gap']]) {
+      const out = run(d, ...argv).stdout;
+      assert.match(out, /NOT evidence of compliance/);
+      assert.match(out, /licensed assessor/);
+    }
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});
+
+test('the SHIPPED BUNDLE can see the frameworks, not just src/', async () => {
+  // This caught a live defect. `auditor-walkthrough` resolves its data
+  // directory from `import.meta.url`, which inside the bundle points at dist/ —
+  // where the JSON files were never copied. `listFrameworks` swallows the
+  // readdir error and returns [], so the published CLI reported ZERO frameworks
+  // and exited 0. Every bundled framework had been invisible from the shipped
+  // artifact, and nothing noticed because every test ran against src/.
+  //
+  // Skipped rather than failed when dist/ is absent: `npm test` must not
+  // require a build, but when a build exists it must be correct.
+  const dist = path.join(HERE, '..', 'dist', 'agentic-security.mjs');
+  if (!fs.existsSync(dist)) return;
+
+  const d = await fsp.mkdtemp(path.join(os.tmpdir(), 'pf11-dist-'));
+  try {
+    await fsp.writeFile(path.join(d, 'package.json'), '{"name":"x","version":"1.0.0"}');
+    const r = spawnSync(process.execPath, [dist, 'compliance', '--list'], { cwd: d, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    for (const id of ['nist-privacy-1-1', 'nist-ai-600-1', 'gdpr', 'owasp-asvs-5']) {
+      assert.match(r.stdout, new RegExp(id), `bundle cannot see ${id} — is dist/compliance-frameworks/ shipped?`);
+    }
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});

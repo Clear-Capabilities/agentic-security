@@ -66,6 +66,13 @@ Commands:
   verify [--finding <id>]      Re-run the verifier loop on last-scan findings (use --live --target <url> to execute PoCs)
   reset [--yes] [--keep ...]   Right-to-delete: wipe accumulated learned state under .agentic-security/ (preserves operator-authored config)
   rule-synth [--dry-run]       Auto-synthesise suppression rules from repeated FP verdicts (proposes — does not activate)
+  compliance [--privacy]       Assess the last scan against NIST Privacy Framework 1.1
+                               --list                 show bundled + BYO frameworks
+                               --walkthrough <id>     auditor narrative for any framework
+                               --gap                  only the failing controls
+                               --format cli|json|md   (default cli)
+                               --fail-on gap          exit 1 when a control is failing
+                               Reads .agentic-security/last-scan.json — run a scan first.
   version                      Print version
   banner [--full]              Print the Patch-the-frog mascot + brand lockup
   harness [path] [--include-home]   Multi-harness config audit: scans .claude/,
@@ -1622,6 +1629,90 @@ async function cmdHunt(args) {
 // `attest` needs our private key. `verify-attestation` needs ONLY a public key,
 // which is the entire point: a buyer or auditor checks the artefact without ever
 // having had access to anything of ours.
+/**
+ * `compliance` — framework assessment from the CLI.
+ *
+ * Reads the LAST SCAN rather than running a new one. A compliance answer is a
+ * statement about a scan that happened, and silently re-scanning here would
+ * make the number depend on when you asked rather than on what was measured —
+ * the same class of confusion as a benchmark that mutates its own corpus. If
+ * there is no scan to read, this says so and exits non-zero instead of
+ * assessing an empty project, which would report controls as satisfied on the
+ * strength of having looked at nothing.
+ */
+async function cmdCompliance(args) {
+  const scanRoot = path.resolve(args.flags.root || '.');
+  const fmt = String(args.flags.format || 'cli');
+  const {
+    assessPrivacyFramework, PRIVACY_FRAMEWORK_ID, BUCKETS,
+  } = await import('../src/posture/privacy-framework.js');
+  const { listFrameworks, loadFramework, evaluateFramework, renderWalkthrough } =
+    await import('../src/posture/auditor-walkthrough.js');
+
+  if (args.flags.list) {
+    const fws = listFrameworks(scanRoot);
+    if (fmt === 'json') { console.log(JSON.stringify(fws, null, 2)); return 0; }
+    for (const f of fws) console.log(`  ${f.id.padEnd(20)} ${f.name}  [${f.source}]`);
+    return 0;
+  }
+
+  let scan;
+  try { scan = JSON.parse(fs.readFileSync(statePath(scanRoot, 'last-scan.json'), 'utf8')); }
+  catch {
+    console.error('No .agentic-security/last-scan.json — run `agentic-security scan .` first.');
+    console.error('Refusing to assess an unscanned project: every control would report as');
+    console.error('unassessed, which is correct but useless, and one flag away from looking clean.');
+    return 2;
+  }
+  // The engine records this two ways depending on the emit path; take either.
+  scan.filesScanned = scan._scanMeta?.filesScanned ?? scan.scanned?.files ?? 0;
+
+  const wt = args.flags.walkthrough;
+  if (wt && wt !== true) {
+    const fw = loadFramework(scanRoot, String(wt));
+    if (!fw) {
+      console.error(`Unknown framework "${wt}". Try --list.`);
+      return 2;
+    }
+    console.log(renderWalkthrough(fw, evaluateFramework(scanRoot, fw, scan), {}));
+    return 0;
+  }
+
+  // Default mode is --privacy: it is the only framework with a remediation
+  // layer, so it is the only one where a CLI exit code means anything.
+  const r = assessPrivacyFramework(scanRoot, scan);
+  if (!r) { console.error(`Framework ${PRIVACY_FRAMEWORK_ID} could not be loaded.`); return 2; }
+
+  const gapsOnly = !!args.flags.gap;
+  if (fmt === 'json') {
+    console.log(JSON.stringify(gapsOnly ? { ...r, controls: r.controls.filter(c => c.bucket === 'gap') } : r, null, 2));
+  } else if (fmt === 'md') {
+    console.log(fs.readFileSync(statePath(scanRoot, 'privacy-framework.md'), 'utf8'));
+  } else {
+    console.log(`\n${r.frameworkName}\n`);
+    console.log(`  ${r.interpretation}\n`);
+    for (const b of BUCKETS) {
+      const rows = r.controls.filter(c => c.bucket === b);
+      if (!rows.length || (gapsOnly && b !== 'gap')) continue;
+      console.log(`  ${b} (${rows.length})`);
+      for (const c of rows) {
+        console.log(`    ${c.id.padEnd(11)} ${c.summary.slice(0, 84)}`);
+        const f = r.findings.find(x => x.id === `privacy-framework:${c.id}`);
+        if (f) console.log(`                → ${f.remediation}`);
+      }
+      console.log('');
+    }
+    console.log('  A control that is "manual" or "engine-gap" is NOT evidence of compliance.');
+    console.log('  This organizes scanner evidence; a licensed assessor owns the attestation.\n');
+  }
+
+  // --fail-on gap is opt-in. A compliance opinion becomes a build failure only
+  // when someone asks for it; defaulting to non-zero would break every pipeline
+  // that adds this command to see the report.
+  if (args.flags['fail-on'] === 'gap' && r.summary.gap > 0) return 1;
+  return 0;
+}
+
 async function cmdAttest(args) {
   const scanRoot = path.resolve(args.flags.root || '.');
   const {
@@ -1991,6 +2082,7 @@ async function main() {
       case 'verify':   process.exit(await cmdVerify(args));
       case 'reset':    process.exit(await cmdReset(args));
       case 'hunt':     process.exit(await cmdHunt(args));
+      case 'compliance': process.exit(await cmdCompliance(args));
       case 'attest':   process.exit(await cmdAttest(args));
       case 'verify-attestation': process.exit(await cmdVerifyAttestation(args));
       case 'rule-synth': process.exit(await cmdRuleSynth(args));
