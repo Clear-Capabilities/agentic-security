@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-09T22:33:21.853Z",
-  "commit": "c1620982ce8810a8d225fdee118017d0a60c4ed0",
+  "generatedAt": "2026-08-10T01:02:33.878Z",
+  "commit": "664988b5830a8dc81ca94f9ec768343986f715e1",
   "targets": {
     "hooks": {
       "total": 25,
@@ -35,7 +35,7 @@
       }
     },
     "scanner/src": {
-      "total": 606,
+      "total": 604,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -129,7 +129,6 @@
         "posture/integrity.js": 6,
         "posture/intent-context.js": 2,
         "posture/learning.js": 3,
-        "posture/license-attributions.js": 1,
         "posture/license-graph.js": 3,
         "posture/license-policy.js": 3,
         "posture/llm-redteam-prompts.js": 6,
@@ -141,7 +140,6 @@
         "posture/poc-generator.js": 3,
         "posture/poc-inprocess.js": 5,
         "posture/policy-gate.js": 4,
-        "posture/pqc-migration-plan.js": 1,
         "posture/pr-augment.js": 1,
         "posture/pre-incident-archaeology.js": 1,
         "posture/profile.js": 4,
