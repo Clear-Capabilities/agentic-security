@@ -48,7 +48,11 @@ function _snapshotKey(component) {
  */
 export function persistSbom(scanRoot, components) {
   const dir = _historyDir(scanRoot);
-  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+  // The mkdir is inside the switch too. Guarding only the write still left an
+  // empty `sbom-history/` in the scanned tree — invisible to `git status`,
+  // because git does not track empty directories, and therefore exactly the
+  // kind of mutation that passes a clean-status check while still being one.
+  if (stateWritesEnabled()) { try { fs.mkdirSync(dir, { recursive: true }); } catch {} }
   const sha = _gitHead(scanRoot) || crypto.createHash('sha256').update(JSON.stringify(components)).digest('hex').slice(0, 12);
   const snap = {
     sha, ts: new Date().toISOString(),

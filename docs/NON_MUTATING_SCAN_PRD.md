@@ -160,12 +160,43 @@ detectable rather than trusted.
 
 ## 6. How we will know it worked
 
-| Metric | Now | Target |
-|---|---|---|
-| `git status` after scanning a foreign repo | dirty, 7+ files | **clean** |
-| Modules writing state outside the seam | 67 of 72 | **0**, guard-enforced |
-| Benchmark trees mutated by a scoring run | 220 of 220 | **0**, asserted |
-| Findings sourced from our own state files | possible | impossible |
+| Metric | At PRD time | Target | **Measured now** |
+|---|---|---|---|
+| Paths added by scanning a foreign repo | 10 | **0** | **0** — asserted by test, both directions |
+| Modules writing state outside the seam | 67 of 72 | **0**, guard-enforced | **55** remain on the ledger; guard blocks any 56th |
+| Benchmark trees mutated by a scoring run | 220 of 220 | **0**, asserted | 0 (runner purges pre-scan) — S3 byte-identity assertion still outstanding |
+| Findings sourced from our own state files | possible | impossible | impossible — `.agentic-security` in `IGNORE_DIRS` **and** filtered at scoring |
+
+### Status, honestly
+
+**S4 done. S1 done. S2 mechanism done, migration ~14% complete. S3 outstanding.**
+
+The `--no-state` acceptance criterion is met and pinned by
+`test/no-stray-state.test.js`: a real CLI scan of a temp project adds zero paths
+while still reporting findings, and the test was proven to FAIL when the switch
+is off.
+
+Three corrections found while implementing, each worth more than the line of
+code that fixed it:
+
+1. **`git status` is not a sufficient check.** Git does not track empty
+   directories, so an earlier revision reported a clean tree while still
+   creating `sbom-history/` and `fix-history/`. The acceptance test compares the
+   full path listing instead. *Directory creation is mutation.*
+2. **The guard was blind to `bin/`.** It walked only `src/`, and the three
+   largest artifacts — `findings.json`, `last-scan.json`, `.sig` — are written by
+   `bin/agentic-security.js`. A seam guard that cannot see the CLI entry point
+   misses the primary writer. Now walks both; found 4 files immediately.
+3. **The guard's detector counted prose as a violation, then over-corrected.**
+   Comment-blind, it pinned 5 already-clean modules to the ledger permanently.
+   Stripping block comments *before* line comments then let a glob in a doc
+   comment (`.agentic-security/rules/*.yml`) open a block comment that consumed
+   **12,198 characters** and hid a genuine violation. Order is now load-bearing
+   and asserted in both directions.
+
+The ledger is the honest measure of what is left: 55 modules still build state
+paths by hand. Each needs the same three-line treatment. What has changed
+permanently is that a 56th cannot be added.
 
 ## 7. Risks
 

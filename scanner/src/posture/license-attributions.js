@@ -11,8 +11,7 @@
 // The emitter is deterministic — sorts by ecosystem, name, version —
 // so commits don't churn between scans.
 
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import { statePath, safeWriteState } from './state-dir.js';
 
 function _sortKey(c) {
   return `${c.ecosystem || 'zz'}:${c.name || ''}:${c.version || ''}`;
@@ -83,11 +82,10 @@ export function generateAttributions(components, options) {
 
 export function persistAttributions(scanRoot, result) {
   if (!result || !result.markdown) return null;
-  try { fs.mkdirSync(path.join(scanRoot, '.agentic-security'), { recursive: true }); } catch {}
-  try { fs.writeFileSync(path.join(scanRoot, '.agentic-security', 'ATTRIBUTIONS.md'), result.markdown); } catch {}
-  if (result.notice) {
-    try { fs.writeFileSync(path.join(scanRoot, '.agentic-security', 'NOTICE'), result.notice); } catch {}
-  }
+  // Through the seam — see the note in pqc-migration-plan.js. The result is
+  // still returned when writing is off; only the artifact is withheld.
+  safeWriteState(statePath(scanRoot, 'ATTRIBUTIONS.md'), result.markdown);
+  if (result.notice) safeWriteState(statePath(scanRoot, 'NOTICE'), result.notice);
   return result;
 }
 

@@ -71,6 +71,7 @@ import { scanWebhook } from './sast/webhook.js';
 import { scanClientSide } from './sast/client-side.js';
 import { scanPromptFirewall } from './sast/prompt-firewall.js';
 import { scanLlmRedteam } from './posture/llm-redteam.js';
+import { statePath as _statePath, safeWriteState as _safeWriteState } from './posture/state-dir.js';
 import { scanContainer } from './sca/container.js';
 import { detectDepConfusion } from './sca/dep-confusion.js';
 import { loadLicensePolicy, evaluateLicensePolicy } from './posture/license-policy.js';
@@ -8220,7 +8221,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
         if (r && r.piiFields) {
           try {
             const dpia = emitDpiaArtifact(r.piiFields, r.findings || []);
-            fs.writeFileSync(path.join(scanRoot, '.agentic-security', 'dpia.md'), dpia);
+            _safeWriteState(_statePath(scanRoot, 'dpia.md'), dpia);
           } catch (_) {}
         }
       });
@@ -8854,9 +8855,11 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
         if (bundles.size) {
           _exploitBundles = {};
           for (const [id, b] of bundles) _exploitBundles[id] = b;
-          const bundlePath = path.join(scanRoot, '.agentic-security', 'exploit-bundles.json');
-          try { fs.mkdirSync(path.dirname(bundlePath), { recursive: true }); } catch {}
-          try { fs.writeFileSync(bundlePath, JSON.stringify(_exploitBundles, null, 2)); } catch {}
+          // Through the seam, so `--no-state` withholds the artifact. The
+          // bundles stay on the scan result either way — a read-only scan must
+          // report the same thing, it just must not leave it behind.
+          _safeWriteState(_statePath(scanRoot, 'exploit-bundles.json'),
+            JSON.stringify(_exploitBundles, null, 2));
         }
       } catch (_) {}
     }

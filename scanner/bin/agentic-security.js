@@ -291,8 +291,11 @@ function _bundleSha() {
 
 async function writeMachineOutput(targetAbs, scan, meta, profile) {
   const stateDir = path.join(targetAbs, '.agentic-security');
-  const { isSafeStateDir: _isSafe } = await import('../src/posture/state-dir.js');
-  if (!_isSafe(stateDir)) {
+  const { isSafeStateDir: _isSafe, stateWritesEnabled: _writesOn } = await import('../src/posture/state-dir.js');
+  // Read-only scan (NON_MUTATING_SCAN_PRD S1). These writes bypass
+  // safeWriteState because they are async, so the switch is checked here — the
+  // same refusal path the project-root check already uses.
+  if (!_writesOn() || !_isSafe(stateDir)) {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write machine output at ${stateDir} — no project marker\n`);
     return;
   }
@@ -651,9 +654,9 @@ async function cmdScan(args) {
   else process.stdout.write(body + '\n');
 
   // Persist last scan for /security-fix and /security-report
-  const { isSafeStateDir: _isSafeStateDir } = await import('../src/posture/state-dir.js');
+  const { isSafeStateDir: _isSafeStateDir, stateWritesEnabled: _writesOnScan } = await import('../src/posture/state-dir.js');
   const stateDir = path.join(path.resolve(target), '.agentic-security');
-  if (_isSafeStateDir(stateDir)) {
+  if (_writesOnScan() && _isSafeStateDir(stateDir)) {
     await fsp.mkdir(stateDir, { recursive: true });
     const persistedScan = toJSON(scan, meta);
     // #10 — MTTR: stamp firstSeenAt/lastSeenAt/ageDays from the PREVIOUS scan so
@@ -805,8 +808,8 @@ async function cmdCi(args) {
 
   // Persist the three CI artifacts.
   const stateDir = path.join(targetAbs, '.agentic-security');
-  const { isSafeStateDir: _isSafeCi } = await import('../src/posture/state-dir.js');
-  if (!_isSafeCi(stateDir)) {
+  const { isSafeStateDir: _isSafeCi, stateWritesEnabled: _writesOnCi } = await import('../src/posture/state-dir.js');
+  if (!_writesOnCi() || !_isSafeCi(stateDir)) {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write CI artifacts at ${stateDir} — no project marker\n`);
     return;
   }

@@ -169,10 +169,15 @@ async function main() {
     }
     const hitPre = matchesCwe(preFindings, e.cwe, e.files);
     const hitPost = matchesCwe(postFindings, e.cwe, e.files);
+    // Same verdict with the advisory-file restriction OFF. See `wide` below.
+    const hitPreWide = matchesCwe(preFindings, e.cwe, null);
+    const hitPostWide = matchesCwe(postFindings, e.cwe, null);
     perEntry.push({
       id: e.id, cwe: e.cwe, language: e.language, repo: e.repo,
       tp: hitPre ? 1 : 0, fn: hitPre ? 0 : 1,
       fp: hitPost ? 1 : 0, tn: hitPost ? 0 : 1,
+      tpWide: hitPreWide ? 1 : 0, fnWide: hitPreWide ? 0 : 1,
+      fpWide: hitPostWide ? 1 : 0, tnWide: hitPostWide ? 0 : 1,
       preFindings: preFindings.length, postFindings: postFindings.length,
     });
   }
@@ -182,6 +187,26 @@ async function main() {
   }), { tp: 0, fp: 0, fn: 0, tn: 0 });
 
   const overall = scoreCounts(sum(perEntry));
+  // The SAME scans scored without the advisory-file restriction.
+  //
+  // WHY THIS IS REPORTED RATHER THAN CHOSEN BETWEEN. Two corrections landed
+  // together — purging scan state (an accuracy correction: the engine had been
+  // partly grading its own prior output) and localiseToAdvisory (a strictness
+  // correction in the HARNESS). Recall fell sharply across the pair. Attributing
+  // that fall to the engine when it belongs to the benchmark's scope would be the
+  // same reasoning error as the contamination, pointed the other way.
+  //
+  // `overall` is the number this project quotes: it is the defensible claim,
+  // because it asks whether the engine flagged the file the advisory is about.
+  // `wide` asks only whether the CWE appeared ANYWHERE in the package, which over
+  // scopes holding hundreds of findings is close to a lookup of "does this
+  // codebase contain this bug class at all" — a question with a much easier yes.
+  // The GAP between them is the diagnostic: it is how much of the engine's
+  // apparent recall comes from finding the right thing versus from finding
+  // something of the right kind somewhere.
+  const wide = scoreCounts(sum(perEntry.map(r => ({
+    tp: r.tpWide, fp: r.fpWide, fn: r.fnWide, tn: r.tnWide,
+  }))));
   const group = (key) => {
     const out = {};
     for (const r of perEntry) {
@@ -207,6 +232,8 @@ async function main() {
     // "18 rows that need classifying". Plan R-4 depends on this existing.
     perEntry,
     overall,
+    // Diagnostic only — NOT this project's headline. See the comment on `wide`.
+    wide: { ...wide, meaning: 'same scans, advisory-file restriction OFF' },
     byLanguage: group('language'),
     byCwe: group('cwe'),
   };
@@ -226,6 +253,14 @@ async function main() {
   out.write('  recall     ' + pct(overall.recall) + '\n');
   out.write('  F1         ' + (overall.f1 === null ? 'n/a' : overall.f1.toFixed(3)) + '\n');
   out.write(`  raw        TP=${overall.tp} FP=${overall.fp} FN=${overall.fn} TN=${overall.tn}\n`);
+
+  out.write('\n  same scans, advisory-file restriction OFF (diagnostic, NOT the claim):\n');
+  out.write('    precision  ' + pct(wide.precision) + '\n');
+  out.write('    recall     ' + pct(wide.recall) + '\n');
+  out.write('    The gap against the figures above is how much apparent recall comes\n' +
+            '    from flagging the right FILE versus flagging the right CWE somewhere\n' +
+            '    in the package. Quote the restricted numbers; read this one to know\n' +
+            '    whether a change moved the engine or moved the benchmark.\n');
 
   out.write('\n  by language\n');
   for (const [k, v] of Object.entries(report.byLanguage)) {

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { scanPqc } from '../src/sast/post-quantum-crypto.js';
 import { buildMigrationPlan, persistMigrationPlan } from '../src/posture/pqc-migration-plan.js';
+import { setStateWritesEnabled } from '../src/posture/state-dir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -109,6 +110,13 @@ test('pqc: migration plan aggregates findings and persists artifact', async () =
 
   const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'pqc-plan-'));
   try {
+    // A project marker is REQUIRED. persistMigrationPlan now routes through
+    // safeWriteState, which refuses to create `.agentic-security/` in a
+    // directory that is not a project root — the guard that exists because
+    // stray state dirs once broke a user's build badly enough that they
+    // uninstalled. Before the migration this test wrote into a bare temp dir,
+    // which is precisely the case the guard is meant to reject.
+    await fsp.writeFile(path.join(tmp, 'package.json'), '{"name":"fixture"}');
     persistMigrationPlan(tmp, plan);
     const jsonPath = path.join(tmp, '.agentic-security', 'pqc-migration-plan.json');
     const mdPath = path.join(tmp, '.agentic-security', 'pqc-migration-plan.md');
@@ -119,6 +127,28 @@ test('pqc: migration plan aggregates findings and persists artifact', async () =
               md.includes('Post-quantum cryptography migration plan'));
     assert.ok(md.includes('FIPS 203') || md.includes('ML-KEM'));
   } finally {
+    await fsp.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('pqc: the plan is returned but NOT written when state writes are off', async () => {
+  // The read-only scan switch must change what is WRITTEN, never what is
+  // REPORTED. A scan that quietly returns less because it was told not to
+  // persist would be a far worse defect than the stray files it fixes.
+  const allFindings = scanPqc('rsa-key.js', readFix('vulnerable/rsa-key.js'));
+  const plan = buildMigrationPlan(allFindings);
+  assert.ok(plan, 'plan built');
+
+  const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'pqc-nostate-'));
+  try {
+    await fsp.writeFile(path.join(tmp, 'package.json'), '{"name":"fixture"}');
+    setStateWritesEnabled(false);
+    const returned = persistMigrationPlan(tmp, plan);
+    assert.equal(returned, plan, 'the plan is still returned');
+    assert.ok(!fs.existsSync(path.join(tmp, '.agentic-security')),
+      'no state directory is created when writes are disabled');
+  } finally {
+    setStateWritesEnabled(true);
     await fsp.rm(tmp, { recursive: true, force: true });
   }
 });

@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
-import { isSafeStateDir, statePath } from './state-dir.js';
+import { isSafeStateDir, statePath, stateWritesEnabled } from './state-dir.js';
 
 function historyDir(scanRoot) {
   return statePath(scanRoot, 'fix-history');
@@ -20,6 +20,9 @@ function historyDir(scanRoot) {
 function logPath(scanRoot) { return path.join(historyDir(scanRoot), 'log.json'); }
 
 function ensure(scanRoot) {
+  // Read-only scan: callers already treat `false` as "history unavailable",
+  // so the switch needs no new branch anywhere else.
+  if (!stateWritesEnabled()) return false;
   const dir = historyDir(scanRoot);
   if (!isSafeStateDir(path.dirname(dir))) return false;
   fs.mkdirSync(dir, { recursive: true });

@@ -120,6 +120,11 @@ test('attributions: NOTICE emitted when Apache-2.0 present, omitted when not', (
 test('attributions: persistAttributions writes ATTRIBUTIONS.md and NOTICE', async () => {
   const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'attribs-'));
   try {
+    // A project marker is REQUIRED: persistAttributions now routes through
+    // safeWriteState, which refuses to create `.agentic-security/` outside a
+    // project root. The bare temp dir this used to write into is exactly the
+    // case that guard exists to reject.
+    await fsp.writeFile(path.join(tmp, 'package.json'), '{"name":"fixture"}');
     const r = generateAttributions([mkComp('npm', 'fastify', '4', 'MIT'),
                                     mkComp('npm', 'express', '4', 'Apache-2.0')]);
     persistAttributions(tmp, r);

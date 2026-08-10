@@ -18,8 +18,7 @@
 // suggestions; JSON-LD-shaped structured output is consumable by Vanta /
 // Drata / SecureFrame or any custom rollup dashboard.
 
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import { statePath, safeWriteState } from './state-dir.js';
 
 function _byHndl(findings) {
   return {
@@ -117,9 +116,12 @@ export function buildMigrationPlan(allFindings) {
 
 export function persistMigrationPlan(scanRoot, plan) {
   if (!plan) return null;
-  try { fs.mkdirSync(path.join(scanRoot, '.agentic-security'), { recursive: true }); } catch {}
-  try { fs.writeFileSync(path.join(scanRoot, '.agentic-security', 'pqc-migration-plan.json'), JSON.stringify(plan, null, 2)); } catch {}
-  try { fs.writeFileSync(path.join(scanRoot, '.agentic-security', 'pqc-migration-plan.md'), _markdown(plan)); } catch {}
+  // Through the seam: creates the directory, enforces the project-root check,
+  // and honours the read-only scan switch. The plan is still RETURNED when
+  // writing is off — a scan must report the same result whether or not it is
+  // allowed to leave files behind.
+  safeWriteState(statePath(scanRoot, 'pqc-migration-plan.json'), JSON.stringify(plan, null, 2));
+  safeWriteState(statePath(scanRoot, 'pqc-migration-plan.md'), _markdown(plan));
   return plan;
 }
 

@@ -40,11 +40,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
+import { statePath, safeWriteState } from './state-dir.js';
 
 const POLICY_FILE = 'compliance.policy.yml';
 
 export function loadPolicy(scanRoot) {
-  const fp = path.join(scanRoot, '.agentic-security', POLICY_FILE);
+  const fp = statePath(scanRoot, POLICY_FILE);
   if (!fs.existsSync(fp)) return null;
   try {
     const raw = fs.readFileSync(fp, 'utf8');
@@ -105,7 +106,7 @@ function _runCheck(check, ctx) {
   }
   if (check['sca-policy-has-entry']) {
     const type = check['sca-policy-has-entry'];
-    const policyPath = path.join(ctx.scanRoot, '.agentic-security', 'sca-policy.yml');
+    const policyPath = statePath(ctx.scanRoot, 'sca-policy.yml');
     if (!fs.existsSync(policyPath)) return { passed: false, reason: 'sca-policy.yml not found' };
     try {
       const policy = yaml.load(fs.readFileSync(policyPath, 'utf8'));
@@ -178,10 +179,9 @@ export function emitEvidenceJsonLd(report, scanRoot) {
       narrative_evidence: c.evidence || [],
     })),
   };
-  try {
-    fs.mkdirSync(path.join(scanRoot, '.agentic-security'), { recursive: true });
-    fs.writeFileSync(path.join(scanRoot, '.agentic-security', 'compliance-evidence.json'), JSON.stringify(jsonld, null, 2));
-  } catch {}
+  // Through the seam — see the note in pqc-migration-plan.js. The report is
+  // still returned when writing is off; only the artifact is withheld.
+  safeWriteState(statePath(scanRoot, 'compliance-evidence.json'), JSON.stringify(jsonld, null, 2));
   return jsonld;
 }
 
@@ -209,9 +209,7 @@ export function emitEvidenceMarkdown(report, scanRoot) {
     }
     lines.push('');
   }
-  try {
-    fs.writeFileSync(path.join(scanRoot, '.agentic-security', 'compliance-evidence.md'), lines.join('\n'));
-  } catch {}
+  safeWriteState(statePath(scanRoot, 'compliance-evidence.md'), lines.join('\n'));
   return lines.join('\n');
 }
 
