@@ -9,13 +9,13 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.136.0 |
+| Engine version | 0.136.1 |
 | Bundle SHA-256 | `b66b38a74c6d14bcf4a30fad910739e3cb83c455f7bf0ae6ca76a1487f598f1a` |
-| Commit | `1002e9952c0bf549ed1d93898226febe52b3dcb3` |
+| Commit | `8b773086147dc118abd0b95d70a9847f02dd3fc7` |
 | Worktree at measurement time | clean |
 | Node | v24.16.0 |
 | Corpus entries | 210 (210 scored) |
-| Generated (UTC) | 2026-08-10T15:08:02.173Z |
+| Generated (UTC) | 2026-08-10T15:23:35.910Z |
 
 ## What these numbers are, and what they are not
 
