@@ -9,6 +9,34 @@
 > make the history less accurate, not more.
 
 
+## 0.136.1 — the release gate stops deadlocking on itself
+
+`npm publish` had been impossible since 0.135.0, and the cause was not the one I
+reported. Not a missing npm token: **the release gate was waiting for itself.**
+
+The release workflow's job is named `publish`. The gate runs inside that job,
+queries hosted CI for HEAD, sees a check run named `publish` that is
+`in_progress` — itself — and requires it to finish before allowing the release.
+It never can. Every tag push failed this way with all nine real checks green, and
+the resulting `publish: failure` then blocked local publishes too, which is the
+error that finally surfaced it.
+
+`.github/required-checks.json` gains a third category, **self**, beside blocking
+and informational. A self check is EXCLUDED, not trusted: it cannot report a
+conclusion until the gate it contains has already passed, so requiring it is a
+deadlock and believing it would be believing a check that has not run. The file
+already insisted every check be classified deliberately — this is the category
+that was missing, and its absence meant `publish` fell through to the safe
+default of blocking, which was exactly wrong here.
+
+Proven in three directions, because excluding a check must not weaken a gate:
+a pending self check no longer blocks, a FAILED self check no longer blocks, and
+a genuinely red blocking check still does. Verified against live CI state:
+`PASS Hosted CI is green for HEAD`.
+
+v0.135.0 and v0.136.0 were tagged but never reached npm for this reason. The
+tags stay where they are — a public tag is not moved — so this ships as 0.136.1.
+
 ## 0.136.0 — NIST Privacy Framework 1.1, and the frameworks that never shipped
 
 ### A privacy compliance scan that says what it did not check

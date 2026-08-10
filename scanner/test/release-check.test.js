@@ -363,6 +363,7 @@ const ciFacts = (checkRuns, tiers = TIERS) => ({
   cliAvailable: true, authenticated: true, checkRuns, headSha: 'abc1234', tiers,
 });
 const done = (name, conclusion) => ({ name, status: 'completed', conclusion });
+const pending = (name) => ({ name, status: 'in_progress', conclusion: null });
 
 test('release-check — a pending informational check does not block the release', () => {
   // The exact case observed on 2026-08-09.
@@ -413,13 +414,38 @@ test('release-check — a missing tier file fails closed: everything blocks', ()
   assert.equal(r.ok, false, 'failing to read the classification must never let a red check through');
 });
 
-test('release-check — the committed tier file is well-formed and the two lists are disjoint', () => {
+test('release-check — the committed tier file is well-formed and the lists are disjoint', () => {
   const tiers = readCheckTiers();
   assert.ok(tiers, `${CHECK_TIERS_FILE} must exist and parse`);
   assert.ok(tiers.blocking.length > 0);
   assert.ok(tiers.informational.length > 0);
-  const overlap = tiers.blocking.filter(n => tiers.informational.includes(n));
-  assert.deepEqual(overlap, [], 'a check cannot be both blocking and informational');
+  const lists = { blocking: tiers.blocking, informational: tiers.informational, self: tiers.self || [] };
+  for (const [a, b] of [['blocking', 'informational'], ['blocking', 'self'], ['informational', 'self']]) {
+    const overlap = lists[a].filter(n => lists[b].includes(n));
+    assert.deepEqual(overlap, [], `a check cannot be both ${a} and ${b}`);
+  }
+});
+
+test('release-check — the gate does not wait on the job it is running inside', () => {
+  // THE DEADLOCK THIS EXISTS TO PREVENT. The release workflow's job is named
+  // `publish`, and the gate runs inside it. Looking for hosted CI on HEAD, the
+  // gate saw a check named `publish` that was in_progress — itself — and
+  // required it to finish. It never could. Both v0.135.0 and v0.136.0 failed
+  // this way with all nine real checks green, and the resulting `publish:
+  // failure` then blocked local publishes too.
+  const tiers = readCheckTiers();
+  assert.ok((tiers.self || []).includes('publish'),
+    'the release workflow job must be classified self, or the gate deadlocks on itself');
+
+  const green = [done('test', 'success'), done('corpus', 'success')];
+  // Pending self — the exact deadlock.
+  assert.equal(evaluateRemoteCi(ciFacts([...green, pending('publish')], tiers)).ok, true);
+  // Failed self — the stale conclusion left behind by the deadlock.
+  assert.equal(evaluateRemoteCi(ciFacts([...green, done('publish', 'failure')], tiers)).ok, true,
+    'a self check says nothing about the commit, in either direction');
+  // And the other direction: a genuinely red BLOCKING check still stops it.
+  assert.equal(evaluateRemoteCi(ciFacts([done('test', 'failure'), pending('publish')], tiers)).ok, false,
+    'excluding self must not weaken any real gate');
 });
 
 test('release-check — the long benchmarks are informational, the correctness gates are not', () => {

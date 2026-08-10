@@ -345,7 +345,8 @@ export function readCheckTiers(repo = REPO) {
   try {
     const doc = JSON.parse(raw);
     if (!Array.isArray(doc?.blocking) || !Array.isArray(doc?.informational)) return null;
-    return { blocking: doc.blocking, informational: doc.informational };
+    // `self` is optional: an older file without it simply classifies nothing as self.
+    return { blocking: doc.blocking, informational: doc.informational, self: Array.isArray(doc.self) ? doc.self : [] };
   } catch {
     return null;
   }
@@ -354,9 +355,15 @@ export function readCheckTiers(repo = REPO) {
 export function partitionCheckRuns(checkRuns, tiers) {
   const blocking = new Set(tiers?.blocking || []);
   const informational = new Set(tiers?.informational || []);
-  const out = { blocking: [], informational: [], unclassified: [] };
+  // The job the gate is running inside. Excluded entirely — see `self` in
+  // .github/required-checks.json. It cannot report a conclusion until the gate
+  // it contains has already passed, so requiring it is a deadlock, and trusting
+  // it would be trusting a check that has not run.
+  const selfChecks = new Set(tiers?.self || []);
+  const out = { blocking: [], informational: [], unclassified: [], self: [] };
   for (const run of checkRuns || []) {
-    if (informational.has(run.name)) out.informational.push(run);
+    if (selfChecks.has(run.name)) out.self.push(run);
+    else if (informational.has(run.name)) out.informational.push(run);
     else if (blocking.has(run.name)) out.blocking.push(run);
     else { out.unclassified.push(run); out.blocking.push(run); }
   }

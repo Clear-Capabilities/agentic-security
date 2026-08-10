@@ -31,7 +31,16 @@
     "been configured from this list, pull requests would have hung forever waiting on",
     "contexts that never report. The names below were read from",
     "`gh api repos/OWNER/REPO/commits/main/check-runs`. Verify the same way before",
-    "adding one."
+    "adding one.",
+    "",
+    "SELF means: this check run IS the job the release gate is executing inside.",
+    "The release workflow's publish job runs the gate, so the gate observes a check",
+    "named 'publish' that is in_progress — itself — and waits for it to finish. It",
+    "never can. Every tag push therefore failed the gate on a self-reference while",
+    "all nine real checks were green, and both v0.135.0 and v0.136.0 failed this way",
+    "before it was diagnosed. A self check is EXCLUDED, not trusted: it says nothing",
+    "about the commit, so treating it as informational would be wrong for the same",
+    "reason treating it as blocking is."
   ],
   "blocking": [
     "test",
@@ -45,5 +54,8 @@
   "informational": [
     "realworld-bench",
     "synthetic-bench"
+  ],
+  "self": [
+    "publish"
   ]
 }
