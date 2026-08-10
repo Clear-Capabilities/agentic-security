@@ -9,6 +9,34 @@
 > make the history less accurate, not more.
 
 
+## 0.136.3 — the same code, published with provenance
+
+**No functional change from 0.136.2.** This version exists for one reason, and
+it is worth stating plainly rather than dressing up: 0.136.2 reached npm from a
+maintainer's laptop, not from CI, so it carries **no provenance attestation** —
+nothing ties that tarball to this repository or this commit beyond trust in the
+publisher.
+
+npm will not accept a re-publish of an existing version, so obtaining provenance
+requires a new one. 0.136.3 is that, and nothing else.
+
+The release path itself was already proven end to end on 0.136.2: the gate passed
+on a clean runner, npm signed a provenance statement and recorded it in the
+Sigstore transparency log, and only the final registry upload was rejected —
+because the token in CI was not authorized to publish. With a valid automation
+token that last step completes, and the attestation that was already being
+generated actually lands.
+
+Verify it yourself once published:
+
+```
+npm view @clear-capabilities/agentic-security-scanner@0.136.3 --json | jq .dist.attestations
+```
+
+`null` means it went out unattested again. `dist.signatures` is NOT the same
+thing — the registry signs every package it serves; provenance is the separate
+Sigstore statement binding the artifact to its source.
+
 ## 0.136.2 — authenticate the gate on the path that actually runs it
 
 0.136.1 removed the self-deadlock and the release workflow got further: every
