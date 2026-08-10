@@ -16,7 +16,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { PACKS } from './rule-packs.js';
 
-import { statePath } from './state-dir.js';
+import { stateDir, statePath } from './state-dir.js';
 export const SCANNER_VERSION = '0.39.2';
 const LOCK_FILE = 'rules.lock.json';
 
@@ -41,7 +41,7 @@ export function buildLockfile() {
 }
 
 export function writeLockfile(scanRoot) {
-  const dir = path.join(scanRoot, '.agentic-security');
+  const dir = stateDir(scanRoot);
   fs.mkdirSync(dir, { recursive: true });
   const fp = path.join(dir, LOCK_FILE);
   const lock = buildLockfile();

@@ -30,7 +30,7 @@ import * as triage from '../src/posture/triage.js';
 import { buildSlackDigest, buildDiscordDigest, postWebhook, buildJiraIssue, buildPrComment, buildSiemEvent, loadIntegrationConfig } from '../src/integrations/index.js';
 import { globFiles } from '../src/util/glob.js';
 
-import { statePath } from '../src/posture/state-dir.js';
+import { stateDir, statePath } from '../src/posture/state-dir.js';
 // last-scan.json integrity helpers — implementation in posture/integrity.js
 // so the MCP server tools can share verification.
 function _verifyLastScan(body, sigFile) {
@@ -291,23 +291,23 @@ function _bundleSha() {
 }
 
 async function writeMachineOutput(targetAbs, scan, meta, profile) {
-  const stateDir = path.join(targetAbs, '.agentic-security');
+  const stateDirPath = stateDir(targetAbs);
   const { isSafeStateDir: _isSafe, stateWritesEnabled: _writesOn } = await import('../src/posture/state-dir.js');
   // Read-only scan (NON_MUTATING_SCAN_PRD S1). These writes bypass
   // safeWriteState because they are async, so the switch is checked here — the
   // same refusal path the project-root check already uses.
-  if (!_writesOn() || !_isSafe(stateDir)) {
-    if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write machine output at ${stateDir} — no project marker\n`);
+  if (!_writesOn() || !_isSafe(stateDirPath)) {
+    if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write machine output at ${stateDirPath} — no project marker\n`);
     return;
   }
-  await fsp.mkdir(stateDir, { recursive: true });
+  await fsp.mkdir(stateDirPath, { recursive: true });
   // Always JSON (used by /security-fix and /security-report).
-  await fsp.writeFile(path.join(stateDir, 'findings.json'),
+  await fsp.writeFile(path.join(stateDirPath, 'findings.json'),
     JSON.stringify(toJSON(scan, meta), null, 2));
   if (profile.profile === 'pro' || profile.machineOutput) {
-    await fsp.writeFile(path.join(stateDir, 'findings.sarif'),
+    await fsp.writeFile(path.join(stateDirPath, 'findings.sarif'),
       JSON.stringify(toSARIF(scan, meta), null, 2));
-    await fsp.writeFile(path.join(stateDir, 'findings.csv'), toCSV(scan));
+    await fsp.writeFile(path.join(stateDirPath, 'findings.csv'), toCSV(scan));
   }
 }
 
@@ -656,9 +656,9 @@ async function cmdScan(args) {
 
   // Persist last scan for /security-fix and /security-report
   const { isSafeStateDir: _isSafeStateDir, stateWritesEnabled: _writesOnScan } = await import('../src/posture/state-dir.js');
-  const stateDir = path.join(path.resolve(target), '.agentic-security');
-  if (_writesOnScan() && _isSafeStateDir(stateDir)) {
-    await fsp.mkdir(stateDir, { recursive: true });
+  const stateDirPath = stateDir(path.resolve(target));
+  if (_writesOnScan() && _isSafeStateDir(stateDirPath)) {
+    await fsp.mkdir(stateDirPath, { recursive: true });
     const persistedScan = toJSON(scan, meta);
     // #10 — MTTR: stamp firstSeenAt/lastSeenAt/ageDays from the PREVIOUS scan so
     // every finding carries an age, SLA breaches can be surfaced, and the fix
@@ -669,7 +669,7 @@ async function cmdScan(args) {
         const { stampFindingTimestamps, buildBaselineMap, renderSlaSummary } = await import('../src/posture/mttr.js');
         let baselineMap = new Map();
         try {
-          const prev = JSON.parse(await fsp.readFile(path.join(stateDir, 'last-scan.json'), 'utf8'));
+          const prev = JSON.parse(await fsp.readFile(path.join(stateDirPath, 'last-scan.json'), 'utf8'));
           baselineMap = buildBaselineMap(prev);
         } catch { /* first run — empty baseline, everything is firstSeen now */ }
         const now = Date.now();
@@ -718,18 +718,18 @@ async function cmdScan(args) {
       } catch { /* best-effort, offline-degrading — never block a scan */ }
     }
     const lastScanBody = JSON.stringify(persistedScan, null, 2);
-    await fsp.writeFile(path.join(stateDir, 'last-scan.json'), lastScanBody);
+    await fsp.writeFile(path.join(stateDirPath, 'last-scan.json'), lastScanBody);
     try {
-      await fsp.writeFile(path.join(stateDir, 'last-scan.json.sig'), _signLastScan(lastScanBody));
+      await fsp.writeFile(path.join(stateDirPath, 'last-scan.json.sig'), _signLastScan(lastScanBody));
     } catch { /* non-fatal — sig file is best-effort */ }
   } else {
-    if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write state at ${stateDir} — no project marker in ${path.resolve(target)}\n`);
+    if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write state at ${stateDirPath} — no project marker in ${path.resolve(target)}\n`);
   }
 
   // 0.14.0 — update streak / achievements after every full scan. Suppress
   // streak side effects when the user only wants raw JSON output (CI piping).
   try {
-    const streak = recordScan(stateDir, persistedScan);
+    const streak = recordScan(stateDirPath, persistedScan);
     // Print celebration / streak line to stderr so it doesn't pollute --format json
     if (process.stderr.isTTY && format !== 'json' && format !== 'sarif') {
       const delta = formatGradeDelta(streak);
@@ -808,18 +808,18 @@ async function cmdCi(args) {
   if (packNames.length) Object.assign(scan, applyPacks(scan, packNames));
 
   // Persist the three CI artifacts.
-  const stateDir = path.join(targetAbs, '.agentic-security');
+  const stateDirPath = stateDir(targetAbs);
   const { isSafeStateDir: _isSafeCi, stateWritesEnabled: _writesOnCi } = await import('../src/posture/state-dir.js');
-  if (!_writesOnCi() || !_isSafeCi(stateDir)) {
-    if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write CI artifacts at ${stateDir} — no project marker\n`);
+  if (!_writesOnCi() || !_isSafeCi(stateDirPath)) {
+    if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write CI artifacts at ${stateDirPath} — no project marker\n`);
     return;
   }
-  await fsp.mkdir(stateDir, { recursive: true });
-  await fsp.writeFile(path.join(stateDir, 'findings.json'),
+  await fsp.mkdir(stateDirPath, { recursive: true });
+  await fsp.writeFile(path.join(stateDirPath, 'findings.json'),
     JSON.stringify(toJSON(scan, meta), null, 2));
-  await fsp.writeFile(path.join(stateDir, 'findings.sarif'),
+  await fsp.writeFile(path.join(stateDirPath, 'findings.sarif'),
     JSON.stringify(toSARIF(scan, meta), null, 2));
-  await fsp.writeFile(path.join(stateDir, 'findings.junit.xml'),
+  await fsp.writeFile(path.join(stateDirPath, 'findings.junit.xml'),
     toJUnit(scan, meta));
 
   const scanCode = exitCodeFor(scan);
@@ -1430,9 +1430,9 @@ async function cmdVerify(args) {
 // --yes to skip the confirmation prompt (for scripted use).
 async function cmdReset(args) {
   const scanRoot = path.resolve(args.flags.root || '.');
-  const stateDir = path.join(scanRoot, '.agentic-security');
-  if (!fs.existsSync(stateDir)) {
-    console.log(`No state to reset at ${stateDir}`);
+  const stateDirPath = stateDir(scanRoot);
+  if (!fs.existsSync(stateDirPath)) {
+    console.log(`No state to reset at ${stateDirPath}`);
     return 0;
   }
   const WIPE = new Set([
@@ -1457,17 +1457,17 @@ async function cmdReset(args) {
   ]);
   const keep = new Set((args.flags.keep || '').split(',').filter(Boolean));
   const targets = [];
-  for (const entry of await fsp.readdir(stateDir, { withFileTypes: true })) {
+  for (const entry of await fsp.readdir(stateDirPath, { withFileTypes: true })) {
     if (keep.has(entry.name)) continue;
     if (WIPE.has(entry.name) || WIPE_DIRS.has(entry.name)) {
       targets.push({ name: entry.name, dir: entry.isDirectory() });
     }
   }
   if (!targets.length) {
-    console.log(`Nothing to reset under ${stateDir}.`);
+    console.log(`Nothing to reset under ${stateDirPath}.`);
     return 0;
   }
-  console.log(`agentic-security reset — will remove from ${stateDir}:`);
+  console.log(`agentic-security reset — will remove from ${stateDirPath}:`);
   for (const t of targets) console.log(`  ${t.name}${t.dir ? '/' : ''}`);
   console.log('');
   console.log('Preserving operator-authored config: rules.yml, rules/, license-policy.yml, trusted-keys.json, ruleset-version.json');
@@ -1477,7 +1477,7 @@ async function cmdReset(args) {
     return 0;
   }
   for (const t of targets) {
-    const p = path.join(stateDir, t.name);
+    const p = path.join(stateDirPath, t.name);
     try {
       if (t.dir) await fsp.rm(p, { recursive: true, force: true });
       else await fsp.rm(p, { force: true });
@@ -2015,7 +2015,7 @@ async function main() {
         const result = analyzeTranscript({ transcriptPath: args.flags.transcript, projectDir });
         if (result.ok) {
           try {
-            const dir = path.join(projectDir, '.agentic-security');
+            const dir = stateDir(projectDir);
             fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(path.join(dir, 'cache-telemetry.json'),
               JSON.stringify({ updatedAt: new Date().toISOString(), metrics: result.metrics, leaks: result.leaks }, null, 2));

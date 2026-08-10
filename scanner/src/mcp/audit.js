@@ -27,6 +27,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { redactArgsBlob } from './redact.js';
 
+import { stateDir } from '../posture/state-dir.js';
 const MAX_ARG_BYTES = 1024;
 const GENESIS = 'GENESIS';
 const REMOTE_TIMEOUT_MS = 1500;
@@ -87,7 +88,7 @@ export function auditCall({ sessionRoot, tool, args, outcome, reason }) {
     let hasMarker = false;
     for (const m of MARKERS) { try { if (fs.existsSync(path.join(sessionRoot, m))) { hasMarker = true; break; } } catch {} }
     if (!hasMarker) return;
-    const dir = path.join(sessionRoot, '.agentic-security');
+    const dir = stateDir(sessionRoot);
     fs.mkdirSync(dir, { recursive: true });
     const logFile = path.join(dir, 'mcp-audit.log');
     const entry = {

@@ -40,7 +40,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 
-import { statePath, safeWriteState } from './state-dir.js';
+import { safeWriteState, stateDir, statePath } from './state-dir.js';
 const DEFAULT_POLICY = {
   acceptRisk: [],
   sla: {},
@@ -184,7 +184,7 @@ export function applyScaPolicy(findings, policy, scanTime = new Date()) {
 // If the policy file doesn't exist, one is created with safe defaults.
 export function appendAcceptRiskFromTriage(scanRoot, finding, reason) {
   if (!scanRoot || !finding) return { ok: false, reason: 'missing arguments' };
-  const dir = path.join(scanRoot, '.agentic-security');
+  const dir = stateDir(scanRoot);
   const fp = path.join(dir, 'sca-policy.yml');
   let policy = loadScaPolicy(scanRoot);
   if (policy && policy._error) return { ok: false, reason: policy._error };

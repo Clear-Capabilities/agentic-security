@@ -100,21 +100,21 @@ const ALLOWLIST = new Set([
   // sites remain (custom rules, logic-claims.json) plus the dpia.md write.
   'src/engine.js',
   
-  'src/llm-validator/index.js', 'src/mcp/audit.js', 'src/mcp/tools.js',
+  'src/llm-validator/index.js', 'src/mcp/tools.js',
   'src/posture/agents-memory.js', 'src/posture/auditor-walkthrough.js', 'src/posture/auth-posture-import.js',
   'src/posture/corpus-enroll.js',
   'src/posture/cve-alert-daemon.js', 
-  'src/posture/deterministic.js', 'src/posture/feature-flags.js',
+  'src/posture/feature-flags.js',
   'src/posture/findings-memory.js', 'src/posture/fix-metrics.js',
   'src/posture/grader-calibration.js', 
   'src/posture/learning.js',
   'src/posture/license-policy.js', 'src/posture/model-rescan.js',
   'src/posture/network-policy-import.js', 'src/posture/pr-augment.js',
-  'src/posture/risk-dollars.js', 'src/posture/router.js', 'src/posture/rule-overrides.js',
+  'src/posture/risk-dollars.js', 'src/posture/rule-overrides.js',
   'src/posture/ruleset-version.js',
-  'src/posture/sca-policy.js',
+  
   'src/posture/scan-checkpoint.js', 'src/posture/telemetry-ingest.js',
-  'src/posture/threat-model-auto.js', 'src/posture/threat-model-grounding.js', 'src/posture/time-to-fix.js',
+  'src/posture/threat-model-grounding.js', 'src/posture/time-to-fix.js',
   'src/posture/triage-memory.js', 'src/posture/verifier-target.js', 'src/posture/waf-ingest.js',
   'src/posture/watch-mode.js', 
 ]);

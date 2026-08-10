@@ -222,8 +222,8 @@ function _confine(sessionRoot, candidate, label) {
 }
 
 function _readLastScanVerified(sessionRoot, { allowUnsigned = false } = {}) {
-  const stateDir = path.join(sessionRoot, '.agentic-security');
-  const scanFile = path.join(stateDir, 'last-scan.json');
+  const stateDirPath = stateDir(sessionRoot);
+  const scanFile = path.join(stateDirPath, 'last-scan.json');
   const sigFile = scanFile + '.sig';
   if (!fs.existsSync(scanFile)) return { scan: null, status: 'missing' };
   const body = fs.readFileSync(scanFile, 'utf8');
@@ -1013,7 +1013,7 @@ export const read_scratchpad = {
 import { appendAgentsMemory as _appendAgentsMemory, readAgentsMemory as _readAgentsMemory } from '../posture/agents-memory.js';
 import { lookupCve as _lookupCve } from '../posture/cve-lookup.js';
 
-import { statePath } from '../posture/state-dir.js';
+import { stateDir, statePath } from '../posture/state-dir.js';
 export const append_agents_memory = {
   name: 'append_agents_memory',
   description: 'Append a short narrative entry to AGENTS.md — agent-authored continual-learning notes. Use at session end to record "what worked / what didn\'t / what I\'d try differently next time" so the next agent can pick up the lesson. Bounded: 2 KB per entry, 20 KB total before rotation to AGENTS.md.archive. Use sparingly — narrative, not structured data.',

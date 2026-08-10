@@ -17,7 +17,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { statePath } from './state-dir.js';
+import { stateDir, statePath } from './state-dir.js';
 function readJson(fp) {
   if (!fs.existsSync(fp)) return null;
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
@@ -56,9 +56,9 @@ export function decide(opts) {
 }
 
 function baseDecision({ scanRoot, intent }) {
-  const stateDir = path.join(scanRoot, '.agentic-security');
-  const lastScan = readJson(path.join(stateDir, 'last-scan.json'));
-  const scanAge = ageHours(path.join(stateDir, 'last-scan.json'));
+  const stateDirPath = stateDir(scanRoot);
+  const lastScan = readJson(path.join(stateDirPath, 'last-scan.json'));
+  const scanAge = ageHours(path.join(stateDirPath, 'last-scan.json'));
 
   if (!lastScan) {
     return {

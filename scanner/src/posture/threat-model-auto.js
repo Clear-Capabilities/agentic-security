@@ -23,7 +23,7 @@
 // .agentic-security/threat-model.md (human-readable).
 
 import * as fs from 'node:fs';
-import { stateWritesEnabled } from './state-dir.js';
+import { stateDir, stateWritesEnabled } from './state-dir.js';
 import * as path from 'node:path';
 
 // STRIDE category descriptors
@@ -214,7 +214,7 @@ function _mid(id) { return String(id).replace(/[^A-Za-z0-9]/g, '_').slice(0, 60)
 export function persistThreatModel(scanRoot, model) {
   // NON_MUTATING_SCAN_PRD S1 — a scan must not modify the tree it scans.
   if (!stateWritesEnabled()) return;
-  const dir = path.join(scanRoot, '.agentic-security');
+  const dir = stateDir(scanRoot);
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
   try { fs.writeFileSync(path.join(dir, 'threat-model.json'), JSON.stringify(model, null, 2)); } catch {}
   try { fs.writeFileSync(path.join(dir, 'threat-model.md'), renderMarkdown(model)); } catch {}
