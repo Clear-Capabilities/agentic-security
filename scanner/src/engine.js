@@ -71,6 +71,7 @@ import { scanWebhook } from './sast/webhook.js';
 import { scanClientSide } from './sast/client-side.js';
 import { scanPromptFirewall } from './sast/prompt-firewall.js';
 import { scanLlmRedteam } from './posture/llm-redteam.js';
+import { assessPrivacyFramework, persistPrivacyFramework } from './posture/privacy-framework.js';
 import { safeWriteState as _safeWriteState, statePath, statePath as _statePath } from './posture/state-dir.js';
 import { scanContainer } from './sca/container.js';
 import { detectDepConfusion } from './sca/dep-confusion.js';
@@ -8780,6 +8781,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // Each is opt-in via env var. They produce machine-readable artifacts
   // (threat-model.json/.md, dpia.md, compliance-evidence.json/.md,
   // sbom-history/<sha>.json, exploit-bundles/) under .agentic-security/.
+  let _privacyFramework = null;
   let _threatModel = null, _apiContractFindings = [], _sbomDiff = null,
       _complianceReport = null, _exploitBundles = null, _pqcPlan = null,
       _licenseGraph = null, _attributions = null, _taxonomySummary = null;
@@ -8847,6 +8849,29 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
         if (_pqcPlan) persistPqcPlan(scanRoot, _pqcPlan);
       } catch (_) {}
     }
+    // NIST Privacy Framework 1.1 assessment.
+    //
+    // The ASSESSMENT is default-on and lands on `scan.privacyFramework`, like
+    // every other posture artifact. Its FINDINGS are opt-in
+    // (AGENTIC_SECURITY_PRIVACY_FRAMEWORK=1), because appending them to
+    // scan.findings would change every severity count, gate verdict and
+    // baseline in every downstream consumer — a compliance opinion should not
+    // silently become a build failure for projects that never asked for it.
+    // Turn them on and they flow through triage and /fix like any finding.
+    if (process.env.AGENTIC_SECURITY_NO_PRIVACY_FRAMEWORK !== '1') {
+      try {
+        _privacyFramework = assessPrivacyFramework(scanRoot, {
+          findings: finalFindings, components: annotatedComponents,
+          // filesScanned feeds the vacuous-satisfaction guard: a clean signal
+          // from a run that read no files is not evidence of compliance.
+          filesScanned: files.length,
+        });
+        if (_privacyFramework) persistPrivacyFramework(scanRoot, _privacyFramework);
+        if (_privacyFramework && process.env.AGENTIC_SECURITY_PRIVACY_FRAMEWORK === '1') {
+          finalFindings.push(..._privacyFramework.findings);
+        }
+      } catch (_) {}
+    }
     // Exploit bundles — per-family PoC + Jest + pytest + remediation for
     // top-N critical/high findings.
     if (process.env.AGENTIC_SECURITY_NO_EXPLOIT_BUNDLES !== '1') {
@@ -8893,7 +8918,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // Addition #3 — root-cause sweep: from confirmed findings, find sibling instances
   // detectors missed, with total-count accounting. Confirmed-only (cheap by default).
   let _rootCauseSweep = null; try { _rootCauseSweep = sweepRootCauses(finalFindings, fc); } catch { _rootCauseSweep = null; }
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

@@ -202,8 +202,32 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 | OWASP ASVS 4.0.3 — Application Security Verification Standard | `asvs` | [coverage](docs/compliance/owasp-asvs-coverage.md) |
 | OWASP LLM Top 10 (2025) | `llm` | [coverage](docs/compliance/owasp-llm-top10-coverage.md) |
 | EU AI Act | `eu-ai-act` | [`scripts/eu-ai-act/`](scripts/eu-ai-act/) |
+| NIST Privacy Framework 1.1 | `--privacy` | all 104 controls, bucketed (below) |
 
-`/compliance --walkthrough <framework>` adds step-by-step auditor narratives with per-control evidence mapping for `nist-csf-2`, `nist-ai-600-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, and `ccpa` — or bring your own controls at `.agentic-security/compliance/<id>/controls.json`.
+`/compliance --walkthrough <framework>` adds step-by-step auditor narratives with per-control evidence mapping for `nist-csf-2`, `nist-ai-600-1`, `nist-privacy-1-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, and `ccpa` — or bring your own controls at `.agentic-security/compliance/<id>/controls.json`.
+
+### NIST Privacy Framework 1.1 — and what it refuses to claim
+
+`/compliance --privacy` assesses all 104 PF 1.1 controls and writes
+`.agentic-security/privacy-framework.{json,md}`. Each gap carries an actionable
+remediation and is emitted as an ordinary finding (`family: privacy-compliance`,
+`CWE-359`), so `/fix` handles it like anything else. Findings are opt-in via
+`AGENTIC_SECURITY_PRIVACY_FRAMEWORK=1` — a compliance opinion shouldn't silently
+become your build failure.
+
+The part worth reading: NIST rates each control for code-testability, and on
+these 104 it is **23 yes, 33 partial, 48 no**. So every control lands in one of
+four buckets and the bucket is always shown — **gap** (mapped signal failing),
+**not assessed** (code-testable, but this engine has no signal for it),
+**manual** (governance/policy, outside any scanner's reach), **satisfied**.
+
+Controls in *not assessed* and *manual* are never counted as satisfied, and the
+satisfied rate is reported over the controls actually assessed, never over all
+104. A scan that examined no files reports everything as *not assessed* rather
+than passing. A privacy report that quietly marks 48 governance controls "passed"
+because no rule fired against them is manufacturing assurance someone will hand
+to an auditor — this one tells you exactly how much of the framework it did not
+check.
 
 ---
 

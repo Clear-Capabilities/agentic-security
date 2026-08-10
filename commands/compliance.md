@@ -12,17 +12,51 @@ Compliance + auditor flows dispatcher.
 | Flag | Behaviour |
 |---|---|
 | `--report <framework>` | Generate auditor-ready compliance attestation. Frameworks: `nist`, `asvs`, `llm`, `eu-ai-act` |
-| `--walkthrough <framework>` | Step-by-step auditor narrative with evidence mapping per control. Frameworks: `nist-csf-2`, `nist-ai-600-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, `ccpa` (or BYO at `.agentic-security/compliance/<id>/controls.json`) |
+| `--walkthrough <framework>` | Step-by-step auditor narrative with evidence mapping per control. Frameworks: `nist-csf-2`, `nist-ai-600-1`, `nist-privacy-1-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, `ccpa` (or BYO at `.agentic-security/compliance/<id>/controls.json`) |
 | `--attestation` | Render buyer-facing security posture artifact. `--format badge|onepager|page` |
 | `--audit <target>` | Stack-specific security audits. Targets: `db`, `auth`, `rate-limit`, `webhook`, `env`, `csp-cors`, `deploy`, `launch`, `llm-cost`, `prompt` |
 | `--pr` | Generate PR-description block (security delta vs base + ATT&CK + reviewers + artifacts) |
 | `--gap` | Show only the **Not-Compliant** controls, each with the exact command that closes it |
+| `--privacy` | NIST Privacy Framework 1.1 assessment with remediation per gap. Artifacts: `.agentic-security/privacy-framework.{json,md}` |
 
 Bare `/compliance` (no flag) prints this mode menu. `--report` and `--gap` accept `--format cli|json|oscal`.
 
 ## `--gap` (close the deltas)
 
 `--gap` runs the attestation for `<framework>` but filters to controls scored **Not-Compliant** / **Partial**, and for each one prints the single command that closes it — e.g. a missing-rate-limit control maps to `/compliance --audit rate-limit`, a secrets control to `/fix --rotate-secret`, a coverage gap to `/fix --compliance`. The output is an actionable worklist, not a full report. `/fix --compliance` consumes the same mapping to batch-close them.
+
+## `--privacy` (NIST Privacy Framework 1.1)
+
+Runs on every scan and writes `.agentic-security/privacy-framework.{json,md}`.
+All 104 PF 1.1 controls are carried, and each lands in exactly one bucket:
+
+| Bucket | Meaning |
+|---|---|
+| **gap** | Mapped to an engine signal, and that signal is failing — **this is the only bucket that emits a finding** |
+| **not assessed** | NIST rates the control code-testable, but this engine has no signal for it. Disclosed by name. **Not a pass.** |
+| **manual** | NIST rates the control not code-testable — governance, policy, process. Outside any scanner's reach. |
+| **satisfied** | Mapped, and the signal is clean |
+
+The split matters: of the 104 controls NIST rates **23 yes, 33 partial and 48 no**
+for code-testability. A tool that reports the 48 governance controls as "passed"
+because no rule fired against them is manufacturing assurance, so they are never
+counted as satisfied — and neither are controls this engine simply does not check.
+
+**Remediation.** Each gap carries an actionable remediation and is emitted as a
+normal finding (`family: privacy-compliance`, `CWE-359`), so it flows through
+triage and `/fix` like any other. Findings are **opt-in** via
+`AGENTIC_SECURITY_PRIVACY_FRAMEWORK=1`: a compliance opinion should not silently
+become a build failure for a project that never asked for one. The assessment
+artifact is written either way.
+
+A scan that examined **no files** reports every control as *not assessed* rather
+than satisfied — a clean signal from a run that read nothing is not evidence.
+
+```bash
+/compliance --privacy                                   # assessment + gaps
+AGENTIC_SECURITY_PRIVACY_FRAMEWORK=1 scan .             # gaps as fixable findings
+/compliance --walkthrough nist-privacy-1-1              # auditor narrative
+```
 
 ## `--format oscal` (machine-readable export)
 

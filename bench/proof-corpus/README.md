@@ -2,7 +2,14 @@
 
 Scans large third-party open-source repositories to produce reproducible
 evidence about language coverage, detection quality, and operational behaviour
-at scale. See the Proof Corpus PRD (removed post-implementation) for the full rationale.
+at scale.
+
+**Why this corpus exists.** The curated CVE-replay corpus is a regression net whose
+fixtures and labels are both written here, so it cannot answer whether the engine
+survives real third-party code: whether the parsers build IR at scale, whether a
+scan is deterministic across runs, and whether the analysis holds on codebases
+nobody here shaped. This corpus answers those, and only those — it carries no
+vulnerability ground truth, so no accuracy rate is derived from it.
 
 ## Running
 
@@ -35,7 +42,7 @@ committed to this tree.
 `results/summary.json` holds aggregate metrics and is committed.
 `results/raw/` holds findings and SARIF for live third-party projects and is
 gitignored — unreviewed findings against software people run in production are
-not ours to publish (PRD §9.1).
+not ours to publish (see the disclosure boundary below).
 
 ## Phase-1 status
 
@@ -64,7 +71,12 @@ declared zero functions, even when the parser returned a valid IR record for
 it (an `__init__.py`, a constants module). That is not a parse failure. The
 metric now counts `parsed` as "an IR record exists for the file," full stop,
 and tracks `functionless` (record exists, zero functions) as a separate,
-non-penalized count. See the Proof Corpus PRD §5.4.
+non-penalized count.
+
+> **Parse-coverage rule (previously PRD §5.4, now owned here):** `parsed` means an
+> IR record exists for the file. A record with zero functions is `functionless`
+> and is counted separately, never as a failure — otherwise every `__init__.py`
+> and constants module depresses a number that is supposed to measure the parser.
 
 **The previously published "Superset Python parse coverage: 74%" was a
 measurement artifact, not a parsing problem.** Under the corrected metric,
@@ -74,7 +86,11 @@ metric miscounted as a failure. There was no Python IR parser bug to
 investigate; the earlier "known gap" and its stated follow-up
 ("investigating the Python IR parser's failure modes") were chasing a number
 that measured the wrong thing. Superset now clears the PRD's 85% acceptance
-bar (the Proof Corpus PRD §12 acceptance criterion 2) on every language in scope.
+bar on every language in scope.
+
+> **Acceptance criterion 2 (previously PRD §12, now owned here):** every language
+> in scope reaches **>=85% parse coverage**, and the files that fail are
+> ENUMERATED in `GAPS.md`, not merely counted.
 
 ### Known gaps surfaced by this run
 
@@ -273,8 +289,12 @@ forwards them" was false for the same reason. Verified by execution:
 This is language-agnostic, not a C++ issue: JS, Python and C++ all show
 intraprocedural findings and no interprocedural ones, exactly as one shared
 defect predicts. It is deliberately **not** fixed here — see the known-issue
-register below. See the Proof Corpus PRD §6.12 for how it affects the
-criterion-4 judgement.
+register below.
+
+> **Criterion 4 (previously PRD §6.12, now owned here):** interprocedural taint
+> must be demonstrated on real code. A run showing intraprocedural findings and
+> zero interprocedural ones across every language fails this criterion — one
+> shared defect explains it, and a language-specific excuse does not.
 
 ## Known issues found on this branch and deliberately not fixed here
 

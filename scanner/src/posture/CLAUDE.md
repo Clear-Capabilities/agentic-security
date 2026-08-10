@@ -80,6 +80,31 @@ Wired in `bin/agentic-security.js` after every filter and after `makeDeterminist
 
 **Rule lifecycle** — `custom-rules.js` (YAML pattern DSL), `rule-overrides.js` (`disable:` gated on signature), `rule-packs.js`, `rule-synthesis.js` (proposes suppressions from triage feedback), `ruleset-version.js`.
 
+**NIST Privacy Framework 1.1 (`privacy-framework.js`)** — assessment + remediation
+over the bundled `compliance-frameworks/nist-privacy-1-1.json` (all 104 controls).
+Sits on top of `auditor-walkthrough.js`'s evaluator and adds the half a narrative
+cannot give you: a gap becomes a FINDING (`family: privacy-compliance`,
+`CWE-359`) carrying an actionable remediation, so it flows through triage and
+`/fix`.
+
+Four buckets, and the bucket is always stated: `gap` (mapped signal failing —
+the ONLY bucket that emits a finding), `engine-gap` (NIST rates it code-testable
+but this engine has no signal — disclosed by name, never a pass), `manual` (NIST
+rates it not code-testable), `satisfied`. NIST's own `codeTestable` rating is
+carried per control and is what separates "nobody checked" from "we checked and
+it is fine" — 48 of 104 are governance controls no scanner can assess, and
+reporting those as passed is the failure mode the module exists to prevent.
+
+Two guards are load-bearing. **Findings are opt-in**
+(`AGENTIC_SECURITY_PRIVACY_FRAMEWORK=1`); the assessment always lands on
+`scan.privacyFramework` and at `.agentic-security/privacy-framework.{json,md}`,
+but appending to `scan.findings` by default would change every severity count
+and gate verdict downstream. And the **vacuous-satisfaction guard**: a
+`family:`-mapped control clears when no findings of that family are open, which
+is also true of a scan that read zero files — so when nothing was examined every
+mapped control degrades to `engine-gap` instead of reporting as satisfied. That
+one was caught by the module's own test, not in review.
+
 **Posture artifacts** — `sbom.js`, `aibom.js`, `api-inventory.js`, `threat-model.js`, `trust-boundary-diagram.js`, `stack-playbook.js`, `deploy-platform.js`, `license-policy.js`, `material-change.js`, `mttr.js`, `streak.js`, `scorecard.js`, `security-trend.js`.
 
 **Why this fired** — `why-fired.js`. Runs LAST so it reflects every annotation. Customer-facing provenance.

@@ -8,6 +8,8 @@
 //
 //   nist-csf-2          NIST Cybersecurity Framework 2.0
 //   nist-ai-600-1       NIST AI Risk Management Framework, GenAI profile
+//   nist-privacy-1-1    NIST Privacy Framework 1.1 (see posture/privacy-framework.js
+//                       for the assessment + remediation layer over it)
 //   owasp-asvs-5        OWASP Application Security Verification Standard 5.0
 //   owasp-llm-top-10    OWASP Top 10 for LLM Applications 2025
 //   eu-ai-act           EU AI Act (Regulation 2024/1689)

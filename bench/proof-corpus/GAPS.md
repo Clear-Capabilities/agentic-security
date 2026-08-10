@@ -7,11 +7,11 @@ each sidecar's per-language `failures[]` array) plus
 `node bench/proof-corpus/runner.mjs --only ghost,superset,godot` and re-reading
 those two files.
 
-This file exists because the Proof Corpus PRD §12 (removed post-implementation) criterion 2 promises the
-files that fail to parse are enumerated, not merely counted. A campaign of this
+This file exists to satisfy acceptance criterion 2: the files that fail to parse
+are ENUMERATED, not merely counted. A campaign of this
 size that reports zero gaps has a broken harness, not a perfect scanner.
 
-**Disclosure boundary (PRD §9.1):** these are source PATHS in public repositories
+**Disclosure boundary:** these are source PATHS in public repositories
 at pinned public commits, and say only which files OUR parser could not build IR
 for. No findings, no snippets, and no vulnerability claims about third-party code
 appear here — those stay in the gitignored `results/raw/`.

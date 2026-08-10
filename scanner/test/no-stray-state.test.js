@@ -110,6 +110,9 @@ const DELIBERATELY_UNGUARDED = new Set([
  *      text, and prompt templates that TELL the user where state lives.
  *  · posture/license-policy.js    — a finding's `file:` field, i.e. the location
  *      shown to a human, not a path anything opens.
+ *  · posture/privacy-framework.js — likewise: a compliance gap is a property of
+ *      the project, not of one line, so the finding cites the framework rather
+ *      than fabricating a source location. Nothing opens it.
  *  · posture/pr-augment.js        — likewise a `path:` field in emitted output.
  *  · posture/rule-overrides.js    — prose inside a warning message.
  *  · mcp/tools.js                 — the reserved-write denylist and the
@@ -140,6 +143,7 @@ const NOT_PATH_CONSTRUCTION = new Set([
   'bin/agentic-security-rule.js', 'src/posture/corpus-enroll.js',
   'src/posture/scan-checkpoint.js', 'src/posture/threat-model-grounding.js',
   'src/posture/agents-memory.js', 'src/discovery/memory.js',
+  'src/posture/privacy-framework.js',
   'src/posture/verifier-target.js',
 ]);
 

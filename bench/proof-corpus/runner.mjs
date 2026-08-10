@@ -3,9 +3,14 @@
 //
 // Clones pinned commits of third-party repositories into an out-of-tree cache,
 // scans each with the committed bundle, and assembles an aggregate results
-// record. Raw findings are never written to a committed path — see
-// the Proof Corpus PRD §9.1 (removed post-implementation) for why that boundary is enforced here rather
-// than left to discipline.
+// record.
+//
+// DISCLOSURE BOUNDARY, enforced in code rather than left to discipline: raw
+// findings are never written to a committed path. They describe possible
+// weaknesses in third-party code at public commits, and publishing them from
+// here would be disclosing someone else's vulnerabilities on their behalf.
+// Only aggregate counts are committed; everything per-finding stays in the
+// gitignored results/raw/.
 //
 // Usage:
 //   node bench/proof-corpus/runner.mjs [options]
@@ -17,7 +22,7 @@
 //                       third-party source paths) are ALWAYS written under the fixed
 //                       bench/proof-corpus/results/raw/ regardless of --out, because that
 //                       is the only path .gitignore covers. --out never relocates raw
-//                       artifacts — see the Proof Corpus PRD §9.1.
+//                       artifacts — see the disclosure boundary above.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -34,7 +39,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MANIFEST = path.join(HERE, 'manifest.json');
 // Fixed regardless of --out: this is the only path bench/proof-corpus/.gitignore
 // covers. Raw artifacts carry real third-party source paths and must never be
-// stageable in git — see the Proof Corpus PRD §9.1 and the runner's --out help text.
+// stageable in git — see the disclosure boundary at the top of this file.
 const RAW_DIR = path.join(HERE, 'results', 'raw');
 
 export function parseArgs(argv) {
@@ -111,8 +116,10 @@ export function sarifDigest(file) {
 // Godot's core/modules/scene/servers/editor). The scanner CLI takes a single
 // root directory, so scanning "just scope[0]" silently narrows the measured
 // scope to one subtree while the manifest and scorecard keep claiming all of
-// them — exactly the "single most dishonest thing this bench could do" that
-// the Proof Corpus PRD §5.3 calls out. Instead, materialize every scope entry
+// them — scanning a subset while the manifest and scorecard keep claiming the
+// whole scope is the single most dishonest thing this bench could do, because
+// the shortfall is invisible in every number it publishes. Instead, materialize
+// every scope entry
 // as a top-level sibling under one staging root (via a real recursive copy,
 // not a symlink — readTree() walks with followSymbolicLinks:false) so a
 // single scan pass covers the full declared scope, sees cross-directory calls
