@@ -39,6 +39,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { stateWritesEnabled } from '../posture/state-dir.js';
 const MEMORY_SCHEMA = 'agentic-security/discovery-memory@1';
 export const MEMORY_FILE = path.join('.agentic-security', 'discovery-memory.json');
 
@@ -76,7 +77,8 @@ export function loadMemory(scanRoot) {
 export function saveMemory(scanRoot, memory) {
   try {
     const p = path.join(scanRoot, MEMORY_FILE);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    if (!stateWritesEnabled()) return;
+  fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, JSON.stringify(memory, null, 2) + '\n');
     return true;
   } catch {

@@ -289,3 +289,32 @@ The error understated the problem by 14x and would not have changed a single
 decision here — but it is recorded because the habit that produces it is the
 same one that produced the withdrawn recall figure: trusting a number a command
 printed without checking what the command actually counted.
+
+
+## Appendix B — the writer/reader split was wrong, and the hand review is the reason we know
+
+Section 1 claimed **≥13 writers / ~42 readers**, flagged as a floor needing
+hand verification. M1's first task did that verification. The result:
+
+| | Count | Basis |
+|---|---|---|
+| **Provably read-only** | **25** | the file contains **no write syscall at all** — provable by absence, not by heuristic |
+| **Writers** | **~30** | confirmed by reading the write sites |
+
+So the ledger is roughly **half writers, half readers** — not "mostly reads".
+The reframing in section 1 was wrong, and wrong in the direction that made the
+work look smaller.
+
+Two things are worth keeping from the episode. The **floor** language was the
+right hedge: 13 was labelled a floor precisely because the heuristics kept
+moving, and it did not turn into a claim that 13 was the answer. And the
+partition that finally settled it is not a better regex — it is a different
+*kind* of argument: a module containing no write syscall **cannot** write,
+which is checkable by absence and cannot be defeated by where the path happens
+to be constructed. Every heuristic before it was trying to trace a path to a
+write; this one asks whether a write exists at all.
+
+Estimating scope with a heuristic and then planning against the estimate is
+what produced both this error and the "1.49 MB" one in Appendix A. The plan
+below is unchanged in substance — every writer still needs the same treatment —
+but M1 and M4 are about twice and half the size respectively.

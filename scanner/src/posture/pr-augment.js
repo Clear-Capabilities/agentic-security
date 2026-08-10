@@ -18,6 +18,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { diffScans, summarizeDiff } from './baseline-compare.js';
 
+import { statePath, safeWriteState } from './state-dir.js';
 const REVIEWER_TRIGGERS = [
   { family: /^auth/,                team: 'security', why: 'Auth-related findings' },
   { family: /^crypto/,              team: 'security', why: 'Cryptography findings' },
@@ -29,7 +30,7 @@ const REVIEWER_TRIGGERS = [
 ];
 
 function _stateFile(scanRoot, name) {
-  return path.join(scanRoot, '.agentic-security', name);
+  return statePath(scanRoot, name);
 }
 
 function _readJson(fp) {
@@ -38,7 +39,7 @@ function _readJson(fp) {
 
 function _baselinePath(scanRoot, ref) {
   const safe = String(ref || 'main').replace(/[^\w.-]/g, '-');
-  return path.join(scanRoot, '.agentic-security', 'scan-baselines', `${safe}.json`);
+  return statePath(scanRoot, 'scan-baselines', `${safe}.json`);
 }
 
 /**
@@ -47,8 +48,10 @@ function _baselinePath(scanRoot, ref) {
  */
 export function persistBaseline(scanRoot, ref, scan) {
   const fp = _baselinePath(scanRoot, ref);
-  try { fs.mkdirSync(path.dirname(fp), { recursive: true }); } catch {}
-  try { fs.writeFileSync(fp, JSON.stringify({ ref, ts: new Date().toISOString(), findings: scan.findings || [] }, null, 2)); } catch {}
+  // safeWriteState creates the directory, enforces the project-root check, and
+  // honours the read-only switch. The path is still returned either way, so
+  // callers that only report where the baseline WOULD live are unaffected.
+  safeWriteState(fp, JSON.stringify({ ref, ts: new Date().toISOString(), findings: scan.findings || [] }, null, 2));
   return fp;
 }
 
@@ -109,7 +112,7 @@ function _artifactLinks(scanRoot) {
   ];
   const out = [];
   for (const c of candidates) {
-    const fp = path.join(scanRoot, '.agentic-security', c.file);
+    const fp = statePath(scanRoot, c.file);
     if (fs.existsSync(fp)) out.push({ name: c.name, path: `.agentic-security/${c.file}` });
   }
   return out;

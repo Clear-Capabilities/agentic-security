@@ -33,6 +33,7 @@ import * as yaml from '../util/yaml.js';
 import { globFiles } from '../util/glob.js';
 import { loadTrustedKeys, verifyRulePack } from './rule-pack-signing.js';
 
+import { statePath, safeWriteState } from './state-dir.js';
 const LANG_EXTS = {
   javascript: ['.js', '.mjs', '.cjs', '.jsx'],
   typescript: ['.ts', '.tsx'],
@@ -48,7 +49,7 @@ const LANG_EXTS = {
 };
 
 function rulesDir(scanRoot) {
-  return path.join(scanRoot, '.agentic-security', 'rules');
+  return statePath(scanRoot, 'rules');
 }
 
 export function loadCustomRules(scanRoot) {
@@ -318,10 +319,11 @@ export function applyCustomRules(scanRoot, fileContents) {
   }
   if (shadow.length) {
     try {
-      const stateDir = path.join(scanRoot, '.agentic-security');
-      fs.mkdirSync(stateDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(stateDir, 'shadow-findings.json'),
+      // Through the seam, so a read-only scan cannot leave shadow findings
+      // behind. Shadow rules are excluded from gates by design, which made this
+      // the least likely write for anyone to notice. (PRD M1)
+      safeWriteState(
+        statePath(scanRoot, 'shadow-findings.json'),
         JSON.stringify({ generatedAt: new Date().toISOString(), findings: shadow }, null, 2),
       );
     } catch { /* non-fatal */ }

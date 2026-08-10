@@ -21,6 +21,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { stateWritesEnabled } from './state-dir.js';
 const STATE_DIR = '.agentic-security';
 const MEMORY_FILE = 'triage-memory.jsonl';
 const AGENTS_FILE = 'AGENTS.md';
@@ -43,6 +44,7 @@ function _bucketKey(finding) {
 export function recordDecision(scanRoot, finding, decision, reason) {
   if (!scanRoot || !finding || !decision) return null;
   if (!['wont-fix', 'false-positive'].includes(decision)) return null;
+  if (!stateWritesEnabled()) return false;
   try { fs.mkdirSync(_stateDir(scanRoot), { recursive: true }); } catch {}
 
   const entry = {

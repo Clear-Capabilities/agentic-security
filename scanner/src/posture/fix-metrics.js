@@ -34,7 +34,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { isSafeStateDir } from './state-dir.js';
+import { isSafeStateDir, stateWritesEnabled } from './state-dir.js';
 
 const STATE_DIR = '.agentic-security';
 const LOG_FILE = 'fix-metrics.jsonl';
@@ -63,7 +63,8 @@ export function recordFixAttempt(scanRoot, record) {
   try {
     const dir = path.join(scanRoot, STATE_DIR);
     if (!isSafeStateDir(dir)) return false;
-    fs.mkdirSync(dir, { recursive: true });
+    if (!stateWritesEnabled()) return;
+  fs.mkdirSync(dir, { recursive: true });
     // One writeSync of one newline-terminated line: a concurrent reader sees
     // whole records or nothing, and a torn tail is dropped on read.
     fs.appendFileSync(_logPath(scanRoot), JSON.stringify(record) + '\n', 'utf8');

@@ -32,6 +32,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { stateWritesEnabled } from './state-dir.js';
 const BUNDLED_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), 'compliance-frameworks');
 const STATE = '.agentic-security';
 
@@ -252,6 +253,7 @@ export function renderWalkthrough(fw, evaluation, opts = {}) {
  */
 export function persistWalkthrough(scanRoot, fw, body) {
   const dir = path.join(scanRoot, STATE, 'auditor-walkthroughs');
+  if (!stateWritesEnabled()) return null;
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
   const fp = path.join(dir, `${fw.id}.md`);
   try { fs.writeFileSync(fp, body); } catch {}

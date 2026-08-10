@@ -40,6 +40,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 
+import { statePath, safeWriteState } from './state-dir.js';
 const DEFAULT_POLICY = {
   acceptRisk: [],
   sla: {},
@@ -49,7 +50,7 @@ const DEFAULT_POLICY = {
 export function loadScaPolicy(scanRoot) {
   if (!scanRoot) return null;
   for (const name of ['sca-policy.yml', 'sca-policy.yaml', 'sca-policy.json']) {
-    const p = path.join(scanRoot, '.agentic-security', name);
+    const p = statePath(scanRoot, name);
     if (!fs.existsSync(p)) continue;
     try {
       const raw = fs.readFileSync(p, 'utf8');
@@ -209,7 +210,6 @@ export function appendAcceptRiskFromTriage(scanRoot, finding, reason) {
   };
   policy.acceptRisk.push(newEntry);
 
-  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
   const serialized = yaml.dump({
     'accept-risk': policy.acceptRisk.map(e => {
       const o = {};
@@ -224,7 +224,10 @@ export function appendAcceptRiskFromTriage(scanRoot, finding, reason) {
     sla: policy.sla && Object.keys(policy.sla).length ? Object.fromEntries(Object.entries(policy.sla).map(([k, v]) => [k, _formatSlaDuration(v)])) : undefined,
     'major-version-freeze': policy.majorVersionFreeze && Object.keys(policy.majorVersionFreeze).length ? policy.majorVersionFreeze : undefined,
   });
-  fs.writeFileSync(fp, serialized);
+  // Through the seam. This one is user-initiated (a triage decision), so a
+  // refusal is reported rather than swallowed: silently not recording an
+  // accepted risk would be worse than failing loudly. (PRD M1)
+  if (!safeWriteState(fp, serialized)) return { ok: false, reason: 'state writes disabled or path outside a project root', path: fp };
   return { ok: true, entry: newEntry, path: fp };
 }
 

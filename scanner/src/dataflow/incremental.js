@@ -31,6 +31,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 
+import { stateWritesEnabled } from '../posture/state-dir.js';
 const STATE_DIR = '.agentic-security/incremental';
 const FILES_PATH = 'files.json';
 const SUMMARIES_PATH = 'summaries.json';
@@ -199,7 +200,8 @@ export function commitIncrementalState(projectRoot, state, currentVersion) {
   if (!projectRoot) return false;
   const dir = path.join(projectRoot, STATE_DIR);
   try {
-    fs.mkdirSync(dir, { recursive: true });
+    if (!stateWritesEnabled()) return;
+  fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, VERSION_PATH), JSON.stringify(currentVersion, null, 2));
     fs.writeFileSync(path.join(dir, FILES_PATH), JSON.stringify(state.files || {}, null, 2));
     const payload = {

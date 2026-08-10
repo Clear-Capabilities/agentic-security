@@ -22,6 +22,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { stateWritesEnabled } from './state-dir.js';
 const FILE = '.agentic-security/triage-feedback.json';
 
 export function loadFeedback(scanRoot) {
@@ -35,6 +36,7 @@ export function loadFeedback(scanRoot) {
 export function saveFeedback(scanRoot, data) {
   if (!scanRoot) return;
   const fp = path.join(scanRoot, FILE);
+  if (!stateWritesEnabled()) return;
   fs.mkdirSync(path.dirname(fp), { recursive: true });
   fs.writeFileSync(fp, JSON.stringify(data, null, 2));
 }

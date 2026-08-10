@@ -23,6 +23,7 @@ import * as fs from 'node:fs/promises';
 import * as fsSync from 'node:fs';
 import * as path from 'node:path';
 
+import { stateWritesEnabled } from './state-dir.js';
 const STATE = '.agentic-security';
 const STATUS_MD   = 'watch-status.md';
 const STATUS_JSON = 'watch-status.json';
@@ -86,6 +87,7 @@ export function renderStatusLine(delta) {
  */
 export function persistStatus(scanRoot, delta) {
   const dir = path.join(scanRoot, STATE);
+  if (!stateWritesEnabled()) return;
   try { fsSync.mkdirSync(dir, { recursive: true }); } catch {}
   const status = {
     ts: new Date().toISOString(),

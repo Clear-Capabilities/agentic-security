@@ -15,6 +15,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { stateWritesEnabled } from './state-dir.js';
 const STATE = '.agentic-security';
 
 function _readJson(scanRoot, name) {
@@ -51,6 +52,7 @@ export function diffValidatorRuns(runA, runB) {
  */
 export function persistRescanReport(scanRoot, from, to, changed) {
   const dir = path.join(scanRoot, STATE, 'model-rescan');
+  if (!stateWritesEnabled()) return null;
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
   const safe = (s) => String(s || 'unknown').replace(/[^\w.-]/g, '-');
   const fp = path.join(dir, `${safe(from)}-vs-${safe(to)}.json`);

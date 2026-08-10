@@ -24,6 +24,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 
+import { statePath, safeWriteState, stateWritesEnabled } from '../posture/state-dir.js';
 // ── Per-call-site refined summaries ────────────────────────────────────────
 
 /**
@@ -160,7 +161,7 @@ export function backwardSlice(callGraph, finding, opts = {}) {
 // ── Persistent cross-scan summary cache ────────────────────────────────────
 
 function _cachePath(scanRoot) {
-  return path.join(scanRoot, '.agentic-security', 'ifds-summaries.json');
+  return statePath(scanRoot, 'ifds-summaries.json');
 }
 
 function _fileHash(content) {
@@ -190,8 +191,9 @@ export function loadPersistedCache(scanRoot) {
  * skip re-analysis of functions whose file hash hasn't changed.
  */
 export function persistCache(scanRoot, cache, perFileIR) {
-  const dir = path.join(scanRoot, '.agentic-security');
-  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+  // A read-only scan still ANALYSES; it just may not persist the cache. The
+  // next scan simply recomputes, which is slower and identical. (PRD M1)
+  if (!stateWritesEnabled()) return;
   const fileHashes = {};
   for (const [filePath, ir] of (perFileIR || new Map())) {
     if (ir && typeof ir._content === 'string') fileHashes[filePath] = _fileHash(ir._content);
@@ -203,7 +205,7 @@ export function persistCache(scanRoot, cache, perFileIR) {
     if (sum.has('∅')) summaries[qid] = sum.get('∅');
   }
   const out = { scanTs: new Date().toISOString(), summaries, fileHashes };
-  try { fs.writeFileSync(_cachePath(scanRoot), JSON.stringify(out, null, 2)); }
+  try { safeWriteState(_cachePath(scanRoot), JSON.stringify(out, null, 2)); }
   catch { /* best-effort */ }
 }
 

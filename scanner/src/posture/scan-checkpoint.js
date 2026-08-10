@@ -43,6 +43,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
+import { stateWritesEnabled } from './state-dir.js';
 const STATE_DIR = '.agentic-security';
 const FILE_NAME = 'scan-checkpoint.jsonl';
 const FORMAT = 'agentic-security-scan-checkpoint/1';
@@ -191,6 +192,12 @@ function _recover(handle, file, runKey) {
  */
 export function openCheckpoint(scanRoot, { runKey } = {}) {
   if (!scanRoot || !runKey) return _emptyHandle('no-run-key');
+  // A read-only scan cannot checkpoint, and must not try. Resume is purely an
+  // optimisation — without it the scan recomputes, which is slower and
+  // identical — so `--no-state` wins over `AGENTIC_SECURITY_RESUME=1` rather
+  // than the two conflicting. The disabled handle no-ops through the rest of
+  // the API, so no caller needs a new branch. (PRD M1)
+  if (!stateWritesEnabled()) return _emptyHandle('state-writes-disabled');
   const handle = _emptyHandle(null);
   try {
     const dir = path.join(scanRoot, STATE_DIR);

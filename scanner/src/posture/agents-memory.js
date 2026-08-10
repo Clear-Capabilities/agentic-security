@@ -29,6 +29,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { stateWritesEnabled } from './state-dir.js';
 const MEMORY_FILE = '.agentic-security/AGENTS.md';
 const ARCHIVE_FILE = '.agentic-security/AGENTS.md.archive';
 const MAX_BYTES = 20 * 1024;
@@ -65,7 +66,8 @@ export function appendAgentsMemory(scanRoot, { agent, body }) {
   const entry = `\n## ${ts}  agent: ${agent}\n\n${snippet}\n`;
   try {
     const fp = _resolve(scanRoot);
-    fs.mkdirSync(path.dirname(fp), { recursive: true });
+    if (!stateWritesEnabled()) return;
+  fs.mkdirSync(path.dirname(fp), { recursive: true });
     if (!fs.existsSync(fp)) fs.writeFileSync(fp, HEADER);
     fs.appendFileSync(fp, entry);
     _maybeRotate(scanRoot);

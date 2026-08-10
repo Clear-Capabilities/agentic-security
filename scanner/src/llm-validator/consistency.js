@@ -24,6 +24,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { validateOne } from './index.js';
 
+import { statePath, stateWritesEnabled } from '../posture/state-dir.js';
 // Build a deterministic test finding from the project's last-scan.json,
 // or accept a hand-crafted one. Returns a clone safe to mutate per trial.
 export function makeTrialFinding(template) {
@@ -60,9 +61,12 @@ export async function measureConsistency({
       // If useCache is false, we want each trial to bypass the cache; we
       // simulate by mutating the finding's file in a way the cache key
       // hashes over. Simpler: clear the per-scanRoot cache before each trial.
-      if (!useCache && scanRoot) {
+      // `stateWritesEnabled()` gates the DELETE as well as any write: removing
+      // files from the scanned tree is a mutation like any other, and under a
+      // read-only scan there is no cache to clear anyway. (PRD M1)
+      if (!useCache && scanRoot && stateWritesEnabled()) {
         try {
-          const cacheDir = path.join(scanRoot, '.agentic-security', 'llm-cache');
+          const cacheDir = statePath(scanRoot, 'llm-cache');
           if (fs.existsSync(cacheDir)) {
             for (const e of fs.readdirSync(cacheDir)) fs.unlinkSync(path.join(cacheDir, e));
           }
