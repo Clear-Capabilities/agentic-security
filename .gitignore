@@ -13,6 +13,12 @@ scanner/dist/*
 !scanner/dist/agentic-security.mjs
 !scanner/dist/agentic-security.mjs.sha256
 !scanner/dist/calibration-seed.json
+# The bundle is committed so it can be run from a fresh clone without a build.
+# Its DATA has to be committed for the same reason: auditor-walkthrough resolves
+# compliance-frameworks/ relative to the bundle, and when only the .mjs was
+# tracked the shipped CLI silently listed ZERO frameworks and exited 0.
+!scanner/dist/compliance-frameworks/
+!scanner/dist/compliance-frameworks/*.json
 # Ignore all .agentic-security/ dirs at any depth. For the root one,
 # ignore all contents but un-ignore the config files that belong in VCS.
 **/.agentic-security/

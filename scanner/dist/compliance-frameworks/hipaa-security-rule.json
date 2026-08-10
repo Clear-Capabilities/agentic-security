@@ -1,0 +1,56 @@
+{
+  "id": "hipaa-security-rule",
+  "name": "HIPAA Security Rule (45 CFR Part 164, Subparts C & E)",
+  "publisher": "US Department of Health and Human Services",
+  "license": "US Federal regulation (public)",
+  "url": "https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-C/part-164",
+  "controls": [
+    {
+      "id": "§164.308(a)(1)",
+      "summary": "Security management process — risk analysis and risk management.",
+      "evidence": ["Scan history under .agentic-security/scan-history/.", "Triage transitions logged."],
+      "mapsTo": ["module:scan-history", "module:triage"]
+    },
+    {
+      "id": "§164.308(a)(3)",
+      "summary": "Workforce security — authorization and supervision of access.",
+      "evidence": ["Zero auth-missing on PHI endpoints.", "IAM policy reviewed via cloud-iam scanner."],
+      "mapsTo": ["family:auth-missing", "family:iam-overpermissive"]
+    },
+    {
+      "id": "§164.308(a)(4)",
+      "summary": "Information access management — minimum necessary access.",
+      "evidence": ["Zero open findings in family idor / authz / k8s-rbac-cluster-admin."],
+      "mapsTo": ["family:idor", "family:authz", "family:k8s-rbac-cluster-admin"]
+    },
+    {
+      "id": "§164.308(a)(5)",
+      "summary": "Security awareness and training.",
+      "evidence": ["CLAUDE.md / AGENTS.md documents the project's security defaults."]
+    },
+    {
+      "id": "§164.312(a)(1)",
+      "summary": "Technical safeguards — access control (unique user identification, automatic logoff, encryption/decryption).",
+      "evidence": ["Zero hardcoded-secret findings.", "Crypto findings cleared on PHI handling code."],
+      "mapsTo": ["family:hardcoded-secret", "family:crypto-weak-cipher"]
+    },
+    {
+      "id": "§164.312(b)",
+      "summary": "Audit controls — record and examine activity in systems containing PHI.",
+      "evidence": ["MCP audit log + fix history present and hash-chained."],
+      "mapsTo": ["module:mcp-audit", "module:fix-history"]
+    },
+    {
+      "id": "§164.312(c)",
+      "summary": "Integrity — PHI not altered or destroyed in an unauthorized manner.",
+      "evidence": ["last-scan.json HMAC integrity check passing.", "Sigstore provenance verified for ML model files (if opt-in)."],
+      "mapsTo": ["module:integrity", "module:sigstore-verify"]
+    },
+    {
+      "id": "§164.312(e)",
+      "summary": "Transmission security — PHI in transit is protected.",
+      "evidence": ["Zero TLS-no-verify / TLS-version findings."],
+      "mapsTo": ["family:crypto-tls-no-verify", "family:crypto-tls-version"]
+    }
+  ]
+}

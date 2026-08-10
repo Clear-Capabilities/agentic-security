@@ -1,0 +1,73 @@
+{
+  "id": "nist-csf-2",
+  "name": "NIST Cybersecurity Framework 2.0",
+  "publisher": "NIST",
+  "license": "public-domain (US Federal publication)",
+  "url": "https://www.nist.gov/cyberframework",
+  "controls": [
+    {
+      "id": "GV.PO",
+      "function": "GOVERN",
+      "category": "Policy",
+      "summary": "Organizational cybersecurity policy is established, communicated, and enforced.",
+      "evidence": ["Repo contains CLAUDE.md / SECURITY.md / .agentic-security/sca-policy.yml that documents the project's security policy.", "Triage decisions reference an organizational policy."],
+      "mapsTo": ["family:hardcoded-secret", "family:license-graph"]
+    },
+    {
+      "id": "ID.AM",
+      "function": "IDENTIFY",
+      "category": "Asset Management",
+      "summary": "Assets (hardware, software, data) are inventoried.",
+      "evidence": [".agentic-security/sbom-history/*.json snapshots present.", "ATTRIBUTIONS.md generated."],
+      "mapsTo": ["module:sbom-diff", "module:license-attributions"]
+    },
+    {
+      "id": "ID.RA",
+      "function": "IDENTIFY",
+      "category": "Risk Assessment",
+      "summary": "Vulnerabilities and threats are identified.",
+      "evidence": ["Regular scan history under .agentic-security/scan-history/.", "ATT&CK / ATLAS technique mapping on findings."],
+      "mapsTo": ["module:attack-taxonomy", "module:exploitability-probability"]
+    },
+    {
+      "id": "PR.AA",
+      "function": "PROTECT",
+      "category": "Identity Management & Access Control",
+      "summary": "Access to assets is limited to authorized users.",
+      "evidence": ["Zero open critical findings in family auth-missing / authz / iam-overpermissive on the current scan."],
+      "mapsTo": ["family:auth-missing", "family:authz", "family:iam-overpermissive", "family:k8s-rbac-cluster-admin"]
+    },
+    {
+      "id": "PR.DS",
+      "function": "PROTECT",
+      "category": "Data Security",
+      "summary": "Data is managed consistent with the organization's risk strategy.",
+      "evidence": ["No critical/high crypto findings.", "DPIA artifact present (.agentic-security/dpia.md) when handling PII."],
+      "mapsTo": ["family:crypto-tls-version", "family:crypto-tls-no-verify", "family:crypto-weak-cipher", "family:pii-exposure"]
+    },
+    {
+      "id": "DE.CM",
+      "function": "DETECT",
+      "category": "Continuous Monitoring",
+      "summary": "Anomalous activity, indicators of compromise are monitored.",
+      "evidence": ["Watch mode artifacts at .agentic-security/watch-status.{md,json}.", "CVE-alert daemon configured."],
+      "mapsTo": ["module:watch-mode", "module:cve-alert-daemon"]
+    },
+    {
+      "id": "RS.AN",
+      "function": "RESPOND",
+      "category": "Analysis",
+      "summary": "Notifications from detection systems are investigated.",
+      "evidence": ["Triage transitions logged in triage.json.", "Triage-memory entries with reasons."],
+      "mapsTo": ["module:triage", "module:triage-memory"]
+    },
+    {
+      "id": "RC.RP",
+      "function": "RECOVER",
+      "category": "Recovery Planning",
+      "summary": "Recovery plans are executed and improved after an incident.",
+      "evidence": ["Fix history under .agentic-security/fix-history/log.json.", "Verifier outcomes recorded."],
+      "mapsTo": ["module:fix-history", "module:verifier"]
+    }
+  ]
+}
