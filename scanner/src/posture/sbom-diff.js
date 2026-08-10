@@ -21,6 +21,7 @@
 // module produces the diff on the next scan.
 
 import * as fs from 'node:fs';
+import { stateWritesEnabled } from './state-dir.js';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -58,7 +59,11 @@ export function persistSbom(scanRoot, components) {
       sha256: c.sha256 || c.integrity || null,
     })),
   };
-  try { fs.writeFileSync(path.join(dir, `${sha}.json`), JSON.stringify(snap, null, 2)); } catch {}
+  // NON_MUTATING_SCAN_PRD S1 — history is a feature, but not at the cost of
+  // mutating a tree the caller only asked us to read.
+  if (stateWritesEnabled()) {
+    try { fs.writeFileSync(path.join(dir, `${sha}.json`), JSON.stringify(snap, null, 2)); } catch {}
+  }
   return snap;
 }
 

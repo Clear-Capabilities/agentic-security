@@ -325,6 +325,11 @@ function parseArgs(argv) {
 }
 
 async function cmdScan(args) {
+  // NON_MUTATING_SCAN_PRD S1 — a scan is an observation; --no-state makes it one.
+  if (args.flags['no-state']) {
+    const { setStateWritesEnabled } = await import('../src/posture/state-dir.js');
+    setStateWritesEnabled(false);
+  }
   const target = args._[1] || '.';
   const targetAbs = path.resolve(target);
   // Load persona profile (R1). Persona-aware defaults flow from here.

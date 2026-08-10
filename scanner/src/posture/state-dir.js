@@ -111,9 +111,42 @@ export function isSafeStateDir(dir) {
   return false;
 }
 
+// --- Read-only scanning (NON_MUTATING_SCAN_PRD S1) ---------------------------
+//
+// A scan is an OBSERVATION. Pointing the engine at a directory should not
+// change it. Until this switch existed, `scan .` wrote seven-plus files into the
+// scanned tree, which breaks CI that asserts a clean worktree, leaves artefacts
+// in third-party code the user does not own, and — measured on this project's
+// own benchmark — let a second scan read the first scan's conclusions as source.
+//
+// This is deliberately a KILL SWITCH AT THE SEAM rather than a parameter
+// threaded through 72 call sites. Threading it would mean 72 chances to forget,
+// and the module this lives in exists precisely because that kind of
+// per-caller discipline already failed once: its header records a user who
+// uninstalled the plugin after stray state directories broke their build.
+let _stateWritesEnabled = true;
+
+/** Turn all state writing off (or back on) for this process. */
+export function setStateWritesEnabled(enabled) {
+  _stateWritesEnabled = Boolean(enabled);
+}
+
+/**
+ * False when writing is disabled by the CLI flag or the environment.
+ *
+ * The env var is read at CALL time, not captured at import, so a test or a
+ * caller can set it after the module is loaded — the same mistake that made the
+ * gate verdict cache silently never engage.
+ */
+export function stateWritesEnabled() {
+  if (process.env.AGENTIC_SECURITY_NO_STATE === '1') return false;
+  return _stateWritesEnabled;
+}
+
 // Safe mkdir: only creates .agentic-security/ if the parent has a project marker.
 // Returns the dir on success, null if refused. Logs a warning when refused.
 export function ensureStateDir(scanRoot) {
+  if (!stateWritesEnabled()) return null;
   const dir = stateDir(scanRoot);
   if (!isSafeStateDir(dir)) {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') {
@@ -132,6 +165,7 @@ export function ensureStateDir(scanRoot) {
 // Safe write: only writes if isSafeStateDir(parent) returns true.
 // Returns true on success, false if refused or errored.
 export function safeWriteState(filePath, content) {
+  if (!stateWritesEnabled()) return false;
   const dir = path.dirname(filePath);
   if (!isSafeStateDir(dir)) {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') {

@@ -585,7 +585,16 @@ const SANITIZER_PATTERNS=[{regex:/(?:escape|escapeHtml|htmlspecialchars|encodeUR
 {regex:/(?:re\.escape|preg_quote|Regexp\.escape)\s*\(/g,type:"Regex Escaping"}];
 const ROUTE_PATTERNS=[{regex:/(?:app|router)\s*\.\s*(get|post|put|patch|delete|all|options|head)\s*\(\s*['"`]([^'"`]+)['"`]/g,fw:"Express",mI:1,pI:2},{regex:/@(?:app|blueprint|bp)\s*\.\s*route\s*\(\s*['"]([^'"]+)['"]\s*(?:,\s*methods\s*=\s*\[([^\]]+)\])?/g,fw:"Flask",pI:1,mtI:2},{regex:/path\s*\(\s*['"]([^'"]+)['"]/g,fw:"Django",pI:1},{regex:/@(?:app|router)\s*\.\s*(get|post|put|patch|delete)\s*\(\s*['"]([^'"]+)['"]/g,fw:"FastAPI",mI:1,pI:2},{regex:/Route\s*::\s*(get|post|put|patch|delete|any)\s*\(\s*['"]([^'"]+)['"]/g,fw:"Laravel",mI:1,pI:2},{regex:/router\s*\.\s*(get|post|put|patch|delete)\s*\(\s*['"]([^'"]+)['"]/g,fw:"Koa/Express",mI:1,pI:2},{regex:/\[Http(Get|Post|Put|Delete|Patch)\s*\(\s*["']?([^"'\]]*)/g,fw:"ASP.NET",mI:1,pI:2},{regex:/['"`](\/api\/[a-zA-Z0-9\/:_\-{}]+)['"`]/g,fw:"API",pI:1}];
 const AUTH_PATTERNS=[/(?:authenticate|isAuthenticated|requireAuth|passport\.authenticate|jwt\.verify|verifyToken|authMiddleware|checkAuth|protect|authorize)\s*[\(,]/gi,/(?:middleware|use)\s*\(\s*(?:auth|jwt|token|session)/gi,/(?:isAuthorized|expressJwt|security\.isAuthorized|denyAll)\s*[\(]/gi,/passport\.(?:authenticate|initialize|session)\s*\(/gi];
-const IGNORE_DIRS=new Set(["node_modules",".git","__pycache__","vendor","dist","build",".next","venv","env",".venv","target","bin","obj",".cache","coverage","bower_components","tests","test","__tests__","spec","mocks"]);
+// `.agentic-security` is OUR OWN OUTPUT and must never be scanned input.
+// (NON_MUTATING_SCAN_PRD S4.) A scan writes threat-model.json,
+// exploit-bundles.json and scan-history.json into the tree it scanned, and those
+// files contain CWE identifiers. Without this, the second scan of any directory
+// reads the first scan's conclusions as source code — measured on the
+// independent benchmark as 220 polluted trees and 544 state files carrying
+// `CWE-` strings, which silently turned an accuracy measurement into the engine
+// grading itself. Scanning our own state is never useful and is exactly how
+// output becomes input.
+const IGNORE_DIRS=new Set(["node_modules",".git","__pycache__","vendor","dist","build",".next","venv","env",".venv","target","bin","obj",".cache","coverage","bower_components","tests","test","__tests__","spec","mocks",".agentic-security"]);
 const CODE_EXTS=new Set(["js","jsx","ts","tsx","mjs","cjs","py","rb","php","java","go","cs","rs","vue","svelte","html","htm","ejs","hbs","pug","erb","twig","graphql","gql","kt","scala","swift","dart","ex","exs","tf","tfvars","dockerfile","c","cc","cpp","cxx","h","hh","hpp","hxx","sol"]);
 // Feat-2: IaC manifest filenames that aren't extension-based.
 const IAC_FILENAMES = new Set(['Dockerfile', 'Containerfile', 'docker-compose.yml', 'docker-compose.yaml', 'Chart.yaml']);
