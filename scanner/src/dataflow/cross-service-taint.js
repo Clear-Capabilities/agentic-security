@@ -44,12 +44,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 
+import { statePath } from '../posture/state-dir.js';
 const SERVICES_FILE_NAMES = ['services.yml', 'services.yaml'];
 
 export function loadServiceGraph(scanRoot) {
   if (!scanRoot) return null;
   for (const name of SERVICES_FILE_NAMES) {
-    const fp = path.join(scanRoot, '.agentic-security', name);
+    const fp = statePath(scanRoot, name);
     if (!fs.existsSync(fp)) continue;
     try {
       const raw = fs.readFileSync(fp, 'utf8');

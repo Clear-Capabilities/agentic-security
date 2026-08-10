@@ -28,6 +28,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './posture/state-dir.js';
 const COLORS = {
   critical:    '#e05d44',  // red
   high:        '#fe7d37',  // orange
@@ -42,7 +43,7 @@ const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
 function _readLastScan(scanRoot) {
   if (!scanRoot) return null;
-  const fp = path.join(scanRoot, '.agentic-security', 'last-scan.json');
+  const fp = statePath(scanRoot, 'last-scan.json');
   if (!fs.existsSync(fp)) return null;
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); }
   catch { return null; }

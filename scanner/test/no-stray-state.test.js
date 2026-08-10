@@ -73,7 +73,8 @@ const ROOTS = ['src', 'bin'].map(d => path.join(SCANNER, d));
 const DELIBERATELY_UNGUARDED = new Set([
   'src/mcp/audit.js', 'src/mcp/tools.js', 'src/posture/corpus-enroll.js',
   'src/posture/deterministic.js', 'src/posture/fix-plan.js',
-  'src/integrations/tickets.js', 'bin/agentic-security-rule.js',
+  'src/integrations/tickets.js',
+  'bin/agentic-security-rule.js',
 ]);
 
 /** The seam itself, plus modules awaiting migration. NON-GROWING. */
@@ -91,31 +92,31 @@ const ALLOWLIST = new Set([
   // seam is not yet the only route.
   'bin/agentic-security.js',
   // Not yet examined — these are subcommand entry points, not the scan path.
-  'bin/agentic-security-audit.js', 'bin/agentic-security-consistency.js',
+  
   'bin/agentic-security-rule.js',
-  'src/badge.js', 'src/dataflow/cross-service-taint.js', 
+  
   'src/dataflow/incremental.js', 'src/discovery/memory.js',
   // engine.js: exploit-bundles.json now goes through the seam, but three read
   // sites remain (custom rules, logic-claims.json) plus the dpia.md write.
   'src/engine.js',
-  'src/integrations/tickets.js', 'src/leaderboard.js', 
+  
   'src/llm-validator/index.js', 'src/mcp/audit.js', 'src/mcp/tools.js',
   'src/posture/agents-memory.js', 'src/posture/auditor-walkthrough.js', 'src/posture/auth-posture-import.js',
   'src/posture/corpus-enroll.js',
-  'src/posture/cve-alert-daemon.js', 'src/posture/dep-add-guard.js',
-  'src/posture/deterministic.js', 'src/posture/exploitability-probability.js', 'src/posture/feature-flags.js',
-  'src/posture/findings-memory.js', 'src/posture/fix-history.js', 'src/posture/fix-metrics.js',
-  'src/posture/fix-plan.js', 'src/posture/grader-calibration.js', 
-  'src/posture/intent-context.js', 'src/posture/learning.js',
-  'src/posture/license-graph.js', 'src/posture/license-policy.js', 'src/posture/model-rescan.js',
+  'src/posture/cve-alert-daemon.js', 
+  'src/posture/deterministic.js', 'src/posture/feature-flags.js',
+  'src/posture/findings-memory.js', 'src/posture/fix-metrics.js',
+  'src/posture/grader-calibration.js', 
+  'src/posture/learning.js',
+  'src/posture/license-policy.js', 'src/posture/model-rescan.js',
   'src/posture/network-policy-import.js', 'src/posture/pr-augment.js',
   'src/posture/risk-dollars.js', 'src/posture/router.js', 'src/posture/rule-overrides.js',
   'src/posture/ruleset-version.js',
-  'src/posture/runtime-correlation.js', 'src/posture/sbom-diff.js', 'src/posture/sca-policy.js',
+  'src/posture/sca-policy.js',
   'src/posture/scan-checkpoint.js', 'src/posture/telemetry-ingest.js',
   'src/posture/threat-model-auto.js', 'src/posture/threat-model-grounding.js', 'src/posture/time-to-fix.js',
   'src/posture/triage-memory.js', 'src/posture/verifier-target.js', 'src/posture/waf-ingest.js',
-  'src/posture/watch-mode.js', 'src/sca/dep-confusion.js',
+  'src/posture/watch-mode.js', 
 ]);
 
 /**

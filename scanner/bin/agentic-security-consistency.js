@@ -26,6 +26,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { measureConsistency, summarize } from '../src/llm-validator/consistency.js';
 
+import { statePath } from '../src/posture/state-dir.js';
 function args() {
   const a = process.argv.slice(2);
   const out = { trials: 5, top: 5, json: false, root: process.cwd() };
@@ -40,7 +41,7 @@ function args() {
 
 async function main() {
   const opts = args();
-  const scanFile = path.join(opts.root, '.agentic-security', 'last-scan.json');
+  const scanFile = statePath(opts.root, 'last-scan.json');
   if (!fs.existsSync(scanFile)) {
     console.error(`no last-scan.json at ${scanFile} — run a scan first`);
     process.exit(2);

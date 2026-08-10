@@ -17,6 +17,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 function readJson(fp) {
   if (!fs.existsSync(fp)) return null;
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
@@ -32,7 +33,7 @@ function ageHours(fp) {
 // history to say anything honest. (premortem: never invent a trend from one
 // data point.)
 export function computeScanTrend(scanRoot) {
-  const hist = readJson(path.join(scanRoot, '.agentic-security', 'scan-history.json'));
+  const hist = readJson(statePath(scanRoot, 'scan-history.json'));
   if (!Array.isArray(hist) || hist.length < 2) return {};
   const cur = hist[hist.length - 1];
   const prev = hist[hist.length - 2];

@@ -157,7 +157,7 @@ function _scratchpadAbs(sessionRoot, relPath) {
 }
 
 function _scratchpadTotalBytes(sessionRoot) {
-  const base = path.join(sessionRoot, '.agentic-security', 'agent-scratchpad');
+  const base = statePath(sessionRoot, 'agent-scratchpad');
   if (!fs.existsSync(base)) return 0;
   let total = 0;
   const walk = (dir) => {
@@ -1013,6 +1013,7 @@ export const read_scratchpad = {
 import { appendAgentsMemory as _appendAgentsMemory, readAgentsMemory as _readAgentsMemory } from '../posture/agents-memory.js';
 import { lookupCve as _lookupCve } from '../posture/cve-lookup.js';
 
+import { statePath } from '../posture/state-dir.js';
 export const append_agents_memory = {
   name: 'append_agents_memory',
   description: 'Append a short narrative entry to AGENTS.md — agent-authored continual-learning notes. Use at session end to record "what worked / what didn\'t / what I\'d try differently next time" so the next agent can pick up the lesson. Bounded: 2 KB per entry, 20 KB total before rotation to AGENTS.md.archive. Use sparingly — narrative, not structured data.',

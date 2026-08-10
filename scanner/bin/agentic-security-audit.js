@@ -23,6 +23,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { verifyAuditLog } from '../src/mcp/audit.js';
 
+import { statePath } from '../src/posture/state-dir.js';
 function args() {
   const a = process.argv.slice(2);
   const sub = a[0] || 'review';
@@ -48,7 +49,7 @@ function _parseDuration(s) {
   return n * u;
 }
 
-function _logPath(root) { return path.join(root, '.agentic-security', 'mcp-audit.log'); }
+function _logPath(root) { return statePath(root, 'mcp-audit.log'); }
 
 function _readEntries(root) {
   const fp = _logPath(root);

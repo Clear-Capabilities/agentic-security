@@ -30,6 +30,7 @@ import * as triage from '../src/posture/triage.js';
 import { buildSlackDigest, buildDiscordDigest, postWebhook, buildJiraIssue, buildPrComment, buildSiemEvent, loadIntegrationConfig } from '../src/integrations/index.js';
 import { globFiles } from '../src/util/glob.js';
 
+import { statePath } from '../src/posture/state-dir.js';
 // last-scan.json integrity helpers — implementation in posture/integrity.js
 // so the MCP server tools can share verification.
 function _verifyLastScan(body, sigFile) {
@@ -438,7 +439,7 @@ async function cmdScan(args) {
   }
 
   // --set-baseline: save current findings as baseline for future --since-baseline filtering
-  const baselinePath = path.join(target || '.', '.agentic-security', 'baseline.json');
+  const baselinePath = statePath(target || '.', 'baseline.json');
   if (args.flags['set-baseline']) {
     const { normalizeFindings } = await import('../src/report/index.js');
     const baselineIds = new Set(normalizeFindings(scan).map(f => f.stableId || f.id));
@@ -880,7 +881,7 @@ async function cmdAccept(args) {
   const id = args.flags.finding;
   if (!id) { console.error('--finding <id> required'); return 4; }
   const reason = args.flags.reason || 'vibecoded for now';
-  const lastScanPath = path.join(target, '.agentic-security', 'findings.json');
+  const lastScanPath = statePath(target, 'findings.json');
   if (!fs.existsSync(lastScanPath)) { console.error('No prior scan found. Run `agentic-security scan` first.'); return 4; }
   const last = JSON.parse(await fsp.readFile(lastScanPath, 'utf8'));
   const f = (last.findings || []).find(x => x.id === id);
@@ -938,7 +939,7 @@ async function cmdTriage(args) {
   }
   const sub = args._[1];
   // Sync first so list reflects the latest scan.
-  const lastScanPath = path.join(target, '.agentic-security', 'findings.json');
+  const lastScanPath = statePath(target, 'findings.json');
   if (fs.existsSync(lastScanPath)) {
     const last = JSON.parse(await fsp.readFile(lastScanPath, 'utf8'));
     triage.syncWithScan(target, last.findings || []);
@@ -1264,7 +1265,7 @@ async function cmdRule(args) {
 async function cmdValidatorCache(args) {
   const sub = args._[1] || 'help';
   const root = path.resolve(args._[2] || '.');
-  const cacheDir = path.join(root, '.agentic-security', 'llm-cache');
+  const cacheDir = statePath(root, 'llm-cache');
   if (!fs.existsSync(cacheDir)) {
     console.log(`No validator cache at ${cacheDir}`);
     return 0;
@@ -1327,7 +1328,7 @@ async function cmdValidatorCache(args) {
 // FR-VER-7 fail-closed: any error → cannot-verify, never silent drop.
 async function cmdVerify(args) {
   const scanRoot = path.resolve(args.flags.root || '.');
-  const lastScanPath = path.join(scanRoot, '.agentic-security', 'last-scan.json');
+  const lastScanPath = statePath(scanRoot, 'last-scan.json');
   if (!fs.existsSync(lastScanPath)) {
     console.error(`No prior scan found at ${lastScanPath}. Run \`agentic-security scan\` first.`);
     return 4;
@@ -1525,8 +1526,8 @@ async function cmdHunt(args) {
   // Prior scan and triage verdicts feed the judge so a hunt does not re-report
   // what the rule engine already found or what a human already dismissed.
   let priorScan = null, triageFeedback = null;
-  try { priorScan = JSON.parse(fs.readFileSync(path.join(scanRoot, '.agentic-security', 'last-scan.json'), 'utf8')); } catch {}
-  try { triageFeedback = JSON.parse(fs.readFileSync(path.join(scanRoot, '.agentic-security', 'triage-feedback.json'), 'utf8')); } catch {}
+  try { priorScan = JSON.parse(fs.readFileSync(statePath(scanRoot, 'last-scan.json'), 'utf8')); } catch {}
+  try { triageFeedback = JSON.parse(fs.readFileSync(statePath(scanRoot, 'triage-feedback.json'), 'utf8')); } catch {}
 
   const lenses = args.flags.lens ? String(args.flags.lens).split(',').map(s => s.trim()).filter(Boolean) : undefined;
   const intFlag = (name) => (args.flags[name] ? parseInt(args.flags[name], 10) : undefined);
@@ -1628,7 +1629,7 @@ async function cmdAttest(args) {
   } = await import('../src/posture/evidence-bundle.js');
 
   let scan;
-  try { scan = JSON.parse(fs.readFileSync(path.join(scanRoot, '.agentic-security', 'last-scan.json'), 'utf8')); }
+  try { scan = JSON.parse(fs.readFileSync(statePath(scanRoot, 'last-scan.json'), 'utf8')); }
   catch { console.error('No .agentic-security/last-scan.json — run a scan first.'); return 2; }
 
   const findings = scan.findings || [];
@@ -1642,7 +1643,7 @@ async function cmdAttest(args) {
   const kp = ensureKeyPair();
   if (kp.created) console.error(`Generated a new signing key at ${kp.privateKey} (public: ${kp.publicKey}).`);
 
-  const outDir = path.join(scanRoot, '.agentic-security', 'attestations');
+  const outDir = statePath(scanRoot, 'attestations');
   fs.mkdirSync(outDir, { recursive: true });
   const meta = {
     engineVersion: scan.engineVersion || null,
@@ -1733,7 +1734,7 @@ async function cmdPacks(args) {
 async function cmdDigest(args) {
   const target = path.resolve(args._[1] || '.');
   const profile = loadProfile(target);
-  const lastScanPath = path.join(target, '.agentic-security', 'findings.json');
+  const lastScanPath = statePath(target, 'findings.json');
   if (!fs.existsSync(lastScanPath)) { console.error('No prior scan found.'); return 4; }
   const last = JSON.parse(await fsp.readFile(lastScanPath, 'utf8'));
   const findings = (last.findings || []).filter(f => f.severity === 'critical' || f.severity === 'high');
@@ -1761,7 +1762,7 @@ async function cmdFix(args) {
   const isApply = !!args.flags.apply;
   const scanRoot = path.resolve(args.flags.root || '.');
   if (!id) { console.error('--finding <id> required'); return 4; }
-  const lastScanPath = path.join(scanRoot, '.agentic-security', 'last-scan.json');
+  const lastScanPath = statePath(scanRoot, 'last-scan.json');
   if (!fs.existsSync(lastScanPath)) { console.error('No prior scan found. Run `agentic-security scan` first.'); return 4; }
   const lastScanBody = await fsp.readFile(lastScanPath, 'utf8');
   const sigVerified = _verifyLastScan(lastScanBody, lastScanPath + '.sig');

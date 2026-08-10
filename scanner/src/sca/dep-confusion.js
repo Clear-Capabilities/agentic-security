@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 import { createRequire } from 'node:module';
 
+import { statePath } from '../posture/state-dir.js';
 const _require = createRequire(import.meta.url);
 const _POPULAR = (() => {
   try {
@@ -52,7 +53,7 @@ export function levenshtein(a, b, maxDistance = 2) {
 function _loadInternalScopes(scanRoot) {
   if (!scanRoot) return [];
   for (const name of ['internal-scopes.yml', 'internal-scopes.yaml']) {
-    const p = path.join(scanRoot, '.agentic-security', name);
+    const p = statePath(scanRoot, name);
     if (!fs.existsSync(p)) continue;
     try {
       const doc = yaml.load(fs.readFileSync(p, 'utf8'));

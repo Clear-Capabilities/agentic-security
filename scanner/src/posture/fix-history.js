@@ -68,7 +68,7 @@ function sha(s) { return crypto.createHash('sha256').update(s).digest('hex').sli
 // findings by `id` (the finding's canonical key from the engine) so we can
 // stash the corresponding stableId on the fix entry and verify in recover().
 function _lastScanPath(scanRoot) {
-  return path.join(scanRoot, '.agentic-security', 'last-scan.json');
+  return statePath(scanRoot, 'last-scan.json');
 }
 function _readLastScan(scanRoot) {
   const fp = _lastScanPath(scanRoot);

@@ -16,6 +16,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 
+import { statePath } from './state-dir.js';
 const DEFAULT_POLICY = {
   allow: [],
   deny: [],
@@ -26,7 +27,7 @@ const DEFAULT_POLICY = {
 export function loadLicensePolicy(scanRoot) {
   if (!scanRoot) return null;
   for (const name of ['license-policy.yml', 'license-policy.yaml', 'license-policy.json']) {
-    const p = path.join(scanRoot, '.agentic-security', name);
+    const p = statePath(scanRoot, name);
     if (!fs.existsSync(p)) continue;
     try {
       const raw = fs.readFileSync(p, 'utf8');

@@ -19,17 +19,18 @@ import * as cp from 'node:child_process';
 import { buildJiraIssue } from './index.js';
 import { escapeMarkdown } from '../util/untrusted.js';
 
-function statePath(scanRoot) {
-  return path.join(scanRoot, '.agentic-security', 'tickets.json');
+import { statePath } from '../posture/state-dir.js';
+function _ticketsPath(scanRoot) {
+  return statePath(scanRoot, 'tickets.json');
 }
 export function readState(scanRoot) {
-  const fp = statePath(scanRoot);
+  const fp = _ticketsPath(scanRoot);
   if (!fs.existsSync(fp)) return {};
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return {}; }
 }
 function writeState(scanRoot, state) {
-  fs.mkdirSync(path.dirname(statePath(scanRoot)), { recursive: true });
-  fs.writeFileSync(statePath(scanRoot), JSON.stringify(state, null, 2));
+  fs.mkdirSync(path.dirname(_ticketsPath(scanRoot)), { recursive: true });
+  fs.writeFileSync(_ticketsPath(scanRoot), JSON.stringify(state, null, 2));
 }
 
 function findingTitle(f) {
@@ -148,7 +149,7 @@ const SEV_RANK = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
 
 export async function syncTickets({ scanRoot, provider, severity = 'high', repo, teamId, dryRun = false }) {
   const minRank = SEV_RANK[severity] ?? 3;
-  const lastScanPath = path.join(scanRoot, '.agentic-security', 'last-scan.json');
+  const lastScanPath = statePath(scanRoot, 'last-scan.json');
   if (!fs.existsSync(lastScanPath)) return { ok: false, error: 'no last-scan.json — run a scan first' };
   const last = JSON.parse(fs.readFileSync(lastScanPath, 'utf8'));
   const allFindings = [...(last.findings || []), ...(last.secrets || []), ...(last.supplyChain || [])];

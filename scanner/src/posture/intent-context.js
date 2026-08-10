@@ -29,6 +29,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 const INTENT_PATH_RE = /(?:^|\/)(?:examples?|demos?|tutorials?|sandbox|playground|challenges?|ctf)(?:\/|$)/i;
 
 const FILE_HEADER_MARKERS = [
@@ -49,7 +50,7 @@ function _readSafely(fp) {
 }
 
 function _readIntentDeclaration(scanRoot) {
-  const fp = path.join(scanRoot, '.agentic-security', 'current-intent.md');
+  const fp = statePath(scanRoot, 'current-intent.md');
   if (!fs.existsSync(fp)) return null;
   const body = _readSafely(fp);
   if (!body) return null;

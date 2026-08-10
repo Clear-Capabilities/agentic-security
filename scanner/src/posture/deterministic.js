@@ -16,6 +16,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { PACKS } from './rule-packs.js';
 
+import { statePath } from './state-dir.js';
 export const SCANNER_VERSION = '0.39.2';
 const LOCK_FILE = 'rules.lock.json';
 
@@ -49,7 +50,7 @@ export function writeLockfile(scanRoot) {
 }
 
 export function readLockfile(scanRoot) {
-  const fp = path.join(scanRoot, '.agentic-security', LOCK_FILE);
+  const fp = statePath(scanRoot, LOCK_FILE);
   if (!fs.existsSync(fp)) return null;
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
 }

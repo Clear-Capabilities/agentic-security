@@ -21,7 +21,7 @@
 // module produces the diff on the next scan.
 
 import * as fs from 'node:fs';
-import { stateWritesEnabled } from './state-dir.js';
+import { statePath, stateWritesEnabled } from './state-dir.js';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -29,7 +29,7 @@ import { execSync } from 'node:child_process';
 const HISTORY_DIR = 'sbom-history';
 
 function _historyDir(scanRoot) {
-  return path.join(scanRoot, '.agentic-security', HISTORY_DIR);
+  return statePath(scanRoot, HISTORY_DIR);
 }
 
 function _gitHead(scanRoot) {

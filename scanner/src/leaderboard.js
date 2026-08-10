@@ -27,6 +27,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { summarizeForBadge } from './badge.js';
 
+import { statePath } from './posture/state-dir.js';
 // Grade thresholds. Critical findings dominate; high/medium contribute
 // secondarily. These numbers are heuristic — calibrate against the
 // public leaderboard corpus once data lands.
@@ -90,7 +91,7 @@ function _deltaTrend(history) {
  */
 export function leaderboardRowFor({ scanRoot, repo, badgeBase = 'https://agentic-security.dev/badge' } = {}) {
   if (!repo) throw new Error('leaderboardRowFor: repo slug is required');
-  const lastScanPath = path.join(scanRoot || '.', '.agentic-security', 'last-scan.json');
+  const lastScanPath = statePath(scanRoot || '.', 'last-scan.json');
   let scan = null;
   try { scan = JSON.parse(fs.readFileSync(lastScanPath, 'utf8')); } catch {}
   const summary = summarizeForBadge(scan);
@@ -98,7 +99,7 @@ export function leaderboardRowFor({ scanRoot, repo, badgeBase = 'https://agentic
   const topCwe = _topCwe(scan);
 
   // Optional scan history for the trend signal.
-  const historyPath = path.join(scanRoot || '.', '.agentic-security', 'scan-history.jsonl');
+  const historyPath = statePath(scanRoot || '.', 'scan-history.jsonl');
   let history = [];
   if (fs.existsSync(historyPath)) {
     try {

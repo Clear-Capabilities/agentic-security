@@ -35,12 +35,13 @@ import * as path from 'node:path';
 import * as readline from 'node:readline';
 import { createReadStream } from 'node:fs';
 
+import { statePath } from './state-dir.js';
 const DEFAULT_TRACE_NAMES = ['runtime-trace.jsonl', 'runtime.jsonl', 'ebpf-trace.jsonl'];
 const DEFAULT_OBSERVATION_WINDOW_DAYS = 30;
 
 export async function loadTrace(scanRoot, opts = {}) {
   const explicit = opts.tracePath || process.env.AGENTIC_SECURITY_RUNTIME_TRACE_PATH;
-  const candidates = explicit ? [explicit] : DEFAULT_TRACE_NAMES.map(n => path.join(scanRoot, '.agentic-security', n));
+  const candidates = explicit ? [explicit] : DEFAULT_TRACE_NAMES.map(n => statePath(scanRoot, n));
   let chosen = null;
   for (const c of candidates) {
     if (fs.existsSync(c)) { chosen = c; break; }

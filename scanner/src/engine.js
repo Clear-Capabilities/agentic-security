@@ -71,7 +71,7 @@ import { scanWebhook } from './sast/webhook.js';
 import { scanClientSide } from './sast/client-side.js';
 import { scanPromptFirewall } from './sast/prompt-firewall.js';
 import { scanLlmRedteam } from './posture/llm-redteam.js';
-import { statePath as _statePath, safeWriteState as _safeWriteState } from './posture/state-dir.js';
+import { safeWriteState as _safeWriteState, statePath, statePath as _statePath } from './posture/state-dir.js';
 import { scanContainer } from './sca/container.js';
 import { detectDepConfusion } from './sca/dep-confusion.js';
 import { loadLicensePolicy, evaluateLicensePolicy } from './posture/license-policy.js';
@@ -2411,7 +2411,7 @@ async function _loadCustomRules(scanRoot){
   _customIgnorePaths = [];
   let raw = null, parsedObj = null;
   for (const ext of ['rules.yml', 'rules.yaml', 'rules.json']) {
-    const p = path.join(scanRoot, '.agentic-security', ext);
+    const p = statePath(scanRoot, ext);
     try { raw = fs.readFileSync(p, 'utf8'); } catch { continue; }
     try {
       if (ext.endsWith('.json')) parsedObj = JSON.parse(raw);
@@ -8584,7 +8584,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // second party could corroborate it.
   try {
     if (scanRoot) {
-      const raw = fs.readFileSync(path.join(scanRoot, '.agentic-security', 'logic-claims.json'), 'utf8');
+      const raw = fs.readFileSync(statePath(scanRoot, 'logic-claims.json'), 'utf8');
       const parsed = JSON.parse(raw);
       const incoming = Array.isArray(parsed) ? parsed : (parsed && parsed.claims) || [];
       if (incoming.length) {

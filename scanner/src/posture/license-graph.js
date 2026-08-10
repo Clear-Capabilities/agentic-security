@@ -37,6 +37,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 // ── License taxonomy ───────────────────────────────────────────────────────
 
 const LICENSE_FAMILIES = {
@@ -223,7 +224,7 @@ export function analyzeLicenseGraph(components, options) {
 
 export function loadLicenseGraphPolicy(scanRoot) {
   if (!scanRoot) return { distributionMode: DEFAULT_DIST_MODE };
-  const fp = path.join(scanRoot, '.agentic-security', 'license-policy.yml');
+  const fp = statePath(scanRoot, 'license-policy.yml');
   if (!fs.existsSync(fp)) return { distributionMode: DEFAULT_DIST_MODE };
   try {
     const raw = fs.readFileSync(fp, 'utf8');

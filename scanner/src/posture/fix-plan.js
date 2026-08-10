@@ -12,6 +12,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 const MAX_FILES = 3;
 const MAX_LOC   = 100;
 
@@ -103,7 +104,7 @@ export function renderFixPlan(finding, opts = {}) {
 // Returns the absolute path of the written file, or null on error.
 export function emitFixPlanFile(scanRoot, finding, opts = {}) {
   if (!scanRoot || !finding) return null;
-  const dir = path.join(scanRoot, '.agentic-security', 'fix-plans');
+  const dir = statePath(scanRoot, 'fix-plans');
   try { fs.mkdirSync(dir, { recursive: true }); } catch { return null; }
   const id = finding.stableId || finding.id || `unknown-${Date.now().toString(36)}`;
   const fp = path.join(dir, `${id}.md`);

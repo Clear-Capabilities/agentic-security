@@ -19,6 +19,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { statePath } from './state-dir.js';
 const CACHE = path.join(process.env.HOME || '/tmp', '.claude', 'agentic-security', 'osv-cache');
 const TYPOSQUAT_LEVENSHTEIN = 2;
 const NEW_PACKAGE_WINDOW_DAYS = 7;
@@ -61,7 +62,7 @@ function _loadPopular(ecosystem) {
 }
 
 function _loadPolicy(scanRoot) {
-  const fp = path.join(scanRoot, '.agentic-security', 'sca-policy.yml');
+  const fp = statePath(scanRoot, 'sca-policy.yml');
   if (!fs.existsSync(fp)) return { deny: [] };
   try {
     const body = fs.readFileSync(fp, 'utf8');
