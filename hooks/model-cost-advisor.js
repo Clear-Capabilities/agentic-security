@@ -6,7 +6,7 @@
 // when a strictly cheaper model+depth would likely do the job just as well —
 // shows a one-line tip with the estimated token-cost savings.
 //
-// HARD LIMITS (see docs/MODEL_COST_OPTIMIZATION_PRD.md §2):
+// HARD LIMITS (see the Model Cost Optimization PRD §2 (removed post-implementation)):
 //   • A hook CANNOT switch the model or effort, and CANNOT pause for
 //     interactive input — there is no output field for either anywhere in the
 //     Claude Code hook schema. So BY DEFAULT this is advisory only: it
@@ -59,7 +59,7 @@ const statePath = path.join(stateDir, 'model-optimizer-state.json');
 
 // ── Pricing & capability table ────────────────────────────────────────────
 // Per 1M tokens (input / output). Source: claude-api skill, cached 2026-07-05.
-// Refresh from docs/MODEL_COST_OPTIMIZATION_PRD.md §2 when rates change.
+// Refresh from the Model Cost Optimization PRD §2 when rates change.
 // Fable 5 is the current flagship (above Opus tier); a session running on it now
 // maps to a known entry so the advisor can price it and recommend a downgrade.
 const MODELS = {
@@ -270,7 +270,7 @@ function modelKey(raw) {
 }
 
 // Zero-token heuristic classifier. Returns 'simple' | 'medium' | 'complex'.
-// Rule table documented in docs/MODEL_COST_OPTIMIZATION_PRD.md R4.
+// Rule table documented in the Model Cost Optimization PRD R4.
 const CHEAP_VERBS = /\b(explain|summari[sz]e|rename|format|list|what is|define|describe|translate)\b/i;
 const EXPENSIVE_VERBS = /\b(refactor|design|debug|architect|migrate|implement|optimi[sz]e|rewrite|build|integrate)\b/i;
 const FILE_MENTION = /(?:\b\w[\w-]*\/[\w./-]+|\b\w[\w-]*\.(?:js|ts|tsx|jsx|py|java|go|rb|php|cs|rs|json|ya?ml|md|sql|sh))\b/i;

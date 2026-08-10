@@ -156,4 +156,4 @@ priority rather than an emergency reprioritization.
 
 ## Appendix — provenance of every claim
 
-Every defect in §1 was reproduced by execution during the C/C++ IR parser workstream (branch `feat/cpp-ir-parser`, PR #43), and each is recorded with its evidence in that branch's `bench/proof-corpus/GAPS.md`, the PR description, or `docs/PROOF_CORPUS_PRD.md`. The remediation figures in §2 come from reading `scanner/src/mcp/tools.js` (the `verify_fix` contract at line 682) and counting `replacement:` occurrences across `scanner/src/sast/*.js` (1 of 110) in this session.
+Every defect in §1 was reproduced by execution during the C/C++ IR parser workstream (branch `feat/cpp-ir-parser`, PR #43), and each is recorded with its evidence in that branch's `bench/proof-corpus/GAPS.md`, the PR description, or the Proof Corpus PRD (removed post-implementation). The remediation figures in §2 come from reading `scanner/src/mcp/tools.js` (the `verify_fix` contract at line 682) and counting `replacement:` occurrences across `scanner/src/sast/*.js` (1 of 110) in this session.

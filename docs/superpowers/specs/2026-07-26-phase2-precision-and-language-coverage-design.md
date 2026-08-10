@@ -55,7 +55,7 @@ Four separate problems, each independently disabling:
 | `line: 0` on every function | Every Java finding would be attributed to line 0. |
 | `qid` is `file::Class::name`, omitting the `@line#sha` suffix every other parser emits | Breaks the shape `class-hierarchy.js` and the `stableId` machinery expect. |
 
-**Java is not a language missing one field. It is a language whose IR frontend was never finished.** That matters beyond the code, because `docs/PROOF_CORPUS_PRD.md` §2.3 lists Java in the **Deep IR** tier — "first-class parser + proven interprocedural taint" — alongside JavaScript and Python. That claim is false and has been for as long as the tier table has existed. Phase 1's own goal statement (G1) named Java as one of three languages that would produce interprocedural findings; it was never capable of it and was never measured.
+**Java is not a language missing one field. It is a language whose IR frontend was never finished.** That matters beyond the code, because the Proof Corpus PRD §2.3 (removed post-implementation) lists Java in the **Deep IR** tier — "first-class parser + proven interprocedural taint" — alongside JavaScript and Python. That claim is false and has been for as long as the tier table has existed. Phase 1's own goal statement (G1) named Java as one of three languages that would produce interprocedural findings; it was never capable of it and was never measured.
 
 Correcting that claim is part of this phase's deliverable, whether or not the Java work itself lands here.
 
@@ -109,7 +109,7 @@ The Java frontend needs statement lowering, parameter extraction, real line numb
 
 Folding it into this phase would mean one plan whose first four tasks are mechanical and whose fifth is a multi-week frontend rebuild — the decomposition failure both planning skills warn about. It gets its own spec and plan, informed by `docs/superpowers/plans/2026-07-25-cpp-ir-parser.md`, which is the closest available template.
 
-**What this phase does about Java now:** corrects the tier claim in `docs/PROOF_CORPUS_PRD.md` §2.3, and records the four specific defects with their evidence so the follow-on plan starts from measurement rather than rediscovery.
+**What this phase does about Java now:** corrects the tier claim in the Proof Corpus PRD §2.3, and records the four specific defects with their evidence so the follow-on plan starts from measurement rather than rediscovery.
 
 ## 6. Deliberately deferred, with reasons
 
@@ -135,7 +135,7 @@ Demonstrated by commands run in the same session as the claim:
 3. A polyglot fixture shows no catalog entry firing on a file whose language it does not target.
 4. Per-language before/after finding counts show no recall loss on the proof-corpus targets.
 5. The self-scan gate is proven in both directions — passes clean, fails on an injected regression.
-6. `docs/PROOF_CORPUS_PRD.md` §2.3 no longer claims Java has proven interprocedural taint, and the four Java defects are recorded with runtime evidence.
+6. the Proof Corpus PRD §2.3 no longer claims Java has proven interprocedural taint, and the four Java defects are recorded with runtime evidence.
 
 ---
 

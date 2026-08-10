@@ -1,5 +1,14 @@
 # Changelog
 
+> **A note on `docs/*_PRD.md` references below.** Product requirement documents in
+> this project are removed once their workstreams land — the durable parts move
+> into the code and tests that enforce them, where they cannot drift out of date.
+> Entries below cite PRD files that were live at the time of that release and no
+> longer exist. They are left as written: a changelog records what was true when
+> it was written, and rewriting past entries to hide a since-deleted file would
+> make the history less accurate, not more.
+
+
 ## 0.135.0 — a scan stops modifying what it scans, and the benchmark stops flattering
 
 Two findings, one of which reverses something this project previously reported.

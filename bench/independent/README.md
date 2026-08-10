@@ -149,7 +149,7 @@ tuning against it.
   conclusions as source. `runner.mjs` now purges before each scan AND refuses to
   score any finding whose path lies inside a state directory; the engine also
   skips `.agentic-security/` when walking. Three independent controls, because
-  this was invisible for weeks. See `docs/NON_MUTATING_SCAN_PRD.md`.
+  this was invisible for weeks. See the Non Mutating Scan PRD (removed post-implementation).
 
 ## Running it
 

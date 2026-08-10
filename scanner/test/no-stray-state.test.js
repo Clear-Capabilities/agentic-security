@@ -1,7 +1,7 @@
 // State-write seam guard.
 //
 // HISTORY, kept because the numbers are the argument. Two PRDs drove this work
-// (docs/NON_MUTATING_SCAN_PRD.md, then a completion PRD whose file was removed
+// (the Non Mutating Scan PRD (removed post-implementation), then a completion PRD whose file was removed
 // once every workstream landed), so what they established lives here:
 //
 //   · 59 modules once built `.agentic-security` paths by hand against 5 that

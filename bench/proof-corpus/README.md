@@ -2,7 +2,7 @@
 
 Scans large third-party open-source repositories to produce reproducible
 evidence about language coverage, detection quality, and operational behaviour
-at scale. See `docs/PROOF_CORPUS_PRD.md` for the full rationale.
+at scale. See the Proof Corpus PRD (removed post-implementation) for the full rationale.
 
 ## Running
 
@@ -64,7 +64,7 @@ declared zero functions, even when the parser returned a valid IR record for
 it (an `__init__.py`, a constants module). That is not a parse failure. The
 metric now counts `parsed` as "an IR record exists for the file," full stop,
 and tracks `functionless` (record exists, zero functions) as a separate,
-non-penalized count. See `docs/PROOF_CORPUS_PRD.md` §5.4.
+non-penalized count. See the Proof Corpus PRD §5.4.
 
 **The previously published "Superset Python parse coverage: 74%" was a
 measurement artifact, not a parsing problem.** Under the corrected metric,
@@ -74,7 +74,7 @@ metric miscounted as a failure. There was no Python IR parser bug to
 investigate; the earlier "known gap" and its stated follow-up
 ("investigating the Python IR parser's failure modes") were chasing a number
 that measured the wrong thing. Superset now clears the PRD's 85% acceptance
-bar (`docs/PROOF_CORPUS_PRD.md` §12 acceptance criterion 2) on every language in scope.
+bar (the Proof Corpus PRD §12 acceptance criterion 2) on every language in scope.
 
 ### Known gaps surfaced by this run
 
@@ -273,7 +273,7 @@ forwards them" was false for the same reason. Verified by execution:
 This is language-agnostic, not a C++ issue: JS, Python and C++ all show
 intraprocedural findings and no interprocedural ones, exactly as one shared
 defect predicts. It is deliberately **not** fixed here — see the known-issue
-register below. See `docs/PROOF_CORPUS_PRD.md` §6.12 for how it affects the
+register below. See the Proof Corpus PRD §6.12 for how it affects the
 criterion-4 judgement.
 
 ## Known issues found on this branch and deliberately not fixed here

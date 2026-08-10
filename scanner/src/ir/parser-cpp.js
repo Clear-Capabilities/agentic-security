@@ -1,7 +1,7 @@
 // C / C++ IR frontend.
 //
 // Hand-rolled, following the parser-cs.js / parser-go.js template. See
-// docs/PROOF_CORPUS_PRD.md §6.3 for why this is not tree-sitter or libclang:
+// the Proof Corpus PRD §6.3 (removed post-implementation) for why this is not tree-sitter or libclang:
 // the build excludes the tree-sitter deps from the bundle, and libclang would
 // require native bindings plus a compile database we deliberately never build.
 //

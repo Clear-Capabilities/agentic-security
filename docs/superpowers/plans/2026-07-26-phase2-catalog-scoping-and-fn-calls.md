@@ -59,7 +59,7 @@ Each confirmed by running the code on 2026-07-26. Do not assume otherwise.
 | `bench/self-scan/measure.mjs` | *Create.* Per-file self-scan counts — the precision harness. |
 | `bench/self-scan/BASELINE.json` | *Create.* Committed per-file baseline. |
 | `bench/self-scan/check.mjs` | *Create.* The gate. |
-| `docs/PROOF_CORPUS_PRD.md` | *Modify.* Correct the Java tier claim; record the four Java defects. |
+| the Proof Corpus PRD (removed post-implementation) | *Modify.* Correct the Java tier claim; record the four Java defects. |
 
 ---
 
@@ -785,7 +785,7 @@ when the total does not change. Proven in both directions."
 
 ## Task 7: Correct the Java claim and record its defects
 
-**Files:** Modify `docs/PROOF_CORPUS_PRD.md`; create `docs/superpowers/specs/2026-07-26-java-ir-frontend-notes.md`.
+**Files:** Modify the Proof Corpus PRD; create `docs/superpowers/specs/2026-07-26-java-ir-frontend-notes.md`.
 
 **Nothing in Java is fixed here.** The frontend needs statement lowering, parameter extraction, real line numbers and a conforming `qid` — the same shape of work as the C++ parser, which took eight tasks. This task makes the claim honest and hands the follow-on plan a measured starting point.
 
@@ -819,7 +819,7 @@ node /tmp/jt.mjs
 
 - [ ] **Step 2: Correct the tier claim**
 
-In `docs/PROOF_CORPUS_PRD.md` §2.3, Java is listed in the **Deep IR** tier — "first-class parser + proven interprocedural taint". Move it to a tier that matches reality and add a footnote recording that its parser yields function names only. Keep the section's existing tone and structure.
+In the Proof Corpus PRD §2.3, Java is listed in the **Deep IR** tier — "first-class parser + proven interprocedural taint". Move it to a tier that matches reality and add a footnote recording that its parser yields function names only. Keep the section's existing tone and structure.
 
 - [ ] **Step 3: Record the defects**
 
@@ -836,7 +836,7 @@ State plainly that these make interprocedural taint impossible for Java regardle
 
 ```bash
 cd /Users/ross/code/agentic-security
-git add docs/PROOF_CORPUS_PRD.md docs/superpowers/specs/2026-07-26-java-ir-frontend-notes.md
+git add the Proof Corpus PRD docs/superpowers/specs/2026-07-26-java-ir-frontend-notes.md
 git commit -m "docs: correct the Java tier claim and record the frontend's defects
 
 PROOF_CORPUS_PRD 2.3 listed Java in the Deep IR tier as having proven

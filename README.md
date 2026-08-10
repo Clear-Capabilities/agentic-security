@@ -167,7 +167,7 @@ Your agentic workforce runs on tokens. agentic-security watches each prompt and 
 - **Beyond this session — lints your own AI app's LLM calls too.** Scanning a project that calls Anthropic, OpenAI, Gemini, or xAI? It flags prompt-cache killers and over-provisioned calls, with a fix in that provider's own framework — e.g. an OpenAI app gets "gpt-5.4 at `reasoning_effort: low`."
 - **Opt-in: an actual choice, not just a tip.** Set `interactive: true` and a qualifying prompt gets you a real `AskUserQuestion` menu — keep your defaults, get the `/model` command to run yourself, or have Claude apply the cheaper model to its own delegated sub-agent work for the rest of the session. Costs a little real context on the prompts where it fires, unlike everything else in this section.
 
-On by default (advisory only — a hook can't switch your model for you); disable per-project via `/setup --model-optimizer` or the kill switch. Full detail, including the live cost HUD, session budget, and interactive mode — [cache economics](docs/MODEL_COST_OPTIMIZATION.md) · [v2 roadmap](docs/CACHE_ECONOMICS_V2_PRD.md).
+On by default (advisory only — a hook can't switch your model for you); disable per-project via `/setup --model-optimizer` or the kill switch. Full detail, including the live cost HUD, session budget, and interactive mode — [cache economics](docs/MODEL_COST_OPTIMIZATION.md).
 
 ---
 

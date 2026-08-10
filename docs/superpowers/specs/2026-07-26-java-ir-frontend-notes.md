@@ -2,7 +2,7 @@
 
 **Status:** documentation only. No code in `scanner/src/` changes as part of this record. It exists so a future rebuild of the Java IR frontend starts from measurement, not rediscovery.
 
-**Context:** `docs/PROOF_CORPUS_PRD.md` §2.3 listed Java in the **Deep IR** tier ("first-class parser + proven interprocedural taint") alongside JS/TS and Python. That claim was never true and was never measured. A prior phase's goal statement also named Java as one of three languages expected to produce interprocedural findings. This document is the measurement that corrects both, and the PRD has been updated in the same commit to move Java to the **Syntactic** tier with a footnote pointing here.
+**Context:** the Proof Corpus PRD §2.3 (removed post-implementation) listed Java in the **Deep IR** tier ("first-class parser + proven interprocedural taint") alongside JS/TS and Python. That claim was never true and was never measured. A prior phase's goal statement also named Java as one of three languages expected to produce interprocedural findings. This document is the measurement that corrects both, and the PRD has been updated in the same commit to move Java to the **Syntactic** tier with a footnote pointing here.
 
 ## Reproduction
 

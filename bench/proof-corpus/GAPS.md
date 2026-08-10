@@ -7,7 +7,7 @@ each sidecar's per-language `failures[]` array) plus
 `node bench/proof-corpus/runner.mjs --only ghost,superset,godot` and re-reading
 those two files.
 
-This file exists because `docs/PROOF_CORPUS_PRD.md` §12 criterion 2 promises the
+This file exists because the Proof Corpus PRD §12 (removed post-implementation) criterion 2 promises the
 files that fail to parse are enumerated, not merely counted. A campaign of this
 size that reports zero gaps has a broken harness, not a perfect scanner.
 

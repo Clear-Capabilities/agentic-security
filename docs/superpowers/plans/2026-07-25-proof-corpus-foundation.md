@@ -28,7 +28,7 @@ Copied from `CLAUDE.md` and `scanner/CLAUDE.md`. Every task's requirements impli
 
 ## Scope Note — why this plan covers only Phases 0–1
 
-`docs/PROOF_CORPUS_PRD.md` v1.1 spans three workstreams and eight phases. Those are genuinely independent subsystems, and per the writing-plans scope check they get separate plans:
+the Proof Corpus PRD (removed post-implementation) v1.1 spans three workstreams and eight phases. Those are genuinely independent subsystems, and per the writing-plans scope check they get separate plans:
 
 | Plan | PRD phases | Independently valuable deliverable |
 |---|---|---|
@@ -245,7 +245,7 @@ Create `scanner/src/ir/ir-stats.js`:
 // language, how many of the files we claim to support did we actually turn
 // into IR? That is the difference between recognising an extension and
 // supporting a language, and it is the headline metric of the proof corpus
-// bench (docs/PROOF_CORPUS_PRD.md §5.4).
+// bench (the Proof Corpus PRD §5.4).
 //
 // Enable by setting AGENTIC_SECURITY_IR_STATS to an output path. The sidecar
 // deliberately contains NO timestamp so two runs over identical input produce
@@ -1506,7 +1506,7 @@ Create `bench/proof-corpus/.gitignore`:
 
 ```gitignore
 # Raw findings never enter git — they are unreviewed results against live
-# third-party projects (PROOF_CORPUS_PRD.md §9.1). Only aggregate summary.json
+# third-party projects (the Proof Corpus PRD §9.1). Only aggregate summary.json
 # is committed.
 results/raw/
 results/*.tmp
@@ -1561,7 +1561,7 @@ Create `bench/proof-corpus/runner.mjs`:
 // Clones pinned commits of third-party repositories into an out-of-tree cache,
 // scans each with the committed bundle, and assembles an aggregate results
 // record. Raw findings are never written to a committed path — see
-// docs/PROOF_CORPUS_PRD.md §9.1 for why that boundary is enforced here rather
+// the Proof Corpus PRD §9.1 for why that boundary is enforced here rather
 // than left to discipline.
 //
 // Usage:
@@ -1879,7 +1879,7 @@ Create `bench/proof-corpus/README.md`. Replace every `<...>` with the actual val
 
 Scans large third-party open-source repositories to produce reproducible
 evidence about language coverage, detection quality, and operational behaviour
-at scale. See `docs/PROOF_CORPUS_PRD.md` for the full rationale.
+at scale. See the Proof Corpus PRD for the full rationale.
 
 ## Running
 

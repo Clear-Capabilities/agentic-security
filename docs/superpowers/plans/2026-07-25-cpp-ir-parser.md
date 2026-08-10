@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-Copied from `CLAUDE.md`, `scanner/CLAUDE.md`, and `docs/PROOF_CORPUS_PRD.md` §6. Every task's requirements implicitly include this section.
+Copied from `CLAUDE.md`, `scanner/CLAUDE.md`, and the Proof Corpus PRD §6. (removed post-implementation) Every task's requirements implicitly include this section.
 
 - **ESM only.** `import`/`export`. No CommonJS anywhere in `scanner/src/`.
 - **Node ≥ 24.** Verified present: v24.16.0.
@@ -79,7 +79,7 @@ Each was confirmed by reading the source. They shape the design; do not assume o
 | `scanner/test/parser-cpp.test.js` | *Create.* Unit tests for the parser. Wired into `test:dataflow`. |
 | `scanner/test/cpp-integration.test.js` | *Create.* Cross-TU resolution, CHA inheritance, end-to-end taint. Wired into `test:dataflow`. |
 | `bench/cve-replay/capability/CVE-*-cpp-*/` | *Create.* Ten C/C++ corpus entries. |
-| `docs/PROOF_CORPUS_PRD.md` | *Modify.* Correct §6.8's claim that CHA is Babel-only; record the measured Godot result. |
+| the Proof Corpus PRD | *Modify.* Correct §6.8's claim that CHA is Babel-only; record the measured Godot result. |
 
 ---
 
@@ -283,7 +283,7 @@ Create `scanner/src/ir/parser-cpp.js`:
 // C / C++ IR frontend.
 //
 // Hand-rolled, following the parser-cs.js / parser-go.js template. See
-// docs/PROOF_CORPUS_PRD.md §6.3 for why this is not tree-sitter or libclang:
+// the Proof Corpus PRD §6.3 for why this is not tree-sitter or libclang:
 // the build excludes the tree-sitter deps from the bundle, and libclang would
 // require native bindings plus a compile database we deliberately never build.
 //
@@ -1341,7 +1341,7 @@ over header declarations and ambiguous bare names refused rather than guessed."
 **Files:**
 - Modify: `scanner/src/ir/class-hierarchy.js`
 - Modify: `scanner/test/cpp-integration.test.js` (append tests)
-- Modify: `docs/PROOF_CORPUS_PRD.md` (correct §6.8)
+- Modify: the Proof Corpus PRD (correct §6.8)
 
 **Interfaces:**
 - Consumes: `ir.classes = [{name, bases, line}]` from Task 1.
@@ -1465,7 +1465,7 @@ Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Correct the PRD**
 
-In `docs/PROOF_CORPUS_PRD.md` §6.8, replace the claim that `class-hierarchy.js` "today walks Babel ASTs and is JS/TS-only" with an accurate statement: `buildClassHierarchy` is already language-neutral, reading `perFileIR` and recovering classes from the qid tail's `Class.method` shape; what it lacked was any population of `extends` for any language, which this work adds via an optional `ir.classes` array. Keep the note that multiple inheritance is flattened to the first base.
+In the Proof Corpus PRD §6.8, replace the claim that `class-hierarchy.js` "today walks Babel ASTs and is JS/TS-only" with an accurate statement: `buildClassHierarchy` is already language-neutral, reading `perFileIR` and recovering classes from the qid tail's `Class.method` shape; what it lacked was any population of `extends` for any language, which this work adds via an optional `ir.classes` array. Keep the note that multiple inheritance is flattened to the first base.
 
 - [ ] **Step 6: Run the dataflow scope**
 
@@ -1479,7 +1479,7 @@ Expected: green.
 
 ```bash
 cd /Users/ross/code/agentic-security
-git add scanner/src/ir/class-hierarchy.js scanner/test/cpp-integration.test.js docs/PROOF_CORPUS_PRD.md
+git add scanner/src/ir/class-hierarchy.js scanner/test/cpp-integration.test.js the Proof Corpus PRD
 git commit -m "feat(ir): populate class-hierarchy extends from an optional ir.classes array
 
 buildClassHierarchy was already language-neutral — it reads perFileIR and
@@ -1877,7 +1877,7 @@ Baseline regenerated and the gate proven in both directions."
 **Files:**
 - Modify: `bench/proof-corpus/manifest.json` (pin `godot`)
 - Modify: `bench/proof-corpus/README.md` (record the before/after)
-- Modify: `docs/PROOF_CORPUS_PRD.md` (record the measured result against §6.12)
+- Modify: the Proof Corpus PRD (record the measured result against §6.12)
 
 **Interfaces:**
 - Consumes: everything from Tasks 1–7, plus the `AGENTIC_SECURITY_IR_STATS` instrument from PR #42.
@@ -1956,7 +1956,7 @@ The seven acceptance criteria, with how each is judged:
 
 - [ ] **Step 6: Record the result**
 
-Update `bench/proof-corpus/README.md` with a Godot row carrying the real figures, including `functionless`, and a before/after line for parse coverage and resolved call-graph edges. Update `docs/PROOF_CORPUS_PRD.md` §2.3's support-tier table: move C/C++ from *Syntactic* to *Structural IR* **only if** criteria 2, 3 and 4 all passed. If they did not, leave the tier unchanged and add a line stating what was measured and what remains.
+Update `bench/proof-corpus/README.md` with a Godot row carrying the real figures, including `functionless`, and a before/after line for parse coverage and resolved call-graph edges. Update the Proof Corpus PRD §2.3's support-tier table: move C/C++ from *Syntactic* to *Structural IR* **only if** criteria 2, 3 and 4 all passed. If they did not, leave the tier unchanged and add a line stating what was measured and what remains.
 
 - [ ] **Step 7: Final gate**
 
@@ -1972,7 +1972,7 @@ Expected: both exit 0.
 
 ```bash
 cd /Users/ross/code/agentic-security
-git add bench/proof-corpus/manifest.json bench/proof-corpus/README.md bench/proof-corpus/results/summary.json docs/PROOF_CORPUS_PRD.md
+git add bench/proof-corpus/manifest.json bench/proof-corpus/README.md bench/proof-corpus/results/summary.json the Proof Corpus PRD
 git commit -m "test(proof-corpus): measure the C/C++ parser on Godot
 
 Pins Godot and records the measured parse coverage, call-graph resolution,

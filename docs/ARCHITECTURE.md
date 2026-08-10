@@ -77,7 +77,7 @@
 ```
 
 **Methodology layer.** On top of the deterministic engine, a set of default-on posture
-annotators add agentic-hunter discipline (see `docs/AGENTIC_METHODOLOGY_PRD.md`):
+annotators add agentic-hunter discipline (see the Agentic Methodology PRD (removed post-implementation)):
 `falsification` (refute each taint finding — demote the ones a control blocks, recall-
 preserving), `entrypoint-inventory` (attack-surface coverage ledger on `scan.entrypointInventory`),
 `root-cause-sweep` (find sibling instances of a confirmed bug, on `scan.rootCauseSweep`),

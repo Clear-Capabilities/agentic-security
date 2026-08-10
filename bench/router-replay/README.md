@@ -51,7 +51,7 @@ entry has regret, or a baselined entry vanishes — same shape as
 - To make the AIQ real, replace the labels with **measured** per-model
   (quality, cost) outcomes — then the hull-advantage number becomes a genuine
   cost-quality verdict. That is the next step (see
-  `docs/MODEL_COST_OPTIMIZATION_PRD.md` and the RouterBench analysis plan).
+  the Model Cost Optimization PRD (removed post-implementation) and the RouterBench analysis plan).
 - The current baseline shows the v0.120.0 heuristic is **dominated** (negative
   hull advantage) with non-trivial downgrade-regret — i.e. this harness is
   already earning its keep by flagging that the classifier needs the quality

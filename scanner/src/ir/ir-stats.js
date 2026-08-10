@@ -4,7 +4,7 @@
 // language, how many of the files we claim to support did we actually turn
 // into IR? That is the difference between recognising an extension and
 // supporting a language, and it is the headline metric of the proof corpus
-// bench (docs/PROOF_CORPUS_PRD.md §5.4).
+// bench (the Proof Corpus PRD §5.4 (removed post-implementation)).
 //
 // Enable by setting AGENTIC_SECURITY_IR_STATS to an output path. The sidecar
 // deliberately contains NO timestamp so two runs over identical input produce
