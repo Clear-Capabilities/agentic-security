@@ -70,6 +70,40 @@ every denominator, and reported by name. It is not a miss. The precedent is
 counted against them, because the alternative silently penalises infrastructure
 failure as if it were a detection failure.
 
+## Measured result — 2026-08-09, n=110, 0 unscored
+
+| | Advisory-local (**the claim**) | Wide (diagnostic) |
+|---|---|---|
+| recall | **12.7%** (14/110) | 33.6% (37/110) |
+| precision | **50.0%** (14/28) | 50.0% (37/74) |
+| F1 | **0.203** | 0.402 |
+
+By language (advisory-local): JavaScript 4/18, Python 7/57, TypeScript 3/35.
+
+**Quote the advisory-local column.** "Wide" is the same scans scored without
+restricting findings to the files the fix commit touched — it asks only whether
+the CWE appeared *anywhere* in the package. Over scopes holding up to 1740
+findings (median 58) that is close to a lookup of "does this codebase contain
+this bug class at all", a question with a much easier yes.
+
+### Why both columns exist
+
+Two corrections landed together: purging the engine's own scan state from the
+trees before scoring (an accuracy correction — the engine had been partly
+grading its own prior output) and restricting matches to the advisory's files (a
+strictness correction in the *harness*). Recall fell from a previously reported
+33.6% to 12.7%, and attributing that fall to the wrong cause would have been the
+same reasoning error as the contamination, pointed the other way.
+
+The decomposition settles it: **the wide figure is still 33.6%, identical to the
+pre-purge number.** So the contamination, though real and worth fixing, was
+**not** inflating this measurement. The entire 20.9-point drop is the benchmark
+becoming honest about *where* a finding has to be.
+
+That makes 12.7% the true recall, and it always was. It is a low number reported
+as a low number — which is the point of owning the instrument rather than
+tuning against it.
+
 ## Honest limits, stated up front
 
 - **`post/` is not proof of a fix.** It is the upstream fix. A finding there is
@@ -103,10 +137,19 @@ failure as if it were a detection failure.
   real findings that simply are not this advisory's bug.
 
 - **The sampling frame is narrow.** Entries are advisories carrying exactly one
-  repository fix commit and a CWE. The current 40 entries come from only 9
-  distinct repositories, so per-project idiosyncrasies are over-represented, and
-  the language mix is entirely JavaScript and TypeScript. Report the CWE and
-  repository distribution alongside any rate quoted from this population.
+  repository fix commit and a CWE — a biased frame favouring well-maintained
+  projects. The population is 110 entries across three languages (Python 57,
+  TypeScript 35, JavaScript 18). Report the CWE and repository distribution
+  alongside any rate quoted from it.
+
+- **Benchmark trees are purged before every scan.** The engine writes
+  `.agentic-security/` into whatever it scans, and those files contain CWE
+  identifiers. Audited on this population: 220 polluted trees, 544 state files
+  carrying `CWE-` strings — so a second scan could read the first scan's
+  conclusions as source. `runner.mjs` now purges before each scan AND refuses to
+  score any finding whose path lies inside a state directory; the engine also
+  skips `.agentic-security/` when walking. Three independent controls, because
+  this was invisible for weeks. See `docs/NON_MUTATING_SCAN_PRD.md`.
 
 ## Running it
 
@@ -122,7 +165,7 @@ because it is fast enough for a smoke test, but **it is not the measurement** �
 it understates recall by roughly 2.6× and anything quoted must come from
 `materialise`.
 
-Budget roughly 8 minutes to materialise 40 entries and 10+ to score them. The
+Budget roughly 8 minutes to materialise 40 entries; scoring the full 110-entry population took ~32 minutes on the maintainer machine. The
 honest measurement is an order of magnitude slower than the dishonest one, which
 is why the scope is capped rather than whole-repo.
 
