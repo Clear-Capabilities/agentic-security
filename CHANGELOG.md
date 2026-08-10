@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.135.0 — a scan stops modifying what it scans, and the benchmark stops flattering
+
+Two findings, one of which reverses something this project previously reported.
+
+### `--no-state`: a scan is an observation again
+
+Pointing the engine at a directory used to write **10 files** into it. For a user
+that means CI asserting a clean tree fails after a scan, and scanning a
+dependency or a customer's code leaves artifacts in a tree they own. Worse, our
+own output contains CWE identifiers, so a second scan could read the first
+scan's conclusions as source.
+
+`AGENTIC_SECURITY_NO_STATE=1` (and `--no-state`) now adds **zero paths** while
+reporting byte-identical findings. Both halves are asserted, and the test was
+proven to FAIL with the switch off — the switch must change what is written,
+never what is found. The engine also skips `.agentic-security/` when walking, so
+our output can never become our input.
+
+Three defects were found in the guard meant to enforce this, each worth more
+than the line that fixed it:
+
+- **`git status` is not sufficient evidence.** Git does not track empty
+  directories, so an earlier revision reported a CLEAN tree while still creating
+  `sbom-history/` and `fix-history/`. Directory creation is mutation: it fails on
+  a read-only mount and is litter in someone else's repo. The acceptance test
+  compares full path listings.
+- **The guard was blind to `bin/`** — where the three largest artifacts
+  (`findings.json`, `last-scan.json`, `.sig`) are written. A seam guard that
+  cannot see the CLI entry point misses the primary writer.
+- **The detector counted documentation as a violation**, then over-corrected: a
+  glob inside `// .agentic-security/rules/*.yml` opened a block comment that
+  consumed 12,198 characters and hid a real violation. Comment-strip order is
+  now load-bearing and asserted in both directions.
+
+Stated plainly: 55 modules still build state paths by hand and remain on a
+migration ledger. What changed permanently is that a 56th cannot be added.
+
+### The independent recall figure was wrong, and the correction is downward
+
+Benchmark trees had been contaminated by the engine's own state files (220
+polluted trees, 544 carrying `CWE-` strings). Fixing that coincided with a second
+change — restricting matches to the files the advisory's fix commit touched — and
+recall fell from a previously reported 33.6% to 12.7%.
+
+Attributing that fall to the wrong cause would have been the same reasoning error
+as the contamination, pointed the other way, so the runner now scores both ways
+in one pass:
+
+| | advisory-local (**the claim**) | wide (diagnostic) |
+|---|---|---|
+| recall | **12.7%** (14/110) | 33.6% (37/110) |
+| precision | **50.0%** (14/28) | 50.0% (37/74) |
+| F1 | **0.203** | 0.402 |
+
+The wide figure is identical to the pre-purge number. **The contamination was
+real and had to be fixed, but it was not inflating the measurement** — every one
+of the 20.9 points comes from the benchmark becoming honest about *where* a
+finding has to be. 12.7% is the true recall, and it always was.
+
+It is published as a low number rather than quietly requalified, because the
+point of owning the instrument is to be able to trust it when it disagrees.
+
+
 ## 0.134.0 — the loop closes, and the logic tier learns how to be wrong
 
 The remaining PRD epics. Two of them are new capability; the other two are the
