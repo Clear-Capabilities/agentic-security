@@ -1,0 +1,90 @@
+{
+  "schema": "agentic-security/independent-population-result@1",
+  "source": "bench/independent/runner.mjs",
+  "measuredAt": "2026-08-09",
+  "engineVersion": "0.135.0",
+  "population": {
+    "totalEntries": 110,
+    "scoredEntries": 110,
+    "unscored": 0,
+    "labelSources": [
+      "github-security-advisory"
+    ]
+  },
+  "overall": {
+    "tp": 14,
+    "fp": 14,
+    "fn": 96,
+    "tn": 96,
+    "precision": {
+      "n": 14,
+      "d": 28,
+      "value": 0.5
+    },
+    "recall": {
+      "n": 14,
+      "d": 110,
+      "value": 0.12727272727272726
+    },
+    "f1": 0.2028985507246377
+  },
+  "wide": {
+    "tp": 37,
+    "fp": 37,
+    "fn": 73,
+    "tn": 73,
+    "precision": {
+      "n": 37,
+      "d": 74,
+      "value": 0.5
+    },
+    "recall": {
+      "n": 37,
+      "d": 110,
+      "value": 0.33636363636363636
+    },
+    "f1": 0.4021739130434782,
+    "meaning": "same scans, advisory-file restriction OFF — diagnostic only, never the claim"
+  },
+  "byLanguage": {
+    "javascript": {
+      "entries": 18,
+      "recall": {
+        "n": 4,
+        "d": 18,
+        "value": 0.2222222222222222
+      },
+      "precision": {
+        "n": 4,
+        "d": 8,
+        "value": 0.5
+      }
+    },
+    "python": {
+      "entries": 57,
+      "recall": {
+        "n": 7,
+        "d": 57,
+        "value": 0.12280701754385964
+      },
+      "precision": {
+        "n": 7,
+        "d": 14,
+        "value": 0.5
+      }
+    },
+    "typescript": {
+      "entries": 35,
+      "recall": {
+        "n": 3,
+        "d": 35,
+        "value": 0.08571428571428572
+      },
+      "precision": {
+        "n": 3,
+        "d": 6,
+        "value": 0.5
+      }
+    }
+  }
+}

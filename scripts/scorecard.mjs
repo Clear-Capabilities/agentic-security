@@ -100,6 +100,16 @@ async function main() {
     committed: {
       corpusBaseline: readJsonIfPresent('bench/cve-replay/corpus-baseline.json'),
       proofCorpus: readJsonIfPresent('bench/proof-corpus/results/summary.json'),
+      // The independent-population result is READ from a committed file rather
+      // than re-run: scoring 110 upstream packages takes ~32 minutes, far too
+      // long to sit inside `npm run scorecard`.
+      //
+      // It is read here at all because the section reporting it used to be
+      // HAND-WRITTEN into docs/SCORECARD.md — an auto-generated file. Every
+      // regeneration silently deleted it, and in between, the document kept
+      // publishing a recall figure (45.0%, n=40) that had already been
+      // withdrawn. A number nobody regenerates is a number nobody corrects.
+      independent: readJsonIfPresent('bench/independent/RESULT.json'),
     },
   });
 

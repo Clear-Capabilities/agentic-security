@@ -273,3 +273,67 @@ test('accuracy scorecard — a NEW target defaults to unreviewed, not reviewed',
   assert.doesNotMatch(reviewedBlock, /some\/new\/target/);
   assert.match(md.slice(md.indexOf('### Drift tripwire')), /some\/new\/target/);
 });
+
+// ── The independent-population section must be GENERATED, not hand-written ──
+//
+// This section previously lived as hand-written prose inside the generated
+// docs/SCORECARD.md. Every `npm run scorecard` silently deleted it, and in the
+// gaps the document kept publishing a recall figure (45.0%, n=40) that had
+// already been withdrawn. These tests exist so that cannot recur: the section
+// is rendered from a committed data file, or it is honestly absent.
+
+const INDEPENDENT = {
+  measuredAt: '2026-08-09',
+  engineVersion: '0.135.0',
+  population: { totalEntries: 110, scoredEntries: 110, unscored: 0 },
+  overall: {
+    tp: 14, fp: 14, fn: 96, tn: 96,
+    precision: { n: 14, d: 28, value: 0.5 },
+    recall: { n: 14, d: 110, value: 14 / 110 },
+    f1: 0.203,
+  },
+  wide: {
+    precision: { n: 37, d: 74, value: 0.5 },
+    recall: { n: 37, d: 110, value: 37 / 110 },
+    f1: 0.402,
+  },
+  byLanguage: {
+    python: { entries: 57, recall: { n: 7, d: 57 }, precision: { n: 7, d: 14 } },
+  },
+};
+
+test('independent population: the measured figures are rendered with their denominators', () => {
+  const inputs = fixtureInputs();
+  inputs.committed = { ...(inputs.committed || {}), independent: INDEPENDENT };
+  const md = renderScorecardMarkdown(buildScorecard(inputs));
+
+  assert.match(md, /Independent evaluation population/,
+    'the section must appear when a committed result exists');
+  // The claim, and never a bare percentage.
+  assert.match(md, /14\/110 \(12\.7%\)/, 'recall with its denominator');
+  assert.match(md, /14\/28 \(50\.0%\)/, 'precision with its denominator');
+  assert.match(md, /0\.203/, 'F1');
+  // The diagnostic column must be present AND labelled as not the claim.
+  assert.match(md, /37\/110 \(33\.6%\)/, 'the wide diagnostic figure');
+  assert.match(md, /Quote the advisory-local column/,
+    'the wide figure must never be presented as the headline');
+  assert.match(md, /7\/57 \(12\.3%\)/, 'per-language rows carry denominators too');
+});
+
+test('independent population: absent committed result omits the section entirely', () => {
+  // Silence is the correct failure mode. A placeholder, a zero, or a stale
+  // remembered number would each be a claim the run cannot support.
+  const md = renderScorecardMarkdown(buildScorecard(fixtureInputs()));
+  assert.doesNotMatch(md, /Independent evaluation population/);
+  assert.doesNotMatch(md, /12\.7%/);
+});
+
+test('independent population: the F1 omission reason no longer denies the population exists', () => {
+  // The old reason string said no labelled real-world population was available.
+  // That became false when bench/independent/ was built; a stale justification
+  // argues against a measurement that now exists.
+  const m = buildScorecard(fixtureInputs());
+  assert.equal(m.methodology.f1Emitted, false, 'still no F1 over the curated corpus');
+  assert.doesNotMatch(m.methodology.f1OmissionReason, /no labelled real-world population/);
+  assert.match(m.methodology.f1OmissionReason, /fixture design|third-party population/);
+});

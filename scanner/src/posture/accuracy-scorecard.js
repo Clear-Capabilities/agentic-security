@@ -121,7 +121,14 @@ export function buildScorecard(inputs) {
       notGeneralRecall: true,
       notGeneralFalsePositiveRate: true,
       f1Emitted: false,
-      f1OmissionReason: 'no labelled real-world population is available to measure precision over, so any F1 would combine denominators that do not describe the same population',
+      // Was: "no labelled real-world population is available". That stopped
+      // being true when bench/independent/ was built, and a stale justification
+      // is worse than none — it argues against a measurement that now exists.
+      // No F1 is emitted FOR THE CURATED CORPUS, and the reason is narrower:
+      // its `post/` fixtures are authored here to be silent, so its precision
+      // denominator describes fixture design rather than engine behaviour.
+      // F1 over the independent population IS reported, in its own section.
+      f1OmissionReason: 'the curated corpus authors both its vulnerable and its fixed fixtures, so an F1 over it would measure fixture design, not accuracy; F1 over the labelled third-party population is reported separately from bench/independent/RESULT.json',
     },
     corpus: {
       measuredThisRun: true,
@@ -137,6 +144,17 @@ export function buildScorecard(inputs) {
     committedInputs: {
       corpusBaseline: committed.corpusBaseline
         ? { source: 'bench/cve-replay/corpus-baseline.json', generatedAt: committed.corpusBaseline.generatedAt, total: committed.corpusBaseline.total, passing: committed.corpusBaseline.passing }
+        : null,
+      independent: committed.independent
+        ? {
+          source: 'bench/independent/RESULT.json',
+          measuredAt: committed.independent.measuredAt || null,
+          engineVersion: committed.independent.engineVersion || null,
+          population: committed.independent.population || null,
+          overall: committed.independent.overall || null,
+          wide: committed.independent.wide || null,
+          byLanguage: committed.independent.byLanguage || null,
+        }
         : null,
       proofCorpus: proof
         ? {
@@ -307,6 +325,46 @@ export function renderScorecardMarkdown(m) {
   }
   L.push('Per-file counts are in `docs/scorecard.json`.');
   L.push('');
+  const ind = m.committedInputs.independent;
+  if (ind && ind.overall) {
+    L.push('## Independent evaluation population — the number that matters');
+    L.push('');
+    L.push('Everything above is a **regression net**: its fixtures and its labels are both');
+    L.push('written here, which is why its detection rate sits at the ceiling by');
+    L.push('construction. `bench/independent/` is the other instrument — real upstream code');
+    L.push('at the commit where a vulnerability really existed, with the CWE assigned by a');
+    L.push('public advisory database rather than by this project.');
+    L.push('');
+    L.push(`**Measured ${ind.measuredAt} on engine ${ind.engineVersion}, ` +
+      `n=${ind.population?.scoredEntries}, ${ind.population?.unscored} unscored** ` +
+      '(*committed artifact*, `' + ind.source + '` — read, not re-run: scoring takes ~32 minutes).');
+    L.push('');
+    L.push('| | Advisory-local (**the claim**) | Wide (diagnostic) |');
+    L.push('| --- | --- | --- |');
+    L.push(`| Precision | **${formatRate(ind.overall.precision?.n, ind.overall.precision?.d)}** | ${formatRate(ind.wide?.precision?.n, ind.wide?.precision?.d)} |`);
+    L.push(`| Recall | **${formatRate(ind.overall.recall?.n, ind.overall.recall?.d)}** | ${formatRate(ind.wide?.recall?.n, ind.wide?.recall?.d)} |`);
+    L.push(`| F1 | **${ind.overall.f1 === null || ind.overall.f1 === undefined ? 'n/a' : ind.overall.f1.toFixed(3)}** | ${ind.wide?.f1 === null || ind.wide?.f1 === undefined ? 'n/a' : ind.wide.f1.toFixed(3)} |`);
+    L.push('');
+    if (ind.byLanguage) {
+      L.push('| Language | n | Recall | Precision |');
+      L.push('| --- | --- | --- | --- |');
+      for (const [k, v] of Object.entries(ind.byLanguage)) {
+        L.push(`| ${k} | ${v.entries} | ${formatRate(v.recall?.n, v.recall?.d)} | ${formatRate(v.precision?.n, v.precision?.d)} |`);
+      }
+      L.push('');
+    }
+    L.push('**Quote the advisory-local column.** "Wide" scores the same scans without');
+    L.push('restricting findings to the files the advisory\'s fix commit touched — it asks');
+    L.push('only whether the CWE appeared *anywhere* in the package. Over scopes holding up');
+    L.push('to 1740 findings that is close to asking whether the codebase contains the bug');
+    L.push('class at all, a question with a much easier yes. It is kept because it is the');
+    L.push('only way to tell whether a change moved the engine or moved the benchmark.');
+    L.push('');
+    L.push('Against ~100% on the curated corpus above. **That gap is the most useful number');
+    L.push('in this document**, and publishing it is the point of the exercise. The figure');
+    L.push('went DOWN when the benchmark was corrected, and is published that way.');
+    L.push('');
+  }
   L.push('## Committed artifacts referenced (not re-run by this command)');
   L.push('');
   const cb = m.committedInputs.corpusBaseline;
