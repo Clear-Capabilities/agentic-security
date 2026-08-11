@@ -19,6 +19,17 @@ test('PHP — echo of $_GET fires; htmlspecialchars / static clean', () => {
   assert.ok(clean(['p.php', '<?php echo "<div>static</div>";']));
 });
 
+// Stage 1 correctness audit: PHP was routed through blankComments' 'py'
+// mode, which strips only `#` comments — PHP's much more common `//` and
+// `/* */` comment styles were left completely unstripped, so commented-out
+// vulnerable PHP code still matched the sink regex.
+test('PHP — commented-out echo does not fire (// and /* */ are real PHP comment forms)', () => {
+  assert.ok(clean(['p.php', '<?php\n// echo "<div>" . $_GET["x"];\necho "safe";']));
+  assert.ok(clean(['p.php', '<?php\n/* echo "<div>" . $_GET["x"]; */\necho "safe";']));
+  // still fires on the real, uncommented line
+  assert.ok(fires(['p.php', '<?php\n// old code\necho "<div>" . $_GET["x"];']));
+});
+
 test('Ruby — render inline interpolation / raw(params) fires; ERB tag / plain clean', () => {
   assert.ok(fires(['c.rb', 'def show; render inline: "<h1>#{params[:q]}</h1>"; end']));
   assert.ok(fires(['c.rb', 'def show; render html: raw(params[:q]); end']));

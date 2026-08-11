@@ -63,11 +63,13 @@ export function scanCSRF(fp, raw) {
   if (!langSel) return [];
 
   const code = blankComments(raw, (ext === 'py' || ext === 'rb') ? 'py' : undefined);
-  // Project-wide-ish: if the file shows CSRF defence anywhere or only handles
-  // token-authenticated routes, we suppress.
-  const csrfInScope = CSRF_DEFENCE_RE.test(code);
-  const tokenAuthInScope = TOKEN_AUTH_RE.test(code);
-  if (csrfInScope || tokenAuthInScope) return [];
+  // Per-route defence is checked below (±15-line window around each route).
+  // There used to also be a whole-file gate here ("if the file shows CSRF
+  // defence ANYWHERE, suppress every route in it") — by regex-substring
+  // monotonicity that gate always fires whenever the per-route window would
+  // have matched too (the window is a substring of the file), so it made the
+  // per-route check provably unreachable: one protected route silently
+  // suppressed every OTHER route in the same file, however unprotected.
 
   const findings = [];
   const seen = new Set();

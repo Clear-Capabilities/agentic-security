@@ -89,9 +89,13 @@ export function scanPrototypePollution(fp, raw) {
     const r2 = new RegExp(re.source, re.flags);
     let mm;
     while ((mm = r2.exec(code))) {
-      // Only flag write context: look for `=` within 20 chars after.
+      // Only flag write context: an `=` that is a genuine assignment, not
+      // part of a comparison operator (==, ===, !=, !==, <=, >=). The
+      // previous /=\s*[^=]/ check wasn't anchored to the first `=`, so it
+      // matched the trailing `=` of a `===` chain (e.g.
+      // `obj.__proto__ === Object.prototype`) as a false "write."
       const post = code.slice(mm.index, mm.index + 60);
-      if (!/=\s*[^=]/.test(post)) continue;
+      if (!/(?<![=!<>])=(?!=)/.test(post)) continue;
       const line = lineOf(raw, mm.index);
       push({
         id: `prototype-pollution-direct:${fp}:${line}`,

@@ -145,10 +145,12 @@ export function scanAuthZ(fp, raw) {
     const m2 = ln.match(JWT_HARDCODED_SECRET_RE);
     if (m2) {
       const val = m2[1];
-      // Suppress only template/env placeholders
-      if (!/process\.env|\$\{|<.*?>|^\s*$/.test(val) && !/\bsecret\b|\bchange.?me\b|^example$/i.test(val) === false || val.length >= 4) {
-        // We still flag well-known placeholders ("secret", "changeme") because they
-        // are the most common production foot-gun.
+      // Suppress only template/env placeholders. We still flag well-known
+      // placeholders ("secret", "changeme", "example") because they are the
+      // most common production foot-gun.
+      const looksLikePlaceholder = /process\.env|\$\{|<.*?>|^\s*$/.test(val);
+      const isKnownBadPlaceholder = /\bsecret\b|\bchange.?me\b|^example$/i.test(val);
+      if (!looksLikePlaceholder || isKnownBadPlaceholder) {
         push(_emit(fp, i + 1,
           'AuthZ: hardcoded JWT secret in source',
           'critical', 'CWE-798', ln.replace(val, '<redacted>'),

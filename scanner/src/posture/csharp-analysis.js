@@ -101,6 +101,49 @@ function isSanitizedExpr(text) {
   return false;
 }
 
+// For each SANITIZER_PATTERNS match in `text`, find the nearest `(...)` call
+// span after the match and return its [start, end) bounds. Used to tell
+// "the sanitizer call actually wraps the tainted value" (HtmlEncode(x)) apart
+// from "the sanitizer pattern matched something unrelated elsewhere in a
+// compound expression" (comment + (IsNullOrEmpty(flag) ? ... : ...)) — a
+// common .NET idiom that combines a tainted value with an unrelated validity
+// check in the same expression.
+function _sanitizerCallSpans(text) {
+  const spans = [];
+  for (const re of SANITIZER_PATTERNS) {
+    const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
+    let m;
+    while ((m = g.exec(text))) {
+      const openIdx = text.indexOf('(', g.lastIndex - 1);
+      if (openIdx !== -1 && openIdx - g.lastIndex < 3) {
+        let depth = 1, j = openIdx + 1;
+        while (j < text.length && depth > 0) {
+          if (text[j] === '(') depth++;
+          else if (text[j] === ')') depth--;
+          j++;
+        }
+        spans.push([openIdx, j]);
+      }
+      if (g.lastIndex === m.index) g.lastIndex++; // avoid infinite loop on zero-width matches
+    }
+  }
+  return spans;
+}
+
+// Is `ref` tainted-and-NOT-neutralized by an enclosing sanitizer call in
+// `text`? True when every occurrence of `ref` as a whole word sits outside
+// every sanitizer call span (i.e. no sanitizer actually wraps it).
+function _refEscapesSanitizers(text, ref, spans) {
+  if (!spans.length) return true;
+  const re = new RegExp(`\\b${ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+  let m, sawAny = false;
+  while ((m = re.exec(text))) {
+    sawAny = true;
+    if (!spans.some(([s, e]) => m.index >= s && m.index < e)) return true;
+  }
+  return !sawAny;
+}
+
 // Walk a single method's body and compute per-variable type + taint.
 // Returns { typeMap, taintMap, sourceLines } where sourceLines records the
 // declaration line at which each variable first became tainted.
@@ -296,12 +339,22 @@ export function receiverIsType(method, flow, receiver, typePattern) {
 // for short expressions but unsafe for arbitrary string-containing text.
 export function expressionIsTainted(flow, text, idents = null) {
   if (!text && !idents) return false;
+  // Check known-tainted variable references that ESCAPE every sanitizer
+  // call span first — a whole-expression sanitizer-pattern match (below)
+  // must not clear a tainted variable the sanitizer doesn't actually wrap.
+  // `HtmlEncode(x)` genuinely neutralizes `x` (inside the call's parens);
+  // `comment + (string.IsNullOrEmpty(flag) ? ... : ...)` does not neutralize
+  // `comment` just because an unrelated sanitizer pattern matched `flag`
+  // elsewhere in the same compound expression.
+  const refs = idents || (text ? text.match(/\b[A-Za-z_]\w*\b/g) || [] : []);
+  const spans = text ? _sanitizerCallSpans(text) : [];
+  for (const r of refs) {
+    if (flow.taintMap.get(r) && (!text || _refEscapesSanitizers(text, r, spans))) return true;
+  }
   if (text) {
     if (isSourceExpr(text) && !isSanitizedExpr(text)) return true;
     if (isSanitizedExpr(text)) return false;
   }
-  const refs = idents || (text ? text.match(/\b[A-Za-z_]\w*\b/g) || [] : []);
-  for (const r of refs) if (flow.taintMap.get(r)) return true;
   return false;
 }
 
@@ -311,9 +364,15 @@ export function expressionIsTainted(flow, text, idents = null) {
 // not treated as code identifiers.
 export function argIsTainted(flow, arg) {
   if (!arg) return false;
+  // Same span-aware fix as expressionIsTainted: a tainted identifier that
+  // escapes every sanitizer call span wins over a whole-argument
+  // sanitizer-pattern match.
+  const spans = arg.text ? _sanitizerCallSpans(arg.text) : [];
+  for (const id of arg.idents || []) {
+    if (flow.taintMap.get(id) && (!arg.text || _refEscapesSanitizers(arg.text, id, spans))) return true;
+  }
   if (arg.text && isSanitizedExpr(arg.text)) return false;
   if (arg.text && isSourceExpr(arg.text)) return true;
-  for (const id of arg.idents || []) if (flow.taintMap.get(id)) return true;
   return false;
 }
 

@@ -114,6 +114,28 @@ test('analysis: sanitizer clears taint', () => {
   assert.equal(expressionIsTainted(flow, 'HttpUtility.HtmlEncode(x)'), false);
 });
 
+// Stage 1 correctness audit: argIsTainted/expressionIsTainted checked
+// isSanitizedExpr() against the WHOLE argument text before ever looking at
+// which identifiers are tainted — a common .NET idiom that combines a
+// tainted value with an unrelated validity check (`string.IsNullOrEmpty`,
+// `int.TryParse`, etc.) in the same expression short-circuited taint to
+// false, because the sanitizer pattern matched somewhere in the text even
+// though it had nothing to do with the tainted sub-expression.
+test('analysis: an unrelated IsNullOrEmpty check elsewhere in the expression does not clear taint', () => {
+  const ir = buildCSharpIR('class T { void M(string flag) { var comment = Request.QueryString["comment"]; Html.Raw(comment + (string.IsNullOrEmpty(flag) ? "[flag]" : "")); } }');
+  const an = analyzeCSharpIR(ir);
+  const flow = an.methodFlow.get(ir.methods[0]);
+  assert.equal(flow.taintMap.get('comment'), true);
+  assert.equal(expressionIsTainted(flow, 'comment + (string.IsNullOrEmpty(flag) ? "[flag]" : "")'), true);
+});
+
+test('detectXss: Html.Raw still fires when the tainted arg also contains an unrelated IsNullOrEmpty check', () => {
+  const src = 'public class T : Controller { public void M(string flag) { var comment = Request.QueryString["comment"]; Html.Raw(comment + (string.IsNullOrEmpty(flag) ? "[flag]" : "")); } }';
+  const findings = scanCSharp('T.cs', src);
+  assert.ok(findings.some(f => /htmlraw|Html\.Raw/i.test(f.id) || /XSS/i.test(f.vuln)),
+    `expected an XSS finding for Html.Raw(tainted), got: ${JSON.stringify(findings)}`);
+});
+
 test('analysis: Controller-derived class auto-taints public params', () => {
   const ir = buildCSharpIR('public class UsersController : Controller { public void Get(string id) { } }');
   const an = analyzeCSharpIR(ir);

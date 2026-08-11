@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../src/runScan.js';
+import { scanPrototypePollution } from '../src/sast/prototype-pollution.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIX = (name) => path.join(__dirname, 'fixtures', name);
@@ -41,6 +42,25 @@ test('prototype-pollution: lodash.merge + hand-rolled fire, fresh target clean',
     'hand-rolled deep merge should fire');
   assert.ok(!fs.some(f => endsWith(f, 'safe-fresh-target.js') && /Prototype Pollution/.test(f.vuln)),
     'Object.assign with fresh target should not fire');
+});
+
+// Stage 1 correctness audit: the direct-write detector's write-context guard
+// (`/=\s*[^=]/.test(post)`, "only flag write context") doesn't anchor to the
+// FIRST `=` — it matches anywhere in the 60-char window, including the
+// trailing `=` of a `===`/`==` chain followed by a space and operand. A
+// read-only strict-equality comparison (a common defensive/type-check idiom)
+// was flagged as "Direct write to __proto__" despite never writing anything.
+test('prototype-pollution direct-write does not fire on a read-only === comparison', () => {
+  const src = 'function isPlainObject(obj) {\n  return obj.__proto__ === Object.prototype;\n}\n';
+  const findings = scanPrototypePollution('app.js', src);
+  assert.equal(findings.filter(f => /Direct write to __proto__/.test(f.vuln)).length, 0,
+    `expected no finding for a read-only comparison, got: ${JSON.stringify(findings)}`);
+});
+
+test('prototype-pollution direct-write still fires on a genuine assignment', () => {
+  const src = 'function pollute(obj) {\n  obj.__proto__ = { polluted: true };\n}\n';
+  const findings = scanPrototypePollution('app.js', src);
+  assert.equal(findings.filter(f => /Direct write to __proto__/.test(f.vuln)).length, 1);
 });
 
 test('csrf: POST without protection fires; csurf and bearer auth are clean', async () => {

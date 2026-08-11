@@ -180,7 +180,7 @@ export function scanXXE(fp, raw) {
   };
 
   if (/\.(?:php|phtml)$/i.test(fp)) {
-    const code = blankComments(raw, 'py');
+    const code = blankComments(raw, 'php');
     _emitOptIn(code, PHP_XXE_RE, null,
       () => 'XXE: XML parsed with LIBXML_NOENT / LIBXML_DTDLOAD (external entities enabled)',
       () => 'Drop the LIBXML_NOENT / LIBXML_DTDLOAD flags — PHP >= 8.0 disables entity substitution by default, so plain loadXML($xml) / simplexml_load_string($xml) is safe. If you must accept DTDs, set libxml_set_external_entity_loader to reject network/file access.');

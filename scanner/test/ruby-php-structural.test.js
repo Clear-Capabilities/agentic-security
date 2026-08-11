@@ -84,6 +84,32 @@ test('CSRF — Rails route POST/resources fires; protect_from_forgery clean', ()
   assert.ok(!has('routes.rb', 'Rails.application.routes.draw do\n  get "/list", to: "list#index"\nend\n'));
 });
 
+// Stage 1 correctness audit: scanCSRF's whole-file gate
+// (`if (csrfInScope || tokenAuthInScope) return [];`) exits before any route
+// is even examined. The later per-route ±15-line window check can only ever
+// see a SUBSET of what the whole file already contains — by regex-substring
+// monotonicity, if the window matches the defence pattern, the whole file
+// (a superset string) must already have matched it too, meaning the function
+// would have already returned []. So a file with ONE protected route and
+// N unprotected routes silently reported ZERO CSRF findings for any of them,
+// as long as they're all in the same file as the protected one.
+test('CSRF — Express: one route with inline defence does not blanket-suppress a sibling unprotected route more than 15 lines away', () => {
+  const filler = Array.from({ length: 20 }, (_, i) => `// filler line ${i}`);
+  const code = [
+    'const express = require("express");',
+    'const app = express();',
+    'app.post("/safe-transfer", csrfProtection, (req, res) => { doTransfer(req.body); });',
+    ...filler,
+    'app.post("/unsafe-transfer", (req, res) => { doTransfer(req.body); });',
+  ].join('\n');
+  const unsafeLine = 3 + filler.length + 1;
+  const findings = scanCSRF('app.js', code);
+  assert.ok(findings.some(f => f.cwe === 'CWE-352' && f.line === unsafeLine),
+    `expected a CSRF finding on the unprotected sibling route (line ${unsafeLine}), got: ${JSON.stringify(findings)}`);
+  assert.ok(!findings.some(f => f.line === 3),
+    'the route with inline csrfProtection must not itself be flagged');
+});
+
 test('CSRF — C# [HttpPost] fires; [ValidateAntiForgeryToken] / Bearer / [ApiController] clean', () => {
   const has = (c) => scanCSRF('C.cs', c).some((f) => f.cwe === 'CWE-352');
   assert.ok(has('public class T : Controller { [HttpPost] public IActionResult Transfer(decimal amt){ return Ok(); } }'));

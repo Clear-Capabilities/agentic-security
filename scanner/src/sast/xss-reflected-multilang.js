@@ -91,7 +91,7 @@ export function scanXssReflectedMultilang(fp, raw) {
   for (const v of Object.values(LANGS)) { if (v.ext.test(fp)) { lang = v; break; } }
   if (!lang) return [];
 
-  const code = blankComments(raw, /\.(?:rb|php)$/i.test(fp) ? 'py' : undefined);
+  const code = blankComments(raw, /\.rb$/i.test(fp) ? 'py' : (/\.(?:php|phtml)$/i.test(fp) ? 'php' : undefined));
   const lines = code.split('\n');
   const findings = [];
   const seen = new Set();

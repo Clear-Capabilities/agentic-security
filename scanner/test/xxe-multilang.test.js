@@ -16,6 +16,16 @@ test('PHP — LIBXML_NOENT/DTDLOAD opt-in fires; default parse clean', () => {
   assert.ok(clean('p.php', '<?php echo "hello";'));
 });
 
+// Stage 1 correctness audit — same class as xss-reflected-multilang.js: PHP
+// was routed through blankComments' 'py' mode (strips only `#`), leaving
+// PHP's `//`/`/* */` comments unstripped, so commented-out vulnerable code
+// still matched.
+test('PHP — commented-out LIBXML_NOENT does not fire (// and /* */ are real PHP comment forms)', () => {
+  assert.ok(clean('p.php', '<?php\n// $d->loadXML($_POST["xml"], LIBXML_NOENT | LIBXML_DTDLOAD);\necho "safe";'));
+  assert.ok(clean('p.php', '<?php\n/* $d->loadXML($_POST["xml"], LIBXML_NOENT | LIBXML_DTDLOAD); */\necho "safe";'));
+  assert.ok(fires('p.php', '<?php\n// old code\n$d->loadXML($_POST["xml"], LIBXML_NOENT | LIBXML_DTDLOAD);'));
+});
+
 test('Go — Decoder Strict=false / custom Entity fires; default decoder clean', () => {
   assert.ok(fires('p.go', 'package main\nimport ("encoding/xml";"os")\nfunc p(f *os.File){ d := xml.NewDecoder(f); d.Strict=false; var v any; d.Decode(&v) }'));
   assert.ok(fires('p.go', 'package main\nimport ("encoding/xml";"os")\nfunc p(f *os.File){ d := xml.NewDecoder(f); d.Entity = map[string]string{}; d.Decode(nil) }'));
