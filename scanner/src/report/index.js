@@ -251,6 +251,20 @@ export function normalizeFindings(scan){
       predictedBountyUsd: f.predictedBountyUsd || null,
       bountyConfidence: f.bountyConfidence || null,
       attackPlaybook: f.attackPlaybook || null,
+      // posture/git-history.js#annotateGitHistory — git blame + commit
+      // context, including AI-authorship detection via the Claude
+      // co-author trailer. Wired in engine.js but previously dropped here.
+      introducedBy: f.introducedBy || null,
+      introducedIn: f.introducedIn || null,
+      introducedAt: f.introducedAt || null,
+      introducedInMessage: f.introducedInMessage || null,
+      originatingPrompt: f.originatingPrompt || null,
+      aiAuthored: f.aiAuthored === true,
+      // posture/risk-dollars.js#annotateRiskDollars,
+      // posture/time-to-fix.js#annotateTimeToFix — same class of gap.
+      riskDollars: f.riskDollars || null,
+      estimatedFixHours: typeof f.estimatedFixHours === 'number' ? f.estimatedFixHours : null,
+      estimatedFixHoursSource: f.estimatedFixHoursSource || null,
     });
   }
   for (const s of (scan.secrets||[])) {

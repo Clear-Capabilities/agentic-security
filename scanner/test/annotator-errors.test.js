@@ -93,3 +93,55 @@ test('toJSON defaults entrypointInventory to null when the engine did not comput
     { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
   assert.equal(out.entrypointInventory, null);
 });
+
+// S7 (/labs --claude-audit, --cross-repo, --risk-dollars, --time-to-fix):
+// same class of bug as licenseGraph/sbomDiff/entrypointInventory above, but
+// per-finding rather than scan-level. posture/git-history.js#annotateGitHistory,
+// posture/risk-dollars.js#annotateRiskDollars, and posture/time-to-fix.js#
+// annotateTimeToFix are all wired into engine.js's annotation pipeline and
+// stamp these fields on every finding — but normalizeFindings()'s per-finding
+// allowlist dropped every one of them, so last-scan.json (what every /labs
+// mode and every downstream consumer actually reads) never carried git
+// authorship, AI-authorship, risk-in-dollars, or time-to-fix data, no matter
+// how many scans ran.
+test('toJSON carries git-history, risk-dollars, and time-to-fix fields through when the engine computed them', () => {
+  const fakeScan = {
+    findings: [{
+      id: 'f1', severity: 'high', vuln: 'SQL Injection', file: 'a.js', line: 3,
+      introducedBy: 'Ada Lovelace', introducedIn: 'abc123def456', introducedAt: '2026-01-01T00:00:00Z',
+      introducedInMessage: 'add query endpoint', originatingPrompt: 'add a users lookup route',
+      aiAuthored: true,
+      riskDollars: { ev: 12345, prob: 0.18, impact: 250000, discount: 0.9, confidenceFloor: 0.8 },
+      estimatedFixHours: 0.7, estimatedFixHoursSource: 'family-base',
+    }],
+    routes: [], components: [], suppressions: [],
+  };
+  const out = toJSON(fakeScan, { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
+  const f = out.findings[0];
+  assert.equal(f.introducedBy, 'Ada Lovelace');
+  assert.equal(f.introducedIn, 'abc123def456');
+  assert.equal(f.introducedAt, '2026-01-01T00:00:00Z');
+  assert.equal(f.introducedInMessage, 'add query endpoint');
+  assert.equal(f.originatingPrompt, 'add a users lookup route');
+  assert.equal(f.aiAuthored, true);
+  assert.deepEqual(f.riskDollars, fakeScan.findings[0].riskDollars);
+  assert.equal(f.estimatedFixHours, 0.7);
+  assert.equal(f.estimatedFixHoursSource, 'family-base');
+});
+
+test('toJSON defaults git-history/risk-dollars/time-to-fix fields to null when the engine did not compute them', () => {
+  const out = toJSON({
+    findings: [{ id: 'f1', severity: 'high', vuln: 'SQL Injection', file: 'a.js', line: 3 }],
+    routes: [], components: [], suppressions: [],
+  }, { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
+  const f = out.findings[0];
+  assert.equal(f.introducedBy, null);
+  assert.equal(f.introducedIn, null);
+  assert.equal(f.introducedAt, null);
+  assert.equal(f.introducedInMessage, null);
+  assert.equal(f.originatingPrompt, null);
+  assert.equal(f.aiAuthored, false);
+  assert.equal(f.riskDollars, null);
+  assert.equal(f.estimatedFixHours, null);
+  assert.equal(f.estimatedFixHoursSource, null);
+});
