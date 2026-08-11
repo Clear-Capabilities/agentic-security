@@ -294,7 +294,7 @@ function _bundleSha() {
   return 'unavailable';
 }
 
-async function writeMachineOutput(targetAbs, scan, meta, profile) {
+async function writeMachineOutput(targetAbs, scan, meta, profile, args) {
   const stateDirPath = stateDir(targetAbs);
   const { isSafeStateDir: _isSafe, stateWritesEnabled: _writesOn } = await import('../src/posture/state-dir.js');
   // Read-only scan (NON_MUTATING_SCAN_PRD S1). These writes bypass
@@ -308,7 +308,7 @@ async function writeMachineOutput(targetAbs, scan, meta, profile) {
   // Always JSON (used by /security-fix and /security-report).
   await fsp.writeFile(path.join(stateDirPath, 'findings.json'),
     JSON.stringify(toJSON(scan, meta), null, 2));
-  if (profile.profile === 'pro' || profile.machineOutput) {
+  if (profile.profile === 'pro' || profile.machineOutput || (args && args.flags['machine-output'])) {
     await fsp.writeFile(path.join(stateDirPath, 'findings.sarif'),
       JSON.stringify(toSARIF(scan, meta), null, 2));
     await fsp.writeFile(path.join(stateDirPath, 'findings.csv'), toCSV(scan));
@@ -437,9 +437,16 @@ async function cmdScan(args) {
 
   const only = args.flags.only;
   if (only) {
+    // Four channels exist (scanner/CLAUDE.md): findings (SAST), secrets,
+    // supplyChain (SCA), logicVulns (business-logic). --only sast keeps
+    // logicVulns (business-logic is source analysis, part of the SAST
+    // pillar); --only sca/secrets must also clear it — it's neither SCA
+    // nor secrets, and normalizeFindings()/exitCodeFor() both fold it in,
+    // so leaving it meant a business-logic finding leaked into a
+    // single-pillar scan's output AND its exit code.
     if (only === 'sast') { scan.secrets = []; scan.supplyChain = []; }
-    if (only === 'sca')  { scan.findings = []; scan.secrets = []; }
-    if (only === 'secrets') { scan.findings = []; scan.supplyChain = []; }
+    if (only === 'sca')  { scan.findings = []; scan.secrets = []; scan.logicVulns = []; }
+    if (only === 'secrets') { scan.findings = []; scan.supplyChain = []; scan.logicVulns = []; }
   }
 
   // --set-baseline: save current findings as baseline for future --since-baseline filtering
@@ -607,7 +614,7 @@ async function cmdScan(args) {
   } catch { /* attestation is metadata; never fail a scan over it */ }
 
   // R2: Always emit machine-readable artifacts to .agentic-security/.
-  await writeMachineOutput(targetAbs, scan, meta, profile);
+  await writeMachineOutput(targetAbs, scan, meta, profile, args);
 
   const includeSuppressed = !!args.flags['include-suppressed'];
   let body;
