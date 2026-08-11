@@ -437,6 +437,14 @@ export function toJSON(scan, meta={}, opts={}){
     // signature proves who asked for it, not that the results are absent.
     suppressedRules: scan.suppressedRules || null,
     _scanMeta: scan._scanMeta || null,
+    // S7: engine.js computes these on every scan with components, and their
+    // own findings already flow into `findings` above — but the structured
+    // summary objects (per-component license map, drift counts, "first
+    // scan, no baseline yet") were previously dropped here, so they never
+    // reached last-scan.json (written from this function's return value)
+    // or any --format output at all.
+    licenseGraph: scan.licenseGraph || null,
+    sbomDiff: scan.sbomDiff || null,
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];
   return out;

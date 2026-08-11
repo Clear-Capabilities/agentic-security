@@ -41,3 +41,37 @@ test('annotatorErrors surfaces when an annotator throws', async () => {
   assert.equal(out.annotatorErrors[0].phase, 'annotateConfidence');
   assert.match(out.annotatorErrors[0].err, /simulated/);
 });
+
+// S7: engine.js computes scan.licenseGraph (posture/license-graph.js) and
+// scan.sbomDiff (posture/sbom-diff.js) on every scan with components — their
+// own FINDINGS already flow into scan.findings, but the structured summary
+// objects themselves (per-component license map, drift added/removed/bumped
+// counts, "first scan, no baseline yet") were never copied into toJSON's
+// output, so they never reached .agentic-security/last-scan.json (written
+// from toJSON's return value) or any --format output. A command instructing
+// an agent to "read scan.licenseGraph" or "read scan.sbomDiff" from the
+// persisted scan would find nothing there.
+test('toJSON carries scan.licenseGraph through when the engine computed one', () => {
+  const fakeScan = {
+    findings: [], routes: [], components: [], suppressions: [],
+    licenseGraph: { byComponent: { 'npm:left-pad': 'MIT' }, copyleftChains: [], dualLicenseTraps: [] },
+  };
+  const out = toJSON(fakeScan, { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
+  assert.deepEqual(out.licenseGraph, fakeScan.licenseGraph);
+});
+
+test('toJSON carries scan.sbomDiff through when the engine computed one', () => {
+  const fakeScan = {
+    findings: [], routes: [], components: [], suppressions: [],
+    sbomDiff: { findings: [], summary: { added: 1, removed: 0, bumped: 2, substituted: 0 }, first: false },
+  };
+  const out = toJSON(fakeScan, { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
+  assert.deepEqual(out.sbomDiff, fakeScan.sbomDiff);
+});
+
+test('toJSON defaults licenseGraph/sbomDiff to null when the engine did not compute them', () => {
+  const out = toJSON({ findings: [], routes: [], components: [], suppressions: [] },
+    { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
+  assert.equal(out.licenseGraph, null);
+  assert.equal(out.sbomDiff, null);
+});
