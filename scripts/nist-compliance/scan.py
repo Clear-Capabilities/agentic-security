@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """NIST AI 600-1 compliance scanner v2.
 
-Scans a code repository for evidence of the 122 NIST AI 600-1 controls
-that are code-testable (column F = Yes or Partial in NIST AI 600-1.xlsx).
-Produces an auditor-ready attestation sheet (markdown, CSV, JSON).
+Scans a code repository for evidence of the NIST AI 600-1 controls that are
+code-testable (`code_testable` of Yes or Partial). Produces an auditor-ready
+attestation sheet (markdown, CSV, JSON).
+
+The control catalog is read from `controls.json`, generated from
+`docs/standards/NIST AI 600-1.xlsx` by `build-catalog.py` — a scan needs no
+spreadsheet parser. Run `build-catalog.py --check` to prove the two agree.
 
 Architecture:
   - Manifest parsing  — package.json, requirements.txt, pyproject.toml,
@@ -53,17 +57,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-try:
-    import openpyxl
-except ImportError:
-    sys.stderr.write(
-        "ERROR: openpyxl is required. Install with: pip3 install openpyxl\n"
-    )
-    sys.exit(2)
-
-
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-DEFAULT_XLSX = REPO_ROOT / "docs" / "NIST AI 600-1.xlsx"
+DEFAULT_CATALOG = Path(__file__).resolve().parent / "controls.json"
 DEFAULT_RULES = Path(__file__).resolve().parent / "evidence-rules.json"
 
 SKIP_DIRS = {
@@ -88,6 +83,11 @@ NAMED_FILES = {
 SKIP_FILE_SUFFIXES = (
     "scripts/nist-compliance/scan.py",
     "scripts/nist-compliance/evidence-rules.json",
+    # controls.json carries the standard's own control text verbatim. Scanning it
+    # would match nearly every term rule against the catalog itself and score this
+    # repo on the questions rather than the answers.
+    "scripts/nist-compliance/controls.json",
+    "scripts/nist-compliance/build-catalog.py",
     "skills/nist-ai-600-1/SKILL.md",
     "commands/nist-ai-600-1.md",
     "nist-ai-600-1-attestation.md",
@@ -752,26 +752,34 @@ def classify(control: dict, ev_list: List[Evidence]) -> Tuple[str, bool]:
 
 # ---------------------- Loading ----------------------
 
-def load_controls(xlsx_path: str) -> List[dict]:
-    wb = openpyxl.load_workbook(xlsx_path, read_only=True)
-    ws = wb["Sheet1"]
-    controls = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        padded = list(row) + [None] * (6 - len(row))
-        cid, family, desc, text, risks, ct = padded[:6]
-        if not cid:
-            continue
-        cid = cid.strip() if isinstance(cid, str) else cid
-        if cid == "GV-4.3--001":
-            cid = "GV-4.3-001"
-        controls.append({
-            "id": cid,
-            "family": family,
-            "description": desc,
-            "text": text,
-            "risks": risks,
-            "code_testable": ct,
-        })
+def load_controls(catalog_path: str) -> List[dict]:
+    """Load the control catalog from generated JSON.
+
+    The catalog is built from `docs/standards/NIST AI 600-1.xlsx` by
+    `build-catalog.py`; a scan reads JSON only, so no spreadsheet parser is
+    needed at scan time. Regenerate after any workbook change —
+    `build-catalog.py --check` fails when the two have drifted apart.
+    """
+    try:
+        with open(catalog_path, "r", encoding="utf-8") as fh:
+            catalog = json.load(fh)
+    except FileNotFoundError:
+        sys.stderr.write(
+            f"ERROR: control catalog not found: {catalog_path}\n"
+            "       Rebuild it with: python3 scripts/nist-compliance/build-catalog.py\n"
+        )
+        sys.exit(2)
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"ERROR: control catalog is not valid JSON ({catalog_path}): {exc}\n")
+        sys.exit(2)
+
+    controls = catalog.get("controls")
+    if not controls:
+        sys.stderr.write(
+            f"ERROR: control catalog has no controls: {catalog_path}\n"
+            "       Rebuild it with: python3 scripts/nist-compliance/build-catalog.py\n"
+        )
+        sys.exit(2)
     return controls
 
 
@@ -822,15 +830,18 @@ def print_summary(statuses, evidence, manifest_deps):
     print()
 
 
-def write_md(controls, rules, evidence, statuses, out_path, root):
+def write_md(controls, rules, evidence, statuses, out_path, root,
+             control_count=None, testable_count=None):
     lines = []
     lines.append("# NIST AI 600-1 Compliance Attestation")
     lines.append("")
     lines.append(f"- **Repository:** `{root}`")
     lines.append(f"- **Scan time:** {datetime.now(timezone.utc).isoformat()}")
     lines.append(f"- **Scanner:** agentic-security/nist-ai-600-1 v0.2 (multi-signal)")
+    # Counts come from the catalog, never a literal — an upstream revision that
+    # adds or drops controls must not leave a stale number in an attestation.
     lines.append(f"- **Catalog:** `NIST AI 600-1.xlsx` "
-                 f"(212 controls; 122 code-testable)")
+                 f"({control_count} controls; {testable_count} code-testable)")
     lines.append("")
     lines.append("> This attestation reports only evidence detectable from "
                  "source code, dependency manifests, configuration, "
@@ -1134,8 +1145,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("path", nargs="?", default=".", help="Repo path to scan")
-    ap.add_argument("--xlsx", default=str(DEFAULT_XLSX),
-                    help="Path to NIST AI 600-1.xlsx")
+    ap.add_argument("--catalog", default=str(DEFAULT_CATALOG),
+                    help="Path to controls.json (built by build-catalog.py)")
     ap.add_argument("--rules", default=str(DEFAULT_RULES),
                     help="Path to evidence-rules.json")
     ap.add_argument("--md-out", default="nist-ai-600-1-attestation.md")
@@ -1149,8 +1160,8 @@ def main():
     quiet = args.quiet
 
     if not quiet:
-        sys.stderr.write(f"Loading control catalog from {args.xlsx}...\n")
-    controls = load_controls(args.xlsx)
+        sys.stderr.write(f"Loading control catalog from {args.catalog}...\n")
+    controls = load_controls(args.catalog)
 
     if not quiet:
         sys.stderr.write(f"Loading evidence rules from {args.rules}...\n")
@@ -1179,7 +1190,8 @@ def main():
         statuses[c["id"]] = classify(c, evidence[c["id"]])
 
     write_md(testable, rules_for, evidence, statuses,
-             args.md_out, root)
+             args.md_out, root,
+             control_count=len(controls), testable_count=len(testable))
     write_csv(testable, rules_for, evidence, statuses, args.csv_out)
     write_json(testable, rules_for, evidence, statuses,
                manifest_deps, args.json_out, root)
