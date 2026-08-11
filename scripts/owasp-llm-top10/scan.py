@@ -13,13 +13,14 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-from _compliance_lib import evaluate
+from _compliance_lib import evaluate, DISCLAIMER
 
 FRAMEWORK = "OWASP LLM Top 10 (2025)"
 RULES_PATH = os.path.join(HERE, "evidence-rules.json")
 
 
 def emit(results, controls, fmt, out_path):
+    skipped = results.get("_skipped", [])
     rows = []
     for ctrl in controls:
         r = results[ctrl["id"]]
@@ -37,9 +38,11 @@ def emit(results, controls, fmt, out_path):
         body = json.dumps(
             {
                 "framework": FRAMEWORK,
+                "disclaimer": DISCLAIMER,
+                "skippedFiles": skipped,
                 "controls": [
-                    {**r, "remediation": ctrl.get("remediation", [])}
-                    for r, ctrl in zip(results.values(), controls)
+                    {**results[ctrl["id"]], "remediation": ctrl.get("remediation", [])}
+                    for ctrl in controls
                 ],
             },
             indent=2,
@@ -62,11 +65,23 @@ def emit(results, controls, fmt, out_path):
         lines = [
             f"# {FRAMEWORK} Compliance Attestation",
             "",
+            f"> {DISCLAIMER}",
+            "",
             f"**Total controls:** {total}    "
             f"**Compliant:** {compliant}    "
             f"**Partial:** {partial}    "
             f"**Not Compliant:** {non_compliant}",
             "",
+            "**Methodology.** Signal weights: `manifest` 5.0, `import` 4.0, `test_path` 3.0, "
+            "`named_path` 2.5, `code_term` 2.0, `config_term` 1.5, `doc_term` 1.0. A control "
+            "reaches **Compliant** only when its total weight is at least 8.0.",
+            "",
+        ]
+        if skipped:
+            lines.append(f"**{len(skipped)} file(s) skipped** (over 500KB, not scanned): " +
+                          ", ".join(skipped[:10]) + (f", and {len(skipped) - 10} more" if len(skipped) > 10 else "") + ".")
+            lines.append("")
+        lines += [
             "| ID | Title | Status | Weight | Signals |",
             "|---|---|---|---:|---|",
         ]

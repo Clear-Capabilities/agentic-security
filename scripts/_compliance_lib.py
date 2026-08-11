@@ -42,17 +42,34 @@ NEGATION_RE = re.compile(
     re.I,
 )
 
+# CMP-8: this artifact is titled "compliance attestation" and is the kind of
+# document someone hands to an auditor without reading the source first —
+# same reasoning as scripts/nist-compliance/scan.py's own disclaimer.
+DISCLAIMER = (
+    "This report is generated from automated pattern matching against the "
+    "codebase (dependency manifests, imports, file paths, and term mentions). "
+    "It does not certify compliance. A licensed assessor is responsible for "
+    "the final attestation."
+)
+
 
 def list_files(root):
+    """Returns (files, skipped) — skipped is every oversized (>500KB) file
+    excluded from the scan. CMP-8: these used to be silently dropped with no
+    trace anywhere in the output, so a control's "Not Compliant" verdict
+    could actually mean "the evidence lives in a file this scan skipped,"
+    indistinguishable from a genuine absence of evidence."""
     out = []
+    skipped = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in DEFAULT_IGNORE and not d.startswith(".cache")]
         for fn in filenames:
             p = os.path.join(dirpath, fn)
             if os.path.getsize(p) > 500_000:
+                skipped.append(p)
                 continue
             out.append(p)
-    return out
+    return out, skipped
 
 
 def kind_of(path):
@@ -68,8 +85,14 @@ def kind_of(path):
 
 
 def evaluate(root, controls):
-    """Evaluate a list of control rules against the codebase. Returns per-control evidence."""
-    files = list_files(root)
+    """Evaluate a list of control rules against the codebase. Returns per-control evidence.
+
+    Skipped (oversized) files are stashed on the return dict under the
+    "_skipped" key so emit() can disclose them rather than presenting an
+    unqualified "Not Compliant" for a control whose evidence might live in
+    a file this scan never read.
+    """
+    files, skipped = list_files(root)
     rel = lambda p: os.path.relpath(p, root)
     contents = {}
     for f in files:
@@ -122,9 +145,19 @@ def evaluate(root, controls):
                 evidence.append({"signal": sig, "term": term, "file": path})
                 weight += WEIGHTS[sig]; signals.add(sig); break
         # Status
+        #
+        # CMP-8: `weight >= 8 OR len(signals) >= 3` let a control reach
+        # "Compliant" from three throwaway low-weight signal kinds alone —
+        # e.g. a word mentioned once in a README (doc_term, 1.0), once in a
+        # YAML config (config_term, 1.5), and once in a code file
+        # (code_term, 2.0) totals 4.5, nowhere near a substantive evidence
+        # bar, but satisfied `len(signals) >= 3` regardless of how low the
+        # combined weight was. Compliant now always requires weight >= 8 —
+        # the signal-kind count is still reported for transparency, but it
+        # is no longer an independent bypass of the weight threshold.
         if weight == 0:
             status = "Not Compliant"
-        elif weight >= 8 or len(signals) >= 3:
+        elif weight >= 8:
             status = "Compliant"
         else:
             status = "Partial"
@@ -136,10 +169,12 @@ def evaluate(root, controls):
             "signals": sorted(signals),
             "evidence": evidence[:10],
         }
+    results["_skipped"] = skipped
     return results
 
 
 def emit(results, controls, framework, fmt, out_path):
+    skipped = results.get("_skipped", [])
     rows = []
     for ctrl in controls:
         r = results[ctrl["id"]]
@@ -152,7 +187,12 @@ def emit(results, controls, framework, fmt, out_path):
             "evidence_count": len(r["evidence"]),
         })
     if fmt == "json":
-        body = json.dumps({"framework": framework, "controls": list(results.values())}, indent=2)
+        body = json.dumps({
+            "framework": framework,
+            "disclaimer": DISCLAIMER,
+            "skippedFiles": skipped,
+            "controls": [results[c["id"]] for c in controls],
+        }, indent=2)
     elif fmt == "csv":
         from io import StringIO
         s = StringIO()
@@ -169,11 +209,26 @@ def emit(results, controls, framework, fmt, out_path):
         lines = [
             f"# {framework} compliance attestation",
             "",
+            f"> {DISCLAIMER}",
+            "",
             f"**Total controls:** {total}    **Compliant:** {compliant}    **Partial:** {partial}    **Not Compliant:** {none}",
             "",
-            "| ID | Title | Status | Weight | Signals |",
-            "|---|---|---|---:|---|",
+            "**Methodology.** Each control's `requires` rules are matched against the "
+            "codebase and scored by signal weight: `manifest` 5.0, `import` 4.0, "
+            "`test_path` 3.0, `named_path` 2.5, `code_term` 2.0, `config_term` 1.5, "
+            "`doc_term` 1.0. A control reaches **Compliant** only when its total "
+            "weight is at least 8.0 — the number and variety of signal kinds matched "
+            "is reported for context but is not on its own sufficient evidence. "
+            "Below that, any matched signal is **Partial**; no match is **Not Compliant**.",
+            "",
         ]
+        if skipped:
+            lines.append(f"**{len(skipped)} file(s) skipped** (over 500KB, not scanned — evidence inside them, "
+                          "if any, is not reflected below): " + ", ".join(skipped[:10]) +
+                          (f", and {len(skipped) - 10} more" if len(skipped) > 10 else "") + ".")
+            lines.append("")
+        lines.append("| ID | Title | Status | Weight | Signals |")
+        lines.append("|---|---|---|---:|---|")
         for r in rows:
             icon = "✅" if r["status"] == "Compliant" else "🟡" if r["status"] == "Partial" else "❌"
             lines.append(f"| `{r['id']}` | {r['title']} | {icon} {r['status']} | {r['weight']} | {r['signals']} |")
