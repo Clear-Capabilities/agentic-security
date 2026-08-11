@@ -75,3 +75,21 @@ test('toJSON defaults licenseGraph/sbomDiff to null when the engine did not comp
   assert.equal(out.licenseGraph, null);
   assert.equal(out.sbomDiff, null);
 });
+
+// S7 (posture --threat's "surface" sub-view): same class of bug as
+// licenseGraph/sbomDiff above — entrypointInventory is always computed by
+// the engine but was never copied into toJSON's output either.
+test('toJSON carries scan.entrypointInventory through when the engine computed one', () => {
+  const fakeScan = {
+    findings: [], routes: [], components: [], suppressions: [],
+    entrypointInventory: { entries: [{ kind: 'http', path: '/users/:id' }], summary: { total: 1 } },
+  };
+  const out = toJSON(fakeScan, { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
+  assert.deepEqual(out.entrypointInventory, fakeScan.entrypointInventory);
+});
+
+test('toJSON defaults entrypointInventory to null when the engine did not compute one', () => {
+  const out = toJSON({ findings: [], routes: [], components: [], suppressions: [] },
+    { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
+  assert.equal(out.entrypointInventory, null);
+});

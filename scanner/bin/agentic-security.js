@@ -649,9 +649,16 @@ async function cmdScan(args) {
   // Persist last scan for /security-fix and /security-report
   const { isSafeStateDir: _isSafeStateDir, stateWritesEnabled: _writesOnScan } = await import('../src/posture/state-dir.js');
   const stateDirPath = stateDir(path.resolve(target));
+  // S7 (Stage-0 audit): declared here, not with `const` inside the `if`
+  // below — it used to be block-scoped there while recordScan() further
+  // down referenced it unconditionally, throwing a ReferenceError on every
+  // single scan (silently swallowed by that call's empty catch{}). streak.json
+  // — grades, streak days, achievements — never actually persisted through
+  // the real CLI as a result, reproduced live before this fix.
+  let persistedScan = null;
   if (_writesOnScan() && _isSafeStateDir(stateDirPath)) {
     await fsp.mkdir(stateDirPath, { recursive: true });
-    const persistedScan = toJSON(scan, meta);
+    persistedScan = toJSON(scan, meta);
     // #10 — MTTR: stamp firstSeenAt/lastSeenAt/ageDays from the PREVIOUS scan so
     // every finding carries an age, SLA breaches can be surfaced, and the fix
     // loop can report time-to-clean. Best-effort; skipped under --deterministic
@@ -720,10 +727,17 @@ async function cmdScan(args) {
 
   // 0.14.0 — update streak / achievements after every full scan. Suppress
   // streak side effects when the user only wants raw JSON output (CI piping).
+  // Gated on `persistedScan !== null` (i.e. the same _writesOnScan() &&
+  // _isSafeStateDir() condition above) — recordScan()'s own isSafeStateDir
+  // check alone does not know about --no-state / AGENTIC_SECURITY_NO_STATE,
+  // so without this a "read-only, mutates nothing" scan would still write
+  // streak.json. This was accidentally masked before the persistedScan
+  // scoping fix (recordScan was never reached at all, for the wrong reason);
+  // fixing that reachability bug required adding this guard explicitly.
   try {
-    const streak = recordScan(stateDirPath, persistedScan);
+    const streak = persistedScan !== null ? recordScan(stateDirPath, persistedScan) : null;
     // Print celebration / streak line to stderr so it doesn't pollute --format json
-    if (process.stderr.isTTY && format !== 'json' && format !== 'sarif') {
+    if (streak && process.stderr.isTTY && format !== 'json' && format !== 'sarif') {
       const delta = formatGradeDelta(streak);
       const line = formatStreakLine(streak);
       if (delta) process.stderr.write('\n' + delta + '\n');

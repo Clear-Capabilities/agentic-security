@@ -445,6 +445,7 @@ export function toJSON(scan, meta={}, opts={}){
     // or any --format output at all.
     licenseGraph: scan.licenseGraph || null,
     sbomDiff: scan.sbomDiff || null,
+    entrypointInventory: scan.entrypointInventory || null,
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];
   return out;

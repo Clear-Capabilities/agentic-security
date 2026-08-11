@@ -185,6 +185,18 @@ function _buildPlaybook(stack) {
     ]});
   }
 
+  // Express
+  if (stack.has('express')) {
+    sections.push({ title: 'Express', items: [
+      'Use helmet() to set security headers (X-Frame-Options, X-Content-Type-Options, HSTS) — Express sets none of these by default',
+      'Never use body-parser / express.json() without a size limit — set `limit` explicitly to prevent request-body DoS',
+      'Apply express-rate-limit to authentication and any expensive routes',
+      'Validate and sanitize all req.params / req.query / req.body — Express does not validate input for you',
+      'Set `app.disable(\'x-powered-by\')` so error responses and headers do not advertise the framework/version to attackers',
+      'Use a CSRF middleware (e.g. csrf-csrf) on any route that relies on cookie-based sessions',
+    ]});
+  }
+
   // Django
   if (stack.has('django')) {
     sections.push({ title: 'Django', items: [
@@ -202,7 +214,16 @@ function _buildPlaybook(stack) {
 function _findingFromItem(scanRoot, stackName, item, idx) {
   return {
     id: `stack-playbook:${stackName.replace(/\s+/g, '_').toUpperCase()}:${idx}`,
-    title: `[${stackName} Security Checklist] ${item.slice(0, 80)}`,
+    // The findings schema requires `vuln` (root CLAUDE.md); this used to set
+    // `title` instead, which isn't a schema field at all. engine.js's generic
+    // no-vuln-name filter (`_shouldKeep`) treats any non-SCA finding with no
+    // `vuln` string as unenriched noise and drops it — silently, for every
+    // stack, confirmed live via a real scan whose logicVulns went from 6
+    // playbook findings right after they were pushed to 0 by the time the
+    // scan returned. `vuln` is now the actionable string this finding is
+    // actually about; `description`/`remediation` (already correct) keep
+    // the fuller text.
+    vuln: `[${stackName} Security Checklist] ${item.slice(0, 80)}`,
     severity: 'info',
     file: 'package.json',
     line: 1,

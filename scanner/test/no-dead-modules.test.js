@@ -95,7 +95,9 @@ const ALLOWLIST = new Set([
   // decay rule).
   // stable-id.js::computeStableId is no longer dead — discovery/judge.js calls
   // it to derive finding stableIds. Entry removed (4R-6 decay rule).
-  'streak.js::loadStreak',
+  // streak.js::loadStreak is no longer dead — commands/posture.md's
+  // --report-card mode (S7, Stage-0 audit) calls it directly. Entry removed
+  // (4R-6 decay rule).
   'streak.js::markLaunchCheckPassed',
   'streak.js::formatAchievements',
   'suppressions.js::loadSoftAccepted',

@@ -47,7 +47,7 @@ If there's no prior scan, the dashboard collapses to a single "run `/scan --all`
 
 ## Implementation
 
-`--harness` and `--trend` below run a real, verified command. `--cache` was already correctly wired. `--status`, `--report-card`, `--threat`, `--playbook`, and `--mgmt` are not yet wired to a concrete invocation — treat any answer for those modes as best-effort narration from context, not a verified command output, until they're fixed the same way.
+`--harness`, `--trend`, `--report-card`, `--threat`, and `--playbook` below run a real, verified command. `--cache` was already correctly wired. `--status` and `--mgmt` are not yet wired to a concrete invocation — treat any answer for those two modes as best-effort narration from context, not a verified command output, until they're fixed the same way.
 
 ```bash
 FLAG="${1:---status}"
@@ -60,11 +60,51 @@ case "$FLAG" in
         console.log(JSON.stringify(m.computeTrend('.'), null, 2));
       });
     " ;;
+  --report-card)
+    node -e "
+      const fs = require('fs');
+      const path = require('path');
+      import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/streak.js').then(({ loadStreak }) => {
+        const stateDir = path.join('.', '.agentic-security');
+        const streak = loadStreak(stateDir);
+        let scan = null;
+        try { scan = JSON.parse(fs.readFileSync(path.join(stateDir, 'last-scan.json'), 'utf8')); } catch {}
+        if (!scan) { console.log(JSON.stringify({ grade: null, message: 'No prior scan found. Run /scan --all first.' })); return; }
+        const findings = scan.findings || [];
+        const critical = findings.filter(f => f.severity === 'critical').length;
+        const high = findings.filter(f => f.severity === 'high').length;
+        const kev = findings.filter(f => f.kev).length;
+        console.log(JSON.stringify({ grade: streak.lastGrade, previousGrade: streak.previousGrade, critical, high, kev, total: findings.length }, null, 2));
+      });
+    " ;;
+  --threat)
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan . --show-threat-model --show-trust-boundary --show-personas --show-bounty --show-playbook --show-spof --format cli
+    node -e "
+      const fs = require('fs');
+      let scan = null;
+      try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); } catch {}
+      console.log(JSON.stringify({ entrypointInventory: (scan && scan.entrypointInventory) || null }, null, 2));
+    " ;;
+  --playbook)
+    node -e "
+      const fs = require('fs');
+      let scan = null;
+      try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); } catch {}
+      if (!scan) { console.log(JSON.stringify({ message: 'No prior scan found. Run /scan --all first.' })); process.exit(0); }
+      const items = (scan.findings || []).filter(f => (f.id || '').startsWith('stack-playbook:'));
+      console.log(JSON.stringify({ stackPlaybookItems: items }, null, 2));
+    " ;;
 esac
 ```
 
 `--harness` runs the real `harness` CLI subcommand (`bin/agentic-security.js` → `posture/harness-score.cjs` via `cmdHarness`) — scores this project's `.claude/`, `.cursor/`, `.codex/`, etc. configs against the six-domain rubric.
 
 `--trend` calls `computeTrend()` (`posture/security-trend.js`) directly, reading `.agentic-security/scan-history.json`. That file is populated by `runScan()` itself (`src/runScan.js` calls `appendScanSnapshot` on every scan, CLI or in-process) — no separate wiring needed on the write side. The result is `{ hasTrend, prev, curr, introduced, fixed, delta, critDelta, improving }` when at least two scans exist, or `{ hasTrend: false, message: "Need at least 2 scans..." }` otherwise. Render `introduced`/`fixed`/`delta` as the "findings trend" — there is no weekly bucketing; it's always last-scan-vs-this-scan.
+
+`--report-card` reads `.agentic-security/streak.json`'s `lastGrade` (computed by `posture/streak.js#recordScan`, already run on every scan) plus the critical/high/KEV counts from `last-scan.json` for the one-line explanation. Suggest the next action from whichever count is non-zero, in order: KEV-listed dependencies first (actively exploited in the wild), then critical, then high.
+
+`--threat` runs a real scan with all six `--show-*` flags that back the STRIDE/personas/playbook/bounty/SPOF/trust-boundary sub-views (`bin/agentic-security.js`'s existing scan flags — "adversary" in the mode table is the persona/archetype framing `--show-personas` already provides, not a separate feature), then separately prints `scan.entrypointInventory` (the "surface" sub-view) — that field is computed by the engine on every scan but was dropped by `toJSON()` until this fix (see `test/annotator-errors.test.js`).
+
+`--playbook` filters `last-scan.json`'s findings for the `stack-playbook:` id prefix — `posture/stack-playbook.js#runStackPlaybook` runs on every scan (wired in `engine.js`) and its stack-specific checklist items land there as `severity: 'info'` findings, one per checklist line, grouped by the detected stack in each finding's `vuln` text (`[Express Security Checklist] ...`). Currently only Express and the 11 pre-existing stacks (Next.js, Supabase, Clerk, NextAuth, Stripe, Prisma/Drizzle, MongoDB, OpenAI/Anthropic/LangChain, email, tRPC, FastAPI, Django) have real checklist content — React, Fastify, Hono, and Lucia are detected but have no playbook section yet (a disclosed content gap, not silently claimed as covered).
 
 `--cache` runs the `cache-report` CLI subcommand (`scanner/bin/agentic-security.js` → `scanner/src/posture/cache-economics.js`), which parses the Claude Code transcript usage for this session and prints the economics + any detected cache leaks. The same data is available to agents via the `query_cache_telemetry` MCP tool.
