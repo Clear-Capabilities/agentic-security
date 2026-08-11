@@ -1,10 +1,10 @@
 // S7 — commands/posture.md's Implementation section named backing modules
 // in prose ("Dispatches to existing command implementations... All modes
 // preserved — no functional regression") without a single concrete
-// invocation. --harness and --trend are the first two fixed with real,
-// verified commands (the other five — --status, --report-card, --threat,
-// --playbook, --mgmt — remain unwired, disclosed as such in the doc rather
-// than left silently claiming full coverage).
+// invocation. --harness, --trend, --report-card, --threat, --playbook, and
+// --status are now fixed with real, verified commands (--mgmt remains
+// unwired, disclosed as such in the doc rather than left silently claiming
+// full coverage).
 //
 // security-trend.js's computeTrend() had zero callers anywhere in the repo
 // before this fix (confirmed by a repo-wide grep, and by its own entry in
@@ -63,6 +63,43 @@ test('S7: posture.md --harness runs the real harness CLI subcommand', async () =
     const r = runMode(script, '--harness', p.dir);
     assert.equal(r.status, 0, `stderr: ${r.stderr}`);
     assert.match(r.stdout, /harness/i);
+  } finally { await p.cleanup(); }
+});
+
+test('S7: posture.md --status reports "no prior scan" honestly when none exists', async () => {
+  const script = extractImplementationBlock();
+  const p = await mkProject();
+  try {
+    const r = runMode(script, '--status', p.dir);
+    assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+    assert.match(r.stdout, /agentic-security \d+\.\d+\.\d+/);
+    const jsonStart = r.stdout.indexOf('{');
+    const parsed = JSON.parse(r.stdout.slice(jsonStart));
+    assert.equal(parsed.lastScan, null);
+    assert.match(parsed.message, /No prior scan/);
+  } finally { await p.cleanup(); }
+});
+
+test('S7: posture.md --status reports real findings-by-severity and hook manager after a scan', async () => {
+  const script = extractImplementationBlock();
+  const p = await mkProject();
+  try {
+    const scanResult = spawnSync('node', [CLI, 'scan', p.dir, '--format', 'json', '--no-network'], { encoding: 'utf8' });
+    assert.ok(scanResult.status <= 3, `scan must exit <=3; got ${scanResult.status}: ${scanResult.stderr}`);
+    fs.mkdirSync(path.join(p.dir, '.husky'));
+
+    const r = runMode(script, '--status', p.dir);
+    assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+    const jsonStart = r.stdout.indexOf('{');
+    const parsed = JSON.parse(r.stdout.slice(jsonStart));
+    assert.ok(parsed.lastScanAt, 'expected a real lastScanAt timestamp');
+    assert.equal(parsed.hookManager, 'husky');
+    assert.equal(typeof parsed.totalFindings, 'number');
+    assert.ok(parsed.totalFindings > 0, 'the vulnerable-js fixture must produce real findings');
+    assert.equal(
+      parsed.bySeverity.critical + parsed.bySeverity.high + parsed.bySeverity.medium + parsed.bySeverity.low + parsed.bySeverity.info,
+      parsed.totalFindings,
+    );
   } finally { await p.cleanup(); }
 });
 

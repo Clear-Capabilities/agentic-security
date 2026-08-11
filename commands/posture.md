@@ -12,7 +12,7 @@ Posture + reporting dispatcher. One command, multiple views.
 | Flag | Behaviour |
 |---|---|
 | (default) | **Combined dashboard** — health snapshot + A–F grade + trend arrow in one screen (see below) |
-| `--status` | One-screen plugin + project health snapshot — version, last scan, cache size, hook activation, suppressions |
+| `--status` | One-screen plugin + project health snapshot — version, last scan, findings by severity, hook activation, suppressions. (Cache economics is a separate view — see `--cache`.) |
 | `--report-card` | Single A–F letter grade + one explanation + one next action |
 | `--harness` | Score this project's AI agent harness against the six-domain rubric |
 | `--trend` | Findings delta between the last two scans — introduced/fixed/net change |
@@ -47,11 +47,37 @@ If there's no prior scan, the dashboard collapses to a single "run `/scan --all`
 
 ## Implementation
 
-`--harness`, `--trend`, `--report-card`, `--threat`, and `--playbook` below run a real, verified command. `--cache` was already correctly wired. `--status` and `--mgmt` are not yet wired to a concrete invocation — treat any answer for those two modes as best-effort narration from context, not a verified command output, until they're fixed the same way.
+`--harness`, `--trend`, `--report-card`, `--threat`, `--playbook`, and `--status` below run a real, verified command. `--cache` was already correctly wired. `--mgmt` is not yet wired to a concrete invocation — treat any answer for that mode as best-effort narration from context, not a verified command output, until it's fixed the same way.
 
 ```bash
 FLAG="${1:---status}"
 case "$FLAG" in
+  --status)
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs version
+    node -e "
+      const fs = require('fs');
+      const path = require('path');
+      import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/workflow-installer.js').then(({ detectProject }) => {
+        const stateDir = path.join('.', '.agentic-security');
+        let scan = null;
+        try { scan = JSON.parse(fs.readFileSync(path.join(stateDir, 'last-scan.json'), 'utf8')); } catch {}
+        const { hookManager } = detectProject('.');
+        if (!scan) {
+          console.log(JSON.stringify({ lastScan: null, hookManager, message: 'No prior scan found. Run /scan --all first.' }, null, 2));
+          return;
+        }
+        const findings = scan.findings || [];
+        const bySeverity = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+        for (const f of findings) { if (f.severity in bySeverity) bySeverity[f.severity]++; }
+        console.log(JSON.stringify({
+          lastScanAt: scan.startedAt || null,
+          hookManager,
+          bySeverity,
+          totalFindings: findings.length,
+          suppressedCount: scan.suppressedCount || 0,
+        }, null, 2));
+      });
+    " ;;
   --harness)
     node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs harness . ;;
   --trend)
@@ -96,6 +122,8 @@ case "$FLAG" in
     " ;;
 esac
 ```
+
+`--status` prints the real CLI `version` line, then reads `.agentic-security/last-scan.json` for `startedAt` (last-scan age), a findings-by-severity breakdown, `totalFindings`, and `suppressedCount` (already present in `toJSON()`'s output — no fix needed), plus `workflow-installer.js#detectProject().hookManager` (`'husky' | 'pre-commit' | 'lefthook' | 'native' | null`) for hook activation. With no prior scan it reports that plainly (`lastScan: null` + a prompt to run `/scan --all`) rather than fabricating zeros.
 
 `--harness` runs the real `harness` CLI subcommand (`bin/agentic-security.js` → `posture/harness-score.cjs` via `cmdHarness`) — scores this project's `.claude/`, `.cursor/`, `.codex/`, etc. configs against the six-domain rubric.
 
