@@ -287,6 +287,109 @@ test('compliance-policy: emitEvidenceJsonLd produces a JSON-LD doc', async () =>
   } finally { await sess.cleanup(); }
 });
 
+// ── CMP-5 ────────────────────────────────────────────────────────────────
+//
+// Proven live before fixing: a two-control SOC2 policy ('CC6.1 No hardcoded
+// credentials' requiring finding-family hardcoded-secret must-be zero;
+// 'CC7.1 No known-vulnerable dependencies' requiring finding-family
+// vulnerable-dep must-be zero) reported BOTH controls compliant with reason
+// '0 findings' on a project holding 1 secret finding and 17 SCA findings (9
+// critical) — because engine.js's compliance wiring passed only the SAST
+// `findings` array as ctx.findings, never secrets/logicVulns/supplyChain.
+
+test('CMP-5: a finding-family check sees a secret finding, not just SAST', async () => {
+  const sess = await mkSession();
+  try {
+    const { loadPolicy, verifyPolicy } = await import('../src/posture/compliance-policy.js');
+    await fsp.writeFile(path.join(sess.dir, '.agentic-security', 'compliance.policy.yml'), `
+framework: "SOC2-light"
+controls:
+  CC6.1:
+    title: "No hardcoded credentials"
+    requires:
+      - finding-family: "hardcoded-secret"
+        must-be: zero
+`);
+    const policy = loadPolicy(sess.dir);
+    const report = verifyPolicy(policy, {
+      scanRoot: sess.dir,
+      findings: [],
+      secrets: [{ family: 'hardcoded-secret', severity: 'high' }],
+    });
+    const cc61 = report.controls.find(c => c.id === 'CC6.1');
+    assert.equal(cc61.status, 'non-compliant',
+      'a real secret finding must not be invisible to a control checking its family');
+  } finally { await sess.cleanup(); }
+});
+
+test('CMP-5: a finding-family check sees a vulnerable-dep (SCA) finding', async () => {
+  const sess = await mkSession();
+  try {
+    const { loadPolicy, verifyPolicy } = await import('../src/posture/compliance-policy.js');
+    await fsp.writeFile(path.join(sess.dir, '.agentic-security', 'compliance.policy.yml'), `
+framework: "SOC2-light"
+controls:
+  CC7.1:
+    title: "No known-vulnerable dependencies"
+    requires:
+      - finding-family: "vulnerable-dep"
+        must-be: zero
+`);
+    const policy = loadPolicy(sess.dir);
+    const report = verifyPolicy(policy, {
+      scanRoot: sess.dir,
+      findings: [],
+      supplyChain: [{ severity: 'critical', name: 'left-pad' }],
+    });
+    const cc71 = report.controls.find(c => c.id === 'CC7.1');
+    assert.equal(cc71.status, 'non-compliant',
+      'a real SCA finding must not be invisible to a control checking family:vulnerable-dep');
+  } finally { await sess.cleanup(); }
+});
+
+test('CMP-5: a malformed policy file is a LOUD parse error, not silently treated as no-policy', async () => {
+  const sess = await mkSession();
+  try {
+    const { loadPolicy, verifyPolicy } = await import('../src/posture/compliance-policy.js');
+    await fsp.writeFile(path.join(sess.dir, '.agentic-security', 'compliance.policy.yml'), '{ not: valid: yaml: [[[');
+    const policy = loadPolicy(sess.dir);
+    assert.ok(policy && policy._error, 'loadPolicy must report the parse error');
+    const report = verifyPolicy(policy, { scanRoot: sess.dir, findings: [] });
+    assert.equal(report.status, 'error', 'a parse error must not be reported the same as "no policy file"');
+    assert.match(report.error, /Failed to parse/);
+  } finally { await sess.cleanup(); }
+});
+
+test('CMP-5: emitEvidenceJsonLd carries a non-certification disclaimer and engine provenance', async () => {
+  const sess = await mkSession();
+  try {
+    const { emitEvidenceJsonLd } = await import('../src/posture/compliance-policy.js');
+    const report = {
+      framework: 'X', version: '1',
+      summary: { total: 1, compliant: 1, nonCompliant: 0, notApplicable: 0 },
+      controls: [{ id: 'C1', title: 't', status: 'compliant', checks: [], evidence: [] }],
+    };
+    const jsonld = emitEvidenceJsonLd(report, sess.dir);
+    assert.match(jsonld.disclaimer, /does not certify compliance/i);
+    assert.ok(jsonld.provenance && typeof jsonld.provenance.engineVersion === 'string' && jsonld.provenance.engineVersion.length > 0,
+      'evidence handed to a GRC tool must be traceable to the engine version that produced it');
+  } finally { await sess.cleanup(); }
+});
+
+test('CMP-5: emitEvidenceMarkdown carries the same disclaimer', async () => {
+  const sess = await mkSession();
+  try {
+    const { emitEvidenceMarkdown } = await import('../src/posture/compliance-policy.js');
+    const report = {
+      framework: 'X', version: '1',
+      summary: { total: 1, compliant: 1, nonCompliant: 0, notApplicable: 0 },
+      controls: [{ id: 'C1', title: 't', status: 'compliant', checks: [], evidence: [] }],
+    };
+    const md = emitEvidenceMarkdown(report, sess.dir);
+    assert.match(md, /does not certify compliance/i);
+  } finally { await sess.cleanup(); }
+});
+
 // ── Item 10: SBOM diff ─────────────────────────────────────────────────────
 
 test('sbom-diff: diffSboms detects added / removed / bumped / substituted', async () => {

@@ -8862,8 +8862,22 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
     if (process.env.AGENTIC_SECURITY_NO_COMPLIANCE !== '1') {
       try {
         const policy = loadCompliancePolicy(scanRoot);
-        if (policy && !policy._error) {
+        if (policy && policy._error) {
+          // CMP-5: a malformed policy used to be silently treated the same
+          // as "no policy file" — the parse error (which names the exact
+          // problem) was computed and then discarded. verifyPolicy now
+          // reports it as a distinct 'error' status rather than staying
+          // silent, and it is surfaced here too so an interactive scan
+          // shows it.
           _complianceReport = verifyCompliancePolicy(policy, { scanRoot, findings: finalFindings });
+          process.stderr.write(`[compliance] ${policy._error}\n`);
+        } else if (policy) {
+          // CMP-5: pass every channel a real scan produces, not just SAST —
+          // a finding-family check for hardcoded-secret or vulnerable-dep
+          // was previously invisible to secrets/SCA findings entirely.
+          _complianceReport = verifyCompliancePolicy(policy, {
+            scanRoot, findings: finalFindings, secrets: aSecrets, logicVulns: aLogic, supplyChain,
+          });
           emitComplianceJsonLd(_complianceReport, scanRoot);
           emitComplianceMarkdown(_complianceReport, scanRoot);
         }
