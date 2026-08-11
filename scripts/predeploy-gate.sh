@@ -74,20 +74,45 @@ predeploy_gate_check() {
     fi
   fi
 
-  # Count findings by severity
-  local crit high med
-  read -r crit high med <<< $(python3 -c "
+  # Count findings by severity AND KEV exposure in one pass. A failure here
+  # (python3 missing, or the JSON unreadable/malformed) MUST fail closed:
+  # this used to leave crit/high/med empty via a bare, fallback-less command
+  # substitution, which made `[ "$crit" -gt 0 ]` error ("integer expression
+  # expected") rather than compare — an error whose non-zero status made the
+  # surrounding `&&` chain evaluate false, so `blocking` silently stayed 0
+  # and the gate printed "Safe to deploy" for a scan it never actually read.
+  # KEV: an earlier version read a top-level `kev`/`kevExposure` array that
+  # last-scan.json never has — KEV status is a per-finding boolean
+  # (`f.kev === true`; see scanner/src/report/index.js), so that branch was
+  # permanently dead regardless of what the scan found. `declare` and assign
+  # are kept on separate lines on purpose: `local x=$(cmd)` masks a failing
+  # command substitution's exit status behind `local`'s own (always-0) one.
+  local counts
+  counts=$(python3 -c "
 import json, sys
-data = json.load(open('$SCAN_FILE'))
+try:
+    data = json.load(open('$SCAN_FILE'))
+except Exception:
+    sys.exit(1)
 findings = []
 for k in ('findings', 'logicVulns', 'supplyChain'):
-    findings.extend(data.get(k, []))
+    findings.extend(data.get(k, []) or [])
 sev_counts = {'critical': 0, 'high': 0, 'medium': 0}
+kev = 0
 for f in findings:
     s = (f.get('severity') or '').lower()
     if s in sev_counts: sev_counts[s] += 1
-print(sev_counts['critical'], sev_counts['high'], sev_counts['medium'])
+    if f.get('kev') is True: kev += 1
+print(sev_counts['critical'], sev_counts['high'], sev_counts['medium'], kev)
 ")
+  if [ $? -ne 0 ] || [ -z "$counts" ]; then
+    echo ""
+    echo "    ❌  Could not read/parse $SCAN_FILE — refusing to guess whether it is safe to deploy."
+    echo "    Run a fresh scan:   /scan --all"
+    return 1
+  fi
+  local crit high med kev_count
+  read -r crit high med kev_count <<< "$counts"
 
   echo "    Last scan:  $(date -r "$scan_mtime" 2>/dev/null || date -d "@$scan_mtime" 2>/dev/null || echo unknown)"
   echo "    Findings:   ${crit} critical · ${high} high · ${med} medium"
@@ -105,17 +130,9 @@ print(sev_counts['critical'], sev_counts['high'], sev_counts['medium'])
   fi
 
   # KEV check
-  if [ "$block_kev" = "true" ]; then
-    local kev_count
-    kev_count=$(python3 -c "
-import json
-data = json.load(open('$SCAN_FILE'))
-print(len(data.get('kev', []) or data.get('kevExposure', [])))
-" 2>/dev/null || echo 0)
-    if [ "$kev_count" -gt 0 ]; then
-      blocking=1
-      blocking_reasons+="${kev_count} KEV-listed (known-exploited) package(s). "
-    fi
+  if [ "$block_kev" = "true" ] && [ "$kev_count" -gt 0 ]; then
+    blocking=1
+    blocking_reasons+="${kev_count} KEV-listed (known-exploited) package(s). "
   fi
 
   if [ "$blocking" = "1" ]; then
