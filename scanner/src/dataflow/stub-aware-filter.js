@@ -17,10 +17,14 @@
 //   Cmd inj (CWE-78):   source type ∈ {number, boolean}               → demote
 //   Path trav (CWE-22): source type ∈ {number, boolean}               → demote
 //
-// Demotion lowers severity by one tier and sets `_stubTypeDemoted: true`
-// with a `_stubTypeReason`. We never DROP findings — the stub-aware
-// reason is shown to the operator so they can override if the stub is
-// wrong or out of date.
+// Demotion lowers confidence + confidenceTier + exploitabilityTier by one
+// step and sets `_stubTypeDemoted: true` with a `_stubTypeReason` — the
+// same recall-preserving shape every other precision annotator in this
+// directory uses (proof-gate.js, verification-separation.js). Severity is
+// never touched and findings are never DROPPED — the stub-aware reason is
+// shown to the operator so they can override if the stub is wrong or out
+// of date. (This module used to mutate severity directly; that violated
+// the convention and was flagged, not designed — see dataflow/CLAUDE.md.)
 
 const FAMILY_SAFE_TYPES = {
   'CWE-79':  new Set(['number', 'boolean', 'Date', 'RegExp', 'bigint']),
@@ -64,10 +68,33 @@ function _normalizeType(t) {
   return trimmed;
 }
 
+// Tier ladders, lowest → highest — identical shape to proof-gate.js's, kept
+// as a local copy rather than importing that module's test-only `_internals`
+// across a module boundary.
+const CONFIDENCE_TIERS = ['very-low', 'low', 'medium', 'high'];
+const EXPLOITABILITY_TIERS = ['low', 'medium', 'high', 'critical'];
+const CONFIDENCE_DEMOTE_FACTOR = 0.4;
+
+function _demoteTier(tier, ladder) {
+  const i = ladder.indexOf(tier);
+  if (i <= 0) return ladder[0];
+  return ladder[i - 1];
+}
+
+function _demote(f) {
+  if (typeof f.confidence === 'number') {
+    f._confidenceBeforeStubFilter = f.confidence;
+    f.confidence = Math.max(0.01, Number((f.confidence * CONFIDENCE_DEMOTE_FACTOR).toFixed(4)));
+  }
+  if (f.confidenceTier) f.confidenceTier = _demoteTier(f.confidenceTier, CONFIDENCE_TIERS);
+  if (f.exploitabilityTier) f.exploitabilityTier = _demoteTier(f.exploitabilityTier, EXPLOITABILITY_TIERS);
+}
+
 /**
  * Post-pass entry. Mutates findings in place: adds `_stubTypeDemoted`,
- * `_stubTypeReason`, downgrades `severity` by one tier when the source
- * type is in the family-safe set for the finding's CWE.
+ * `_stubTypeReason`, demotes confidence/confidenceTier/exploitabilityTier
+ * by one step when the source type is in the family-safe set for the
+ * finding's CWE. Severity is never touched (recall-preserving).
  *
  * Returns the (mutated) findings array with `_stubFilterStats` non-
  * enumerable sidecar.
@@ -131,9 +158,7 @@ export function applyStubAwareFilter(findings, stubs, perFileIR) {
     if (sourceType && safeSet.has(sourceType)) {
       f._stubTypeDemoted = true;
       f._stubTypeReason = `source type ${sourceType} cannot carry ${f.cwe} metacharacters`;
-      f._stubTypeOriginalSeverity = f.severity;
-      const downgrade = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
-      if (downgrade[f.severity]) f.severity = downgrade[f.severity];
+      _demote(f);
       demoted++;
       continue;
     }
@@ -142,9 +167,7 @@ export function applyStubAwareFilter(findings, stubs, perFileIR) {
     if (guardType && safeSet.has(guardType)) {
       f._stubTypeDemoted = true;
       f._stubTypeReason = `type guard narrows to ${guardType}, safe for ${f.cwe}`;
-      f._stubTypeOriginalSeverity = f.severity;
-      const downgrade = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
-      if (downgrade[f.severity]) f.severity = downgrade[f.severity];
+      _demote(f);
       demoted++;
     }
   }
@@ -155,4 +178,4 @@ export function applyStubAwareFilter(findings, stubs, perFileIR) {
   return findings;
 }
 
-export const _internal = { FAMILY_SAFE_TYPES, _sourceTypeFromStubs, _normalizeType };
+export const _internal = { FAMILY_SAFE_TYPES, _sourceTypeFromStubs, _normalizeType, CONFIDENCE_TIERS, EXPLOITABILITY_TIERS, _demoteTier };

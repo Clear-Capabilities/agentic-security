@@ -137,7 +137,8 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // stub signatures (loaded by ir/type-stubs.js when AGENTIC_SECURITY_TYPE_STUBS=1).
   // If a finding's source type is provably non-stringy (number, boolean,
   // Date, RegExp) AND the sink class can't be triggered by that type,
-  // demote the finding's severity.
+  // demote the finding's confidence/tier (recall-preserving — severity
+  // is never touched).
   if (process.env.AGENTIC_SECURITY_TYPE_STUBS === '1' && opts.scanRoot) {
     try {
       const stubs = loadProjectStubs(opts.scanRoot);
