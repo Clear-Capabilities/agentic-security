@@ -14,16 +14,16 @@ Compliance + auditor flows dispatcher.
 | `--report <framework>` | Generate auditor-ready compliance attestation. Frameworks: `nist`, `asvs`, `llm`, `eu-ai-act` |
 | `--walkthrough <framework>` | Step-by-step auditor narrative with evidence mapping per control. Frameworks: `nist-csf-2`, `nist-ai-600-1`, `nist-privacy-1-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, `ccpa` (or BYO at `.agentic-security/compliance/<id>/controls.json`) |
 | `--attestation` | Render buyer-facing security posture artifact. `--format badge|onepager|page` |
-| `--audit <target>` | Stack-specific security audits. Targets: `db`, `auth`, `rate-limit`, `webhook`, `env`, `csp-cors`, `deploy`, `launch`, `llm-cost`, `prompt` |
-| `--pr` | Generate PR-description block (security delta vs base + ATT&CK + reviewers + artifacts) |
+| `--audit <target>` | Filters `last-scan.json`'s findings by keyword per target: `db`, `auth`, `rate-limit`, `webhook`, `env`, `csp-cors`, `llm-cost`, `prompt`. `deploy` and `launch` instead run `/secure`'s real readiness check for that intent, not a findings filter. |
+| `--pr` | Generate a PR-description block: findings delta vs a persisted baseline + MITRE ATT&CK techniques on new findings + suggested reviewers by family + links to posture artifacts |
 | `--gap` | Show only the **Not-Compliant** controls, each with the exact command that closes it |
 | `--privacy` | NIST Privacy Framework 1.1 assessment with remediation per gap. Artifacts: `.agentic-security/privacy-framework.{json,md}` |
 
-Bare `/compliance` (no flag) prints this mode menu. `--report` and `--gap` accept `--format cli|json|oscal`.
+Bare `/compliance` (no flag) prints this mode menu. `--report` and `--gap` accept `--format cli|json`.
 
 ## `--gap` (close the deltas)
 
-`--gap` runs the attestation for `<framework>` but filters to controls scored **Not-Compliant** / **Partial**, and for each one prints the single command that closes it — e.g. a missing-rate-limit control maps to `/compliance --audit rate-limit`, a secrets control to `/fix --rotate-secret`, a coverage gap to `/fix --compliance`. The output is an actionable worklist, not a full report. `/fix --compliance` consumes the same mapping to batch-close them.
+`--gap` with no framework argument filters the **NIST Privacy Framework 1.1** assessment (`--privacy`'s bucket model) to the `gap` bucket — this is the real `agentic-security compliance --gap` CLI subcommand, documented below. `--gap <framework>` filters that named framework's generic evaluation (`auditor-walkthrough.js#evaluateFramework`) to controls whose status is not `present` (i.e. `partial` or `manual` — no code-checked evidence clears them), each with its observations. It is a worklist of what isn't clearing, not a mapping to a specific closing command per control — that per-control command mapping described in earlier drafts of this doc does not exist in the code and has been removed rather than left aspirational.
 
 ## `--privacy` (NIST Privacy Framework 1.1)
 
@@ -73,9 +73,11 @@ every control as unassessed and sits one careless flag away from looking clean.
 Exit codes: **0** report produced · **1** only with `--fail-on gap` and a failing
 control · **2** nothing to assess, or an unknown framework.
 
-## `--format oscal` (machine-readable export)
+## `--format json` (machine-readable export)
 
-`--report <fw> --format oscal` emits the attestation as an **OSCAL-aligned** JSON document (NIST's machine-readable assessment format): an `assessment-results`-shaped object with one `finding`/`observation` per control, each carrying the control id, status (`satisfied` / `not-satisfied`), and the evidence paths the scanner matched. `--format json` emits the same data in the plugin's native finding schema. Both are what GRC tooling and auditors ingest; `--format cli` (default) stays human-readable.
+`--report <fw> --format json` emits the framework evaluation as structured JSON — one `{control, status, observations}` entry per control, `status` ∈ `present` (all mapped signals clear) / `partial` (some signal present but not all clear, or an unverifiable `rule:` mapping) / `manual` (no automated mapping at all). `--format cli` (default) renders the same evaluation as `--walkthrough`'s auditor narrative.
+
+**`--format oscal` does not exist.** No OSCAL (NIST's machine-readable assessment-results format) exporter is implemented anywhere in this codebase — earlier drafts of this doc described one that was never built. `--format oscal` is refused with an explicit error rather than silently falling back to `json`.
 
 ## Examples
 
@@ -89,4 +91,147 @@ control · **2** nothing to assess, or an unknown framework.
 
 ## Implementation
 
-Routes to the posture modules (`compliance-policy.js`, `auditor-walkthrough.js`, `pr-augment.js`) and the scanner CLI.
+Every mode below runs a real, verified command. `--privacy`/`--walkthrough`(no `--format json`)/`--gap` (no framework) pass straight through to the real `agentic-security compliance` CLI subcommand already documented above; the rest call the backing posture modules directly, since no CLI flag exposes them.
+
+```bash
+FLAG="${1:-}"
+
+fw_alias() {
+  case "$1" in
+    nist)       echo "nist-ai-600-1" ;;
+    asvs)       echo "owasp-asvs-5" ;;
+    llm)        echo "owasp-llm-top-10" ;;
+    eu-ai-act)  echo "eu-ai-act" ;;
+    *)          echo "$1" ;;
+  esac
+}
+
+case "$FLAG" in
+  --report)
+    FW=$(fw_alias "$2")
+    FMT="cli"
+    if [ "$3" = "--format" ] && [ -n "$4" ]; then FMT="$4"; fi
+    if [ "$FMT" = "oscal" ]; then
+      echo '{"error": "oscal format is not implemented — no OSCAL exporter exists in this codebase. Use --format json for the structured evaluation instead."}'
+      exit 2
+    fi
+    node -e "
+      const fs = require('fs');
+      import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/auditor-walkthrough.js').then(aw => {
+        let scan = null;
+        try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); } catch {}
+        if (!scan) { console.error('No .agentic-security/last-scan.json — run a scan first.'); process.exit(2); }
+        const fwId = process.argv[1];
+        const fw = aw.loadFramework('.', fwId);
+        if (!fw) { console.error('Unknown framework \"' + fwId + '\". Try /compliance --walkthrough with --list, or a bundled id: nist-ai-600-1, owasp-asvs-5, owasp-llm-top-10, eu-ai-act, nist-csf-2, nist-privacy-1-1, gdpr, hipaa-security-rule, ccpa.'); process.exit(2); }
+        const evaluation = aw.evaluateFramework('.', fw, scan);
+        const format = process.argv[2];
+        if (format === 'json') {
+          console.log(JSON.stringify({ framework: { id: fw.id, name: fw.name }, evaluation }, null, 2));
+        } else {
+          console.log(aw.renderWalkthrough(fw, evaluation, {}));
+        }
+      });
+    " "$FW" "$FMT" ;;
+  --walkthrough)
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs compliance --walkthrough "$2" ;;
+  --attestation)
+    FMT="badge"
+    if [ "$2" = "--format" ] && [ -n "$3" ]; then FMT="$3"; fi
+    case "$FMT" in
+      badge)    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs badge ;;
+      onepager) python3 ${CLAUDE_PLUGIN_ROOT}/scripts/security-onepager.py --print ;;
+      page)     python3 ${CLAUDE_PLUGIN_ROOT}/scripts/trust-page.py --contact security@example.com ;;
+      *)        echo "Unknown --format \"$FMT\" for --attestation. Valid: badge, onepager, page." ;;
+    esac ;;
+  --audit)
+    TARGET="$2"
+    case "$TARGET" in
+      deploy) node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs secure . --deploy --json ;;
+      launch) node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs secure . --launch --json ;;
+      *)
+        node -e "
+          const fs = require('fs');
+          const KEYWORDS = {
+            db: /\bsql\s*injection|\bdatabase\b|stored\s*xss.*db/i,
+            auth: /\bauth(?:entication|orization)?\b|\bidor\b|broken-auth/i,
+            'rate-limit': /rate[-\s]?limit/i,
+            webhook: /webhook/i,
+            env: /hardcoded[-\s]?secret|environment\s*variable|\.env\b/i,
+            'csp-cors': /\bcsp\b|\bcors\b|clickjack|x-frame|content-security-policy|header-hardening/i,
+            'llm-cost': /cost\s*advisory/i,
+            prompt: /prompt\s*injection|\bLLM01\b/i,
+          };
+          const target = process.argv[1];
+          const re = KEYWORDS[target];
+          if (!re) { console.log(JSON.stringify({ message: 'Unknown --audit target \"' + target + '\". Valid: ' + Object.keys(KEYWORDS).join(', ') + ', deploy, launch.' })); process.exit(0); }
+          let scan = null;
+          try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); } catch {}
+          if (!scan) { console.log(JSON.stringify({ message: 'No prior scan found. Run /scan --all first.' })); process.exit(0); }
+          const hay = f => [f.vuln, f.family, f.owaspLlm].filter(Boolean).join(' ');
+          const matched = (scan.findings || []).filter(f => re.test(hay(f)));
+          console.log(JSON.stringify({
+            target, matchedCount: matched.length,
+            findings: matched.map(f => ({ id: f.id, vuln: f.vuln, severity: f.severity, file: f.file, line: f.line })),
+          }, null, 2));
+        " "$TARGET" ;;
+    esac ;;
+  --pr)
+    REF="main"
+    if [ "$2" = "--persist-baseline" ] && [ -n "$3" ]; then
+      node -e "
+        import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/pr-augment.js').then(pa => {
+          const fs = require('fs');
+          let scan = null;
+          try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); } catch {}
+          if (!scan) { console.error('No .agentic-security/last-scan.json — run a scan first.'); process.exit(2); }
+          const fp = pa.persistBaseline('.', process.argv[1], scan);
+          console.log(JSON.stringify({ persisted: fp }, null, 2));
+        });
+      " "$3"
+    else
+      if [ "$2" = "--baseline" ] && [ -n "$3" ]; then REF="$3"; fi
+      node -e "
+        import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/pr-augment.js').then(pa => {
+          const r = pa.augmentPrBody('.', { baselineRef: process.argv[1] });
+          if (!r.ok) { console.error(r.error); process.exit(2); }
+          console.log(r.body);
+        });
+      " "$REF"
+    fi ;;
+  --gap)
+    if [ -n "$2" ] && [ "$2" != "--format" ]; then
+      FW=$(fw_alias "$2")
+      node -e "
+        const fs = require('fs');
+        import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/auditor-walkthrough.js').then(aw => {
+          let scan = null;
+          try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); } catch {}
+          if (!scan) { console.error('No .agentic-security/last-scan.json — run a scan first.'); process.exit(2); }
+          const fwId = process.argv[1];
+          const fw = aw.loadFramework('.', fwId);
+          if (!fw) { console.error('Unknown framework \"' + fwId + '\".'); process.exit(2); }
+          const evaluation = aw.evaluateFramework('.', fw, scan);
+          const gaps = evaluation.filter(e => e.status !== 'present');
+          console.log(JSON.stringify({ framework: fw.id, gapCount: gaps.length, gaps: gaps.map(g => ({ id: g.control.id, summary: g.control.summary, status: g.status, observations: g.observations })) }, null, 2));
+        });
+      " "$FW"
+    else
+      node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs compliance --gap "$@"
+    fi ;;
+  --privacy|"")
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs compliance ;;
+  *)
+    echo "Modes: --report --walkthrough --attestation --audit --pr --gap --privacy" ;;
+esac
+```
+
+`--report <framework>` and `--gap <framework>` both call `auditor-walkthrough.js#loadFramework`/`evaluateFramework` directly — the same functions the real `compliance --walkthrough` CLI path uses internally, just exposed for the alias-shorthand ids (`nist`/`asvs`/`llm`/`eu-ai-act`) and for raw JSON. `--report`'s default (non-JSON) rendering calls the same `renderWalkthrough` narrative as `--walkthrough` — there is no separate "attestation" renderer in the code, so the two converge outside `--format json`.
+
+`--walkthrough <framework>` and `--privacy`/bare `--gap` pass straight through to the real `agentic-security compliance` CLI subcommand (unchanged from the `--privacy` section above).
+
+`--attestation --format badge|onepager|page` calls three independently real backends: the CLI's `badge` subcommand (`src/badge.js`, SVG), `scripts/security-onepager.py --print` (Markdown one-pager), and `scripts/trust-page.py --contact ...` (Markdown trust page). None of the three previously had any invocation path from this command.
+
+`--audit <target>` is a keyword filter over `last-scan.json`'s findings (`vuln`/`family`/`owaspLlm` text) — not a dedicated per-target detector, disclosed as such. `deploy` and `launch` are different in kind: they run `agentic-security secure --deploy`/`--launch`, the real readiness-decision command (`posture/router.js#decide`), rather than filtering findings.
+
+`--pr [--baseline <ref>]` calls `posture/pr-augment.js#augmentPrBody` directly — a fully real, unit-tested module (`test/pr-augment.test.js`) with zero prior CLI wiring anywhere in the codebase. It needs a persisted baseline to diff against; `--pr --persist-baseline <ref>` calls `persistBaseline` to snapshot the current scan under that ref (run this on the base branch first). With no baseline, `augmentPrBody` still returns a body — showing the whole current scan as "added" — rather than failing.
