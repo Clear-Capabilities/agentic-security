@@ -814,20 +814,28 @@ async function cmdCi(args) {
   const packNames = packArg ? (Array.isArray(packArg) ? packArg : String(packArg).split(',')) : [];
   if (packNames.length) Object.assign(scan, applyPacks(scan, packNames));
 
-  // Persist the three CI artifacts.
+  // Persist the three CI artifacts — but a refusal to write must NEVER skip
+  // the --fail-on evaluation below. S1 (Stage-0 audit, 2026): this used to be
+  // a bare `return;` inside the write-guard, so `cmdCi` returned `undefined`
+  // and `process.exit(await cmdCi(args))` became `process.exit(undefined)`,
+  // which Node treats as exit 0 — a CI pipeline reading only $? would see a
+  // passing build whose findings were never evaluated against --fail-on at
+  // all. The write and the gate are orthogonal: "we couldn't persist
+  // artifacts" is not evidence about "the scan is clean."
   const stateDirPath = stateDir(targetAbs);
   const { isSafeStateDir: _isSafeCi, stateWritesEnabled: _writesOnCi } = await import('../src/posture/state-dir.js');
-  if (!_writesOnCi() || !_isSafeCi(stateDirPath)) {
+  const _canWriteCi = _writesOnCi() && _isSafeCi(stateDirPath);
+  if (!_canWriteCi) {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write CI artifacts at ${stateDirPath} — no project marker\n`);
-    return;
+  } else {
+    await fsp.mkdir(stateDirPath, { recursive: true });
+    await fsp.writeFile(path.join(stateDirPath, 'findings.json'),
+      JSON.stringify(toJSON(scan, meta), null, 2));
+    await fsp.writeFile(path.join(stateDirPath, 'findings.sarif'),
+      JSON.stringify(toSARIF(scan, meta), null, 2));
+    await fsp.writeFile(path.join(stateDirPath, 'findings.junit.xml'),
+      toJUnit(scan, meta));
   }
-  await fsp.mkdir(stateDirPath, { recursive: true });
-  await fsp.writeFile(path.join(stateDirPath, 'findings.json'),
-    JSON.stringify(toJSON(scan, meta), null, 2));
-  await fsp.writeFile(path.join(stateDirPath, 'findings.sarif'),
-    JSON.stringify(toSARIF(scan, meta), null, 2));
-  await fsp.writeFile(path.join(stateDirPath, 'findings.junit.xml'),
-    toJUnit(scan, meta));
 
   const scanCode = exitCodeFor(scan);
   const findings = normalizeFindings(scan);
@@ -835,7 +843,9 @@ async function cmdCi(args) {
   for (const f of findings) sev[f.severity] = (sev[f.severity] || 0) + 1;
   process.stderr.write(
     `[ci] ${findings.length} findings — ${sev.critical} critical · ${sev.high} high · ${sev.medium} medium · ${sev.low} low\n` +
-    `[ci] artifacts: .agentic-security/findings.{json,sarif,junit.xml}\n` +
+    (_canWriteCi
+      ? `[ci] artifacts: .agentic-security/findings.{json,sarif,junit.xml}\n`
+      : `[ci] artifacts: NOT written (state writes refused — set AGENTIC_SECURITY_DEBUG=1 for the reason)\n`) +
     `[ci] fail-on=${failOn}  scan-exit=${scanCode}\n`
   );
   // FR-SDLC-9: when --policy <file.rego> is supplied, evaluate against the

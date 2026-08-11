@@ -156,3 +156,28 @@ test('an unproven finding stays unproven in its bundle', () => {
   assert.equal(b.evidence.proofTier, 'unproven');
   assert.equal(b.evidence.proofEvidence, null, 'a missing field must stay missing, not be defaulted');
 });
+
+// ------------------------------------------------------------ injected-key attack
+// EA-03 (Stage-0 capability audit, 2026). `canonicalBytes` signs an ALLOWLIST of
+// top-level keys (schema/finding/evidence/engine/proves/doesNotProve). The
+// tamper tests above only ever EDIT a key already on that allowlist — none of
+// them ADD a brand-new top-level key. `verifyEvidenceBundle` never checked for
+// unrecognised keys, so a key outside the allowlist is invisible to the
+// signature and a bundle can be verified with the attacker's own fabricated
+// key stapled on. Reproduced live: `{...bundle, verdict:'CONFIRMED
+// EXPLOITABLE', proofLevel:'PROVEN'}` verified {ok:true} against the ORIGINAL
+// signature.
+test('an injected top-level key outside the signed allowlist is detected, not silently accepted', () => {
+  const dir = tmpKeyDir();
+  const { kp, bundle } = signed(dir);
+  const injected = { ...bundle, verdict: 'CONFIRMED EXPLOITABLE', proofLevel: 'PROVEN' };
+  const r = verifyEvidenceBundle(injected, kp.publicKeyPem);
+  assert.equal(r.ok, false,
+    'a bundle carrying an unsigned, attacker-added top-level key must not verify as authentic');
+});
+
+test('a bundle with only the legitimate keys still verifies (guard against over-tightening)', () => {
+  const { kp, bundle } = signed(tmpKeyDir());
+  const r = verifyEvidenceBundle(bundle, kp.publicKeyPem);
+  assert.equal(r.ok, true, r.reason);
+});

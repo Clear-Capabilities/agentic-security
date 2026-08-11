@@ -1098,8 +1098,29 @@ export function toShipVerdict(scan, options = {}) {
   const profile = options.profile || { confidenceMin: CONF_DEFAULT_VIB, showTaxonomy: false };
   const color = options.color !== false;
   const c = (s, code) => color ? `${code}${s}${RESET}` : s;
-  const findings = _withConfidence(normalizeFindings(scan), profile.confidenceMin ?? CONF_DEFAULT_VIB);
-  const actionable = findings.filter(f => /critical|high/.test(f.severity));
+  // CMP-4 (Stage-0 audit, 2026): the safety headline (Safe/Not-safe-to-deploy)
+  // and the critical/high counts that drive it MUST come from the FULL
+  // finding set, matching exitCodeFor — confidence filtering must never be
+  // able to make a real critical/high invisible to the verdict. Before this
+  // fix, `findings` was confidence-filtered BEFORE the severity split, so a
+  // critical at confidence 0.85 (below the 0.9 vibecoder floor) made the
+  // verdict print "Safe to deploy" while exitCodeFor — reading the same scan
+  // unfiltered — returned 3. Same scan, contradictory answers depending on
+  // which one you read.
+  //
+  // Confidence filtering KEEPS its legitimate purpose for low/medium/info
+  // findings — those never gate the safety verdict, so hiding noisy
+  // low-signal ones from a non-expert reader is a reasonable UX choice, not a
+  // security decision. What changes is that low/medium/info findings hidden
+  // this way are now DISCLOSED by count rather than silently vanishing,
+  // matching the project's no-silent-truncation convention.
+  const allFindings = normalizeFindings(scan);
+  const min = profile.confidenceMin ?? CONF_DEFAULT_VIB;
+  const criticalOrHighAll = allFindings.filter(f => /critical|high/.test(f.severity));
+  const restFiltered = _withConfidence(allFindings.filter(f => !/critical|high/.test(f.severity)), min);
+  const findings = [...criticalOrHighAll, ...restFiltered];
+  const filteredOutCount = allFindings.length - findings.length;
+  const actionable = criticalOrHighAll;
   const advisoryCount = findings.length - actionable.length;
   const sev = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const f of findings) sev[f.severity] = (sev[f.severity] || 0) + 1;
@@ -1163,6 +1184,12 @@ export function toShipVerdict(scan, options = {}) {
     lines.push(c('     /security-fix --finding <id>       fix exactly one', DIM));
   } else if (advisoryCount > 0) {
     lines.push(c(`  ${advisoryCount} advisory item${advisoryCount === 1 ? '' : 's'} — run /security-scan-all --firehose to see them.`, DIM));
+  }
+  // No-silent-truncation: a low/medium/info finding hidden by the confidence
+  // floor must be disclosed by count. Critical/high are never in this count —
+  // see filteredOutCount's computation above.
+  if (filteredOutCount > 0) {
+    lines.push(c(`  ${filteredOutCount} more below your confidence threshold — run /security-scan-all --firehose to see them.`, DIM));
   }
   // Discoverability: the depth (per-finding explanation) and the shareable report
   // exist but aren't obvious from the one-screen verdict — point to them.

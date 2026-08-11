@@ -227,9 +227,26 @@ export function signEvidenceBundle(bundle, privateKeyPem) {
  * Returns {ok, reason}. Never throws — a malformed bundle from an untrusted
  * source is an expected input, not an exceptional one.
  */
+// The complete set of top-level keys a legitimately-built, signed bundle can
+// carry — buildEvidenceBundle's six plus signEvidenceBundle's `signature`.
+// EA-03 (Stage-0 audit, 2026): canonicalBytes SIGNS an allowlist of fields;
+// verifyEvidenceBundle never checked for keys OUTSIDE that allowlist, so a
+// bundle with a fabricated `verdict`/`proofLevel`/anything-else stapled on
+// after signing verified as authentic — the signature simply never covered
+// those bytes. Rejecting unknown keys here closes that; it must exactly match
+// what buildEvidenceBundle+signEvidenceBundle actually produce, or a
+// legitimate bundle would start failing verification.
+const BUNDLE_TOP_LEVEL_KEYS = new Set([
+  'schema', 'finding', 'evidence', 'engine', 'proves', 'doesNotProve', 'signature',
+]);
+
 export function verifyEvidenceBundle(bundle, publicKeyPem) {
   if (!bundle || typeof bundle !== 'object') return { ok: false, reason: 'bundle is not an object' };
   if (bundle.schema !== BUNDLE_SCHEMA) return { ok: false, reason: `unrecognised schema: ${bundle.schema}` };
+  const unknownKeys = Object.keys(bundle).filter(k => !BUNDLE_TOP_LEVEL_KEYS.has(k));
+  if (unknownKeys.length) {
+    return { ok: false, reason: `unrecognised top-level key(s) not covered by the signature: ${unknownKeys.join(', ')}` };
+  }
   const sig = bundle.signature;
   if (!sig?.value) return { ok: false, reason: 'bundle is unsigned' };
   if (sig.algorithm !== 'ed25519') return { ok: false, reason: `unsupported algorithm: ${sig.algorithm}` };

@@ -2,7 +2,7 @@
 // severity isn't taken at face value) + verdict discoverability lines.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { toCLI, toProTable, toHTML, toShipVerdict } from '../src/report/index.js';
+import { toCLI, toProTable, toHTML, toShipVerdict, exitCodeFor } from '../src/report/index.js';
 
 const demoted = {
   unreachable: { severity: 'critical', cwe: 'CWE-94', file: 'a.js', line: 1, vuln: 'Code injection', unreachableInProd: true, mitigationVerdict: 'unreachable-in-prod' },
@@ -100,4 +100,42 @@ test('explain depth degrades gracefully when fields are absent', () => {
   const out = stripAnsi(toCLI({ findings: [bare] }, { color: false }));
   assert.doesNotMatch(out, /\n\s+why:/);
   assert.doesNotMatch(out, /\n\s+how:/);
+});
+
+// ── toShipVerdict must not claim safety the exit code disagrees with ────────
+// CMP-4 (Stage-0 capability audit, 2026). _withConfidence filtered the WHOLE
+// finding set before toShipVerdict computed severity counts or the safe/
+// not-safe headline — so a critical below the confidence floor was invisible
+// to a human reading the verdict, while exitCodeFor (which reads the
+// UNFILTERED set) still exits 3 for the same scan. Reproduced live: two
+// critical findings at confidence 0.85/0.6 (vibecoder floor 0.9) rendered
+// "✅ Safe to deploy · 0 critical · 0 high · 0 advisory".
+const stripAnsi2 = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+
+test('toShipVerdict: a below-floor critical still shows "Not safe to deploy" and is counted', () => {
+  const scan = { findings: [
+    { severity: 'critical', vuln: 'A', confidence: 0.85, file: 'a.js', line: 1, cwe: 'CWE-89' },
+    { severity: 'critical', vuln: 'B', confidence: 0.6, file: 'b.js', line: 2, cwe: 'CWE-78' },
+  ] };
+  const out = stripAnsi2(toShipVerdict(scan, { color: false, profile: { confidenceMin: 0.9, showTaxonomy: false } }));
+  assert.match(out, /Not safe to deploy/,
+    'a critical below the confidence floor must still fail the headline verdict');
+  assert.match(out, /2 critical/,
+    `expected the critical count to include both findings regardless of confidence, got: ${out.match(/\d+ critical/)}`);
+  assert.equal(exitCodeFor(scan), 3, 'sanity: exit code already correctly saw both criticals');
+});
+
+test('toShipVerdict: below-floor findings are disclosed, not silently dropped', () => {
+  const scan = { findings: [
+    { severity: 'low', vuln: 'Noisy', confidence: 0.2, file: 'a.js', line: 1, cwe: 'CWE-1' },
+  ] };
+  const out = stripAnsi2(toShipVerdict(scan, { color: false, profile: { confidenceMin: 0.9, showTaxonomy: false } }));
+  assert.match(out, /1.*below.*confidence|confidence.*1/i,
+    `a filtered-out finding must be disclosed by count, not silently vanish. got:\n${out}`);
+});
+
+test('toShipVerdict: a genuinely clean scan (nothing filtered) still says Safe to deploy with no disclosure noise', () => {
+  const out = stripAnsi2(toShipVerdict({ findings: [] }, { color: false }));
+  assert.match(out, /Safe to deploy/);
+  assert.doesNotMatch(out, /below.*confidence/i);
 });

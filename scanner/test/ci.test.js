@@ -65,3 +65,39 @@ test('ci --fail-on none always exits 0', async () => {
   const r = runCi(dir, ['--fail-on', 'none']);
   assert.equal(r.code, 0);
 });
+
+// S1 (Stage-0 capability audit, 2026). cmdCi's state-dir-write guard executed
+// a bare `return;` with no value, so `process.exit(await cmdCi(args))` became
+// `process.exit(undefined)` — exit 0 — regardless of what --fail-on demanded,
+// because the fail-on evaluation lived AFTER the guard and never ran. Verified
+// via direct code read + `node -e "process.exit(undefined)"` -> exit 0 before
+// this fix. A CI pipeline reading only the exit code would see a passing
+// build with unevaluated critical findings.
+test('ci --fail-on critical still exits 1 when state writes are refused (AGENTIC_SECURITY_NO_STATE=1)', async () => {
+  if (!fs.existsSync(cli)) { console.warn('dist/ not built; skipping ci test'); return; }
+  const dir = await copyFixture();
+  const r = spawnSync('node', [cli, 'ci', dir, '--fail-on', 'critical'], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      AGENTIC_SECURITY_NO_STATE: '1',
+      GITHUB_BASE_REF: '', CI_MERGE_REQUEST_TARGET_BRANCH_NAME: '',
+      BUILDKITE_PULL_REQUEST_BASE_BRANCH: '', BITBUCKET_PR_DESTINATION_BRANCH: '',
+    },
+  });
+  assert.equal(r.status, 1,
+    `state-write refusal must not skip the fail-on evaluation; stderr=${r.stderr}`);
+  // And artifacts genuinely were not written — the refusal itself is still honoured.
+  assert.ok(!fs.existsSync(path.join(dir, '.agentic-security', 'findings.json')),
+    'AGENTIC_SECURITY_NO_STATE=1 must still block the artifact write');
+});
+
+test('ci --fail-on none exits 0 even when state writes are refused (both directions)', async () => {
+  if (!fs.existsSync(cli)) return;
+  const dir = await copyFixture();
+  const r = spawnSync('node', [cli, 'ci', dir, '--fail-on', 'none'], {
+    encoding: 'utf8',
+    env: { ...process.env, AGENTIC_SECURITY_NO_STATE: '1' },
+  });
+  assert.equal(r.status, 0);
+});

@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -148,15 +149,29 @@ We follow a no-retaliation policy for good-faith security research. See our `/.w
 
 
 def data_handling_block() -> str:
+    # CMP-9 (Stage-0 audit, 2026): this used to assert specific infrastructure
+    # facts unconditionally — "TLS 1.2+", "AES-256 at rest", "No engineer has
+    # direct production database access" — regardless of what the target
+    # project's actual infrastructure was. Nothing here is derivable from a
+    # source-code scan (encryption-at-rest, retention policy and access
+    # control are properties of infrastructure and process, not code this
+    # tool reads), so it must never be presented as scanner-verified fact.
+    # Bracketed placeholders force the operator to fill in something true
+    # before the document ships, rather than shipping a plausible-sounding
+    # default that may not describe their infrastructure at all.
     return """## Data handling
 
-We follow the principle of least access:
+⚠ **OPERATOR REVIEW REQUIRED — this section is a template, not a scan result.**
+Nothing below is derived from your code; source-code scanning cannot see your
+infrastructure, your cloud provider's encryption settings, or your data
+retention policy. Replace every bracketed placeholder with what is actually
+true for your systems before sharing this document, or delete this section.
 
-- **Encryption in transit:** TLS 1.2+ for all inbound and outbound traffic.
-- **Encryption at rest:** All databases are encrypted with provider-managed keys (AES-256).
-- **Access controls:** Production credentials are scoped per-service. No engineer has direct production database access; all queries go through reviewed application code.
-- **Data minimization:** We collect only the fields required to deliver the service. PII fields are documented in our privacy policy.
-- **Retention:** Customer data is retained for the duration of the contract plus 30 days, then purged. Audit logs are retained for 12 months.
+- **Encryption in transit:** [fill in — e.g. "TLS 1.2+" — verify against your actual load balancer / CDN config]
+- **Encryption at rest:** [fill in — verify against your actual database/storage provider settings]
+- **Access controls:** [fill in — describe who can actually reach production data, and how]
+- **Data minimization:** [fill in — what fields you actually collect]
+- **Retention:** [fill in — your actual retention and deletion policy]
 """
 
 
@@ -167,9 +182,15 @@ def render(company: str, contact: str, scan: dict | None, stack: list[str], stre
 
 *Last updated: {today}*
 
-This page summarizes the security practices in production at {company}. It's
-generated from our actual security tooling, not a marketing template — if
-something here is wrong, our scanner will flag it and we'll update.
+This page summarizes the security practices in production at {company}.
+
+**What is and isn't tool-verified.** The "Posture summary" and "What we
+actually do" sections below are generated from live scan data — if something
+there is wrong, re-running the scanner will flag it. The "Data handling"
+section is NOT: it is a template requiring manual review, because
+infrastructure facts like encryption settings and data retention are not
+visible to a source-code scanner. Do not present this whole document as
+tool-verified — only the sections that actually are.
 
 ## Posture summary
 
@@ -211,6 +232,11 @@ def main() -> None:
     parser.add_argument("--company", default=None, help="Company / product name")
     parser.add_argument("--contact", default="security@example.com", help="Security contact email")
     parser.add_argument("--print", action="store_true")
+    parser.add_argument("--force", action="store_true",
+        help="Overwrite an existing output file. Without this flag the script refuses "
+             "if the file already exists — SECURITY.md is a GitHub-recognised name for "
+             "a project's real vulnerability-disclosure policy, and this generator must "
+             "not silently destroy a hand-authored one (CMP-9, Stage-0 audit, 2026).")
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve() if args.cwd else Path.cwd()
@@ -227,6 +253,10 @@ def main() -> None:
         return
 
     out = cwd / args.output
+    if out.exists() and not args.force:
+        print(f"✗ Refusing to overwrite existing {args.output} — pass --force to overwrite, "
+              f"or --print to preview without writing.", file=sys.stderr)
+        sys.exit(1)
     out.write_text(md)
     print(f"✓ Security one-pager written: {out.relative_to(cwd) if str(out).startswith(str(cwd)) else out}")
     print(f"  Suggested next steps:")
