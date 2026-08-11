@@ -12,7 +12,16 @@ A line count is not a risk metric. A 1000-line refactor that touches no auth bou
 
 ## Inputs
 
-- The output of `node scanner/dist/agentic-security.mjs material-change --since <ref>` (or whatever path the runner uses) — a JSON object `{ materialRisk, findings, perKindCounts, byFile, error? }` produced by `scanner/src/posture/material-change.js#classifyDiff`.
+- There is no `material-change` CLI subcommand — run this instead (the same invocation `/scan --diff` uses internally) to get the JSON object `{ materialRisk, findings, perKindCounts, byFile, error? }` produced by `scanner/src/posture/material-change.js#classifyGitDiff`:
+  ```bash
+  node -e "
+  import('\${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/material-change.js').then(m => {
+    const r = m.classifyGitDiff(process.cwd(), '<ref>');
+    process.stdout.write(JSON.stringify(r, null, 2));
+  });
+  "
+  ```
+  Replace `<ref>` with the base ref to diff against (e.g. `origin/main`, `HEAD~1`).
 - Optional context: which file in `byFile` is most concerning, recent commits via `git log`.
 
 ## Method

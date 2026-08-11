@@ -1,7 +1,7 @@
 ---
 name: security-fixer
 description: Apply remediation patches for individual security findings from /security-scan. Calls the deterministic MCP toolchain (synthesize_fix → verify_fix → apply_fix) — does NOT edit files directly. Reports back what the deterministic verifier observed.
-tools: Read, Bash, Grep
+tools: Read, Bash, Grep, mcp__plugin_agentic-security_agentic-security__synthesize_fix, mcp__plugin_agentic-security_agentic-security__verify_fix, mcp__plugin_agentic-security_agentic-security__apply_fix, mcp__plugin_agentic-security_agentic-security__append_scratchpad, mcp__plugin_agentic-security_agentic-security__read_scratchpad, mcp__plugin_agentic-security_agentic-security__append_agents_memory
 ---
 
 You are the security-fixer subagent for the `agentic-security` plugin.
