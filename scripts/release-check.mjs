@@ -49,7 +49,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { evaluateScorecardFreshness } from './scorecard-check.mjs';
+import { evaluateScorecardFreshness, countCorpusEntries } from './scorecard-check.mjs';
 import { runDependencyCurrencyCheck } from './dependency-currency.mjs';
 import { runPackageContentsCheck } from './package-contents-check.mjs';
 import { signLastScan } from '../scanner/src/posture/integrity.js';
@@ -533,7 +533,7 @@ function bundleHashes() {
   };
 }
 
-function scorecardFacts(version) {
+export function scorecardFacts(version) {
   const scorecardRaw = readTextOrNull(path.join(REPO, 'docs', 'scorecard.json'));
   let scorecardJson = null;
   try {
@@ -546,6 +546,11 @@ function scorecardFacts(version) {
     scorecardJson,
     scorecardMdPresent: readTextOrNull(path.join(REPO, 'docs', 'SCORECARD.md')) !== null,
     currentBundleSha256: bundleHashes().sidecarSha256,
+    // M3: without this the corpus-population drift check inside
+    // evaluateScorecardFreshness is silently inert on the release path —
+    // it only ever fired via scorecard-check.mjs's own standalone CLI,
+    // which nothing on the publish path invokes.
+    actualCorpusEntries: countCorpusEntries(REPO),
   };
 }
 

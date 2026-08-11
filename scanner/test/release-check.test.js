@@ -7,6 +7,9 @@
 // constructed inputs so a refactor cannot quietly loosen a check.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   CHECKS,
   plannedCheckIds,
@@ -20,7 +23,10 @@ import {
   CHECK_TIERS_FILE,
   evaluateCommandGate,
   extractVersionsFromSource,
+  scorecardFacts,
 } from '../../scripts/release-check.mjs';
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // ---------------------------------------------------------------- check 1
 test('release-gate — clean working tree passes', () => {
@@ -481,4 +487,26 @@ test('release-check — the tier file lists check-RUN names, never workflow name
     assert.ok(!tiers.blocking.includes(bad) && !tiers.informational.includes(bad),
       `"${bad}" is a workflow name, not a check-run name`);
   }
+});
+
+// M3: scorecardFacts() feeds evaluateScorecardFreshness's corpus-population
+// check on the path that actually gates a release (release-check.mjs, wired
+// into prepublishOnly and release.yml) — scorecard-check.mjs's own CLI does
+// compute actualCorpusEntries, but that CLI is never invoked from the
+// release/publish path, so the check was silently inert there: a corpus that
+// grew or shrank since the scorecard was last regenerated would not block a
+// publish. This pins that scorecardFacts() independently counts the real
+// on-disk corpus the same way the runner enumerates it (a directory is an
+// entry iff it carries manifest.json).
+test('M3: scorecardFacts() counts the real on-disk corpus so the population check is not inert', () => {
+  let expected = 0;
+  for (const tier of ['regression', 'capability', 'deep']) {
+    const dir = path.join(REPO_ROOT, 'bench', 'cve-replay', tier);
+    for (const e of fs.readdirSync(dir)) {
+      if (fs.existsSync(path.join(dir, e, 'manifest.json'))) expected++;
+    }
+  }
+  assert.ok(expected > 0, 'the real corpus must be non-empty for this test to mean anything');
+  const facts = scorecardFacts('0.0.0-test');
+  assert.equal(facts.actualCorpusEntries, expected);
 });

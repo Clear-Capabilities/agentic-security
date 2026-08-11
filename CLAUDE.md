@@ -91,7 +91,7 @@ A bundle PROVES its contents are unmodified since signing. It does NOT prove the
 
 `workflow_dispatch` on the release workflow runs the gate and `npm pack --dry-run` without publishing, which is the cheapest way to check a release would go out cleanly.
 
-When cutting a release, run `npm run scorecard` (regenerates `docs/SCORECARD.md` + `docs/scorecard.json`), review the numbers, and commit the result — `npm run scorecard:check` enforces this at publish time (wired into `prepublishOnly`) by failing when the committed scorecard's `engineVersion` doesn't match `scanner/package.json`'s version; it checks, it does not regenerate.
+When cutting a release, run `npm run scorecard` (regenerates `docs/SCORECARD.md` + `docs/scorecard.json`), review the numbers, and commit the result — `scripts/release-check.mjs`'s `scorecard-freshness` check enforces this at publish time (wired into `prepublishOnly` and `release.yml`) by failing when the committed scorecard's `engineVersion` doesn't match `scanner/package.json`'s version, or when its `corpus.totalEntries` disagrees with the corpus actually on disk; it checks, it does not regenerate. `npm run scorecard:check` runs the same underlying decision logic (`scorecard-check.mjs`) standalone for local iteration, but is not itself wired into any gate — `release-check.mjs` imports the logic directly rather than shelling out to it.
 
 ---
 

@@ -152,6 +152,26 @@ function readJsonIfPresent(absPath) {
   }
 }
 
+// Count the corpus the same way the runner enumerates it: a directory is an
+// entry iff it carries a manifest.json. Counting directories alone would
+// drift from the runner's own definition and could disagree with it.
+// Exported so release-check.mjs's scorecardFacts() reuses this exact
+// definition rather than growing a second, possibly-drifting count.
+export function countCorpusEntries(repoRoot) {
+  try {
+    let n = 0;
+    for (const tier of ['regression', 'capability', 'deep']) {
+      const dir = path.join(repoRoot, 'bench', 'cve-replay', tier);
+      for (const e of fs.readdirSync(dir)) {
+        if (fs.existsSync(path.join(dir, e, 'manifest.json'))) n++;
+      }
+    }
+    return n;
+  } catch {
+    return null; // corpus unreadable — skip the check rather than guess
+  }
+}
+
 function main() {
   const pkg = readJsonIfPresent(path.join(REPO, 'scanner', 'package.json'));
   const pkgVersion = pkg && pkg.version;
@@ -175,20 +195,7 @@ function main() {
     currentBundleSha256 = raw.trim().split(/\s+/)[0] || null;
   } catch { /* bundle not built — nothing to compare against, not an error here */ }
 
-  // Count the corpus the same way the runner enumerates it: a directory is an
-  // entry iff it carries a manifest.json. Counting directories alone would
-  // drift from the runner's own definition and could disagree with it.
-  let actualCorpusEntries = null;
-  try {
-    let n = 0;
-    for (const tier of ['regression', 'capability', 'deep']) {
-      const dir = path.join(REPO, 'bench', 'cve-replay', tier);
-      for (const e of fs.readdirSync(dir)) {
-        if (fs.existsSync(path.join(dir, e, 'manifest.json'))) n++;
-      }
-    }
-    actualCorpusEntries = n;
-  } catch { /* corpus unreadable — skip the check rather than guess */ }
+  const actualCorpusEntries = countCorpusEntries(REPO);
 
   if (!pkgVersion) {
     process.stderr.write('✗ scorecard-check: could not read scanner/package.json version\n');
