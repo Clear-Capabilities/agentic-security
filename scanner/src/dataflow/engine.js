@@ -1040,6 +1040,13 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         // allowlist that never names `callee`, so this does not reach SARIF/
         // JSON/HTML report output.
         ...(f.callee !== undefined ? { callee: f.callee } : {}),
+        // sourceProvenance/chain[].provenance: catalog.js's per-source label
+        // (e.g. 'http-body' for req.body) computed earlier at the finding's
+        // creation site — previously dropped by this allowlist, which is
+        // what left posture/exploitability-probability.js's
+        // 'source-from-network' factor permanently dead (it reads
+        // t.provenance off chain/trace entries).
+        sourceProvenance: f.sourceProvenance || null,
         source: f.trace && f.trace.length ? {
           file: fn.file,
           line: f.trace[0].line,
@@ -1051,7 +1058,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
           label: f.sinkId,
         },
         chain: (f.trace || []).map(t => ({
-          file: fn.file, line: t.line, label: t.sourceLabel,
+          file: fn.file, line: t.line, label: t.sourceLabel, provenance: t.provenance || null,
         })),
       });
     }

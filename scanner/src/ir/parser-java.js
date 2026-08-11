@@ -168,6 +168,26 @@ function _flattenFqnToString(node) {
   return ids.length ? ids.join('.') : 'unknown';
 }
 
+// Descend to the first leaf token in a CST subtree and return its
+// startLine. java-parser (chevrotain) leaf tokens carry startLine directly;
+// rule nodes only carry `children`. Returns 0 when nothing is found (e.g.
+// an empty node), which callers already treat as "unknown".
+function _lineOf(node) {
+  if (!node) return 0;
+  if (Array.isArray(node)) {
+    for (const n of node) { const l = _lineOf(n); if (l) return l; }
+    return 0;
+  }
+  if (typeof node.startLine === 'number') return node.startLine;
+  if (node.children) {
+    for (const k of Object.keys(node.children)) {
+      const l = _lineOf(node.children[k]);
+      if (l) return l;
+    }
+  }
+  return 0;
+}
+
 /**
  * Build a function's CFG from its method-body CST.
  *
@@ -176,7 +196,7 @@ function _flattenFqnToString(node) {
  * `if` / `loop-header` node and the body falls through linearly. This is
  * coarser than the JS frontend; v2 will branch the succ array.
  */
-function buildCfgFromBody(bodyNode, line) {
+function buildCfgFromBody(bodyNode) {
   const nodes = {};
   const entry = nextNodeId();
   const exit = nextNodeId();
@@ -222,7 +242,7 @@ function buildCfgFromBody(bodyNode, line) {
             const target = d.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
             const initExpr = d.children?.variableInitializer?.[0]?.children?.expression?.[0];
             if (target) {
-              emit({ kind: 'assign', target, source: initExpr ? exprFromCst(initExpr) : { kind: 'unknown' }, line: line || 0, succ: [] });
+              emit({ kind: 'assign', target, source: initExpr ? exprFromCst(initExpr) : { kind: 'unknown' }, line: _lineOf(lv), succ: [] });
             }
           }
         }
@@ -238,34 +258,34 @@ function buildCfgFromBody(bodyNode, line) {
       const e = kids.expressionStatement[0]?.children?.statementExpression?.[0]?.children?.expression?.[0];
       if (e) {
         const expr = exprFromCst(e);
-        if (expr.kind === 'call') emit({ ...expr, line: line || 0, succ: [] });
+        if (expr.kind === 'call') emit({ ...expr, line: _lineOf(kids.expressionStatement[0]), succ: [] });
         else if (expr.kind === 'binary' && expr.op === '=') {
           // assignment expr `x = y;`
-          emit({ kind: 'assign', target: expr.left?.name || null, source: expr.right, line: line || 0, succ: [] });
+          emit({ kind: 'assign', target: expr.left?.name || null, source: expr.right, line: _lineOf(kids.expressionStatement[0]), succ: [] });
         }
       }
     }
     if (kids.returnStatement) {
       const r = kids.returnStatement[0];
       const expr = r.children?.expression?.[0];
-      emit({ kind: 'return', value: expr ? exprFromCst(expr) : null, line: line || 0, succ: [] });
+      emit({ kind: 'return', value: expr ? exprFromCst(expr) : null, line: _lineOf(r), succ: [] });
     }
     if (kids.throwStatement) {
       const t = kids.throwStatement[0];
       const expr = t.children?.expression?.[0];
-      emit({ kind: 'throw', value: expr ? exprFromCst(expr) : null, line: line || 0, succ: [] });
+      emit({ kind: 'throw', value: expr ? exprFromCst(expr) : null, line: _lineOf(t), succ: [] });
     }
     if (kids.ifStatement) {
       const i = kids.ifStatement[0];
       const cond = i.children?.expression?.[0];
-      emit({ kind: 'if', cond: cond ? exprFromCst(cond) : null, line: line || 0, succ: [] });
+      emit({ kind: 'if', cond: cond ? exprFromCst(cond) : null, line: _lineOf(i), succ: [] });
       // Then branch body falls through linearly; v1 simplification.
       for (const sub of (i.children?.statement || [])) walkStmts(sub);
     }
     if (kids.whileStatement) {
       const w = kids.whileStatement[0];
       const cond = w.children?.expression?.[0];
-      emit({ kind: 'loop-header', cond: cond ? exprFromCst(cond) : null, line: line || 0, succ: [] });
+      emit({ kind: 'loop-header', cond: cond ? exprFromCst(cond) : null, line: _lineOf(w), succ: [] });
       for (const sub of (w.children?.statement || [])) walkStmts(sub);
     }
   }
@@ -318,12 +338,17 @@ export async function parseJavaFile(file, raw) {
           const params = []; // params extraction deferred
           const body = md.children?.methodBody?.[0]?.children?.block?.[0];
           if (body) {
+            const methodLine = _lineOf(md);
             functions.push({
-              qid: `${file}::${className || 'class'}::${name}`,
+              // Sibling frontends (parser-js.js) suffix the qid with `@line`
+              // so overloaded/same-named methods don't collide — without it,
+              // callgraph.js's `functions.set(fn.qid, fn)` silently drops
+              // every overload but the last one declared.
+              qid: `${file}::${className || 'class'}::${name}@${methodLine}`,
               name: className ? `${className}.${name}` : name,
-              line: 0,
+              line: methodLine,
               params,
-              cfg: buildCfgFromBody(body, 0),
+              cfg: buildCfgFromBody(body),
               file,
             });
           }

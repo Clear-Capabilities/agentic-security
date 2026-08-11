@@ -128,6 +128,7 @@ export function normalizeFindings(scan){
       triage: f.triageScore ?? null,
       dataClasses: f.dataClasses || [],
       chain: Array.isArray(f.chain) ? f.chain : null,
+      sourceProvenance: f.sourceProvenance || null,
       confidence: typeof f.confidence === 'number' ? f.confidence : null,
       // R17: corroboration ("one issue, many signals") — count of independent
       // analyses that agreed, and which ones.

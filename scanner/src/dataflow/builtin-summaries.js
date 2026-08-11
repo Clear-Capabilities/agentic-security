@@ -125,7 +125,7 @@ export function lookupBuiltinSummary(calleeName) {
   if (lastDot > 0) {
     const short = calleeName.slice(lastDot + 1);
     const fallback = BUILTIN_SUMMARIES.get(short);
-    if (fallback) return null;
+    if (fallback) return fallback;
   }
   return null;
 }

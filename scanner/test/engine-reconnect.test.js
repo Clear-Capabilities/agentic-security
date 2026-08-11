@@ -103,6 +103,30 @@ test('engine: a call-shaped source returned from a helper taints the caller (Blo
     `expected at least one IR-TAINT finding from a call-shaped return source; got ${findings.length}`);
 });
 
+// Stage 1 correctness audit: catalog.js labels every source with a
+// `provenance` (e.g. 'http-body' for req.body) so findings can be
+// attributed, and the engine faithfully tracks it per-source-instance while
+// walking (`_taintSources`) and computes a `sourceProvenance` per finding —
+// but the FINAL exported finding's `chain` array (built here in
+// runTaintEngine) stripped `.provenance` down to {file,line,label}, and
+// `sourceProvenance` was never copied onto the finding at all. Consumer:
+// posture/exploitability-probability.js's 'source-from-network' factor reads
+// `t.provenance` off `chain`/`trace` entries — with the field always
+// missing from every finding in every real scan, that 1.3x exploitability
+// boost for plainly network-controlled sources (req.body/headers/cookies)
+// could never fire, for any finding, from any producer.
+test('engine: a network-provenance source (req.body) survives onto the finding\'s chain and sourceProvenance', () => {
+  const code = 'function h(req, db){ var q = req.body.q; db.query("SELECT * FROM t WHERE a = " + q); }\n';
+  const { perFile, callGraph } = buildProjectIR({ 'app.js': code });
+  const findings = runTaintEngine(perFile, callGraph, { fnLimit: 5000, deadlineMs: Date.now() + 30000 });
+  const ir = findings.filter(f => (f.parser || '') === 'IR-TAINT');
+  assert.ok(ir.length >= 1, `expected at least one IR-TAINT finding; got ${findings.length}`);
+  const f = ir[0];
+  assert.equal(f.sourceProvenance, 'http-body', `expected sourceProvenance on the finding, got: ${JSON.stringify(f.sourceProvenance)}`);
+  assert.ok(Array.isArray(f.chain) && f.chain.length > 0, 'expected a non-empty chain');
+  assert.equal(f.chain[0].provenance, 'http-body', `expected chain[0].provenance to survive, got: ${JSON.stringify(f.chain[0])}`);
+});
+
 test('interprocedural: a JS source in one function reaches a sink in another', async () => {
   const findings = await scanFixture('js');
   const ir = findings.filter(f => (f.parser || '') === 'IR-TAINT');
