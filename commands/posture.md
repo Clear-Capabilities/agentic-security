@@ -18,7 +18,7 @@ Posture + reporting dispatcher. One command, multiple views.
 | `--trend` | Findings delta between the last two scans — introduced/fixed/net change |
 | `--threat` | Threat model views: STRIDE, personas, playbook, bounty, adversary, surface, boundary, SPOF |
 | `--playbook` | Stack-specific posture playbook (Express, FastAPI, Django, Rails, Spring Boot, etc.) |
-| `--mgmt` | Posture management surface — auth, network, WAF, telemetry, feature-flag imports |
+| `--mgmt` | Posture management surface — which of the five customer-supplied import digests (auth, network, WAF, telemetry, feature-flag) are configured, and how many findings each one mitigated/annotated on the last scan |
 | `--cache` | **Prompt-cache economics** for this session — cache-hit %, $ saved by caching, $ wasted on avoidable cache misses (model switches / TTL gaps / prefix changes), per-model breakdown. Reads the Claude Code transcript usage; advisory, read-only. |
 
 Add `--json` to any mode to emit machine-readable output for scripting / CI.
@@ -47,7 +47,7 @@ If there's no prior scan, the dashboard collapses to a single "run `/scan --all`
 
 ## Implementation
 
-`--harness`, `--trend`, `--report-card`, `--threat`, `--playbook`, and `--status` below run a real, verified command. `--cache` was already correctly wired. `--mgmt` is not yet wired to a concrete invocation — treat any answer for that mode as best-effort narration from context, not a verified command output, until it's fixed the same way.
+Every mode below runs a real, verified command.
 
 ```bash
 FLAG="${1:---status}"
@@ -120,6 +120,33 @@ case "$FLAG" in
       const items = (scan.findings || []).filter(f => (f.id || '').startsWith('stack-playbook:'));
       console.log(JSON.stringify({ stackPlaybookItems: items }, null, 2));
     " ;;
+  --mgmt)
+    node -e "
+      const fs = require('fs');
+      Promise.all([
+        import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/auth-posture-import.js'),
+        import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/network-policy-import.js'),
+        import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/waf-ingest.js'),
+        import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/telemetry-ingest.js'),
+      ]).then(([auth, net, waf, telem]) => {
+        const authPosture = auth.loadAuthPosture('.');
+        const networkPosture = net.loadNetworkPosture('.');
+        const wafRules = waf.loadWafRules('.');
+        const telemetry = telem.loadTelemetry('.');
+        const flagsConfigured = fs.existsSync('feature-flag-rollouts.json') || fs.existsSync('feature-flags.json');
+
+        let scan = null;
+        try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); } catch {}
+        const findings = (scan && scan.findings) || [];
+        console.log(JSON.stringify({
+          auth: { configured: !!(authPosture && authPosture.routes), routeCount: authPosture ? Object.keys(authPosture.routes || {}).length : 0, findingsMitigated: findings.filter(f => f.mitigatedByAuth).length },
+          network: { configured: !!(networkPosture && networkPosture.workloads), workloadCount: networkPosture ? Object.keys(networkPosture.workloads || {}).length : 0, findingsMitigated: findings.filter(f => f.mitigatedByNetwork).length },
+          waf: { configured: wafRules.length > 0, ruleCount: wafRules.length, findingsMitigated: findings.filter(f => f.mitigatedByWaf).length },
+          telemetry: { configured: !!telemetry, findingsAnnotated: findings.filter(f => f.prodRequestCount !== null && f.prodRequestCount !== undefined).length, coldPaths: findings.filter(f => f.coldPath).length, hotPaths: findings.filter(f => f.hotPath).length },
+          featureFlags: { configured: flagsConfigured, findingsGated: findings.filter(f => f.featureFlag).length },
+        }, null, 2));
+      });
+    " ;;
 esac
 ```
 
@@ -134,5 +161,7 @@ esac
 `--threat` runs a real scan with all six `--show-*` flags that back the STRIDE/personas/playbook/bounty/SPOF/trust-boundary sub-views (`bin/agentic-security.js`'s existing scan flags — "adversary" in the mode table is the persona/archetype framing `--show-personas` already provides, not a separate feature), then separately prints `scan.entrypointInventory` (the "surface" sub-view) — that field is computed by the engine on every scan but was dropped by `toJSON()` until this fix (see `test/annotator-errors.test.js`).
 
 `--playbook` filters `last-scan.json`'s findings for the `stack-playbook:` id prefix — `posture/stack-playbook.js#runStackPlaybook` runs on every scan (wired in `engine.js`) and its stack-specific checklist items land there as `severity: 'info'` findings, one per checklist line, grouped by the detected stack in each finding's `vuln` text (`[Express Security Checklist] ...`). Currently only Express and the 11 pre-existing stacks (Next.js, Supabase, Clerk, NextAuth, Stripe, Prisma/Drizzle, MongoDB, OpenAI/Anthropic/LangChain, email, tRPC, FastAPI, Django) have real checklist content — React, Fastify, Hono, and Lucia are detected but have no playbook section yet (a disclosed content gap, not silently claimed as covered).
+
+`--mgmt` calls the four exported `loadX(scanRoot)` readers directly (`auth-posture-import.js#loadAuthPosture`, `network-policy-import.js#loadNetworkPosture`, `waf-ingest.js#loadWafRules`, `telemetry-ingest.js#loadTelemetry`) to report whether each customer-side digest file is present, plus a direct file-existence check for the two feature-flag rollout filenames (`feature-flags.js#loadRollouts` isn't exported, so its candidate paths are checked inline rather than duplicating its parsing logic). Mitigation/annotation counts come from `last-scan.json`'s findings — `mitigatedByAuth`/`mitigatedByNetwork`/`mitigatedByWaf`/`featureFlag`/`prodRequestCount` are all stamped by the corresponding `annotateX` pass, already wired in `engine.js`, and all survive `toJSON()`'s per-finding allowlist. A surface reporting `configured: false` means no digest file was found, not that nothing needed mitigating.
 
 `--cache` runs the `cache-report` CLI subcommand (`scanner/bin/agentic-security.js` → `scanner/src/posture/cache-economics.js`), which parses the Claude Code transcript usage for this session and prints the economics + any detected cache leaks. The same data is available to agents via the `query_cache_telemetry` MCP tool.

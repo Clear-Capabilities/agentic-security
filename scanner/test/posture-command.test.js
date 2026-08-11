@@ -1,10 +1,9 @@
 // S7 — commands/posture.md's Implementation section named backing modules
 // in prose ("Dispatches to existing command implementations... All modes
 // preserved — no functional regression") without a single concrete
-// invocation. --harness, --trend, --report-card, --threat, --playbook, and
-// --status are now fixed with real, verified commands (--mgmt remains
-// unwired, disclosed as such in the doc rather than left silently claiming
-// full coverage).
+// invocation. All eight modes (--status, --report-card, --harness, --trend,
+// --threat, --playbook, --mgmt, --cache) are now fixed with real, verified
+// commands.
 //
 // security-trend.js's computeTrend() had zero callers anywhere in the repo
 // before this fix (confirmed by a repo-wide grep, and by its own entry in
@@ -100,6 +99,40 @@ test('S7: posture.md --status reports real findings-by-severity and hook manager
       parsed.bySeverity.critical + parsed.bySeverity.high + parsed.bySeverity.medium + parsed.bySeverity.low + parsed.bySeverity.info,
       parsed.totalFindings,
     );
+  } finally { await p.cleanup(); }
+});
+
+test('S7: posture.md --mgmt reports all five import surfaces as unconfigured when no digest files exist', async () => {
+  const script = extractImplementationBlock();
+  const p = await mkProject();
+  try {
+    const r = runMode(script, '--mgmt', p.dir);
+    assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+    const parsed = JSON.parse(r.stdout);
+    for (const key of ['auth', 'network', 'waf', 'telemetry', 'featureFlags']) {
+      assert.equal(parsed[key].configured, false, `${key} should be unconfigured in a fixture with no digest files`);
+    }
+  } finally { await p.cleanup(); }
+});
+
+test('S7: posture.md --mgmt reports a real WAF rule count and mitigation after a scan with waf-rules.json configured', async () => {
+  const script = extractImplementationBlock();
+  const p = await mkProject();
+  try {
+    fs.mkdirSync(path.join(p.dir, '.agentic-security'), { recursive: true });
+    fs.writeFileSync(
+      path.join(p.dir, '.agentic-security', 'waf-rules.json'),
+      JSON.stringify({ rules: [{ id: 'cf-1', pattern: 'SQLi attempt', families: ['sql-injection'] }] }),
+    );
+    const scanResult = spawnSync('node', [CLI, 'scan', p.dir, '--format', 'json', '--no-network'], { encoding: 'utf8' });
+    assert.ok(scanResult.status <= 3, `scan must exit <=3; got ${scanResult.status}: ${scanResult.stderr}`);
+
+    const r = runMode(script, '--mgmt', p.dir);
+    assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+    const parsed = JSON.parse(r.stdout);
+    assert.equal(parsed.waf.configured, true);
+    assert.equal(parsed.waf.ruleCount, 1);
+    assert.ok(parsed.waf.findingsMitigated >= 1, `expected at least 1 WAF-mitigated finding, got: ${JSON.stringify(parsed.waf)}`);
   } finally { await p.cleanup(); }
 });
 
