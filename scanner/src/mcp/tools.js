@@ -152,8 +152,13 @@ function _validateScratchpadPath(relPath) {
   return { ok: true, agent, session, fileParts };
 }
 
+// Routes through the same lstat+realpath confinement every other write/
+// path-taking tool uses (OWASP MCP05) — a lexical prefix/charset check
+// alone doesn't stop a pre-planted symlink at any path component from
+// relocating the write/read outside the session root. Throws on escape;
+// callers must catch (see append_scratchpad / read_scratchpad).
 function _scratchpadAbs(sessionRoot, relPath) {
-  return path.resolve(sessionRoot, relPath.replace(/\\/g, '/'));
+  return _confine(sessionRoot, relPath.replace(/\\/g, '/'), 'scratchpad path');
 }
 
 function _scratchpadTotalBytes(sessionRoot) {
@@ -933,7 +938,9 @@ export const append_scratchpad = {
   async handler({ path: relPath, content }, ctx) {
     const v = _validateScratchpadPath(relPath);
     if (!v.ok) return { _meta: META, ok: false, reason: v.reason };
-    const abs = _scratchpadAbs(ctx.sessionRoot, relPath);
+    let abs;
+    try { abs = _scratchpadAbs(ctx.sessionRoot, relPath); }
+    catch (e) { return { _meta: META, ok: false, reason: `path-escape refused: ${e.message}` }; }
     const total = _scratchpadTotalBytes(ctx.sessionRoot);
     if (total + content.length > SCRATCHPAD_MAX_TOTAL_BYTES) {
       return {
@@ -979,7 +986,9 @@ export const read_scratchpad = {
   async handler({ path: relPath, offset, limit }, ctx) {
     const v = _validateScratchpadPath(relPath);
     if (!v.ok) return { _meta: META, ok: false, reason: v.reason };
-    const abs = _scratchpadAbs(ctx.sessionRoot, relPath);
+    let abs;
+    try { abs = _scratchpadAbs(ctx.sessionRoot, relPath); }
+    catch (e) { return { _meta: META, ok: false, reason: `path-escape refused: ${e.message}` }; }
     if (!fs.existsSync(abs)) return { _meta: META, ok: false, reason: 'not-found' };
     let stat;
     try { stat = fs.statSync(abs); } catch (e) { return { _meta: META, ok: false, reason: `stat-failed: ${e.message}` }; }

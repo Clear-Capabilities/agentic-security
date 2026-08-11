@@ -571,6 +571,61 @@ test('apply_fix refuses to overwrite a symlinked finding.file', async () => {
   await fsp.rm(outside, { recursive: true, force: true });
 });
 
+test('append_scratchpad refuses to write through a pre-planted symlink escaping the session root', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'as-mcp-sl-'));
+  const outside = await fsp.mkdtemp(path.join(os.tmpdir(), 'as-outside-'));
+  // Pre-plant the scratchpad session dir itself as a symlink to outside —
+  // every other write/path tool in this module routes through _confine(),
+  // which lstat-refuses a symlinked leaf; append_scratchpad must too.
+  await fsp.mkdir(path.join(dir, '.agentic-security', 'agent-scratchpad', 'agentA'), { recursive: true });
+  await fsp.symlink(outside, path.join(dir, '.agentic-security', 'agent-scratchpad', 'agentA', 'sess1'));
+  const { handleRequest } = createServer({ sessionRoot: dir });
+  const r = await call(handleRequest, 'append_scratchpad', {
+    path: '.agentic-security/agent-scratchpad/agentA/sess1/notes.md',
+    content: 'PWNED',
+  });
+  const p = payload(r);
+  assert.equal(p.ok, false, `expected the write to be refused, got: ${JSON.stringify(p)}`);
+  assert.match(p.reason, /symbolic link|path-escape/);
+  assert.equal(fs.existsSync(path.join(outside, 'notes.md')), false, 'must not have written outside the session root');
+  await fsp.rm(dir, { recursive: true, force: true });
+  await fsp.rm(outside, { recursive: true, force: true });
+});
+
+test('read_scratchpad refuses to read through a pre-planted symlink escaping the session root', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'as-mcp-sl-'));
+  const outside = await fsp.mkdtemp(path.join(os.tmpdir(), 'as-outside-'));
+  await fsp.writeFile(path.join(outside, 'notes.md'), 'SECRET-OUTSIDE-CONTENT');
+  await fsp.mkdir(path.join(dir, '.agentic-security', 'agent-scratchpad', 'agentA'), { recursive: true });
+  await fsp.symlink(outside, path.join(dir, '.agentic-security', 'agent-scratchpad', 'agentA', 'sess1'));
+  const { handleRequest } = createServer({ sessionRoot: dir });
+  const r = await call(handleRequest, 'read_scratchpad', {
+    path: '.agentic-security/agent-scratchpad/agentA/sess1/notes.md',
+  });
+  const p = payload(r);
+  assert.equal(p.ok, false, `expected the read to be refused, got: ${JSON.stringify(p)}`);
+  assert.match(p.reason, /symbolic link|path-escape/);
+  assert.ok(!JSON.stringify(p).includes('SECRET-OUTSIDE-CONTENT'), 'must not have leaked content from outside the session root');
+  await fsp.rm(dir, { recursive: true, force: true });
+  await fsp.rm(outside, { recursive: true, force: true });
+});
+
+test('append_scratchpad then read_scratchpad round-trips normally inside the session root', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'as-mcp-sp-'));
+  const { handleRequest } = createServer({ sessionRoot: dir });
+  const p1 = payload(await call(handleRequest, 'append_scratchpad', {
+    path: '.agentic-security/agent-scratchpad/agentA/sess1/notes.md',
+    content: 'hello world',
+  }));
+  assert.equal(p1.ok, true, `expected a normal write to succeed, got: ${JSON.stringify(p1)}`);
+  const p2 = payload(await call(handleRequest, 'read_scratchpad', {
+    path: '.agentic-security/agent-scratchpad/agentA/sess1/notes.md',
+  }));
+  assert.equal(p2.ok, true);
+  assert.equal(p2.content, 'hello world');
+  await fsp.rm(dir, { recursive: true, force: true });
+});
+
 // ─── OWASP MCP08 — Audit-log hash chain detects tampering ────────────────────
 
 test('audit log forms a hash chain that verifyAuditLog accepts', async () => {
