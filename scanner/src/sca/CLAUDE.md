@@ -7,7 +7,7 @@ ecosystems and the most common lockfiles in each.
 
 Most of the SCA *pipeline* lives in `../engine.js` (the manifest dispatch
 in `parseManifests`, OSV/KEV/EPSS enrichment, attack-path computation).
-This directory holds the eight specialized modules called from there.
+This directory holds the seven specialized modules called from there.
 
 ## Modules
 
@@ -19,7 +19,6 @@ This directory holds the eight specialized modules called from there.
 | `dep-confusion.js` | Two related detectors. **Typosquat:** Levenshtein distance ≤ 2 against `popular-packages.json` — **188 packages (115 npm + 73 pypi), not "top-1000"** as this row previously said; re-derive the count from the file rather than trusting a hardcoded number here again. **Dependency confusion:** internal-scoped names (declared in `.agentic-security/internal-scopes.yml`) appearing on the public registry. Local-first; **this module does not itself call OSV** — it reads a flag set by an earlier, separate OSV/queryRegistries pass upstream (whether a dep "resolved by OSV"), which is different from "OSV consulted [by this module] to confirm confusion findings" as previously stated. |
 | `llm-function-extract.js` | **Opt-in via `AGENTIC_SECURITY_LLM_SCA=1`.** LLM-assisted extraction of vulnerable function names for CVEs that lack OSV `ecosystem_specific.vulnerable_functions` data. Cached per CVE under `~/.config/agentic-security/llm-sca-cache/`. Endpoint-dependent — degrades to no-op when unreachable. |
 | `py-package-functions.js` | **Opt-in via `AGENTIC_SECURITY_DEEP=1`** (Python only). Locates installed Python packages via `site-packages` and parses them with the CPython `ast` module (subprocess) to *validate* that an OSV-named vulnerable function exists in the installed version. Closes the "OSV says this function is vulnerable, but the version you installed actually removed it" false-positive class. |
-| `sarif-ingest.js` | Normalizes SARIF 2.1.0 from external scanners and merges into the unified scan. Deduplicates by fingerprint `(CWE, file, line ± 2, rule)`. Twelve tool profiles supported with default-severity + semantic-kind mapping. |
 | `vendor-detect.js` | Detects libraries copied into `src/` (lodash, jQuery, Angular, React, etc.) via characteristic version strings and function signatures. Catches the case where a vulnerable library bypasses the lockfile because someone vendored it directly. |
 
 ## Data sources + caches

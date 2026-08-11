@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.136.3",
-    "bundleSha256": "b66b38a74c6d14bcf4a30fad910739e3cb83c455f7bf0ae6ca76a1487f598f1a",
-    "commit": "afb15d2880f307f04f348dd2d631986d218eea45",
-    "worktreeClean": true,
+    "bundleSha256": "f350108a4b11c017ed496855238db75c1b2122a9325e081bb7770acb7ca00f0e",
+    "commit": "5854652004585ecf9a39c0d4deada679e2a399d8",
+    "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-10T16:26:26.372Z"
+    "generatedAt": "2026-08-11T18:50:23.663Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -503,7 +503,7 @@
         }
       },
       "scanner/src": {
-        "total": 604,
+        "total": 603,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -720,7 +720,6 @@
           "sca/install-script-analysis.js": 1,
           "sca/llm-function-extract.js": 1,
           "sca/py-package-functions.js": 1,
-          "sca/sarif-ingest.js": 1,
           "sca/sigstore-verify.js": 7,
           "sca/vendor-detect.js": 1,
           "util/untrusted.js": 3

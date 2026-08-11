@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-10T01:02:33.878Z",
-  "commit": "664988b5830a8dc81ca94f9ec768343986f715e1",
+  "generatedAt": "2026-08-11T18:49:08.141Z",
+  "commit": "5854652004585ecf9a39c0d4deada679e2a399d8",
   "targets": {
     "hooks": {
       "total": 25,
@@ -35,7 +35,7 @@
       }
     },
     "scanner/src": {
-      "total": 604,
+      "total": 603,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -252,7 +252,6 @@
         "sca/install-script-analysis.js": 1,
         "sca/llm-function-extract.js": 1,
         "sca/py-package-functions.js": 1,
-        "sca/sarif-ingest.js": 1,
         "sca/sigstore-verify.js": 7,
         "sca/vendor-detect.js": 1,
         "util/untrusted.js": 3

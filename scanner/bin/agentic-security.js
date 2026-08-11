@@ -14,7 +14,6 @@ import { toCycloneDX, toSPDX } from '../src/posture/sbom.js';
 import { toPBOM } from '../src/sast/pipeline.js';
 import { buildAIBOM, aibomToMarkdown } from '../src/posture/aibom.js';
 import { recordScan, formatStreakLine, formatGradeDelta } from '../src/posture/streak.js';
-import { ingestAndMerge } from '../src/sca/sarif-ingest.js';
 import { loadProfile, saveProfile, detectProfile, renderAttributionLine, ATTRIBUTION, ATTRIBUTION_URL } from '../src/posture/profile.js';
 import { applySuppressions, addSoftAcceptance, expiredSoftAcceptances } from '../src/posture/suppressions.js';
 import { applyOverrides, validateOverrides, suppressionReport, renderSuppressionSummary } from '../src/posture/rule-overrides.js';
@@ -28,7 +27,6 @@ import { syncTickets } from '../src/integrations/tickets.js';
 import { decide as decideNextAction, explain as explainDecision } from '../src/posture/router.js';
 import * as triage from '../src/posture/triage.js';
 import { buildSlackDigest, buildDiscordDigest, postWebhook, buildJiraIssue, buildPrComment, buildSiemEvent, loadIntegrationConfig } from '../src/integrations/index.js';
-import { globFiles } from '../src/util/glob.js';
 
 import { stateDir, statePath } from '../src/posture/state-dir.js';
 // last-scan.json integrity helpers — implementation in posture/integrity.js
@@ -111,7 +109,6 @@ Options:
   --show-threat-model          Append the auto-derived STRIDE threat model summary
   --show-drift                 Append calibration-drift alarms (overconfidence detection)
   --sca-reachable-only         Only SCA findings where the vulnerable function is reachable
-  --ingest-sarif <glob>        Merge external SARIF into this scan
   --scorecard                  Enrich components with OSSF Scorecard scores
   --no-network                 Skip OSV/registry queries (offline mode)
   --pr [ref]                   Diff-aware: scan only files changed since ref (auto-detects PR base)
@@ -493,18 +490,6 @@ async function cmdScan(args) {
 
   // 0.9.0 Feat-18: --scorecard flag enables OSSF Scorecard enrichment
   if (args.flags['scorecard']) process.env.AGENTIC_SECURITY_SCORECARD = '1';
-
-  // 0.7.0 Feat-7: --ingest-sarif <path-or-glob> merges SARIF from external tools (Semgrep,
-  // gitleaks, Bandit, Trivy, Checkov, etc.) into this scan's findings, deduping by
-  // fingerprint and tracking provenance via sources[].
-  if (args.flags['ingest-sarif']) {
-    const glob = args.flags['ingest-sarif'];
-    const paths = await globFiles(glob);
-    if (paths.length) {
-      const r = ingestAndMerge(scan, paths);
-      if (process.stderr.isTTY) process.stderr.write(`[ingest] merged ${r.merged} / added ${r.added} findings from ${paths.length} SARIF file(s)\n`);
-    }
-  }
 
   // 0.6.0 Feat-1: --sca-reachable-only filters to only SCA findings where the vulnerable
   // function was confirmed reachable from a route handler.

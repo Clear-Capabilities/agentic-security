@@ -94,7 +94,7 @@ patterns. Governance, organisational, and process controls require human attesta
 | MG-3.1 | AI incidents tracked and remediated | `posture/fix-history.js`; `posture/mttr.js` | **Covered** |
 | MG-3.2 | AI incident process tested | — | Out of scope |
 | MG-4.1 | Supply chain risks managed | `sca/dep-confusion.js`; `posture/sbom.js` | **Covered** |
-| MG-4.2 | Third-party AI providers assessed | `posture/aibom.js`; `sca/sarif-ingest.js` | Partial |
+| MG-4.2 | Third-party AI providers assessed | `posture/aibom.js` | Partial |
 
 ## Not covered — gaps requiring new rules or process
 

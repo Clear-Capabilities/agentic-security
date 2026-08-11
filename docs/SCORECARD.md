@@ -10,12 +10,12 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.136.3 |
-| Bundle SHA-256 | `b66b38a74c6d14bcf4a30fad910739e3cb83c455f7bf0ae6ca76a1487f598f1a` |
-| Commit | `afb15d2880f307f04f348dd2d631986d218eea45` |
-| Worktree at measurement time | clean |
+| Bundle SHA-256 | `f350108a4b11c017ed496855238db75c1b2122a9325e081bb7770acb7ca00f0e` |
+| Commit | `5854652004585ecf9a39c0d4deada679e2a399d8` |
+| Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 210 (210 scored) |
-| Generated (UTC) | 2026-08-10T16:26:26.372Z |
+| Generated (UTC) | 2026-08-11T18:50:23.663Z |
 
 ## What these numbers are, and what they are not
 
@@ -139,7 +139,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 604 |
+| `scanner/src` | 603 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
