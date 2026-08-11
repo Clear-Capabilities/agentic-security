@@ -138,6 +138,25 @@ export const CHECKS = [
       'changed detection behaviour on this repository.',
   },
   {
+    // M2 (Stage-0 audit, 2026): built with both-direction verification
+    // recorded, but unreachable from every gate including this one — a
+    // repo-wide grep found `bench:mutation:check` only in package.json and
+    // documentation. A publish could ship a detector that keys on syntax
+    // rather than semantics with nothing to catch it.
+    id: 'mutation-gate',
+    title: 'Metamorphic + adversarial mutation gate holds',
+    slow: true,
+    remedy: 'Run `npm run bench:mutation:check` in scanner/ — a detector is keying ' +
+      'on syntax rather than semantics. See the printed case for which mutant flipped.',
+  },
+  {
+    id: 'layer-recall-gate',
+    title: 'Per-layer, per-language taint recall baseline holds',
+    slow: true,
+    remedy: 'Run `npm run bench:layer-recall:check` in scanner/ and inspect which ' +
+      "language's taint-layer recall regressed — see docs/METRICS.md.",
+  },
+  {
     id: 'head-pushed',
     title: 'HEAD exists on origin/main',
     slow: false,
@@ -660,6 +679,8 @@ function main(argv) {
   evaluate('test-suite', () => runNpmGate('test'));
   evaluate('corpus-gate', () => runNpmGate('bench:cve-replay:check'));
   evaluate('self-scan-gate', () => runNpmGate('bench:self-scan:check'));
+  evaluate('mutation-gate', () => runNpmGate('bench:mutation:check'));
+  evaluate('layer-recall-gate', () => runNpmGate('bench:layer-recall:check'));
 
   evaluate('head-pushed', () =>
     evaluateHeadPushed({ headSha, remoteRefsContainingHead: remoteRefsContainingHead() }));

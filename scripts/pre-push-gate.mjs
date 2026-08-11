@@ -128,6 +128,24 @@ export const CHECKS = [
     remedy: 'Run `npm run bench:self-scan:check` in scanner/ and fix the code that ' +
       'changed detection behaviour on this repository.',
   },
+  {
+    // M2 (Stage-0 audit, 2026): built with both-direction verification
+    // recorded, but unreachable from every gate — a repo-wide grep found
+    // `bench:mutation:check` only in package.json and documentation.
+    // Measured ~0.85s; placed before layer-recall-gate (~11.5s).
+    id: 'mutation-gate',
+    title: 'Metamorphic + adversarial mutation gate holds',
+    npmScript: 'bench:mutation:check',
+    remedy: 'Run `npm run bench:mutation:check` in scanner/ — a detector is keying ' +
+      'on syntax rather than semantics. See the printed case for which mutant flipped.',
+  },
+  {
+    id: 'layer-recall-gate',
+    title: 'Per-layer, per-language taint recall baseline holds',
+    npmScript: 'bench:layer-recall:check',
+    remedy: 'Run `npm run bench:layer-recall:check` in scanner/ and inspect which ' +
+      "language's taint-layer recall regressed — see docs/METRICS.md.",
+  },
 ];
 
 /** Ids in execution order — cheapest first. */

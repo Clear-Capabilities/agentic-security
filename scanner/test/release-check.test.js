@@ -288,16 +288,27 @@ test('release-gate — a gated command exiting 0 passes, non-zero fails', () => 
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all twelve checks in order', () => {
+test('release-gate — full run plans all fourteen checks in order', () => {
+  // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
+  // slow, both were previously unreachable from every gate including this one.
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 12);
+  assert.equal(ids.length, 14);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
+});
+
+test('release-gate — mutation-gate and layer-recall-gate are registered and slow', () => {
+  const mutation = CHECKS.find(c => c.id === 'mutation-gate');
+  const layerRecall = CHECKS.find(c => c.id === 'layer-recall-gate');
+  assert.ok(mutation, 'mutation-gate must be a registered release check');
+  assert.equal(mutation.slow, true);
+  assert.ok(layerRecall, 'layer-recall-gate must be a registered release check');
+  assert.equal(layerRecall.slow, true);
 });
 
 test('release-gate — --fast skips only the slow gates, keeping 1-5, package-contents, and 9-10', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
-  assert.equal(slowIds.length, 4);
+  assert.equal(slowIds.length, 6);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
   assert.equal(ids.length, 8);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
@@ -312,10 +323,10 @@ test('release-gate — --fast skips only the slow gates, keeping 1-5, package-co
   }
 });
 
-test('release-gate — the slow checks are the three command gates plus the registry gate', () => {
+test('release-gate — the slow checks are the five command gates plus the registry gate', () => {
   assert.deepEqual(
     CHECKS.filter(c => c.slow).map(c => c.id),
-    ['test-suite', 'corpus-gate', 'self-scan-gate', 'dependency-currency']
+    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'layer-recall-gate', 'dependency-currency']
   );
 });
 

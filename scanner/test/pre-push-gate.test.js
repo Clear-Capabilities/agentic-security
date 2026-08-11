@@ -109,7 +109,27 @@ test('pre-push-gate — checks run cheapest-first: the guards and bundle integri
   assert.deepEqual(ids, [
     'worktree-matches-push', 'push-blast-radius',
     'bundle-integrity', 'package-contents', 'test-suite', 'corpus-gate', 'self-scan-gate',
+    'mutation-gate', 'layer-recall-gate',
   ]);
+});
+
+// M2 (Stage-0 audit, 2026). bench:mutation:check and bench:layer-recall:check
+// were both built with both-direction verification recorded, but neither was
+// reachable from pre-push, release-check, or any CI workflow — a repo-wide
+// grep found the npm script names only in package.json and documentation.
+// Both gates protected nothing that would actually stop a regressed push.
+test('pre-push-gate — mutation and layer-recall gates are present, cheapest of the two first', () => {
+  const mutation = CHECKS.find(c => c.id === 'mutation-gate');
+  const layerRecall = CHECKS.find(c => c.id === 'layer-recall-gate');
+  assert.ok(mutation, 'mutation-gate must be a registered pre-push check');
+  assert.equal(mutation.npmScript, 'bench:mutation:check');
+  assert.ok(layerRecall, 'layer-recall-gate must be a registered pre-push check');
+  assert.equal(layerRecall.npmScript, 'bench:layer-recall:check');
+  // Measured this session: mutation ~0.85s, layer-recall ~11.5s (forces deep
+  // mode on all 210 corpus entries) — mutation goes first.
+  const ids = orderedCheckIds();
+  assert.ok(ids.indexOf('mutation-gate') < ids.indexOf('layer-recall-gate'),
+    'the cheaper gate (mutation) must run before the pricier one (layer-recall)');
 });
 
 test('pre-push-gate — every check declares a title and a remedy', () => {
