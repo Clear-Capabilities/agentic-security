@@ -168,11 +168,8 @@ jobs:
       - name: Run security scan
         id: scan
         run: |
-          npx --yes agentic-security scan . \\\\
-            --format sarif --output security-results.sarif \\\\
-            --format json --output security-results.json \\\\
-            --no-network \\\\
-          || true
+          npx --yes agentic-security scan . --format sarif --output security-results.sarif --no-network || true
+          npx --yes agentic-security scan . --format json --output security-results.json --no-network || true
 
       - name: Upload SARIF
         if: always()
@@ -183,13 +180,13 @@ jobs:
 
       - name: Fail on \${severity}+ findings
         run: |
-          node -e "
+          node -e \"
             const r=JSON.parse(require('fs').readFileSync('security-results.json','utf8'));
             const S={critical:0,high:1,medium:2};
             const bad=(r.findings||[]).filter(f=>(S[f.severity]??9)<=(S['\${severity}']??1));
             if(bad.length){console.error(bad.length+' \${severity}+ finding(s)');process.exit(1);}
             console.log('Security gate passed.');
-          "
+          \"
 \`;
 
 console.log('');

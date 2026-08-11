@@ -10,14 +10,13 @@ agentic-security:
   stage: security
   image: node:24
   script:
-    - npm install --no-audit --no-fund @clear-capabilities/agentic-security-scanner
-    - npx agentic-security scan --all --json > findings.json
-    - npx agentic-security ci-gate --threshold high
+    - npx --yes agentic-security ci . --fail-on high
   artifacts:
     when: always
     paths:
-      - findings.json
+      - .agentic-security/findings.json
       - .agentic-security/findings.sarif
+      - .agentic-security/findings.junit.xml
     reports:
       sast: .agentic-security/findings.sarif
     expire_in: 30 days

@@ -19,7 +19,7 @@
             name="agentic-security"
             factoryClass="com.clearcapabilities.agenticsec.AgenticSecurityServerFactory">
       <description><![CDATA[
-        Wraps the agentic-security-lsp bin (npm: @clearcapabilities/agentic-security-scanner).
+        Wraps the agentic-security-lsp bin (npm: @clear-capabilities/agentic-security-scanner).
         Emits security diagnostics on save.
       ]]></description>
     </server>

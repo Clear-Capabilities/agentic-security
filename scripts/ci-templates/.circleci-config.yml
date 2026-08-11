@@ -10,18 +10,20 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install scanner
-          command: npm install --no-audit --no-fund @clear-capabilities/agentic-security-scanner
-      - run:
-          name: Run agentic-security scan
-          command: npx agentic-security scan --all --json > findings.json
-      - run:
-          name: Gate on threshold
-          command: npx agentic-security ci-gate --threshold high
+          name: Run agentic-security scan + gate
+          command: npx --yes agentic-security ci . --fail-on high
+      # when: always — a blocking gate exits non-zero and stops the job;
+      # without this, CircleCI skips every step after the failing one and
+      # the findings are never uploaded for the run that actually matters.
       - store_artifacts:
-          path: findings.json
+          path: .agentic-security/findings.json
+          when: always
       - store_artifacts:
           path: .agentic-security/findings.sarif
+          when: always
+      - store_artifacts:
+          path: .agentic-security/findings.junit.xml
+          when: always
 
 workflows:
   security:

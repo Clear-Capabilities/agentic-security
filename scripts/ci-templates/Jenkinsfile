@@ -7,15 +7,11 @@ pipeline {
   stages {
     stage('Security · agentic-security') {
       steps {
-        sh '''
-          npm install --no-audit --no-fund @clearcapabilities/agentic-security-scanner
-          npx agentic-security scan --all --json > findings.json
-          npx agentic-security ci-gate --threshold high
-        '''
+        sh 'npx --yes agentic-security ci . --fail-on high'
       }
       post {
         always {
-          archiveArtifacts artifacts: 'findings.json, .agentic-security/findings.sarif',
+          archiveArtifacts artifacts: '.agentic-security/findings.json, .agentic-security/findings.sarif, .agentic-security/findings.junit.xml',
                            allowEmptyArchive: true
           recordIssues tools: [
             sarif(pattern: '.agentic-security/findings.sarif')
