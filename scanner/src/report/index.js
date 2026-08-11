@@ -265,6 +265,40 @@ export function normalizeFindings(scan){
       riskDollars: f.riskDollars || null,
       estimatedFixHours: typeof f.estimatedFixHours === 'number' ? f.estimatedFixHours : null,
       estimatedFixHoursSource: f.estimatedFixHoursSource || null,
+      // posture/composite-risk.js#annotateCompositeRisk — the module's own
+      // header calls this "the canonical sort key" for agents/UI; toProTable
+      // silently fell back to the older `triage` field because this was
+      // never in the allowlist.
+      compositeRisk: typeof f.compositeRisk === 'number' ? f.compositeRisk : null,
+      compositeRiskTier: f.compositeRiskTier || null,
+      compositeRiskFactors: Array.isArray(f.compositeRiskFactors) ? f.compositeRiskFactors : null,
+      // posture/relevance.js#annotateRelevance — entrypoint-reachability
+      // verdict + audit trail. The re-ranked `exploitability` it also sets
+      // did survive normalization; the verdict fields explaining WHY did not.
+      entrypointReachable: f.entrypointReachable ?? null,
+      relevance: typeof f.relevance === 'number' ? f.relevance : null,
+      relevanceTier: f.relevanceTier || null,
+      relevanceFactors: Array.isArray(f.relevanceFactors) ? f.relevanceFactors : null,
+      // posture/attack-taxonomy.js#annotateAttackTaxonomy — default-on;
+      // toProTable's `capec`/`mitre` columns read these and rendered `—`
+      // for every finding because they were never in this allowlist.
+      attck: f.attck || null,
+      attckName: f.attckName || null,
+      attckTactic: f.attckTactic || null,
+      atlas: f.atlas || null,
+      atlasName: f.atlasName || null,
+      d3fend: f.d3fend || null,
+      capec: f.capec || null,
+      // posture/falsification.js#annotateFalsification +
+      // posture/verification-separation.js#recordVerdict — recall-preserving
+      // (never removes a finding, never touches severity), but the verdict
+      // itself needs to survive to output or a quarantined finding ships
+      // indistinguishable from one nobody contested.
+      falsification: f.falsification || null,
+      quarantined: f.quarantined === true,
+      verification: f.verification || null,
+      // posture/pattern-propagation.js#annotateCrossRepoSignals — default-on.
+      crossRepoSignal: f.crossRepoSignal || null,
     });
   }
   for (const s of (scan.secrets||[])) {
@@ -460,6 +494,13 @@ export function toJSON(scan, meta={}, opts={}){
     licenseGraph: scan.licenseGraph || null,
     sbomDiff: scan.sbomDiff || null,
     entrypointInventory: scan.entrypointInventory || null,
+    // S7: same class of gap as the three above — computed on every scan
+    // (rootCauseSweep unconditionally; attackTaxonomy/privacyFramework each
+    // default-on unless their own AGENTIC_SECURITY_NO_*/opt-in env var says
+    // otherwise) but never reached last-scan.json or any --format output.
+    rootCauseSweep: scan.rootCauseSweep || null,
+    attackTaxonomy: scan.attackTaxonomy || null,
+    privacyFramework: scan.privacyFramework || null,
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];
   return out;
@@ -1267,10 +1308,12 @@ export function toProTable(scan, options = {}) {
   const columns = options.columns || 'standard'; // 'standard' | 'mitre' | 'capec' | 'owasp'
   const findings = _withConfidence(normalizeFindings(scan), profile.confidenceMin ?? CONF_DEFAULT_PRO);
 
-  // Rank by triage score (or severity rank if absent).
+  // Rank by compositeRisk (the canonical priority key, per composite-risk.js's
+  // own header) when present, falling back to the older triage score, then
+  // severity rank.
   findings.sort((a, b) => {
-    const ea = a.triage ?? (1 - (SEV_RANK[a.severity] || 0) / 4);
-    const eb = b.triage ?? (1 - (SEV_RANK[b.severity] || 0) / 4);
+    const ea = a.compositeRisk ?? (a.triage != null ? a.triage * 100 : (1 - (SEV_RANK[a.severity] || 0) / 4) * 100);
+    const eb = b.compositeRisk ?? (b.triage != null ? b.triage * 100 : (1 - (SEV_RANK[b.severity] || 0) / 4) * 100);
     return eb - ea;
   });
 
@@ -1295,7 +1338,7 @@ export function toProTable(scan, options = {}) {
     const cwe = (f.cwe || '—').padEnd(10);
     const cvss = (f.cvss || f.cvssV3?.score || '—').toString().padEnd(5);
     const owasp = (f.owasp || f.owaspCategory || '—').padEnd(10);
-    const mitre = (f.mitreAttack || f.attckTechnique || '—').padEnd(20);
+    const mitre = (f.attck || '—').padEnd(20);
     const capec = (f.capec || '—').padEnd(10);
     const conf = (f.confidence == null ? '—' : f.confidence.toFixed(2));
     const vuln = (f.vuln || '').slice(0, 60);

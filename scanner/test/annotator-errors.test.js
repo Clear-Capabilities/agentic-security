@@ -145,3 +145,84 @@ test('toJSON defaults git-history/risk-dollars/time-to-fix fields to null when t
   assert.equal(f.estimatedFixHours, null);
   assert.equal(f.estimatedFixHoursSource, null);
 });
+
+// S7 (Stage 1 correctness audit) — same class of bug, found by an audit
+// agent hunting for wired-but-dropped fields. Each of these is set by an
+// annotator confirmed wired in engine.js's default-on pipeline
+// (posture/composite-risk.js, relevance.js, attack-taxonomy.js,
+// falsification.js + verification-separation.js, pattern-propagation.js)
+// but was missing from normalizeFindings()'s per-finding allowlist, and
+// rootCauseSweep/attackTaxonomy/privacyFramework (all returned unconditionally
+// or default-on from runFullScan's own return object in engine.js) were
+// missing from toJSON()'s scan-level object.
+test('toJSON carries compositeRisk/relevance/attack-taxonomy/falsification/crossRepoSignal fields through when the engine computed them', () => {
+  const fakeScan = {
+    findings: [{
+      id: 'f1', severity: 'high', vuln: 'SQL Injection', file: 'a.js', line: 3,
+      compositeRisk: 82, compositeRiskTier: 'high', compositeRiskFactors: ['epss:0.4', 'reachable'],
+      entrypointReachable: true, relevance: 0.9, relevanceTier: 'direct', relevanceFactors: ['route-reachable'],
+      attck: 'T1190', attckName: 'Exploit Public-Facing Application', attckTactic: 'Initial Access',
+      atlas: 'AML.T0010', atlasName: 'AI Model Access', d3fend: 'D3-AI', capec: 'CAPEC-66',
+      falsification: { verdict: 'upheld', reasons: ['no control found on path'] },
+      quarantined: false,
+      verification: { producer: 'detector:REGEX', verdicts: [], consensus: 'undecided' },
+      crossRepoSignal: { siblingRepoCount: 2, pattern: 'sqli-parameterize' },
+    }],
+    routes: [], components: [], suppressions: [],
+    rootCauseSweep: { found: 3, candidates: 3, mitigated: 0 },
+    attackTaxonomy: { byTactic: { 'Initial Access': 1 } },
+    privacyFramework: { frameworkName: 'NIST Privacy Framework 1.1', controls: [] },
+  };
+  const out = toJSON(fakeScan, { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
+  const f = out.findings[0];
+  assert.equal(f.compositeRisk, 82);
+  assert.equal(f.compositeRiskTier, 'high');
+  assert.deepEqual(f.compositeRiskFactors, ['epss:0.4', 'reachable']);
+  assert.equal(f.entrypointReachable, true);
+  assert.equal(f.relevance, 0.9);
+  assert.equal(f.relevanceTier, 'direct');
+  assert.deepEqual(f.relevanceFactors, ['route-reachable']);
+  assert.equal(f.attck, 'T1190');
+  assert.equal(f.attckName, 'Exploit Public-Facing Application');
+  assert.equal(f.attckTactic, 'Initial Access');
+  assert.equal(f.atlas, 'AML.T0010');
+  assert.equal(f.atlasName, 'AI Model Access');
+  assert.equal(f.d3fend, 'D3-AI');
+  assert.equal(f.capec, 'CAPEC-66');
+  assert.deepEqual(f.falsification, { verdict: 'upheld', reasons: ['no control found on path'] });
+  assert.equal(f.quarantined, false);
+  assert.deepEqual(f.verification, { producer: 'detector:REGEX', verdicts: [], consensus: 'undecided' });
+  assert.deepEqual(f.crossRepoSignal, { siblingRepoCount: 2, pattern: 'sqli-parameterize' });
+  assert.deepEqual(out.rootCauseSweep, fakeScan.rootCauseSweep);
+  assert.deepEqual(out.attackTaxonomy, fakeScan.attackTaxonomy);
+  assert.deepEqual(out.privacyFramework, fakeScan.privacyFramework);
+});
+
+test('toJSON defaults compositeRisk/relevance/attack-taxonomy/falsification/crossRepoSignal fields to null when the engine did not compute them', () => {
+  const out = toJSON({
+    findings: [{ id: 'f1', severity: 'high', vuln: 'SQL Injection', file: 'a.js', line: 3 }],
+    routes: [], components: [], suppressions: [],
+  }, { scanId: 't', startedAt: '2026-01-01T00:00:00Z' });
+  const f = out.findings[0];
+  assert.equal(f.compositeRisk, null);
+  assert.equal(f.compositeRiskTier, null);
+  assert.equal(f.compositeRiskFactors, null);
+  assert.equal(f.entrypointReachable, null);
+  assert.equal(f.relevance, null);
+  assert.equal(f.relevanceTier, null);
+  assert.equal(f.relevanceFactors, null);
+  assert.equal(f.attck, null);
+  assert.equal(f.attckName, null);
+  assert.equal(f.attckTactic, null);
+  assert.equal(f.atlas, null);
+  assert.equal(f.atlasName, null);
+  assert.equal(f.d3fend, null);
+  assert.equal(f.capec, null);
+  assert.equal(f.falsification, null);
+  assert.equal(f.quarantined, false);
+  assert.equal(f.verification, null);
+  assert.equal(f.crossRepoSignal, null);
+  assert.equal(out.rootCauseSweep, null);
+  assert.equal(out.attackTaxonomy, null);
+  assert.equal(out.privacyFramework, null);
+});

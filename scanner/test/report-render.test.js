@@ -35,6 +35,30 @@ test('toProTable — risk note rendered under the row', () => {
   assert.match(out, /↓ likely lower risk — low exploitability/);
 });
 
+// S7 (Stage 1 correctness audit) — toProTable's mitre/capec columns read
+// f.mitreAttack/f.attckTechnique/f.capec, but no code anywhere in the repo
+// ever sets those first two names — the real field posture/attack-taxonomy.js
+// stamps is f.attck. The mitre column rendered "—" for every finding.
+test('toProTable --columns mitre renders the real f.attck field, not the never-set f.mitreAttack', () => {
+  const tagged = { severity: 'critical', cwe: 'CWE-1236', file: 'a.js', line: 1, vuln: 'Injection', attck: 'T1190' };
+  const out = toProTable({ findings: [tagged] }, { color: false, columns: 'mitre', profile: { confidenceMin: 0 } });
+  assert.match(out, /T1190/);
+  assert.doesNotMatch(out, /—\s+Injection/);
+});
+
+// posture/composite-risk.js's own header calls compositeRisk "the canonical
+// sort key... used by agents and UI as the canonical sort key" — but it was
+// dropped by normalizeFindings, so toProTable fell back to the older `triage`
+// field. Now that it survives, the sort should prefer it.
+test('toProTable sorts by compositeRisk when present, ahead of a higher-triage-but-lower-compositeRisk finding', () => {
+  const lowRiskHighTriage = { severity: 'low', cwe: 'CWE-1', file: 'a.js', line: 1, vuln: 'Low priority', triage: 0.9, compositeRisk: 10 };
+  const highRiskLowTriage = { severity: 'low', cwe: 'CWE-2', file: 'b.js', line: 2, vuln: 'High priority', triage: 0.1, compositeRisk: 95 };
+  const out = toProTable({ findings: [lowRiskHighTriage, highRiskLowTriage] }, { color: false, profile: { confidenceMin: 0 } });
+  const iHigh = out.indexOf('High priority');
+  const iLow = out.indexOf('Low priority');
+  assert.ok(iHigh >= 0 && iLow >= 0 && iHigh < iLow, 'the higher-compositeRisk finding must sort first');
+});
+
 test('toHTML — embeds the precomputed risk note for demoted findings, null otherwise', () => {
   const html = toHTML(scan);
   assert.match(html, /"_riskNote":"likely lower risk — not reachable in prod"/);
