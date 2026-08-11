@@ -2,14 +2,34 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   wilsonInterval,
   brierScore,
   buildCalibrationTable,
   annotateCalibratedConfidence,
   computeBrierOnHeldOut,
+  loadCalibrationHistory,
   _internals,
 } from '../src/posture/calibration.js';
+
+async function mkProject() {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'calib-'));
+  await fsp.writeFile(path.join(dir, 'package.json'), '{"name":"calib-test"}');
+  return { dir, cleanup: () => fsp.rm(dir, { recursive: true, force: true }) };
+}
+
+function writeTriage(dir, { findings, transitions }) {
+  const stateDir = path.join(dir, '.agentic-security');
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(stateDir, 'triage.json'),
+    JSON.stringify({ findings, transitions }, null, 2)
+  );
+}
 
 test('wilsonInterval is symmetric around 0.5 with large N', () => {
   const [lo, hi] = wilsonInterval(500, 1000);
@@ -135,4 +155,104 @@ test('seed corpus loads via loadCalibrationHistory + buildCalibrationTable', asy
 
 test('_internals reports the calibration floor', () => {
   assert.equal(_internals.MIN_SAMPLES_FOR_CALIBRATION, 30);
+});
+
+// EA-01: loadCalibrationHistory must not count untriaged 'open' findings or
+// auto-closed 'fixed' findings (triage.js's syncWithScan sets these with no
+// human ever having looked at the finding) as true positives. Only a state a
+// human actually chose is a real signal: a manual 'fixed' transition is TP,
+// 'false-positive' is FP. 'open', 'in-progress', 'wont-fix', and an
+// automatic 'fixed' contribute to neither bucket.
+test('EA-01: an untouched open finding is not counted as a true positive', async () => {
+  const p = await mkProject();
+  try {
+    writeTriage(p.dir, {
+      findings: {
+        'F-1': { id: 'F-1', family: 'made-up-family-xyz', state: 'open' },
+      },
+      transitions: [{ id: 'F-1', from: null, to: 'open', at: '2026-01-01T00:00:00Z' }],
+    });
+    const h = loadCalibrationHistory(p.dir);
+    const fam = h.families['made-up-family-xyz'];
+    assert.equal(fam ? fam.tp : 0, 0, 'an open, untriaged finding must not manufacture a TP');
+    assert.equal(buildCalibrationTable(h)['made-up-family-xyz'], undefined,
+      'a family with zero real signal must not enter the calibration table');
+  } finally { await p.cleanup(); }
+});
+
+test('EA-01: an automatically auto-closed finding is not counted as a true positive', async () => {
+  const p = await mkProject();
+  try {
+    writeTriage(p.dir, {
+      findings: {
+        'F-1': { id: 'F-1', family: 'made-up-family-xyz', state: 'fixed', fixed_at: '2026-01-02T00:00:00Z' },
+      },
+      transitions: [
+        { id: 'F-1', from: null, to: 'open', at: '2026-01-01T00:00:00Z' },
+        { id: 'F-1', from: 'open', to: 'fixed', at: '2026-01-02T00:00:00Z', automatic: true },
+      ],
+    });
+    const h = loadCalibrationHistory(p.dir);
+    const fam = h.families['made-up-family-xyz'];
+    assert.equal(fam ? fam.tp : 0, 0,
+      'an auto-closed finding (scanner just stopped seeing it) must not manufacture a TP');
+  } finally { await p.cleanup(); }
+});
+
+test('EA-01: a manually-transitioned fixed finding IS counted as a true positive', async () => {
+  const p = await mkProject();
+  try {
+    writeTriage(p.dir, {
+      findings: {
+        'F-1': { id: 'F-1', family: 'made-up-family-xyz', state: 'fixed', fixed_at: '2026-01-02T00:00:00Z' },
+      },
+      transitions: [
+        { id: 'F-1', from: null, to: 'open', at: '2026-01-01T00:00:00Z' },
+        { id: 'F-1', from: 'open', to: 'fixed', at: '2026-01-02T00:00:00Z' },
+      ],
+    });
+    const h = loadCalibrationHistory(p.dir);
+    assert.equal(h.families['made-up-family-xyz'].tp, 1);
+    assert.equal(h.families['made-up-family-xyz'].fp, 0);
+  } finally { await p.cleanup(); }
+});
+
+test('EA-01: a false-positive marked finding IS counted as a false positive', async () => {
+  const p = await mkProject();
+  try {
+    writeTriage(p.dir, {
+      findings: {
+        'F-1': { id: 'F-1', family: 'made-up-family-xyz', state: 'false-positive' },
+      },
+      transitions: [
+        { id: 'F-1', from: null, to: 'open', at: '2026-01-01T00:00:00Z' },
+        { id: 'F-1', from: 'open', to: 'false-positive', at: '2026-01-02T00:00:00Z' },
+      ],
+    });
+    const h = loadCalibrationHistory(p.dir);
+    assert.equal(h.families['made-up-family-xyz'].tp, 0);
+    assert.equal(h.families['made-up-family-xyz'].fp, 1);
+  } finally { await p.cleanup(); }
+});
+
+test('EA-01: in-progress and wont-fix contribute to neither bucket', async () => {
+  const p = await mkProject();
+  try {
+    writeTriage(p.dir, {
+      findings: {
+        'F-1': { id: 'F-1', family: 'made-up-family-xyz', state: 'in-progress' },
+        'F-2': { id: 'F-2', family: 'made-up-family-xyz', state: 'wont-fix' },
+      },
+      transitions: [
+        { id: 'F-1', from: null, to: 'open', at: '2026-01-01T00:00:00Z' },
+        { id: 'F-1', from: 'open', to: 'in-progress', at: '2026-01-02T00:00:00Z' },
+        { id: 'F-2', from: null, to: 'open', at: '2026-01-01T00:00:00Z' },
+        { id: 'F-2', from: 'open', to: 'wont-fix', at: '2026-01-02T00:00:00Z' },
+      ],
+    });
+    const h = loadCalibrationHistory(p.dir);
+    const fam = h.families['made-up-family-xyz'];
+    assert.equal(fam ? fam.tp : 0, 0);
+    assert.equal(fam ? fam.fp : 0, 0);
+  } finally { await p.cleanup(); }
 });

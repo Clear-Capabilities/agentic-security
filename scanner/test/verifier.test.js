@@ -2,6 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   validatePoc,
   proveSanitizerAbsence,
@@ -10,6 +11,7 @@ import {
   verifierCoverageSummary,
   _internals,
 } from '../src/posture/verifier.js';
+import { sandboxAvailable } from '../src/sandbox/index.js';
 
 // ─── validatePoc — refuse destructive/oversized/no-exit PoCs ───────────────
 
@@ -168,4 +170,82 @@ test('verdict for finding without target in live mode is cannot-verify', () => {
   // fileContents in ctx, that fails; we land on cannot-verify or
   // verified-sanitizer-absence depending on whether fileContents was passed.
   assert.ok(['cannot-verify', 'verified-sanitizer-absence'].includes(v.verdict));
+});
+
+// ─── EA-02: live PoC execution goes through the confinement sandbox ───────
+//
+// verifier.js's live-verify path used to run generated PoCs via a bare
+// `spawnSync('node', [file])` (only PATH/NODE_OPTIONS scrubbed) whenever
+// Docker was unavailable — completely unconfined, and reachable by default
+// since Docker is not installed on most CI/dev hosts. These pin the fix:
+// live execution goes through src/sandbox/index.js's runConfined, the same
+// facility execution-proof.js uses, and refuses rather than falling back to
+// something unconfined when no confinement primitive is available.
+
+test('EA-02: runSandboxed refuses to execute when the sandbox is disabled — never falls back unconfined', () => {
+  const poc = { lang: 'node', code: `process.exit(0);` };
+  const r = _internals.runSandboxed(poc, { target: 'http://127.0.0.1:1', force: 'disabled' });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /sandbox|confine/i);
+});
+
+// The target server is hosted by a python3 subprocess rather than
+// node:http — on this development machine, inbound connections to a
+// *node-process-hosted* listening socket are silently intercepted (verified
+// by reproducing the hang with zero sandbox involvement at all: a bare,
+// unconfined `curl` against a node:http server hangs to timeout on this
+// host, while the identical curl against a python http.server responds
+// instantly). That is a local per-process network policy on the dev
+// machine, not a sandbox defect — confined curl and a confined Node PoC
+// both reach a python-hosted target immediately. Using python3 as the
+// target sidesteps the machine-specific quirk instead of the sandbox.
+function _startPyTarget() {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('python3', ['-c', `
+import http.server, socketserver, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.end_headers(); self.wfile.write(b'ok')
+    def log_message(self, *a): pass
+srv = socketserver.TCPServer(('127.0.0.1', 0), H)
+print('PORT', srv.server_address[1]); sys.stdout.flush()
+srv.serve_forever()
+`]);
+    proc.stdout.on('data', (d) => {
+      const m = /PORT (\d+)/.exec(d.toString());
+      if (m) resolve({ port: Number(m[1]), proc });
+    });
+    proc.on('error', reject);
+    setTimeout(() => reject(new Error('python3 target server did not start')), 5000);
+  });
+}
+
+test('EA-02: runSandboxed executes the PoC through real confinement and reaches the live target', async (t) => {
+  if (!sandboxAvailable()) {
+    t.skip('SKIPPED, NOT PASSED — no confinement primitive available on this host');
+    return;
+  }
+  if (spawnSync('python3', ['--version']).status !== 0) {
+    t.skip('SKIPPED, NOT PASSED — python3 not available on this host');
+    return;
+  }
+  const { port, proc } = await _startPyTarget();
+  const target = `http://127.0.0.1:${port}/`;
+  try {
+    const poc = {
+      lang: 'node',
+      code: `
+        import http from 'node:http';
+        http.get('http://localhost:3000/', (res) => {
+          process.exit(res.statusCode === 200 ? 0 : 1);
+        }).on('error', () => process.exit(2));
+      `,
+    };
+    const r = _internals.runSandboxed(poc, { target, timeoutMs: 10000 });
+    assert.equal(r.ok, true, `expected the sandboxed PoC to run; got: ${JSON.stringify(r)}`);
+    assert.equal(r.exitCode, 0, 'PoC must have reached the live target through the confined sandbox');
+    assert.notEqual(r.runner, 'docker', 'must not depend on Docker being installed');
+  } finally {
+    proc.kill();
+  }
 });

@@ -121,15 +121,31 @@ export function loadCalibrationHistory(scanRoot) {
   };
   if (seed) merge(seed);
   if (customer) merge(customer);
-  // Merge triage-derived TP/FP counts (auto-feedback loop)
+  // Merge triage-derived TP/FP counts (auto-feedback loop).
+  //
+  // EA-01: only a state a human actually chose is a real signal. triage.js's
+  // syncWithScan sets every new finding to 'open' with no human involved, and
+  // auto-closes any finding the scanner stops seeing to 'fixed' with
+  // `automatic:true` on the transition — neither reflects a judgment that the
+  // finding was real. Counting them as TP made the "true positive" column
+  // entirely machine-generated while the FP column required an explicit human
+  // false-positive mark, so calibrated confidence trended toward 1.0 for any
+  // family with enough scan volume regardless of actual accuracy. Only a
+  // manual 'fixed' transition (confirmed real, now resolved) counts as TP;
+  // only 'false-positive' counts as FP. 'open', 'in-progress', 'wont-fix',
+  // and an automatically-reached 'fixed' contribute to neither bucket.
   try {
     const triage = _readJsonMaybe(statePath(scanRoot, 'triage.json'));
     if (triage && triage.findings) {
+      const lastFixedIsAutomatic = new Map();
+      for (const t of triage.transitions || []) {
+        if (t && t.to === 'fixed') lastFixedIsAutomatic.set(t.id, t.automatic === true);
+      }
       const triageFams = {};
       for (const f of Object.values(triage.findings)) {
         const fam = f.family || 'unknown';
         if (!triageFams[fam]) triageFams[fam] = { tp: 0, fp: 0 };
-        if (f.state === 'fixed' || f.state === 'open' || f.state === 'in-progress') triageFams[fam].tp++;
+        if (f.state === 'fixed' && lastFixedIsAutomatic.get(f.id) !== true) triageFams[fam].tp++;
         else if (f.state === 'false-positive') triageFams[fam].fp++;
       }
       merge({ families: triageFams });

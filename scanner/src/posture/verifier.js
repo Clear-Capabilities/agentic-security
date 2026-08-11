@@ -17,9 +17,11 @@
 //     against a caller-provided target URL (AGENTIC_SECURITY_VERIFY_TARGET).
 //     Without a target, live mode falls back to validate-only with a
 //     `cannot-verify` verdict + reason 'no-target'.
-//   * Sandbox: Docker by default with restrictive flags; subprocess fallback
-//     with ulimit. The sandbox runner is exported so the CLI subcommand can
-//     reuse it.
+//   * Sandbox: live execution runs through src/sandbox/index.js's confined
+//     execution facility (the same one execution-proof.js uses) — never a
+//     bare, unconfined subprocess. When no confinement primitive is
+//     available on the host, live verification refuses rather than falling
+//     back to running the PoC unconfined.
 //
 // Fail-closed semantics (FR-VER-7): any error — Docker missing, target down,
 // PoC throws — produces `cannot-verify`, never `rejected`. An attacker who
@@ -28,7 +30,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { runConfined, sandboxAvailable } from '../sandbox/index.js';
 import { isExplicitlyNoPoc } from './poc-cwe-map.js';
 
 // ─── PoC static validation ──────────────────────────────────────────────────
@@ -122,68 +124,41 @@ export function proveSanitizerAbsence(finding, fileContents) {
 function runSandboxed(poc, opts = {}) {
   const target = opts.target;
   if (!target) return { ok: false, reason: 'no-target' };
-  // Materialise the PoC to a temp file.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-poc-'));
-  const file = path.join(dir, poc.lang === 'python' ? 'poc.py' : 'poc.mjs');
+  if (!sandboxAvailable() && !opts.force) {
+    return { ok: false, reason: 'no confinement primitive available on this host; refusing to execute the PoC unconfined', runner: 'disabled' };
+  }
+  // Materialise the PoC into a fresh sandbox root.
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'as-poc-')));
+  const file = poc.lang === 'python' ? 'poc.py' : 'poc.mjs';
   try {
-    fs.writeFileSync(file, _patchTarget(poc.code, target));
+    fs.writeFileSync(path.join(dir, file), _patchTarget(poc.code, target));
   } catch (e) {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
     return { ok: false, reason: `write-failed:${e.message}` };
   }
-  const docker = _haveDocker() ? _runDocker(file, dir, poc.lang, opts) : null;
-  const result = docker || _runSubprocess(file, poc.lang, opts);
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-  return result;
+  try {
+    const argv = poc.lang === 'python' ? ['python3', file] : [process.execPath, file];
+    // allowNetwork: the whole point of live verification is reaching the
+    // caller-provided target — writes and everything else stay confined.
+    const r = runConfined(argv, { root: dir, timeoutMs: opts.timeoutMs || 15000, allowNetwork: true, force: opts.force });
+    if (r.status === 'disabled') {
+      return { ok: false, reason: 'confined execution is disabled; the PoC was refused and never executed', runner: r.backend };
+    }
+    if (r.status === 'error') {
+      return { ok: false, reason: `sandbox-error:${(r.stderr || '').trim() || 'unknown'}`, runner: r.backend };
+    }
+    if (r.timedOut) {
+      return { ok: false, reason: 'poc-timeout', runner: r.backend };
+    }
+    return { ok: true, exitCode: r.exitCode, stderr: r.stderr || '', stdout: r.stdout || '', runner: r.backend, denied: r.denied };
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
 }
 
 function _patchTarget(code, target) {
   // Replace the localhost:3000 placeholder with the caller-provided target.
   return code.replace(/http:\/\/localhost:3000/g, target);
-}
-
-function _haveDocker() {
-  try {
-    const r = spawnSync('docker', ['version'], { stdio: 'ignore', timeout: 3000 });
-    return r.status === 0;
-  } catch { return false; }
-}
-
-function _runDocker(file, dir, lang, opts) {
-  const image = lang === 'python' ? 'python:3.12-slim' : 'node:22-slim';
-  const cmd = lang === 'python' ? ['python3', '/work/poc.py'] : ['node', '/work/poc.mjs'];
-  const args = [
-    'run', '--rm',
-    '--network=host',          // PoC must reach the target; host is the smallest blast radius
-    '--cap-drop=ALL',
-    '--memory=256m',
-    '--cpu-quota=20000',
-    '--pids-limit=64',
-    '--read-only',
-    '--tmpfs=/tmp',
-    '--user', 'nobody',
-    '-v', `${dir}:/work:ro`,
-    image,
-    ...cmd,
-  ];
-  const r = spawnSync('docker', args, {
-    timeout: opts.timeoutMs || 15000,
-    encoding: 'utf8',
-  });
-  if (r.error) return { ok: false, reason: `docker-error:${r.error.code || r.error.message}`, runner: 'docker' };
-  return { ok: true, exitCode: r.status, stderr: r.stderr || '', stdout: r.stdout || '', runner: 'docker' };
-}
-
-function _runSubprocess(file, lang, opts) {
-  const bin = lang === 'python' ? 'python3' : 'node';
-  const r = spawnSync(bin, [file], {
-    timeout: opts.timeoutMs || 15000,
-    encoding: 'utf8',
-    // Best-effort containment without Docker. Operators are warned in stderr
-    // that the subprocess fallback offers materially weaker isolation.
-    env: { PATH: process.env.PATH || '', NODE_OPTIONS: '' },
-  });
-  if (r.error) return { ok: false, reason: `subprocess-error:${r.error.code || r.error.message}`, runner: 'subprocess' };
-  return { ok: true, exitCode: r.status, stderr: r.stderr || '', stdout: r.stdout || '', runner: 'subprocess' };
 }
 
 // ─── Per-finding verdict assignment ─────────────────────────────────────────
