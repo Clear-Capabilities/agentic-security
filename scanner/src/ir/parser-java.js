@@ -58,6 +58,27 @@ function exprFromCst(node) {
     // CST node with named children — recurse into the most informative one.
     // Method invocation
     if (node.children.methodInvocation) return _methodInvocation(node.children.methodInvocation[0]);
+    // `primary` is how java-parser actually models a call: the name lives in
+    // primaryPrefix (an fqnOrRefType) and the invocation itself in
+    // primarySuffix.methodInvocationSuffix. Without this branch the fall-through
+    // below recursed into the prefix and returned the NAME — so
+    // `req.getParameter("q")` lowered to a member access, never a call, and no
+    // source or sink in the Java catalog could ever match.
+    if (node.children.primaryPrefix) {
+      const prefix = node.children.primaryPrefix[0];
+      const suffixes = node.children.primarySuffix || [];
+      const invocation = suffixes
+        .map(s => s.children?.methodInvocationSuffix?.[0])
+        .find(Boolean);
+      if (invocation) {
+        const fqn = prefix?.children?.fqnOrRefType?.[0];
+        const callee = fqn ? _flattenFqnToString(fqn) : 'unknown';
+        const args = (invocation.children?.argumentList?.[0]?.children?.expression || [])
+          .map(exprFromCst);
+        return { kind: 'call', callee, args };
+      }
+      return exprFromCst(prefix);
+    }
     // FQN ref
     if (node.children.fqnOrRefType) return _fqnExpr(node.children.fqnOrRefType[0]);
     if (node.children.unqualifiedClassInstanceCreationExpression) {
@@ -89,12 +110,37 @@ function exprFromCst(node) {
   return { kind: 'unknown' };
 }
 
+/**
+ * The identifier images of an `fqnOrRefType`, in order.
+ *
+ * java-parser does NOT put `Identifier` directly on `fqnOrRefType`. The real
+ * shape is fqnOrRefTypePartFirst / fqnOrRefTypePartRest → fqnOrRefTypePartCommon
+ * → Identifier, so reading `children.Identifier` returned nothing for every
+ * real-world expression and both callers below degraded to 'unknown'. The
+ * direct-Identifier form is still accepted as a fallback.
+ */
+function _fqnIdents(node) {
+  if (!node || !node.children) return [];
+  const direct = node.children.Identifier;
+  if (Array.isArray(direct) && direct.length) return direct.map(t => t.image);
+  const out = [];
+  const parts = [
+    ...(node.children.fqnOrRefTypePartFirst || []),
+    ...(node.children.fqnOrRefTypePartRest || []),
+  ];
+  for (const p of parts) {
+    const common = p.children?.fqnOrRefTypePartCommon?.[0];
+    const id = common?.children?.Identifier?.[0]?.image;
+    if (id) out.push(id);
+  }
+  return out;
+}
+
 function _fqnExpr(node) {
-  // java-parser fqnOrRefType has children { Identifier: [...] } sometimes
-  // and Dot tokens between them.
   if (!node || !node.children) return { kind: 'unknown' };
-  const ids = node.children.Identifier;
-  if (!ids || !ids.length) return { kind: 'unknown' };
+  const idImages = _fqnIdents(node);
+  if (!idImages.length) return { kind: 'unknown' };
+  const ids = idImages.map(image => ({ image }));
   let cur = { kind: 'ident', name: ids[0].image };
   for (let i = 1; i < ids.length; i++) {
     cur = { kind: 'member', object: cur, prop: ids[i].image };
@@ -118,10 +164,8 @@ function _methodInvocation(node) {
 }
 
 function _flattenFqnToString(node) {
-  if (!node || !node.children) return 'unknown';
-  const ids = node.children.Identifier;
-  if (!ids) return 'unknown';
-  return ids.map(t => t.image).join('.');
+  const ids = _fqnIdents(node);
+  return ids.length ? ids.join('.') : 'unknown';
 }
 
 /**
@@ -157,6 +201,14 @@ function buildCfgFromBody(bodyNode, line) {
   function walkStmts(stmtNode) {
     if (!stmtNode || !stmtNode.children) return;
     const kids = stmtNode.children;
+    // java-parser nests a `block` as block → blockStatements (PLURAL, an
+    // intermediate rule node) → blockStatement. Walking only `blockStatement`
+    // from the block node therefore descended into nothing and every method
+    // body lowered to an empty CFG — which is why Java had IR functions with
+    // entry/exit and no statements, and taint could never fire.
+    if (kids.blockStatements) {
+      for (const bss of kids.blockStatements) walkStmts(bss);
+    }
     // Block statement children
     if (kids.blockStatement) {
       for (const bs of kids.blockStatement) walkStmts(bs);

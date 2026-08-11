@@ -1,7 +1,7 @@
 {
   "name": "agentic-security",
   "version": "0.75.1",
-  "description": "Agentic-Security: SAST + SCA + secrets + IaC + LLM-sec scanner with deterministic fix toolchain. Exposes a Model Context Protocol (MCP) server with 12 tools Cursor's agent can call directly.",
+  "description": "Agentic-Security: SAST + SCA + secrets + IaC + LLM-sec scanner with deterministic fix toolchain. Exposes a Model Context Protocol (MCP) server with 17 tools Cursor's agent can call directly.",
   "author": {
     "name": "Ross Young",
     "email": "ross@clearcapabilities.com"
@@ -18,7 +18,7 @@
         "--root",
         "${CURSOR_PROJECT_DIR:-${PWD}}"
       ],
-      "description": "agentic-security MCP server (12 tools). Session root confined to the current project directory; apply_fix requires confirm:true and a valid last-scan.json HMAC signature.",
+      "description": "agentic-security MCP server (17 tools). Session root confined to the current project directory; apply_fix and apply_sca_upgrade require confirm:true and a valid last-scan.json HMAC signature.",
       "trust": {
         "writes_files": true,
         "session_scope": "project_directory_only",
@@ -28,5 +28,5 @@
       }
     }
   },
-  "notes": "Cursor support via MCP. The agent invokes the 12 MCP tools the same way as in Claude Code. Slash commands and auto-activating skills are Claude-Code-only today; Cursor users get the deterministic toolchain but not the skill activation surface."
+  "notes": "Cursor support via MCP. The agent invokes the 17 MCP tools the same way as in Claude Code. Slash commands and auto-activating skills are Claude-Code-only today; Cursor users get the deterministic toolchain but not the skill activation surface."
 }

@@ -16,7 +16,7 @@ This directory holds the eight specialized modules called from there.
 | `index.js` | Re-exports six public symbols from `../engine.js` so external consumers can `import { parseManifests, queryOSV, … } from '@…/sca'`. |
 | `binary-metadata.js` | **Opt-in via `AGENTIC_SECURITY_BINARY_SCA=1`.** Reads dependency metadata from compiled artifacts: JAR `META-INF/MANIFEST.MF` + `pom.properties`, Go binary `go.buildinfo`. Never executes the binary. JAR extraction uses `fs.mkdtemp` for an isolated scratch dir (premortem-derived: shared `/tmp` lets a hostile JAR plant a symlinked manifest that escapes the scratch). |
 | `container.js` | Dockerfile parser. Detects EOL `FROM` base images (alpine/debian/ubuntu/node/python) against `base-images.json`, and synthesizes lightweight SCA components from `apt-get install` / `apk add` package lists. No Docker daemon required. |
-| `dep-confusion.js` | Two related detectors. **Typosquat:** Levenshtein distance ≤ 2 against the top-1000 packages in `popular-packages.json`. **Dependency confusion:** internal-scoped names (declared in `.agentic-security/internal-scopes.yml`) appearing on the public registry. Local-first; OSV consulted only to confirm confusion findings. |
+| `dep-confusion.js` | Two related detectors. **Typosquat:** Levenshtein distance ≤ 2 against `popular-packages.json` — **188 packages (115 npm + 73 pypi), not "top-1000"** as this row previously said; re-derive the count from the file rather than trusting a hardcoded number here again. **Dependency confusion:** internal-scoped names (declared in `.agentic-security/internal-scopes.yml`) appearing on the public registry. Local-first; **this module does not itself call OSV** — it reads a flag set by an earlier, separate OSV/queryRegistries pass upstream (whether a dep "resolved by OSV"), which is different from "OSV consulted [by this module] to confirm confusion findings" as previously stated. |
 | `llm-function-extract.js` | **Opt-in via `AGENTIC_SECURITY_LLM_SCA=1`.** LLM-assisted extraction of vulnerable function names for CVEs that lack OSV `ecosystem_specific.vulnerable_functions` data. Cached per CVE under `~/.config/agentic-security/llm-sca-cache/`. Endpoint-dependent — degrades to no-op when unreachable. |
 | `py-package-functions.js` | **Opt-in via `AGENTIC_SECURITY_DEEP=1`** (Python only). Locates installed Python packages via `site-packages` and parses them with the CPython `ast` module (subprocess) to *validate* that an OSV-named vulnerable function exists in the installed version. Closes the "OSV says this function is vulnerable, but the version you installed actually removed it" false-positive class. |
 | `sarif-ingest.js` | Normalizes SARIF 2.1.0 from external scanners and merges into the unified scan. Deduplicates by fingerprint `(CWE, file, line ± 2, rule)`. Twelve tool profiles supported with default-severity + semantic-kind mapping. |
@@ -132,7 +132,7 @@ if a detector forgets to set them.
   is updated periodically; an alpine-3.16 today might not appear EOL until
   the file is refreshed. Bias is toward false negatives.
 - **Typosquat threshold is a single distance.** Levenshtein ≤ 2 against
-  the top-1000 list. Increasing the threshold blows up the FP rate;
+  the popular-packages.json list (188 entries, not top-1000). Increasing the threshold blows up the FP rate;
   decreasing it loses real typosquats. This is the calibrated default.
 
 ## Adding a new detector here

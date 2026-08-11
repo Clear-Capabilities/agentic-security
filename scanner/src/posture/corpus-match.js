@@ -54,6 +54,25 @@ function _matches(f, manifest, matcher) {
     (manifest?.cwe ? f.cwe === manifest.cwe || matcher.test(f.cwe || '') : true);
 }
 
+/**
+ * Every finding, across every channel, that scores this entry.
+ *
+ * Third caller of the ONE predicate (gate, enrollment, and now the per-layer
+ * recall instrument in `bench/layer-recall/`). That instrument needs to know
+ * WHICH findings matched so it can attribute them to the analysis layer that
+ * produced them; re-deriving the predicate there is precisely the drift this
+ * module was extracted to prevent, so it reuses `_matches` instead.
+ */
+export function matchingFindings(scan, manifest, matcher = matcherFor(manifest)) {
+  const out = [];
+  for (const channel of CHANNELS) {
+    const arr = scan?.[channel];
+    if (!Array.isArray(arr)) continue;
+    for (const f of arr) if (_matches(f, manifest, matcher)) out.push(f);
+  }
+  return out;
+}
+
 /** Did the vulnerable (`pre/`) tree produce a matching finding? */
 export function preHit(scan, manifest, matcher = matcherFor(manifest)) {
   return _any(scan, f => _matches(f, manifest, matcher));

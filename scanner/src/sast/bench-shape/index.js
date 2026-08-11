@@ -21,7 +21,7 @@
 // set) AND strips the marker comments from the corpus before scanning, so the
 // engine's true detection capability is measured.
 
-export function isBenchShape() {
+function isBenchShape() {
   return process.env.AGENTIC_SECURITY_BENCH_SHAPE === '1';
 }
 
@@ -38,11 +38,6 @@ export {
   applyJavaBenchSuppressions,
 } from '../java-bench-extras.js';
 
-// Re-export the cpp-bench-extras suppressor — gated at call sites.
-export {
-  applyJulietCppSuppressions as applyJulietCppFamilySuppressions,
-} from '../cpp-bench-extras.js';
-
 // OWASP Benchmark @WebServlet route-category extractor.
 // Returns the canonical vuln family (e.g. 'sql-injection') for files whose
 // @WebServlet URL encodes the test category, or null.
@@ -54,7 +49,7 @@ const _OWASP_BENCH_CATEGORY_MAP = {
   'weakrand': 'weak-rng', 'trustbound': 'trust-boundary',
   'securecookie': 'header-hardening',
 };
-export function benchShapeWebServletCategory(cleaned) {
+function benchShapeWebServletCategory(cleaned) {
   if (!isBenchShape()) return null;
   const m = cleaned.match(/@WebServlet\s*\(\s*(?:value\s*=\s*)?["'](?:[^"']*\/)?(\w+?)-\d+\//);
   if (!m) return null;

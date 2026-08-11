@@ -80,6 +80,20 @@ function _lowerExpr(text) {
     if (parts.length === 1) return { kind: 'ident', name: parts[0] };
     return _buildMemberChain(parts);
   }
+  // Object creation: `new Type(args)` — lowered to a call so taint flows into
+  // constructor arguments. Without this branch the expression fell through to
+  // the concat heuristic below, and because the `+` sits INSIDE the parens
+  // `_splitTopLevelPlus` returned the input unchanged, so that branch recursed
+  // on the identical string until the stack blew. `buildProjectIR` catches
+  // per-file, so the crash surfaced only as "this file has no IR" — 12 of 21 C#
+  // corpus entries, and the catalog's own `cs-sqlcommand` rule ("SQL Injection
+  // (new SqlCommand with concatenated user input)") could never fire.
+  const newMatch = s.match(/^new\s+([\w.]+)\s*\((.*)\)\s*$/s);
+  if (newMatch) {
+    const callee = newMatch[1].split('.').pop();
+    const args = _splitTopLevelCommas(newMatch[2]).map(_lowerExpr);
+    return { kind: 'call', callee, args, isNew: true };
+  }
   // Call: foo.bar(args) or Bar(args). Find the LAST '(' at depth 0.
   const callMatch = s.match(/^([\w.]+)\s*\((.*)\)\s*$/s);
   if (callMatch) {
@@ -88,9 +102,15 @@ function _lowerExpr(text) {
     return { kind: 'call', callee, args };
   }
   // String concat / interpolation — heuristic.
+  //
+  // The `parts.length > 1` guard is load-bearing, not defensive tidiness: when
+  // the `+` is nested inside parens or brackets, `_splitTopLevelPlus` returns
+  // the input as a single part, and mapping `_lowerExpr` over it recurses on the
+  // identical string forever. Any future expression form that reaches here
+  // unsplit would otherwise reintroduce the same stack overflow.
   if (s.includes('+') && /["']/.test(s)) {
-    const parts = _splitTopLevelPlus(s).map(_lowerExpr);
-    return { kind: 'tpl', parts };
+    const rawParts = _splitTopLevelPlus(s);
+    if (rawParts.length > 1) return { kind: 'tpl', parts: rawParts.map(_lowerExpr) };
   }
   if (/^"|^@"/.test(s)) return { kind: 'literal', value: s };
   if (/^\d/.test(s))   return { kind: 'literal', value: s };

@@ -671,7 +671,7 @@ const REQUEST_WRAPPER_CLASS_RE = /\b(?:public\s+|private\s+|protected\s+|static\
 
 /** Parse a Java file and return the names of any classes that wrap an
  *  HttpServletRequest and expose String-returning getters. */
-export function findRequestWrapperGetters(file, raw) {
+function findRequestWrapperGetters(file, raw) {
   if (!JAVA_EXT.test(file) || !raw || raw.length > 500_000) return [];
   const content = blankComments(raw);
   const out = [];

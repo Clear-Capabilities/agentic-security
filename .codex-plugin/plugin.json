@@ -1,7 +1,7 @@
 {
   "name": "agentic-security",
   "version": "0.75.1",
-  "description": "Agentic-Security: SAST + SCA + secrets + IaC + LLM-sec scanner with deterministic fix toolchain. Exposes a Model Context Protocol (MCP) server with 12 tools that Codex CLI can call directly.",
+  "description": "Agentic-Security: SAST + SCA + secrets + IaC + LLM-sec scanner with deterministic fix toolchain. Exposes a Model Context Protocol (MCP) server with 17 tools that Codex CLI can call directly.",
   "author": {
     "name": "Ross Young",
     "email": "ross@clearcapabilities.com"
@@ -18,7 +18,7 @@
         "--root",
         "${CODEX_PROJECT_DIR:-${PWD}}"
       ],
-      "description": "agentic-security MCP server (12 tools: scan_diff, query_taint, explain_finding, find_rule_module, lookup_cve, synthesize_fix, verify_fix, apply_fix, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory). Session root confined to the current project directory; apply_fix requires confirm:true and a valid last-scan.json HMAC signature; shadow findings are never auto-applied.",
+      "description": "agentic-security MCP server (17 tools: scan_diff, query_taint, explain_finding, find_rule_module, lookup_cve, synthesize_fix, verify_fix, apply_fix, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry). Session root confined to the current project directory; apply_fix and apply_sca_upgrade require confirm:true and a valid last-scan.json HMAC signature; shadow findings are never auto-applied.",
       "trust": {
         "writes_files": true,
         "session_scope": "project_directory_only",

@@ -6,9 +6,18 @@
 // from those attackers are actively weaponizing.
 //
 // Decoration shape (added to each SCA finding with a CVE):
-//   epss: 0.92345
+//   epssScore: 0.92345   (this comment previously said `epss:`; the code has
+//                         always written `epssScore` — the comment was wrong,
+//                         not the code)
 //   epssPercentile: 0.987
 //   exploitedNow: true   ← percentile >= 0.95
+//
+// ⚠ engine.js ALSO sets f.epssScore/f.epssPercentile directly (around line
+// 6451), independently of this module's fetchEPSS/decorate path — two
+// implementations of the same decoration. This module's own `fetchEPSS` has
+// no in-tree caller (allowlisted in no-dead-modules.test.js as future-public
+// API); the live path is the one in engine.js. Worth consolidating, not
+// resolved here.
 //
 // Source: https://api.first.org/data/v1/epss?cve=CVE-...,CVE-...
 // Cached on disk: ~/.claude/agentic-security/epss-cache/<sha256>.json

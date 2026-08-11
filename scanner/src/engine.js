@@ -148,7 +148,7 @@ import { ingestLogicClaims } from './posture/logic-claims.js';
 import { annotateNarration } from './posture/flow-narration.js';
 import { applyPathConstraints } from './posture/path-predicates.js';
 // Phase 3 (Sentinel-parity Layer 1 + 2) — IR + interprocedural taint engine.
-import { buildProjectIR } from './ir/index.js';
+import { buildProjectIR, buildProjectIRAsync } from './ir/index.js';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
 // v3 next-gen — Pillars 1, 4, 5, 6, 8, 9.
@@ -8124,22 +8124,25 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
     // Generalised sanitizer consumption (dataflow/sanitizer-gate.js): labels
     // findings whose flow passes a catalog sanitizer matching their family
     // (xss/url/cmd, not just sql) so the proof gate below can demote them the
-    // same way it demotes proven-clean SQL. `sanitizersOnPath` would need to
-    // be `{ [findingId]: string[] of sanitizer callees observed on that
-    // finding's flow }`. There is nothing to build that map from: the live
-    // taint walk in dataflow/engine.js does NOT consult sanitizer catalog
-    // entries at all. `matchSinkOrSanitizer()` returns every catalog hit for
-    // a callee, but every consumer in dataflow/*.js selects only
-    // `e.kind === 'sink'` — there is no `'sanitizer'` branch anywhere in that
-    // tree. Taint is killed only by clean re-assignment of a variable
-    // (removePathAndDescendants, engine.js:374), which happens regardless of
-    // whether the RHS call is a catalog sanitizer.
-    // So this is `{}` and the gate below is INERT — not "awaiting plumbing"
-    // but awaiting the sanitizer walk itself. Making it live needs two things:
-    // (1) dataflow/engine.js honouring `kind === 'sanitizer'` at a call site,
-    // and (2) that call site's callee name threaded onto the finding
-    // alongside the trace/chain that proven-clean.js already reads.
+    // same way it demotes proven-clean SQL.
+    //
+    // The taint walk now records the sanitizer callees observed on the value
+    // reaching each sink argument (`dataflow/engine.js` `_sanitizersForExpr`)
+    // and stamps them on the finding as `_sanitizersOnPath`. This rebuilds the
+    // `{ [findingId]: string[] }` shape the gate wants. Both `id` and
+    // `stableId` are keyed because the gate accepts either and stable ids are
+    // assigned by an earlier annotator.
+    //
+    // The sanitizer never kills the taint in the walk itself: a mislabelled
+    // sanitizer would then hide a real vulnerability outright, whereas a label
+    // only demotes confidence here. Recall-preserving, on purpose.
     const sanitizersOnPath = {};
+    for (const f of finalFindings) {
+      const names = f && f._sanitizersOnPath;
+      if (!Array.isArray(names) || !names.length) continue;
+      if (f.id) sanitizersOnPath[f.id] = names;
+      if (f.stableId) sanitizersOnPath[f.stableId] = names;
+    }
     _runAnnotator("applySanitizerGate", () => { applySanitizerGate(finalFindings, { sanitizersOnPath }); });
     _runAnnotator("annotateProofGate", () => { annotateProofGate(finalFindings); });
   }
@@ -8420,10 +8423,25 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // gets strictly more wall-clock for the taint analysis itself than an
   // uninstrumented run with the same budget.
   let _sharedIR = null;
+  // Java IR requires the ASYNC builder. `parser-java.js` exports an async
+  // `parseJavaFile` (java-parser needs a dynamic import), so the sync
+  // `buildProjectIR` has no Java branch at all — and both deep-path call sites
+  // used it. The result was that no .java file had ever produced an IR function
+  // in deep mode: `bench/layer-recall` measured java at 0/25 while the catalog
+  // carried 7 Java sources and 15 Java sinks that had nothing to run against.
+  // `buildProjectIRAsync` is a full mirror plus Java and had zero callers.
+  //
+  // Gated on the presence of .java rather than always awaiting: the async
+  // builder is a superset, but switching every scan in the product to it to fix
+  // one language would change the execution shape (and attempt the java-parser
+  // import) for projects that contain no Java. `runFullScan` is already async,
+  // so the await costs nothing structurally.
+  const _hasJava = Object.keys(fc || {}).some(f => /\.java$/i.test(f));
+  const _buildIR = async () => (_hasJava ? await buildProjectIRAsync(fc) : buildProjectIR(fc));
   const _irStatsTarget = irStatsTarget();
   if (_irStatsTarget) {
     try {
-      _sharedIR = buildProjectIR(fc);
+      _sharedIR = await _buildIR();
       writeIrStats(_irStatsTarget, collectIrStats(fc, _sharedIR.perFile, _sharedIR.callGraph));
     } catch (e) {
       // Instrumentation must never fail a scan. Surface only when debugging.
@@ -8441,7 +8459,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
     const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
     const t0 = Date.now();
     try {
-      const { perFile, callGraph } = _sharedIR || (_sharedIR = buildProjectIR(fc));
+      const { perFile, callGraph } = _sharedIR || (_sharedIR = await _buildIR());
       // The runDeepAnalysis call is synchronous in this codebase; we can't
       // truly interrupt it without re-architecting the worklist. We pass a
       // deadlineMs hint that the inner loops check; if absent, we still cap
@@ -8471,6 +8489,29 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
         f.validator_verdict = 'unvalidated';
       }
       finalFindings.push(...irFindings);
+      // Sanitizer + proof gate, pass 2 of 2 — same ordering trap as the
+      // ignore-pragma double pass below, and for the same reason: pass 1 runs
+      // ~2300 lines above, long before deep-mode IR findings exist, so a
+      // sanitized IR-TAINT flow was never labelled and a proven-clean one was
+      // never demoted. Deep mode is what the CLI uses outside CI, so that was
+      // the case that mattered most.
+      //
+      // Scoped to `irFindings` rather than re-running over `finalFindings`:
+      // annotateProofGate demotes confidence, so a second pass over findings
+      // pass 1 already handled would demote them twice.
+      if (process.env.AGENTIC_SECURITY_NO_PROOF_GATE !== '1') {
+        const _irSanitizers = {};
+        for (const f of irFindings) {
+          const names = f && f._sanitizersOnPath;
+          if (!Array.isArray(names) || !names.length) continue;
+          if (f.id) _irSanitizers[f.id] = names;
+          if (f.stableId) _irSanitizers[f.stableId] = names;
+        }
+        _runAnnotator("applySanitizerGate:deep", () => {
+          applySanitizerGate(irFindings, { sanitizersOnPath: _irSanitizers });
+        });
+        _runAnnotator("annotateProofGate:deep", () => { annotateProofGate(irFindings); });
+      }
       // Pragma pass 2 of 2 — see the pass-1 comment far above. Deep-mode IR
       // findings land here, long after pass 1 ran, so without this an
       // `agentic-security-ignore` on an ir-taint finding is inert. Deep mode is
@@ -8526,11 +8567,18 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       confidence: 1.0,
     });
   }
-  // Phase 2 (Sentinel-parity): LLM validator stage. No-op unless the operator
-  // sets AGENTIC_SECURITY_LLM_VALIDATE=1 AND AGENTIC_SECURITY_LLM_ENDPOINT. When
-  // disabled, every finding gets unvalidated:true and the existing confidence
-  // pipeline accounts for that. When enabled, the validator emits accept/reject
-  // /escalate per finding; rejects are dropped into the suppression log.
+  // Phase 2 (Sentinel-parity): LLM validator stage. DEFAULT-ON whenever
+  // AGENTIC_SECURITY_LLM_ENDPOINT is configured — not gated on
+  // AGENTIC_SECURITY_LLM_VALIDATE=1 as this comment previously (and wrongly)
+  // said. Opt OUT with AGENTIC_SECURITY_LLM_VALIDATE=0; the legacy
+  // AGENTIC_SECURITY_LLM_VALIDATE=1 still works as an explicit-on no-op. With
+  // no endpoint configured the validator stays a no-op regardless — no
+  // surprise network calls from an unrelated env var. See
+  // llm-validator/index.js's own header, which states this correctly; this
+  // comment was the one that had drifted. When disabled, every finding gets
+  // unvalidated:true and the existing confidence pipeline accounts for that.
+  // When enabled, the validator emits accept/reject/escalate per finding;
+  // rejects are dropped into the suppression log.
   try {
     // Concurrency defaults to 1 (the validator's deterministic-default).
     // Operators raise via AGENTIC_SECURITY_LLM_CONCURRENCY at the cost of

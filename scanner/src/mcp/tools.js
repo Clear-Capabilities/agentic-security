@@ -680,7 +680,7 @@ export const apply_fix = {
 // proceed with apply_fix.
 export const verify_fix = {
   name: 'verify_fix',
-  description: 'Verify a proposed patch before applying. Re-scans the patched files in memory and runs the project linter. Returns { ok, rescan, lint, summary }. No filesystem writes.',
+  description: 'Verify a proposed patch before applying. Re-scans the patched files in memory, runs the project linter, runs the project test suite, checks fix honesty (FULL/MITIGATION/WORKAROUND), and re-runs the PoC when one exists. Returns { ok, rescan, lint, summary }. Does not write to the target project’s own files, but DOES append one record per attempt to .agentic-security/fix-metrics.jsonl for the measured fix-loop.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,

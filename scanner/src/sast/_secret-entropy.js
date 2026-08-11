@@ -63,7 +63,7 @@ const JWT_RE       = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 // Configurable thresholds. Defaults tuned against the Juliet Java
 // 468-FP / 1-TP collapse — these settings drop FPs to ~30 without
 // losing the AWS-key-shaped TP.
-export const DEFAULT_OPTIONS = {
+const DEFAULT_OPTIONS = {
   // Empirical floor for *non-dictionary* credentials. Lower than the
   // 3.5 ceiling Shannon-quoted for "true randomness" because real test
   // fixtures and rotated secrets often use repetitive base alphabets

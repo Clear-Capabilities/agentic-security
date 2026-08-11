@@ -19,7 +19,7 @@ Annotators that run **after** every detector has emitted, plus state stores read
 
 **Production-posture ingest** — `auth-posture-import.js`, `network-policy-import.js`, `telemetry-ingest.js`, `waf-ingest.js`, `feature-flags.js`. These read customer-side YAML and convert to mitigation flags consumed by `mitigation-composite.js`.
 
-**Fix lifecycle** — `fix-history.js` (apply + backup + recover), `fix-verify.js` (closed-loop re-scan + lint), `fix-plan.js` (oversized-patch fallback), `regression-test-gen.js`, `deterministic-fix.js` (safe context-independent literal-swap patch synthesis — md5/sha1→sha256, TLS verify-off→on — materialized on demand by `mcp/synthesize_fix`; every patch still passes through `apply_fix`'s inline verify before it lands).
+**Fix lifecycle** — `fix-history.js` (apply + backup + recover), `fix-verify.js` (**five legs, not "re-scan + lint"**: rescan + lint + the project test suite + the fix-honesty gate + a PoC re-check, and it appends one record per attempt to `.agentic-security/fix-metrics.jsonl` — see `mcp/CLAUDE.md`'s `verify_fix` row, which had the same stale "no writes" claim), `fix-plan.js` (oversized-patch fallback — **not currently wired to anything**, see the dead-module allowlist), `regression-test-gen.js`, `deterministic-fix.js` (safe context-independent literal-swap patch synthesis — md5/sha1→sha256, TLS verify-off→on — materialized on demand by `mcp/synthesize_fix`; every patch still passes through `apply_fix`'s inline verify before it lands).
 
 **Measured fix loop (R5)** — `fix-metrics.js`. `verifyFix` times each stage
 (`rescan`/`lint`/`tests`/`honesty`) and appends one record per attempt to
@@ -49,7 +49,7 @@ rather than creating a stray state dir outside a project.
 - `entrypoint-inventory.js` — attack-surface completeness ledger. Enumerates every entry point (HTTP/queue/cron/CLI/env/upload/webhook) with a disposition each; on `scan.entrypointInventory`.
 - `root-cause-sweep.js` — from confirmed findings, finds sibling instances detectors missed with total-count accounting (`found === candidates + mitigated`); on `scan.rootCauseSweep`. Searches the corpus **once per distinct sink pattern**, not once per finding — findings deriving the same pattern share one walk and one set of (read-only) match records. The counts are always exact; the materialised `instances` list is a bounded sample (`INSTANCE_SAMPLE_LIMIT`, 100) and says so via `instancesTruncated`. Both properties are load-bearing on large corpora: the per-finding walk was O(findings × corpus-bytes) and the instance records were O(findings × matches), which together exhausted a 6 GB heap on a 40k-file suite. If you touch this module, keep the own-site exclusion **per pattern group** — resolving it globally makes a group subtract an exclusion it never matched and drives counts negative.
 - `model-routing.js` — capability-based CWE/severity→model policy; stamps `finding.dispatchModel` (strongest for crypto/auth/critical, mid for injection, cheapest for low-sev hardening) for cost-sensitive subagent dispatch.
-- `fix-honesty-gate.js` — deterministic honesty gates on fix output: a residual-risk hand-wave guard, a cited-file:line requirement for any FP/safe verdict, and FULL/MITIGATION/WORKAROUND completeness tiers. Consumed by `fix-verify.js` when the caller supplies fix metadata; the closed-loop test leg (`fix-verify-loop.js`) is wired into `mcp/apply_fix` behind `AGENTIC_SECURITY_FIX_RUN_TESTS=1`.
+- `fix-honesty-gate.js` — deterministic honesty gates on fix output: a residual-risk hand-wave guard, a cited-file:line requirement for any FP/safe verdict, and FULL/MITIGATION/WORKAROUND completeness tiers. `fix-verify.js` accepts a `fixMeta` param and consults this gate when it is present (`if (fixMeta && typeof fixMeta === 'object')`) — **but nothing in the shipped code currently supplies `fixMeta`** (grepped `mcp/tools.js`, `posture/autopilot.js`; zero callers), so this gate is reachable but dormant in practice, not "consumed" in the sense of actually running against real fix output today. The closed-loop test leg (`fix-verify-loop.js`, which does exist) is genuinely wired into `mcp/apply_fix` behind `AGENTIC_SECURITY_FIX_RUN_TESTS=1` — that half of this line was accurate.
 
 **Relevance scoping (R6 + R9)** — `relevance.js`. Turns the two existing *inventories* into *inputs*: `entrypoint-inventory.js` supplies the attack surface, `threat-model.js` supplies assets/boundaries/STRIDE, and `annotateRelevance(findings, ctx)` scores each finding by how reachable and how threat-modelled it is. Sets `entrypointReachable: true|false|null`, `relevance` (0..1), `relevanceTier: 'direct'|'indirect'|'unreachable'|'unknown'`, `relevanceFactors[]`, and re-ranks `exploitability` (ordinal priority, ×1.15 direct / ×0.6 unreachable, floored at 0.05, tier label recomputed on the same thresholds `annotateExploitability` uses). Reachability is a forward BFS over a literal-specifier import graph (JS/TS relative + Python dotted + Java FQCN) starting at every entry-point file.
 
@@ -234,10 +234,19 @@ the CI-gated tier and graduation into it is a human decision with a stated
 policy; an automated writer must not decide what blocks everyone's build.
 
 **Operator entry point:** `scripts/enroll-proven-finding.mjs <project>`
-(`--dry-run` scores without writing). It proves findings itself — the scan
-pipeline does **not** attach a `poc` to findings or promote proof tiers, so
-`last-scan.json` never contains an `execution-proven` finding on its own. PoCs
-come from the PoC-generator. Enrolment additionally needs fixed content
+(`--dry-run` scores without writing). It proves findings itself — **but the
+scan pipeline DOES attach an HTTP-shaped `f.poc` by default** (`annotatePocs`,
+`engine.js`, unconditional — not behind a flag; findings with no matching CWE
+template get `f.poc: null`). What the scan pipeline does NOT do by default is
+the *sandbox execution proof* that promotes a finding to the
+`execution-proven` tier: that pass is genuinely opt-in
+(`AGENTIC_SECURITY_PROVE=1`), so `last-scan.json` never contains an
+`execution-proven` finding from an ordinary scan on its own — this file
+previously conflated "attaches a poc" with "promotes to execution-proven,"
+which are two different passes with two different default states. Enrolment
+still proves findings itself via its own sandboxed run, independent of
+whichever tier `last-scan.json` shipped with. Enrolment additionally needs
+fixed content
 (`finding.fix.patch`) for `post/`; a proven finding with no fix is reported as
 skipped, not dropped. After enrolling, refresh the baseline
 (`npm run bench:cve-replay:update-baseline`) and commit it.

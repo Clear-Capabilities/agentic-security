@@ -30,14 +30,17 @@
 // Sinks: anywhere a CFG node calls a catalog-registered sink with a tainted
 // argument, we emit a finding.
 //
-// Sanitizers: NOT consulted by this walk. `matchSinkOrSanitizer()` returns
-// catalog hits of both kinds, but every consumer in this directory keeps only
-// `e.kind === 'sink'`; no `'sanitizer'` branch exists anywhere in dataflow/*.
-// Taint dies here only when a variable is re-assigned from a clean expression
-// (removePathAndDescendants, below) — which is orthogonal to whether the RHS
-// happens to be a catalog sanitizer. Recognising sanitizer entries at a call
-// site is open work; until it lands, treat the catalog's sanitizer half as
-// documentation consumed by other layers, not by this engine.
+// Sanitizers: RECORDED, but they do not kill taint in this walk.
+// `_sanitizersForExpr` (below) collects the sanitizer callees applied to the
+// value reaching each sink argument — inline, or inherited via
+// `_sanitizersByVar` from the variable it reads — and stamps them on the
+// finding as `_sanitizersOnPath`. `dataflow/sanitizer-gate.js` then labels the
+// finding `sanitized:true` only when the sanitizer's `appliesTo` family
+// actually covers the finding's threat class; `engine.js`'s proof gate demotes
+// from there. Taint itself still dies only when a variable is re-assigned from
+// a clean expression (removePathAndDescendants, below) — a mislabelled
+// sanitizer must never silently drop a real vulnerability, so the walk never
+// treats a sanitizer call as clearing the tainted path on its own.
 
 import { matchSource, matchSinkOrSanitizer } from './catalog.js';
 import { functionRecord } from '../ir/callgraph.js';
@@ -268,6 +271,53 @@ function _matchCallCatalog(calleeExpr, argExprs, state) {
   return { cat, argTaints };
 }
 
+// Sanitizer callees observed on an expression.
+//
+// The engine deliberately does NOT let a sanitizer kill taint. A blanket
+// "any sanitizer clears the flow" rule scores well on benchmarks and silently
+// drops a real SQL injection whenever the code applied an HTML escaper — the
+// C/C++ catalog work already found strncpy/snprintf tagged effect:'strip' when
+// they bound length rather than sanitising content. So the walk RECORDS which
+// sanitizers touched the value and hands them to sanitizer-gate.js, which
+// labels the finding, and the proof gate demotes it. Recall-preserving, same
+// precedent as falsification.js / proof-gate.js: never removed, never
+// severity-touched.
+function _sanitizersInExprTree(expr, out) {
+  if (!expr || typeof expr !== 'object') return;
+  if (expr.kind === 'call') {
+    const cat = matchSinkOrSanitizer(expr.callee, _currentFile);
+    if (cat) {
+      for (const e of cat) {
+        if (e.kind === 'sanitizer' && e.match && e.match.callee) out.add(e.match.callee);
+      }
+    }
+  }
+  for (const k of ['left', 'right', 'callee', 'object', 'property', 'value']) {
+    if (expr[k] && typeof expr[k] === 'object') _sanitizersInExprTree(expr[k], out);
+  }
+  for (const k of ['args', 'parts', 'branches', 'elements']) {
+    if (Array.isArray(expr[k])) for (const e of expr[k]) _sanitizersInExprTree(e, out);
+  }
+  if (Array.isArray(expr.props)) for (const p of expr.props) _sanitizersInExprTree(p && p.value, out);
+}
+
+// Sanitizers applied to `expr`: those called inline within it, plus those
+// recorded against any variable it reads (`const safe = escapeHtml(x); sink(safe)`).
+function _sanitizersForExpr(expr, callContext) {
+  const out = new Set();
+  _sanitizersInExprTree(expr, out);
+  const byVar = callContext && callContext._sanitizersByVar;
+  if (byVar && byVar.size) {
+    const vars = new Set();
+    _collectExprVars(expr, vars);
+    for (const v of vars) {
+      const s = byVar.get(v);
+      if (s) for (const n of s) out.add(n);
+    }
+  }
+  return out;
+}
+
 // cat / argTaints: the result of _matchCallCatalog (computed by the caller,
 // at whatever point in its case is appropriate for its own state-mutation
 // ordering).
@@ -299,7 +349,13 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
           ? reachingSources.slice(0, 5)
           // Fallback: better to surface "no precise source" than the wrong source.
           : [];
+        // Sanitizers seen on the value reaching THIS argument. Consumed by
+        // sanitizer-gate.js, which labels only when the sanitizer's family
+        // covers the finding's threat class — an xss escaper on a SQL sink
+        // must not read as sanitised.
+        const _sanNames = _sanitizersForExpr(taintedArgExpr, callContext);
         findings.push({
+          ...(_sanNames.size ? { _sanitizersOnPath: [..._sanNames] } : {}),
           kind: 'taint',
           sinkId: e.id,
           vuln: e.vuln?.name || 'Tainted Sink',
@@ -347,6 +403,18 @@ function step(node, stateIn, callContext) {
         findings.push(..._sinkFindingsForCall(
           node.source.callee, node.source.args, _sinkCat, _sinkArgTaints,
           state, callContext, node.line).findings);
+      }
+      // Record which sanitizers were applied to the value now held by `target`
+      // (inline in the RHS, or inherited from the vars the RHS reads). Placed
+      // before every early return in this case so the map cannot go stale on
+      // the interprocedural paths below. A clean RHS clears the entry, mirroring
+      // removePathAndDescendants — a stale sanitizer would label a later,
+      // genuinely unsanitized flow.
+      if (target) {
+        const _san = _sanitizersForExpr(node.source, callContext);
+        const _byVar = (callContext._sanitizersByVar ||= new Map());
+        if (_san.size) _byVar.set(target, _san);
+        else _byVar.delete(target);
       }
       // Constant propagation: track variables assigned from literals
       if (target && _activeConstantVars) {
@@ -946,6 +1014,32 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         // (a control-dependence finding, not an explicit data-flow one).
         confidence: (f.implicit && typeof f.confidence === 'number') ? f.confidence : 0.75,
         ...(f.implicit === true ? { implicit: true } : {}),
+        // Sanitizer callees observed on the value reaching this sink. This
+        // mapping is an explicit allowlist, so a field absent here is silently
+        // dropped — which is what previously left sanitizer-gate.js inert.
+        ...(Array.isArray(f._sanitizersOnPath) && f._sanitizersOnPath.length
+          ? { _sanitizersOnPath: f._sanitizersOnPath } : {}),
+        // _funcQid: the enclosing function's qid, set upstream during the walk
+        // but silently dropped by this allowlist before backward.js's
+        // annotateBackwardSlices ever saw it — the same class of omission
+        // _sanitizersOnPath had. Without it, annotateBackwardSlices's very
+        // first check (`if (!f._funcQid) skip`) discarded every finding, so
+        // backward-slice annotation was permanently a no-op regardless of
+        // AGENTIC_SECURITY_BACKWARD_SLICE.
+        ...(f._funcQid ? { _funcQid: f._funcQid } : {}),
+        // callee: kept as plain `callee` (not underscore-prefixed) to match
+        // backward.js's own contract, which reads `f.callee` on both real and
+        // fake-fixture findings throughout its module and test suite. It is
+        // the SAME object reference as the CFG call node's own `callee` (set
+        // at `_sinkFindingsForCall`'s call site as `callee: calleeExpr`,
+        // never copied) — backward.js's sink-node lookup matches
+        // `n.callee === f.callee` by reference identity, so dropping this
+        // field (as the allowlist previously did) meant that match could
+        // never succeed regardless of `_funcQid`. It is not read by
+        // report/index.js's normalizeFindings, which is itself an explicit
+        // allowlist that never names `callee`, so this does not reach SARIF/
+        // JSON/HTML report output.
+        ...(f.callee !== undefined ? { callee: f.callee } : {}),
         source: f.trace && f.trace.length ? {
           file: fn.file,
           line: f.trace[0].line,

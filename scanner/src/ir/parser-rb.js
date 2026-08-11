@@ -22,7 +22,18 @@
 
 import * as crypto from 'node:crypto';
 
-const DEF_RE = /(?:^|\n)\s*def\s+(?:self\.)?(\w+[?!=]?)\s*(?:\(([^)]*)\))?/g;
+// `[ \t]*` before the optional parameter list, NOT `\s*`.
+//
+// `\s*` crosses newlines, so for `def show\n  c = params[:c]` the match ran to
+// the next line's indentation. `parseRubyFile` then computes the body start as
+// `indexOf('\n', m.index + m[0].length)`, which landed on the newline at the END
+// of the first statement — so the body was sliced from after it and statement 1
+// of EVERY Ruby method was silently discarded (a single-statement body became
+// empty). In a Rails controller that first statement is almost always the
+// `params` read, i.e. the taint source, which is why `bench/layer-recall`
+// measured Ruby at 0/20 IR-TAINT recall while all 20 corpus entries passed on
+// the regex layer. A parameter list on the same line still matches.
+const DEF_RE = /(?:^|\n)[ \t]*def\s+(?:self\.)?(\w+[?!=]?)[ \t]*(?:\(([^)]*)\))?/g;
 
 function _extractRubyBody(src, defEnd) {
   let depth = 1;

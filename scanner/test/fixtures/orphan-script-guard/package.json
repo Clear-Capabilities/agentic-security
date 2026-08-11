@@ -1,0 +1,6 @@
+{
+  "name": "orphan-script-guard-fixture",
+  "scripts": {
+    "demo": "node scripts/live/runner.mjs"
+  }
+}

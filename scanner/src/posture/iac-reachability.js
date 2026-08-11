@@ -1,21 +1,27 @@
 // IaC → application code reachability bridge (Sentinel-parity FR-DET-4).
 //
-// Detects publicly-exposed cloud resources in IaC (Terraform / CloudFormation
-// / Kubernetes) and correlates them with application-code references to the
-// same resource (by name, ARN, or hostname). Application-code findings on
-// resources that IaC has exposed get a severity bump and an explicit
-// "exposed-via-iac" tag.
+// Detects publicly-exposed cloud resources in IaC and correlates them with
+// application-code references to the same resource (by name, ARN, or
+// hostname). Application-code findings on resources that IaC has exposed get
+// a severity bump and an explicit "exposed-via-iac" tag.
 //
-// Patterns detected:
+// **Terraform only.** Only `parseTerraform` exists in this file — this header
+// previously also listed CloudFormation and five Kubernetes patterns as
+// detected; neither has any parser function anywhere here (found via
+// Stage-0 doc audit, 2026; confirmed by grep for `function parse*` in this
+// file, which returns exactly one hit). The pattern list below is therefore
+// the Terraform-only reality, not the originally-documented superset:
 //
 //   S3 bucket with public-read ACL / public-access-block disabled
 //   RDS / DocumentDB / Redshift with publicly_accessible = true
 //   Security group with 0.0.0.0/0 ingress on a sensitive port
 //   ALB / NLB / API Gateway with internet-facing scheme
-//   K8s Service of type LoadBalancer with no NetworkPolicy
-//   K8s Ingress with no auth annotation
 //   Lambda function URL with auth_type = NONE
 //   ECS task with assignPublicIp = ENABLED
+//
+// NOT IMPLEMENTED despite being previously documented here: CloudFormation
+// support, K8s Service/LoadBalancer + NetworkPolicy correlation, K8s Ingress
+// auth-annotation checking.
 //
 // Output: { exposedResources: [{name, kind, file, line, severity}], findings: [...new findings] }
 

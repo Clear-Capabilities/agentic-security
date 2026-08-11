@@ -159,3 +159,36 @@ end
   assert.equal(ir.functions[0].name, 'a');
   assert.equal(ir.functions[1].name, 'b');
 });
+
+// ── Ruby: the first body statement must not be swallowed ────────────────────
+// DEF_RE's `\s*` before the optional parameter list matched across the newline,
+// so `m[0]` for `def show\n  c = params[:c]` ended at the next line's indent.
+// `indexOf('\n', ...)` then found the newline at the END of the first statement,
+// and the body was sliced from there — silently dropping statement 1 of EVERY
+// Ruby method. In a Rails controller that statement is almost always the one
+// that reads `params`, which is why bench/layer-recall measured Ruby at 0/20
+// IR-TAINT recall while all 20 corpus entries passed on other layers.
+test('rb: the first statement of a method body is lowered', async () => {
+  const { parseRubyFile } = await import('../src/ir/parser-rb.js');
+  const out = parseRubyFile('a.rb', 'def show\n  c = params[:c]\n  system(c)\nend\n');
+  const kinds = Object.values(out.functions[0].cfg.nodes).map(n => n.kind);
+  assert.ok(kinds.includes('assign'),
+    `first statement dropped — got nodes: ${kinds.join(',')}`);
+});
+
+test('rb: a single-statement method body is not emptied', async () => {
+  const { parseRubyFile } = await import('../src/ir/parser-rb.js');
+  const out = parseRubyFile('a.rb', 'def show\n  b = 2\nend\n');
+  const kinds = Object.values(out.functions[0].cfg.nodes).map(n => n.kind);
+  assert.ok(kinds.includes('assign'), `body emptied — got nodes: ${kinds.join(',')}`);
+});
+
+test('rb: a method with a parameter list still parses its params and body', async () => {
+  // Guard on the fix: DEF_RE must still reach `(a, b)` on the same line.
+  const { parseRubyFile } = await import('../src/ir/parser-rb.js');
+  const out = parseRubyFile('a.rb', 'def show(a, b)\n  c = a\n  system(c)\nend\n');
+  const fn = out.functions[0];
+  assert.deepEqual(fn.params, ['a', 'b']);
+  const kinds = Object.values(fn.cfg.nodes).map(n => n.kind);
+  assert.ok(kinds.includes('assign') && kinds.includes('call'), `got: ${kinds.join(',')}`);
+});

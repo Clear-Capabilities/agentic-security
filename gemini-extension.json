@@ -1,7 +1,7 @@
 {
   "name": "agentic-security",
   "version": "0.75.1",
-  "description": "Agentic-Security scanner + MCP server for Gemini CLI. Provides 12 MCP tools the Gemini agent can call directly: scan, query taint, explain finding, find rule module, look up CVE, synthesize / verify / apply fix, append / read scratchpad, append / read AGENTS.md memory.",
+  "description": "Agentic-Security scanner + MCP server for Gemini CLI. Provides 17 MCP tools the Gemini agent can call directly: scan, query taint, explain finding, find rule module, look up CVE, synthesize / verify / apply fix, synthesize / apply SCA upgrade, append / read scratchpad, append / read AGENTS.md memory, query triage/findings memory, query cache telemetry.",
   "author": {
     "name": "Ross Young",
     "email": "ross@clearcapabilities.com"
@@ -31,5 +31,5 @@
   "install": {
     "via": "gemini extensions install https://github.com/Clear-Capabilities/agentic-security"
   },
-  "notes": "Gemini CLI support via MCP. The slash commands (/scan, /fix, /secure, /explain) and auto-activating skills are Claude-Code-specific today; Gemini users get the 12 MCP tools and can wire them into Gemini-native workflows."
+  "notes": "Gemini CLI support via MCP. The slash commands (/scan, /fix, /secure, /explain) and auto-activating skills are Claude-Code-specific today; Gemini users get the 17 MCP tools and can wire them into Gemini-native workflows."
 }

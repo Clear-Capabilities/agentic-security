@@ -6,7 +6,7 @@
 // pattern recurs.
 //
 // Mechanism: for every JS file under scanner/src/{posture,llm-validator,
-// dataflow,lsp,ir,mcp}/, find each top-level `export function`/`export const`
+// dataflow,lsp,ir,mcp,discovery,sast}/, find each top-level `export function`/`export const`
 // /`export class` and assert at least one OTHER source file imports or
 // references that symbol. Self-references inside the same file don't count.
 //
@@ -30,7 +30,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = path.resolve(__dirname, '..', 'src');
 
 const SCAN_DIRS = [
-  'posture', 'llm-validator', 'dataflow', 'lsp', 'ir', 'mcp', 'discovery',
+  'posture', 'llm-validator', 'dataflow', 'lsp', 'ir', 'mcp', 'discovery', 'sast',
 ];
 
 // Symbols allowed to be uncalled. Each MUST have a justification.
@@ -127,7 +127,16 @@ const ALLOWLIST = new Set([
   'posture/sbom-diff.js::persistSbom',
   'posture/triage.js::exportTriageMetrics',
   // Dataflow scaffolded internals (IFDS cache helpers, K2 wrapper, cross-
-  // service annotations) consumed transitively or kept for API symmetry.
+  // service annotations). PREVIOUS JUSTIFICATION WAS FALSE ("consumed
+  // transitively or kept for API symmetry") — checked all 8 symbols below by
+  // grep against scanner/src/, zero found any reference outside their own
+  // module (2026 Stage-0 audit). This is an entire scaffolded cluster with no
+  // production caller: cross-service taint contract inference, the K2
+  // (k=2 call-string) context-sensitivity wrapper, IFDS-precise persistence,
+  // async-sequencing source detection, and builtin-summaries' own exported
+  // constant. Worth a real decision (wire the cluster in, or delete it) —
+  // kept allowlisted here because that decision is out of scope for a
+  // documentation-truth pass.
   'dataflow/async-sequencing.js::isAsyncSourceFromSummary',
   'dataflow/builtin-summaries.js::BUILTIN_SUMMARIES',
   'dataflow/cross-repo.js::detectIntraProjectServiceEdges',
@@ -140,9 +149,17 @@ const ALLOWLIST = new Set([
   'dataflow/ifds-precise.js::shouldSkipReanalysis',
   'dataflow/k2-summary-cache.js::K2SummaryCache',
   'dataflow/k2-summary-cache.js::wrapAsK2',
-  // C/C++ preprocessor helpers — exported for the C/C++ IR pipeline and
-  // for /trim-dead-code's preprocessor-mode invocation. Consumed via the
-  // IR builder, not by name.
+  // C/C++ preprocessor helpers. PREVIOUS JUSTIFICATION WAS FALSE ("consumed
+  // via the IR builder, not by name" / "for /trim-dead-code's preprocessor
+  // mode") — grepped both claims (scanner/src/ir/index.js, parser-cpp.js,
+  // scripts/*.mjs, commands/*.md): zero references anywhere outside this
+  // file. Genuinely orphaned, found via the Stage-0 capability audit (2026).
+  // This is a real capability gap, not just a stale comment: C/C++ files
+  // containing #define/#include macros are never preprocessed before
+  // parsing, so parser-cpp.js sees raw macro tokens rather than their
+  // expansions. Kept allowlisted (rather than deleted) because wiring it in
+  // or deleting it is a real decision about C/C++ parse fidelity, not a
+  // documentation fix.
   'ir/cpp-preprocessor.js::preprocessFile',
   'ir/cpp-preprocessor.js::resolveSize',
   'ir/cpp-preprocessor.js::resolveTypedef',

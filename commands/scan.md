@@ -154,7 +154,7 @@ esac
 
 **`/scan --sca`** — Dependency CVE audit only (OSV.dev-backed). If suspicious packages appear, invoke the `sca-malware-analyst` subagent for a CLEAN/SUSPICIOUS/MALICIOUS verdict.
 
-**`/scan --secrets`** — Secret sweep (60+ provider patterns + entropy detection). For any hit: rotate the credential immediately, move to a secrets manager, audit git history.
+**`/scan --secrets`** — Secret sweep (51 provider patterns + entropy detection). For any hit: rotate the credential immediately, move to a secrets manager, audit git history.
 
 **`/scan --authz`** — Deep auth/authZ audit (OWASP A01). Covers: JWT algorithm confusion, hardcoded JWT secrets, missing `algorithms:[]` constraint, OAuth2 PKCE absent on public clients, `redirect_uri` from request without allowlist, session fixation, multi-tenant queries missing `tenantId`/`orgId` filter.
 

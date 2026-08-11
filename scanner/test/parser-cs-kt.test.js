@@ -100,3 +100,37 @@ public class M {
   assert.equal(ir.functions.length, 3);
   assert.deepEqual(ir.functions.map(f => f.name).sort(), ['A', 'B', 'C']);
 });
+
+// ── C#: `new Type(...)` with a concatenated argument must not blow the stack ──
+// `_lowerExpr` had no branch for `new`, so `new SqlCommand("q" + name, conn)`
+// fell through to the string-concat heuristic. The `+` is inside the parens, so
+// `_splitTopLevelPlus` returned the input UNCHANGED and the branch recursed on
+// the identical string — RangeError, caught by buildProjectIR's per-file
+// try/catch, silently yielding no IR. 12 of 21 C# corpus entries hit this, which
+// is why bench/layer-recall measured c# at 0/21 taint recall: the parser was
+// crashing on the most common C# SQL-injection shape there is.
+test('cs: `new Type(concat)` does not recurse infinitely', async () => {
+  const { parseCSharpFile } = await import('../src/ir/parser-cs.js');
+  const src = 'public class A { public void F() { var c = new SqlCommand("q" + name, conn); } }';
+  const out = parseCSharpFile('A.cs', src);   // must not throw
+  assert.ok(out && out.functions.length === 1);
+});
+
+test('cs: `new Type(args)` lowers to a call so taint can flow into it', async () => {
+  const { parseCSharpFile } = await import('../src/ir/parser-cs.js');
+  const out = parseCSharpFile('A.cs',
+    'public class A { public void F() { var c = new SqlCommand("q" + name, conn); } }');
+  const assign = Object.values(out.functions[0].cfg.nodes).find(n => n.kind === 'assign');
+  assert.equal(assign.source.kind, 'call', `got ${assign.source.kind}`);
+  assert.equal(assign.source.callee, 'SqlCommand');
+  assert.equal(assign.source.args.length, 2);
+});
+
+test('cs: a top-level concat still lowers to a tpl', async () => {
+  // Guard: the recursion fix must not disable concatenation lowering, which is
+  // what carries taint through `"a" + tainted`.
+  const { parseCSharpFile } = await import('../src/ir/parser-cs.js');
+  const out = parseCSharpFile('A.cs', 'public class A { public void F() { var s = "a" + n; } }');
+  const assign = Object.values(out.functions[0].cfg.nodes).find(n => n.kind === 'assign');
+  assert.equal(assign.source.kind, 'tpl');
+});

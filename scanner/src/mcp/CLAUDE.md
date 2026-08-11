@@ -12,14 +12,21 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 | `find_rule_module` | ✓ | reads `scanner/src/{sast,posture}/` to answer "which file detects CWE-X / family Y" |
 | `lookup_cve` | ✓ | reads local OSV / KEV / EPSS cache; staleness-tiered |
 | `synthesize_fix` | ✓ | reads last-scan; returns the patch text |
-| `verify_fix` | ✓ | re-scans patched files in memory + runs lint; no writes |
+| `verify_fix` | ✗ | re-scans patched files in memory, runs lint + the project test suite + the fix-honesty gate + PoC re-check; does not touch the target project's own files, but appends a record to `.agentic-security/fix-metrics.jsonl` per attempt |
 | `apply_fix` | ✗ | writes via `posture/fix-history.js` (with backup) |
 | `append_scratchpad` | ✗ | writes under `.agentic-security/agent-scratchpad/<agent>/<session>/` only |
 | `read_scratchpad` | ✓ | paginated read of scratchpad files |
 | `append_agents_memory` | ✗ | appends to `.agentic-security/AGENTS.md` continual-learning file |
 | `read_agents_memory` | ✓ | tail of `.agentic-security/AGENTS.md` |
+| `synthesize_sca_upgrade` | ✓ | runs an ecosystem dry-run (`npm install --dry-run` etc.); returns the upgrade plan; no writes |
+| `apply_sca_upgrade` | ✗ | backs up manifests, runs the package manager, runs the project test command, restores manifests on test failure |
+| `query_triage_memory` | ✓ | reads past triage decisions (wont-fix/false-positive) by natural-language query |
+| `query_findings_memory` | ✓ | reads accumulated scan memory (findings + triage history + AGENTS.md) by natural-language query |
+| `query_cache_telemetry` | ✓ | reads prompt-cache economics from the current session transcript; no network |
 
-`apply_fix` is the only write tool. It requires `confirm:true` AND the last-scan HMAC to verify AND the target path not on the reserved-write list.
+**17 tools, not 12** — this table previously stopped at 12 and the count quoted elsewhere (root `CLAUDE.md`, the non-Claude plugin manifests) said "Six." Re-derive with `grep -c "name: '" scanner/src/mcp/tools.js` rather than trusting a hardcoded number here again.
+
+**Two write tools, not one.** `apply_fix` and `apply_sca_upgrade` both write; `verify_fix` also writes (see its row above) though not to the target project's own files. `apply_fix` additionally requires `confirm:true` AND the last-scan HMAC to verify AND the target path not on the reserved-write list; `apply_sca_upgrade` requires `confirm:true` and gates on its own test-restore cycle.
 
 ## Hardening posture (OWASP MCP Top 10)
 

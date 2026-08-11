@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-08-11",
+  "entriesScored": 210,
+  "taintByLanguage": {
+    "c#": 1,
+    "c/c++": 2,
+    "go": 3,
+    "java": 1,
+    "js/ts": 7,
+    "kotlin": 0,
+    "php": 1,
+    "python": 7,
+    "ruby": 1
+  },
+  "totalByLanguage": {
+    "c#": 21,
+    "c/c++": 11,
+    "go": 22,
+    "java": 25,
+    "js/ts": 36,
+    "kotlin": 20,
+    "php": 23,
+    "python": 32,
+    "ruby": 20
+  }
+}

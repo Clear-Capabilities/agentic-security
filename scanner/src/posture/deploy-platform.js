@@ -4,7 +4,10 @@
 // returns platform-specific security findings: missing headers, public previews,
 // no health checks, unsafe infra settings.
 //
-// Platforms: Vercel, Railway, Fly.io, Render, Netlify, AWS Amplify, Cloudflare
+// Platforms: Vercel, Railway, Fly.io, Netlify, Cloudflare.
+// NOT implemented despite being previously listed here: Render, AWS Amplify
+// (found via Stage-0 doc audit, 2026 — grepped for any render/amplify config
+// path or platform key in this file; zero hits for either).
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';

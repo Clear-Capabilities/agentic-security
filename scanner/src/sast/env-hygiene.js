@@ -4,12 +4,15 @@
 // NEXT_PUBLIC_ vars that expose private values, .env.example with real
 // credentials, and hardcoded fallback values that look real.
 //
-// Findings:
+// Findings (4 implemented; ENV_MISSING_GITIGNORE was documented here but has
+// no implementation anywhere in this file — found via Stage-0 doc audit,
+// 2026. Either implement it or drop it from this list; left as a gap, not
+// silently removed, so the missing coverage stays visible):
 //   ENV_NEXT_PUBLIC_SECRET     — NEXT_PUBLIC_ variable whose name implies it's secret
 //   ENV_EXAMPLE_REAL_VALUE     — .env.example / .env.sample with a real-looking value
 //   ENV_HARDCODED_FALLBACK     — process.env.X || "looks-real" fallback in source
-//   ENV_MISSING_GITIGNORE      — .env / .env.local present but not in .gitignore
 //   ENV_DOTENV_IN_SOURCE       — .env file content loaded via require/import in prod code
+//   NOT IMPLEMENTED: ENV_MISSING_GITIGNORE — .env / .env.local present but not in .gitignore
 
 const _ENV_FILE_RE = /^\.env(?:\.(?:local|development|production|test|staging))?$/i;
 const _NONPROD_RE = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|examples?|node_modules)\//i;

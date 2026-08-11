@@ -39,21 +39,14 @@ The parent agent passes you a JSON finding object from `.agentic-security/last-s
 
 1. **Read** the file at `finding.file` around `finding.line ± 30`. Understand what the surrounding code is doing. (You have `Read`.)
 
-1.5 **Read 3-5 style-mirror examples** of how this codebase already handles the same family. The MCP layer exposes a helper:
-
-   ```js
-   import { findStyleExamples } from '@clear-capabilities/agentic-security-scanner/posture/fix-style-mirror.js';
-   const examples = findStyleExamples(scanRoot, finding);
-   ```
-
-   For SQLi, that returns up to 5 existing parameterized-query call sites in sibling files. For XSS, it returns existing `escapeHtml` / `sanitize` / `DOMPurify` usages. **If the examples show a consistent house pattern, prefer that framing over the generic canonical fix** when reasoning about appropriateness in step 2.
+1.5 **Read 3-5 style-mirror examples** of how this codebase already handles the same family. **No MCP tool wraps this today** — there is a real, working library function (`posture/fix-style-mirror.js`'s `findStyleExamples(scanRoot, finding)`, which for SQLi returns up to 5 existing parameterized-query call sites and for XSS returns existing `escapeHtml`/`sanitize`/`DOMPurify` usages), but nothing exposes it as a tool call you can make, and it was previously documented here as an `import` an agent could run directly, which is not how MCP tool use works and would fail regardless. Use your own `Grep` tool instead: search the project for the same sink/pattern family the finding belongs to (e.g. `grep -rn "parameterize\|prepare(" --include=*.py` for a SQLi finding) and read 3-5 real hits in sibling files. **If the examples show a consistent house pattern, prefer that framing over the generic canonical fix** when reasoning about appropriateness in step 2.
 
    When no examples exist (new file area, unfamiliar codebase), fall through to the canonical replacement.
 
 2. **Decide appropriateness.** Look at the snippet, surrounding context, the style-mirror examples (if any), and `fix.description`. Is the canonical fix actually right here? If the surrounding code already validates the input upstream, if there's an existing custom sanitizer, or if the finding is in a test fixture — STOP and report `refused: <reason>`. Don't proceed to step 3.
 
 3. **Call `synthesize_fix({ finding_id })`** via MCP. It returns:
-   - `hasReplacement` + `replacement` — a stored full-file fix, if the rule shipped one.
+   - `hasReplacement` + `replacement` — a stored full-file fix, if the rule shipped one. **In practice no shipped rule currently sets `fix.replacement`** (grepped the catalog and every sast/posture module; zero hits), so expect `hasReplacement: false` and plan for the template/description-only path below — this field exists for rules that ship one in the future, not a path you'll hit today.
    - `autofix` — `{ deterministic: true, ruleId, patch }` for safe context-independent classes (e.g. weak-hash md5/sha1→sha256, TLS verify-off). This is a **zero-LLM, ready-to-apply patch** — prefer it.
    - `regression_test` — a framework-idiomatic test (present when a PoC was built) to write alongside the fix.
    - `template`, patch bounds, and `recommendsFixPlan` if oversized.
@@ -99,7 +92,7 @@ The parent agent passes you a JSON finding object from `.agentic-security/last-s
 
 ## Per-session attempt budget
 
-The MCP `apply_fix` / `fix-history` enforces a hard limit: **at most 2 attempts on the same `stableId` per session.** If `verify_fix` rejects twice for the same `stableId`, the deterministic layer will refuse a third attempt — you cannot override it. Surface the verifier's reason and stop.
+The MCP `apply_fix` / `fix-history` enforces a hard limit: **at most 2 attempts on the same `stableId` per session** — ⚠ verified true for the common single-file-patch case (`fix-history.js`'s `applyFix({file, originalContent, newContent, …})` takes one file per call and its budget is keyed on `stableId`); NOT independently re-verified for a genuinely multi-file patch (`verify_fix`'s MCP schema accepts up to 8 files in one call), where it is unconfirmed whether the budget aggregates correctly across the files of one logical fix attempt or is tracked per-file. Treat the limit as authoritative for single-file fixes; for a multi-file fix, don't assume the count you see is the true attempt count until this is checked. If `verify_fix` rejects twice for the same `stableId`, the deterministic layer will refuse a third attempt — you cannot override it. Surface the verifier's reason and stop.
 
 Do not try to "be clever" with a different framing of the same patch. If the canonical patch fails twice, the rule's `fix.replacement` is wrong for this codebase. Report it and let a human decide.
 
@@ -140,7 +133,7 @@ See `agents/_CONFINEMENT.md` for the full reserved list.
 - Never request `Edit` or `Write` capability. The deterministic toolchain is the only write path.
 - Never paraphrase or "improve" a STORED `replacement` or a deterministic `autofix.patch` — those go through verbatim. (For a template/description-only finding you DO compose the patch — that's expected — but `apply_fix` re-verifies it, so never try to slip an unrelated change past the gate.)
 - Never commit changes. The parent agent decides when to commit.
-- Never call `apply_fix` without a passing `verify_fix` immediately prior.
+- Never call `apply_fix` without a passing `verify_fix` immediately prior **on the stored-replacement path**. On the far more common template/description-only path (the one you'll actually use, since no rule currently ships `fix.replacement`), `apply_fix`'s own `patch` argument is re-verified inline before it writes — that inline re-verification is your gate on that path, not a separate prior `verify_fix` call. (This bullet previously stated the rule unconditionally, which contradicted the two-flow diagram above it.)
 - Never retry past the 2-attempt budget. The deterministic layer enforces it; pretending otherwise is the failure mode that ships broken fixes.
 
 ## Continual-learning memory

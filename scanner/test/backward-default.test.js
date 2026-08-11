@@ -9,7 +9,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { annotateBackwardSlices, sliceBackward } from '../src/dataflow/backward.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function _fakeFn(name, fromLine, nodes) {
   // nodes is an array of {kind, line, ...}; builds entry → ... → exit linear CFG.
@@ -106,4 +110,33 @@ test('annotateBackwardSlices is a no-op for non-array input (defensive)', () => 
   // The function returns the input unchanged when it isn't an array.
   assert.equal(annotateBackwardSlices(null, {}, {}), null);
   assert.equal(annotateBackwardSlices(undefined, {}, {}), undefined);
+});
+
+// _funcQid propagation (Stage 0 doc-drift investigation, taint-ir item [0]/[5]).
+//
+// annotateBackwardSlices's first check is `if (!f._funcQid) { skipped++; continue; }`.
+// The taint walk DOES set _funcQid on every finding during construction
+// (dataflow/engine.js's callContext._findings.push(...) calls), but the final
+// IR-TAINT finding object is built from an explicit field allowlist that never
+// named _funcQid — the same class of bug _sanitizersOnPath had before it was
+// fixed. Result: every finding reaching annotateBackwardSlices had
+// f._funcQid === undefined, so backward slicing skipped 100% of findings,
+// always, regardless of AGENTIC_SECURITY_BACKWARD_SLICE.
+test('IR-TAINT findings carry _funcQid so backward slicing can look them up', async () => {
+  process.env.AGENTIC_SECURITY_DEEP = '1';
+  process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+  process.env.AGENTIC_SECURITY_BACKWARD_SLICE = '1';
+  try {
+    const { runScan } = await import('../src/runScan.js');
+    const { scan } = await runScan(path.join(__dirname, 'fixtures', 'ir-taint', 'interproc'));
+    const taint = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
+    assert.ok(taint.length > 0, 'precondition: at least one IR-TAINT finding must fire');
+    const withSlice = taint.filter(f => Array.isArray(f.backwardSlice) && f.backwardSlice.length > 0);
+    assert.ok(withSlice.length > 0,
+      `expected at least one finding annotated with a non-empty backwardSlice, got 0 of ${taint.length}`);
+  } finally {
+    delete process.env.AGENTIC_SECURITY_DEEP;
+    delete process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+    delete process.env.AGENTIC_SECURITY_BACKWARD_SLICE;
+  }
 });

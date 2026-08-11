@@ -1,9 +1,12 @@
 // Generalised, recall-preserving sanitizer gate.
 //
-// The catalog carries 65 sanitizer entries tagged by family via `appliesTo`
-// (sql, xss, url, cmd). Before this module only `appliesTo: ['sql']` was ever
-// consumed — by proven-clean.js — so a correctly sanitized xss/url/cmd flow was
-// still reported at full confidence. That is a pure false-positive source.
+// The catalog carries 381 sanitizer entries (all languages, all kinds; count
+// via CATALOG.filter(e => e.kind === 'sanitizer').length — re-derive rather
+// than trust a hardcoded number here, since this comment has been wrong
+// before) tagged by family via `appliesTo` (sql, xss, url, cmd, *, …). Before
+// this module only `appliesTo: ['sql']` was ever consumed — by
+// proven-clean.js — so a correctly sanitized xss/url/cmd flow was still
+// reported at full confidence. That is a pure false-positive source.
 //
 // This gate NEVER removes a finding. It sets `sanitized` plus a proof object and
 // lets the existing proof gate in engine.js do the demotion, exactly as
@@ -78,7 +81,12 @@ export function applySanitizerGate(findings, ctx) {
     if (!Array.isArray(observed) || !observed.length) continue;
     const matching = observed.filter(name => {
       const fams = index.get(name);
-      return fams && fams.has(fam);
+      // `*` is the catalog's universal tag, carried by the 17 type-coercion
+      // entries (parseInt/intval/Atoi/TryParse/…) that neutralise every
+      // injection family by making the value non-stringy. Matching it
+      // literally against 'sql'/'xss' never succeeds, which left that whole
+      // tier inert.
+      return fams && (fams.has(fam) || fams.has('*'));
     });
     if (!matching.length) continue;
     // Label only. The proof gate decides what to do with the label.

@@ -82,7 +82,7 @@ function familyOf(finding) {
 }
 
 // Return the primary-CWE family for a Juliet C/C++ test path, or null.
-export function julietPrimaryFamily(file) {
+function julietPrimaryFamily(file) {
   const m = JULIET_DIR_RE.exec(String(file).replace(/\\/g, '/'));
   if (!m) return null;
   return CWE_TO_FAMILY[parseInt(m[1], 10)] || null;

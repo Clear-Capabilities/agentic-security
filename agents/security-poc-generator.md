@@ -21,8 +21,8 @@ and produce no payload.
 The calling command passes:
 
 1. The **finding** object (file, line, vuln, cwe, severity, source, sink, snippet, etc.) from `.agentic-security/last-scan.json`.
-2. The **framework detection** result from `scripts/validator/detect-framework.js`: `{framework, runner, ext, lang}`. Use this to choose the right test idiom — jest vs. vitest vs. node:test vs. pytest vs. go test vs. cargo test vs. dotnet test vs. junit vs. rspec vs. phpunit.
-3. The **risk context** block from `scripts/validator/risk-context.js` (severity, reachability, route, data classes, compliance).
+2. The **framework detection** result from `scripts/validator/detect-framework.mjs`: `{framework, runner, ext, lang}`. Use this to choose the right test idiom — jest vs. vitest vs. node:test vs. pytest vs. go test vs. cargo test vs. dotnet test vs. junit vs. rspec vs. phpunit.
+3. The **risk context** block from `scripts/validator/risk-context.mjs` (severity, reachability, route, data classes, compliance).
 4. ±60 lines of file context around the finding line (read via the Read tool).
 
 ## Class-refusal check (run BEFORE generating)

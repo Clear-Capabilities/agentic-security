@@ -68,7 +68,7 @@ function intLocals(raw) {
 // Pattern 1: Constant ternary assigning to bar.
 //   bar = (<expr> [+-*]) num <cmp> <literal> ? "<safe>" : param;
 // where `num` is a local int constant and the comparison folds to a known bool.
-export function hasConstantTernaryBarSafe(raw) {
+function hasConstantTernaryBarSafe(raw) {
   const ints = intLocals(raw);
   // Try a few common shape variants. The first looks for the (lhs ± num) > N pattern.
   // We allow either order — `bar = literal ? ... : ...` style.
@@ -105,7 +105,7 @@ export function hasConstantTernaryBarSafe(raw) {
 }
 
 // Pattern 2: Constant if/else assigning to bar — same idea.
-export function hasConstantIfBarSafe(raw) {
+function hasConstantIfBarSafe(raw) {
   const ints = intLocals(raw);
   // `if ((N op M) op2 num cmp K) bar = "<literal>"; else bar = param;`
   const re = /\bif\s*\(\s*\((-?\d+)\s*([+\-*])\s*(-?\d+)\)\s*([+\-])\s*(\w+)\s*([><=!]=?|==)\s*(-?\d+)\s*\)\s*bar\s*=\s*"[^"]*"\s*;\s*else\s+bar\s*=\s*(\w+)\s*;/g;
@@ -143,7 +143,7 @@ export function hasConstantIfBarSafe(raw) {
 //   map.put("keyB-XXX", param);
 //   bar = map.get("keyB-XXX");
 //   bar = map.get("keyA-XXX");   // overwrites with safe
-export function hasMapDoubleGetSafe(raw) {
+function hasMapDoubleGetSafe(raw) {
   // Use a tolerant regex — we don't need to bind every put to every get.
   // The presence of these three lines in this order suffices.
   const re = /\.\s*put\s*\(\s*("[^"]+")\s*,\s*"[^"]*"\s*\)\s*;[\s\S]{0,400}?\.\s*put\s*\(\s*("[^"]+")\s*,\s*\w+\s*\)[\s\S]{0,500}?\bbar\s*=\s*(?:\(String\)\s*)?\w+\.get\(\s*\2\s*\)[\s\S]{0,200}?\bbar\s*=\s*(?:\(String\)\s*)?\w+\.get\(\s*\1\s*\)/;
@@ -203,7 +203,7 @@ function _simulateListBar(raw) {
   return anyResolved;
 }
 
-export function hasListGetIndex0Safe(raw) {
+function hasListGetIndex0Safe(raw) {
   return _simulateListBar(raw);
 }
 
@@ -217,7 +217,7 @@ export function hasListGetIndex0Safe(raw) {
 //     case 'B': bar = "literal";   break;   // TAKEN
 //     ...
 //   }
-export function hasSwitchCharAtConstantSafe(raw) {
+function hasSwitchCharAtConstantSafe(raw) {
   // 1. Find `String <var> = "<lit>";` then `char <other> = <var>.charAt(<idx>);`.
   const decl = /\bString\s+(\w+)\s*=\s*"([^"]+)"\s*;\s*(?:\/\/[^\n]*\n)?\s*char\s+\w+\s*=\s*\1\s*\.\s*charAt\s*\(\s*(\d+)\s*\)\s*;/g;
   let m;

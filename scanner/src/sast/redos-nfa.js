@@ -273,7 +273,7 @@ export function isUnsafeRegex(body) {
   return detectSuperlinear(parsed.tree);
 }
 
-export function extractJsRegexBodies(code) {
+function extractJsRegexBodies(code) {
   const out = [];
   // Regex literals: /pattern/flags
   for (const m of code.matchAll(/\/([^/\n]+)\/[gimsuy]*/g)) {
@@ -307,7 +307,7 @@ export function extractJavaRegexBodies(code) {
 
 // Go: regexp.MustCompile / Compile / MatchString("…") — Go string literals use
 // "…" (interpreted) or `…` (raw). Both carry the pattern verbatim.
-export function extractGoRegexBodies(code) {
+function extractGoRegexBodies(code) {
   const out = [];
   for (const m of code.matchAll(/\bregexp\.(?:MustCompile|Compile|CompilePOSIX|MatchString|Match)\s*\(\s*"((?:\\.|[^"\n])+)"/g)) {
     out.push({ body: m[1].replace(/\\\\/g, '\\'), line: code.slice(0, m.index).split('\n').length });
@@ -320,7 +320,7 @@ export function extractGoRegexBodies(code) {
 
 // PHP: preg_match / preg_match_all / preg_replace("/…/flags", …) — the regex is
 // a delimited string; strip the delimiter + trailing flags.
-export function extractPhpRegexBodies(code) {
+function extractPhpRegexBodies(code) {
   const out = [];
   for (const m of code.matchAll(/\bpreg_(?:match|match_all|replace|replace_callback|split)\s*\(\s*(['"])(.+?)\1/g)) {
     let lit = m[2];
@@ -334,7 +334,7 @@ export function extractPhpRegexBodies(code) {
 }
 
 // Ruby: a regex literal /…/ used with =~ / .match / .match? / Regexp.new("…").
-export function extractRubyRegexBodies(code) {
+function extractRubyRegexBodies(code) {
   const out = [];
   for (const m of code.matchAll(/(?:=~|\.match\??|\.scan|\.gsub|\.sub|grep)\s*\(?\s*\/((?:\\.|[^\/\n])+)\//g)) {
     out.push({ body: m[1], line: code.slice(0, m.index).split('\n').length });
@@ -346,7 +346,7 @@ export function extractRubyRegexBodies(code) {
 }
 
 // C#: new Regex("…") / Regex.IsMatch(s, "…") / Regex.Match / Regex.Replace.
-export function extractCsharpRegexBodies(code) {
+function extractCsharpRegexBodies(code) {
   const out = [];
   for (const m of code.matchAll(/\bnew\s+Regex\s*\(\s*@?"((?:\\.|""|[^"\n])+)"/g)) {
     out.push({ body: m[1].replace(/""/g, '"'), line: code.slice(0, m.index).split('\n').length });
@@ -358,7 +358,7 @@ export function extractCsharpRegexBodies(code) {
 }
 
 // Kotlin: Regex("…") / "…".toRegex() / Pattern.compile("…").
-export function extractKotlinRegexBodies(code) {
+function extractKotlinRegexBodies(code) {
   const out = [];
   for (const m of code.matchAll(/\bRegex\s*\(\s*"((?:\\.|[^"\n])+)"/g)) {
     out.push({ body: m[1].replace(/\\\\/g, '\\'), line: code.slice(0, m.index).split('\n').length });

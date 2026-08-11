@@ -19,18 +19,22 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `scanner/src/posture/` | Annotation pipeline + state stores. 90+ modules. | `scanner/src/posture/CLAUDE.md` |
 | `scanner/src/dataflow/` | Layer-2 taint engine (k=1 monovariant return-taint; see local file for what is and isn't modelled). | `scanner/src/dataflow/CLAUDE.md` |
 | `scanner/src/discovery/` | LLM candidate discovery, gated by the deterministic engine. Propose → confirm → refute → judge. | `scanner/src/discovery/CLAUDE.md` |
-| `scanner/src/mcp/` | MCP server. Six tools; OWASP MCP Top 10 hardened. | `scanner/src/mcp/CLAUDE.md` |
+| `scanner/src/mcp/` | MCP server. 17 tools (2 write: `apply_fix`, `apply_sca_upgrade`); OWASP MCP Top 10 hardened. | `scanner/src/mcp/CLAUDE.md` |
 | `scanner/src/ir/` | Layer-1 IR: Babel-based JS/TS; Python via stdlib `ast` subprocess (default, when python3 available) with regex fallback; `java-parser`-based Java. | `scanner/src/ir/CLAUDE.md` |
 | `scanner/src/lsp/` | LSP server wrapping `runScan`. Ships with the JetBrains + Neovim plugins. |  |
-| `scanner/src/llm-validator/` | Layer-3 LLM validator (opt-in via `AGENTIC_SECURITY_LLM_VALIDATE=1`). |  |
+| `scanner/src/llm-validator/` | Layer-3 LLM validator. **Default-on whenever `AGENTIC_SECURITY_LLM_ENDPOINT` is configured** — not gated on a separate opt-in flag. Opt out with `AGENTIC_SECURITY_LLM_VALIDATE=0`. With no endpoint configured it stays a no-op regardless, so an unrelated env var can never trigger a surprise network call. |  |
 | `scanner/test/` | Node test runner suite. Scoped via `npm run test:{smoke,sast,posture,dataflow,mcp,report,lifecycle}` — see `scanner/CLAUDE.md`. |  |
 | `bench/cve-replay/` | Real-CVE replay corpus + runner. 210 entries (3 regression + 201 capability + 6 deep), all `pre:TP post:TN`; target 500. Execution-proven findings can auto-enrol via `npm run corpus:enroll` — see `scanner/src/posture/CLAUDE.md`. Baseline-gated via `npm run bench:cve-replay:check` (`bench/cve-replay/CONTRIBUTING.md`). |  |
+| `bench/layer-recall/` | Per-layer, per-language recall (`npm run bench:layer-recall:check`). Answers *which analysis layer* detected each corpus entry, with deep mode forced on for all 210. Baseline-gated on per-language taint counts. Published at `docs/METRICS.md`; kotlin is the one remaining language at **0%** taint recall (not a defect — Kotlin taint works, see `test/kt-taint-flow.test.js`; its corpus entries simply aren't taint-shaped). java, ruby, and c# were each fixed from 0% after real IR-layer defects were found. |  |
+| `bench/mutation/` | Metamorphic + adversarial mutation gate (`npm run bench:mutation:check`). Scores **verdict-flip correctness**, not detection count: a semantics-preserving rewrite must not move the verdict, a semantics-changing near-miss must. This is the anti-overfitting check — accumulating patterns cannot raise the score, and an engine that games a family check fails it. |  |
 | `bench/owasp-benchmark-v1.2/`, `bench/sard-juliet-java/`, `bench/polyglot/` | External benches (gitignored, regenerated). |  |
 | `commands/` | Slash-command markdown files. 10 dispatchers: `secure`, `find-and-fix-everything`, `scan`, `triage`, `fix`, `posture`, `compliance`, `supply`, `setup`, `labs`. Every capability is a mode of a dispatcher (e.g. CI gates live at `/setup --ci`, the red/blue/auditor deep-dive at `/triage --deep`); the legacy single-purpose aliases redirect via `hooks/legacy-alias-redirect.js`. |  |
 | `agents/` | Sub-agent system prompts. Edit-capable agents follow `agents/_CONFINEMENT.md`. |  |
 | `hooks/` | Claude Code hook scripts + `hooks.json`. |  |
 | `.githooks/` | Committed **git** hooks (distinct from `hooks/` above, which is editor integration). Currently `pre-push`, a shim over `scripts/pre-push-gate.mjs`. Activated per clone via `core.hooksPath` — see "Pre-push gate". |  |
 | `scripts/` | Compliance + helper scripts + CI templates (`scripts/ci-templates/`). |  |
+| `docs/standards/` | Upstream standards source material. A document lives here **only if a generator reads it** — currently just `NIST AI 600-1.xlsx`, consumed by `scripts/nist-compliance/build-catalog.py`. Never read at runtime. | `docs/standards/README.md` |
+| `docs/compliance/` | Per-framework coverage maps, derived from the framework JSON. One per framework linked in the README table. |  |
 | `docs/POSITIONING.md` | ICP statement: vibecoder-first; pro follow-on. |  |
 | `docs/HARNESS_ASSESSMENT_SPEC.md` | Six-domain rubric for scoring an AI agent harness (PRD-derived, versioned). |  |
 | `docs/HARNESS_ASSESSMENT_EVIDENCE.md` + `docs/schemas/harness-evidence.schema.json` | Wire format a conforming harness must emit so it can be scored. |  |
@@ -137,7 +141,7 @@ Three anti-rot rules stop "temporarily pinned" from becoming permanent — each 
 
 See the **`scanner/src/sast/CLAUDE.md`** local guide. (Moved out of root per the Claude-Code-at-scale guidance: reusable expertise belongs next to the code it applies to, not in the every-session root file.)
 
-The skill `skills/add-scan-rule.md` packages the same workflow for on-demand invocation outside the repo (e.g. from a downstream consumer's session).
+The skill `skills/add-scan-rule/SKILL.md` packages the same workflow for on-demand invocation outside the repo (e.g. from a downstream consumer's session).
 
 ---
 

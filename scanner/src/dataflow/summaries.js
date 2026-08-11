@@ -28,7 +28,13 @@
 //   - Field sensitivity is at the parameter granularity only (not arbitrary
 //     access paths). `f(obj)` with obj.foo tainted is treated the same as
 //     obj.bar tainted.
-//   - No higher-order tracking — callbacks passed as args aren't analyzed.
+//   - Higher-order tracking IS modelled, in engine.js (not here): a callback
+//     passed as an argument is recorded via `_higherOrderInvocations`, then
+//     resolved and analyzed with the callback's own tainted parameter, with
+//     its findings merged back into the caller (`higher-order.js`). This
+//     summary cache is unaware of it; the higher-order path is a separate
+//     mechanism layered on top by the caller. (This bullet previously said
+//     no such tracking existed at all, which was true only of THIS module.)
 //   - Recursion: when we'd recurse into a function already on the analysis
 //     stack, we return the bottom summary (no-taint) and rely on fixed-point
 //     iteration. With k=1 this converges in ≤2 iterations for typical code.

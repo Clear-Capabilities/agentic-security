@@ -162,9 +162,24 @@ export function seedSummaryCache(summaryCache, persisted, reusableQids) {
 }
 
 /**
- * Serialize a SummaryCache for persistence. Only persists summaries with
- * `_persistable: true` (set by the engine when the summary is independent
- * of an entry taint-state — typically pure functions or terminal sinks).
+ * Serialize a SummaryCache for persistence.
+ *
+ * ACTUAL current filter: excludes `_budgetExceeded` and `_recursive`
+ * summaries, and caps at MAX_PERSISTED_SUMMARIES. There is no
+ * context-independence filter — nothing in this codebase ever sets a
+ * `_persistable` flag (this comment previously claimed one existed and gated
+ * on it; grep confirms no such flag is set anywhere). Every non-recursive,
+ * non-budget-exceeded summary is persisted regardless of whether it depends
+ * on the entry taint-state it was computed under.
+ *
+ * OPEN QUESTION, not resolved by this comment fix: whether the reseeding
+ * side (`pickReusableSummaries`/`seedSummaryCache`) re-validates a persisted
+ * summary against the CALLER's actual entry taint-state before reuse, or
+ * trusts it as-is. If it trusts it as-is, a summary computed under one
+ * tainted-arg shape could be replayed for a call site with a different shape
+ * next scan — a real correctness question for the k-CFA context-sensitivity
+ * this cache exists to provide, worth a dedicated investigation rather than
+ * a guess made while reconciling documentation.
  *
  * Returns a plain object `{ qid: summary }` safe for JSON.stringify.
  */
