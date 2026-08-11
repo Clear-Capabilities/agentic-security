@@ -99,10 +99,24 @@ export function loadFramework(scanRoot, id) {
  *   'manual'    — control has no mapsTo (requires manual attestation)
  */
 export function evaluateFramework(scanRoot, fw, scan) {
+  // CMP-2: last-scan.json (what this is actually handed in production) carries
+  // findings across four separate channels — SAST (`findings`), secrets,
+  // business-logic, and SCA (`supplyChain`) — because report/index.js's
+  // normalizeFindings keeps them apart too. Reading only `scan.findings` made
+  // every secrets/logic/SCA finding invisible to every framework's family:
+  // mappings, e.g. a critical hardcoded secret never counted against a
+  // control mapped to family:hardcoded-secret. Each channel's family default
+  // mirrors normalizeFindings' own fallback for that channel so the two stay
+  // in agreement about what family an untagged finding belongs to.
   const findings = (scan && Array.isArray(scan.findings)) ? scan.findings : [];
+  const secrets = ((scan && Array.isArray(scan.secrets)) ? scan.secrets : [])
+    .map(s => ({ ...s, family: s.family || 'hardcoded-secret' }));
+  const logicVulns = (scan && Array.isArray(scan.logicVulns)) ? scan.logicVulns : [];
+  const supplyChain = ((scan && Array.isArray(scan.supplyChain)) ? scan.supplyChain : [])
+    .map(sc => ({ ...sc, family: sc.family || 'vulnerable-dep' }));
   const components = (scan && Array.isArray(scan.components)) ? scan.components : [];
   const families = new Map();
-  for (const f of findings) {
+  for (const f of [...findings, ...secrets, ...logicVulns, ...supplyChain]) {
     const k = f.family || 'unknown';
     if (!families.has(k)) families.set(k, []);
     families.get(k).push(f);
@@ -122,6 +136,14 @@ export function evaluateFramework(scanRoot, fw, scan) {
 
     let allCleared = true;
     let anySignal = false;
+    // CMP-2: a rule: mapping's own observation says "verify manually" — it
+    // is deliberately not code-checked. It used to set anySignal=true and
+    // leave allCleared untouched, so a control whose ONLY mapping was rule:
+    // resolved to 'present' (fully evidenced), the same status as a control
+    // with real, checked evidence. Any rule: mapping present caps the
+    // control at 'partial' — never 'present' — regardless of what the
+    // family:/module: mappings in the same control found.
+    let hasUnverifiableMapping = false;
     for (const m of maps) {
       if (m.startsWith('family:')) {
         const fam = m.slice('family:'.length).split(':')[0];
@@ -182,11 +204,12 @@ export function evaluateFramework(scanRoot, fw, scan) {
         // Could check whether a custom rule fires zero — leave a hint for now.
         obs.push(`(rule mapping) ${m} — verify manually that the bodyguard rule is enabled.`);
         anySignal = true;
+        hasUnverifiableMapping = true;
       }
     }
 
     if (!anySignal) status = 'manual';
-    else if (allCleared) status = 'present';
+    else if (allCleared && !hasUnverifiableMapping) status = 'present';
     else status = 'partial';
 
     results.push({ control: c, status, observations: obs });

@@ -781,7 +781,7 @@
       "summary": "Software is maintained, replaced, and removed commensurate with risk.",
       "codeTestable": "partial",
       "mapsTo": [
-        "family:vulnerable-dependency",
+        "family:vulnerable-dep",
         "family:dependency-drift"
       ]
     },
@@ -800,7 +800,7 @@
       "codeTestable": "yes",
       "mapsTo": [
         "family:dependency-confusion",
-        "family:vulnerable-dependency"
+        "family:vulnerable-dep"
       ]
     },
     {

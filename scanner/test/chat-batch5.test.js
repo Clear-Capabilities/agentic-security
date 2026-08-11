@@ -218,6 +218,60 @@ test('auditor: evaluateFramework marks partial when open findings on a mapsTo fa
   } finally { await p.cleanup(); }
 });
 
+// ── CMP-2 ────────────────────────────────────────────────────────────────
+//
+// (a) evaluateFramework read only scan.findings (SAST-only) — secrets, SCA
+//     and logic findings were invisible to every framework's family:
+//     mappings, even though the scan object it's handed carries all four
+//     channels (the same shape last-scan.json has).
+// (b) a `rule:` mapping set anySignal=true unconditionally and never set
+//     allCleared=false — so a control whose only evidence is "verify this
+//     manually" (the rule: observation's own text) could resolve to
+//     'present', the same status as a control with real, checked evidence.
+
+test('CMP-2: evaluateFramework sees secrets, logicVulns and supplyChain findings, not just SAST', async () => {
+  const p = await mkProject();
+  try {
+    const fw = loadFramework(p.dir, 'ccpa'); // maps family:hardcoded-secret
+    const scanWithSecret = { findings: [], secrets: [{ family: 'hardcoded-secret', severity: 'critical' }] };
+    const r = evaluateFramework(p.dir, fw, scanWithSecret);
+    const withSecretFamily = r.filter(x =>
+      Array.isArray(x.control.mapsTo) && x.control.mapsTo.includes('family:hardcoded-secret'));
+    assert.ok(withSecretFamily.length > 0, 'ccpa must map at least one control to family:hardcoded-secret');
+    assert.ok(withSecretFamily.every(x => x.status !== 'present'),
+      'a critical secret finding must not be invisible to a control mapped to its family');
+  } finally { await p.cleanup(); }
+});
+
+test('CMP-2: evaluateFramework sees an open vulnerable-dep (SCA) finding', async () => {
+  const p = await mkProject();
+  try {
+    const fw = loadFramework(p.dir, 'owasp-asvs-5'); // V10.1 maps family:vulnerable-dep
+    const scan = { findings: [], supplyChain: [{ severity: 'critical', name: 'left-pad', vuln: 'CVE-x' }] };
+    const r = evaluateFramework(p.dir, fw, scan);
+    const v101 = r.find(x => x.control.id === 'V10.1');
+    assert.ok(v101);
+    assert.notEqual(v101.status, 'present',
+      'a critical SCA finding must not be invisible to the control mapped to family:vulnerable-dep');
+  } finally { await p.cleanup(); }
+});
+
+test('CMP-2: a control whose only mapping is rule: can never resolve to "present" (rule-only pass)', async () => {
+  const p = await mkProject();
+  try {
+    const fw = loadFramework(p.dir, 'owasp-llm-top-10'); // has a control mapped to rule:no-max-tokens
+    const r = evaluateFramework(p.dir, fw, { findings: [] });
+    const ruleOnly = r.filter(x =>
+      Array.isArray(x.control.mapsTo) &&
+      x.control.mapsTo.every(m => m.startsWith('rule:')));
+    assert.ok(ruleOnly.length > 0, 'expected at least one rule:-only control in owasp-llm-top-10');
+    for (const c of ruleOnly) {
+      assert.notEqual(c.status, 'present',
+        `${c.control.id}: a control whose evidence says "verify manually" must not report as fully present`);
+    }
+  } finally { await p.cleanup(); }
+});
+
 test('auditor: renderWalkthrough produces Markdown with summary + per-control sections', async () => {
   const p = await mkProject();
   try {
