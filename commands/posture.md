@@ -15,7 +15,7 @@ Posture + reporting dispatcher. One command, multiple views.
 | `--status` | One-screen plugin + project health snapshot — version, last scan, cache size, hook activation, suppressions |
 | `--report-card` | Single A–F letter grade + one explanation + one next action |
 | `--harness` | Score this project's AI agent harness against the six-domain rubric |
-| `--trend` | Findings trend over time — added/closed/wont-fix by week |
+| `--trend` | Findings delta between the last two scans — introduced/fixed/net change |
 | `--threat` | Threat model views: STRIDE, personas, playbook, bounty, adversary, surface, boundary, SPOF |
 | `--playbook` | Stack-specific posture playbook (Express, FastAPI, Django, Rails, Spring Boot, etc.) |
 | `--mgmt` | Posture management surface — auth, network, WAF, telemetry, feature-flag imports |
@@ -47,6 +47,24 @@ If there's no prior scan, the dashboard collapses to a single "run `/scan --all`
 
 ## Implementation
 
-Dispatches to existing command implementations based on the flag. All modes preserved — no functional regression.
+`--harness` and `--trend` below run a real, verified command. `--cache` was already correctly wired. `--status`, `--report-card`, `--threat`, `--playbook`, and `--mgmt` are not yet wired to a concrete invocation — treat any answer for those modes as best-effort narration from context, not a verified command output, until they're fixed the same way.
+
+```bash
+FLAG="${1:---status}"
+case "$FLAG" in
+  --harness)
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs harness . ;;
+  --trend)
+    node -e "
+      import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/security-trend.js').then(m => {
+        console.log(JSON.stringify(m.computeTrend('.'), null, 2));
+      });
+    " ;;
+esac
+```
+
+`--harness` runs the real `harness` CLI subcommand (`bin/agentic-security.js` → `posture/harness-score.cjs` via `cmdHarness`) — scores this project's `.claude/`, `.cursor/`, `.codex/`, etc. configs against the six-domain rubric.
+
+`--trend` calls `computeTrend()` (`posture/security-trend.js`) directly, reading `.agentic-security/scan-history.json`. That file is populated by `runScan()` itself (`src/runScan.js` calls `appendScanSnapshot` on every scan, CLI or in-process) — no separate wiring needed on the write side. The result is `{ hasTrend, prev, curr, introduced, fixed, delta, critDelta, improving }` when at least two scans exist, or `{ hasTrend: false, message: "Need at least 2 scans..." }` otherwise. Render `introduced`/`fixed`/`delta` as the "findings trend" — there is no weekly bucketing; it's always last-scan-vs-this-scan.
 
 `--cache` runs the `cache-report` CLI subcommand (`scanner/bin/agentic-security.js` → `scanner/src/posture/cache-economics.js`), which parses the Claude Code transcript usage for this session and prints the economics + any detected cache leaks. The same data is available to agents via the `query_cache_telemetry` MCP tool.

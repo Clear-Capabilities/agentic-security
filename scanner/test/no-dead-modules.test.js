@@ -90,7 +90,9 @@ const ALLOWLIST = new Set([
   'ruleset-version.js::readPinned',
   // effectiveVersion is no longer dead — the CLI calls it to stamp the ruleset
   // version into the R4 run attestation. Entry removed (4R-6 decay rule).
-  'security-trend.js::computeTrend',
+  // security-trend.js::computeTrend is no longer dead — commands/posture.md's
+  // --trend mode (S7, Stage-0 audit) calls it directly. Entry removed (4R-6
+  // decay rule).
   // stable-id.js::computeStableId is no longer dead — discovery/judge.js calls
   // it to derive finding stableIds. Entry removed (4R-6 decay rule).
   'streak.js::loadStreak',
