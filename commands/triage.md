@@ -1,105 +1,89 @@
 ---
 description: Interactive triage. Mark each finding TP / FP / wontfix. Feeds the active-learning loop for next scan.
-argument-hint: "[<finding-id>]"
+argument-hint: "[<finding-id>] [--verdict tp|fp|wontfix] [--reason \"...\"]"
 ---
 
-Interactive triage. By default cycles through every finding in the last scan ranked by exploitability + confidence. Pass a `<finding-id>` to triage a single finding directly.
+Walks every finding in the last scan ranked by exploitability + confidence, one at a time. Pass a `<finding-id>` to triage a single finding directly.
 
 The user's verdicts are persisted to `.agentic-security/triage-feedback.json` and read by the engine's active-learning loop on the next scan (FR-PREC-4): findings whose `stableId` was previously marked `fp` are suppressed; findings marked `tp` get a confidence boost.
 
+**This is a two-step, assistant-driven loop, not a blocking terminal prompt.** An earlier version used a Node `readline` interface and blocked on `rl.question()` — that only works with a live TTY attached to stdin, which the harness that actually runs this command does not provide, so it silently produced nothing (S6, Stage-0 audit: reproduced live — closed stdin makes it print the prompt once and exit 0 with zero verdicts recorded). The real interactive layer is this conversation: **you** (the assistant) list the findings, present each one to the user via normal conversation or `AskUserQuestion`, then invoke the record step below with their answer. Nothing here blocks waiting on stdin.
+
+### Step 1 — list findings needing triage
+
+This step's stdout is machine-readable JSON — no banner or other decoration mixed in.
+
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs banner 2>/dev/null || true
+node -e "
+const fs = require('fs');
+const arg = (process.argv[1] || '').trim();
+let scan;
+try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); }
+catch (e) { console.error('No last-scan.json found. Run /scan --all first.'); process.exit(1); }
+let findings = (scan.findings || []).slice();
+if (arg) findings = findings.filter(f => f.id === arg || (f.id || '').includes(arg) || f.stableId === arg);
+if (!findings.length) { console.error('No findings to triage.'); process.exit(0); }
+findings.sort((a,b) => (b.exploitability||0) - (a.exploitability||0) || (b.confidence||0) - (a.confidence||0));
+console.log(JSON.stringify(findings.map(f => ({
+  id: f.id, stableId: f.stableId || null, vuln: f.vuln || '(unnamed)',
+  file: f.file || null, line: f.line || null, severity: f.severity,
+  exploitability: f.exploitability ?? null, confidence: f.confidence ?? null,
+  cwe: f.cwe || null, snippet: (f.snippet || '').slice(0, 80),
+})), null, 2));
+" -- "$1"
+```
+
+Present each finding in the returned list to the user (in conversation, or via `AskUserQuestion` with options `tp`/`fp`/`wontfix`/`skip`) one at a time. After each answer, call Step 2 to record it before moving to the next finding — do not batch all findings into one question.
+
+### Step 2 — record one verdict
+
+```bash
 node -e "
 const fs = require('fs');
 const path = require('path');
-const readline = require('readline');
-
-const argv = process.argv.slice(1);
-const arg = (argv.find(a => !a.startsWith('--')) || '').trim();
-const learnFlag = argv.includes('--learn');
+const [stableIdOrId, vuln, file, line, family, snippet, verdict, ...reasonParts] = process.argv.slice(1);
+const reason = reasonParts.join(' ').slice(0, 280);
+if (!['tp','fp','wontfix'].includes(verdict)) { console.error('verdict must be tp|fp|wontfix, got: ' + verdict); process.exit(1); }
 
 // Premortem 2R3.3 / 2R-11: write path gated symmetrically with read path so
 // an attacker who runs /triage can't poison the file in advance of an
 // AGENTIC_SECURITY_LEARN flip. Default OFF — verdicts only persist when the
 // operator explicitly says so.
-const LEARN_ENABLED = process.env.AGENTIC_SECURITY_LEARN === '1' || learnFlag;
+const LEARN_ENABLED = process.env.AGENTIC_SECURITY_LEARN === '1' || process.argv.includes('--learn');
 if (!LEARN_ENABLED) {
-  console.error('agentic-security: triage verdicts will NOT be persisted.');
-  console.error('  To enable: set AGENTIC_SECURITY_LEARN=1 in your env, or pass --learn.');
-  console.error('  (Read-only triage mode — you can still walk findings.)');
+  console.log('· (verdict NOT recorded — read-only mode; set AGENTIC_SECURITY_LEARN=1 or pass --learn to persist)');
+  process.exit(0);
 }
-
-let scan;
-try { scan = JSON.parse(fs.readFileSync('.agentic-security/last-scan.json', 'utf8')); }
-catch (e) { console.error('No last-scan.json found. Run /scan --all first.'); process.exit(1); }
-
-let findings = (scan.findings || []).slice();
-if (arg) findings = findings.filter(f => f.id === arg || (f.id || '').includes(arg) || f.stableId === arg);
-if (!findings.length) { console.error('No findings to triage.'); process.exit(0); }
-
-findings.sort((a,b) => (b.exploitability||0) - (a.exploitability||0) || (b.confidence||0) - (a.confidence||0));
 
 const FEEDBACK = '.agentic-security/triage-feedback.json';
 let feedback = { entries: [] };
 try { feedback = JSON.parse(fs.readFileSync(FEEDBACK, 'utf8')); } catch {}
 feedback.entries = feedback.entries || [];
-
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const ask = q => new Promise(res => rl.question(q, ans => res(ans.trim())));
-
+feedback.entries.push({
+  stableId: stableIdOrId || null,
+  verdict, reason,
+  family: family === '-' ? null : family,
+  file: file === '-' ? null : file,
+  line: line === '-' ? null : Number(line),
+  vuln: vuln === '-' ? null : vuln,
+  sinkSnippet: (snippet === '-' ? '' : snippet).slice(0, 200),
+  at: new Date().toISOString(),
+});
+fs.mkdirSync(path.dirname(FEEDBACK), { recursive: true });
+fs.writeFileSync(FEEDBACK, JSON.stringify(feedback, null, 2));
+// Premortem 2R-7: also record into per-CWE production-triage metrics so
+// /posture --trend can surface real-world precision trends.
 (async () => {
-  const W = (s, code) => process.stdout.isTTY ? \`\\x1b[\${code}m\${s}\\x1b[0m\` : s;
-  let i = 0;
-  while (i < findings.length) {
-    const f = findings[i];
-    console.log('');
-    console.log(W('─'.repeat(72), '2'));
-    console.log(\`[\${i+1}/\${findings.length}] \` + W(f.vuln || '(unnamed)', '1'));
-    console.log(\`  File:           \${f.file || '(none)'}:\${f.line || '?'}\`);
-    console.log(\`  Severity:       \${f.severity}  ·  Exploitability: \${f.exploitability ?? '?'}  ·  Confidence: \${f.confidence ?? '?'}\`);
-    if (f.cwe) console.log(\`  CWE:            \${f.cwe}\`);
-    if (f.stableId) console.log(\`  Stable ID:      \${f.stableId}\`);
-    if (f.snippet) console.log(\`  Snippet:        \${(f.snippet || '').slice(0, 80)}\`);
-    console.log('');
-    const ans = (await ask('  [t]p · [f]p · [w]ontfix · [n]ext · [p]rev · [s]kip · [q]uit ? ')).toLowerCase();
-    if (ans === 'q') break;
-    if (ans === 'n' || ans === 's') { i++; continue; }
-    if (ans === 'p') { i = Math.max(0, i - 1); continue; }
-    if (['t','f','w'].includes(ans)) {
-      const reason = (await ask('  Reason (optional): ')).slice(0, 280);
-      const verdict = ans === 't' ? 'tp' : ans === 'f' ? 'fp' : 'wontfix';
-      if (!LEARN_ENABLED) {
-        console.log(W('  · (verdict NOT recorded — read-only mode; pass --learn or set AGENTIC_SECURITY_LEARN=1 to persist)', '33'));
-        i++; continue;
-      }
-      feedback.entries.push({
-        stableId: f.stableId || null,
-        verdict, reason,
-        family: f.family || null,
-        file: f.file || null, line: f.line || null, vuln: f.vuln || null,
-        sinkSnippet: (f.sink?.snippet || f.snippet || '').slice(0, 200),
-        at: new Date().toISOString(),
-      });
-      fs.mkdirSync(path.dirname(FEEDBACK), { recursive: true });
-      fs.writeFileSync(FEEDBACK, JSON.stringify(feedback, null, 2));
-      // Premortem 2R-7: also record into per-CWE production-triage metrics so
-      // /posture --trend can surface real-world precision trends.
-      try {
-        const { recordTriage } = await import(path.join(process.env.CLAUDE_PLUGIN_ROOT || '.', 'scanner/src/posture/validator-metrics.js'));
-        recordTriage(process.cwd(), { family: f.family, verdict, stableId: f.stableId });
-      } catch { /* best-effort telemetry */ }
-      console.log(W('  ✓ recorded ' + verdict, '32'));
-      i++; continue;
-    }
-    console.log('  (unrecognized — try t/f/w/n/p/s/q)');
-  }
-  rl.close();
-  console.log('');
-  console.log(W('Triage feedback saved to ' + FEEDBACK, '2'));
-  console.log(W(\`\${feedback.entries.length} total entries — applied on next /scan run.\`, '2'));
+  try {
+    const { recordTriage } = await import(path.join(process.env.CLAUDE_PLUGIN_ROOT || '.', 'scanner/src/posture/validator-metrics.js'));
+    recordTriage(process.cwd(), { family: family === '-' ? null : family, verdict, stableId: stableIdOrId || null });
+  } catch { /* best-effort telemetry */ }
+  console.log('✓ recorded ' + verdict + ' — ' + feedback.entries.length + ' total entries, applied on next /scan run.');
 })();
-" -- "$1"
+" -- "${STABLE_ID:--}" "${VULN:--}" "${FILE:--}" "${LINE:--}" "${FAMILY:--}" "${SNIPPET:--}" "$VERDICT" "$REASON"
 ```
+
+Set `STABLE_ID`/`VULN`/`FILE`/`LINE`/`FAMILY`/`SNIPPET`/`VERDICT`/`REASON` env vars (or pass `-` for any field you don't have) before invoking this block for each finding the user gives a verdict on. `skip`/`next`/`prev` need no write at all — just move to the next finding in the Step 1 list without calling Step 2.
 
 Tell the user how many verdicts were recorded and remind them the suppressions take effect on the next `/scan`.
 
