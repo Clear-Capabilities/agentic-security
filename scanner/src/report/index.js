@@ -83,6 +83,19 @@ function fingerprint(f){
   return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
 }
 
+// CMP-3: the findings schema requires `remediation` (root CLAUDE.md), and
+// most detectors set it, but normalizeFindings only ever read the older
+// `fix` STRING field that a minority of detectors use — so for every
+// detector using the documented schema field, the SARIF fixes[]/
+// fullDescription, the Markdown Fix column, and the CLI inline "fix:" line
+// all rendered empty. `fix` still wins when both are set, matching the
+// existing precedence in explainParts() above.
+function _remediationOf(f) {
+  if (f && typeof f.fix === 'string') return f.fix;
+  if (typeof f?.remediation === 'string') return f.remediation;
+  return null;
+}
+
 export function normalizeFindings(scan){
   const out = [];
   // Feat-4: filter findings via custom suppressions, recording the suppression
@@ -109,7 +122,8 @@ export function normalizeFindings(scan){
       file: f.file,
       line: f.line || f.source?.line || f.sink?.line || 0,
       snippet: f.snippet || f.source?.snippet || f.sink?.snippet || '',
-      fix: f.fix ? { description: f.fix, code: f.code || '' } : null,
+      fix: _remediationOf(f) ? { description: _remediationOf(f), code: f.code || '' } : null,
+      remediation: _remediationOf(f),
       reachable: f.reachable ?? null,
       triage: f.triageScore ?? null,
       dataClasses: f.dataClasses || [],
@@ -250,7 +264,8 @@ export function normalizeFindings(scan){
       stride: s.stride || 'Information Disclosure',
       file: s.file, line: s.line, snippet: s.snippet || '',
       masked: s.masked || null,
-      fix: s.fix ? { description: s.fix, code: s.code || '' } : null,
+      fix: _remediationOf(s) ? { description: _remediationOf(s), code: s.code || '' } : null,
+      remediation: _remediationOf(s),
       blastRadius: s.blastRadius || null,
       // Premortem #8: parser/family for downstream confidence + calibration.
       parser: s.parser || 'SECRETS',
@@ -267,7 +282,8 @@ export function normalizeFindings(scan){
       cwe: lv.cwe || null,
       stride: lv.stride || null,
       file: lv.file, line: lv.line, snippet: lv.snippet || '',
-      fix: lv.fix ? { description: lv.fix, code: lv.code || '' } : null,
+      fix: _remediationOf(lv) ? { description: _remediationOf(lv), code: lv.code || '' } : null,
+      remediation: _remediationOf(lv),
       blastRadius: lv.blastRadius || null,
       // Premortem #8.
       parser: lv.parser || 'LOGIC',

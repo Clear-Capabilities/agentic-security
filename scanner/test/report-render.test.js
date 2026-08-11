@@ -2,7 +2,7 @@
 // severity isn't taken at face value) + verdict discoverability lines.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { toCLI, toProTable, toHTML, toShipVerdict, exitCodeFor } from '../src/report/index.js';
+import { toCLI, toProTable, toHTML, toShipVerdict, exitCodeFor, toSARIF, normalizeFindings } from '../src/report/index.js';
 
 const demoted = {
   unreachable: { severity: 'critical', cwe: 'CWE-94', file: 'a.js', line: 1, vuln: 'Code injection', unreachableInProd: true, mitigationVerdict: 'unreachable-in-prod' },
@@ -138,4 +138,53 @@ test('toShipVerdict: a genuinely clean scan (nothing filtered) still says Safe t
   const out = stripAnsi2(toShipVerdict({ findings: [] }, { color: false }));
   assert.match(out, /Safe to deploy/);
   assert.doesNotMatch(out, /below.*confidence/i);
+});
+
+// ── CMP-3: normalizeFindings must carry the schema's `remediation` field ────
+//
+// Most detectors set `remediation` (the field the schema in root CLAUDE.md
+// actually requires); a minority of older detectors set `fix` instead.
+// normalizeFindings only ever read `fix`, so every consumer downstream of it
+// (SARIF fixes[]/fullDescription, the Markdown Fix column, the CLI inline
+// "fix:" line) rendered empty for the majority of detectors.
+
+test('CMP-3: normalizeFindings carries remediation through into .fix and .remediation', () => {
+  const f = { severity: 'high', vuln: 'SQLi', file: 'a.js', line: 1, cwe: 'CWE-89', remediation: 'Use a parameterized query.' };
+  const [out] = normalizeFindings({ findings: [f] });
+  assert.equal(out.remediation, 'Use a parameterized query.');
+  assert.equal(out.fix?.description, 'Use a parameterized query.');
+});
+
+test('CMP-3: a `fix` string still wins when both fix and remediation are set (existing precedent, unchanged)', () => {
+  const f = { severity: 'high', vuln: 'X', file: 'a.js', line: 1, fix: 'from fix field', remediation: 'from remediation field' };
+  const [out] = normalizeFindings({ findings: [f] });
+  assert.equal(out.remediation, 'from fix field');
+});
+
+test('CMP-3: secrets and logicVulns channels also carry remediation through', () => {
+  const scan = {
+    secrets: [{ severity: 'high', vuln: 'Hardcoded key', file: 's.js', line: 1, remediation: 'Rotate the key; load from env.' }],
+    logicVulns: [{ severity: 'medium', vuln: 'Broken authz', file: 'l.js', line: 1, remediation: 'Check ownership before returning the resource.' }],
+  };
+  const out = normalizeFindings(scan);
+  assert.equal(out.find(x => x.kind === 'secret').remediation, 'Rotate the key; load from env.');
+  assert.equal(out.find(x => x.kind === 'logic').remediation, 'Check ownership before returning the resource.');
+});
+
+test('CMP-3: toSARIF emits fixes[] and a real fullDescription from a remediation-only finding', () => {
+  const f = { severity: 'critical', vuln: 'SQL Injection', file: 'a.js', line: 1, cwe: 'CWE-89', remediation: 'Use a parameterized query with bound params.' };
+  const sarif = toSARIF({ findings: [f] }, {});
+  const result = sarif.runs[0].results[0];
+  assert.ok(Array.isArray(result.fixes) && result.fixes.length === 1,
+    'a remediation-only finding must produce a SARIF fixes[] entry, not silently omit it');
+  assert.match(result.fixes[0].description.text, /parameterized query/);
+  const rule = sarif.runs[0].tool.driver.rules[0];
+  assert.match(rule.fullDescription.text, /parameterized query/,
+    'fullDescription must not degrade to the bare rule title when remediation is present');
+});
+
+test('CMP-3: toCLI renders the inline fix line for a remediation-only finding (not just fix-field ones)', () => {
+  const f = { severity: 'high', vuln: 'Broken AuthZ', file: 'a.js', line: 1, cwe: 'CWE-862', remediation: 'Verify the caller owns the resource before returning it.' };
+  const out = stripAnsi2(toCLI({ findings: [f] }, { color: false }));
+  assert.match(out, /fix: Verify the caller owns the resource before returning it\./);
 });
