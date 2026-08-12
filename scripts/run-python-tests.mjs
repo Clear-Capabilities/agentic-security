@@ -21,8 +21,24 @@ if (probe.status !== 0) {
   process.exit(0);
 }
 
-const testFiles = fs.readdirSync(path.join(REPO, 'scripts'))
-  .filter((f) => f.startsWith('test_') && f.endsWith('.py'))
+// Stage 6 correctness audit: this used to be a flat, non-recursive
+// readdirSync over scripts/ only, so scripts/nist-compliance/test_regex_redos.py
+// (added to guard against reintroducing the ReDoS fixed in e0c669b) was never
+// discovered or run by `npm test` — the exact silent-regression gap this
+// runner exists to close, just one directory level deeper than it looked.
+function _findTestFiles(dir) {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === '__pycache__' || entry.name.startsWith('.')) continue;
+    const fp = path.join(dir, entry.name);
+    if (entry.isDirectory()) { out.push(..._findTestFiles(fp)); continue; }
+    if (entry.name.startsWith('test_') && entry.name.endsWith('.py')) out.push(fp);
+  }
+  return out;
+}
+
+const testFiles = _findTestFiles(path.join(REPO, 'scripts'))
+  .map((fp) => path.relative(REPO, fp))
   .sort();
 
 if (!testFiles.length) {
@@ -32,8 +48,8 @@ if (!testFiles.length) {
 
 let failed = false;
 for (const f of testFiles) {
-  console.log(`[test:python] running scripts/${f}`);
-  const r = spawnSync('python3', [path.join(REPO, 'scripts', f)], { stdio: 'inherit', cwd: REPO });
+  console.log(`[test:python] running ${f}`);
+  const r = spawnSync('python3', [path.join(REPO, f)], { stdio: 'inherit', cwd: REPO });
   if (r.status !== 0) failed = true;
 }
 process.exit(failed ? 1 : 0);

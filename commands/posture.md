@@ -79,7 +79,13 @@ case "$FLAG" in
       });
     " ;;
   --harness)
-    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs harness . ;;
+    # harness-score.cjs deliberately exits 1 when the overall level is below
+    # "Operating" (it's also a CI gate via `npm run harness-score`) — but
+    # /posture is the REPORTING dispatcher (gates live at /setup --ci, per
+    # root CLAUDE.md), matching --report-card's own convention of printing a
+    # bad grade rather than failing the shell over it. `|| true` decouples
+    # "did the report render" from "did the project pass the bar."
+    node ${CLAUDE_PLUGIN_ROOT}/scripts/harness-score.cjs || true ;;
   --trend)
     node -e "
       import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/security-trend.js').then(m => {
@@ -152,7 +158,7 @@ esac
 
 `--status` prints the real CLI `version` line, then reads `.agentic-security/last-scan.json` for `startedAt` (last-scan age), a findings-by-severity breakdown, `totalFindings`, and `suppressedCount` (already present in `toJSON()`'s output — no fix needed), plus `workflow-installer.js#detectProject().hookManager` (`'husky' | 'pre-commit' | 'lefthook' | 'native' | null`) for hook activation. With no prior scan it reports that plainly (`lastScan: null` + a prompt to run `/scan --all`) rather than fabricating zeros.
 
-`--harness` runs the real `harness` CLI subcommand (`bin/agentic-security.js` → `posture/harness-score.cjs` via `cmdHarness`) — scores this project's `.claude/`, `.cursor/`, `.codex/`, etc. configs against the six-domain rubric.
+`--harness` runs `scripts/harness-score.cjs` directly — the six-domain rubric scorer described in `docs/HARNESS_ASSESSMENT_SPEC.md` (also wired as `npm run harness-score` in `scanner/package.json`). It checks P0/P1 controls mechanically against the live state of the project it runs in and reports `Level 1-4` per domain plus an overall `MIN(six domains)`. This is a different tool from the CLI's `harness` subcommand (`bin/agentic-security.js`'s `cmdHarness`, invoked as `agentic-security harness <path>`) — that one is a harness-*config* security scanner (looks for insecure/malicious settings in `.claude/`, `.cursor/`, `.codex/`, etc. files) and shares nothing but the name. `/posture --harness` previously called the wrong one of these two (a 2026-06 fix — commit `17d9107` — wired it to `cmdHarness` instead of the rubric scorer this mode has always documented and the removed `/harness-score` alias always pointed to); fixed to call the rubric scorer directly.
 
 `--trend` calls `computeTrend()` (`posture/security-trend.js`) directly, reading `.agentic-security/scan-history.json`. That file is populated by `runScan()` itself (`src/runScan.js` calls `appendScanSnapshot` on every scan, CLI or in-process) — no separate wiring needed on the write side. The result is `{ hasTrend, prev, curr, introduced, fixed, delta, critDelta, improving }` when at least two scans exist, or `{ hasTrend: false, message: "Need at least 2 scans..." }` otherwise. Render `introduced`/`fixed`/`delta` as the "findings trend" — there is no weekly bucketing; it's always last-scan-vs-this-scan.
 

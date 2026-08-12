@@ -801,7 +801,7 @@ def print_summary(statuses, evidence, manifest_deps):
     print()
     print(f"{BOLD}NIST AI 600-1 Compliance Scan{RESET}")
     print(f"  {total} testable controls scanned "
-          f"(67 also need external attestation)")
+          f"({needs_ext} also need external attestation)")
     print(f"  {len(manifest_deps)} unique dependencies found in manifests")
     print()
 

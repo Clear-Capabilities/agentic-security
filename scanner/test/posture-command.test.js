@@ -55,13 +55,25 @@ function runMode(script, arg, cwd) {
   }
 }
 
-test('S7: posture.md --harness runs the real harness CLI subcommand', async () => {
+// Stage 6 correctness audit: this used to invoke `agentic-security harness .`
+// (cmdHarness — a harness-CONFIG security scanner, an unrelated tool that
+// only shares the word "harness") instead of scripts/harness-score.cjs (the
+// six-domain rubric scorer this mode has always documented and the removed
+// /harness-score alias always pointed to). A bare /harness/i match on
+// stdout would pass against EITHER tool's output, so it wouldn't have
+// caught that bug — asserting on rubric-specific content instead.
+// harness-score.cjs is also a CI gate (`npm run harness-score`, exits 1
+// below "Operating") — /posture is the reporting dispatcher, so its command
+// block appends `|| true` to decouple "did the report render" from "did
+// the project pass the bar," matching --report-card's own convention.
+test('S7: posture.md --harness runs the real six-domain rubric scorer, not the unrelated harness-config scanner', async () => {
   const script = extractImplementationBlock();
   const p = await mkProject();
   try {
     const r = runMode(script, '--harness', p.dir);
     assert.equal(r.status, 0, `stderr: ${r.stderr}`);
-    assert.match(r.stdout, /harness/i);
+    assert.match(r.stdout, /Harness Assessment.*Domain Report/s);
+    assert.match(r.stdout, /Overall:.*Level \d/);
   } finally { await p.cleanup(); }
 });
 

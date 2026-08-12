@@ -1,5 +1,17 @@
 # NIST AI 600-1 scanner coverage map
 
+> **⚠ Known-stale (disclosed, Stage 6 correctness audit).** The control counts below predate
+> `scripts/nist-compliance/controls.json`'s 2026-08-11 regeneration from the source spreadsheet
+> (212 controls, per-row IDs like `GV-1.3-002`) and disagree with the engine-consumed
+> `scanner/src/posture/compliance-frameworks/nist-ai-600-1.json` (6 hand-curated controls) too —
+> this table matches neither. `docs/standards/README.md` describes this file as generated from
+> the JSON, but no generator for it currently exists, and nothing gates it against drifting out
+> of sync the way `scripts/release-check.mjs`'s `scorecard-freshness` check does for
+> `docs/SCORECARD.md`. Do not cite the counts below; they are not evidence of anything at
+> present. Fixing this needs a real generator, not a hand edit — a hand-authored correction here
+> would just be a differently-wrong snapshot with the same drift problem the day after the next
+> spreadsheet or JSON change.
+
 **Framework version:** NIST AI 600-1 (2024) — Artificial Intelligence Risk Management Framework: Generative AI
 
 This table maps NIST AI 600-1 controls to the scanner rules that provide evidence for each

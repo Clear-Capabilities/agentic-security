@@ -1,5 +1,13 @@
 # OWASP ASVS scanner coverage map
 
+> **⚠ Known-stale (disclosed, Stage 6 correctness audit).** This table enumerates the full ASVS
+> 4.0.3 standard by chapter (~162 requirements), but the engine-consumed
+> `scanner/src/posture/compliance-frameworks/owasp-asvs-5.json` currently holds only 10 curated
+> controls — this table matches neither the full standard's real requirement count nor what the
+> engine actually assesses. No generator produces this file from the JSON, and nothing gates it
+> against drift (see `docs/standards/README.md`, and the same disclosure on the NIST AI 600-1
+> coverage map). Do not cite the counts below.
+
 **Framework version:** OWASP Application Security Verification Standard 4.0.3
 
 This table maps OWASP ASVS Level 1 and Level 2 requirements to scanner rules.
