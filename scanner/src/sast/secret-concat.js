@@ -62,7 +62,7 @@ export function scanSecretConcat(fp, raw) {
     findings.push({
       id, file: fp, line,
       vuln: 'Hardcoded credential — secret split across concatenated literals to evade detection',
-      severity: 'high', cwe: 'CWE-798', family: 'secret', parser: 'SECRET-CONCAT', confidence: 0.78,
+      severity: 'high', cwe: 'CWE-798', family: 'hardcoded-secret', parser: 'SECRET-CONCAT', confidence: 0.78,
       snippet: rawSnippet.split(m[2]).join(masked), masked,
       remediation: 'Load the secret from the environment or a secrets manager (process.env / os.environ / Vault / AWS Secrets Manager). Splitting the literal across a concatenation does not protect it — rotate the exposed value, it must be considered compromised.',
     });

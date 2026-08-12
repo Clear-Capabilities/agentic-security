@@ -31,17 +31,26 @@ export function scanHistoryDiff(diffText, commit, detectFn) {
   if (!added.trim()) return [];
   let findings = [];
   try { findings = detectFn(`git-history@${commit}`, added) || []; } catch { return []; }
-  return findings.map((f) => ({
-    ...f,
-    id: `secret-history:${commit}:${f.id || f.vuln || 'secret'}`,
-    file: `git-history@${commit}`,
-    line: 0,
-    commit,
-    _historical: true,
-    vuln: `${f.vuln || 'Hardcoded Secret'} (in git history)`,
-    description: `${f.description || 'A credential was committed.'} Found in commit ${commit}; even if removed from HEAD it remains recoverable from git and must be rotated.`,
-    remediation: 'Rotate the credential now, then purge it from history (git filter-repo / BFG) and move it to a secrets manager. Removing it from HEAD alone is insufficient.',
-  }));
+  return findings.map((f) => {
+    const remediation = 'Rotate the credential now, then purge it from history (git filter-repo / BFG) and move it to a secrets manager. Removing it from HEAD alone is insufficient.';
+    return {
+      ...f,
+      id: `secret-history:${commit}:${f.id || f.vuln || 'secret'}`,
+      file: `git-history@${commit}`,
+      line: 0,
+      commit,
+      _historical: true,
+      vuln: `${f.vuln || 'Hardcoded Secret'} (in git history)`,
+      description: `${f.description || 'A credential was committed.'} Found in commit ${commit}; even if removed from HEAD it remains recoverable from git and must be rotated.`,
+      remediation,
+      // report/index.js's _remediationOf checks `.fix` before `.remediation`
+      // — the underlying detector already set `.fix` to a generic "remove
+      // the line" string, which would otherwise silently shadow this
+      // history-specific instruction ("removing it from HEAD alone is
+      // insufficient") in every report format.
+      fix: remediation,
+    };
+  });
 }
 
 /**

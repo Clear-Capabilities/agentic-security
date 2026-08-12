@@ -319,6 +319,12 @@ export function normalizeFindings(scan){
       // Premortem #8: parser/family for downstream confidence + calibration.
       parser: s.parser || 'SECRETS',
       family: s.family || 'hardcoded-secret',
+      // secret-history.js sets these on a git-history-sweep finding (the
+      // commit it was found in, and a flag distinguishing it from a
+      // working-tree finding) — carried through so a consumer doesn't have
+      // to parse the commit sha back out of the synthetic `file` value.
+      commit: s.commit || null,
+      historical: s._historical === true,
     });
   }
   for (const lv of (scan.logicVulns||[])) {
