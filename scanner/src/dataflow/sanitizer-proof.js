@@ -117,11 +117,29 @@ export function verifyProjectSanitizers(perFileIR, catalog) {
     if (!calleeName) continue;
     const fns = fnByName.get(calleeName);
     if (!fns || !fns.length) continue;            // not a project-local sanitizer
+    // Stage 3 correctness audit (detection depth): this used to take only
+    // `appliesTo[0]`, so a multi-family entry (`appliesTo: ['sql', 'xss']`)
+    // was only ever verified against its FIRST tag — silently skipping
+    // whether the project's local function actually behaves as a
+    // sanitizer for the OTHER families it claims to cover. It also fell
+    // back to the literal string `'*'` when `appliesTo` was absent or
+    // wildcard-only, and `'*'` has no entry in `_SHAPE_RULES` — every
+    // wildcard-tagged sanitizer (the 17 catalog type-coercion entries:
+    // parseInt, Number(), etc.) was unconditionally verdicted
+    // `trusted: false, reason: "no shape rule for family '*'"`, even
+    // though `'*'` legitimately covers every family by design (see
+    // sanitizer-gate.js's own header comment on the same wildcard tag).
+    // Fixed: verify against every concrete (non-'*') family the entry
+    // claims; a wildcard-only entry has no per-family shape to check
+    // against and contributes no verdict rather than a misleading false one.
+    const families = (Array.isArray(entry.appliesTo) ? entry.appliesTo : []).filter(f => f !== '*');
+    if (!families.length) continue;
     for (const fn of fns) {
       const bodyText = _stringifyCfgBody(fn);
-      const family = (entry.appliesTo && entry.appliesTo[0]) || '*';
-      const verdict = isValidSanitizerFor(bodyText, family);
-      out.push({ fnQid: fn.qid, family, trusted: verdict.trusted, reason: verdict.reason });
+      for (const family of families) {
+        const verdict = isValidSanitizerFor(bodyText, family);
+        out.push({ fnQid: fn.qid, family, trusted: verdict.trusted, reason: verdict.reason });
+      }
     }
   }
   return out;

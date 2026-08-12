@@ -154,6 +154,27 @@ test('parseGoFile: returns null for files with no functions', () => {
   assert.equal(ir, null);
 });
 
+// Stage 3 correctness audit (detection depth, per-language-IR): _lowerExpr
+// has TWO occurrences of the same "string concat with +" check. The first
+// (near the top, after fmt.Sprintf) correctly guards on
+// `_splitTopLevelPlus(s).length > 1` before mapping _lowerExpr over the
+// parts. The second — reached when nothing else matched in between —  was
+// missing that guard. When the `+` sits inside an extra pair of parens
+// (`("SELECT " + name)`, e.g. an over-parenthesized call argument),
+// _splitTopLevelPlus's depth tracking never returns to 0 at the `+`, so it
+// returns the input UNCHANGED as one part — and `.map(_lowerExpr)` then
+// recurses on the identical string forever. Same bug class, same fix, as
+// the already-guarded C# `new Type(concat)` case (test/parser-cs-kt.test.js).
+test('parseGoFile: a concat expression wrapped in an extra pair of parens does not recurse infinitely', () => {
+  const code = `package main
+func handle(name string) {
+	db.Query(("SELECT " + name))
+}
+`;
+  const ir = parseGoFile('app.go', code); // must not throw RangeError
+  assert.ok(ir && ir.functions.length === 1);
+});
+
 test('parseGoFile: IR shape matches universal contract', () => {
   const code = `package main
 func f(x int) int {

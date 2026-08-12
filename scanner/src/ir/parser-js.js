@@ -98,7 +98,22 @@ function lhsPath(n) {
   if (n.type === 'ThisExpression') return '_this_';
   if (n.type === 'MemberExpression') {
     const base = lhsPath(n.object);
-    const prop = n.computed ? '*' : (n.property?.name || '*');
+    // Stage 3 correctness audit (detection depth, path-feasibility): a
+    // computed WRITE with a literal key (`obj['secret'] = tainted`) used
+    // to collapse straight to the wildcard '*' — never trying to extract
+    // the literal, unlike exprOf's MemberExpression case just above,
+    // which DOES extract it for reads. That asymmetry meant a tainted
+    // write via bracket notation with a literal key produced access path
+    // "obj.*", while any later read of that same key (`obj.secret` or
+    // `obj['secret']`) resolves via exprOf to the specific path
+    // "obj.secret" — isCoveredBy has no wildcard semantics (`'*'` is a
+    // literal property name here, not a match-anything token), so the two
+    // paths never matched and the taint was silently unreachable from any
+    // correctly-computed read. Mirrors exprOf's extraction exactly so a
+    // write and a read of the same literal key always agree.
+    const prop = n.computed
+      ? (n.property?.value != null ? String(n.property.value) : '*')
+      : (n.property?.name || '*');
     if (!base) return null;
     return base + '.' + prop;
   }
@@ -307,17 +322,45 @@ export function parseJsFile(file, code) {
           const id = lhsPath(path.node.id);
           if (!id) return;
           const initExpr = exprOf(path.node.init);
-          const nodeId = nextNodeId();
           const line = path.node.loc?.start?.line || 0;
-          addNode(fn, { id: nodeId, kind: 'assign', target: id, source: initExpr, line, succ: [], pred: [] });
-          if (typeof id === 'string') recordWrite(fn, id, initExpr, nodeId);
+          if (typeof id === 'string') {
+            const nodeId = nextNodeId();
+            addNode(fn, { id: nodeId, kind: 'assign', target: id, source: initExpr, line, succ: [], pred: [] });
+            recordWrite(fn, id, initExpr, nodeId);
+            return;
+          }
+          // Destructuring: `const {a, b: renamed} = obj;` / `const [a, b] = arr;`.
+          // Emit one REAL 'assign' CFG node per bound name — not just a
+          // recordWrite() bookkeeping entry — because the taint engine's
+          // step() 'assign' case reads `node.target` directly and requires
+          // a plain string (`typeof node.target === 'string'`); the single
+          // node this used to emit had target=the whole {kind:'object-
+          // pattern'|'array-pattern', ...} OBJECT, which step() always
+          // treated as `target=null` — so taint from `obj`/`arr` never
+          // reached ANY destructured binding, for every project that uses
+          // this extremely common pattern. fn.writes/recordWrite (used
+          // below too) is bookkeeping nothing in dataflow/ ever reads;
+          // only real CFG nodes matter to the walk.
           if (id && typeof id === 'object' && id.kind === 'object-pattern') {
-            // x = { foo: a, bar: b } — emit one write per property.
             for (const p of id.props) {
               const alias = typeof p.alias === 'string' ? p.alias : null;
               if (!alias) continue;
-              recordWrite(fn, alias, { kind: 'member', object: initExpr, prop: p.key }, nodeId);
+              const memberSrc = { kind: 'member', object: initExpr, prop: p.key };
+              const nodeId = nextNodeId();
+              addNode(fn, { id: nodeId, kind: 'assign', target: alias, source: memberSrc, line, succ: [], pred: [] });
+              recordWrite(fn, alias, memberSrc, nodeId);
             }
+            return;
+          }
+          if (id && typeof id === 'object' && id.kind === 'array-pattern') {
+            id.elements.forEach((el, i) => {
+              const alias = typeof el === 'string' ? el : null;
+              if (!alias) return; // elision (`const [, b] = arr`) or nested pattern — not modeled
+              const memberSrc = { kind: 'member', object: initExpr, prop: String(i) };
+              const nodeId = nextNodeId();
+              addNode(fn, { id: nodeId, kind: 'assign', target: alias, source: memberSrc, line, succ: [], pred: [] });
+              recordWrite(fn, alias, memberSrc, nodeId);
+            });
           }
         },
 

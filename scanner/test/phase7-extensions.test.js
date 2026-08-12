@@ -173,6 +173,74 @@ test('sanitizer-proof: verifyProjectSanitizers walks IR + flags untrusted', () =
   assert.equal(verdicts[0].trusted, false);  // bare `return input` is not real XSS sanitization
 });
 
+// Stage 3 correctness audit (detection depth): verifyProjectSanitizers used
+// to check only `appliesTo[0]` — a multi-family entry silently skipped
+// verifying whether the project's local function is trustworthy for its
+// OTHER claimed families.
+test('sanitizer-proof: verifyProjectSanitizers checks every family in appliesTo, not just the first', () => {
+  const perFileIR = {
+    'a.js': { file: 'a.js', functions: [
+      // Body performs a parameterized-query call (a real SQL sanitization
+      // shape) but NOT HTML-escaping — so it should verdict trusted for
+      // 'sql' and untrusted for 'xss', proving BOTH families were checked.
+      { qid: 'a.js::module::clean', name: 'clean', cfg: { nodes: {
+        n1: { kind: 'call', callee: 'stmt.prepare', args: [], line: 2 },
+        n2: { kind: 'return', value: { kind: 'ident', name: 'input' }, line: 3 },
+      } } },
+    ]},
+  };
+  const catalog = [
+    { kind: 'sanitizer', match: { type: 'call', callee: 'clean' }, appliesTo: ['sql', 'xss'] },
+  ];
+  const verdicts = verifyProjectSanitizers(perFileIR, catalog);
+  const byFamily = Object.fromEntries(verdicts.map(v => [v.family, v.trusted]));
+  assert.deepEqual(Object.keys(byFamily).sort(), ['sql', 'xss'],
+    `expected a verdict for both families, got: ${JSON.stringify(verdicts)}`);
+  assert.equal(byFamily.sql, true, 'a parameterized-query call should verdict trusted for sql');
+  assert.equal(byFamily.xss, false, 'the same body has no HTML-escaping shape, so xss must be untrusted');
+});
+
+// Stage 3 correctness audit (detection depth): a wildcard-tagged entry
+// (`appliesTo: ['*']`, the 17 catalog type-coercion entries like parseInt)
+// used to fall through to `family = '*'`, and `_SHAPE_RULES` has no '*'
+// entry — every wildcard sanitizer was unconditionally verdicted
+// trusted:false, misrepresenting a family that legitimately has no
+// per-family shape to check. It must contribute no verdict instead.
+test('sanitizer-proof: verifyProjectSanitizers does not verdict a wildcard-only entry as untrusted', () => {
+  const perFileIR = {
+    'a.js': { file: 'a.js', functions: [
+      { qid: 'a.js::module::coerce', name: 'coerce', cfg: { nodes: {
+        n1: { kind: 'return', value: { kind: 'ident', name: 'input' }, line: 2 },
+      } } },
+    ]},
+  };
+  const catalog = [
+    { kind: 'sanitizer', match: { type: 'call', callee: 'coerce' }, appliesTo: ['*'] },
+  ];
+  const verdicts = verifyProjectSanitizers(perFileIR, catalog);
+  assert.equal(verdicts.length, 0,
+    `a wildcard-only entry has no per-family shape to verify and must not produce a false verdict, got: ${JSON.stringify(verdicts)}`);
+});
+
+// A mixed appliesTo (concrete family + wildcard) must still verify the
+// concrete family — the wildcard tag is excluded, not the whole entry.
+test('sanitizer-proof: verifyProjectSanitizers still checks a concrete family alongside a wildcard tag', () => {
+  const perFileIR = {
+    'a.js': { file: 'a.js', functions: [
+      { qid: 'a.js::module::clean', name: 'clean', cfg: { nodes: {
+        n1: { kind: 'call', callee: 'DOMPurify.sanitize', args: [], line: 2 },
+      } } },
+    ]},
+  };
+  const catalog = [
+    { kind: 'sanitizer', match: { type: 'call', callee: 'clean' }, appliesTo: ['xss', '*'] },
+  ];
+  const verdicts = verifyProjectSanitizers(perFileIR, catalog);
+  assert.equal(verdicts.length, 1);
+  assert.equal(verdicts[0].family, 'xss');
+  assert.equal(verdicts[0].trusted, true);
+});
+
 // ── P4.4 String-value abstract domain ─────────────────────────────────────
 test('string-domain: makeConst + render round-trip', () => {
   assert.equal(render(makeConst('hello')), 'hello');

@@ -106,10 +106,20 @@ function _lowerExpr(text) {
     const args = _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr);
     return { kind: 'call', callee: callMatch.callee, args };
   }
-  // String concat with +
+  // String concat with + — a SECOND occurrence of the same check as above
+  // (line ~92), reached when the expression didn't match any branch in
+  // between (calls, literals, etc.). It's missing the `parts.length > 1`
+  // guard the first occurrence has: when the `+` sits inside an extra
+  // pair of parens (`("SELECT " + name)` — e.g. an over-parenthesized
+  // argument), `_splitTopLevelPlus` returns the input unchanged as ONE
+  // part (depth never returns to 0 at the `+`), and `.map(_lowerExpr)`
+  // then recurses on the IDENTICAL string forever — a stack overflow,
+  // uncaught here (only caught by buildProjectIR's per-file try/catch, so
+  // it surfaces only as "this file has no IR"). Same bug class, same fix,
+  // as parser-cs.js's `_splitTopLevelPlus` guard for `new Type(concat)`.
   if (s.includes('+') && /["'`]/.test(s)) {
-    const parts = _splitTopLevelPlus(s).map(_lowerExpr);
-    return { kind: 'tpl', parts };
+    const parts = _splitTopLevelPlus(s);
+    if (parts.length > 1) return { kind: 'tpl', parts: parts.map(_lowerExpr) };
   }
   // Member: a.b.c
   if (/^[A-Za-z_][\w.]*$/.test(s)) {

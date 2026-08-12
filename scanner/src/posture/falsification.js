@@ -22,7 +22,19 @@ import {
 } from './verification-separation.js';
 
 const DEMOTE_FACTOR = 0.4;               // mirror proof-gate.js
-const TIERS = ['low', 'medium', 'high']; // confidence / exploitability tier order
+// Stage 3 correctness audit (detection depth): this ladder was missing
+// 'critical' — exploitability.js sets f.exploitabilityTier = 'critical' at
+// score >= 0.80 (the tier falsification most needs to demote, since it's
+// exactly the findings a false "survives" verdict would most overstate).
+// _dropTier('critical') hit the `i <= 0` "unknown tier, leave unchanged"
+// branch (indexOf returns -1 for an unrecognized value), so a falsified
+// finding at the critical exploitability tier kept its full tier — the
+// demotion silently no-op'd for the highest tier in the system. 'very-low'
+// (confidence.js's own floor tier) is included too, for the same reason
+// confidenceTier is demoted by this same function — it was already
+// unchanged-at-floor by the same `i <= 0` fallback, so this is a
+// completeness fix there, not a behavior change.
+const TIERS = ['very-low', 'low', 'medium', 'high', 'critical']; // confidence / exploitability tier order
 
 function _dropTier(tier) {
   const i = TIERS.indexOf(tier);
@@ -66,7 +78,16 @@ export function classifyFinding(finding, fileContents) {
   }
   // A sanitizer that doesn't match the sink context does NOT block the flow —
   // the finding survives (this is a real bug, not a mitigation).
-  if (finding.sanitizerMismatch === true) {
+  //
+  // Stage 3 correctness audit (detection depth): this was `=== true`, but
+  // the field's real producer (engine.js's applySanitizerEffectiveness)
+  // sets `f.sanitizerMismatch = f.sanitizerType` — a STRING sanitizer-type
+  // label ("Type Guard", "JWT Algo Pinning", ...), never the literal
+  // boolean `true`. Every OTHER consumer of this field (confidence.js,
+  // exploitability.js, engine.js's own scoring) checks it via plain
+  // truthiness; this strict-equality check could never match a real
+  // finding, making the whole branch dead code.
+  if (finding.sanitizerMismatch) {
     return { verdict: 'survived', reasons: ['wrong-context sanitizer does not neutralize this sink'] };
   }
   const window = _pathWindow(finding, fileContents);

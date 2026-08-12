@@ -110,17 +110,58 @@ function _findFunction(finding, perFileIR) {
   return chosen;
 }
 
+// Backward BFS via `pred` edges from `startId` — every node that can reach
+// `startId` by following the CFG forward from itself.
+function _backwardReachable(fn, startId) {
+  const visited = new Set();
+  const stack = [startId];
+  while (stack.length) {
+    const id = stack.pop();
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const node = fn.cfg.nodes[id];
+    if (!node) continue;
+    for (const p of node.pred || []) stack.push(p);
+  }
+  return visited;
+}
+
 function _allCallNodesBetween(fn, trace, sinkLine) {
   if (!fn || !fn.cfg || !fn.cfg.nodes) return [];
   const earliestSrcLine = Math.min(
     ...trace.map(t => (typeof t.line === 'number' ? t.line : sinkLine))
   );
+  // Stage 3 correctness audit (detection depth): this used to be a pure
+  // line-number-range filter — ANY call node between the earliest source
+  // line and the sink line, anywhere in the function, regardless of
+  // whether it could ever actually execute before the sink. A
+  // parameterizer call inside an unrelated `if` branch that RETURNS
+  // before ever reaching the sink (a completely different, non-converging
+  // path) satisfied that filter and could falsely "prove" a genuinely
+  // vulnerable SQL concatenation on a different branch was clean — the
+  // dangerous direction for a proof gate, since `provenClean` de-emphasizes
+  // the finding in reports and risk scoring.
+  //
+  // Restrict candidates to nodes CFG-reachable as a predecessor of the
+  // sink's own node (backward BFS via `pred`): a call that cannot execute
+  // on ANY path leading to the sink is excluded. This is still not a full
+  // per-path proof (a parameterizer reachable via SOME but not ALL paths
+  // to the sink, or one that sanitizes an unrelated variable, still
+  // passes) — that's the v2 SMT work the module header already scopes
+  // out — but it closes the specific "unrelated branch that never reaches
+  // the sink at all" false-proof case.
+  const sinkNodeId = Object.keys(fn.cfg.nodes).find(id => {
+    const n = fn.cfg.nodes[id];
+    return n && n.kind === 'call' && n.line === sinkLine;
+  });
+  const reachable = sinkNodeId ? _backwardReachable(fn, sinkNodeId) : null;
   const out = [];
   for (const id of Object.keys(fn.cfg.nodes)) {
     const node = fn.cfg.nodes[id];
     if (!node || node.kind !== 'call') continue;
     if (typeof node.line !== 'number') continue;
     if (node.line < earliestSrcLine || node.line > sinkLine) continue;
+    if (reachable && !reachable.has(id)) continue;
     out.push({ line: node.line, callee: node.callee });
   }
   return out;
