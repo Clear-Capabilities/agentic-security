@@ -102,6 +102,9 @@ function cvesIn(finding) {
   const found = new Set();
   if (typeof finding.cve === 'string') found.add(finding.cve.toUpperCase());
   if (Array.isArray(finding.cves)) for (const c of finding.cves) found.add(String(c).toUpperCase());
+  // The actual field name every SCA finding in this codebase uses (src/sca/
+  // CLAUDE.md's documented shape; carried through by normalizeFindings).
+  if (Array.isArray(finding.cveAliases)) for (const c of finding.cveAliases) found.add(String(c).toUpperCase());
   if (Array.isArray(finding.vulnerabilities)) {
     for (const v of finding.vulnerabilities) {
       if (typeof v.id === 'string' && v.id.startsWith('CVE-')) found.add(v.id.toUpperCase());

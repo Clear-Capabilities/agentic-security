@@ -569,6 +569,20 @@ async function cmdScan(args) {
     annotateRiskDollars(targetAbs, scan.findings || []);
   } catch {}
 
+  // Re-run composite risk for the same reason as annotateRiskDollars above:
+  // engine.js's mid-pipeline annotateCompositeRisk calls ran before
+  // enrichWithEPSS (just above) had a chance to set f.exploitedNow, so
+  // every finding's 'exploited-now-floor:75' boost was computed against a
+  // field that was always undefined at the time — an actively-exploited
+  // CVE (EPSS percentile >= 0.95) never got its compositeRisk score raised.
+  // annotateCompositeRisk is pure/idempotent (only sets compositeRisk*
+  // fields, reads everything else), so re-running it here is safe.
+  try {
+    const { annotateCompositeRisk } = await import('../src/posture/composite-risk.js');
+    annotateCompositeRisk(scan.findings || []);
+    annotateCompositeRisk(scan.supplyChain || []);
+  } catch {}
+
   // Blast-radius narrative — purely local, always safe to run.
   if (!args.flags['no-blast-radius']) {
     try { enrichWithBlastRadius(scan, targetAbs); } catch {}

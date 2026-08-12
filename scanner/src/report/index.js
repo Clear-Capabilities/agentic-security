@@ -337,6 +337,14 @@ export function normalizeFindings(scan){
       // Premortem #8.
       parser: lv.parser || 'LOGIC',
       family: lv.family || null,
+      // evaluateLicensePolicy (kind:'license') sets these so a consumer can
+      // identify WHICH component/license triggered the finding without
+      // regex-parsing the prose `vuln` string. Harmless no-op (all null)
+      // for every other logicVulns kind that doesn't set them.
+      package: lv.package || null,
+      version: lv.version || null,
+      ecosystem: lv.ecosystem || null,
+      license: lv.license || null,
     });
   }
   for (const sc of (scan.supplyChain||[])) {

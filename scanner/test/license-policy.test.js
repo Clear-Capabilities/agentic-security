@@ -45,3 +45,28 @@ test('License policy — null policy emits no findings', () => {
   const findings = evaluateLicensePolicy([{ name: 'a', license: 'GPL-3.0' }], null);
   assert.equal(findings.length, 0);
 });
+
+// Stage 4 correctness audit: evaluateLicensePolicy sets `package`, `version`,
+// `ecosystem`, `license` on every finding so a consumer can tell WHICH
+// component and WHICH license triggered it — but normalizeFindings'
+// logicVulns merge (report/index.js) builds its output object from an
+// explicit field allowlist that never included these four. A license-policy
+// finding surviving normalizeFindings (the shape every report format and
+// last-scan.json actually ships) carries only the human-readable `vuln`
+// string; there is no structured way for a consumer (CSV column, SARIF
+// property, MCP tool) to recover which package/license/ecosystem it's about
+// without regex-parsing prose.
+test('License policy — package/version/ecosystem/license survive normalizeFindings', async () => {
+  const { normalizeFindings } = await import('../src/report/index.js');
+  const findings = evaluateLicensePolicy(
+    [{ name: 'bad-lib', version: '2.0.0', ecosystem: 'npm', license: 'GPL-3.0', filePath: 'package.json' }],
+    policy,
+  );
+  const norm = normalizeFindings({ logicVulns: findings });
+  const f = norm.find(n => n.kind === 'license');
+  assert.ok(f, 'expected the license-policy finding to survive normalizeFindings');
+  assert.equal(f.package, 'bad-lib');
+  assert.equal(f.version, '2.0.0');
+  assert.equal(f.ecosystem, 'npm');
+  assert.equal(f.license, 'GPL-3.0');
+});
