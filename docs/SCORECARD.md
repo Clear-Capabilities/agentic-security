@@ -9,13 +9,13 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.136.3 |
-| Bundle SHA-256 | `f350108a4b11c017ed496855238db75c1b2122a9325e081bb7770acb7ca00f0e` |
-| Commit | `5854652004585ecf9a39c0d4deada679e2a399d8` |
+| Engine version | 0.136.4 |
+| Bundle SHA-256 | `2b2c8628df1a5b45c5d3fd5461498efe171469239d6d19f01bdbb65bed3d8e74` |
+| Commit | `fe3837e234adc120b179f5b58a5a0ba65e779b27` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
-| Corpus entries | 210 (210 scored) |
-| Generated (UTC) | 2026-08-11T18:50:23.663Z |
+| Corpus entries | 214 (214 scored) |
+| Generated (UTC) | 2026-08-12T22:31:45.046Z |
 
 ## What these numbers are, and what they are not
 
@@ -54,8 +54,8 @@ cannot defend would cost more credibility than the number is worth.
 
 | Population | Detected / correctly silent |
 | --- | --- |
-| Vulnerable fixtures (`pre/`) — detection | 210/210 (100.0%) |
-| Fixed counterparts (`post/`) — correct silence | 210/210 (100.0%) |
+| Vulnerable fixtures (`pre/`) — detection | 214/214 (100.0%) |
+| Fixed counterparts (`post/`) — correct silence | 214/214 (100.0%) |
 
 All corpus entries scored; no entry was excluded.
 
@@ -68,27 +68,33 @@ All corpus entries scored; no entry was excluded.
 | csharp | 21 | 21/21 (100.0%) | 21/21 (100.0%) |
 | go | 22 | 22/22 (100.0%) | 22/22 (100.0%) |
 | java | 25 | 25/25 (100.0%) | 25/25 (100.0%) |
-| javascript | 36 | 36/36 (100.0%) | 36/36 (100.0%) |
+| javascript | 38 | 38/38 (100.0%) | 38/38 (100.0%) |
+| json | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | kotlin | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
 | php | 23 | 23/23 (100.0%) | 23/23 (100.0%) |
 | python | 32 | 32/32 (100.0%) | 32/32 (100.0%) |
 | ruby | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
+| terraform | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 
 ### By CWE
 
 | CWE | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
+| 285 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-113 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-120 | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 | CWE-1321 | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 | CWE-1333 | 7 | 7/7 (100.0%) | 7/7 (100.0%) |
+| CWE-1427 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-208 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-22 | 14 | 14/14 (100.0%) | 14/14 (100.0%) |
+| CWE-284 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-316 | 2 | 2/2 (100.0%) | 2/2 (100.0%) |
 | CWE-327 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-329 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-338 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-352 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
+| CWE-494 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-502 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-601 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-611 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
@@ -107,7 +113,7 @@ All corpus entries scored; no entry was excluded.
 
 | Tier | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
-| capability | 201 | 201/201 (100.0%) | 201/201 (100.0%) |
+| capability | 205 | 205/205 (100.0%) | 205/205 (100.0%) |
 | deep | 6 | 6/6 (100.0%) | 6/6 (100.0%) |
 | regression | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 
@@ -132,14 +138,14 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 25 |
-| `scripts` | 24 |
+| `scripts` | 26 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 603 |
+| `scanner/src` | 611 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -182,8 +188,8 @@ went DOWN when the benchmark was corrected, and is published that way.
 
 ## Committed artifacts referenced (not re-run by this command)
 
-- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-08-08):
-  210/210 entries recorded as passing. The gate
+- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-08-12):
+  214/214 entries recorded as passing. The gate
   `npm run bench:cve-replay:check` fails the build on any drift from it.
   The rates above are computed from this run, not from this file.
 - **Third-party repository run** (*committed artifact*, `bench/proof-corpus/results/summary.json`,

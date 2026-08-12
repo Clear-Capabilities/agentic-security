@@ -9,7 +9,60 @@
 > make the history less accurate, not more.
 
 
-## 0.136.3 — the same code, published with provenance
+## 0.136.4 — dominance-correct implicit-flow taint, and wiring three dead-reachable tools
+
+A capability-PRD follow-up audit found several places where a real, tested
+mechanism existed in the code but nothing in the product could actually reach
+it. This release closes those gaps rather than documenting them further.
+
+**`implicit-flow.js` now uses real dominance, not a depth counter.** The
+branch-scoping check for implicit taint (does a constant-argument sink sit
+*inside* a tainted branch, or after it closes?) was a path-dependent DFS
+depth-counter, which cannot distinguish a join point from a nested branch and
+both over- and under-attributes depending on CFG shape. It's replaced with a
+proper dominance check (`ssa.js`'s `computeDominators`, already used for φ-node
+placement, now exported and reused here) plus a predecessor-count "sole
+parent" test — needed because an else-less `if`'s CFG lowering links the
+condition directly to the join node, which a naive dominance check alone would
+still misread as a branch root. `dataflow/engine.js`'s implicit-flow post-pass
+is split into two correctly-scoped passes: a sink-call-must-be-inside-the-
+branch check for constant-argument leaks, and an ungated check for
+already-tainted-variable-as-argument leaks, which don't need the sink itself
+to be branch-local.
+
+**Three previously-dead mechanisms are now reachable.** `verify_fix`'s PoC-
+recheck leg always reported `not-requested` — the caller never had the PoC to
+pass it, so it's now looked up server-side from the finding's own
+`last-scan.json` entry. `fix-honesty-gate.js`'s deterministic honesty checks
+(vague-assurance residual prose, unbacked false-positive verdicts) were fully
+built and consulted by the verifier, but `fixMeta` was never in `apply_fix` or
+`verify_fix`'s MCP schema, so no caller could ever supply one; a dishonest
+`fixMeta` now blocks the write itself, not just the report. `verifyRunAttestation`
+had no CLI caller at all — `verify-attestation` now auto-detects a
+run-attestation shape and re-scans the target to check it reproduces the
+attested digest, backed by two new release-gate checks
+(`attestation-self-check`, `nist-catalog-freshness`).
+
+**Stale docs, fixed instead of flagged.** `docs/compliance/{nist-ai-600-1,
+owasp-asvs}-coverage.md` carried static control tables that drifted from the
+live evaluator; both now point at the `/compliance` walkthrough/report instead
+of duplicating data that can go stale. The ASVS doc also had a genuine
+version mismatch (4.0.3 vs. the 5.0 catalog actually in use). A new
+`scripts/check-doc-drift.mjs` catches this class of staleness mechanically —
+it resolves every backtick-quoted path/export reference in a CLAUDE.md file
+against the real filesystem — after this audit found several by hand.
+
+**CVE-replay corpus:** four new capability entries (IaC open-ingress, LLM
+system-prompt injection, MCP untrusted-install, API missing-auth/BFLA),
+closing four of six previously-flagged zero-coverage categories; each verified
+`pre:TP post:TN` against the real runner before joining the baseline. SBOM and
+SCA-reachability are documented in `bench/cve-replay/CONTRIBUTING.md` as
+structurally unable to fit this corpus's binary presence/absence schema —
+they're covered by their own test suites instead.
+
+CMP-1's family-alias table also closed three more gaps
+(`k8s-pod-security-privileged`, `mcp-audit.js`'s `agent-tool-exec` backfill,
+dependency-confusion family tagging).
 
 **No functional change from 0.136.2.** This version exists for one reason, and
 it is worth stating plainly rather than dressing up: 0.136.2 reached npm from a

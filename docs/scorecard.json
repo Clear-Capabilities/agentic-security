@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.136.3",
-    "bundleSha256": "f350108a4b11c017ed496855238db75c1b2122a9325e081bb7770acb7ca00f0e",
-    "commit": "5854652004585ecf9a39c0d4deada679e2a399d8",
+    "engineVersion": "0.136.4",
+    "bundleSha256": "2b2c8628df1a5b45c5d3fd5461498efe171469239d6d19f01bdbb65bed3d8e74",
+    "commit": "fe3837e234adc120b179f5b58a5a0ba65e779b27",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-11T18:50:23.663Z"
+    "generatedAt": "2026-08-12T22:31:45.046Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -19,17 +19,17 @@
   },
   "corpus": {
     "measuredThisRun": true,
-    "totalEntries": 210,
-    "scoredEntries": 210,
+    "totalEntries": 214,
+    "scoredEntries": 214,
     "notScored": [],
     "overall": {
       "detection": {
-        "n": 210,
-        "d": 210
+        "n": 214,
+        "d": 214
       },
       "silence": {
-        "n": 210,
-        "d": 210
+        "n": 214,
+        "d": 214
       }
     },
     "byLanguage": [
@@ -95,14 +95,26 @@
       },
       {
         "key": "javascript",
-        "entries": 36,
+        "entries": 38,
         "detection": {
-          "n": 36,
-          "d": 36
+          "n": 38,
+          "d": 38
         },
         "silence": {
-          "n": 36,
-          "d": 36
+          "n": 38,
+          "d": 38
+        }
+      },
+      {
+        "key": "json",
+        "entries": 1,
+        "detection": {
+          "n": 1,
+          "d": 1
+        },
+        "silence": {
+          "n": 1,
+          "d": 1
         }
       },
       {
@@ -152,9 +164,33 @@
           "n": 20,
           "d": 20
         }
+      },
+      {
+        "key": "terraform",
+        "entries": 1,
+        "detection": {
+          "n": 1,
+          "d": 1
+        },
+        "silence": {
+          "n": 1,
+          "d": 1
+        }
       }
     ],
     "byCwe": [
+      {
+        "key": "285",
+        "entries": 1,
+        "detection": {
+          "n": 1,
+          "d": 1
+        },
+        "silence": {
+          "n": 1,
+          "d": 1
+        }
+      },
       {
         "key": "CWE-113",
         "entries": 8,
@@ -204,6 +240,18 @@
         }
       },
       {
+        "key": "CWE-1427",
+        "entries": 1,
+        "detection": {
+          "n": 1,
+          "d": 1
+        },
+        "silence": {
+          "n": 1,
+          "d": 1
+        }
+      },
+      {
         "key": "CWE-208",
         "entries": 8,
         "detection": {
@@ -225,6 +273,18 @@
         "silence": {
           "n": 14,
           "d": 14
+        }
+      },
+      {
+        "key": "CWE-284",
+        "entries": 1,
+        "detection": {
+          "n": 1,
+          "d": 1
+        },
+        "silence": {
+          "n": 1,
+          "d": 1
         }
       },
       {
@@ -285,6 +345,18 @@
         "silence": {
           "n": 8,
           "d": 8
+        }
+      },
+      {
+        "key": "CWE-494",
+        "entries": 1,
+        "detection": {
+          "n": 1,
+          "d": 1
+        },
+        "silence": {
+          "n": 1,
+          "d": 1
         }
       },
       {
@@ -447,14 +519,14 @@
     "byTier": [
       {
         "key": "capability",
-        "entries": 201,
+        "entries": 205,
         "detection": {
-          "n": 201,
-          "d": 201
+          "n": 205,
+          "d": 205
         },
         "silence": {
-          "n": 201,
-          "d": 201
+          "n": 205,
+          "d": 205
         }
       },
       {
@@ -503,7 +575,7 @@
         }
       },
       "scanner/src": {
-        "total": 603,
+        "total": 611,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -521,10 +593,10 @@
           "ir/cpp-preprocessor.js": 2,
           "ir/ir-stats.js": 1,
           "ir/parser-cpp.js": 6,
-          "ir/parser-cs.js": 2,
+          "ir/parser-cs.js": 3,
           "ir/parser-go.js": 5,
           "ir/parser-kt.js": 2,
-          "ir/parser-php.js": 7,
+          "ir/parser-php.js": 8,
           "ir/parser-py-cst.js": 1,
           "ir/parser-py.helper.py": 1,
           "ir/parser-py.js": 2,
@@ -534,11 +606,11 @@
           "leaderboard.js": 3,
           "llm-validator/consistency.js": 1,
           "llm-validator/cost-ceiling.js": 1,
-          "llm-validator/index.js": 4,
+          "llm-validator/index.js": 5,
           "llm-validator/redact.js": 2,
           "lsp/server.js": 3,
-          "mcp/audit.js": 7,
-          "mcp/redact.js": 1,
+          "mcp/audit.js": 8,
+          "mcp/redact.js": 3,
           "mcp/server.js": 1,
           "mcp/tools.js": 7,
           "poc-video.js": 1,
@@ -567,6 +639,7 @@
           "posture/cross-lang-orm.js": 1,
           "posture/cross-lang-queues.js": 5,
           "posture/cross-repo-memory.js": 2,
+          "posture/csharp-analysis.js": 1,
           "posture/custom-rules.js": 2,
           "posture/cve-alert-daemon.js": 6,
           "posture/cve-lookup.js": 4,
@@ -718,7 +791,7 @@
           "sca/dep-confusion.js": 3,
           "sca/import-reachability.js": 1,
           "sca/install-script-analysis.js": 1,
-          "sca/llm-function-extract.js": 1,
+          "sca/llm-function-extract.js": 2,
           "sca/py-package-functions.js": 1,
           "sca/sigstore-verify.js": 7,
           "sca/vendor-detect.js": 1,
@@ -726,15 +799,17 @@
         }
       },
       "scripts": {
-        "total": 24,
+        "total": 26,
         "byFile": {
           "_compliance_lib.py": 1,
           "apply-command-trim.mjs": 2,
           "calibration-expand.mjs": 2,
+          "check-doc-drift.mjs": 1,
           "detector-fuzz-runner.mjs": 3,
           "ghsa-to-hints.mjs": 3,
           "llm-cost-ceiling.py": 2,
           "nist-compliance/scan.py": 2,
+          "release-check.mjs": 1,
           "rotate-key-auto.py": 1,
           "self-test-runner.mjs": 2,
           "synthesize-detector.mjs": 5,
@@ -750,9 +825,9 @@
   "committedInputs": {
     "corpusBaseline": {
       "source": "bench/cve-replay/corpus-baseline.json",
-      "generatedAt": "2026-08-08",
-      "total": 210,
-      "passing": 210
+      "generatedAt": "2026-08-12",
+      "total": 214,
+      "passing": 214
     },
     "independent": {
       "source": "bench/independent/RESULT.json",
