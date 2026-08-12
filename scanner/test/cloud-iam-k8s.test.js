@@ -51,6 +51,26 @@ test('cloud-iam: narrow AWS policy with MFA condition is silent', () => {
   assert.equal(out.filter(f => f.family === 'aws-no-mfa').length, 0);
 });
 
+// Stage 4 correctness audit: scanCloudIam's own dispatcher routes .tf files
+// into detectAws() whenever _isAwsPolicy(raw) matches (`(isJson || isTf) &&
+// _isAwsPolicy(raw)`) — but detectAws's very first line is
+// `parsed = JSON.parse(raw)` over the WHOLE FILE, and a .tf file is HCL, not
+// JSON, even when it embeds a real JSON policy document in a heredoc. That
+// JSON.parse always throws on Terraform source, hits the catch-all
+// `catch { return; }`, and detectAws produces zero findings for every .tf
+// file — including the aws-overbroad-managed-policy check at the bottom of
+// the function, which doesn't even need JSON.parse but is unreachable
+// because the early return happens before it. AWS IAM policies embedded in
+// Terraform heredocs are one of the most common real-world ways this shape
+// appears in a scanned repo, so this is a real, high-impact false negative,
+// not a theoretical gap.
+test('cloud-iam: a public S3 bucket policy embedded in a Terraform heredoc is flagged, not silently skipped', () => {
+  const src = read(path.join(IAM, 'vulnerable/aws-public-bucket.tf'));
+  const out = scanCloudIam('aws-public-bucket.tf', src);
+  assert.ok(out.some(f => f.family === 'aws-public-s3'),
+    `expected aws-public-s3 from the Terraform heredoc; got ${out.map(f => f.family).join(',')}`);
+});
+
 // Stage 4 correctness audit: cloud-iam.js's _line(raw, idx) expects idx to be
 // a numeric string offset (like every GCP call site correctly passes
 // mm.index/m.index) — but 4 AWS call sites pass a string literal instead

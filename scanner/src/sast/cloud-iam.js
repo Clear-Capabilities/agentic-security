@@ -90,10 +90,49 @@ function _actionList(a) {
   return Array.isArray(a) ? a : [a];
 }
 
+// Finds every balanced {...} substring in `raw` that parses as valid JSON
+// and itself contains a "Statement" key. Recovers the case _isAwsPolicy
+// already promises to route here: an AWS policy document embedded as a
+// JSON-quoted string inside a non-JSON host file — most commonly a
+// Terraform heredoc (`policy = <<EOF ... EOF`). Does not attempt to parse
+// native-HCL jsonencode({...}) blocks (bare identifiers, no quotes) — that
+// shape doesn't match _isAwsPolicy's own quoted-key detection regex either,
+// so it's already outside this detector's claimed scope.
+function _extractJsonPolicyBlocks(raw) {
+  const blocks = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] !== '{') continue;
+    let depth = 0, inStr = false, strCh = '', esc = false, j = i;
+    for (; j < raw.length; j++) {
+      const c = raw[j];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === '\\') esc = true;
+        else if (c === strCh) inStr = false;
+        continue;
+      }
+      if (c === '"') { inStr = true; strCh = c; continue; }
+      if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) break; }
+    }
+    if (depth !== 0 || j >= raw.length) continue;
+    const candidate = raw.slice(i, j + 1);
+    if (!/"Statement"\s*:/.test(candidate)) continue;
+    try { blocks.push(JSON.parse(candidate)); } catch { /* not valid JSON on its own */ }
+  }
+  return blocks;
+}
+
 function detectAws(file, raw, out, seen) {
-  let parsed;
-  try { parsed = JSON.parse(raw); } catch { return; }
-  const ss = _statements(parsed);
+  let ss;
+  try {
+    ss = _statements(JSON.parse(raw));
+  } catch {
+    // Non-JSON host file (e.g. Terraform HCL) — fall back to locating
+    // embedded JSON policy-document blocks instead of giving up outright.
+    ss = _extractJsonPolicyBlocks(raw).flatMap(_statements);
+    if (!ss.length) return;
+  }
   // _line() takes a raw-text offset, not a substring — a monotonically
   // advancing cursor lets successive statements (JSON.parse preserves
   // source order) each locate their OWN occurrence of a shared marker
