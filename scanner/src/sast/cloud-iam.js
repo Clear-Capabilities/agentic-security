@@ -94,16 +94,25 @@ function detectAws(file, raw, out, seen) {
   let parsed;
   try { parsed = JSON.parse(raw); } catch { return; }
   const ss = _statements(parsed);
+  // _line() takes a raw-text offset, not a substring — a monotonically
+  // advancing cursor lets successive statements (JSON.parse preserves
+  // source order) each locate their OWN occurrence of a shared marker
+  // like `"Principal"` instead of every statement resolving to the same
+  // (first) occurrence in the file.
+  let _cursor = 0;
   for (const s of ss) {
     if ((s.Effect || 'Allow') !== 'Allow') continue;
     const actions = _actionList(s.Action);
     const isStarAction = actions.includes('*') || actions.some(a => /^[a-z]+:\*$/.test(a));
     const hasCondition = s.Condition && Object.keys(s.Condition).length > 0;
     const principalStar = _principalIsWildcard(s.Principal);
+    let _advanceTo = _cursor;
 
     // aws-public-s3-policy
     if (principalStar && actions.some(a => /^s3:/.test(a))) {
-      const ln = _line(raw, `"Principal"`);
+      const idx = raw.indexOf('"Principal"', _cursor);
+      const ln = _line(raw, idx >= 0 ? idx : _cursor);
+      if (idx >= 0) _advanceTo = Math.max(_advanceTo, idx + 1);
       const id = `aws-public-s3-policy:${file}:${ln}`;
       if (!seen.has(id)) {
         seen.add(id);
@@ -118,7 +127,9 @@ function detectAws(file, raw, out, seen) {
 
     // aws-public-trust-policy (Principal:* on AssumeRole)
     if (principalStar && actions.includes('sts:AssumeRole')) {
-      const ln = _line(raw, 'AssumeRole');
+      const idx = raw.indexOf('AssumeRole', _cursor);
+      const ln = _line(raw, idx >= 0 ? idx : _cursor);
+      if (idx >= 0) _advanceTo = Math.max(_advanceTo, idx + 1);
       const id = `aws-public-trust-policy:${file}:${ln}`;
       if (!seen.has(id)) {
         seen.add(id);
@@ -136,7 +147,9 @@ function detectAws(file, raw, out, seen) {
       if (_HIGH_RISK_AWS_ACTIONS.includes(a) || a === '*') {
         const conditionStr = JSON.stringify(s.Condition || {});
         if (!/MultiFactorAuthPresent|MultiFactorAuthAge/.test(conditionStr)) {
-          const ln = _line(raw, `"${a}"`);
+          const idx = raw.indexOf(`"${a}"`, _cursor);
+          const ln = _line(raw, idx >= 0 ? idx : _cursor);
+          if (idx >= 0) _advanceTo = Math.max(_advanceTo, idx + 1);
           const id = `aws-no-mfa-condition:${file}:${a}:${ln}`;
           if (!seen.has(id)) {
             seen.add(id);
@@ -153,12 +166,13 @@ function detectAws(file, raw, out, seen) {
 
     // (iam:PassRole with Resource:* is detected by posture/iam-policy.js —
     // not duplicated here.)
+    _cursor = _advanceTo;
   }
 
   // aws-overbroad-managed-policy
   if (/"AdministratorAccess"|"PowerUserAccess"/.test(raw) && !/root\b|Bootstrap\b/.test(raw)) {
     const m = /"(AdministratorAccess|PowerUserAccess)"/.exec(raw);
-    const ln = _line(raw, m[0]);
+    const ln = _line(raw, m.index);
     const id = `aws-overbroad-managed-policy:${file}:${ln}`;
     if (!seen.has(id)) {
       seen.add(id);

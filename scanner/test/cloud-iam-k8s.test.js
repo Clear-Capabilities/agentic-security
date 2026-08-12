@@ -51,6 +51,34 @@ test('cloud-iam: narrow AWS policy with MFA condition is silent', () => {
   assert.equal(out.filter(f => f.family === 'aws-no-mfa').length, 0);
 });
 
+// Stage 4 correctness audit: cloud-iam.js's _line(raw, idx) expects idx to be
+// a numeric string offset (like every GCP call site correctly passes
+// mm.index/m.index) — but 4 AWS call sites pass a string literal instead
+// (`"Principal"`, 'AssumeRole', `"${a}"`, m[0]). raw.slice(0, <string>)
+// coerces the string to NaN, and slice(0, NaN) always returns '', so
+// these findings are always stamped line:1 regardless of where the
+// actual statement sits in the file. Because the finding id is
+// `${ruleId}:${file}:${line}`, two textually distinct offending
+// statements in the same file collapse onto the identical id, and the
+// seen.has(id) dedup silently drops the second one — a false negative,
+// not merely a wrong line number.
+test('cloud-iam: two distinct over-permissive S3 statements in one file both fire (not silently deduped by a shared broken line number)', () => {
+  const policy = {
+    Version: '2012-10-17',
+    Statement: [
+      { Effect: 'Allow', Principal: '*', Action: ['s3:GetObject'] },
+      { Effect: 'Allow', Principal: '*', Action: ['s3:PutObject'] },
+    ],
+  };
+  const src = JSON.stringify(policy, null, 2);
+  const out = scanCloudIam('policy.json', src).filter(f => f.family === 'aws-public-s3');
+  assert.equal(out.length, 2, `expected 2 distinct aws-public-s3-policy findings (one per statement); got ${out.length}: ${JSON.stringify(out.map(f => f.id))}`);
+  // Real bonus: the line numbers should actually differ, and neither should
+  // be the always-wrong fallback of 1.
+  const lines = out.map(f => f.line);
+  assert.notEqual(lines[0], lines[1], `both findings reported the same line ${lines[0]} — the second statement's true position was never located`);
+});
+
 test('cloud-iam: AGENTIC_SECURITY_NO_CLOUD_IAM disables', () => {
   process.env.AGENTIC_SECURITY_NO_CLOUD_IAM = '1';
   try {
