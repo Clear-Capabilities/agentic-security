@@ -42,7 +42,7 @@ app.get('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const cmdFindings = irFindings.filter(f => /command|exec|injection/i.test(f.vuln || ''));
   assert.ok(cmdFindings.length >= 1,
@@ -61,7 +61,7 @@ app.get('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const cmdFindings = irFindings.filter(f => /command|exec|injection/i.test(f.vuln || ''));
   assert.ok(cmdFindings.length >= 1,
@@ -81,7 +81,7 @@ app.get('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const cmdFindings = irFindings.filter(f => /command|exec|injection/i.test(f.vuln || ''));
   assert.ok(cmdFindings.length >= 1,
@@ -100,7 +100,7 @@ app.get('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const cmdFindings = irFindings.filter(f => /command|exec|injection/i.test(f.vuln || ''));
   assert.equal(cmdFindings.length, 0, 'a clean literal must not trigger a finding');

@@ -41,7 +41,7 @@ app.get('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   // Filtered to the deep engine's own findings (parser: 'IR-TAINT') — a
   // plain regex/structural SAST detector would also catch this direct
   // cp.exec(req.body.x) pattern regardless of whether step() crashed, which
@@ -64,7 +64,7 @@ app.get('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const cmdFindings = irFindings.filter(f => /command|exec|injection/i.test(f.vuln || ''));
   assert.ok(cmdFindings.length >= 1, 'control case must fire the same IR-TAINT finding');

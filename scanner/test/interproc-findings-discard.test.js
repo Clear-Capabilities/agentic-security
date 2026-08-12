@@ -49,7 +49,7 @@ app.get('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const sqlFindings = irFindings.filter(f => /sql/i.test(f.vuln || ''));
   assert.ok(sqlFindings.length >= 1,
@@ -70,7 +70,7 @@ app.get('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const sqlFindings = irFindings.filter(f => /sql/i.test(f.vuln || ''));
   assert.ok(sqlFindings.length >= 1,

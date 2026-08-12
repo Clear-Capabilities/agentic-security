@@ -9,6 +9,33 @@
 > make the history less accurate, not more.
 
 
+## 0.136.6 — correction: the "flaky" dataflow tests were a real, deterministic gap
+
+0.136.5's entry below called a cluster of `test:dataflow` failures on the
+hosted runner resource-contention flakiness, because a second, simultaneous
+workflow run of the identical commit showed a completely different failure
+and neither reproduced locally. That diagnosis was wrong, and the actual
+cause is more interesting: 13 test files pass `runScan(dir, { deep: true })`
+to exercise the interprocedural taint engine directly, but never opt into
+`AGENTIC_SECURITY_DEEP_IN_CI` — and `engine.js` deliberately auto-disables
+deep mode under any detected CI environment unless that second flag is also
+set, precisely so a pathological file can't hang a CI pipeline. Every one of
+those 13 files has therefore been silently CI-broken (never actually
+exercising the deep engine there, only recording the "skipped in CI"
+placeholder finding) since the day it was written — invisible until this
+release's tag push put 62 accumulated commits through hosted CI for the
+first time. Reproduced deterministically with `CI=true node --test
+<file>.test.js` locally (no CI service required), fixed by threading
+`deepInCi: true` alongside `deep: true` at all 21 call sites across those 13
+files, and confirmed both directions: `npm test` is clean with `CI` unset
+and with `CI=true` set.
+
+The earlier flakiness diagnosis wasn't entirely wrong — the *other* workflow
+run's single MTTR-wiring failure genuinely didn't reproduce on a third run
+and remains unexplained — but it was wrong about *this* failure cluster,
+which was 100% reproducible once isolated with the right environment
+variable rather than blamed on shared-runner load.
+
 ## 0.136.5 — the release workflow gets its own missing dependency
 
 0.136.4 was tagged and its release workflow ran — for the first time ever,

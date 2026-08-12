@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.136.5",
+    "engineVersion": "0.136.6",
     "bundleSha256": "2b2c8628df1a5b45c5d3fd5461498efe171469239d6d19f01bdbb65bed3d8e74",
-    "commit": "69e53bfa921c5d0368ce4635e483132edfcbbd84",
+    "commit": "d1847e22f57316ede6cc173315425d44503fdf95",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-12T23:04:29.105Z"
+    "generatedAt": "2026-08-12T23:21:17.670Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",

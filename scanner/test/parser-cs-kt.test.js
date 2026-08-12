@@ -57,7 +57,7 @@ public class UsersController {
   }
 }
 `);
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   // We accept any SQL/injection-ish finding on Find(). The engine is new;
   // the smoke is "the new IR doesn't break the run AND the catalog wires up."
   assert.ok(scan && Array.isArray(scan.findings),
@@ -73,7 +73,7 @@ fun handle(call: Any) {
   Runtime.getRuntime().exec("ping " + host)
 }
 `);
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   assert.ok(scan && Array.isArray(scan.findings),
     'scan must produce findings array on Kotlin input');
   fs.rmSync(dir, { recursive: true, force: true });

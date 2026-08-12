@@ -96,7 +96,7 @@ app.get('/run', (req, res) => {
   cp.exec(obj);
 });
 `);
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const cmdFindings = irFindings.filter(f => /command|exec|injection/i.test(f.vuln || ''));
   assert.ok(cmdFindings.length >= 1,

@@ -36,7 +36,7 @@ app.get('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   assert.ok(irFindings.length >= 1,
     `expected {deep:true} to enable the IR-TAINT engine and produce a finding, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);

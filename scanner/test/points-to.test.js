@@ -113,7 +113,7 @@ app.post('/run', (req, res) => {
   process.env.AGENTIC_SECURITY_POINTS_TO = '1';
   let scan;
   try {
-    ({ scan } = await runScan(dir, { deep: true }));
+    ({ scan } = await runScan(dir, { deep: true, deepInCi: true }));
   } finally {
     if (prev === undefined) delete process.env.AGENTIC_SECURITY_POINTS_TO;
     else process.env.AGENTIC_SECURITY_POINTS_TO = prev;

@@ -52,7 +52,7 @@ app.get('/clean', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const cmdFindings = (scan.findings || []).filter(f =>
     /command|exec|injection/i.test(f.vuln || ''));
   // The tainted call should fire. The clean call should NOT add a second
@@ -90,7 +90,7 @@ app.post('/run', (req, res) => {
 });
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   // The engine doesn't have to FIRE on this case in v0.66 (field-sensitive
   // mutated-param flow with member-write is an explicit limitation), but
   // it must not regress on the unrelated assignment patterns. We assert
@@ -121,7 +121,7 @@ app.get('/run', (req, res) => {
   // The key assertion is "the scan completes" — i.e. no infinite recursion
   // and no walltime explosion. We give it a generous budget.
   const t0 = Date.now();
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const dt = Date.now() - t0;
   assert.ok(dt < 30_000, `scan took ${dt}ms — recursion budget likely blown`);
   assert.ok(scan && Array.isArray(scan.findings), 'scan must complete');
@@ -144,7 +144,7 @@ test('budget: deep engine respects MAX_FP_ITERS cap', async () => {
   lines.push(`});`);
   const dir = mkTmp('budget', { 'app.js': lines.join('\n') });
   const t0 = Date.now();
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const dt = Date.now() - t0;
   assert.ok(dt < 30_000, `fixed-point with 20 helpers took ${dt}ms — too slow`);
   assert.ok(scan && Array.isArray(scan.findings));

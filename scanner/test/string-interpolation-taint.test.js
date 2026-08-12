@@ -43,7 +43,7 @@ function handler() {
 }
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const sqlFindings = irFindings.filter(f => /sql/i.test(f.vuln || ''));
   assert.ok(sqlFindings.length >= 1,
@@ -60,7 +60,7 @@ function handler() {
 }
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const sqlFindings = irFindings.filter(f => /sql/i.test(f.vuln || ''));
   assert.equal(sqlFindings.length, 0,
@@ -79,7 +79,7 @@ public class App {
 }
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const sqlFindings = irFindings.filter(f => /sql/i.test(f.vuln || ''));
   assert.ok(sqlFindings.length >= 1,
@@ -98,7 +98,7 @@ public class App {
 }
 `,
   });
-  const { scan } = await runScan(dir, { deep: true });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   const sqlFindings = irFindings.filter(f => /sql/i.test(f.vuln || ''));
   assert.equal(sqlFindings.length, 0, 'a clean literal interpolated value must not trigger a finding');
