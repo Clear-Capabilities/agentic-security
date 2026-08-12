@@ -909,9 +909,13 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // unbounded blowup). v0.66 — the inner ctx now records mutatedParams
   // via _mutatedParamsOut so cross-function param mutation propagates.
   const MAX_FP_ITERS = 3;
-  let prevCacheSize = -1;
   for (let it = 0; it < MAX_FP_ITERS; it++) {
     if (Date.now() > deadlineMs) break;
+    // Tracks whether this iteration actually changed any cached summary's
+    // VALUE — the correct convergence signal (see below). Reset each
+    // iteration; if nothing changed, the fixed point has been reached and
+    // further iterations would recompute byte-identical results.
+    let changedThisIter = false;
     for (const fn of fnList) {
       if (Date.now() > deadlineMs) break;
       const entry = new Set();
@@ -938,14 +942,32 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         taintedGlobals: new Set(),
         findings: [],
       };
+      // Membership-aware, not size-only — two summaries with the same
+      // mutatedParams CARDINALITY but different MEMBERS (e.g. {'a'} vs
+      // {'b'}) were treated as unchanged, so a real refinement across
+      // iterations (a callee's mutated-field identity settling once its own
+      // callees' summaries became known) was silently never written to the
+      // cache. Same bug class as summaries.js's _summaryEq, fixed alongside
+      // it. Reuses the same access-path-aware setsEqual already imported
+      // for taint-state comparison elsewhere in this file (mutatedParams
+      // entries are access paths too, e.g. '_this_.field').
       if (!existing
           || existing.returnTainted !== next.returnTainted
-          || (existing.mutatedParams?.size || 0) !== next.mutatedParams.size) {
+          || !accessSetsEqual(existing.mutatedParams, next.mutatedParams)) {
         summaryCache.set(fn.qid, entry, next);
+        changedThisIter = true;
       }
     }
-    if (summaryCache.size() === prevCacheSize) break;
-    prevCacheSize = summaryCache.size();
+    // NOT `summaryCache.size() === prevCacheSize` (the pre-fix check): every
+    // function gets a cache key on iteration 0 (`!existing` is true for all
+    // of them), so `.size()` — a KEY COUNT — jumps from 0 to N once and then
+    // never changes again, since overwriting an existing Map key never
+    // changes `.size`. That made the loop `break` after iteration 1
+    // regardless of whether iteration 1 itself found real refinements to
+    // write, silently delivering 2 rounds of fixed-point refinement instead
+    // of the MAX_FP_ITERS=3 this code and dataflow/CLAUDE.md both promise.
+    // `changedThisIter` tracks actual value changes instead.
+    if (!changedThisIter) break;
   }
   // Class-field cross-taint pass: when a method writes tainted data to _this_.field,
   // re-analyze other methods of the same class with those fields in the entry state.

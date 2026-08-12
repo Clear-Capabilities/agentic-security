@@ -191,10 +191,23 @@ export class SummaryCache {
   clear() { this._cache.clear(); this._iter = 0; this._contextsByQid.clear(); this._contextCapHits = 0; }
 }
 
+// Stage 3 correctness audit (detection depth): this compared mutatedParams
+// by SIZE only, not membership — two summaries with the same cardinality
+// but different members (e.g. {'fieldA'} vs {'fieldB'}, plausible across
+// fixed-point iterations of a recursive helper whose mutated-target
+// identity depends on recursion depth) were treated as equal. compute()'s
+// fixed-point loop (above) then `break`s WITHOUT caching the just-computed
+// `summary` — but still returns it to its immediate caller. Any OTHER,
+// later call site doing a plain cache `.get(qid, sameEntry)` would then
+// silently receive the stale `prev` summary the loop declared "equal to"
+// the fresher one it never cached.
 function _summaryEq(a, b) {
   if (!a || !b) return a === b;
   if (!!a.returnTainted !== !!b.returnTainted) return false;
-  if ((a.mutatedParams?.size || 0) !== (b.mutatedParams?.size || 0)) return false;
+  const am = a.mutatedParams || new Set();
+  const bm = b.mutatedParams || new Set();
+  if (am.size !== bm.size) return false;
+  for (const p of am) if (!bm.has(p)) return false;
   return true;
 }
 
