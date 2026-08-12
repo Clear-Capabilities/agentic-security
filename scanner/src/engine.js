@@ -7508,7 +7508,7 @@ async function queryRegistries(components){
 
 // Node port: takes { fileContents, depFileContents } maps directly instead of a JSZip object.
 // fileContents = code files keyed by relative path; depFileContents = manifest/lockfiles keyed by relative path.
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
   // defined in OTHER files (Juliet's DataflowThruInnerClass / Vector / Stream
@@ -8452,10 +8452,21 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       }
     }
   }
-  const _deepRequested = process.env.AGENTIC_SECURITY_DEEP === '1';
+  // `deep`/`deepInCi` come from runScan()'s options object (threaded through
+  // unchanged from runScan.js) — an explicit-opt-in override alongside the
+  // env vars, not a replacement for them. Added because `runScan(dir,
+  // {deep:true})` was a silent, total no-op: this options object was
+  // destructured for fileContents/depFileContents/scanRoot/resume only, so
+  // `deep` was dropped on the floor and deep mode stayed off regardless.
+  // Several interprocedural test files (interproc-k2.test.js,
+  // parser-cs-kt.test.js, points-to.test.js) pass exactly this option
+  // believing it enables deep mode — it never did, so those tests were
+  // exercising whatever coincidentally fires without the deep engine, not
+  // the interprocedural machinery they're named for.
+  const _deepRequested = deep === true || process.env.AGENTIC_SECURITY_DEEP === '1';
   const _inCi = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI ||
                    process.env.BUILDKITE || process.env.CIRCLECI || process.env.JENKINS_URL);
-  const _deepInCiAllowed = process.env.AGENTIC_SECURITY_DEEP_IN_CI === '1';
+  const _deepInCiAllowed = deepInCi === true || process.env.AGENTIC_SECURITY_DEEP_IN_CI === '1';
   const _deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed);
   if (_deepEnabled) {
     const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
