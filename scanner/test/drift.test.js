@@ -52,6 +52,26 @@ test('Drift — newly exposed data class detected (Confidential added)', () => {
     `expected Confidential newly exposed; got: ${d.dataClasses.newlyExposed.join(', ')}`);
 });
 
+// S7 (Stage 2 measurement-completeness audit): _findingKey used to be purely
+// `${kind}:${file}:${line}:${vuln}` — a PR that shifts an existing, still-
+// unfixed finding's line (e.g. adding an unrelated import above it) made it
+// look like one finding was "removed" and a different one "added," inflating
+// drift tier and falsely flagging the PR as introducing+fixing something it
+// never touched. stableId (posture/stable-id.js) omits the exact line by
+// design and must be preferred when present.
+test('Drift — a finding that only shifted line (same stableId) is not double-counted as added+removed', () => {
+  const base = {
+    routes: [], components: [], supplyChain: [],
+    findings: [{ kind: 'sast', severity: 'critical', vuln: 'SQL Injection', file: 'app.js', line: 20, stableId: 'stable-abc' }],
+    logicVulns: [],
+  };
+  const shifted = JSON.parse(JSON.stringify(base));
+  shifted.findings[0].line = 21; // unrelated edit shifted this finding down one line
+  const d = driftBetween(base, shifted);
+  assert.equal(d.findings.added.length, 0, `expected no added findings from a pure line shift, got: ${JSON.stringify(d.findings.added)}`);
+  assert.equal(d.findings.removed.length, 0, `expected no removed findings from a pure line shift, got: ${JSON.stringify(d.findings.removed)}`);
+});
+
 test('Drift — driftToMarkdown produces a usable report', () => {
   const md = driftToMarkdown(driftBetween(baseScan, newScan));
   assert.ok(/Posture drift/.test(md), 'header missing');

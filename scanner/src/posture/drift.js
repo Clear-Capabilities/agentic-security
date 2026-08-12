@@ -8,7 +8,13 @@
 
 function _routeKey(r) { return `${r.method || 'ANY'} ${r.path || '(file)'} @ ${r.file}:${r.line}`; }
 function _depKey(c)   { return `${c.ecosystem}:${c.name}@${c.version}`; }
-function _findingKey(f) { return `${f.kind}:${f.file}:${f.line}:${(f.vuln||'').slice(0,80)}`; }
+// Prefer stableId (posture/stable-id.js) — it omits the exact source line by
+// design, so an unrelated edit that shifts a still-unfixed finding's line
+// number doesn't register as one "removed" + one "added" finding, inflating
+// drift tier and falsely flagging a PR as introducing/fixing something it
+// didn't touch. Falls back to the line-sensitive key only for finding shapes
+// that never got a stableId annotated.
+function _findingKey(f) { return f.stableId || `${f.kind}:${f.file}:${f.line}:${(f.vuln||'').slice(0,80)}`; }
 
 function _toMap(arr, keyFn) {
   const m = new Map();

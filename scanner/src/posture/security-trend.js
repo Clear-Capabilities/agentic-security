@@ -35,7 +35,13 @@ function _snapshotFromScan(scan, label) {
     medium: findings.filter(f => f.severity === 'medium').length,
     low: findings.filter(f => f.severity === 'low').length,
     kev: findings.filter(f => f.kev).length,
-    ids: new Set(findings.map(f => f.id).filter(Boolean)),
+    // stable-id.js exists specifically because the default `id` embeds file
+    // path + line number, so any refactor that shifts a line rotates the id
+    // — using it here would report the same unfixed vulnerability as one
+    // "fixed" finding and one "introduced" finding on every such shift.
+    // stableId omits the exact line by design; fall back to `id` only for
+    // finding shapes that never got a stableId annotated.
+    ids: new Set(findings.map(f => f.stableId || f.id).filter(Boolean)),
   };
 }
 
