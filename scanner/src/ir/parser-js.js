@@ -189,6 +189,38 @@ export function parseJsFile(file, code) {
     return node.id;
   };
 
+  // Babel visits an IfStatement's consequent then its alternate as ordinary
+  // children of the same enter/exit pair, with no boundary hook between
+  // them — so fn._cursor was never reset before the alternate was
+  // traversed: the alternate's first node was linked as a successor of the
+  // CONSEQUENT's tail (a false predecessor edge corrupting any taint-state
+  // reasoning across the join) rather than a true second branch off the
+  // condition (also silently dropping the condition's "false" outgoing
+  // edge, which made applyPathFeasibility's constant-condition pruning
+  // treat the `if` as unconditional and delete its only edge).
+  //
+  // Called from the generic `Statement` visitor below AND from the top of
+  // every handler whose node type can itself be the direct (unbraced) root
+  // of an if's alternate (ReturnStatement, ThrowStatement, IfStatement for
+  // else-if chains, the loop statements, TryStatement) — Babel merges
+  // alias-derived and type-specific visitors for the same node but runs the
+  // type-specific one FIRST, so relying on the `Statement` alias alone
+  // misses every alternate root that also has its own specific handler.
+  // The one-shot flag makes the (redundant, second) `Statement` firing a
+  // safe no-op once the type-specific handler already did the reset.
+  const maybeResetAtAlternateBoundary = (fn, path) => {
+    const parent = path.parentPath && path.parentPath.node;
+    if (!parent || parent.type !== 'IfStatement' || parent.alternate !== path.node) return;
+    if (path.node._alternateBoundaryHandled) return;
+    path.node._alternateBoundaryHandled = true;
+    // fn._cursor is still the consequent's tail (or the condition node
+    // itself, if the consequent added none) — converge it into the join
+    // before abandoning it, then start the alternate from the condition,
+    // exactly like the consequent did.
+    linkCfg(fn, fn._cursor, parent._asJoin);
+    fn._cursor = parent._asCond;
+  };
+
   const recordWrite = (fn, target, source, nodeId) => {
     if (!target || typeof target !== 'string') return;
     if (!fn.writes.has(target)) fn.writes.set(target, []);
@@ -313,6 +345,7 @@ export function parseJsFile(file, code) {
 
         ReturnStatement(path) {
           const fn = currentFn(); if (!fn) return;
+          maybeResetAtAlternateBoundary(fn, path);
           const expr = path.node.argument ? exprOf(path.node.argument) : null;
           const nodeId = nextNodeId();
           const line = path.node.loc?.start?.line || 0;
@@ -322,12 +355,30 @@ export function parseJsFile(file, code) {
           linkCfg(fn, nodeId, fn.cfg.exit);
         },
 
+        // Fires for every statement node, via Babel's built-in "Statement"
+        // alias — the fallback path for whichever concrete type an if's
+        // `alternate` turns out to be when that type has no specific
+        // handler of its own (BlockStatement, ExpressionStatement,
+        // VariableDeclaration, ...). Types that DO have a specific handler
+        // below (ReturnStatement, IfStatement, the loop statements,
+        // TryStatement) call `maybeResetAtAlternateBoundary` themselves,
+        // since Babel runs a node's type-specific visitor BEFORE its
+        // alias-derived one for the same node — relying on this alone would
+        // miss those cases entirely.
+        Statement: {
+          enter(path) {
+            const fn = currentFn(); if (!fn) return;
+            maybeResetAtAlternateBoundary(fn, path);
+          },
+        },
+
         IfStatement: {
           enter(path) {
             // We model branches by inserting a noop "join" after the if; both
             // branches link to it. Without this, the linear cursor model would
             // miss that statements after the if are reachable from either branch.
             const fn = currentFn(); if (!fn) return;
+            maybeResetAtAlternateBoundary(fn, path);
             const condNodeId = nextNodeId();
             const joinId = nextNodeId();
             const line = path.node.loc?.start?.line || 0;
@@ -335,7 +386,6 @@ export function parseJsFile(file, code) {
             fn.cfg.nodes.set(joinId, { id: joinId, kind: 'noop', succ: [], pred: [], line });
             path.node._asJoin = joinId;
             path.node._asCond = condNodeId;
-            path.node._asBranchSavedCursor = fn._cursor; // == condNodeId
           },
           exit(path) {
             const fn = currentFn(); if (!fn) return;
@@ -344,9 +394,10 @@ export function parseJsFile(file, code) {
             if (!joinId || !condId) return;
             // The visitor visited the body of the if — Babel's body visit ran
             // *after* the enter(), so fn._cursor now points to the tail of the
-            // consequent. Connect it to the join, then if no else branch
-            // existed, connect the cond directly to the join (representing
-            // the "false" edge).
+            // consequent (or, thanks to maybeResetAtAlternateBoundary, of the
+            // alternate when one exists). Connect it to the join, then if no
+            // else branch existed, connect the cond directly to the join
+            // (representing the "false" edge).
             linkCfg(fn, fn._cursor, joinId);
             if (!path.node.alternate) linkCfg(fn, condId, joinId);
             fn._cursor = joinId;
@@ -359,6 +410,7 @@ export function parseJsFile(file, code) {
         'WhileStatement|ForStatement|DoWhileStatement|ForInStatement|ForOfStatement': {
           enter(path) {
             const fn = currentFn(); if (!fn) return;
+            maybeResetAtAlternateBoundary(fn, path);
             const headerId = nextNodeId();
             const exitId = nextNodeId();
             const line = path.node.loc?.start?.line || 0;
@@ -379,11 +431,16 @@ export function parseJsFile(file, code) {
         },
 
         TryStatement: {
-          enter() { /* approximate try/catch as sequential — taint flows through both */ },
+          enter(path) {
+            const fn = currentFn(); if (!fn) return;
+            maybeResetAtAlternateBoundary(fn, path);
+            /* approximate try/catch as sequential — taint flows through both */
+          },
         },
 
         ThrowStatement(path) {
           const fn = currentFn(); if (!fn) return;
+          maybeResetAtAlternateBoundary(fn, path);
           const expr = exprOf(path.node.argument);
           const nodeId = nextNodeId();
           const line = path.node.loc?.start?.line || 0;
