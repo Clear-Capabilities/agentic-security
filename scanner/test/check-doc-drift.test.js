@@ -88,6 +88,27 @@ test('resolveCandidate: returns null for a genuinely nonexistent path', () => {
   assert.equal(resolveCandidate(claudeMd, 'this/path/does/not/exist.js'), null);
 });
 
+test('resolveCandidate: never resolves outside the repo, even for a root-level CLAUDE.md', () => {
+  // For the ROOT CLAUDE.md, "two levels up from its own directory" lands in
+  // the parent of the repo checkout — on a real machine that's arbitrary
+  // ancestor directories (a dev's home directory, a CI runner's work root)
+  // with no relationship to this project. A reference resolved there is a
+  // false negative that is machine-dependent by construction: it passed on
+  // the maintainer's laptop only because `.claude/settings.local.json`
+  // happens to exist under their home directory as an unrelated,
+  // machine-global Claude Code settings file, and failed on a clean CI
+  // checkout where no such coincidence exists. Every accepted resolution
+  // must stay inside REPO.
+  const claudeMd = path.join(REPO, 'CLAUDE.md');
+  const resolved = resolveCandidate(claudeMd, '.claude/settings.local.json');
+  if (resolved !== null) {
+    assert.ok(
+      resolved === REPO || resolved.startsWith(REPO + path.sep),
+      `resolveCandidate escaped the repo: ${resolved}`,
+    );
+  }
+});
+
 test('exportExistsIn: finds a real export function', () => {
   const target = path.join(REPO, 'scanner', 'src', 'posture', 'model-rescan.js');
   assert.equal(exportExistsIn(target, 'runModelRescan'), true);

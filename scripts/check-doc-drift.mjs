@@ -108,6 +108,11 @@ const KNOWN_EXAMPLE_BASENAMES = new Set([
   // example contract-artifact filenames the scanner recognizes in projects
   // it scans — neither is a source file in THIS repo.
   'last-scan.json', 'openapi.json',
+  // Gitignored, user-created override file (root CLAUDE.md documents it as
+  // exactly that: "Override locally via `.claude/settings.local.json`
+  // (gitignored)"). It exists only on machines where someone created one —
+  // never on a fresh checkout — so its absence is never drift.
+  'settings.local.json',
 ]);
 
 export function candidatesIn(text) {
@@ -159,9 +164,19 @@ export function resolveCandidate(claudeMdPath, filePath) {
     // rather than repeating the full prefix inline every time.
     path.resolve(REPO, 'scanner'),
   ];
+  // Every accepted resolution must stay inside the repo. For a CLAUDE.md
+  // near the repo root, "two levels up from its own directory" escapes the
+  // checkout entirely — into a dev's home directory or a CI runner's work
+  // root, both arbitrary and machine-dependent. That let this checker
+  // resolve `.claude/settings.local.json` against the maintainer's own
+  // machine-global `~/.claude/settings.local.json`, an unrelated file that
+  // happens to share a name, passing locally and failing on a clean CI
+  // checkout where no such coincidence exists.
+  const isInsideRepo = (p) => p === REPO || p.startsWith(REPO + path.sep);
   for (const base of bases) {
+    if (!isInsideRepo(base)) continue;
     const candidate = path.resolve(base, filePath);
-    if (fs.existsSync(candidate)) return candidate;
+    if (isInsideRepo(candidate) && fs.existsSync(candidate)) return candidate;
   }
   // Last resort: a partial path (e.g. `posture/finding-defaults.js`
   // mentioned from a doc several directories up) — search the whole repo

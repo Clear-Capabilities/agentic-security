@@ -9,6 +9,36 @@
 > make the history less accurate, not more.
 
 
+## 0.136.7 — the doc-drift checker was resolving paths outside the repo
+
+0.136.6's hosted release run failed on a check this same audit added a few
+releases ago: `check-doc-drift.mjs`'s own regression test, "the real
+repository currently has zero mechanically-checkable drift," flagged root
+CLAUDE.md's documented (and correctly gitignored) `.claude/settings.local.json`
+reference as a dangling path.
+
+The actual defect was in `resolveCandidate`'s search bases, not in the
+reference: for a CLAUDE.md near the repo root, one of the fallback bases is
+"two directories up from the CLAUDE.md's own directory" — meant for nested
+CLAUDE.md files reaching back toward the repo root, but for the ROOT
+CLAUDE.md itself that lands OUTSIDE the checkout entirely, in whatever
+happens to be the parent of wherever the repo was cloned. On the
+maintainer's laptop that's their home directory, which happens to contain
+an unrelated, machine-global `~/.claude/settings.local.json` from ordinary
+Claude Code usage — so the checker "resolved" the reference against a file
+that has nothing to do with this project, passed locally, and failed on a
+clean CI checkout where no such coincidence exists. `resolveCandidate` now
+rejects any candidate base or resolved path outside the repo root, and
+`settings.local.json` — genuinely optional, gitignored, user-created — joins
+the checker's existing known-example-basename allowlist as a second,
+independent fix.
+
+Reproduced without touching CI: moved the local override file aside,
+confirmed the existing regression test still passed (proving the checker was
+resolving against something else entirely), traced it to the home-directory
+escape, fixed both the escape and the allowlist gap, verified clean with the
+file present and absent, then restored it.
+
 ## 0.136.6 — correction: the "flaky" dataflow tests were a real, deterministic gap
 
 0.136.5's entry below called a cluster of `test:dataflow` failures on the
