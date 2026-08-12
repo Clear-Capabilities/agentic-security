@@ -19,9 +19,9 @@
 //
 // CVE ids are namespaced per-run (like test/sca-batch.test.js) so a cached
 // disk entry from a prior run of this file can never mask a fetch that
-// should have happened — fetchEPSS caches by CVE list at
-// ~/.claude/agentic-security/epss-cache/ with a 24h TTL and no test hook
-// to bypass it.
+// should have happened — the underlying EPSS fetch helper caches by CVE
+// list at ~/.claude/agentic-security/epss-cache/ with a 24h TTL and no
+// test hook to bypass it.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
