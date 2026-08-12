@@ -8134,7 +8134,13 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   };
   _runAnnotator('annotateStableIds', () => annotateStableIds(finalFindings));
   _runAnnotator("clusterByRootCause", () => { finalFindings = clusterByRootCause(finalFindings); });
-  _runAnnotator("demoteUnreachable", () => { demoteUnreachable(finalFindings, { routes: aR }); });
+  _runAnnotator("demoteUnreachable", () => {
+    demoteUnreachable(finalFindings, { routes: aR });
+    // `type: 'vulnerable_dep'` findings live in supplyChain, not finalFindings
+    // (src/sca/CLAUDE.md) — demoteUnreachable's SCA-tier branch needs this
+    // array passed explicitly or it never sees an SCA finding at all.
+    demoteUnreachable(supplyChain, { routes: aR });
+  });
   // Premortem #8: backfill parser/family BEFORE confidence and calibration,
   // because both consume those fields and silently no-op when they're null.
   _runAnnotator("backfillFindingDefaults", () => { backfillFindingDefaults(finalFindings); });
@@ -8717,8 +8723,11 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       /(?:^|\/)test_[^/]*\.py$/i.test(f) || /_test\.(?:py|go)$/i.test(f));
     annotateScaVerdicts(supplyChain, { testsDetected: _testsDetected });
   } catch (_) {}
-  // 0.9.0 Feat-15: dep confusion
-  try{const dc=detectDepConfusion(annotatedComponents,scanRoot);aF.push(...dc);}catch(_){}
+  // 0.9.0 Feat-15: dep confusion. These are supply-chain findings (kind:'sca',
+  // derived from `components` not source code) and belong in supplyChain, not
+  // aF — aF was already snapshotted into finalFindings at dedupeFindingsWithEvidence
+  // above, so pushing into aF here silently discards every result.
+  try{const dc=detectDepConfusion(annotatedComponents,scanRoot);supplyChain.push(...dc);}catch(_){}
   // Deployment-platform security checklist
   try{const dpf=scanDeployPlatform(scanRoot);aLogic.push(...dpf);}catch(_){}
   // Stack-specific security playbook

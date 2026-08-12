@@ -6,6 +6,60 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { demoteUnreachable } from '../src/posture/reachability-filter.js';
 
+// ── engine.js wiring: demoteUnreachable must actually run over supplyChain ──
+//
+// Stage 4 correctness audit: every test above proves demoteUnreachable()
+// itself demotes an SCA finding correctly — but engine.js only ever calls
+// it as `demoteUnreachable(finalFindings, {routes: aR})`, and `finalFindings`
+// is the SAST array. `type: 'vulnerable_dep'` findings live exclusively in
+// the separate `supplyChain` array (per src/sca/CLAUDE.md's own "Gotchas"
+// section), which is never passed to demoteUnreachable at all. So the
+// entire SCA branch inside demoteUnreachable — ~10 lines handling
+// manifest-only/unreachable/transitive-only/build-only tiers — is dead code
+// in production: a critical-severity dependency that is provably never
+// imported anywhere in the project stays at full severity forever.
+globalThis.fetch = async (url) => {
+  const u = String(url);
+  if (u.includes('querybatch')) {
+    return { ok: true, json: async () => ({ results: [{ vulns: [{ id: 'GHSA-wiring-test-0001' }] }] }) };
+  }
+  if (u.includes('/v1/vulns/')) {
+    return { ok: true, json: async () => ({
+      id: 'GHSA-wiring-test-0001',
+      summary: 'synthetic critical vuln for demoteUnreachable wiring test',
+      affected: [{ ranges: [{ events: [{ fixed: '9.9.9' }] }] }],
+      severity: [{ type: 'CVSS_V3', score: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' }],
+      database_specific: { severity: 'CRITICAL' },
+    }) };
+  }
+  return { ok: true, json: async () => ({}) };
+};
+
+const { runFullScan } = await import('../src/engine.js');
+
+test('engine wiring: a manifest-only critical SCA dependency is demoted by a real scan, not left at full severity', async () => {
+  const depFileContents = {
+    'package.json': JSON.stringify({
+      name: 'demo', version: '1.0.0',
+      dependencies: { 'agentic-security-wiring-test-pkg': '4.17.15' },
+    }),
+  };
+  const fileContents = {
+    // demoteUnreachable requires the project to have >=1 detected route
+    // (otherwise it treats reachability as uninformative and demotes
+    // nothing at all — see reachability-filter.js's own haveRoutes guard).
+    // This route never imports or calls the vulnerable package, so the
+    // dependency itself still cannot rise above manifest-only.
+    'server.js': "const express = require('express');\nconst app = express();\napp.get('/health', (req, res) => res.send('ok'));\n",
+  };
+  const result = await runFullScan({ fileContents, depFileContents, scanRoot: '/tmp/agentic-security-sca-wiring-test' });
+  const sc = (result.supplyChain || []).find(s => s.type === 'vulnerable_dep' && s.name === 'agentic-security-wiring-test-pkg');
+  assert.ok(sc, 'expected the synthetic vulnerable dependency to be found');
+  assert.equal(sc.reachabilityTier, 'manifest-only', 'precondition: this dependency must land in a DEMOTE_SCA_TIERS tier');
+  assert.equal(sc.severity, 'medium', 'a manifest-only critical SCA finding must be demoted, same as demoteUnreachable does in isolation');
+  assert.equal(sc.unreachable, true);
+});
+
 // ── posture/reachability-filter.js: SCA findings demote by tier ─────────────
 
 function makeScaFinding(tier, severity = 'critical') {

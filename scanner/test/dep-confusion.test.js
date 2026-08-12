@@ -3,6 +3,32 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { levenshtein, detectDepConfusion } from '../src/sca/dep-confusion.js';
 
+// ── engine.js wiring: detectDepConfusion's results must reach scan output ──
+//
+// Stage 4 correctness audit: engine.js calls
+// `const dc=detectDepConfusion(annotatedComponents,scanRoot);aF.push(...dc);`
+// at line ~8727 — but `finalFindings` (what actually gets returned as
+// scan.findings) is computed once, earlier, as
+// `finalFindings=dedupeFindingsWithEvidence(aF)` (line ~8012), a snapshot
+// that is never re-derived from `aF` again. Every `aF.push()` after that
+// line — including this one — pushes into a disconnected, dead array.
+// The dep-confusion/typosquat findings are computed correctly but never
+// appear in scan.findings OR scan.supplyChain: they are silently discarded,
+// not merely mischannelled.
+globalThis.fetch = async () => ({ ok: true, json: async () => ({ results: [] }) });
+const { runFullScan } = await import('../src/engine.js');
+
+test('engine wiring: a typosquat dependency found by detectDepConfusion actually reaches scan output', async () => {
+  const depFileContents = {
+    'package.json': JSON.stringify({ name: 'demo', version: '1.0.0', dependencies: { reactt: '1.0.0' } }),
+  };
+  const fileContents = { 'index.js': 'console.log("no use of the typosquatted package");\n' };
+  const result = await runFullScan({ fileContents, depFileContents, scanRoot: '/tmp/agentic-security-dep-confusion-wiring-test' });
+  const inFindings = (result.findings || []).some(f => /typosquat/i.test(f.vuln || ''));
+  const inSupplyChain = (result.supplyChain || []).some(f => /typosquat/i.test(f.vuln || ''));
+  assert.ok(inFindings || inSupplyChain, 'expected the typosquat finding to appear somewhere in scan output (found in neither scan.findings nor scan.supplyChain)');
+});
+
 test('Levenshtein — basic distances + maxDistance early exit', () => {
   assert.equal(levenshtein('lodash', 'lodash'), 0);
   assert.equal(levenshtein('lodahs', 'lodash'), 2);  // transposition = 2 substitutions in plain Levenshtein
