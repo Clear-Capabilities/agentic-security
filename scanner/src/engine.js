@@ -2214,7 +2214,13 @@ const IAC_PATTERNS = [
   { match: /\$\{\{\s*github\.event\.(?:issue|pull_request)\.title|\$\{\{\s*github\.event\.comment\.body/i,
     fileTypes: /\.github\/workflows\/.*\.ya?ml$/i,
     severity: 'high', cwe: 'CWE-78', vuln: 'GitHub Actions: untrusted github.event input interpolated into shell',
-    fix: 'Pass user-controlled fields via env vars and reference them as $VARNAME in the script body, not via ${{ }} interpolation.' },
+    fix: 'Pass user-controlled fields via env vars and reference them as $VARNAME in the script body, not via ${{ }} interpolation.',
+    // Same false-positive as src/sast/pipeline.js's overlapping rule: a pure
+    // `KEY: ${{ github.event.… }}` mapping line assigns to an env var at the
+    // workflow-engine level (the fix's own recommended pattern), not into a
+    // shell command string — only a match embedded in a larger line (a run:
+    // script body) is actually dangerous.
+    lineSafeRe: /^[\w.-]+\s*:\s*\$\{\{[^}]*\}\}\s*$/ },
 ];
 
 function scanIaC(fp, raw){
@@ -2227,6 +2233,7 @@ function scanIaC(fp, raw){
     let m;
     while ((m = re.exec(raw))) {
       const line = raw.substring(0, m.index).split('\n').length;
+      if (p.lineSafeRe && p.lineSafeRe.test((lines[line - 1] || '').trim())) continue;
       findings.push({
         id: `iac:${fp}:${line}:${p.vuln.replace(/\s/g, '_').slice(0, 60)}`,
         kind: 'iac', severity: p.severity, vuln: p.vuln,

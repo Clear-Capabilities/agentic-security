@@ -64,14 +64,25 @@ function _line(raw, idx) {
   return raw.slice(0, idx).split('\n').length;
 }
 
+// Zero-width / invisible Unicode characters: zero-width space, ZWNJ, ZWJ,
+// word joiner, BOM/zero-width no-break space. Interspersing these between
+// every character renders/executes identically to a human or LLM reader
+// (most tokenizers treat them as no-ops) while breaking literal-word regex
+// matching — a documented real-world prompt-injection evasion technique
+// against exactly this kind of pattern-matching defense. None of these are
+// '\n', so removing them never shifts _line()'s line-count computation.
+const _ZERO_WIDTH_RE = /[​‌‍⁠﻿]/g;
+
 export function scanClaudeMdPromptInjection(file, raw) {
   if (!file || !raw || typeof raw !== 'string') return [];
   if (!_INSTRUCTION_FILE_RE.test(file)) return [];
   if (raw.length > 1_000_000) return [];
 
+  const cleaned = raw.replace(_ZERO_WIDTH_RE, '');
+
   // Strip fenced code blocks so example snippets in docs don't trip the
   // detector. Replace with same-length whitespace to preserve line offsets.
-  const stripped = raw.replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, ' '));
+  const stripped = cleaned.replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, ' '));
 
   const findings = [];
 
@@ -149,12 +160,12 @@ export function scanClaudeMdPromptInjection(file, raw) {
 
   // Hardcoded credentials in CLAUDE.md / AGENTS.md.
   for (const { re, label } of _CRED_RE) {
-    const m = re.exec(raw);
+    const m = re.exec(cleaned);
     if (!m) continue;
     findings.push({
       id: `claude-md:hardcoded-cred:${file}:${m.index}`,
       file,
-      line: _line(raw, m.index),
+      line: _line(cleaned, m.index),
       vuln: `Instruction file contains a hardcoded ${label}`,
       severity: 'critical',
       family: 'harness-config-secrets',

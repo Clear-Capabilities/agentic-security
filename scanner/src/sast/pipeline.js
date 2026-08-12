@@ -43,6 +43,13 @@ const PIPELINE_PATTERNS = [
     vuln: 'Pipeline: untrusted github.event input interpolated into shell context',
     sev: 'critical', cwe: 'CWE-78',
     fix: 'Pipe untrusted github.event values through an environment variable instead of interpolating into the shell, e.g. `env: TITLE: ${{ github.event.issue.title }}` then use `"$TITLE"` in the run script.',
+    // Suppress the exact pattern this fix recommends: a pure YAML mapping
+    // entry (`KEY: ${{ github.event.… }}`) assigns the value to an env var
+    // at the workflow-engine level, not into a shell command string — the
+    // shell later reads it as an ordinary env-var reference ("$KEY"), which
+    // is safe. A match embedded inside a larger line (a run: script body)
+    // does not have this shape and is still flagged.
+    lineSafeRe: /^[\w.-]+\s*:\s*\$\{\{[^}]*\}\}\s*$/,
   },
   {
     re: /\bid-token\s*:\s*write\b/g,
@@ -70,6 +77,7 @@ export function scanPipeline(fp, raw) {
     let m;
     while ((m = re.exec(raw))) {
       const line = raw.substring(0, m.index).split('\n').length;
+      if (p.lineSafeRe && p.lineSafeRe.test((lines[line - 1] || '').trim())) continue;
       const id = `pipeline:${fp}:${line}:${p.vuln.replace(/\s/g, '_').slice(0, 48)}`;
       if (seen.has(id)) continue;
       seen.add(id);
