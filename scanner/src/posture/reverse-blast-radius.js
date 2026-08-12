@@ -96,7 +96,11 @@ export function annotateScaReverseBlast(findings, fileContents) {
   if (!Object.keys(map).length) return findings;
   for (const f of findings) {
     if (!f || typeof f !== 'object') continue;
-    const pkg = f.package || f.dependency || f.pkg;
+    // SCA findings (engine.js's queryOSV) carry the package name as `.name`
+    // — `.package`/`.dependency`/`.pkg` are never set anywhere in this
+    // codebase; kept as a fallback in case a caller supplies a differently-
+    // shaped finding.
+    const pkg = f.name || f.package || f.dependency || f.pkg;
     if (!pkg || !map[pkg]) continue;
     f.reverseExposure = {
       importerCount: map[pkg].directImporters.length,

@@ -558,6 +558,17 @@ async function cmdScan(args) {
     try { await enrichWithEPSS(scan); } catch {}
   }
 
+  // Re-run risk-dollars now that both signals it needs are actually
+  // available: EPSS (just enriched above — engine.js's own call ran before
+  // this, so every finding's epssScore was still unset) and relevanceTier
+  // (posture/relevance.js runs last inside runScan/engine.js, so it's
+  // populated on `scan.findings` by the time we get here, but wasn't yet
+  // when engine.js's own annotateRiskDollars call ran mid-pipeline).
+  try {
+    const { annotateRiskDollars } = await import('../src/posture/risk-dollars.js');
+    annotateRiskDollars(targetAbs, scan.findings || []);
+  } catch {}
+
   // Blast-radius narrative — purely local, always safe to run.
   if (!args.flags['no-blast-radius']) {
     try { enrichWithBlastRadius(scan, targetAbs); } catch {}

@@ -218,6 +218,27 @@ test('risk-dollars: EPSS score overrides family base rate', async () => {
   } finally { await p.cleanup(); }
 });
 
+// Stage 1 correctness audit: SCA entries carry reachabilityTier/
+// routeReachable (engine.js's SCA reachability pass); SAST findings never
+// do — annotateRiskDollars is only ever called with SAST findings
+// (finalFindings), so _reachDiscount always fell through to 'unknown'
+// (0.3x) for every finding it actually annotates, regardless of real
+// reachability. SAST findings carry relevanceTier instead
+// (posture/relevance.js) — this must be consulted as a fallback.
+test('risk-dollars: relevanceTier is consulted as a fallback discount signal for SAST findings', async () => {
+  const p = await mkProject();
+  try {
+    const direct = [{ family: 'sqli', severity: 'high', confidence: 0.8, relevanceTier: 'direct' }];
+    const unreachable = [{ family: 'sqli', severity: 'high', confidence: 0.8, relevanceTier: 'unreachable' }];
+    const unknown = [{ family: 'sqli', severity: 'high', confidence: 0.8 }];
+    annotateRiskDollars(p.dir, direct);
+    annotateRiskDollars(p.dir, unreachable);
+    annotateRiskDollars(p.dir, unknown);
+    assert.ok(direct[0].riskDollars.ev > unknown[0].riskDollars.ev, 'a directly-reachable finding must score higher than an unknown-reachability one');
+    assert.ok(unknown[0].riskDollars.ev > unreachable[0].riskDollars.ev, 'an unknown-reachability finding must score higher than a provably-unreachable one');
+  } finally { await p.cleanup(); }
+});
+
 // ── time-to-fix ─────────────────────────────────────────────────────────
 
 test('time-to-fix: annotateTimeToFix sums hours + family rollup', async () => {

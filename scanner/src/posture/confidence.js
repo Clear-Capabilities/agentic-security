@@ -47,19 +47,53 @@ export function annotateConfidence(findings) {
       if (f.routeRooted) conf = Math.min(1, conf + 0.05);
       if (f.guards && f.guards.length) conf *= 0.80;
       if (f.reachable === false) conf *= 0.55;
+      // f.unvalidated is set later in the pipeline (llm-validator/index.js,
+      // invoked well after this first confidence pass), so it's never true
+      // here on a finding's first computation — see applyUnvalidatedPenalty
+      // below, the real enforcement point, run after validation. Kept here
+      // too so a caller that builds a synthetic finding with
+      // unvalidated:true pre-set still gets it applied in one pass.
       if (f.unvalidated) conf *= 0.85;   // LLM validator unavailable
-      if (f.llmOnly) conf *= 0.70;       // LLM-only finding, no Layer-2 path
+      // f.llmOnly: currently unreachable — no producer anywhere in this
+      // codebase ever sets it (grepped). Documented as a no-op rather than
+      // silently deleted, since the intent ("LLM-only finding, no Layer-2
+      // path") is a real, plausible signal that just isn't wired yet.
+      if (f.llmOnly) conf *= 0.70;
     }
     conf = Math.max(0, Math.min(1, conf));
     f.confidence = Math.round(conf * 1000) / 1000;
-    // Premortem 3R-15: derive tier from the 2-decimal display value so a
-    // finding reported as "0.75" never lands in two tiers depending on the
-    // viewer's rounding. Add a +0.005 epsilon to anchor cutoffs to the
-    // displayed rounded value (3-decimal raw 0.745 → 2-decimal 0.75 → high).
-    const display = Math.round(f.confidence * 100) / 100;
-    if (display >= 0.75) f.confidenceTier = 'high';
-    else if (display >= 0.50) f.confidenceTier = 'medium';
-    else if (display >= 0.25) f.confidenceTier = 'low';
-    else f.confidenceTier = 'very-low';
+    f.confidenceTier = _tierFor(f.confidence);
+  }
+}
+
+// Premortem 3R-15: derive tier from the 2-decimal display value so a
+// finding reported as "0.75" never lands in two tiers depending on the
+// viewer's rounding (3-decimal raw 0.745 → 2-decimal 0.75 → high).
+function _tierFor(confidence) {
+  const display = Math.round(confidence * 100) / 100;
+  if (display >= 0.75) return 'high';
+  if (display >= 0.50) return 'medium';
+  if (display >= 0.25) return 'low';
+  return 'very-low';
+}
+
+// Retroactively applies the unvalidated penalty to findings whose
+// confidence was already computed by annotateConfidence BEFORE
+// f.unvalidated could be known — annotateConfidence only computes from
+// scratch when f.confidence is still null (so hand-tuned detector
+// confidences survive untouched), and f.unvalidated is set by
+// llm-validator/index.js, which runs well after the pipeline's first
+// annotateConfidence pass. Call this once, immediately after LLM
+// validation runs (or is skipped). Idempotent: a finding is only
+// adjusted once, tracked via f._unvalidatedPenaltyApplied.
+export function applyUnvalidatedPenalty(findings) {
+  if (!Array.isArray(findings)) return;
+  for (const f of findings) {
+    if (!f || typeof f !== 'object') continue;
+    if (f._unvalidatedPenaltyApplied) continue;
+    f._unvalidatedPenaltyApplied = true;
+    if (!f.unvalidated || typeof f.confidence !== 'number') continue;
+    f.confidence = Math.round(Math.max(0, Math.min(1, f.confidence * 0.85)) * 1000) / 1000;
+    f.confidenceTier = _tierFor(f.confidence);
   }
 }

@@ -126,6 +126,27 @@ test('annotateVerifierVerdicts sets verifier_verdict on every finding', () => {
   assert.equal(findings[2].verifier_verdict, 'verified-sanitizer-absence');
 });
 
+// Stage 1 correctness audit: engine.js calls annotateVerifierVerdicts
+// (~line 8335) BEFORE the LLM validator ever runs (~line 8587, where
+// validator_verdict is actually set on findings) — so 'verified-by-llm'
+// could never be produced by the real pipeline, only by a hand-built
+// fixture that sets validator_verdict up front (which is what the tests
+// above do, masking the ordering bug). Fixed by re-running
+// annotateVerifierVerdicts immediately after the LLM validator sets
+// validator_verdict. This test pins the exact mechanism: a finding
+// annotated BEFORE validator_verdict exists stays cannot-verify; the SAME
+// finding, re-annotated after validator_verdict is set, correctly becomes
+// verified-by-llm — proving the re-run (not a one-shot call) is what's
+// required.
+test('annotateVerifierVerdicts must be re-run after validator_verdict is set — one early call is not enough', () => {
+  const f = { family: 'unmapped-family' };
+  annotateVerifierVerdicts([f], {});
+  assert.equal(f.verifier_verdict, 'cannot-verify', 'before validation runs, this family has no other path to a verdict');
+  f.validator_verdict = 'accept'; // simulates what llmValidateMany sets, later in the real pipeline
+  annotateVerifierVerdicts([f], {});
+  assert.equal(f.verifier_verdict, 'verified-by-llm', 're-running after validator_verdict is set must upgrade the verdict');
+});
+
 test('annotateVerifierVerdicts never throws on garbage input', () => {
   assert.doesNotThrow(() => annotateVerifierVerdicts(null));
   assert.doesNotThrow(() => annotateVerifierVerdicts([null, {}, { family: 'sql-injection' }]));

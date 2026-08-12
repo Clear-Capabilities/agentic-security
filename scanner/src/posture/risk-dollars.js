@@ -110,8 +110,25 @@ function _impactFor(finding, cfg) {
   return table.default;
 }
 
+// SCA entries carry reachabilityTier/routeReachable (engine.js's SCA
+// reachability pass); SAST findings never do — they carry relevanceTier/
+// entrypointReachable instead (posture/relevance.js). Without this
+// fallback, _reachDiscount always read 'unknown' (0.3) for every SAST
+// finding, regardless of whether it was actually route-reachable.
+function _relevanceTierToReachTier(relevanceTier) {
+  switch (relevanceTier) {
+    case 'direct':      return 'route-reachable';
+    case 'indirect':    return 'function-reachable';
+    case 'unreachable': return 'unreachable';
+    default:            return null;
+  }
+}
+
 function _reachDiscount(finding) {
-  const tier = finding.reachabilityTier || finding.routeReachable && 'route-reachable' || 'unknown';
+  const tier = finding.reachabilityTier
+    || (finding.routeReachable && 'route-reachable')
+    || _relevanceTierToReachTier(finding.relevanceTier)
+    || 'unknown';
   return REACH_DISCOUNT[tier] || 0.3;
 }
 

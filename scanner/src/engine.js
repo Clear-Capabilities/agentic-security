@@ -121,7 +121,7 @@ import { scanRuby } from './sast/ruby.js';
 import { scanPhp } from './sast/php.js';
 import { classifySecretCandidate as _entropyClassifySecret } from './sast/_secret-entropy.js';
 // Phase 1 — precision-engineering posture modules.
-import { annotateConfidence } from './posture/confidence.js';
+import { annotateConfidence, applyUnvalidatedPenalty } from './posture/confidence.js';
 import { backfillFindingDefaults } from './posture/finding-defaults.js';
 import { annotatePocs } from './posture/poc-generator.js';
 import { annotateExecutionProofs } from './posture/prove-findings.js';
@@ -8291,8 +8291,10 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // v3 next-gen: per-attacker-persona score matrix (FR-ADV-2). Must run AFTER
   // crown-jewels + mitigation composite so it sees those signals.
   _runAnnotator("annotatePersonaScores", () => { annotatePersonaScores(finalFindings); });
-  // v3 next-gen: SCA reverse-blast-radius enrichment (FR-ADV-5).
-  _runAnnotator("annotateScaReverseBlast", () => { annotateScaReverseBlast(finalFindings, fc); });
+  // v3 next-gen: SCA reverse-blast-radius enrichment (FR-ADV-5). Annotates
+  // SCA findings (package-name-keyed) — must run against supplyChain, not
+  // finalFindings (SAST), which has no package-name field at all.
+  _runAnnotator("annotateScaReverseBlast", () => { annotateScaReverseBlast(supplyChain, fc); });
   // v3 next-gen: bug-bounty payout prediction (FR-ADV-3). Composes with the
   // mitigation composite — gated/unreachable findings get the bounty scaled
   // down rather than zeroed.
@@ -8591,7 +8593,23 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       vuln: d.vuln, file: d.file, line: d.line, snippet: d.snippet,
       reason: 'llm-validator:reject:' + (d.validator_reasoning || '').slice(0, 80),
     });
+    // Re-run: annotateVerifierVerdicts ran (~8335) before validator_verdict
+    // existed on any finding (set here, hundreds of lines later), so its
+    // 'verified-by-llm' verdict — documented as one of five possible
+    // outcomes in verifier.js's own header — could never be produced by the
+    // real pipeline. Cheap and idempotent; re-running is the fix, not
+    // moving the original call (confidence/exploitability annotators
+    // upstream of it still need to run before validation, same as before).
+    try { annotateVerifierVerdicts(finalFindings, { fileContents: fc }); } catch (_) {}
   } catch(_) {}
+  // Same ordering fix as annotateVerifierVerdicts above: annotateConfidence
+  // (~8111) computes f.confidence before f.unvalidated exists on any
+  // finding, so its 0.85x "LLM validator unavailable" penalty could never
+  // apply in the real pipeline. Runs unconditionally (outside the
+  // llmValidateMany try-block above) because f.unvalidated is also set
+  // directly on deep-mode IR findings appended earlier in this function,
+  // independent of whether the LLM validator itself ran.
+  try { applyUnvalidatedPenalty(finalFindings); } catch (_) {}
   try {
     const { kept, suppressed } = applyLearnedFeedback(scanRoot, finalFindings);
     finalFindings = kept;

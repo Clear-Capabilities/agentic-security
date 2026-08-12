@@ -240,6 +240,20 @@ test('reverse-blast-radius: imports + route mapping', () => {
   assert.ok(findings[0].reverseExposure.importerCount >= 1);
 });
 
+// Stage 1 correctness audit: real SCA findings (engine.js's queryOSV) carry
+// the package name as `.name` — `.package`/`.dependency`/`.pkg` are never
+// set anywhere in the codebase (confirmed by grep), so this annotator never
+// matched a single real finding despite being fully wired.
+test('reverse-blast-radius: matches the real field name (.name), not the never-set .package/.dependency/.pkg', () => {
+  const fc = {
+    'src/api/users.ts': 'import _ from "lodash";\napp.get("/users", h);',
+  };
+  const findings = [{ name: 'lodash', type: 'vulnerable_dep', severity: 'high' }];
+  annotateScaReverseBlast(findings, fc);
+  assert.ok(findings[0].reverseExposure, 'expected reverseExposure to be attached via the real .name field');
+  assert.ok(findings[0].reverseExposure.importerCount >= 1);
+});
+
 // ── FR-LEARN-9 ───────────────────────────────────────────────────────────
 test('calibration-drift: no-data path returns note', () => {
   const r = computeDrift('/tmp/_no_drift_v3test');
