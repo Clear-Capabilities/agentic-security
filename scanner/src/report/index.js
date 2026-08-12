@@ -290,8 +290,8 @@ export function normalizeFindings(scan){
       atlasName: f.atlasName || null,
       d3fend: f.d3fend || null,
       capec: f.capec || null,
-      // posture/falsification.js#annotateFalsification +
-      // posture/verification-separation.js#recordVerdict — recall-preserving
+      // posture/falsification.js#annotateFalsification, which records its
+      // verdict via posture/verification-separation.js — recall-preserving
       // (never removes a finding, never touches severity), but the verdict
       // itself needs to survive to output or a quarantined finding ships
       // indistinguishable from one nobody contested.

@@ -10,6 +10,11 @@
 import * as crypto from 'node:crypto';
 
 // Stable fingerprint for cross-scan finding identity. Mirrors the dedupe key.
+// Exported so a caller can compute the "removed since baseline" (i.e. fixed)
+// set that computeMTTR needs, using the exact same identity function
+// buildBaselineMap uses internally — a caller-side reimplementation would
+// risk drifting from this one and silently under/over-counting fixes.
+export function fingerprintFinding(f) { return _fingerprint(f); }
 function _fingerprint(f) {
   const file = (f.file || '').split(' -> ').pop();
   const line = f.line || f.source?.line || f.sink?.line || 0;

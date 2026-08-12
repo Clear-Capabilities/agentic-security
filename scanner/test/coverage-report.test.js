@@ -1,5 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   langOfFile,
   computeAnalysisTiers,
@@ -7,6 +11,7 @@ import {
   summarizeCoverage,
   IR_TAINT_LANGS,
 } from '../src/posture/coverage-report.js';
+import { runScan } from '../src/runScan.js';
 
 test('langOfFile maps extensions to languages', () => {
   assert.equal(langOfFile('a/b.ts'), 'ts');
@@ -54,4 +59,27 @@ test('summarizeCoverage surfaces pattern-only languages and skips', () => {
   assert.match(s, /ir-taint=\[js\]/);
   assert.match(s, /pattern-only=\[rs\]/);
   assert.match(s, /unmodeled-sink-candidates=3/);
+});
+
+// S7 (Stage 2 measurement-completeness audit): scan._scanMeta.filesScanned
+// used to be `files.length` — the CANDIDATE list before the per-file loop's
+// size/density skip checks run — not the count of files actually analyzed
+// (Object.keys(fc), the same set computeAnalysisTiers reads one line above
+// in engine.js). A skipped file was counted in BOTH filesScanned and
+// filesSkipped, so "scanned=N skipped=M" implied N+M files were seen when
+// only N-of-those-candidates were actually analyzed.
+test('_scanMeta.filesScanned excludes files skipped for size, matching the files actually analyzed', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'agsec-coverage-'));
+  try {
+    await fsp.writeFile(path.join(dir, 'package.json'), '{"name":"coverage-test"}');
+    await fsp.writeFile(path.join(dir, 'normal.js'), 'const x = eval(require("fs").readFileSync(0));\n');
+    // Engine skips any file over 10KB whose average line length exceeds 400
+    // chars (engine.js's per-file loop, _filesDenseSkipped++) — a minified-
+    // bundle heuristic. One very long line comfortably clears both bars.
+    await fsp.writeFile(path.join(dir, 'dense.js'), 'const x = 1;' + 'a'.repeat(15_000) + ';\n');
+    const { scan } = await runScan(dir, { network: false });
+    assert.ok(scan._scanMeta.filesDenseSkipped >= 1, `expected the dense file to be skipped, got: ${JSON.stringify(scan._scanMeta)}`);
+    assert.equal(scan._scanMeta.filesScanned, Object.keys(scan.fc || {}).length,
+      'filesScanned must equal the number of files actually analyzed (fc), not the pre-skip candidate count');
+  } finally { await fsp.rm(dir, { recursive: true, force: true }); }
 });

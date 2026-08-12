@@ -683,21 +683,43 @@ async function cmdScan(args) {
     // so deterministic state stays byte-identical run-to-run.
     if (!args.flags.deterministic) {
       try {
-        const { stampFindingTimestamps, buildBaselineMap, renderSlaSummary } = await import('../src/posture/mttr.js');
+        const { stampFindingTimestamps, buildBaselineMap, renderSlaSummary, fingerprintFinding, computeMTTR } = await import('../src/posture/mttr.js');
         let baselineMap = new Map();
+        let prevAll = [];
         try {
           const prev = JSON.parse(await fsp.readFile(path.join(stateDirPath, 'last-scan.json'), 'utf8'));
           baselineMap = buildBaselineMap(prev);
+          // The previous scan's own findings already carry firstSeenAt/lastSeenAt
+          // from ITS baseline lookup — exactly the shape computeMTTR needs for
+          // whichever of them are no longer present now (i.e. were fixed).
+          prevAll = [
+            ...(prev?.findings || []), ...(prev?.secrets || []),
+            ...(prev?.supplyChain || []).filter(s => s.type === 'vulnerable_dep'),
+          ];
         } catch { /* first run — empty baseline, everything is firstSeen now */ }
         const now = Date.now();
         stampFindingTimestamps(persistedScan.findings || [], baselineMap, now);
         stampFindingTimestamps(persistedScan.secrets || [], baselineMap, now);
         stampFindingTimestamps((persistedScan.supplyChain || []).filter(s => s.type === 'vulnerable_dep'), baselineMap, now);
+        // #10 — MTTR: which of the previous scan's findings are no longer
+        // present now (fixed), and how long each took. computeMTTR itself was
+        // fully built and tested but had never had a real caller — the module's
+        // own comment calls it "true MTTR," distinct from the open-backlog
+        // median-age proxy renderSlaSummary already surfaces below.
+        const currentFps = new Set([
+          ...(persistedScan.findings || []), ...(persistedScan.secrets || []),
+          ...(persistedScan.supplyChain || []).filter(s => s.type === 'vulnerable_dep'),
+        ].map(fingerprintFinding));
+        const removed = prevAll.filter(f => !currentFps.has(fingerprintFinding(f)));
+        persistedScan.mttr = computeMTTR(removed);
         // Surface the SLA-breach line on human-readable formats (not JSON/CI pipes).
         const isJson = format === 'json' || format === 'sarif' || format === 'cyclonedx' || format === 'sbom' || format === 'spdx' || format === 'vex' || format === 'openvex' || format === 'pbom' || format === 'aibom';
         if (!isJson) {
           const sla = renderSlaSummary(persistedScan.findings || []);
           if (sla) process.stderr.write(`⏰ agentic-security: ${sla}\n`);
+          if (persistedScan.mttr.count > 0) {
+            process.stderr.write(`✅ agentic-security: ${persistedScan.mttr.count} finding(s) fixed since last scan, median ${Math.round(persistedScan.mttr.medianDays)}d to remediate\n`);
+          }
         }
       } catch { /* MTTR is best-effort — never block a scan write */ }
 

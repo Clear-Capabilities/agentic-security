@@ -8975,7 +8975,16 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   let _analysisTier = null, _unmodeledSinks = null;
   try { _analysisTier = computeAnalysisTiers(Object.keys(fc)); } catch {}
   try { _unmodeledSinks = countUnmodeledSinkCandidates(fc, finalFindings); } catch {}
-  const _scanMeta={filesScanned:files.length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length}};
+  // filesScanned counts files actually analyzed (Object.keys(fc), the same
+  // set computeAnalysisTiers above reads) — NOT files.length, the candidate
+  // list before the per-file loop's size/density skips run. Using the
+  // candidate count here double-counted skipped files: they were included
+  // in filesScanned AND separately reported in filesSkipped/filesDenseSkipped,
+  // so coverage-report.js's "scanned=N skipped=M" line implied N+M files were
+  // seen when only N-of-those-candidates were actually analyzed.
+  // checkpoint.total intentionally keeps files.length — that field means the
+  // full candidate set for resume bookkeeping, a different, correct meaning.
+  const _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length}};
   // R8: the scan completed, so the checkpoint has been fully consumed — remove
   // it. Anything that threw before this point leaves it in place to resume from.
   try { closeCheckpoint(_ckpt, { complete: true }); } catch (_) {}

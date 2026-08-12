@@ -1,7 +1,16 @@
 // 0.8.0 Feat-11: MTTR / finding-age tracking tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stampFindingTimestamps, buildBaselineMap, findingsExceedingSLA, computeMTTR, renderSlaSummary } from '../src/posture/mttr.js';
+import * as fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { stampFindingTimestamps, buildBaselineMap, findingsExceedingSLA, computeMTTR, renderSlaSummary, fingerprintFinding } from '../src/posture/mttr.js';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const cli = path.resolve(here, '..', 'dist', 'agentic-security.mjs');
 
 test('MTTR — first scan stamps firstSeenAt = lastSeenAt = now and ageDays = 0', () => {
   const findings = [{ kind: 'sast', vuln: 'XSS', file: 'a.js', line: 10 }];
@@ -64,4 +73,33 @@ test('renderSlaSummary (#10): flags findings past SLA with per-severity counts +
 test('renderSlaSummary: null when nothing is past SLA', () => {
   assert.equal(renderSlaSummary([{ severity: 'high', ageDays: 5 }]), null);
   assert.equal(renderSlaSummary([]), null);
+});
+
+// S7 (Stage 2 measurement-completeness audit): computeMTTR was fully built
+// and unit-tested (above) but had zero real callers anywhere in bin/ or src/
+// — the module's own comment calls it "true MTTR," distinct from the open-
+// backlog median-age proxy renderSlaSummary already surfaced. The MTTR
+// figure users actually saw came from an entirely different code path
+// (posture/triage.js's trend()). Wired into cmdScan alongside the existing
+// firstSeenAt/lastSeenAt stamping.
+test('MTTR wiring: a real CLI scan reports mttr.count=0 with no baseline, then a real fix is measured on the next scan', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'agsec-mttr-cli-'));
+  try {
+    await fsp.writeFile(path.join(dir, 'package.json'), '{"name":"mttr-cli-test"}');
+    await fsp.writeFile(path.join(dir, 'app.js'), 'function h(req){ eval(req.body.x); }\n');
+
+    const r1 = spawnSync('node', [cli, 'scan', dir, '--format', 'json', '--no-network'], { encoding: 'utf8' });
+    assert.ok(r1.status <= 3, `first scan must exit <=3; got ${r1.status}: ${r1.stderr}`);
+    const scan1 = JSON.parse(fs.readFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), 'utf8'));
+    assert.ok(scan1.mttr, 'expected scan.mttr to be present after the first real scan');
+    assert.equal(scan1.mttr.count, 0, 'nothing can be "fixed" relative to a nonexistent baseline');
+
+    // Fix it: remove the eval() call entirely.
+    await fsp.writeFile(path.join(dir, 'app.js'), 'function h(req){ return 1; }\n');
+    const r2 = spawnSync('node', [cli, 'scan', dir, '--format', 'json', '--no-network'], { encoding: 'utf8' });
+    assert.ok(r2.status <= 3, `second scan must exit <=3; got ${r2.status}: ${r2.stderr}`);
+    const scan2 = JSON.parse(fs.readFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), 'utf8'));
+    assert.ok(scan2.mttr.count >= 1, `expected at least one fixed finding measured, got: ${JSON.stringify(scan2.mttr)}`);
+    assert.equal(typeof scan2.mttr.medianDays, 'number');
+  } finally { await fsp.rm(dir, { recursive: true, force: true }); }
 });
