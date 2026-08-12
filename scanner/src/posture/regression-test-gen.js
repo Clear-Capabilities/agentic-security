@@ -103,18 +103,30 @@ test('${finding.vuln.replace(/'/g, "\\'")}', async () => {
 }
 
 function _renderPytest(finding, poc) {
+  // Same finding-specific extraction _renderJest uses, not the hardcoded
+  // SQL-injection payload every call used to emit regardless of the actual
+  // vulnerability class. poc.code is assumed to follow this project's own
+  // URL_/METHOD/PAYLOAD synthesis convention (poc-generator.js), same as
+  // the JS PoCs this extraction already works against.
+  const url = _extractUrl(poc.code) || 'http://localhost:3000';
+  const method = (_extractMethod(poc.code) || 'POST').toLowerCase();
+  const payload = _extractPayloadValue(poc.code) || 'PoC';
   return `# Regression test for ${finding.vuln} (${finding.cwe || 'unknown CWE'}).
-# Auto-generated from P1.1 PoC.
+# Auto-generated from P1.1 PoC; fails on vulnerable code, passes after the fix.
 
 import requests
 
 
 def test_${(finding.stableId || finding.id || 'finding').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 40)}():
-    url = 'http://localhost:3000'
-    r = requests.post(url, json={'input': "' UNION SELECT username, password FROM users--"})
-    # After the fix, the response should not contain SQL-syntax-error evidence.
+    url = ${JSON.stringify(url)}
+    payload = ${JSON.stringify(payload)}
+    r = requests.${method}(url, json={'input': payload}) if ${JSON.stringify(method)} != 'get' \\
+        else requests.get(url, params={'input': payload})
+    # The assertion below is the "exploit demonstrated" signal — when this
+    # test PASSES, the vuln is still present. After the fix, this assertion
+    # SHOULD fail. Inverse the assertion in a green build.
     text = r.text
-    demonstrated = 'syntax error' in text.lower() or '<script>' in text
+    demonstrated = 'PoC' in text or 'syntax error' in text.lower() or '<script>' in text
     assert not demonstrated, f'Vulnerability still present: {text[:200]}'
 `;
 }
@@ -127,10 +139,13 @@ function _extractMethod(code) {
   const m = String(code || '').match(/METHOD = (['"])([A-Z]+)\1/);
   return m ? m[2] : null;
 }
-function _extractPayloadLine(code) {
+function _extractPayloadValue(code) {
   const m = String(code || '').match(/PAYLOAD = `([^`]+)`/);
-  if (m) return `const PAYLOAD = ${JSON.stringify(m[1])};`;
-  return `const PAYLOAD = 'PoC';`;
+  return m ? m[1] : null;
+}
+function _extractPayloadLine(code) {
+  const v = _extractPayloadValue(code);
+  return `const PAYLOAD = ${JSON.stringify(v || 'PoC')};`;
 }
 
 /**

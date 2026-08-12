@@ -296,8 +296,12 @@ function _stripState(dir) {
   }
 }
 
-// `scoreCandidate` is deliberately NOT exported: an external caller could
-// score a candidate and then write it by some other route, which is exactly
-// the unscored-write path this module exists to make unavailable. Enrolment
-// scores and writes as one operation or not at all.
-export const _internals = { DEFAULT_TIER, scoreCandidate, _languageOf, _escapeRegex, _stripState };
+// `scoreCandidate` is deliberately NOT exported — not even via _internals,
+// the test-only-helpers convention used elsewhere in this codebase: an
+// external caller could score a candidate and then write it by some other
+// route, which is exactly the unscored-write path this module exists to
+// make unavailable. Enrolment scores and writes as one operation or not at
+// all. Keep it out of this object even though every other _internals
+// export in this codebase is a harmless pure helper — this one specific
+// function is the security boundary, not test plumbing.
+export const _internals = { DEFAULT_TIER, _languageOf, _escapeRegex, _stripState };

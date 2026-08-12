@@ -352,6 +352,28 @@ test('apply_fix (#3): a patch that introduces a new ≥medium finding is REJECTE
   await cleanup();
 });
 
+// Stage 5 correctness audit: fix-verify.js#verifyFix computes and returns
+// { ok, rescan, lint, tests, testedPrePatch, honesty, poc, durations,
+// summary } — five legs, not two — but the verify_fix MCP tool handler
+// only forwarded ok/rescan/lint/summary, silently dropping tests, honesty,
+// and poc from the response entirely. An agent inspecting only the
+// structured fields sees no indication of why verification failed when the
+// failure was in the test-suite or PoC leg — only the free-text summary
+// string carries that information, contradicting the tool's own
+// description ("runs the project test suite, checks fix honesty...").
+test('verify_fix: the tests and poc legs are present in the response, not silently dropped', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, vuln: 'demo' }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), 'export function ok() { return 1; }\n');
+  const r = await call(handleRequest, 'verify_fix', { stable_id: 'a1b2c3d4e5f60718', files: { 'app.js': 'export function ok() { return 2; }\n' } });
+  const p = payload(r);
+  assert.ok('tests' in p, `expected verify_fix's response to include the tests leg; got keys: ${Object.keys(p).join(', ')}`);
+  assert.ok('poc' in p, `expected verify_fix's response to include the poc leg; got keys: ${Object.keys(p).join(', ')}`);
+  assert.ok('honesty' in p, `expected verify_fix's response to include the honesty leg; got keys: ${Object.keys(p).join(', ')}`);
+  await cleanup();
+});
+
 test('synthesize_fix → apply_fix (#1+#3): deterministic autofix applied end-to-end', async () => {
   const { handleRequest, root, cleanup } = await makeSession({
     findings: [{ id: 'F1', stableId: 'deadbeefcafe0011', severity: 'medium', file: 'h.js', line: 1, rule: 'crypto-weak-hash', cwe: 'CWE-328', family: 'crypto-weak-hash', vuln: 'Weak hash md5', description: 'md5' }],

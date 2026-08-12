@@ -15,7 +15,7 @@ import path from 'node:path';
 import { runScan } from '../src/runScan.js';
 import { preHit, postHit, matcherFor } from '../src/posture/corpus-match.js';
 import {
-  isEnrollable, buildCandidate, enrollProvenFinding, entryIdFor,
+  isEnrollable, buildCandidate, enrollProvenFinding, entryIdFor, _internals,
 } from '../src/posture/corpus-enroll.js';
 
 const VULN = [
@@ -334,4 +334,19 @@ test('the real chain: sandbox proof decides the tier, and only a proven finding 
     const manifest = JSON.parse(fs.readFileSync(path.join(r.dir, 'manifest.json'), 'utf8'));
     assert.equal(manifest.provenance.observed, provenVuln.proofEvidence.observed);
   } finally { fs.rmSync(corpus, { recursive: true, force: true }); }
+});
+
+// Stage 5 correctness audit: this module's own header comment and
+// posture/CLAUDE.md both assert "scoreCandidate is deliberately unexported
+// so no caller can score by one route and write by another" — the
+// structural guarantee that makes it impossible to reintroduce the
+// v0.106.0 unscored-write mistake. But scoreCandidate WAS reachable, just
+// one property-access away, via `_internals.scoreCandidate` — the same
+// _internals convention this module (and autopilot.js, corpus-match.js)
+// uses to expose genuinely test-only pure helpers. A future contributor
+// trusting the header comment could import _internals for an unrelated
+// reason and unknowingly get the "unexported" function back.
+test('scoreCandidate is genuinely unreachable through _internals (the documented guarantee actually holds)', () => {
+  assert.equal('scoreCandidate' in _internals, false,
+    'scoreCandidate must not be reachable via _internals — the module docs assert it is deliberately unexported');
 });

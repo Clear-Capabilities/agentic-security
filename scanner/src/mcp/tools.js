@@ -685,7 +685,7 @@ export const apply_fix = {
 // proceed with apply_fix.
 export const verify_fix = {
   name: 'verify_fix',
-  description: 'Verify a proposed patch before applying. Re-scans the patched files in memory, runs the project linter, runs the project test suite, checks fix honesty (FULL/MITIGATION/WORKAROUND), and re-runs the PoC when one exists. Returns { ok, rescan, lint, summary }. Does not write to the target project’s own files, but DOES append one record per attempt to .agentic-security/fix-metrics.jsonl for the measured fix-loop.',
+  description: 'Verify a proposed patch before applying. Re-scans the patched files in memory, runs the project linter, runs the project test suite, checks fix honesty (FULL/MITIGATION/WORKAROUND) when fixMeta is supplied, and re-runs the PoC when one exists. Returns { ok, rescan, lint, tests, honesty, poc, summary }. Does not write to the target project’s own files, but DOES append one record per attempt to .agentic-security/fix-metrics.jsonl for the measured fix-loop.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -723,6 +723,17 @@ export const verify_fix = {
         ok: r.ok,
         rescan: { ok: r.rescan.ok, reason: r.rescan.reason, introduced: r.rescan.introduced || [] },
         lint: { runner: r.lint.runner, ok: r.lint.ok, skipped: r.lint.skipped || false, output: redactString(r.lint.output || '').slice(0, 1500) },
+        // verifyFix computes five legs, not two — tests/honesty/poc were
+        // being silently dropped here, leaving an agent with no structured
+        // way to see WHY verification failed when the failure was in one
+        // of those three (only the free-text summary carried it).
+        // test-runner.js's runProjectTests never returns raw stdout/stderr,
+        // so no redaction is needed there; honesty.violations are static,
+        // code-generated strings; poc.reason is redacted defensively since
+        // it can echo proof-harness detail derived from scanned source.
+        tests: r.tests,
+        honesty: r.honesty,
+        poc: r.poc ? { ...r.poc, reason: r.poc.reason ? redactString(r.poc.reason) : r.poc.reason } : r.poc,
         summary: r.summary,
       };
     } catch (e) {

@@ -46,6 +46,43 @@ test('annotateRegressionTests refuses to emit a test when PoC has no route conte
   assert.equal(finding.regression_test._skipped, 'poc-param-key-unverified');
 });
 
+// Stage 5 correctness audit: _renderPytest never referenced its `poc`
+// argument at all — it emitted a hardcoded URL, method, and SQL-injection
+// payload for EVERY finding, regardless of the actual vulnerability. A
+// path-traversal or command-injection finding routed to the pytest path
+// would get a test whose URL/payload has nothing to do with the finding it
+// claims to regression-test. Currently unreachable in the shipped pipeline
+// (poc-generator.js's CWE_TEMPLATES all hardcode lang:'node'), which is why
+// no existing test caught it — this constructs a Python-lang poc by hand,
+// following the same URL_/METHOD/PAYLOAD synthesis convention the Jest
+// path's extraction already works against.
+test('annotateRegressionTests emits a pytest test that reflects the actual finding, not a hardcoded SQLi payload', () => {
+  const finding = {
+    vuln: 'Path Traversal via unsanitized filename',
+    cwe: 'CWE-22',
+    file: 'download.py',
+    line: 10,
+    stableId: 'py-path-traversal',
+    poc: {
+      lang: 'python',
+      paramKeyConfidence: 'high',
+      code: [
+        "const URL_ = 'http://victim.internal:8080/download';",
+        "const METHOD = 'GET';",
+        "const PAYLOAD = `../../etc/passwd`;",
+      ].join('\n'),
+    },
+  };
+  annotateRegressionTests([finding]);
+  assert.ok(finding.regression_test, `expected a regression test to be emitted; got null`);
+  assert.equal(finding.regression_test.framework, 'pytest');
+  const code = finding.regression_test.code;
+  assert.ok(code, `expected runnable code, got _skipped: ${finding.regression_test._skipped}`);
+  assert.match(code, /victim\.internal:8080\/download/, 'expected the finding-specific URL, not the hardcoded localhost:3000');
+  assert.match(code, /\.\.\/\.\.\/etc\/passwd/, 'expected the finding-specific payload, not the hardcoded SQL UNION string');
+  assert.doesNotMatch(code, /UNION SELECT/, 'must not emit the old hardcoded SQL-injection payload for a path-traversal finding');
+});
+
 test('annotateRegressionTests emits null when no PoC', () => {
   const f = { vuln: 'X', cwe: 'CWE-1' };
   annotateRegressionTests([f]);
