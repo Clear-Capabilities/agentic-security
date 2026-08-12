@@ -67,6 +67,35 @@ function _splitStatements(body) {
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
+  // Stage 3 correctness audit (detection depth, per-language-IR): PHP
+  // double-quoted strings interpolate variables directly
+  // ("SELECT ... WHERE id=$id", "hi {$user->name}") — single-quoted
+  // strings never do. This must run BEFORE the generic string-literal
+  // fallback just below, which otherwise treated ANY quoted string
+  // (including a double-quoted one containing a live variable) as an
+  // opaque clean literal — silently dropping the interpolated variable's
+  // taint. This is exactly `"SELECT ... WHERE id=$id"`, one of the most
+  // common real PHP SQL-injection shapes. Simple (`$var`, `$var->prop`,
+  // `$var[key]`) and complex (`{$expr}`) interpolation forms are both
+  // lowered into a template, same shape as the `.`-concat branch below.
+  if (/^"/.test(s) && s.includes('$')) {
+    const inner = s.slice(1, -1);
+    const re = /\{(\$[^}]+)\}|(\$[A-Za-z_]\w*(?:->[A-Za-z_]\w*|\[[^\]]+\])?)/g;
+    let lastIndex = 0;
+    const parts = [];
+    let matched = false;
+    let m;
+    while ((m = re.exec(inner)) !== null) {
+      matched = true;
+      if (m.index > lastIndex) parts.push({ kind: 'literal', value: inner.slice(lastIndex, m.index) });
+      parts.push(_lowerExpr(m[1] !== undefined ? m[1] : m[2]));
+      lastIndex = re.lastIndex;
+    }
+    if (matched) {
+      if (lastIndex < inner.length) parts.push({ kind: 'literal', value: inner.slice(lastIndex) });
+      return { kind: 'tpl', parts };
+    }
+  }
   if (/^"/.test(s) || /^'/.test(s)) return { kind: 'literal', value: s };
   if (/^\d/.test(s)) return { kind: 'literal', value: s };
   if (/^(true|false|null|NULL)\b/.test(s)) return { kind: 'literal', value: s };

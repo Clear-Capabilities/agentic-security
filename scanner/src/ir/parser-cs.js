@@ -116,6 +116,35 @@ function _lowerExpr(text) {
     const rawParts = _splitTopLevelPlus(s);
     if (rawParts.length > 1) return { kind: 'tpl', parts: rawParts.map(_lowerExpr) };
   }
+  // Stage 3 correctness audit (detection depth, per-language-IR):
+  // interpolated strings ($"id={id}", $@"...", @$"...") were entirely
+  // unrecognized by every branch above — not even treated as an opaque
+  // literal, since nothing here tested for the leading `$` prefix — so
+  // they fell all the way through to {kind:'unknown'}, silently dropping
+  // any interpolated variable's taint. This is exactly
+  // `new SqlCommand($"SELECT ... WHERE id={id}", conn)`, one of the most
+  // common real C# SQL-injection shapes. `{expr}` / `{expr:format}` are
+  // lowered into a template, same shape as the `+`-concat branch above.
+  if (/^\$@?"/.test(s) || /^@\$"/.test(s)) {
+    const bodyStart = s.indexOf('"') + 1;
+    const inner = s.slice(bodyStart, -1);
+    const re = /\{([^{}:]+)(?::[^{}]*)?\}/g;
+    let lastIndex = 0;
+    const parts = [];
+    let matched = false;
+    let m;
+    while ((m = re.exec(inner)) !== null) {
+      matched = true;
+      if (m.index > lastIndex) parts.push({ kind: 'literal', value: inner.slice(lastIndex, m.index) });
+      parts.push(_lowerExpr(m[1].trim()));
+      lastIndex = re.lastIndex;
+    }
+    if (matched) {
+      if (lastIndex < inner.length) parts.push({ kind: 'literal', value: inner.slice(lastIndex) });
+      return { kind: 'tpl', parts };
+    }
+    return { kind: 'literal', value: s };
+  }
   if (/^"|^@"/.test(s)) return { kind: 'literal', value: s };
   if (/^\d/.test(s))   return { kind: 'literal', value: s };
   return { kind: 'unknown' };
