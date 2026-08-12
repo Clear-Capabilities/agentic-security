@@ -160,7 +160,15 @@ const pct = (list) => list.length
 console.log('-'.repeat(94));
 console.log(`metamorphic (verdict must HOLD): ${pct(metamorphic)}`);
 console.log(`adversarial (verdict must FLIP): ${pct(adversarial)}`);
-console.log(`verdict-flip correctness       : ${pct(rows)}`);
+// Deliberately excludes the untagged 'baseline' sanity-check case: this line
+// reports verdict-FLIP correctness specifically, and baseline is neither a
+// metamorphic nor an adversarial mutant. Computing it over `rows` (all cases,
+// including baseline) made the printed total disagree with metamorphic+
+// adversarial's own sum (3+3=6 vs. a reported denominator of 7) — any
+// baseline-only regression showed up as an unexplained "missing" case in this
+// summary line with no attribution. `failures` below still covers every row,
+// baseline included, so this is a reporting fix, not a gate-strength change.
+console.log(`verdict-flip correctness       : ${pct([...metamorphic, ...adversarial])}`);
 
 fs.rmSync(tmpRoot, { recursive: true, force: true });
 

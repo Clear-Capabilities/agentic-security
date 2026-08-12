@@ -285,7 +285,9 @@ test('accuracy scorecard — a NEW target defaults to unreviewed, not reviewed',
 const INDEPENDENT = {
   measuredAt: '2026-08-09',
   engineVersion: '0.135.0',
-  population: { totalEntries: 110, scoredEntries: 110, unscored: 0 },
+  // bench/independent/runner.mjs's real shape: unscored is an array of
+  // {id, reason}, not a count — see the dedicated test below.
+  population: { totalEntries: 110, scoredEntries: 110, unscored: [] },
   overall: {
     tp: 14, fp: 14, fn: 96, tn: 96,
     precision: { n: 14, d: 28, value: 0.5 },
@@ -318,6 +320,37 @@ test('independent population: the measured figures are rendered with their denom
   assert.match(md, /Quote the advisory-local column/,
     'the wide figure must never be presented as the headline');
   assert.match(md, /7\/57 \(12\.3%\)/, 'per-language rows carry denominators too');
+});
+
+// S7 (Stage 2 measurement-completeness audit): bench/independent/runner.mjs
+// builds population.unscored as an array of {id, reason} objects (pushed on
+// fetch/scan failure), never `.length`'d — but the render treated it as a
+// scalar count, on the line this section itself calls "the number that
+// matters." `${array}` stringifies to "[object Object],[object Object]" for
+// a non-empty array and silently blank for an empty one — both wrong.
+test('independent population: unscored renders as a count, not "[object Object]" (real array shape)', () => {
+  const withUnscored = {
+    ...INDEPENDENT,
+    population: {
+      totalEntries: 110, scoredEntries: 108,
+      unscored: [
+        { id: 'pkg-a', reason: 'not fetched — run `npm run bench:independent:fetch`' },
+        { id: 'pkg-b', reason: 'scan failed: timeout' },
+      ],
+    },
+  };
+  const inputs = fixtureInputs();
+  inputs.committed = { ...(inputs.committed || {}), independent: withUnscored };
+  const md = renderScorecardMarkdown(buildScorecard(inputs));
+  assert.match(md, /n=108, 2 unscored/, `expected a real count, got: ${md.match(/n=\d+.*unscored\*\*/)?.[0]}`);
+  assert.doesNotMatch(md, /\[object Object\]/);
+});
+
+test('independent population: an empty unscored array renders "0 unscored", not blank', () => {
+  const inputs = fixtureInputs();
+  inputs.committed = { ...(inputs.committed || {}), independent: INDEPENDENT }; // unscored: []
+  const md = renderScorecardMarkdown(buildScorecard(inputs));
+  assert.match(md, /n=110, 0 unscored/, `expected "0 unscored", got: ${md.match(/n=\d+.*unscored\*\*/)?.[0]}`);
 });
 
 test('independent population: absent committed result omits the section entirely', () => {

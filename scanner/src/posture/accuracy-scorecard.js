@@ -335,8 +335,16 @@ export function renderScorecardMarkdown(m) {
     L.push('at the commit where a vulnerability really existed, with the CWE assigned by a');
     L.push('public advisory database rather than by this project.');
     L.push('');
+    // population.unscored is an array of {id, reason} (bench/independent/runner.mjs) —
+    // render its count, not the array itself (Array#toString would stringify to
+    // "[object Object],[object Object]" or blank for an empty array, both silently
+    // wrong on the line this section calls "the number that matters"). Tolerates a
+    // bare number too, for any already-committed artifact predating this fix.
+    const unscoredList = ind.population?.unscored;
+    const unscoredCount = Array.isArray(unscoredList) ? unscoredList.length
+      : (typeof unscoredList === 'number' ? unscoredList : 0);
     L.push(`**Measured ${ind.measuredAt} on engine ${ind.engineVersion}, ` +
-      `n=${ind.population?.scoredEntries}, ${ind.population?.unscored} unscored** ` +
+      `n=${ind.population?.scoredEntries}, ${unscoredCount} unscored** ` +
       '(*committed artifact*, `' + ind.source + '` — read, not re-run: scoring takes ~32 minutes).');
     L.push('');
     L.push('| | Advisory-local (**the claim**) | Wide (diagnostic) |');
