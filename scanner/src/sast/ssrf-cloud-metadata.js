@@ -66,15 +66,18 @@ export function scanSSRFCloudMetadata(fp, raw) {
   }
 
   // 2. User-controlled URL into an HTTP client, with no metadata guard nearby.
-  const fileHasMetadataGuard = METADATA_GUARD_RE.test(code);
   const r = new RegExp(SSRF_CLIENT_RE.source, SSRF_CLIENT_RE.flags);
   let m;
   while ((m = r.exec(code))) {
     const line = lineOf(raw, m.index);
-    // Skip if a guard appears in ±10 lines.
+    // Skip if a guard appears in ±10 lines. A file-wide "does this file
+    // contain a guard anywhere" check used to OR into this and blanket-
+    // suppressed every unguarded call site once any one call site was
+    // properly guarded — removed; proximity is what makes a guard actually
+    // apply to a given call.
     const lines = raw.split('\n');
     const window = lines.slice(Math.max(0, line - 11), line + 10).join(' ');
-    if (METADATA_GUARD_RE.test(window) || fileHasMetadataGuard) continue;
+    if (METADATA_GUARD_RE.test(window)) continue;
     push({
       id: `ssrf-meta-usercontrolled:${fp}:${line}`,
       file: fp, line,

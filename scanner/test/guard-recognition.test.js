@@ -55,3 +55,32 @@ test('ssrf-cloud-metadata: metadata IP in a deny-list is not flagged; a real fet
   assert.equal(n('const DENY = new Set(["169.254.169.254"]); if (DENY.has(host)) throw new Error();'), 0);
   assert.ok(n('fetch("http://169.254.169.254/latest/meta-data/iam/")') >= 1);
 });
+
+// Stage 4 correctness audit: rule 2 (user-controlled URL into an HTTP
+// client) checks `fileHasMetadataGuard = METADATA_GUARD_RE.test(code)` over
+// the WHOLE FILE, then suppresses via `if (... || fileHasMetadataGuard)
+// continue;` — a metadata guard ANYWHERE in the file suppresses EVERY
+// unguarded call site in that file, not just ones actually near the guard.
+// The correct, already-present check is the localized ±10-line window
+// (`METADATA_GUARD_RE.test(window)`); `fileHasMetadataGuard` makes that
+// check redundant in the safe direction and dangerous in the unsafe one.
+// Pre-existing tests didn't catch this because they compare separate FILES
+// (a guarded fixture vs. an unguarded one) — this needs both call sites in
+// the SAME file to reproduce.
+test('ssrf-cloud-metadata: a guard near one fetch does not blanket-suppress an unrelated, unguarded fetch far below it in the same file', () => {
+  const filler = Array.from({ length: 20 }, (_, i) => `console.log("filler ${i}");`).join('\n');
+  const src = [
+    'function guardedFetch(req) {',
+    '  if (req.url.host === "169.254.169.254") throw new SecurityException("blocked");',
+    '  return fetch(req.query.url);',
+    '}',
+    filler,
+    'function unguardedFetch(req) {',
+    '  return fetch(req.query.url);',
+    '}',
+  ].join('\n');
+  const out = scanSSRFCloudMetadata('app.js', src).filter(f => f.id.includes('usercontrolled'));
+  // The near-guard fetch is correctly suppressed by its own local ±10-line
+  // window; the far-away fetch has no guard anywhere near it and must fire.
+  assert.equal(out.length, 1, `expected exactly the far, unguarded fetch to fire (near-guard one correctly suppressed locally); got ${out.length} findings: ${JSON.stringify(out.map(f => f.line))}`);
+});
