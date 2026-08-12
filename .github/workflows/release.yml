@@ -65,6 +65,15 @@ jobs:
         working-directory: scanner
         run: npm ci
 
+      # release-check's nist-catalog-freshness check shells out to
+      # build-catalog.py, which needs openpyxl to read the source workbook.
+      # A hosted runner has no reason to carry it by default — it's not a
+      # scanning dependency (see that script's own header), only a rebuild
+      # one — so it must be installed explicitly here or this check can never
+      # pass on a clean runner.
+      - name: Install NIST catalog rebuild dependency
+        run: pip3 install --quiet openpyxl
+
       # The tag is the release's identity. If it disagrees with the version being
       # published, stop before anything is built — a mismatch here means the tag
       # and the artifact would describe different releases forever.

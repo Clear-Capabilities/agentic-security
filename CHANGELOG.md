@@ -9,6 +9,30 @@
 > make the history less accurate, not more.
 
 
+## 0.136.5 — the release workflow gets its own missing dependency
+
+0.136.4 was tagged and its release workflow ran — for the first time ever,
+since the 60-odd commits it carried had accumulated across many local
+sessions without a single hosted-CI push. The gate caught a real gap in
+itself: `nist-catalog-freshness` (a check this same release adds, see below)
+shells out to `scripts/nist-compliance/build-catalog.py`, which needs
+`openpyxl` to read the source workbook. That's present on the maintainer's
+machine via a system Python install, but nothing installs it on the hosted
+runner — so the check could never have passed there. `release.yml` now
+installs it explicitly before the gate runs.
+
+The same CI run also showed roughly a dozen dataflow tests fail — a
+completely different set than the *other* workflow (`ci.yml`) failed on the
+same commit at the same time (one flaky MTTR-wiring test, no overlap with the
+dataflow set). Neither set reproduces locally, isolated or otherwise. That
+non-overlap is the signature of resource-contention flakiness on a shared
+runner, not a deterministic regression, so it isn't chased further here — but
+it's worth knowing about if a future release gate flakes on `npm test` again.
+
+Per the project's own precedent (see 0.136.1 below): a tag that failed to
+publish stays where it is rather than being moved. 0.136.4 is that tag. This
+ships as 0.136.5 instead, otherwise identical.
+
 ## 0.136.4 — dominance-correct implicit-flow taint, and wiring three dead-reachable tools
 
 A capability-PRD follow-up audit found several places where a real, tested
