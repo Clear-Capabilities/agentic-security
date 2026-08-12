@@ -272,6 +272,90 @@ test('CMP-2: a control whose only mapping is rule: can never resolve to "present
   } finally { await p.cleanup(); }
 });
 
+// ── Stage 6 correctness audit ──────────────────────────────────────────
+//
+// (a) `family:auth-missing`/`family:authz` are compliance-JSON-only strings
+//     no detector ever emits — real missing-auth findings use family names
+//     like `broken-access-control`. Every control mapped to auth-missing/
+//     authz read 'present' regardless of open findings.
+// (b) `family:X:Y` subfamily qualifiers were parsed then discarded — any
+//     finding of family X counted against every control mapped to family X,
+//     regardless of which subfamily the control actually named.
+// (c) the documented 'absent' status (a control where nothing at all
+//     passed) was unreachable — every non-present, non-manual control
+//     rendered as 'partial', collapsing "mostly clean, one gap" and
+//     "completely unevidenced" into the same bucket.
+
+test('Stage6: a critical broken-access-control finding is visible to a control mapped to family:auth-missing', async () => {
+  const p = await mkProject();
+  try {
+    const fw = loadFramework(p.dir, 'owasp-asvs-5'); // V2.1 maps solely to family:auth-missing
+    const scan = { findings: [{ family: 'broken-access-control', subfamily: 'missing-auth', severity: 'critical' }] };
+    const r = evaluateFramework(p.dir, fw, scan);
+    const v21 = r.find(x => x.control.id === 'V2.1');
+    assert.ok(v21);
+    assert.notEqual(v21.status, 'present',
+      'a critical unauthenticated-route finding must not be invisible to the control mapped to family:auth-missing');
+  } finally { await p.cleanup(); }
+});
+
+test('Stage6: a framework-specific missing-auth family (fastapi-missing-auth) also reaches family:auth-missing', async () => {
+  const p = await mkProject();
+  try {
+    const fw = loadFramework(p.dir, 'owasp-asvs-5');
+    const scan = { findings: [{ family: 'fastapi-missing-auth', severity: 'high' }] };
+    const r = evaluateFramework(p.dir, fw, scan);
+    const v21 = r.find(x => x.control.id === 'V2.1');
+    assert.notEqual(v21.status, 'present');
+  } finally { await p.cleanup(); }
+});
+
+test('Stage6: family:X:Y subfamily qualifier scopes the match — an unrelated subfamily does not falsely flag a control', async () => {
+  const p = await mkProject();
+  try {
+    const fw = loadFramework(p.dir, 'owasp-llm-top-10');
+    // llm-tool-exec is LLM07's subfamily, not LLM06's (llm-credential-in-prompt).
+    const scan = { findings: [{ family: 'llm-app-security', subfamily: 'llm-tool-exec', severity: 'critical' }] };
+    const r = evaluateFramework(p.dir, fw, scan);
+    const llm06 = r.find(x => x.control.id === 'LLM06');
+    assert.ok(llm06);
+    assert.equal(llm06.status, 'present',
+      'an llm-tool-exec finding must not count against LLM06, which is scoped to the llm-credential-in-prompt subfamily');
+  } finally { await p.cleanup(); }
+});
+
+test('Stage6: family:X:Y subfamily qualifier still matches when the subfamily is the right one', async () => {
+  const p = await mkProject();
+  try {
+    const fw = loadFramework(p.dir, 'owasp-llm-top-10');
+    const scan = { findings: [{ family: 'llm-app-security', subfamily: 'llm-credential-in-prompt', severity: 'critical' }] };
+    const r = evaluateFramework(p.dir, fw, scan);
+    const llm06 = r.find(x => x.control.id === 'LLM06');
+    assert.notEqual(llm06.status, 'present');
+  } finally { await p.cleanup(); }
+});
+
+test('Stage6: evaluateFramework can report "absent" for a control where nothing at all passed', () => {
+  const fw = {
+    id: 'synthetic', name: 'Synthetic', publisher: 'test', license: 'internal',
+    controls: [{ id: 'S-1', summary: 'Totally unevidenced control.', mapsTo: ['family:sqli'] }],
+  };
+  const scan = { findings: [{ family: 'sqli', severity: 'critical' }] };
+  const r = evaluateFramework('/tmp/does-not-need-to-exist', fw, scan);
+  assert.equal(r[0].status, 'absent',
+    'a control whose only mapping totally fails (no passing evidence at all) should read absent, not partial');
+});
+
+test('Stage6: a mixed control (some mappings pass, one fails) still reads "partial", not "absent"', () => {
+  const fw = {
+    id: 'synthetic', name: 'Synthetic', publisher: 'test', license: 'internal',
+    controls: [{ id: 'S-2', summary: 'Mixed control.', mapsTo: ['family:sqli', 'family:xss'] }],
+  };
+  const scan = { findings: [{ family: 'sqli', severity: 'critical' }] }; // xss family has zero findings -> clears
+  const r = evaluateFramework('/tmp/does-not-need-to-exist', fw, scan);
+  assert.equal(r[0].status, 'partial');
+});
+
 test('auditor: renderWalkthrough produces Markdown with summary + per-control sections', async () => {
   const p = await mkProject();
   try {

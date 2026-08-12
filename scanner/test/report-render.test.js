@@ -2,7 +2,7 @@
 // severity isn't taken at face value) + verdict discoverability lines.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { toCLI, toProTable, toHTML, toShipVerdict, exitCodeFor, toSARIF, normalizeFindings } from '../src/report/index.js';
+import { toCLI, toProTable, toHTML, toShipVerdict, exitCodeFor, toSARIF, toSTIX, normalizeFindings } from '../src/report/index.js';
 
 const demoted = {
   unreachable: { severity: 'critical', cwe: 'CWE-94', file: 'a.js', line: 1, vuln: 'Code injection', unreachableInProd: true, mitigationVerdict: 'unreachable-in-prod' },
@@ -211,4 +211,67 @@ test('CMP-3: toCLI renders the inline fix line for a remediation-only finding (n
   const f = { severity: 'high', vuln: 'Broken AuthZ', file: 'a.js', line: 1, cwe: 'CWE-862', remediation: 'Verify the caller owns the resource before returning it.' };
   const out = stripAnsi2(toCLI({ findings: [f] }, { color: false }));
   assert.match(out, /fix: Verify the caller owns the resource before returning it\./);
+});
+
+// Stage 6 correctness audit: a real `description` field (distinct from
+// `vuln`/`remediation`, set by ~47 SAST detectors) was silently dropped by
+// normalizeFindings, and SARIF/STIX's description-shaped fields preferred
+// remediation text over it whenever both were present.
+test('Stage6: normalizeFindings carries `description` through for the SAST channel', () => {
+  const f = { severity: 'high', vuln: 'Missing auth', file: 'a.js', line: 1, description: 'The specific why-this-fired narrative.' };
+  const [out] = normalizeFindings({ findings: [f] });
+  assert.equal(out.description, 'The specific why-this-fired narrative.');
+});
+
+test('Stage6: normalizeFindings carries `description` through for secrets and logicVulns channels', () => {
+  const scan = {
+    secrets: [{ severity: 'high', vuln: 'Hardcoded key', file: 's.js', line: 1, description: 'secret desc' }],
+    logicVulns: [{ severity: 'medium', vuln: 'Broken authz', file: 'l.js', line: 1, description: 'logic desc' }],
+  };
+  const out = normalizeFindings(scan);
+  assert.equal(out.find(x => x.kind === 'secret').description, 'secret desc');
+  assert.equal(out.find(x => x.kind === 'logic').description, 'logic desc');
+});
+
+test('Stage6: toSARIF prefers a real description over remediation text when both are present', () => {
+  const f = {
+    severity: 'critical', vuln: 'SQL Injection', file: 'a.js', line: 1, cwe: 'CWE-89',
+    description: 'User input reaches a raw query without parameterization.',
+    remediation: 'Use a parameterized query with bound params.',
+  };
+  const sarif = toSARIF({ findings: [f] }, {});
+  const rule = sarif.runs[0].tool.driver.rules[0];
+  const result = sarif.runs[0].results[0];
+  assert.match(rule.fullDescription.text, /reaches a raw query/, 'fullDescription must prefer description over remediation');
+  assert.match(result.message.text, /reaches a raw query/, 'result message must prefer description over remediation');
+  assert.doesNotMatch(rule.fullDescription.text, /parameterized query/);
+});
+
+test('Stage6: toSTIX prefers a real description over remediation text when both are present', () => {
+  const f = {
+    severity: 'critical', vuln: 'SQL Injection', file: 'a.js', line: 1, cwe: 'CWE-89',
+    description: 'User input reaches a raw query without parameterization.',
+    remediation: 'Use a parameterized query with bound params.',
+  };
+  const stix = toSTIX({ findings: [f] }, {});
+  const vuln = stix.objects.find(o => o.type === 'vulnerability');
+  assert.match(vuln.description, /reaches a raw query/);
+  assert.doesNotMatch(vuln.description, /parameterized query/);
+});
+
+test('Stage6: riskNote flags a confidence-0 finding, not just confidence-0.05 (boundary bug)', () => {
+  const zero = { severity: 'critical', vuln: 'X', file: 'a.js', line: 1, confidence: 0 };
+  const low = { severity: 'critical', vuln: 'Y', file: 'a.js', line: 2, confidence: 0.05 };
+  const out = stripAnsi2(toCLI({ findings: [zero, low] }, { color: false }));
+  const notes = (out.match(/lower confidence — verify before prioritising/g) || []).length;
+  assert.equal(notes, 2, 'both the confidence-0 and confidence-0.05 findings should get the downgrade note');
+});
+
+test('Stage6: toHTML honors meta.startedAt for generatedAt (determinism parity with every other emitter)', () => {
+  const scan = { findings: [] };
+  const fixed = '1970-01-01T00:00:00.000Z';
+  const html1 = toHTML(scan, { startedAt: fixed });
+  const html2 = toHTML(scan, { startedAt: fixed });
+  assert.equal(html1, html2, 'toHTML must be byte-identical across runs when meta.startedAt is fixed');
+  assert.match(html1, /generated 1970-01-01T00:00:00\.000Z/);
 });

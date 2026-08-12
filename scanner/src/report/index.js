@@ -24,7 +24,12 @@ function riskNote(f) {
   const et = String(f.exploitabilityTier || '').toLowerCase();
   if (et === 'minimal' || et === 'low') return `likely lower risk — ${et} exploitability`;
   const ct = String(f.confidenceTier || '').toLowerCase();
-  if (ct === 'low' || (typeof f.confidence === 'number' && f.confidence > 0 && f.confidence < 0.5)) {
+  // `f.confidence` is clamped to [0,1] by posture/confidence.js and 0 is a
+  // real, reachable value (unset confidence normalizes to `null`, not 0) —
+  // the single worst score this note exists to catch. A `> 0` lower bound
+  // exempted exactly that value from the downgrade note a 0.05 finding
+  // correctly got.
+  if (ct === 'low' || (typeof f.confidence === 'number' && f.confidence < 0.5)) {
     return 'lower confidence — verify before prioritising';
   }
   return null;
@@ -90,7 +95,13 @@ function fingerprint(f){
 // fullDescription, the Markdown Fix column, and the CLI inline "fix:" line
 // all rendered empty. `fix` still wins when both are set, matching the
 // existing precedence in explainParts() above.
-function _remediationOf(f) {
+// Exported (Stage 6) so other raw-finding consumers outside this module —
+// mcp/tools.js's scan_diff, lsp/server.js — that read scan.findings BEFORE
+// normalizeFindings ever touches it can apply the same fix-string-vs-
+// remediation-field precedence instead of re-implementing it ad hoc (and
+// getting it wrong the way both of those did — reading only `.remediation`,
+// which ~127 of engine.js's own detectors never set).
+export function _remediationOf(f) {
   if (f && typeof f.fix === 'string') return f.fix;
   if (typeof f?.remediation === 'string') return f.remediation;
   return null;
@@ -297,6 +308,17 @@ export function normalizeFindings(scan){
       // indistinguishable from one nobody contested.
       falsification: f.falsification || null,
       quarantined: f.quarantined === true,
+      // The canonical schema (scanner/CLAUDE.md) documents `description` as
+      // a required field distinct from `vuln` (headline) and `remediation`
+      // (fix instructions) — ~47 SAST detectors set finding-specific "why
+      // this fired" prose here. It was never in this allowlist, so it was
+      // silently dropped between the detector and every report format.
+      description: f.description || null,
+      // posture/threat-model-grounding.js#applyThreatModel — crown-jewel /
+      // out-of-scope / compliance-regime / attacker-model tags. The severity
+      // bump/demotion it also performs mutates `severity` directly (so that
+      // half already survived normalization); this object itself did not.
+      threatModel: f.threatModel || null,
       verification: f.verification || null,
       // posture/pattern-propagation.js#annotateCrossRepoSignals — default-on.
       crossRepoSignal: f.crossRepoSignal || null,
@@ -325,6 +347,7 @@ export function normalizeFindings(scan){
       // to parse the commit sha back out of the synthetic `file` value.
       commit: s.commit || null,
       historical: s._historical === true,
+      description: s.description || null,
     });
   }
   for (const lv of (scan.logicVulns||[])) {
@@ -351,6 +374,7 @@ export function normalizeFindings(scan){
       version: lv.version || null,
       ecosystem: lv.ecosystem || null,
       license: lv.license || null,
+      description: lv.description || null,
     });
   }
   for (const sc of (scan.supplyChain||[])) {
@@ -563,7 +587,10 @@ export function toSTIX(scan, meta = {}) {
       created: now,
       modified: now,
       name: `${f.vuln || 'Security finding'} at ${f.file || '?'}:${f.line || '?'}`,
-      description: f.fix?.description || f.vuln || '',
+      // Same precedence fix as toSARIF's fullDescription/message: the
+      // detector's own description of the finding beats remediation text,
+      // which beats degrading to the bare vuln title.
+      description: f.description || f.fix?.description || f.vuln || '',
       external_references: cweExt,
       labels: [f.severity || 'unknown'],
       // x_* extension fields — STIX 2.1 allows custom properties prefixed
@@ -716,7 +743,14 @@ export function toSARIF(scan, meta={}){
     id: f.vuln.replace(/[^a-zA-Z0-9]/g, '_'),
     name: f.vuln,
     shortDescription: { text: f.vuln },
-    fullDescription: { text: f.fix?.description || f.vuln },
+    // Prefer the detector's own explanation of the finding (`description`)
+    // over remediation text — `fix?.description` is fix instructions, not
+    // an account of the vulnerability. Falling back to remediation (rather
+    // than degrading to the bare rule title, already shown in
+    // shortDescription/name) when no description was set is intentional —
+    // see CMP-3's test asserting a remediation-only finding still gets a
+    // non-degenerate fullDescription.
+    fullDescription: { text: f.description || f.fix?.description || f.vuln },
     helpUri: f.cwe ? `https://cwe.mitre.org/data/definitions/${f.cwe.replace(/[^0-9]/g,'')}.html` : undefined,
     properties: { tags: [f.cwe, f.stride].filter(Boolean) },
   });
@@ -781,7 +815,7 @@ export function toSARIF(scan, meta={}){
         return {
         ruleId: f.vuln ? f.vuln.replace(/[^a-zA-Z0-9]/g, '_') : 'unknown',
         level: SEV_TO_SARIF[f.severity] || 'warning',
-        message: { text: f.fix?.description || f.vuln || 'Security finding' },
+        message: { text: f.description || f.fix?.description || f.vuln || 'Security finding' },
         locations: [{ physicalLocation: { artifactLocation: { uri: f.file }, region: { startLine: Math.max(1, f.line||1) } } }],
         ...(codeFlows ? { codeFlows } : {}),
         ...(fixes ? { fixes } : {}),
@@ -893,7 +927,12 @@ export function toHTML(scan, meta = {}) {
   for (const f of findings) byFile[f.file] = (byFile[f.file] || 0) + 1;
   const hotspots = Object.entries(byFile).sort((a,b)=>b[1]-a[1]).slice(0, 10);
   const data = JSON.stringify(findings).replace(/</g, '\\u003c');
-  const generatedAt = new Date().toISOString();
+  // Every other emitter falls back to meta.startedAt (which
+  // posture/deterministic.js forces to a fixed value under --deterministic)
+  // before minting a fresh timestamp — toHTML never consulted it, so it was
+  // the one format that stayed non-deterministic run-to-run even under
+  // --deterministic.
+  const generatedAt = meta.startedAt || new Date().toISOString();
   const SEV_HEX = { critical: '#ff2d55', high: '#ff6b35', medium: '#ffb800', low: '#34d058', info: '#82aaff' };
   const sevBars = Object.entries(counts).map(([k, v]) =>
     `<div class="sev-row"><span class="sev-tag" style="background:${SEV_HEX[k]}22;color:${SEV_HEX[k]}">${k}</span><span class="sev-bar" style="width:${Math.min(100, v * 4)}%;background:${SEV_HEX[k]}"></span><span class="sev-num">${v}</span></div>`

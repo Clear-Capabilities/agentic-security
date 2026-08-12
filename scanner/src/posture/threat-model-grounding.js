@@ -13,8 +13,8 @@
 //     SOC2 / HIPAA / GDPR) adds compliance-tag fields to findings in
 //     matching families (PII → HIPAA/GDPR; auth → SOC2 CC6.1; etc.).
 //   - **Stated attacker** — "## Attacker model" / "## Threat actor"
-//     section sets f.attackerProfile = 'script-kiddie' | 'apt' | 'insider'
-//     for use in downstream prioritization.
+//     section sets f.threatModel.attacker = 'script-kiddie' | 'apt' |
+//     'insider' for use in downstream prioritization.
 //
 // Opt-out: AGENTIC_SECURITY_NO_THREAT_MODEL_GROUNDING=1
 

@@ -98,6 +98,23 @@ export function loadFramework(scanRoot, id) {
  *   'absent'    — no signal / open critical findings on every mapsTo family
  *   'manual'    — control has no mapsTo (requires manual attestation)
  */
+// Stage 6 correctness audit: several compliance frameworks map controls to
+// `family:auth-missing` / `family:authz`, but no detector in this codebase
+// ever emits those literal family strings — the real missing-auth/authz
+// detectors use `broken-access-control` (generic), `fastapi-missing-auth`,
+// `springboot-missing-authz`, `laravel-missing-auth`, `quarkus-missing-authz`
+// (framework-specific). Without this alias, a control mapped to
+// auth-missing/authz read "present" (vacuously — the family bucket was
+// always empty) even with a critical, unauthenticated route open. Listed
+// under both compliance-side names since `broken-access-control` covers
+// both "nobody checked" (missing auth) and "checked wrong" (broken authz)
+// and it is strictly safer to over-count a real finding against both than
+// to keep silently excluding it from either.
+const COMPLIANCE_FAMILY_ALIAS = {
+  'auth-missing': ['broken-access-control', 'fastapi-missing-auth', 'springboot-missing-authz', 'laravel-missing-auth', 'quarkus-missing-authz'],
+  'authz': ['broken-access-control', 'idor', 'springboot-missing-authz', 'quarkus-missing-authz'],
+};
+
 export function evaluateFramework(scanRoot, fw, scan) {
   // CMP-2: last-scan.json (what this is actually handed in production) carries
   // findings across four separate channels — SAST (`findings`), secrets,
@@ -136,6 +153,13 @@ export function evaluateFramework(scanRoot, fw, scan) {
 
     let allCleared = true;
     let anySignal = false;
+    // Tracks whether ANY family:/module: mapping in this control actually
+    // passed (distinct from allCleared, which asks whether EVERY one did).
+    // Feeds the 'absent' vs 'partial' distinction below: a control where
+    // nothing at all checks out is a materially different auditor story
+    // ("no evidence") than one that's mostly clean with one open gap
+    // ("evidence with a gap") — both used to render as the same 'partial'.
+    let anyCleared = false;
     // CMP-2: a rule: mapping's own observation says "verify manually" — it
     // is deliberately not code-checked. It used to set anySignal=true and
     // leave allCleared untouched, so a control whose ONLY mapping was rule:
@@ -146,13 +170,26 @@ export function evaluateFramework(scanRoot, fw, scan) {
     let hasUnverifiableMapping = false;
     for (const m of maps) {
       if (m.startsWith('family:')) {
-        const fam = m.slice('family:'.length).split(':')[0];
-        const open = (families.get(fam) || []).filter(f => !f.intentSuppressed && !f.pastDecision && (f.severity === 'critical' || f.severity === 'high'));
+        // `family:X` and the subfamily-qualified `family:X:Y` (used by
+        // owasp-llm-top-10 for LLM02/LLM06/LLM07) both used to collapse to
+        // just `X` here — the `:Y` qualifier was parsed and then silently
+        // dropped, so any finding of family X counted against every control
+        // mapped to X regardless of which subfamily the control actually
+        // named (four LLM controls flagged off one credential-in-prompt
+        // finding). Detectors that emit a subfamily always set it, so
+        // filtering is safe; findings with no subfamily set still count
+        // (recall-preserving default — same precedent as relevance.js).
+        const [fam, subfam] = m.slice('family:'.length).split(':');
+        const aliasFams = COMPLIANCE_FAMILY_ALIAS[fam] || [];
+        const candidates = [fam, ...aliasFams].flatMap(k => families.get(k) || []);
+        const scoped = subfam ? candidates.filter(f => !f.subfamily || f.subfamily === subfam) : candidates;
+        const open = scoped.filter(f => !f.intentSuppressed && !f.pastDecision && (f.severity === 'critical' || f.severity === 'high'));
         if (open.length) {
           allCleared = false;
           obs.push(`${open.length} open ${fam} finding(s) at high/critical.`);
         } else {
           obs.push(`✓ ${fam}: no open critical/high findings.`);
+          anyCleared = true;
         }
         anySignal = true;
       } else if (m.startsWith('module:')) {
@@ -196,6 +233,7 @@ export function evaluateFramework(scanRoot, fw, scan) {
         if (resolved && fs.existsSync(resolved)) {
           obs.push(`✓ ${mod}: ${label} present.`);
           anySignal = true;
+          anyCleared = true;
         } else {
           obs.push(`✗ ${mod}: expected ${label} not present.`);
           allCleared = false;
@@ -208,8 +246,19 @@ export function evaluateFramework(scanRoot, fw, scan) {
       }
     }
 
+    // 'absent' was documented (see the docstring above) as a fourth,
+    // distinct status — a control where NOTHING passed at all — but the
+    // assignment below never produced it; every non-present, non-manual
+    // control rendered as 'partial' regardless of whether it was "mostly
+    // clean with one gap" or "completely unevidenced". Only introduced for
+    // the fully-automated case (no rule: mapping) to avoid reclassifying
+    // any control that already reads 'partial' because of an inherently
+    // unverifiable rule: mapping — that precedent (rule: caps at 'partial',
+    // never reaching 'present' OR 'absent') is unchanged.
     if (!anySignal) status = 'manual';
-    else if (allCleared && !hasUnverifiableMapping) status = 'present';
+    else if (hasUnverifiableMapping) status = 'partial';
+    else if (allCleared) status = 'present';
+    else if (!anyCleared) status = 'absent';
     else status = 'partial';
 
     results.push({ control: c, status, observations: obs });
