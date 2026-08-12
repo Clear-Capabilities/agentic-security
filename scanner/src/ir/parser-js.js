@@ -138,16 +138,25 @@ export function parseJsFile(file, code) {
     const exitId  = nextNodeId();
     const fn = {
       qid, name: name || 'anon', line,
+      // Plain strings, per the IR shape contract (ir/CLAUDE.md: "params:
+      // ['arg1', 'arg2', ...]") — every other parser (py, cs, rb, cpp, ...)
+      // already emits this shape. This one used to emit {name,kind[,props]}
+      // objects instead, which every consumer (access-paths.js's
+      // isCoveredBy, summaries.js's paramNames.indexOf, entryStateFromCall,
+      // the k=2 pass's `new Set(fn.params)`) silently failed to match against
+      // — Set/string-equality checks against an object never succeed, so
+      // mutated-parameter taint and context-sensitive entry states were both
+      // unconditionally inert for every JS/TS function. Nothing in src/
+      // reads a param's .kind or .props, so the richer shape bought nothing.
       params: (params || []).map(p => {
         if (!p) return null;
-        if (p.type === 'Identifier') return { name: p.name, kind: 'ident' };
-        if (p.type === 'ObjectPattern') return { name: '<obj>', kind: 'object-pattern',
-          props: p.properties.map(pp => ({
-            key: pp.key?.name || (pp.key?.value != null ? String(pp.key.value) : '*'),
-            alias: lhsPath(pp.value),
-          })) };
-        if (p.type === 'AssignmentPattern' && p.left?.type === 'Identifier') return { name: p.left.name, kind: 'ident' };
-        if (p.type === 'RestElement' && p.argument?.type === 'Identifier') return { name: p.argument.name, kind: 'rest' };
+        if (p.type === 'Identifier') return p.name;
+        if (p.type === 'ObjectPattern') return '<obj>';
+        if (p.type === 'ArrayPattern') return '<arr>';
+        if (p.type === 'AssignmentPattern' && p.left?.type === 'Identifier') return p.left.name;
+        if (p.type === 'AssignmentPattern' && p.left?.type === 'ObjectPattern') return '<obj>';
+        if (p.type === 'AssignmentPattern' && p.left?.type === 'ArrayPattern') return '<arr>';
+        if (p.type === 'RestElement' && p.argument?.type === 'Identifier') return p.argument.name;
         return null;
       }).filter(Boolean),
       cfg: { entry: entryId, exit: exitId, nodes: new Map() },
@@ -330,7 +339,29 @@ export function parseJsFile(file, code) {
           const parent = path.parent;
           if (parent && (parent.type === 'VariableDeclarator' || parent.type === 'AssignmentExpression')) return;
           const calleeExpr = exprOf(path.node.callee);
-          const args = (path.node.arguments || []).map(exprOf);
+          // An inline arrow/function-expression argument (`arr.map(x => ...)`)
+          // becomes {kind:'function-value', qid} instead of exprOf's generic
+          // {kind:'unknown'} fallback (exprOf has no case for either node
+          // type) — dataflow/higher-order.js's calleeIsResolvableCallback and
+          // engine.js's higher-order-invocation push site both special-case
+          // 'function-value', but nothing ever produced one for JS/TS, so
+          // higher-order taint flow only ever worked for a by-reference
+          // callback (`arr.map(processItem)`), never the far more common
+          // inline-callback shape. The qid is computed to match EXACTLY what
+          // this same node's own ArrowFunctionExpression/FunctionExpression
+          // visitor (below) will independently compute when Babel's
+          // traversal reaches it: for a function literal passed directly as
+          // a call argument, none of that visitor's naming heuristics
+          // (VariableDeclarator/AssignmentExpression/ObjectProperty parent)
+          // match, so it always resolves to name 'anon' scoped under the
+          // CURRENT function — exactly what's available here.
+          const args = (path.node.arguments || []).map(a => {
+            if (a && (a.type === 'ArrowFunctionExpression' || a.type === 'FunctionExpression')) {
+              const argLine = a.loc?.start?.line || 1; // matches enterFn's own fallback
+              return { kind: 'function-value', qid: fnQid(file, fn.name, 'anon', argLine) };
+            }
+            return exprOf(a);
+          });
           const line = path.node.loc?.start?.line || 0;
           const nodeId = nextNodeId();
           addNode(fn, { id: nodeId, kind: 'call', callee: calleeExpr, args, line, succ: [], pred: [] });

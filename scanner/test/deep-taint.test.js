@@ -95,7 +95,12 @@ test('IR builder: parses functions and produces a CFG with entry/exit nodes', as
   const helper = ir.functions.find(f => f.name === 'helper');
   assert.ok(helper, 'helper function should be in IR');
   assert.equal(helper.params.length, 1);
-  assert.equal(helper.params[0].name, 'x');
+  // Plain string, per the IR shape contract (ir/CLAUDE.md) — not {name,kind}.
+  // See parser-js.js's enterFn for why the object shape was wrong: every
+  // consumer (isCoveredBy, entryStateFromCall, points-to.js) treats params
+  // as strings, so the richer shape silently broke every string-equality
+  // check against it.
+  assert.equal(helper.params[0], 'x');
   assert.ok(helper.cfg.entry, 'CFG entry node id should be set');
   assert.ok(helper.cfg.exit, 'CFG exit node id should be set');
 });

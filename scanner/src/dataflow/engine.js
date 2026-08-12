@@ -374,9 +374,36 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
   return { findings };
 }
 
+// Surfaces a cached (or freshly computed) summary's `findings` into the
+// CURRENT caller's context — the only place a class-field/k=2 pre-pass's
+// speculative findings (in runTaintEngine) become reportable, because
+// reaching this point means a real call site actually consulted that exact
+// qid+entry. Called uniformly on both a cache HIT (`summaryCache.get()`)
+// and a cache MISS (`summaryCache.compute()`'s return value), so it doesn't
+// matter whether this call site is the first one to ever reach this
+// qid+entry or the fifth — findings ride on the summary object itself now,
+// not on a one-shot merge inside compute()'s callback. Module-level (not
+// nested in runTaintEngine) because step()'s assign/plain-call interproc
+// branches call it too, and step() is a top-level function with no access
+// to runTaintEngine's locals.
+function _mergeSummaryFindings(callContext, callerQid, sum, via) {
+  if (!sum || !Array.isArray(sum.findings) || !sum.findings.length) return;
+  callContext._findings.push(...sum.findings.map(f => ({ ...f, _funcQid: callerQid || null, _via: via })));
+}
+
 // Apply a CFG node to a taint-state. Returns the new state + any finding emitted.
 function step(node, stateIn, callContext) {
-  const state = new Set(stateIn);
+  // `let`, not `const` — the 'call' case (built-in-mutation and mutated-param
+  // branches below) reassigns this binding. It was `const` until Stage 3 of
+  // the correctness audit: a bare-statement call to Object.assign/_.merge/
+  // etc. with a tainted source arg, or any plain call whose callee summary
+  // reports mutated params, threw "Assignment to constant variable" here.
+  // The engine's per-function analyzeFunction() call sites all wrap in a
+  // blanket try/catch, so the exception was silent — and it discarded every
+  // finding already collected for the ENTIRE containing function, not just
+  // the mutation site, since the throw unwound past `findings.push(...)`
+  // calls for unrelated sinks earlier in the same function body.
+  let state = new Set(stateIn);
   const findings = [];
 
   switch (node.kind) {
@@ -472,10 +499,19 @@ function step(node, stateIn, callContext) {
                 returnTainted: !!inner._returnTainted,
                 mutatedParams: inner._mutatedParamsOut || new Set(),
                 taintedGlobals: new Set(),
-                findings: [],
+                // Real findings from the callee's own body — e.g.
+                // `function makeQuery(id){ db.query(...id) } ... makeQuery(uid)`
+                // — ride on the summary itself (was hardcoded `[]`, so
+                // nothing ever read inner._findings and the SQLi inside
+                // makeQuery was silently dropped). _mergeSummaryFindings
+                // below surfaces them into THIS caller now that a real
+                // call site has been established, and does the same on a
+                // future cache hit from any other real caller.
+                findings: inner._findings,
               };
             });
           }
+          _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
           if (sum && sum.returnTainted) {
             newState = _addPathAliasAware(newState, target, callContext);
             callContext._taintSources.push({
@@ -583,10 +619,14 @@ function step(node, stateIn, callContext) {
                 returnTainted: !!inner._returnTainted,
                 mutatedParams: inner._mutatedParamsOut || new Set(),
                 taintedGlobals: new Set(),
-                findings: [],
+                // See the sibling assign-call-site compute() above — same
+                // fix, same reason: this callee's own findings were
+                // computed correctly and then thrown away (hardcoded `[]`).
+                findings: inner._findings,
               };
             });
           }
+          _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
           if (sum && sum.mutatedParams && sum.mutatedParams.size) {
             const mutated = callContext._summaryCache.applyAtCallSite(
               sum, paramNames, node.args || [], state);
@@ -642,7 +682,13 @@ function step(node, stateIn, callContext) {
         if (dot <= 0) return null;
         const recv = callee.slice(0, dot);
         const recvTainted = isCoveredBy(state, recv);
-        return higherOrderTaintFlow(node, recvTainted);
+        // higherOrderTaintFlow requires a flattened STRING callee (its own
+        // `typeof callee !== 'string'` guard) — passing the raw `node` here
+        // handed it a JS/TS structured callee expr ({kind:'member',...})
+        // unconditionally, which never passed that guard, so this feature
+        // was entirely dead for JS/TS (the primary catalogued language).
+        // `callee` here is `_plainCallCalleeName`, already flattened above.
+        return higherOrderTaintFlow({ ...node, callee }, recvTainted);
       })();
       if (hoFlow && hoFlow.taintsCallbackParam === 0) {
         // The first arg should be the callback. If it's a plain ident or
@@ -655,7 +701,17 @@ function step(node, stateIn, callContext) {
         if (cb && (cb.kind === 'ident' || cb.kind === 'function-value')) {
           callContext._higherOrderInvocations = callContext._higherOrderInvocations || [];
           callContext._higherOrderInvocations.push({
-            callee: cb.kind === 'ident' ? cb.name : (cb.qid || null),
+            // A resolved-by-name callback (`arr.map(processItem)`) and an
+            // inline callback (`arr.map(x => ...)`, parser-js.js's
+            // exprOf now emits {kind:'function-value', qid}) need different
+            // resolution strategies downstream — a bare name looked up via
+            // the call graph's byNameInFile index (ambiguous/guessable) vs.
+            // an exact qid looked up directly in callGraph.functions. Kept
+            // as two fields rather than overloading `callee` with either
+            // shape, so the consumer can't accidentally hand a qid to the
+            // name-based resolver (or vice versa).
+            callee: cb.kind === 'ident' ? cb.name : null,
+            calleeQid: cb.kind === 'function-value' ? (cb.qid || null) : null,
             paramIndex: 0,
             taintedParam: true,
             line: node.line,
@@ -870,6 +926,12 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _mutatedParamsOut: new Set(),
       };
       try { analyzeFunction(fn, entry, ctx); } catch {}
+      // Report real findings discovered by this probe rather than letting
+      // them die with `ctx` — see _collectFindings's header comment. Safe to
+      // call every iteration and again from the main loop below: dedup is by
+      // (sinkId, file, line), so re-discovering the same empty-entry finding
+      // multiple times collapses to one reported finding, never a duplicate.
+      _collectFindings(fn, ctx._findings);
       const next = {
         returnTainted: !!ctx._returnTainted,
         mutatedParams: ctx._mutatedParamsOut || new Set(),
@@ -912,11 +974,19 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _mutatedParamsOut: new Set(),
       };
       try { analyzeFunction(fn, fields, ctx); } catch {}
+      // `findings` carries the REAL findings from this probe (was hardcoded
+      // `[]`, discarding them) — but this pass is speculative (every field
+      // in `fields` is assumed simultaneously tainted; nothing here confirms
+      // this exact method is ever reached with that state), so it must not
+      // report them itself. They ride on the cached summary and are only
+      // surfaced by _mergeSummaryFindings when a REAL call site (assign,
+      // plain-call, or higher-order) actually consults this qid+entry —
+      // at that point a genuine reachable caller has been established.
       summaryCache.set(fn.qid, fields, {
         returnTainted: !!ctx._returnTainted,
         mutatedParams: ctx._mutatedParamsOut || new Set(),
         taintedGlobals: new Set(),
-        findings: [],
+        findings: ctx._findings,
       });
     }
   }
@@ -936,11 +1006,27 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       _mutatedParamsOut: new Set(),
     };
     try { analyzeFunction(fn, taintedEntry, ctx); } catch {}
+    // `findings` carries the real findings from this probe (was hardcoded
+    // `[]`). This pass assumes EVERY param is simultaneously tainted —
+    // there's no check that any real caller ever passes tainted data here
+    // at all (the header comment above claims "AND at least one caller in
+    // the call graph"; the code has never actually enforced that) — so
+    // these findings must not be reported unconditionally, only when a real
+    // call site's own entry state happens to match and consults this cached
+    // summary via _mergeSummaryFindings. This is the exact scenario that
+    // motivated storing them at all: an inline callback
+    // (`arr.forEach(x => sink(x))`) has one param, so it gets probed here
+    // with taintedEntry={param} BEFORE the higher-order invocation loop
+    // below ever runs; without `findings` riding on the cached summary, the
+    // real finding computed right here was thrown away and unrecoverable —
+    // the higher-order loop's own `summaryCache.get()` would hit this
+    // now-cached (finding-less) summary and never call `compute()` (the
+    // only place that used to merge findings) at all.
     summaryCache.set(fn.qid, taintedEntry, {
       returnTainted: !!ctx._returnTainted,
       mutatedParams: ctx._mutatedParamsOut || new Set(),
       taintedGlobals: new Set(),
-      findings: [],
+      findings: ctx._findings,
     });
   }
   for (const fn of fnList) {
@@ -967,13 +1053,20 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     for (let hi = 0; hi < Math.min(hoInvocations.length, HO_CAP); hi++) {
       if (Date.now() > deadlineMs) break;
       const inv = hoInvocations[hi];
-      if (!inv.callee || !inv.taintedParam) continue;
-      // inv.callee is always a bare ident (only cb.kind === 'ident' pushes a
-      // higher-order invocation — see the push site above), so resolve()'s
-      // bare-tail guess never triggers here either way; resolveKnownCallee
-      // for consistency with the other call-graph lookups in this file.
-      const resolved = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(inv.callee, fn && fn.file) : null;
-      const cbFn = functionRecord(callGraph, resolved);
+      if ((!inv.callee && !inv.calleeQid) || !inv.taintedParam) continue;
+      // Two resolution strategies, matching the two shapes the push site can
+      // record: an inline callback (`arr.map(x => ...)`) carries an exact
+      // qid (parser-js.js's exprOf synthesizes it identically to how
+      // enterFn will independently name the same node) — look it up directly
+      // in callGraph.functions, no name resolution involved. A by-reference
+      // callback (`arr.map(processItem)`) carries a bare ident name; resolve
+      // it the same way every other call-graph lookup in this file does.
+      // resolveKnownCallee (never the bare-tail-guessing resolve()) since a
+      // wrong guess here would fabricate a callback relationship that
+      // doesn't exist.
+      const cbFn = inv.calleeQid
+        ? functionRecord(callGraph, inv.calleeQid)
+        : functionRecord(callGraph, callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(inv.callee, fn && fn.file) : null);
       if (!cbFn || !cbFn.params || !cbFn.params.length) continue;
       const cbEntry = new Set([cbFn.params[inv.paramIndex || 0]]);
       let cbSummary = summaryCache.get(cbFn.qid, cbEntry);
@@ -986,21 +1079,57 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
             _mutatedParamsOut: new Set(),
           };
           try { analyzeFunction(cbFn, cbEntry, inner); } catch {}
-          // Merge any findings from the callback analysis into the caller.
-          callContext._findings.push(...inner._findings.map(f => ({ ...f, _funcQid: fn.qid, _via: 'higher-order' })));
           return {
             returnTainted: !!inner._returnTainted,
             mutatedParams: inner._mutatedParamsOut || new Set(),
             taintedGlobals: new Set(),
-            findings: [],
+            findings: inner._findings,
           };
         });
       }
+      // Uniform with the assign/plain-call sites: merge whether this was a
+      // fresh compute() (findings from `inner` just above) or a cache HIT —
+      // e.g. the k=2 pass already probed this exact qid+entry (a callback
+      // with one param has taintedEntry===cbEntry) and stashed its own real
+      // findings on the summary rather than reporting them speculatively.
+      _mergeSummaryFindings(callContext, fn.qid, cbSummary, 'higher-order');
     }
-    for (const f of callContext._findings) {
-      const key = `${f.sinkId}:${fn.file}:${f.line}`;
+    _collectFindings(fn, callContext._findings);
+  }
+  // v0.69 — expose cache to caller (runDeepAnalysis) for incremental persistence.
+  // Dead code suppression: demote findings in functions with zero callers
+  // (except route handlers which are entry points)
+  const calledQids = new Set();
+  if (callGraph.edges) for (const e of callGraph.edges) calledQids.add(typeof e.to === 'string' ? e.to : e.to?.qid);
+  if (callGraph.callersOf) for (const [qid, callers] of callGraph.callersOf) { if (callers && callers.size) calledQids.add(qid); }
+  for (const f of all) {
+    if (!f._funcQid) continue;
+    const fn = callGraph.functions?.get(f._funcQid);
+    if (!fn) continue;
+    if (calledQids.has(f._funcQid)) continue;
+    if (/handler|route|controller|middleware|endpoint/i.test(fn.name || '')) continue;
+    f._inDeadCode = true;
+    const dg = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
+    if (dg[f.severity]) f.severity = dg[f.severity];
+  }
+  Object.defineProperty(all, '_summaryCache', { value: summaryCache, enumerable: false });
+  return all;
+
+  // Dedup + map a raw findings array (from analyzeFunction's callContext)
+  // into the reported IR-TAINT shape, attributed to `fn`. Used directly by
+  // the main loop and the empty-entry pre-pass (both analyze under an entry
+  // state that is either empty or true-by-construction, so their findings
+  // are unconditionally real). The class-field and k=2 pre-passes are
+  // speculative (they assume fields/params are tainted without confirming
+  // any real caller ever does that) — see _mergeSummaryFindings, which is
+  // the gate that gives their findings a chance to be reported only once a
+  // genuine caller is established.
+  function _collectFindings(attributedFn, srcFindings) {
+    for (const f of srcFindings) {
+      const key = `${f.sinkId}:${attributedFn.file}:${f.line}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      const fn = attributedFn;
       all.push({
         id: `ir-taint:${fn.file}:${f.line}:${f.sinkId}`,
         file: fn.file,
@@ -1063,22 +1192,5 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       });
     }
   }
-  // v0.69 — expose cache to caller (runDeepAnalysis) for incremental persistence.
-  // Dead code suppression: demote findings in functions with zero callers
-  // (except route handlers which are entry points)
-  const calledQids = new Set();
-  if (callGraph.edges) for (const e of callGraph.edges) calledQids.add(typeof e.to === 'string' ? e.to : e.to?.qid);
-  if (callGraph.callersOf) for (const [qid, callers] of callGraph.callersOf) { if (callers && callers.size) calledQids.add(qid); }
-  for (const f of all) {
-    if (!f._funcQid) continue;
-    const fn = callGraph.functions?.get(f._funcQid);
-    if (!fn) continue;
-    if (calledQids.has(f._funcQid)) continue;
-    if (/handler|route|controller|middleware|endpoint/i.test(fn.name || '')) continue;
-    f._inDeadCode = true;
-    const dg = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
-    if (dg[f.severity]) f.severity = dg[f.severity];
-  }
-  Object.defineProperty(all, '_summaryCache', { value: summaryCache, enumerable: false });
-  return all;
+
 }
