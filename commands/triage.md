@@ -28,6 +28,12 @@ console.log(JSON.stringify(findings.map(f => ({
   id: f.id, stableId: f.stableId || null, vuln: f.vuln || '(unnamed)',
   file: f.file || null, line: f.line || null, severity: f.severity,
   exploitability: f.exploitability ?? null, confidence: f.confidence ?? null,
+  // Prefer the calibrated probability over the raw ordinal confidence when
+  // one exists for this family — this is what Step 2 must pass through as
+  // reportedConfidence so posture/calibration-drift.js has something to
+  // compare against realized triage accuracy. Without it, the drift alarm
+  // can never fire on real data (Stage 2 measurement-completeness audit).
+  reportedConfidence: (typeof f.calibrated_confidence === 'number' ? f.calibrated_confidence : f.confidence) ?? null,
   cwe: f.cwe || null, snippet: (f.snippet || '').slice(0, 80),
 })), null, 2));
 " -- "$1"
@@ -41,7 +47,7 @@ Present each finding in the returned list to the user (in conversation, or via `
 node -e "
 const fs = require('fs');
 const path = require('path');
-const [stableIdOrId, vuln, file, line, family, snippet, verdict, ...reasonParts] = process.argv.slice(1);
+const [stableIdOrId, vuln, file, line, family, snippet, reportedConfidenceRaw, verdict, ...reasonParts] = process.argv.slice(1);
 const reason = reasonParts.join(' ').slice(0, 280);
 if (!['tp','fp','wontfix'].includes(verdict)) { console.error('verdict must be tp|fp|wontfix, got: ' + verdict); process.exit(1); }
 
@@ -67,6 +73,9 @@ feedback.entries.push({
   line: line === '-' ? null : Number(line),
   vuln: vuln === '-' ? null : vuln,
   sinkSnippet: (snippet === '-' ? '' : snippet).slice(0, 200),
+  // What the engine reported for this finding at triage time, so
+  // posture/calibration-drift.js can compare it against realized accuracy.
+  reportedConfidence: (reportedConfidenceRaw === '-' || reportedConfidenceRaw === undefined) ? null : Number(reportedConfidenceRaw),
   at: new Date().toISOString(),
 });
 fs.mkdirSync(path.dirname(FEEDBACK), { recursive: true });
@@ -80,10 +89,10 @@ fs.writeFileSync(FEEDBACK, JSON.stringify(feedback, null, 2));
   } catch { /* best-effort telemetry */ }
   console.log('✓ recorded ' + verdict + ' — ' + feedback.entries.length + ' total entries, applied on next /scan run.');
 })();
-" -- "${STABLE_ID:--}" "${VULN:--}" "${FILE:--}" "${LINE:--}" "${FAMILY:--}" "${SNIPPET:--}" "$VERDICT" "$REASON"
+" -- "${STABLE_ID:--}" "${VULN:--}" "${FILE:--}" "${LINE:--}" "${FAMILY:--}" "${SNIPPET:--}" "${REPORTED_CONFIDENCE:--}" "$VERDICT" "$REASON"
 ```
 
-Set `STABLE_ID`/`VULN`/`FILE`/`LINE`/`FAMILY`/`SNIPPET`/`VERDICT`/`REASON` env vars (or pass `-` for any field you don't have) before invoking this block for each finding the user gives a verdict on. `skip`/`next`/`prev` need no write at all — just move to the next finding in the Step 1 list without calling Step 2.
+Set `STABLE_ID`/`VULN`/`FILE`/`LINE`/`FAMILY`/`SNIPPET`/`REPORTED_CONFIDENCE`/`VERDICT`/`REASON` env vars (or pass `-` for any field you don't have) before invoking this block for each finding the user gives a verdict on — `REPORTED_CONFIDENCE` is the `reportedConfidence` value Step 1 printed for this finding. `skip`/`next`/`prev` need no write at all — just move to the next finding in the Step 1 list without calling Step 2.
 
 Tell the user how many verdicts were recorded and remind them the suppressions take effect on the next `/scan`.
 

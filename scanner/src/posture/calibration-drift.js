@@ -57,12 +57,18 @@ export function computeDrift(scanRoot, opts = {}) {
   const fb = loadTriageFeedback(scanRoot);
   if (!fb.length) return { alarms: [], note: 'no-feedback-data' };
 
-  // Group by family. Each entry should carry: family, verdict ('tp'|'fp'|'wai'),
-  // reportedConfidence (0..1), ts.
+  // Group by family. Each entry should carry: family, verdict ('tp'|'fp'|'wontfix'),
+  // reportedConfidence (0..1), at.
+  // Field names/verdict values here previously didn't match the real
+  // producer (commands/triage.md's Step 2): it writes `at`, not `ts`, and
+  // never wrote `reportedConfidence` at all (fixed there alongside this —
+  // Stage 2 measurement-completeness audit) or a `'wai'` verdict (it only
+  // ever writes 'tp'|'fp'|'wontfix'), so this alarm could never fire against
+  // real triage data regardless of how badly calibration had drifted.
   const byFamily = new Map();
   for (const e of fb) {
-    if (!e || !e.family || !inWindow(e.ts, window)) continue;
-    if (!['tp', 'fp', 'wai'].includes(e.verdict)) continue;
+    if (!e || !e.family || !inWindow(e.at, window)) continue;
+    if (!['tp', 'fp', 'wontfix'].includes(e.verdict)) continue;
     if (typeof e.reportedConfidence !== 'number') continue;
     if (!byFamily.has(e.family)) byFamily.set(e.family, []);
     byFamily.get(e.family).push(e);
@@ -75,7 +81,7 @@ export function computeDrift(scanRoot, opts = {}) {
     const reportedAcc = entries.reduce((acc, e) => acc + e.reportedConfidence, 0) / entries.length;
     const divergence = Math.abs(reportedAcc - realizedAcc);
     if (divergence < threshold) continue;
-    const firstTs = entries.map(e => e.ts).filter(Boolean).sort()[0];
+    const firstTs = entries.map(e => e.at).filter(Boolean).sort()[0];
     alarms.push({
       alarm: true,
       since: firstTs,

@@ -121,6 +121,60 @@ test('S6: Step 2 does not persist a verdict when AGENTIC_SECURITY_LEARN is unset
   } finally { await p.cleanup(); }
 });
 
+// Stage 2 measurement-completeness audit: posture/calibration-drift.js needs
+// each triage-feedback.json entry's reportedConfidence to compare against
+// realized accuracy, but nothing ever captured it — Step 1 now emits it
+// (preferring calibrated_confidence over the raw ordinal confidence) and
+// Step 2 now threads it through into the persisted entry.
+test('S6: Step 1 emits reportedConfidence, preferring calibrated_confidence over the raw ordinal confidence', async () => {
+  const script = extractStep('### Step 1 — list findings needing triage');
+  const p = await mkProject([
+    { id: 'F1', stableId: 'S1', vuln: 'SQLi', confidence: 0.9, calibrated_confidence: 0.42 },
+    { id: 'F2', stableId: 'S2', vuln: 'XSS', confidence: 0.7 },
+  ]);
+  try {
+    const r = runStep(script, { cwd: p.dir });
+    assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+    const parsed = JSON.parse(r.stdout);
+    const f1 = parsed.find((f) => f.stableId === 'S1');
+    const f2 = parsed.find((f) => f.stableId === 'S2');
+    assert.equal(f1.reportedConfidence, 0.42, 'must prefer calibrated_confidence when present');
+    assert.equal(f2.reportedConfidence, 0.7, 'falls back to the raw ordinal confidence when no calibration exists');
+  } finally { await p.cleanup(); }
+});
+
+test('S6: Step 2 records reportedConfidence when passed through', async () => {
+  const script = extractStep('### Step 2 — record one verdict');
+  const p = await mkProject([]);
+  try {
+    const r = runStep(script, {
+      cwd: p.dir,
+      env: {
+        AGENTIC_SECURITY_LEARN: '1',
+        STABLE_ID: 'S1', VULN: 'SQL injection', FILE: 'a.js', LINE: '5', FAMILY: 'sqli', SNIPPET: '-',
+        REPORTED_CONFIDENCE: '0.42', VERDICT: 'tp', REASON: 'confirmed via manual review',
+      },
+    });
+    assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+    const feedback = JSON.parse(fs.readFileSync(path.join(p.dir, '.agentic-security', 'triage-feedback.json'), 'utf8'));
+    assert.equal(feedback.entries[0].reportedConfidence, 0.42);
+  } finally { await p.cleanup(); }
+});
+
+test('S6: Step 2 records reportedConfidence as null when omitted (no false precision)', async () => {
+  const script = extractStep('### Step 2 — record one verdict');
+  const p = await mkProject([]);
+  try {
+    const r = runStep(script, {
+      cwd: p.dir,
+      env: { AGENTIC_SECURITY_LEARN: '1', STABLE_ID: 'S1', VERDICT: 'tp' },
+    });
+    assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+    const feedback = JSON.parse(fs.readFileSync(path.join(p.dir, '.agentic-security', 'triage-feedback.json'), 'utf8'));
+    assert.equal(feedback.entries[0].reportedConfidence, null);
+  } finally { await p.cleanup(); }
+});
+
 test('S6: Step 2 rejects an invalid verdict rather than recording garbage', async () => {
   const script = extractStep('### Step 2 — record one verdict');
   const p = await mkProject([]);

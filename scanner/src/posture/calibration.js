@@ -145,7 +145,13 @@ export function loadCalibrationHistory(scanRoot) {
       for (const f of Object.values(triage.findings)) {
         const fam = f.family || 'unknown';
         if (!triageFams[fam]) triageFams[fam] = { tp: 0, fp: 0 };
-        if (f.state === 'fixed' && lastFixedIsAutomatic.get(f.id) !== true) triageFams[fam].tp++;
+        // Require POSITIVE proof of a manual transition (=== false), not
+        // merely the absence of proof of an automatic one (!== true) — the
+        // latter fails OPEN: a finding with no transition record at all
+        // (lastFixedIsAutomatic.get returns undefined) counted as a manual
+        // TP by default, exactly the machine-generated-signal failure mode
+        // this whole block's comment states it exists to prevent.
+        if (f.state === 'fixed' && lastFixedIsAutomatic.get(f.id) === false) triageFams[fam].tp++;
         else if (f.state === 'false-positive') triageFams[fam].fp++;
       }
       merge({ families: triageFams });

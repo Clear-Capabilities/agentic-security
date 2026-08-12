@@ -199,6 +199,29 @@ test('EA-01: an automatically auto-closed finding is not counted as a true posit
   } finally { await p.cleanup(); }
 });
 
+// Stage 2 measurement-completeness audit: a 'fixed' finding with NO
+// transition record at all (e.g. imported/migrated triage.json, or any
+// write path that updates state without appending a transition) used to
+// count as a manual TP by default — the check was `!== true` (absence of
+// proof of automatic) rather than `=== false` (positive proof of manual),
+// which fails OPEN exactly where this whole mechanism exists to fail
+// closed on unproven signal.
+test('EA-01: a fixed finding with NO transition record is not counted as a true positive (fails closed, not open)', async () => {
+  const p = await mkProject();
+  try {
+    writeTriage(p.dir, {
+      findings: {
+        'F-1': { id: 'F-1', family: 'made-up-family-xyz', state: 'fixed', fixed_at: '2026-01-02T00:00:00Z' },
+      },
+      transitions: [], // no record of how this became "fixed"
+    });
+    const h = loadCalibrationHistory(p.dir);
+    const fam = h.families['made-up-family-xyz'];
+    assert.equal(fam ? fam.tp : 0, 0,
+      'an untracked "fixed" state must not manufacture a TP absent positive proof of a manual transition');
+  } finally { await p.cleanup(); }
+});
+
 test('EA-01: a manually-transitioned fixed finding IS counted as a true positive', async () => {
   const p = await mkProject();
   try {

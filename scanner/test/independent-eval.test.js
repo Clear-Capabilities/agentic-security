@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { prf, matchFamily, scoreCorpus, checkGate, normPath } from '../../bench/independent-eval/score.mjs';
+import { prf, matchFamily, scoreCorpus, checkGate, normPath, bestConfidence } from '../../bench/independent-eval/score.mjs';
 
 test('prf: standard confusion cell', () => {
   const r = prf({ tp: 3, fp: 1, fn: 1 });
@@ -31,6 +31,25 @@ test('matchFamily: family string and CWE containment', () => {
   assert.equal(matchFamily({ cwe: '89' }, { cwe: '89' }), true);
   assert.equal(matchFamily({ cwe: '22' }, { cwe: 'CWE-89' }), false);
   assert.equal(matchFamily({ family: 'x', cwe: '89' }, { family: 'y', cwe: 'CWE-89' }), true); // cwe rescues
+});
+
+// Stage 2 measurement-completeness audit: runner.mjs's finding-attribution
+// step checked f.confidence (the ordinal heuristic) BEFORE a fallback to
+// f.calibratedConfidence — a camelCase field no producer anywhere in the
+// codebase ever writes (the real field, posture/calibration.js's, is
+// snake_case: calibrated_confidence). Since f.confidence is set on nearly
+// every finding, the fallback was permanently dead, so Brier/ECE were always
+// scored against the uncalibrated heuristic, never the calibrated
+// probability this harness exists to validate.
+test('bestConfidence prefers the real calibrated_confidence field over the raw ordinal confidence', () => {
+  assert.equal(bestConfidence({ confidence: 0.9, calibrated_confidence: 0.3 }), 0.3,
+    'the calibrated probability must win even though confidence is also set');
+  assert.equal(bestConfidence({ confidence: 0.9 }), 0.9,
+    'falls back to confidence when no calibration exists for this family');
+  assert.equal(bestConfidence({ confidence: 0.9, calibratedConfidence: 0.1 }), 0.9,
+    'the never-written camelCase field must not be consulted');
+  assert.equal(bestConfidence({}), 0.5, 'falls back to the neutral prior with no signal at all');
+  assert.equal(bestConfidence(null), 0.5);
 });
 
 test('normPath strips ./ and normalizes slashes', () => {

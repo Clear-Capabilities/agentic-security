@@ -25,6 +25,24 @@ export function normPath(p) {
 }
 
 /**
+ * Best confidence signal for calibration scoring — prefers the calibrated
+ * PROBABILITY (posture/calibration.js's calibrated_confidence, the real
+ * per-family P(TP) when enough held-out history exists) over the raw
+ * ordinal `confidence` heuristic. calibration.js's own header draws this
+ * distinction explicitly: confidence is "an ordinal score... a '0.8' today
+ * doesn't mean '80% likely TP.'" `confidence` is set on virtually every
+ * finding, so it must be the FALLBACK, not the first check, or Brier/ECE
+ * here score the uncalibrated heuristic instead of the number this harness
+ * exists to validate.
+ */
+export function bestConfidence(f) {
+  if (!f) return 0.5;
+  if (typeof f.calibrated_confidence === 'number') return f.calibrated_confidence;
+  if (typeof f.confidence === 'number') return f.confidence;
+  return 0.5;
+}
+
+/**
  * Does a produced finding satisfy an entry's labeled class?
  * Matches on family string OR on CWE containment (the manifest may carry
  * either; the engine sets both `family` and `cwe`).

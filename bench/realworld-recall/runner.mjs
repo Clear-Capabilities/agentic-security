@@ -100,7 +100,11 @@ async function scanDir(dir) {
     const { scan } = await runScan(tmp);
     return (normalizeFindings(scan) || []).map((f) => ({
       id: f.id || f.stableId, file: f.file, line: f.line, family: f.family, cwe: f.cwe, vuln: f.vuln,
-      confidence: typeof f.confidence === 'number' ? f.confidence : (typeof f.calibratedConfidence === 'number' ? f.calibratedConfidence : 0.5),
+      // Same fix as bench/independent-eval/runner.mjs: prefer the calibrated
+      // probability (real field name, snake_case) over the raw ordinal
+      // confidence heuristic, and correct the field name — the previous
+      // camelCase fallback was never written by any producer.
+      confidence: typeof f.calibrated_confidence === 'number' ? f.calibrated_confidence : (typeof f.confidence === 'number' ? f.confidence : 0.5),
     }));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

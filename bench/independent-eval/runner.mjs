@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { runScan } from '../../scanner/src/runScan.js';
 import { normalizeFindings } from '../../scanner/src/report/index.js';
 import { evaluateHeldOut, summarize, summarizePerLanguage } from '../../scanner/src/posture/holdout-eval.js';
-import { scoreCorpus, checkGate, normPath } from './score.mjs';
+import { scoreCorpus, checkGate, normPath, bestConfidence } from './score.mjs';
 
 import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -136,9 +136,7 @@ async function main() {
     let rel = f.file;
     if (path.isAbsolute(rel)) rel = path.relative(tmp, rel);
     rel = normPath(rel);
-    const conf = typeof f.confidence === 'number' ? f.confidence
-      : typeof f.calibratedConfidence === 'number' ? f.calibratedConfidence : 0.5;
-    (byFile[rel] ||= []).push({ family: f.family, cwe: f.cwe, confidence: conf });
+    (byFile[rel] ||= []).push({ family: f.family, cwe: f.cwe, confidence: bestConfidence(f) });
   }
 
   // Remap onto exact manifest keys (tolerate path-prefix differences).

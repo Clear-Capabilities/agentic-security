@@ -92,15 +92,22 @@ export function recordTriage(scanRoot, { family, verdict, stableId }) {
   const data = _read(scanRoot);
   data.productionTriage = data.productionTriage || {};
   const row = data.productionTriage[family] = data.productionTriage[family] || { tp: 0, fp: 0, wontfix: 0, lastAt: null };
+  void stableId;
+  // Already frozen from a previous call — `_capped: true` was persisted at
+  // the moment the cap was crossed (below), so this is a deliberate,
+  // visible freeze: nothing new is written, but nothing was silently lost
+  // either. Previously the crossing call itself never called _write, so
+  // `_capped` never reached disk and EVERY call after the cap — not just
+  // more of the same verdict, any verdict — silently vanished with the
+  // on-disk row frozen one write short of the real crossing point.
+  if (row._capped) return row;
   row[verdict] = (row[verdict] || 0) + 1;
   row.lastAt = new Date().toISOString();
   // Cap per-family rows so a runaway triage script can't bloat the file.
+  // The crossing call still writes — that's what makes the freeze visible.
   if ((row.tp || 0) + (row.fp || 0) + (row.wontfix || 0) > 10_000) {
-    // Stop accumulating; the trend is well-established by now.
     row._capped = true;
-    return row;
   }
-  void stableId;
   _write(scanRoot, data);
   return row;
 }
