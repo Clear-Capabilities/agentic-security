@@ -148,6 +148,62 @@ test('synthesize_sca_upgrade: produces a structured plan for valid SCA finding',
   } finally { await sess.cleanup(); }
 });
 
+// Stage 4 correctness audit: every test above builds last-scan.json by hand
+// (`{ supplyChain: [...] }`, findings carrying `type: 'vulnerable_dep'`
+// directly) — never through the real persistence path the CLI actually
+// uses. In production, last-scan.json is written from `toJSON(scan, meta)`
+// (bin/agentic-security.js), whose `findings` array is
+// `normalizeFindings(scan)` — and normalizeFindings' supplyChain merge loop
+// (report/index.js) builds each output object from an explicit field
+// allowlist that does NOT include `type`. So a real scan's persisted SCA
+// finding has no `.type` field and no top-level `.supplyChain` array at
+// all; `_findById` locates it via `scan.findings` (the only array that
+// exists), returns an object where `f.type` is `undefined`, and
+// `f.type !== 'vulnerable_dep'` is therefore always true. Both
+// synthesize_sca_upgrade and apply_sca_upgrade refuse EVERY real SCA
+// finding an agent could ever actually obtain from a scan — the hand-built
+// fixtures above could never catch this because they never exercise
+// toJSON/normalizeFindings at all.
+test('synthesize_sca_upgrade: succeeds on a finding_id taken from a REAL toJSON()-persisted scan, not a hand-built fixture', async () => {
+  const { runFullScan } = await import('../src/engine.js');
+  const { toJSON } = await import('../src/report/index.js');
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('querybatch')) return { ok: true, json: async () => ({ results: [{ vulns: [{ id: 'GHSA-real-persist-0001' }] }] }) };
+    if (u.includes('/v1/vulns/')) return { ok: true, json: async () => ({
+      id: 'GHSA-real-persist-0001', summary: 'real-persistence test vuln',
+      affected: [{ ranges: [{ events: [{ fixed: '4.17.21' }] }] }],
+      severity: [{ type: 'CVSS_V3', score: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' }],
+      database_specific: { severity: 'HIGH' },
+    }) };
+    return { ok: true, json: async () => ({}) };
+  };
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'as-sca-real-'));
+  try {
+    await fsp.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 't', version: '0.0.1', dependencies: { lodash: '4.17.20' } }));
+    const scan = await runFullScan({ fileContents: {}, depFileContents: { 'package.json': fs.readFileSync(path.join(dir, 'package.json'), 'utf8') }, scanRoot: dir });
+    const persisted = toJSON(scan, {});
+    const scaFinding = persisted.findings.find(f => f.kind === 'sca' && f.package === 'lodash');
+    assert.ok(scaFinding, 'expected a real SCA finding for lodash in the persisted scan');
+
+    const stateDir = path.join(dir, '.agentic-security');
+    await fsp.mkdir(stateDir, { recursive: true });
+    const body = JSON.stringify(persisted);
+    await fsp.writeFile(path.join(stateDir, 'last-scan.json'), body);
+    await fsp.writeFile(path.join(stateDir, 'last-scan.json.sig'), signLastScan(body));
+    const { handleRequest } = createServer({ sessionRoot: dir });
+
+    const r = await call(handleRequest, 'synthesize_sca_upgrade', { finding_id: scaFinding.id });
+    const p = payload(r);
+    assert.notEqual(p.reason, 'finding is not an SCA vulnerable_dep — use synthesize_fix for SAST findings',
+      `synthesize_sca_upgrade refused a real SCA finding taken straight from last-scan.json: ${JSON.stringify(p)}`);
+  } finally {
+    globalThis.fetch = origFetch;
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ── MCP apply_sca_upgrade ────────────────────────────────────────────────────
 
 test('apply_sca_upgrade: refuses without confirm:true', async () => {

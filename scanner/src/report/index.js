@@ -346,6 +346,12 @@ export function normalizeFindings(scan){
     out.push({
       id: fingerprint(sc),
       kind: 'sca',
+      // sc.type discriminates vulnerable_dep | unpinned_dep | no_lockfile
+      // (src/sca/CLAUDE.md). Every MCP SCA-upgrade tool checks this field
+      // on findings looked up from the PERSISTED (toJSON-serialized) scan —
+      // dropping it here made synthesize_sca_upgrade/apply_sca_upgrade
+      // refuse every real SCA finding unconditionally.
+      type: sc.type || 'vulnerable_dep',
       severity: sc.severity || 'high',
       vuln: scVuln,
       cwe: sc.cwe || null,
