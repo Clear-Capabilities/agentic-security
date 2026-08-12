@@ -18,20 +18,38 @@ import { CATALOG } from './catalog.js';
 
 // Map a finding to a sanitizer family using its CWE first (stable) and its vuln
 // text second (human-authored, so only a fallback).
+//
+// CWE-22 (path traversal) maps to the catalog's real 'path' family
+// (py-pathlib-resolve / cs-path-getfullpath / kt-path-canonical, all
+// appliesTo:['path']) — it used to collapse to 'url' alongside CWE-918/601,
+// which meant those genuine path-containment sanitizers could never match a
+// CWE-22 finding at all (permanently inert gate for that CWE), AND any
+// url-family sanitizer (URL-percent-encoding: encodeURIComponent etc.)
+// satisfied the family check for CWE-22/918/601 findings even though
+// percent-encoding neutralizes none of them. SSRF (CWE-918) and open
+// redirect (CWE-601) are host/scheme allow-list problems, not encoding
+// problems, and the catalog has no dedicated family for either — mapping
+// them to a family with zero real catalog matches (rather than borrowing
+// 'url') means this gate correctly never fires for them, leaving that
+// containment to engine.js's separate dropGuardedFindings host-allowlist
+// recognition instead of a false "proven clean" from an unrelated encoder.
 const _CWE_FAMILY = {
   'CWE-89': 'sql',
   'CWE-79': 'xss',
   'CWE-78': 'cmd',
-  'CWE-22': 'url',
-  'CWE-918': 'url',
-  'CWE-601': 'url',
+  'CWE-22': 'path',
+  'CWE-918': 'ssrf-host-allowlist-only',   // no catalog family — see above
+  'CWE-601': 'redirect-allowlist-only',    // no catalog family — see above
 };
 
 const _TEXT_FAMILY = [
   [/sql/i, 'sql'],
   [/xss|cross-site scripting/i, 'xss'],
   [/command injection/i, 'cmd'],
-  [/path traversal|ssrf|redirect/i, 'url'],
+  [/path traversal/i, 'path'],
+  // No catalog family for ssrf/redirect — deliberately no fallback entry
+  // (see the _CWE_FAMILY comment above); familyOfFinding returns null and
+  // applySanitizerGate's `if (!fam) continue;` safely no-ops.
 ];
 
 export function familyOfFinding(f) {

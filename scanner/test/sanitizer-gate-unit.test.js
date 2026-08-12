@@ -44,3 +44,41 @@ test('no sanitizersOnPath leaves the gate a no-op', () => {
 test('familyOfFinding prefers the CWE over the human-authored vuln text', () => {
   assert.equal(familyOfFinding({ cwe: 'CWE-89', vuln: 'looks like xss' }), 'sql');
 });
+
+// Stage 3 correctness audit (detection depth): CWE-22/918/601 all collapsed
+// to the catalog's 'url' family. Two real consequences: (a) CWE-22's real
+// containment sanitizers (py-pathlib-resolve/cs-path-getfullpath/
+// kt-path-canonical, all appliesTo:['path']) could never match a CWE-22
+// finding at all, since the finding was mapped to 'url' not 'path' — the
+// gate was permanently inert for path traversal; (b) a url-family
+// URL-percent-encoder (encodeURIComponent etc.) satisfied the family check
+// for CWE-918 (SSRF) and CWE-601 (open redirect) findings, even though
+// percent-encoding a hostname does nothing to stop either — both are
+// host/scheme allow-list problems, not encoding problems. A live-exploitable
+// SSRF (encodeURIComponent(req.query.host) used directly as a fetch target)
+// would have been marked "proven clean" by this gate.
+test('a url-family encoder does NOT clear an SSRF (CWE-918) finding', () => {
+  const f = finding({ cwe: 'CWE-918', vuln: 'Server-Side Request Forgery' });
+  applySanitizerGate([f], { sanitizersOnPath: { f1: ['encodeURIComponent'] } });
+  assert.notEqual(f.sanitized, true,
+    'URL-percent-encoding a hostname does not neutralize SSRF — this must not be marked sanitized');
+});
+
+test('a url-family encoder does NOT clear an open-redirect (CWE-601) finding', () => {
+  const f = finding({ cwe: 'CWE-601', vuln: 'Open Redirect' });
+  applySanitizerGate([f], { sanitizersOnPath: { f1: ['encodeURIComponent'] } });
+  assert.notEqual(f.sanitized, true);
+});
+
+test('a real path-containment sanitizer DOES clear a CWE-22 (path traversal) finding', () => {
+  const f = finding({ cwe: 'CWE-22', vuln: 'Path Traversal' });
+  applySanitizerGate([f], { sanitizersOnPath: { f1: ['resolve'] } }); // py-pathlib-resolve, appliesTo:['path']
+  assert.equal(f.sanitized, true, 'a real path-family sanitizer must clear a CWE-22 finding');
+  assert.equal(f.sanitizerProof.family, 'path');
+});
+
+test('a url-family encoder does NOT clear a CWE-22 (path traversal) finding', () => {
+  const f = finding({ cwe: 'CWE-22', vuln: 'Path Traversal' });
+  applySanitizerGate([f], { sanitizersOnPath: { f1: ['encodeURIComponent'] } });
+  assert.notEqual(f.sanitized, true, 'URL-encoding does not contain a path traversal');
+});
