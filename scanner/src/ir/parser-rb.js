@@ -21,6 +21,8 @@
 // failure (heredocs, multi-line strings can confuse the regex parser).
 
 import * as crypto from 'node:crypto';
+import { callSitesFromCfg } from './call-sites.js';
+import { matchBalancedCall } from './balanced-call.js';
 
 // `[ \t]*` before the optional parameter list, NOT `\s*`.
 //
@@ -121,10 +123,15 @@ function _lowerExpr(text) {
   if (/^(true|false|nil)\b/.test(s)) return { kind: 'literal', value: s };
   // Symbol
   if (/^:\w+/.test(s)) return { kind: 'literal', value: s };
-  // Call: obj.method(args) or method(args)
-  const callMatch = s.match(/^([\w.]+)\s*\((.*)\)\s*$/s);
+  // Call: obj.method(args) or method(args). matchBalancedCall finds the
+  // paren that actually balances the FIRST '(' — not the greedy-to-end-of-
+  // string match the old `/\((.*)\)\s*$/` used, which corrupted the
+  // argument text for a chained call (`sanitize(x).strip` produced
+  // args="x).strip", which then fell through to {kind:'unknown'} and
+  // silently dropped x).
+  const callMatch = matchBalancedCall(s, /^([\w.]+)/);
   if (callMatch) {
-    return { kind: 'call', callee: callMatch[1], args: _splitTopLevelCommas(callMatch[2]).map(_lowerExpr) };
+    return { kind: 'call', callee: callMatch.callee, args: _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr) };
   }
   // Method call without parens is very common in Ruby but hard to detect
   // reliably with regex. We handle the explicit-paren form above.
@@ -190,9 +197,9 @@ function _lowerStmt(stmt, line) {
     return { kind: 'assign', line, target: assign[1], source: _lowerExpr(assign[2]) };
   }
   // Statement-form call with parens
-  const call = s.match(/^([\w.]+)\s*\((.*)\)\s*$/s);
+  const call = matchBalancedCall(s, /^([\w.]+)/);
   if (call) {
-    return { kind: 'call', line, callee: call[1], args: _splitTopLevelCommas(call[2]).map(_lowerExpr) };
+    return { kind: 'call', line, callee: call.callee, args: _splitTopLevelCommas(call.argsText).map(_lowerExpr) };
   }
   // Statement-form call without parens (common Ruby idiom): redirect_to expr
   const bareCall = s.match(/^([a-z_]\w*)\s+(.+)$/s);
@@ -309,10 +316,22 @@ export function parseRubyFile(file, code) {
     const exit = _addNode(nodes, { kind: 'exit', line: startLine });
     const tail = _buildCfg(extracted.body, nodes, entry, startLine + 1);
     _linkNodes(nodes, tail, exit);
+    const cfg = { entry, exit, nodes };
     functions.push({
       qid: _qid(file, name, startLine, extracted.body),
       name, line: startLine, params, file,
-      cfg: { entry, exit, nodes },
+      cfg,
+      // Ruby never emitted `fn.calls` at all (ir/CLAUDE.md documents this
+      // as a known gap) — tabulation.js, dataflow/index.js and
+      // callgraph.js all read it to build call edges, so an absent array
+      // is indistinguishable from "calls nothing," disabling ALL Ruby
+      // interprocedural taint. call-sites.js's callSitesFromCfg is the
+      // same language-agnostic CFG walk parser-py-cst.js already uses for
+      // exactly this; Ruby's node shapes ('call' with callee/args,
+      // 'assign' with source, 'return'/'throw' with value, 'if' with
+      // cond) match its documented contract already, so no new lowering
+      // logic is needed here — only wiring the call.
+      calls: callSitesFromCfg(cfg),
     });
     DEF_RE.lastIndex = extracted.end;
   }

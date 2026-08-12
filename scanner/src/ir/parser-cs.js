@@ -27,6 +27,7 @@
 
 import * as crypto from 'node:crypto';
 import { callSitesFromCfg } from './call-sites.js';
+import { matchBalancedCall } from './balanced-call.js';
 
 const METHOD_RE = new RegExp(
   '(?:^|[\\s;{}])(?:public|private|protected|internal|static|virtual|override|async|sealed|abstract|new|readonly|partial)' +
@@ -88,18 +89,21 @@ function _lowerExpr(text) {
   // per-file, so the crash surfaced only as "this file has no IR" — 12 of 21 C#
   // corpus entries, and the catalog's own `cs-sqlcommand` rule ("SQL Injection
   // (new SqlCommand with concatenated user input)") could never fire.
-  const newMatch = s.match(/^new\s+([\w.]+)\s*\((.*)\)\s*$/s);
+  const newMatch = matchBalancedCall(s, /^new\s+([\w.]+)/);
   if (newMatch) {
-    const callee = newMatch[1].split('.').pop();
-    const args = _splitTopLevelCommas(newMatch[2]).map(_lowerExpr);
+    const callee = newMatch.callee.split('.').pop();
+    const args = _splitTopLevelCommas(newMatch.argsText).map(_lowerExpr);
     return { kind: 'call', callee, args, isNew: true };
   }
-  // Call: foo.bar(args) or Bar(args). Find the LAST '(' at depth 0.
-  const callMatch = s.match(/^([\w.]+)\s*\((.*)\)\s*$/s);
+  // Call: foo.bar(args) or Bar(args). matchBalancedCall finds the paren
+  // that actually balances the FIRST '(' — not the greedy-to-end-of-string
+  // match the old `/\((.*)\)\s*$/` used, which corrupted the argument text
+  // for a chained call (`Sanitize(x).Trim()` produced argsText="x).Trim(",
+  // which then fell through to {kind:'unknown'} and silently dropped x).
+  const callMatch = matchBalancedCall(s, /^([\w.]+)/);
   if (callMatch) {
-    const callee = callMatch[1];
-    const args = _splitTopLevelCommas(callMatch[2]).map(_lowerExpr);
-    return { kind: 'call', callee, args };
+    const args = _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr);
+    return { kind: 'call', callee: callMatch.callee, args };
   }
   // String concat / interpolation — heuristic.
   //
@@ -189,9 +193,9 @@ function _lowerStmt(stmt, line) {
     return { kind: 'assign', line, target, source: _lowerExpr(sourceText) };
   }
   // statement-form call
-  const cm = s.match(/^([A-Za-z_][\w.]*)\s*\((.*)\)\s*$/s);
+  const cm = matchBalancedCall(s, /^([A-Za-z_][\w.]*)/);
   if (cm) {
-    return { kind: 'call', line, callee: cm[1], args: _splitTopLevelCommas(cm[2]).map(_lowerExpr) };
+    return { kind: 'call', line, callee: cm.callee, args: _splitTopLevelCommas(cm.argsText).map(_lowerExpr) };
   }
   return { kind: 'unknown', line, text: s };
 }

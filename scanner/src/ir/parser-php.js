@@ -19,6 +19,7 @@
 
 import * as crypto from 'node:crypto';
 import { callSitesFromCfg } from './call-sites.js';
+import { matchBalancedCall } from './balanced-call.js';
 
 const FUNC_RE = new RegExp(
   '(?:^|[\\n;{}]|<\\?php|<\\?)\\s*' +
@@ -81,17 +82,22 @@ function _lowerExpr(text) {
   }
   // Variable
   if (/^\$[A-Za-z_]\w*$/.test(s)) return { kind: 'ident', name: s };
-  // Method call: $obj->method(args) or ClassName::method(args)
-  const methodCall = s.match(/^(\$[\w]+(?:->[\w]+)*|[A-Za-z_][\w]*(?:::[\w]+)*)\s*\((.*)\)\s*$/s);
+  // Method call: $obj->method(args) or ClassName::method(args).
+  // matchBalancedCall finds the paren that actually balances the FIRST
+  // '(' — not the greedy-to-end-of-string match the old `/\((.*)\)\s*$/`
+  // used, which corrupted the argument text for a chained call
+  // (`sanitize($x)->trim()` produced args="$x)->trim(", which then fell
+  // through to {kind:'unknown'} and silently dropped $x).
+  const methodCall = matchBalancedCall(s, /^(\$[\w]+(?:->[\w]+)*|[A-Za-z_][\w]*(?:::[\w]+)*)/);
   if (methodCall) {
-    const callee = methodCall[1].replace(/->/g, '.').replace(/::/g, '.');
-    const args = _splitTopLevelCommas(methodCall[2]).map(_lowerExpr);
+    const callee = methodCall.callee.replace(/->/g, '.').replace(/::/g, '.');
+    const args = _splitTopLevelCommas(methodCall.argsText).map(_lowerExpr);
     return { kind: 'call', callee, args };
   }
   // Function call: func(args)
-  const funcCall = s.match(/^([A-Za-z_][\w]*)\s*\((.*)\)\s*$/s);
+  const funcCall = matchBalancedCall(s, /^([A-Za-z_][\w]*)/);
   if (funcCall) {
-    return { kind: 'call', callee: funcCall[1], args: _splitTopLevelCommas(funcCall[2]).map(_lowerExpr) };
+    return { kind: 'call', callee: funcCall.callee, args: _splitTopLevelCommas(funcCall.argsText).map(_lowerExpr) };
   }
   // Concat with .
   if (s.includes('.') && /["'\$]/.test(s)) {
@@ -170,10 +176,10 @@ function _lowerStmt(stmt, line) {
     return { kind: 'assign', line, target: assign[1], source: _lowerExpr(assign[2]) };
   }
   // Statement-form call
-  const call = s.match(/^(\$[\w]+(?:->[\w]+)*|[A-Za-z_][\w]*(?:::[\w]+)*)\s*\((.*)\)\s*$/s);
+  const call = matchBalancedCall(s, /^(\$[\w]+(?:->[\w]+)*|[A-Za-z_][\w]*(?:::[\w]+)*)/);
   if (call) {
-    const callee = call[1].replace(/->/g, '.').replace(/::/g, '.');
-    return { kind: 'call', line, callee, args: _splitTopLevelCommas(call[2]).map(_lowerExpr) };
+    const callee = call.callee.replace(/->/g, '.').replace(/::/g, '.');
+    return { kind: 'call', line, callee, args: _splitTopLevelCommas(call.argsText).map(_lowerExpr) };
   }
   return null;
 }

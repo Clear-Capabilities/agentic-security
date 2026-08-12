@@ -22,6 +22,7 @@
 
 import * as crypto from 'node:crypto';
 import { callSitesFromCfg } from './call-sites.js';
+import { matchBalancedCall } from './balanced-call.js';
 
 const FUNC_RE = new RegExp(
   '(?:^|[\\n;{}])\\s*func\\s+' +
@@ -76,7 +77,11 @@ function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
   if (/^fmt\.Sprintf\s*\(/.test(s)) {
-    const inner = s.slice(s.indexOf('(') + 1, s.lastIndexOf(')'));
+    // Same balanced-paren concern as the call patterns below — a chained
+    // call after fmt.Sprintf(...) (rare but not impossible via a wrapper)
+    // would otherwise have its args text swallow the chain's own parens.
+    const sprintf = matchBalancedCall(s, /^fmt\.Sprintf/);
+    const inner = sprintf ? sprintf.argsText : s.slice(s.indexOf('(') + 1, s.lastIndexOf(')'));
     const parts = _splitTopLevelCommas(inner).map(_lowerExpr);
     return { kind: 'tpl', parts };
   }
@@ -91,12 +96,15 @@ function _lowerExpr(text) {
   if (/^"/.test(s) || /^`/.test(s)) return { kind: 'literal', value: s };
   if (/^\d/.test(s)) return { kind: 'literal', value: s };
   if (/^(true|false|nil)\b/.test(s)) return { kind: 'literal', value: s };
-  // Call: foo.Bar(args) or Bar(args)
-  const callMatch = s.match(/^([\w.]+)\s*\((.*)\)\s*$/s);
+  // Call: foo.Bar(args) or Bar(args). matchBalancedCall finds the paren
+  // that actually balances the FIRST '(' — not the greedy-to-end-of-string
+  // match the old `/\((.*)\)\s*$/` used, which corrupted the argument text
+  // for a chained call (`Sanitize(x).Trim()` produced args="x).Trim(",
+  // which then fell through to {kind:'unknown'} and silently dropped x).
+  const callMatch = matchBalancedCall(s, /^([\w.]+)/);
   if (callMatch) {
-    const callee = callMatch[1];
-    const args = _splitTopLevelCommas(callMatch[2]).map(_lowerExpr);
-    return { kind: 'call', callee, args };
+    const args = _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr);
+    return { kind: 'call', callee: callMatch.callee, args };
   }
   // String concat with +
   if (s.includes('+') && /["'`]/.test(s)) {
@@ -220,9 +228,9 @@ function _lowerStmt(stmt, line) {
     return { kind: 'assign', line, target: varDecl[1], source: _lowerExpr(varDecl[2]) };
   }
   // Statement-form call: obj.Method(args) or Method(args)
-  const cm = s.match(/^([\w.]+)\s*\((.*)\)\s*$/s);
+  const cm = matchBalancedCall(s, /^([\w.]+)/);
   if (cm) {
-    return { kind: 'call', line, callee: cm[1], args: _splitTopLevelCommas(cm[2]).map(_lowerExpr) };
+    return { kind: 'call', line, callee: cm.callee, args: _splitTopLevelCommas(cm.argsText).map(_lowerExpr) };
   }
   return null;
 }
