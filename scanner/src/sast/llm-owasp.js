@@ -369,7 +369,10 @@ export function scanLLMOwasp(fp, raw) {
     if (!USER_INJECTED_RAG_RE.test(lines[li])) continue;
     // Suppress if there's an obvious auth or provenance check in the surrounding context
     const ctx20 = _windowText(lines, Math.max(0, li - 10), 20);
-    if (/\b(?:require_auth|is_admin|check_permission|verified_source|provenance|signed|hmac)\b/i.test(ctx20)) break;
+    // continue, not break: a guard near THIS match says nothing about a
+    // later, unrelated match elsewhere in the file — stopping the loop here
+    // would hide every subsequent unguarded instance.
+    if (/\b(?:require_auth|is_admin|check_permission|verified_source|provenance|signed|hmac)\b/i.test(ctx20)) continue;
     push({
       id: `llm-owasp:${fp}:${li + 1}:llm03-user-injected-rag`,
       kind: 'sast', severity: 'high',
@@ -379,7 +382,6 @@ export function scanLLMOwasp(fp, raw) {
       fix: 'Authenticate the submitter and validate content before it enters the knowledge base. Tag each chunk with source, owner, and trust_level metadata at ingest time. At retrieval, filter or down-rank chunks from unverified sources. Scan injected content for prompt-injection markers before storing.',
       confidence: 0.88,
     });
-    break;
   }
 
   // --- LLM03: auto-ingested third-party feed that may be compromised ---

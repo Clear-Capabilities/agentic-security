@@ -51,6 +51,33 @@ test('OWASP LLM Top 10 — clean fixture produces no LLM Top 10 findings', () =>
   );
 });
 
+// Stage 4 correctness audit: the LLM03 "user-injected content enters RAG
+// without source validation" rule scans `for (let li = 0; li < lines.length;
+// li++)` looking for `is_user_injected=True` markers, but BOTH exit paths
+// inside the loop body end in `break` instead of `continue` — the
+// guard-suppression branch (`if (guardNearby) break;`) and the
+// finding-emission branch (`push(...); break;`). Either way, the loop
+// terminates after processing exactly the FIRST match in the file: a
+// second, textually unrelated, genuinely unguarded RAG-injection marker
+// later in the same file is never even examined, let alone flagged.
+test('llm-owasp: a second unguarded is_user_injected marker later in the file still fires (loop must not stop after the first match)', () => {
+  const filler = Array.from({ length: 15 }, (_, i) => `# filler line ${i}`).join('\n');
+  const src = [
+    '# RAG knowledge base ingestion',
+    'def ingest_first(chunk):',
+    '    entry = KBEntry(text=chunk, is_user_injected=True)',
+    '    kb.add(entry)',
+    '',
+    filler,
+    '',
+    'def ingest_second(chunk):',
+    '    entry2 = KBEntry(text=chunk, is_user_injected=True)',
+    '    kb.add(entry2)',
+  ].join('\n');
+  const out = scanLLMOwasp('app/rag.py', src).filter(f => f.owaspLlm === 'LLM03' && /RAG knowledge base/i.test(f.vuln));
+  assert.equal(out.length, 2, `expected both unguarded RAG-injection markers to fire; got ${out.length}: ${JSON.stringify(out.map(f => f.line))}`);
+});
+
 test('OWASP LLM Top 10 — owaspLlm tag persists through report serialization', async () => {
   const { runScan } = await import('../src/runScan.js');
   const { normalizeFindings } = await import('../src/report/index.js');

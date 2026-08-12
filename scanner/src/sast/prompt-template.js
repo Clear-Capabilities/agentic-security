@@ -92,11 +92,6 @@ export function scanPromptTemplate(fp, raw) {
   const seen = new Set();
   const push = (f) => { if (!seen.has(f.id)) { seen.add(f.id); findings.push(f); } };
 
-  // Strong negative for code files: a proper role-separated messages array anywhere
-  // in the file means the developer is using the framework correctly. Suppress
-  // inline-string findings in this case (still scan prompt template files).
-  const hasRoleSeparation = isCodeFile && ROLE_SEPARATION_RE.test(raw);
-
   // CASE 1 — Prompt template files: scan the entire file content for
   // user-input interpolations without isolation markers nearby.
   if (isPromptFile) {
@@ -120,7 +115,7 @@ export function scanPromptTemplate(fp, raw) {
 
   // CASE 2 — Inline prompt strings in code files. Scan f-strings (Python) and
   // template literals (JS/TS) for prompt-shape markers + user interpolation.
-  if (isCodeFile && !hasRoleSeparation) {
+  if (isCodeFile) {
     const candidates = [];
     if (/\.py$/i.test(fpNorm)) {
       let m;
@@ -142,6 +137,13 @@ export function scanPromptTemplate(fp, raw) {
       if (!pyInterp && !jsInterp) continue;
       // Suppress if isolation markers are inside the prompt string itself
       if (ISOLATION_MARKER_RE.test(c.text)) continue;
+      // Suppress if THIS candidate is itself the `content:` value inside a
+      // role-separated messages:[{role,content}] object — checked in a
+      // tight preceding window (same object literal), not file-wide, so a
+      // well-formed call elsewhere in the file can't blanket-suppress an
+      // unrelated, unisolated candidate.
+      const roleWindow = raw.substring(Math.max(0, c.start - 120), c.start);
+      if (ROLE_SEPARATION_RE.test(roleWindow) || /\brole\s*[:=]/i.test(roleWindow)) continue;
       const line = raw.substring(0, c.start).split('\n').length;
       push(_emit(fp, line,
         'Prompt Template: user input interpolated into prompt string without isolation',
