@@ -46,6 +46,31 @@ test('a hardcoded GitHub token does not appear raw in normalized findings, HTML,
   assert.ok(!csv.includes(TOKEN), 'raw token leaked into CSV report');
 });
 
+// Stage 6 correctness audit: scanConfigFiles (the ".env with Real-Looking
+// KEY" detector) was the one secrets-adjacent detector this Stage-4 fix
+// missed — it still shipped the raw, unmasked line as `snippet`. Standard
+// `.env` syntax (KEY=value, unquoted) also evades the MCP redact.js
+// catch-all, which requires a quoted value — so the leak reached
+// explain_finding's response unredacted too, not just the report formats
+// covered by the two tests above.
+test('a committed .env secret does not appear raw in normalized findings, HTML, or CSV output', async () => {
+  const SECRET = 'SuperSecretPass123';
+  const dir = mkTmp('dotenv', {
+    '.env': `DB_PASSWORD=${SECRET}\n`,
+  });
+  const { scan } = await runScan(dir);
+  const norm = normalizeFindings(scan);
+  const envFindings = norm.filter(f => /Committed \.env with Real-Looking/.test(f.vuln || ''));
+  assert.ok(envFindings.length >= 1, 'expected a committed-.env finding');
+  for (const f of envFindings) {
+    assert.ok(!f.snippet.includes(SECRET), `raw .env secret leaked in normalized snippet: ${f.snippet}`);
+  }
+  const html = toHTML(scan, {});
+  assert.ok(!html.includes(SECRET), 'raw .env secret leaked into HTML report');
+  const csv = toCSV(scan, {});
+  assert.ok(!csv.includes(SECRET), 'raw .env secret leaked into CSV report');
+});
+
 test('a split-concatenation secret (secret-concat.js) does not appear raw in normalized findings', async () => {
   const dir = mkTmp('concat', {
     // Split across two literals to evade the contiguous-token scanners —

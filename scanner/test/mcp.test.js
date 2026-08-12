@@ -22,6 +22,7 @@ import { createServer, SERVER_NAME, PROTOCOL_VERSION, CODE_FINGERPRINT } from '.
 import { signLastScan } from '../src/posture/integrity.js';
 import { redactString } from '../src/mcp/redact.js';
 import { verifyAuditLog } from '../src/mcp/audit.js';
+import { recordDecision } from '../src/posture/triage-memory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -201,6 +202,42 @@ test('scan_diff refuses absolute paths outside session root', async () => {
   const r = await call(handleRequest, 'scan_diff', { files: ['/etc/passwd'] });
   assert.equal(r.result.isError, true);
   assert.match(r.result.content[0].text, /escapes session root/);
+  await cleanup();
+});
+
+// Stage 6 correctness audit: scan_diff only ever read result.scan.findings
+// (the SAST channel). scan.secrets is a separate array on the raw runScan()
+// result — its own tool description promises "Use BEFORE writing a
+// Write/Edit to disk so the agent can self-correct", but a file containing
+// a bare hardcoded credential reported findingCount: 0 through it.
+// A GitHub-token-shaped value, not the well-known "...EXAMPLE" AWS test key
+// used elsewhere in this file — that literal string trips the detector's
+// own doc-context suppression (it contains the word "EXAMPLE"), which would
+// make this test assert on suppressed-secret behavior instead of the
+// channel-merge bug it exists to catch.
+const GH_TOKEN = 'ghp_1234567890abcdefghijklmnopqrstuvwxyz12';
+
+test('scan_diff surfaces a hardcoded secret (scan.secrets channel), not just SAST findings', async () => {
+  const { root, handleRequest, cleanup } = await makeSession();
+  await fsp.writeFile(path.join(root, 'app.js'), `const GITHUB_TOKEN = "${GH_TOKEN}";\n`);
+  const r = await call(handleRequest, 'scan_diff', { files: ['app.js'] });
+  const p = payload(r);
+  assert.ok(p.findingCount >= 1, `expected at least one finding for a hardcoded GitHub token, got ${p.findingCount}`);
+  await cleanup();
+});
+
+// Same fix also reused _remediationOf so a fix-string detector's remediation
+// (~127 of engine.js's own detectors set `fix`, not `remediation`) doesn't
+// come back empty through scan_diff — mirroring the CMP-3 fix already
+// established at the report/index.js layer.
+test('scan_diff returns a real remediation for a fix-string detector, not an empty string', async () => {
+  const { root, handleRequest, cleanup } = await makeSession();
+  await fsp.writeFile(path.join(root, 'app.js'), `const GITHUB_TOKEN = "${GH_TOKEN}";\n`);
+  const r = await call(handleRequest, 'scan_diff', { files: ['app.js'] });
+  const p = payload(r);
+  const secretFinding = p.findings.find(f => /GitHub/i.test(f.title || ''));
+  assert.ok(secretFinding, 'expected a GitHub token finding');
+  assert.ok(secretFinding.remediation, `expected non-empty remediation, got ${JSON.stringify(secretFinding.remediation)}`);
   await cleanup();
 });
 
@@ -637,6 +674,24 @@ test('scan_diff refuses a symlink in session root pointing outside', async () =>
   assert.match(r.result.content[0].text, /symbolic link/i);
   await fsp.rm(dir, { recursive: true, force: true });
   await fsp.rm(outside, { recursive: true, force: true });
+});
+
+// Stage 6 correctness audit: query_triage_memory/query_findings_memory
+// returned their backing modules' output verbatim, with no redaction pass
+// — inconsistent with mcp/CLAUDE.md's "Adding a new tool" contract ("Redact
+// every outbound string via redactString/redactFinding"). A triage
+// decision's free-text `reason` is agent/user-authored and could echo
+// secret-shaped content copied from the finding it's about.
+test('query_triage_memory redacts secret-shaped content in a decision reason', async () => {
+  const { root, handleRequest, cleanup } = await makeSession();
+  const SECRET = 'ghp_1234567890abcdefghijklmnopqrstuvwxyz12';
+  recordDecision(root, { vuln: 'Hardcoded token', family: 'hardcoded-secret', file: 'a.js', line: 1 },
+    'false-positive', `Already rotated, the leaked value was ${SECRET}`);
+  const r = await call(handleRequest, 'query_triage_memory', { query: '' });
+  const p = payload(r);
+  assert.ok(p.count >= 1, 'expected the recorded decision to come back');
+  assert.ok(!JSON.stringify(p.results).includes(SECRET), 'raw secret leaked through query_triage_memory');
+  await cleanup();
 });
 
 test('apply_fix refuses to overwrite a symlinked finding.file', async () => {

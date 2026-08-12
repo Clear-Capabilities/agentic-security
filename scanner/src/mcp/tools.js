@@ -21,6 +21,7 @@ import { synthesizeDeterministicPatch } from '../posture/deterministic-fix.js';
 import { verifyLastScan } from '../posture/integrity.js';
 import { analyzeTranscript, formatCacheReport, renderCacheStatusLine } from '../posture/cache-economics.js';
 import { redactString, redactFinding } from './redact.js';
+import { _remediationOf } from '../report/index.js';
 
 // Lazy-loaded: these transitively pull in npm packages (@babel/core and
 // friends) that aren't available in the plugin-cache install path
@@ -342,12 +343,22 @@ export const scan_diff = {
     const wantSet = new Set(Object.keys(fileContents));
     const sevRank = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
     const min = sevRank[severity] ?? 0;
-    const findings = (result.scan.findings || [])
+    // Stage 6 correctness audit: this only ever read result.scan.findings
+    // (the SAST channel) — scan.secrets and scan.logicVulns are separate
+    // arrays on the raw runScan() result (report/index.js's normalizeFindings
+    // is what merges all four channels, and that merge hasn't run yet here).
+    // A file containing a bare hardcoded credential reported findingCount: 0
+    // through a tool whose own description promises "Use BEFORE writing a
+    // Write/Edit to disk so the agent can self-correct". Also reused
+    // _remediationOf so a fix-string detector (the majority of engine.js's
+    // own, ~127 call sites) doesn't silently report an empty `description`
+    // the way reading only `.remediation` did.
+    const findings = [...(result.scan.findings || []), ...(result.scan.secrets || []), ...(result.scan.logicVulns || [])]
       .filter(f => wantSet.has(String(f.file || '').replace(/\\/g, '/')) && (sevRank[f.severity] ?? 0) >= min)
       .map(f => redactFinding({
         id: f.id, severity: f.severity, file: f.file, line: f.line,
         title: f.title || f.vuln, cwe: f.cwe,
-        description: f.description, remediation: f.remediation,
+        description: f.description, remediation: _remediationOf(f),
       }));
     // Harness-anatomy #1: offload when the result exceeds OFFLOAD_THRESHOLD.
     // The agent gets a head+tail preview plus a path it can page through;
@@ -1101,7 +1112,20 @@ export const query_triage_memory = {
   },
   async handler({ query }, ctx) {
     const { queryMemory } = await import('../posture/triage-memory.js');
-    const results = queryMemory(ctx.sessionRoot, query || '');
+    const raw = queryMemory(ctx.sessionRoot, query || '');
+    // Stage 6 correctness audit: this returned queryMemory's output
+    // verbatim, with no redaction pass — every other tool that echoes
+    // scanned-source-derived text redacts it (mcp/CLAUDE.md's "Adding a new
+    // tool" step 3). Round-trip through redactString the same way
+    // redactFinding already does for its own opaque `.trace` field: results
+    // here mix shapes (a triage decision's free-text `reason`, a finding's
+    // `vuln`/`family`/file path), so scrubbing the whole serialized
+    // structure catches secret-shaped substrings regardless of which field
+    // they landed in, rather than hardcoding a field allowlist that could
+    // miss one.
+    let results;
+    try { results = JSON.parse(redactString(JSON.stringify(raw))); }
+    catch { results = raw; }
     return {
       _meta: META,
       count: results.length,
@@ -1129,7 +1153,16 @@ export const query_findings_memory = {
   },
   async handler({ query }, ctx) {
     const { queryFindingsMemory } = await import('../posture/findings-memory.js');
-    return { _meta: META, ...queryFindingsMemory(ctx.sessionRoot, query || '') };
+    const raw = queryFindingsMemory(ctx.sessionRoot, query || '');
+    // Stage 6 correctness audit — same redaction gap and same fix as
+    // query_triage_memory just above: this mixes four differently-shaped
+    // result kinds (finding / triage / history / AGENTS.md text), so a
+    // whole-structure redactString round-trip is applied rather than a
+    // per-field allowlist that could miss one of the four shapes.
+    let body;
+    try { body = JSON.parse(redactString(JSON.stringify(raw))); }
+    catch { body = raw; }
+    return { _meta: META, ...body };
   },
 };
 

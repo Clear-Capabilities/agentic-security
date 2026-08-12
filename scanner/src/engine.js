@@ -5492,12 +5492,21 @@ function scanConfigFiles(fc){
         const[,k,v]=m;
         if(!v||v==='""'||v==="''"||/^(?:change.?me|your[_-]|placeholder|example|xxx+|todo|<|\$\{)/i.test(v))continue;
         if(/(?:password|secret|key|token|api)/i.test(k)){
+          // Stage 6 correctness audit: this was the one secrets-adjacent
+          // detector still shipping the RAW, unmasked source line as
+          // `snippet` — its siblings (scanCredentials/scanEntropySecrets)
+          // were already fixed for this exact leak in the Stage 4 audit.
+          // Nothing downstream re-redacts `snippet`, and the MCP redact.js
+          // catch-all requires a QUOTED value, which standard `.env`
+          // KEY=value syntax never has — so the plaintext committed
+          // secret flowed straight through explain_finding unredacted.
+          const masked=v.length>8?v.substring(0,4)+"…"+v.substring(v.length-4):"…";
           out.push({
             vuln:`Committed .env with Real-Looking ${k}`,
             severity:"high",cwe:"CWE-538",stride:"Information Disclosure",
             fix:`Remove ${k} from committed env files. Use .env.example with placeholders and ignore .env in VCS.`,
             code:`# In .gitignore\n.env\n\n# .env.example (commit)\n${k}=<your-${k.toLowerCase()}>`,
-            file:fp,line:i+1,snippet:ln
+            file:fp,line:i+1,snippet:ln.split(v).join(masked),masked
           });
         }
       }

@@ -18,6 +18,8 @@ import * as path from 'node:path';
 import * as readline from 'node:readline';
 import { runScan } from '../runScan.js';
 import { resetCustomRulesBudget } from '../posture/custom-rules.js';
+import { redactFinding } from '../mcp/redact.js';
+import { _remediationOf } from '../report/index.js';
 
 const PROTOCOL_VERSION = '3.17';
 const SERVER_NAME = 'agentic-security-lsp';
@@ -52,6 +54,13 @@ function sevToLsp(sev) {
 
 function findingToDiagnostic(f) {
   const line = Math.max(0, (f.line || 1) - 1);
+  // Stage 6 correctness audit: this read f.remediation directly, but raw
+  // scan.findings entries (what this consumes, pre-normalizeFindings) come
+  // from two conventions — most posture/*.js and newer sast/*.js modules
+  // set `remediation`, while ~127 of engine.js's own detectors set a `fix`
+  // STRING field instead. _remediationOf carries the same precedence
+  // report/index.js already established for this exact split (CMP-3).
+  const remediation = _remediationOf(f);
   return {
     range: {
       start: { line, character: 0 },
@@ -60,7 +69,7 @@ function findingToDiagnostic(f) {
     severity: sevToLsp(f.severity),
     source: 'agentic-security',
     code: f.cwe || f.family || 'finding',
-    message: `${f.vuln || 'Security finding'}${f.remediation ? '\n\n' + (typeof f.remediation === 'string' ? f.remediation : '') : ''}`.slice(0, 2000),
+    message: `${f.vuln || 'Security finding'}${remediation ? '\n\n' + remediation : ''}`.slice(0, 2000),
     tags: [],
   };
 }
@@ -142,7 +151,20 @@ async function scanFile(uri) {
     // and eventually start skipping custom rules.
     resetCustomRulesBudget(_rootDir);
     const { scan } = await runScan(_rootDir, { fileContents, depFileContents });
-    const findings = (scan.findings || []).filter(f => f.file === rel);
+    // Stage 6 correctness audit: this only ever read scan.findings (the SAST
+    // channel). scan.secrets and scan.logicVulns are separate arrays on the
+    // raw runScan() result — normalizeFindings is what merges all four
+    // channels, and that hasn't run here — so a saved file with a hardcoded
+    // credential got a clean problem pane, no diagnostic at all. Unlike the
+    // MCP surface, this server never applied redactFinding either (nothing
+    // here imported mcp/redact.js), which would have been a landmine the
+    // moment secrets/logicVulns were added without it: those channels are
+    // exactly where raw secret material shows up in `snippet`. Both fixed
+    // together — merge the channels AND redact — so the fix for one gap
+    // doesn't open the other.
+    const findings = [...(scan.findings || []), ...(scan.secrets || []), ...(scan.logicVulns || [])]
+      .filter(f => f.file === rel)
+      .map(f => redactFinding(f));
     await publishDiagnostics(uri, findings);
   } catch (e) {
     process.stderr.write(`agentic-security-lsp: scan failed: ${e.message}\n`);
@@ -273,3 +295,7 @@ export function startLspServer() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   startLspServer();
 }
+
+function _setRootDir(dir) { _rootDir = dir; _depCache = { rootDir: null, depFileContents: {} }; }
+
+export const _internals = { findingToDiagnostic, scanFile, uriToPath, pathToUri, _diagnosticsByUri, _setRootDir };
