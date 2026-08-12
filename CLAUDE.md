@@ -128,7 +128,7 @@ Several releases (v0.106.0–v0.107.1) shipped broken or false because work was 
 
 ## Dependency currency + the hold list
 
-Release gate check 11 (`scripts/dependency-currency.mjs`) keeps both package trees — `scanner/` and `ide/vscode/` — free of known-vulnerable and stale dependencies. It has two halves, and they are deliberately unequal:
+Release gate check `dependency-currency` (`scripts/dependency-currency.mjs`, listed by id rather than position — the checks array has grown twice since this paragraph was first written and a hardcoded ordinal drifted stale both times) keeps both package trees — `scanner/` and `ide/vscode/` — free of known-vulnerable and stale dependencies. It has two halves, and they are deliberately unequal:
 
 - **Known advisories — no opt-out.** Any advisory at **moderate severity or above**, in either tree, fails the gate. There is no flag, no hold, no waiver. A dependency with a published vulnerability is never an acceptable release state.
 - **Outdated dependencies — holdable.** Anything behind its latest published version fails *unless* it is listed in `.dependency-holds.json` at the repo root. Each entry carries `package`, `tree`, `heldAt`, `reason`, `addedAt`, `reviewBy`. The list exists because "always latest" is occasionally wrong: `web-tree-sitter` is pinned at `0.20.8` because the newer runtime cannot load any grammar in the newest published prebuilt bundle (older grammar ABI), silently dropping six long-tail languages — see `scanner/src/ir/tree-sitter-loader.js`.

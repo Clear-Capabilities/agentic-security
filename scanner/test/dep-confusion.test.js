@@ -54,6 +54,20 @@ test('Typosquat detection — flags 1–2 edit distance from popular packages', 
   assert.equal(lodashFinding.severity, 'high');
 });
 
+// CMP-1 (Stage 6 follow-up): neither finding constructor here set `family`,
+// so both fell through to the generic `vulnerable-dep` default every unset
+// supplyChain finding gets in auditor-walkthrough.js — invisible to any
+// compliance control mapped to the more specific family:dependency-confusion
+// (ccpa.json).
+test('Typosquat detection — findings carry family: dependency-confusion, not the generic vulnerable-dep default', () => {
+  const components = [
+    { ecosystem: 'npm', name: 'reactt', version: '1.0.0', filePath: 'package.json' }, // 1-edit from react
+  ];
+  const findings = detectDepConfusion(components, null);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].family, 'dependency-confusion');
+});
+
 test('Typosquat — popular package itself does NOT trigger', () => {
   const components = [{ ecosystem: 'npm', name: 'lodash', version: '4.17.21' }];
   const findings = detectDepConfusion(components, null);

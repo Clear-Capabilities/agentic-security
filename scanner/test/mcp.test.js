@@ -359,6 +359,74 @@ test('apply_fix (#3): a verifier-approved patch is applied for a template-only f
   await cleanup();
 });
 
+// Stage 6 correctness audit: posture/fix-honesty-gate.js's deterministic
+// honesty checks were fully built and fix-verify.js already consulted them
+// when given a fixMeta — but neither apply_fix's nor verify_fix's
+// inputSchema ever had a fixMeta property, so no call through the MCP
+// surface could reach the gate. Fixed by exposing it on both.
+test('apply_fix (#3): a hand-wave residual in fixMeta blocks the write, not just reports a verdict', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, rule: 'demo', vuln: 'Weak hash', cwe: 'CWE-328', description: 'md5 used' }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), "const c=require('crypto');const h=c.createHash('md5');\n");
+  const clean = 'export function ok() { return 1; }\n';
+  const r = await call(handleRequest, 'apply_fix', {
+    finding_id: 'F1', confirm: true, patch: { 'app.js': clean },
+    fixMeta: { residual: 'the input is adequately handled now', signals: { sinkSignatureChanged: true, allCallersRouted: true, testDiscriminates: true } },
+  });
+  const p = payload(r);
+  assert.equal(p.applied, false, `expected the dishonest residual to block the write; got ${JSON.stringify(p)}`);
+  assert.equal(p.verify?.honesty?.ok, false);
+  assert.equal(await fsp.readFile(path.join(root, 'app.js'), 'utf8'), "const c=require('crypto');const h=c.createHash('md5');\n", 'file must be unchanged when the write is blocked');
+  await cleanup();
+});
+
+test('apply_fix (#3): an honest fixMeta does not block a real write', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, rule: 'demo', vuln: 'Weak hash', cwe: 'CWE-328', description: 'md5 used' }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), "const c=require('crypto');const h=c.createHash('md5');\n");
+  const clean = 'export function ok() { return 1; }\n';
+  const r = await call(handleRequest, 'apply_fix', {
+    finding_id: 'F1', confirm: true, patch: { 'app.js': clean },
+    fixMeta: { signals: { sinkSignatureChanged: true, allCallersRouted: true, testDiscriminates: true } },
+  });
+  const p = payload(r);
+  assert.equal(p.applied, true, `expected the write to succeed; got ${JSON.stringify(p)}`);
+  assert.equal(await fsp.readFile(path.join(root, 'app.js'), 'utf8'), clean);
+  await cleanup();
+});
+
+test('verify_fix: a hand-wave residual in fixMeta surfaces honesty.ok:false', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, vuln: 'demo' }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), 'export function ok() { return 1; }\n');
+  const r = await call(handleRequest, 'verify_fix', {
+    stable_id: 'a1b2c3d4e5f60718', files: { 'app.js': 'export function ok() { return 2; }\n' },
+    fixMeta: { residual: 'this will be fixed later', signals: { sinkSignatureChanged: true, allCallersRouted: true, testDiscriminates: true } },
+  });
+  const p = payload(r);
+  assert.equal(p.honesty?.ok, false, `expected a hand-wave residual to fail the honesty gate; got ${JSON.stringify(p.honesty)}`);
+  assert.ok(p.honesty.violations.some(v => /vague-assurance/.test(v)));
+  await cleanup();
+});
+
+test('verify_fix: an uncited false-positive verdict in fixMeta also fails honesty', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, vuln: 'demo' }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), 'export function ok() { return 1; }\n');
+  const r = await call(handleRequest, 'verify_fix', {
+    stable_id: 'a1b2c3d4e5f60718', files: { 'app.js': 'export function ok() { return 2; }\n' },
+    fixMeta: { verdict: 'false-positive', evidence: [] },
+  });
+  const p = payload(r);
+  assert.equal(p.honesty?.ok, false);
+  assert.ok(p.honesty.violations.some(v => /citation/.test(v)));
+  await cleanup();
+});
+
 test('apply_fix (#3): patch path refuses a finding with no stableId', async () => {
   const { handleRequest, root, cleanup } = await makeSession({
     findings: [{ id: 'F1', severity: 'high', file: 'app.js', line: 1, vuln: 'demo' }],
@@ -408,6 +476,27 @@ test('verify_fix: the tests and poc legs are present in the response, not silent
   assert.ok('tests' in p, `expected verify_fix's response to include the tests leg; got keys: ${Object.keys(p).join(', ')}`);
   assert.ok('poc' in p, `expected verify_fix's response to include the poc leg; got keys: ${Object.keys(p).join(', ')}`);
   assert.ok('honesty' in p, `expected verify_fix's response to include the honesty leg; got keys: ${Object.keys(p).join(', ')}`);
+  await cleanup();
+});
+
+// Follow-up to the fix above: forwarding tests/honesty/poc made the poc
+// leg's status VISIBLE, but every call through this surface still reached
+// it with poc undefined (inputSchema has no `poc` property), so it always
+// reported {status:'not-requested'} — visibility isn't reachability. Fixed
+// by looking up the original finding's f.poc server-side from last-scan.json
+// via stable_id (the scan pipeline already attaches one by default), rather
+// than widening the schema to make the caller resupply PoC data it never had.
+test('verify_fix: looks up the finding\'s own poc from last-scan.json and exercises the poc leg', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{
+      id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, vuln: 'demo',
+      poc: { lang: 'node', code: "const URL_ = 'http://localhost:3000/x';\nconst METHOD = 'GET';\n" },
+    }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), 'export function ok() { return 1; }\n');
+  const r = await call(handleRequest, 'verify_fix', { stable_id: 'a1b2c3d4e5f60718', files: { 'app.js': 'export function ok() { return 2; }\n' } });
+  const p = payload(r);
+  assert.notEqual(p.poc.status, 'not-requested', `expected the poc leg to be exercised, got ${JSON.stringify(p.poc)}`);
   await cleanup();
 });
 

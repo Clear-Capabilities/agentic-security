@@ -8,7 +8,9 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { diffValidatorRuns, persistRescanReport, summarizeDelta } from '../src/posture/model-rescan.js';
+import * as os from 'node:os';
+import * as fsp from 'node:fs/promises';
+import { diffValidatorRuns, persistRescanReport, summarizeDelta, runModelRescan } from '../src/posture/model-rescan.js';
 
 const CMDS = path.resolve(import.meta.dirname, '..', '..', 'commands');
 
@@ -71,6 +73,81 @@ test('model-rescan: agree → no changes', () => {
   const r = { model: 'x', results: { 'F1': { verdict: 'tp' } } };
   const changed = diffValidatorRuns(r, r);
   assert.deepEqual(changed, []);
+});
+
+// Stage 6 correctness audit: diffValidatorRuns/persistRescanReport/
+// summarizeDelta above were fully built with no producer to feed them a
+// real {model, results} run file — /labs --model-rescan was disclosed as
+// genuinely unwired. runModelRescan is the missing producer: it re-runs
+// llm-validator's validateMany twice (baseline env, then toModel via the
+// existing AGENTIC_SECURITY_LLM_MODEL_VALIDATE override) and turns the two
+// runs into a real delta report.
+async function mkScanRoot(findings) {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'model-rescan-'));
+  const stateDir = path.join(dir, '.agentic-security');
+  await fsp.mkdir(stateDir, { recursive: true });
+  await fsp.writeFile(path.join(dir, 'a.js'), 'const x = 1;\n');
+  await fsp.writeFile(path.join(stateDir, 'last-scan.json'), JSON.stringify({ findings }));
+  return dir;
+}
+
+test('runModelRescan: requires a --model argument', async () => {
+  const dir = await mkScanRoot([{ id: 'F1', severity: 'high', file: 'a.js', line: 1, vuln: 'X' }]);
+  const r = await runModelRescan(dir, {});
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /no --model/);
+  await fsp.rm(dir, { recursive: true, force: true });
+});
+
+test('runModelRescan: refuses cleanly when there is no prior scan', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'model-rescan-empty-'));
+  const r = await runModelRescan(dir, { toModel: 'claude-opus-5' });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /run a scan first/);
+  await fsp.rm(dir, { recursive: true, force: true });
+});
+
+test('runModelRescan: produces a real {from, to, changed, reportPath} delta (degrades honestly to unvalidated with no endpoint configured, matching the rest of this codebase — setting a MODEL alone can\'t establish a provider)', async () => {
+  const dir = await mkScanRoot([
+    { id: 'F1', stableId: 'stable-f1-aaaaaaaa', severity: 'critical', file: 'a.js', line: 1, vuln: 'SQLi' },
+  ]);
+  const r = await runModelRescan(dir, { toModel: 'claude-opus-5' });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  // No AGENTIC_SECURITY_LLM_ENDPOINT/PRESET is configured in this test env,
+  // so neither run can actually resolve a provider — both correctly report
+  // 'unvalidated' rather than falsely claiming the requested model ran.
+  assert.equal(r.from, 'unvalidated');
+  assert.equal(r.to, 'unvalidated');
+  assert.deepEqual(r.changed, [], 'both unvalidated runs must agree — nothing to report as changed');
+  assert.ok(r.reportPath && fs.existsSync(r.reportPath), 'expected a persisted rescan report');
+  const persisted = JSON.parse(fs.readFileSync(r.reportPath, 'utf8'));
+  assert.equal(persisted.to, 'unvalidated');
+  await fsp.rm(dir, { recursive: true, force: true });
+});
+
+test('runModelRescan: the model override genuinely reaches provider resolution, not just the report label', async () => {
+  // A deliberately unreachable-but-syntactically-valid endpoint (port 0):
+  // resolveProvider succeeds (so `model` reflects the real resolved config,
+  // not the 'unvalidated' fallback), while the actual HTTP call fails fast
+  // with no live network dependency — same technique test/llm-validator-
+  // default-on.test.js already uses.
+  const dir = await mkScanRoot([
+    { id: 'F1', stableId: 'stable-f1-bbbbbbbb', severity: 'critical', file: 'a.js', line: 1, vuln: 'SQLi' },
+  ]);
+  const prevEndpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
+  const prevModel = process.env.AGENTIC_SECURITY_LLM_MODEL;
+  process.env.AGENTIC_SECURITY_LLM_ENDPOINT = 'http://localhost:0/never';
+  process.env.AGENTIC_SECURITY_LLM_MODEL = 'baseline-model';
+  try {
+    const r = await runModelRescan(dir, { toModel: 'challenger-model' });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.from, 'baseline-model', 'the "from" run must resolve the baseline env model, not a placeholder');
+    assert.equal(r.to, 'challenger-model', 'the "to" run must resolve the requested override model, proving AGENTIC_SECURITY_LLM_MODEL_VALIDATE genuinely took effect');
+  } finally {
+    if (prevEndpoint === undefined) delete process.env.AGENTIC_SECURITY_LLM_ENDPOINT; else process.env.AGENTIC_SECURITY_LLM_ENDPOINT = prevEndpoint;
+    if (prevModel === undefined) delete process.env.AGENTIC_SECURITY_LLM_MODEL; else process.env.AGENTIC_SECURITY_LLM_MODEL = prevModel;
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('model-rescan: summarizeDelta surfaces TP↔FP flip counts', () => {

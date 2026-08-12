@@ -1,10 +1,14 @@
 // S7 — commands/labs.md's Implementation section named backing modules in
 // prose ("Routes to existing posture modules: claude-authorship.js,
-// model-rescan.js, ...") without a single concrete invocation. Six of the
-// seven modes (--claude-audit, --cross-repo, --risk-dollars, --time-to-fix,
-// --synthesize-rule, --llm) are now fixed with real, verified commands.
-// --model-rescan stays disclosed as genuinely unwired: posture/model-rescan.js
-// expects a {model, results} run file that nothing in the codebase produces.
+// model-rescan.js, ...") without a single concrete invocation. All seven
+// modes (--claude-audit, --cross-repo, --risk-dollars, --time-to-fix,
+// --synthesize-rule, --llm, --model-rescan) are now fixed with real,
+// verified commands. --model-rescan was the last holdout — posture/
+// model-rescan.js expected a {model, results} run file that nothing in the
+// codebase produced; fixed in the Stage 6 correctness audit by adding the
+// missing producer, runModelRescan(), which runs llm-validator's
+// validateMany twice (baseline env, then the requested model via the
+// existing AGENTIC_SECURITY_LLM_MODEL_VALIDATE override).
 //
 // Wiring --claude-audit / --cross-repo / --risk-dollars / --time-to-fix
 // surfaced a real bug: posture/git-history.js#annotateGitHistory (aiAuthored,
@@ -191,13 +195,47 @@ test('S7: labs.md --llm surfaces real OWASP-LLM-tagged findings and an AI-BOM', 
   } finally { await p.cleanup(); }
 });
 
-test('S7: labs.md --model-rescan honestly discloses it is unwired rather than fabricating a delta', async () => {
+// Stage 6 correctness audit: --model-rescan is now genuinely wired —
+// posture/model-rescan.js#runModelRescan is the missing producer that runs
+// llm-validator's validateMany twice and feeds the result into the
+// already-built diffValidatorRuns/persistRescanReport/summarizeDelta.
+test('S7: labs.md --model-rescan requires a --model argument', async () => {
   const script = extractImplementationBlock();
   const p = await mkProject(FIXTURE);
   try {
     const r = runMode(script, ['--model-rescan'], p.dir);
     assert.equal(r.status, 0, `stderr: ${r.stderr}`);
     const parsed = JSON.parse(r.stdout);
-    assert.equal(parsed.wired, false);
+    assert.equal(parsed.ok, false);
+    assert.match(parsed.reason, /--model/);
+  } finally { await p.cleanup(); }
+});
+
+test('S7: labs.md --model-rescan honestly reports "run a scan first" when there is no prior scan', async () => {
+  const script = extractImplementationBlock();
+  const p = await mkProject(FIXTURE);
+  try {
+    const r = runMode(script, ['--model-rescan', '--model', 'claude-opus-5'], p.dir);
+    assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+    const parsed = JSON.parse(r.stdout);
+    assert.equal(parsed.ok, false);
+    assert.match(parsed.reason, /run a scan first/);
+  } finally { await p.cleanup(); }
+});
+
+test('S7: labs.md --model-rescan produces a real delta report against a prior scan (degrades honestly to unvalidated with no LLM endpoint configured in this test env)', async () => {
+  const script = extractImplementationBlock();
+  const p = await mkProject(FIXTURE);
+  try {
+    const scanResult = spawnSync('node', [CLI, 'scan', p.dir, '--format', 'json', '--no-network'], { encoding: 'utf8' });
+    assert.ok(scanResult.status <= 3, `scan must exit <=3; got ${scanResult.status}: ${scanResult.stderr}`);
+
+    const r = runMode(script, ['--model-rescan', '--model', 'claude-opus-5'], p.dir);
+    assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+    const parsed = JSON.parse(r.stdout);
+    assert.equal(parsed.ok, true, JSON.stringify(parsed));
+    assert.ok(Array.isArray(parsed.changed));
+    assert.ok(parsed.reportPath, 'expected a persisted rescan report path');
+    assert.ok(fs.existsSync(parsed.reportPath), `expected the rescan report to actually exist at ${parsed.reportPath}`);
   } finally { await p.cleanup(); }
 });

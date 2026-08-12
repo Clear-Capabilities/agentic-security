@@ -32,6 +32,7 @@
 //     → new state with the implicit-tainted vars added at confidence 0.5
 
 import { addPath } from './access-paths.js';
+import { computeDominators } from '../ir/ssa.js';
 
 export function isImplicitFlowEnabled() {
   // OPT-IN (default OFF): implicit/control-dependence flow is famously noisy, so
@@ -47,47 +48,78 @@ export function isImplicitFlowEnabled() {
  *   cfg:           the function CFG
  *   exprTaint:     callback (expr) -> bool, using the current taint state
  *
- * Heuristic: walk forward from entry, and when we hit an `if` whose
- * condition is tainted, mark all nodes reachable from the consequent (and,
- * if present, the alternate) until we exit those branches.
+ * Correctness (Stage 6 audit): this used to be a path-dependent DFS that
+ * incremented a "depth" counter on entering a tainted `if`'s successors and
+ * only ever decremented it at a loop-header — there was no mechanism to
+ * detect a branch's natural JOIN point, so once a path entered depth 1,
+ * every node reachable afterward (including everything textually AFTER the
+ * if/else closes, for the rest of the function) stayed marked
+ * `tainted: true` forever. A first fix attempt (reset depth at the join)
+ * was reverted because it broke the equally-real, intentional pattern
+ * `if (tainted) { p = x; } eval(p)`: `p`'s taint must survive past the
+ * branch on the VARIABLE (via markImplicitTaint → the normal forward-taint
+ * state, entirely independent of this map), even though `eval(p)` itself is
+ * not lexically inside the branch.
+ *
+ * The actual invariant this map must encode is narrower than "reachable
+ * after a tainted if": a node N is genuinely INSIDE the branch rooted at
+ * successor B if and only if B DOMINATES N — every path from the function
+ * entry to N passes through B. A join point (reachable via the other
+ * branch, or via any path that bypasses the if) is by definition NOT
+ * dominated by B. This is exactly what `computeDominators` (shared with
+ * ir/ssa.js's SSA φ-node placement) computes, so reuse it instead of a
+ * path-dependent walk that structurally cannot distinguish "inside" from
+ * "after".
+ *
+ * One more wrinkle the CFG shape forces on us: parser-js.js's IfStatement
+ * lowering models a missing `else` as a DIRECT edge from the `if` node to
+ * the post-if join node (`if (!path.node.alternate) linkCfg(fn, condId,
+ * joinId)`), so `n.succ` for an else-less `if` is `[branchEntry, joinId]`
+ * — the join node is literally one of the "successors" too. Naively
+ * dominance-checking every successor as if it were a branch root treats
+ * `joinId` itself as something to dominate through, and `joinId` trivially
+ * dominates everything after it (there's no other way to reach that code),
+ * which resurrects the exact over-attribution this fix exists to close.
+ * Distinguish a genuine branch entry from a join/skip target structurally:
+ * a real branch entry has EXACTLY ONE predecessor — this `if` node itself.
+ * A join node always has a second predecessor (the branch's own tail, or —
+ * for the else-less case — this same direct skip edge), so it never
+ * qualifies.
  */
 export function buildImplicitContext(cfg, exprTaint) {
   const ctxByNid = new Map();
   if (!cfg || !cfg.nodes) return ctxByNid;
-  // Walk forward; track "depth" of how many tainted-branches we're nested in.
-  const visited = new Set();
-  const stack = [{ nid: cfg.entry, depth: 0, label: null }];
-  while (stack.length) {
-    const { nid, depth, label } = stack.pop();
-    if (visited.has(nid)) continue;
-    visited.add(nid);
-    if (depth > 0) ctxByNid.set(nid, { tainted: true, conditionLabel: label });
-    const n = cfg.nodes[nid];
-    if (!n) continue;
-    if (n.kind === 'if' && n.cond && exprTaint(n.cond)) {
-      // Config-constant filter: if condition is `ident === literal` where
-      // ident is NOT tainted, skip (it's a config check, not a taint branch).
-      if (n.cond.kind === 'binary' && (n.cond.op === '===' || n.cond.op === '==' || n.cond.op === 'Eq') &&
-          n.cond.right && n.cond.right.kind === 'literal' &&
-          n.cond.left && n.cond.left.kind === 'ident' &&
-          !exprTaint(n.cond.left)) {
-        for (const s of (n.succ || [])) {
-          stack.push({ nid: s, depth, label });
+  const dom = computeDominators(cfg);
+  const predCount = new Map();
+  const soleParent = new Map();
+  for (const [pid, p] of Object.entries(cfg.nodes)) {
+    for (const s of (p?.succ || [])) {
+      predCount.set(s, (predCount.get(s) || 0) + 1);
+      if (!soleParent.has(s)) soleParent.set(s, pid);
+    }
+  }
+  for (const [nid, n] of Object.entries(cfg.nodes)) {
+    if (!n || n.kind !== 'if' || !n.cond || !exprTaint(n.cond)) continue;
+    // Config-constant filter: if condition is `ident === literal` where
+    // ident is NOT tainted, skip (it's a config check, not a taint branch).
+    if (n.cond.kind === 'binary' && (n.cond.op === '===' || n.cond.op === '==' || n.cond.op === 'Eq') &&
+        n.cond.right && n.cond.right.kind === 'literal' &&
+        n.cond.left && n.cond.left.kind === 'ident' &&
+        !exprTaint(n.cond.left)) {
+      continue;
+    }
+    const label = _formatCondLabel(n.cond);
+    for (const branchRoot of (n.succ || [])) {
+      if (branchRoot === nid) continue; // guard against a malformed self-loop
+      // Not a genuine branch entry — it's a join/skip target reachable
+      // some other way too (see header). Marking it (or anything only
+      // reachable through it) would leak taint past the branch's real scope.
+      if ((predCount.get(branchRoot) || 0) !== 1 || soleParent.get(branchRoot) !== nid) continue;
+      for (const [candidate, domSet] of dom) {
+        if (candidate === nid) continue;
+        if (domSet && domSet.has(branchRoot) && !ctxByNid.has(candidate)) {
+          ctxByNid.set(candidate, { tainted: true, conditionLabel: label });
         }
-      } else {
-        for (const s of (n.succ || [])) {
-          stack.push({ nid: s, depth: depth + 1, label: _formatCondLabel(n.cond) });
-        }
-      }
-    } else if (n.kind === 'loop-header' && depth > 0) {
-      // Loop-body exclusion: don't escalate implicit depth inside loops —
-      // loop iteration count is not a taint channel for most vuln classes.
-      for (const s of (n.succ || [])) {
-        stack.push({ nid: s, depth: Math.max(depth - 1, 0), label });
-      }
-    } else {
-      for (const s of (n.succ || [])) {
-        stack.push({ nid: s, depth, label });
       }
     }
   }

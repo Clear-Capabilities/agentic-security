@@ -39,7 +39,8 @@ Every test file under `test/*.test.js` should be assigned to one of these scoped
 - `src/posture/CLAUDE.md` — what each module category is for (90+ modules, indexed there)
 - `src/dataflow/CLAUDE.md` — k=1 monovariant scope, `SummaryCache` keying, what the engine does NOT model
 - `src/mcp/CLAUDE.md` — MCP tool inventory, OWASP MCP Top 10 mapping, reserved-write list
-- `test/CLAUDE.md` — fixture conventions, when smoke vs unit
+
+(Fixture conventions and smoke-vs-unit scoping are covered above under "Test commands" — a separate test-directory guide was referenced here but never existed; found by the doc-drift checker at scripts/check-doc-drift.mjs and removed rather than left dangling.)
 
 ## LSP for self-development
 

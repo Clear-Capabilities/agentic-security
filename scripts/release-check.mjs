@@ -53,6 +53,7 @@ import { evaluateScorecardFreshness, countCorpusEntries } from './scorecard-chec
 import { runDependencyCurrencyCheck } from './dependency-currency.mjs';
 import { runPackageContentsCheck } from './package-contents-check.mjs';
 import { signLastScan } from '../scanner/src/posture/integrity.js';
+import { computeRunAttestation, verifyRunAttestation } from '../scanner/src/posture/attestation.js';
 import {
   gatherKeyParts, computeVerdictKey, loadCache, recordVerdict,
   evaluateCachedVerdict, renderProvenance, cachingDisabled,
@@ -105,6 +106,33 @@ export const CHECKS = [
     title: 'Committed accuracy scorecard describes this version',
     slow: false,
     remedy: 'Run `npm run scorecard`, review the numbers, and commit the result.',
+  },
+  {
+    // R4 correctness follow-up: computeRunAttestation is genuinely wired
+    // (bin/agentic-security.js, every scan), but nothing ever exercised
+    // verifyRunAttestation — a broken canonicalisation or signing change
+    // could ship and nobody would notice until a third party tried to
+    // verify a shipped attestation and it silently failed. Round-trips a
+    // synthetic finding set through compute-then-verify (must pass) and a
+    // mutated copy (must fail) — proves the subsystem still does what it
+    // claims, in both directions, before every release.
+    id: 'attestation-self-check',
+    title: 'Run-attestation compute/verify round-trip holds',
+    slow: false,
+    remedy: 'Run `node --test scanner/test/attestation.test.js` and fix the ' +
+      'canonicalisation or signing code — see scanner/src/posture/attestation.js.',
+  },
+  {
+    // Stage 6 correctness follow-up: build-catalog.py --check exists
+    // specifically to catch controls.json drifting from the source
+    // spreadsheet, and it works (verified by running it), but nothing
+    // automated ever called it — a spreadsheet edit with no matching
+    // controls.json regeneration could ship silently.
+    id: 'nist-catalog-freshness',
+    title: 'NIST AI 600-1 controls.json matches its source spreadsheet',
+    slow: false,
+    remedy: 'Run `python3 scripts/nist-compliance/build-catalog.py` to regenerate ' +
+      'controls.json and evidence-rules.json from the updated spreadsheet, then commit both.',
   },
   {
     id: 'package-contents',
@@ -459,6 +487,34 @@ export function evaluateCommandGate({ label, exitCode }) {
   return result([`\`${label}\` exited ${exitCode}.`]);
 }
 
+/**
+ * Check: run-attestation compute/verify round-trip. Pure — no I/O, no
+ * network, no filesystem. A synthetic finding set stands in for a real
+ * scan; the point is proving the SUBSYSTEM (canonicalisation + digest +
+ * comparison) still agrees with itself, not attesting anything about this
+ * repository's own findings (that already happens on every real scan).
+ */
+export function evaluateAttestationSelfCheck() {
+  const base = { engineVersion: 'release-check-selftest', rulesetVersion: '1', bundleSha: 'deadbeef' };
+  const findings = [
+    { id: 'a', severity: 'high', file: 'x.js', line: 1, cwe: 'CWE-89', vuln: 'SQLi' },
+    { id: 'b', severity: 'medium', file: 'y.js', line: 2, cwe: 'CWE-79', vuln: 'XSS' },
+  ];
+  const attestation = computeRunAttestation({ ...base, findings });
+  const roundTrip = verifyRunAttestation(attestation, { ...base, findings });
+  if (!roundTrip.ok) {
+    return result([`compute→verify round-trip failed on an unmodified finding set: ${roundTrip.reason}`]);
+  }
+  // The other direction: a changed finding set MUST fail verification, or
+  // the digest isn't actually binding to finding content.
+  const mutated = verifyRunAttestation(attestation, { ...base, findings: findings.slice(0, 1) });
+  if (mutated.ok) {
+    return result(['verifyRunAttestation accepted a mutated finding set against an unchanged ' +
+      'attestation — the digest is not actually binding to finding content.']);
+  }
+  return result();
+}
+
 // ---------------------------------------------------------------------------
 // I/O layer. Everything below gathers facts and hands them to the functions
 // above; none of it makes a pass/fail decision of its own.
@@ -677,6 +733,13 @@ function main(argv) {
   evaluate('scorecard-freshness', () => {
     if (!version) return result(['Cannot check the scorecard: no version could be determined.']);
     return evaluateScorecardFreshness(scorecardFacts(version));
+  });
+
+  evaluate('attestation-self-check', () => evaluateAttestationSelfCheck());
+
+  evaluate('nist-catalog-freshness', () => {
+    const r = run('python3', [path.join(REPO, 'scripts', 'nist-compliance', 'build-catalog.py'), '--check'], { cwd: REPO });
+    return evaluateCommandGate({ label: 'python3 scripts/nist-compliance/build-catalog.py --check', exitCode: r.status });
   });
 
   evaluate('package-contents', () => runPackageContentsCheck(REPO));

@@ -30,7 +30,8 @@ Labs modes are experimental by intent. Maturity today:
 | `--llm` | **Stable** — candidate to promote to a first-class `/scan --llm` surface. |
 | `--risk-dollars`, `--time-to-fix` | **Stable** — candidates to surface under `/posture`. |
 | `--claude-audit`, `--cross-repo` | **Beta** — output shape may change. |
-| `--model-rescan`, `--synthesize-rule` | **Experimental** — gated on env vars; not yet load-bearing. |
+| `--model-rescan` | **Beta** — real producer as of the Stage 6 correctness audit (see below); still gated on an LLM endpoint being configured. |
+| `--synthesize-rule` | **Experimental** — gated on env vars; not yet load-bearing. |
 
 "Stable" modes keep working from `/labs` even after they're promoted; promotion adds a primary path, it doesn't remove the labs one.
 
@@ -48,7 +49,7 @@ Labs modes are experimental by intent. Maturity today:
 
 ## Implementation
 
-`--claude-audit`, `--cross-repo`, `--risk-dollars`, `--time-to-fix`, `--synthesize-rule`, and `--llm` below run a real, verified command. `--model-rescan` is genuinely not wired: `posture/model-rescan.js`'s `diffValidatorRuns()` expects a `{model, results: {findingId: {verdict, reason}}}` run file, but nothing in the codebase — including `llm-validator/index.js`, the module that actually calls an LLM — ever writes a file in that shape. Wiring it would mean inventing the producer, not fixing a missing invocation, so it stays disclosed as experimental rather than fabricated.
+All seven modes below run a real, verified command. `--model-rescan` was the one exception until the Stage 6 correctness audit: `posture/model-rescan.js`'s `diffValidatorRuns()` expects a `{model, results: {findingId: {verdict, reason}}}` run file, but nothing in the codebase — including `llm-validator/index.js`, the module that actually calls an LLM — ever wrote a file in that shape. Fixed by adding the missing producer, `model-rescan.js#runModelRescan(scanRoot, {toModel})`: it re-validates the last scan's findings twice through `llm-validator/index.js#validateMany` — once under whatever model the environment currently resolves to ("from"), once under `toModel` via the existing per-role override `AGENTIC_SECURITY_LLM_MODEL_VALIDATE` (`llm-validator/providers.js` already supports this; no new plumbing needed) — then feeds both runs into the already-built `diffValidatorRuns`/`persistRescanReport`/`summarizeDelta`. Requires an LLM endpoint configured (`AGENTIC_SECURITY_LLM_ENDPOINT`); with none configured, `validateMany` degrades every finding to `unvalidated` with no network call, same as everywhere else in this codebase.
 
 ```bash
 FLAG="${1:-}"
@@ -139,7 +140,16 @@ case "$FLAG" in
       }, null, 2));
     " ;;
   --model-rescan)
-    echo '{"wired": false, "reason": "no producer writes a {model,results} run file anywhere in the codebase yet — see the note above the mode dispatcher", "requires": ["AGENTIC_SECURITY_LLM_VALIDATE=1", "AGENTIC_SECURITY_LLM_ENDPOINT"]}' ;;
+    MODEL=""
+    if [ "$2" = "--model" ] && [ -n "$3" ]; then MODEL="$3"; fi
+    node -e "
+      import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/model-rescan.js').then(async (mr) => {
+        const toModel = process.argv[1];
+        if (!toModel) { console.log(JSON.stringify({ ok: false, reason: 'Usage: /labs --model-rescan --model <model-id>' })); process.exit(0); }
+        const r = await mr.runModelRescan('.', { toModel });
+        console.log(JSON.stringify(r, null, 2));
+      });
+    " "$MODEL" ;;
   *)
     echo "Modes: --claude-audit --model-rescan --synthesize-rule --cross-repo --risk-dollars --time-to-fix --llm" ;;
 esac

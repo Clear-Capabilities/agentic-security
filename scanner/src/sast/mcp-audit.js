@@ -101,10 +101,17 @@ export function scanMCP(fp, raw) {
 
   const findings = [];
   const seen = new Set();
+  // CMP-1 (Stage 6 follow-up): no call site here ever set `family`, so every
+  // finding fell through to a generic backfilled value — invisible to any
+  // compliance control mapped to `family:agent-tool-exec` (owasp-llm-top-10's
+  // LLM07), and to the family-keyed cost tables in risk-dollars.js/
+  // time-to-fix.js, which both already carry an 'agent-tool-exec' entry with
+  // nothing in the codebase that could ever produce a matching finding.
   const push = (f) => {
     const key = `${f.file}:${f.line}:${f.vuln}`;
     if (seen.has(key)) return;
     seen.add(key);
+    if (!f.family) f.family = 'agent-tool-exec';
     findings.push(f);
   };
 

@@ -22,6 +22,7 @@ import {
   readCheckTiers,
   CHECK_TIERS_FILE,
   evaluateCommandGate,
+  evaluateAttestationSelfCheck,
   extractVersionsFromSource,
   scorecardFacts,
 } from '../../scripts/release-check.mjs';
@@ -293,12 +294,22 @@ test('release-gate — a gated command exiting 0 passes, non-zero fails', () => 
   assert.ok(bad.errors.some(e => /npm test/.test(e) && /exit(ed)? 1/.test(e)));
 });
 
+// ------------------------------------------- attestation-self-check (item 8)
+test('release-gate — attestation-self-check passes on a real compute/verify round-trip', () => {
+  const r = evaluateAttestationSelfCheck();
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+});
+
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all fourteen checks in order', () => {
+test('release-gate — full run plans all sixteen checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
+  // A Stage-6 correctness follow-up added attestation-self-check +
+  // nist-catalog-freshness — both fast, both give a previously-orphaned
+  // verifier/checker (verifyRunAttestation, build-catalog.py --check) a
+  // real, automated caller for the first time.
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 14);
+  assert.equal(ids.length, 16);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -311,18 +322,29 @@ test('release-gate — mutation-gate and layer-recall-gate are registered and sl
   assert.equal(layerRecall.slow, true);
 });
 
-test('release-gate — --fast skips only the slow gates, keeping 1-5, package-contents, and 9-10', () => {
+test('release-gate — attestation-self-check and nist-catalog-freshness are registered and fast', () => {
+  const attSelf = CHECKS.find(c => c.id === 'attestation-self-check');
+  const nistFresh = CHECKS.find(c => c.id === 'nist-catalog-freshness');
+  assert.ok(attSelf, 'attestation-self-check must be a registered release check');
+  assert.equal(attSelf.slow, false);
+  assert.ok(nistFresh, 'nist-catalog-freshness must be a registered release check');
+  assert.equal(nistFresh.slow, false);
+});
+
+test('release-gate — --fast skips only the slow gates, keeping 1-5, the two new fast checks, package-contents, and 9-10', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 6);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 8);
+  assert.equal(ids.length, 10);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
-  // The four cheap correctness gates, package-contents, and both provenance
-  // gates must survive --fast: they are what make a fast run still meaningful.
+  // The four cheap correctness gates, the two new fast checks,
+  // package-contents, and both provenance gates must survive --fast: they
+  // are what make a fast run still meaningful.
   for (const keep of [
     'working-tree-clean', 'version-consistency', 'changelog-entry',
-    'bundle-integrity', 'scorecard-freshness', 'package-contents',
+    'bundle-integrity', 'scorecard-freshness', 'attestation-self-check',
+    'nist-catalog-freshness', 'package-contents',
     'head-pushed', 'remote-ci-green',
   ]) {
     assert.ok(ids.includes(keep), `--fast must still run ${keep}`);

@@ -819,8 +819,29 @@ function analyzeFunction(fn, entryState, callContext) {
         const t = implicitAssignTarget(nodes[nid], ctx);
         if (t) implicitState = markImplicitTaint(implicitState, t);
       }
-      // A sink in a tainted branch whose arg is implicit-tainted (or constant)
-      // — and NOT already explicitly tainted (the normal pass covers that).
+      // Stage 6 correctness audit: these are two genuinely different gates,
+      // previously conflated into one loop over `ictx`. `allConst` is a
+      // leak from the SINK CALL'S OWN EXECUTION revealing the branch was
+      // taken — that requires the call itself to be genuinely inside the
+      // tainted branch (now correctly dominance-scoped by
+      // buildImplicitContext, see its header). `argRefsImplicit` is a leak
+      // from a VARIABLE that was implicit-tainted earlier — once a var is
+      // marked, its taint is a normal fact about the var, not about where
+      // it's later read; requiring the READ site to also be lexically
+      // inside a branch would miss the canonical
+      // `if (tainted) { p = x; } eval(p)` pattern the moment `eval(p)` is
+      // (correctly) recognized as being outside the branch.
+      const reportedNids = new Set();
+      const reportImplicit = (nid, node, sink, conditionLabel) => {
+        if (reportedNids.has(nid)) return;
+        reportedNids.add(nid);
+        callContext._findings.push({
+          ...createImplicitFinding(node, conditionLabel),
+          _funcQid: fn.qid, sinkId: sink.id,
+          cwe: (sink.vuln && sink.vuln.cwe) || 'CWE-200',
+        });
+      };
+      // Pass 1 — constant-arg sink calls genuinely inside a tainted branch.
       for (const [nid, ctx] of ictx) {
         const node = nodes[nid];
         if (!node || node.kind !== 'call') continue;
@@ -829,16 +850,24 @@ function analyzeFunction(fn, entryState, callContext) {
         if (!sink) continue;
         const inS = inStates.get(nid) || new Set();
         if ((node.args || []).some((a) => exprTaint(a, inS))) continue;
-        const argRefsImplicit = (node.args || []).some((a) => {
-          const ap = accessPathOf(a); return ap && isCoveredBy(implicitState, `implicit:${ap}`);
-        });
         const allConst = (node.args || []).length > 0 && (node.args || []).every((a) => a && a.kind === 'literal');
-        if (argRefsImplicit || allConst) {
-          callContext._findings.push({
-            ...createImplicitFinding(node, ctx.conditionLabel),
-            _funcQid: fn.qid, sinkId: sink.id,
-            cwe: (sink.vuln && sink.vuln.cwe) || 'CWE-200',
+        if (allConst) reportImplicit(nid, node, sink, ctx.conditionLabel);
+      }
+      // Pass 2 — any sink call anywhere in the function whose argument
+      // reads an implicit-tainted variable, regardless of whether the
+      // call site itself is inside a branch.
+      if (implicitState.size) {
+        for (const [nid, node] of Object.entries(nodes)) {
+          if (!node || node.kind !== 'call') continue;
+          const cat = matchSinkOrSanitizer(node.callee, _currentFile);
+          const sink = cat && cat.find((e) => e.kind === 'sink');
+          if (!sink) continue;
+          const inS = inStates.get(nid) || new Set();
+          if ((node.args || []).some((a) => exprTaint(a, inS))) continue;
+          const argRefsImplicit = (node.args || []).some((a) => {
+            const ap = accessPathOf(a); return ap && isCoveredBy(implicitState, `implicit:${ap}`);
           });
+          if (argRefsImplicit) reportImplicit(nid, node, sink, ictx.get(nid)?.conditionLabel || null);
         }
       }
     } catch { /* implicit flow is best-effort + opt-in */ }

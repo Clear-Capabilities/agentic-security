@@ -30,16 +30,21 @@ Edit the JSON, not the coverage map. The coverage maps state control counts and 
 percentages; if they are hand-edited they will disagree with what the engine actually assesses,
 which is exactly the failure mode the whole chain exists to prevent.
 
-**That second link is currently aspirational, not automated (disclosed, Stage 6 correctness
-audit).** No generator actually produces `docs/compliance/*.md` from the JSON — the files were
-transcribed by hand and have since drifted (`nist-ai-600-1-coverage.md` and
-`owasp-asvs-coverage.md` both carry a stale-data banner as a result; `owasp-llm-top10-coverage.md`
-and `nist-privacy-1-1-coverage.md` currently happen to still match their JSON, which is luck, not
-enforcement). There is also no gate: `scripts/release-check.mjs` has a `scorecard-freshness`
-check for exactly this problem on `docs/SCORECARD.md`, but nothing equivalent runs
-`build-catalog.py --check` or diffs a coverage map's counts against its JSON before a release.
-Until a real generator exists, treat every `docs/compliance/*-coverage.md` control count as
-unverified prose, not evidence.
+**That second link was aspirational, not automated, and had actually drifted (found and fixed,
+Stage 6 correctness audit).** No generator ever produced `docs/compliance/*.md` from the JSON —
+the files were transcribed by hand once and then drifted silently (`nist-ai-600-1-coverage.md`'s
+control counts matched neither `controls.json` nor the engine mapping; `owasp-asvs-coverage.md`
+even had the framework VERSION wrong — 4.0.3 in prose vs. 5.0 in the JSON it claimed to
+summarize). Rather than hand-authoring a corrected snapshot (the same drift problem, one commit
+later), both pages were rewritten to point at the live evaluators
+(`/compliance --walkthrough <id>` / `--report <alias>`) instead of re-stating counts in prose —
+so there is nothing left to go stale in those two files. `owasp-llm-top10-coverage.md` and
+`nist-privacy-1-1-coverage.md` still carry static counts that currently happen to match their
+JSON; that is luck, not enforcement, and the same pointer-based fix applies if either one is
+found to have drifted. The `build-catalog.py --check` half of this (confirming `controls.json`
+itself still matches the source spreadsheet) is now wired into `scripts/release-check.mjs` as
+the `nist-catalog-freshness` gate, matching the precedent `scorecard-freshness` already set for
+`docs/SCORECARD.md`.
 
 The Python attestation scanners under `scripts/` follow the same rule — none of them opens a
 workbook. `scripts/nist-compliance/` is the one catalog with a generator, because its controls

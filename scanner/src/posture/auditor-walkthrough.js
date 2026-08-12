@@ -110,11 +110,38 @@ export function loadFramework(scanRoot, id) {
 // both "nobody checked" (missing auth) and "checked wrong" (broken authz)
 // and it is strictly safer to over-count a real finding against both than
 // to keep silently excluding it from either.
+// CMP-1 (Stage 6 follow-up): grown incrementally by cross-referencing every
+// `family:` string the bundled compliance-frameworks/*.json files reference
+// against what src/sast + src/posture actually emit (a small, closed
+// problem — only the strings a control actually maps to, not a universal
+// vocabulary registry). k8s-admission.js's real rule id is
+// `k8s-pod-privileged`; `nist-csf-2.json`/`hipaa-security-rule.json` map to
+// the compliance-side spelling `k8s-pod-security-privileged`, which no
+// detector ever emitted.
 const COMPLIANCE_FAMILY_ALIAS = {
   'auth-missing': ['broken-access-control', 'fastapi-missing-auth', 'springboot-missing-authz', 'laravel-missing-auth', 'quarkus-missing-authz'],
   'authz': ['broken-access-control', 'idor', 'springboot-missing-authz', 'quarkus-missing-authz'],
+  'k8s-pod-security-privileged': ['k8s-pod-privileged'],
 };
 
+// CMP-1 audit trail: every `family:` string referenced by the bundled
+// compliance-frameworks/*.json files was cross-checked against real
+// detector output; entries above are the confirmed naming mismatches with a
+// real detector to alias, and `mcp-audit.js`/`sca/dep-confusion.js` were
+// fixed at the SOURCE (they now set `family` explicitly) rather than
+// aliased, since the finding constructors themselves were the root cause.
+// Four references have no matching detector at all — not a naming
+// mismatch, a genuine coverage gap that would need a new rule, out of
+// scope for an alias table: `crypto-tls-version` (crypto-protocol.js checks
+// verify-disabled, not minimum-TLS-version — the file's own header comment
+// even names the never-implemented `crypto-tls-min-version` rule id),
+// `nosql-injection` (referenced by cross-lang-meta.js's chain-detection
+// list, but no dedicated NoSQL-injection detector exists), `pii-exposure`
+// and `data-exposure` (both referenced only by consumers — threat-model-
+// auto.js's classifier and a Juliet-benchmark answer-key label
+// respectively — with no producer). Every control mapped to one of these
+// four reads `manual`/`engine-gap` rather than a false `present`, which is
+// the safe failure mode this whole mechanism exists to guarantee.
 export function evaluateFramework(scanRoot, fw, scan) {
   // CMP-2: last-scan.json (what this is actually handed in production) carries
   // findings across four separate channels — SAST (`findings`), secrets,

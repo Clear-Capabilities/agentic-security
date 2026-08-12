@@ -74,4 +74,69 @@ export function summarizeDelta(changed) {
   return lines.join('\n');
 }
 
+// Stage 6 correctness audit: diffValidatorRuns/persistRescanReport/
+// summarizeDelta above were fully built, but nothing in the codebase ever
+// produced a `{model, results: {findingId: {verdict, reason}}}` run file
+// for them to consume — commands/labs.md's `--model-rescan` mode was
+// disclosed as genuinely unwired rather than fabricated. This is the
+// missing producer: runs the SAME findings through the LLM validator twice
+// — once under whatever model the environment currently resolves to
+// ("from"), once under `toModel` ("to", via the existing per-role env
+// override `AGENTIC_SECURITY_LLM_MODEL_VALIDATE` — no new plumbing needed,
+// llm-validator/providers.js already supports it) — and turns the two runs
+// into a real delta report. Reuses validateMany's own candidate filter
+// (critical/high severity, low confidence, or AST parser) rather than
+// re-validating every finding, matching normal validation scope. When no
+// LLM endpoint is configured, validateMany degrades every finding to
+// 'unvalidated' with no network call — this function inherits that
+// no-network-by-default behavior rather than working around it.
+export async function runModelRescan(scanRoot, { toModel } = {}) {
+  if (!toModel) return { ok: false, reason: 'no --model given to rescan with' };
+  const scan = _readJson(scanRoot, 'last-scan.json');
+  if (!scan) return { ok: false, reason: 'no .agentic-security/last-scan.json — run a scan first' };
+  const findings = Array.isArray(scan.findings) ? scan.findings : [];
+  if (!findings.length) return { ok: false, reason: 'last scan has no findings to re-validate' };
+
+  const fileContents = {};
+  for (const f of findings) {
+    if (!f.file || fileContents[f.file] !== undefined) continue;
+    try { fileContents[f.file] = fs.readFileSync(path.join(scanRoot, f.file), 'utf8'); }
+    catch { /* file may have moved/been deleted since the scan; validateMany skips it */ }
+  }
+
+  const { validateMany } = await import('../llm-validator/index.js');
+  const { resolveProvider } = await import('../llm-validator/providers.js');
+
+  const runFor = async (envKey, modelOverride) => {
+    const prev = envKey ? process.env[envKey] : undefined;
+    if (envKey) process.env[envKey] = modelOverride;
+    let resolvedModel = 'unvalidated';
+    try {
+      const r = resolveProvider({ role: 'validate' });
+      if (r.ok) resolvedModel = r.config.model;
+      const clones = findings.map(f => ({ ...f }));
+      await validateMany(clones, { fileContents, scanRoot });
+      const results = {};
+      for (const f of clones) {
+        const id = f.stableId || f.id;
+        if (!id) continue;
+        results[id] = { verdict: f.validator_verdict || 'unvalidated', reason: f.validator_reasoning || null };
+      }
+      return { model: resolvedModel, results };
+    } finally {
+      if (envKey) {
+        if (prev === undefined) delete process.env[envKey];
+        else process.env[envKey] = prev;
+      }
+    }
+  };
+
+  const runA = await runFor(null, null);
+  const runB = await runFor('AGENTIC_SECURITY_LLM_MODEL_VALIDATE', toModel);
+
+  const changed = diffValidatorRuns(runA, runB);
+  const reportPath = persistRescanReport(scanRoot, runA.model, runB.model, changed);
+  return { ok: true, from: runA.model, to: runB.model, changed, reportPath, summary: summarizeDelta(changed) };
+}
+
 export const _internals = {};

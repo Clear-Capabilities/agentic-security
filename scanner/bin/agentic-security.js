@@ -1841,15 +1841,72 @@ async function cmdAttest(args) {
   return 0;
 }
 
+// R4/D2 correctness follow-up: attestation.js ships TWO independent
+// verifiers — verifyEvidenceBundle (per-finding, Ed25519, self-contained —
+// only needs a public key) and verifyRunAttestation (whole-run, per-install
+// HMAC, NOT self-contained — needs the caller to also supply the finding
+// set to re-derive against). This CLI command only ever called the first;
+// the second had zero production callers anywhere in the repo (confirmed by
+// grep — only test/attestation.test.js called it). Auto-detect which
+// artifact was handed in and dispatch to the matching verifier instead of
+// silently misinterpreting a run-attestation as a (structurally different)
+// evidence bundle.
+function _asRunAttestation(obj) {
+  if (obj && typeof obj.digest === 'string' && obj.canonicalisation) return obj;
+  if (obj && obj.attestation && typeof obj.attestation.digest === 'string') return obj.attestation;
+  return null;
+}
+
+// Verifies a run attestation the ONLY way it can be verified: by re-deriving
+// the digest from a fresh scan and comparing. Unlike an evidence bundle
+// (self-contained, just needs a public key), a run attestation is a claim
+// about a FINDING SET, not a standalone signed blob — "does scanning this
+// codebase right now reproduce the exact digest an earlier run attested"
+// is the actual, meaningful question this command answers.
+async function cmdVerifyRunAttestation(attestation, args) {
+  const projectPath = path.resolve(args.flags.against || '.');
+  if (!fs.existsSync(projectPath)) {
+    console.error(`--against path does not exist: ${projectPath}`);
+    return 2;
+  }
+  console.log(`Re-scanning ${projectPath} to check it reproduces the attested digest...`);
+  const { runScan } = await import('../src/runScan.js');
+  const { normalizeFindings } = await import('../src/report/index.js');
+  const { effectiveVersion } = await import('../src/posture/ruleset-version.js');
+  const { verifyRunAttestation } = await import('../src/posture/attestation.js');
+  const { scan } = await runScan(projectPath);
+  const r = verifyRunAttestation(attestation, {
+    findings: normalizeFindings(scan),
+    engineVersion: PKG_VERSION,
+    rulesetVersion: effectiveVersion(projectPath).version,
+    bundleSha: _bundleSha(),
+    root: projectPath,
+  });
+  if (!r.ok) {
+    console.error(`✗ INVALID — ${r.reason}`);
+    return 1;
+  }
+  console.log('✓ VALID — a fresh scan of this project reproduces the attested digest exactly.');
+  console.log('');
+  console.log(`  digest:          ${attestation.digest}`);
+  console.log(`  findingCount:    ${attestation.findingCount}`);
+  console.log(`  proves:          ${attestation.proves}`);
+  console.log(`  does NOT prove:  ${attestation.doesNotProve}`);
+  return 0;
+}
+
 async function cmdVerifyAttestation(args) {
   const { verifyEvidenceBundle, keyPaths } = await import('../src/posture/evidence-bundle.js');
   // `args._[0]` is the command name itself — the same convention cmdScan uses.
   const file = args.flags.bundle || args._[1];
-  if (!file) { console.error('Usage: agentic-security verify-attestation <bundle.json> [--public-key <path>]'); return 2; }
+  if (!file) { console.error('Usage: agentic-security verify-attestation <bundle.json|last-scan.json> [--public-key <path>] [--against <project-path>]'); return 2; }
 
   let bundle;
   try { bundle = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8')); }
   catch (e) { console.error(`Could not read bundle: ${e.message}`); return 2; }
+
+  const runAttestation = _asRunAttestation(bundle);
+  if (runAttestation) return cmdVerifyRunAttestation(runAttestation, args);
 
   const keyFile = args.flags['public-key'] || keyPaths().publicKey;
   let publicKeyPem = null;

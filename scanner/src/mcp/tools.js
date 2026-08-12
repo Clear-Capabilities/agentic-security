@@ -521,10 +521,40 @@ export const apply_fix = {
         additionalProperties: { type: 'string', maxLength: 500_000 },
         minProperties: 1, maxProperties: 8,
       },
+      // Stage 6 correctness audit: same gap and same fix as verify_fix — the
+      // honesty gate is reachable but was never wired to any real caller.
+      // Here it's stronger than advisory: the inline re-verify below already
+      // gates the WRITE on `verdict.ok`, and verifyFixCore's own `ok`
+      // formula already folds in `honesty.ok` when fixMeta is supplied — so
+      // passing it through here makes a dishonest fixMeta (hand-wave
+      // residual, uncited false-positive verdict) block the write itself,
+      // not just report a verdict.
+      fixMeta: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          residual: { type: 'string', maxLength: 2000 },
+          verdict: { type: 'string', maxLength: 64 },
+          evidence: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 },
+          signals: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              sinkSignatureChanged: { type: 'boolean' },
+              allCallersRouted: { type: 'boolean' },
+              testDiscriminates: { type: 'boolean' },
+              rateLimitOnly: { type: 'boolean' },
+              docsOnly: { type: 'boolean' },
+              logOnlyNoReject: { type: 'boolean' },
+              partialSanitization: { type: 'boolean' },
+            },
+          },
+        },
+      },
     },
     required: ['finding_id', 'confirm'],
   },
-  async handler({ finding_id, confirm, dry_run = false, patch = null }, ctx) {
+  async handler({ finding_id, confirm, dry_run = false, patch = null, fixMeta = null }, ctx) {
     if (confirm !== true) {
       return { _meta: META, applied: false, reason: 'apply_fix requires confirm: true.' };
     }
@@ -580,6 +610,7 @@ export const apply_fix = {
             scanRoot: ctx.sessionRoot,
             originalFindingStableId: f.stableId,
             files: _files,
+            fixMeta,
           });
         }
       } catch (e) {
@@ -589,7 +620,7 @@ export const apply_fix = {
         return {
           _meta: META, applied: false,
           reason: `patch rejected by verifier: ${verdict.summary || verdict.rescan?.reason || 'did not verify'}`,
-          verify: { rescan: verdict.rescan, lint: { runner: verdict.lint?.runner, ok: verdict.lint?.ok } },
+          verify: { rescan: verdict.rescan, lint: { runner: verdict.lint?.runner, ok: verdict.lint?.ok }, honesty: verdict.honesty || null },
         };
       }
       if (dry_run) {
@@ -708,10 +739,41 @@ export const verify_fix = {
         minProperties: 1,
         maxProperties: 8,
       },
+      // Stage 6 correctness audit: posture/fix-honesty-gate.js's deterministic
+      // honesty checks (vague-assurance residual prose, unbacked false-
+      // positive verdicts, tier/residual consistency) were fully built and
+      // fix-verify.js already consulted them when given a `fixMeta` — but
+      // this schema never had a `fixMeta` property, so no call through the
+      // MCP surface could ever supply one. The gate can only run against
+      // claims the AGENT self-reports (residual risk, verdict, evidence,
+      // completeness signals) — nothing here is server-computable — so
+      // fixing this meant exposing the property, not inventing a lookup.
+      fixMeta: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          residual: { type: 'string', maxLength: 2000 },
+          verdict: { type: 'string', maxLength: 64 },
+          evidence: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 20 },
+          signals: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              sinkSignatureChanged: { type: 'boolean' },
+              allCallersRouted: { type: 'boolean' },
+              testDiscriminates: { type: 'boolean' },
+              rateLimitOnly: { type: 'boolean' },
+              docsOnly: { type: 'boolean' },
+              logOnlyNoReject: { type: 'boolean' },
+              partialSanitization: { type: 'boolean' },
+            },
+          },
+        },
+      },
     },
     required: ['stable_id', 'files'],
   },
-  async handler({ stable_id, files }, ctx) {
+  async handler({ stable_id, files, fixMeta }, ctx) {
     // Confine every file path before passing to the verifier.
     const confined = {};
     for (const [relPath, content] of Object.entries(files || {})) {
@@ -723,11 +785,31 @@ export const verify_fix = {
       confined[relPath] = String(content);
     }
     try {
+      // The PoC-re-check leg (verifyFixCore's `pocLeg`) needs a `poc` param
+      // to do anything — until now nothing supplied one, so it always
+      // reported {status:'not-requested'} through this surface (see
+      // posture/CLAUDE.md's disclosure). Rather than widening inputSchema
+      // to make the CALLER pass PoC data back, look it up server-side: the
+      // scan pipeline already attaches an HTTP-shaped f.poc to matching
+      // findings by default (engine.js's annotatePocs), and last-scan.json
+      // already carries it under the same stableId this handler receives.
+      // Best-effort: a missing/unsigned/tampered scan just means no PoC is
+      // available to re-check, not a verify_fix failure — the rescan/lint/
+      // tests legs below are independent of this and still apply.
+      let poc = null;
+      try {
+        const { scan: lastScan } = _readLastScanVerified(ctx.sessionRoot, { allowUnsigned: true });
+        const orig = lastScan && (lastScan.findings || []).find(f => f.stableId === stable_id);
+        if (orig && orig.poc && orig.poc.code) poc = { ...orig.poc, finding: orig };
+      } catch { /* best-effort lookup; poc stays null */ }
+
       const verifyFixCore = await getVerifyFixCore();
       const r = await verifyFixCore({
         scanRoot: ctx.sessionRoot,
         originalFindingStableId: stable_id,
         files: confined,
+        poc,
+        fixMeta,
       });
       return {
         _meta: META,

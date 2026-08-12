@@ -97,6 +97,12 @@ export function detectDepConfusion(components, scanRoot) {
             id, kind: 'sca', severity: bestDist === 1 ? 'critical' : 'high',
             vuln: `Possible typosquat: "${c.name}" (1–2 chars from "${bestMatch}")`,
             cwe: 'CWE-1357', stride: 'Tampering',
+            // CMP-1 (Stage 6 follow-up): neither finding here set `family`,
+            // so both fell through to the generic `vulnerable-dep` default
+            // every unset supplyChain finding gets — invisible to any
+            // compliance control mapped to the more specific
+            // family:dependency-confusion (ccpa.json).
+            family: 'dependency-confusion',
             file: c.filePath || 'package.json', line: 0,
             snippet: `${c.ecosystem}:${c.name}@${c.version}`,
             fix: `Verify "${c.name}" is the package you actually meant. The popular package "${bestMatch}" is ${bestDist} edit(s) away — typosquat malware commonly registers names like this. Double-check the publisher, weekly downloads, and recent changes before keeping this dep.`,
@@ -122,6 +128,7 @@ export function detectDepConfusion(components, scanRoot) {
             id, kind: 'sca', severity: 'high',
             vuln: `Internal-scoped package on public registry: "${c.name}"`,
             cwe: 'CWE-1357', stride: 'Tampering',
+            family: 'dependency-confusion',
             file: c.filePath || 'package.json', line: 0,
             snippet: `${c.ecosystem}:${c.name}@${c.version}`,
             fix: `"${c.name}" matches your internal scope "${scope}", but is being resolved from the public registry. Confirm whether your private registry is configured (e.g. .npmrc / .pypirc) — if a public copy exists with the same name an attacker could publish malicious updates and your installs would silently switch.`,

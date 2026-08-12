@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-11T18:49:08.141Z",
-  "commit": "5854652004585ecf9a39c0d4deada679e2a399d8",
+  "generatedAt": "2026-08-12T20:51:22.551Z",
+  "commit": "3e3d7fdb2518e6a79037aa8d41695f773ba0eed6",
   "targets": {
     "hooks": {
       "total": 25,
@@ -19,15 +19,17 @@
       }
     },
     "scripts": {
-      "total": 24,
+      "total": 26,
       "byFile": {
         "_compliance_lib.py": 1,
         "apply-command-trim.mjs": 2,
         "calibration-expand.mjs": 2,
+        "check-doc-drift.mjs": 1,
         "detector-fuzz-runner.mjs": 3,
         "ghsa-to-hints.mjs": 3,
         "llm-cost-ceiling.py": 2,
         "nist-compliance/scan.py": 2,
+        "release-check.mjs": 1,
         "rotate-key-auto.py": 1,
         "self-test-runner.mjs": 2,
         "synthesize-detector.mjs": 5,
@@ -35,7 +37,7 @@
       }
     },
     "scanner/src": {
-      "total": 603,
+      "total": 611,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -53,10 +55,10 @@
         "ir/cpp-preprocessor.js": 2,
         "ir/ir-stats.js": 1,
         "ir/parser-cpp.js": 6,
-        "ir/parser-cs.js": 2,
+        "ir/parser-cs.js": 3,
         "ir/parser-go.js": 5,
         "ir/parser-kt.js": 2,
-        "ir/parser-php.js": 7,
+        "ir/parser-php.js": 8,
         "ir/parser-py-cst.js": 1,
         "ir/parser-py.helper.py": 1,
         "ir/parser-py.js": 2,
@@ -66,11 +68,11 @@
         "leaderboard.js": 3,
         "llm-validator/consistency.js": 1,
         "llm-validator/cost-ceiling.js": 1,
-        "llm-validator/index.js": 4,
+        "llm-validator/index.js": 5,
         "llm-validator/redact.js": 2,
         "lsp/server.js": 3,
-        "mcp/audit.js": 7,
-        "mcp/redact.js": 1,
+        "mcp/audit.js": 8,
+        "mcp/redact.js": 3,
         "mcp/server.js": 1,
         "mcp/tools.js": 7,
         "poc-video.js": 1,
@@ -99,6 +101,7 @@
         "posture/cross-lang-orm.js": 1,
         "posture/cross-lang-queues.js": 5,
         "posture/cross-repo-memory.js": 2,
+        "posture/csharp-analysis.js": 1,
         "posture/custom-rules.js": 2,
         "posture/cve-alert-daemon.js": 6,
         "posture/cve-lookup.js": 4,
@@ -250,7 +253,7 @@
         "sca/dep-confusion.js": 3,
         "sca/import-reachability.js": 1,
         "sca/install-script-analysis.js": 1,
-        "sca/llm-function-extract.js": 1,
+        "sca/llm-function-extract.js": 2,
         "sca/py-package-functions.js": 1,
         "sca/sigstore-verify.js": 7,
         "sca/vendor-detect.js": 1,

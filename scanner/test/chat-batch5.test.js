@@ -356,6 +356,24 @@ test('Stage6: a mixed control (some mappings pass, one fails) still reads "parti
   assert.equal(r[0].status, 'partial');
 });
 
+// CMP-1 (Stage 6 follow-up): k8s-admission.js's real rule id for a
+// privileged-pod finding is `k8s-pod-privileged`, but owasp-asvs-5.json and
+// nist-privacy-1-1.json map controls to the compliance-side spelling
+// `k8s-pod-security-privileged`, which no detector ever emitted.
+test('Stage6 (CMP-1): a k8s-pod-privileged finding is visible to a control mapped to family:k8s-pod-security-privileged', async () => {
+  const p = await mkProject();
+  try {
+    const fw = loadFramework(p.dir, 'owasp-asvs-5');
+    const scan = { findings: [{ family: 'k8s-pod-privileged', severity: 'critical' }] };
+    const r = evaluateFramework(p.dir, fw, scan);
+    const withMapping = r.filter(x =>
+      Array.isArray(x.control.mapsTo) && x.control.mapsTo.includes('family:k8s-pod-security-privileged'));
+    assert.ok(withMapping.length > 0, 'owasp-asvs-5 must map at least one control to family:k8s-pod-security-privileged');
+    assert.ok(withMapping.every(x => x.status !== 'present'),
+      'a critical privileged-pod finding must not be invisible to a control mapped to its (differently-spelled) family');
+  } finally { await p.cleanup(); }
+});
+
 test('auditor: renderWalkthrough produces Markdown with summary + per-control sections', async () => {
   const p = await mkProject();
   try {

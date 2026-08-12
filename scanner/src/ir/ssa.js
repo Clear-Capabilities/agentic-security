@@ -43,7 +43,12 @@ export function isSSAEnabled() {
  *
  * Returns Map<nodeId, Set<nodeId>>  — dom[n] = set of nodes that dominate n.
  */
-function computeDominators(cfg) {
+// Exported (Stage 6 correctness audit) so dataflow/implicit-flow.js can
+// reuse this tested algorithm to correctly scope "is node N genuinely
+// inside branch B" (N is inside iff B dominates N — every path to N passes
+// through B) instead of a path-dependent DFS depth counter that had no way
+// to detect a branch's join point.
+export function computeDominators(cfg) {
   const nodes = Object.keys(cfg.nodes || {});
   const entry = cfg.entry;
   const dom = new Map();
