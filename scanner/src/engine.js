@@ -6571,7 +6571,7 @@ function _makePurl(ecosystem,name,version,group){
   const t={npm:'npm',pypi:'pypi'}[ecosystem]||ecosystem;
   if(!t)return'';
   const ns=group?`${encodeURIComponent(group)}/`:'';
-  return`pkg:${t}/${ns}${encodeURIComponent(name)}${version?'@'+version:''}`;
+  return`pkg:${t}/${ns}${encodeURIComponent(name)}${version?'@'+encodeURIComponent(version):''}`;
 }
 
 function _parsePackageJson(text,filePath){
@@ -7891,6 +7891,11 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // R8 (PRD §5): OS packages from an extracted container image's package DBs
   // (dpkg/apk) — baked-in deps the Dockerfile never names. Feed the OSV/SBOM pipeline.
   try{const{extractImagePackages}=await import('./sca/image-packages.js');for(const ip of extractImagePackages(allFileContents)){if(!components.some(c=>c.ecosystem===ip.ecosystem&&c.name===ip.name&&c.version===ip.version))components.push(ip);}}catch(_){}
+  // Dockerfile-declared apt/apk install-line packages — complementary to
+  // extractImagePackages above (which reads an actually scanned filesystem's
+  // installed-package DB, a different signal: build-time-declared vs.
+  // actually-installed).
+  try{const{extractContainerPackages}=await import('./sca/container.js');for(const cp of extractContainerPackages(allFileContents)){if(!components.some(c=>c.ecosystem===cp.ecosystem&&c.name===cp.name&&c.version===cp.version))components.push(cp);}}catch(_){}
   try{const{detectVendoredLibraries}=await import('./sca/vendor-detect.js');const vendored=detectVendoredLibraries(fc);for(const v of vendored){const key=`${v.ecosystem}:${v.name}:${v.version}`;if(!components.some(c=>`${c.ecosystem}:${c.name}:${c.version}`===key))components.push({...v,group:'',purl:`pkg:${v.ecosystem}/${v.name}@${v.version}`,filePath:v.file,isUnpinned:false,reachable:true});}}catch(_){}
   const reach=buildReachabilitySet(fc);
   const reachabilitySet=reach.imported;

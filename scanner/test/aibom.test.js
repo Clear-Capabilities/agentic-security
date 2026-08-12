@@ -45,6 +45,17 @@ test('AI-BOM: extracts models, prompt templates, frameworks, vector stores', asy
   const vsNames = aibom.vectorStores.map(v => v.name);
   assert.ok(vsNames.includes('@pinecone-database/pinecone'), 'expected pinecone; got: ' + vsNames.join(', '));
 
+  // Stage 4 correctness audit: _classifyFramework checks FRAMEWORK_PACKAGES
+  // before EMBEDDING_PACKAGES and returns on first match — but every member
+  // of EMBEDDING_PACKAGES (openai, @anthropic-ai/sdk, sentence-transformers)
+  // is ALSO in FRAMEWORK_PACKAGES, so the embedding-provider branch can
+  // never be reached for any real package; aibom.embeddings is always [].
+  // openai/@anthropic-ai/sdk here are legitimately both an inference
+  // framework AND an embedding provider — classification isn't mutually
+  // exclusive in reality and shouldn't be treated that way in code.
+  const embNames = aibom.embeddings.map(e => e.name);
+  assert.ok(embNames.includes('openai'), 'expected openai to also appear as an embedding provider; got: ' + embNames.join(', '));
+
   // Markdown rendering doesn't crash and contains the section headers
   const md = aibomToMarkdown(aibom);
   assert.match(md, /^# AI-BOM/m);

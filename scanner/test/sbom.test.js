@@ -5,9 +5,28 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../src/runScan.js';
 import { toCycloneDX, toSPDX } from '../src/posture/sbom.js';
+import { parseManifests } from '../src/engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIX = (n) => path.join(__dirname, 'fixtures', n);
+
+// Stage 4 correctness audit: _makePurl (engine.js) percent-encodes name and
+// namespace/group but concatenates `version` raw: `${version?'@'+version:''}`.
+// The package-url spec requires every purl component to be percent-encoded.
+// A semver build-metadata suffix (`1.0.0+build.123`, entirely legal semver
+// and common in real packages) produces a purl with a literal, un-encoded
+// `+` — which any spec-compliant purl consumer decodes as a space, silently
+// corrupting the version string for external tools (vuln databases,
+// dependency-resolution systems) that ingest this SBOM/PURL data.
+test('purl: version component is percent-encoded (build-metadata "+" does not leak through raw)', () => {
+  const components = parseManifests({
+    'package.json': JSON.stringify({ dependencies: { 'some-lib': '1.0.0+build.123' } }),
+  });
+  const c = components.find(x => x.name === 'some-lib');
+  assert.ok(c, 'expected the component to be parsed');
+  assert.equal(c.purl, 'pkg:npm/some-lib@1.0.0%2Bbuild.123',
+    `expected the '+' to be percent-encoded; got ${c.purl}`);
+});
 
 test('SBOM — CycloneDX 1.6 has correct top-level fields', async () => {
   const { scan, meta } = await runScan(FIX('vulnerable-js'));

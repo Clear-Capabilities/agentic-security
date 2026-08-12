@@ -80,9 +80,14 @@ export function scanContainer(fp, raw) {
     });
   }
 
+  return findings;
+}
+
+function _parsePackagesFromDockerfile(raw) {
   // Pass 2: apt/apk packages — surface as components hint for the SCA pipeline.
   // We do NOT query OSV here (the engine's SCA pass owns that). Just collect names.
   const packages = [];
+  let m;
   _APT_INSTALL_RE.lastIndex = 0;
   while ((m = _APT_INSTALL_RE.exec(raw))) {
     for (const tok of m[1].split(/\s+/)) {
@@ -101,7 +106,34 @@ export function scanContainer(fp, raw) {
       if (/^[a-z0-9][\w.+-]*$/.test(name)) packages.push({ ecosystem: 'alpine', name, version: ver || '' });
     }
   }
-  // Stash packages on the first finding so the engine can consume them downstream
-  if (packages.length && findings.length) findings[0]._containerPackages = packages;
-  return findings;
+  return packages;
+}
+
+// Extract Dockerfile-declared apt/apk packages across every Dockerfile in
+// fileContents, as full SCA component entries — mirrors image-packages.js's
+// extractImagePackages(fileContents) signature/shape so both plug into the
+// engine's components merge the same way. Deliberately independent of
+// scanContainer's return value: piggybacking package data on a *finding*
+// meant no packages were ever surfaced for a Dockerfile whose FROM line
+// wasn't itself flagged (the common case — most Dockerfiles pin a
+// non-EOL base image), even though apt/apk lines were still present and
+// parseable.
+export function extractContainerPackages(fileContents) {
+  const comps = [];
+  const seen = new Set();
+  for (const [file, content] of Object.entries(fileContents || {})) {
+    if (!_DOCKERFILE_RE.test(file.replace(/\\/g, '/'))) continue;
+    if (!content || content.length > 200_000) continue;
+    for (const p of _parsePackagesFromDockerfile(content)) {
+      const key = `${p.ecosystem}:${p.name}:${p.version}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      comps.push({
+        name: p.name, version: p.version, group: '', scope: 'required',
+        purl: `pkg:${p.ecosystem === 'debian' ? 'deb/debian' : 'apk/alpine'}/${encodeURIComponent(p.name)}${p.version ? '@' + encodeURIComponent(p.version) : ''}`,
+        ecosystem: p.ecosystem, filePath: file, isUnpinned: !p.version, isOsPackage: true, reachable: true,
+      });
+    }
+  }
+  return comps;
 }

@@ -156,12 +156,16 @@ function _extractPromptFile(fp, content) {
   };
 }
 
+// A package's role isn't mutually exclusive in reality — `openai` and
+// `@anthropic-ai/sdk` are both a general inference framework AND an
+// embedding-provider SDK. Returns every matching class, not just the first.
 function _classifyFramework(c) {
   const name = (c.name || '').toLowerCase();
-  if (FRAMEWORK_PACKAGES.has(name) || FRAMEWORK_PACKAGES.has(c.name)) return 'inference-framework';
-  if (VECTOR_STORE_PACKAGES.has(name) || VECTOR_STORE_PACKAGES.has(c.name)) return 'vector-store';
-  if (EMBEDDING_PACKAGES.has(name) || EMBEDDING_PACKAGES.has(c.name)) return 'embedding-provider';
-  return null;
+  const classes = [];
+  if (FRAMEWORK_PACKAGES.has(name) || FRAMEWORK_PACKAGES.has(c.name)) classes.push('inference-framework');
+  if (VECTOR_STORE_PACKAGES.has(name) || VECTOR_STORE_PACKAGES.has(c.name)) classes.push('vector-store');
+  if (EMBEDDING_PACKAGES.has(name) || EMBEDDING_PACKAGES.has(c.name)) classes.push('embedding-provider');
+  return classes;
 }
 
 // Public: build the AI-BOM from already-scanned data.
@@ -189,10 +193,10 @@ export function buildAIBOM(scan, fileContents = {}, meta = {}) {
   const vectorStores = [];
   const embeddings = [];
   for (const c of (scan.components || [])) {
-    const cls = _classifyFramework(c);
-    if (cls === 'inference-framework') frameworks.push({ ecosystem: c.ecosystem, name: c.name, version: c.version, license: c.license || null });
-    else if (cls === 'vector-store') vectorStores.push({ ecosystem: c.ecosystem, name: c.name, version: c.version });
-    else if (cls === 'embedding-provider') embeddings.push({ ecosystem: c.ecosystem, name: c.name, version: c.version });
+    const classes = _classifyFramework(c);
+    if (classes.includes('inference-framework')) frameworks.push({ ecosystem: c.ecosystem, name: c.name, version: c.version, license: c.license || null });
+    if (classes.includes('vector-store')) vectorStores.push({ ecosystem: c.ecosystem, name: c.name, version: c.version });
+    if (classes.includes('embedding-provider')) embeddings.push({ ecosystem: c.ecosystem, name: c.name, version: c.version });
   }
   return {
     aibomFormat: 'agentic-security AI-BOM',

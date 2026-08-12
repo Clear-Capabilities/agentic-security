@@ -42,6 +42,23 @@ function buildResolver(text) {
 
 function lineOf(text, idx) { return text.slice(0, idx).split('\n').length; }
 
+// AWS security-group `cidr_blocks` lives inside either an `ingress { }` or
+// `egress { }` block. Egress-to-anywhere (0.0.0.0/0 outbound) is the
+// standard default for nearly every security group and is not itself a
+// finding; only the same value on an ingress (inbound) rule is an exposure.
+// Finds the nearest enclosing block by walking back to the last occurrence
+// of either keyword before the match position — security-group ingress/
+// egress blocks don't nest another ingress/egress block inside themselves,
+// so the closest preceding one is the enclosing one.
+const _BLOCK_KEYWORD_RE = /\b(ingress|egress)\s*\{/g;
+function _enclosingBlockType(raw, idx) {
+  let last = null;
+  _BLOCK_KEYWORD_RE.lastIndex = 0;
+  let m;
+  while ((m = _BLOCK_KEYWORD_RE.exec(raw)) && m.index < idx) last = m[1];
+  return last;
+}
+
 const CHECKS = [
   {
     id: 'open-ingress', cwe: 'CWE-284', sev: 'high',
@@ -49,6 +66,13 @@ const CHECKS = [
     bad: (val) => /\b0\.0\.0\.0\/0\b|::\/0\b/.test(val),
     vuln: 'Terraform: security-group ingress open to the world (0.0.0.0/0)',
     fix: 'Restrict cidr_blocks to known networks; never default an ingress CIDR to 0.0.0.0/0.',
+    // Only ingress (inbound) exposure is a finding — egress-to-anywhere is
+    // the standard, expected default. A cidr_blocks outside any
+    // ingress/egress block (no enclosing keyword found) is kept: that's
+    // the standalone `aws_security_group_rule` resource shape, which needs
+    // a separate `type = "ingress"` attribute this module doesn't parse —
+    // erring toward reporting rather than silently dropping it.
+    blockGate: (blockType) => blockType !== 'egress',
   },
   {
     id: 'public-bucket', cwe: 'CWE-732', sev: 'high',
@@ -76,6 +100,7 @@ export function scanTerraform(fp, raw) {
     const re = new RegExp(check.attr.source, check.attr.flags);
     let m;
     while ((m = re.exec(raw))) {
+      if (check.blockGate && !check.blockGate(_enclosingBlockType(raw, m.index))) continue;
       const rawVal = m[1];
       // A literal list may hold several entries; resolve each token.
       const tokens = rawVal.replace(/^\[|\]$/g, '').split(',').map(t => t.trim()).filter(Boolean);

@@ -20,6 +20,20 @@ test('open ingress via a VARIABLE default fires (the regex blind spot)', () => {
   assert.match(f[0].description, /via `ingress_cidr`/);
 });
 
+// Stage 4 correctness audit: the open-ingress check's attr regex matches
+// `cidr_blocks = [...]` anywhere in the file, with no awareness of whether
+// it's nested inside an `ingress { }` or `egress { }` block. An egress rule
+// allowing 0.0.0.0/0 (outbound to anywhere) is the standard, expected
+// default for nearly every AWS security group — it's an ingress rule doing
+// the same that's the actual exposure. The rule's own name and vuln text
+// ("ingress open to the world") only claim to check ingress.
+test('egress cidr_blocks = 0.0.0.0/0 (normal, safe outbound rule) does NOT fire the ingress check', () => {
+  const tf = `resource "aws_security_group" "x" {\n  egress { cidr_blocks = ["0.0.0.0/0"] }\n}`;
+  const f = scanTerraform('main.tf', tf);
+  assert.equal(f.filter(x => /open to the world/.test(x.vuln)).length, 0,
+    `expected the egress-only rule to be silent; got ${JSON.stringify(f.map(x => x.vuln))}`);
+});
+
 test('public S3 ACL via variable fires', () => {
   const tf = `
     variable "acl" { default = "public-read" }
