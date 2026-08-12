@@ -2747,10 +2747,24 @@ function scanLogicVulns(fp,raw){
     while((m=re.exec(haystack))){
       const line=lineAt(haystack,m.index);
       const snippet=lines[line-1]?.trim()||"";
+      let outSnippet=snippet;
       // FP-2: credential FP filter
       if(pat.vuln==='Hardcoded Secret'||pat.vuln==='Hardcoded Credential Check'){
         const fpCheck=_isFalsePositiveCredential(fp,snippet,m[0]);
         if(fpCheck.skip){_suppressionLog.push({vuln:pat.vuln,file:fp,line,snippet,reason:fpCheck.reason});continue;}
+        // Stage 4 correctness audit (coverage breadth, secrets): same
+        // unredacted-snippet leak found in engine.js's scanEntropySecrets/
+        // scanCredentials and sast/secret-concat.js — this is a THIRD,
+        // separate detector (LOGIC_PATTERNS' own "Hardcoded Secret" rule)
+        // that also stored the raw source line, with no masking at all.
+        // The regex captures the quoted value inside `m[0]`; mask just
+        // that value within the reported snippet.
+        const valMatch=m[0].match(/['"]([^'"]{3,})['"]/);
+        if(valMatch){
+          const val=valMatch[1];
+          const masked=val.length>8?val.substring(0,4)+"…"+val.substring(val.length-4):"••••";
+          outSnippet=snippet.split(val).join(masked);
+        }
       }
       // FP-6: operational-context gate for selected logic patterns
       if (predicate) {
@@ -2760,7 +2774,7 @@ function scanLogicVulns(fp,raw){
           continue;
         }
       }
-      results.push({vuln:pat.vuln,severity:pat.severity,cwe:pat.cwe,stride:pat.stride,kind:pat.kind,fix:pat.fix,code:pat.code,file:fp,line,snippet});
+      results.push({vuln:pat.vuln,severity:pat.severity,cwe:pat.cwe,stride:pat.stride,kind:pat.kind,fix:pat.fix,code:pat.code,file:fp,line,snippet:outSnippet});
     }
   }
   const routeRe=/(?:app|router)\s*\.\s*(?:get|post|all)\s*\(\s*['"`](\/(?:debug|admin|test|internal|__)[^'"`]*)/gi;let rm;
@@ -5409,17 +5423,29 @@ function scanEntropySecrets(fp,raw){
     // FP-5: structural / doc-context suppression
     const surrounding=lines.slice(Math.max(0,line-3),Math.min(lines.length,line+1)).join("\n");
     const nonSecretReason=_isLikelyNonSecret(v, ctx, surrounding);
+    const masked=v.substring(0,4)+"…"+v.substring(v.length-4);
     if (nonSecretReason) {
-      _suppressionLog.push({vuln:"High-Entropy Credential Candidate",file:fp,line,snippet:ctx.trim(),reason:'entropy-'+nonSecretReason});
+      // Same redaction concern as the main finding below applies to the
+      // suppression log — it's exposed via --include-suppressed, and a
+      // heuristic "probably not a real secret" call can be wrong.
+      _suppressionLog.push({vuln:"High-Entropy Credential Candidate",file:fp,line,snippet:ctx.trim().split(v).join(masked),reason:'entropy-'+nonSecretReason});
       continue;
     }
-    const masked=v.substring(0,4)+"…"+v.substring(v.length-4);
+    // Stage 4 correctness audit (coverage breadth, secrets): `snippet` used
+    // to carry the RAW, unmasked source line — including the full secret
+    // value — even though `masked` right next to it was correctly
+    // redacted. Nothing downstream (normalizeFindings, toHTML, toCSV,
+    // toJUnit) ever redacts `snippet` again, so the plaintext credential
+    // this detector exists to find flowed straight into every report
+    // format this scanner emits, including last-scan.json. Redact the
+    // exact matched value out of the snippet at the source, the same way
+    // `masked` already is.
     out.push({
       vuln:"High-Entropy Credential Candidate",
       severity:"high",cwe:"CWE-798",stride:"Information Disclosure",
       fix:"Replace with environment variable or secrets manager reference; rotate the value immediately.",
       code:`// BEFORE\nconst secret = "${masked}";\n\n// AFTER\nconst secret = process.env.APP_SECRET;`,
-      file:fp,line,snippet:ctx.trim(),masked,entropy:e.toFixed(2)
+      file:fp,line,snippet:ctx.trim().split(v).join(masked),masked,entropy:e.toFixed(2)
     });
   }
   return out;
@@ -6369,7 +6395,11 @@ function scanCredentials(fp,raw){
       if(seen.has(key))continue;seen.add(key);
       const severity=pat.s==="c"?"critical":pat.s==="h"?"high":"medium";
       const masked=val.length>12?val.substring(0,6)+"••••••"+val.substring(val.length-4):val.substring(0,3)+"•••";
-      results.push({vuln:pat.n,severity,cwe:"CWE-798",stride:"Information Disclosure",file:fp,line,snippet,masked,fix:"Remove the hardcoded credential. Store secrets in environment variables or a secrets manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager). Rotate the exposed credential immediately, treat it as compromised.",code:`// Remove hardcoded value:\n// const secret = "${masked}";\n\n// Use environment variable instead:\nconst secret = process.env.${pat.n.toUpperCase().replace(/[^A-Z0-9]/g,"_")};`});
+      // Stage 4 correctness audit (coverage breadth, secrets): same
+      // unredacted-snippet leak as scanEntropySecrets — `snippet` carried
+      // the raw source line (full credential value) straight through to
+      // every report format. Redact the exact matched value here too.
+      results.push({vuln:pat.n,severity,cwe:"CWE-798",stride:"Information Disclosure",file:fp,line,snippet:snippet.split(val).join(masked),masked,fix:"Remove the hardcoded credential. Store secrets in environment variables or a secrets manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager). Rotate the exposed credential immediately, treat it as compromised.",code:`// Remove hardcoded value:\n// const secret = "${masked}";\n\n// Use environment variable instead:\nconst secret = process.env.${pat.n.toUpperCase().replace(/[^A-Z0-9]/g,"_")};`});
     }
   }
   return results;

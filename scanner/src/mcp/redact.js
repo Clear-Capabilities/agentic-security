@@ -27,6 +27,32 @@ const PATTERNS = [
   [/rk_(?:live|test)_[A-Za-z0-9]{20,}/g, 'stripe-restricted-key'],
   [/SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}/g, 'sendgrid-key'],
   [/AIza[0-9A-Za-z_-]{35}/g, 'google-api-key'],
+  // Stage 4 correctness audit (coverage breadth, AI security): this list
+  // only covered a small subset of what the scanner's OWN credential
+  // detector (engine.js's CREDENTIAL_PATTERNS, 40+ provider shapes) finds
+  // — a Shopify/Telegram/Twilio/Discord-webhook/Square/Google-OAuth/JDBC
+  // secret detected and reported by a scan reached explain_finding's
+  // output completely unredacted, because none of those shapes were in
+  // THIS separate, narrower list. Reusing the same regex bodies as
+  // engine.js's CREDENTIAL_PATTERNS for the shapes verified to leak
+  // (rather than importing engine.js itself, which would pull its entire
+  // multi-thousand-line module graph into the MCP server's dependency
+  // surface for a handful of consts).
+  [/ya29\.[0-9A-Za-z_-]{20,}/g, 'google-oauth-token'],
+  [/shp(?:at|ss|ca|pa)_[a-fA-F0-9]{32}/g, 'shopify-token'],
+  [/(?<![0-9])[0-9]{8,10}:AA[0-9A-Za-z_-]{33}(?![A-Za-z0-9_])/g, 'telegram-bot-token'],
+  [/twilio.{0,20}SK[0-9a-fA-F]{32}/gi, 'twilio-api-key'],
+  [/sq0atp-[0-9A-Za-z_-]{22}/g, 'square-access-token'],
+  [/sq0csp-[0-9A-Za-z_-]{43}/g, 'square-oauth-secret'],
+  [/access_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}/g, 'paypal-braintree-token'],
+  [/https:\/\/(?:discordapp|discord)\.com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+/g, 'discord-webhook'],
+  [/https:\/\/hooks\.slack\.com\/services\/T[a-zA-Z0-9_]{8}\/B[a-zA-Z0-9_]{8,12}\/[a-zA-Z0-9_]{24}/g, 'slack-webhook'],
+  [/https:\/\/outlook\.office\.com\/webhook\/[A-Za-z0-9\-@]+\/IncomingWebhook\/[A-Za-z0-9-]+\/[A-Za-z0-9-]+/g, 'teams-webhook'],
+  [/https:\/\/(?:www\.)?hooks\.zapier\.com\/hooks\/catch\/[A-Za-z0-9]+\/[A-Za-z0-9]+\//g, 'zapier-webhook'],
+  // JDBC connection string carrying a password: only redact when password
+  // evidence is actually on the line (matches engine.js's own ctx gate),
+  // so a credential-free JDBC URL in docs isn't needlessly mangled.
+  [/jdbc:[a-z:]+:\/\/[A-Za-z0-9.\-_:;=/@?,&]*(?:@|password=|passwd=|pwd=)[A-Za-z0-9.\-_:;=/@?,&]*/gi, 'jdbc-connection-string'],
   // JWT — three dot-separated b64url segments starting with eyJ
   [/eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, 'jwt'],
   // PEM-encoded private keys

@@ -48,11 +48,22 @@ export function scanSecretConcat(fp, raw) {
     const id = `secret-concat:${fp}:${line}`;
     if (seen.has(id)) continue;
     seen.add(id);
+    // Stage 4 correctness audit (coverage breadth, secrets): same
+    // unredacted-snippet leak found in engine.js's scanEntropySecrets/
+    // scanCredentials — `snippet` carried the raw source line, including
+    // the full reassembled secret's literal pieces, straight through to
+    // every report format this scanner emits. This detector never
+    // computed a masked value at all (the other two secret detectors do).
+    // Mask the exact matched concat-expression text (m[2], the same
+    // substring this detector reassembled `value` from) within the
+    // snippet before reporting it.
+    const masked = value.length > 8 ? value.substring(0, 4) + '…' + value.substring(value.length - 4) : '••••';
+    const rawSnippet = (raw.split('\n')[line - 1] || '').trim().slice(0, 200);
     findings.push({
       id, file: fp, line,
       vuln: 'Hardcoded credential — secret split across concatenated literals to evade detection',
       severity: 'high', cwe: 'CWE-798', family: 'secret', parser: 'SECRET-CONCAT', confidence: 0.78,
-      snippet: (raw.split('\n')[line - 1] || '').trim().slice(0, 200),
+      snippet: rawSnippet.split(m[2]).join(masked), masked,
       remediation: 'Load the secret from the environment or a secrets manager (process.env / os.environ / Vault / AWS Secrets Manager). Splitting the literal across a concatenation does not protect it — rotate the exposed value, it must be considered compromised.',
     });
   }

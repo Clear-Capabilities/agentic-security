@@ -467,6 +467,28 @@ test('redactString redacts known provider key shapes', () => {
   }
 });
 
+// Stage 4 correctness audit (coverage breadth, AI security): redact.js's
+// pattern list only covered a small subset of what the scanner's own
+// credential detector (engine.js's CREDENTIAL_PATTERNS) recognizes — a
+// Shopify/Telegram/Twilio/Discord-webhook/Square/Google-OAuth/JDBC secret
+// reached explain_finding's output completely unredacted.
+test('redactString redacts provider shapes previously missing from the list', () => {
+  const samples = [
+    'ya29.a0AfH6SMB' + 'X'.repeat(30),                                      // Google OAuth token
+    'shpat_' + 'a'.repeat(32),                                              // Shopify access token
+    '123456789:AAH' + 'a'.repeat(32),                                       // Telegram bot token
+    'const twilioKey = "SK' + 'a'.repeat(32) + '"',                          // Twilio API key
+    'sq0atp-' + 'X'.repeat(22),                                             // Square access token
+    'https://discord.com/api/webhooks/123456789012345678/' + 'A'.repeat(30), // Discord webhook
+    'https://hooks.zapier.com/hooks/catch/123456/abcdef/',                  // Zapier webhook
+    'jdbc:mysql://db.example.com:3306/app?password=hunter2hunter2',         // JDBC with password
+  ];
+  for (const s of samples) {
+    const out = redactString(s);
+    assert.match(out, /\[REDACTED:/, `not redacted: ${s.slice(0, 40)}…`);
+  }
+});
+
 test('explain_finding redacts secret in snippet before returning to agent', async () => {
   const { handleRequest, cleanup } = await makeSession({
     findings: [{
