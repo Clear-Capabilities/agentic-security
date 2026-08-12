@@ -38,7 +38,16 @@ function _detectRunner(scanRoot) {
     } catch { return null; }
   })();
   if (pkg && pkg.scripts && pkg.scripts.test && !/no test specified/.test(String(pkg.scripts.test))) {
-    return { runner: 'npm', cmd: 'npm', args: ['test', '--silent', '--', '--passWithNoTests'] };
+    // --passWithNoTests is Jest-specific CLI syntax — appending it
+    // unconditionally broke every non-Jest npm test script (mocha, vitest,
+    // ava, tap, or a plain node script) with an "unrecognized option" exit,
+    // failing verification for a reason that has nothing to do with
+    // whether the patch actually broke anything. Only add it when Jest is
+    // actually the configured runner.
+    const usesJest = /\bjest\b/.test(String(pkg.scripts.test))
+      || Boolean(pkg.devDependencies?.jest) || Boolean(pkg.dependencies?.jest);
+    const args = usesJest ? ['test', '--silent', '--', '--passWithNoTests'] : ['test', '--silent'];
+    return { runner: 'npm', cmd: 'npm', args };
   }
   if (has('pytest.ini') || has('pyproject.toml') || has('setup.cfg')) {
     return { runner: 'pytest', cmd: 'pytest', args: ['-q', '--no-header', '-x'] };

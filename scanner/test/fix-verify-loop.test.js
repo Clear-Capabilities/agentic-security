@@ -54,6 +54,48 @@ test('runProjectTests: failing runner emits ok=false', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// Stage 5 correctness audit: _detectRunner unconditionally appends
+// `--`, `--passWithNoTests` (a Jest-specific CLI flag) to every npm
+// project's `npm test` invocation, regardless of what test framework is
+// actually configured. The prior "detects npm test" test above doesn't
+// catch this — its `sh -c` fixture happens to silently ignore the extra
+// positional args. A real, valid, non-Jest test script chokes on the
+// unrecognized flag and verification fails for a reason that has nothing
+// to do with whether the patch actually broke anything.
+test('runProjectTests: a valid non-Jest npm test script is not broken by an injected Jest-only flag', () => {
+  const dir = mkdir('nonjest');
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
+    name: 'demo', version: '1.0.0',
+    scripts: { test: 'node -e "console.log(\'ok\')"' },
+  }));
+  const out = runProjectTests(dir, { timeoutMs: 30_000 });
+  assert.equal(out.runner, 'npm');
+  assert.equal(out.ok, true, `expected a valid non-Jest test script to pass verification; got ${JSON.stringify(out)}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('runProjectTests: a Jest project still gets --passWithNoTests (no regression on the original intent)', () => {
+  const dir = mkdir('jest');
+  // A stub `jest` executable on PATH (via node_modules/.bin, exactly where
+  // npm resolves package-script commands from) that echoes its own argv,
+  // so this test observes the real args npm invoked it with rather than
+  // guessing from an exit code.
+  const binDir = path.join(dir, 'node_modules', '.bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const stubPath = path.join(binDir, 'jest');
+  fs.writeFileSync(stubPath, '#!/usr/bin/env node\nconsole.log(JSON.stringify(process.argv.slice(2)));\n');
+  fs.chmodSync(stubPath, 0o755);
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
+    name: 'demo', version: '1.0.0',
+    scripts: { test: 'jest' },
+    devDependencies: { jest: '^29.0.0' },
+  }));
+  const out = runProjectTests(dir, { timeoutMs: 30_000 });
+  assert.equal(out.ok, true, `expected the stub jest to run cleanly; got ${JSON.stringify(out)}`);
+  assert.match(out.output, /--passWithNoTests/, `expected the Jest-specific flag to still be passed for a real Jest project; got ${JSON.stringify(out)}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('verifyFixWithTests: emits untested-but-passes when no runner exists', async () => {
   const dir = mkdir('utbp');
   // A trivial clean file — scan should be empty.

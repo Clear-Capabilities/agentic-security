@@ -62,7 +62,7 @@ export function recordFixAttempt(scanRoot, record) {
   try {
     const dir = stateDir(scanRoot);
     if (!isSafeStateDir(dir)) return false;
-    if (!stateWritesEnabled()) return;
+    if (!stateWritesEnabled()) return false;
   fs.mkdirSync(dir, { recursive: true });
     // One writeSync of one newline-terminated line: a concurrent reader sees
     // whole records or nothing, and a torn tail is dropped on read.

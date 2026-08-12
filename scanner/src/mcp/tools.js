@@ -590,7 +590,7 @@ export const apply_fix = {
           const originalContent = fs.existsSync(v.abs) ? await fsp.readFile(v.abs, 'utf8') : '';
           const entry = await applyFixHistory({
             scanRoot: ctx.sessionRoot, file: rel, originalContent, newContent: v.content,
-            findingId: f.id, stableId: f.stableId, ruleId: f.rule || null, vuln: f.vuln || f.title || null,
+            findingId: f.id, stableId: f.stableId, ruleId: f.ruleId || f.cwe || f.family || null, vuln: f.vuln || f.title || null,
           });
           written.push({ file: rel, historyId: entry.id, backupPath: entry.backupPath });
         }
@@ -648,7 +648,7 @@ export const apply_fix = {
         newContent: f.fix.replacement,
         findingId: f.id,
         stableId: f.stableId || null,   // premortem 4R-8
-        ruleId: f.rule || null,
+        ruleId: f.ruleId || f.cwe || f.family || null,
         vuln: f.vuln || f.title || null,
       });
     } catch (e) {
@@ -806,7 +806,13 @@ export const synthesize_fix = {
       regression_test: f.regression_test || null,
       remediation: typeof fix.description === 'string' ? fix.description : (typeof fix === 'string' ? fix : null),
       patchBounds: { touchedFiles, locDelta, oversized },
-      recommendsFixPlan: oversized && !hasReplacement && !autofix,
+      // oversized can only be true when hasReplacement is true (locDelta is
+      // only computed in that branch, and touchedFiles never varies) — a
+      // `!hasReplacement` conjunct here was a structural contradiction that
+      // made this permanently false. The correct signal: the stored
+      // replacement itself is too big to trust auto-applying, and there's
+      // no safer deterministic alternative.
+      recommendsFixPlan: oversized && !autofix,
     };
   },
 };

@@ -110,7 +110,14 @@ export async function runAutopilot({
   for (const f of inScope) {
     const key = f.stableId || `${f.file}:${f.line}:${f.vuln}`;
     const prior = resume ? state.findings[key] : null;
-    if (prior?.outcome) { results.push(prior); continue; }
+    // A cached VERIFIED_FIXED whose patch was gated (not written) on a prior
+    // apply:false run is not a terminal outcome once the caller asks for
+    // apply:true — replaying it verbatim would silently never call
+    // applyFix on the exact two-step workflow (preview, then --apply) this
+    // gate exists to support. Everything else cached IS terminal and is
+    // replayed as before.
+    const gatedOnlyByApply = prior?.outcome === 'VERIFIED_FIXED' && prior.applied !== true && apply === true;
+    if (prior?.outcome && !gatedOnlyByApply) { results.push(prior); continue; }
 
     const rec = { key, file: f.file, line: f.line, vuln: f.vuln, severity: f.severity };
 

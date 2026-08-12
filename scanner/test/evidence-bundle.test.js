@@ -181,3 +181,51 @@ test('a bundle with only the legitimate keys still verifies (guard against over-
   const r = verifyEvidenceBundle(bundle, kp.publicKeyPem);
   assert.equal(r.ok, true, r.reason);
 });
+
+// Stage 5 correctness audit: ensureKeyPair's private-key write is exclusive
+// ('wx' — the fix for a documented prior TOCTOU), but the public-key write
+// right after it is a plain 'w', and the EEXIST recovery path unconditionally
+// fs.readFileSync's the public key with no fallback. If process B loses the
+// 'wx' race on the private key (because process A already created it) before
+// process A has reached its OWN public-key write, process B's recovery read
+// throws an uncaught ENOENT and crashes — the exact race the 'wx' fix was
+// supposed to close, just shifted one file over. Real concurrency, not a
+// mock: N processes are held at a synchronization barrier so they all reach
+// ensureKeyPair() at (as close to) the same instant, forcing the actual race
+// window rather than hoping OS scheduling produces it.
+test('ensureKeyPair: concurrent first-use does not crash on the public-key half of the race', async () => {
+  const { spawn } = await import('node:child_process');
+  const dir = tmpKeyDir();
+  const barrierDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ekp-barrier-'));
+  const childScript = path.join(barrierDir, 'child.mjs');
+  const N = 8;
+  fs.writeFileSync(childScript, `
+import * as fs from 'node:fs';
+const [,, dir, barrierDir, n] = process.argv;
+fs.writeFileSync(barrierDir + '/ready-' + process.pid, '1');
+while (fs.readdirSync(barrierDir).filter(f => f.startsWith('ready-')).length < Number(n)) { /* busy-wait */ }
+const { ensureKeyPair } = await import(${JSON.stringify(path.join(process.cwd(), 'src/posture/evidence-bundle.js'))});
+try {
+  const kp = ensureKeyPair(dir);
+  process.stdout.write(JSON.stringify({ ok: true, hasPriv: !!kp.privateKeyPem, hasPub: !!kp.publicKeyPem }));
+} catch (e) {
+  process.stdout.write(JSON.stringify({ ok: false, error: e.message, code: e.code }));
+}
+`);
+  const results = await Promise.all(Array.from({ length: N }, () => new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [childScript, dir, barrierDir, String(N)]);
+    let out = '', err = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('exit', (code) => resolve({ code, out, err }));
+    p.on('error', reject);
+  })));
+  const crashed = results.filter(r => r.code !== 0 || !r.out);
+  assert.equal(crashed.length, 0,
+    `expected all ${N} concurrent ensureKeyPair() calls to succeed cleanly; ${crashed.length} crashed:\n` +
+    crashed.map(r => `exit=${r.code} stderr=${r.err.slice(0, 300)}`).join('\n'));
+  for (const r of results) {
+    const parsed = JSON.parse(r.out);
+    assert.equal(parsed.ok, true, `expected ensureKeyPair to return successfully; got ${r.out}`);
+  }
+});

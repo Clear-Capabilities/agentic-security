@@ -157,6 +157,24 @@ test('metrics never create a stray state dir outside a project', () => {
   } finally { fs.rmSync(bare, { recursive: true, force: true }); }
 });
 
+// Stage 5 correctness audit: the docstring declares `@returns {boolean}
+// whether the record was written`, and every other early-exit in this
+// function returns `false` — except the stateWritesEnabled() check, which
+// is a bare `return;` (undefined). Sibling functions in the same state-dir
+// family (state-dir.js's safeWriteState/ensureStateDir) correctly return
+// false/null on this same condition.
+test('returns false, not undefined, when state writes are disabled', () => {
+  const root = tmpRoot();
+  process.env.AGENTIC_SECURITY_NO_STATE = '1';
+  try {
+    assert.equal(recordFixAttempt(root, attempt()), false,
+      'expected a boolean false, not undefined, when state writes are disabled');
+  } finally {
+    delete process.env.AGENTIC_SECURITY_NO_STATE;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('a malformed record cannot enter a distribution', () => {
   const root = tmpRoot();
   try {

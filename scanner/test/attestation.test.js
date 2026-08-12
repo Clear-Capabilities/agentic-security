@@ -195,6 +195,82 @@ test('an unsigned attestation still verifies structurally (signature is optional
   assert.equal(verifyRunAttestation(att, { findings: corpus(), ...META }).ok, true);
 });
 
+// Stage 5 correctness audit: integrity.js's _readOrGenerateKey has no
+// exclusivity on its key-file write (plain fs.writeFileSync, default 'w').
+// On first use (no key file yet), concurrent processes each generate their
+// OWN random key in memory, then race to persist it — the last writer wins
+// on disk, but every OTHER process keeps signing with the key it generated
+// and lost, which now exists nowhere. Every signature made under a lost key
+// fails verification forever after, indistinguishable from real tampering.
+// evidence-bundle.js's ensureKeyPair() already guards against the identical
+// race for its own (Ed25519) key material via exclusive-create ('wx') +
+// re-read-on-EEXIST; that fix was never applied to this (HMAC) twin. Real
+// concurrency, not a mock: N processes are held at a synchronization
+// barrier so they all reach key generation at (as close to) the same
+// instant, forcing the actual race window.
+test('concurrent first-use does not produce signatures that fail to verify later', async () => {
+  const { spawn } = await import('node:child_process');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const tmpConfig = fs.mkdtempSync(path.join(os.tmpdir(), 'integrity-race-'));
+  const barrierDir = fs.mkdtempSync(path.join(os.tmpdir(), 'integrity-race-barrier-'));
+  const childScript = path.join(barrierDir, 'child.mjs');
+  const N = 8;
+  const findings = corpus();
+  fs.writeFileSync(childScript, `
+import * as fs from 'node:fs';
+const [,, outFile, barrierDir, n] = process.argv;
+fs.writeFileSync(barrierDir + '/ready-' + process.pid, '1');
+while (fs.readdirSync(barrierDir).filter(f => f.startsWith('ready-')).length < Number(n)) { /* busy-wait */ }
+const { computeRunAttestation } = await import(${JSON.stringify(path.join(process.cwd(), 'src/posture/attestation.js'))});
+const att = computeRunAttestation({ findings: ${JSON.stringify(findings)}, ...${JSON.stringify(META)}, sign: true });
+fs.writeFileSync(outFile, JSON.stringify(att));
+`);
+  const outFiles = Array.from({ length: N }, (_, i) => path.join(tmpConfig, `att-${i}.json`));
+  await Promise.all(outFiles.map(out => new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [childScript, out, barrierDir, String(N)], {
+      env: { ...process.env, XDG_CONFIG_HOME: tmpConfig, AGENTIC_SECURITY_HMAC_KEY: '' },
+    });
+    let err = '';
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`exit ${code}: ${err}`)));
+    p.on('error', reject);
+  })));
+  // Verify in a FRESH subprocess with the same isolated XDG_CONFIG_HOME —
+  // not in this test-file's own process, whose integrity.js module-level
+  // key cache may already hold this machine's real per-install key from an
+  // earlier test in this same file (module state is cached per-process,
+  // not per-test), which would read the wrong key file regardless of
+  // whether the source fix works.
+  const verifyScript = path.join(barrierDir, 'verify.mjs');
+  fs.writeFileSync(verifyScript, `
+import * as fs from 'node:fs';
+const { verifyRunAttestation } = await import(${JSON.stringify(path.join(process.cwd(), 'src/posture/attestation.js'))});
+const findings = ${JSON.stringify(findings)};
+const results = ${JSON.stringify(outFiles)}.map((out) => {
+  const att = JSON.parse(fs.readFileSync(out, 'utf8'));
+  const v = verifyRunAttestation(att, { findings, ...${JSON.stringify(META)} });
+  return { file: out, ok: v.ok, reason: v.reason };
+});
+process.stdout.write(JSON.stringify(results));
+`);
+  const verifyOut = await new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [verifyScript], {
+      env: { ...process.env, XDG_CONFIG_HOME: tmpConfig, AGENTIC_SECURITY_HMAC_KEY: '' },
+    });
+    let out = '', err = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('exit', (code) => code === 0 ? resolve(out) : reject(new Error(`verify exit ${code}: ${err}`)));
+    p.on('error', reject);
+  });
+  const results = JSON.parse(verifyOut);
+  const failures = results.filter(r => !r.ok);
+  assert.equal(failures.length, 0,
+    `expected all ${N} concurrently-generated signatures to verify; ${failures.length} failed:\n${JSON.stringify(failures, null, 2)}`);
+});
+
 // ── the honest limit ────────────────────────────────────────────────────────
 
 test('the attestation states what it does NOT prove', () => {

@@ -368,6 +368,53 @@ test('synthesize_fix → apply_fix (#1+#3): deterministic autofix applied end-to
   await cleanup();
 });
 
+// Stage 5 correctness audit: synthesize_fix computes `oversized = touchedFiles
+// > 3 || locDelta > 100`, but touchedFiles is hard-coded to 1 (never
+// reassigned) and locDelta is only ever computed inside `if (hasReplacement)`
+// — so oversized can only become true when hasReplacement is also true. Yet
+// `recommendsFixPlan: oversized && !hasReplacement && !autofix` additionally
+// requires !hasReplacement — a structural contradiction that makes
+// recommendsFixPlan permanently false for every possible input, silencing
+// the oversized-patch fix-plan fallback agents/security-fixer.md documents
+// relying on.
+// Stage 5 correctness audit: apply_fix records `ruleId: f.rule || null` at
+// both call sites, but no finding in this codebase ever carries a `.rule`
+// field (confirmed by grep across src/sast, src/posture, src/ir,
+// src/dataflow, and against this repo's own real last-scan.json — zero
+// hits). Sibling code (why-fired.js, stable-id.js, bin/agentic-security.js's
+// cmdFix) all read `f.ruleId` with a `f.cwe`/`f.family` fallback instead.
+// Every fix applied through the MCP apply_fix tool wrote a permanently-null
+// ruleId into fix-history/log.json, discarding the rule/CWE provenance the
+// audit log exists to carry.
+test('apply_fix: fix-history log records a real ruleId (cwe/family fallback), not always null', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1,
+      cwe: 'CWE-798', vuln: 'Hardcoded Secret' }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), 'const x = 1;\n');
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true, patch: { 'app.js': 'const x = 2;\n' } });
+  const p = payload(r);
+  assert.equal(p.applied, true, `expected the patch to apply; got ${JSON.stringify(p)}`);
+  const log = JSON.parse(await fsp.readFile(path.join(root, '.agentic-security', 'fix-history', 'log.json'), 'utf8'));
+  const entry = log.find(e => e.findingId === 'F1');
+  assert.ok(entry, 'expected a fix-history log entry for F1');
+  assert.equal(entry.ruleId, 'CWE-798', `expected ruleId to fall back to the finding's cwe; got ${JSON.stringify(entry)}`);
+  await cleanup();
+});
+
+test('synthesize_fix: recommendsFixPlan actually fires for an oversized stored replacement', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, vuln: 'demo',
+      fix: { description: 'x', replacement: Array.from({ length: 300 }, (_, i) => `line ${i}`).join('\n') } }],
+  });
+  await fsp.writeFile(path.join(root, 'app.js'), 'export function ok() { return 1; }\n');
+  const syn = payload(await call(handleRequest, 'synthesize_fix', { finding_id: 'F1' }));
+  assert.equal(syn.hasReplacement, true);
+  assert.equal(syn.patchBounds.oversized, true, `expected the 300-line replacement to be flagged oversized; got ${JSON.stringify(syn.patchBounds)}`);
+  assert.equal(syn.recommendsFixPlan, true, `expected recommendsFixPlan to fire on an oversized stored replacement; got ${JSON.stringify(syn)}`);
+  await cleanup();
+});
+
 test('query_taint matches across findings', async () => {
   const { handleRequest, cleanup } = await makeSession({
     findings: [

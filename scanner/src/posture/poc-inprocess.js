@@ -119,14 +119,33 @@ function _binding(finding, call) {
 // The request property the handler reads. Anchored to the request identifier
 // the export actually binds, so a file that reads `req.query` while exporting
 // `(request, response)` does not produce a PoC built on the wrong name.
-function _requestSource(content, reqIdent) {
+//
+// A handler that reads more than one request property (extremely common —
+// e.g. a harmless query param for pagination alongside the actual body
+// param used in the sink) used to always get the first property found in a
+// fixed query>body>params priority, with no relationship to which one
+// actually reaches the sink — silently building a PoC against an inert
+// parameter while the real injection point went untouched. When sinkLine
+// is known, prefer whichever match sits closest to it (line proximity is a
+// cheap, effective proxy for "this is the value that flows into the sink a
+// few lines below/above it"); otherwise fall back to the old first-found
+// behavior for callers that can't supply a line.
+function _requestSource(content, reqIdent, sinkLine) {
   const esc = reqIdent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const candidates = [];
   for (const prop of ['query', 'body', 'params']) {
-    const re = new RegExp(`\\b${esc}\\.${prop}\\.(\\w+)`);
-    const m = content.match(re);
-    if (m) return { prop, key: m[1] };
+    const re = new RegExp(`\\b${esc}\\.${prop}\\.(\\w+)`, 'g');
+    let m;
+    while ((m = re.exec(content))) {
+      const line = content.slice(0, m.index).split('\n').length;
+      candidates.push({ prop, key: m[1], line });
+    }
   }
-  return null;
+  if (!candidates.length) return null;
+  if (typeof sinkLine === 'number') {
+    candidates.sort((a, b) => Math.abs(a.line - sinkLine) - Math.abs(b.line - sinkLine));
+  }
+  return { prop: candidates[0].prop, key: candidates[0].key };
 }
 
 // The sink must interpolate into a SHELL, not an argv array. `exec`/`execSync`
@@ -184,7 +203,7 @@ export function synthesizeInProcessPoc(finding, fileContent) {
     return { ok: false, reason: 'no exported two-argument (req, res) handler found — nothing to call without inventing an interface' };
   }
 
-  const src = _requestSource(fileContent, reqIdent);
+  const src = _requestSource(fileContent, reqIdent, finding.line);
   if (!src) {
     return { ok: false, reason: `the handler does not read query/body/params off '${reqIdent}', so the injection point is unknown` };
   }
@@ -392,7 +411,7 @@ function _sqlInjectionPoc(finding, fileContent) {
   if (!found) return NO_HANDLER;
   const { call, reqIdent } = found;
 
-  const src = _requestSource(fileContent, reqIdent);
+  const src = _requestSource(fileContent, reqIdent, finding.line);
   if (!src) {
     return { ok: false, reason: `the handler does not read query/body/params off '${reqIdent}', so the injection point is unknown` };
   }
@@ -490,7 +509,7 @@ function _pathTraversalPoc(finding, fileContent) {
   if (!READ_SINK.test(fileContent)) {
     return { ok: false, reason: 'no readFile/sendFile sink in the file, so there is no served content to observe coming back' };
   }
-  const src = _requestSource(fileContent, reqIdent);
+  const src = _requestSource(fileContent, reqIdent, finding.line);
   if (!src) {
     return { ok: false, reason: `the handler does not read query/body/params off '${reqIdent}', so the traversal point is unknown` };
   }

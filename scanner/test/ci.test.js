@@ -52,6 +52,24 @@ test('ci writes findings.{json,sarif,junit.xml} to .agentic-security/', async ()
   assert.match(xml, /^<\?xml version="1\.0"/);
 });
 
+// Stage 5 correctness audit: cmdScan computes and attaches scan.attestation
+// (the R4 tamper-evidence digest — "attests what actually ships") right
+// before writing its own artifacts, but cmdCi duplicates cmdScan's
+// suppression/override/pack pipeline and artifact-writing without ever
+// computing an attestation. `agentic-security ci` is the documented
+// single-shot CI entry point — the pipeline most likely to be used as the
+// actual evidence/audit trail — yet findings.json, its real CI artifact,
+// always carries attestation: null.
+test('ci writes an attestation into findings.json, same as scan does', async () => {
+  if (!fs.existsSync(cli)) { console.warn('dist/ not built; skipping ci test'); return; }
+  const dir = await copyFixture();
+  const r = runCi(dir, ['--fail-on', 'none']);
+  assert.equal(r.code, 0, `--fail-on none should exit 0; stderr=${r.stderr}`);
+  const findings = JSON.parse(await fsp.readFile(path.join(dir, '.agentic-security', 'findings.json'), 'utf8'));
+  assert.ok(findings.attestation, `expected findings.json to carry a run attestation, same as 'agentic-security scan'; got ${JSON.stringify(findings.attestation)}`);
+  assert.match(findings.attestation.digest, /^[0-9a-f]{64}$/);
+});
+
 test('ci --fail-on critical exits 1 when critical findings exist', async () => {
   if (!fs.existsSync(cli)) return;
   const dir = await copyFixture();

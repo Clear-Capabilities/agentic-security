@@ -159,6 +159,40 @@ test('the run is resumable and does not redo completed findings', async () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// Stage 5 correctness audit: the resume short-circuit
+// (`if (prior?.outcome) { results.push(prior); continue; }`) unconditionally
+// replays ANY cached terminal outcome, including a VERIFIED_FIXED record
+// from a prior GATED (apply:false) run — whose cached `applied` is `false`
+// and whose `reason` literally says "gates on: patch is ready but was not
+// written". It never checks whether the CURRENT run's `apply` flag differs
+// from what produced that cached record, so the second, --apply run of the
+// exact two-step workflow this tool is designed around (preview once, then
+// re-run with --apply once satisfied) silently never calls applyFix. Exit
+// code 0, outcome VERIFIED_FIXED, applied:false — the vulnerable file is
+// never touched, and nothing in the return value screams "this is wrong."
+test('resuming with apply:true after a gated (apply:false) run actually applies the fix', async () => {
+  const dir = tmp();
+  try {
+    const stateFile = path.join(dir, 'autopilot.json');
+    let applied = 0;
+    const stages = goodStages({ applyFix: async () => { applied++; } });
+    // Run 1: default gate (apply:false) — preview only, per the documented
+    // safe-by-default workflow.
+    const first = await runAutopilot({ stages, stateFile });
+    assert.equal(first.results[0].outcome, 'VERIFIED_FIXED');
+    assert.equal(first.results[0].applied, false);
+    assert.equal(applied, 0);
+    // Run 2: SAME stateFile, resume:true (default), now apply:true — the
+    // user reviewed the preview and wants the already-proven-safe patch
+    // written.
+    const second = await runAutopilot({ apply: true, stages, stateFile });
+    assert.equal(applied, 1, 'applyFix was never called on the apply:true resume run');
+    assert.equal(second.results[0].outcome, 'VERIFIED_FIXED');
+    assert.equal(second.results[0].applied, true,
+      `expected the resumed run to actually apply the fix; got ${JSON.stringify(second.results[0])}`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('state survives to disk mid-run', async () => {
   const dir = tmp();
   try {

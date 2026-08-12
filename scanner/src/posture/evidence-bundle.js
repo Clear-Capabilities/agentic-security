@@ -104,12 +104,25 @@ export function ensureKeyPair(dir = keyDir()) {
     return { privateKeyPem, publicKeyPem, created: true, ...p };
   } catch (e) {
     if (e.code !== 'EEXIST') throw e;
-    return {
-      privateKeyPem: fs.readFileSync(p.privateKey, 'utf8'),
-      publicKeyPem: fs.readFileSync(p.publicKey, 'utf8'),
-      created: false,
-      ...p,
-    };
+    // We lost the race on the private key — someone else's 'wx' won.
+    // Their public-key write follows immediately after their private-key
+    // write but is not itself atomic with it, so it may not have landed
+    // yet: a bare read here would throw an uncaught ENOENT on a genuinely
+    // transient state, not a real error. Retry briefly rather than crash.
+    const sleepBuf = new Int32Array(new SharedArrayBuffer(4));
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return {
+          privateKeyPem: fs.readFileSync(p.privateKey, 'utf8'),
+          publicKeyPem: fs.readFileSync(p.publicKey, 'utf8'),
+          created: false,
+          ...p,
+        };
+      } catch (readErr) {
+        if (readErr.code !== 'ENOENT' || attempt >= 50) throw readErr;
+        Atomics.wait(sleepBuf, 0, 0, 10); // 10ms; ~500ms total budget
+      }
+    }
   }
 }
 

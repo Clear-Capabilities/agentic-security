@@ -593,3 +593,31 @@ test('a silent handler runs to completion so the marker check actually executes'
   assert.equal(r.proofEvidence.exitCode, 0,
     'the PoC must run to completion, or the guard was never evaluated');
 });
+
+// Stage 5 correctness audit: _requestSource scans the WHOLE file for the
+// first query/body/params access in a fixed priority order, with no
+// relationship to which property actually reaches the sink. Any handler
+// that legitimately reads more than one request property — extremely
+// common (e.g. a harmless query param for pagination alongside the actual
+// body param used in the sink) — gets the wrong one selected, so the
+// synthesized PoC injects its payload into an inert parameter while the
+// real injection point is never touched. Confirmed live: this fires a
+// false negative (PROVEN marker never written) on a genuinely vulnerable
+// multi-parameter handler.
+test('synthesizes a PoC against the parameter that actually reaches the sink, not just the first one read', () => {
+  const multiParam = [
+    "const { exec } = require('child_process');",
+    'module.exports = function handler(req, res) {',
+    '  const page = req.query.page;',                                   // harmless, unrelated to the sink
+    '  const name = req.body.name;',                                    // the real injection point
+    "  exec('echo hello ' + name, (err, stdout) => { res.send(page + ': ' + stdout); });",
+    '};',
+  ].join('\n');
+  // finding.line points at the exec() call — the sink line the scanner
+  // actually flagged — not at the harmless req.query.page read above it.
+  const sinkLine = multiParam.split('\n').findIndex(l => l.includes('exec(')) + 1;
+  const r = synthesizeInProcessPoc(cmdi({ line: sinkLine }), multiParam);
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.poc.paramSource, 'body', `expected the sink-adjacent 'body' param to be chosen; got ${JSON.stringify({ paramSource: r.poc.paramSource, paramKey: r.poc.paramKey })}`);
+  assert.equal(r.poc.paramKey, 'name');
+});

@@ -867,6 +867,26 @@ async function cmdCi(args) {
   const packNames = packArg ? (Array.isArray(packArg) ? packArg : String(packArg).split(',')) : [];
   if (packNames.length) Object.assign(scan, applyPacks(scan, packNames));
 
+  // R4 — same run attestation cmdScan attaches, computed here too so
+  // findings.json (the actual CI evidence artifact) carries the same
+  // tamper-evidence digest 'agentic-security scan' does, rather than
+  // always shipping attestation: null. Runs after every filter above, so
+  // it attests what actually ships. Metadata only — never fails the scan.
+  try {
+    const { computeRunAttestation } = await import('../src/posture/attestation.js');
+    const { keyProvenance } = await import('../src/posture/integrity.js');
+    const { effectiveVersion } = await import('../src/posture/ruleset-version.js');
+    scan.attestation = computeRunAttestation({
+      findings: normalizeFindings(scan),
+      engineVersion: PKG_VERSION,
+      rulesetVersion: effectiveVersion(targetAbs).version,
+      bundleSha: _bundleSha(),
+      root: targetAbs,
+      sign: true,
+    });
+    if (scan.attestation) scan.attestation.keyProvenance = keyProvenance();
+  } catch { /* attestation is metadata; never fail a scan over it */ }
+
   // Persist the three CI artifacts — but a refusal to write must NEVER skip
   // the --fail-on evaluation below. S1 (Stage-0 audit, 2026): this used to be
   // a bare `return;` inside the write-guard, so `cmdCi` returned `undefined`

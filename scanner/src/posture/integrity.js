@@ -52,19 +52,37 @@ function _readOrGenerateKey() {
       if (/^[0-9a-fA-F]{32,}$/.test(hex)) { _keySource = 'per-install'; return Buffer.from(hex, 'hex'); }
     }
   } catch { /* fall through to generate */ }
-  // Generate, mode 0600.
+  // Generate, mode 0600. `wx` — exclusive create, same TOCTOU fix
+  // evidence-bundle.js's ensureKeyPair() already applies to its own key
+  // material: on first use, two concurrent processes can both pass the
+  // existsSync check above as false and both reach here. Without exclusive
+  // create, the last writer's key silently wins on disk while every OTHER
+  // process keeps signing with the key it generated and lost — a key that
+  // now exists nowhere, so every signature made under it fails to verify
+  // forever after, indistinguishable from real tampering.
   const buf = crypto.randomBytes(32);
   try {
     fs.mkdirSync(_keyDir(), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(fp, buf.toString('hex') + '\n', { mode: 0o600 });
+    fs.writeFileSync(fp, buf.toString('hex') + '\n', { mode: 0o600, flag: 'wx' });
     _keySource = 'per-install-new';
-  } catch {
-    // Could not persist — this key lives for this process only, so nothing
-    // signed with it will verify on any later run. Callers must be able to see
-    // that, or a permanently-unverifiable signature looks like a valid one.
+    return buf;
+  } catch (e) {
+    if (e.code === 'EEXIST') {
+      // Another process won the race and persisted its key first — use
+      // THAT key instead of the one we generated, or we'd return a key
+      // that matches nothing on disk.
+      try {
+        const hex = fs.readFileSync(fp, 'utf8').trim();
+        if (/^[0-9a-fA-F]{32,}$/.test(hex)) { _keySource = 'per-install'; return Buffer.from(hex, 'hex'); }
+      } catch { /* fall through to ephemeral */ }
+    }
+    // Could not persist (or the winner's key was unreadable/malformed) —
+    // this key lives for this process only, so nothing signed with it will
+    // verify on any later run. Callers must be able to see that, or a
+    // permanently-unverifiable signature looks like a valid one.
     _keySource = 'ephemeral';
+    return buf;
   }
-  return buf;
 }
 
 // REMOVED (2026-08-08): the legacy hostname-derived key.
