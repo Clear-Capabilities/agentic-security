@@ -70,6 +70,46 @@ test('scorecard-gate — bundle unbuilt (no dist) → does not warn or fail on t
   assert.deepEqual(r.warnings, []);
 });
 
+// --- independent-population staleness --------------------------------------
+//
+// Stage 2 measurement-completeness audit: nothing checked whether
+// committedInputs.independent — docs/SCORECARD.md's own words, "the number
+// that matters" — described the current release at all. A stale
+// independent-population F1/precision/recall could ship forever with zero
+// signal to a maintainer. Warning (not error), matching the bundleSha256
+// precedent: this section is read from a committed artifact
+// (bench/independent/RESULT.json) that takes ~32 minutes to regenerate and
+// is legitimately not re-run every release.
+
+test('scorecard-gate — independent-population engineVersion mismatch → warns, does not fail', () => {
+  const r = evaluateScorecardFreshness(baseInputs({
+    scorecardJson: {
+      provenance: { engineVersion: '1.2.3', bundleSha256: 'abc123' },
+      committedInputs: { independent: { engineVersion: '1.0.0', measuredAt: '2020-01-01' } },
+    },
+  }));
+  assert.equal(r.ok, true, 'must not fail the release gate');
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.warnings.length, 1);
+  assert.ok(/1\.0\.0/.test(r.warnings[0]) && /1\.2\.3/.test(r.warnings[0]));
+});
+
+test('scorecard-gate — independent-population engineVersion match → no warning', () => {
+  const r = evaluateScorecardFreshness(baseInputs({
+    scorecardJson: {
+      provenance: { engineVersion: '1.2.3', bundleSha256: 'abc123' },
+      committedInputs: { independent: { engineVersion: '1.2.3' } },
+    },
+  }));
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.warnings, []);
+});
+
+test('scorecard-gate — no committedInputs.independent section at all → no warning (nothing to check)', () => {
+  const r = evaluateScorecardFreshness(baseInputs());
+  assert.deepEqual(r.warnings, []);
+});
+
 // --- corpus population ----------------------------------------------------
 //
 // The hole these close, found by adversarial review of a green gate: the
