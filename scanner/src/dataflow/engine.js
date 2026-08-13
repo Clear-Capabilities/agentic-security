@@ -166,6 +166,25 @@ function _resolvableCalleeName(calleeExpr) {
   return null;
 }
 
+// Resolve calleeExpr to { qid, fn } via the call graph — the shared
+// resolve-and-lookup sequence every summary-consulting call site needs.
+// Extracted from what were two independent, drifting copies (assign-RHS and
+// plain-call-statement) so a future change (like PRD R11 in this same file)
+// only has to land once. See _resolvableCalleeName's own comment for why a
+// bare-name/pre-flattened-string callee is the ONLY case handled here for
+// now — Task 4 (PRD R11) extends this function's body to add a second,
+// CHA-gated resolution path for member-expression callees.
+function _resolveCalleeForSummary(calleeExpr, callContext) {
+  if (!callContext || !callContext._callGraph || !callContext._callGraph.resolveKnownCallee) return null;
+  const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
+  const _resolvableName = _resolvableCalleeName(calleeExpr);
+  if (!_resolvableName) return null;
+  const resolved = callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile);
+  const fn = functionRecord(callContext._callGraph, resolved);
+  const qid = resolved && (resolved.qid || resolved);
+  return typeof qid === 'string' ? { qid, fn } : null;
+}
+
 function exprTaint(expr, state) {
   if (expr && (expr.kind === 'member' || expr.kind === 'call') && exprIsSource(expr)) return true;
   if (!expr) return false;
@@ -505,18 +524,10 @@ function step(node, stateIn, callContext) {
       const calleeName = node.source && node.source.kind === 'call'
         ? _flattenCalleeName(node.source.callee) : null;
       if (target && calleeName && callContext._summaryCache && callContext._callGraph) {
-        const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-        const _resolvableName = node.source && node.source.kind === 'call'
-          ? _resolvableCalleeName(node.source.callee) : null;
-        // resolveKnownCallee: never guess via resolve()'s bare-tail
-        // fallback. _resolvableCalleeName already refuses JS member
-        // expressions, but a pre-flattened STRING callee (Go/PHP/Ruby/
-        // C++/Python parsers) can still be dotted, and only the resolver
-        // itself can tell — see callgraph.js.
-        const resolved = (_resolvableName && callContext._callGraph.resolveKnownCallee)
-          ? callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile) : null;
-        const fn  = functionRecord(callContext._callGraph, resolved);
-        const qid = resolved && (resolved.qid || resolved);
+        const _resolvedTarget = node.source && node.source.kind === 'call'
+          ? _resolveCalleeForSummary(node.source.callee, callContext) : null;
+        const fn  = _resolvedTarget && _resolvedTarget.fn;
+        const qid = _resolvedTarget && _resolvedTarget.qid;
         if (typeof qid === 'string') {
           // v0.66 — context-sensitive lookup. Build the entry-state from
           // the call args + current taint; look up (and lazily compute) the
@@ -652,15 +663,9 @@ function step(node, stateIn, callContext) {
       // Object.assign(target, tainted) → target becomes tainted in caller.
       const _plainCallCalleeName = _flattenCalleeName(node.callee);
       if (callContext._summaryCache && callContext._callGraph && _plainCallCalleeName) {
-        const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-        const _resolvableName = _resolvableCalleeName(node.callee);
-        // resolveKnownCallee: see the comment at the sibling call site above
-        // — a pre-flattened dotted STRING callee must not be guessed via
-        // resolve()'s bare-tail fallback.
-        const resolved = (_resolvableName && callContext._callGraph.resolveKnownCallee)
-          ? callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile) : null;
-        const fn  = functionRecord(callContext._callGraph, resolved);
-        const qid = resolved && (resolved.qid || resolved);
+        const _resolvedTarget = _resolveCalleeForSummary(node.callee, callContext);
+        const fn  = _resolvedTarget && _resolvedTarget.fn;
+        const qid = _resolvedTarget && _resolvedTarget.qid;
         if (typeof qid === 'string' && fn && Array.isArray(fn.params)) {
           const paramNames = fn.params;
           const entry = paramNames.length
