@@ -111,10 +111,18 @@ function _flattenCalleeName(calleeExpr) {
 // (`this.userRepo.save` -> parts = ['this','userRepo','save']). A partial
 // flatten (`_flattenCalleeName` would return just 'save' for `this.userRepo.
 // save`, since its object isn't a bare ident) silently starves that heuristic.
+//
+// Note: parser-js.js encodes ThisExpression as {kind:'ident', name:'_this_'}
+// (a sentinel, not literal 'this'). We must convert it to the literal string
+// 'this' so receiverTypeAtCall's `parts[0] === 'this'` heuristic actually fires.
 function _fullyFlattenMemberChain(calleeExpr) {
   if (!calleeExpr) return null;
   if (typeof calleeExpr === 'string') return calleeExpr;
-  if (calleeExpr.kind === 'ident') return calleeExpr.name || null;
+  if (calleeExpr.kind === 'ident') {
+    const name = calleeExpr.name || null;
+    // Convert the parser's _this_ sentinel to the literal 'this' string
+    return name === '_this_' ? 'this' : name;
+  }
   if (calleeExpr.kind === 'member' && typeof calleeExpr.prop === 'string') {
     const base = _fullyFlattenMemberChain(calleeExpr.object);
     return base ? `${base}.${calleeExpr.prop}` : calleeExpr.prop;
@@ -1018,6 +1026,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _stack: new Set(), deadlineMs,
         _summaryCache: summaryCache, _callGraph: callGraph,
         _mutatedParamsOut: new Set(),
+        _currentFnQid: fn.qid,
+        _cha: opts._cha,
+        _pointsTo: opts._pointsTo,
       };
       try { analyzeFunction(fn, entry, ctx); } catch {}
       // Report real findings discovered by this probe rather than letting

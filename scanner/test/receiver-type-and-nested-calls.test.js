@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
 import { buildProjectIR } from '../src/ir/index.js';
 import { runDeepAnalysis } from '../src/dataflow/index.js';
+import { matchSinkOrSanitizer } from '../src/dataflow/catalog.js';
 
 function mkTmp(name, files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-rcvr-${name}-`));
@@ -34,8 +35,6 @@ repo.save(1);
   assert.doesNotThrow(() => runDeepAnalysis(perFile, callGraph, { fileContents }));
 });
 
-import { matchSinkOrSanitizer } from '../src/dataflow/catalog.js';
-
 test('R6 unit: matchSinkOrSanitizer suppresses a bare-name SQL sink on a non-DB receiver type', () => {
   const calleeExpr = { kind: 'member', object: { kind: 'ident', name: 'cache' }, prop: 'query' };
   // No receiverType passed (today's behavior) — still matches, unconstrained.
@@ -62,27 +61,34 @@ test('R6 unit: unknown receiver type (null) stays permissive — unknown != clea
     'an unresolved (null) receiver type must never suppress a match — only a confident mismatch may');
 });
 
-test('R6 end-to-end: unknown/unmatched receiver type still allows match (conservative)', async () => {
-  // When CHA returns null or cannot infer receiver type, the finding is
-  // allowed through (Unknown ≠ clean). This test ensures we stay permissive.
-  const dir = mkTmp('r6-e2e', {
+test('R6 end-to-end: db.query(tainted) is reported as SQLi; cache.query(tainted) is NOT (brief Step 1)', async () => {
+  const dir = mkTmp('r6-suppression', {
     'app.js': `
 const express = require('express');
 const app = express();
-app.get('/', (req, res) => {
-  const x = require('./untyped');
-  x.query(req.query.q);
+app.get('/a', (req, res) => {
+  const db = require('./db');
+  db.query(req.query.q);
+});
+app.get('/b', (req, res) => {
+  const cache = require('./cache');
+  cache.query(req.query.q);
 });
 `,
-    'untyped.js': `
-module.exports = { query(s) { return s; } };
+    'db.js': `
+class Database { query(sql) { return sql; } }
+module.exports = new Database();
+`,
+    'cache.js': `
+class Redis { query(key) { return key; } }
+module.exports = new Redis();
 `,
   });
   const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const sqlFindings = (scan.findings || []).filter(f => /sql/i.test(f.vuln || ''));
-  // Even though `x` is untyped/unknown, the finding should still fire
-  // (conservative: null receiverType never suppresses).
-  assert.ok(sqlFindings.length > 0,
-    'x.query(tainted) with unknown receiver type should still be flagged (Unknown ≠ clean)');
+  const lineOf = f => f.line || (f.id && Number((f.id.match(/:(\d+):/) || [])[1])) || 0;
+  assert.ok(sqlFindings.some(f => lineOf(f) === 6), 'db.query(tainted) should be flagged as SQLi');
+  assert.ok(!sqlFindings.some(f => lineOf(f) === 10), 'cache.query(tainted) should NOT be flagged as SQLi');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
