@@ -1007,6 +1007,35 @@ function _globalKey(name) {
   return typeof name === 'string' && name.charCodeAt(0) === 36 /* '$' */ ? name.slice(1) : name;
 }
 
+// PRD R4a (docs/DETECTION_GAP_REMEDIATION_PRD.md): this module's own shape
+// contract above documents two callee forms — 'name' (bare, matched by last
+// segment) and 'name.foo' (matched by FULL PATH) — but both lookup sites
+// used to reduce every callee to its last segment unconditionally, so an
+// entry indexed under a full dotted key (catalog-expanded.js's `san()`
+// helper builds many: 'Encode.forHtml', 'pg.escapeLiteral',
+// 'filepath.Clean', ...) could never be retrieved. An entry lives under
+// exactly one CALLEE_INDEX key (its own `match.callee`, dotted or bare), so
+// looking up both the full path and the last segment and concatenating
+// hits never double-counts — it just also finds entries the last-segment
+// key alone was missing.
+function _calleeIndexHits(calleeExpr) {
+  let last = null;
+  let full = null;
+  if (typeof calleeExpr === 'string') {
+    full = calleeExpr;
+    last = calleeExpr.includes('.') ? calleeExpr.slice(calleeExpr.lastIndexOf('.') + 1) : calleeExpr;
+  } else if (calleeExpr && calleeExpr.kind === 'member' && calleeExpr.prop) {
+    last = calleeExpr.prop;
+    if (calleeExpr.object && calleeExpr.object.kind === 'ident') full = `${calleeExpr.object.name}.${calleeExpr.prop}`;
+  } else if (calleeExpr && calleeExpr.kind === 'ident') {
+    last = calleeExpr.name || null;
+  }
+  const raw = [];
+  if (full && full !== last) { const h = CALLEE_INDEX.get(full); if (h) raw.push(...h); }
+  if (last) { const h = CALLEE_INDEX.get(last); if (h) raw.push(...h); }
+  return raw;
+}
+
 export function matchSource(expr, file) {
   if (!expr) return null;
   // Member sources (req.query): the original path — unchanged.
@@ -1041,19 +1070,13 @@ export function matchSource(expr, file) {
   // sources were never recognized at the assignment RHS. Match by callee last
   // segment (Go gives a dotted string; JS/Py a member/ident expr).
   if (expr.kind === 'call') {
-    let cn = null;
-    if (typeof expr.callee === 'string') cn = expr.callee.includes('.') ? expr.callee.slice(expr.callee.lastIndexOf('.') + 1) : expr.callee;
-    else if (expr.callee && expr.callee.kind === 'member') cn = expr.callee.prop;
-    else if (expr.callee && expr.callee.kind === 'ident') cn = expr.callee.name;
-    if (cn) {
-      const raw = CALLEE_INDEX.get(cn);
-      if (raw) {
-        const hits = filterByProvenance(raw)
-          .filter(h => _languageAllowed(h, file))
-          .filter(h => _receiverAllowed(h, expr.callee));
-        const s = hits.find(h => h.kind === 'source');
-        if (s) return s;
-      }
+    const raw = _calleeIndexHits(expr.callee);
+    if (raw.length) {
+      const hits = filterByProvenance(raw)
+        .filter(h => _languageAllowed(h, file))
+        .filter(h => _receiverAllowed(h, expr.callee));
+      const s = hits.find(h => h.kind === 'source');
+      if (s) return s;
     }
   }
   return null;
@@ -1061,16 +1084,8 @@ export function matchSource(expr, file) {
 
 export function matchSinkOrSanitizer(calleeExpr, file) {
   if (!calleeExpr) return null;
-  let calleeName = null;
-  // R3 (PRD §5): the Go IR (and other string-callee parsers) represent a call
-  // target as a dotted STRING ("db.Query") rather than a member expr. Match on
-  // the last segment so those languages' sinks/sanitizers are recognized too.
-  if (typeof calleeExpr === 'string') calleeName = calleeExpr.includes('.') ? calleeExpr.slice(calleeExpr.lastIndexOf('.') + 1) : calleeExpr;
-  else if (calleeExpr.kind === 'ident') calleeName = calleeExpr.name;
-  else if (calleeExpr.kind === 'member') calleeName = calleeExpr.prop;
-  if (!calleeName) return null;
-  const raw = CALLEE_INDEX.get(calleeName);
-  if (!raw) return null;
+  const raw = _calleeIndexHits(calleeExpr);
+  if (!raw.length) return null;
   const hits = filterByProvenance(raw)
     .filter(h => _languageAllowed(h, file))
     .filter(h => _receiverAllowed(h, calleeExpr));

@@ -1271,13 +1271,75 @@ function _guardWindow(ctx, before = 25, after = 5) {
     .replace(/(^|[^\w'"`])#[^\n]*/g, '$1 ');
 }
 
-function _hasSsrfHostGuard(ctx) { return _SSRF_HOST_GUARD_RE.test(_guardWindow(ctx)); }
+// PRD R15: a guard-shaped token anywhere in the -25/+5 window used to be
+// sufficient — an allow-list built for an unrelated purpose, or even the
+// tainted variable's OWN declaration line, sitting in the same screenful of
+// code as a genuinely-unguarded sink, silently killed a real finding. This
+// does not require full dataflow correlation, only a cheap positional one:
+// the sink's own argument identifier(s) must appear WITHIN A FEW LINES of
+// the specific line the guard-shaped text actually matched on — not merely
+// somewhere in the whole window, which is true of almost any variable used
+// nearby (its own declaration, an unrelated helper, the sink line itself).
+// Falls back to permissive (unable to correlate → don't break existing
+// recall protection) when the sink line yields no usable identifier.
+const _GUARD_STOPWORDS = new Set(['var', 'let', 'const', 'function', 'return', 'new', 'await', 'async',
+  'if', 'else', 'for', 'while', 'require', 'import', 'from', 'true', 'false', 'null', 'undefined',
+  'this', 'self', 'req', 'res', 'request', 'response']);
+function _sinkLineIdentifiers(ctx) {
+  const line = (ctx && Array.isArray(ctx.lines) && ctx.lines[(ctx.line || 1) - 1]) || '';
+  const ids = new Set();
+  // Excludes call-target identifiers (name immediately followed by `(`) —
+  // `fetch(target)` must correlate on the ARGUMENT `target`, not on `fetch`
+  // itself, which incidentally appears anywhere the module imports fetch
+  // (e.g. `const fetch = require('node-fetch')`) and would trivially
+  // "correlate" with any guard window in the same file.
+  const re = /\b[A-Za-z_$][\w$]*\b(?!\s*\()/g;
+  let m;
+  while ((m = re.exec(line))) {
+    const id = m[0];
+    // No minimum length: short variable names (`u`, `p`, `f`) are common,
+    // legitimate taint carriers in real code — excluding them left the
+    // ONLY correlating identifier out entirely for sinks like
+    // `File.ReadAllText(p)` or `axios.get(u.toString())`, defeating
+    // correlation with a guard that genuinely protects that exact
+    // variable (a corpus regression caught this: CVE-2021-22054-ssrf-shape,
+    // CVE-2022-26049-cs-path).
+    if (id.length >= 1 && !_GUARD_STOPWORDS.has(id)) ids.add(id);
+  }
+  return ids;
+}
+// Runs guardRe against the window and, for each match, checks whether any
+// sink-line identifier appears within `span` lines of that match's own line
+// (excluding the sink line itself, which trivially contains its own
+// argument). Tries every match, not just the first, since a window can
+// contain several guard-shaped lines and only one need actually correlate.
+function _guardMatchNearSinkIdentifier(ctx, guardRe, span = 2) {
+  const w = _guardWindow(ctx);
+  const re = new RegExp(guardRe.source, guardRe.flags.includes('g') ? guardRe.flags : guardRe.flags + 'g');
+  const ids = _sinkLineIdentifiers(ctx);
+  if (!ids.size) return re.test(w); // can't correlate — fall back to the old shape-only check
+  const wLines = w.split('\n');
+  const sinkLineText = (ctx.lines && ctx.lines[(ctx.line || 1) - 1]) || '';
+  let m;
+  while ((m = re.exec(w))) {
+    const guardLineIdx = w.slice(0, m.index).split('\n').length - 1; // 0-based within window
+    const lo = Math.max(0, guardLineIdx - span);
+    const hi = Math.min(wLines.length, guardLineIdx + span + 1);
+    const local = wLines.slice(lo, hi).filter((l) => l !== sinkLineText).join('\n');
+    for (const id of ids) {
+      if (new RegExp(`\\b${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(local)) return true;
+    }
+  }
+  return false;
+}
+
+function _hasSsrfHostGuard(ctx) { return _guardMatchNearSinkIdentifier(ctx, _SSRF_HOST_GUARD_RE); }
 
 // A path-traversal containment guard near the file sink: a basename/strip
 // helper that removes directory components, a framework safe-join, or a
 // canonicalize-then-startsWith containment check.
 const _PATH_GUARD_RE = /\b(?:basename|GetFileName|secure_filename|sanitize_filename|send_from_directory|safe_join)\s*\(|\b(?:startsWith|startswith|StartsWith|HasPrefix)\s*\(|\bgetCanonicalPath\b|\btoRealPath\b|\bfilepath\s*\.\s*(?:Clean|Base|Abs)\b/;
-function _hasPathGuard(ctx) { return _PATH_GUARD_RE.test(_guardWindow(ctx)); }
+function _hasPathGuard(ctx) { return _guardMatchNearSinkIdentifier(ctx, _PATH_GUARD_RE); }
 
 // Reflected-XSS output-encoding guard: an HTML escaper applied near the sink.
 const _XSS_ESCAPER = String.raw`(?:escapeHtml|escape_html|escape-html|sanitizeHtml|sanitize_html|DOMPurify\.sanitize|he\.encode|he\.escape|_\.escape|validator\.escape|bleach\.clean|markupsafe|htmlspecialchars|htmlentities|html\.escape|escapeHTML|encodeURIComponent|escape)\s*\(`;
@@ -3008,15 +3070,17 @@ const JAVA_FAMILY_RULES = [
         return !isWeak(resolved);  // strong → suppress; weak → fire
       }
       // 2) OWASP Benchmark fallback — hardcoded answer-key for OWASP's own
-      //    benchmark.properties file. Pure label leakage; disabled under
-      //    blind bench so the F1 reflects the production engine alone.
-      const _blindHere = process.env.AGENTIC_SECURITY_BLIND_BENCH === '1';
-      const OWASP_BENCH_PROPS = _blindHere ? {} : {
+      //    benchmark.properties file. Pure label leakage. PRD R5: was
+      //    opt-out (disabled only under BLIND_BENCH=1) — inverted to opt-in,
+      //    enabled only under explicit BENCH_SHAPE=1, matching the
+      //    documented default every other bench-shape mechanism follows.
+      const _benchShapeHere = process.env.AGENTIC_SECURITY_BENCH_SHAPE === '1' && process.env.AGENTIC_SECURITY_BLIND_BENCH !== '1';
+      const OWASP_BENCH_PROPS = _benchShapeHere ? {
         cryptoAlg1: 'DES/ECB/PKCS5Padding',
         cryptoAlg2: 'AES/CCM/NoPadding',
         hashAlg1: 'MD5',
         hashAlg2: 'SHA-256',
-      };
+      } : {};
       if (OWASP_BENCH_PROPS[propKey]) {
         return !isWeak(OWASP_BENCH_PROPS[propKey]);
       }
@@ -4464,8 +4528,10 @@ function scanJavaSAST(fp, raw) {
   // 72/73/74/.../82 where the receiving file has no local source — the
   // tainted Vector/List/Map arrives via a method parameter from a sibling
   // file. Gated tightly to avoid FPs on real apps.
-  if (!hasSource && process.env.AGENTIC_SECURITY_BLIND_BENCH !== '1') {
-    // Juliet-shape signal — disabled under blind bench (answer-key leakage).
+  if (!hasSource && process.env.AGENTIC_SECURITY_BENCH_SHAPE === '1' && process.env.AGENTIC_SECURITY_BLIND_BENCH !== '1') {
+    // PRD R5: was opt-out (disabled only under BLIND_BENCH=1) — inverted to
+    // opt-in, matching the documented default every other bench-shape
+    // mechanism in this file follows. Juliet-shape signal.
     const _isJulietShape = /\bjuliet\.(?:testcases|support)\b/.test(cleaned)
       || /\b(?:badSink|badSource|goodG2B|goodB2G)\s*\(/.test(cleaned);
     if (_isJulietShape && /\b(?:Vector|ArrayList|LinkedList|List|Set|HashSet|Map|HashMap|Hashtable|Properties|Queue|Deque|Stack|Optional)\s*<[^>]*>\s+[A-Za-z_]\w*\s*[,)]/.test(cleaned)) {
@@ -4485,15 +4551,18 @@ function scanJavaSAST(fp, raw) {
     let pm;
     // OWASP_BENCH_PROPS is the OWASP Benchmark answer-key for its own
     // benchmark.properties file (hashAlg1 → MD5, cryptoAlg1 → DES/ECB). Pure
-    // label leakage. Disabled under blind bench; real apps use the
-    // properties index loaded from the filesystem instead.
-    const _blindHere = process.env.AGENTIC_SECURITY_BLIND_BENCH === '1';
-    const OWASP_BENCH_PROPS = _blindHere ? {} : {
+    // label leakage. PRD R5: was opt-out (disabled only under
+    // BLIND_BENCH=1) — inverted to opt-in, enabled only under explicit
+    // BENCH_SHAPE=1; real apps use the properties index loaded from the
+    // filesystem instead (the `resolved`/`getJavaProperty` path above this
+    // fallback).
+    const _benchShapeHere = process.env.AGENTIC_SECURITY_BENCH_SHAPE === '1' && process.env.AGENTIC_SECURITY_BLIND_BENCH !== '1';
+    const OWASP_BENCH_PROPS = _benchShapeHere ? {
       cryptoAlg1: 'DES/ECB/PKCS5Padding',
       cryptoAlg2: 'AES/CCM/NoPadding',
       hashAlg1: 'MD5',
       hashAlg2: 'SHA-256',
-    };
+    } : {};
     const isWeak = (v) =>
       /\b(?:MD2|MD4|MD5|SHA-?1|SHA1|DES|DESede|3DES|RC2|RC4|Blowfish|HmacMD5|HmacSHA1)\b|AES\s*\/\s*ECB/i.test(v || '');
     while ((pm = propUseRe.exec(cleaned)) !== null) {
@@ -4824,7 +4893,13 @@ function annotateReachability(findings,routes,callGraph,fc){
     // Within 60 lines of a route declaration we consider this source route-rooted
     const routeRooted=rl.some(l=>Math.abs(l-srcLine)<60);
     f.routeRooted=routeRooted;
-    // Cheap function-of-source lookup via callGraph
+    // Cheap function-of-source lookup via callGraph. buildCallGraph only
+    // ever populates entries for .js/.jsx/.ts/.tsx/.mjs/.cjs files (PRD
+    // R15) — callGraph[fp] being absent for every other language is an
+    // ABSENCE OF EVIDENCE, not evidence the finding is unreachable, and
+    // must not be conflated with a JS file whose call graph genuinely has
+    // no incoming edge.
+    const hasCallGraphData=Object.prototype.hasOwnProperty.call(callGraph,fp);
     const funcs=callGraph[fp]||{};
     let enclosing=null;
     for(const[fn,info] of Object.entries(funcs))
@@ -4833,6 +4908,7 @@ function annotateReachability(findings,routes,callGraph,fc){
     // Reachable when route-rooted OR enclosingFunction is called from any function
     // declared near a route in the same file
     if(routeRooted){f.reachable=true;continue;}
+    if(!hasCallGraphData){f.reachable=null;continue;}
     let reachable=false;
     if(enclosing){
       for(const rLine of rl){
@@ -7817,7 +7893,15 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
     const c = fc[p];
     if (!c) continue;
     // Path-based category for Juliet test cases: `juliet-cweN/.../...java`.
-    const julietMatch = p.match(/(?:^|\/)juliet-cwe(\d+)\//i);
+    // PRD R5: this reads a path-embedded answer key (the directory name
+    // declares the CWE) exactly like _javaWebServletCategory's @WebServlet
+    // annotation reading below — off by default, enabled only when
+    // BENCH_SHAPE=1. This branch previously had no gate at all, so a real
+    // repository with a directory that happens to be named `juliet-cweNN/`
+    // would silently lose off-family findings in the default pipeline.
+    const julietMatch = (process.env.AGENTIC_SECURITY_BENCH_SHAPE === '1'
+      && process.env.AGENTIC_SECURITY_BLIND_BENCH !== '1')
+      ? p.match(/(?:^|\/)juliet-cwe(\d+)\//i) : null;
     if (julietMatch && _JULIET_CWE_TO_FAMILY[julietMatch[1]]) {
       _benchCategoryByFile.set(p, _JULIET_CWE_TO_FAMILY[julietMatch[1]]);
       continue;

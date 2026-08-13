@@ -117,6 +117,7 @@ const JS_XML_JSON = [
 ];
 
 const JS_VALIDATORS = [
+  san('js', 'validator', 'validator.escape',      ['xss']),
   san('js', 'validator', 'validator.isEmail',     ['xss', 'sql']),
   san('js', 'validator', 'validator.isURL',       ['url']),
   san('js', 'validator', 'validator.isUUID',      ['*']),

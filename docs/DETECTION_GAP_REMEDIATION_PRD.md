@@ -1,0 +1,297 @@
+# PRD — Closing the structural detection gaps found in the August 2026 capability audit
+
+**Status:** Draft for review
+**Version:** 1.0
+**Date:** 2026-08-13
+**Engine version:** 0.136.9
+**Scope:** The full detection pipeline — `scanner/src/ir/`, `scanner/src/dataflow/`, `scanner/src/sast/`, and the aggregation/posture layer in `scanner/src/engine.js` + `scanner/src/posture/`.
+**Audience:** Engineering (scanner core).
+
+This is a planning document. Nothing here is implemented by writing it — it is the backlog and the evidence behind each item.
+
+---
+
+## 1. Purpose
+
+An architectural audit was run against a stated internal benchmark scoring below 80% F1, with an explicit instruction to root-cause *structural* detection gaps — not propose a rule-list — and to flag anywhere fixing the gap would tempt special-casing to the benchmark rather than improving general detection. Five agents read `scanner/src/ir/`, `scanner/src/dataflow/`, the source/sink/sanitizer catalog, `scanner/src/sast/`, and the aggregation/posture pipeline end-to-end, citing file:line for every claim. No test fixture, corpus label, or benchmark answer key was read to produce the findings.
+
+This PRD converts that audit into a prioritized, engineering-actionable plan. Every recommendation below is anchored to a verified fact about the current code, not a best-practice wishlist.
+
+---
+
+## 2. Methodology & honesty preface
+
+Two things shape every recommendation here and must be stated up front:
+
+1. **The regression corpus (F1 = 1.000, 214 entries) proves nothing about real-world recall.** `npm run corpus:provenance` reports **100% of the corpus is self-authored fixtures** — written by the same people who write the detectors, admitted only once they score `pre:TP post:TN`. It is a *regression net*: it proves nothing that used to be caught has stopped being caught. Its detection rate sits at the ceiling by construction.
+2. **The number that matters is the independent population, and it is low.** `bench/independent/RESULT.json` — 110 entries mined from real GitHub Security Advisories, CWE assigned by the advisory maintainers, scored against real fix commits nobody on this side chose — measures **recall 12.7% (14/110), precision 50.0%, F1 0.203** (advisory-local scope; "wide" scope is 33.6% recall / F1 0.402 and is explicitly diagnostic-only, not the claim). Last measured 2026-08-09 on engine 0.135.0 — **stale as of this PRD** and should be re-run once the P0 items land, since several of them plausibly move it.
+
+Neither point is new information invented for this PRD — both are already recorded in `bench/independent/README.md` and `docs/ROADMAP.md`'s own "What the gates do not prove" section. What the audit adds is *why* the independent number is low: the capability that would close the gap is either turned off by default, or present but keyed on names/strings instead of types/flow.
+
+**The one-sentence diagnosis:** this is not a missing-rules problem. It is that (a) the analysis capable of finding real flow-based bugs runs in exactly one context (the interactive CLI), and (b) where it does run, matching is name-string comparison wearing a semantic costume — no type resolution, no import binding, and for several languages the control-flow bodies where real sinks live never reach the IR at all.
+
+---
+
+## 3. Current state — what actually runs, and where
+
+| Stage | Mechanism | Default in interactive CLI scan? | Default in CI / MCP / LSP / library `runScan()`? |
+|---|---|---|---|
+| Regex/structural SAST (~111 modules) | Text matching, mostly grammar-blind | ✅ on | ✅ on |
+| Intra-file AST taint (JS only, Express-gated) | Babel AST tracer | ✅ on (gated conditions apply) | ✅ on (same gating) |
+| Cross-file taint (JS only) | Import-graph heuristic, no parameter correspondence | ✅ on | ✅ on |
+| **Interprocedural dataflow engine (Layer 2)** | Context-sensitive worklist, 641-entry catalog | ✅ on | ❌ **off** — CI force-overrides even an explicit request; MCP/LSP/library callers never set the flag |
+| Sanitizer-gate demotion | Family-checked, recall-preserving | ✅ on (when deep runs) | n/a (deep off) |
+| Reachability demotion | Same-file, line-proximity, JS-only call graph | ✅ on, mutates severity | ✅ on, mutates severity |
+| `dropGuardedFindings` | Flow-insensitive ±25/+5-line regex window | ✅ on, hard-removes | ✅ on, hard-removes |
+| LLM validator | Deletes weakly-provenanced findings on model "reject" | Only if endpoint configured | Only if endpoint configured |
+
+Evidence: `bin/agentic-security.js:413-419`; `scanner/src/engine.js:8523-8527, 8628-8639`; `scanner/src/mcp/tools.js:341-342`; `scanner/src/lsp/server.js:153`; `scanner/src/runScan.js:123`.
+
+**The load-bearing fact:** `dataflow/CLAUDE.md` itself records that disabling the deep engine drops corpus detection only 210→204 — i.e. roughly 97% of *regression-corpus* detection already comes from the layer that has no type/flow awareness. The independent-population F1 measures what that layer actually achieves against real code, and it is 0.203.
+
+---
+
+## 4. Gap themes
+
+The audit's ten root-cause categories cluster into six themes, ordered by expected ROI (impact ÷ effort), not by category number:
+
+- **Theme A — Turn on and stop suppressing what already works** (R1–R5). Config/wiring fixes to code that already exists and is already tested. Lowest risk, highest ROI.
+- **Theme B — Semantic grounding of matching** (R6–R7). The receiver-type and import-binding machinery is half-built; finish wiring it.
+- **Theme C — Parser/IR fidelity for the control-flow-blind languages** (R8–R9). Java/C#/Kotlin/PHP/Ruby splitters drop or mangle braced bodies; this caps deep-mode recall near zero for those languages regardless of any catalog work.
+- **Theme D — Interprocedural completeness** (R10–R12). The summary engine is real but shaped narrowly (assignment-site-only, bare-identifier-only, alias-analysis wired to nothing).
+- **Theme E — Flow-modeling coverage gaps** (R13–R14). Whole sink/source shapes (member-write, loop elements, annotations) the catalog cannot express.
+- **Theme F — Aggregation precision-safety** (R15–R16). Pairs with Theme A: nothing found upstream survives if it gets hard-dropped or mis-severitied downstream.
+
+Each recommendation uses a fixed template: **Gap · Evidence · Recommendation · Why it wins · Effort · Success metric.**
+
+---
+
+## 5. Recommendations
+
+### Theme A — Turn on and stop suppressing what already works
+
+#### R1. Make deep mode opt-out (not opt-in) for MCP, LSP, and library `runScan()` callers; stop force-disabling it in CI
+- **Gap:** The only capability difference between "regex scanner" and "flow-aware scanner" runs in exactly one entry point — the interactive CLI. Every CI gate, every editor diagnostic, every agent-driven scan is regex/structural-only, and even an explicit `AGENTIC_SECURITY_DEEP=1` is silently overridden in CI.
+- **Evidence:** `bin/agentic-security.js:413-419` (env var set only in `cmdScan`, only when `!inCi`); `scanner/src/engine.js:8523-8527` (`_deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed)`); `scanner/src/mcp/tools.js:341-342` and `scanner/src/lsp/server.js:153` (call `runScan()` with no `deep` option); `scanner/src/runScan.js:123` (threads `deep`/`deepInCi` only if the caller supplies them).
+- **Recommendation:** Default `deep: true` inside `runScan()` itself (not just the CLI), keep the existing time budget (`AGENTIC_SECURITY_DEEP_TIMEOUT_MS`) and function cap as the safety valve, and change the CI override from a hard block to "honor an explicit `AGENTIC_SECURITY_DEEP_IN_CI=1`or `--deep` flag, default off only when neither is set." Update `commands/setup.md`'s generated CI templates to pass `--deep` with a CI-appropriate budget.
+- **Why it wins:** This is the single highest-leverage lever in the audit. It activates every other fix in this document for the surfaces that currently see none of them, with near-zero precision risk — deep mode only *adds* flow-checked findings on top of the existing regex layer.
+- **Effort:** S (config/wiring; the engine, budget, and degrade-on-timeout path already exist).
+- **Success metric:** Independent-population recall (`bench/independent`) measured with MCP/LSP-shaped invocation (no `--deep` CLI flag) matches CLI-invocation recall on the same population.
+
+#### R2. Fix the dead-code demotion bug
+- **Gap:** Dead-code severity demotion reads fields that do not exist on call-graph edges and misjudges every function as uncalled, silently downgrading severity on nearly all IR-TAINT findings.
+- **Evidence:** `scanner/src/dataflow/engine.js:1153-1165` reads `e.to` and calls `.size` on `callersOf` values; `scanner/src/ir/callgraph.js:147,160` — edges carry `.callee`, not `.to`; `callgraph.js:165-170` — `callersOf` values are plain Arrays (no `.size`). Net effect: `calledQids` is always effectively empty, so every function whose name doesn't match `/handler|route|controller|middleware|endpoint/i` — including all top-level findings — is marked `_inDeadCode` and demoted one severity notch (critical→high, high→medium).
+- **Recommendation:** Fix the two field-name mismatches. Add a unit test asserting a function *with* a real recorded caller is never marked dead-code, using the actual `callgraph.js` edge/`callersOf` shapes (not a hand-built double) — the bug is precisely a shape mismatch a mock would hide.
+- **Why it wins:** One-line-class fix; stops a systematic, silent severity downgrade of real true positives across every deep-mode scan that has ever run.
+- **Effort:** XS.
+- **Success metric:** A synthetic fixture with a genuinely-called, non-handler-named function produces an undemoted finding; existing dataflow test suite stays green.
+
+#### R3. Route deep-mode findings through the full annotator pipeline
+- **Gap:** IR-TAINT findings are appended to the result set *after* dedup, clustering, stable-ID assignment, family backfill, confidence, calibration, and reachability have each already run once — so they duplicate pattern-layer findings verbatim, carry `family: undefined`, and never receive calibrated confidence.
+- **Evidence:** `scanner/src/engine.js:8033` (dedup/clustering/annotator block) vs `8557-8561` (deep append, after); `scanner/src/dataflow/engine.js:1184-1230` (emission allowlist has no `family` field); single-call-site greps confirm no annotator re-runs on the appended set.
+- **Recommendation:** Move the deep-mode append to *before* the dedup/annotator block (preferred — deep findings then dedupe against pattern-layer duplicates of the same bug, and get real family/calibration/reachability), or, if ordering constraints prevent that, re-run the specific annotator functions (`backfillFindingDefaults`, dedup, family backfill) over the merged set after append. Add a `family` field to the IR-TAINT emission shape either way.
+- **Why it wins:** Stops double-counting the same vulnerability once regex and once deep-mode catch it (inflates apparent finding counts and confuses triage), and makes deep findings first-class citizens of the confidence/calibration system instead of unscored orphans.
+- **Effort:** M (touches dedup ordering; needs the "aggregation-array snapshot hazard" documented at `engine.js:8747-8751` — pushing into a post-dedup array is silently discarded — treated carefully).
+- **Success metric:** A fixture where both the regex layer and deep mode independently detect the same sink produces exactly one finding with a non-null `family` and a non-null `calibrated_confidence` (or an explicit under-sample null with reason, same as pattern-layer findings).
+
+#### R4. Fix the dead sanitizer index and stop `builtin-summaries` from killing taint family-blind
+- **Gap:** Two independent sanitizer defects, one precision-only and one a real false-negative generator.
+  - (a) 191 of 381 sanitizer catalog entries (50%) use dotted callees (`Encode.forHtml`, `pg.escapeLiteral`, `filepath.Clean`, `validator.isEmail`) indexed under the full dotted key, but every lookup path reduces to the callee's last segment — so these entries can **never be retrieved**. 106 of the 191 have no bare-name twin, meaning the entire OWASP Java Encoder family, Go's `filepath.Clean`/`url.QueryEscape`, and the `validator.js` family never demote a finding.
+  - (b) `builtin-summaries` **deletes** taint entirely, family-blind, at unresolved-callee assignment sites for ~15 name-matched functions (`parseInt`, `encodeURIComponent`, `DOMPurify.sanitize`, `escape`, `html.escape`...) — so `x = encodeURIComponent(t); db.query(x)` silently removes the SQLi finding, contradicting the engine's own stated doctrine that sanitizers demote, never kill.
+- **Evidence:** (a) `catalog.js:943-948` (index built on unstripped `e.match.callee`) vs `catalog.js:1045,1068-1070` (lookups on last segment only); verified empirically in-session (`matchSinkOrSanitizer({member: 'Encode.forHtml'}, 'A.java')` → `null`). (b) `dataflow/engine.js:534-541` (`removePathAndDescendants` + early return when `!builtin.returnTainted`); `builtin-summaries.js:98-117`; stated doctrine at `dataflow/engine.js:274-284` and `dataflow/CLAUDE.md`.
+- **Recommendation:** (a) Have `matchSinkOrSanitizer`'s lookup also try the full dotted key before falling back to last-segment (the catalog's own shape comment at `catalog.js:27-29` already promises this behavior — it was never implemented). (b) Change `builtin-summaries`' `returnTainted: false` entries to *demote* (append a sanitizer-observed record, consistent with every other sanitizer path) rather than delete the taint state outright.
+- **Why it wins:** (a) is a pure precision win — revives ~106 real-world sanitizer idioms with zero detection-capability change. (b) closes a reproducible false-negative class that will recur on any code using a common encoding/casting helper before an unrelated sink.
+- **Effort:** S for (a), S for (b) — both are localized fixes to functions with clear existing test coverage patterns to extend.
+- **Success metric:** A fixture calling `Encode.forHtml(x)` before an XSS sink demotes; a fixture calling `encodeURIComponent(x)` before a SQL sink still reports the SQLi (demoted, not deleted).
+
+#### R5. Gate the ungated bench-shape logic behind `AGENTIC_SECURITY_BENCH_SHAPE`
+- **Gap:** The root `CLAUDE.md`'s documented convention — "bench-shape adapters (answer-key reading) are off by default" — is violated in three places that run unconditionally in the default pipeline.
+- **Evidence:**
+  1. The `juliet-cwe<N>/` path-prefix category filter deletes off-family findings with **no env check at all** (`scanner/src/engine.js:7815-7827`, applied at `7864-7881` and `8799-8810`). The `@WebServlet` category-reading variant *is* correctly gated (`engine.js:3152-3153`) — this is the same mechanism, ungated, sitting a few hundred lines away.
+  2. `OWASP_BENCH_PROPS` (hardcoded `benchmark.properties` answer values) and the Juliet collection-parameter taint source are **opt-out** via `AGENTIC_SECURITY_BLIND_BENCH=1` rather than **opt-in** via `AGENTIC_SECURITY_BENCH_SHAPE=1` (`engine.js:4467-4473, 4486-4503`) — inverted from the documented default.
+  3. Java's "universal safe-shape" suppression (`isJavaBarProvablySafe`, keyed on the OWASP Benchmark's `bar`/`param` variable-naming convention) and `primary-cwe-java.js`'s testbench-shape incidental-XSS suppression (≤300-LOC, one handler) run on **every Java file** with no gate at all, on the stated rationale that the shapes are semantically safe (`engine.js:7846-7855, 8811-8856`; `primary-cwe-java.js:1-33,142-155`).
+- **Recommendation:** Wrap (1) and (2) in the same `AGENTIC_SECURITY_BENCH_SHAPE` check the `@WebServlet` path already uses. For (3), this is judgment: if the safe-shape heuristic is independently correct as a general Java suppression rule (not just correct on Benchmark-shaped files), it should be re-justified and kept — but re-justify from a real-world Java sample, not from the fact that it currently passes the self-authored corpus, and rename it away from the benchmark-specific function name (`isJavaBarProvablySafe`) so it reads as what it claims to be.
+- **Why it wins:** This is the direct, concrete instance of "special-casing to the benchmark" the original audit request asked to be flagged and avoided — fixing it is table stakes for trusting any F1 number this engine reports on itself.
+- **Effort:** S for (1) and (2); M for (3) (requires the re-justification work, not just a flag flip).
+- **Success metric:** `AGENTIC_SECURITY_BLIND_BENCH=1` and default-unset produce identical suppression behavior on a non-Juliet-path Java fixture; corpus F1 is re-measured with the gate closed to confirm no regression on entries that were never relying on it.
+
+### Theme B — Semantic grounding of matching
+
+#### R6. Wire the existing receiver-type/CHA machinery into catalog match-time keying
+- **Gap:** Sinks and sources match by bare last-segment callee name, project-wide. Only 7 of 641 catalog entries declare a receiver constraint. The receiver-type infrastructure to fix this **already exists and is unused**: `receiver-context.js` (`receiverTypeAtCall`/`keyWithReceiver`) and `SummaryCache`'s optional `receiverType` key dimension are both implemented, but no engine call site ever passes a `receiverType` argument.
+- **Evidence:** `catalog.js:1062-1078` (last-segment-only matching); `receiver-context.js:1-76` (header admits "engine either over-fires or under-fires" — describing current behavior); `summaries.js:91-107` (accepts `receiverType`, unused); `dataflow/engine.js` call sites at lines 484, 601, 952, 986, 1006, 1020, 1052, 1076, 1123 — none pass it. Concretely: `py-requests-get` (bare `get`) matches `dict.get(tainted)` as SSRF; `rb-erb-new` (bare `new`) matches every Ruby `X.new(tainted)` as critical SSTI.
+- **Recommendation:** At each call site currently computing catalog matches, compute `receiverTypeAtCall` from the already-built CHA/class-hierarchy data (`class-hierarchy.js`) and thread it into the `SummaryCache`/catalog lookup. Start with the highest-FP-risk bare-name entries identified above (`get`, `new`, `load`, `exec`) since they have the most to gain.
+- **Why it wins:** Attacks both directions of the name-collision problem at once — fewer FPs on coincidentally-named safe methods, and it unlocks adding narrower, more confident sink entries (e.g., a JDBC-specific `query` entry) without them drowning in false positives from unrelated `.query()` calls.
+- **Effort:** M — the mechanism is built; this is systematic wiring across call sites plus regression-testing the FP delta.
+- **Success metric:** Mutation-gate style test: `cache.query(tainted)` (a non-DB object) no longer fires a SQL sink once the receiver isn't inferable as a DB type; a genuine `db.query(tainted)` still fires.
+
+#### R7. Add import-binding resolution to callee-name resolution
+- **Gap:** Cross-file call resolution is bare-name matching with no awareness of what a name is actually bound to. The re-export/import-awareness feature already exists in `buildCallGraph` but is dead in the production path because neither IR builder passes the `fileContents` argument that populates it.
+- **Evidence:** `ir/callgraph.js:36-49` (re-export map populated only when `fileContents` supplied) vs `ir/index.js:185` and `ir/index.js:241` (`buildCallGraph(perFile)`, one argument, both call sites); `ir/callgraph.js:220-226` (first-file-defining-that-name-in-Map-iteration-order fallback when nothing better resolves).
+- **Recommendation:** Thread `fileContents` through both `buildCallGraph` call sites so the existing re-export/import parsing actually runs. This is a smaller, more contained fix than R6 — it is wiring one already-implemented parameter, not new machinery.
+- **Why it wins:** Directly reduces cross-file mis-binding (two same-named functions in unrelated files currently collide) at effectively zero new code.
+- **Effort:** XS — pass an existing parameter at two call sites, verify no regression from the previously-empty map now being populated.
+- **Success metric:** A fixture with two same-named functions in different files, only one of which is actually imported at the call site, resolves to the correct one.
+
+### Theme C — Parser/IR fidelity for the control-flow-blind languages
+
+#### R8. Stop Java/C#/Kotlin/PHP splitters from dropping or mangling braced control-flow bodies
+- **Gap:** This is the single highest-leverage IR defect in the audit. For Java, C#, Kotlin, and PHP (in the cases where their control-flow regexes don't match cleanly), statements *inside* `if`/`for`/`try`/`switch`/`while` bodies do not merely lose branch structure — they are **dropped entirely or folded into a bogus node**, because the statement splitters never flush at a closing `}`.
+- **Evidence:**
+  - Java: `walkStmts` (`parser-java.js:221-291`) has no case for `forStatement`/`tryStatement`/`switchStatement`/`doStatement`/bare nested blocks — these statement kinds are never visited, full stop. Most real Java sinks sit inside try-with-resources (the idiomatic JDBC pattern), which is structurally invisible.
+  - C#: `_splitStatements` (`parser-cs.js:42-65`) splits only on `;` at brace depth 0 and never flushes on `}`, so an entire `if (...) { ... }` block *plus* the following statement collapse into one blob; `_lowerStmt` then matches `matchBalancedCall` on the leading keyword and lowers the whole thing to a bogus `{kind:'call', callee:'if'}` node (`parser-cs.js:225-228`).
+  - Kotlin: same defect class — a whole braced block buffers as one statement and falls through to an `{kind:'unknown'}` node (`parser-kt.js:34-63, 155-177`). This is consistent with the documented 0% Kotlin taint recall in the root `CLAUDE.md`.
+  - PHP: control-flow regexes are anchored at `$` (end of the `;`-delimited blob), so any statement following a closing `}` before the next `;` breaks the match and glues onto a bogus call node (`parser-php.js:33-65, 274-318`).
+  - Contrast: `parser-go.js` and `parser-cpp.js` already recurse into brace blocks correctly — this is proof the pattern is achievable in this codebase's parsing style, not a request for new architecture.
+- **Recommendation:** Rewrite the four affected splitters to recurse into braced blocks the way `parser-go.js`/`parser-cpp.js` already do, producing real (even if only partially branch-aware) CFG nodes for statements inside control-flow bodies. This does not require full branch/join CFG parity with JS in the first pass — even a linear-but-complete lowering (every statement gets a node, in order) is a strict improvement over the current drop/mangle behavior.
+- **Why it wins:** Caps deep-mode recall near zero for these languages *regardless of any catalog or interprocedural work* — Theme B and D fixes have nothing to operate on if the sink's containing statement was never lowered into the IR. This is the correction most likely to move the language-coverage numbers in `docs/METRICS.md`.
+- **Effort:** L — four hand-rolled parsers, each needs careful re-testing against its existing fixture suite plus new fixtures proving braced-body statements are now represented.
+- **Success metric:** For each of the four languages, a fixture with a tainted source flowing into a sink *inside* an `if`/`try`/`for` body is detected by deep mode where it previously was not (verified with deep mode isolated from the regex layer, matching the methodology `bench/cve-replay/CONTRIBUTING.md`'s "deep tier" already uses to prove a fixture is deep-only).
+
+#### R9. Extract Java method parameters and derive `fn.calls` via the shared `call-sites.js` helper
+- **Gap:** `parser-java.js` extracts **no parameters** (`params: []`, comment: "deferred") and never sets `fn.calls`, so Java has zero interprocedural taint entry points and zero call-graph edges — independent of the R8 fix.
+- **Evidence:** `parser-java.js:338` (`const params = []`); no `calls` property set anywhere in the file (edges built from `fn.calls || []`, `callgraph.js:145-146`); contrast `parser-rb.js:334` and `parser-py-cst.js:176-185`, which both derive `fn.calls` post-parse via the shared `call-sites.js#callSitesFromCfg` helper specifically built to prevent this class of resolver-guard drift.
+- **Recommendation:** (a) Extract real parameter names from the `methodDeclaration`/`methodHeader` CST nodes java-parser already exposes. (b) Once R8 lands real CFG call nodes for Java, wire `callSitesFromCfg` as a post-parse pass the same way Ruby and Python-CST already do — no new call-extraction logic needed, just applying the existing shared helper.
+- **Why it wins:** Unlocks interprocedural summaries and a real call graph for Java specifically — the language the audit's Theme C evidence suggests has the largest gap between "IR exists" (java-parser is a real CST) and "IR is usable by the taint engine."
+- **Effort:** M — parameter extraction is contained; wiring `callSitesFromCfg` is mechanical once R8's CFG nodes exist for the statement kinds calls live in.
+- **Success metric:** A cross-function Java fixture (tainted parameter → helper call → sink in the callee) is detected interprocedurally; `ir/CLAUDE.md`'s "Java interprocedural summaries are limited" caveat is removed or narrowed.
+
+### Theme D — Interprocedural completeness
+
+#### R10. Consult interprocedural summaries for calls nested directly in sink arguments, not just assignment-site calls
+- **Gap:** Return-taint from a helper function only flows through the pipeline when the call is the right-hand side of an assignment. `sink(getUserInput())` — the helper nested directly inside the sink's argument list — consults no summary at all; `exprTaint`'s `'call'` case only checks the call's *own* arguments for taint, never the callee's return-taint summary.
+- **Evidence:** `dataflow/engine.js:142-147` (inline `'call'` case, args-only) vs `457-531` (the only summary-consulting path, gated on being an assignment RHS).
+- **Recommendation:** Extend `exprTaint`'s `'call'` case to also consult the resolved callee's summary (the same lookup `457-531` already performs) when the call appears in a non-assignment expression position, including directly as a sink argument.
+- **Why it wins:** This is an extremely common real-world shape (`db.query(getUserInput())`, `res.send(buildResponse())`) that the current assignment-only gate structurally cannot see, regardless of catalog completeness.
+- **Effort:** M — the summary lookup exists and is proven at the assignment site; this generalizes its call site, with care needed around double-counting if a call is both nested and later assigned in the same expression tree.
+- **Success metric:** A fixture with a source-reading helper called directly inside a sink's argument list (no intermediate variable) is detected.
+
+#### R11. Resolve JS member/method calls against CHA-narrowed receiver types, guarded to avoid FP explosion
+- **Gap:** JS member-method calls (`service.method(tainted)`, `repo.save(tainted)`) are deliberately never resolved interprocedurally, breaking the interprocedural chain for the dominant JS/TS object-oriented style (repository/service pattern).
+- **Evidence:** `dataflow/engine.js:105-121` (`_resolvableCalleeName` explicitly refuses member expressions, with an inline rationale comment about avoiding invented edges).
+- **Recommendation:** This gap was left unresolved *on purpose* to avoid a known FP class (imprecise method resolution inventing edges between unrelated same-named methods). Do not lift the refusal unconditionally — instead, gate resolution on R6's receiver-type work landing first: resolve a member call only when CHA/class-hierarchy data narrows the receiver to a single concrete class (i.e., the same precision bar R6 establishes for catalog matching). This makes R11 a direct consumer of R6 rather than a parallel, independently risky change.
+- **Why it wins:** Recovers interprocedural taint through the single most common JS/TS code-organization pattern, without reintroducing the imprecise-resolution problem the original refusal was protecting against.
+- **Effort:** L — correctly sequenced behind R6; the resolution logic itself is a moderate addition, but proving it doesn't regress precision needs the mutation gate exercised specifically against member-call shapes.
+- **Success metric:** `this.userRepo.save(tainted)` resolves to `UserRepo.save`'s summary when `UserRepo` is CHA-unambiguous; an ambiguous same-named method across two unrelated classes still refuses to resolve (verified via a two-class fixture, mirroring the existing ambiguous-bare-name refusal test pattern in `callgraph.js`).
+
+#### R12. Wire the points-to graph the worklist already expects to receive
+- **Gap:** Alias/points-to analysis is built (Steensgaard-style, opt-in via `AGENTIC_SECURITY_POINTS_TO=1`) but is dead even when explicitly enabled: the option is computed and passed into `opts._pointsTo`, but `runTaintEngine` never copies it onto any `callContext`, and the alias-aware tainting code path reads `callContext._pointsTo`, which is therefore always `undefined`.
+- **Evidence:** `index.js:94-98` (`_pointsTo` passed in `opts`); `dataflow/engine.js:915-928` (`runTaintEngine` reads only `opts.fnLimit`/`deadlineMs`/`summaryCache` from `opts`); `dataflow/engine.js:59-74` (`_addPathAliasAware` reads `callContext._pointsTo`); grep confirms no assignment site connects the two.
+- **Recommendation:** Add the missing assignment — copy `opts._pointsTo` onto each `callContext` where `runTaintEngine` constructs one. This is literally a missing line, not missing design.
+- **Why it wins:** `const a = obj; a.x = tainted; sink(obj.x)` — a basic alias shape — is currently always missed even under the opt-in flag meant to catch it. Fixing the wiring makes the existing (and presumably already-tested-in-isolation) points-to graph actually reachable.
+- **Effort:** XS.
+- **Success metric:** With `AGENTIC_SECURITY_POINTS_TO=1`, the alias fixture above is detected; without the flag, behavior is unchanged (confirming the fix is additive, not a default-behavior change).
+
+### Theme E — Flow-modeling coverage gaps
+
+#### R13. Model member-write sinks and synthesize loop-element taint
+- **Gap:** Two structural blind spots that make whole vulnerability classes unreachable in deep mode regardless of catalog size.
+  - DOM XSS sinks (`el.innerHTML = tainted`, `location.href = tainted`, React's `dangerouslySetInnerHTML`) exist in the catalog's `MEMBER_INDEX` but are **never consulted** — `matchSinkOrSanitizer` only reads `CALLEE_INDEX`, and the `step()` assign-case only sink-matches when the RHS is itself a call, never when the assignment *target* is a member expression.
+  - `for (const x of req.body.items) sink(x)` — the loop variable is never bound to the iterated (tainted) expression. The JS loop visitor emits only loop-header/exit nodes; the `VariableDeclarator` for the loop binding has a null `init`, lowering to `{kind:'unknown'}`, which reads as clean.
+- **Evidence:** `catalog.js:349-360` (member-type sink entries) vs `dataflow/engine.js:427-433` (assign-case: sink-matches only call RHS) and `1062-1078` (`matchSinkOrSanitizer` reads `CALLEE_INDEX` only); `ir/parser-js.js:484-505` (loop lowering, no iterable-to-binding assign synthesized) — contrast Python-CST, Go `for`-range, and PHP `foreach`, which all *do* synthesize this assign (`parser-py.helper.py:426-447`, `parser-go.js:360-380`, `parser-php.js:305-318`) — this is a JS-specific omission, not a general engine limitation.
+- **Recommendation:** (a) Add an LHS sink-match branch to the assign case, consulting `MEMBER_INDEX` when the assignment target is a member expression. (b) In `parser-js.js`'s loop lowering, synthesize an assign node binding the loop variable to the iterated expression, matching what the other three languages' parsers already do for the same construct.
+- **Why it wins:** (a) unlocks DOM-based XSS detection in deep mode (currently regex-only, with all the flow-blindness that implies). (b) closes a JS-specific inconsistency — the other languages already solved this exact shape, so it's applying an established pattern, not inventing one.
+- **Effort:** M for (a) (touches the core `step()` assign case, needs careful regression testing against existing assign-case behavior); S for (b) (localized to one visitor, direct pattern match against three sibling implementations).
+- **Success metric:** `el.innerHTML = req.query.x` is detected as XSS in deep mode; `for (const item of req.body.items) { eval(item) }` is detected as code injection.
+
+#### R14. Add annotation/decorator-shaped framework sources and non-JS top-level IR
+- **Gap:** Two coverage gaps that are catalog-shape limitations rather than flow-analysis limitations.
+  - Framework sources expressed as annotations/decorators (Spring `@RequestParam`/`@PathVariable`/`@RequestBody`, ASP.NET Core `[FromQuery]`/`[FromBody]`, NestJS `@Query()`/`@Body()`) have no catalog representation — the catalog only matches callables and member reads, and annotations are neither.
+  - Top-level (non-function) code has IR in JS only (`<module>` synthetic function, `ir/parser-js.js:264,557`). Python, PHP, and Ruby parsers extract only declared functions — a flat vulnerable script (`<?php system($_GET['cmd']);`) has zero Layer-2 coverage in those languages.
+- **Evidence:** `catalog.js:176-177` ("Spring annotation-style sources are detected per-rule, not as catalog members" — an acknowledged, not accidental, gap); `parser-py.helper.py:557-559`, `parser-php.js:371`, `parser-rb.js:338` (function-only extraction).
+- **Recommendation:** (a) Extend the catalog schema to support an `annotation` match kind (parameter decorated with a known-source annotation → tainted parameter), consumed at IR construction time for languages whose parsers already see decorators/attributes (C# already lowers attributes for route/auth extraction per the SAST-layer audit — reuse that groundwork). (b) Wrap top-level statements in a synthetic module-scope function for Python/PHP/Ruby, mirroring the existing JS `<module>` pattern.
+- **Why it wins:** (a) opens Spring/ASP.NET/NestJS controller-parameter taint — a large share of real-world enterprise-framework vulnerabilities. (b) closes the "classic vulnerable script" gap that is disproportionately common in the kind of small, real-world advisory-labelled code the independent benchmark measures.
+- **Effort:** L for (a) (new catalog match kind, needs per-language decorator/attribute extraction where not already present); S for (b) (direct pattern-copy of the existing JS approach).
+- **Success metric:** A Spring controller method with a `@RequestParam` flowing to a `JdbcTemplate.query` call is detected (contingent on R6's receiver-typed JDBC sink existing too); a flat PHP/Python/Ruby script with source→sink on the same top-level statement list is detected.
+
+### Theme F — Aggregation precision-safety
+
+#### R15. Convert flow-insensitive hard-drops into evidence-gated demotions
+- **Gap:** `dropGuardedFindings` hard-removes CWE-918/CWE-22/reflected-XSS findings when *any* allowlist-shaped token (`startsWith(`, `basename(`, a bare `ALLOW` substring) appears anywhere in a −25/+5-line window around the sink — with no check that the "guard" actually applies to the tainted variable. Reachability demotion separately mutates canonical severity (critical→medium, high→low, low→info) based on a same-file, 60-line-proximity, JS/TS-only call-graph heuristic — meaning every cross-file finding and every non-JS finding in a routed project is demoted on a guess.
+- **Evidence:** `dropGuardedFindings` window/regex at `scanner/src/engine.js:1263-1356`, wired at `8049`; `_SSRF_HOST_GUARD_RE` matches the bare word `ALLOW` (`engine.js:1259`). Reachability: `scanner/src/posture/reachability-filter.js:16-72` (severity mutation table); `scanner/src/engine.js:4814-4848` (60-line same-file model), `4649-4651` (call graph built for `.js/.jsx/.ts/.tsx/.mjs/.cjs` only — every other language's reachability rests solely on the line-proximity heuristic).
+- **Recommendation:** For `dropGuardedFindings`: require the guard token to reference the *same identifier* the finding's taint traces through (a cheap textual check — does the guard line mention the tainted variable name — is a meaningful improvement over "anywhere in the window" even before any real dataflow correlation). For reachability: require an actual call-graph edge (even a heuristic one) before demoting severity for JS/TS; for languages with no call graph, do not apply the demotion at all rather than defaulting to `reachable=false` on missing data — an absence of evidence should not be scored the same as evidence of unreachability.
+- **Why it wins:** Both mechanisms currently suppress or downgrade real findings based on proximity, not evidence. This is where Theme A–E's improved detections would otherwise go to die — closing this theme protects the ROI of every other item in this document.
+- **Effort:** M — both are self-contained changes to existing functions with clear, testable before/after behavior; the risk is re-tuning without breaking the (real) precision benefit these mechanisms provide when they're right.
+- **Success metric:** A fixture where the guard token protects an unrelated variable (not the tainted one) no longer suppresses the finding; a non-JS finding with no call-graph data is no longer demoted purely for lacking one (verified against the existing reachability test suite to confirm no regression on cases where the demotion is currently correct).
+
+#### R16. Re-measure the independent population after the P0 items land
+- **Gap:** Not a code gap — a measurement gap. The 12.7%/F1 0.203 baseline is 0.135.0-vintage and predates every fix in this document.
+- **Evidence:** `bench/independent/RESULT.json` — `measuredAt: 2026-08-09`, `engineVersion: 0.135.0`.
+- **Recommendation:** Re-run `npm run bench:independent` after Theme A (R1–R5) lands, and again after Theme C (R8–R9) lands, reporting per-CWE and per-language breakdowns in `docs/SCORECARD.md` — not just the headline number, per the existing convention in `RECALL_IMPROVEMENT_PRD.md`'s own methodology.
+- **Why it wins:** Without this, the plan's success is unverifiable. R1 alone (deep mode reaching the population's advisory-local scoring, which currently runs however `bench/independent/runner.mjs` invokes the scanner) may already move the number materially, and that needs to be *measured*, not assumed.
+- **Effort:** S per run (~32 minutes of runtime, no engineering).
+- **Success metric:** A dated, engine-versioned entry in `docs/SCORECARD.md` after each milestone below.
+
+---
+
+## 6. Sequencing and dependency ordering
+
+```
+R1  (deep opt-out everywhere)      ─┐
+R2  (dead-code demotion bug)        │  Theme A — independent, do first,
+R4  (sanitizer index + kill fix)    │  lowest risk, unlocks measurement
+R5  (gate bench-shape leaks)       ─┘  of everything downstream
+
+R3  (annotator pipeline for deep)  ── depends on R1 mattering (more deep
+                                       findings flowing through means the
+                                       ordering bug matters more)
+
+R7  (import-binding wiring)        ── independent, do alongside Theme A
+
+R6  (receiver-type wiring)         ─┐
+R11 (member-call resolution)        │  R11 explicitly sequenced behind R6
+                                    ─┘
+
+R8  (brace-block splitters)        ─┐
+R9  (Java params + fn.calls)        │  R9 depends on R8's CFG nodes existing
+                                    ─┘  for the statement kinds calls live in
+
+R10, R12, R13(a)                    independent of each other, land any time
+R13(b), R14                         independent, low-risk additive changes
+
+R15                                 pairs with Theme A — do early, since it
+                                     otherwise silently discards Theme A/B/C/D
+                                     gains
+
+R16                                 after each milestone below
+```
+
+**Milestones:**
+
+| Milestone | Items | Expected effect |
+|---|---|---|
+| M1 | R1, R2, R4, R5, R15 | Deep mode reaches every scan surface; the pipeline stops discarding/mis-severitying what it already finds; bench-shape leaks closed. Re-measure (R16) here — this milestone alone may account for most of the achievable near-term recall gain, since it activates capability that already exists. |
+| M2 | R3, R6, R7, R10, R12, R13, R14 | Matching gets type/import awareness; remaining flow-shape gaps close. Re-measure. |
+| M3 | R8, R9, R11 | Java/C#/Kotlin/PHP stop being structurally blind inside control-flow bodies; JS member-call resolution reopens (gated on R6). Re-measure. |
+
+No number in this document should be read as a forecast — `RECALL_IMPROVEMENT_PRD.md`'s own caution applies here too: projections are a planning aid, and the only number that goes in `SCORECARD.md` is one that was actually measured after the code landed.
+
+---
+
+## 7. Overfitting watchlist
+
+This section exists because the audit that produced this PRD was explicitly asked to flag it, and because the codebase already has three live instances (R5) despite a documented policy against it. These rules apply to every item above and to any future work in this area:
+
+- **A new source/sink/sanitizer catalog entry must cite an upstream framework or library API** (a real function signature from real documentation), never a name observed in a test fixture or benchmark file. The corpus provenance check (`scripts/corpus-provenance-check.mjs`) already fails a commit that lands a detector and its corpus entries together — that discipline extends to this work.
+- **Do not gate new logic on file-path shapes that resemble benchmark layout** (`juliet-cwe*/`, `*-benchmark/`, variable-naming conventions like `bar`/`param`) unless the gate is explicitly behind `AGENTIC_SECURITY_BENCH_SHAPE` and documented as such.
+- **The mutation gate (`bench/mutation`, verdict-flip scoring) is the existing structural defense against this class of overfitting** — it scores whether a semantics-preserving rewrite holds a verdict and a semantics-changing near-miss flips it, which a name-matching improvement tuned to one fixture's exact shape would fail. Every recommendation above that touches matching logic (R4, R6, R7, R10, R11, R13) should add mutation-gate cases, not just corpus fixtures.
+- **R5's Java "universal safe-shape" suppression is the one item in this document that needs active judgment, not just a flag flip** — it may be a real, generalizable Java safety pattern that happens to have been named after (and validated against) benchmark code, or it may be benchmark-fitted logic wearing a general-sounding name. Resolve this by testing it against real-world Java samples independent of the corpus, not by inspecting the code harder.
+- **Re-measuring against the independent population (R16), not the regression corpus, is the check that this plan actually improved general detection rather than re-fitting the self-authored corpus tighter.** The regression corpus staying green throughout this work is necessary (no backslide) but not sufficient (it cannot demonstrate progress, only its absence of regression) — R16 is not optional bookkeeping, it is the acceptance criterion for the whole PRD.
+
+---
+
+## 8. What would make this plan wrong
+
+- **If turning deep mode on by default (R1) blows the CI time budget on real repos,** the milestone-1 win shrinks to "opt-out for MCP/LSP only, CI stays opt-in" — still a real improvement, but smaller than projected. Measure p95 latency on a representative repo size before flipping the CI default.
+- **If the independent-population re-measurement (R16) after M1 shows little movement,** the diagnosis that "deep mode being off is the dominant factor" is wrong or incomplete, and Theme B/C work should be reprioritized ahead of further Theme A polish — the whole point of measuring at each milestone is to catch this rather than assume the sequencing above was right.
+- **If R8's parser rewrites introduce regressions in the languages' existing (correct) linear-CFG behavior,** the fix could net-negative on precision for those languages even while improving recall — this is exactly what the mutation gate and each language's existing fixture suite exist to catch, and R8 should not land without both passing.
+- **If R6/R11's receiver-type gating still produces meaningfully more false positives than the current name-only matching,** despite the gating, the CHA/class-hierarchy data this relies on may not be reliable enough for dynamically-typed languages (JS in particular) to support type-gated resolution — in which case R11 in particular should stay unimplemented rather than shipped with degraded precision, consistent with why it was refused in the first place.
+
+---
+
+## 9. Out of scope for this PRD
+
+- **New CWE/rule coverage that isn't a structural gap** — this document is about capability the engine cannot express today, not "add a rule for CWE-X" in a category the engine already handles well. That work is tracked separately (see `RECALL_IMPROVEMENT_PRD.md`'s per-CWE method for how to do it correctly when it's needed).
+- **Long-tail/tree-sitter language IR (Rust, Solidity, Swift, Dart)** — these have zero IR and zero catalog today; bringing them to parity is a greenfield effort comparable in size to onboarding a new language from scratch, not a "fix the gap" item, and belongs in its own PRD if prioritized.
+- **The discovery/LLM-assisted layer** — semantic bugs with no sink to pattern-match (missing authorization, logic flaws) are explicitly the discovery layer's job, not the deterministic pipeline's, per existing project architecture. Out of scope here.
+- **k>1 call-string context sensitivity beyond what R6/R11 need** — a genuinely large, separate piece of work (see `SAST_SCA_IMPROVEMENT_PRD.md` R2 for the prior treatment of this); not required to close the gaps this audit identified.

@@ -330,14 +330,27 @@ export function aliasesForVar(pointsTo, qid, varName) {
   const fullName = `${qid}::${varName}`;
   const aliases = pointsTo.aliasesOf(fullName);
   const out = new Set([varName]);
+  // PRD R12 (docs/DETECTION_GAP_REMEDIATION_PRD.md): a real function qid is
+  // itself multi-segment (`file::scope::name@line`) and contains `::`, so
+  // stripping up to the FIRST `::` truncates mid-qid instead of removing
+  // it — `app.js::<module>::anon@5::obj` became `<module>::anon@5::obj`,
+  // not the bare `obj` the engine's per-function taint state keys on. Strip
+  // the exact known `${qid}::` prefix first; only fall back to the
+  // first-`::` heuristic for an alias that (unusually) carries a different
+  // qid than the one being queried.
+  const prefix = `${qid}::`;
   for (const a of aliases) {
-    // Strip the qid prefix for engine-state lookups (engine state is per-fn).
-    const idx = a.indexOf('::');
-    if (idx > 0) {
-      const local = a.slice(idx + 2);
-      // Skip __loc: / __virt: synthetic names.
-      if (local && !local.startsWith('__')) out.add(local);
+    let local = null;
+    if (a.startsWith(prefix)) {
+      local = a.slice(prefix.length);
+    } else {
+      const idx = a.indexOf('::');
+      if (idx > 0) local = a.slice(idx + 2);
     }
+    // Skip __loc: / __virt: synthetic names, and any alias that still
+    // carries a qid fragment (a cross-function alias isn't a valid path in
+    // THIS function's per-fn taint state).
+    if (local && !local.startsWith('__') && !local.includes('::')) out.add(local);
   }
   return [...out];
 }

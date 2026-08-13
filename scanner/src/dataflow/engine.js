@@ -533,10 +533,29 @@ function step(node, stateIn, callContext) {
           // Fallback: check builtin summaries for unresolved external calls
           const builtin = lookupBuiltinSummary(calleeName);
           if (builtin) {
-            if (builtin.returnTainted && (node.source.args || []).some(a => exprTaint(a, newState))) {
+            const _argTainted = (node.source.args || []).some(a => exprTaint(a, newState));
+            if (builtin.returnTainted && _argTainted) {
               newState = _addPathAliasAware(newState, target, callContext);
             } else if (!builtin.returnTainted) {
-              newState = removePathAndDescendants(newState, target);
+              // PRD R4b: a builtin summary saying returnTainted:false can mean
+              // two very different things — a genuinely non-deriving function
+              // (crypto.randomBytes) where clearing taint is correct, or a
+              // sanitizer-shaped function (encodeURIComponent, parseInt,
+              // DOMPurify.sanitize...) that DOES receive tainted input and
+              // whose safety is family-scoped (a URL encoder does nothing for
+              // SQLi). `_sanitizersForExpr` above already recorded the latter
+              // case into `_sanitizersByVar` when this callee is ALSO a
+              // registered catalog sanitizer — defer to sanitizer-gate.js's
+              // family-aware demotion there instead of unconditionally
+              // killing every family's taint here. Only a genuinely-untainted
+              // argument, or a callee with no catalog-sanitizer registration,
+              // still clears via removePathAndDescendants.
+              const _recordedSan = target && callContext._sanitizersByVar && callContext._sanitizersByVar.get(target);
+              if (_argTainted && _recordedSan && _recordedSan.size) {
+                newState = _addPathAliasAware(newState, target, callContext);
+              } else {
+                newState = removePathAndDescendants(newState, target);
+              }
               return { state: newState, findings };
             }
             if (builtin.mutatedParams && builtin.mutatedParams.size) {
@@ -1093,6 +1112,12 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       deadlineMs,   // honored by the worklist inside analyzeFunction
       _summaryCache: summaryCache,
       _callGraph: callGraph,
+      // PRD R12: index.js builds this graph (AGENTIC_SECURITY_POINTS_TO=1)
+      // and passes it in opts._pointsTo, but nothing previously copied it
+      // onto callContext — _addPathAliasAware reads callContext._pointsTo,
+      // which was therefore always undefined, and alias-aware tainting was
+      // a no-op even with the flag set.
+      _pointsTo: opts._pointsTo,
     };
     try {
       analyzeFunction(fn, new Set(), callContext);
@@ -1151,8 +1176,8 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // Dead code suppression: demote findings in functions with zero callers
   // (except route handlers which are entry points)
   const calledQids = new Set();
-  if (callGraph.edges) for (const e of callGraph.edges) calledQids.add(typeof e.to === 'string' ? e.to : e.to?.qid);
-  if (callGraph.callersOf) for (const [qid, callers] of callGraph.callersOf) { if (callers && callers.size) calledQids.add(qid); }
+  if (callGraph.edges) for (const e of callGraph.edges) if (e.callee) calledQids.add(typeof e.callee === 'string' ? e.callee : e.callee?.qid);
+  if (callGraph.callersOf) for (const [qid, callers] of callGraph.callersOf) { if (Array.isArray(callers) ? callers.length : callers?.size) calledQids.add(qid); }
   for (const f of all) {
     if (!f._funcQid) continue;
     const fn = callGraph.functions?.get(f._funcQid);

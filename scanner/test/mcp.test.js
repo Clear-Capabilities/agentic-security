@@ -241,6 +241,34 @@ test('scan_diff returns a real remediation for a fix-string detector, not an emp
   await cleanup();
 });
 
+// PRD R1 (docs/DETECTION_GAP_REMEDIATION_PRD.md): scan_diff called
+// runScan() with no `deep` option, so the interprocedural taint engine
+// never ran here — every agent-driven pre-write self-correction scan was
+// regex/AST-only, structurally blind to the class of bug the deep engine
+// exists for (a source read in one function, reaching a sink in another,
+// connected only through a call). NOT changing runScan()'s global default
+// or the CI override — deliberately scoped to this tool's own call site,
+// per the PRD's own risk section.
+test('scan_diff runs the interprocedural taint engine, not just regex/AST (deep mode reaches this tool)', async () => {
+  const { root, handleRequest, cleanup } = await makeSession();
+  await fsp.writeFile(path.join(root, 'app.js'), `
+const db = require('./db');
+const express = require('express');
+const app = express();
+function leak(id) { db.query('SELECT * FROM t WHERE id=' + id); }
+app.get('/run', (req, res) => {
+  const uid = req.query.id;
+  leak(uid);
+});
+`);
+  const r = await call(handleRequest, 'scan_diff', { files: ['app.js'] });
+  const p = payload(r);
+  const irFinding = p.findings.find((f) => f.title === 'SQL Injection (db.query)');
+  assert.ok(irFinding,
+    `expected the deep-engine-only "SQL Injection (db.query)" finding (source in the route handler, sink in a separate function "leak"), got titles: ${JSON.stringify(p.findings.map((f) => f.title))}`);
+  await cleanup();
+});
+
 test('apply_fix refuses finding whose file field escapes session root', async () => {
   const { handleRequest, root, cleanup } = await makeSession({
     findings: [{

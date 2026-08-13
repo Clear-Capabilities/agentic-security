@@ -94,3 +94,33 @@ test('scanFile diagnostics are redacted — a committed .env secret does not app
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// PRD R1 (docs/DETECTION_GAP_REMEDIATION_PRD.md): scanFile called runScan()
+// with no `deep` option, so every on-save LSP diagnostic pass was
+// regex/AST-only — blind to a bug whose source and sink are connected only
+// through a call within the same saved file. NOT changing runScan()'s
+// global default or the CI override — scoped to this call site only, same
+// as the analogous scan_diff (MCP) fix.
+test('scanFile runs the interprocedural taint engine, not just regex/AST (deep mode reaches on-save diagnostics)', () => {
+  const dir = mkTmp('deep', {
+    'app.js': `
+const db = require('./db');
+const express = require('express');
+const app = express();
+function leak(id) { db.query('SELECT * FROM t WHERE id=' + id); }
+app.get('/run', (req, res) => {
+  const uid = req.query.id;
+  leak(uid);
+});
+`,
+  });
+  try {
+    // _diagnosticsByUri stores the raw finding objects (pre-
+    // findingToDiagnostic conversion), so assert on `.vuln`, not `.message`.
+    const diags = scanFileInChild(dir, path.join(dir, 'app.js'));
+    assert.ok(diags.some((d) => d.vuln === 'SQL Injection (db.query)'),
+      `expected the deep-engine-only "SQL Injection (db.query)" finding, got vulns: ${JSON.stringify(diags.map((d) => d.vuln))}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

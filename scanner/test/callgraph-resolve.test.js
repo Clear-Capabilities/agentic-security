@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCallGraph } from '../src/ir/callgraph.js';
+import { buildProjectIR } from '../src/ir/index.js';
 
 // Two files each define a function named `handler` (a common collision).
 function twoFileGraph() {
@@ -37,4 +38,43 @@ test('callerFile with no local match falls back to global resolution (no dropped
 
 test('unknown name still returns null', () => {
   assert.equal(twoFileGraph().resolve('nope', 'a.js'), null);
+});
+
+// PRD R7 (docs/DETECTION_GAP_REMEDIATION_PRD.md): buildCallGraph's re-export
+// map (`export { x as y } from './z'`, `module.exports = require('./z')`)
+// only populates when `fileContents` is passed as the second argument — but
+// both real callers (ir/index.js's buildProjectIR/buildProjectIRAsync) called
+// buildCallGraph(perFile) with one argument, so the map was always empty and
+// this resolution path was dead in production. An ALIASED re-export is the
+// case this actually matters for: a bare-name search across every file
+// cannot find a call to the ALIAS (no function is literally named that), and
+// without the re-export map redirecting to the real function's name, the
+// call is silently unresolved — a dropped edge, not just an imprecise one.
+test('an aliased re-export resolves via the source function, when fileContents is supplied', () => {
+  const perFileIR = {
+    'impl.js': { functions: [{ qid: 'impl.js::helper@1#ccc', name: 'helper', file: 'impl.js', calls: [] }] },
+    'router.js': { functions: [{ qid: 'router.js::main@2#ddd', name: 'main', file: 'router.js', calls: [{ callee: 'processInput', line: 2 }] }] },
+  };
+  const fileContents = {
+    'impl.js': 'function helper(x) {}\n',
+    'router.js': "export { helper as processInput } from './impl.js';\nfunction main(req) { processInput(req.query.cmd); }\n",
+  };
+  const withoutContents = buildCallGraph(perFileIR);
+  assert.equal(withoutContents.resolveKnownCallee('processInput', 'router.js'), null,
+    'control: without fileContents the alias genuinely cannot resolve (confirms the test fixture exercises the re-export path, not some other resolution rule)');
+  const withContents = buildCallGraph(perFileIR, fileContents);
+  const resolved = withContents.resolveKnownCallee('processInput', 'router.js');
+  assert.equal(resolved, 'impl.js::helper@1#ccc',
+    `expected the aliased re-export to resolve to impl.js's helper, got ${JSON.stringify(resolved)}`);
+});
+
+test('buildProjectIR (the real call site) resolves an aliased re-export end to end', () => {
+  const fileContents = {
+    'impl.js': 'function helper(x) {}\n',
+    'router.js': "export { helper as processInput } from './impl.js';\nfunction main(req) { processInput(req.query.cmd); }\n",
+  };
+  const { callGraph } = buildProjectIR(fileContents);
+  const resolved = callGraph.resolveKnownCallee('processInput', 'router.js');
+  assert.ok(resolved, `expected buildProjectIR's own call graph to resolve the aliased re-export, got ${JSON.stringify(resolved)}`);
+  assert.match(String(resolved), /impl\.js.*helper/, `expected resolution into impl.js's helper, got ${JSON.stringify(resolved)}`);
 });

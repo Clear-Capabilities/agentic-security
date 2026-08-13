@@ -150,7 +150,13 @@ async function scanFile(uri) {
     // the reset, a long-lived LSP server would accumulate budget across saves
     // and eventually start skipping custom rules.
     resetCustomRulesBudget(_rootDir);
-    const { scan } = await runScan(_rootDir, { fileContents, depFileContents });
+    // PRD R1 (docs/DETECTION_GAP_REMEDIATION_PRD.md): deep mode is
+    // default-on for the interactive CLI scan but was never requested here,
+    // so every on-save diagnostic pass was regex/AST-only — blind to any bug
+    // whose source and sink are connected only through a call. Scoped to
+    // exactly the saved file (fileContents has one entry), so this does not
+    // turn every keystroke's save into a full-project deep scan.
+    const { scan } = await runScan(_rootDir, { fileContents, depFileContents, deep: true, deepInCi: true });
     // Stage 6 correctness audit: this only ever read scan.findings (the SAST
     // channel). scan.secrets and scan.logicVulns are separate arrays on the
     // raw runScan() result — normalizeFindings is what merges all four

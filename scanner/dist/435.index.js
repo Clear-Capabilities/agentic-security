@@ -814,8 +814,16 @@ const scan_diff = {
       fileContents[rel] = content;
     }
 
+    // PRD R1 (docs/DETECTION_GAP_REMEDIATION_PRD.md): deep mode is default-on
+    // for the interactive CLI scan but was never requested here, so an
+    // agent's pre-write self-correction scan was regex/AST-only — blind to
+    // any bug whose source and sink are connected only through a call
+    // (`fileContents` scopes the deep engine's IR to exactly the files
+    // passed in, same bound this tool already enforces via MAX_FILES_PER_SCAN
+    // / MAX_TOTAL_SCAN_BYTES, so this does not turn scan_diff into a
+    // full-project deep scan).
     const runScan = await getRunScan();
-    const result = await runScan(sessionRoot, { network: false, fileContents });
+    const result = await runScan(sessionRoot, { network: false, fileContents, deep: true, deepInCi: true });
     const wantSet = new Set(Object.keys(fileContents));
     const sevRank = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
     const min = sevRank[severity] ?? 0;

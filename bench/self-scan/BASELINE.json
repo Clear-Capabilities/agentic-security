@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-12T20:51:22.551Z",
-  "commit": "3e3d7fdb2518e6a79037aa8d41695f773ba0eed6",
+  "generatedAt": "2026-08-13T05:13:44.886Z",
+  "commit": "d15e185e2d8e6847cdff65149fe26b8544594147",
   "targets": {
     "hooks": {
       "total": 25,
@@ -37,7 +37,7 @@
       }
     },
     "scanner/src": {
-      "total": 611,
+      "total": 612,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -50,7 +50,7 @@
         "dataflow/string-domain.js": 2,
         "discovery/memory.js": 1,
         "history-scan.js": 2,
-        "integrations/index.js": 11,
+        "integrations/index.js": 10,
         "integrations/tickets.js": 8,
         "ir/cpp-preprocessor.js": 2,
         "ir/ir-stats.js": 1,
@@ -124,7 +124,7 @@
         "posture/fix-verify-loop.js": 2,
         "posture/fix-verify.js": 1,
         "posture/fleet.js": 1,
-        "posture/flow-narration.js": 2,
+        "posture/flow-narration.js": 3,
         "posture/grader-calibration.js": 4,
         "posture/harness-discovery.js": 1,
         "posture/holdout-eval.js": 3,
@@ -247,7 +247,7 @@
         "sast/wrong-context-sanitizer.js": 3,
         "sast/xss-reflected-multilang.js": 1,
         "sast/xxe.js": 1,
-        "sast/zip-slip.js": 1,
+        "sast/zip-slip.js": 2,
         "sca/binary-metadata.js": 6,
         "sca/container.js": 4,
         "sca/dep-confusion.js": 3,

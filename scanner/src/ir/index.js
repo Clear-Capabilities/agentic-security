@@ -182,7 +182,13 @@ export function buildProjectIR(fileContents) {
       }
     }
   }
-  const cg = buildCallGraph(perFile);
+  // PRD R7 (docs/DETECTION_GAP_REMEDIATION_PRD.md): buildCallGraph's
+  // re-export map (aliased `export {x as y} from './z'`, CJS
+  // `module.exports = require('./z')`) only populates when fileContents is
+  // passed — without it, a call to an aliased re-export can never resolve
+  // (no function is literally named the alias anywhere), a dropped edge,
+  // not just an imprecise one.
+  const cg = buildCallGraph(perFile, fileContents);
   const cha = buildClassHierarchy(perFile);
   return { perFile, callGraph: cg, cha };
 }
@@ -238,7 +244,13 @@ export async function buildProjectIRAsync(fileContents) {
       }
     }
   }
-  const cg = buildCallGraph(perFile);
+  // PRD R7 (docs/DETECTION_GAP_REMEDIATION_PRD.md): buildCallGraph's
+  // re-export map (aliased `export {x as y} from './z'`, CJS
+  // `module.exports = require('./z')`) only populates when fileContents is
+  // passed — without it, a call to an aliased re-export can never resolve
+  // (no function is literally named the alias anywhere), a dropped edge,
+  // not just an imprecise one.
+  const cg = buildCallGraph(perFile, fileContents);
   const cha = buildClassHierarchy(perFile);
   return { perFile, callGraph: cg, cha };
 }
