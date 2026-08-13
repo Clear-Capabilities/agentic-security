@@ -226,3 +226,42 @@ app.get('/run', (req, res) => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('R10: a helper call nested directly in a sink argument is detected', async () => {
+  const dir = mkTmp('r10-nested', {
+    'app.js': `
+const { exec } = require('child_process');
+const express = require('express');
+const app = express();
+function getUserInput(req) { return req.query.cmd; }
+app.get('/run', (req, res) => {
+  exec(getUserInput(req));
+  res.send('ok');
+});
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const cmdFindings = (scan.findings || []).filter(f => /command|exec|injection/i.test(f.vuln || ''));
+  assert.ok(cmdFindings.length >= 1,
+    'expected exec(getUserInput(req)) to be detected — getUserInput()\'s own return-taint summary must be consulted for a call nested directly in the sink argument, not just at assignment/statement position');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('R10: a clean nested call does not spuriously taint the sink', async () => {
+  const dir = mkTmp('r10-clean-nested', {
+    'app.js': `
+const { exec } = require('child_process');
+const express = require('express');
+const app = express();
+function getFixedCommand() { return 'echo hello'; }
+app.get('/run', (req, res) => {
+  exec(getFixedCommand());
+  res.send('ok');
+});
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const cmdFindings = (scan.findings || []).filter(f => /command|exec|injection/i.test(f.vuln || ''));
+  assert.equal(cmdFindings.length, 0, 'exec(getFixedCommand()) must NOT be flagged — the nested call returns no tainted value');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+

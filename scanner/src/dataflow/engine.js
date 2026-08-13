@@ -221,7 +221,48 @@ function _resolveCalleeForSummary(calleeExpr, callContext) {
   return typeof qid === 'string' ? { qid, fn } : null;
 }
 
-function exprTaint(expr, state) {
+// PRD R10 (docs/DETECTION_GAP_REMEDIATION_PRD.md): the only two places that
+// consult a callee's SummaryCache entry are the assign-RHS and plain-call-
+// statement paths in step() below — a call nested INSIDE another expression
+// (most commonly a sink's own argument list, `sink(getUserInput())`) reaches
+// neither, so exprTaint's 'call' case fell back to checking only the nested
+// call's OWN arguments, silently losing the callee's return-taint. Mirrors
+// the same resolve -> get-or-compute -> merge sequence step()'s two existing
+// call sites use, via the Task 3/4 shared _resolveCalleeForSummary.
+function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext) {
+  if (!callContext || !callContext._summaryCache) return false;
+  const target = _resolveCalleeForSummary(calleeExpr, callContext);
+  if (!target) return false;
+  const { qid, fn } = target;
+  const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
+  const entry = paramNames.length
+    ? entryStateFromCall(paramNames, argExprs || [], state)
+    : new Set();
+  let sum = callContext._summaryCache.get(qid, entry);
+  if (!sum && fn && fn.cfg) {
+    sum = callContext._summaryCache.compute(qid, entry, () => {
+      const inner = {
+        _findings: [], _taintSources: [], _returnTainted: false,
+        _stack: new Set(), deadlineMs: callContext.deadlineMs,
+        _summaryCache: callContext._summaryCache,
+        _callGraph: callContext._callGraph,
+        _mutatedParamsOut: new Set(),
+        _cha: callContext._cha,
+      };
+      try { analyzeFunction(fn, entry, inner); } catch {}
+      return {
+        returnTainted: !!inner._returnTainted,
+        mutatedParams: inner._mutatedParamsOut || new Set(),
+        taintedGlobals: new Set(),
+        findings: inner._findings,
+      };
+    });
+  }
+  _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
+  return !!(sum && sum.returnTainted);
+}
+
+function exprTaint(expr, state, callContext) {
   if (expr && (expr.kind === 'member' || expr.kind === 'call') && exprIsSource(expr)) return true;
   if (!expr) return false;
   // Constant propagation: variables assigned from literals are never tainted
@@ -235,16 +276,18 @@ function exprTaint(expr, state) {
   switch (expr.kind) {
     case 'literal':           return false;
     case 'binary':
-    case 'logical':           return exprTaint(expr.left, state) || exprTaint(expr.right, state);
-    case 'tpl':               return (expr.parts || []).some(p => exprTaint(p, state));
-    case 'union':             return (expr.branches || []).some(b => exprTaint(b, state));
-    case 'object':            return (expr.props || []).some(p => exprTaint(p.value, state));
-    case 'array':             return (expr.elements || []).some(e => exprTaint(e, state));
+    case 'logical':           return exprTaint(expr.left, state, callContext) || exprTaint(expr.right, state, callContext);
+    case 'tpl':               return (expr.parts || []).some(p => exprTaint(p, state, callContext));
+    case 'union':             return (expr.branches || []).some(b => exprTaint(b, state, callContext));
+    case 'object':            return (expr.props || []).some(p => exprTaint(p.value, state, callContext));
+    case 'array':             return (expr.elements || []).some(e => exprTaint(e, state, callContext));
     case 'call': {
-      // Calls are handled at the CFG level (the call has already been processed).
-      // For an inline call expression, conservatively return whether any arg is tainted.
-      // This loses the sanitizer effect but is safe.
-      return (expr.args || []).some(a => exprTaint(a, state));
+      // The call's own arguments (unchanged from before) OR — PRD R10 — the
+      // resolved callee's own return-taint summary. Args-tainted is checked
+      // FIRST and short-circuits: it's the cheap, no-resolve-attempt case and
+      // was already correct.
+      if ((expr.args || []).some(a => exprTaint(a, state, callContext))) return true;
+      return _nestedCallReturnTainted(expr.callee, expr.args, state, callContext);
     }
     case 'unknown':           return false;
     default:                  return false;
@@ -370,7 +413,7 @@ function literalSkeletonMatchesFamily(expr, cwe) {
 function _matchCallCatalog(calleeExpr, argExprs, state, callContext) {
   const receiverType = _receiverTypeFor(calleeExpr, callContext);
   const cat = matchSinkOrSanitizer(calleeExpr, _currentFile, receiverType);
-  const argTaints = (argExprs || []).map(a => exprTaint(a, state));
+  const argTaints = (argExprs || []).map(a => exprTaint(a, state, callContext));
   return { cat, argTaints };
 }
 
@@ -629,7 +672,7 @@ function step(node, stateIn, callContext) {
           // Fallback: check builtin summaries for unresolved external calls
           const builtin = lookupBuiltinSummary(calleeName);
           if (builtin) {
-            const _argTainted = (node.source.args || []).some(a => exprTaint(a, newState));
+            const _argTainted = (node.source.args || []).some(a => exprTaint(a, newState, callContext));
             if (builtin.returnTainted && _argTainted) {
               newState = _addPathAliasAware(newState, target, callContext);
             } else if (!builtin.returnTainted) {
@@ -657,7 +700,7 @@ function step(node, stateIn, callContext) {
             if (builtin.mutatedParams && builtin.mutatedParams.size) {
               for (const idx of builtin.mutatedParams) {
                 const argExpr = (node.source.args || [])[parseInt(idx)];
-                if (argExpr && argExpr.kind === 'ident' && (node.source.args || []).some(a => exprTaint(a, newState))) {
+                if (argExpr && argExpr.kind === 'ident' && (node.source.args || []).some(a => exprTaint(a, newState, callContext))) {
                   newState = _addPathAliasAware(newState, argExpr.name, callContext);
                 }
               }
@@ -670,7 +713,7 @@ function step(node, stateIn, callContext) {
         const sourcePath = accessPathOf(node.source);
         if (sourcePath) newState = addPath(newState, sourcePath);
         callContext._taintSources.push({ varName: target, sourceId: src.id, sourceLabel: src.label, provenance: src.provenance || null, line: node.line });
-      } else if (exprTaint(node.source, newState)) {
+      } else if (exprTaint(node.source, newState, callContext)) {
         // P1.1: when the source IS a pure access path (e.g., RHS is `obj.foo.bar`),
         // taint the TARGET as well as transitively propagate the source path so
         // later uses of the same source remain tainted. The target path
@@ -840,7 +883,7 @@ function step(node, stateIn, callContext) {
     }
 
     case 'return': {
-      if (exprTaint(node.value, state)) {
+      if (exprTaint(node.value, state, callContext)) {
         callContext._returnTainted = true;
       }
       return { state, findings };
@@ -922,7 +965,7 @@ function analyzeFunction(fn, entryState, callContext) {
     try {
       const union = new Set();
       for (const s of inStates.values()) for (const p of s) union.add(p);
-      const ictx = buildImplicitContext(fn.cfg, (expr) => exprTaint(expr, union));
+      const ictx = buildImplicitContext(fn.cfg, (expr) => exprTaint(expr, union, callContext));
       // Mark vars assigned inside a tainted branch as implicit-tainted.
       let implicitState = new Set();
       for (const [nid, ctx] of ictx) {
@@ -959,7 +1002,7 @@ function analyzeFunction(fn, entryState, callContext) {
         const sink = cat && cat.find((e) => e.kind === 'sink');
         if (!sink) continue;
         const inS = inStates.get(nid) || new Set();
-        if ((node.args || []).some((a) => exprTaint(a, inS))) continue;
+        if ((node.args || []).some((a) => exprTaint(a, inS, callContext))) continue;
         const allConst = (node.args || []).length > 0 && (node.args || []).every((a) => a && a.kind === 'literal');
         if (allConst) reportImplicit(nid, node, sink, ctx.conditionLabel);
       }
@@ -973,7 +1016,7 @@ function analyzeFunction(fn, entryState, callContext) {
           const sink = cat && cat.find((e) => e.kind === 'sink');
           if (!sink) continue;
           const inS = inStates.get(nid) || new Set();
-          if ((node.args || []).some((a) => exprTaint(a, inS))) continue;
+          if ((node.args || []).some((a) => exprTaint(a, inS, callContext))) continue;
           const argRefsImplicit = (node.args || []).some((a) => {
             const ap = accessPathOf(a); return ap && isCoveredBy(implicitState, `implicit:${ap}`);
           });
