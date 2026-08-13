@@ -9,6 +9,35 @@
 > make the history less accurate, not more.
 
 
+## 0.136.8 — instrumenting a real, still-unexplained hosted-CI-only failure
+
+0.136.7's hosted release run got past every other check and failed on
+exactly one: `test/mttr.test.js`'s CLI-wiring test, which asserts a real
+`agentic-security scan` reports an `mttr` field in `last-scan.json`. That
+field comes from a deliberately best-effort code path in `cmdScan`
+(`bin/agentic-security.js`) wrapped in a bare `catch { /* MTTR is
+best-effort — never block a scan write */ }` — correct as a product
+decision (a scan must never fail because a secondary metric couldn't be
+computed), but it means whatever throws inside that block has never been
+visible to anyone, including this investigation.
+
+This is now confirmed NOT the shared-runner flakiness 0.136.5/0.136.6
+blamed it as: reran the identical failed job against the identical commit
+(`gh run rerun --failed`, no code change) and got the exact same failure,
+same file, same line, same message, a fourth consecutive time. Extensive
+local reproduction attempts — simulating `CI=true`/`GITHUB_ACTIONS=true`,
+running the full 1328-test `test:posture` scope concurrently to match CI's
+exact invocation shape, invoking the real bundled CLI directly under the
+same env vars — all passed cleanly. Whatever this is, it is deterministic
+on GitHub's hosted runner and has not reproduced anywhere else tried so far.
+
+Rather than keep guessing, the silent catch now logs the actual error to
+stderr whenever `CI`/`GITHUB_ACTIONS` is set (or `AGENTIC_SECURITY_MTTR_DEBUG=1`
+locally), and the test's own assertion message now includes the scan
+subprocess's stderr. Scan behavior is unchanged — this is instrumentation
+only, shipped specifically to get a real answer out of the next hosted run
+instead of another guess.
+
 ## 0.136.7 — the doc-drift checker was resolving paths outside the repo
 
 0.136.6's hosted release run failed on a check this same audit added a few

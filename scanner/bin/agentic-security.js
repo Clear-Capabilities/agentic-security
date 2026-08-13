@@ -735,7 +735,16 @@ async function cmdScan(args) {
             process.stderr.write(`✅ agentic-security: ${persistedScan.mttr.count} finding(s) fixed since last scan, median ${Math.round(persistedScan.mttr.medianDays)}d to remediate\n`);
           }
         }
-      } catch { /* MTTR is best-effort — never block a scan write */ }
+      } catch (e) {
+        // MTTR is best-effort — never block a scan write. But a silent catch
+        // here previously hid a real, deterministic CI-only failure (the
+        // mttr field went missing on every hosted-CI run, never locally, and
+        // nothing explained why) for long enough that it shipped several
+        // releases undiagnosed. Surface it — never fail the scan on it.
+        if (process.env.AGENTIC_SECURITY_MTTR_DEBUG === '1' || process.env.CI || process.env.GITHUB_ACTIONS) {
+          process.stderr.write(`agentic-security: MTTR computation failed (best-effort, scan unaffected): ${(e && e.stack) || e}\n`);
+        }
+      }
 
       // R5 — report the observed time-to-validated-fix distribution from the
       // fix attempts recorded by `verifyFix`. This is measurement, not

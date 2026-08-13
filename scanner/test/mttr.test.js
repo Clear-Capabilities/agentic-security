@@ -91,7 +91,7 @@ test('MTTR wiring: a real CLI scan reports mttr.count=0 with no baseline, then a
     const r1 = spawnSync('node', [cli, 'scan', dir, '--format', 'json', '--no-network'], { encoding: 'utf8' });
     assert.ok(r1.status <= 3, `first scan must exit <=3; got ${r1.status}: ${r1.stderr}`);
     const scan1 = JSON.parse(fs.readFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), 'utf8'));
-    assert.ok(scan1.mttr, 'expected scan.mttr to be present after the first real scan');
+    assert.ok(scan1.mttr, `expected scan.mttr to be present after the first real scan. stderr: ${r1.stderr}`);
     assert.equal(scan1.mttr.count, 0, 'nothing can be "fixed" relative to a nonexistent baseline');
 
     // Fix it: remove the eval() call entirely.
