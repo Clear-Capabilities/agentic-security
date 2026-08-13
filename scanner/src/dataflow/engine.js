@@ -51,6 +51,7 @@ import { SummaryCache, entryStateFromCall } from './summaries.js';
 import { lookupBuiltinSummary } from './builtin-summaries.js';
 import { isImplicitFlowEnabled, buildImplicitContext, implicitAssignTarget, markImplicitTaint, createImplicitFinding } from './implicit-flow.js';
 import { receiverTypeAtCall } from './receiver-context.js';
+import { resolveMethod } from '../ir/class-hierarchy.js';
 
 // v0.70 #2 — addPath that also taints every alias of the variable.
 // When `target` is a dotted path like "a.x" and the root `a` has aliases
@@ -166,6 +167,28 @@ function _resolvableCalleeName(calleeExpr) {
   return null;
 }
 
+// PRD R11 (docs/DETECTION_GAP_REMEDIATION_PRD.md), gated behind R6's
+// receiver-type machinery per the PRD's own sequencing note. Resolving a bare
+// dotted callee name by guessing (stripping to its last segment and matching
+// ANY same-named function project-wide) is refused elsewhere in this file for
+// good reason (_resolvableCalleeName's own comment) — but constructing
+// "ClassName.methodName" from a CHA-CONFIRMED class is not a guess, it is the
+// same exact-match classMethods lookup a same-file `ClassName.method()` call
+// site already uses (ir/callgraph.js). resolveMethod is the safety check: it
+// only returns non-null when `className` is a REAL class CHA recorded AND
+// that class (or one of its ancestors) actually defines `methodName` — so an
+// unresolved receiver (receiverType null, or a soft-label fallback that
+// happens not to name a real class) safely falls through to "no resolution"
+// rather than fabricating an edge.
+function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
+  if (!calleeExpr || calleeExpr.kind !== 'member' || typeof calleeExpr.prop !== 'string') return null;
+  const className = _receiverTypeFor(calleeExpr, callContext);
+  if (!className || !callContext._cha) return null;
+  const found = resolveMethod(callContext._cha, className, calleeExpr.prop);
+  if (!found) return null;
+  return `${found.className}.${found.methodName}`;
+}
+
 // Resolve calleeExpr to { qid, fn } via the call graph — the shared
 // resolve-and-lookup sequence every summary-consulting call site needs.
 // Extracted from what were two independent, drifting copies (assign-RHS and
@@ -177,7 +200,12 @@ function _resolvableCalleeName(calleeExpr) {
 function _resolveCalleeForSummary(calleeExpr, callContext) {
   if (!callContext || !callContext._callGraph || !callContext._callGraph.resolveKnownCallee) return null;
   const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-  const _resolvableName = _resolvableCalleeName(calleeExpr);
+  let _resolvableName = _resolvableCalleeName(calleeExpr);
+  // PRD R11: _resolvableCalleeName refuses every member-expression callee.
+  // When that's the reason we have nothing, try the CHA-gated path before
+  // giving up — but ONLY then, so the existing exact/bare-name behavior is
+  // completely unchanged for every case it already handled.
+  if (!_resolvableName) _resolvableName = _resolveMemberCalleeViaCHA(calleeExpr, callContext);
   if (!_resolvableName) return null;
   const resolved = callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile);
   const fn = functionRecord(callContext._callGraph, resolved);

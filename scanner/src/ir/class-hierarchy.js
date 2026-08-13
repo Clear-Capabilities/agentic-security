@@ -62,16 +62,36 @@ export function buildClassHierarchy(perFileIR) {
       }
     }
     if (!Array.isArray(ir.functions)) continue;
-    // Recover class names from method qids of the shape
-    //   <file>::<scope>::<className.method>
-    // Many of our existing parsers emit class methods as `Foo.bar` in qid.
+    // Recover class names from method qids. Two shapes are recognized:
+    //   1. "Foo.bar@line#hash" — class and method dot-joined in the qid's
+    //      last segment (parser-cpp.js's convention).
+    //   2. "<file>::ClassName::method@line#hash" — class and method as
+    //      separate `::`-joined qid segments (parser-js.js's and
+    //      parser-java.js's ACTUAL convention — this was previously
+    //      unrecognized, which silently left `classes` permanently empty
+    //      for JS/Java, making resolveMethod() a no-op for those languages;
+    //      the only prior test for this coded the dot-joined shape by hand
+    //      rather than checking real parser output, which is how the gap
+    //      went uncaught. See test/receiver-type-and-nested-calls.test.js's
+    //      "registers a real JS class method from actual parser output"
+    //      regression test.)
     for (const fn of ir.functions) {
       if (!fn.qid) continue;
-      const tail = fn.qid.split('::').pop() || '';
+      const segs = fn.qid.split('::');
+      const tail = segs[segs.length - 1] || '';
       const dotIdx = tail.indexOf('.');
-      if (dotIdx <= 0) continue;
-      const className = tail.slice(0, dotIdx);
-      const methodName = tail.slice(dotIdx + 1).replace(/@\d+#[0-9a-f]+$/, '');
+      let className = null;
+      let methodName = null;
+      if (dotIdx > 0) {
+        className = tail.slice(0, dotIdx);
+        methodName = tail.slice(dotIdx + 1).replace(/@\d+#[0-9a-f]+$/, '');
+      } else if (segs.length >= 3 && /^[A-Z]/.test(segs[segs.length - 2])) {
+        // Gated on the second-to-last segment being PascalCase so this
+        // doesn't misfire on an ordinary nested-function scope segment.
+        className = segs[segs.length - 2];
+        methodName = tail.replace(/@\d+(#[0-9a-f]+)?$/, '');
+      }
+      if (!className || !methodName) continue;
       methodOwners.set(fn.qid, className);
       let cls = classes.get(className);
       if (!cls) {
