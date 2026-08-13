@@ -19,6 +19,19 @@ scanner/dist/*
 # tracked the shipped CLI silently listed ZERO frameworks and exited 0.
 !scanner/dist/compliance-frameworks/
 !scanner/dist/compliance-frameworks/*.json
+# Third instance of the same bug class. ncc code-splits every dynamically-
+# imported internal module (bin/agentic-security.js has ~58 `await
+# import('../src/...')` call sites, one per lazily-loaded subcommand) into
+# its own numbered dist/NNN.index.js chunk, loaded by the main bundle via a
+# runtime import() relative to its own location on disk. Those chunks were
+# never allowlisted here, so a checkout with ONLY the committed
+# agentic-security.mjs (exactly the shape of a fresh CI clone, or the
+# reusable workflow's raw.githubusercontent.com single-file fetch above)
+# throws ERR_MODULE_NOT_FOUND the moment a lazy subcommand path — e.g. the
+# MTTR wiring behind an ordinary `scan` — actually runs. Invisible on any
+# machine that has ever run `npm run build` locally, since the chunks exist
+# on disk there regardless of git tracking.
+!scanner/dist/*.index.js
 # Ignore all .agentic-security/ dirs at any depth. For the root one,
 # ignore all contents but un-ignore the config files that belong in VCS.
 **/.agentic-security/

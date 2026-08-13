@@ -9,6 +9,51 @@
 > make the history less accurate, not more.
 
 
+## 0.136.9 — the real bug: the single-file bundle was never actually self-contained
+
+0.136.8's diagnostic logging answered the question immediately:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module
+'.../scanner/dist/449.index.js' imported from
+'.../scanner/dist/agentic-security.mjs'
+```
+
+`dist/agentic-security.mjs` is documented and committed as a self-contained
+single-file bundle — `.gitignore`'s own comment says the reusable
+`scan.yml` workflow fetches *only that one file* from
+raw.githubusercontent.com so downstream users need no install step. That
+was never quite true. `bin/agentic-security.js` lazily loads each
+subcommand's implementation with `await import('../src/...')` — about 58
+call sites, deliberately, so running `agentic-security scan` doesn't pay
+the cost of loading every posture/discovery/compliance module `agentic-security
+compliance` or `agentic-security hunt` would need. `ncc` code-splits every
+one of those into its own `dist/NNN.index.js` chunk rather than inlining
+it, and the chunk is loaded at runtime via a path relative to the bundle's
+own location on disk — but `.gitignore` only ever allowlisted the main
+`.mjs`, its sha256 sidecar, and the compliance-frameworks data. All 38
+chunk files were silently gitignored. `.claude/settings.local.json`-style
+invisible: they exist on any machine that has ever run `npm run build`
+locally (which is every contributor's, permanently, from the first
+`npm install`), so nobody — human or gate — had a checkout that lacked
+them until this release's hosted CI runs did.
+
+This is the third occurrence of the identical bug class in this file's own
+history — `.gitignore` already carries a comment about the same thing
+happening to `compliance-frameworks/` data before ("the shipped CLI
+silently listed ZERO frameworks and exited 0"). Same shape both times: a
+single tracked entry point quietly depends on sibling files nobody
+allowlisted.
+
+Fixed by allowlisting `scanner/dist/*.index.js` and committing all 38
+current chunks (744 KB), and by adding a permanent regression guard
+(`test/dist-chunks-tracked.test.js`, wired into `test:lifecycle`) that
+diffs `dist/*.index.js` on disk against `git ls-files dist` and fails
+loud, by name, the moment a future build produces a chunk nobody
+allowlisted — rather than waiting for a lazy code path to hit it in
+production. Verified RED against the pre-fix git state (all 38 chunks
+correctly reported untracked) and GREEN after staging them.
+
 ## 0.136.8 — instrumenting a real, still-unexplained hosted-CI-only failure
 
 0.136.7's hosted release run got past every other check and failed on

@@ -1,0 +1,218 @@
+export const id = 238;
+export const ids = [238];
+export const modules = {
+
+/***/ 2238:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   I3: () => (/* binding */ recordFixAttempt),
+/* harmony export */   fixDurationReport: () => (/* binding */ fixDurationReport),
+/* harmony export */   renderFixDurationSummary: () => (/* binding */ renderFixDurationSummary)
+/* harmony export */ });
+/* unused harmony exports FIX_STAGES, loadFixAttempts, bucketOf, summarizeFixDurations, _internals */
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(1174);
+// Time-to-validated-fix (R5, the reporting half).
+//
+// `verifyFix` already RUNS the stages and `test-runner.js` already times the
+// slowest one. What did not exist was anything durable to read afterwards, so
+// "how long does a fix actually take to validate" had no answer from real runs
+// — only an estimate (`time-to-fix.js` guesses engineering hours from family
+// and patch shape, before anything runs). This module is the opposite: it
+// records what the pipeline observed and reports the distribution.
+//
+// THE HONESTY RULES, which are most of why this file is longer than a mean:
+//
+//  1. A failed attempt is NOT a data point about how long a fix takes. Fixes
+//     that fail verification fail fast (a re-scan that still sees the finding
+//     never reaches the test suite), so blending them into one average makes
+//     the pipeline look faster the worse it performs. Validated and failed
+//     attempts are summarised separately and never merged.
+//
+//  2. "Tests skipped" is not "tests passed". A project with no detectable
+//     suite can reach `ok:true` having run only the re-scan and the linter.
+//     That is a weaker claim than a fix whose suite executed, and it is also
+//     much faster, so counting the two together would quietly deflate the
+//     headline. They get their own bucket: `validated` means the suite ran and
+//     passed, `validatedWithoutTests` means there was no suite to run.
+//
+//  3. Every figure carries its `n`, and a percentile computed from too few
+//     samples is labelled unreliable rather than omitted or silently reported.
+//     Same precedent as the accuracy scorecard's `{n, d}` rates: a number
+//     without its denominator is not a measurement.
+//
+// Storage is append-only JSONL at `<scanRoot>/.agentic-security/fix-metrics.jsonl`,
+// one record per verification attempt. Nothing here throws (posture
+// convention) — an unwritable or corrupt log degrades to "no metrics", never
+// to a failed verification.
+
+
+
+
+
+const LOG_FILE = 'fix-metrics.jsonl';
+
+// Below this many samples a percentile is an artifact of the sample, not a
+// property of the pipeline. Reported anyway (hiding it invites re-deriving it
+// wrong downstream) but flagged, so a caller cannot quote it as settled.
+const RELIABLE_N = 10;
+
+// The stages verifyFix runs, in execution order. Kept here so the recorder and
+// the summariser cannot drift apart on stage naming.
+const FIX_STAGES = Object.freeze(['rescan', 'lint', 'tests', 'honesty', 'poc']);
+
+function _logPath(scanRoot) {
+  return (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, LOG_FILE);
+}
+
+/**
+ * Append one verification attempt. Best-effort and silent on failure: metrics
+ * must never be able to fail a fix that otherwise verified.
+ *
+ * @returns {boolean} whether the record was written (for tests, not callers).
+ */
+function recordFixAttempt(scanRoot, record) {
+  if (!scanRoot || !record || typeof record !== 'object') return false;
+  try {
+    const dir = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .stateDir */ .Pn)(scanRoot);
+    if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.isSafeStateDir)(dir)) return false;
+    if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.stateWritesEnabled)()) return false;
+  node_fs__WEBPACK_IMPORTED_MODULE_0__.mkdirSync(dir, { recursive: true });
+    // One writeSync of one newline-terminated line: a concurrent reader sees
+    // whole records or nothing, and a torn tail is dropped on read.
+    node_fs__WEBPACK_IMPORTED_MODULE_0__.appendFileSync(_logPath(scanRoot), JSON.stringify(record) + '\n', 'utf8');
+    return true;
+  } catch { return false; }
+}
+
+/**
+ * Read every well-formed attempt. A line that does not parse is skipped, not
+ * fatal — the last line of an interrupted write is the expected case.
+ */
+function loadFixAttempts(scanRoot) {
+  try {
+    const raw = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(_logPath(scanRoot), 'utf8');
+    const out = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const rec = JSON.parse(line);
+        if (rec && typeof rec === 'object' && typeof rec.totalMs === 'number') out.push(rec);
+      } catch { /* torn or hand-edited line — drop it, keep the rest */ }
+    }
+    return out;
+  } catch { return []; }
+}
+
+// Nearest-rank percentile over an ascending array. Nearest-rank rather than
+// interpolated because these are observed durations, and an interpolated p50
+// reports a duration that no run actually took.
+function _pct(sorted, p) {
+  if (!sorted.length) return null;
+  const rank = Math.ceil((p / 100) * sorted.length);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, rank - 1))];
+}
+
+function _dist(values) {
+  const v = values.filter(x => typeof x === 'number' && Number.isFinite(x) && x >= 0).sort((a, b) => a - b);
+  if (!v.length) return { n: 0, minMs: null, p50Ms: null, p90Ms: null, maxMs: null, meanMs: null, reliable: false };
+  const sum = v.reduce((a, b) => a + b, 0);
+  return {
+    n: v.length,
+    minMs: v[0],
+    p50Ms: _pct(v, 50),
+    p90Ms: _pct(v, 90),
+    maxMs: v[v.length - 1],
+    meanMs: Math.round(sum / v.length),
+    // Says whether the percentiles above may be quoted, not whether the count
+    // is real. n and min/max/mean are exact at any sample size.
+    reliable: v.length >= RELIABLE_N,
+  };
+}
+
+// Which bucket an attempt belongs to. Deliberately total: every attempt lands
+// in exactly one, so the bucket counts always sum to the attempt count and a
+// mis-shaped record cannot silently vanish from the denominator.
+function bucketOf(a) {
+  if (!a?.ok) return 'failed';
+  return a.testsRan ? 'validated' : 'validatedWithoutTests';
+}
+
+/**
+ * Summarise a set of attempts into the reported distribution.
+ *
+ * `validated` is the headline: attempts that verified AND whose test suite
+ * actually ran and passed. The other two buckets exist so that headline cannot
+ * be inflated by counting weaker or faster outcomes inside it.
+ */
+function summarizeFixDurations(attempts) {
+  const all = Array.isArray(attempts) ? attempts : [];
+  const buckets = { validated: [], validatedWithoutTests: [], failed: [] };
+  for (const a of all) buckets[bucketOf(a)].push(a);
+
+  const byStage = {};
+  for (const stage of FIX_STAGES) {
+    // Per-stage timings come from validated runs only. A stage's duration in a
+    // failed run is truncated by the failure (the pipeline stops), so mixing
+    // them in would understate every stage after the first failure point.
+    byStage[stage] = _dist(buckets.validated.map(a => a?.stages?.[stage]));
+  }
+
+  return {
+    attempts: all.length,
+    counts: {
+      validated: buckets.validated.length,
+      validatedWithoutTests: buckets.validatedWithoutTests.length,
+      failed: buckets.failed.length,
+    },
+    timeToValidatedFix: _dist(buckets.validated.map(a => a.totalMs)),
+    timeToValidatedFixWithoutTests: _dist(buckets.validatedWithoutTests.map(a => a.totalMs)),
+    timeToFailure: _dist(buckets.failed.map(a => a.totalMs)),
+    byStage,
+    reliableAtOrAbove: RELIABLE_N,
+  };
+}
+
+/** Read + summarise in one step. */
+function fixDurationReport(scanRoot) {
+  return summarizeFixDurations(loadFixAttempts(scanRoot));
+}
+
+function _ms(v) {
+  if (v == null) return '—';
+  return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${v}ms`;
+}
+
+/**
+ * One-paragraph human summary. Returns null when there is nothing measured —
+ * callers print nothing rather than printing an empty table.
+ */
+function renderFixDurationSummary(sum) {
+  if (!sum || !sum.attempts) return null;
+  const d = sum.timeToValidatedFix;
+  const parts = [];
+  if (d.n) {
+    parts.push(
+      `time-to-validated-fix: median ${_ms(d.p50Ms)}, p90 ${_ms(d.p90Ms)} `
+      + `(n=${d.n}${d.reliable ? '' : `, below ${sum.reliableAtOrAbove} — percentiles not yet reliable`})`,
+    );
+  } else {
+    parts.push('time-to-validated-fix: no fix has both verified and had its test suite run yet');
+  }
+  if (sum.counts.validatedWithoutTests) {
+    parts.push(`${sum.counts.validatedWithoutTests} verified with no detectable test suite (excluded from the median above)`);
+  }
+  if (sum.counts.failed) {
+    parts.push(`${sum.counts.failed} failed verification, median ${_ms(sum.timeToFailure.p50Ms)} (counted separately)`);
+  }
+  return parts.join('; ') + '.';
+}
+
+const _internals = { _dist, _pct, RELIABLE_N };
+
+
+/***/ })
+
+};
