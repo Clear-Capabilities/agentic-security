@@ -9,6 +9,86 @@
 > make the history less accurate, not more.
 
 
+## 0.136.10 — detection-gap remediation Theme A: dedup, family, and calibration for deep mode
+
+An architectural audit of the SAST/taint pipeline (`docs/DETECTION_GAP_REMEDIATION_PRD.md`)
+found nine structural gaps behind missed real-world vulnerability classes. This
+release lands Theme A, the fixes on the production detection path:
+
+- **Dead-code demotion silently downgraded nearly every finding.** A field-name
+  mismatch (`.to`/`.size` vs the real `.callee`/Array shape) meant `calledQids`
+  was always effectively empty, so any function not named `handler`/`route`/
+  `controller`/`middleware`/`endpoint` — including most real sinks — got
+  demoted one severity notch on every deep-mode scan that ever ran.
+- **Half the sanitizer catalog was unreachable.** 191 of 381 sanitizer entries
+  use dotted callees (`Encode.forHtml`, `filepath.Clean`, `validator.isEmail`)
+  indexed under the full dotted key, but every lookup path reduced to the
+  callee's last segment — so these entries could never be retrieved. Catalog
+  lookup now tries the full dotted key before falling back to the last segment,
+  the behavior its own header comment already promised.
+- **A sanitizer-blind kill switch.** `builtin-summaries` deleted taint outright
+  at ~15 name-matched builtins (`parseInt`, `encodeURIComponent`,
+  `DOMPurify.sanitize`...) regardless of threat family, contradicting the
+  engine's own documented doctrine that sanitizers demote, never kill —
+  `x = encodeURIComponent(t); db.query(x)` silently lost its SQLi finding.
+  Now demotes through the same family-scoped sanitizer gate every other path
+  uses.
+- **Three bench-shape leaks were opt-out instead of opt-in**, violating this
+  repo's own documented convention (`AGENTIC_SECURITY_BENCH_SHAPE=1` to enable,
+  never `AGENTIC_SECURITY_BLIND_BENCH` to disable): a Juliet path-prefix
+  category filter with no env check at all, and two Java answer-key mechanisms
+  gated the wrong direction.
+- **Cross-file import resolution was dead code with zero callers.** `fileContents`
+  was never threaded into `buildCallGraph`, so its re-export/import-binding
+  resolution never ran — two same-named functions in unrelated files collided
+  by bare name on every scan.
+- **The points-to graph was built and then never wired in.** `AGENTIC_SECURITY_POINTS_TO=1`
+  computed a real alias graph but `runTaintEngine` never copied it onto
+  `callContext`, so the opt-in flag caught nothing. A second bug in
+  `aliasesForVar` (stripping only the first `::` instead of the qid's full
+  prefix) was fixed alongside it, since the qid itself always contains
+  multiple `::` segments.
+- **Guard recognition was flow-insensitive.** `dropGuardedFindings` matched a
+  guard-shaped regex anywhere in a −25/+5 line window with zero correlation to
+  the sink's actual tainted identifier, killing real SSRF/path findings
+  whenever unrelated guard-shaped text sat nearby. Rewritten to require the
+  guard match to appear near one of the sink's own argument identifiers.
+  Reachability annotation was also fixed to record "unknown" rather than
+  "unreachable" for languages with no call-graph data — only a strict `false`
+  should demote a finding, and absence of evidence isn't evidence of absence.
+- **Deep mode was unreachable from the MCP and LSP integration surfaces.**
+  `scan_diff` and `scanFile` never enabled deep mode, so the interprocedural
+  taint engine — the thing most likely to catch a real cross-function
+  vulnerability — never ran from either integration.
+- **Deep-mode (IR-TAINT) findings bypassed the entire finding pipeline.** They
+  were appended *after* dedup, clustering, stable-ID assignment, family
+  backfill, confidence, and calibration had already run once, so a sink caught
+  by both the regex layer and deep mode produced two findings — one of them
+  permanently unscored (no family, no calibrated confidence, no reachability
+  demotion, no mitigation annotation). Deep-mode findings now enter the same
+  pre-dedup pool as every other detector's output and ride the identical
+  pipeline. Fixing this exposed two further latent bugs it's now safe to state
+  plainly: dedup's winner-selection didn't prefer a real interprocedural
+  taint-walk finding over a same-severity flat pattern match at the same sink
+  (an IR-TAINT finding could lose a tie and take its sanitizer/chain evidence
+  down with it), and root-cause clustering keyed its "same sink" bucket on a
+  generic catalog rule id rather than a per-line signal, so two unrelated
+  `eval()` calls in one file could collapse into a single reported finding the
+  moment deep-mode findings started reaching that annotator. Both are fixed.
+
+Verification for all nine items: full test gate green, CVE-replay corpus
+214/214 with zero drift, metamorphic/adversarial mutation gate 6/6, self-scan
+precision gate re-baselined against three fully root-caused (not blindly
+accepted) drifts, and the pre-push gate's per-language taint-recall check
+confirmed no regression. `@vercel/ncc` (dev-only build dependency) was also
+bumped 0.44.1 → 0.45.0 to clear the release gate's dependency-currency check.
+
+R3 (route deep-mode findings through the full annotator pipeline) was the last
+item in Theme A. Themes B–E of the same PRD — semantic type/import-aware
+matching, control-flow-blind-parser fixes for Java/C#/Kotlin/PHP, deeper
+interprocedural completeness, and DOM/loop-element flow modeling — remain open
+and are tracked in `docs/DETECTION_GAP_REMEDIATION_PRD.md`.
+
 ## 0.136.9 — the real bug: the single-file bundle was never actually self-contained
 
 0.136.8's diagnostic logging answered the question immediately:
