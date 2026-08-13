@@ -63,10 +63,10 @@ export const CATALOG = [
 
   // ─── SINKS (JS/TS) ─────────────────────────────────────────────────────────
   // SQL.
-  { kind: 'sink', id: 'js-sql-query',  language: 'js', framework: 'sql', match: { type: 'call', callee: 'query'    }, argIndex: 0,
+  { kind: 'sink', id: 'js-sql-query',  language: 'js', framework: 'sql', match: { type: 'call', callee: 'query', receiverTypeIn: ['^(?:db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma)$'] }, argIndex: 0,
     vuln: { name: 'SQL Injection (db.query)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterized queries: db.query("SELECT * FROM t WHERE id = ?", [id]). Never interpolate untrusted strings into SQL.' } },
-  { kind: 'sink', id: 'js-sql-execute', language: 'js', framework: 'sql', match: { type: 'call', callee: 'execute' }, argIndex: 0,
+  { kind: 'sink', id: 'js-sql-execute', language: 'js', framework: 'sql', match: { type: 'call', callee: 'execute', receiverTypeIn: ['^(?:db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma)$'] }, argIndex: 0,
     vuln: { name: 'SQL Injection (db.execute)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterized queries: db.execute("SELECT * FROM t WHERE id = ?", [id]).' } },
   // OS command.
@@ -360,7 +360,7 @@ export const CATALOG = [
             remediation: 'Sanitize the __html field via DOMPurify before passing it to dangerouslySetInnerHTML — better, render text via children.' } },
 
   // ─── SINKS (HTTP outbound / SSRF) ─────────────────────────────────────────
-  { kind: 'sink', id: 'py-requests-get',   language: 'py', framework: 'requests', match: { type: 'call', callee: 'get' },   argIndex: 0,
+  { kind: 'sink', id: 'py-requests-get',   language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiverTypeIn: ['^(?:requests|session|client|http)$'] },   argIndex: 0,
     vuln: { name: 'SSRF (requests.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the URL host and reject RFC1918 + metadata endpoints before fetching. Use an allow-list.' } },
   { kind: 'sink', id: 'py-requests-post',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'post' },  argIndex: 0,
@@ -414,7 +414,7 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-jinja-from-string', language: 'py', framework: 'jinja2', match: { type: 'call', callee: 'from_string' }, argIndex: 0,
     vuln: { name: 'SSTI (Jinja2.from_string)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never feed a user-supplied string into a template engine. Use pre-registered templates and pass values as variables.' } },
-  { kind: 'sink', id: 'rb-erb-new',           language: 'rb', framework: 'erb',    match: { type: 'call', callee: 'new' }, argIndex: 0,
+  { kind: 'sink', id: 'rb-erb-new',           language: 'rb', framework: 'erb',    match: { type: 'call', callee: 'new', receiverTypeIn: ['^ERB$'] }, argIndex: 0,
     vuln: { name: 'SSTI (ERB.new)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Use pre-existing templates with binding/locals — never construct a template from user input.' } },
   { kind: 'sink', id: 'js-handlebars-compile',language: 'js', framework: 'handlebars', match: { type: 'call', callee: 'compile' }, argIndex: 0,
@@ -605,7 +605,7 @@ export const CATALOG = [
     vuln: { name: 'Unsafe Deserialization (yaml.load)', severity: 'high', cwe: 'CWE-502',
             remediation: 'Use yaml.safe_load instead of yaml.load on untrusted YAML.' } },
   // SSRF / HTTP-out.
-  { kind: 'sink', id: 'py-requests-get-v2',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'get'  }, argIndex: 0,
+  { kind: 'sink', id: 'py-requests-get-v2',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiverTypeIn: ['^(?:requests|session|client|http)$'] },  argIndex: 0,
     vuln: { name: 'SSRF (requests.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the host first, reject 169.254.169.254 / RFC1918 / localhost; or proxy through a server-side allow-list.' } },
   { kind: 'sink', id: 'py-requests-post-v2', language: 'py', framework: 'requests', match: { type: 'call', callee: 'post' }, argIndex: 0,
@@ -903,6 +903,33 @@ function _receiverAllowed(entry, calleeExpr) {
   if (basePat && !segs.some((s) => new RegExp(basePat).test(String(s)))) return false;
   return true;
 }
+
+// PRD R6 (docs/DETECTION_GAP_REMEDIATION_PRD.md): a SECOND, independent
+// receiver constraint — this one checked against the CHA-INFERRED TYPE of
+// the receiver (computed by the caller, engine.js's `_receiverTypeFor`), not
+// the textual receiver-chain segments `_receiverAllowed` above checks. The
+// two are complementary: `_receiverAllowed`'s `match.receiver` regex can only
+// ever see the SOURCE TEXT of the call site (`db.query` vs `cache.query` —
+// both pass any receiver regex that doesn't special-case exact names); this
+// gate can additionally use a resolved class/variable-type hint, so a bare
+// `.query()` on something confidently NOT database-shaped can be excluded
+// without hand-listing every possible non-DB variable name as a `receiver`
+// exclusion (which `_receiverAllowed`'s regex form cannot express at all —
+// it only expresses required patterns, never forbidden ones).
+//
+// Unknown != clean: a null/undefined receiverType (CHA could not resolve
+// anything for this call site) NEVER suppresses a match — only a receiver
+// type that was confidently resolved and does not appear in the entry's
+// `receiverTypeIn` allow-list does. An entry with no `receiverTypeIn` is
+// completely unaffected by this gate (returns true unconditionally), exactly
+// like `_receiverAllowed` when neither `receiver` nor `receiverBase` is set.
+function _receiverTypeAllowed(entry, receiverType) {
+  const pats = entry.match && entry.match.receiverTypeIn;
+  if (!pats || !pats.length) return true;
+  if (!receiverType) return true;
+  return pats.some((p) => new RegExp(p, 'i').test(String(receiverType)));
+}
+
 // Merge the expanded sanitizer catalog. We dedupe on `id` (case-insensitive)
 // so a base-catalog entry always wins over a same-id expanded one — the base
 // catalog is the curated/blessed surface; the expansion is additive coverage.
@@ -1082,13 +1109,14 @@ export function matchSource(expr, file) {
   return null;
 }
 
-export function matchSinkOrSanitizer(calleeExpr, file) {
+export function matchSinkOrSanitizer(calleeExpr, file, receiverType) {
   if (!calleeExpr) return null;
   const raw = _calleeIndexHits(calleeExpr);
   if (!raw.length) return null;
   const hits = filterByProvenance(raw)
     .filter(h => _languageAllowed(h, file))
-    .filter(h => _receiverAllowed(h, calleeExpr));
+    .filter(h => _receiverAllowed(h, calleeExpr))
+    .filter(h => _receiverTypeAllowed(h, receiverType));
   return hits.length ? hits : null;
 }
 

@@ -50,6 +50,7 @@ import { higherOrderTaintFlow } from './higher-order.js';
 import { SummaryCache, entryStateFromCall } from './summaries.js';
 import { lookupBuiltinSummary } from './builtin-summaries.js';
 import { isImplicitFlowEnabled, buildImplicitContext, implicitAssignTarget, markImplicitTaint, createImplicitFinding } from './implicit-flow.js';
+import { receiverTypeAtCall } from './receiver-context.js';
 
 // v0.70 #2 — addPath that also taints every alias of the variable.
 // When `target` is a dotted path like "a.x" and the root `a` has aliases
@@ -100,6 +101,43 @@ function _flattenCalleeName(calleeExpr) {
       : calleeExpr.prop;
   }
   return null;
+}
+
+// PRD R6/R11 (docs/DETECTION_GAP_REMEDIATION_PRD.md): unlike _flattenCalleeName
+// (which only flattens ONE level — `x.method`/`this.method` — because that is
+// the 2-segment shape catalog matching and resolveKnownCallee both key on),
+// receiver-context.js's receiverTypeAtCall needs the FULL dotted chain,
+// including `this`, to apply its `this.field.method` heuristic
+// (`this.userRepo.save` -> parts = ['this','userRepo','save']). A partial
+// flatten (`_flattenCalleeName` would return just 'save' for `this.userRepo.
+// save`, since its object isn't a bare ident) silently starves that heuristic.
+function _fullyFlattenMemberChain(calleeExpr) {
+  if (!calleeExpr) return null;
+  if (typeof calleeExpr === 'string') return calleeExpr;
+  if (calleeExpr.kind === 'ident') return calleeExpr.name || null;
+  if (calleeExpr.kind === 'member' && typeof calleeExpr.prop === 'string') {
+    const base = _fullyFlattenMemberChain(calleeExpr.object);
+    return base ? `${base}.${calleeExpr.prop}` : calleeExpr.prop;
+  }
+  return null;
+}
+
+// Shared by R6 (catalog receiver-type gating) and R11 (member-call
+// resolution) so both use the exact same precision bar, per the PRD's own
+// sequencing note that R11 must not be more permissive than R6. Returns null
+// whenever CHA has nothing useful to say — callers must treat null as
+// "unknown", never as a signal to suppress or refuse (see this file's
+// "Unknown ≠ clean" global constraint).
+function _receiverTypeFor(calleeExpr, callContext) {
+  if (!callContext || !callContext._cha) return null;
+  const flat = _fullyFlattenMemberChain(calleeExpr);
+  if (!flat || !flat.includes('.')) return null;
+  return receiverTypeAtCall(
+    { kind: 'call', callee: flat },
+    { qid: callContext._currentFnQid },
+    _currentFile,
+    callContext._cha,
+  );
 }
 
 // Narrower than _flattenCalleeName: the name to hand to callGraph.resolve().
@@ -264,9 +302,11 @@ function literalSkeletonMatchesFamily(expr, cwe) {
 
 // calleeExpr / argExprs: the IR nodes for the call's callee and arguments.
 // state: the taint-state Set to evaluate argument taint against.
+// callContext: context from the engine (contains _cha for CHA lookups).
 // Returns { cat, argTaints }.
-function _matchCallCatalog(calleeExpr, argExprs, state) {
-  const cat = matchSinkOrSanitizer(calleeExpr, _currentFile);
+function _matchCallCatalog(calleeExpr, argExprs, state, callContext) {
+  const receiverType = _receiverTypeFor(calleeExpr, callContext);
+  const cat = matchSinkOrSanitizer(calleeExpr, _currentFile, receiverType);
   const argTaints = (argExprs || []).map(a => exprTaint(a, state));
   return { cat, argTaints };
 }
@@ -426,7 +466,7 @@ function step(node, stateIn, callContext) {
       // return path below, including the early interprocedural returns.
       if (node.source && node.source.kind === 'call') {
         const { cat: _sinkCat, argTaints: _sinkArgTaints } =
-          _matchCallCatalog(node.source.callee, node.source.args, state);
+          _matchCallCatalog(node.source.callee, node.source.args, state, callContext);
         findings.push(..._sinkFindingsForCall(
           node.source.callee, node.source.args, _sinkCat, _sinkArgTaints,
           state, callContext, node.line).findings);
@@ -599,7 +639,7 @@ function step(node, stateIn, callContext) {
       // Computed here (before the mutation passes below) so that argTaints
       // reflects the pre-mutation state, exactly as before this logic was
       // extracted into _matchCallCatalog/_sinkFindingsForCall.
-      const { cat, argTaints } = _matchCallCatalog(node.callee, node.args, state);
+      const { cat, argTaints } = _matchCallCatalog(node.callee, node.args, state, callContext);
       // v0.66 — apply mutated-param taint at plain (non-assign) call sites.
       // Object.assign(target, tainted) → target becomes tainted in caller.
       const _plainCallCalleeName = _flattenCalleeName(node.callee);
