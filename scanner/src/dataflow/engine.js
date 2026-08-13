@@ -493,6 +493,7 @@ function step(node, stateIn, callContext) {
                 _summaryCache: callContext._summaryCache,
                 _callGraph: callContext._callGraph,
                 _mutatedParamsOut: new Set(),
+                _cha: callContext._cha,
               };
               try { analyzeFunction(fn, entry, inner); } catch {}
               return {
@@ -632,6 +633,7 @@ function step(node, stateIn, callContext) {
                 _summaryCache: callContext._summaryCache,
                 _callGraph: callContext._callGraph,
                 _mutatedParamsOut: new Set(),
+                _cha: callContext._cha,
               };
               try { analyzeFunction(fn, entry, inner); } catch {}
               return {
@@ -1118,6 +1120,10 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // which was therefore always undefined, and alias-aware tainting was
       // a no-op even with the flag set.
       _pointsTo: opts._pointsTo,
+      // PRD R6/R11: same pattern as _pointsTo above — the CHA opts.js builds
+      // must reach callContext or every receiver-type/member-call consumer
+      // is permanently a no-op.
+      _cha: opts._cha,
     };
     try {
       analyzeFunction(fn, new Set(), callContext);
@@ -1153,6 +1159,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
             _stack: new Set(), deadlineMs,
             _summaryCache: summaryCache, _callGraph: callGraph,
             _mutatedParamsOut: new Set(),
+            _cha: callContext._cha,
           };
           try { analyzeFunction(cbFn, cbEntry, inner); } catch {}
           return {
