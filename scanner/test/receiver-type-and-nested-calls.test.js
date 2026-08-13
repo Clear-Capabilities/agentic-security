@@ -92,3 +92,36 @@ module.exports = new Redis();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('R6: this.<field>.<method>() sinks are not regressed by the receiver-type gate', async () => {
+  // Critical #2 regression test (confirmed working shape): ensure that
+  // this.db.query(tainted) is still detected as SQLi after the _this_ →
+  // 'this' sentinel conversion fix. The key is that tainted input (req.query.q)
+  // is read WITHIN the same method that calls this.db.query(), not passed
+  // as a parameter from an earlier hop (which would hit a pre-existing
+  // interprocedural-taint limitation unrelated to this task).
+  const dir = mkTmp('r6-this-field', {
+    'app.js': `
+const express = require('express');
+const app = express();
+class Repo {
+  constructor() { this.db = require('./db'); }
+  find(req) { return this.db.query(req.query.q); }
+}
+const repo = new Repo();
+app.get('/search', (req, res) => {
+  repo.find(req);
+  res.send('ok');
+});
+`,
+    'db.js': `
+class Database { query(sql) { return sql; } }
+module.exports = new Database();
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const sqlFindings = (scan.findings || []).filter(f => /sql/i.test(f.vuln || ''));
+  assert.ok(sqlFindings.length >= 1,
+    'this.db.query(req.query.q) inside a class method must still be detected as SQLi after the R6 receiver-type gate');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
