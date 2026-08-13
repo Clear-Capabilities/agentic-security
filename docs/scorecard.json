@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.136.9",
-    "bundleSha256": "97962939dfdb49667c5808ca441d6db28a2032f1ecf34f582e106adca48c1f16",
-    "commit": "70577c421dee6df4d9cb2e3b39143f6e3605637a",
+    "engineVersion": "0.136.10",
+    "bundleSha256": "50849c9a4f596cfe91ca814f0ea52d203f76614b32fdcb2f70f5ab644e52dd34",
+    "commit": "abbe88e913256370f3aca88dd1b06c7f70f0a34b",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-13T00:15:35.454Z"
+    "generatedAt": "2026-08-13T13:51:25.583Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -575,7 +575,7 @@
         }
       },
       "scanner/src": {
-        "total": 611,
+        "total": 612,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -588,7 +588,7 @@
           "dataflow/string-domain.js": 2,
           "discovery/memory.js": 1,
           "history-scan.js": 2,
-          "integrations/index.js": 11,
+          "integrations/index.js": 10,
           "integrations/tickets.js": 8,
           "ir/cpp-preprocessor.js": 2,
           "ir/ir-stats.js": 1,
@@ -662,7 +662,7 @@
           "posture/fix-verify-loop.js": 2,
           "posture/fix-verify.js": 1,
           "posture/fleet.js": 1,
-          "posture/flow-narration.js": 2,
+          "posture/flow-narration.js": 3,
           "posture/grader-calibration.js": 4,
           "posture/harness-discovery.js": 1,
           "posture/holdout-eval.js": 3,
@@ -785,7 +785,7 @@
           "sast/wrong-context-sanitizer.js": 3,
           "sast/xss-reflected-multilang.js": 1,
           "sast/xxe.js": 1,
-          "sast/zip-slip.js": 1,
+          "sast/zip-slip.js": 2,
           "sca/binary-metadata.js": 6,
           "sca/container.js": 4,
           "sca/dep-confusion.js": 3,
