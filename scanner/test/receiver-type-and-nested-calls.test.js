@@ -134,8 +134,8 @@ test('class-hierarchy: registers a real JS class method from actual parser outpu
   assert.ok(cha.classes.get('UserRepo').methods.has('save'), "save should be registered as UserRepo's method");
 });
 
-test('R11: member-call interprocedural resolution via this.field.method (CHA-unambiguous)', async () => {
-  const dir = mkTmp('r11-this', {
+test('R11: member-call interprocedural resolution via a CHA-tracked local variable', async () => {
+  const dir = mkTmp('r11-local', {
     'app.js': `
 const { exec } = require('child_process');
 const express = require('express');
@@ -143,14 +143,13 @@ const app = express();
 class CommandRunner {
   run(cmd) { exec(cmd); }
 }
-class Service {
-  constructor() { this.commandRunner = new CommandRunner(); }
-  handle(input) { this.commandRunner.run(input); }
+function handle(input) {
+  const runner = new CommandRunner();
+  runner.run(input);
 }
 app.get('/run', (req, res) => {
-  const svc = new Service();
   const cmd = req.query.cmd;
-  svc.handle(cmd);
+  handle(cmd);
   res.send('ok');
 });
 `,
@@ -158,7 +157,35 @@ app.get('/run', (req, res) => {
   const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const cmdFindings = (scan.findings || []).filter(f => /command|exec|injection/i.test(f.vuln || ''));
   assert.ok(cmdFindings.length >= 1,
-    'expected the tainted flow through svc.handle() -> this.commandRunner.run() -> exec() to be detected interprocedurally');
+    'expected the tainted flow through handle() -> runner.run() -> exec() to be detected interprocedurally via a CHA-tracked local variable');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('R11: this.<field>.<method>() does not fabricate an interprocedural resolution (no verified type available)', async () => {
+  const dir = mkTmp('r11-this-no-resolve', {
+    'app.js': `
+const express = require('express');
+const app = express();
+class Handler {
+  process(x) { return x; }
+}
+class Wrapper {
+  constructor() { this.handler = new Handler(); }
+  run(input) { this.handler.process(input); }
+}
+app.get('/run', (req, res) => {
+  const w = new Wrapper();
+  w.run(req.query.q);
+  res.send('ok');
+});
+`,
+  });
+  // this.handler.process(input) has no CHA-verified type for `this.handler` —
+  // R11 must not resolve it. The assertion here is simply that the scan
+  // completes cleanly; no interprocedural finding through process() is
+  // expected (and none should be fabricated).
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  assert.ok(scan && Array.isArray(scan.findings), 'scan must complete without fabricating a this.field resolution');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -186,9 +213,14 @@ app.get('/run', (req, res) => {
   });
   // Neither Logger.save nor Cache.save calls exec/eval/a sink — this test's
   // real assertion is that the scan completes without throwing and without
-  // fabricating a finding out of an unresolved/ambiguous receiver. An
-  // ambiguous receiver (CHA can't type `target` to one class) must fall back
-  // to "no resolution", never a guess.
+  // fabricating a finding out of an unresolved/ambiguous receiver. `target`
+  // is assigned from a ternary (`flag ? new Logger() : new Cache()`), which
+  // isn't a `kind: 'call'` RHS shape buildClassHierarchy's typeOfVar walker
+  // recognizes (it only tracks direct `x = new Foo()` assigns) — so
+  // classOfVar(cha, file, fnQid, 'target') genuinely returns null here, and
+  // _resolveMemberCalleeViaCHA correctly refuses before ever reaching
+  // resolveMethod. This is real CHA-ambiguity-driven refusal, not an
+  // incidental non-collision between `target` and a registered class name.
   const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   assert.ok(scan && Array.isArray(scan.findings), 'scan must complete');
   fs.rmSync(dir, { recursive: true, force: true });

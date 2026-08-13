@@ -51,7 +51,7 @@ import { SummaryCache, entryStateFromCall } from './summaries.js';
 import { lookupBuiltinSummary } from './builtin-summaries.js';
 import { isImplicitFlowEnabled, buildImplicitContext, implicitAssignTarget, markImplicitTaint, createImplicitFinding } from './implicit-flow.js';
 import { receiverTypeAtCall } from './receiver-context.js';
-import { resolveMethod } from '../ir/class-hierarchy.js';
+import { resolveMethod, classOfVar } from '../ir/class-hierarchy.js';
 
 // v0.70 #2 — addPath that also taints every alias of the variable.
 // When `target` is a dotted path like "a.x" and the root `a` has aliases
@@ -167,23 +167,31 @@ function _resolvableCalleeName(calleeExpr) {
   return null;
 }
 
-// PRD R11 (docs/DETECTION_GAP_REMEDIATION_PRD.md), gated behind R6's
-// receiver-type machinery per the PRD's own sequencing note. Resolving a bare
-// dotted callee name by guessing (stripping to its last segment and matching
-// ANY same-named function project-wide) is refused elsewhere in this file for
-// good reason (_resolvableCalleeName's own comment) — but constructing
-// "ClassName.methodName" from a CHA-CONFIRMED class is not a guess, it is the
-// same exact-match classMethods lookup a same-file `ClassName.method()` call
-// site already uses (ir/callgraph.js). resolveMethod is the safety check: it
-// only returns non-null when `className` is a REAL class CHA recorded AND
-// that class (or one of its ancestors) actually defines `methodName` — so an
-// unresolved receiver (receiverType null, or a soft-label fallback that
-// happens not to name a real class) safely falls through to "no resolution"
-// rather than fabricating an edge.
+// R11 (docs/DETECTION_GAP_REMEDIATION_PRD.md): unlike R6's _receiverTypeFor
+// (used only to narrow an ALREADY-pattern-matched catalog sink — safe to be
+// wrong in either direction, since the worst case is over/under-gating an
+// existing match), this function creates a NEW interprocedural call-graph
+// edge. A wrong resolution here fabricates a data-flow path that does not
+// exist, which this codebase's own doctrine treats as strictly worse than
+// a missed one (see _resolvableCalleeName's comment above). _receiverTypeFor's
+// soft-label fallbacks (the this.field PascalCase guess, and the bare-
+// identifier-name fallback) are NAME-based guesses with no verification
+// that the receiver was ever actually assigned that type — reusing them
+// here would let a same-named parameter/variable/field (e.g. a duck-typed
+// `function process(Model, data) { Model.save(data); }`) resolve to an
+// unrelated real class purely by name coincidence. So this function does
+// NOT call _receiverTypeFor/receiverTypeAtCall; it calls classOfVar
+// DIRECTLY, which only returns non-null when the receiver was genuinely
+// assignment-tracked (`let x = new Foo()` / TS `const x: Foo = ...`).
+// A receiver reached only through the this.field naming convention, or an
+// untyped bare identifier, correctly refuses to resolve here — a real,
+// deliberate scope narrower than R6's heuristic.
 function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
   if (!calleeExpr || calleeExpr.kind !== 'member' || typeof calleeExpr.prop !== 'string') return null;
-  const className = _receiverTypeFor(calleeExpr, callContext);
-  if (!className || !callContext._cha) return null;
+  if (!callContext || !callContext._cha) return null;
+  if (!calleeExpr.object || calleeExpr.object.kind !== 'ident' || calleeExpr.object.name === '_this_') return null;
+  const className = classOfVar(callContext._cha, _currentFile, callContext._currentFnQid, calleeExpr.object.name);
+  if (!className) return null;
   const found = resolveMethod(callContext._cha, className, calleeExpr.prop);
   if (!found) return null;
   return `${found.className}.${found.methodName}`;
