@@ -1095,6 +1095,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _stack: new Set(), deadlineMs,
         _summaryCache: summaryCache, _callGraph: callGraph,
         _mutatedParamsOut: new Set(),
+        _currentFnQid: fn.qid,
+        _cha: opts._cha,
+        _pointsTo: opts._pointsTo,
       };
       try { analyzeFunction(fn, fields, ctx); } catch {}
       // `findings` carries the REAL findings from this probe (was hardcoded
@@ -1127,6 +1130,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       _stack: new Set(), deadlineMs,
       _summaryCache: summaryCache, _callGraph: callGraph,
       _mutatedParamsOut: new Set(),
+      _currentFnQid: fn.qid,
+      _cha: opts._cha,
+      _pointsTo: opts._pointsTo,
     };
     try { analyzeFunction(fn, taintedEntry, ctx); } catch {}
     // `findings` carries the real findings from this probe (was hardcoded
@@ -1165,6 +1171,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       deadlineMs,   // honored by the worklist inside analyzeFunction
       _summaryCache: summaryCache,
       _callGraph: callGraph,
+      _currentFnQid: fn.qid,
       // PRD R12: index.js builds this graph (AGENTIC_SECURITY_POINTS_TO=1)
       // and passes it in opts._pointsTo, but nothing previously copied it
       // onto callContext — _addPathAliasAware reads callContext._pointsTo,
