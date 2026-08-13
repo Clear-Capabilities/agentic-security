@@ -29,7 +29,12 @@ function mkTmp() {
 function runHook(cwd) {
   const r = cp.spawnSync('node', [HOOK], {
     cwd, env: { ...process.env, CLAUDE_PROJECT_DIR: cwd },
-    input: '{}', encoding: 'utf8', timeout: 4000,
+    // 20s, not 4s: this spawns a real child process, and a busy machine
+    // (concurrent test runs, unrelated background load) can starve it well
+    // past 4s even though the hook itself normally completes in ~100-300ms.
+    // A 4s cap was producing false failures (status:null from the timeout,
+    // not a real assertion failure) under ordinary machine contention.
+    input: '{}', encoding: 'utf8', timeout: 20000,
   });
   return { code: r.status, stderr: r.stderr || '', stdout: r.stdout || '' };
 }
