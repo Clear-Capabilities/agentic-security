@@ -39,11 +39,19 @@ async function deepScan(dir) {
   }
 }
 
+// PRD R3: an IR-TAINT finding now dedupes against a pattern-layer duplicate
+// of the same sink before the rest of the pipeline runs, so the survivor's
+// `parser` field may belong to the winning non-IR-TAINT detector while
+// IR-TAINT is recorded as corroborating `evidence` (its taint-walk-only
+// fields, including _sanitizersOnPath, are merged onto that winner — see
+// dedupeFindingsWithEvidence in src/engine.js). Match either shape.
+const _irTainted = (f) => f.parser === 'IR-TAINT' || (Array.isArray(f.evidence) && f.evidence.includes('IR-TAINT'));
+
 const sqlTaintFindings = (fs) =>
-  fs.filter(f => f.parser === 'IR-TAINT' && /sql/i.test(`${f.vuln} ${f.cwe}`));
+  fs.filter(f => _irTainted(f) && /sql/i.test(`${f.vuln} ${f.cwe}`));
 
 const xssTaintFindings = (fs) =>
-  fs.filter(f => f.parser === 'IR-TAINT' && /CWE-79/.test(`${f.cwe}`));
+  fs.filter(f => _irTainted(f) && /CWE-79/.test(`${f.cwe}`));
 
 test('a matching-family sanitizer on the flow labels the finding as sanitized', async () => {
   const found = xssTaintFindings(await deepScan(FIX('sanitizer-typed/right-family')));

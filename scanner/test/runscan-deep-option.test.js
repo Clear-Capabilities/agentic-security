@@ -37,9 +37,16 @@ app.get('/run', (req, res) => {
 `,
   });
   const { scan } = await runScan(dir, { deep: true, deepInCi: true });
-  const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
-  assert.ok(irFindings.length >= 1,
-    `expected {deep:true} to enable the IR-TAINT engine and produce a finding, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
+  // PRD R3: IR-TAINT findings now dedupe against a pattern-layer duplicate of
+  // the same sink before the rest of the pipeline runs, so the survivor's own
+  // `parser` field may be the winning non-IR-TAINT detector (e.g. STRUCTURAL)
+  // with IR-TAINT recorded as corroborating `evidence` — this is the correct,
+  // intended outcome (see test/deep-mode-annotator-pipeline.test.js), not a
+  // sign the deep engine didn't run. Check either shape.
+  const irContribution = (scan.findings || []).filter(f =>
+    f.parser === 'IR-TAINT' || (Array.isArray(f.evidence) && f.evidence.includes('IR-TAINT')));
+  assert.ok(irContribution.length >= 1,
+    `expected {deep:true} to enable the IR-TAINT engine and contribute a finding, got: ${JSON.stringify((scan.findings || []).map(f => ({ parser: f.parser, evidence: f.evidence })))}`);
 });
 
 test('runScan(dir, {}) (no deep option) leaves deep mode off, matching prior default behavior', async () => {

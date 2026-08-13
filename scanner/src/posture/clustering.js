@@ -28,7 +28,18 @@ function sinkKey(f) {
   const parser = f.parser || '';
   const rule = f.cwe || f.family || (f.vuln || '').slice(0, 40);
   const file = f.file || f.sink?.file || '';
-  const sinkExpr = (f.sink?.label || f.sink?.snippet || f.snippet || '')
+  // PRD R3: dataflow/engine.js sets sink.label to the catalog rule id
+  // (f.sinkId) for IR-TAINT findings — the same generic string for every
+  // callsite of that rule, not a per-callsite snippet. Two textually-unrelated
+  // sinks sharing a rule (e.g. two independent eval() calls in one file) would
+  // otherwise collapse into one cluster and silently drop a real finding. The
+  // dedup pass upstream (dedupeFindingsWithEvidence) already collapses
+  // multiple sources converging on the SAME sink line, so every IR-TAINT
+  // finding reaching this point has a distinct line — folding the line into
+  // the key here can only split buckets more finely, never wrongly merge one.
+  const sinkExpr = (parser === 'IR-TAINT'
+    ? `L${f.sink?.line || f.line || 0}:${f.sink?.label || ''}`
+    : (f.sink?.label || f.sink?.snippet || f.snippet || ''))
     .replace(/['"`][^'"`]*['"`]/g, '_S_')
     .replace(/\s+/g, ' ')
     .trim()

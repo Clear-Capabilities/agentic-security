@@ -5898,15 +5898,26 @@ function dedupeFindingsWithEvidence(findings){
     const key=`${file}:${sinkLine}:${fam}`;
     if(!buckets.has(key)){buckets.set(key,f);continue;}
     const kept=buckets.get(key);
-    // Winner selection: an interprocedural flow finding (carries source→sink
-    // attribution) is the better carrier than a flat structural/regex match at
-    // the same sink — keep its chain/source-line attribution. When neither or
-    // both carry flow, fall back to severity. The winner keeps its own severity
-    // (we must not resurrect a rating that ownership/reachability analysis
-    // deliberately downgraded on one of the two findings).
+    // Winner selection: an IR-TAINT finding (the deep engine's real
+    // interprocedural taint walk) is the best carrier at a shared sink,
+    // ahead of everything else — PRD R3: it carries taint-walk-only evidence
+    // (sanitizer observations keyed off the actual value reaching the sink,
+    // chain, LLM-validation state) that a flat pattern/AST match has no
+    // equivalent for, and that evidence would silently vanish if a
+    // same-severity pattern-layer duplicate won the tie instead. Below that,
+    // an interprocedural flow finding (carries source→sink attribution) is
+    // the better carrier than a flat structural/regex match — keep its
+    // chain/source-line attribution. When neither or both carry flow, fall
+    // back to severity. The winner keeps its own severity (we must not
+    // resurrect a rating that ownership/reachability analysis deliberately
+    // downgraded on one of the two findings).
+    const fIsIrTaint = f.parser === 'IR-TAINT';
+    const kIsIrTaint = kept.parser === 'IR-TAINT';
     const fHasFlow = !!(f.source && f.sink);
     const kHasFlow = !!(kept.source && kept.sink);
-    const keepNew = (fHasFlow !== kHasFlow)
+    const keepNew = (fIsIrTaint !== kIsIrTaint)
+      ? fIsIrTaint
+      : (fHasFlow !== kHasFlow)
       ? fHasFlow
       : (SEV_RANK[f.severity]??9) < (SEV_RANK[kept.severity]??9);
     const winner = keepNew ? f : kept;
@@ -8114,6 +8125,169 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // Roadmap #8 — tree-sitter sinks for long-tail languages (opt-in,
   // AGENTIC_SECURITY_TREE_SITTER=1; degrades to no-op without the optional dep).
   if(process.env.AGENTIC_SECURITY_TREE_SITTER==='1'){try{aF.push(...await scanTreeSitterSinks(fc));}catch(_){}}
+  // Phase 3 (Sentinel-parity FR-L1, FR-L2) — IR + interprocedural taint.
+  // R1 (PRD §5): the CLI entry (bin/agentic-security.js#cmdScan) now sets
+  // AGENTIC_SECURITY_DEEP=1 by default for local/interactive scans, so deep mode
+  // runs on the default `/scan --all` path. This gate is the enforcement +
+  // CI-safety point: it honors an explicit opt-out (DEEP=0) and keeps deep off in
+  // CI unless DEEP_IN_CI=1. In-process callers (tests, the cve-replay corpus) invoke
+  // runScan()/runFullScan() directly without the CLI default, so they stay deep-off
+  // and remain deterministic regression gates.
+  //
+  // PRD R3: IR-TAINT findings are appended into `aF` HERE, before dedup, so
+  // they dedupe against a pattern-layer duplicate of the same sink and then
+  // ride through the exact same annotator pipeline every other finding does
+  // (stable IDs, clustering, reachability, family backfill, confidence,
+  // calibration, exploitability, sanitizer/proof gate, mitigation, composite
+  // risk, LLM validation...) below. Previously this block ran AFTER that
+  // entire pipeline and pushed straight into the post-dedup `finalFindings`
+  // array, so a sink caught by both the regex layer and deep mode produced
+  // two findings (one with no family and no calibrated confidence) instead
+  // of one deduped, fully-annotated finding.
+  //
+  // SAFETY: Deep mode is gated for CI safety:
+  //   - Global timeout via AGENTIC_SECURITY_DEEP_TIMEOUT_MS (default 300_000 = 5 min)
+  //   - Auto-disabled in CI unless AGENTIC_SECURITY_DEEP_IN_CI=1 is also set,
+  //     so a pathological file can't hang the whole pipeline.
+  // ── IR parse-coverage sidecar (proof-corpus instrumentation, default off) ──
+  // Built ahead of the deep-mode gate so coverage is measurable without paying
+  // for taint analysis, and stashed in _sharedIR so the deep block below reuses
+  // it rather than parsing the project twice.
+  //
+  // NOTE (affects instrumented runs only, i.e. AGENTIC_SECURITY_IR_STATS set):
+  // when this block runs, buildProjectIR() happens here, BEFORE the deep-mode
+  // budget timer (t0) below is started. On an uninstrumented run, IR
+  // construction instead happens inside the timed block via the
+  // `_sharedIR || (_sharedIR = buildProjectIR(fc))` line, so its cost counts
+  // against AGENTIC_SECURITY_DEEP_TIMEOUT_MS. That means the deep budget does
+  // NOT account for parse time when stats are enabled — an instrumented run
+  // gets strictly more wall-clock for the taint analysis itself than an
+  // uninstrumented run with the same budget.
+  let _sharedIR = null;
+  // Java IR requires the ASYNC builder. `parser-java.js` exports an async
+  // `parseJavaFile` (java-parser needs a dynamic import), so the sync
+  // `buildProjectIR` has no Java branch at all — and both deep-path call sites
+  // used it. The result was that no .java file had ever produced an IR function
+  // in deep mode: `bench/layer-recall` measured java at 0/25 while the catalog
+  // carried 7 Java sources and 15 Java sinks that had nothing to run against.
+  // `buildProjectIRAsync` is a full mirror plus Java and had zero callers.
+  //
+  // Gated on the presence of .java rather than always awaiting: the async
+  // builder is a superset, but switching every scan in the product to it to fix
+  // one language would change the execution shape (and attempt the java-parser
+  // import) for projects that contain no Java. `runFullScan` is already async,
+  // so the await costs nothing structurally.
+  const _hasJava = Object.keys(fc || {}).some(f => /\.java$/i.test(f));
+  const _buildIR = async () => (_hasJava ? await buildProjectIRAsync(fc) : buildProjectIR(fc));
+  const _irStatsTarget = irStatsTarget();
+  if (_irStatsTarget) {
+    try {
+      _sharedIR = await _buildIR();
+      writeIrStats(_irStatsTarget, collectIrStats(fc, _sharedIR.perFile, _sharedIR.callGraph));
+    } catch (e) {
+      // Instrumentation must never fail a scan. Surface only when debugging.
+      if (process.env.AGENTIC_SECURITY_IR_STATS_DEBUG === '1') {
+        process.stderr.write(`ir-stats: ${e && e.message}\n`);
+      }
+    }
+  }
+  // `deep`/`deepInCi` come from runScan()'s options object (threaded through
+  // unchanged from runScan.js) — an explicit-opt-in override alongside the
+  // env vars, not a replacement for them. Added because `runScan(dir,
+  // {deep:true})` was a silent, total no-op: this options object was
+  // destructured for fileContents/depFileContents/scanRoot/resume only, so
+  // `deep` was dropped on the floor and deep mode stayed off regardless.
+  // Several interprocedural test files (interproc-k2.test.js,
+  // parser-cs-kt.test.js, points-to.test.js) pass exactly this option
+  // believing it enables deep mode — it never did, so those tests were
+  // exercising whatever coincidentally fires without the deep engine, not
+  // the interprocedural machinery they're named for.
+  const _deepRequested = deep === true || process.env.AGENTIC_SECURITY_DEEP === '1';
+  const _inCi = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI ||
+                   process.env.BUILDKITE || process.env.CIRCLECI || process.env.JENKINS_URL);
+  const _deepInCiAllowed = deepInCi === true || process.env.AGENTIC_SECURITY_DEEP_IN_CI === '1';
+  const _deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed);
+  let _deepCallGraph = null;
+  if (_deepEnabled) {
+    const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
+    const t0 = Date.now();
+    try {
+      const { perFile, callGraph } = _sharedIR || (_sharedIR = await _buildIR());
+      _deepCallGraph = callGraph;
+      // The runDeepAnalysis call is synchronous in this codebase; we can't
+      // truly interrupt it without re-architecting the worklist. We pass a
+      // deadlineMs hint that the inner loops check; if absent, we still cap
+      // function count via fnLimit. Operators who suspect a hung run can
+      // kill the process and re-run with AGENTIC_SECURITY_DEEP=0.
+      const irFindings = runDeepAnalysis(perFile, callGraph, {
+        fnLimit: parseInt(process.env.AGENTIC_SECURITY_DEEP_FN_LIMIT || '5000', 10),
+        deadlineMs: t0 + budgetMs,
+        // v0.69 — incremental cache inputs (used when AGENTIC_SECURITY_INCREMENTAL=1).
+        scanRoot,
+        fileContents: fc,
+      });
+      const elapsed = Date.now() - t0;
+      if (elapsed > budgetMs) {
+        // We exceeded budget — surface a single info finding so operators see it.
+        aF.push({
+          id: `ir-taint-timeout:${scanRoot || ''}`,
+          file: '(deep-engine)', line: 0,
+          vuln: `IR-TAINT deep mode exceeded ${budgetMs}ms budget (${elapsed}ms used) — results may be incomplete`,
+          severity: 'info',
+          parser: 'IR-TAINT',
+          confidence: 0.5,
+        });
+      }
+      for (const f of irFindings) {
+        f.unvalidated = true;
+        f.validator_verdict = 'unvalidated';
+      }
+      aF.push(...irFindings);
+    } catch (e) {
+      // Deep mode is best-effort. A parser blowup in one file shouldn't kill
+      // the scan — fall back to the pattern-only result.
+    }
+  } else if (_deepRequested && _inCi) {
+    // Operator asked for deep but we're in CI — emit a non-blocking notice
+    // so they know it was skipped and how to override.
+    aF.push({
+      id: 'ir-taint-ci-skipped',
+      file: '(deep-engine)', line: 0,
+      vuln: 'IR-TAINT deep mode skipped in CI environment (set AGENTIC_SECURITY_DEEP_IN_CI=1 to opt in)',
+      severity: 'info',
+      parser: 'IR-TAINT',
+      confidence: 1.0,
+    });
+  }
+  // Java SCA enrichment: use deep-mode IR call graph to improve Java function reachability
+  if (_deepCallGraph) {
+    try {
+      for (const sc of supplyChain) {
+        if (sc.type !== 'vulnerable_dep' || sc.ecosystem !== 'maven') continue;
+        if (sc.functionReachable === 'reachable') continue;
+        const allFns = [...(sc.osvVulnFunctions || []), ...(VULN_FUNCTION_HINTS[sc.name] || [])];
+        if (!allFns.length) continue;
+        for (const fn of _deepCallGraph.functions ? _deepCallGraph.functions.values() : []) {
+          if (!fn.cfg || !fn.cfg.nodes) continue;
+          for (const node of Object.values(fn.cfg.nodes)) {
+            if (node.kind !== 'call') continue;
+            const callee = typeof node.callee === 'string' ? node.callee : null;
+            if (!callee) continue;
+            const shortCallee = callee.includes('.') ? callee.split('.').pop() : callee;
+            if (allFns.some(f => f === shortCallee || f === callee)) {
+              sc.functionReachable = 'reachable';
+              sc.reachabilityTier = 'function-reachable';
+              if (!sc.vulnerableFunctionCallSites) sc.vulnerableFunctionCallSites = [];
+              sc.vulnerableFunctionCallSites.push({ pkg: sc.name, fn: shortCallee, file: fn.file, line: node.line });
+              sc._javaIrEnriched = true;
+              break;
+            }
+          }
+          if (sc.functionReachable === 'reachable') break;
+        }
+      }
+    } catch { /* Java SCA enrichment is best-effort */ }
+  }
   let finalFindings;try{finalFindings=dedupeFindingsWithEvidence(aF);}catch(_){finalFindings=dd(aF,f=>f.id);}
   // Inline `agentic-security-ignore` pragmas, pass 1 of 2. This covers every
   // finding that exists BY THIS POINT — the pattern detectors, the cross-file
@@ -8537,190 +8711,6 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // FR-LOGIC-6: LLM-driven flow narration (template fallback when no LLM endpoint).
   try { await annotateNarration(finalFindings); }
   catch (e) { _annotatorErrors.push({ phase: 'annotateNarration', err: String((e && e.message) || e) }); }
-  // Phase 3 (Sentinel-parity FR-L1, FR-L2) — IR + interprocedural taint.
-  // R1 (PRD §5): the CLI entry (bin/agentic-security.js#cmdScan) now sets
-  // AGENTIC_SECURITY_DEEP=1 by default for local/interactive scans, so deep mode
-  // runs on the default `/scan --all` path. This gate is the enforcement +
-  // CI-safety point: it honors an explicit opt-out (DEEP=0) and keeps deep off in
-  // CI unless DEEP_IN_CI=1. In-process callers (tests, the cve-replay corpus) invoke
-  // runScan()/runFullScan() directly without the CLI default, so they stay deep-off
-  // and remain deterministic regression gates. Findings ride through the standard
-  // dedup/cluster/confidence pipeline below and the LLM-validator stage that follows.
-  //
-  // SAFETY: Deep mode is gated for CI safety:
-  //   - Global timeout via AGENTIC_SECURITY_DEEP_TIMEOUT_MS (default 300_000 = 5 min)
-  //   - Auto-disabled in CI unless AGENTIC_SECURITY_DEEP_IN_CI=1 is also set,
-  //     so a pathological file can't hang the whole pipeline.
-  // ── IR parse-coverage sidecar (proof-corpus instrumentation, default off) ──
-  // Built ahead of the deep-mode gate so coverage is measurable without paying
-  // for taint analysis, and stashed in _sharedIR so the deep block below reuses
-  // it rather than parsing the project twice.
-  //
-  // NOTE (affects instrumented runs only, i.e. AGENTIC_SECURITY_IR_STATS set):
-  // when this block runs, buildProjectIR() happens here, BEFORE the deep-mode
-  // budget timer (t0) below is started. On an uninstrumented run, IR
-  // construction instead happens inside the timed block via the
-  // `_sharedIR || (_sharedIR = buildProjectIR(fc))` line, so its cost counts
-  // against AGENTIC_SECURITY_DEEP_TIMEOUT_MS. That means the deep budget does
-  // NOT account for parse time when stats are enabled — an instrumented run
-  // gets strictly more wall-clock for the taint analysis itself than an
-  // uninstrumented run with the same budget.
-  let _sharedIR = null;
-  // Java IR requires the ASYNC builder. `parser-java.js` exports an async
-  // `parseJavaFile` (java-parser needs a dynamic import), so the sync
-  // `buildProjectIR` has no Java branch at all — and both deep-path call sites
-  // used it. The result was that no .java file had ever produced an IR function
-  // in deep mode: `bench/layer-recall` measured java at 0/25 while the catalog
-  // carried 7 Java sources and 15 Java sinks that had nothing to run against.
-  // `buildProjectIRAsync` is a full mirror plus Java and had zero callers.
-  //
-  // Gated on the presence of .java rather than always awaiting: the async
-  // builder is a superset, but switching every scan in the product to it to fix
-  // one language would change the execution shape (and attempt the java-parser
-  // import) for projects that contain no Java. `runFullScan` is already async,
-  // so the await costs nothing structurally.
-  const _hasJava = Object.keys(fc || {}).some(f => /\.java$/i.test(f));
-  const _buildIR = async () => (_hasJava ? await buildProjectIRAsync(fc) : buildProjectIR(fc));
-  const _irStatsTarget = irStatsTarget();
-  if (_irStatsTarget) {
-    try {
-      _sharedIR = await _buildIR();
-      writeIrStats(_irStatsTarget, collectIrStats(fc, _sharedIR.perFile, _sharedIR.callGraph));
-    } catch (e) {
-      // Instrumentation must never fail a scan. Surface only when debugging.
-      if (process.env.AGENTIC_SECURITY_IR_STATS_DEBUG === '1') {
-        process.stderr.write(`ir-stats: ${e && e.message}\n`);
-      }
-    }
-  }
-  // `deep`/`deepInCi` come from runScan()'s options object (threaded through
-  // unchanged from runScan.js) — an explicit-opt-in override alongside the
-  // env vars, not a replacement for them. Added because `runScan(dir,
-  // {deep:true})` was a silent, total no-op: this options object was
-  // destructured for fileContents/depFileContents/scanRoot/resume only, so
-  // `deep` was dropped on the floor and deep mode stayed off regardless.
-  // Several interprocedural test files (interproc-k2.test.js,
-  // parser-cs-kt.test.js, points-to.test.js) pass exactly this option
-  // believing it enables deep mode — it never did, so those tests were
-  // exercising whatever coincidentally fires without the deep engine, not
-  // the interprocedural machinery they're named for.
-  const _deepRequested = deep === true || process.env.AGENTIC_SECURITY_DEEP === '1';
-  const _inCi = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI ||
-                   process.env.BUILDKITE || process.env.CIRCLECI || process.env.JENKINS_URL);
-  const _deepInCiAllowed = deepInCi === true || process.env.AGENTIC_SECURITY_DEEP_IN_CI === '1';
-  const _deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed);
-  if (_deepEnabled) {
-    const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
-    const t0 = Date.now();
-    try {
-      const { perFile, callGraph } = _sharedIR || (_sharedIR = await _buildIR());
-      // The runDeepAnalysis call is synchronous in this codebase; we can't
-      // truly interrupt it without re-architecting the worklist. We pass a
-      // deadlineMs hint that the inner loops check; if absent, we still cap
-      // function count via fnLimit. Operators who suspect a hung run can
-      // kill the process and re-run with AGENTIC_SECURITY_DEEP=0.
-      const irFindings = runDeepAnalysis(perFile, callGraph, {
-        fnLimit: parseInt(process.env.AGENTIC_SECURITY_DEEP_FN_LIMIT || '5000', 10),
-        deadlineMs: t0 + budgetMs,
-        // v0.69 — incremental cache inputs (used when AGENTIC_SECURITY_INCREMENTAL=1).
-        scanRoot,
-        fileContents: fc,
-      });
-      const elapsed = Date.now() - t0;
-      if (elapsed > budgetMs) {
-        // We exceeded budget — surface a single info finding so operators see it.
-        finalFindings.push({
-          id: `ir-taint-timeout:${scanRoot || ''}`,
-          file: '(deep-engine)', line: 0,
-          vuln: `IR-TAINT deep mode exceeded ${budgetMs}ms budget (${elapsed}ms used) — results may be incomplete`,
-          severity: 'info',
-          parser: 'IR-TAINT',
-          confidence: 0.5,
-        });
-      }
-      for (const f of irFindings) {
-        f.unvalidated = true;
-        f.validator_verdict = 'unvalidated';
-      }
-      finalFindings.push(...irFindings);
-      // Sanitizer + proof gate, pass 2 of 2 — same ordering trap as the
-      // ignore-pragma double pass below, and for the same reason: pass 1 runs
-      // ~2300 lines above, long before deep-mode IR findings exist, so a
-      // sanitized IR-TAINT flow was never labelled and a proven-clean one was
-      // never demoted. Deep mode is what the CLI uses outside CI, so that was
-      // the case that mattered most.
-      //
-      // Scoped to `irFindings` rather than re-running over `finalFindings`:
-      // annotateProofGate demotes confidence, so a second pass over findings
-      // pass 1 already handled would demote them twice.
-      if (process.env.AGENTIC_SECURITY_NO_PROOF_GATE !== '1') {
-        const _irSanitizers = {};
-        for (const f of irFindings) {
-          const names = f && f._sanitizersOnPath;
-          if (!Array.isArray(names) || !names.length) continue;
-          if (f.id) _irSanitizers[f.id] = names;
-          if (f.stableId) _irSanitizers[f.stableId] = names;
-        }
-        _runAnnotator("applySanitizerGate:deep", () => {
-          applySanitizerGate(irFindings, { sanitizersOnPath: _irSanitizers });
-        });
-        _runAnnotator("annotateProofGate:deep", () => { annotateProofGate(irFindings); });
-      }
-      // Pragma pass 2 of 2 — see the pass-1 comment far above. Deep-mode IR
-      // findings land here, long after pass 1 ran, so without this an
-      // `agentic-security-ignore` on an ir-taint finding is inert. Deep mode is
-      // what the CLI uses outside CI and taint findings are the ones users most
-      // want to silence, so the documented feature did nothing in the case that
-      // mattered most.
-      //
-      // Re-running over the already-filtered array is safe and does not
-      // double-log: pass 1's removals are gone from `finalFindings`, so only the
-      // newly-appended IR findings can match here, and each suppression reaches
-      // the ledger exactly once.
-      try{ _applyIgnorePragmas(finalFindings, fc); }catch(_){}
-      // Java SCA enrichment: use deep-mode IR call graph to improve Java function reachability
-      try {
-        for (const sc of supplyChain) {
-          if (sc.type !== 'vulnerable_dep' || sc.ecosystem !== 'maven') continue;
-          if (sc.functionReachable === 'reachable') continue;
-          const allFns = [...(sc.osvVulnFunctions || []), ...(VULN_FUNCTION_HINTS[sc.name] || [])];
-          if (!allFns.length) continue;
-          for (const fn of callGraph.functions ? callGraph.functions.values() : []) {
-            if (!fn.cfg || !fn.cfg.nodes) continue;
-            for (const node of Object.values(fn.cfg.nodes)) {
-              if (node.kind !== 'call') continue;
-              const callee = typeof node.callee === 'string' ? node.callee : null;
-              if (!callee) continue;
-              const shortCallee = callee.includes('.') ? callee.split('.').pop() : callee;
-              if (allFns.some(f => f === shortCallee || f === callee)) {
-                sc.functionReachable = 'reachable';
-                sc.reachabilityTier = 'function-reachable';
-                if (!sc.vulnerableFunctionCallSites) sc.vulnerableFunctionCallSites = [];
-                sc.vulnerableFunctionCallSites.push({ pkg: sc.name, fn: shortCallee, file: fn.file, line: node.line });
-                sc._javaIrEnriched = true;
-                break;
-              }
-            }
-            if (sc.functionReachable === 'reachable') break;
-          }
-        }
-      } catch { /* Java SCA enrichment is best-effort */ }
-    } catch (e) {
-      // Deep mode is best-effort. A parser blowup in one file shouldn't kill
-      // the scan — fall back to the pattern-only result.
-    }
-  } else if (_deepRequested && _inCi) {
-    // Operator asked for deep but we're in CI — emit a non-blocking notice
-    // so they know it was skipped and how to override.
-    finalFindings.push({
-      id: 'ir-taint-ci-skipped',
-      file: '(deep-engine)', line: 0,
-      vuln: 'IR-TAINT deep mode skipped in CI environment (set AGENTIC_SECURITY_DEEP_IN_CI=1 to opt in)',
-      severity: 'info',
-      parser: 'IR-TAINT',
-      confidence: 1.0,
-    });
-  }
   // Phase 2 (Sentinel-parity): LLM validator stage. DEFAULT-ON whenever
   // AGENTIC_SECURITY_LLM_ENDPOINT is configured — not gated on
   // AGENTIC_SECURITY_LLM_VALIDATE=1 as this comment previously (and wrongly)
