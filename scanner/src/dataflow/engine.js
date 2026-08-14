@@ -1409,7 +1409,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     const fn = callGraph.functions?.get(f._funcQid);
     if (!fn) continue;
     if (calledQids.has(f._funcQid)) continue;
-    if (/handler|route|controller|middleware|endpoint/i.test(fn.name || '')) continue;
+    if (fn.name === '<module>' || /handler|route|controller|middleware|endpoint/i.test(fn.name || '')) continue;
     f._inDeadCode = true;
     const dg = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
     if (dg[f.severity]) f.severity = dg[f.severity];
