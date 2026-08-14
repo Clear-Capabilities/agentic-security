@@ -331,6 +331,20 @@ export function parseJsFile(file, code) {
 
         VariableDeclarator(path) {
           const fn = currentFn(); if (!fn) return;
+          // PRD R13(b): `for (const item of tainted)` is, structurally, also
+          // an ordinary VariableDeclarator (`item`, no `init`) — Babel visits
+          // it as a normal child of the ForOfStatement's `left` on the way
+          // into the loop body. Left to the general case below, this generic
+          // visit fires AFTER the loop visitor's enter() hook synthesizes
+          // `item = <iterated expr>`, re-assigning `item` from an absent
+          // `init` (source: unknown) and silently erasing the taint just
+          // synthesized. Skip it here; the loop visitor owns this binding.
+          // Scoped narrowly to ForOfStatement's own `left` declarator only —
+          // ForInStatement's `for (const key in obj)` is unchanged (key
+          // still resolves to source: unknown, exactly as before this task).
+          const gpDecl = path.parentPath && path.parentPath.node;
+          const gpLoop = path.parentPath && path.parentPath.parentPath && path.parentPath.parentPath.node;
+          if (gpLoop && gpLoop.type === 'ForOfStatement' && gpLoop.left === gpDecl) return;
           const id = lhsPath(path.node.id);
           if (!id) return;
           const initExpr = exprOf(path.node.init);
@@ -504,6 +518,40 @@ export function parseJsFile(file, code) {
             fn.cfg.nodes.set(exitId, { id: exitId, kind: 'noop', succ: [], pred: [], line });
             path.node._loopHeader = headerId;
             path.node._loopExit = exitId;
+            // PRD R13(b): for-of's binding variable is never connected to the
+            // iterated expression, so `for (const x of tainted) sink(x)` reads
+            // x as {kind:'unknown'} — clean. Synthesize an assign binding the
+            // loop variable to the iterated expression, exactly as the
+            // Python-CST/Go/PHP parsers already do for their own for-each
+            // constructs (parser-py.helper.py, parser-go.js, parser-php.js).
+            // Conservative, matching this file's own stated doctrine for
+            // loops in general ("any iteration could taint X"): the WHOLE
+            // loop variable is tainted if the iterable is tainted, not a
+            // specific element — element-level precision isn't modeled here
+            // any more than it is for the rest of this file's loop handling.
+            // Scoped to ForOfStatement only — While/For/DoWhile/ForIn have no
+            // "loop variable bound to an iterated collection" shape and must
+            // see zero behavior change from this addition.
+            if (path.node.type === 'ForOfStatement') {
+              const leftNode = path.node.left;
+              const declId = leftNode && leftNode.type === 'VariableDeclaration'
+                ? leftNode.declarations[0]?.id
+                : leftNode;
+              // Only the simple `for (const x of ...)` / `for (x of ...)`
+              // shape is synthesized. A destructuring binding
+              // (`for (const {a,b} of ...)`) has no single flat target name
+              // lhsPath-style logic could bind to — left unsynthesized rather
+              // than guessed at, matching this codebase's "refuse rather than
+              // invent an edge" doctrine elsewhere (see _resolvableCalleeName
+              // in dataflow/engine.js for the same principle applied to call
+              // resolution).
+              const loopVar = declId && declId.type === 'Identifier' ? declId.name : null;
+              if (loopVar) {
+                const iterExpr = exprOf(path.node.right);
+                const bindId = nextNodeId();
+                addNode(fn, { id: bindId, kind: 'assign', target: loopVar, source: iterExpr, line, succ: [], pred: [] });
+              }
+            }
           },
           exit(path) {
             const fn = currentFn(); if (!fn) return;
