@@ -333,6 +333,7 @@ export function parsePhpFile(file, code) {
   if (code.length > 1_000_000) return null;
 
   const functions = [];
+  const spans = []; // {start, end}: source ranges fully consumed by a matched function (signature through closing brace)
   FUNC_RE.lastIndex = 0;
   _nid = 0;
   let m;
@@ -362,11 +363,70 @@ export function parsePhpFile(file, code) {
       cfg,
       calls: callSitesFromCfg(cfg),
     });
+    spans.push({ start: m.index, end: extracted.end });
     // Don't skip past the closing brace: for `<?php function h(){...} function m(){...}`
     // that brace is the only boundary character available to anchor the next
     // function's match (there's no newline/semicolon between them), and advancing
     // past it here would make the following function declaration unmatchable.
     FUNC_RE.lastIndex = extracted.end;
   }
-  return functions.length ? { file, functions, topLevel: null } : null;
+
+  // R14(b): lower top-level (module-scope) statements into a synthetic
+  // <module> function, mirroring parser-js.js's Program-level lowering.
+  // The "gap" text is everything NOT inside a matched function's
+  // [signature, closing-brace) span, fed through the same _buildCfg used
+  // for real function bodies — no new statement-classification logic.
+  spans.sort((a, b) => a.start - b.start);
+  const modNodes = {};
+  const modEntry = _addNode(modNodes, { kind: 'entry', line: 1 });
+  const modExit = _addNode(modNodes, { kind: 'exit', line: 1 });
+  let modTail = modEntry;
+  let cursor = 0;
+  for (const span of spans) {
+    if (span.start > cursor) {
+      let gap = code.slice(cursor, span.start);
+      // Strip PHP opening tags from gap text (only on the first gap, i.e., when cursor === 0)
+      if (cursor === 0) {
+        gap = gap.replace(/^<\?(?:php)?\s*/i, '');
+      }
+      if (gap.trim()) {
+        modTail = _buildCfg(gap, modNodes, modTail, _lineAt(code, cursor));
+      }
+    }
+    cursor = Math.max(cursor, span.end);
+  }
+  if (cursor < code.length) {
+    let gapStart = cursor;
+    // Skip past the closing brace at span.end (since FUNC_RE.lastIndex points to it,
+    // and that's what we use to resume matching; we don't want to process it again)
+    if (gapStart < code.length && code[gapStart] === '}') {
+      gapStart++;
+    }
+    if (gapStart < code.length) {
+      let gap = code.slice(gapStart);
+      // Strip PHP opening tags from gap text (only on the first gap, i.e., when cursor === 0)
+      if (cursor === 0) {
+        gap = gap.replace(/^<\?(?:php)?\s*/i, '');
+      }
+      if (gap.trim()) {
+        modTail = _buildCfg(gap, modNodes, modTail, _lineAt(code, gapStart));
+      }
+    }
+  }
+  _linkNodes(modNodes, modTail, modExit);
+  const modHasContent = Object.values(modNodes).some(n => n.kind !== 'entry' && n.kind !== 'exit');
+  let topLevel = null;
+  if (modHasContent) {
+    const moduleCfg = { entry: modEntry, exit: modExit, nodes: modNodes };
+    const modQid = _qid(file, '<module>', 1, code);
+    functions.push({
+      qid: modQid,
+      name: '<module>', line: 1, params: [], file,
+      cfg: moduleCfg,
+      calls: callSitesFromCfg(moduleCfg),
+    });
+    topLevel = modQid;
+  }
+
+  return functions.length ? { file, functions, topLevel } : null;
 }
