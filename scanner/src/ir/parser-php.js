@@ -363,7 +363,11 @@ export function parsePhpFile(file, code) {
       cfg,
       calls: callSitesFromCfg(cfg),
     });
-    spans.push({ start: m.index, end: extracted.end });
+    // span.end is exclusive (points after the closing brace), so interior and trailing
+    // gaps both work correctly without special casing. extracted.end points AT the brace,
+    // so we add 1 to make it exclusive. We keep FUNC_RE.lastIndex at extracted.end
+    // (the brace position) so subsequent function matches can use it as a boundary.
+    spans.push({ start: m.index, end: extracted.end + 1 });
     // Don't skip past the closing brace: for `<?php function h(){...} function m(){...}`
     // that brace is the only boundary character available to anchor the next
     // function's match (there's no newline/semicolon between them), and advancing
@@ -396,21 +400,13 @@ export function parsePhpFile(file, code) {
     cursor = Math.max(cursor, span.end);
   }
   if (cursor < code.length) {
-    let gapStart = cursor;
-    // Skip past the closing brace at span.end (since FUNC_RE.lastIndex points to it,
-    // and that's what we use to resume matching; we don't want to process it again)
-    if (gapStart < code.length && code[gapStart] === '}') {
-      gapStart++;
+    let gap = code.slice(cursor);
+    // Strip PHP opening tags from gap text (only on the first gap, i.e., when cursor === 0)
+    if (cursor === 0) {
+      gap = gap.replace(/^<\?(?:php)?\s*/i, '');
     }
-    if (gapStart < code.length) {
-      let gap = code.slice(gapStart);
-      // Strip PHP opening tags from gap text (only on the first gap, i.e., when cursor === 0)
-      if (cursor === 0) {
-        gap = gap.replace(/^<\?(?:php)?\s*/i, '');
-      }
-      if (gap.trim()) {
-        modTail = _buildCfg(gap, modNodes, modTail, _lineAt(code, gapStart));
-      }
+    if (gap.trim()) {
+      modTail = _buildCfg(gap, modNodes, modTail, _lineAt(code, cursor));
     }
   }
   _linkNodes(modNodes, modTail, modExit);

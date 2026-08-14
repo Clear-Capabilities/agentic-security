@@ -48,3 +48,23 @@ system($cmd);
   const helper = ir.functions.find(f => f.name === 'helper');
   assert.ok(helper, 'the real function must still be extracted unchanged');
 });
+
+test('parsePhpFile: interior gap between two functions is correctly captured (critical brace-leak scenario)', () => {
+  const code = `<?php
+function a() {
+}
+$x = mysqli_query($conn, $sql);
+function b() {
+}
+`;
+  const ir = parsePhpFile('twofunc.php', code);
+  assert.ok(ir, 'IR should be produced for a file with functions and top-level statements');
+  assert.equal(ir.functions.length, 3, 'expected functions a, b, and synthetic <module>');
+  const mod = ir.functions.find(f => f.name === '<module>');
+  assert.ok(mod, 'should have synthetic <module>');
+  const nodes = Object.values(mod.cfg.nodes);
+  assert.ok(nodes.some(n => n.kind === 'assign' && n.target === '$x'), 'expected the interior assignment to be captured in the <module>');
+  const a = ir.functions.find(f => f.name === 'a');
+  const b = ir.functions.find(f => f.name === 'b');
+  assert.ok(a && b, 'both real functions must be extracted unchanged');
+});
