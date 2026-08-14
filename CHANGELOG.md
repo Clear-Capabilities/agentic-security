@@ -161,6 +161,67 @@ Verification: full test gate green (`npm test`, 3146 tests), corpus
 against the pre-fix engine) and layer-recall (214/214 detected, per-language
 taint counts equal to baseline) all green.
 
+### R13 (Theme E — flow-modeling coverage), both sub-fixes
+
+- **R13(a) — a member-write assignment target (`el.innerHTML = tainted`) is
+  now consulted against the sink catalog.** The taint engine previously only
+  checked call expressions against the sink catalog; a plain property
+  assignment with no call syntax at all — the PRD's own success metric,
+  `el.innerHTML = req.query.x` — was structurally invisible regardless of
+  taint. `dataflow/catalog.js` gains a small member-write sink table and
+  `matchMemberWriteSink(targetPath, file)`; `dataflow/engine.js` consults it
+  on assignment targets alongside the existing call-sink path.
+- **R13(b) — a for-of loop variable now carries the iterated expression's
+  taint into the loop body.** `for (const item of req.body.items) { eval(item) }`
+  — the PRD's other stated success metric — previously read `item` as clean:
+  the shared Babel loop visitor never bound the for-of loop variable to what
+  it iterates. `ir/parser-js.js`'s loop visitor now synthesizes an
+  `item = <iterated expr>` assignment in its `enter()` hook, scoped strictly
+  to `ForOfStatement`; the other four loop-statement types that funnel
+  through the same shared visitor (`for`, `while`, `do-while`, `for-in`) are
+  pinned byte-identical in CFG output by a dedicated regression test, since
+  a shared-visitor edit is the single riskiest shape of change this plan
+  made.
+
+  **This one took two extra fix rounds, and both are worth recording
+  honestly.** First: a second, generic Babel visitor
+  (`VariableDeclarator`) also fires for the for-of binding's own
+  `const item` declarator and runs after the loop visitor's `enter()` but
+  before the body, silently overwriting the just-synthesized assignment
+  with `source:unknown` — fixed with a guard skipping that declarator.
+  That guard's first version was over-broad: it skipped *any*
+  `ForOfStatement` `left` declarator, which also deleted the same visitor's
+  pre-existing destructuring taint-KILL nodes and regressed
+  `for (const {cmd} of SAFE) eval(cmd)` to a false positive (the
+  destructured `cmd` should shadow and clear an outer tainted `cmd` of the
+  same name, and briefly stopped doing so). Narrowed to
+  `path.node.id?.type === 'Identifier'` so only the simple-identifier shape
+  the loop visitor actually synthesizes for is skipped; destructuring falls
+  through unaffected, now pinned by a regression test.
+
+  Second, and unrelated to the guard bug: R13(b)'s new taint capability made
+  a genuinely pre-existing, independent bug newly reachable inside the
+  scanner's *own* `ir/type-stubs.js` — `catalog.js`'s `js-exec` entry
+  matches any `X.exec(tainted)` by bare property name with no receiver-type
+  check, so `RegExp.exec()` calls newly carrying taint via the for-of fix
+  got misidentified as `child_process.exec` command injection. Confirmed
+  independent of the loop change (reproduces on a trivial non-loop fixture)
+  and traced to a catalog entry that predates this PRD entirely
+  (`f0d7e03`). Required a `bench/self-scan/BASELINE.json` update
+  (`dataflow/index.js: 0→5`, `ir/type-stubs.js: 6→10`), not a code fix —
+  logged as its own open gap in `docs/DETECTION_GAP_REMEDIATION_PRD.md`
+  rather than patched here, since the real fix needs CHA to type
+  regex-literal-assigned variables first.
+
+Both sub-fixes are covered end-to-end and at the unit level by
+`test/member-write-and-loop-taint.test.js` (9 tests), wired into
+`test:dataflow`. Verification: full gate green — `npm test` (3155 tests, 0
+failures), corpus (214/214, no drift), mutation (12/12 verdict-flip),
+layer-recall (js/ts taint recall unchanged at 7/38 vs. baseline's 7/36 — R13
+lands via dedicated unit tests rather than new corpus entries, so no
+taint-layer increase was expected or observed here) and self-scan (green
+against the baseline this same work already updated).
+
 ## 0.136.10 — detection-gap remediation Theme A: dedup, family, and calibration for deep mode
 
 An architectural audit of the SAST/taint pipeline (`docs/DETECTION_GAP_REMEDIATION_PRD.md`)
