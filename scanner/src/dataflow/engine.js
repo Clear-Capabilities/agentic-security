@@ -50,6 +50,13 @@ import { higherOrderTaintFlow } from './higher-order.js';
 import { SummaryCache, entryStateFromCall } from './summaries.js';
 import { lookupBuiltinSummary } from './builtin-summaries.js';
 import { isImplicitFlowEnabled, buildImplicitContext, implicitAssignTarget, markImplicitTaint, createImplicitFinding } from './implicit-flow.js';
+// NOTE: receiver-context.js's receiverTypeAtCall is deliberately NOT imported
+// here. It was the implementation of _receiverTypeFor's old `this.field`
+// branch, whose PascalCase-of-field-name guess is the false-negative bug this
+// file's _receiverTypeFor comment describes. Its other exports are still used
+// (summaries.js imports hashReceiverType for cache keying); only this call
+// site is gone.
+import { resolveMethod, classOfVar } from '../ir/class-hierarchy.js';
 
 // v0.70 #2 — addPath that also taints every alias of the variable.
 // When `target` is a dotted path like "a.x" and the root `a` has aliases
@@ -102,6 +109,74 @@ function _flattenCalleeName(calleeExpr) {
   return null;
 }
 
+// PRD R6/R11 (docs/DETECTION_GAP_REMEDIATION_PRD.md): unlike _flattenCalleeName
+// (which only flattens ONE level — `x.method`/`this.method` — because that is
+// the 2-segment shape catalog matching and resolveKnownCallee both key on),
+// _receiverTypeFor needs the FULL dotted chain, including `this`, to see how
+// LONG the chain actually is: a 3+-segment chain (`this.userRepo.save` ->
+// ['this','userRepo','save'], `svc.db.query` -> ['svc','db','query']) names a
+// receiver that is a property path, and CHA cannot type property paths at all.
+// A partial flatten (`_flattenCalleeName` returns just 'save' for
+// `this.userRepo.save`, since its object isn't a bare ident) would hide that
+// distinction and make a 3-segment chain look like an untyped bare call.
+//
+// Note: parser-js.js encodes ThisExpression as {kind:'ident', name:'_this_'}
+// (a sentinel, not literal 'this'). We convert it to the literal string
+// 'this' so the flattened chain reads the way the source does and its segment
+// count is honest (`this.db.query` is 3 segments, not 2).
+function _fullyFlattenMemberChain(calleeExpr) {
+  if (!calleeExpr) return null;
+  if (typeof calleeExpr === 'string') return calleeExpr;
+  if (calleeExpr.kind === 'ident') {
+    const name = calleeExpr.name || null;
+    // Convert the parser's _this_ sentinel to the literal 'this' string
+    return name === '_this_' ? 'this' : name;
+  }
+  if (calleeExpr.kind === 'member' && typeof calleeExpr.prop === 'string') {
+    const base = _fullyFlattenMemberChain(calleeExpr.object);
+    return base ? `${base}.${calleeExpr.prop}` : calleeExpr.prop;
+  }
+  return null;
+}
+
+// Shared by R6 (catalog receiver-type gating) and R11 (member-call
+// resolution) so both use the exact same precision bar, per the PRD's own
+// sequencing note that R11 must not be more permissive than R6. Returns null
+// whenever CHA has nothing useful to say — callers must treat null as
+// "unknown", never as a signal to suppress or refuse (see this file's
+// "Unknown ≠ clean" global constraint).
+function _receiverTypeFor(calleeExpr, callContext) {
+  if (!callContext || !callContext._cha) return null;
+  const flat = _fullyFlattenMemberChain(calleeExpr);
+  if (!flat || !flat.includes('.')) return null;
+  const parts = flat.split('.');
+  // Only a bare `x.method()` receiver (exactly 2 dot-separated parts) is
+  // something CHA can genuinely verify: classOfVar only tracks bare local
+  // variable -> class bindings from `let/const x = new Foo()`, never
+  // property-path types. This one condition replaces two separate prior
+  // bugs found in whole-branch review: the this.field branch (`this.x.y()`
+  // is 3 parts, `this` as root) used to PascalCase-guess a type from the
+  // field name and could never return null, silently suppressing real
+  // findings on any field name outside a fixed vocabulary
+  // (this.dbConn.query(), this.readReplica.query(), ...); the non-this
+  // branch used to resolve parts[0] (the chain ROOT) for multi-segment
+  // chains like svc.db.query(), which answers "what type is svc?" instead
+  // of the actual question "what type is svc.db?" -- a question CHA has no
+  // way to answer, since it never tracks field types, only local-variable
+  // types. Both were name/shape guesses being trusted as confident
+  // resolutions. A multi-segment or `this`-rooted chain now honestly
+  // returns null (unknown, permissive) rather than guessing.
+  //
+  // The same doctrine already killed a third instance of this bug class: a
+  // receiver assigned via `const c = mysql.createConnection({})` cannot be
+  // typed by CHA (member-call factory, not `new X()`), so classOfVar returns
+  // null — returning the bare name 'c' as a "type" suppressed a real finding
+  // (regression: CVE-2021-22214-node-sqli-shape). There is no name-based
+  // fallback anywhere in this function for exactly that reason.
+  if (parts.length !== 2) return null;
+  return classOfVar(callContext._cha, _currentFile, callContext._currentFnQid, parts[0]);
+}
+
 // Narrower than _flattenCalleeName: the name to hand to callGraph.resolve().
 // Only a bare identifier call (`helper()`) — or a pre-flattened STRING, which
 // is how the Go/PHP/Ruby/Python/C++ parsers already emit call targets —
@@ -120,7 +195,106 @@ function _resolvableCalleeName(calleeExpr) {
   return null;
 }
 
-function exprTaint(expr, state) {
+// R11 (docs/DETECTION_GAP_REMEDIATION_PRD.md): unlike R6's _receiverTypeFor
+// (used only to narrow an ALREADY-pattern-matched catalog sink — safe to be
+// wrong in either direction, since the worst case is over/under-gating an
+// existing match), this function creates a NEW interprocedural call-graph
+// edge. A wrong resolution here fabricates a data-flow path that does not
+// exist, which this codebase's own doctrine treats as strictly worse than
+// a missed one (see _resolvableCalleeName's comment above). It therefore
+// calls classOfVar DIRECTLY, which only returns non-null when the receiver
+// was genuinely assignment-tracked (`let x = new Foo()`), and additionally
+// requires the receiver to be a bare, non-`this` identifier expression.
+//
+// Historically _receiverTypeFor carried NAME-based fallbacks (a
+// PascalCase-of-`this.field` guess and a bare-identifier-name fallback) that
+// this function was careful never to reuse, because a same-named
+// parameter/variable/field (e.g. a duck-typed
+// `function process(Model, data) { Model.save(data); }`) would resolve to an
+// unrelated real class purely by name coincidence. Whole-branch review found
+// those same guesses were also wrong for R6's much softer use, so they are
+// gone: _receiverTypeFor now bottoms out in the same classOfVar call this
+// function makes. The two are deliberately kept as separate functions
+// anyway — they take different inputs (a flattened chain vs. a member
+// expression) and R11's extra `resolveMethod` step means it can still refuse
+// where R6 does not.
+function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
+  if (!calleeExpr || calleeExpr.kind !== 'member' || typeof calleeExpr.prop !== 'string') return null;
+  if (!callContext || !callContext._cha) return null;
+  if (!calleeExpr.object || calleeExpr.object.kind !== 'ident' || calleeExpr.object.name === '_this_') return null;
+  const className = classOfVar(callContext._cha, _currentFile, callContext._currentFnQid, calleeExpr.object.name);
+  if (!className) return null;
+  const found = resolveMethod(callContext._cha, className, calleeExpr.prop);
+  if (!found) return null;
+  return `${found.className}.${found.methodName}`;
+}
+
+// Resolve calleeExpr to { qid, fn } via the call graph — the shared
+// resolve-and-lookup sequence every summary-consulting call site needs.
+// Extracted from what were two independent, drifting copies (assign-RHS and
+// plain-call-statement) so a future change (like PRD R11 in this same file)
+// only has to land once. See _resolvableCalleeName's own comment for why a
+// bare-name/pre-flattened-string callee is the ONLY case handled here for
+// now — Task 4 (PRD R11) extends this function's body to add a second,
+// CHA-gated resolution path for member-expression callees.
+function _resolveCalleeForSummary(calleeExpr, callContext) {
+  if (!callContext || !callContext._callGraph || !callContext._callGraph.resolveKnownCallee) return null;
+  const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
+  let _resolvableName = _resolvableCalleeName(calleeExpr);
+  // PRD R11: _resolvableCalleeName refuses every member-expression callee.
+  // When that's the reason we have nothing, try the CHA-gated path before
+  // giving up — but ONLY then, so the existing exact/bare-name behavior is
+  // completely unchanged for every case it already handled.
+  if (!_resolvableName) _resolvableName = _resolveMemberCalleeViaCHA(calleeExpr, callContext);
+  if (!_resolvableName) return null;
+  const resolved = callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile);
+  const fn = functionRecord(callContext._callGraph, resolved);
+  const qid = resolved && (resolved.qid || resolved);
+  return typeof qid === 'string' ? { qid, fn } : null;
+}
+
+// PRD R10 (docs/DETECTION_GAP_REMEDIATION_PRD.md): the only two places that
+// consult a callee's SummaryCache entry are the assign-RHS and plain-call-
+// statement paths in step() below — a call nested INSIDE another expression
+// (most commonly a sink's own argument list, `sink(getUserInput())`) reaches
+// neither, so exprTaint's 'call' case fell back to checking only the nested
+// call's OWN arguments, silently losing the callee's return-taint. Mirrors
+// the same resolve -> get-or-compute -> merge sequence step()'s two existing
+// call sites use, via the Task 3/4 shared _resolveCalleeForSummary.
+function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext) {
+  if (!callContext || !callContext._summaryCache) return false;
+  const target = _resolveCalleeForSummary(calleeExpr, callContext);
+  if (!target) return false;
+  const { qid, fn } = target;
+  const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
+  const entry = paramNames.length
+    ? entryStateFromCall(paramNames, argExprs || [], state)
+    : new Set();
+  let sum = callContext._summaryCache.get(qid, entry);
+  if (!sum && fn && fn.cfg) {
+    sum = callContext._summaryCache.compute(qid, entry, () => {
+      const inner = {
+        _findings: [], _taintSources: [], _returnTainted: false,
+        _stack: new Set(), deadlineMs: callContext.deadlineMs,
+        _summaryCache: callContext._summaryCache,
+        _callGraph: callContext._callGraph,
+        _mutatedParamsOut: new Set(),
+        _cha: callContext._cha,
+      };
+      try { analyzeFunction(fn, entry, inner); } catch {}
+      return {
+        returnTainted: !!inner._returnTainted,
+        mutatedParams: inner._mutatedParamsOut || new Set(),
+        taintedGlobals: new Set(),
+        findings: inner._findings,
+      };
+    });
+  }
+  _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
+  return !!(sum && sum.returnTainted);
+}
+
+function exprTaint(expr, state, callContext) {
   if (expr && (expr.kind === 'member' || expr.kind === 'call') && exprIsSource(expr)) return true;
   if (!expr) return false;
   // Constant propagation: variables assigned from literals are never tainted
@@ -134,16 +308,18 @@ function exprTaint(expr, state) {
   switch (expr.kind) {
     case 'literal':           return false;
     case 'binary':
-    case 'logical':           return exprTaint(expr.left, state) || exprTaint(expr.right, state);
-    case 'tpl':               return (expr.parts || []).some(p => exprTaint(p, state));
-    case 'union':             return (expr.branches || []).some(b => exprTaint(b, state));
-    case 'object':            return (expr.props || []).some(p => exprTaint(p.value, state));
-    case 'array':             return (expr.elements || []).some(e => exprTaint(e, state));
+    case 'logical':           return exprTaint(expr.left, state, callContext) || exprTaint(expr.right, state, callContext);
+    case 'tpl':               return (expr.parts || []).some(p => exprTaint(p, state, callContext));
+    case 'union':             return (expr.branches || []).some(b => exprTaint(b, state, callContext));
+    case 'object':            return (expr.props || []).some(p => exprTaint(p.value, state, callContext));
+    case 'array':             return (expr.elements || []).some(e => exprTaint(e, state, callContext));
     case 'call': {
-      // Calls are handled at the CFG level (the call has already been processed).
-      // For an inline call expression, conservatively return whether any arg is tainted.
-      // This loses the sanitizer effect but is safe.
-      return (expr.args || []).some(a => exprTaint(a, state));
+      // The call's own arguments (unchanged from before) OR — PRD R10 — the
+      // resolved callee's own return-taint summary. Args-tainted is checked
+      // FIRST and short-circuits: it's the cheap, no-resolve-attempt case and
+      // was already correct.
+      if ((expr.args || []).some(a => exprTaint(a, state, callContext))) return true;
+      return _nestedCallReturnTainted(expr.callee, expr.args, state, callContext);
     }
     case 'unknown':           return false;
     default:                  return false;
@@ -264,10 +440,12 @@ function literalSkeletonMatchesFamily(expr, cwe) {
 
 // calleeExpr / argExprs: the IR nodes for the call's callee and arguments.
 // state: the taint-state Set to evaluate argument taint against.
+// callContext: context from the engine (contains _cha for CHA lookups).
 // Returns { cat, argTaints }.
-function _matchCallCatalog(calleeExpr, argExprs, state) {
-  const cat = matchSinkOrSanitizer(calleeExpr, _currentFile);
-  const argTaints = (argExprs || []).map(a => exprTaint(a, state));
+function _matchCallCatalog(calleeExpr, argExprs, state, callContext) {
+  const receiverType = _receiverTypeFor(calleeExpr, callContext);
+  const cat = matchSinkOrSanitizer(calleeExpr, _currentFile, receiverType);
+  const argTaints = (argExprs || []).map(a => exprTaint(a, state, callContext));
   return { cat, argTaints };
 }
 
@@ -426,7 +604,7 @@ function step(node, stateIn, callContext) {
       // return path below, including the early interprocedural returns.
       if (node.source && node.source.kind === 'call') {
         const { cat: _sinkCat, argTaints: _sinkArgTaints } =
-          _matchCallCatalog(node.source.callee, node.source.args, state);
+          _matchCallCatalog(node.source.callee, node.source.args, state, callContext);
         findings.push(..._sinkFindingsForCall(
           node.source.callee, node.source.args, _sinkCat, _sinkArgTaints,
           state, callContext, node.line).findings);
@@ -457,18 +635,10 @@ function step(node, stateIn, callContext) {
       const calleeName = node.source && node.source.kind === 'call'
         ? _flattenCalleeName(node.source.callee) : null;
       if (target && calleeName && callContext._summaryCache && callContext._callGraph) {
-        const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-        const _resolvableName = node.source && node.source.kind === 'call'
-          ? _resolvableCalleeName(node.source.callee) : null;
-        // resolveKnownCallee: never guess via resolve()'s bare-tail
-        // fallback. _resolvableCalleeName already refuses JS member
-        // expressions, but a pre-flattened STRING callee (Go/PHP/Ruby/
-        // C++/Python parsers) can still be dotted, and only the resolver
-        // itself can tell — see callgraph.js.
-        const resolved = (_resolvableName && callContext._callGraph.resolveKnownCallee)
-          ? callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile) : null;
-        const fn  = functionRecord(callContext._callGraph, resolved);
-        const qid = resolved && (resolved.qid || resolved);
+        const _resolvedTarget = node.source && node.source.kind === 'call'
+          ? _resolveCalleeForSummary(node.source.callee, callContext) : null;
+        const fn  = _resolvedTarget && _resolvedTarget.fn;
+        const qid = _resolvedTarget && _resolvedTarget.qid;
         if (typeof qid === 'string') {
           // v0.66 — context-sensitive lookup. Build the entry-state from
           // the call args + current taint; look up (and lazily compute) the
@@ -493,6 +663,7 @@ function step(node, stateIn, callContext) {
                 _summaryCache: callContext._summaryCache,
                 _callGraph: callContext._callGraph,
                 _mutatedParamsOut: new Set(),
+                _cha: callContext._cha,
               };
               try { analyzeFunction(fn, entry, inner); } catch {}
               return {
@@ -533,7 +704,7 @@ function step(node, stateIn, callContext) {
           // Fallback: check builtin summaries for unresolved external calls
           const builtin = lookupBuiltinSummary(calleeName);
           if (builtin) {
-            const _argTainted = (node.source.args || []).some(a => exprTaint(a, newState));
+            const _argTainted = (node.source.args || []).some(a => exprTaint(a, newState, callContext));
             if (builtin.returnTainted && _argTainted) {
               newState = _addPathAliasAware(newState, target, callContext);
             } else if (!builtin.returnTainted) {
@@ -561,7 +732,7 @@ function step(node, stateIn, callContext) {
             if (builtin.mutatedParams && builtin.mutatedParams.size) {
               for (const idx of builtin.mutatedParams) {
                 const argExpr = (node.source.args || [])[parseInt(idx)];
-                if (argExpr && argExpr.kind === 'ident' && (node.source.args || []).some(a => exprTaint(a, newState))) {
+                if (argExpr && argExpr.kind === 'ident' && (node.source.args || []).some(a => exprTaint(a, newState, callContext))) {
                   newState = _addPathAliasAware(newState, argExpr.name, callContext);
                 }
               }
@@ -574,7 +745,7 @@ function step(node, stateIn, callContext) {
         const sourcePath = accessPathOf(node.source);
         if (sourcePath) newState = addPath(newState, sourcePath);
         callContext._taintSources.push({ varName: target, sourceId: src.id, sourceLabel: src.label, provenance: src.provenance || null, line: node.line });
-      } else if (exprTaint(node.source, newState)) {
+      } else if (exprTaint(node.source, newState, callContext)) {
         // P1.1: when the source IS a pure access path (e.g., RHS is `obj.foo.bar`),
         // taint the TARGET as well as transitively propagate the source path so
         // later uses of the same source remain tainted. The target path
@@ -598,20 +769,14 @@ function step(node, stateIn, callContext) {
       // Computed here (before the mutation passes below) so that argTaints
       // reflects the pre-mutation state, exactly as before this logic was
       // extracted into _matchCallCatalog/_sinkFindingsForCall.
-      const { cat, argTaints } = _matchCallCatalog(node.callee, node.args, state);
+      const { cat, argTaints } = _matchCallCatalog(node.callee, node.args, state, callContext);
       // v0.66 — apply mutated-param taint at plain (non-assign) call sites.
       // Object.assign(target, tainted) → target becomes tainted in caller.
       const _plainCallCalleeName = _flattenCalleeName(node.callee);
       if (callContext._summaryCache && callContext._callGraph && _plainCallCalleeName) {
-        const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-        const _resolvableName = _resolvableCalleeName(node.callee);
-        // resolveKnownCallee: see the comment at the sibling call site above
-        // — a pre-flattened dotted STRING callee must not be guessed via
-        // resolve()'s bare-tail fallback.
-        const resolved = (_resolvableName && callContext._callGraph.resolveKnownCallee)
-          ? callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile) : null;
-        const fn  = functionRecord(callContext._callGraph, resolved);
-        const qid = resolved && (resolved.qid || resolved);
+        const _resolvedTarget = _resolveCalleeForSummary(node.callee, callContext);
+        const fn  = _resolvedTarget && _resolvedTarget.fn;
+        const qid = _resolvedTarget && _resolvedTarget.qid;
         if (typeof qid === 'string' && fn && Array.isArray(fn.params)) {
           const paramNames = fn.params;
           const entry = paramNames.length
@@ -632,6 +797,7 @@ function step(node, stateIn, callContext) {
                 _summaryCache: callContext._summaryCache,
                 _callGraph: callContext._callGraph,
                 _mutatedParamsOut: new Set(),
+                _cha: callContext._cha,
               };
               try { analyzeFunction(fn, entry, inner); } catch {}
               return {
@@ -749,7 +915,7 @@ function step(node, stateIn, callContext) {
     }
 
     case 'return': {
-      if (exprTaint(node.value, state)) {
+      if (exprTaint(node.value, state, callContext)) {
         callContext._returnTainted = true;
       }
       return { state, findings };
@@ -831,7 +997,7 @@ function analyzeFunction(fn, entryState, callContext) {
     try {
       const union = new Set();
       for (const s of inStates.values()) for (const p of s) union.add(p);
-      const ictx = buildImplicitContext(fn.cfg, (expr) => exprTaint(expr, union));
+      const ictx = buildImplicitContext(fn.cfg, (expr) => exprTaint(expr, union, callContext));
       // Mark vars assigned inside a tainted branch as implicit-tainted.
       let implicitState = new Set();
       for (const [nid, ctx] of ictx) {
@@ -868,7 +1034,7 @@ function analyzeFunction(fn, entryState, callContext) {
         const sink = cat && cat.find((e) => e.kind === 'sink');
         if (!sink) continue;
         const inS = inStates.get(nid) || new Set();
-        if ((node.args || []).some((a) => exprTaint(a, inS))) continue;
+        if ((node.args || []).some((a) => exprTaint(a, inS, callContext))) continue;
         const allConst = (node.args || []).length > 0 && (node.args || []).every((a) => a && a.kind === 'literal');
         if (allConst) reportImplicit(nid, node, sink, ctx.conditionLabel);
       }
@@ -882,7 +1048,7 @@ function analyzeFunction(fn, entryState, callContext) {
           const sink = cat && cat.find((e) => e.kind === 'sink');
           if (!sink) continue;
           const inS = inStates.get(nid) || new Set();
-          if ((node.args || []).some((a) => exprTaint(a, inS))) continue;
+          if ((node.args || []).some((a) => exprTaint(a, inS, callContext))) continue;
           const argRefsImplicit = (node.args || []).some((a) => {
             const ap = accessPathOf(a); return ap && isCoveredBy(implicitState, `implicit:${ap}`);
           });
@@ -976,6 +1142,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _stack: new Set(), deadlineMs,
         _summaryCache: summaryCache, _callGraph: callGraph,
         _mutatedParamsOut: new Set(),
+        _currentFnQid: fn.qid,
+        _cha: opts._cha,
+        _pointsTo: opts._pointsTo,
       };
       try { analyzeFunction(fn, entry, ctx); } catch {}
       // Report real findings discovered by this probe rather than letting
@@ -1042,6 +1211,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _stack: new Set(), deadlineMs,
         _summaryCache: summaryCache, _callGraph: callGraph,
         _mutatedParamsOut: new Set(),
+        _currentFnQid: fn.qid,
+        _cha: opts._cha,
+        _pointsTo: opts._pointsTo,
       };
       try { analyzeFunction(fn, fields, ctx); } catch {}
       // `findings` carries the REAL findings from this probe (was hardcoded
@@ -1074,6 +1246,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       _stack: new Set(), deadlineMs,
       _summaryCache: summaryCache, _callGraph: callGraph,
       _mutatedParamsOut: new Set(),
+      _currentFnQid: fn.qid,
+      _cha: opts._cha,
+      _pointsTo: opts._pointsTo,
     };
     try { analyzeFunction(fn, taintedEntry, ctx); } catch {}
     // `findings` carries the real findings from this probe (was hardcoded
@@ -1112,12 +1287,17 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       deadlineMs,   // honored by the worklist inside analyzeFunction
       _summaryCache: summaryCache,
       _callGraph: callGraph,
+      _currentFnQid: fn.qid,
       // PRD R12: index.js builds this graph (AGENTIC_SECURITY_POINTS_TO=1)
       // and passes it in opts._pointsTo, but nothing previously copied it
       // onto callContext — _addPathAliasAware reads callContext._pointsTo,
       // which was therefore always undefined, and alias-aware tainting was
       // a no-op even with the flag set.
       _pointsTo: opts._pointsTo,
+      // PRD R6/R11: same pattern as _pointsTo above — the CHA opts.js builds
+      // must reach callContext or every receiver-type/member-call consumer
+      // is permanently a no-op.
+      _cha: opts._cha,
     };
     try {
       analyzeFunction(fn, new Set(), callContext);
@@ -1153,6 +1333,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
             _stack: new Set(), deadlineMs,
             _summaryCache: summaryCache, _callGraph: callGraph,
             _mutatedParamsOut: new Set(),
+            _cha: callContext._cha,
           };
           try { analyzeFunction(cbFn, cbEntry, inner); } catch {}
           return {

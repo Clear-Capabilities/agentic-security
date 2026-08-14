@@ -9,6 +9,238 @@
 > make the history less accurate, not more.
 
 
+## Unreleased — Theme B+D of the detection-gap remediation PRD (R6, R10, R11)
+
+Closes three of the five open items in `docs/DETECTION_GAP_REMEDIATION_PRD.md`'s
+Theme B ("semantic grounding of matching") and Theme D ("interprocedural
+completeness"). R7 and R12 — filed under the same two themes — turned out to
+already be landed (commit `553f9a5`, swept in opportunistically alongside
+Theme A's nine fixes).
+
+- **Class Hierarchy Analysis is now wired into the deep pipeline** —
+  prerequisite infrastructure for R6 and R11. `ir/class-hierarchy.js` and the
+  receiver-type heuristic (`dataflow/receiver-context.js`) were both already
+  built and unit-tested but never consulted at scan time; `dataflow/index.js`
+  now builds CHA once per scan and threads it through every `callContext`.
+  Landing this exposed a real, independent pre-existing bug in
+  `class-hierarchy.js` itself: its method-qid parser assumed a dot-joined
+  `"ClassName.method"` shape, but the parser's actual qid format for a class
+  method is `::`-joined (`file.js::ClassName::method@line`) — so `cha.classes`
+  was silently empty for every JS/TS class, and CHA-based resolution could
+  never have worked at all until this was fixed. The only prior test for
+  `buildClassHierarchy` had hand-mocked a qid in the wrong shape, which is why
+  this went unnoticed.
+- **R6 — catalog sink matching is now gated by CHA-inferred receiver type.**
+  A bare-name sink like `.query()` or `.get()` previously matched on ANY
+  receiver project-wide (`cache.query(x)` scored identically to
+  `db.query(x)`). An opt-in `match.receiverTypeIn` catalog field is now
+  declared on the 5 highest-FP-risk bare-name entries (`js-sql-query`,
+  `js-sql-execute`, `py-requests-get` x2, `rb-erb-new`). Unknown receiver type
+  never suppresses a match — only a confidently resolved, non-matching type
+  does.
+
+  **Coverage is not uniform across those 5, and the honest summary is that
+  only the two JS entries do real work.** The gate can only fire when CHA
+  actually resolves a receiver type, and CHA's `typeOfVar` is populated from
+  exactly one shape: a local `let/const x = new Foo()` whose IR carries the
+  `isNew` marker — emitted today by the JS/TS, Java and C# parsers only.
+  So `rb-erb-new` is effectively inert: `ERB.new(x)`'s receiver is a bare
+  identifier that is never `new`-assigned, so the type is always unknown and
+  the entry always stays permissive. The two `py-requests-get` entries are
+  inert for the same reason (Python has no `new`, so its parser emits no
+  marker). Both are harmless — an inert gate is a permissive gate, and the
+  pattern layer's match survives untouched — but "applied to 5 entries"
+  should not be read as "gating 5 entries."
+- **R10 — a call nested inside another expression now consults the callee's
+  own taint summary.** `sink(getUserInput())` previously only checked
+  `getUserInput()`'s own arguments for taint (the call's return-taint was
+  invisible outside assignment-RHS and bare-statement position, the only two
+  places the summary cache was consulted). `exprTaint`'s `'call'` case now
+  also resolves and consults the callee's summary, via the same shared
+  resolver R11 uses.
+- **R11 — a JS/TS member call (`svc.save(x)`) now resolves interprocedurally
+  when CHA traces the receiver to one unambiguous, assignment-tracked local
+  variable.** Previously refused unconditionally (a bare dotted-name guess
+  risks inventing an edge between two unrelated same-named methods). This
+  landed narrower than originally scoped: it deliberately still refuses
+  `this.field.method()` resolution. An early implementation reused R6's full
+  receiver-type heuristic, including its two name-guess fallbacks
+  (`this.field` PascalCase-to-class guessing, bare-identifier soft-labeling) —
+  safe for R6's weaker consequence (mis-gating an *existing* catalog match),
+  but review found that reusing the same guesses for R11's stronger
+  consequence (fabricating a *new* interprocedural call-graph edge) let a
+  same-named unrelated variable resolve to the wrong class purely by name
+  coincidence. R11 now calls `classOfVar` directly, trusting only genuinely
+  assignment-tracked local types, and an ambiguous or unresolved receiver
+  (including every `this.field` shape) still safely refuses to resolve rather
+  than guessing — matching this PRD's own stated caution that R11 should stay
+  unimplemented rather than ship with degraded precision.
+
+Two narrower gaps surfaced during R11 implementation and were deliberately
+left unfixed as out of scope (recorded as candidate future work in
+`docs/DETECTION_GAP_REMEDIATION_PRD.md`'s new "Status updates" section): CHA's
+variable-type tracking is scoped to the exact enclosing function (a
+module-scope instance referenced from inside a closure/route-handler can't be
+typed there), and taint-argument recognition only handles bare-identifier or
+one-level member-access call arguments (a two-level access like
+`req.query.cmd` passed directly is invisible to it).
+
+- **A wiring-and-verification pass on this work caught R6 suppressing a real
+  finding, and the fix landed the same way it was found: with a gate.**
+  `bench:layer-recall:check` — which exists precisely to catch a layer going
+  quiet on a language it used to cover — flagged `js/ts` taint recall
+  dropping 7 → 6. Root cause: `_receiverTypeFor` fell back to returning the
+  receiver's own bare identifier name (e.g. `c`) whenever `classOfVar`
+  couldn't verify a type, and the caller then treated that name as a
+  confidently-resolved non-match rather than as "unknown" — a direct
+  violation of R6's own "unknown != clean" rule. Concretely:
+  `const c = mysql.createConnection({}); c.query(tainted)` (a `mysql`
+  connection assigned via a factory call rather than `new X()`, the exact
+  shape `CVE-2021-22214-node-sqli-shape` exercises) was silently dropped by
+  the taint engine, because `'c'` doesn't match the SQL receiver allow-list —
+  even though it's a genuine, tainted SQL sink. `bench:cve-replay:check`
+  stayed green throughout, because a different, non-taint layer happened to
+  still catch this same corpus entry — the corpus gate answers "was it
+  detected at all," not "by which layer," which is exactly the blind spot
+  `bench:layer-recall:check` exists to close. Fixed by removing the
+  bare-identifier fallback: a non-`this` receiver is now trusted only when
+  `classOfVar` genuinely resolves it, mirroring the fix already applied to
+  R11 above. This is exactly the kind of near-miss the full gate sequence
+  (test, corpus, mutation, layer-recall) exists to catch before it ships, and
+  it did.
+- **That fix was too narrow, and the whole-branch review caught it: the same
+  bug class had three more instances in the same function.** The round-4 fix
+  above removed the bare-identifier fallback but kept the `this.field`
+  PascalCase guess, on the reasoning that it wasn't implicated in *that*
+  regression. It was implicated in the identical one. `receiverTypeAtCall`'s
+  `this`-branch structurally cannot return `null` — it PascalCases the field
+  name and returns it — so every `this.<field>.method()` call was treated as a
+  confidently-resolved type, and only field names that happened to collide
+  with the allow-list vocabulary survived. `this.dbConn.query(req.query.q)`
+  and `this.readReplica.query(req.query.q)` are both real SQL injections, both
+  reported by the pre-branch base commit, and both were silently absent from
+  this branch — not demoted, gone, with no other layer catching them. Two more
+  instances alongside it: for a multi-segment chain like `svc.db.query(x)` the
+  code resolved `parts[0]` — the chain ROOT — answering "what type is `svc`?"
+  when the receiver is `svc.db`, a property path CHA never types at all; and
+  `buildClassHierarchy`'s `typeOfVar` walker accepted any PascalCase callee as
+  a constructor, so `const q = BuildCache()` was confidently mistyped as class
+  `BuildCache`. All three were name-or-shape guesses being trusted as
+  resolutions.
+
+  Rather than a fourth one-off patch, `_receiverTypeFor` now states the one
+  thing CHA can actually verify and refuses everything else: a receiver chain
+  of exactly two dot-separated parts (`x.method`), resolved through
+  `classOfVar`. `this`-rooted and multi-segment chains return `null` —
+  unknown, permissive. `parser-js.js` now emits the `isNew` marker on
+  `NewExpression` (matching what the Java and C# parsers already emit) and
+  `buildClassHierarchy` requires it, so a PascalCase *factory* call is no
+  longer mistaken for a constructor. Separately, the `receiverTypeIn`
+  vocabularies were exact-anchored (`^(?:db|pool|conn…)$`) from back when the
+  value reaching them could be a bare variable name; now that only real class
+  names arrive, `DatabaseConnection`, `PrismaClient` and `MySQLConnection` all
+  failed the allow-list and were suppressed, while only a class literally
+  named `Db` passed — the existing test passed solely because its fixture was
+  named `class Db`. Those four patterns are now substring matches
+  (`rb-erb-new`'s `^ERB$` stays anchored: one exact class, not a vocabulary),
+  and `Cache` still correctly suppresses.
+
+  The claim two bullets up — "unknown receiver type never suppresses a match"
+  — was false on the `this.field` path for the whole of this branch's life
+  until now. It is true again, and it is now gated rather than asserted:
+  `bench/mutation/` gained a detection dimension and four R6 cases, two of
+  them metamorphic renames (`class Db` → `class DatabaseConnection`,
+  `this.db` → `this.dbConn`) that a vocabulary-keyed gate cannot survive, plus
+  an adversarial non-DB receiver so that simply deleting the gate cannot pass
+  either. Both metamorphic cases fail on the pre-fix engine. Three rounds of
+  this same false-negative class shipped behind human review; the mutation
+  gate is what makes a fourth fail loudly instead.
+
+Verification: full test gate green (`npm test`, 3146 tests), corpus
+(214/214, no drift), mutation (9/9 verdict-flip, and non-zero exit confirmed
+against the pre-fix engine) and layer-recall (214/214 detected, per-language
+taint counts equal to baseline) all green.
+
+## 0.136.10 — detection-gap remediation Theme A: dedup, family, and calibration for deep mode
+
+An architectural audit of the SAST/taint pipeline (`docs/DETECTION_GAP_REMEDIATION_PRD.md`)
+found nine structural gaps behind missed real-world vulnerability classes. This
+release lands Theme A, the fixes on the production detection path:
+
+- **Dead-code demotion silently downgraded nearly every finding.** A field-name
+  mismatch (`.to`/`.size` vs the real `.callee`/Array shape) meant `calledQids`
+  was always effectively empty, so any function not named `handler`/`route`/
+  `controller`/`middleware`/`endpoint` — including most real sinks — got
+  demoted one severity notch on every deep-mode scan that ever ran.
+- **Half the sanitizer catalog was unreachable.** 191 of 381 sanitizer entries
+  use dotted callees (`Encode.forHtml`, `filepath.Clean`, `validator.isEmail`)
+  indexed under the full dotted key, but every lookup path reduced to the
+  callee's last segment — so these entries could never be retrieved. Catalog
+  lookup now tries the full dotted key before falling back to the last segment,
+  the behavior its own header comment already promised.
+- **A sanitizer-blind kill switch.** `builtin-summaries` deleted taint outright
+  at ~15 name-matched builtins (`parseInt`, `encodeURIComponent`,
+  `DOMPurify.sanitize`...) regardless of threat family, contradicting the
+  engine's own documented doctrine that sanitizers demote, never kill —
+  `x = encodeURIComponent(t); db.query(x)` silently lost its SQLi finding.
+  Now demotes through the same family-scoped sanitizer gate every other path
+  uses.
+- **Three bench-shape leaks were opt-out instead of opt-in**, violating this
+  repo's own documented convention (`AGENTIC_SECURITY_BENCH_SHAPE=1` to enable,
+  never `AGENTIC_SECURITY_BLIND_BENCH` to disable): a Juliet path-prefix
+  category filter with no env check at all, and two Java answer-key mechanisms
+  gated the wrong direction.
+- **Cross-file import resolution was dead code with zero callers.** `fileContents`
+  was never threaded into `buildCallGraph`, so its re-export/import-binding
+  resolution never ran — two same-named functions in unrelated files collided
+  by bare name on every scan.
+- **The points-to graph was built and then never wired in.** `AGENTIC_SECURITY_POINTS_TO=1`
+  computed a real alias graph but `runTaintEngine` never copied it onto
+  `callContext`, so the opt-in flag caught nothing. A second bug in
+  `aliasesForVar` (stripping only the first `::` instead of the qid's full
+  prefix) was fixed alongside it, since the qid itself always contains
+  multiple `::` segments.
+- **Guard recognition was flow-insensitive.** `dropGuardedFindings` matched a
+  guard-shaped regex anywhere in a −25/+5 line window with zero correlation to
+  the sink's actual tainted identifier, killing real SSRF/path findings
+  whenever unrelated guard-shaped text sat nearby. Rewritten to require the
+  guard match to appear near one of the sink's own argument identifiers.
+  Reachability annotation was also fixed to record "unknown" rather than
+  "unreachable" for languages with no call-graph data — only a strict `false`
+  should demote a finding, and absence of evidence isn't evidence of absence.
+- **Deep mode was unreachable from the MCP and LSP integration surfaces.**
+  `scan_diff` and `scanFile` never enabled deep mode, so the interprocedural
+  taint engine — the thing most likely to catch a real cross-function
+  vulnerability — never ran from either integration.
+- **Deep-mode (IR-TAINT) findings bypassed the entire finding pipeline.** They
+  were appended *after* dedup, clustering, stable-ID assignment, family
+  backfill, confidence, and calibration had already run once, so a sink caught
+  by both the regex layer and deep mode produced two findings — one of them
+  permanently unscored (no family, no calibrated confidence, no reachability
+  demotion, no mitigation annotation). Deep-mode findings now enter the same
+  pre-dedup pool as every other detector's output and ride the identical
+  pipeline. Fixing this exposed two further latent bugs it's now safe to state
+  plainly: dedup's winner-selection didn't prefer a real interprocedural
+  taint-walk finding over a same-severity flat pattern match at the same sink
+  (an IR-TAINT finding could lose a tie and take its sanitizer/chain evidence
+  down with it), and root-cause clustering keyed its "same sink" bucket on a
+  generic catalog rule id rather than a per-line signal, so two unrelated
+  `eval()` calls in one file could collapse into a single reported finding the
+  moment deep-mode findings started reaching that annotator. Both are fixed.
+
+Verification for all nine items: full test gate green, CVE-replay corpus
+214/214 with zero drift, metamorphic/adversarial mutation gate 6/6, self-scan
+precision gate re-baselined against three fully root-caused (not blindly
+accepted) drifts, and the pre-push gate's per-language taint-recall check
+confirmed no regression. `@vercel/ncc` (dev-only build dependency) was also
+bumped 0.44.1 → 0.45.0 to clear the release gate's dependency-currency check.
+
+R3 (route deep-mode findings through the full annotator pipeline) was the last
+item in Theme A. Themes B–E of the same PRD — semantic type/import-aware
+matching, control-flow-blind-parser fixes for Java/C#/Kotlin/PHP, deeper
+interprocedural completeness, and DOM/loop-element flow modeling — remain open
+and are tracked in `docs/DETECTION_GAP_REMEDIATION_PRD.md`.
+
 ## 0.136.9 — the real bug: the single-file bundle was never actually self-contained
 
 0.136.8's diagnostic logging answered the question immediately:

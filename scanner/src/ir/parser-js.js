@@ -63,11 +63,23 @@ function exprOf(n) {
       prop: n.computed ? (n.property?.value != null ? String(n.property.value) : '*') : (n.property?.name || '*'),
     };
     case 'CallExpression':
-    case 'OptionalCallExpression':
+    case 'OptionalCallExpression': return {
+      kind: 'call',
+      callee: exprOf(n.callee),
+      args: (n.arguments || []).map(exprOf),
+    };
+    // `new Foo()` is emitted as a call PLUS an `isNew: true` marker, matching
+    // what parser-java.js and parser-cs.js already emit. Without the marker a
+    // `new Foo()` is byte-identical in the IR to a plain `Foo()` call, and
+    // class-hierarchy.js's typeOfVar walker therefore typed `const x =
+    // SomeFactoryFn()` as class `SomeFactoryFn` — a fabricated type that then
+    // reaches the dataflow receiver-type gate and can suppress a real finding.
+    // Nothing else in the engine reads `isNew`, so this is purely additive.
     case 'NewExpression':     return {
       kind: 'call',
       callee: exprOf(n.callee),
       args: (n.arguments || []).map(exprOf),
+      isNew: true,
     };
     case 'BinaryExpression':  return { kind: 'binary', op: n.operator, left: exprOf(n.left), right: exprOf(n.right) };
     case 'LogicalExpression': return { kind: 'logical', op: n.operator, left: exprOf(n.left), right: exprOf(n.right) };

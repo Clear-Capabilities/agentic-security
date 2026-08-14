@@ -12,6 +12,7 @@ import {
   serializeSummaries, commitIncrementalState,
 } from './incremental.js';
 import { buildPointsTo } from './points-to.js';
+import { buildClassHierarchy } from '../ir/class-hierarchy.js';
 import { annotateSoftTaint } from './soft-taint.js';
 import { runIfdsTaintEngine } from './ifds.js';
 import { proveExploits } from './exploit-prover.js';
@@ -79,6 +80,19 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
       priorState = null;
     }
   }
+  // PRD R6/R11 (docs/DETECTION_GAP_REMEDIATION_PRD.md): Class Hierarchy
+  // Analysis. Built once per scan (mirrors the points-to graph immediately
+  // below) and threaded through opts so the taint engine can (a) narrow
+  // catalog sink matches to the receiver's inferred type (R6) and (b) safely
+  // resolve a member call to a concrete callee when the receiver resolves to
+  // exactly one known class (R11). Unlike points-to, this is NOT gated behind
+  // an env flag — receiver-context.js and class-hierarchy.js were both
+  // already built, unit-tested, and left completely unreachable from the
+  // production pipeline (see PRD R6's evidence); building it always is cheap
+  // (a single walk of the already-parsed IR, no fixed-point iteration) and
+  // every consumer degrades to today's behavior when it finds no useful type.
+  let classHierarchy = null;
+  try { classHierarchy = buildClassHierarchy(perFileIR); } catch { classHierarchy = null; }
   // v0.70 #2 — Steensgaard points-to / alias analysis. Built once before
   // the worklist, passed via opts so the engine can resolve aliased
   // mutations (`let a = obj; a.x = tainted; sink(obj.x)`).
@@ -95,6 +109,7 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
     ...opts,
     summaryCache: preSeededCache || undefined,
     _pointsTo: pointsToGraph || undefined,
+    _cha: classHierarchy || undefined,
   });
   if (process.env.AGENTIC_SECURITY_IFDS === '1') {
     try {

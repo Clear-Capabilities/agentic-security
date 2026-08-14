@@ -20,9 +20,18 @@
 // What we DO catch:
 //   - `class Foo {}` declarations + their method signatures.
 //   - `class Bar extends Foo {}` extends relationships.
-//   - `let x = new Foo()` typed-LHS inference.
-//   - `const x: Foo = ...` TS-annotated-LHS inference.
-//   - `function buildFoo(): Foo { ... }` typed-return inference.
+//   - `let x = new Foo()` typed-LHS inference — and ONLY this shape. The
+//     assign's RHS must be a call with `isNew: true` and a bare PascalCase
+//     (or already-known-class) identifier callee.
+//
+// What this header used to claim and the code has never done (corrected in
+// whole-branch review; do not re-add the claim without the code):
+//   - `const x: Foo = ...` TS-annotated-LHS inference — NOT implemented. A
+//     TS type annotation never reaches typeOfVar.
+//   - `function buildFoo(): Foo { ... }` typed-return inference — NOT
+//     implemented. `const x = buildFoo()` is untyped (correctly: it is a
+//     plain call, not a `new`), so classOfVar returns null for `x`.
+// Both are "unknown", which downstream consumers must treat as permissive.
 
 const _AST_CACHE = new WeakMap();
 
@@ -62,16 +71,45 @@ export function buildClassHierarchy(perFileIR) {
       }
     }
     if (!Array.isArray(ir.functions)) continue;
-    // Recover class names from method qids of the shape
-    //   <file>::<scope>::<className.method>
-    // Many of our existing parsers emit class methods as `Foo.bar` in qid.
+    // Recover class names from method qids. Two shapes are recognized:
+    //   1. "Foo.bar@line#hash" — class and method dot-joined in the qid's
+    //      last segment (parser-cpp.js's convention).
+    //   2. "<file>::ClassName::method@line#hash" — class and method as
+    //      separate `::`-joined qid segments (parser-js.js's and
+    //      parser-java.js's ACTUAL convention — this was previously
+    //      unrecognized, which silently left `classes` permanently empty
+    //      for JS/Java, making resolveMethod() a no-op for those languages;
+    //      the only prior test for this coded the dot-joined shape by hand
+    //      rather than checking real parser output, which is how the gap
+    //      went uncaught. See test/receiver-type-and-nested-calls.test.js's
+    //      "registers a real JS class method from actual parser output"
+    //      regression test.)
     for (const fn of ir.functions) {
       if (!fn.qid) continue;
-      const tail = fn.qid.split('::').pop() || '';
+      const segs = fn.qid.split('::');
+      const tail = segs[segs.length - 1] || '';
       const dotIdx = tail.indexOf('.');
-      if (dotIdx <= 0) continue;
-      const className = tail.slice(0, dotIdx);
-      const methodName = tail.slice(dotIdx + 1).replace(/@\d+#[0-9a-f]+$/, '');
+      let className = null;
+      let methodName = null;
+      if (dotIdx > 0) {
+        className = tail.slice(0, dotIdx);
+        methodName = tail.slice(dotIdx + 1).replace(/@\d+#[0-9a-f]+$/, '');
+      } else if (segs.length >= 3 && /^[A-Z]/.test(segs[segs.length - 2])) {
+        // Gated on the second-to-last segment being PascalCase so this
+        // doesn't misfire on an ordinary nested-function scope segment.
+        className = segs[segs.length - 2];
+        // Two sequential strips, not one `(#[0-9a-f]+)?` optional group: the
+        // combined form is flagged by this project's own self-scan gate
+        // (engine.js's safe-regex-backed ReDoS heuristic says unsafe; the
+        // NFA-based analyzer in sast/redos-nfa.js says safe — no genuine
+        // superlinear ambiguity exists here, safe-regex's star-height
+        // heuristic is just coarser). Splitting into two definitively-safe
+        // regexes (each independently passes both checkers) is behavior-
+        // identical — verified against "tail@5#hash" and "tail@5" — and
+        // avoids relying on any one detector's judgment call.
+        methodName = tail.replace(/#[0-9a-f]+$/, '').replace(/@\d+$/, '');
+      }
+      if (!className || !methodName) continue;
       methodOwners.set(fn.qid, className);
       let cls = classes.get(className);
       if (!cls) {
@@ -91,11 +129,19 @@ export function buildClassHierarchy(perFileIR) {
         const src = n.source;
         if (!src || src.kind !== 'call') continue;
         // `new Foo()` is shaped as { kind: 'call', callee: { kind: 'ident', name: 'Foo' }, isNew: true }
+        // `isNew` is REQUIRED, not optional: without it a plain call to a
+        // PascalCase-named function (`let x = SomeFactoryFn()`) is
+        // indistinguishable from a real constructor call and silently
+        // mistypes `x` as class `SomeFactoryFn`. That mistype then flows
+        // into the dataflow engine's receiver-type gate, where a wrong
+        // "confidently resolved" type can suppress a real finding. Same
+        // `n.source.isNew` test collectInstantiatedClasses uses below.
+        if (!src.isNew) continue;
         const callee = src.callee;
         const className = callee?.kind === 'ident' ? callee.name : null;
         if (!className) continue;
         if (classes.has(className) || /^[A-Z]/.test(className)) {
-          // Convention: PascalCase callees treated as constructors.
+          // Convention: PascalCase `new` callees treated as constructors.
           const target = typeof n.target === 'string' ? n.target : null;
           if (target) typeOfVar.set(`${file}::${fn.qid}::${target}`, className);
         }
