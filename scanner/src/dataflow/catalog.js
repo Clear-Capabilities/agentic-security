@@ -63,10 +63,10 @@ export const CATALOG = [
 
   // ─── SINKS (JS/TS) ─────────────────────────────────────────────────────────
   // SQL.
-  { kind: 'sink', id: 'js-sql-query',  language: 'js', framework: 'sql', match: { type: 'call', callee: 'query', receiverTypeIn: ['^(?:db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma)$'] }, argIndex: 0,
+  { kind: 'sink', id: 'js-sql-query',  language: 'js', framework: 'sql', match: { type: 'call', callee: 'query', receiverTypeIn: ['db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma'] }, argIndex: 0,
     vuln: { name: 'SQL Injection (db.query)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterized queries: db.query("SELECT * FROM t WHERE id = ?", [id]). Never interpolate untrusted strings into SQL.' } },
-  { kind: 'sink', id: 'js-sql-execute', language: 'js', framework: 'sql', match: { type: 'call', callee: 'execute', receiverTypeIn: ['^(?:db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma)$'] }, argIndex: 0,
+  { kind: 'sink', id: 'js-sql-execute', language: 'js', framework: 'sql', match: { type: 'call', callee: 'execute', receiverTypeIn: ['db|pool|conn(?:ection)?|client|sql|database|pg|mysql|sequelize|knex|prisma'] }, argIndex: 0,
     vuln: { name: 'SQL Injection (db.execute)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterized queries: db.execute("SELECT * FROM t WHERE id = ?", [id]).' } },
   // OS command.
@@ -360,7 +360,7 @@ export const CATALOG = [
             remediation: 'Sanitize the __html field via DOMPurify before passing it to dangerouslySetInnerHTML — better, render text via children.' } },
 
   // ─── SINKS (HTTP outbound / SSRF) ─────────────────────────────────────────
-  { kind: 'sink', id: 'py-requests-get',   language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiverTypeIn: ['^(?:requests|session|client|http)$'] },   argIndex: 0,
+  { kind: 'sink', id: 'py-requests-get',   language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiverTypeIn: ['requests|session|client|http'] },   argIndex: 0,
     vuln: { name: 'SSRF (requests.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the URL host and reject RFC1918 + metadata endpoints before fetching. Use an allow-list.' } },
   { kind: 'sink', id: 'py-requests-post',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'post' },  argIndex: 0,
@@ -605,7 +605,7 @@ export const CATALOG = [
     vuln: { name: 'Unsafe Deserialization (yaml.load)', severity: 'high', cwe: 'CWE-502',
             remediation: 'Use yaml.safe_load instead of yaml.load on untrusted YAML.' } },
   // SSRF / HTTP-out.
-  { kind: 'sink', id: 'py-requests-get-v2',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiverTypeIn: ['^(?:requests|session|client|http)$'] },  argIndex: 0,
+  { kind: 'sink', id: 'py-requests-get-v2',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiverTypeIn: ['requests|session|client|http'] },  argIndex: 0,
     vuln: { name: 'SSRF (requests.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the host first, reject 169.254.169.254 / RFC1918 / localhost; or proxy through a server-side allow-list.' } },
   { kind: 'sink', id: 'py-requests-post-v2', language: 'py', framework: 'requests', match: { type: 'call', callee: 'post' }, argIndex: 0,
@@ -923,6 +923,19 @@ function _receiverAllowed(entry, calleeExpr) {
 // `receiverTypeIn` allow-list does. An entry with no `receiverTypeIn` is
 // completely unaffected by this gate (returns true unconditionally), exactly
 // like `_receiverAllowed` when neither `receiver` nor `receiverBase` is set.
+//
+// The vocabulary patterns are deliberately UNANCHORED (substring, case-
+// insensitive). They were originally written `^(?:db|pool|conn…)$` back when
+// the value reaching this gate could be a bare variable/field NAME. It no
+// longer can — after the whole-branch-review fix, `_receiverTypeFor` only
+// ever yields a real `classOfVar`-resolved CLASS name — and real class names
+// are compound: `DatabaseConnection`, `PrismaClient`, `MySQLConnection` all
+// failed the exact-anchored form and were silently suppressed, while only a
+// class literally named `Db` survived. Substring matching is the honest
+// shape for a vocabulary check over compound identifiers. `rb-erb-new`
+// stays anchored (`^ERB$`) because it names ONE exact class, not a
+// vocabulary. Over-matching here is the safe direction: it only ever
+// *permits* a match the pattern layer already made.
 function _receiverTypeAllowed(entry, receiverType) {
   const pats = entry.match && entry.match.receiverTypeIn;
   if (!pats || !pats.length) return true;

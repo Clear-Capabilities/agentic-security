@@ -20,9 +20,18 @@
 // What we DO catch:
 //   - `class Foo {}` declarations + their method signatures.
 //   - `class Bar extends Foo {}` extends relationships.
-//   - `let x = new Foo()` typed-LHS inference.
-//   - `const x: Foo = ...` TS-annotated-LHS inference.
-//   - `function buildFoo(): Foo { ... }` typed-return inference.
+//   - `let x = new Foo()` typed-LHS inference — and ONLY this shape. The
+//     assign's RHS must be a call with `isNew: true` and a bare PascalCase
+//     (or already-known-class) identifier callee.
+//
+// What this header used to claim and the code has never done (corrected in
+// whole-branch review; do not re-add the claim without the code):
+//   - `const x: Foo = ...` TS-annotated-LHS inference — NOT implemented. A
+//     TS type annotation never reaches typeOfVar.
+//   - `function buildFoo(): Foo { ... }` typed-return inference — NOT
+//     implemented. `const x = buildFoo()` is untyped (correctly: it is a
+//     plain call, not a `new`), so classOfVar returns null for `x`.
+// Both are "unknown", which downstream consumers must treat as permissive.
 
 const _AST_CACHE = new WeakMap();
 
@@ -111,11 +120,19 @@ export function buildClassHierarchy(perFileIR) {
         const src = n.source;
         if (!src || src.kind !== 'call') continue;
         // `new Foo()` is shaped as { kind: 'call', callee: { kind: 'ident', name: 'Foo' }, isNew: true }
+        // `isNew` is REQUIRED, not optional: without it a plain call to a
+        // PascalCase-named function (`let x = SomeFactoryFn()`) is
+        // indistinguishable from a real constructor call and silently
+        // mistypes `x` as class `SomeFactoryFn`. That mistype then flows
+        // into the dataflow engine's receiver-type gate, where a wrong
+        // "confidently resolved" type can suppress a real finding. Same
+        // `n.source.isNew` test collectInstantiatedClasses uses below.
+        if (!src.isNew) continue;
         const callee = src.callee;
         const className = callee?.kind === 'ident' ? callee.name : null;
         if (!className) continue;
         if (classes.has(className) || /^[A-Z]/.test(className)) {
-          // Convention: PascalCase callees treated as constructors.
+          // Convention: PascalCase `new` callees treated as constructors.
           const target = typeof n.target === 'string' ? n.target : null;
           if (target) typeOfVar.set(`${file}::${fn.qid}::${target}`, className);
         }

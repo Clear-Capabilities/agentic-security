@@ -50,7 +50,12 @@ import { higherOrderTaintFlow } from './higher-order.js';
 import { SummaryCache, entryStateFromCall } from './summaries.js';
 import { lookupBuiltinSummary } from './builtin-summaries.js';
 import { isImplicitFlowEnabled, buildImplicitContext, implicitAssignTarget, markImplicitTaint, createImplicitFinding } from './implicit-flow.js';
-import { receiverTypeAtCall } from './receiver-context.js';
+// NOTE: receiver-context.js's receiverTypeAtCall is deliberately NOT imported
+// here. It was the implementation of _receiverTypeFor's old `this.field`
+// branch, whose PascalCase-of-field-name guess is the false-negative bug this
+// file's _receiverTypeFor comment describes. Its other exports are still used
+// (summaries.js imports hashReceiverType for cache keying); only this call
+// site is gone.
 import { resolveMethod, classOfVar } from '../ir/class-hierarchy.js';
 
 // v0.70 #2 — addPath that also taints every alias of the variable.
@@ -107,15 +112,18 @@ function _flattenCalleeName(calleeExpr) {
 // PRD R6/R11 (docs/DETECTION_GAP_REMEDIATION_PRD.md): unlike _flattenCalleeName
 // (which only flattens ONE level — `x.method`/`this.method` — because that is
 // the 2-segment shape catalog matching and resolveKnownCallee both key on),
-// receiver-context.js's receiverTypeAtCall needs the FULL dotted chain,
-// including `this`, to apply its `this.field.method` heuristic
-// (`this.userRepo.save` -> parts = ['this','userRepo','save']). A partial
-// flatten (`_flattenCalleeName` would return just 'save' for `this.userRepo.
-// save`, since its object isn't a bare ident) silently starves that heuristic.
+// _receiverTypeFor needs the FULL dotted chain, including `this`, to see how
+// LONG the chain actually is: a 3+-segment chain (`this.userRepo.save` ->
+// ['this','userRepo','save'], `svc.db.query` -> ['svc','db','query']) names a
+// receiver that is a property path, and CHA cannot type property paths at all.
+// A partial flatten (`_flattenCalleeName` returns just 'save' for
+// `this.userRepo.save`, since its object isn't a bare ident) would hide that
+// distinction and make a 3-segment chain look like an untyped bare call.
 //
 // Note: parser-js.js encodes ThisExpression as {kind:'ident', name:'_this_'}
-// (a sentinel, not literal 'this'). We must convert it to the literal string
-// 'this' so receiverTypeAtCall's `parts[0] === 'this'` heuristic actually fires.
+// (a sentinel, not literal 'this'). We convert it to the literal string
+// 'this' so the flattened chain reads the way the source does and its segment
+// count is honest (`this.db.query` is 3 segments, not 2).
 function _fullyFlattenMemberChain(calleeExpr) {
   if (!calleeExpr) return null;
   if (typeof calleeExpr === 'string') return calleeExpr;
@@ -137,36 +145,35 @@ function _fullyFlattenMemberChain(calleeExpr) {
 // whenever CHA has nothing useful to say — callers must treat null as
 // "unknown", never as a signal to suppress or refuse (see this file's
 // "Unknown ≠ clean" global constraint).
-//
-// CRITICAL: does NOT fall back to bare receiver identifier names (which are
-// guesses, not resolutions). A receiver assigned via `const c = mysql.
-// createConnection({})` cannot be typed by CHA (member-call factory, not
-// `new X()`), so classOfVar returns null — we MUST treat that as "unknown"
-// and return null, not return 'c' and let the caller treat it as a confident
-// non-match, which suppresses real findings (regression: CVE-2021-22214-
-// node-sqli-shape was silently suppressed, violating "unknown ≠ clean").
-// receiverTypeAtCall did have a fallback; this function does not.
 function _receiverTypeFor(calleeExpr, callContext) {
   if (!callContext || !callContext._cha) return null;
   const flat = _fullyFlattenMemberChain(calleeExpr);
   if (!flat || !flat.includes('.')) return null;
   const parts = flat.split('.');
-  if (parts[0] === 'this') {
-    // this.field.method() — the PascalCase-of-field-name heuristic. Kept as
-    // is: not implicated in the bare-identifier regression (which was caught in
-    // the non-`this` path), and R6's already-shipped this.db.query() coverage
-    // depends on it.
-    return receiverTypeAtCall(
-      { kind: 'call', callee: flat },
-      { qid: callContext._currentFnQid },
-      _currentFile,
-      callContext._cha,
-    );
-  }
-  // Non-`this` receiver: only trust a GENUINELY CHA-tracked type — mirrors
-  // Task 4's R11 fix (_resolveMemberCalleeViaCHA). Do NOT fall back to the
-  // bare receiver identifier's own name: that is a guess, not a resolution,
-  // and treating it as confidently-resolved suppresses real findings.
+  // Only a bare `x.method()` receiver (exactly 2 dot-separated parts) is
+  // something CHA can genuinely verify: classOfVar only tracks bare local
+  // variable -> class bindings from `let/const x = new Foo()`, never
+  // property-path types. This one condition replaces two separate prior
+  // bugs found in whole-branch review: the this.field branch (`this.x.y()`
+  // is 3 parts, `this` as root) used to PascalCase-guess a type from the
+  // field name and could never return null, silently suppressing real
+  // findings on any field name outside a fixed vocabulary
+  // (this.dbConn.query(), this.readReplica.query(), ...); the non-this
+  // branch used to resolve parts[0] (the chain ROOT) for multi-segment
+  // chains like svc.db.query(), which answers "what type is svc?" instead
+  // of the actual question "what type is svc.db?" -- a question CHA has no
+  // way to answer, since it never tracks field types, only local-variable
+  // types. Both were name/shape guesses being trusted as confident
+  // resolutions. A multi-segment or `this`-rooted chain now honestly
+  // returns null (unknown, permissive) rather than guessing.
+  //
+  // The same doctrine already killed a third instance of this bug class: a
+  // receiver assigned via `const c = mysql.createConnection({})` cannot be
+  // typed by CHA (member-call factory, not `new X()`), so classOfVar returns
+  // null — returning the bare name 'c' as a "type" suppressed a real finding
+  // (regression: CVE-2021-22214-node-sqli-shape). There is no name-based
+  // fallback anywhere in this function for exactly that reason.
+  if (parts.length !== 2) return null;
   return classOfVar(callContext._cha, _currentFile, callContext._currentFnQid, parts[0]);
 }
 
@@ -194,19 +201,23 @@ function _resolvableCalleeName(calleeExpr) {
 // existing match), this function creates a NEW interprocedural call-graph
 // edge. A wrong resolution here fabricates a data-flow path that does not
 // exist, which this codebase's own doctrine treats as strictly worse than
-// a missed one (see _resolvableCalleeName's comment above). _receiverTypeFor's
-// soft-label fallbacks (the this.field PascalCase guess, and the bare-
-// identifier-name fallback) are NAME-based guesses with no verification
-// that the receiver was ever actually assigned that type — reusing them
-// here would let a same-named parameter/variable/field (e.g. a duck-typed
-// `function process(Model, data) { Model.save(data); }`) resolve to an
-// unrelated real class purely by name coincidence. So this function does
-// NOT call _receiverTypeFor/receiverTypeAtCall; it calls classOfVar
-// DIRECTLY, which only returns non-null when the receiver was genuinely
-// assignment-tracked (`let x = new Foo()` / TS `const x: Foo = ...`).
-// A receiver reached only through the this.field naming convention, or an
-// untyped bare identifier, correctly refuses to resolve here — a real,
-// deliberate scope narrower than R6's heuristic.
+// a missed one (see _resolvableCalleeName's comment above). It therefore
+// calls classOfVar DIRECTLY, which only returns non-null when the receiver
+// was genuinely assignment-tracked (`let x = new Foo()`), and additionally
+// requires the receiver to be a bare, non-`this` identifier expression.
+//
+// Historically _receiverTypeFor carried NAME-based fallbacks (a
+// PascalCase-of-`this.field` guess and a bare-identifier-name fallback) that
+// this function was careful never to reuse, because a same-named
+// parameter/variable/field (e.g. a duck-typed
+// `function process(Model, data) { Model.save(data); }`) would resolve to an
+// unrelated real class purely by name coincidence. Whole-branch review found
+// those same guesses were also wrong for R6's much softer use, so they are
+// gone: _receiverTypeFor now bottoms out in the same classOfVar call this
+// function makes. The two are deliberately kept as separate functions
+// anyway — they take different inputs (a flattened chain vs. a member
+// expression) and R11's extra `resolveMethod` step means it can still refuse
+// where R6 does not.
 function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
   if (!calleeExpr || calleeExpr.kind !== 'member' || typeof calleeExpr.prop !== 'string') return null;
   if (!callContext || !callContext._cha) return null;

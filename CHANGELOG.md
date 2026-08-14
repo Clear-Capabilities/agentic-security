@@ -34,10 +34,23 @@ Theme A's nine fixes).
   A bare-name sink like `.query()` or `.get()` previously matched on ANY
   receiver project-wide (`cache.query(x)` scored identically to
   `db.query(x)`). An opt-in `match.receiverTypeIn` catalog field is now
-  applied to the 5 highest-FP-risk bare-name entries (`js-sql-query`,
+  declared on the 5 highest-FP-risk bare-name entries (`js-sql-query`,
   `js-sql-execute`, `py-requests-get` x2, `rb-erb-new`). Unknown receiver type
   never suppresses a match — only a confidently resolved, non-matching type
   does.
+
+  **Coverage is not uniform across those 5, and the honest summary is that
+  only the two JS entries do real work.** The gate can only fire when CHA
+  actually resolves a receiver type, and CHA's `typeOfVar` is populated from
+  exactly one shape: a local `let/const x = new Foo()` whose IR carries the
+  `isNew` marker — emitted today by the JS/TS, Java and C# parsers only.
+  So `rb-erb-new` is effectively inert: `ERB.new(x)`'s receiver is a bare
+  identifier that is never `new`-assigned, so the type is always unknown and
+  the entry always stays permissive. The two `py-requests-get` entries are
+  inert for the same reason (Python has no `new`, so its parser emits no
+  marker). Both are harmless — an inert gate is a permissive gate, and the
+  pattern layer's match survives untouched — but "applied to 5 entries"
+  should not be read as "gating 5 entries."
 - **R10 — a call nested inside another expression now consults the callee's
   own taint summary.** `sink(getUserInput())` previously only checked
   `getUserInput()`'s own arguments for taint (the call's return-taint was
@@ -95,9 +108,58 @@ one-level member-access call arguments (a two-level access like
   R11 above. This is exactly the kind of near-miss the full gate sequence
   (test, corpus, mutation, layer-recall) exists to catch before it ships, and
   it did.
+- **That fix was too narrow, and the whole-branch review caught it: the same
+  bug class had three more instances in the same function.** The round-4 fix
+  above removed the bare-identifier fallback but kept the `this.field`
+  PascalCase guess, on the reasoning that it wasn't implicated in *that*
+  regression. It was implicated in the identical one. `receiverTypeAtCall`'s
+  `this`-branch structurally cannot return `null` — it PascalCases the field
+  name and returns it — so every `this.<field>.method()` call was treated as a
+  confidently-resolved type, and only field names that happened to collide
+  with the allow-list vocabulary survived. `this.dbConn.query(req.query.q)`
+  and `this.readReplica.query(req.query.q)` are both real SQL injections, both
+  reported by the pre-branch base commit, and both were silently absent from
+  this branch — not demoted, gone, with no other layer catching them. Two more
+  instances alongside it: for a multi-segment chain like `svc.db.query(x)` the
+  code resolved `parts[0]` — the chain ROOT — answering "what type is `svc`?"
+  when the receiver is `svc.db`, a property path CHA never types at all; and
+  `buildClassHierarchy`'s `typeOfVar` walker accepted any PascalCase callee as
+  a constructor, so `const q = BuildCache()` was confidently mistyped as class
+  `BuildCache`. All three were name-or-shape guesses being trusted as
+  resolutions.
 
-Verification: full test gate green (`npm test`), corpus/mutation/layer-recall
-gates checked with zero unexplained drift (see PR for the actual run output).
+  Rather than a fourth one-off patch, `_receiverTypeFor` now states the one
+  thing CHA can actually verify and refuses everything else: a receiver chain
+  of exactly two dot-separated parts (`x.method`), resolved through
+  `classOfVar`. `this`-rooted and multi-segment chains return `null` —
+  unknown, permissive. `parser-js.js` now emits the `isNew` marker on
+  `NewExpression` (matching what the Java and C# parsers already emit) and
+  `buildClassHierarchy` requires it, so a PascalCase *factory* call is no
+  longer mistaken for a constructor. Separately, the `receiverTypeIn`
+  vocabularies were exact-anchored (`^(?:db|pool|conn…)$`) from back when the
+  value reaching them could be a bare variable name; now that only real class
+  names arrive, `DatabaseConnection`, `PrismaClient` and `MySQLConnection` all
+  failed the allow-list and were suppressed, while only a class literally
+  named `Db` passed — the existing test passed solely because its fixture was
+  named `class Db`. Those four patterns are now substring matches
+  (`rb-erb-new`'s `^ERB$` stays anchored: one exact class, not a vocabulary),
+  and `Cache` still correctly suppresses.
+
+  The claim two bullets up — "unknown receiver type never suppresses a match"
+  — was false on the `this.field` path for the whole of this branch's life
+  until now. It is true again, and it is now gated rather than asserted:
+  `bench/mutation/` gained a detection dimension and four R6 cases, two of
+  them metamorphic renames (`class Db` → `class DatabaseConnection`,
+  `this.db` → `this.dbConn`) that a vocabulary-keyed gate cannot survive, plus
+  an adversarial non-DB receiver so that simply deleting the gate cannot pass
+  either. Both metamorphic cases fail on the pre-fix engine. Three rounds of
+  this same false-negative class shipped behind human review; the mutation
+  gate is what makes a fourth fail loudly instead.
+
+Verification: full test gate green (`npm test`, 3146 tests), corpus
+(214/214, no drift), mutation (9/9 verdict-flip, and non-zero exit confirmed
+against the pre-fix engine) and layer-recall (214/214 detected, per-language
+taint counts equal to baseline) all green.
 
 ## 0.136.10 — detection-gap remediation Theme A: dedup, family, and calibration for deep mode
 

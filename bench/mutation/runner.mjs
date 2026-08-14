@@ -33,6 +33,25 @@ import { runScan } from '../../scanner/src/runScan.js';
 // not assumed.
 await disableStateWrites();
 
+// ── Case shape ───────────────────────────────────────────────────────────────
+// Every case declares which DIMENSION of the verdict it is measuring, because
+// the two bug classes this harness has had to catch are different kinds of
+// wrong:
+//
+//   dimension: 'sanitization'  (default) — the finding must FIRE in every case
+//              and the question is whether the engine calls it `sanitized`.
+//              `expectSanitized` is the answer. This is the original family
+//              (family-aware sanitizer gating); its CWE is XSS.
+//
+//   dimension: 'detection'     — the question is whether the finding fires AT
+//              ALL. `expectDetected` is the answer. Needed for the receiver-
+//              type gate (PRD R6), which can only ever be wrong by suppressing
+//              or by failing to suppress — there is no sanitizer in the flow to
+//              have an opinion about.
+//
+// `cwe` selects which findings the case looks at (default: XSS).
+const DEFAULT_CWE = /CWE-79/;
+
 // ── The base program. Tainted input, one sanitizer, one XSS sink. ────────────
 // Each case rewrites it; `expectSanitized` is what the engine must conclude.
 const CASES = [
@@ -106,6 +125,88 @@ const CASES = [
   el.insertAdjacentHTML('beforeend', req.query.name);
 });`,
   },
+
+  // ── PRD R6: the CHA-inferred receiver-type gate on catalog sink matching ───
+  // This gate decides whether a bare `.query()` is a SQL sink by consulting the
+  // receiver's resolved class. It shipped three times with the same defect: a
+  // NAME or SHAPE guess ("the field is called `dbConn`, so its class must be
+  // `DbConn`"; "the chain root is `svc`, so ask about `svc`") being trusted as
+  // a confident type resolution, which then SUPPRESSED real SQL injections
+  // whose receiver name happened to fall outside a fixed vocabulary. A corpus
+  // fixture cannot catch that class of bug — the fixtures were themselves
+  // named to match the vocabulary. A metamorphic rename can, and does: every
+  // case below FAILS on the pre-fix engine.
+  {
+    id: 'r6-baseline-local',
+    class: 'baseline',
+    dimension: 'detection',
+    cwe: /CWE-89/,
+    expectDetected: true,
+    why: 'tainted input reaching .query() on a local DB object is SQL injection',
+    code: `class Db {
+  query(sql) { return sql; }
+}
+app.get('/s', (req, res) => {
+  const d = new Db();
+  d.query(req.query.q);
+});`,
+  },
+  {
+    id: 'metamorphic-receiver-class-rename',
+    class: 'metamorphic',
+    dimension: 'detection',
+    cwe: /CWE-89/,
+    expectDetected: true,
+    why: 'renaming `class Db` to `class DatabaseConnection` is the same program — a receiver-type allow-list that only matches the short name is keyed on spelling, not on meaning',
+    code: `class DatabaseConnection {
+  query(sql) { return sql; }
+}
+app.get('/s', (req, res) => {
+  const d = new DatabaseConnection();
+  d.query(req.query.q);
+});`,
+  },
+  {
+    id: 'r6-baseline-field',
+    class: 'baseline',
+    dimension: 'detection',
+    cwe: /CWE-89/,
+    expectDetected: true,
+    why: 'the same SQL injection reached through a `this.<field>` receiver',
+    code: `class Repo {
+  constructor() { this.db = makeConn(); }
+  find(req) { return this.db.query(req.query.q); }
+}
+app.get('/s', (req, res) => { new Repo().find(req); });`,
+  },
+  {
+    id: 'metamorphic-receiver-field-rename',
+    class: 'metamorphic',
+    dimension: 'detection',
+    cwe: /CWE-89/,
+    expectDetected: true,
+    why: 'renaming the field `this.db` to `this.dbConn` is the same program — a gate that guesses the receiver type from the field name loses the finding on any name outside its vocabulary',
+    code: `class Repo {
+  constructor() { this.dbConn = makeConn(); }
+  find(req) { return this.dbConn.query(req.query.q); }
+}
+app.get('/s', (req, res) => { new Repo().find(req); });`,
+  },
+  {
+    id: 'adversarial-non-db-receiver',
+    class: 'adversarial',
+    dimension: 'detection',
+    cwe: /CWE-89/,
+    expectDetected: false,
+    why: 'a `.query()` on a confidently-typed cache is not a SQL sink — this is the false positive the receiver-type gate exists to remove, and it is what stops "delete the gate" from passing the two metamorphic cases above',
+    code: `class Cache {
+  query(key) { return key; }
+}
+app.get('/s', (req, res) => {
+  const c = new Cache();
+  c.query(req.query.q);
+});`,
+  },
 ];
 
 async function verdictFor(c, tmpRoot) {
@@ -116,9 +217,10 @@ async function verdictFor(c, tmpRoot) {
   process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
   try {
     const { scan } = await runScan(dir);
-    const xss = (scan.findings || []).filter(
-      f => f.parser === 'IR-TAINT' && /CWE-79/.test(f.cwe || ''));
-    return { detected: xss.length > 0, sanitized: xss.some(f => f.sanitized === true) };
+    const cweRe = c.cwe || DEFAULT_CWE;
+    const hits = (scan.findings || []).filter(
+      f => f.parser === 'IR-TAINT' && cweRe.test(f.cwe || ''));
+    return { detected: hits.length > 0, sanitized: hits.some(f => f.sanitized === true) };
   } finally {
     delete process.env.AGENTIC_SECURITY_DEEP;
     delete process.env.AGENTIC_SECURITY_DEEP_IN_CI;
@@ -131,23 +233,34 @@ let failures = 0;
 
 for (const c of CASES) {
   const v = await verdictFor(c, tmpRoot);
-  // Precondition: the finding must fire in every case. A mutation that stops
-  // detection entirely is not evidence about sanitization — it is a hole, and
-  // silently scoring it as "not sanitized" would let a blind engine pass.
-  const detectOk = v.detected;
-  const verdictOk = detectOk && v.sanitized === c.expectSanitized;
+  let detectOk, verdictOk, expected;
+  if (c.dimension === 'detection') {
+    // The detection dimension IS the verdict here — a case may legitimately
+    // expect no finding (the adversarial non-DB receiver), so "did it fire"
+    // cannot also serve as a precondition.
+    expected = c.expectDetected;
+    detectOk = true;
+    verdictOk = v.detected === c.expectDetected;
+  } else {
+    // Precondition: the finding must fire in every case. A mutation that stops
+    // detection entirely is not evidence about sanitization — it is a hole, and
+    // silently scoring it as "not sanitized" would let a blind engine pass.
+    expected = c.expectSanitized;
+    detectOk = v.detected;
+    verdictOk = detectOk && v.sanitized === c.expectSanitized;
+  }
   if (!verdictOk) failures++;
-  rows.push({ ...c, ...v, detectOk, verdictOk });
+  rows.push({ ...c, ...v, expected, detectOk, verdictOk });
 }
 
 const w = (s, n) => String(s).padEnd(n);
 console.log('\nMetamorphic + adversarial mutation gate\n');
-console.log(w('case', 38), w('class', 13), w('detected', 10), w('sanitized', 11), w('expected', 10), 'ok');
-console.log('-'.repeat(94));
+console.log(w('case', 38), w('class', 13), w('dimension', 14), w('detected', 10), w('sanitized', 11), w('expected', 10), 'ok');
+console.log('-'.repeat(108));
 for (const r of rows) {
   console.log(
-    w(r.id, 38), w(r.class, 13), w(r.detected, 10),
-    w(r.sanitized, 11), w(r.expectSanitized, 10), r.verdictOk ? 'PASS' : 'FAIL');
+    w(r.id, 38), w(r.class, 13), w(r.dimension || 'sanitization', 14), w(r.detected, 10),
+    w(r.sanitized, 11), w(r.expected, 10), r.verdictOk ? 'PASS' : 'FAIL');
   if (!r.verdictOk) {
     console.log(`   ${r.detectOk ? 'verdict' : 'DETECTION'} wrong — ${r.why}`);
   }
@@ -157,7 +270,7 @@ const metamorphic = rows.filter(r => r.class === 'metamorphic');
 const adversarial = rows.filter(r => r.class === 'adversarial');
 const pct = (list) => list.length
   ? `${list.filter(r => r.verdictOk).length}/${list.length}` : '0/0';
-console.log('-'.repeat(94));
+console.log('-'.repeat(108));
 console.log(`metamorphic (verdict must HOLD): ${pct(metamorphic)}`);
 console.log(`adversarial (verdict must FLIP): ${pct(adversarial)}`);
 // Deliberately excludes the untagged 'baseline' sanity-check case: this line
