@@ -42,7 +42,7 @@
 // sanitizer must never silently drop a real vulnerability, so the walk never
 // treats a sanitizer call as clearing the tainted path on its own.
 
-import { matchSource, matchSinkOrSanitizer } from './catalog.js';
+import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink } from './catalog.js';
 import { functionRecord } from '../ir/callgraph.js';
 import { accessPathOf, isCoveredBy, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual } from './access-paths.js';
 import { aliasesForVar } from './points-to.js';
@@ -552,6 +552,38 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
   return { findings };
 }
 
+// PRD R13(a): finding shape for a member-write sink match (el.innerHTML =
+// tainted). Distinct from _sinkFindingsForCall because there is no call
+// argument list to index into — the "argument" of interest is the whole
+// assignment RHS, which the catalog entries already mark via argIndex:'rhs'
+// (a sentinel that existed in these 3 entries since they were added, with no
+// consumer until now). Mirrors _sinkFindingsForCall's trace/sanitizer
+// attribution exactly, so a member-write finding looks like any other
+// deep-mode finding downstream.
+function _memberWriteSinkFindings(hits, sourceExpr, state, callContext, line, targetPath) {
+  const findings = [];
+  for (const e of hits) {
+    const reachingSources = _sourcesReachingExpr(sourceExpr, state, callContext._taintSources);
+    const traceForThisFinding = reachingSources.length ? reachingSources.slice(0, 5) : [];
+    const _sanNames = _sanitizersForExpr(sourceExpr, callContext);
+    findings.push({
+      ...(_sanNames.size ? { _sanitizersOnPath: [..._sanNames] } : {}),
+      kind: 'taint',
+      sinkId: e.id,
+      vuln: e.vuln?.name || 'Tainted Sink',
+      severity: e.vuln?.severity || 'high',
+      cwe: e.vuln?.cwe || null,
+      remediation: e.vuln?.remediation || null,
+      line,
+      argIndex: 'rhs',
+      callee: targetPath,
+      sourceProvenance: (traceForThisFinding[0]?.provenance) || null,
+      trace: traceForThisFinding,
+    });
+  }
+  return findings;
+}
+
 // Surfaces a cached (or freshly computed) summary's `findings` into the
 // CURRENT caller's context — the only place a class-field/k=2 pre-pass's
 // speculative findings (in runTaintEngine) become reportable, because
@@ -608,6 +640,19 @@ function step(node, stateIn, callContext) {
         findings.push(..._sinkFindingsForCall(
           node.source.callee, node.source.args, _sinkCat, _sinkArgTaints,
           state, callContext, node.line).findings);
+      }
+      // PRD R13(a): the assignment TARGET can itself be a sink shape
+      // (el.innerHTML = tainted) — additive to the RHS-call-sink check
+      // above, which only ever looked at node.source. `target` is only a
+      // dotted member-access path when the LHS was a member expression
+      // (lhsPath in parser-js.js); a bare identifier target ("x") has no
+      // dot and _matchMemberWriteSink correctly returns null for it.
+      if (target && target.includes('.')) {
+        const _memberHits = matchMemberWriteSink(target, _currentFile);
+        if (_memberHits && exprTaint(node.source, state, callContext)) {
+          findings.push(..._memberWriteSinkFindings(
+            _memberHits, node.source, state, callContext, node.line, target));
+        }
       }
       // Record which sanitizers were applied to the value now held by `target`
       // (inline in the RHS, or inherited from the vars the RHS reads). Placed

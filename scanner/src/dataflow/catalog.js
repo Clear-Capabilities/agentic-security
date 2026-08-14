@@ -1133,5 +1133,31 @@ export function matchSinkOrSanitizer(calleeExpr, file, receiverType) {
   return hits.length ? hits : null;
 }
 
+// PRD R13(a) (docs/DETECTION_GAP_REMEDIATION_PRD.md): three sink entries
+// (js-innerHTML-assign, js-outerHTML-assign, react-dangerouslySetInnerHTML)
+// have sat in MEMBER_INDEX under the object:'_any_' wildcard since they were
+// added, but nothing ever queried MEMBER_INDEX for an ASSIGNMENT TARGET —
+// matchSinkOrSanitizer only reads CALLEE_INDEX, and matchSource's MEMBER_INDEX
+// lookups are for READS keyed by a SPECIFIC object name (e.g. "document.cookie"),
+// not the "any receiver" wildcard a DOM sink needs. `targetPath` is the
+// flattened LHS access-path string parser-js.js's lhsPath already produces
+// for a member-expression assignment target (e.g. "el.innerHTML" for
+// `el.innerHTML = x`) — this function extracts the property name and looks
+// it up under the wildcard key the same way `object:'_any_'` entries are
+// indexed (catalog.js's own indexing loop keys every entry by
+// `${match.object}.${match.prop}` regardless of what object names are, so a
+// wildcard entry lives under the literal key "_any_.<prop>").
+export function matchMemberWriteSink(targetPath, file) {
+  if (typeof targetPath !== 'string' || !targetPath.includes('.')) return null;
+  const prop = targetPath.slice(targetPath.lastIndexOf('.') + 1);
+  if (!prop) return null;
+  const raw = MEMBER_INDEX.get(`_any_.${prop}`);
+  if (!raw) return null;
+  const hits = filterByProvenance(raw)
+    .filter(h => _languageAllowed(h, file))
+    .filter(h => h.kind === 'sink');
+  return hits.length ? hits : null;
+}
+
 // For tests and reflection.
 export function _catalogSize() { return CATALOG.length; }
