@@ -296,6 +296,7 @@ export function parseRubyFile(file, code) {
   if (code.length > 1_000_000) return null;
 
   const functions = [];
+  const spans = []; // {start, end}: source ranges fully consumed by a matched def (header through matching `end`)
   DEF_RE.lastIndex = 0;
   _nid = 0;
   let m;
@@ -333,7 +334,44 @@ export function parseRubyFile(file, code) {
       // logic is needed here — only wiring the call.
       calls: callSitesFromCfg(cfg),
     });
+    spans.push({ start: m.index, end: extracted.end });
     DEF_RE.lastIndex = extracted.end;
   }
-  return functions.length ? { file, functions, topLevel: null } : null;
+
+  // R14(b): lower top-level (module-scope) statements into a synthetic
+  // <module> function, mirroring parser-js.js's Program-level lowering.
+  // Same gap-computation approach as parser-php.js's Task 3 twin.
+  spans.sort((a, b) => a.start - b.start);
+  const modNodes = {};
+  const modEntry = _addNode(modNodes, { kind: 'entry', line: 1 });
+  const modExit = _addNode(modNodes, { kind: 'exit', line: 1 });
+  let modTail = modEntry;
+  let cursor = 0;
+  for (const span of spans) {
+    if (span.start > cursor) {
+      const gap = code.slice(cursor, span.start);
+      modTail = _buildCfg(gap, modNodes, modTail, _lineAt(code, cursor));
+    }
+    cursor = Math.max(cursor, span.end);
+  }
+  if (cursor < code.length) {
+    const gap = code.slice(cursor);
+    modTail = _buildCfg(gap, modNodes, modTail, _lineAt(code, cursor));
+  }
+  _linkNodes(modNodes, modTail, modExit);
+  const modHasContent = Object.values(modNodes).some(n => n.kind !== 'entry' && n.kind !== 'exit');
+  let topLevel = null;
+  if (modHasContent) {
+    const moduleCfg = { entry: modEntry, exit: modExit, nodes: modNodes };
+    const modQid = _qid(file, '<module>', 1, code);
+    functions.push({
+      qid: modQid,
+      name: '<module>', line: 1, params: [], file,
+      cfg: moduleCfg,
+      calls: callSitesFromCfg(moduleCfg),
+    });
+    topLevel = modQid;
+  }
+
+  return functions.length ? { file, functions, topLevel } : null;
 }
