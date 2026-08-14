@@ -9,7 +9,13 @@
 > make the history less accurate, not more.
 
 
-## Unreleased — Theme B+D of the detection-gap remediation PRD (R6, R10, R11)
+## Unreleased — Theme B+D and Theme E of the detection-gap remediation PRD (R6, R10, R11, R13)
+
+Two independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land together
+here. Each has its own subsection below, and each subsection carries its own
+verification paragraph — the numbers in one do not describe the other.
+
+### Theme B+D (R6, R10, R11) — semantic grounding and interprocedural completeness
 
 Closes three of the five open items in `docs/DETECTION_GAP_REMEDIATION_PRD.md`'s
 Theme B ("semantic grounding of matching") and Theme D ("interprocedural
@@ -156,12 +162,14 @@ one-level member-access call arguments (a two-level access like
   this same false-negative class shipped behind human review; the mutation
   gate is what makes a fourth fail loudly instead.
 
-Verification: full test gate green (`npm test`, 3146 tests), corpus
-(214/214, no drift), mutation (9/9 verdict-flip, and non-zero exit confirmed
-against the pre-fix engine) and layer-recall (214/214 detected, per-language
-taint counts equal to baseline) all green.
+**Verification — Theme B+D (R6, R10, R11) only:** full test gate green
+(`npm test`, 3146 tests), corpus (214/214, no drift), mutation (9/9
+verdict-flip, and non-zero exit confirmed against the pre-fix engine) and
+layer-recall (214/214 detected, per-language taint counts equal to baseline)
+all green. These figures predate the R13 work below, which was gated
+separately; see R13's own verification paragraph for the current totals.
 
-### R13 (Theme E — flow-modeling coverage), both sub-fixes
+### Theme E (R13) — flow-modeling coverage, both sub-fixes
 
 - **R13(a) — a member-write assignment target (`el.innerHTML = tainted`) is
   now consulted against the sink catalog.** The taint engine previously only
@@ -183,7 +191,7 @@ taint counts equal to baseline) all green.
   a shared-visitor edit is the single riskiest shape of change this plan
   made.
 
-  **This one took two extra fix rounds, and both are worth recording
+  **This one took three extra fix rounds, and all three are worth recording
   honestly.** First: a second, generic Babel visitor
   (`VariableDeclarator`) also fires for the for-of binding's own
   `const item` declarator and runs after the loop visitor's `enter()` but
@@ -213,11 +221,33 @@ taint counts equal to baseline) all green.
   rather than patched here, since the real fix needs CHA to type
   regex-literal-assigned variables first.
 
+  Third, found by the final whole-branch review: narrowing the guard fixed
+  destructuring but left the shape the guard now *owns* with no kill at all.
+  `const`/`let` in a for-of head is a **block-scoped** binding, and this
+  engine's taint model has no block scoping — so once the loop variable was
+  bound to the iterable's taint, that state flowed straight past the loop's
+  exit and over-tainted a same-named OUTER variable:
+  `let item = 'safe'; for (const item of req.body.items) {} eval(item)`
+  reported a Code Injection finding that the pre-R13 engine correctly called
+  clean, because the generic `VariableDeclarator` visitor used to emit a
+  taint-KILL there and the guard suppresses it. That directly violated this
+  work's own "strictly additive — never remove or alter an existing finding"
+  constraint. The loop visitor now records the bound name in `enter()` and
+  re-emits the kill in `exit()`, on the loop's normal exit edge
+  (`header → exit-noop → kill → post-loop code`), so in-loop taint
+  reachability is untouched and only the post-loop read is cleared. The
+  bare-assignment form (`for (x of ...)`, no `const`/`let`) deliberately gets
+  **no** kill — that binding is function-scoped and its value legitimately
+  survives the loop; killing it would itself have been a regression. Both
+  directions are now pinned by tests.
+
 Both sub-fixes are covered end-to-end and at the unit level by
-`test/member-write-and-loop-taint.test.js` (9 tests), wired into
-`test:dataflow`. Verification: full gate green — `npm test` (3155 tests, 0
-failures), corpus (214/214, no drift), mutation (12/12 verdict-flip),
-layer-recall (js/ts taint recall unchanged at 7/38 vs. baseline's 7/36 — R13
+`test/member-write-and-loop-taint.test.js` (12 tests), wired into
+`test:dataflow`.
+
+**Verification — R13 only:** full gate green — `npm test` (3158 tests, 0
+failures), corpus (214/214, no drift), mutation (12/12 mutant verdicts
+correct, of which 9/9 are verdict-flip cases), layer-recall (js/ts taint recall unchanged at 7/38 vs. baseline's 7/36 — R13
 lands via dedicated unit tests rather than new corpus entries, so no
 taint-layer increase was expected or observed here) and self-scan (green
 against the baseline this same work already updated).

@@ -159,3 +159,77 @@ app.get('/run', (req, res) => {
     'the destructured cmd shadows the outer tainted cmd — the pre-existing destructuring taint-kill handling must not be suppressed by the ForOfStatement guard');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('R13(b): a block-scoped for-of binding\'s taint does not leak past the loop onto a same-named OUTER variable', async () => {
+  // Mirror image of the destructuring regression above. `const item` inside
+  // the for-of head is a BLOCK-SCOPED binding — the outer `item` is a
+  // different variable that was never assigned anything tainted, so the
+  // post-loop eval(item) must be clean. The synthesized loop binding (which
+  // replaced the generic VariableDeclarator's taint-KILL for this shape) has
+  // to be killed again on the loop's exit edge or it flows straight out of
+  // the loop and over-taints the outer name.
+  const dir = mkTmp('loop-shadow-leak', {
+    'app.js': `
+const express = require('express');
+const app = express();
+app.get('/run', (req, res) => {
+  let item = 'safe';
+  for (const item of req.body.items) { console.log(item); }
+  eval(item);
+  res.send('ok');
+});
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const codeInjFindings = (scan.findings || []).filter(f =>
+    /code injection|eval/i.test(f.vuln || '') && f.parser === 'IR-TAINT');
+  assert.equal(codeInjFindings.length, 0,
+    'the outer `item` is a separate block-scoped binding that was never tainted — the for-of loop variable\'s synthesized taint must not survive the loop exit');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('R13(b): the bare-assignment for-of form (`for (x of ...)`) keeps its taint AFTER the loop', async () => {
+  // The counterpart guard for the kill added above: `for (x of ...)` with no
+  // const/let declares nothing — it assigns to an existing, function-scoped
+  // `x` whose value legitimately survives the loop. Killing that on exit
+  // would be a real detection regression, so the exit-kill must fire only
+  // for the VariableDeclaration (const/let) shape.
+  const dir = mkTmp('loop-bare-assign', {
+    'app.js': `
+const express = require('express');
+const app = express();
+app.get('/run', (req, res) => {
+  let x;
+  for (x of req.body.items) { console.log(x); }
+  eval(x);
+  res.send('ok');
+});
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const codeInjFindings = (scan.findings || []).filter(f =>
+    /code injection|eval/i.test(f.vuln || '') && f.parser === 'IR-TAINT');
+  assert.ok(codeInjFindings.length >= 1,
+    '`for (x of tainted)` rebinds a function-scoped x — its taint must still reach a post-loop sink');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('R13(a)+(b) composition: a loop-bound value reaches a member-write sink', async () => {
+  const dir = mkTmp('compose', {
+    'app.js': `
+const express = require('express');
+const app = express();
+app.get('/render', (req, res) => {
+  const el = document.getElementById('out');
+  for (const item of req.body.items) {
+    el.innerHTML = item;
+  }
+  res.send('ok');
+});
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const xssFindings = (scan.findings || []).filter(f => /xss/i.test(f.vuln || '') && f.parser === 'IR-TAINT');
+  assert.ok(xssFindings.length >= 1, 'a loop-bound value flowing into el.innerHTML must be detected — R13(a) and R13(b) must compose');
+  fs.rmSync(dir, { recursive: true, force: true });
+});

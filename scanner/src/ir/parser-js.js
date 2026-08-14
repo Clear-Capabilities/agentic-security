@@ -565,6 +565,30 @@ export function parseJsFile(file, code) {
                 const iterExpr = exprOf(path.node.right);
                 const bindId = nextNodeId();
                 addNode(fn, { id: bindId, kind: 'assign', target: loopVar, source: iterExpr, line, succ: [], pred: [] });
+                // `for (const x of ...)` / `for (let x of ...)` declares a
+                // BLOCK-SCOPED binding: a same-named `x` outside the loop is a
+                // different variable and must be completely unaffected by
+                // whatever the loop's `x` held. This engine's taint model has
+                // no block scoping, so the synthesized binding above would
+                // otherwise flow past the loop's exit and over-taint an outer
+                // `x` (proven: `let item='safe'; for (const item of req.body
+                // .items){} eval(item)` reported a Code Injection finding that
+                // pre-R13(b) code correctly reported as clean — the generic
+                // VariableDeclarator visitor used to emit `assign x <-
+                // {kind:'unknown'}` here, a taint KILL, and the guard above now
+                // suppresses it for exactly this shape). Record the name so
+                // exit() can re-emit that kill AFTER the loop, restoring the
+                // pre-existing behavior for post-loop reads while keeping the
+                // new in-loop taint flow.
+                //
+                // Deliberately NOT done for the bare-assignment form
+                // (`for (x of ...)`, leftNode is not a VariableDeclaration):
+                // that binding is not block-scoped, it reuses an existing
+                // outer `x`, and its value legitimately survives the loop —
+                // killing it there would itself be a regression.
+                if (leftNode && leftNode.type === 'VariableDeclaration') {
+                  path.node._loopBindVar = loopVar;
+                }
               }
             }
           },
@@ -576,6 +600,26 @@ export function parseJsFile(file, code) {
             linkCfg(fn, fn._cursor, headerId); // back-edge
             linkCfg(fn, headerId, exitId);     // exit edge
             fn._cursor = exitId;
+            // See the _loopBindVar comment in enter(): restore the taint KILL
+            // that the ForOfStatement VariableDeclarator guard suppresses, so
+            // a block-scoped for-of binding's synthesized taint cannot leak
+            // past the loop onto a same-named outer variable. Emitted AFTER
+            // `fn._cursor = exitId` so it sits on the loop's normal exit path
+            // (header -> exit-noop -> kill -> whatever follows the loop) and
+            // therefore runs once on the way out — never inside the body, so
+            // in-loop taint reachability is unchanged.
+            if (path.node._loopBindVar) {
+              const killId = nextNodeId();
+              addNode(fn, {
+                id: killId,
+                kind: 'assign',
+                target: path.node._loopBindVar,
+                source: { kind: 'unknown' },
+                line: path.node.loc?.start?.line || 0,
+                succ: [],
+                pred: [],
+              });
+            }
           },
         },
 
