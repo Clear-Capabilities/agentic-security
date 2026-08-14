@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-13T05:13:44.886Z",
-  "commit": "d15e185e2d8e6847cdff65149fe26b8544594147",
+  "generatedAt": "2026-08-14T20:56:31.827Z",
+  "commit": "e89bc925c09b1f92e645c26e110006bdc55ea8a6",
   "targets": {
     "hooks": {
       "total": 25,
@@ -37,13 +37,14 @@
       }
     },
     "scanner/src": {
-      "total": 612,
+      "total": 621,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
         "dataflow/exploit-prover.js": 2,
         "dataflow/ifds-precise.js": 3,
         "dataflow/incremental.js": 7,
+        "dataflow/index.js": 5,
         "dataflow/polyglot.js": 2,
         "dataflow/privacy-taint.js": 1,
         "dataflow/sanitizer-proof.js": 1,
@@ -63,7 +64,7 @@
         "ir/parser-py.helper.py": 1,
         "ir/parser-py.js": 2,
         "ir/parser-rb.js": 3,
-        "ir/type-stubs.js": 6,
+        "ir/type-stubs.js": 10,
         "ir/universal-ir.js": 1,
         "leaderboard.js": 3,
         "llm-validator/consistency.js": 1,

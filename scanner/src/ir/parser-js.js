@@ -338,13 +338,28 @@ export function parseJsFile(file, code) {
           // visit fires AFTER the loop visitor's enter() hook synthesizes
           // `item = <iterated expr>`, re-assigning `item` from an absent
           // `init` (source: unknown) and silently erasing the taint just
-          // synthesized. Skip it here; the loop visitor owns this binding.
-          // Scoped narrowly to ForOfStatement's own `left` declarator only —
-          // ForInStatement's `for (const key in obj)` is unchanged (key
-          // still resolves to source: unknown, exactly as before this task).
+          // synthesized. Skip it here ONLY for the simple-identifier shape
+          // the loop visitor actually owns and synthesizes for — a bare
+          // `for (const item of ...)` binding.
+          //
+          // A destructuring for-of binding (`for (const {a,b} of ...)` /
+          // `for (const [a,b] of ...)`) is explicitly NOT covered by the
+          // loop visitor's synthesis (see the ForOfStatement branch below —
+          // `loopVar` stays null and nothing is emitted for it), so it MUST
+          // fall through to the general destructuring handling further down
+          // in this same visitor. That handling was already here before this
+          // task and does something this guard must not break: it emits real
+          // taint-KILL assign nodes for each destructured name, which is what
+          // makes `let cmd = tainted; for (const {cmd} of SAFE) sink(cmd)`
+          // correctly clear cmd's stale outer taint. An earlier version of
+          // this guard matched on the ForOfStatement `left` alone (no
+          // Identifier check) and silently deleted those taint-kill nodes,
+          // producing a false positive on exactly that shadowing shape — see
+          // the regression test below.
           const gpDecl = path.parentPath && path.parentPath.node;
           const gpLoop = path.parentPath && path.parentPath.parentPath && path.parentPath.parentPath.node;
-          if (gpLoop && gpLoop.type === 'ForOfStatement' && gpLoop.left === gpDecl) return;
+          if (gpLoop && gpLoop.type === 'ForOfStatement' && gpLoop.left === gpDecl
+              && path.node.id?.type === 'Identifier') return;
           const id = lhsPath(path.node.id);
           if (!id) return;
           const initExpr = exprOf(path.node.init);

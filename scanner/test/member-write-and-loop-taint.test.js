@@ -136,3 +136,26 @@ app.get('/run', (req, res) => {
   assert.ok(scan && Array.isArray(scan.findings), 'scan must complete for every other loop shape');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('R13(b): a destructuring for-of binding still shadows/kills a same-named outer taint (regression — the guard must not suppress destructuring handling)', async () => {
+  const dir = mkTmp('loop-destructure-shadow', {
+    'app.js': `
+const express = require('express');
+const app = express();
+app.get('/run', (req, res) => {
+  let cmd = req.query.c;
+  const SAFE = [{ cmd: 'echo hello' }];
+  for (const { cmd } of SAFE) {
+    eval(cmd);
+  }
+  res.send('ok');
+});
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const codeInjFindings = (scan.findings || []).filter(f =>
+    /code injection|eval/i.test(f.vuln || '') && f.parser === 'IR-TAINT');
+  assert.equal(codeInjFindings.length, 0,
+    'the destructured cmd shadows the outer tainted cmd — the pre-existing destructuring taint-kill handling must not be suppressed by the ForOfStatement guard');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
