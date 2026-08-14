@@ -137,16 +137,37 @@ function _fullyFlattenMemberChain(calleeExpr) {
 // whenever CHA has nothing useful to say — callers must treat null as
 // "unknown", never as a signal to suppress or refuse (see this file's
 // "Unknown ≠ clean" global constraint).
+//
+// CRITICAL: does NOT fall back to bare receiver identifier names (which are
+// guesses, not resolutions). A receiver assigned via `const c = mysql.
+// createConnection({})` cannot be typed by CHA (member-call factory, not
+// `new X()`), so classOfVar returns null — we MUST treat that as "unknown"
+// and return null, not return 'c' and let the caller treat it as a confident
+// non-match, which suppresses real findings (regression: CVE-2021-22214-
+// node-sqli-shape was silently suppressed, violating "unknown ≠ clean").
+// receiverTypeAtCall did have a fallback; this function does not.
 function _receiverTypeFor(calleeExpr, callContext) {
   if (!callContext || !callContext._cha) return null;
   const flat = _fullyFlattenMemberChain(calleeExpr);
   if (!flat || !flat.includes('.')) return null;
-  return receiverTypeAtCall(
-    { kind: 'call', callee: flat },
-    { qid: callContext._currentFnQid },
-    _currentFile,
-    callContext._cha,
-  );
+  const parts = flat.split('.');
+  if (parts[0] === 'this') {
+    // this.field.method() — the PascalCase-of-field-name heuristic. Kept as
+    // is: not implicated in the bare-identifier regression (which was caught in
+    // the non-`this` path), and R6's already-shipped this.db.query() coverage
+    // depends on it.
+    return receiverTypeAtCall(
+      { kind: 'call', callee: flat },
+      { qid: callContext._currentFnQid },
+      _currentFile,
+      callContext._cha,
+    );
+  }
+  // Non-`this` receiver: only trust a GENUINELY CHA-tracked type — mirrors
+  // Task 4's R11 fix (_resolveMemberCalleeViaCHA). Do NOT fall back to the
+  // bare receiver identifier's own name: that is a guess, not a resolution,
+  // and treating it as confidently-resolved suppresses real findings.
+  return classOfVar(callContext._cha, _currentFile, callContext._currentFnQid, parts[0]);
 }
 
 // Narrower than _flattenCalleeName: the name to hand to callGraph.resolve().

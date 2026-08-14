@@ -9,6 +9,72 @@
 > make the history less accurate, not more.
 
 
+## Unreleased — Theme B+D of the detection-gap remediation PRD (R6, R10, R11)
+
+Closes three of the five open items in `docs/DETECTION_GAP_REMEDIATION_PRD.md`'s
+Theme B ("semantic grounding of matching") and Theme D ("interprocedural
+completeness"). R7 and R12 — filed under the same two themes — turned out to
+already be landed (commit `553f9a5`, swept in opportunistically alongside
+Theme A's nine fixes).
+
+- **Class Hierarchy Analysis is now wired into the deep pipeline** —
+  prerequisite infrastructure for R6 and R11. `ir/class-hierarchy.js` and the
+  receiver-type heuristic (`dataflow/receiver-context.js`) were both already
+  built and unit-tested but never consulted at scan time; `dataflow/index.js`
+  now builds CHA once per scan and threads it through every `callContext`.
+  Landing this exposed a real, independent pre-existing bug in
+  `class-hierarchy.js` itself: its method-qid parser assumed a dot-joined
+  `"ClassName.method"` shape, but the parser's actual qid format for a class
+  method is `::`-joined (`file.js::ClassName::method@line`) — so `cha.classes`
+  was silently empty for every JS/TS class, and CHA-based resolution could
+  never have worked at all until this was fixed. The only prior test for
+  `buildClassHierarchy` had hand-mocked a qid in the wrong shape, which is why
+  this went unnoticed.
+- **R6 — catalog sink matching is now gated by CHA-inferred receiver type.**
+  A bare-name sink like `.query()` or `.get()` previously matched on ANY
+  receiver project-wide (`cache.query(x)` scored identically to
+  `db.query(x)`). An opt-in `match.receiverTypeIn` catalog field is now
+  applied to the 5 highest-FP-risk bare-name entries (`js-sql-query`,
+  `js-sql-execute`, `py-requests-get` x2, `rb-erb-new`). Unknown receiver type
+  never suppresses a match — only a confidently resolved, non-matching type
+  does.
+- **R10 — a call nested inside another expression now consults the callee's
+  own taint summary.** `sink(getUserInput())` previously only checked
+  `getUserInput()`'s own arguments for taint (the call's return-taint was
+  invisible outside assignment-RHS and bare-statement position, the only two
+  places the summary cache was consulted). `exprTaint`'s `'call'` case now
+  also resolves and consults the callee's summary, via the same shared
+  resolver R11 uses.
+- **R11 — a JS/TS member call (`svc.save(x)`) now resolves interprocedurally
+  when CHA traces the receiver to one unambiguous, assignment-tracked local
+  variable.** Previously refused unconditionally (a bare dotted-name guess
+  risks inventing an edge between two unrelated same-named methods). This
+  landed narrower than originally scoped: it deliberately still refuses
+  `this.field.method()` resolution. An early implementation reused R6's full
+  receiver-type heuristic, including its two name-guess fallbacks
+  (`this.field` PascalCase-to-class guessing, bare-identifier soft-labeling) —
+  safe for R6's weaker consequence (mis-gating an *existing* catalog match),
+  but review found that reusing the same guesses for R11's stronger
+  consequence (fabricating a *new* interprocedural call-graph edge) let a
+  same-named unrelated variable resolve to the wrong class purely by name
+  coincidence. R11 now calls `classOfVar` directly, trusting only genuinely
+  assignment-tracked local types, and an ambiguous or unresolved receiver
+  (including every `this.field` shape) still safely refuses to resolve rather
+  than guessing — matching this PRD's own stated caution that R11 should stay
+  unimplemented rather than ship with degraded precision.
+
+Two narrower gaps surfaced during R11 implementation and were deliberately
+left unfixed as out of scope (recorded as candidate future work in
+`docs/DETECTION_GAP_REMEDIATION_PRD.md`'s new "Status updates" section): CHA's
+variable-type tracking is scoped to the exact enclosing function (a
+module-scope instance referenced from inside a closure/route-handler can't be
+typed there), and taint-argument recognition only handles bare-identifier or
+one-level member-access call arguments (a two-level access like
+`req.query.cmd` passed directly is invisible to it).
+
+Verification: full test gate green (`npm test`), corpus/mutation/layer-recall
+gates checked with zero unexplained drift (see PR for the actual run output).
+
 ## 0.136.10 — detection-gap remediation Theme A: dedup, family, and calibration for deep mode
 
 An architectural audit of the SAST/taint pipeline (`docs/DETECTION_GAP_REMEDIATION_PRD.md`)
