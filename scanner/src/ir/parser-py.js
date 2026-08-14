@@ -170,6 +170,7 @@ function _findTopLevel(s, sep) {
 function extractFunctions(text, file) {
   const lines = blankComments(text, 'py').split('\n');
   const fns = [];
+  const consumed = new Set();
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     // Premortem #14: balanced-paren signature parse to handle default values
@@ -194,16 +195,18 @@ function extractFunctions(text, file) {
     const after = line.slice(p + 1);
     if (!/^\s*(?:->\s*[^:]+)?:\s*(?:#.*)?$/.test(after)) continue;
     const params = _splitArgs(paramsText).map(s => s.trim().split(/[:=]/)[0].trim()).filter(Boolean);
+    consumed.add(i + 1);
     // Collect body lines: anything indented strictly more than `indent`
     // until we hit a line with same-or-less indent.
     const body = [];
     let j = i + 1;
     while (j < lines.length) {
       const l = lines[j];
-      if (l.trim() === '') { body.push({ line: j + 1, text: '' }); j++; continue; }
+      if (l.trim() === '') { body.push({ line: j + 1, text: '' }); consumed.add(j + 1); j++; continue; }
       const li = l.match(/^(\s*)/)[1].length;
       if (li <= indent) break;
       body.push({ line: j + 1, text: l.slice(indent + 4) });   // strip one indent
+      consumed.add(j + 1);
       j++;
     }
     fns.push({
@@ -214,7 +217,22 @@ function extractFunctions(text, file) {
       body,
     });
   }
-  return fns;
+  return { fns, consumed, lines };
+}
+
+// R14(b): the complement of extractFunctions' consumed lines is the
+// module-level (top-level) statement text, lowered through the same
+// buildCfg() every real function body already uses. Only line text is
+// needed — buildCfg/_classifyLine already trim() before matching, so
+// leading indentation on a stray line is harmless.
+function _moduleLevelBody(lines, consumed) {
+  const body = [];
+  for (let i = 0; i < lines.length; i++) {
+    const lineNo = i + 1;
+    if (consumed.has(lineNo)) continue;
+    body.push({ line: lineNo, text: lines[i] });
+  }
+  return body;
 }
 
 // ── Build CFG from a function's body lines ──────────────────────────────
@@ -295,7 +313,7 @@ export function parsePythonFile(file, raw) {
   if (!file || !raw || typeof raw !== 'string') return null;
   if (!/\.py$/i.test(file)) return null;
   if (raw.length > 1_000_000) return null;
-  const fnRecs = extractFunctions(raw, file);
+  const { fns: fnRecs, consumed, lines } = extractFunctions(raw, file);
   const functions = fnRecs.map(fn => ({
     qid: fn.qid,
     name: fn.name,
@@ -304,9 +322,18 @@ export function parsePythonFile(file, raw) {
     cfg: buildCfg(fn),
     file,
   }));
+  const modBody = _moduleLevelBody(lines, consumed);
+  const modCfg = buildCfg({ body: modBody });
+  const modHasContent = Object.values(modCfg.nodes).some(n => n.kind !== 'entry' && n.kind !== 'exit' && n.kind !== 'noop');
+  let topLevel = null;
+  if (modHasContent) {
+    const modQid = `${file}::module::<module>`;
+    functions.push({ qid: modQid, name: '<module>', line: 1, params: [], cfg: modCfg, file });
+    topLevel = modQid;
+  }
   return {
     file,
     functions,
-    topLevel: null,
+    topLevel,
   };
 }
