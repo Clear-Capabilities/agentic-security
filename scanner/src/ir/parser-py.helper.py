@@ -595,7 +595,36 @@ def _process_one(file: str, content: str) -> dict[str, Any]:
     except SyntaxError as e:
         return {"file": file, "functions": [], "topLevel": None, "_error": f"syntax-error: {e.msg} (line {e.lineno})"}
     fns = _extract_functions(tree, file)
-    return {"file": file, "functions": fns, "topLevel": None}
+    # R14(b): lower top-level (module-scope) statements into a synthetic
+    # <module> function, mirroring parser-js.js's Program-level lowering.
+    # Only included when it carries real content — a FunctionDef/ClassDef
+    # encountered here lowers to a noop placeholder (_lower_stmt already
+    # does this so nested defs aren't double-counted; see _extract_functions
+    # above, which independently captures them via ast.walk), so a
+    # function-only file must not gain a <module> entry just because its
+    # single top-level statement happens to be a def.
+    mod_builder = CfgBuilder("<module>")
+    mod_builder.lower(tree.body)
+    mod_has_content = any(
+        n.get("kind") not in ("entry", "exit", "noop")
+        for n in mod_builder.nodes.values()
+    )
+    top_level_qid = None
+    if mod_has_content:
+        top_level_qid = _qid(file, "<module>", 1)
+        fns.append({
+            "qid": top_level_qid,
+            "name": "<module>",
+            "line": 1,
+            "params": [],
+            "file": file,
+            "cfg": {
+                "entry": mod_builder.entry,
+                "exit": mod_builder.exit,
+                "nodes": mod_builder.nodes,
+            },
+        })
+    return {"file": file, "functions": fns, "topLevel": top_level_qid}
 
 
 def main() -> int:

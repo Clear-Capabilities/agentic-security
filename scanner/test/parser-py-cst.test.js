@@ -304,3 +304,46 @@ def f(items):
   const ifNode = nodes.find(n => n.kind === 'if');
   assert.ok(ifNode, 'expected if node for comprehension filter');
 });
+
+_maybe('module-level top-level statements are lowered into a synthetic <module> function', async () => {
+  const code = `import os
+
+cmd = request.args
+os.system(cmd)
+`;
+  const [ir] = await parsePythonFilesBatch([{ file: 'flat.py', content: code }]);
+  assert.ok(ir);
+  const mod = ir.functions.find(f => f.name === '<module>');
+  assert.ok(mod, 'expected a synthetic <module> function for top-level statements');
+  assert.equal(ir.topLevel, mod.qid);
+  const nodes = Object.values(mod.cfg.nodes);
+  const assigns = nodes.filter(n => n.kind === 'assign');
+  assert.ok(assigns.some(a => a.target === 'cmd'), 'expected the module-level cmd assignment');
+  const calls = nodes.filter(n => n.kind === 'call');
+  assert.ok(calls.some(c => c.callee === 'os.system'), 'expected the module-level os.system call');
+});
+
+_maybe('a function-only file gets no <module> entry (conditional inclusion, unchanged behavior)', async () => {
+  const code = `def f(x):
+    return x + 1
+`;
+  const [ir] = await parsePythonFilesBatch([{ file: 'funcs_only.py', content: code }]);
+  assert.ok(ir);
+  assert.equal(ir.functions.length, 1, 'no synthetic <module> entry should be added when there is no real top-level content');
+  assert.equal(ir.topLevel, null);
+});
+
+_maybe('a nested function/class at module scope does not itself count as module content', async () => {
+  // _lower_stmt already emits a noop placeholder for a FunctionDef/ClassDef
+  // encountered while lowering a statement list (see parser-py.helper.py
+  // :506-515) — this must not make the module CFG look non-trivial on its
+  // own. Confirms the "at least one non-noop node" gate, not just "any node".
+  const code = `class Foo:
+    def bar(self):
+        return 1
+`;
+  const [ir] = await parsePythonFilesBatch([{ file: 'class_only.py', content: code }]);
+  assert.ok(ir);
+  assert.equal(ir.functions.find(f => f.name === '<module>'), undefined);
+  assert.equal(ir.topLevel, null);
+});
