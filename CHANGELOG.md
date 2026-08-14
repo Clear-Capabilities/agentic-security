@@ -72,6 +72,30 @@ typed there), and taint-argument recognition only handles bare-identifier or
 one-level member-access call arguments (a two-level access like
 `req.query.cmd` passed directly is invisible to it).
 
+- **A wiring-and-verification pass on this work caught R6 suppressing a real
+  finding, and the fix landed the same way it was found: with a gate.**
+  `bench:layer-recall:check` — which exists precisely to catch a layer going
+  quiet on a language it used to cover — flagged `js/ts` taint recall
+  dropping 7 → 6. Root cause: `_receiverTypeFor` fell back to returning the
+  receiver's own bare identifier name (e.g. `c`) whenever `classOfVar`
+  couldn't verify a type, and the caller then treated that name as a
+  confidently-resolved non-match rather than as "unknown" — a direct
+  violation of R6's own "unknown != clean" rule. Concretely:
+  `const c = mysql.createConnection({}); c.query(tainted)` (a `mysql`
+  connection assigned via a factory call rather than `new X()`, the exact
+  shape `CVE-2021-22214-node-sqli-shape` exercises) was silently dropped by
+  the taint engine, because `'c'` doesn't match the SQL receiver allow-list —
+  even though it's a genuine, tainted SQL sink. `bench:cve-replay:check`
+  stayed green throughout, because a different, non-taint layer happened to
+  still catch this same corpus entry — the corpus gate answers "was it
+  detected at all," not "by which layer," which is exactly the blind spot
+  `bench:layer-recall:check` exists to close. Fixed by removing the
+  bare-identifier fallback: a non-`this` receiver is now trusted only when
+  `classOfVar` genuinely resolves it, mirroring the fix already applied to
+  R11 above. This is exactly the kind of near-miss the full gate sequence
+  (test, corpus, mutation, layer-recall) exists to catch before it ships, and
+  it did.
+
 Verification: full test gate green (`npm test`), corpus/mutation/layer-recall
 gates checked with zero unexplained drift (see PR for the actual run output).
 
