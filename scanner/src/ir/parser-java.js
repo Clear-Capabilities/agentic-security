@@ -364,7 +364,17 @@ export async function parseJavaFile(file, raw) {
             const variableModifiers = vp?.children?.variableModifier || [];
             for (const vm of variableModifiers) {
               const ann = vm.children?.annotation?.[0];
-              const decoratorName = ann?.children?.typeName?.[0]?.children?.Identifier?.[0]?.image;
+              // `typeName.children.Identifier` is an array of ALL
+              // dot-separated segments for a fully-qualified annotation
+              // (`@org.springframework.web.bind.annotation.RequestParam`
+              // yields ['org','springframework','web','bind','annotation',
+              // 'RequestParam']) — the simple annotation name is the LAST
+              // segment, not the first. Taking [0] previously recorded the
+              // package root ("org") as the decorator name, a silent wrong
+              // value rather than the honest drop the C#/JS sibling parsers
+              // produce for the same shape (fix round 1, R14(a) Task 5).
+              const identifiers = ann?.children?.typeName?.[0]?.children?.Identifier;
+              const decoratorName = identifiers?.length ? identifiers[identifiers.length - 1]?.image : undefined;
               if (decoratorName && paramName) {
                 paramAnnotations.push({ index: idx, name: paramName, decorator: decoratorName });
               }

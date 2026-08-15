@@ -94,6 +94,26 @@ public class UserController {
   ]);
 });
 
+// Fix round 1: a fully-qualified annotation's `typeName.Identifier` is an
+// array of ALL dot-separated segments, not just the simple name — taking
+// the first entry previously recorded the package root ("org") as the
+// decorator instead of the actual annotation name.
+test('parseJavaFile: a fully-qualified annotation records the simple name, not the package root', async () => {
+  const code = `
+public class UserController {
+    public String show(@org.springframework.web.bind.annotation.RequestParam String q) {
+        return q;
+    }
+}
+`;
+  const ir = await parseJavaFile('UserController.java', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => f.name.includes('show'));
+  assert.ok(fn);
+  assert.deepEqual(fn.params, ['q']);
+  assert.deepEqual(fn.paramAnnotations, [{ index: 0, name: 'q', decorator: 'RequestParam' }]);
+});
+
 // Java parameter shapes that the CST handles differently from a plain
 // `Type name` parameter. Not exhaustive coverage of every shape — just
 // confirming extraction doesn't silently corrupt or crash on them.
