@@ -301,6 +301,36 @@ function buildCfgFromBody(bodyNode) {
       const inner = basic || enhanced;
       const cond = basic?.children?.expression?.[0];
       emit({ kind: 'loop-header', cond: cond ? exprFromCst(cond) : null, line: _lineOf(f), succ: [] });
+      // R8 Task 1 fix round 1: `for (T x : xs)` never bound `x` to `xs` —
+      // the loop body was reachable (the fix above) but the loop variable
+      // itself carried no taint provenance, so a genuinely tainted
+      // collection reaching a sink through the loop variable still
+      // couldn't fire. Confirmed via direct CST inspection:
+      // enhancedForStatement.children = {..., localVariableDeclaration,
+      // Colon, expression, ..., statement} — `localVariableDeclaration` is
+      // the loop var's declaration (same variableDeclaratorList shape used
+      // elsewhere in this file) and `expression` is the iterated
+      // collection. Mirrors the established pattern in parser-js.js's
+      // ForOfStatement handling (PRD R13(b)): synthesize
+      // `{kind:'assign', target: loopVar, source: iterExpr}` BEFORE
+      // recursing into the body, so any body statement reading the loop
+      // variable sees its taint provenance already established. Java's
+      // for-each always declares a fresh block-scoped variable (there is
+      // no bare-assignment form the way JS's `for (x of xs)` has), so —
+      // unlike parser-js.js — there is no pre-existing outer variable of
+      // the same name to protect with a post-loop kill; the Java CFG
+      // builder does not model block scoping elsewhere either, so adding
+      // one only for this binding would be new, inconsistent behavior
+      // rather than a fix for this gap.
+      if (enhanced) {
+        const lvd = enhanced.children?.localVariableDeclaration?.[0];
+        const declarator = lvd?.children?.variableDeclaratorList?.[0]?.children?.variableDeclarator?.[0];
+        const loopVar = declarator?.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
+        const iterExpr = enhanced.children?.expression?.[0];
+        if (loopVar) {
+          emit({ kind: 'assign', target: loopVar, source: iterExpr ? exprFromCst(iterExpr) : { kind: 'unknown' }, line: _lineOf(enhanced), succ: [] });
+        }
+      }
       for (const sub of (inner?.children?.statement || [])) walkStmts(sub);
     }
     if (kids.doStatement) {
@@ -361,10 +391,44 @@ function buildCfgFromBody(bodyNode) {
       const sw = kids.switchStatement[0];
       const cond = sw.children?.expression?.[0];
       emit({ kind: 'if', cond: cond ? exprFromCst(cond) : null, line: _lineOf(sw), succ: [] });
-      const groups = sw.children?.switchBlock?.[0]?.children?.switchBlockStatementGroup || [];
+      const swBlock = sw.children?.switchBlock?.[0];
+      // Classic colon-form (`case 1: ...; break;`).
+      const groups = swBlock?.children?.switchBlockStatementGroup || [];
       for (const g of groups) {
         const bss = g.children?.blockStatements?.[0];
         if (bss) walkStmts(bss);
+      }
+      // R8 Task 1 fix round 1: arrow-form (`case 1 -> ...;`, Java 14+) is a
+      // structurally distinct grammar rule — confirmed via direct CST
+      // inspection (java-parser@3.0.1) — not an alternate reading of
+      // switchBlockStatementGroup. A switchBlock's children carry EITHER
+      // switchBlockStatementGroup (colon-form) OR switchRule (arrow-form),
+      // never both (Java's grammar forbids mixing them in one switch
+      // block), so this is a separate, independent branch rather than a
+      // fallback path. Each switchRule carries exactly one body-shape key:
+      // `expression` (`case 1 -> sink(x);`), `block`
+      // (`case 1 -> { ...; }`), or `throwStatement`
+      // (`case 1 -> throw new X();`). Before this fix arrow-form switches
+      // fell through this whole branch producing zero walked statements —
+      // confirmed 0 IR-TAINT findings for the idiomatic modern-Java shape.
+      const rules = swBlock?.children?.switchRule || [];
+      for (const r of rules) {
+        const rblock = r.children?.block?.[0];
+        if (rblock) { walkStmts(rblock); continue; }
+        const rthrow = r.children?.throwStatement?.[0];
+        if (rthrow) {
+          const texpr = rthrow.children?.expression?.[0];
+          emit({ kind: 'throw', value: texpr ? exprFromCst(texpr) : null, line: _lineOf(rthrow), succ: [] });
+          continue;
+        }
+        const rexpr = r.children?.expression?.[0];
+        if (rexpr) {
+          const expr = exprFromCst(rexpr);
+          if (expr.kind === 'call') emit({ ...expr, line: _lineOf(r), succ: [] });
+          else if (expr.kind === 'binary' && expr.op === '=') {
+            emit({ kind: 'assign', target: expr.left?.name || null, source: expr.right, line: _lineOf(r), succ: [] });
+          }
+        }
       }
     }
     // Bare nested block `{ ... }` with no leading keyword. The

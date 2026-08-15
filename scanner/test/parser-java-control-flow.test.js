@@ -124,6 +124,31 @@ public class C {
   assert.ok(calls.some(c => c.callee === 'cleanup'), 'expected the default body call');
 });
 
+// R8 Task 1 fix round 1: arrow-form switch (`case 1 -> ...;`, Java 14+) is a
+// structurally distinct CST rule (switchBlock.children.switchRule) from the
+// colon-form this file's other switch test exercises
+// (switchBlock.children.switchBlockStatementGroup) — Java's grammar allows
+// either form but never mixes them in one switch block, so this needed its
+// own branch, not a fallback off the existing one. Before this fix, arrow
+// bodies were entirely unwalked (0 call nodes), degrading modern-Java
+// switch expressions to regex-only detection.
+test('parseJavaFile: a sink inside an arrow-form switch-case body is captured', async () => {
+  const code = `
+public class C {
+    public void run(int n, String id) {
+        switch (n) {
+            case 1 -> log(id);
+            default -> cleanup(id);
+        }
+    }
+}
+`;
+  const ir = await parseJavaFile('C.java', code);
+  const calls = callNodes(ir, 'run');
+  assert.ok(calls.some(c => c.callee === 'log'), 'expected the arrow case-1 body call');
+  assert.ok(calls.some(c => c.callee === 'cleanup'), 'expected the arrow default body call');
+});
+
 test('parseJavaFile: a sink inside a do-while body is captured', async () => {
   const code = `
 public class C {
@@ -190,4 +215,39 @@ public class C {
   const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   assert.ok(irFindings.length >= 1, `expected an IR-TAINT finding for a sink inside a for-loop, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
+});
+
+// R8 Task 1 fix round 1: this is the canonical R8 for-loop success-metric
+// shape — a tainted COLLECTION reaching a sink through the loop variable,
+// not (as the test above intentionally is) a variable tainted outside the
+// loop that merely happens to be read inside a loop body over an unrelated
+// collection. Before this fix, `for (T x : xs)` never bound `x` to `xs`, so
+// even with the loop body now reachable in the CFG, `id` here carried no
+// taint provenance and this produced zero IR-TAINT findings.
+//
+// The iterated array is tainted via the existing, already-registered
+// `@RequestParam` annotation-source mechanism (R14(a)), applied to an
+// array-typed parameter — deliberately NOT `req.getParameterValues(...)`
+// (no catalog source entry for it) and NOT an array-initializer literal
+// (`String[] ids = { req.getParameter("id") };`, which lowers to
+// `{ kind: 'unknown' }` in exprFromCst — a separate, unrelated gap), so this
+// test isolates the for-each variable-binding fix alone.
+test('parseJavaFile: an end-to-end runScan detects a tainted collection flowing through its for-each loop variable into a sink', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-java-foreach-'));
+  fs.writeFileSync(path.join(dir, 'C.java'), `
+public class C {
+    public void run(@RequestParam String[] ids, java.sql.Statement stmt) throws Exception {
+        for (String id : ids) {
+            stmt.executeQuery(id);
+        }
+    }
+}
+`);
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(irFindings.length >= 1, `expected an IR-TAINT finding for a tainted collection reaching a sink via its for-each loop variable, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
 });
