@@ -11,6 +11,17 @@
 //   - method calls (statement-form): `obj.Method(args);` / `Method(args);`
 //   - return: `return expr;`
 //   - ASP.NET source-like access: `Request.Form["x"]`, `Request.QueryString[...]`
+//   - control flow (R8): `if`/`else`/`else if`/`while`/`for`/`foreach`/
+//     `switch`/`do`/`try`/`catch`/`finally` bodies are recursed into by
+//     `_buildCfg` (ported from parser-cpp.js's proven keyword+balanced-scan
+//     pattern), so a sink several levels deep inside a braced body is
+//     reachable. A `for` header's init clause becomes a real assign node
+//     (not just its test clause as the condition); a `foreach` header
+//     binds its loop variable to the iterated collection before the body
+//     is recursed into, so the loop variable itself carries taint
+//     provenance. Line numbers through this recursion are computed via
+//     exact character-offset lookup (`_lineStarts`/`_lineForOffset`), not
+//     approximated — see `_buildCfg`'s header comment.
 //
 // What we do NOT model (regex-fallback class limits):
 //   - LINQ expressions (treated as opaque expression)
@@ -19,8 +30,17 @@
 //   - generics on declarations beyond Type<...> name
 //   - attributes (skipped)
 //   - destructuring / tuples
-//   - control flow (if/for/while/switch) — body is treated as straight-line;
-//     this is enough for the source-reaches-sink shapes we care about.
+//   - control-flow BRANCHING semantics: `if`/`else`, `switch` cases, and
+//     `try`/`catch`/`finally` clauses are each recursed into and linked
+//     SEQUENTIALLY (matching parser-cpp.js's own "linear but complete"
+//     approximation) rather than as alternative/exceptional paths — every
+//     branch's body is reachable in the CFG, which is what taint analysis
+//     needs, but the graph does not model that only one branch executes
+//     per run.
+//   - a comment appearing MID-statement (after real content has already
+//     started) is left as literal text, not stripped — only a comment
+//     that precedes a statement (the common real-world shape) is skipped
+//     by `_splitStatements`; see that function's header comment.
 //
 // This is a v1. Promoted to a Roslyn-backed CST parser (analogous to
 // parser-py-cst.js) once we have a dotnet capability probe.
@@ -37,30 +57,195 @@ const METHOD_RE = new RegExp(
   '\\s*\\(([^)]*)\\)' +                             // params (group 3)
   '\\s*\\{', 'g');
 
-// Matches a top-level statement inside a method body. We split on `;` only
-// at brace-depth 0; this keeps simple lambdas inside calls intact.
+// Matches a top-level statement inside a method body. Splits on `;` at
+// brace-depth 0 (keeping simple lambdas inside calls intact), AND — R8 —
+// also flushes on a `}` that returns the SAME shared depth counter to 0.
+// That second trigger is what makes a braced control-flow body
+// (`if (...) { ... }`) come back as its OWN statement, ready for
+// `_buildCfg` to recurse into, instead of staying glued to whatever `;`
+// happens to terminate the NEXT statement (the old, pre-R8 behavior,
+// which is why control flow was invisible before this task).
+//
+// This is safe for C#'s `{}`-based collection/object initializers
+// (`new Foo { X = 1 }`) and lambda bodies passed as call arguments
+// (`xs.ForEach(x => { Process(x); })`) because `depth` here is ONE shared
+// counter across `{`, `(` and `[` (matching this file's pre-existing
+// convention) — a `}` only reaches depth 0 when EVERY enclosing brace,
+// paren and bracket has also closed, so a collection initializer's `}`
+// (which closes while the surrounding `(...)` of a call, or the
+// surrounding `;`-terminated `var x = ...` is still "open" only in the
+// sense of not yet having hit a flush point) or a lambda body's `}`
+// (which closes while the outer call's `(` is still open, i.e. depth > 0)
+// never trips this trigger. Only a `}` that is truly the LAST unmatched
+// delimiter does — precisely the shape a control-flow body's closing
+// brace has.
+//
+// Returns `{ text, start }[]` — `start` is the absolute character offset,
+// within `body`, of the first REAL (non-whitespace) character of `text`.
+// This offset is tracked directly against the ORIGINAL, untouched `body`
+// string (never against a reconstructed/trimmed copy), so `_buildCfg` can
+// compute exact line numbers via a single `_lineStarts`/`_lineForOffset`
+// pair built once per function body — see that pairing's comment. This
+// is the R8 lesson from the PHP task (3 fix rounds, all ultimately about
+// line-number precision): approximate offsets computed by re-counting
+// newlines in text that has already been trimmed or reconstructed are
+// lossy (a stripped comment, a dropped blank line) in ways that only
+// surface on real multi-line source; an exact offset into the pristine
+// original text cannot drift.
+//
+// Also splits on a `:` at depth 0 that terminates a `switch` body's
+// `case <expr>:` / `default:` label — those labels are not otherwise
+// separated by `;` or `}`, and without this a label stays glued onto
+// whatever real statement follows it, which then fails every shape
+// `_lowerStmt` recognizes and silently drops that statement. Scoped
+// tightly (the accumulated text so far must be EXACTLY `case <expr>` or
+// `default`) so an ordinary ternary's `:` can't mis-fire — a ternary's
+// left-hand accumulated text is never going to equal one of those two
+// shapes. `::` (the `global::`/qualified-name operator) is excluded via
+// the adjacent-character check so a qualified name's colon can never be
+// mistaken for a label terminator.
+//
+// Comment handling: a `//` or `/* */` comment is skipped outright (not
+// merely blanked) while NO real content has been accumulated yet for the
+// statement currently being scanned (i.e. only whitespace so far this
+// cycle) — the common real-world shape of a standalone comment line
+// immediately before a statement. Skipping it here, rather than letting
+// it become part of the statement text, matters because `_lowerStmt`
+// refuses (`startsWith('//')`) any statement text that begins with a
+// comment: without this, a comment on its own line right before e.g.
+// `var cmd = ...;` would glue onto it and silently drop that statement
+// from the CFG. A comment appearing mid-statement (after real content has
+// already started) is left as literal text — this parser has never
+// modelled comments in general, and fixing that broader gap is out of
+// scope for this task.
 function _splitStatements(body) {
   const out = [];
   let buf = '';
+  let contentStart = -1;   // absolute offset of the first real char of the
+                            // statement currently being accumulated, or -1
+                            // if none seen yet.
   let depth = 0;
-  let inString = null;     // null | '"' | "'" | '@"' style
+  let inString = null;     // null | '"' | "'"
   let escape = false;
+  const push = (c, idx) => {
+    buf += c;
+    if (contentStart === -1 && !/\s/.test(c)) contentStart = idx;
+  };
+  const flush = () => {
+    const trimmed = buf.trim();
+    if (trimmed) out.push({ text: trimmed, start: contentStart });
+    buf = '';
+    contentStart = -1;
+  };
   for (let i = 0; i < body.length; i++) {
     const c = body[i];
-    if (escape) { buf += c; escape = false; continue; }
+    if (contentStart === -1) {
+      if (c === '/' && body[i + 1] === '/') {
+        while (i < body.length && body[i] !== '\n') i++;
+        continue;
+      }
+      if (c === '/' && body[i + 1] === '*') {
+        i += 2;
+        while (i < body.length && !(body[i] === '*' && body[i + 1] === '/')) i++;
+        if (i < body.length) i += 1;
+        continue;
+      }
+    }
+    if (escape) { push(c, i); escape = false; continue; }
     if (inString) {
-      buf += c;
+      push(c, i);
       if (inString === '"' && c === '\\') { escape = true; continue; }
       if (c === inString) inString = null;
       continue;
     }
-    if (c === '"' || c === "'") { inString = c; buf += c; continue; }
-    if (c === '{' || c === '(' || c === '[') depth++;
-    if (c === '}' || c === ')' || c === ']') depth--;
+    if (c === '"' || c === "'") { inString = c; push(c, i); continue; }
+    if (c === '{' || c === '(' || c === '[') { depth++; push(c, i); continue; }
+    if (c === '}' || c === ')' || c === ']') {
+      depth--;
+      push(c, i);
+      if (c === '}' && depth === 0) flush();
+      continue;
+    }
+    if (c === ';' && depth === 0) { flush(); continue; }
+    if (c === ':' && depth === 0 && body[i + 1] !== ':' && body[i - 1] !== ':') {
+      const t = buf.trim();
+      if (/^case\s+[\s\S]+$/.test(t) || t === 'default') { flush(); continue; }
+    }
+    push(c, i);
+  }
+  flush();
+  return out;
+}
+
+// Build a sorted array of line-start offsets for `text` (index 0 holds the
+// start of line 1, i.e. always 0). Paired with `_lineForOffset` to turn a
+// character offset into an exact 1-based line number in O(log n) — ported
+// verbatim from parser-cpp.js's `_lineStarts`/`_lineForOffset`, the
+// proven reference for this exact-offset-based line computation pattern.
+function _lineStarts(text) {
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') starts.push(i + 1);
+  }
+  return starts;
+}
+
+function _lineForOffset(lineStarts, idx) {
+  let lo = 0, hi = lineStarts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (lineStarts[mid] <= idx) lo = mid; else hi = mid - 1;
+  }
+  return lo + 1;
+}
+
+// Find the index of the delimiter in `openCh`/`closeCh` that matches the
+// one at `openIdx`, respecting nesting and skipping string-literal
+// content. Returns -1 if unmatched.
+function _matchDelim(text, openIdx, openCh, closeCh) {
+  let depth = 0;
+  let inStr = null;
+  let escape = false;
+  for (let i = openIdx; i < text.length; i++) {
+    const c = text[i];
+    if (escape) { escape = false; continue; }
+    if (inStr) {
+      if (c === '\\') { escape = true; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = c; continue; }
+    if (c === openCh) depth++;
+    else if (c === closeCh) { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
+// Split a `for` header's `init; test; step` on top-level `;` (respecting
+// nested parens/brackets/strings) so the init clause can be surfaced as a
+// real assign node and the test clause used as the loop's condition —
+// mirroring parser-cpp.js's `_splitTopLevelAligned` use for the same
+// C-style for-loop shape.
+function _splitTopLevelSemi(s) {
+  const out = [];
+  let buf = '';
+  let depth = 0;
+  let inStr = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      buf += c;
+      if (c === '\\') { i++; buf += s[i] || ''; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = c; buf += c; continue; }
+    if (c === '(' || c === '{' || c === '[') depth++;
+    if (c === ')' || c === '}' || c === ']') depth--;
     if (c === ';' && depth === 0) { out.push(buf.trim()); buf = ''; continue; }
     buf += c;
   }
-  if (buf.trim()) out.push(buf.trim());
+  out.push(buf.trim());
   return out;
 }
 
@@ -263,6 +448,168 @@ function _qid(file, name, line, body) {
   return `${file}::${name}@${line}#${sha}`;
 }
 
+// Node-id counter for `_buildCfg`. Reset to 0 per function (see
+// `parseCSharpFile`) so ids stay `n0`, `n1`, ... within a single
+// function's `cfg.nodes` — matching the pre-R8 flat loop's `n${idx}`
+// naming convention, just keyed off a running node COUNT now rather than
+// the original statement array's index (a single top-level statement, an
+// `if` block, can now expand into many CFG nodes, so id generation can no
+// longer be tied to statement position). Confirmed by grep that nothing
+// in this file, its tests, or the dataflow engine depends on the exact
+// string shape of these ids.
+let _csNid = 0;
+function _nextNodeId() { return `n${_csNid++}`; }
+
+function _addNode(nodes, node) {
+  const id = _nextNodeId();
+  node.succ = node.succ || [];
+  node.pred = node.pred || [];
+  nodes[id] = node;
+  return id;
+}
+
+function _linkNodes(nodes, src, dst) {
+  if (!nodes[src] || !nodes[dst]) return;
+  if (!nodes[src].succ.includes(dst)) nodes[src].succ.push(dst);
+  if (!nodes[dst].pred.includes(src)) nodes[dst].pred.push(src);
+}
+
+// R8: recursive statement-splitting + CFG builder, replacing the previous
+// flat single-pass loop. Ported from parser-cpp.js's `emit()` — the
+// already-proven, working reference for exactly this shape of problem in
+// this codebase's hand-rolled-parser style: match a leading control-flow
+// keyword, balanced-scan its condition and its `{...}` body, and recurse
+// ONLY into that matched body. Every other `}` (a collection initializer's
+// or a lambda's) is left alone by this mechanism — see `_splitStatements`'
+// header comment for why those are never mistaken for a control-flow
+// body's close.
+//
+// Line numbers are computed EXACTLY, not approximated: `lineStarts` is
+// built once, by the caller, from the function's whole (untouched) body
+// text, and `baseAbs` is threaded through every recursive call as the
+// absolute offset — within that SAME body text — of `bodyText[0]`. Every
+// statement's line is then `funcStartLine + _lineForOffset(lineStarts,
+// baseAbs + stmt.start) - 1`. Because `baseAbs` and every sub-offset used
+// below (`afterHeader`, `lead`, matched-delimiter indices) are all
+// measured directly against the statement's own text — which
+// `_splitStatements` guarantees is a byte-for-byte contiguous slice of
+// the original body from `stmt.start` onward (see that function's
+// comment) — this cannot drift the way a newline-recount over
+// already-trimmed/reconstructed text can. That drift is exactly what cost
+// the PHP port of this same task 3 fix rounds; getting the exact-offset
+// version right from the start avoids repeating it here.
+function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, depth = 0) {
+  if (depth > 12) return prevId;
+  let prev = prevId;
+  for (const { text: s, start } of _splitStatements(bodyText)) {
+    if (!s) continue;
+    const absStart = baseAbs + start;
+    const line = funcStartLine + _lineForOffset(lineStarts, absStart) - 1;
+
+    const hm = s.match(/^(if|while|for|foreach|switch|else\s+if|else|do|try|catch|finally)\b/);
+    if (hm) {
+      const kwNorm = hm[1].replace(/\s+/g, ' ').trim();
+      let p = hm[0].length;
+      while (p < s.length && /\s/.test(s[p])) p++;
+      let condRaw = null, afterHeader = p;
+      if (s[p] === '(') {
+        const closeIdx = _matchDelim(s, p, '(', ')');
+        if (closeIdx !== -1) {
+          condRaw = s.slice(p + 1, closeIdx);
+          afterHeader = closeIdx + 1;
+        }
+      }
+
+      if (kwNorm === 'foreach' && condRaw !== null) {
+        // `foreach (var x in xs)` / `foreach (Type x in xs)`. Unlike the
+        // other headers below, foreach's parenthesised clause is not an
+        // expression — it's a declaration — so it gets its own
+        // loop-header node (no `cond`) plus, R8 fix-round lesson from
+        // Java's for-each gap: a synthesized assign binding the loop
+        // variable to the iterated collection BEFORE the body is
+        // recursed into. Without this, the body is reachable but the
+        // loop variable itself carries no taint provenance, so
+        // `foreach (var id in ids) { sink(id); }` could never fire even
+        // though `sink(x) { ... }` shapes elsewhere in the same function
+        // do.
+        const headerId = _addNode(nodes, { kind: 'loop-header', line });
+        _linkNodes(nodes, prev, headerId);
+        prev = headerId;
+        const fm = condRaw.match(/^([\s\S]+?)\s+in\s+([\s\S]+)$/);
+        if (fm) {
+          const declPart = fm[1].trim();
+          const loopVar = declPart.split(/\s+/).pop();
+          const iterExpr = fm[2].trim();
+          if (loopVar && /^[A-Za-z_]\w*$/.test(loopVar)) {
+            const assignId = _addNode(nodes, { kind: 'assign', line, target: loopVar, source: _lowerExpr(iterExpr) });
+            _linkNodes(nodes, prev, assignId);
+            prev = assignId;
+          }
+        }
+      } else {
+        const needsCond = /^(?:if|while|for|switch|else if|catch)$/.test(kwNorm);
+        if (needsCond && condRaw !== null) {
+          let condForNode = condRaw;
+          let initRaw = null;
+          if (kwNorm === 'for') {
+            // `for (init; test; step)` — surface the test as the
+            // condition and the init as a leading assign node (context
+            // (a): a C# for-loop commonly initializes a loop variable
+            // that the body then reads, e.g. `for (int i = 0; ...)`
+            // followed by `arr[i]` inside the body — without this the
+            // loop var's taint provenance is never established).
+            const parts = _splitTopLevelSemi(condRaw);
+            if (parts.length > 1) {
+              initRaw = parts[0];
+              condForNode = parts[1];
+            }
+          }
+          const ifId = _addNode(nodes, { kind: 'if', line, cond: _lowerExpr(condForNode) });
+          _linkNodes(nodes, prev, ifId);
+          prev = ifId;
+          if (kwNorm === 'for' && initRaw && initRaw.trim()) {
+            const initNode = _lowerStmt(initRaw.trim(), line);
+            if (initNode && initNode.kind === 'assign') {
+              const initId = _addNode(nodes, initNode);
+              _linkNodes(nodes, prev, initId);
+              prev = initId;
+            }
+          }
+        }
+      }
+
+      const rest = s.slice(afterHeader);
+      const lead = rest.match(/^\s*/)[0].length;
+      if (rest[lead] === '{') {
+        const closeRel = _matchDelim(rest, lead, '{', '}');
+        if (closeRel !== -1) {
+          const innerBaseAbs = absStart + afterHeader + lead + 1;
+          prev = _buildCfg(rest.slice(lead + 1, closeRel), nodes, prev, funcStartLine, lineStarts, innerBaseAbs, depth + 1);
+        }
+      } else if (rest.trim()) {
+        const innerBaseAbs = absStart + afterHeader;
+        prev = _buildCfg(rest, nodes, prev, funcStartLine, lineStarts, innerBaseAbs, depth + 1);
+      }
+      continue;
+    }
+
+    // A bare nested block `{ ... }` with no leading keyword.
+    const bare = s.match(/^\{([\s\S]*)\}$/);
+    if (bare) {
+      const innerBaseAbs = absStart + 1;
+      prev = _buildCfg(bare[1], nodes, prev, funcStartLine, lineStarts, innerBaseAbs, depth + 1);
+      continue;
+    }
+
+    const node = _lowerStmt(s, line);
+    if (!node) continue;
+    const id = _addNode(nodes, node);
+    _linkNodes(nodes, prev, id);
+    prev = id;
+  }
+  return prev;
+}
+
 export function parseCSharpFile(file, code) {
   if (!file || typeof code !== 'string') return null;
   const functions = [];
@@ -336,26 +683,28 @@ export function parseCSharpFile(file, code) {
     const extracted = _extractBody(code, braceIdx);
     if (!extracted) continue;
     const startLine = _lineAt(code, m.index);
-    const stmts = _splitStatements(extracted.body);
-    // Build a linear CFG: entry → s1 → s2 → ... → exit.
+    // R8 (lesson learned from the PHP port of this task, fix round 3): the
+    // body's own start line must be derived from `braceIdx` — the
+    // method's ACTUAL opening `{` — not approximated as `startLine + 1`.
+    // `startLine` (above) is the line of the METHOD DECLARATION match,
+    // which only happens to be one line before the body for a same-line
+    // signature; a multi-line signature or Allman brace style would make
+    // that approximation wrong by however many lines the signature spans.
+    const bodyStartLine = _lineAt(code, braceIdx + 1);
+    // Built once per function body; `_buildCfg` looks up every node's
+    // line in O(log n) via `_lineForOffset` against this SAME array — see
+    // `_buildCfg`'s header comment for why this (not per-statement
+    // newline-recounting) is what keeps line numbers exact through
+    // arbitrarily deep recursion.
+    const lineStarts = _lineStarts(extracted.body);
+    // Build the CFG: entry → (recursive statement/control-flow walk) → exit.
     const nodes = {};
     nodes.entry = { kind: 'entry', line: startLine, succ: [], pred: [] };
     nodes.exit  = { kind: 'exit',  line: startLine, succ: [], pred: [] };
-    let prev = 'entry';
-    let stmtLine = startLine;
-    for (let idx = 0; idx < stmts.length; idx++) {
-      const node = _lowerStmt(stmts[idx], stmtLine);
-      if (!node) continue;
-      const id = `n${idx}`;
-      nodes[id] = { ...node, succ: [], pred: [prev] };
-      nodes[prev].succ.push(id);
-      prev = id;
-      // Approximate per-statement line advance by counting '\n' in source.
-      // (Cheap, good-enough for finding line attribution.)
-      stmtLine += (stmts[idx].match(/\n/g) || []).length + 1;
-    }
-    nodes[prev].succ.push('exit');
-    nodes.exit.pred.push(prev);
+    _csNid = 0;
+    const tail = _buildCfg(extracted.body, nodes, 'entry', bodyStartLine, lineStarts, 0, 0);
+    nodes[tail].succ.push('exit');
+    nodes.exit.pred.push(tail);
     const cfg = { entry: 'entry', exit: 'exit', nodes };
     functions.push({
       qid: _qid(file, name, startLine, extracted.body),
