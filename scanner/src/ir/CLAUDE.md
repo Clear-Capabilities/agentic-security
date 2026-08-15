@@ -156,6 +156,11 @@ Every parser must produce this shape:
       name: 'function_name',
       line: 42,
       params: ['arg1', 'arg2', ...],
+      paramAnnotations: [{index, name, decorator}],  // R14(a): OPTIONAL — present only
+                                                        // when a param carries a recognized
+                                                        // framework decorator/attribute.
+                                                        // Populated by parser-cs.js,
+                                                        // parser-js.js, parser-java.js.
       file: 'file.py',
       cfg: {
         entry: 'nodeId',

@@ -9,9 +9,9 @@
 > make the history less accurate, not more.
 
 
-## Unreleased — Theme B+D and Theme E of the detection-gap remediation PRD (R6, R10, R11, R13, R14(b))
+## Unreleased — Theme B+D and Theme E of the detection-gap remediation PRD (R6, R10, R11, R13, R14(a), R14(b))
 
-Three independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land
+Four independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land
 together here. Each has its own subsection below, and each subsection carries
 its own verification paragraph — the numbers in one do not describe the
 other.
@@ -296,6 +296,117 @@ cleared on rerun), corpus (214/214, no drift), mutation (9/9 verdict-flip
 correct), layer-recall (no taint-layer regression; python/php/ruby taint
 counts unchanged from baseline, as expected — this work lands via dedicated
 unit tests, not new corpus entries) and self-scan (no drift).
+
+### Theme E (R14(a)) — annotation/decorator-shaped framework sources
+
+Closes the other half of Theme E's R14 item, left open when R14(b) landed.
+Framework sources expressed as parameter annotations/decorators — Spring's
+`@RequestParam`/`@PathVariable`/`@RequestBody`/`@RequestHeader`, ASP.NET
+Core's `[FromQuery]`/`[FromBody]`/`[FromForm]`/`[FromRoute]`/`[FromHeader]`,
+NestJS's `@Query()`/`@Body()`/`@Param()`/`@Headers()` — had no catalog
+representation at all: the catalog only matched callables and member reads,
+and an annotation is neither. A controller method whose only taint source
+was a decorated parameter was invisible to deep mode regardless of how
+directly it flowed to a sink.
+
+A new `annotation` catalog match kind (`dataflow/catalog.js`) is now
+consulted at every one of the taint engine's 8 `analyzeFunction` entry
+points via `_unionAnnotationTaint` (`dataflow/engine.js`), against a new
+IR side-channel field, `fn.paramAnnotations`, populated by three language
+extractors: `ir/parser-cs.js` (C#/ASP.NET Core attributes), `ir/parser-js.js`
+(NestJS decorators), and `ir/parser-java.js` (Spring annotations). The Java
+extractor also fixes a genuine, independent gap-fill that came bundled with
+the annotation work: Java parameter names were never extracted at all
+before this (`params: []` unconditionally) — real parameter names and
+Spring annotations are now both pulled from the same `formalParameterList`
+CST walk.
+
+**Accepted false-positive risk, documented rather than silently shipped:**
+matching is on the *bare* decorator/attribute name only (`ANNOTATION_INDEX`
+is keyed by `pa.decorator`, `dataflow/catalog.js`'s `matchAnnotationParams`)
+— there is no import-binding or namespace/package check confirming the
+decorator actually came from Spring/ASP.NET Core/NestJS. A user-defined
+decorator or attribute that happens to share one of these names (a custom
+`@Query()` in an unrelated JS library, a hand-rolled `[FromHeader]`
+attribute) would be treated as a tainted parameter source. This is the same
+risk class R6 (`docs/DETECTION_GAP_REMEDIATION_PRD.md`) already accepted and
+documented for bare-name sink matching before it grew a `receiverTypeIn`
+companion gate; R14(a) has no equivalent gate yet, and none of the three
+extractors have the type/import information available to build one today.
+Left as a known, accepted gap rather than blocking the whole feature on it.
+
+Per-task summary: Task 1 (catalog schema) needed one fix round (a missing
+provenance filter, a latent bug). Task 2 (engine plumbing across all 8
+`analyzeFunction` call sites) needed two: round 1's own review found the
+wiring solid but test coverage only jointly proved 2 of 8 sites, and while
+closing that gap it also made two wrong "impossible to isolate" claims about
+two further sites that the re-review refuted with real repros and round 2
+fixed properly. Two genuinely pre-existing, unrelated bugs were found along
+the way and logged in the PRD rather than fixed: a class-field cross-taint
+pass that has been dead code since v0.66.0, and a cross-file finding
+line-number mis-attribution bug. Task 3 (C# extraction) needed one fix round
+(stacked attributes on one parameter only captured the first) and surfaced a
+third data point for the PRD's own R8 item (parenthesized attribute
+arguments break the pre-existing C# method-detection regex), logged not
+fixed. Task 4 (JS/TS extraction) needed one fix round (a defaulted-parameter
+decorator was silently dropped by a type-check bug). Task 5 (Java extraction
++ real parameter extraction) needed one fix round (fully-qualified
+annotations recorded the wrong decorator name); its own review specifically
+investigated whether Java's dropped varargs parameters could cause
+positional param/annotation misattribution and confirmed they cannot, for
+any code that actually compiles.
+
+Task 6 (this entry) ran the full verification gate rather than trusting each
+task's own scoped tests, and it earned its keep twice over — two genuinely
+new, real issues, both fixed, neither papered over.
+
+First, the full `npm test` run (not exercised by any single task in
+isolation) surfaced a real gap: the four new NestJS catalog entries
+(`js-nestjs-query`, `js-nestjs-body`, `js-nestjs-param`, `js-nestjs-headers`)
+were missing the `provenance` label every JS source entry is required to
+carry (`test/phase7-extensions.test.js`, scoped to `test:sast`, which none
+of Tasks 1-5's own isolated `test:dataflow` runs exercised). Fixed by adding
+the same provenance values already used for the equivalent Express `req.*`
+sources (`url-param`/`http-body`/`path-param`/`header`).
+
+Second, `bench:self-scan:check` flagged a brand-new finding in
+`ir/parser-cs.js` itself: Task 3's new `attrRegex` had two independent
+`\s*` quantifiers both able to consume the same whitespace run when the
+overall match fails (no closing `]`) — a textbook adjacent-quantifier
+ReDoS. Verified as a genuine vulnerability, not a detector false positive,
+by direct timing measurement: matching against a crafted no-closing-bracket
+input scaled quadratically (2.5ms at 2,000 chars → 599ms at 32,000 chars),
+extrapolating to roughly ten minutes on a megabyte-scale adversarial input.
+Fixed by moving the leading `\s*` inside the optional parenthesized-argument
+group, removing the second independent quantifier; re-verified linear
+afterward (0.49ms at 200,000 chars) with byte-identical matches against
+every real attribute shape tested (stacked, spaced, empty-arg). The
+engine's own ReDoS heuristic (the third-party `safe-regex` library's
+star-height check) still flags the fixed pattern — confirmed a heuristic
+false positive on the now-safe regex, not a remaining vulnerability, by the
+same empirical timing method — so `bench/self-scan/BASELINE.json` was
+updated for `ir/parser-cs.js: 3→4`, documented here rather than further
+restructuring a regex already proven linear-time.
+
+**Verification — full gate re-run after both fixes:** `test:dataflow`
+670/670. `npm test` — all 12 scoped sub-scripts report `fail 0`
+(`test:smoke` 28, `test:glob`, `test:sast` 553, `test:posture` 1330,
+`test:dataflow` 670, `test:mcp` 102, `test:report` 111, `test:bench-modules`
+70, `test:lifecycle`, plus C++-dataflow and Python suites), no `npm error`
+anywhere in the run. `bench:cve-replay:check` 214/214 baselined entries, no
+drift. `bench:mutation:check` 9/9 verdict-flip correct (5/5 metamorphic
+hold, 4/4 adversarial flip). `bench:layer-recall:check` reports no
+taint-layer recall regression across any language — expected, since R14(a)
+lands via dedicated unit tests, not new corpus entries, matching R13's and
+R14(b)'s own precedent. `bench:self-scan:check` clean against the one
+deliberate, documented baseline update above; no other file moved. Bundle
+rebuilt (`dist/agentic-security.mjs` + `.sha256`); `npm run smoke` against
+the rebuilt bundle correctly reports critical/high findings on the
+deliberately-vulnerable fixture (exit code 3, this CLI's documented
+"critical findings present" convention), and the underlying `test:smoke`
+suite (28/28) already passed as part of the full gate above.
+
+**Full Theme E (R13 + R14) is now complete.**
 
 ## 0.136.10 — detection-gap remediation Theme A: dedup, family, and calibration for deep mode
 

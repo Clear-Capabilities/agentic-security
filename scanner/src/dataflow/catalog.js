@@ -188,10 +188,10 @@ export const CATALOG = [
   { kind: 'source', id: 'cs-aspnet-fromform',    language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromForm' },    label: '[FromForm] (ASP.NET Core)' },
   { kind: 'source', id: 'cs-aspnet-fromroute',   language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromRoute' },   label: '[FromRoute] (ASP.NET Core)' },
   { kind: 'source', id: 'cs-aspnet-fromheader',  language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromHeader' },  label: '[FromHeader] (ASP.NET Core)' },
-  { kind: 'source', id: 'js-nestjs-query',   language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Query' },   label: '@Query() (NestJS)' },
-  { kind: 'source', id: 'js-nestjs-body',    language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Body' },    label: '@Body() (NestJS)' },
-  { kind: 'source', id: 'js-nestjs-param',   language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Param' },   label: '@Param() (NestJS)' },
-  { kind: 'source', id: 'js-nestjs-headers', language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Headers' }, label: '@Headers() (NestJS)' },
+  { kind: 'source', id: 'js-nestjs-query',   language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Query' },   label: '@Query() (NestJS)',   provenance: 'url-param' },
+  { kind: 'source', id: 'js-nestjs-body',    language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Body' },    label: '@Body() (NestJS)',    provenance: 'http-body' },
+  { kind: 'source', id: 'js-nestjs-param',   language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Param' },   label: '@Param() (NestJS)',   provenance: 'path-param' },
+  { kind: 'source', id: 'js-nestjs-headers', language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Headers' }, label: '@Headers() (NestJS)', provenance: 'header' },
 
   // ─── SOURCES (Go) ─────────────────────────────────────────────────────────
   { kind: 'source', id: 'go-r-form',     language: 'go', framework: 'net/http', match: { type: 'member', object: 'r', prop: 'Form' },     label: 'r.Form' },

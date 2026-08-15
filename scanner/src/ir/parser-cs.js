@@ -276,7 +276,17 @@ export function parseCSharpFile(file, code) {
       const t = p.trim();
       if (!t) return null;
       // Extract ALL leading [AttributeName] or [AttributeName(...)] patterns (stacked or not).
-      const attrRegex = /^\[\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*\]/;
+      // R14(a) Task 6: the `\s*` before the optional parens group and the
+      // trailing `\s*` before `]` used to be two independent top-level
+      // quantifiers both able to consume the same whitespace run when the
+      // overall match fails (no closing `]`) — classic adjacent-quantifier
+      // ReDoS, confirmed quadratic (n=32000 chars took ~600ms; caught by
+      // this repo's own self-scan gate against its own new code). Moving
+      // the leading `\s*` inside the optional group removes the second
+      // degree of freedom the backtracker was exploiting; verified O(n)
+      // afterward (n=200000 chars in well under 1ms) with identical
+      // matches on every real attribute shape (stacked, spaced, empty-arg).
+      const attrRegex = /^\[\s*([A-Za-z_]\w*)(?:\s*\([^)]*\))?\s*\]/;
       let remaining = t;
       let match;
       const decorators = [];
