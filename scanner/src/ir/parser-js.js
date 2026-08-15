@@ -163,6 +163,7 @@ export function parseJsFile(file, code) {
     const qid = fnQid(file, scopeName, name, line);
     const entryId = nextNodeId();
     const exitId  = nextNodeId();
+    const paramAnnotations = [];
     const fn = {
       qid, name: name || 'anon', line,
       // Plain strings, per the IR shape contract (ir/CLAUDE.md: "params:
@@ -175,8 +176,25 @@ export function parseJsFile(file, code) {
       // mutated-parameter taint and context-sensitive entry states were both
       // unconditionally inert for every JS/TS function. Nothing in src/
       // reads a param's .kind or .props, so the richer shape bought nothing.
-      params: (params || []).map(p => {
+      params: (params || []).map((p, idx) => {
         if (!p) return null;
+        // NestJS/Angular-style parameter decorators (@Query(), @Body(), etc.)
+        // — Babel attaches these to the raw param node as `p.decorators`
+        // (or `p.left.decorators` for a defaulted param). This is a real
+        // array; every entry must be captured, not just the first, since
+        // stacked decorators (@Query() @SomeOtherDecorator() x) are legal
+        // and dropping later ones silently loses the source-relevant one.
+        const decoratorNodes = p.decorators || (p.left && p.left.decorators) || [];
+        for (const d of decoratorNodes) {
+          const expr = d.expression;
+          const decoratorName = expr?.type === 'CallExpression' ? expr.callee?.name : expr?.name;
+          // Only record when the parameter itself resolves to a plain
+          // identifier — decorators on destructured params are rare and
+          // out of scope for this plan.
+          if (decoratorName && p.type === 'Identifier') {
+            paramAnnotations.push({ index: idx, name: p.name, decorator: decoratorName });
+          }
+        }
         if (p.type === 'Identifier') return p.name;
         if (p.type === 'ObjectPattern') return '<obj>';
         if (p.type === 'ArrayPattern') return '<arr>';
@@ -193,6 +211,7 @@ export function parseJsFile(file, code) {
       writes: new Map(),
       file,
       _cursor: entryId, // current node ID — next addNode() links from here
+      ...(paramAnnotations.length ? { paramAnnotations } : {}),
     };
     fn.cfg.nodes.set(entryId, { id: entryId, kind: 'entry', succ: [], pred: [], line });
     fn.cfg.nodes.set(exitId,  { id: exitId,  kind: 'exit',  succ: [], pred: [], line });
