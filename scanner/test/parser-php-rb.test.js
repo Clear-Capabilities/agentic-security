@@ -77,6 +77,38 @@ function f($x) {
   }
 });
 
+// R14(b) final whole-branch review, Finding 1 (CRITICAL), function-body half:
+// `_lowerExpr`'s dot-concat branch recursed on its own unchanged input
+// forever whenever every `.` in the expression is nested inside
+// brackets/quotes (e.g. an array literal with a dotted string value), since
+// `_splitTopLevelDot` then returns the input as a single un-split part. This
+// was always reachable from inside a function body, even before R14(b) — the
+// module-level lowering (see parser-php-module-level.test.js) just widened
+// its reach enormously. Same pattern as parser-cs.js's `new Type(concat)`
+// stack-overflow guard.
+test('parsePhpFile: an array literal with a dotted string value inside a function body does not recurse infinitely', () => {
+  const code = `<?php
+function getRoutes() {
+    $routes = ["health" => "check.status"];
+    return $routes;
+}
+`;
+  const out = parsePhpFile('routes.php', code); // must not throw
+  assert.ok(out && out.functions.length === 1);
+});
+
+test('parsePhpFile: a top-level concat still lowers to a tpl (the recursion guard must not disable real concatenation)', () => {
+  const code = `<?php
+function f($id) {
+    $q = "SELECT * FROM t WHERE id=" . $id;
+    return $q;
+}
+`;
+  const out = parsePhpFile('concat.php', code);
+  const assign = Object.values(out.functions[0].cfg.nodes).find(n => n.kind === 'assign');
+  assert.equal(assign.source.kind, 'tpl');
+});
+
 // ── Ruby parser ──────────────────────────────────────────────────────────────
 
 test('parseRubyFile: captures def with params', () => {

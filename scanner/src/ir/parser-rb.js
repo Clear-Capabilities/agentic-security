@@ -79,33 +79,48 @@ function _extractRubyBody(src, defEnd) {
 const _RB_OPENERS = /^(?:if|unless|while|until|for|case|begin|do)\b/;
 const _RB_BLOCK_KW = /\b(?:def|class|module|if|unless|while|until|for|case|begin|do)\b/;
 
+// Returns `{ text, line }[]` — `line` is the 1-indexed line, relative to the
+// START of `body`, where that statement's text begins (the array index of
+// its first raw source line, +1). For a multi-line if/while/until block
+// this is the line of the OPENING keyword, not of `end`. Tracking this
+// directly from each raw line's position — rather than recomputing it
+// afterwards by counting newlines inside the joined, already-trimmed
+// statement text — avoids silently losing blank/comment lines that were
+// skipped along the way (they're dropped entirely by the `!line` guard
+// below and never contribute to any count once the text is joined). See
+// parser-php.js's twin fix and comment for the full rationale (Finding 2 of
+// the R14(b) final whole-branch review) — this is the same root bug in a
+// per-line splitter instead of a per-semicolon one.
 function _splitStatements(body) {
   const lines = body.split('\n');
   const out = [];
   let buf = '';
+  let bufLine = 0;
   let depth = 0;
-  for (const rawLine of lines) {
+  lines.forEach((rawLine, idx) => {
+    const lineNo = idx + 1;
     const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
+    if (!line || line.startsWith('#')) return;
     if (depth === 0 && _RB_OPENERS.test(line)) {
-      if (buf.trim()) out.push(buf.trim());
+      if (buf.trim()) out.push({ text: buf.trim(), line: bufLine });
       buf = line + '\n';
+      bufLine = lineNo;
       for (const m of line.matchAll(/\b(?:if|unless|while|until|for|case|begin|do|def|class|module)\b/g)) depth++;
       if (/\bend\b/.test(line)) depth--;
-      if (depth <= 0) { depth = 0; out.push(buf.trim()); buf = ''; }
-      continue;
+      if (depth <= 0) { depth = 0; out.push({ text: buf.trim(), line: bufLine }); buf = ''; }
+      return;
     }
     if (depth > 0) {
       buf += line + '\n';
       for (const m of line.matchAll(/\b(?:if|unless|while|until|for|case|begin|do|def|class|module)\b/g)) depth++;
       const endMatches = line.match(/\bend\b/g);
       if (endMatches) depth -= endMatches.length;
-      if (depth <= 0) { depth = 0; out.push(buf.trim()); buf = ''; }
-      continue;
+      if (depth <= 0) { depth = 0; out.push({ text: buf.trim(), line: bufLine }); buf = ''; }
+      return;
     }
-    out.push(line);
-  }
-  if (buf.trim()) out.push(buf.trim());
+    out.push({ text: line, line: lineNo });
+  });
+  if (buf.trim()) out.push({ text: buf.trim(), line: bufLine });
   return out;
 }
 
@@ -202,8 +217,19 @@ function _lowerStmt(stmt, line) {
     return { kind: 'call', line, callee: call.callee, args: _splitTopLevelCommas(call.argsText).map(_lowerExpr) };
   }
   // Statement-form call without parens (common Ruby idiom): redirect_to expr
+  //
+  // `class` and `module` must be excluded here: before R14(b), top-level
+  // text was never fed through `_lowerStmt` at all, so a wrapper like
+  // `class Foo < ApplicationController` never reached this heuristic. Now
+  // that every top-level statement is, an unguarded match lowers it to a
+  // bogus `{kind:'call', callee:'class', ...}` node — and since nearly
+  // every Ruby file wraps its top-level content in a `class`/`module`
+  // (an extremely common idiom), this alone caused most of this repo's own
+  // Ruby fixtures to gain a spurious `<module>` entry containing nothing
+  // but this one bogus node, contradicting the "zero existing fixtures
+  // gain a <module> entry" constraint for Ruby specifically.
   const bareCall = s.match(/^([a-z_]\w*)\s+(.+)$/s);
-  if (bareCall && /^[a-z_]/.test(bareCall[1]) && !/^(?:if|unless|while|until|for|case|when|elsif|else|end|return|raise|require|include|extend|attr_\w+)$/.test(bareCall[1])) {
+  if (bareCall && /^[a-z_]/.test(bareCall[1]) && !/^(?:if|unless|while|until|for|case|when|elsif|else|end|return|raise|require|include|extend|attr_\w+|class|module)$/.test(bareCall[1])) {
     return { kind: 'call', line, callee: bareCall[1], args: [_lowerExpr(bareCall[2])] };
   }
   return null;
@@ -218,6 +244,47 @@ function _lineAt(src, idx) {
 function _qid(file, name, line, body) {
   const sha = crypto.createHash('sha256').update(body).digest('hex').slice(0, 8);
   return `${file}::${name}@${line}#${sha}`;
+}
+
+// DEF_RE's leading alternation `(?:^|\n)` matches a single boundary
+// character (the newline ending the PRECEDING line) that belongs to
+// whatever precedes the def, not to the def itself. `m.index` always points
+// at the START of that boundary. `_blank` (below) never touches actual `\n`
+// characters — only non-newline characters are turned into spaces — so
+// including this boundary newline in the def's span would be harmless
+// either way; this still excludes it, purely so the span's meaning (source
+// consumed by the def declaration) doesn't include a character that
+// belongs to the previous line, mirroring parser-php.js's twin fix (there
+// the equivalent boundary CAN be a non-newline character like `;`, which
+// does need excluding).
+function _defBoundaryLen(idx) {
+  return idx === 0 ? 0 : 1;
+}
+
+// Blank out every real def's span in a COPY of the full source (replace its
+// characters with spaces, preserving every newline exactly). This lets the
+// WHOLE file be lowered in a single _buildCfg call at startLine=1 for the
+// module-level CFG, which keeps every remaining statement's reported line
+// number exactly equal to its real source line — no character is ever
+// deleted, only turned into a space, so nothing can shift. This replaces
+// the old per-gap slicing + per-gap startLine re-derivation, which
+// mis-tracked lines whenever a gap slice started with leading
+// blank/newline characters and broke the line-scoped
+// `agentic-security-ignore` suppression pragma for module-level findings.
+function _blankSpans(code, spans) {
+  let out = '';
+  let cursor = 0;
+  for (const span of spans) {
+    if (span.start > cursor) out += code.slice(cursor, span.start);
+    out += _blank(code.slice(span.start, span.end));
+    cursor = span.end;
+  }
+  out += code.slice(cursor);
+  return out;
+}
+
+function _blank(text) {
+  return text.replace(/[^\n]/g, ' ');
 }
 
 let _nid = 0;
@@ -243,13 +310,22 @@ function _extractRubyBlockBody(compound) {
   return lines.slice(1, -1).join('\n');
 }
 
+// `startLine` is the absolute source line of the FIRST raw line of
+// `bodyText`. Each statement's absolute line is `startLine + stmt.line - 1`
+// (`stmt.line` from _splitStatements is already 1-indexed and relative to
+// `bodyText`), so — unlike the old incremental `line++`/`line += newlines+1`
+// bookkeeping this replaced — no line is ever derived by re-counting
+// newlines in already-joined, already-trimmed text. That old scheme
+// silently dropped any blank line (or, at module level, any blanked-out def
+// span — see `_blankSpans`) that preceded a statement, which is exactly
+// what made module-level Ruby findings report the wrong source line.
 function _buildCfg(bodyText, nodes, prevId, startLine) {
   const stmts = _splitStatements(bodyText);
   let prev = prevId;
-  let line = startLine;
   for (const stmt of stmts) {
-    const s = stmt.trim();
-    if (!s || s.startsWith('#')) { line++; continue; }
+    const s = stmt.text;
+    const line = startLine + stmt.line - 1;
+    if (!s || s.startsWith('#')) continue;
 
     const ifMatch = s.match(/^(if|unless)\s+(.+)$/m);
     if (ifMatch && /\bend\b\s*$/.test(s)) {
@@ -262,7 +338,6 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
       _linkNodes(nodes, thenTail, join);
       _linkNodes(nodes, ifNode, join);
       prev = join;
-      line += (s.match(/\n/g) || []).length + 1;
       continue;
     }
 
@@ -276,16 +351,14 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
       const join = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, header, join);
       prev = join;
-      line += (s.match(/\n/g) || []).length + 1;
       continue;
     }
 
     const node = _lowerStmt(s, line);
-    if (!node) { line += (s.match(/\n/g) || []).length + 1; continue; }
+    if (!node) continue;
     const id = _addNode(nodes, node);
     _linkNodes(nodes, prev, id);
     prev = id;
-    line += (s.match(/\n/g) || []).length + 1;
   }
   return prev;
 }
@@ -334,30 +407,24 @@ export function parseRubyFile(file, code) {
       // logic is needed here — only wiring the call.
       calls: callSitesFromCfg(cfg),
     });
-    spans.push({ start: m.index, end: extracted.end });
+    spans.push({ start: m.index + _defBoundaryLen(m.index), end: extracted.end });
     DEF_RE.lastIndex = extracted.end;
   }
 
   // R14(b): lower top-level (module-scope) statements into a synthetic
   // <module> function, mirroring parser-js.js's Program-level lowering.
-  // Same gap-computation approach as parser-php.js's Task 3 twin.
+  // Every real def's span is blanked (see _blankSpans) in a copy of the
+  // full source, and the WHOLE blanked text is lowered in a single
+  // _buildCfg call at startLine=1 — this keeps every remaining statement's
+  // reported line number exactly equal to its real source line, since no
+  // character is ever deleted, only blanked to a space (newlines always
+  // survive). Same approach as parser-php.js's twin fix.
   spans.sort((a, b) => a.start - b.start);
+  const blanked = _blankSpans(code, spans);
   const modNodes = {};
   const modEntry = _addNode(modNodes, { kind: 'entry', line: 1 });
   const modExit = _addNode(modNodes, { kind: 'exit', line: 1 });
-  let modTail = modEntry;
-  let cursor = 0;
-  for (const span of spans) {
-    if (span.start > cursor) {
-      const gap = code.slice(cursor, span.start);
-      modTail = _buildCfg(gap, modNodes, modTail, _lineAt(code, cursor));
-    }
-    cursor = Math.max(cursor, span.end);
-  }
-  if (cursor < code.length) {
-    const gap = code.slice(cursor);
-    modTail = _buildCfg(gap, modNodes, modTail, _lineAt(code, cursor));
-  }
+  const modTail = _buildCfg(blanked, modNodes, modEntry, 1);
   _linkNodes(modNodes, modTail, modExit);
   const modHasContent = Object.values(modNodes).some(n => n.kind !== 'entry' && n.kind !== 'exit');
   let topLevel = null;

@@ -68,3 +68,54 @@ function b() {
   const b = ir.functions.find(f => f.name === 'b');
   assert.ok(a && b, 'both real functions must be extracted unchanged');
 });
+
+// R14(b) final whole-branch review, Finding 1 (CRITICAL): a top-level array
+// literal whose string values contain a `.` nested inside brackets/quotes
+// (e.g. "check.status") made `_lowerExpr`'s dot-concat branch recurse on
+// its own unchanged input forever, since `_splitTopLevelDot` returns the
+// input as a single un-split part when every `.` is nested. Before R14(b)
+// this was only reachable from inside a function body; the module-level
+// lowering now feeds every top-level statement through the same code path,
+// so a file with this shape anywhere at the top level crashed the WHOLE
+// file out of Layer-2 analysis (caught by ir/index.js's per-file try/catch,
+// silently, with no findings for anything else in the file either).
+test('parsePhpFile: a top-level array literal with a dotted string value does not crash the parser, and the real sink alongside it is still captured', () => {
+  const code = `<?php
+$routes = ["health" => "check.status"];
+system($_GET['cmd']);
+`;
+  const ir = parsePhpFile('routes.php', code);
+  assert.ok(ir, 'must not throw / must not silently drop the whole file');
+  const mod = ir.functions.find(f => f.name === '<module>');
+  assert.ok(mod, 'expected a <module> entry');
+  const nodes = Object.values(mod.cfg.nodes);
+  assert.ok(nodes.some(n => n.kind === 'call' && n.callee === 'system'), 'the real sink must still be captured despite the benign array literal alongside it');
+});
+
+// R14(b) final whole-branch review, Finding 2 (IMPORTANT): module-level CFG
+// nodes must report their REAL source line, not an approximation derived
+// from re-counting newlines in already-trimmed gap text (which silently
+// loses any blank line, or blanked-out function span, that preceded the
+// statement). This fixture places the sink several lines past a function
+// declaration so an off-by-N error (not just off-by-1) would be caught.
+test('parsePhpFile: a module-level statement past a function declaration reports its exact real source line', () => {
+  const code = `<?php
+function helper($x) {
+    return $x;
+}
+
+$cmd = $_GET['cmd'];
+system($cmd);
+`;
+  const ir = parsePhpFile('lines.php', code);
+  assert.ok(ir);
+  const mod = ir.functions.find(f => f.name === '<module>');
+  assert.ok(mod);
+  const nodes = Object.values(mod.cfg.nodes);
+  const assign = nodes.find(n => n.kind === 'assign' && n.target === '$cmd');
+  const call = nodes.find(n => n.kind === 'call' && n.callee === 'system');
+  assert.ok(assign, 'expected the $cmd assignment');
+  assert.ok(call, 'expected the system() call');
+  assert.equal(assign.line, 6, 'assignment is on real source line 6');
+  assert.equal(call.line, 7, 'call is on real source line 7');
+});
