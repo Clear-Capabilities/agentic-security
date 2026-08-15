@@ -44,17 +44,56 @@ const FUNC_RE = new RegExp(
 // cause of PHP module-level findings reporting the wrong line and, in turn,
 // making the line-scoped `agentic-security-ignore` suppression pragma inert
 // for them (Finding 2 of the R14(b) final whole-branch review).
-// True when the next non-whitespace token starting at `body[i + 1]` is one
-// of the `else`/`catch`/`finally` continuation keywords — the ones that
-// must stay glued to a preceding `}` rather than starting a new split
-// entry (see the R8 comment at the `}`-flush call site below). Whitespace
-// only is skipped (not comments), matching the `\s*` `ifMatch` and the
-// try/catch/finally recognizer (`_scanTryCatchFinally`) themselves allow
-// between `}` and the keyword — a comment in between was already
-// unsupported before this task and stays that way.
+// True when the next non-whitespace, non-comment token starting at
+// `body[i + 1]` is one of the `else`/`catch`/`finally` continuation
+// keywords — the ones that must stay glued to a preceding `}` rather than
+// starting a new split entry (see the R8 comment at the `}`-flush call
+// site below). Both whitespace AND comments (`//` and `/* */`) are
+// skipped, mirroring `_splitStatements`' own comment-skip logic.
+//
+// R8 fix round 3: whitespace-only skipping was a real regression this
+// task introduced (not a pre-existing limitation, as an earlier version of
+// this comment incorrectly claimed). `} /* mid */ else { ... }` or
+// `}\n// explain\nelse { ... }` are unremarkable, real PHP shapes — a
+// comment explaining WHY an else/catch/finally branch exists is a normal
+// thing to write immediately above it. With whitespace-only skipping, the
+// comment defeated the lookahead, the `}`-flush fired anyway, and the
+// entire `else`/`catch`/`finally` body was silently dropped from the CFG.
+// For `catch`/`finally` specifically this is confirmed a clean, provable
+// fix (see the `catch`/`finally` regression tests in
+// `test/parser-php-control-flow.test.js`, which fail without this change
+// and pass with it) — `_scanTryCatchFinally`'s balanced-brace scanning has
+// no competing bug to interact with. For `else` specifically, this
+// lookahead fix is still correct and necessary, but its OUTCOME is masked
+// in practice by `ifMatch`'s own separate, pre-existing, out-of-scope
+// greedy-capture bug (the then-body group unconditionally swallows
+// through to the else-body's own closing `}`, dropping the else body
+// regardless of whether a comment was ever involved — confirmed by
+// testing commit `735ef63`, before this task started, with an identical
+// comment-free else fixture: already broken then, for an unrelated
+// reason). `ifMatch` and `_scanTryCatchFinally` both already tolerate an
+// ordinary `\s*`/whitespace gap between `}` and the keyword; skipping
+// comments here too keeps this lookahead in sync with what those
+// recognizers can actually parse once the flush is correctly suppressed.
 function _continuationKeywordAhead(body, i) {
   let j = i + 1;
-  while (j < body.length && /\s/.test(body[j])) j++;
+  let moved = true;
+  while (moved) {
+    moved = false;
+    while (j < body.length && /\s/.test(body[j])) { j++; moved = true; }
+    if (body[j] === '/' && body[j + 1] === '/') {
+      while (j < body.length && body[j] !== '\n') j++;
+      moved = true;
+      continue;
+    }
+    if (body[j] === '/' && body[j + 1] === '*') {
+      j += 2;
+      while (j < body.length && !(body[j] === '*' && body[j + 1] === '/')) j++;
+      if (j < body.length) j += 2; // past the closing '*/'
+      moved = true;
+      continue;
+    }
+  }
   for (const kw of ['else', 'catch', 'finally']) {
     if (body.startsWith(kw, j)) {
       const after = body[j + kw.length];
@@ -793,7 +832,25 @@ export function parsePhpFile(file, code) {
     const nodes = {};
     const entry = _addNode(nodes, { kind: 'entry', line: startLine });
     const exit = _addNode(nodes, { kind: 'exit', line: startLine });
-    const tail = _buildCfg(extracted.body, nodes, entry, startLine + 1);
+    // R8 fix round 3: the function body's `startLine` must be derived from
+    // `braceIdx` (the function's actual opening `{`), not from `startLine + 1`
+    // (a flat one-line offset from `m.index`, the FUNC_RE match start —
+    // typically a preceding boundary character/token, not the function
+    // itself). `startLine + 1` is only correct when `{` sits on the very
+    // next physical line after wherever `m.index` landed, which holds for
+    // ordinary same-line-brace, single-line-signature functions but breaks
+    // for: Allman brace style (`{` on its own line — off by 1), a
+    // multi-line function signature (off by 2-3, one per extra signature
+    // line), and a function preceded by blank lines (off by however many
+    // blank lines precede it — a nearly universal real-world style). This
+    // reproduces the exact same pragma-inert/wrong-line-suppresses symptom
+    // fix rounds 1-2 already fixed for control-flow bodies, just at the
+    // function-body base line instead of a nested recursion site — pre-
+    // existing to this task (confirmed byte-identical across the original
+    // commit and both prior fix rounds), not something this task's own
+    // changes introduced, but it defeats the same user-facing goal so it's
+    // fixed here rather than left for a separate task.
+    const tail = _buildCfg(extracted.body, nodes, entry, _lineAt(code, braceIdx + 1));
     _linkNodes(nodes, tail, exit);
     const cfg = { entry, exit, nodes };
     functions.push({

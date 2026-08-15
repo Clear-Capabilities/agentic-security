@@ -372,3 +372,135 @@ function run($conn) {
     'the pragma placed on the REAL sink line (line 6, inside the if-body, one line after an unrelated // comment) must suppress the finding — ' +
     'before the fix round 2 fix, the comment ate a newline from the line count and the finding was reported at the wrong line, making this pragma placement inert');
 });
+
+// --- R8 fix round 3 regressions ----------------------------------------
+//
+// A third task review found two more problems: (1) a PRE-EXISTING bug (not
+// introduced by this task, confirmed byte-identical across the original
+// commit and both prior fix rounds) in `parsePhpFile`'s function-body base
+// line — it used a flat `startLine + 1` offset from where `FUNC_RE`
+// matched, correct only when the function's opening `{` sits on the very
+// next physical line, which breaks for Allman brace style, multi-line
+// signatures, and (very commonly) a function preceded by blank lines; and
+// (2) a genuine REGRESSION this task's own round 1 introduced:
+// `_continuationKeywordAhead` (the lookahead that keeps `}`+`else`/
+// `catch`/`finally` glued together) only skipped whitespace when scanning
+// ahead for the continuation keyword, not comments — so a comment between
+// `}` and `else`/`catch`/`finally` (an unremarkable, real shape: explaining
+// why a catch/finally clause exists) defeated the lookahead, the flush
+// fired anyway, and the ENTIRE continuation body was silently dropped.
+// Both are fixed above.
+
+test('parsePhpFile: a sink inside an Allman-brace-style function\'s if-body is reported at its EXACT source line', () => {
+  const code = `<?php
+function f($conn)
+{
+    if (true) {
+        mysqli_query($conn, 'x');
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  const call = calls.find(c => c.callee === 'mysqli_query');
+  assert.ok(call, 'expected the if-body sink to be captured');
+  assert.equal(call.line, 5, 'sink is on real source line 5 — Allman brace style (`{` on its own line, line 3) must not shift the function body\'s base line by assuming the brace sits on the `function` keyword\'s own line');
+});
+
+test('parsePhpFile: a sink inside a function preceded by blank lines is reported at its EXACT source line', () => {
+  const code = `<?php
+
+
+function f($conn) {
+    if (true) {
+        mysqli_query($conn, 'x');
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  const call = calls.find(c => c.callee === 'mysqli_query');
+  assert.ok(call, 'expected the if-body sink to be captured');
+  assert.equal(call.line, 6, 'sink is on real source line 6 — 2 blank lines (lines 2-3) before the function declaration must not be lost from the function body\'s base line computation');
+});
+
+test('parsePhpFile: a // comment between a try-body\'s closing brace and `catch` does not drop the catch body', () => {
+  const code = `<?php
+function f($conn) {
+    try {
+        sink1($conn);
+    }
+    // explain why we catch here
+    catch (Exception $e) {
+        sink2($e);
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'sink1'), 'expected the try-body sink');
+  assert.ok(calls.some(c => c.callee === 'sink2'), 'expected the catch-body sink — a `//` comment between `}` and `catch` must not defeat the continuation-keyword lookahead and cause the `}`-flush to fire early, which would silently drop this entire catch body');
+});
+
+test('parsePhpFile: a /* */ comment between a catch-body\'s closing brace and `finally` does not drop the finally body', () => {
+  const code = `<?php
+function f($conn) {
+    try {
+        sink1($conn);
+    } catch (Exception $e) {
+        sink2($e);
+    } /* explain why we also need finally */ finally {
+        sink3($conn);
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'sink1'), 'expected the try-body sink');
+  assert.ok(calls.some(c => c.callee === 'sink2'), 'expected the catch-body sink');
+  assert.ok(calls.some(c => c.callee === 'sink3'), 'expected the finally-body sink — a `/* */` comment between `}` and `finally` must not defeat the continuation-keyword lookahead. This test uses `finally` rather than `else` for the `/* */` case because `_scanTryCatchFinally`\'s balanced-brace scanning (fix round 1) has no greedy-capture issue, cleanly isolating THIS fix from the separate, pre-existing, explicitly out-of-scope `ifMatch` greedy-capture bug documented below.');
+});
+
+test('parsePhpFile: a /* */ comment between an if-body\'s closing brace and `else` does not cause the `}`-flush to fire early (scoped assertion — see note)', () => {
+  // NOTE on scope: this does NOT assert the else-body's own sink is
+  // captured. `ifMatch`'s regex (`^if...\{([\s\S]*)\}(?:\s*else\s*\{
+  // ([\s\S]*)\})?\s*$`) has a SEPARATE, pre-existing, already-reviewed-
+  // and-explicitly-out-of-scope bug: its then-body capture group is
+  // greedy and unconditionally swallows through to the LAST `}` in the
+  // statement, leaving the optional else-group unmatched — this drops an
+  // else-body's content regardless of whether a comment is present (
+  // confirmed by direct regex tracing AND by testing commit `735ef63`,
+  // the state before this task started, with the IDENTICAL comment-free
+  // fixture: the else body was already dropped then, for the same
+  // structural reason). Round 1 fixed the analogous bug for try/catch/
+  // finally by replacing its regex with a balanced-brace scanner (see the
+  // `finally` test above, which DOES assert its sink); `ifMatch` itself
+  // was never touched by this task and fixing its greedy-capture bug is
+  // out of this fix round's scope per the reviewer's explicit instruction
+  // in an earlier round. What THIS test verifies is narrower and fully
+  // within this fix round's actual scope: the comment must not defeat
+  // `_continuationKeywordAhead`'s lookahead and cause the `}`-flush to
+  // fire early — which would fragment the if/else into two orphaned
+  // pieces and silently drop a TRAILING statement's sink too (verified:
+  // before this fix round, `_continuationKeywordAhead` was whitespace-
+  // only, but — separately confirmed — the trailing statement survived
+  // regardless in this exact shape; this test still pins the composition
+  // as a whole staying well-formed under the comment-aware lookahead).
+  const code = `<?php
+function f($x, $conn) {
+    if ($x) {
+        sink_a();
+    } /* mid */ else {
+        sink_b();
+    }
+    mysqli_query($conn, 'x');
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'sink_a'), 'expected the if-body sink to still be captured');
+  assert.ok(calls.some(c => c.callee === 'mysqli_query'), 'expected the statement AFTER the if/else to still be captured as its own node, proving the comment did not corrupt subsequent parsing');
+  const fn = ir.functions.find(f => f.name === 'f');
+  const ifNodes = Object.values(fn.cfg.nodes).filter(n => n.kind === 'if');
+  assert.equal(ifNodes.length, 1, 'expected exactly ONE if-node for this single if/else construct — a premature `}`-flush caused by the comment defeating the lookahead would otherwise still parse cleanly here (this exact shape happens to survive either way), so this assertion is a stability pin, not proof of the fix by itself; see the `catch`/`finally` tests above for that proof');
+});
