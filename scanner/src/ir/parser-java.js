@@ -288,6 +288,96 @@ function buildCfgFromBody(bodyNode) {
       emit({ kind: 'loop-header', cond: cond ? exprFromCst(cond) : null, line: _lineOf(w), succ: [] });
       for (const sub of (w.children?.statement || [])) walkStmts(sub);
     }
+    if (kids.forStatement) {
+      const f = kids.forStatement[0];
+      // Both basicForStatement (`for(init;test;step)`) and
+      // enhancedForStatement (`for(T x : xs)`) wrap a `statement` child for
+      // the loop body — same shape whileStatement already walks. Confirmed
+      // via direct java-parser CST inspection (java-parser@3.0.1): each
+      // forStatement's `children` has exactly one of these two keys, never
+      // both, and each carries `statement` directly.
+      const basic = f.children?.basicForStatement?.[0];
+      const enhanced = f.children?.enhancedForStatement?.[0];
+      const inner = basic || enhanced;
+      const cond = basic?.children?.expression?.[0];
+      emit({ kind: 'loop-header', cond: cond ? exprFromCst(cond) : null, line: _lineOf(f), succ: [] });
+      for (const sub of (inner?.children?.statement || [])) walkStmts(sub);
+    }
+    if (kids.doStatement) {
+      const d = kids.doStatement[0];
+      const cond = d.children?.expression?.[0];
+      emit({ kind: 'loop-header', cond: cond ? exprFromCst(cond) : null, line: _lineOf(d), succ: [] });
+      for (const sub of (d.children?.statement || [])) walkStmts(sub);
+    }
+    if (kids.tryStatement) {
+      const t = kids.tryStatement[0];
+      emit({ kind: 'noop', line: _lineOf(t), succ: [] });
+      // Plain `try { ... }` has direct `block`/`catches`/`finally` children.
+      // Try-with-resources (`try (Resource r = ...) { ... }` — the idiomatic
+      // JDBC shape) wraps in a distinct `tryWithResourcesStatement`
+      // intermediate node, and — confirmed via direct CST inspection, this
+      // is the one place the plan's illustrative code was wrong — that
+      // intermediate node carries its OWN `block`/`catches`/`finally`
+      // children; a plain tryStatement's outer `children` is just
+      // `{ tryWithResourcesStatement: [...] }` with nothing else, so
+      // reading `catches`/`finally` off the outer `t` (as the plan's draft
+      // did) silently drops the catch/finally bodies of every
+      // try-with-resources block. `container` below picks the node that
+      // actually owns them.
+      const twr = t.children?.tryWithResourcesStatement?.[0];
+      const container = twr || t;
+      if (twr) {
+        const resSpec = twr.children?.resourceSpecification?.[0];
+        // resourceSpecification -> resourceList -> resource[] -> each a
+        // localVariableDeclaration-shaped resource; reuse the existing
+        // localVariableDeclarationStatement lowering shape directly rather
+        // than duplicating it, by walking each resource as if it were one.
+        const resources = resSpec?.children?.resourceList?.[0]?.children?.resource || [];
+        for (const r of resources) {
+          const vdecl = r.children?.localVariableDeclaration?.[0] || r;
+          const declarators = vdecl?.children?.variableDeclaratorList?.[0]?.children?.variableDeclarator || [];
+          for (const d of declarators) {
+            const target = d.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
+            const initExpr = d.children?.variableInitializer?.[0]?.children?.expression?.[0] || d.children?.expression?.[0];
+            if (target) emit({ kind: 'assign', target, source: initExpr ? exprFromCst(initExpr) : { kind: 'unknown' }, line: _lineOf(r), succ: [] });
+          }
+        }
+      }
+      const bodyBlock = container.children?.block?.[0];
+      if (bodyBlock) walkStmts(bodyBlock);
+      const catches = container.children?.catches?.[0]?.children?.catchClause || [];
+      for (const cc of catches) {
+        const cblock = cc.children?.block?.[0];
+        if (cblock) walkStmts(cblock);
+      }
+      // Confirmed via direct CST inspection: the key is `finally`, no
+      // trailing underscore, in both the plain and try-with-resources
+      // shapes (java-parser@3.0.1).
+      const fin = container.children?.finally?.[0];
+      const finBlock = fin?.children?.block?.[0];
+      if (finBlock) walkStmts(finBlock);
+    }
+    if (kids.switchStatement) {
+      const sw = kids.switchStatement[0];
+      const cond = sw.children?.expression?.[0];
+      emit({ kind: 'if', cond: cond ? exprFromCst(cond) : null, line: _lineOf(sw), succ: [] });
+      const groups = sw.children?.switchBlock?.[0]?.children?.switchBlockStatementGroup || [];
+      for (const g of groups) {
+        const bss = g.children?.blockStatements?.[0];
+        if (bss) walkStmts(bss);
+      }
+    }
+    // Bare nested block `{ ... }` with no leading keyword. The
+    // `statementWithoutTrailingSubstatement` branch above already recurses
+    // into each such node via walkStmts; confirmed via direct CST
+    // inspection that a bare block lands as
+    // `statementWithoutTrailingSubstatement[0].children.block[0]`, so this
+    // branch — which fires for any node with a `block` child, not just
+    // this one — picks it up on the recursive call without a dedicated
+    // bare-block branch.
+    if (kids.block) {
+      for (const b of kids.block) walkStmts(b);
+    }
   }
 
   if (nodes[prev]) {
