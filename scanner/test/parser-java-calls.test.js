@@ -74,6 +74,38 @@ public class App {
     `expected a buildCmd edge from handler; handler edges: ${JSON.stringify(handlerEdges)}`);
 });
 
+test('buildCallGraph resolves a cross-class Java call to the real target qid', async () => {
+  // The other two callgraph tests above only ever check an UNRESOLVED edge
+  // (the same-class bare-call gap this file documents) — that leaves the
+  // whole suite unable to distinguish "Java call resolution works" from
+  // "Java call resolution is completely broken." This test proves the
+  // positive case: a qualified cross-class call (`Helper.sanitize(id)`,
+  // extracted as callee `"Helper.sanitize"`) resolves via callgraph.js's
+  // `classMethods` index to the real callee qid, not just a calleeName.
+  const helperIr = await parseJavaFile('Helper.java', `
+public class Helper {
+  static String sanitize(String s) {
+    return s.trim();
+  }
+}
+`);
+  const appIr = await parseJavaFile('App.java', `
+public class App {
+  void handler(String id) {
+    Helper.sanitize(id);
+  }
+}
+`);
+  const callGraph = buildCallGraph({ 'Helper.java': helperIr, 'App.java': appIr }, {});
+  const handlerFn = appIr.functions.find(f => f.name === 'App.handler');
+  const sanitizeFn = helperIr.functions.find(f => f.name === 'Helper.sanitize');
+  assert.ok(handlerFn, 'expected handler function');
+  assert.ok(sanitizeFn, 'expected sanitize function');
+  const edge = callGraph.edges.find(e => e.caller === handlerFn.qid && e.calleeName === 'Helper.sanitize');
+  assert.ok(edge, `expected a Helper.sanitize edge from handler; edges: ${JSON.stringify(callGraph.edges)}`);
+  assert.equal(edge.callee, sanitizeFn.qid, 'expected the edge to resolve to the real callee qid, not stay unresolved');
+});
+
 test('a call inside a control-flow body (R8 shape) is still captured in fn.calls', async () => {
   // R9 is only useful because R8 already made sure calls inside if/for/
   // try/switch bodies are reachable in the CFG at all — this test pins
