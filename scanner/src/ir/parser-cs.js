@@ -275,13 +275,23 @@ export function parseCSharpFile(file, code) {
     const params = paramsText.split(',').map((p, idx) => {
       const t = p.trim();
       if (!t) return null;
-      // Extract leading [AttributeName] or [AttributeName(...)] before processing the name.
-      const attrMatch = t.match(/^\[\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*\]/);
+      // Extract ALL leading [AttributeName] or [AttributeName(...)] patterns (stacked or not).
+      const attrRegex = /^\[\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*\]/;
+      let remaining = t;
+      let match;
+      const decorators = [];
+      while ((match = attrRegex.exec(remaining)) !== null) {
+        decorators.push(match[1]);
+        remaining = remaining.slice(match[0].length).trim();
+      }
       // "Type name" → name. "Type<T> name" → name. "Type[] name = default" → name.
-      const last = t.replace(/=.*$/, '').trim().split(/\s+/).pop();
+      const last = remaining.replace(/=.*$/, '').trim().split(/\s+/).pop();
       const paramName = last && /^[A-Za-z_][\w]*$/.test(last) ? last : null;
-      if (attrMatch && paramName) {
-        paramAnnotations.push({ index: idx, name: paramName, decorator: attrMatch[1] });
+      // Add an entry for each decorator found.
+      for (const decorator of decorators) {
+        if (paramName) {
+          paramAnnotations.push({ index: idx, name: paramName, decorator });
+        }
       }
       return paramName;
     }).filter(Boolean);

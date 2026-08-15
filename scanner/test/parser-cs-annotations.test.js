@@ -60,6 +60,28 @@ public class UserController {
   assert.deepEqual(fn.paramAnnotations, [{ index: 0, name: 'q', decorator: 'FromQuery' }]);
 });
 
+test('parseCSharpFile: stacked attributes [Required][FromQuery] captures all decorators', () => {
+  const code = `
+public class UserController {
+    public string Show([Required][FromQuery] string q) {
+        return q;
+    }
+}
+`;
+  const ir = parseCSharpFile('UserController.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => f.name.includes('Show'));
+  assert.deepEqual(fn.params, ['q']);
+  assert.ok(fn.paramAnnotations);
+  // Both decorators should be captured
+  assert.equal(fn.paramAnnotations.length, 2);
+  const decoratorNames = fn.paramAnnotations.map(pa => pa.decorator);
+  assert.ok(decoratorNames.includes('Required'));
+  assert.ok(decoratorNames.includes('FromQuery'));
+  // Both should reference the same parameter
+  assert.ok(fn.paramAnnotations.every(pa => pa.name === 'q'));
+});
+
 test('R14(a) end-to-end: ASP.NET Core [FromQuery] flowing to a SQL sink is detected', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r14a-cs-'));
   fs.writeFileSync(path.join(dir, 'UserController.cs'), `
