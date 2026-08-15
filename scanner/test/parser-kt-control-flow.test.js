@@ -135,3 +135,18 @@ fun run(call: Any) {
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   assert.ok(irFindings.length >= 1, `expected an IR-TAINT finding, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
 });
+
+test('parseKotlinFile: deeply chained braceless if statements do not overflow the stack', () => {
+  // Final-review fix: _consumeChunk recursed into the braceless single-
+  // statement body (`if (x) doThing()`) BEFORE its own `depth > 12` guard
+  // ran, so the descent itself was unbounded — only chaining within a
+  // single call was capped. This reproduces the reviewer's confirmed
+  // RangeError repro (overflows by n=5000, this uses 5000) and asserts the
+  // guard now returns gracefully instead of blowing the stack.
+  const n = 5000;
+  const code = `fun f(id: String) {\n${'if (a) '.repeat(n)}sink(id)\n}`;
+  const ir = parseKotlinFile('f.kt', code);
+  assert.ok(ir, 'expected parseKotlinFile to return a result instead of throwing');
+  const fn = ir.functions.find(f => f.name === 'f');
+  assert.ok(fn, 'expected a "functions" entry for f, proving the parse completed');
+});

@@ -413,6 +413,7 @@ const NEEDS_COND_RE = /^(?:if|while|when|else if|catch)$/;
 // untouched body text — of `s[0]`; every position derived below is
 // `abs0 + <offset within s>`, never re-approximated.
 function _consumeChunk(s, abs0, nodes, prevId, funcStartLine, lineStarts, depth) {
+  if (depth > 12) return prevId;
   let prev = prevId;
   let pos = 0;
   let first = true;
