@@ -272,6 +272,22 @@ export function parseCSharpFile(file, code) {
     const name = m[2];
     const paramsText = m[3] || '';
     const paramAnnotations = [];
+    // `keptIdx` tracks the parameter's position in the FILTERED array — the
+    // same array `fn.params` ends up being — not the raw pre-filter split
+    // position (`idx` below). It only advances when a fragment actually
+    // yields a kept parameter name, so an empty/unparseable comma fragment
+    // ahead of an annotated parameter doesn't shift that parameter's
+    // recorded `index` off of its real position in `fn.params`. R14(a)
+    // final-review fix: Java (`parser-java.js`) and JS/TS (`parser-js.js`)
+    // both already compute `index` this way (position in the final
+    // `fn.params`, per the plan's Global Constraints); C# was the only one
+    // of the three using the raw split index, which silently diverges
+    // whenever an earlier fragment is filtered out. Nothing reads
+    // `paramAnnotations[i].index` today (confirmed by grep), so this was
+    // latent — but the field is kept for future k>1 call-string work, so a
+    // silently-wrong producer here would become a real bug once something
+    // starts consuming it.
+    let keptIdx = 0;
     const params = paramsText.split(',').map((p, idx) => {
       const t = p.trim();
       if (!t) return null;
@@ -304,11 +320,14 @@ export function parseCSharpFile(file, code) {
       // "Type name" → name. "Type<T> name" → name. "Type[] name = default" → name.
       const last = remaining.replace(/=.*$/, '').trim().split(/\s+/).pop();
       const paramName = last && /^[A-Za-z_][\w]*$/.test(last) ? last : null;
-      // Add an entry for each decorator found.
-      for (const decorator of decorators) {
-        if (paramName) {
-          paramAnnotations.push({ index: idx, name: paramName, decorator });
+      // Add an entry for each decorator found, indexed by position in the
+      // FILTERED params array (see `keptIdx` comment above) — not `idx`,
+      // the raw pre-filter split position.
+      if (paramName) {
+        for (const decorator of decorators) {
+          paramAnnotations.push({ index: keptIdx, name: paramName, decorator });
         }
+        keptIdx++;
       }
       return paramName;
     }).filter(Boolean);

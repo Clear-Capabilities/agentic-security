@@ -82,6 +82,31 @@ public class UserController {
   assert.ok(fn.paramAnnotations.every(pa => pa.name === 'q'));
 });
 
+test('parseCSharpFile: index reflects position in the FILTERED params array, not the raw comma-split position', () => {
+  // An empty comma fragment ahead of the annotated parameter is dropped by
+  // the `if (!t) return null` / `.filter(Boolean)` pipeline, so the raw
+  // split has 2 entries (["", " [FromQuery] string q"]) but `fn.params`
+  // ends up with only 1. `paramAnnotations[0].index` must be 0 (q's real
+  // position in fn.params), not 1 (its position in the raw split) — the
+  // final-review fix for the C#/Java/JS `index`-semantics inconsistency.
+  const code = `
+public class UserController {
+    public string Show(, [FromQuery] string q) {
+        return q;
+    }
+}
+`;
+  const ir = parseCSharpFile('UserController.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => f.name.includes('Show'));
+  assert.ok(fn);
+  assert.deepEqual(fn.params, ['q'], 'the empty fragment must not survive into fn.params');
+  assert.ok(fn.paramAnnotations, 'expected paramAnnotations to be populated');
+  assert.deepEqual(fn.paramAnnotations, [{ index: 0, name: 'q', decorator: 'FromQuery' }]);
+  assert.equal(fn.paramAnnotations[0].index, fn.params.indexOf(fn.paramAnnotations[0].name),
+    'index must equal the annotated param\'s actual position in fn.params');
+});
+
 test('R14(a) end-to-end: ASP.NET Core [FromQuery] flowing to a SQL sink is detected', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r14a-cs-'));
   fs.writeFileSync(path.join(dir, 'UserController.cs'), `
