@@ -89,7 +89,20 @@ function _splitStatements(body) {
     if (c === '"' || c === '\'') { inStr = c; push(c); continue; }
     if (c === '/' && body[i + 1] === '/') {
       while (i < body.length && body[i] !== '\n') i++;
-      if (i < body.length) curLine++; // the newline terminating the comment
+      // R8 fix round 2: push the newline that terminated the comment into
+      // `buf` (not just bump `curLine`). Comment text itself is still
+      // dropped (never pushed) — only the LINE it displaced is preserved,
+      // same principle `_blankSpans`/`_blank` already use elsewhere in
+      // this file (blank content out, keep line structure intact, don't
+      // delete it outright). Without this, the flushed statement text
+      // this comment lived inside ends up with FEWER newlines than the
+      // real source has, so `_buildCfg`'s newline-counting line
+      // computation for a nested body silently undercounts by exactly the
+      // number of newlines lost to comments — the sink line reported to
+      // the caller (and therefore the `agentic-security-ignore` pragma
+      // line it must match) is wrong for any control-flow body containing
+      // an otherwise-unrelated `//` comment.
+      if (i < body.length) { push('\n'); curLine++; }
       continue;
     }
     if (c === '/' && body[i + 1] === '*') {
@@ -98,9 +111,14 @@ function _splitStatements(body) {
       // tracking stays accurate for whatever follows — same contract the
       // `//` handling above upholds. Bounded even when unterminated (`i`
       // simply runs to `body.length` and the outer `for` loop ends).
+      // R8 fix round 2: same newline-preservation fix as the `//` handler
+      // above, but a block comment can span MANY lines — push one `\n`
+      // into `buf` for every newline it displaces, not just one, or a
+      // multi-line block comment inside a control-flow body would still
+      // undercount by (newlines - 1).
       i += 2; // past the opening '/*'
       while (i < body.length && !(body[i] === '*' && body[i + 1] === '/')) {
-        if (body[i] === '\n') curLine++;
+        if (body[i] === '\n') { curLine++; push('\n'); }
         i++;
       }
       if (i < body.length) i++; // land on the '/' of '*/'; skipped, contributing no statement text
@@ -624,31 +642,36 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
     const line = startLine + stmt.line - 1;
     if (!s || s.startsWith('//') || s.startsWith('#')) continue;
 
-    const ifMatch = s.match(/^if\s*\((.+?)\)\s*\{([\s\S]*)\}(?:\s*else\s*\{([\s\S]*)\})?\s*$/s);
+    // R8 fix round 2: `line` (the absolute source line of `s`'s FIRST
+    // character — the `if`/`while`/`foreach`/`switch` keyword itself) is
+    // NOT a safe stand-in for a body's own start line in general. Fix
+    // round 1 used flat `line` for these four recognizers on the
+    // assumption that K&R-style `{` on the same physical line as the
+    // keyword makes the body start on that same line — true only when
+    // the header between the keyword and `{` is a single physical line
+    // AND contains no comment that ate a newline without contributing one
+    // back to `s` (fix round 1 also missed that a comment anywhere inside
+    // `s` — not just inside the header — undercounts newlines the same
+    // way; that half is fixed by `_splitStatements` now pushing a `\n`
+    // for every newline a skipped comment displaces, above). A `d`-flagged
+    // regex exposes each capture group's real character offset within
+    // `s` via `.indices`, so `_countNewlines(s, offset)` gives the body's
+    // EXACT absolute line regardless of how many lines the header itself
+    // spans or how many comments precede the body — the same precise
+    // per-clause technique the try/catch/finally recognizer below already
+    // uses (there, offsets come from the balanced-brace scanner instead
+    // of regex `.indices`, same principle).
+    const ifMatch = s.match(/^if\s*\((.+?)\)\s*\{([\s\S]*)\}(?:\s*else\s*\{([\s\S]*)\})?\s*$/ds);
     if (ifMatch) {
       const ifNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(ifMatch[1]), line });
       _linkNodes(nodes, prev, ifNode);
       const join = _addNode(nodes, { kind: 'noop', line });
-      // R8 fix round 1 (Critical): `line` is the absolute source line of
-      // `s`'s FIRST character (the `if` keyword itself). For ordinary K&R
-      // brace style (`{` on the same physical line as `if`/`while`/
-      // `foreach`/`try`/`switch`), the captured body's own first
-      // character (right after that `{`) is on that SAME line — so the
-      // child recursion's `startLine` must be `line`, not `line + 1`. The
-      // previous `line + 1` silently over-counted by one line for every
-      // control-flow body, which — because `_buildCfg` recursion is now
-      // reachable for constructs that aren't last-in-scope (this task's
-      // whole point) — became the default line-number behavior for
-      // essentially all PHP control flow, not a rare edge case. Proven via
-      // `runScan`: a sink on real line N was reported at line N+1, and an
-      // `agentic-security-ignore` pragma placed on the TRUE line was
-      // inert while one placed on the wrong (reported) line suppressed
-      // it. See `test/parser-php-control-flow.test.js`'s exact-line and
-      // suppression-pragma regression tests.
-      const thenTail = _buildCfg(ifMatch[2], nodes, ifNode, line, depth + 1);
+      const thenStartLine = line + _countNewlines(s, ifMatch.indices[2][0]);
+      const thenTail = _buildCfg(ifMatch[2], nodes, ifNode, thenStartLine, depth + 1);
       _linkNodes(nodes, thenTail, join);
       if (ifMatch[3]) {
-        const elseTail = _buildCfg(ifMatch[3], nodes, ifNode, line, depth + 1);
+        const elseStartLine = line + _countNewlines(s, ifMatch.indices[3][0]);
+        const elseTail = _buildCfg(ifMatch[3], nodes, ifNode, elseStartLine, depth + 1);
         _linkNodes(nodes, elseTail, join);
       } else {
         _linkNodes(nodes, ifNode, join);
@@ -657,11 +680,12 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       continue;
     }
 
-    const whileMatch = s.match(/^while\s*\((.+?)\)\s*\{([\s\S]*)\}\s*$/s);
+    const whileMatch = s.match(/^while\s*\((.+?)\)\s*\{([\s\S]*)\}\s*$/ds);
     if (whileMatch) {
       const header = _addNode(nodes, { kind: 'loop-header', line });
       _linkNodes(nodes, prev, header);
-      const bodyTail = _buildCfg(whileMatch[2], nodes, header, line, depth + 1);
+      const bodyStartLine = line + _countNewlines(s, whileMatch.indices[2][0]);
+      const bodyTail = _buildCfg(whileMatch[2], nodes, header, bodyStartLine, depth + 1);
       _linkNodes(nodes, bodyTail, header);
       const join = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, header, join);
@@ -669,13 +693,14 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       continue;
     }
 
-    const foreachMatch = s.match(/^foreach\s*\((.+?)\s+as\s+(?:\$\w+\s*=>\s*)?(\$\w+)\)\s*\{([\s\S]*)\}\s*$/s);
+    const foreachMatch = s.match(/^foreach\s*\((.+?)\s+as\s+(?:\$\w+\s*=>\s*)?(\$\w+)\)\s*\{([\s\S]*)\}\s*$/ds);
     if (foreachMatch) {
       const header = _addNode(nodes, { kind: 'loop-header', line });
       _linkNodes(nodes, prev, header);
       const assignId = _addNode(nodes, { kind: 'assign', target: foreachMatch[2], source: _lowerExpr(foreachMatch[1]), line });
       _linkNodes(nodes, header, assignId);
-      const bodyTail = _buildCfg(foreachMatch[3], nodes, assignId, line, depth + 1);
+      const bodyStartLine = line + _countNewlines(s, foreachMatch.indices[3][0]);
+      const bodyTail = _buildCfg(foreachMatch[3], nodes, assignId, bodyStartLine, depth + 1);
       _linkNodes(nodes, bodyTail, header);
       const join = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, header, join);
@@ -688,14 +713,14 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       const tryNode = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, prev, tryNode);
       const join = _addNode(nodes, { kind: 'noop', line });
-      // Unlike the if/while/foreach/switch bodies above, catch/finally
-      // clauses do NOT generally start on `line` (the `try` keyword's own
-      // line) — they start wherever their own `catch (...) {` / `finally
-      // {` happens to land, often several lines later. `_scanTryCatchFinally`
-      // already tracked each body's exact character offset within `s`
-      // while it balanced-brace-scanned it, so deriving the precise
-      // absolute line via `_countNewlines` here is effectively free and
-      // strictly more correct than reusing a flat `line` for every clause.
+      // Same exact-offset technique as the if/while/foreach/switch bodies
+      // above, just fed by `_scanTryCatchFinally`'s balanced-brace-scan
+      // offsets instead of a `d`-flagged regex's `.indices` (there's no
+      // single regex to attach `.indices` to here — that's the whole
+      // reason this recognizer scans by hand). catch/finally clauses
+      // especially do NOT start on `line` (the `try` keyword's own line)
+      // in general — they start wherever their own `catch (...) {` /
+      // `finally {` happens to land, often several lines later.
       const tryStartLine = line + _countNewlines(s, tryScan.tryBodyOffset);
       const tryTail = _buildCfg(tryScan.tryBody, nodes, tryNode, tryStartLine, depth + 1);
       let tail = tryTail;
@@ -716,7 +741,7 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       continue;
     }
 
-    const switchMatch = s.match(/^switch\s*\((.+?)\)\s*\{([\s\S]*)\}\s*$/s);
+    const switchMatch = s.match(/^switch\s*\((.+?)\)\s*\{([\s\S]*)\}\s*$/ds);
     if (switchMatch) {
       const switchNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(switchMatch[1]), line });
       _linkNodes(nodes, prev, switchNode);
@@ -725,7 +750,8 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       // braces) — lower the whole switchBlock body as ONE linear sequence
       // under the switch node, matching this plan's "linear-but-complete"
       // target rather than modeling per-case branch/skip semantics.
-      const bodyTail = _buildCfg(switchMatch[2], nodes, switchNode, line, depth + 1);
+      const bodyStartLine = line + _countNewlines(s, switchMatch.indices[2][0]);
+      const bodyTail = _buildCfg(switchMatch[2], nodes, switchNode, bodyStartLine, depth + 1);
       _linkNodes(nodes, bodyTail, join);
       prev = join;
       continue;

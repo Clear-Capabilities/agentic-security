@@ -255,3 +255,120 @@ function run($conn) {
     'the pragma placed on the REAL sink line (line 5, inside the if-body) must suppress the finding — ' +
     'before the fix, the finding was reported one line too late (line 6) and this pragma placement was inert');
 });
+
+// --- R8 fix round 2 regressions --------------------------------------
+//
+// A second task review found fix round 1's line-tracking fix was still
+// incomplete: it only handled the plain, comment-free, single-line-header
+// case. Two independent undercounting sources remained live: (1)
+// `_splitStatements`'s comment-skip handlers consumed a comment's
+// newline(s) without contributing any newline back to the flushed
+// statement text, so a body containing an unrelated comment lost exactly
+// that many newlines from the count `_buildCfg` uses to compute a nested
+// body's start line; (2) `if`/`while`/`foreach`/`switch` still used a flat
+// `line` (the keyword's own line) for their body's start line, which is
+// only correct when the header between the keyword and `{` is a single
+// physical line — wrong for a multi-line condition. Both are fixed above
+// (comment newline preservation in `_splitStatements`; `d`-flagged regex
+// `.indices` + `_countNewlines` for all four recognizers, matching the
+// technique fix round 1 already used for try/catch/finally). These tests
+// pin all three previously-uncovered shapes: a `//` comment in the body, a
+// `/* */` comment in the body, and a multi-line `if (...)` condition — the
+// prior round's tests were all comment-free and single-line-header, which
+// is exactly why they didn't catch this.
+
+test('parsePhpFile: a sink in an if-body containing an unrelated // comment is reported at its EXACT source line', () => {
+  const code = `<?php
+function f($conn) {
+    if (true) {
+        // an unrelated comment
+        $a = 1;
+        mysqli_query($conn, 'x');
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  const call = calls.find(c => c.callee === 'mysqli_query');
+  assert.ok(call, 'expected the if-body sink to be captured');
+  assert.equal(call.line, 6, 'sink is on real source line 6 — a `//` comment on line 4 must not undercount the newline it displaces');
+});
+
+test('parsePhpFile: a sink in a try-body containing a multi-line /* */ comment is reported at its EXACT source line', () => {
+  const code = `<?php
+function f($conn) {
+    try {
+        /* a
+           multi
+           line
+           comment */
+        mysqli_query($conn, 'x');
+    } catch (Exception $e) {
+        log_error($e);
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  const call = calls.find(c => c.callee === 'mysqli_query');
+  assert.ok(call, 'expected the try-body sink to be captured');
+  assert.equal(call.line, 8, 'sink is on real source line 8 — a 4-line block comment (lines 4-7) must not undercount by any of its internal newlines');
+});
+
+test('parsePhpFile: a sink in a switch-body containing a /* */ comment is reported at its EXACT source line', () => {
+  const code = `<?php
+function f($x) {
+    switch ($x) {
+        /* explain the case */
+        case 1:
+            sink1($x);
+            break;
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  const call = calls.find(c => c.callee === 'sink1');
+  assert.ok(call, 'expected the case-body sink to be captured');
+  assert.equal(call.line, 6, 'sink is on real source line 6');
+});
+
+test('parsePhpFile: a sink in the body of an if-statement with a multi-line condition is reported at its EXACT source line', () => {
+  const code = `<?php
+function f($conn, $a, $b) {
+    if ($a &&
+        $b) {
+        mysqli_query($conn, 'x');
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  const call = calls.find(c => c.callee === 'mysqli_query');
+  assert.ok(call, 'expected the if-body sink to be captured');
+  assert.equal(call.line, 5, 'sink is on real source line 5 — a 2-line if condition (lines 3-4) must not shift the body-relative line count computed off a flat "line" approximation');
+});
+
+test('runScan + agentic-security-ignore on the TRUE source line of a sink inside an if-body that ALSO contains an unrelated comment suppresses the finding', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const phpFile = (pragma = '') => `<?php
+function run($conn) {
+    if (true) {
+        // an unrelated comment that must not perturb line tracking
+        $id = $_GET['id'];
+        mysqli_query($conn, $id);${pragma}
+    }
+}
+`;
+  const controlDir = mkTmp({ 'index.php': phpFile() });
+  const { scan: control } = await runScan(controlDir, { deep: true, deepInCi: true });
+  const controlTaint = (control.findings || []).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(controlTaint.length >= 1, 'positive control: deep mode must produce an IR-TAINT finding for the unsuppressed if-body sink');
+
+  const suppressedDir = mkTmp({ 'index.php': phpFile(' // agentic-security-ignore') });
+  const { scan: suppressed } = await runScan(suppressedDir, { deep: true, deepInCi: true });
+  const suppressedTaint = (suppressed.findings || []).filter(f => f.parser === 'IR-TAINT');
+  assert.equal(suppressedTaint.length, 0,
+    'the pragma placed on the REAL sink line (line 6, inside the if-body, one line after an unrelated // comment) must suppress the finding — ' +
+    'before the fix round 2 fix, the comment ate a newline from the line count and the finding was reported at the wrong line, making this pragma placement inert');
+});
