@@ -22,6 +22,7 @@
 // when the shape is unfamiliar.
 
 import { blankComments } from '../sast/_comment-strip.js';
+import { callSitesFromCfg } from './call-sites.js';
 
 let _nodeIdSeq = 0;
 function nextNodeId() { return 'jn' + (++_nodeIdSeq); }
@@ -538,6 +539,7 @@ export async function parseJavaFile(file, raw) {
           const body = md.children?.methodBody?.[0]?.children?.block?.[0];
           if (body) {
             const methodLine = _lineOf(md);
+            const cfg = buildCfgFromBody(body);
             functions.push({
               // Sibling frontends (parser-js.js) suffix the qid with `@line`
               // so overloaded/same-named methods don't collide — without it,
@@ -547,8 +549,9 @@ export async function parseJavaFile(file, raw) {
               name: className ? `${className}.${name}` : name,
               line: methodLine,
               params,
-              cfg: buildCfgFromBody(body),
+              cfg,
               file,
+              calls: callSitesFromCfg(cfg),
               ...(paramAnnotations.length ? { paramAnnotations } : {}),
             });
           }
