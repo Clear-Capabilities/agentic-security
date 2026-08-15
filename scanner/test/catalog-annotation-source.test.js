@@ -54,3 +54,31 @@ test('matchAnnotationParams: NestJS @Query() taints its param name on a .ts file
   );
   assert.ok(result.has('q'));
 });
+
+test('matchAnnotationParams: AGENTIC_SECURITY_CATALOG_OFFICIAL_ONLY=1 respects provenance filter (regression guard)', () => {
+  // Verify that the function applies filterByProvenance to respect the
+  // OFFICIAL_ONLY mode. This guards against a regression where filterByProvenance
+  // is accidentally removed from matchAnnotationParams but left in place for
+  // matchSource/matchSinkOrSanitizer/matchMemberWriteSink — a silent divergence
+  // that would cause non-official (community/inferred) annotation entries to
+  // be silently ignored when official-only mode is enabled.
+  const oldEnv = process.env.AGENTIC_SECURITY_CATALOG_OFFICIAL_ONLY;
+  try {
+    // Set OFFICIAL_ONLY mode on.
+    process.env.AGENTIC_SECURITY_CATALOG_OFFICIAL_ONLY = '1';
+    // The existing Spring @RequestParam is official (default-stamped) and should
+    // still match even with OFFICIAL_ONLY on.
+    const result = matchAnnotationParams(
+      [{ index: 0, name: 'q', decorator: 'RequestParam' }],
+      'UserController.java'
+    );
+    assert.ok(result.has('q'), '@RequestParam (official entry) must match with OFFICIAL_ONLY=1');
+  } finally {
+    // Restore the original env var.
+    if (oldEnv === undefined) {
+      delete process.env.AGENTIC_SECURITY_CATALOG_OFFICIAL_ONLY;
+    } else {
+      process.env.AGENTIC_SECURITY_CATALOG_OFFICIAL_ONLY = oldEnv;
+    }
+  }
+});

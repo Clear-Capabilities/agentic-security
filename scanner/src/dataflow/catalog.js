@@ -1191,13 +1191,13 @@ export function matchAnnotationParams(paramAnnotations, file) {
   const tainted = new Set();
   if (!paramAnnotations || !paramAnnotations.length) return tainted;
   for (const pa of paramAnnotations) {
-    const hits = ANNOTATION_INDEX.get(pa.decorator);
-    if (!hits) continue;
-    for (const e of hits) {
-      if (e.kind !== 'source') continue;
-      if (!_languageAllowed(e, file)) continue;
+    const raw = ANNOTATION_INDEX.get(pa.decorator);
+    if (!raw) continue;
+    const hits = filterByProvenance(raw)
+      .filter(h => _languageAllowed(h, file))
+      .filter(h => h.kind === 'source');
+    if (hits.length) {
       tainted.add(pa.name);
-      break;
     }
   }
   return tainted;
