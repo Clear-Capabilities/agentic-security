@@ -42,7 +42,7 @@
 // sanitizer must never silently drop a real vulnerability, so the walk never
 // treats a sanitizer call as clearing the tainted path on its own.
 
-import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink } from './catalog.js';
+import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink, matchAnnotationParams } from './catalog.js';
 import { functionRecord } from '../ir/callgraph.js';
 import { accessPathOf, isCoveredBy, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual } from './access-paths.js';
 import { aliasesForVar } from './points-to.js';
@@ -281,7 +281,7 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext) {
         _mutatedParamsOut: new Set(),
         _cha: callContext._cha,
       };
-      try { analyzeFunction(fn, entry, inner); } catch {}
+      try { analyzeFunction(fn, _unionAnnotationTaint(fn, entry), inner); } catch {}
       return {
         returnTainted: !!inner._returnTainted,
         mutatedParams: inner._mutatedParamsOut || new Set(),
@@ -710,7 +710,7 @@ function step(node, stateIn, callContext) {
                 _mutatedParamsOut: new Set(),
                 _cha: callContext._cha,
               };
-              try { analyzeFunction(fn, entry, inner); } catch {}
+              try { analyzeFunction(fn, _unionAnnotationTaint(fn, entry), inner); } catch {}
               return {
                 returnTainted: !!inner._returnTainted,
                 mutatedParams: inner._mutatedParamsOut || new Set(),
@@ -844,7 +844,7 @@ function step(node, stateIn, callContext) {
                 _mutatedParamsOut: new Set(),
                 _cha: callContext._cha,
               };
-              try { analyzeFunction(fn, entry, inner); } catch {}
+              try { analyzeFunction(fn, _unionAnnotationTaint(fn, entry), inner); } catch {}
               return {
                 returnTainted: !!inner._returnTainted,
                 mutatedParams: inner._mutatedParamsOut || new Set(),
@@ -974,6 +974,18 @@ function step(node, stateIn, callContext) {
     default:
       return { state, findings };
   }
+}
+
+// R14(a): annotation-derived taint is a function-invariant fact — identical
+// for every call to this qid — so it is unioned into the per-call-site entry
+// state, never into the SummaryCache key (that stays exactly what the caller
+// supplied). Returns the ORIGINAL Set unchanged when there's nothing to add,
+// so callers that never touch annotation-shaped params pay zero extra cost.
+function _unionAnnotationTaint(fn, entrySet) {
+  if (!fn.paramAnnotations || !fn.paramAnnotations.length) return entrySet;
+  const extra = matchAnnotationParams(fn.paramAnnotations, fn.file);
+  if (!extra.size) return entrySet;
+  return new Set([...entrySet, ...extra]);
 }
 
 // Worklist traversal of one function's CFG with a given entry-taint-state.
@@ -1191,7 +1203,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _cha: opts._cha,
         _pointsTo: opts._pointsTo,
       };
-      try { analyzeFunction(fn, entry, ctx); } catch {}
+      try { analyzeFunction(fn, _unionAnnotationTaint(fn, entry), ctx); } catch {}
       // Report real findings discovered by this probe rather than letting
       // them die with `ctx` — see _collectFindings's header comment. Safe to
       // call every iteration and again from the main loop below: dedup is by
@@ -1260,7 +1272,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _cha: opts._cha,
         _pointsTo: opts._pointsTo,
       };
-      try { analyzeFunction(fn, fields, ctx); } catch {}
+      try { analyzeFunction(fn, _unionAnnotationTaint(fn, fields), ctx); } catch {}
       // `findings` carries the REAL findings from this probe (was hardcoded
       // `[]`, discarding them) — but this pass is speculative (every field
       // in `fields` is assumed simultaneously tainted; nothing here confirms
@@ -1295,7 +1307,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       _cha: opts._cha,
       _pointsTo: opts._pointsTo,
     };
-    try { analyzeFunction(fn, taintedEntry, ctx); } catch {}
+    try { analyzeFunction(fn, _unionAnnotationTaint(fn, taintedEntry), ctx); } catch {}
     // `findings` carries the real findings from this probe (was hardcoded
     // `[]`). This pass assumes EVERY param is simultaneously tainted —
     // there's no check that any real caller ever passes tainted data here
@@ -1345,7 +1357,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       _cha: opts._cha,
     };
     try {
-      analyzeFunction(fn, new Set(), callContext);
+      analyzeFunction(fn, _unionAnnotationTaint(fn, new Set()), callContext);
     } catch { continue; }
     // Process higher-order invocations: resolve callbacks and analyze with
     // tainted first-param. Feed findings back into the caller's finding set.
@@ -1380,7 +1392,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
             _mutatedParamsOut: new Set(),
             _cha: callContext._cha,
           };
-          try { analyzeFunction(cbFn, cbEntry, inner); } catch {}
+          try { analyzeFunction(cbFn, _unionAnnotationTaint(cbFn, cbEntry), inner); } catch {}
           return {
             returnTainted: !!inner._returnTainted,
             mutatedParams: inner._mutatedParamsOut || new Set(),
