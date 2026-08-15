@@ -177,7 +177,11 @@ Every parser must produce this shape:
       }
     }
   ],
-  topLevel: null,   // reserved for module-level code; not yet used
+  topLevel: null,   // qid of the synthetic <module> function wrapping
+                    // top-level statements, or null if the file has none
+                    // worth lowering. JS, Python (CST + regex), PHP, and
+                    // Ruby all populate this (PRD R14(b)); the other IR
+                    // languages still leave it null.
 }
 ```
 

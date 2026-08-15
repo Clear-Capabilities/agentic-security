@@ -9,11 +9,12 @@
 > make the history less accurate, not more.
 
 
-## Unreleased — Theme B+D and Theme E of the detection-gap remediation PRD (R6, R10, R11, R13)
+## Unreleased — Theme B+D and Theme E of the detection-gap remediation PRD (R6, R10, R11, R13, R14(b))
 
-Two independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land together
-here. Each has its own subsection below, and each subsection carries its own
-verification paragraph — the numbers in one do not describe the other.
+Three independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land
+together here. Each has its own subsection below, and each subsection carries
+its own verification paragraph — the numbers in one do not describe the
+other.
 
 ### Theme B+D (R6, R10, R11) — semantic grounding and interprocedural completeness
 
@@ -251,6 +252,50 @@ correct, of which 9/9 are verdict-flip cases), layer-recall (js/ts taint recall 
 lands via dedicated unit tests rather than new corpus entries, so no
 taint-layer increase was expected or observed here) and self-scan (green
 against the baseline this same work already updated).
+
+### Theme E (R14(b)) — non-JS top-level IR
+
+Closes the other half of Theme E's R14 item: Python (CST parser and regex
+fallback), PHP, and Ruby now synthesize a `<module>` function wrapping
+top-level statements, mirroring the JS `<module>` pattern
+(`ir/parser-js.js:264,557`) that already existed. Before this, a flat
+vulnerable script with no wrapping function or class — `<?php
+system($_GET['cmd']);`, a bare `system(params[:cmd])` in Ruby, a bare
+`os.system(request.args)` at Python module scope — had zero Layer-2
+taint-analysis coverage in these three languages, regardless of how
+obviously tainted the flow was, simply because the IR layer never extracted
+top-level statements into any CFG at all. Unlike JS's unconditional
+`<module>` creation, all three new paths only synthesize the function when
+the file actually has top-level statements worth lowering, to keep the
+change's blast radius on existing function-only fixtures at zero.
+
+Landing this also surfaced (and fixed) a real, independent severity bug:
+the dead-code demotion in `dataflow/engine.js` only exempts functions whose
+name matches `/handler|route|controller|middleware|endpoint/i` from being
+downgraded one severity tier when the call graph records no caller — but a
+synthetic `<module>` function is *never* called by anything (module scope
+has no caller by construction), so every finding this work would have added
+was about to land one tier too low (critical → high, etc.) the moment it
+shipped. `<module>`-scoped findings are now exempt from dead-code demotion
+outright. **This is a severity-tier fix for existing JS `<module>` findings
+too** — nothing new is detected by it, but any JS top-level finding that was
+previously silently demoted now reports at its correct severity.
+
+End-to-end coverage: `test/r14b-module-level-e2e.test.js` runs a real
+`runScan` against a minimal flat script in each of the three languages
+(plus Python's regex-fallback path separately) and asserts an `IR-TAINT`
+finding comes back — proving the PRD's actual success metric, not just
+correct IR shape. Wired into `test:dataflow`.
+
+**Verification — R14(b) only:** `test:dataflow` (625/625, includes the 4 new
+end-to-end tests), `npm test` (3176 tests, 0 failures on an isolated rerun —
+two transient `spawnSync`-timeout failures surfaced under heavy parallel
+system load on the first two attempts, in `audit-cli.test.js` and
+`triage-command.test.js`, neither of which this work touches, and both
+cleared on rerun), corpus (214/214, no drift), mutation (9/9 verdict-flip
+correct), layer-recall (no taint-layer regression; python/php/ruby taint
+counts unchanged from baseline, as expected — this work lands via dedicated
+unit tests, not new corpus entries) and self-scan (no drift).
 
 ## 0.136.10 — detection-gap remediation Theme A: dedup, family, and calibration for deep mode
 

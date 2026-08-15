@@ -12,7 +12,8 @@
 #   { file, functions: [
 #       { qid, name, line, params, file,
 #         cfg: { entry: nodeId, exit: nodeId, nodes: { id: node } } }
-#     ], topLevel: null }
+#     ], topLevel: <qid of synthetic <module> function, or null if the file
+#                   has no top-level statements worth lowering (PRD R14(b))> }
 #
 #   node = {
 #     kind: 'entry' | 'exit' | 'noop' | 'loop-header' | 'assign' | 'call'
