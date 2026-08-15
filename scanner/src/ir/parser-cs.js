@@ -506,7 +506,24 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
     const absStart = baseAbs + start;
     const line = funcStartLine + _lineForOffset(lineStarts, absStart) - 1;
 
-    const hm = s.match(/^(if|while|for|foreach|switch|else\s+if|else|do|try|catch|finally)\b/);
+    // R8 fix round 1: `using (...) { }` and `lock (...) { }` were missing
+    // from this alternation entirely — both lowered to a bogus
+    // `call:using`/`call:lock` node via the generic `_lowerStmt` fallback,
+    // with their `{...}` body text (including a paren argument list that
+    // looks exactly like a call's) silently discarded. `using` is THE
+    // canonical C#/ADO.NET wrapper around the exact sinks this task
+    // targets (`SqlCommand`, `ExecuteReader`, file streams — anything
+    // `IDisposable`), so this was a significant real-world gap: a sink
+    // wrapped in `using` produced ZERO findings even after this task's
+    // main fix, same as if it were wrapped in `if` before this task
+    // existed at all. `using`/`lock` are deliberately NOT added to
+    // `needsCond` below — unlike `if`/`while`/`for`/`switch`, their
+    // parenthesised clause is a resource-acquisition declaration or a
+    // lock target, not a boolean expression, so lowering it via
+    // `_lowerExpr` would just produce `{kind:'unknown'}` and isn't worth
+    // a synthetic node; the body — where the real sink-bearing statements
+    // live — is what this fix makes reachable.
+    const hm = s.match(/^(if|while|for|foreach|switch|else\s+if|else|do|try|catch|finally|using|lock)\b/);
     if (hm) {
       const kwNorm = hm[1].replace(/\s+/g, ' ').trim();
       let p = hm[0].length;

@@ -284,3 +284,102 @@ public class C {
   assert.ok(initAssign, 'expected the for-loop init clause `int i = 0` to lower to an assign node');
   assert.equal(initAssign.source?.value, '0');
 });
+
+// ── R8 fix round 1: using/lock statement bodies ─────────────────────────
+//
+// `using (...) { }` and `lock (...) { }` were missing from `_buildCfg`'s
+// keyword-match alternation entirely — both fell through to `_lowerStmt`'s
+// generic statement-form-call recognizer, which happily matched
+// `using(conn)`/`lock(this)` as a bogus `call:using`/`call:lock` node and
+// discarded the `{...}` body text outright (the closing `)` of the
+// "call" is exactly where the real body starts). `using` is THE canonical
+// C#/ADO.NET wrapper around the sinks this task targets — this dropped an
+// enormous fraction of real-world SQL/command/file sinks even after this
+// task's main if/for/try/switch fix landed.
+test('parseCSharpFile: a sink inside a using (...) { } body is captured, with the exact line', () => {
+  const code = `
+public class C {
+    public void Run(string id) {
+        using (var conn = OpenConnection()) {
+            var cmd = new SqlCommand("SELECT * FROM t WHERE id=" + id);
+            conn.Execute(cmd);
+        }
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const calls = callNodes(ir, 'Run');
+  const sink = calls.find(c => c.callee === 'Execute' || c.callee === 'conn.Execute');
+  assert.ok(sink, 'expected the using-body sink call, got: ' + JSON.stringify(calls));
+  const lines = code.split('\n');
+  const expectedLine = lines.findIndex(l => l.includes('conn.Execute(cmd)')) + 1;
+  assert.equal(sink.line, expectedLine, `expected conn.Execute at exact source line ${expectedLine}, got ${sink.line}`);
+});
+
+test('parseCSharpFile: a sink inside a lock (...) { } body is captured, with the exact line', () => {
+  const code = `
+public class C {
+    public void Run(string id) {
+        lock (this) {
+            var cmd = new SqlCommand("SELECT * FROM t WHERE id=" + id);
+            db.Execute(cmd);
+        }
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const calls = callNodes(ir, 'Run');
+  const sink = calls.find(c => c.callee === 'Execute' || c.callee === 'db.Execute');
+  assert.ok(sink, 'expected the lock-body sink call, got: ' + JSON.stringify(calls));
+  const lines = code.split('\n');
+  const expectedLine = lines.findIndex(l => l.includes('db.Execute(cmd)')) + 1;
+  assert.equal(sink.line, expectedLine, `expected db.Execute at exact source line ${expectedLine}, got ${sink.line}`);
+});
+
+test('parseCSharpFile: the braceless C# 8 `using var x = ...;` declaration form still lowers normally', () => {
+  // Distinct from the braced `using (...) { }` statement form above: this
+  // is a plain local-variable declaration with a `using` modifier (no
+  // parens, no body) — unaffected by this fix-round's regex change, since
+  // it never matches `s[p] === '('` and falls through to ordinary
+  // statement lowering. Pinned explicitly so a future change to the
+  // keyword-match regex can't silently regress this unrelated shape.
+  const code = `
+public class C {
+    public void Run(string id) {
+        using var conn = new SqlConnection("cs" + id);
+        conn.Open();
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => f.name === 'Run');
+  assert.ok(fn);
+  const nodes = Object.values(fn.cfg.nodes);
+  const assign = nodes.find(n => n.kind === 'assign' && n.target === 'conn');
+  assert.ok(assign, 'expected `using var conn = new SqlConnection(...)` to lower to an assign node, got: ' + JSON.stringify(nodes));
+  assert.equal(assign.source?.kind, 'call');
+  assert.equal(assign.source?.callee, 'SqlConnection');
+  const calls = nodes.filter(n => n.kind === 'call');
+  assert.ok(calls.some(c => c.callee === 'conn.Open'), 'expected the following statement to still lower correctly');
+});
+
+test('parseCSharpFile: end-to-end runScan detects a source flowing through a using-wrapped ADO.NET block into a sink', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-cs-using-'));
+  fs.writeFileSync(path.join(dir, 'C.cs'), `
+public class C {
+    public void Run([FromQuery] string id) {
+        using (var conn = OpenConnection()) {
+            var cmd = new SqlCommand("SELECT * FROM t WHERE id=" + id);
+            conn.ExecuteQuery(cmd);
+        }
+    }
+}
+`);
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(irFindings.length >= 1, `expected an IR-TAINT finding for the using-wrapped ADO.NET shape, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
+});
