@@ -97,6 +97,28 @@ class UserController {
   assert.deepEqual(fn.paramAnnotations, [{ index: 0, name: 'q', decorator: 'Query' }]);
 });
 
+test('parseJsFile: a decorated parameter with a default value keeps its decorator (fix round 1)', () => {
+  // @Query() page = 1 is a common NestJS idiom. Babel represents this param
+  // as an AssignmentPattern with the decorator on `p.left`, not `p` — a
+  // guard that unconditionally checked the outer `p.type === 'Identifier'`
+  // rejected it even though the decorator-node fallback had already found
+  // it. Regression guard for that gap.
+  const code = `
+class UserController {
+  show(@Query() page = 1) {
+    return page;
+  }
+}
+`;
+  const ir = parseJsFile('user.controller.ts', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => f.name.includes('show'));
+  assert.ok(fn);
+  assert.deepEqual(fn.params, ['page'], 'fn.params must stay plain strings, unaffected by this change');
+  assert.ok(fn.paramAnnotations, 'expected paramAnnotations to be populated');
+  assert.deepEqual(fn.paramAnnotations, [{ index: 0, name: 'page', decorator: 'Query' }]);
+});
+
 test('R14(a) end-to-end: NestJS @Query() flowing to a code-injection sink is detected', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r14a-nest-'));
   fs.writeFileSync(path.join(dir, 'app.controller.ts'), `

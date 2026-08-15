@@ -180,10 +180,19 @@ export function parseJsFile(file, code) {
         if (!p) return null;
         // NestJS/Angular-style parameter decorators (@Query(), @Body(), etc.)
         // — Babel attaches these to the raw param node as `p.decorators`
-        // (or `p.left.decorators` for a defaulted param). This is a real
-        // array; every entry must be captured, not just the first, since
-        // stacked decorators (@Query() @SomeOtherDecorator() x) are legal
-        // and dropping later ones silently loses the source-relevant one.
+        // (or `p.left.decorators` for a defaulted param, e.g. `@Query() page
+        // = 1` — a very common NestJS idiom). This is a real array; every
+        // entry must be captured, not just the first, since stacked
+        // decorators (@Query() @SomeOtherDecorator() x) are legal and
+        // dropping later ones silently loses the source-relevant one.
+        //
+        // For a defaulted param, `p.type` is 'AssignmentPattern', never
+        // 'Identifier' — the identifier that actually carries the decorator
+        // and the name lives at `p.left`. The guard below must check THAT
+        // resolved node's type, not `p.type` unconditionally, or every
+        // defaulted-identifier decorated parameter silently loses its
+        // decorator (fix round 1, R14(a) Task 4).
+        const resolvedIdent = p.type === 'AssignmentPattern' ? p.left : p;
         const decoratorNodes = p.decorators || (p.left && p.left.decorators) || [];
         for (const d of decoratorNodes) {
           const expr = d.expression;
@@ -191,8 +200,8 @@ export function parseJsFile(file, code) {
           // Only record when the parameter itself resolves to a plain
           // identifier — decorators on destructured params are rare and
           // out of scope for this plan.
-          if (decoratorName && p.type === 'Identifier') {
-            paramAnnotations.push({ index: idx, name: p.name, decorator: decoratorName });
+          if (decoratorName && resolvedIdent?.type === 'Identifier') {
+            paramAnnotations.push({ index: idx, name: resolvedIdent.name, decorator: decoratorName });
           }
         }
         if (p.type === 'Identifier') return p.name;
