@@ -271,12 +271,19 @@ export function parseCSharpFile(file, code) {
   while ((m = METHOD_RE.exec(code)) !== null) {
     const name = m[2];
     const paramsText = m[3] || '';
-    const params = paramsText.split(',').map(p => {
+    const paramAnnotations = [];
+    const params = paramsText.split(',').map((p, idx) => {
       const t = p.trim();
       if (!t) return null;
+      // Extract leading [AttributeName] or [AttributeName(...)] before processing the name.
+      const attrMatch = t.match(/^\[\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*\]/);
       // "Type name" → name. "Type<T> name" → name. "Type[] name = default" → name.
       const last = t.replace(/=.*$/, '').trim().split(/\s+/).pop();
-      return last && /^[A-Za-z_][\w]*$/.test(last) ? last : null;
+      const paramName = last && /^[A-Za-z_][\w]*$/.test(last) ? last : null;
+      if (attrMatch && paramName) {
+        paramAnnotations.push({ index: idx, name: paramName, decorator: attrMatch[1] });
+      }
+      return paramName;
     }).filter(Boolean);
     const braceIdx = code.indexOf('{', m.index + m[0].length - 1);
     if (braceIdx < 0) continue;
@@ -309,6 +316,7 @@ export function parseCSharpFile(file, code) {
       name, line: startLine, params, file,
       cfg,
       calls: callSitesFromCfg(cfg),
+      ...(paramAnnotations.length ? { paramAnnotations } : {}),
     });
     METHOD_RE.lastIndex = extracted.end + 1;
   }
