@@ -149,12 +149,13 @@ Each recommendation uses a fixed template: **Gap · Evidence · Recommendation �
 - **Success metric:** For each of the four languages, a fixture with a tainted source flowing into a sink *inside* an `if`/`try`/`for` body is detected by deep mode where it previously was not (verified with deep mode isolated from the regex layer, matching the methodology `bench/cve-replay/CONTRIBUTING.md`'s "deep tier" already uses to prove a fixture is deep-only).
 
 #### R9. Extract Java method parameters and derive `fn.calls` via the shared `call-sites.js` helper
+- **Status:** CLOSED — 2026-08-15. Part (a) completed as a side effect of R14(a) Task 5. Part (b) completed via `scanner/src/ir/parser-java.js:25-26` (import + CFG-to-calls wiring), verified by `test/parser-java-calls.test.js` (3 tests, all passing).
 - **Gap:** `parser-java.js` extracts **no parameters** (`params: []`, comment: "deferred") and never sets `fn.calls`, so Java has zero interprocedural taint entry points and zero call-graph edges — independent of the R8 fix.
 - **Evidence:** `parser-java.js:338` (`const params = []`); no `calls` property set anywhere in the file (edges built from `fn.calls || []`, `callgraph.js:145-146`); contrast `parser-rb.js:334` and `parser-py-cst.js:176-185`, which both derive `fn.calls` post-parse via the shared `call-sites.js#callSitesFromCfg` helper specifically built to prevent this class of resolver-guard drift.
 - **Recommendation:** (a) Extract real parameter names from the `methodDeclaration`/`methodHeader` CST nodes java-parser already exposes. (b) Once R8 lands real CFG call nodes for Java, wire `callSitesFromCfg` as a post-parse pass the same way Ruby and Python-CST already do — no new call-extraction logic needed, just applying the existing shared helper.
 - **Why it wins:** Unlocks interprocedural summaries and a real call graph for Java specifically — the language the audit's Theme C evidence suggests has the largest gap between "IR exists" (java-parser is a real CST) and "IR is usable by the taint engine."
 - **Effort:** M — parameter extraction is contained; wiring `callSitesFromCfg` is mechanical once R8's CFG nodes exist for the statement kinds calls live in.
-- **Success metric:** A cross-function Java fixture (tainted parameter → helper call → sink in the callee) is detected interprocedurally; `ir/CLAUDE.md`'s "Java interprocedural summaries are limited" caveat is removed or narrowed.
+- **Success metric:** A cross-function Java fixture (tainted parameter → helper call → sink in the callee) is detected interprocedurally; `ir/CLAUDE.md`'s "Java interprocedural summaries are limited" caveat is removed or narrowed. **Verified:** part (b) wiring complete; `fn.calls` now populated for every Java function. Part (a) parameter extraction was completed in R14(a).
 
 ### Theme D — Interprocedural completeness
 
