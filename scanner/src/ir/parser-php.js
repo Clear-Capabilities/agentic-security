@@ -10,12 +10,25 @@
 //   - return
 //   - foreach as loop-header + assign
 //   - PHP superglobals ($_GET, $_POST, $_REQUEST, etc.) as ident sources
+//   - control flow (R8): `if`/`else`/`while`/`for`/`foreach`/`try`/`catch`/
+//     `finally`/`switch` bodies are recursed into — the statement splitter
+//     now flushes on a closing `}` (see the `}`-flush comment near
+//     `_splitStatements` below) instead of only on `;`, so a sink nested
+//     inside a braced control-flow body is reachable rather than being
+//     dropped or folded into a bogus call node. This took three fix rounds
+//     to get line-number-exact (see the PRD R8 status entry in
+//     `docs/DETECTION_GAP_REMEDIATION_PRD.md` for the full history) — the
+//     CFG shape itself was correct from the first round.
 //
 // What we do NOT model:
 //   - arrow functions (fn($x) => expr)
 //   - traits / interfaces
 //   - anonymous classes
-//   - control flow (if/for/while/switch) — body is straight-line
+//   - the PHP 8 `match` expression (analogous gap to Java's arrow-form
+//     `switch` — this is the one modern control-flow SHAPE R8 did not
+//     cover, as opposed to the R8 fix's own scope, which is bodies of
+//     control-flow statements PHP already recognized)
+//   - `elseif`/`else if` chains (pre-existing, not touched by R8)
 
 import * as crypto from 'node:crypto';
 import { callSitesFromCfg } from './call-sites.js';

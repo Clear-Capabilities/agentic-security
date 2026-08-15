@@ -244,9 +244,29 @@ function _lowerStmt(stmt, line) {
   // into — so only the call's own identity (callee + any non-lambda args)
   // is modeled; that is enough to keep the call SITE visible instead of
   // silently vanishing.
-  const trailing = s.match(/^([\w.]+)\s*(\([^()]*\))?\s*\{[\s\S]*\}\s*$/);
+  //
+  // R8 fix round (found by this task's own bench:self-scan:check, the exact
+  // same defect class as R14(a)'s C# `attrRegex` ReDoS): the original single
+  // pattern here had an optional paren group sandwiched between two `\s*`
+  // quantifiers (`\s*(\([^()]*\))?\s*`) — on a failing match, the engine can
+  // partition a run of whitespace between the two `\s*`s in exponentially
+  // many ways, confirmed genuinely quadratic (200,000-char adversarial input:
+  // ~1.7s at 20,000 chars, extrapolating far higher at realistic file sizes).
+  // Restructured into two mutually-exclusive alternatives — no-parens and
+  // with-parens — exactly as `class-hierarchy.js` (commit `6bd394c`) and the
+  // C# fix (PRD R14(a)) both did for the identical shape: a REQUIRED group
+  // between two `\s*`s has no such ambiguity, because the parser is not
+  // choosing whether to consume the group, only where the group starts.
+  // Re-verified linear (200,000 chars: ~3ms) and byte-identical to the old
+  // pattern's output across a 15-shape sweep (calls with/without args, no
+  // parens at all, multi-segment callee, non-matching text, unbalanced
+  // parens, empty body).
+  const trailingNoParens = s.match(/^([\w.]+)\s*\{[\s\S]*\}\s*$/);
+  const trailingWithParens = trailingNoParens ? null : s.match(/^([\w.]+)\s*(\([^()]*\))\s*\{[\s\S]*\}\s*$/);
+  const trailing = trailingNoParens || trailingWithParens;
   if (trailing) {
-    const argsText = trailing[2] ? trailing[2].slice(1, -1) : '';
+    const parenGroup = trailingWithParens ? trailingWithParens[2] : null;
+    const argsText = parenGroup ? parenGroup.slice(1, -1) : '';
     return { kind: 'call', line, callee: trailing[1], args: argsText ? _splitTopLevelCommas(argsText).map(_lowerExpr) : [] };
   }
   return { kind: 'unknown', line, text: s };

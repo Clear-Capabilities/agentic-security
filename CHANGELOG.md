@@ -9,9 +9,9 @@
 > make the history less accurate, not more.
 
 
-## Unreleased — Theme B+D and Theme E of the detection-gap remediation PRD (R6, R10, R11, R13, R14(a), R14(b))
+## Unreleased — Theme B+D, Theme C, and Theme E of the detection-gap remediation PRD (R6, R8, R10, R11, R13, R14(a), R14(b))
 
-Four independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land
+Five independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land
 together here. Each has its own subsection below, and each subsection carries
 its own verification paragraph — the numbers in one do not describe the
 other.
@@ -421,6 +421,87 @@ documented "critical findings present" convention), and the underlying
 `test:smoke` suite (28/28) already passed as part of the full gate above.
 
 **Full Theme E (R13 + R14) is now complete.**
+
+### Theme C (R8) — braced control-flow body recursion, four languages
+
+Closes the single highest-leverage IR defect this project's whole
+detection-gap audit found. Java, C#, Kotlin, and PHP's statement splitters
+previously dropped or mangled the body of any braced control-flow statement
+(`if`/`for`/`try`/`switch`/`while`/`do`/`when`) — not just losing branch
+structure, but silently deleting the statements inside, or folding them into
+a bogus node. Since real-world sinks in these languages overwhelmingly sit
+inside exactly this shape (try-with-resources in Java, `using`/`try` in C#,
+`try`/`when` in Kotlin, `try`/`foreach` in PHP), this capped deep-mode taint
+recall near zero for all four regardless of any catalog or interprocedural
+work already landed elsewhere in this PRD. All four now recurse into these
+bodies with a real (statement-linear) CFG walk.
+
+- **Java** (`ir/parser-java.js`) — `walkStmts` additively extended to also
+  recurse into `for`/`try`/`switch`/`do`/bare-block statements. Fixed a
+  self-caught bug in the implementation plan's own draft code before it
+  shipped: try-with-resources' `catch`/`finally` were being read off the
+  wrong CST node, which would have silently dropped catch/finally for the
+  single most idiomatic JDBC pattern. One fix round closed two further
+  gaps: enhanced-for's loop variable now carries real taint provenance
+  (synthesized assign, mirroring `parser-js.js`'s `ForOfStatement`
+  pattern), and Java 14+ arrow-form `switch` (`case 1 -> …`) is now
+  recognized.
+- **PHP** (`ir/parser-php.js`) — the statement splitter now flushes on a
+  closing `}` (previously only `;`), with `try`/`switch` recognizers and a
+  recursion guard added. This was the hardest task in the plan (3 fix
+  rounds, all substantially about line-number precision, not detection
+  shape) — see `docs/DETECTION_GAP_REMEDIATION_PRD.md`'s R8 status entry
+  for the full round-by-round narration. Fixing the splitter this way also
+  resolved a pre-existing bug where `if`/`while`/`foreach` bodies were
+  already being mis-split before this task touched them.
+- **C#** (`ir/parser-cs.js`) — C# had no control-flow handling at all
+  before this; `_buildCfg` was built from scratch, ported from
+  `parser-cpp.js`'s proven recurse-into-braces pattern. One fix round:
+  `using (...) { }` and `lock (...) { }` bodies were invisible — `using`
+  being the canonical ADO.NET wrapper around exactly the sinks this task
+  targets, this was a real, significant gap.
+- **Kotlin** (`ir/parser-kt.js`) — new recursive `_buildCfg` mirroring C#'s,
+  with Kotlin-specific adaptations for its trailing-lambda call syntax and
+  `when` expression arms. Zero fix rounds during implementation — the
+  cleanest of the four tasks, in part because each implementer was briefed
+  on the previous tasks' hard-won lessons before starting.
+
+**Verification found and fixed a genuine regression this PRD's own new code
+introduced**, not papered over: `bench:self-scan:check` flagged
+`ir/parser-kt.js`'s new trailing-lambda regex as a ReDoS — the identical
+defect class as this same changelog's R14(a) C# `attrRegex` finding (an
+optional group sandwiched between two `\s*` quantifiers), independently
+confirmed genuinely quadratic by direct timing. Fixed the same way that
+precedent was: restructured into two mutually-exclusive alternatives,
+re-verified linear and byte-identical across a 15-shape sweep. A second,
+unrelated ReDoS in the same file's variable-declaration regex was found
+during that investigation and traced to a commit five months predating this
+PRD — left unfixed and logged as a candidate future item, since it wasn't
+introduced by this work.
+
+**Measured `bench/layer-recall` impact — an honest result, not the one
+originally expected.** Baseline before: `java 1/25, kotlin 0/20, c# 1/21,
+php 1/23`. Measured after: `java 1/25 (unchanged), kotlin 0/20 (unchanged),
+c# 1/21 (unchanged), php 2/23 (+1)`. Only PHP moved. Investigation confirmed
+why: this corpus's existing Java/Kotlin/C# fixtures that contain
+`if`/`try`/`for` syntax use it as a single-line guard clause ahead of a
+flat-level sink, not a sink genuinely nested inside the body — the exact
+shape this task fixed is real and directly proven by each language's own
+new dedicated unit tests, but three of the four languages' existing corpus
+fixtures simply aren't shaped to exercise it at the corpus-benchmark level.
+`bench/layer-recall/baseline.json` updated to the measured counts
+(`entriesScored` 210→214, `php` 1→2, plus an unrelated `js/ts` 7→8 catch-up
+from this baseline file not having been regenerated since 2026-08-11 —
+no language decreased).
+
+**Full gate:** `test:dataflow` 725/725 (rerun clean after the ReDoS fix).
+`npm test` — all 12 scoped sub-scripts green (`test:smoke` 28, `test:glob`
+13, `test:sast` 553, `test:posture` 1330, `test:dataflow` 725, `test:mcp`
+102, `test:report` 111, `test:bench-modules` 70, `test:lifecycle` 216,
+`test:eval` 23, `test:discovery` 79, C++-dataflow 26, plus the Python script
+suite). `bench:cve-replay:check` 214/214, no drift. `bench:mutation:check`
+9/9 verdict-flip correct. `bench:self-scan:check` clean with zero drift
+from the pre-R8 baseline after the fix.
 
 ## 0.136.10 — detection-gap remediation Theme A: dedup, family, and calibration for deep mode
 
