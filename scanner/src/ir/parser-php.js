@@ -10,7 +10,7 @@
 //   - return
 //   - foreach as loop-header + assign
 //   - PHP superglobals ($_GET, $_POST, $_REQUEST, etc.) as ident sources
-//   - control flow (R8): `if`/`else`/`while`/`for`/`foreach`/`try`/`catch`/
+//   - control flow (R8): `if`/`else`/`while`/`foreach`/`try`/`catch`/
 //     `finally`/`switch` bodies are recursed into — the statement splitter
 //     now flushes on a closing `}` (see the `}`-flush comment near
 //     `_splitStatements` below) instead of only on `;`, so a sink nested
@@ -18,17 +18,27 @@
 //     dropped or folded into a bogus call node. This took three fix rounds
 //     to get line-number-exact (see the PRD R8 status entry in
 //     `docs/DETECTION_GAP_REMEDIATION_PRD.md` for the full history) — the
-//     CFG shape itself was correct from the first round.
+//     CFG shape itself was correct from the first round. NOTE: C-style
+//     `for` is deliberately NOT in this list — PHP has no `for`-loop
+//     recognizer at all (never in R8's scope, still true today); a sink
+//     inside `for ($i=0; $i<3; $i++) { ... }` still folds into a bogus
+//     `call:for` node and is lost entirely, the exact failure mode R8
+//     exists to fix, unfixed for this one construct.
 //
 // What we do NOT model:
 //   - arrow functions (fn($x) => expr)
 //   - traits / interfaces
 //   - anonymous classes
+//   - C-style `for` loops (see the note above — no recognizer exists)
 //   - the PHP 8 `match` expression (analogous gap to Java's arrow-form
 //     `switch` — this is the one modern control-flow SHAPE R8 did not
 //     cover, as opposed to the R8 fix's own scope, which is bodies of
 //     control-flow statements PHP already recognized)
 //   - `elseif`/`else if` chains (pre-existing, not touched by R8)
+//   - `if`/`else`'s pre-existing greedy-capture-group bug: the then-body
+//     capture group unconditionally swallows through to the else-body's
+//     own closing `}`, dropping the else-body's first statement
+//     (pre-existing, confirmed present before R8, not fixed by it)
 
 import * as crypto from 'node:crypto';
 import { callSitesFromCfg } from './call-sites.js';

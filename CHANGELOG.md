@@ -479,20 +479,29 @@ during that investigation and traced to a commit five months predating this
 PRD — left unfixed and logged as a candidate future item, since it wasn't
 introduced by this work.
 
-**Measured `bench/layer-recall` impact — an honest result, not the one
-originally expected.** Baseline before: `java 1/25, kotlin 0/20, c# 1/21,
-php 1/23`. Measured after: `java 1/25 (unchanged), kotlin 0/20 (unchanged),
-c# 1/21 (unchanged), php 2/23 (+1)`. Only PHP moved. Investigation confirmed
-why: this corpus's existing Java/Kotlin/C# fixtures that contain
-`if`/`try`/`for` syntax use it as a single-line guard clause ahead of a
-flat-level sink, not a sink genuinely nested inside the body — the exact
-shape this task fixed is real and directly proven by each language's own
-new dedicated unit tests, but three of the four languages' existing corpus
-fixtures simply aren't shaped to exercise it at the corpus-benchmark level.
-`bench/layer-recall/baseline.json` updated to the measured counts
-(`entriesScored` 210→214, `php` 1→2, plus an unrelated `js/ts` 7→8 catch-up
-from this baseline file not having been regenerated since 2026-08-11 —
-no language decreased).
+**Measured `bench/layer-recall` impact: 0 of 4 languages — an honest
+result, not the one originally expected, and corrected once more after
+this entry's first draft mis-attributed PHP's gain.** Baseline before:
+`java 1/25, kotlin 0/20, c# 1/21, php 1/23`. Measured after: `java 1/25
+(unchanged), kotlin 0/20 (unchanged), c# 1/21 (unchanged), php 2/23 (+1)`.
+PHP's `+1` is real, but it is **not R8's** — commit-swap A/B testing shows
+the pre-R8 `parser-php.js` still reproduces 2/23, while the pre-R14(b)
+`parser-php.js` (an earlier, unrelated PRD item — PHP's `<module>`
+top-level lowering) drops it back to 1/23. None of the corpus's `pre/`
+fixtures — the state the benchmark actually scores — place a sink
+genuinely inside a control-flow body for any of the four languages this
+task touched. The underlying capability this task fixed is completely real
+and independently proven, just not by this corpus: each language's own new
+dedicated `runScan` unit test (`test/parser-{java,cs,kt,php}-control-flow.test.js`)
+directly asserts a sink nested inside an `if`/`try`/`for`/`switch` body is
+now detected where it wasn't before. `bench/layer-recall/baseline.json`
+still updated to the measured counts (`entriesScored` 210→214, `php` 1→2,
+plus an unrelated `js/ts` 7→8 catch-up from this baseline file not having
+been regenerated since 2026-08-11 — no language decreased) — the baseline
+update is correct regardless of attribution, since it reflects the
+engine's actual current state. A follow-up item: this corpus needs a
+fixture per language with a sink genuinely inside a control-flow body (not
+a guard clause) before it can measure R8's impact at all.
 
 **Full gate:** `test:dataflow` 725/725 (rerun clean after the ReDoS fix).
 `npm test` — all 12 scoped sub-scripts green (`test:smoke` 28, `test:glob`
