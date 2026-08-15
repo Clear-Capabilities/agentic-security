@@ -72,6 +72,20 @@ function _splitStatements(body) {
       if (i < body.length) curLine++; // the newline terminating the comment
       continue;
     }
+    if (c === '/' && body[i + 1] === '*') {
+      // Block comment (incl. PHPDoc, e.g. `/** @param string $x */`).
+      // Skip to the matching `*/`, counting any newlines crossed so line
+      // tracking stays accurate for whatever follows — same contract the
+      // `//` handling above upholds. Bounded even when unterminated (`i`
+      // simply runs to `body.length` and the outer `for` loop ends).
+      i += 2; // past the opening '/*'
+      while (i < body.length && !(body[i] === '*' && body[i + 1] === '/')) {
+        if (body[i] === '\n') curLine++;
+        i++;
+      }
+      if (i < body.length) i++; // land on the '/' of '*/'; skipped, contributing no statement text
+      continue;
+    }
     if (c === '{' || c === '(' || c === '[') depth++;
     if (c === '}' || c === ')' || c === ']') depth--;
     if (c === ';' && depth === 0) {
