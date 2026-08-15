@@ -374,21 +374,33 @@ Second, `bench:self-scan:check` flagged a brand-new finding in
 `\s*` quantifiers both able to consume the same whitespace run when the
 overall match fails (no closing `]`) — a textbook adjacent-quantifier
 ReDoS. Verified as a genuine vulnerability, not a detector false positive,
-by direct timing measurement: matching against a crafted no-closing-bracket
-input scaled quadratically (2.5ms at 2,000 chars → 599ms at 32,000 chars),
-extrapolating to roughly ten minutes on a megabyte-scale adversarial input.
-Fixed by moving the leading `\s*` inside the optional parenthesized-argument
-group, removing the second independent quantifier; re-verified linear
-afterward (0.49ms at 200,000 chars) with byte-identical matches against
-every real attribute shape tested (stacked, spaced, empty-arg). The
-engine's own ReDoS heuristic (the third-party `safe-regex` library's
-star-height check) still flags the fixed pattern — confirmed a heuristic
-false positive on the now-safe regex, not a remaining vulnerability, by the
-same empirical timing method — so `bench/self-scan/BASELINE.json` was
-updated for `ir/parser-cs.js: 3→4`, documented here rather than further
-restructuring a regex already proven linear-time.
+by direct timing measurement, end-to-end reachable through
+`parseCSharpFile` on an adversarial `.cs` file, not just an isolated
+microbenchmark: 2.4 seconds on a 64,000-character input, extrapolating to
+roughly ten minutes at 1MB.
 
-**Verification — full gate re-run after both fixes:** `test:dataflow`
+The first fix round moved the leading `\s*` inside the optional
+parenthesized-argument group — genuinely linear (re-verified: 0.49ms at
+200,000 chars) — but the engine's own `safe-regex`-backed ReDoS heuristic
+still flagged that version, so that round accepted a
+`bench/self-scan/BASELINE.json` bump (`ir/parser-cs.js: 3→4`) as the
+resolution. A task review caught that this repo already has precedent for
+a cleaner fix to the exact same situation: commit `6bd394c`
+(`class-hierarchy.js`) hit an identical "safe-regex flags a pattern that's
+actually safe" case and resolved it by restructuring into two
+independently-safe alternatives rather than accepting the drift, reasoning
+explicitly that this "avoids relying on any one detector's judgment call."
+Applying that same pattern here — two alternatives (no-args and
+with-args) instead of one optional group, decorator name read from
+`match[1] || match[2]` — passes `safe-regex` as `true`, independently
+re-verified linear (0.63ms at 256,000 chars), and produces byte-identical
+matches across a 12-shape sweep against the first round's already-fixed
+version. **No baseline bump was needed after all**:
+`bench/self-scan/BASELINE.json` was reverted to its pre-Task-6 state
+(`ir/parser-cs.js: 3`, `scanner/src` total 621) once the restructured
+regex stopped tripping the heuristic.
+
+**Verification — full gate re-run after all fixes:** `test:dataflow`
 670/670. `npm test` — all 12 scoped sub-scripts report `fail 0`
 (`test:smoke` 28, `test:glob`, `test:sast` 553, `test:posture` 1330,
 `test:dataflow` 670, `test:mcp` 102, `test:report` 111, `test:bench-modules`
@@ -398,13 +410,15 @@ drift. `bench:mutation:check` 9/9 verdict-flip correct (5/5 metamorphic
 hold, 4/4 adversarial flip). `bench:layer-recall:check` reports no
 taint-layer recall regression across any language — expected, since R14(a)
 lands via dedicated unit tests, not new corpus entries, matching R13's and
-R14(b)'s own precedent. `bench:self-scan:check` clean against the one
-deliberate, documented baseline update above; no other file moved. Bundle
-rebuilt (`dist/agentic-security.mjs` + `.sha256`); `npm run smoke` against
-the rebuilt bundle correctly reports critical/high findings on the
-deliberately-vulnerable fixture (exit code 3, this CLI's documented
-"critical findings present" convention), and the underlying `test:smoke`
-suite (28/28) already passed as part of the full gate above.
+R14(b)'s own precedent. `bench:self-scan:check` clean with **zero drift
+from the pre-Task-6 baseline** — the ReDoS false positive is gone rather
+than accepted, matching commit `6bd394c`'s own outcome exactly.
+`test/parser-cs-annotations.test.js` 5/5 after the restructure. Bundle
+rebuilt (`dist/agentic-security.mjs` + `.sha256`) after each regex change;
+`npm run smoke` against the rebuilt bundle correctly reports critical/high
+findings on the deliberately-vulnerable fixture (exit code 3, this CLI's
+documented "critical findings present" convention), and the underlying
+`test:smoke` suite (28/28) already passed as part of the full gate above.
 
 **Full Theme E (R13 + R14) is now complete.**
 
