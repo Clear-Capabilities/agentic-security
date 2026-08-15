@@ -44,6 +44,26 @@ const FUNC_RE = new RegExp(
 // cause of PHP module-level findings reporting the wrong line and, in turn,
 // making the line-scoped `agentic-security-ignore` suppression pragma inert
 // for them (Finding 2 of the R14(b) final whole-branch review).
+// True when the next non-whitespace token starting at `body[i + 1]` is one
+// of the `else`/`catch`/`finally` continuation keywords — the ones that
+// must stay glued to a preceding `}` rather than starting a new split
+// entry (see the R8 comment at the `}`-flush call site below). Whitespace
+// only is skipped (not comments), matching the `\s*` the `ifMatch`/
+// `tryMatch` regexes themselves use between `}` and the keyword — a
+// comment in between was already unsupported before this task and stays
+// that way.
+function _continuationKeywordAhead(body, i) {
+  let j = i + 1;
+  while (j < body.length && /\s/.test(body[j])) j++;
+  for (const kw of ['else', 'catch', 'finally']) {
+    if (body.startsWith(kw, j)) {
+      const after = body[j + kw.length];
+      if (after === undefined || !/\w/.test(after)) return true;
+    }
+  }
+  return false;
+}
+
 function _splitStatements(body) {
   const out = [];
   let buf = '';
@@ -87,13 +107,67 @@ function _splitStatements(body) {
       continue;
     }
     if (c === '{' || c === '(' || c === '[') depth++;
-    if (c === '}' || c === ')' || c === ']') depth--;
+    if (c === '}' || c === ')' || c === ']') {
+      depth--;
+      // R8: a `}` that returns the shared depth counter to 0 ends a
+      // braced control-flow body (if/while/foreach/try/switch) — flush a
+      // statement boundary here too, not just on `;` at depth 0. PHP has
+      // no `{}`-based object/array-literal syntax (arrays use `[...]`,
+      // tracked by the same counter but not this trigger), so this cannot
+      // mis-fire mid-expression the way it would for a language with `{}`
+      // object initializers. A `}` that closes a lambda/closure body
+      // passed as a call argument (`usort($arr, function($a,$b){...})`)
+      // does NOT trigger this — that `}` returns depth from 2 to 1 (still
+      // inside usort's outer `(`), not to 0.
+      //
+      // EXCEPTION: do not flush when the next non-whitespace token is
+      // `else`, `catch`, or `finally` — those must stay glued onto the
+      // SAME statement as the preceding `}` for `ifMatch`/`tryMatch` in
+      // `_buildCfg` to see `if (...) { ... } else { ... }` or
+      // `try { ... } catch (...) { ... } finally { ... }` as one
+      // contiguous blob (both regexes are anchored end-to-end with `$`
+      // and span the whole construct). A blind flush-on-every-`}` here
+      // would silently split `if`/`else` and multi-clause `try` into two
+      // statements each, which is a strictly WORSE regression than the
+      // "must be last statement in scope" bug this task fixes — an
+      // `else`/`catch`/`finally` body would be dropped from the CFG
+      // entirely, not just occasionally mis-split.
+      if (c === '}' && depth === 0 && !_continuationKeywordAhead(body, i)) {
+        push(c);
+        const t = buf.trim();
+        if (t) out.push({ text: t, line: bufLine ?? curLine });
+        buf = '';
+        bufLine = null;
+        continue;
+      }
+    }
     if (c === ';' && depth === 0) {
       const t = buf.trim();
       if (t) out.push({ text: t, line: bufLine ?? curLine });
       buf = '';
       bufLine = null;
       continue;
+    }
+    // R8: a `switch` body's `case <expr>:` / `default:` labels are
+    // terminated by `:`, not `;` or `}` — without this, the label text
+    // stays glued onto whatever real statement follows it (no `;` or `}`
+    // separates them), and that combined blob then fails BOTH the
+    // assignment and call-statement shapes in `_lowerStmt` (neither
+    // starts with `$var =` nor a bare identifier-call), silently
+    // dropping the case body's first statement entirely — worse than the
+    // brief's anticipated "label falls through to `_lowerStmt` and
+    // returns null harmlessly" behavior. Scoped tightly (buf must be
+    // EXACTLY `case <expr>` or `default`) so it can't mis-fire on a
+    // ternary's `:` or `Foo::bar` static access, both of which leave buf
+    // holding something that never matches either pattern.
+    if (c === ':' && depth === 0) {
+      const t = buf.trim();
+      if (/^case\s+[\s\S]+$/.test(t) || t === 'default') {
+        out.push({ text: t, line: bufLine ?? curLine });
+        buf = '';
+        bufLine = null;
+        continue;
+      }
     }
     push(c);
     if (c === '\n') curLine++;
@@ -387,7 +461,8 @@ function _linkNodes(nodes, src, dst) {
 // blank line (or, at module level, any blanked-out function span — see
 // `_blankSpans`) that preceded a statement, which is exactly what made
 // module-level PHP findings report the wrong source line.
-function _buildCfg(bodyText, nodes, prevId, startLine) {
+function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
+  if (depth > 12) return prevId;
   const stmts = _splitStatements(bodyText);
   let prev = prevId;
   for (const stmt of stmts) {
@@ -400,10 +475,10 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
       const ifNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(ifMatch[1]), line });
       _linkNodes(nodes, prev, ifNode);
       const join = _addNode(nodes, { kind: 'noop', line });
-      const thenTail = _buildCfg(ifMatch[2], nodes, ifNode, line + 1);
+      const thenTail = _buildCfg(ifMatch[2], nodes, ifNode, line + 1, depth + 1);
       _linkNodes(nodes, thenTail, join);
       if (ifMatch[3]) {
-        const elseTail = _buildCfg(ifMatch[3], nodes, ifNode, line + 1);
+        const elseTail = _buildCfg(ifMatch[3], nodes, ifNode, line + 1, depth + 1);
         _linkNodes(nodes, elseTail, join);
       } else {
         _linkNodes(nodes, ifNode, join);
@@ -416,7 +491,7 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
     if (whileMatch) {
       const header = _addNode(nodes, { kind: 'loop-header', line });
       _linkNodes(nodes, prev, header);
-      const bodyTail = _buildCfg(whileMatch[2], nodes, header, line + 1);
+      const bodyTail = _buildCfg(whileMatch[2], nodes, header, line + 1, depth + 1);
       _linkNodes(nodes, bodyTail, header);
       const join = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, header, join);
@@ -430,10 +505,45 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
       _linkNodes(nodes, prev, header);
       const assignId = _addNode(nodes, { kind: 'assign', target: foreachMatch[2], source: _lowerExpr(foreachMatch[1]), line });
       _linkNodes(nodes, header, assignId);
-      const bodyTail = _buildCfg(foreachMatch[3], nodes, assignId, line + 1);
+      const bodyTail = _buildCfg(foreachMatch[3], nodes, assignId, line + 1, depth + 1);
       _linkNodes(nodes, bodyTail, header);
       const join = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, header, join);
+      prev = join;
+      continue;
+    }
+
+    const tryMatch = s.match(/^try\s*\{([\s\S]*)\}\s*catch\s*\(([^)]*)\)\s*\{([\s\S]*)\}(?:\s*finally\s*\{([\s\S]*)\})?\s*$/s);
+    if (tryMatch) {
+      const tryNode = _addNode(nodes, { kind: 'noop', line });
+      _linkNodes(nodes, prev, tryNode);
+      const join = _addNode(nodes, { kind: 'noop', line });
+      const tryTail = _buildCfg(tryMatch[1], nodes, tryNode, line + 1, depth + 1);
+      const catchNode = _addNode(nodes, { kind: 'noop', line });
+      _linkNodes(nodes, tryTail, catchNode);
+      const catchTail = _buildCfg(tryMatch[3], nodes, catchNode, line + 1, depth + 1);
+      let tail = catchTail;
+      if (tryMatch[4]) {
+        const finallyNode = _addNode(nodes, { kind: 'noop', line });
+        _linkNodes(nodes, tail, finallyNode);
+        tail = _buildCfg(tryMatch[4], nodes, finallyNode, line + 1, depth + 1);
+      }
+      _linkNodes(nodes, tail, join);
+      prev = join;
+      continue;
+    }
+
+    const switchMatch = s.match(/^switch\s*\((.+?)\)\s*\{([\s\S]*)\}\s*$/s);
+    if (switchMatch) {
+      const switchNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(switchMatch[1]), line });
+      _linkNodes(nodes, prev, switchNode);
+      const join = _addNode(nodes, { kind: 'noop', line });
+      // PHP switch/case bodies fall through by default (no per-case
+      // braces) — lower the whole switchBlock body as ONE linear sequence
+      // under the switch node, matching this plan's "linear-but-complete"
+      // target rather than modeling per-case branch/skip semantics.
+      const bodyTail = _buildCfg(switchMatch[2], nodes, switchNode, line + 1, depth + 1);
+      _linkNodes(nodes, bodyTail, join);
       prev = join;
       continue;
     }
