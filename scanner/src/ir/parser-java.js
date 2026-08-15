@@ -335,7 +335,42 @@ export async function parseJavaFile(file, raw) {
           const name = md.children?.methodHeader?.[0]?.children?.methodDeclarator?.[0]?.children?.Identifier?.[0]?.image
             || md.children?.methodDeclarator?.[0]?.children?.Identifier?.[0]?.image
             || 'anonymous';
-          const params = []; // params extraction deferred
+          // Parameter list + annotations live in the same CST subtree, so
+          // both are extracted in one walk (PRD R14(a) Task 5). Mirrors the
+          // dual-path fallback pattern used above for `name`: depending on
+          // which `k` matched in the outer loop, the params live nested
+          // under a `methodHeader` node OR directly under `methodDeclarator`.
+          const fpl = md.children?.methodHeader?.[0]?.children?.methodDeclarator?.[0]?.children?.formalParameterList?.[0]
+            || md.children?.methodDeclarator?.[0]?.children?.formalParameterList?.[0];
+          const paramAnnotations = [];
+          const params = (fpl?.children?.formalParameter || []).map((fp, idx) => {
+            // Regular parameters nest under `variableParaRegularParameter`.
+            // Varargs (`String... args`) instead use a distinct
+            // `variableArityParameter` node that this walk doesn't extract
+            // from — `vp` is undefined, so this degrades gracefully to a
+            // dropped (not corrupted/crashed) parameter, matching the
+            // codebase's existing "degrade gracefully rather than throw"
+            // convention for shapes that aren't cleanly extractable. Array
+            // types (`String[] args`) are unaffected — the `[]` lives in
+            // `unannType`, not the identifier, so `variableDeclaratorId`
+            // still yields a clean name.
+            const vp = fp.children?.variableParaRegularParameter?.[0];
+            const paramName = vp?.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image || null;
+            // Java allows multiple stacked annotations on one parameter
+            // (`@NotNull @RequestParam String q`), each its own
+            // `variableModifier` entry — loop over all of them, not just
+            // the first, or a stacked annotation is silently dropped (the
+            // same class of bug Task 3's C# regex needed a fix round for).
+            const variableModifiers = vp?.children?.variableModifier || [];
+            for (const vm of variableModifiers) {
+              const ann = vm.children?.annotation?.[0];
+              const decoratorName = ann?.children?.typeName?.[0]?.children?.Identifier?.[0]?.image;
+              if (decoratorName && paramName) {
+                paramAnnotations.push({ index: idx, name: paramName, decorator: decoratorName });
+              }
+            }
+            return paramName;
+          }).filter(Boolean);
           const body = md.children?.methodBody?.[0]?.children?.block?.[0];
           if (body) {
             const methodLine = _lineOf(md);
@@ -350,6 +385,7 @@ export async function parseJavaFile(file, raw) {
               params,
               cfg: buildCfgFromBody(body),
               file,
+              ...(paramAnnotations.length ? { paramAnnotations } : {}),
             });
           }
         }
