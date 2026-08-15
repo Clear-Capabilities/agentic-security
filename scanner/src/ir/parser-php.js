@@ -48,10 +48,10 @@ const FUNC_RE = new RegExp(
 // of the `else`/`catch`/`finally` continuation keywords — the ones that
 // must stay glued to a preceding `}` rather than starting a new split
 // entry (see the R8 comment at the `}`-flush call site below). Whitespace
-// only is skipped (not comments), matching the `\s*` the `ifMatch`/
-// `tryMatch` regexes themselves use between `}` and the keyword — a
-// comment in between was already unsupported before this task and stays
-// that way.
+// only is skipped (not comments), matching the `\s*` `ifMatch` and the
+// try/catch/finally recognizer (`_scanTryCatchFinally`) themselves allow
+// between `}` and the keyword — a comment in between was already
+// unsupported before this task and stays that way.
 function _continuationKeywordAhead(body, i) {
   let j = i + 1;
   while (j < body.length && /\s/.test(body[j])) j++;
@@ -122,14 +122,17 @@ function _splitStatements(body) {
       //
       // EXCEPTION: do not flush when the next non-whitespace token is
       // `else`, `catch`, or `finally` — those must stay glued onto the
-      // SAME statement as the preceding `}` for `ifMatch`/`tryMatch` in
-      // `_buildCfg` to see `if (...) { ... } else { ... }` or
+      // SAME statement as the preceding `}` for `ifMatch` and the
+      // try/catch/finally recognizer in `_buildCfg` to see
+      // `if (...) { ... } else { ... }` or
       // `try { ... } catch (...) { ... } finally { ... }` as one
-      // contiguous blob (both regexes are anchored end-to-end with `$`
-      // and span the whole construct). A blind flush-on-every-`}` here
-      // would silently split `if`/`else` and multi-clause `try` into two
-      // statements each, which is a strictly WORSE regression than the
-      // "must be last statement in scope" bug this task fixes — an
+      // contiguous blob (`ifMatch` is anchored end-to-end with `$` and
+      // spans the whole construct; the try/catch/finally recognizer scans
+      // the whole construct by hand for the same reason). A blind
+      // flush-on-every-`}` here would silently split `if`/`else` and
+      // multi-clause `try` into two statements each, which is a strictly
+      // WORSE regression than the "must be last statement in scope" bug
+      // this task fixes — an
       // `else`/`catch`/`finally` body would be dropped from the CFG
       // entirely, not just occasionally mis-split.
       if (c === '}' && depth === 0 && !_continuationKeywordAhead(body, i)) {
@@ -158,9 +161,20 @@ function _splitStatements(body) {
     // brief's anticipated "label falls through to `_lowerStmt` and
     // returns null harmlessly" behavior. Scoped tightly (buf must be
     // EXACTLY `case <expr>` or `default`) so it can't mis-fire on a
-    // ternary's `:` or `Foo::bar` static access, both of which leave buf
-    // holding something that never matches either pattern.
-    if (c === ':' && depth === 0) {
+    // ternary's `:`, which leaves buf holding something that never
+    // matches either pattern.
+    //
+    // Excludes `::` (PHP's static-access / class-constant / PHP 8.1
+    // enum-case operator, e.g. `case Foo::BAR:` or `case Status::Active:`)
+    // via the adjacent-char check below — without it, `case Foo::BAR:`'s
+    // FIRST `:` already makes buf read "case Foo", which matches the case
+    // pattern just as eagerly as the real terminating `:` after `BAR`
+    // does, mis-splitting mid-token and dropping that case's body. Both
+    // colons of a `::` pair are skipped (checking one neighbor character
+    // each is enough: the first colon sees `body[i+1] === ':'`, the
+    // second sees `body[i-1] === ':'`), so only a genuine lone `:` can
+    // ever terminate a label.
+    if (c === ':' && depth === 0 && body[i + 1] !== ':' && body[i - 1] !== ':') {
       const t = buf.trim();
       if (/^case\s+[\s\S]+$/.test(t) || t === 'default') {
         out.push({ text: t, line: bufLine ?? curLine });
@@ -452,6 +466,146 @@ function _linkNodes(nodes, src, dst) {
   if (!nodes[dst].pred.includes(src)) nodes[dst].pred.push(src);
 }
 
+// R8 fix round 1: counts `\n` in `s` up to (not including) `upTo`. `s` here
+// is the RAW, untrimmed statement text `_buildCfg` is currently processing
+// (not a `.trim()`-mangled reconstruction — the exact lossy pattern the
+// module header comment above `_splitStatements` warns against), so a
+// direct count is safe and exact, not an approximation.
+function _countNewlines(s, upTo) {
+  let n = 0;
+  const end = Math.min(upTo, s.length);
+  for (let i = 0; i < end; i++) if (s[i] === '\n') n++;
+  return n;
+}
+
+// Scans a balanced `{ ... }` block starting at `s[openIdx] === '{'`.
+// String-aware (a `{`/`}` inside a quoted string doesn't perturb depth),
+// mirroring `_splitStatements`' own string handling. Returns the index
+// just past the matching `}`, or -1 if unbalanced/not found.
+function _matchBraceBlock(s, openIdx) {
+  if (s[openIdx] !== '{') return -1;
+  let depth = 0;
+  let inStr = null;
+  let escape = false;
+  for (let i = openIdx; i < s.length; i++) {
+    const c = s[i];
+    if (escape) { escape = false; continue; }
+    if (inStr) {
+      if (c === '\\') { escape = true; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === '\'') { inStr = c; continue; }
+    if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return -1;
+}
+
+// R8 fix round 1 (Important): manually scans a
+// `try { ... } (catch (...) { ... })* (finally { ... })?` construct by hand
+// rather than delegating to one greedy-capture-group regex. The regex this
+// replaced (`^try\s*\{([\s\S]*)\}\s*catch\s*\(([^)]*)\)\s*\{([\s\S]*)\}
+// (?:\s*finally\s*\{([\s\S]*)\})?\s*$`) has two real bugs: its catch-body
+// group is GREEDY, so for `try{}catch(E $e){A}finally{B}` it swallows
+// through to finally's OWN closing `}` (not catch's), making the trailing
+// `(?:\s*finally...)?` group match nothing — `finally` bodies were dead
+// code, never actually reachable. And it unconditionally REQUIRES a catch
+// clause, so the equally-valid `try { ... } finally { ... }` (no catch) PHP
+// shape was invisible entirely, both bodies dropped. Neither is fixable by
+// tweaking the regex (lazy-matching the catch group just breaks nested-
+// brace bodies the other way); balanced-brace scanning is the correct fix.
+//
+// Only the FIRST catch clause is modeled in the CFG (matches this task's
+// brief scope — multi-catch BLOCK form, `catch(A){}catch(B){}`, was
+// already an accepted, documented partial-capture degrade before this fix,
+// confirmed non-crashing; union-type catches, `catch (A|B $e) {}`, are
+// unaffected and fully supported, same as before). Every catch clause
+// present is still scanned past correctly (not just the first) so a
+// trailing `finally` is located at its real position rather than
+// mismatched against a later catch's own content.
+//
+// Returns null if `s` isn't `try { ... }` shaped at all. Otherwise:
+//   { tryBody, tryBodyOffset, catchBody, catchBodyOffset,
+//     finallyBody, finallyBodyOffset }
+// A body that isn't present is `null` with `-1` for its offset. Each
+// `*Offset` is `s`'s own character offset of that body's first character —
+// paired with `_countNewlines`, this gives the caller (`_buildCfg`) the
+// EXACT absolute source line for each clause, not just the try-body's
+// (which happens to share `line`'s value for ordinary K&R style, but
+// catch/finally clauses generally start several lines later).
+function _scanTryCatchFinally(s) {
+  const head = /^try\s*/.exec(s);
+  if (!head) return null;
+  let i = head[0].length;
+  if (s[i] !== '{') return null;
+  const tryBodyOffset = i + 1;
+  const tryEnd = _matchBraceBlock(s, i);
+  if (tryEnd < 0) return null;
+  const tryBody = s.slice(tryBodyOffset, tryEnd - 1);
+  i = tryEnd;
+
+  let catchBody = null;
+  let catchBodyOffset = -1;
+  let sawCatch = false;
+  for (;;) {
+    const rest = s.slice(i);
+    const ws = /^\s*/.exec(rest)[0];
+    i += ws.length;
+    const cm = /^catch\s*\(/.exec(s.slice(i));
+    if (!cm) break;
+    const parenStart = i + cm[0].length - 1;
+    const parenEnd = s.indexOf(')', parenStart);
+    if (parenEnd < 0) return null;
+    let j = parenEnd + 1;
+    const ws2 = /^\s*/.exec(s.slice(j))[0];
+    j += ws2.length;
+    if (s[j] !== '{') return null;
+    const bodyOffset = j + 1;
+    const bodyEnd = _matchBraceBlock(s, j);
+    if (bodyEnd < 0) return null;
+    if (!sawCatch) {
+      catchBody = s.slice(bodyOffset, bodyEnd - 1);
+      catchBodyOffset = bodyOffset;
+      sawCatch = true;
+    }
+    i = bodyEnd;
+  }
+
+  let finallyBody = null;
+  let finallyBodyOffset = -1;
+  {
+    const ws = /^\s*/.exec(s.slice(i))[0];
+    let j = i + ws.length;
+    const fm = /^finally\s*/.exec(s.slice(j));
+    if (fm) {
+      j += fm[0].length;
+      if (s[j] === '{') {
+        const bodyOffset = j + 1;
+        const bodyEnd = _matchBraceBlock(s, j);
+        if (bodyEnd < 0) return null;
+        finallyBody = s.slice(bodyOffset, bodyEnd - 1);
+        finallyBodyOffset = bodyOffset;
+        i = bodyEnd;
+      }
+    }
+  }
+
+  // PHP requires at least one of catch/finally; a bare `try {}` alone
+  // isn't valid PHP and isn't a shape this recognizer should claim.
+  if (!sawCatch && finallyBody === null) return null;
+  // Whatever remains must be only trailing whitespace, or this wasn't a
+  // clean try/catch/finally statement after all — fall through to the
+  // generic `_lowerStmt` path (safe no-op) rather than claiming a bad
+  // match.
+  if (s.slice(i).trim() !== '') return null;
+
+  return { tryBody, tryBodyOffset, catchBody, catchBodyOffset, finallyBody, finallyBodyOffset };
+}
+
 // `startLine` is the absolute source line of the FIRST character of
 // `bodyText`. Each statement's absolute line is `startLine + stmt.line - 1`
 // (`stmt.line` from _splitStatements is already 1-indexed and relative to
@@ -475,10 +629,26 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       const ifNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(ifMatch[1]), line });
       _linkNodes(nodes, prev, ifNode);
       const join = _addNode(nodes, { kind: 'noop', line });
-      const thenTail = _buildCfg(ifMatch[2], nodes, ifNode, line + 1, depth + 1);
+      // R8 fix round 1 (Critical): `line` is the absolute source line of
+      // `s`'s FIRST character (the `if` keyword itself). For ordinary K&R
+      // brace style (`{` on the same physical line as `if`/`while`/
+      // `foreach`/`try`/`switch`), the captured body's own first
+      // character (right after that `{`) is on that SAME line — so the
+      // child recursion's `startLine` must be `line`, not `line + 1`. The
+      // previous `line + 1` silently over-counted by one line for every
+      // control-flow body, which — because `_buildCfg` recursion is now
+      // reachable for constructs that aren't last-in-scope (this task's
+      // whole point) — became the default line-number behavior for
+      // essentially all PHP control flow, not a rare edge case. Proven via
+      // `runScan`: a sink on real line N was reported at line N+1, and an
+      // `agentic-security-ignore` pragma placed on the TRUE line was
+      // inert while one placed on the wrong (reported) line suppressed
+      // it. See `test/parser-php-control-flow.test.js`'s exact-line and
+      // suppression-pragma regression tests.
+      const thenTail = _buildCfg(ifMatch[2], nodes, ifNode, line, depth + 1);
       _linkNodes(nodes, thenTail, join);
       if (ifMatch[3]) {
-        const elseTail = _buildCfg(ifMatch[3], nodes, ifNode, line + 1, depth + 1);
+        const elseTail = _buildCfg(ifMatch[3], nodes, ifNode, line, depth + 1);
         _linkNodes(nodes, elseTail, join);
       } else {
         _linkNodes(nodes, ifNode, join);
@@ -491,7 +661,7 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
     if (whileMatch) {
       const header = _addNode(nodes, { kind: 'loop-header', line });
       _linkNodes(nodes, prev, header);
-      const bodyTail = _buildCfg(whileMatch[2], nodes, header, line + 1, depth + 1);
+      const bodyTail = _buildCfg(whileMatch[2], nodes, header, line, depth + 1);
       _linkNodes(nodes, bodyTail, header);
       const join = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, header, join);
@@ -505,7 +675,7 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       _linkNodes(nodes, prev, header);
       const assignId = _addNode(nodes, { kind: 'assign', target: foreachMatch[2], source: _lowerExpr(foreachMatch[1]), line });
       _linkNodes(nodes, header, assignId);
-      const bodyTail = _buildCfg(foreachMatch[3], nodes, assignId, line + 1, depth + 1);
+      const bodyTail = _buildCfg(foreachMatch[3], nodes, assignId, line, depth + 1);
       _linkNodes(nodes, bodyTail, header);
       const join = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, header, join);
@@ -513,20 +683,33 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       continue;
     }
 
-    const tryMatch = s.match(/^try\s*\{([\s\S]*)\}\s*catch\s*\(([^)]*)\)\s*\{([\s\S]*)\}(?:\s*finally\s*\{([\s\S]*)\})?\s*$/s);
-    if (tryMatch) {
+    const tryScan = /^try\s*\{/.test(s) ? _scanTryCatchFinally(s) : null;
+    if (tryScan) {
       const tryNode = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, prev, tryNode);
       const join = _addNode(nodes, { kind: 'noop', line });
-      const tryTail = _buildCfg(tryMatch[1], nodes, tryNode, line + 1, depth + 1);
-      const catchNode = _addNode(nodes, { kind: 'noop', line });
-      _linkNodes(nodes, tryTail, catchNode);
-      const catchTail = _buildCfg(tryMatch[3], nodes, catchNode, line + 1, depth + 1);
-      let tail = catchTail;
-      if (tryMatch[4]) {
+      // Unlike the if/while/foreach/switch bodies above, catch/finally
+      // clauses do NOT generally start on `line` (the `try` keyword's own
+      // line) — they start wherever their own `catch (...) {` / `finally
+      // {` happens to land, often several lines later. `_scanTryCatchFinally`
+      // already tracked each body's exact character offset within `s`
+      // while it balanced-brace-scanned it, so deriving the precise
+      // absolute line via `_countNewlines` here is effectively free and
+      // strictly more correct than reusing a flat `line` for every clause.
+      const tryStartLine = line + _countNewlines(s, tryScan.tryBodyOffset);
+      const tryTail = _buildCfg(tryScan.tryBody, nodes, tryNode, tryStartLine, depth + 1);
+      let tail = tryTail;
+      if (tryScan.catchBody !== null) {
+        const catchNode = _addNode(nodes, { kind: 'noop', line });
+        _linkNodes(nodes, tail, catchNode);
+        const catchStartLine = line + _countNewlines(s, tryScan.catchBodyOffset);
+        tail = _buildCfg(tryScan.catchBody, nodes, catchNode, catchStartLine, depth + 1);
+      }
+      if (tryScan.finallyBody !== null) {
         const finallyNode = _addNode(nodes, { kind: 'noop', line });
         _linkNodes(nodes, tail, finallyNode);
-        tail = _buildCfg(tryMatch[4], nodes, finallyNode, line + 1, depth + 1);
+        const finallyStartLine = line + _countNewlines(s, tryScan.finallyBodyOffset);
+        tail = _buildCfg(tryScan.finallyBody, nodes, finallyNode, finallyStartLine, depth + 1);
       }
       _linkNodes(nodes, tail, join);
       prev = join;
@@ -542,7 +725,7 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       // braces) — lower the whole switchBlock body as ONE linear sequence
       // under the switch node, matching this plan's "linear-but-complete"
       // target rather than modeling per-case branch/skip semantics.
-      const bodyTail = _buildCfg(switchMatch[2], nodes, switchNode, line + 1, depth + 1);
+      const bodyTail = _buildCfg(switchMatch[2], nodes, switchNode, line, depth + 1);
       _linkNodes(nodes, bodyTail, join);
       prev = join;
       continue;

@@ -1,6 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { parsePhpFile } from '../src/ir/parser-php.js';
+
+function mkTmp(files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-php-fix1-'));
+  for (const [rel, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(dir, rel), content);
+  }
+  return dir;
+}
 
 function callNodes(ir, fnName) {
   const fn = ir.functions.find(f => f.name === fnName);
@@ -129,4 +140,118 @@ function run($conn) {
   const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   assert.ok(irFindings.length >= 1, `expected an IR-TAINT finding for a sink inside try, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
+});
+
+// --- R8 fix round 1 regressions ---------------------------------------
+//
+// A task review of the original commit found: (1) a Critical line-tracking
+// off-by-one affecting every recursive `_buildCfg` call this task added or
+// touched (the child body's `startLine` was `line + 1` instead of `line`,
+// silently over-counting by one line for K&R-style control flow — the
+// overwhelmingly common PHP style — which broke the `agentic-security-ignore`
+// suppression pragma for control-flow-body findings); (2) `tryMatch`'s
+// greedy catch-body regex capture group swallowed through to `finally`'s
+// own closing `}`, making `finally` bodies dead code; (3) `try { } finally
+// { }` with no `catch` clause was unrecognized entirely; (4) the new
+// `:`-based case-label flush mis-fired on `::` (class-constant / PHP 8.1
+// enum-case labels, e.g. `case Foo::BAR:`), mis-splitting mid-token and
+// dropping that case's body. All four are fixed above; these tests pin
+// each one directly.
+
+test('parsePhpFile: a sink several lines into an if-body is reported at its EXACT source line', () => {
+  const code = `<?php
+function f($conn) {
+    if (true) {
+        $a = 1;
+        $b = 2;
+        mysqli_query($conn, 'x');
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  const call = calls.find(c => c.callee === 'mysqli_query');
+  assert.ok(call, 'expected the if-body sink to be captured');
+  assert.equal(call.line, 6, 'sink is on real source line 6 (1: <?php, 2: function, 3: if, 4: $a, 5: $b, 6: mysqli_query) — reporting line 7 was the R8 fix-round-1 Critical off-by-one');
+});
+
+test('parsePhpFile: sinks in the try, catch, AND finally bodies are all reported at their EXACT source lines', () => {
+  const code = `<?php
+function f($conn) {
+    try {
+        sink1($conn);
+    } catch (Exception $e) {
+        sink2($e);
+    } finally {
+        sink3($conn);
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  const byName = (name) => calls.find(c => c.callee === name);
+  assert.ok(byName('sink1'), 'expected the try-body sink');
+  assert.ok(byName('sink2'), 'expected the catch-body sink');
+  assert.ok(byName('sink3'), 'expected the finally-body sink — previously dead code: the old regex\'s greedy catch-body capture group swallowed through finally\'s own closing brace, so `tryMatch[4]` (finally) could never match anything');
+  assert.equal(byName('sink1').line, 4, 'try-body sink is on real source line 4');
+  assert.equal(byName('sink2').line, 6, 'catch-body sink is on real source line 6');
+  assert.equal(byName('sink3').line, 8, 'finally-body sink is on real source line 8');
+});
+
+test('parsePhpFile: try/finally with NO catch clause captures both bodies (previously unrecognized entirely)', () => {
+  const code = `<?php
+function f($conn) {
+    try {
+        sink1($conn);
+    } finally {
+        sink2($conn);
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'sink1'), 'expected the try-body sink for a catch-less try/finally');
+  assert.ok(calls.some(c => c.callee === 'sink2'), 'expected the finally-body sink for a catch-less try/finally');
+});
+
+test('parsePhpFile: case labels using class-constant / enum-case syntax (Foo::BAR) are not mis-split by the `:` flush', () => {
+  const code = `<?php
+function f($x) {
+    switch ($x) {
+        case Foo::BAR:
+            sink1($x);
+            break;
+        case Status::Active:
+            sink2($x);
+            break;
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'sink1'), 'expected the `case Foo::BAR:` body sink — the naive `:` flush treats the FIRST `:` of `::` as the label terminator, splitting mid-token and dropping this body');
+  assert.ok(calls.some(c => c.callee === 'sink2'), 'expected the `case Status::Active:` (PHP 8.1 enum-case shape) body sink');
+});
+
+test('runScan + agentic-security-ignore on the TRUE source line of a sink inside an if-body suppresses the finding (R8 fix-round-1 regression for the Critical line-tracking bug)', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const phpFile = (pragma = '') => `<?php
+function run($conn) {
+    if (true) {
+        $id = $_GET['id'];
+        mysqli_query($conn, $id);${pragma}
+    }
+}
+`;
+  const controlDir = mkTmp({ 'index.php': phpFile() });
+  const { scan: control } = await runScan(controlDir, { deep: true, deepInCi: true });
+  const controlTaint = (control.findings || []).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(controlTaint.length >= 1, 'positive control: deep mode must produce an IR-TAINT finding for the unsuppressed if-body sink');
+
+  const suppressedDir = mkTmp({ 'index.php': phpFile(' // agentic-security-ignore') });
+  const { scan: suppressed } = await runScan(suppressedDir, { deep: true, deepInCi: true });
+  const suppressedTaint = (suppressed.findings || []).filter(f => f.parser === 'IR-TAINT');
+  assert.equal(suppressedTaint.length, 0,
+    'the pragma placed on the REAL sink line (line 5, inside the if-body) must suppress the finding — ' +
+    'before the fix, the finding was reported one line too late (line 6) and this pragma placement was inert');
 });
