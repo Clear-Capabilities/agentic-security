@@ -173,8 +173,25 @@ export const CATALOG = [
   { kind: 'source', id: 'java-request-getReader',      language: 'java', framework: 'servlet', match: { type: 'call', callee: 'getReader' },      label: 'request.getReader' },
   { kind: 'source', id: 'java-system-getenv',          language: 'java', framework: 'stdlib',  match: { type: 'call', callee: 'getenv' },         label: 'System.getenv' },
   { kind: 'source', id: 'java-system-getProperty',     language: 'java', framework: 'stdlib',  match: { type: 'call', callee: 'getProperty' },    label: 'System.getProperty' },
-  // Spring annotation-style sources are detected per-rule, not as catalog
-  // members (they're parameter decorators rather than callable shapes).
+
+  // ─── SOURCES (Annotation/Decorator-shaped) ────────────────────────────────
+  // R14(a): annotation/decorator-shaped framework sources (Spring @RequestParam,
+  // ASP.NET Core [FromQuery], NestJS @Query()). These are indexed and matched via
+  // matchAnnotationParams, which is called once per function against the IR's
+  // paramAnnotations side-channel.
+  { kind: 'source', id: 'java-spring-requestparam',  language: 'java', framework: 'spring', match: { type: 'annotation', name: 'RequestParam' },  label: '@RequestParam (Spring)' },
+  { kind: 'source', id: 'java-spring-pathvariable',  language: 'java', framework: 'spring', match: { type: 'annotation', name: 'PathVariable' },  label: '@PathVariable (Spring)' },
+  { kind: 'source', id: 'java-spring-requestbody',   language: 'java', framework: 'spring', match: { type: 'annotation', name: 'RequestBody' },   label: '@RequestBody (Spring)' },
+  { kind: 'source', id: 'java-spring-requestheader',  language: 'java', framework: 'spring', match: { type: 'annotation', name: 'RequestHeader' }, label: '@RequestHeader (Spring)' },
+  { kind: 'source', id: 'cs-aspnet-fromquery',   language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromQuery' },   label: '[FromQuery] (ASP.NET Core)' },
+  { kind: 'source', id: 'cs-aspnet-frombody',    language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromBody' },    label: '[FromBody] (ASP.NET Core)' },
+  { kind: 'source', id: 'cs-aspnet-fromform',    language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromForm' },    label: '[FromForm] (ASP.NET Core)' },
+  { kind: 'source', id: 'cs-aspnet-fromroute',   language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromRoute' },   label: '[FromRoute] (ASP.NET Core)' },
+  { kind: 'source', id: 'cs-aspnet-fromheader',  language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromHeader' },  label: '[FromHeader] (ASP.NET Core)' },
+  { kind: 'source', id: 'js-nestjs-query',   language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Query' },   label: '@Query() (NestJS)' },
+  { kind: 'source', id: 'js-nestjs-body',    language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Body' },    label: '@Body() (NestJS)' },
+  { kind: 'source', id: 'js-nestjs-param',   language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Param' },   label: '@Param() (NestJS)' },
+  { kind: 'source', id: 'js-nestjs-headers', language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Headers' }, label: '@Headers() (NestJS)' },
 
   // ─── SOURCES (Go) ─────────────────────────────────────────────────────────
   { kind: 'source', id: 'go-r-form',     language: 'go', framework: 'net/http', match: { type: 'member', object: 'r', prop: 'Form' },     label: 'r.Form' },
@@ -980,6 +997,7 @@ for (const e of CATALOG) {
 const CALLEE_INDEX = new Map();
 const MEMBER_INDEX = new Map();
 const GLOBAL_INDEX = new Map();
+const ANNOTATION_INDEX = new Map();
 for (const e of CATALOG) {
   if (!e.match) continue;
   if (e.match.type === 'call' && e.match.callee && e.match.callee !== '*') {
@@ -998,6 +1016,10 @@ for (const e of CATALOG) {
     const k = e.match.name;
     if (!GLOBAL_INDEX.has(k)) GLOBAL_INDEX.set(k, []);
     GLOBAL_INDEX.get(k).push(e);
+  } else if (e.match.type === 'annotation' && e.match.name) {
+    const k = e.match.name;
+    if (!ANNOTATION_INDEX.has(k)) ANNOTATION_INDEX.set(k, []);
+    ANNOTATION_INDEX.get(k).push(e);
   }
 }
 
@@ -1157,6 +1179,28 @@ export function matchMemberWriteSink(targetPath, file) {
     .filter(h => _languageAllowed(h, file))
     .filter(h => h.kind === 'sink');
   return hits.length ? hits : null;
+}
+
+// R14(a): annotation/decorator-shaped framework sources (Spring @RequestParam,
+// ASP.NET Core [FromQuery], NestJS @Query()). Unlike matchSource/matchSinkOrSanitizer,
+// this does not consult an expression encountered while walking a CFG node —
+// there is no CFG node for "this function's own declared parameter list." It is
+// consulted once per function, against the IR's paramAnnotations side-channel,
+// by engine.js's _unionAnnotationTaint before each analyzeFunction call.
+export function matchAnnotationParams(paramAnnotations, file) {
+  const tainted = new Set();
+  if (!paramAnnotations || !paramAnnotations.length) return tainted;
+  for (const pa of paramAnnotations) {
+    const hits = ANNOTATION_INDEX.get(pa.decorator);
+    if (!hits) continue;
+    for (const e of hits) {
+      if (e.kind !== 'source') continue;
+      if (!_languageAllowed(e, file)) continue;
+      tainted.add(pa.name);
+      break;
+    }
+  }
+  return tainted;
 }
 
 // For tests and reflection.
