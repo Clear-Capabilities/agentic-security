@@ -399,6 +399,43 @@ function _linkNodes(nodes, src, dst) {
 const HEADER_RE = /^(if|while|for|when|else\s+if|else|do|try|catch|finally)\b/;
 const NEEDS_COND_RE = /^(?:if|while|when|else if|catch)$/;
 
+// Taint-engine PRD P1: trailing-lambda body recursion. Detects the START of
+// a `recv.method(args)? { … }` call — deliberately NOT the whole statement
+// (the pre-P1 `_lowerStmt` trigger's `[\s\S]*\}\s*$` greedy tail is exactly
+// what mis-captured a chained `xs.filter { … }.forEach { … }` as one big
+// opaque lambda with the wrong callee). `_matchDelim` finds the REAL
+// matching `}` from here, the same balanced-scan primitive every keyword
+// branch below already uses.
+//
+// Split into two alternatives — no-args and with-args — rather than one
+// optional group between two `\s*`s: `bench:self-scan:check` caught this
+// exact shape as a genuine quadratic ReDoS (confirmed by direct timing:
+// 40000 whitespace chars with no trailing `{` took ~1s), the identical
+// defect class this file's own R8 task already fixed once (see the CLAUDE.md
+// note on the sibling `decl` regex) and parser-cs.js's `attrRegex` fixed the
+// same way. Each alternative has its own capture group for the callee name
+// (`m[1]`/`m[2]`); only one is ever set.
+const TRAILING_LAMBDA_TRIGGER_RE = /^([\w.]+)\s*\{|^([\w.]+)\s*(\([^()]*\))\s*\{/;
+
+// Stdlib scope functions whose lambda receives the RECEIVER (or an element
+// of it) as its own parameter — these get a synthesized taint-binding
+// assign before the body is recursed into, mirroring the for-loop's
+// loop-variable binding immediately below. `reduce`/`fold` pass BOTH an
+// accumulator and an element; this codebase's recall-preserving doctrine
+// (favor a false positive over a silent false negative — see catalog.js's
+// sanitizer-recording comment for the same tradeoff) argues for binding
+// every declared param to the receiver rather than trying to disambiguate
+// which one is the actual element.
+//
+// Deliberately EXCLUDED: `apply`/`run` — these pass the receiver as an
+// IMPLICIT `this`, not a named/`it` lambda parameter (`T.() -> R`, not
+// `T.(T) -> R`), so there is nothing to bind here without modeling
+// implicit-receiver member calls. Their bodies are still recursed into
+// below (so an already-tainted OUTER variable referenced inside still
+// works), just without receiver-as-param binding — a real, documented
+// scope boundary, not a silent gap.
+const LAMBDA_BINDABLE_METHODS = new Set(['forEach', 'map', 'filter', 'reduce', 'fold', 'use', 'let', 'also']);
+
 // R8: recursive statement handler. `s` is ONE element returned by
 // `_splitStatements` — which, because Kotlin's splitter (unlike C#'s) does
 // not flush on a `}` reaching depth 0, may itself be a CHAIN of glued
@@ -422,6 +459,61 @@ function _consumeChunk(s, abs0, nodes, prevId, funcStartLine, lineStarts, depth)
     const rest = s.slice(skipTo);
     const hm = rest.match(HEADER_RE);
     if (!hm) {
+      // Taint-engine PRD P1: trailing-lambda body recursion. Checked before
+      // falling through to a leaf statement — `HEADER_RE` never matches an
+      // identifier-starting trailing-lambda call, so there is no ambiguity
+      // between the two triggers.
+      const lambdaMatch = rest.match(TRAILING_LAMBDA_TRIGGER_RE);
+      if (lambdaMatch) {
+        const braceIdxInS = skipTo + lambdaMatch[0].length - 1; // index of '{' within s
+        const closeRel = _matchDelim(s, braceIdxInS, '{', '}');
+        if (closeRel !== -1) {
+          first = false;
+          const callee = lambdaMatch[1] || lambdaMatch[2];
+          const parenGroup = lambdaMatch[3] || null;
+          const argsText = parenGroup ? parenGroup.slice(1, -1) : '';
+          const callArgs = argsText ? _splitTopLevelCommas(argsText).map(_lowerExpr) : [];
+          const line = _lineForAbs(lineStarts, funcStartLine, abs0 + skipTo);
+          const callId = _addNode(nodes, { kind: 'call', line, callee, args: callArgs });
+          _linkNodes(nodes, prev, callId);
+          prev = callId;
+
+          const dot = callee.lastIndexOf('.');
+          // A leading-dot callee (`.forEach { … }`, the second link of a
+          // CHAINED trailing lambda like `xs.filter{}.forEach{}`) yields an
+          // empty receiver here — deliberately falls into the same
+          // no-binding path as .apply/.run below, since there is no real
+          // identifier to bind from (the true receiver is the previous
+          // lambda's return value, which this file does not model as a
+          // synthetic variable). The call site and body are still captured.
+          const receiver = dot > 0 ? callee.slice(0, dot) : null;
+          const method = dot >= 0 ? callee.slice(dot + 1) : callee;
+
+          const bodyInner = s.slice(braceIdxInS + 1, closeRel);
+          const bodyAbs0 = abs0 + braceIdxInS + 1;
+
+          if (receiver && LAMBDA_BINDABLE_METHODS.has(method)) {
+            const arrowIdx = _findTopLevelArrow(bodyInner);
+            const paramNames = arrowIdx >= 0
+              ? bodyInner.slice(0, arrowIdx).split(',').map(p => p.trim()).filter(p => /^[A-Za-z_]\w*$/.test(p))
+              : ['it'];
+            for (const p of paramNames) {
+              const assignId = _addNode(nodes, { kind: 'assign', line, target: p, source: _lowerExpr(receiver) });
+              _linkNodes(nodes, prev, assignId);
+              prev = assignId;
+            }
+            const recurseFrom = arrowIdx >= 0 ? arrowIdx + 2 : 0;
+            prev = _buildCfg(bodyInner.slice(recurseFrom), nodes, prev, funcStartLine, lineStarts, bodyAbs0 + recurseFrom, depth + 1);
+          } else {
+            // .apply/.run, a chained continuation, or an unlisted scope
+            // function: body still reachable, no param binding.
+            prev = _buildCfg(bodyInner, nodes, prev, funcStartLine, lineStarts, bodyAbs0, depth + 1);
+          }
+          pos = closeRel + 1;
+          if (pos >= s.length || depth > 12) return prev;
+          continue;
+        }
+      }
       if (first) {
         return _lowerLeafOrBlock(s, abs0, nodes, prev, funcStartLine, lineStarts, depth);
       }

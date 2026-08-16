@@ -11,11 +11,11 @@ that produced them.
 | --- | --- |
 | Engine version | 0.137.1 |
 | Bundle SHA-256 | `c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c` |
-| Commit | `1eee11e7d1b62eee4b63abbcebc91b2843f6afde` |
+| Commit | `867ddf0ed4cd112d34601b6658b1484607568d1b` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
-| Corpus entries | 214 (214 scored) |
-| Generated (UTC) | 2026-08-16T14:45:47.345Z |
+| Corpus entries | 215 (215 scored) |
+| Generated (UTC) | 2026-08-16T17:32:24.204Z |
 
 ## What these numbers are, and what they are not
 
@@ -54,8 +54,8 @@ cannot defend would cost more credibility than the number is worth.
 
 | Population | Detected / correctly silent |
 | --- | --- |
-| Vulnerable fixtures (`pre/`) — detection | 214/214 (100.0%) |
-| Fixed counterparts (`post/`) — correct silence | 214/214 (100.0%) |
+| Vulnerable fixtures (`pre/`) — detection | 215/215 (100.0%) |
+| Fixed counterparts (`post/`) — correct silence | 215/215 (100.0%) |
 
 All corpus entries scored; no entry was excluded.
 
@@ -70,7 +70,7 @@ All corpus entries scored; no entry was excluded.
 | java | 25 | 25/25 (100.0%) | 25/25 (100.0%) |
 | javascript | 38 | 38/38 (100.0%) | 38/38 (100.0%) |
 | json | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
-| kotlin | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
+| kotlin | 21 | 21/21 (100.0%) | 21/21 (100.0%) |
 | php | 23 | 23/23 (100.0%) | 23/23 (100.0%) |
 | python | 32 | 32/32 (100.0%) | 32/32 (100.0%) |
 | ruby | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
@@ -87,7 +87,7 @@ All corpus entries scored; no entry was excluded.
 | CWE-1333 | 7 | 7/7 (100.0%) | 7/7 (100.0%) |
 | CWE-1427 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-208 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-22 | 14 | 14/14 (100.0%) | 14/14 (100.0%) |
+| CWE-22 | 15 | 15/15 (100.0%) | 15/15 (100.0%) |
 | CWE-284 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-316 | 2 | 2/2 (100.0%) | 2/2 (100.0%) |
 | CWE-327 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
@@ -114,7 +114,7 @@ All corpus entries scored; no entry was excluded.
 | Tier | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
 | capability | 205 | 205/205 (100.0%) | 205/205 (100.0%) |
-| deep | 6 | 6/6 (100.0%) | 6/6 (100.0%) |
+| deep | 7 | 7/7 (100.0%) | 7/7 (100.0%) |
 | regression | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 
 ## Taint-layer recall by language
@@ -149,17 +149,17 @@ below for current counts.
 
 ### Whole corpus (diagnostic)
 
-Entries scored: 214
+Entries scored: 215
 
 | Language | IR-TAINT recall |
 | --- | --- |
-| c# | 4/21 (19.0%) |
+| c# | 5/21 (23.8%) |
 | c/c++ | 2/11 (18.2%) |
 | go | 3/22 (13.6%) |
 | java | 1/25 (4.0%) |
 | js/ts | 8/38 (21.1%) |
 | json | 0/1 (0.0%) |
-| kotlin | 0/20 (0.0%) |
+| kotlin | 1/21 (4.8%) |
 | php | 2/23 (8.7%) |
 | python | 10/32 (31.3%) |
 | ruby | 1/20 (5.0%) |
@@ -167,16 +167,17 @@ Entries scored: 214
 
 ### Deep-tier only — taint-shaped subset (headline)
 
-Entries scored: 6
+Entries scored: 7
 
 | Language | IR-TAINT recall |
 | --- | --- |
 | c/c++ | 1/1 (100.0%) |
 | js/ts | 3/3 (100.0%) |
+| kotlin | 1/1 (100.0%) |
 | php | 1/1 (100.0%) |
 | python | 1/1 (100.0%) |
 
-Not yet measured on this subset: c#, go, java, json, kotlin, ruby, terraform
+Not yet measured on this subset: c#, go, java, json, ruby, terraform
 
 ## Precision-side signal: self-scan (measured this run)
 
@@ -249,8 +250,8 @@ went DOWN when the benchmark was corrected, and is published that way.
 
 ## Committed artifacts referenced (not re-run by this command)
 
-- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-08-12):
-  214/214 entries recorded as passing. The gate
+- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-08-16):
+  215/215 entries recorded as passing. The gate
   `npm run bench:cve-replay:check` fails the build on any drift from it.
   The rates above are computed from this run, not from this file.
 - **Third-party repository run** (*committed artifact*, `bench/proof-corpus/results/summary.json`,

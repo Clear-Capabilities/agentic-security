@@ -150,3 +150,172 @@ test('parseKotlinFile: deeply chained braceless if statements do not overflow th
   const fn = ir.functions.find(f => f.name === 'f');
   assert.ok(fn, 'expected a "functions" entry for f, proving the parse completed');
 });
+
+// ─── Taint-engine PRD P1: trailing-lambda body recursion ───────────────────
+
+function assignNodes(ir, fnName) {
+  const fn = ir.functions.find(f => f.name === fnName);
+  assert.ok(fn, `expected function "${fnName}"`);
+  return Object.values(fn.cfg.nodes).filter(n => n.kind === 'assign');
+}
+
+test('parseKotlinFile: a sink inside a .forEach { } trailing-lambda body is captured', () => {
+  const code = `
+fun run(ids: List<String>) {
+    ids.forEach {
+        db.execute(it)
+    }
+}
+`;
+  const ir = parseKotlinFile('f.kt', code);
+  assert.ok(ir);
+  const calls = callNodes(ir, 'run');
+  assert.ok(calls.some(c => c.callee === 'execute' || c.callee === 'db.execute'),
+    `expected the sink call inside .forEach's body, got: ${JSON.stringify(calls)}`);
+});
+
+test('parseKotlinFile: a sink inside a .use { } trailing-lambda body is captured (idiomatic JDBC shape)', () => {
+  const code = `
+fun run(conn: Connection, id: String) {
+    conn.use {
+        it.execute(id)
+    }
+}
+`;
+  const ir = parseKotlinFile('f.kt', code);
+  assert.ok(ir);
+  const calls = callNodes(ir, 'run');
+  assert.ok(calls.some(c => c.callee === 'execute' || c.callee === 'it.execute'),
+    `expected the sink call inside .use's body, got: ${JSON.stringify(calls)}`);
+});
+
+test('parseKotlinFile: .forEach with an implicit "it" parameter binds it to the receiver', () => {
+  const code = `
+fun run(ids: List<String>) {
+    ids.forEach {
+        db.execute(it)
+    }
+}
+`;
+  const ir = parseKotlinFile('f.kt', code);
+  const assigns = assignNodes(ir, 'run');
+  const itBinding = assigns.find(a => a.target === 'it');
+  assert.ok(itBinding, `expected an assign node binding "it", got: ${JSON.stringify(assigns)}`);
+  assert.equal(itBinding.source && itBinding.source.name, 'ids',
+    `expected "it" bound to the receiver "ids", got source: ${JSON.stringify(itBinding.source)}`);
+});
+
+test('parseKotlinFile: .forEach with a named parameter (x -> ...) binds the named param, not "it"', () => {
+  const code = `
+fun run(ids: List<String>) {
+    ids.forEach { x ->
+        db.execute(x)
+    }
+}
+`;
+  const ir = parseKotlinFile('f.kt', code);
+  const assigns = assignNodes(ir, 'run');
+  const xBinding = assigns.find(a => a.target === 'x');
+  assert.ok(xBinding, `expected an assign node binding "x", got: ${JSON.stringify(assigns)}`);
+  assert.equal(xBinding.source && xBinding.source.name, 'ids');
+});
+
+test('parseKotlinFile: .reduce binds BOTH the accumulator and element params (recall-preserving)', () => {
+  const code = `
+fun run(ids: List<String>) {
+    ids.reduce { acc, x ->
+        db.execute(x)
+    }
+}
+`;
+  const ir = parseKotlinFile('f.kt', code);
+  const assigns = assignNodes(ir, 'run');
+  const targets = assigns.map(a => a.target);
+  assert.ok(targets.includes('acc'), `expected "acc" bound, got: ${JSON.stringify(targets)}`);
+  assert.ok(targets.includes('x'), `expected "x" bound, got: ${JSON.stringify(targets)}`);
+});
+
+test('parseKotlinFile: .apply/.run do NOT bind a lambda parameter (implicit-this, no param to bind)', () => {
+  const code = `
+fun run(cfg: Config) {
+    cfg.apply {
+        db.execute(x)
+    }
+}
+`;
+  const ir = parseKotlinFile('f.kt', code);
+  const assigns = assignNodes(ir, 'run');
+  assert.equal(assigns.length, 0,
+    `.apply must not synthesize a param-binding assign (nothing to bind an implicit-this to), got: ${JSON.stringify(assigns)}`);
+  // But the body must still be reachable — the call site inside is captured.
+  const calls = callNodes(ir, 'run');
+  assert.ok(calls.some(c => c.callee === 'execute' || c.callee === 'db.execute'),
+    `expected .apply's body to still be recursed into even without binding, got: ${JSON.stringify(calls)}`);
+});
+
+test('parseKotlinFile: a chained trailing lambda (.filter{}.forEach{}) is not mis-captured, and BOTH bodies are reached', () => {
+  const code = `
+fun run(ids: List<String>) {
+    ids.filter { it.isNotEmpty() }.forEach {
+        db.execute(it)
+    }
+}
+`;
+  const ir = parseKotlinFile('f.kt', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => f.name === 'run');
+  assert.ok(fn, 'expected a "run" function');
+  const calls = callNodes(ir, 'run');
+  // The chain's own two call sites (filter, forEach) plus isNotEmpty (from
+  // inside filter's body) plus execute (from inside forEach's body) — all
+  // four must be visible, proving neither body was swallowed by the other.
+  const callees = calls.map(c => c.callee);
+  assert.ok(callees.some(c => c === 'filter' || c === 'ids.filter'), `expected filter call site, got: ${JSON.stringify(callees)}`);
+  assert.ok(callees.some(c => c === 'forEach' || /forEach$/.test(c)), `expected forEach call site, got: ${JSON.stringify(callees)}`);
+  assert.ok(callees.some(c => c === 'isNotEmpty' || /isNotEmpty$/.test(c)), `expected isNotEmpty from inside filter's body, got: ${JSON.stringify(callees)}`);
+  assert.ok(callees.some(c => c === 'execute' || /execute$/.test(c)), `expected execute from inside forEach's body, got: ${JSON.stringify(callees)}`);
+});
+
+test('parseKotlinFile: end-to-end runScan detects taint flowing through a .forEach lambda parameter into a sink', async () => {
+  // Isolates the binding mechanism itself: `request.getParameter` is the
+  // already-proven Kotlin source (kt-taint-flow.test.js); `.forEach`'s
+  // receiver here is that tainted value directly, not a real Iterable —
+  // semantically odd Kotlin, but the taint engine does no type-checking, so
+  // this is the minimal fixture that isolates "does the synthesized `it`
+  // binding correctly inherit the receiver's taint" from every other
+  // variable in the pipeline (collection-element taint, a real Ktor source
+  // shape, etc., none of which this task touches).
+  //
+  // The `?.` safe-call operator is a separate, pre-existing gap in this
+  // parser's call-matching regexes (confirmed: even a bare `conn?.execute(x)`,
+  // no lambda at all, already lowers to `kind: 'unknown'` before this task's
+  // changes) — real and worth a follow-up given how idiomatic `?.` is in
+  // Kotlin, but outside this task's scope (trailing-lambda BODY recursion,
+  // not call-syntax coverage).
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-kt-lambda-'));
+  fs.writeFileSync(path.join(dir, 'App.kt'), `
+fun handler(request: HttpServletRequest, stmt: Statement) {
+    val id = request.getParameter("id")
+    id.forEach {
+        stmt.executeQuery("SELECT * FROM t WHERE id=" + it)
+    }
+}
+`);
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(irFindings.length >= 1,
+    `expected an IR-TAINT finding through the .forEach lambda's "it" binding, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
+});
+
+test('parseKotlinFile: deeply nested trailing lambdas do not overflow the stack', () => {
+  const n = 500;
+  const code = `fun f(id: String) {\n${'xs.let {\n'.repeat(n)}sink(id)\n${'}\n'.repeat(n)}}`;
+  const ir = parseKotlinFile('f.kt', code);
+  assert.ok(ir, 'expected parseKotlinFile to return a result instead of throwing');
+  const fn = ir.functions.find(f => f.name === 'f');
+  assert.ok(fn, 'expected a "functions" entry for f, proving the parse completed');
+});

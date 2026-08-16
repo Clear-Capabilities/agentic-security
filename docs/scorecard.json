@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.137.1",
     "bundleSha256": "c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c",
-    "commit": "1eee11e7d1b62eee4b63abbcebc91b2843f6afde",
+    "commit": "867ddf0ed4cd112d34601b6658b1484607568d1b",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-16T14:45:47.345Z"
+    "generatedAt": "2026-08-16T17:32:24.204Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -19,17 +19,17 @@
   },
   "corpus": {
     "measuredThisRun": true,
-    "totalEntries": 214,
-    "scoredEntries": 214,
+    "totalEntries": 215,
+    "scoredEntries": 215,
     "notScored": [],
     "overall": {
       "detection": {
-        "n": 214,
-        "d": 214
+        "n": 215,
+        "d": 215
       },
       "silence": {
-        "n": 214,
-        "d": 214
+        "n": 215,
+        "d": 215
       }
     },
     "byLanguage": [
@@ -119,14 +119,14 @@
       },
       {
         "key": "kotlin",
-        "entries": 20,
+        "entries": 21,
         "detection": {
-          "n": 20,
-          "d": 20
+          "n": 21,
+          "d": 21
         },
         "silence": {
-          "n": 20,
-          "d": 20
+          "n": 21,
+          "d": 21
         }
       },
       {
@@ -265,14 +265,14 @@
       },
       {
         "key": "CWE-22",
-        "entries": 14,
+        "entries": 15,
         "detection": {
-          "n": 14,
-          "d": 14
+          "n": 15,
+          "d": 15
         },
         "silence": {
-          "n": 14,
-          "d": 14
+          "n": 15,
+          "d": 15
         }
       },
       {
@@ -531,14 +531,14 @@
       },
       {
         "key": "deep",
-        "entries": 6,
+        "entries": 7,
         "detection": {
-          "n": 6,
-          "d": 6
+          "n": 7,
+          "d": 7
         },
         "silence": {
-          "n": 6,
-          "d": 6
+          "n": 7,
+          "d": 7
         }
       },
       {
@@ -826,12 +826,12 @@
   "taintRecall": {
     "measuredThisRun": true,
     "wholeCorpus": {
-      "entriesScored": 214,
+      "entriesScored": 215,
       "byLanguage": [
         {
           "language": "c#",
           "taint": {
-            "n": 4,
+            "n": 5,
             "d": 21
           }
         },
@@ -873,8 +873,8 @@
         {
           "language": "kotlin",
           "taint": {
-            "n": 0,
-            "d": 20
+            "n": 1,
+            "d": 21
           }
         },
         {
@@ -908,7 +908,7 @@
       ]
     },
     "deepTierOnly": {
-      "entriesScored": 6,
+      "entriesScored": 7,
       "byLanguage": [
         {
           "language": "c/c++",
@@ -922,6 +922,13 @@
           "taint": {
             "n": 3,
             "d": 3
+          }
+        },
+        {
+          "language": "kotlin",
+          "taint": {
+            "n": 1,
+            "d": 1
           }
         },
         {
@@ -944,9 +951,9 @@
   "committedInputs": {
     "corpusBaseline": {
       "source": "bench/cve-replay/corpus-baseline.json",
-      "generatedAt": "2026-08-12",
-      "total": 214,
-      "passing": 214
+      "generatedAt": "2026-08-16",
+      "total": 215,
+      "passing": 215
     },
     "independent": {
       "source": "bench/independent/RESULT.json",
