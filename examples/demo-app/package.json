@@ -5,7 +5,7 @@
   "description": "Deliberately vulnerable demo app for the agentic-security tutorials. Never deploy.",
   "main": "server.js",
   "dependencies": {
-    "express": "4.17.1",
+    "express": "4.22.0",
     "lodash": "4.17.15",
     "@anthropic-ai/sdk": "^0.30.0"
   }
