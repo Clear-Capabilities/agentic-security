@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { disableStateWrites, purgeScanState } from '../_lib/tree-integrity.mjs';
 import { runScan } from '../../scanner/src/runScan.js';
 import { matcherFor, matchingFindings } from '../../scanner/src/posture/corpus-match.js';
-import { layersOf, buildMatrix, languageOf, LAYER_TAINT } from './attribute.mjs';
+import { layersOf, buildMatrix, summarize, languageOf, LAYER_TAINT } from './attribute.mjs';
 
 await disableStateWrites();
 
@@ -38,6 +38,7 @@ const argv = process.argv.slice(2);
 const CHECK = argv.includes('--check');
 const UPDATE = argv.includes('--update-baseline');
 const ONLY = (argv.find(a => a.startsWith('--language=')) || '').split('=')[1] || null;
+const JSON_OUT = argv.includes('--json');
 
 function listEntries() {
   const out = [];
@@ -78,11 +79,11 @@ async function scoreEntry(entry) {
   try {
     const { scan } = await runScan(pre);
     const matched = matchingFindings(scan, manifest, matcherFor(manifest));
-    return { id: entry.id, language, detected: matched.length > 0, layers: layersOf(matched) };
+    return { id: entry.id, tier: entry.tier, language, detected: matched.length > 0, layers: layersOf(matched) };
   } catch (e) {
     // A scan that threw is UNSCORED, not "not detected" — counting a crash as a
     // taint miss would understate the engine and hide the crash.
-    return { id: entry.id, language, detected: false, layers: [], error: e.message };
+    return { id: entry.id, tier: entry.tier, language, detected: false, layers: [], error: e.message };
   } finally {
     if (saved[0] === undefined) delete process.env.AGENTIC_SECURITY_DEEP;
     else process.env.AGENTIC_SECURITY_DEEP = saved[0];
@@ -125,43 +126,71 @@ const foldedCount = Object.keys(layerTotals).filter(
 const pad = (s, n) => String(s).padEnd(n);
 const pct = (n, d) => d ? `${Math.round((100 * n) / d)}%` : '—';
 
-console.log('\nPer-layer recall over the CVE-replay corpus (deep mode forced on for every entry)\n');
-const head = [pad('language', 10), pad('entries', 9), pad('detected', 11), pad('IR-TAINT', 13)]
-  .concat(otherLayers.map(l => pad(l.toLowerCase(), 12))).concat([pad('other', 7)]);
-console.log(head.join(''));
-console.log('-'.repeat(head.join('').length));
-for (const lang of langs) {
-  const c = matrix[lang];
-  const taint = c.byLayer[LAYER_TAINT] || 0;
-  const otherSum = Object.entries(c.byLayer)
-    .filter(([l]) => l !== LAYER_TAINT && !otherLayers.includes(l))
-    .reduce((s, [, n]) => s + n, 0);
-  const cells = [
-    pad(lang, 10), pad(c.total, 9), pad(`${c.detected} (${pct(c.detected, c.total)})`, 11),
-    pad(`${taint} (${pct(taint, c.total)})`, 13),
-  ].concat(otherLayers.map(l => pad(c.byLayer[l] || 0, 12)))
-   .concat([pad(otherSum, 7)]);
-  console.log(cells.join(''));
-}
+const allSummary = summarize(rows);
+const deepRows = rows.filter(r => r.tier === 'deep');
+const deepSummary = summarize(deepRows);
 
-const totalTaint = rows.filter(r => r.layers.includes(LAYER_TAINT)).length;
-console.log('-'.repeat(head.join('').length));
-console.log(`\n  entries scored      : ${rows.length}${errors ? ` (${errors} errored — unscored, not counted as misses)` : ''}`);
-console.log(`  detected (any layer): ${rows.filter(r => r.detected).length}`);
-console.log(`  detected by TAINT   : ${totalTaint} (${pct(totalTaint, rows.length)})`);
-if (foldedCount) console.log(`  ('other' folds ${foldedCount} lower-volume detector labels)`);
-const blind = langs.filter(l => !(matrix[l].byLayer[LAYER_TAINT] > 0));
-if (blind.length) {
-  console.log(`\n  ⚠ languages with ZERO taint-layer recall: ${blind.join(', ')}`);
-  console.log(`    These pass the corpus gate on other layers. The taint engine does not see them.`);
+if (!JSON_OUT) {
+  console.log('\nPer-layer recall over the CVE-replay corpus (deep mode forced on for every entry)\n');
+  const head = [pad('language', 10), pad('entries', 9), pad('detected', 11), pad('IR-TAINT', 13)]
+    .concat(otherLayers.map(l => pad(l.toLowerCase(), 12))).concat([pad('other', 7)]);
+  console.log(head.join(''));
+  console.log('-'.repeat(head.join('').length));
+  for (const lang of langs) {
+    const c = matrix[lang];
+    const taint = c.byLayer[LAYER_TAINT] || 0;
+    const otherSum = Object.entries(c.byLayer)
+      .filter(([l]) => l !== LAYER_TAINT && !otherLayers.includes(l))
+      .reduce((s, [, n]) => s + n, 0);
+    const cells = [
+      pad(lang, 10), pad(c.total, 9), pad(`${c.detected} (${pct(c.detected, c.total)})`, 11),
+      pad(`${taint} (${pct(taint, c.total)})`, 13),
+    ].concat(otherLayers.map(l => pad(c.byLayer[l] || 0, 12)))
+     .concat([pad(otherSum, 7)]);
+    console.log(cells.join(''));
+  }
+
+  const totalTaint = rows.filter(r => r.layers.includes(LAYER_TAINT)).length;
+  console.log('-'.repeat(head.join('').length));
+  console.log(`\n  entries scored      : ${rows.length}${errors ? ` (${errors} errored — unscored, not counted as misses)` : ''}`);
+  console.log(`  detected (any layer): ${rows.filter(r => r.detected).length}`);
+  console.log(`  detected by TAINT   : ${totalTaint} (${pct(totalTaint, rows.length)})`);
+  if (foldedCount) console.log(`  ('other' folds ${foldedCount} lower-volume detector labels)`);
+  const blind = langs.filter(l => !(matrix[l].byLayer[LAYER_TAINT] > 0));
+  if (blind.length) {
+    console.log(`\n  ⚠ languages with ZERO taint-layer recall: ${blind.join(', ')}`);
+    console.log(`    These pass the corpus gate on other layers. The taint engine does not see them.`);
+  }
+
+  console.log('\nTaint-shaped subset only (deep/ tier — provably invisible without deep mode)\n');
+  if (!deepRows.length) {
+    console.log('  (no deep-tier entries)');
+  } else {
+    const deepLangs = [...new Set(deepRows.map(r => r.language))].sort();
+    console.log([pad('language', 10), pad('entries', 9), pad('IR-TAINT', 13)].join(''));
+    console.log('-'.repeat(32));
+    for (const lang of deepLangs) {
+      const total = deepSummary.totalByLanguage[lang] || 0;
+      const taint = deepSummary.taintByLanguage[lang] || 0;
+      console.log([pad(lang, 10), pad(total, 9), pad(`${taint} (${pct(taint, total)})`, 13)].join(''));
+    }
+    const deepLangsWithNoEntry = langs.filter(l => !deepLangs.includes(l));
+    if (deepLangsWithNoEntry.length) {
+      console.log(`\n  languages with NO deep-tier entry yet: ${deepLangsWithNoEntry.join(', ')}`);
+      console.log(`  (not zero recall — simply not measured on the taint-shaped subset)`);
+    }
+  }
 }
 
 const summary = {
   generatedAt: new Date().toISOString().slice(0, 10),
-  entriesScored: rows.length,
-  taintByLanguage: Object.fromEntries(langs.map(l => [l, matrix[l].byLayer[LAYER_TAINT] || 0])),
-  totalByLanguage: Object.fromEntries(langs.map(l => [l, matrix[l].total])),
+  ...allSummary,
+  deepTier: deepSummary,
 };
+
+if (JSON_OUT) {
+  console.log(JSON.stringify(summary, null, 2));
+}
 
 if (UPDATE) {
   fs.writeFileSync(BASELINE, JSON.stringify(summary, null, 2) + '\n');
@@ -180,9 +209,14 @@ if (CHECK) {
     const now = summary.taintByLanguage[lang] ?? 0;
     if (now < was) regressions.push(`${lang}: taint recall ${was} → ${now}`);
   }
+  const baseDeep = (base.deepTier && base.deepTier.taintByLanguage) || {};
+  for (const [lang, was] of Object.entries(baseDeep)) {
+    const now = (deepSummary.taintByLanguage && deepSummary.taintByLanguage[lang]) ?? 0;
+    if (now < was) regressions.push(`${lang} (deep-tier taint-shaped subset): taint recall ${was} → ${now}`);
+  }
   if (regressions.length) {
     console.error(`\n✖ taint-layer recall regressed:\n   ${regressions.join('\n   ')}`);
     process.exit(1);
   }
-  console.log('\n✓ no taint-layer recall regression');
+  console.log('\n✓ no taint-layer recall regression (whole corpus or deep-tier subset)');
 }
