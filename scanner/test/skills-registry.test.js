@@ -144,7 +144,9 @@ test('any /command referenced by a skill resolves to an existing commands/*.md',
     'usr', 'bin', 'tmp', 'var', 'etc', 'private',
   ]);
   for (const s of skills) {
-    const body = fs.readFileSync(s.file, 'utf8');
+    // URL path segments (https://platform.openai.com/api-keys) are never
+    // slash-command references — blank URLs before scanning.
+    const body = fs.readFileSync(s.file, 'utf8').replace(/https?:\/\/\S+/g, ' ');
     let m;
     while ((m = reSlash.exec(body)) !== null) {
       const cmd = m[1];
