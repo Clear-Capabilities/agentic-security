@@ -740,6 +740,21 @@ export const CATALOG = [
             remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header. Prefer an allow-listed set of header values.' } },
   { kind: 'source', id: 'py-flask-request-get-data', language: 'py', framework: 'flask', match: { type: 'call', callee: 'get_data' }, label: 'request.get_data() (Flask raw body)', provenance: 'http-body' },
   { kind: 'source', id: 'py-django-request-body',    language: 'py', framework: 'django', match: { type: 'member', object: 'request', prop: 'body' }, label: 'request.body (Django raw body)', provenance: 'http-body' },
+  { kind: 'sink', id: 'php-header', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'header' }, argIndex: 0,
+    vuln: { name: 'HTTP Response Splitting / CRLF Injection (header())', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip/validate CR/LF from any user-controlled value before passing it to header().' } },
+  { kind: 'sink', id: 'js-response-setheader', language: 'js', framework: 'express', match: { type: 'call', callee: 'setHeader', receiver: '^res$' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / CRLF Injection (res.setHeader)', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header (Node itself rejects raw CR/LF since 10.x, but do not rely on that alone).' } },
+  { kind: 'sink', id: 'java-servlet-setheader', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'setHeader' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / Header Injection (HttpServletResponse.setHeader)', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header value.' } },
+  { kind: 'sink', id: 'kt-servlet-setheader', language: 'kt', framework: 'servlet', match: { type: 'call', callee: 'setHeader' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / Header Injection (HttpServletResponse.setHeader)', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header value.' } },
+  { kind: 'sink', id: 'go-header-set', language: 'go', framework: 'net/http', match: { type: 'call', callee: 'Set', receiver: 'Header' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / Header Injection (Header().Set)', severity: 'high', cwe: 'CWE-113',
+            remediation: 'net/http rejects raw CR/LF in header values since Go 1.x, but still validate/allow-list user-controlled header values.' } },
 
   // ─── SANITIZERS (Python) ───────────────────────────────────────────────────
   { kind: 'sanitizer', id: 'py-shlex-quote-v2',         language: 'py', match: { type: 'call', callee: 'quote' },          effect: 'strip', appliesTo: ['cmd'] },
@@ -791,6 +806,13 @@ export const CATALOG = [
   { kind: 'sink', id: 'cs-binformatter',       language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Deserialize' },    argIndex: 0,
     vuln: { name: 'Insecure Deserialization (BinaryFormatter.Deserialize)', severity: 'critical', cwe: 'CWE-502',
             remediation: 'BinaryFormatter is deprecated and unsafe. Use System.Text.Json with explicit type constraints.' } },
+  // ASP.NET Core's IHeaderDictionary.Add — a distinct real API from the
+  // older Response.AddHeader (cs-response-addheader below); "Add" alone is
+  // far too generic (List<T>.Add, Dictionary.Add, ...), hence the receiver
+  // scope on "Headers".
+  { kind: 'sink', id: 'cs-headers-add', language: 'cs', framework: 'aspnetcore', match: { type: 'call', callee: 'Add', receiver: 'Headers' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / Header Injection (IHeaderDictionary.Add)', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header value.' } },
   // Taint-engine PRD P1 — found missing during the C# investigation: these
   // CWEs (601/79/113/611/90) could never be IR-TAINT-caught without a sink
   // entry, even with a perfect engine.

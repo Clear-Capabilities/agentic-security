@@ -295,7 +295,7 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext) {
 }
 
 function exprTaint(expr, state, callContext) {
-  if (expr && (expr.kind === 'member' || expr.kind === 'call') && exprIsSource(expr)) return true;
+  if (expr && (expr.kind === 'member' || expr.kind === 'call' || expr.kind === 'ident') && exprIsSource(expr)) return true;
   if (!expr) return false;
   // Constant propagation: variables assigned from literals are never tainted
   if (expr.kind === 'ident' && _activeConstantVars && _activeConstantVars.has(expr.name)) return false;
@@ -409,6 +409,24 @@ function exprIsSource(expr) {
   // Previously only member reads were recognized, so Go's call-style sources
   // never tainted the assignment target. matchSource now resolves call sources.
   if (expr.kind === 'call') {
+    const hit = matchSource(expr, _currentFile);
+    if (hit) return hit;
+  }
+  // Taint-recall PRD (80%): bare-identifier GLOBAL sources — PHP's $_GET/
+  // $_POST/$_REQUEST/$_SERVER, Ruby's params/cookies/session/ENV, JS's
+  // location — referenced DIRECTLY (not first assigned to a local, not a
+  // member-read off them) were completely unreachable here. matchSource
+  // itself has always supported a bare-ident branch (GLOBAL_INDEX lookup by
+  // the identifier's own name), but neither this function nor exprTaint's
+  // early check ever called it for expr.kind === 'ident' — only
+  // 'member'/'call'. So `header("X: " . $_GET)` (or any shape where a
+  // global is read directly rather than through member/subscript access)
+  // never tainted anything, no matter how the value was actually used.
+  // Confirmed via a real corpus fixture whose PHP parser also mis-splits
+  // `$_GET["trace"]`'s string literal, leaving a bare `$_GET` ident in a
+  // template's parts — this fix makes that residue still count, which is
+  // the right behavior regardless of that separate mis-split bug.
+  if (expr.kind === 'ident') {
     const hit = matchSource(expr, _currentFile);
     if (hit) return hit;
   }
