@@ -702,6 +702,30 @@ export const CATALOG = [
   { kind: 'sink', id: 'cs-binformatter',       language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Deserialize' },    argIndex: 0,
     vuln: { name: 'Insecure Deserialization (BinaryFormatter.Deserialize)', severity: 'critical', cwe: 'CWE-502',
             remediation: 'BinaryFormatter is deprecated and unsafe. Use System.Text.Json with explicit type constraints.' } },
+  // Taint-engine PRD P1 — found missing during the C# investigation: these
+  // CWEs (601/79/113/611/90) could never be IR-TAINT-caught without a sink
+  // entry, even with a perfect engine.
+  { kind: 'sink', id: 'cs-redirect',           language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'Redirect' },        argIndex: 0,
+    vuln: { name: 'Open Redirect (Controller.Redirect)', severity: 'medium', cwe: 'CWE-601',
+            remediation: 'Whitelist destination URLs, or use LocalRedirect for same-app paths.' } },
+  { kind: 'sink', id: 'cs-localredirect',      language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'LocalRedirect' },   argIndex: 0,
+    vuln: { name: 'Open Redirect (Controller.LocalRedirect)', severity: 'medium', cwe: 'CWE-601',
+            remediation: 'LocalRedirect rejects absolute URLs, but a crafted relative path can still redirect off-site via scheme-relative (//evil.com) input — validate the path.' } },
+  { kind: 'sink', id: 'cs-response-write',     language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'Write', receiver: '^Response$' }, argIndex: 0,
+    vuln: { name: 'Reflected XSS (Response.Write)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'HTML-encode with HttpUtility.HtmlEncode before writing user input to the response.' } },
+  { kind: 'sink', id: 'cs-response-addheader', language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'AddHeader', receiver: '^Response$' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / Header Injection (Response.AddHeader)', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip CR/LF from header values, or use a framework API that rejects them automatically.' } },
+  { kind: 'sink', id: 'cs-xmldoc-load',        language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Load', receiver: '^(?:[Xx]ml[Dd]oc(?:ument)?|xmlDoc|doc)$' }, argIndex: 0,
+    vuln: { name: 'XXE (XmlDocument.Load)', severity: 'high', cwe: 'CWE-611',
+            remediation: 'Set XmlResolver = null and DtdProcessing = DtdProcessing.Prohibit before loading untrusted XML.' } },
+  { kind: 'sink', id: 'cs-xmldoc-loadxml',     language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'LoadXml' },         argIndex: 0,
+    vuln: { name: 'XXE (XmlDocument.LoadXml)', severity: 'high', cwe: 'CWE-611',
+            remediation: 'Set XmlResolver = null and DtdProcessing = DtdProcessing.Prohibit before parsing untrusted XML.' } },
+  { kind: 'sink', id: 'cs-directorysearcher',  language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'DirectorySearcher' }, argIndex: 'all',
+    vuln: { name: 'LDAP Injection (new DirectorySearcher with concatenated filter)', severity: 'high', cwe: 'CWE-90',
+            remediation: 'Escape LDAP special characters in filter components, or build the filter with a parameterized helper.' } },
 
   // ─── SANITIZERS (C#) ─────────────────────────────────────────────────────
   { kind: 'sanitizer', id: 'cs-html-encode',    language: 'cs', match: { type: 'call', callee: 'HtmlEncode' },     effect: 'strip', appliesTo: ['xss'] },
