@@ -452,6 +452,34 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-ldap-search', language: 'java', framework: 'jndi',  match: { type: 'call', callee: 'search' }, argIndex: 1,
     vuln: { name: 'LDAP Injection (DirContext.search)', severity: 'high', cwe: 'CWE-90',
             remediation: 'Escape LDAP filter metacharacters with Rdn.escapeValue or use a parameterised filter.' } },
+  { kind: 'sink', id: 'kt-ldap-search', language: 'kt', framework: 'jndi',  match: { type: 'call', callee: 'search' }, argIndex: 1,
+    vuln: { name: 'LDAP Injection (DirContext.search)', severity: 'high', cwe: 'CWE-90',
+            remediation: 'Escape LDAP filter metacharacters or use a parameterised filter.' } },
+  // ldapjs: client.search(base, { filter: tainted }, cb) — the tainted value
+  // lives inside an object-literal argument, not a flat string arg;
+  // exprTaint's own 'object' case already recurses into prop values, so a
+  // plain argIndex against the options object works without any special
+  // object-shape handling.
+  { kind: 'sink', id: 'js-ldap-search', language: 'js', framework: 'ldapjs', match: { type: 'call', callee: 'search', receiver: 'client' }, argIndex: 1,
+    vuln: { name: 'LDAP Injection (ldapjs client.search)', severity: 'high', cwe: 'CWE-90',
+            remediation: 'Escape LDAP filter metacharacters before building the filter string.' } },
+  { kind: 'sink', id: 'py-ldap-search-s', language: 'py', framework: 'python-ldap', match: { type: 'call', callee: 'search_s' }, argIndex: 2,
+    vuln: { name: 'LDAP Injection (python-ldap search_s)', severity: 'high', cwe: 'CWE-90',
+            remediation: 'Escape LDAP filter metacharacters (ldap.filter.escape_filter_chars) before building the filter string.' } },
+  { kind: 'sink', id: 'rb-net-ldap-search', language: 'rb', framework: 'net-ldap', match: { type: 'call', callee: 'search', receiver: 'conn' }, argIndex: 'all',
+    vuln: { name: 'LDAP Injection (net/ldap Connection#search)', severity: 'high', cwe: 'CWE-90',
+            remediation: 'Escape LDAP filter metacharacters before building the filter string.' } },
+  { kind: 'sink', id: 'php-ldap-search', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'ldap_search' }, argIndex: 2,
+    vuln: { name: 'LDAP Injection (ldap_search)', severity: 'high', cwe: 'CWE-90',
+            remediation: 'Escape LDAP filter metacharacters with ldap_escape($value, "", LDAP_ESCAPE_FILTER) before building the filter string.' } },
+  // NewSearchRequest's filter is a fixed but unusual argument position
+  // (7th positional); 'all' is used instead of pinning an index — this
+  // stdlib call has no other plausible non-LDAP use, so the recall
+  // gained by not depending on exact positional counting outweighs the
+  // (near-zero) added imprecision.
+  { kind: 'sink', id: 'go-ldap-newsearchrequest', language: 'go', framework: 'go-ldap', match: { type: 'call', callee: 'NewSearchRequest' }, argIndex: 'all',
+    vuln: { name: 'LDAP Injection (go-ldap NewSearchRequest)', severity: 'high', cwe: 'CWE-90',
+            remediation: 'Escape LDAP filter metacharacters before building the filter string.' } },
   { kind: 'sink', id: 'java-xpath-compile', language: 'java', framework: 'xpath', match: { type: 'call', callee: 'compile' }, argIndex: 0,
     vuln: { name: 'XPath Injection (XPath.compile)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Use XPathVariableResolver or setXPathVariableResolver; never concat user input into the expression.' } },

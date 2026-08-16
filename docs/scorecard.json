@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.137.1",
     "bundleSha256": "c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c",
-    "commit": "ae5d86c3f3307b8b1bd2a01f125c35ee205c4938",
+    "commit": "67816d10fff432f7ab7db2888e51181976debcc7",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-16T18:58:42.283Z"
+    "generatedAt": "2026-08-16T19:10:10.396Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -831,7 +831,7 @@
         {
           "language": "c#",
           "taint": {
-            "n": 6,
+            "n": 7,
             "d": 21
           }
         },
@@ -845,21 +845,21 @@
         {
           "language": "go",
           "taint": {
-            "n": 4,
+            "n": 5,
             "d": 22
           }
         },
         {
           "language": "java",
           "taint": {
-            "n": 2,
+            "n": 4,
             "d": 25
           }
         },
         {
           "language": "js/ts",
           "taint": {
-            "n": 9,
+            "n": 10,
             "d": 38
           }
         },
@@ -873,28 +873,28 @@
         {
           "language": "kotlin",
           "taint": {
-            "n": 2,
+            "n": 3,
             "d": 21
           }
         },
         {
           "language": "php",
           "taint": {
-            "n": 3,
+            "n": 4,
             "d": 23
           }
         },
         {
           "language": "python",
           "taint": {
-            "n": 15,
+            "n": 17,
             "d": 32
           }
         },
         {
           "language": "ruby",
           "taint": {
-            "n": 2,
+            "n": 3,
             "d": 20
           }
         },

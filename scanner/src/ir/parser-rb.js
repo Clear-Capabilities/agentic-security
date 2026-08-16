@@ -138,6 +138,19 @@ function _lowerExpr(text) {
   if (/^(true|false|nil)\b/.test(s)) return { kind: 'literal', value: s };
   // Symbol
   if (/^:\w+/.test(s)) return { kind: 'literal', value: s };
+  // Taint-recall PRD (80%): keyword-argument / hash-shorthand syntax
+  // (`method(base: "...", filter: tainted)`) had no branch at all — every
+  // such arg text fell through to `{kind:'unknown'}`, silently dropping
+  // whatever value (including a tainted one) it carried. This is Ruby's
+  // dominant kwargs idiom (net/ldap, most Rails-adjacent APIs), so any call
+  // using it lost taint through EVERY keyword arg, not just one. Lower to
+  // just the value expression — the key name itself carries no taint
+  // relevance, same treatment JS/Python object-literal properties already
+  // get via exprTaint's 'object' case. The colon must immediately follow
+  // the identifier (no space) so this can't mis-fire on a ternary's
+  // `cond ? a : b` (space before its colon).
+  const kwarg = s.match(/^([A-Za-z_]\w*):\s*(.+)$/);
+  if (kwarg) return _lowerExpr(kwarg[2]);
   // Call: obj.method(args) or method(args). matchBalancedCall finds the
   // paren that actually balances the FIRST '(' — not the greedy-to-end-of-
   // string match the old `/\((.*)\)\s*$/` used, which corrupted the
