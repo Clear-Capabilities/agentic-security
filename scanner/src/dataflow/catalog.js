@@ -536,6 +536,26 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-etree-parse', language: 'py', framework: 'lxml', match: { type: 'call', callee: 'parse' }, argIndex: 0,
     vuln: { name: 'XXE (lxml.etree.parse)', severity: 'high', cwe: 'CWE-611',
             remediation: 'Use defusedxml.ElementTree or pass resolve_entities=False.' } },
+  { kind: 'sink', id: 'kt-documentbuilder-parse', language: 'kt', framework: 'jaxp', match: { type: 'call', callee: 'parse' }, argIndex: 'all',
+    vuln: { name: 'XXE (DocumentBuilder.parse)', severity: 'high', cwe: 'CWE-611',
+            remediation: 'Disable DTDs: setFeature("http://apache.org/xml/features/disallow-doctype-decl", true).' } },
+  { kind: 'sink', id: 'js-libxml-parsexmlstring', language: 'js', framework: 'libxmljs', match: { type: 'call', callee: 'parseXmlString' }, argIndex: 0,
+    vuln: { name: 'XXE (libxmljs parseXmlString)', severity: 'high', cwe: 'CWE-611',
+            remediation: 'Do not pass { noent: true, dtdload: true } for untrusted XML — omit both options.' } },
+  { kind: 'sink', id: 'rb-nokogiri-xml', language: 'rb', framework: 'nokogiri', match: { type: 'call', callee: 'XML', receiver: 'Nokogiri' }, argIndex: 0,
+    vuln: { name: 'XXE (Nokogiri::XML with dtdload/noent enabled)', severity: 'high', cwe: 'CWE-611',
+            remediation: 'Do not enable config.dtdload/config.noent for untrusted XML — Nokogiri is safe by default.' } },
+  { kind: 'sink', id: 'php-domdocument-loadxml', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'loadXML' }, argIndex: 0,
+    vuln: { name: 'XXE (DOMDocument::loadXML with LIBXML_NOENT)', severity: 'high', cwe: 'CWE-611',
+            remediation: 'Do not pass LIBXML_NOENT for untrusted XML, and set libxml_disable_entity_loader(true) (PHP < 8) / avoid external entity loading.' } },
+  // The dangerous construction is `xml.NewDecoder(r)` itself — d.Strict=false
+  // is a config statement with no separate call to hang a sink on, and
+  // d.Decode(&v) has no tainted ARGUMENT (the taint is in the receiver `d`,
+  // established at construction time). Matching the constructor call with
+  // the tainted reader argument gives a real, if slightly earlier, signal.
+  { kind: 'sink', id: 'go-xml-newdecoder', language: 'go', framework: 'stdlib', match: { type: 'call', callee: 'NewDecoder', receiver: 'xml' }, argIndex: 0,
+    vuln: { name: 'XXE (encoding/xml.NewDecoder on untrusted input)', severity: 'high', cwe: 'CWE-611',
+            remediation: 'encoding/xml does not expand external entities by default — audit for Strict=false or a custom Entity map before treating this as safe; prefer a hardened parser for untrusted XML.' } },
 
   // ─── SINKS (NoSQL) ────────────────────────────────────────────────────────
   { kind: 'sink', id: 'js-mongo-where', language: 'js', framework: 'mongo', match: { type: 'call', callee: '$where' }, argIndex: 0,

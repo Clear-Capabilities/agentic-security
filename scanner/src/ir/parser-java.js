@@ -121,7 +121,17 @@ function exprFromCst(node) {
     if (node.children.unqualifiedClassInstanceCreationExpression) {
       const ci = node.children.unqualifiedClassInstanceCreationExpression[0];
       const callee = (ci.children?.classOrInterfaceTypeToInstantiate?.[0]?.children?.Identifier?.[0]?.image) || 'new';
-      return { kind: 'call', callee, isNew: true, args: [] };
+      // Taint-recall PRD (80%): args was hardcoded to [] — every
+      // `new X(arg1, arg2)` constructor call lowered with its arguments
+      // silently discarded, so a sink modeled as a constructor call
+      // (argIndex-based) could never see a tainted constructor argument
+      // regardless of catalog correctness. Same argumentList.expression
+      // shape the methodInvocationSuffix branch above already extracts
+      // from. Confirmed via a real corpus fixture
+      // (`new ByteArrayInputStream(xml)` feeding `b.parse(...)`).
+      const args = (ci.children?.argumentList?.[0]?.children?.expression || [])
+        .map(exprFromCst);
+      return { kind: 'call', callee, isNew: true, args };
     }
     if (node.children.literal) return exprFromCst(node.children.literal[0]);
     if (node.children.Identifier) return { kind: 'ident', name: node.children.Identifier[0].image };
