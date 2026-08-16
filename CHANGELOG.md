@@ -9,6 +9,21 @@
 > make the history less accurate, not more.
 
 
+## 0.137.1 — Dependabot policy for the deliberately-vulnerable fixtures
+
+Housekeeping release. Adds `.github/dependabot.yml` so Dependabot leaves the
+intentionally-vulnerable fixture directories alone — `examples/demo-app`,
+`scanner/test/fixtures/**`, and `bench/**` pin old, known-vulnerable
+dependencies on purpose so the SCA/SBOM/CVE detectors and the tutorials have
+real findings to surface (and `scanner/test/demo-app.test.js` asserts a CVE
+finding on a pinned dep). An `ignore: "*"` entry suppresses both version- and
+security-update PRs for those directories. The real trees (`scanner/`,
+`ide/vscode/`) get no version-update entries — their currency stays enforced by
+the `dependency-currency` release gate — and repo-level security updates still
+cover them.
+
+No engine or detector changes.
+
 ## 0.137.0 — detection-gap remediation Themes B+D, C, E, plus R9, the R16 close-out, and the docs overhaul
 
 Seven independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land
