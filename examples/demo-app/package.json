@@ -1,0 +1,12 @@
+{
+  "name": "agentic-security-demo-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deliberately vulnerable demo app for the agentic-security tutorials. Never deploy.",
+  "main": "server.js",
+  "dependencies": {
+    "express": "4.17.1",
+    "lodash": "4.17.15",
+    "@anthropic-ai/sdk": "^0.30.0"
+  }
+}

@@ -9,12 +9,48 @@
 > make the history less accurate, not more.
 
 
-## 0.137.0 — detection-gap remediation Themes B+D, C, E, plus R9 and the R16 close-out
+## 0.137.0 — detection-gap remediation Themes B+D, C, E, plus R9, the R16 close-out, and the docs overhaul
 
 Seven independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land
-together here (R6, R8, R9, R10, R11, R13, R14(a), R14(b), R16). Each has its
-own subsection below, and each subsection carries its own verification
-paragraph — the numbers in one do not describe the other.
+together here (R6, R8, R9, R10, R11, R13, R14(a), R14(b), R16), alongside the
+world-class docs overhaul (`docs/DOCS_OVERHAUL_PRD.md`). Each has its own
+subsection below, and each subsection carries its own verification paragraph —
+the numbers in one do not describe the other.
+
+### Docs overhaul — a learning layer, an accuracy pass, and an anti-rot gate
+
+The product had a strong evidence layer (architecture, metrics, compliance
+maps) and no learning layer. This release adds one, and repairs what was false.
+
+- **A deliberately-vulnerable demo app** at `examples/demo-app/` — ~10 files
+  spanning every pillar (SQLi, missing auth, eval, MD5 hashing, prompt
+  injection, hardcoded key, Dockerfile hygiene, vulnerable deps). Its promised
+  findings are pinned by `scanner/test/demo-app.test.js` (wired into
+  `test:smoke`) so a detector change can't silently make the tutorials lie. It
+  is outside the self-scan gate's target set, so it never perturbs that gate.
+- **A 15-minute quickstart** (`docs/guides/quickstart.md`) and **six
+  task-oriented how-to guides** — scanning, fixing, SBOM/AI-BOM, compliance, CI
+  setup, leaked-secret response — plus a **CLI reference**, a **configuration &
+  env-var reference**, and a **docs hub** (`docs/README.md`). Every command
+  shown was run against the demo app before being documented.
+- **Accuracy pass** — repaired every false/contradictory claim the doc survey
+  found: version drift across four manifests (`gemini-extension.json` was
+  ~60 versions stale), the model-cost-optimizer default contradiction, the
+  compliance `--gap` row, a skill pointing at a deleted command file (revoke-URL
+  matrix restored inline), the README's `hunt`-is-a-slash-command claim, and
+  `secure --tour`/`--daily` documented-but-unimplemented (now implemented).
+- **New anti-rot gate** — `scripts/check-doc-drift.mjs --gate` fails on any
+  dangling internal link across README/docs/commands/skills/agents; wired into
+  the release gate as `doc-links` and proven both directions. Manifest
+  version-sync now also covers `gemini-extension.json`.
+- **Two output-correctness fixes surfaced while documenting:** the CycloneDX/
+  SPDX SBOM tool version was hardcoded `0.7.0` — now stamped from the real
+  engine version via `meta.engineVersion`. And `js-yaml` was bumped
+  `5.2.3 → 5.3.0` to clear the dependency-currency gate.
+
+Verification: `test:smoke` 30/30 (includes the two demo-app contract tests),
+`sbom` 3/3, `release-check` 49/49, `check-doc-drift --gate` clean and
+fails-on-planted-break. Full `npm test` + the release gate run on push.
 
 ### R9 — Java call-graph edges existed in the CFG but never reached the call graph
 

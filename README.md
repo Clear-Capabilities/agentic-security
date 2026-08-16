@@ -92,6 +92,29 @@ Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_C
 
 ---
 
+## Quickstart
+
+New here? This repo ships a deliberately vulnerable [demo app](examples/demo-app/) so your first scan always finds something:
+
+```bash
+npx @clear-capabilities/agentic-security-scanner scan examples/demo-app
+```
+
+You'll get a plain-English verdict, per-finding fixes, and an exit code you can gate CI on. The full walkthrough — scan, read the verdict, fix a finding (verified before it's written), export a report, then run it on your own project — is the **[15-minute quickstart](docs/guides/quickstart.md)**.
+
+---
+
+## Documentation
+
+| I'm here to… | Start with |
+|---|---|
+| **Try it** — get a win in 15 minutes | [Quickstart](docs/guides/quickstart.md) |
+| **Do a specific task** | [How-to guides](docs/guides/) — [scanning](docs/guides/scanning.md) · [fixing vulns](docs/guides/fixing-vulnerabilities.md) · [SBOM & AI-BOM](docs/guides/sbom-and-ai-bom.md) · [compliance](docs/guides/compliance.md) · [CI setup](docs/guides/ci-setup.md) · [leaked secrets](docs/guides/leaked-secrets.md) |
+| **Evaluate it for my company** | [Architecture](docs/ARCHITECTURE.md) · [Metrics](docs/METRICS.md) · [Scorecard](docs/SCORECARD.md) · [Compliance coverage](docs/compliance/) · [Threat model](docs/AGENT_THREAT_MODEL.md) |
+| **Reference** | [CLI](docs/reference/cli.md) · [Configuration & env vars](docs/reference/configuration.md) · [Cost optimization](docs/MODEL_COST_OPTIMIZATION.md) |
+
+---
+
 ## Commands
 
 Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`, `--help`, `--daily`) — it looks at your project and tells you what to run next. Everything else is grouped below by what you're trying to do:

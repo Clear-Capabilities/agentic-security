@@ -433,6 +433,9 @@ async function cmdScan(args) {
       if (process.stderr.isTTY) process.stderr.write(`\r[${p.phase}] ${p.current}/${p.total} ${p.file}     `);
     },
   });
+  // The BOM/attestation emitters stamp the producing engine's version into
+  // their metadata; carry the real package version so it can never drift.
+  if (meta && meta.engineVersion == null) meta.engineVersion = PKG_VERSION;
   if (process.stderr.isTTY) process.stderr.write('\r' + ' '.repeat(80) + '\r');
 
   const only = args.flags.only;

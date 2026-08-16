@@ -1,6 +1,6 @@
 # PRD: World-Class Docs & README
 
-**Status:** Approved — in implementation
+**Status:** Implemented in 0.137.0 (P0–P3 all landed; see CHANGELOG)
 **Owner:** Ross Young
 **Created:** 2026-08-15
 **Design approved:** 2026-08-15 (brainstorm session; approach A of three)

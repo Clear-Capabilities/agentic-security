@@ -61,7 +61,7 @@ export function toCycloneDX(scan, meta = {}) {
     version: 1,
     metadata: {
       timestamp: meta.startedAt || new Date().toISOString(),
-      tools: [{ vendor: 'Clear Capabilities', name: 'agentic-security', version: '0.7.0' }],
+      tools: [{ vendor: 'Clear Capabilities', name: 'agentic-security', version: meta.engineVersion || 'dev' }],
       component: { type: 'application', name: 'scan-target', version: '1.0.0' },
     },
     components: cdxComponents,
@@ -117,7 +117,7 @@ export function toSPDX(scan, meta = {}) {
     documentNamespace: docNamespace,
     creationInfo: {
       created: ts,
-      creators: ['Tool: agentic-security-0.7.0'],
+      creators: [`Tool: agentic-security-${meta.engineVersion || 'dev'}`],
     },
     packages,
     relationships: packages.map(p => ({
