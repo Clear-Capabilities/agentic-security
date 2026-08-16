@@ -25,20 +25,26 @@
 // what makes the rest of this bench valuable: per-file counts, so a rule that
 // starts firing somewhere new is visible even when the total is unchanged.
 //
-// Coverage note (Phase 2 / task 3, 2026-07-26): `hooks/` and `scripts/` are
-// JS/Python only, so they cannot detect a precision change in any other
-// language's interprocedural analysis. `fixtures/polyglot/` is the only part
-// of this bench that can, and only for the languages it contains a genuine
-// caller->callee chain for: each of `app.go`, `App.cs`, `App.kt`, `app.php`
-// is a two-function `identity(x) -> emit()` chain where the callee returns
-// its argument and the caller passes the result to a sink, with the value
+// Coverage note (Phase 2 / task 3, 2026-07-26; closed 2026-08-15 — taint
+// engine PRD P0). `hooks/` and `scripts/` are JS/Python only, so they cannot
+// detect a precision change in any other language's interprocedural
+// analysis. `fixtures/polyglot/` is the part of this bench that can, and now
+// covers eight of the nine first-class languages: `app.go`, `App.cs`,
+// `App.kt`, `app.php`, `App.java`, `app.js`, `app.py`, `app.rb` are each a
+// two-function `identity(x) -> emit()` chain where the callee returns its
+// argument and the caller passes the result to a sink, with the value
 // originating from a hardcoded local literal (not argv/env/network/request)
 // — so the correct polyglot total is 0, and a nonzero result there is a real
 // false positive on an interprocedural chain over untainted data, not noise
-// to tune away. `app.js`/`app.py`/`app.rb` remain single-function, sink-only
-// fixtures (no caller), so this bench still cannot see an interprocedural
-// change in JS/Python/Ruby, and it has no fixture at all for Java (Task 7).
-// Do not over-trust a 0 here as proof nothing moved outside what's listed.
+// to tune away. `cpp` (the ninth first-class language, per
+// `scanner/src/dataflow/CLAUDE.md`) has no fixture in this set yet. Every
+// sink used here was live-fire verified against a genuinely-tainted variant
+// before being trusted as a negative control (see the git history for
+// `bench/self-scan/fixtures/polyglot/*` around the P0 taint-engine-PRD
+// commits) — this is what makes `bench:self-scan:check`'s existing
+// exact-drift gate function as a real per-language taint false-positive
+// budget: any future imprecision on any of these eight languages now fails
+// the build, per file, immediately.
 //
 // Verification note (same task, follow-up): the first version of this fixture
 // set used sinks the dataflow catalog (`scanner/src/dataflow/catalog.js`)
