@@ -1,0 +1,43 @@
+version: 2
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependabot policy for this repo.
+#
+# The real, shipped dependency trees are `scanner/` and `ide/vscode/`. Their
+# currency is enforced at RELEASE time by the `dependency-currency` gate
+# (scripts/dependency-currency.mjs): any dependency at moderate-or-above
+# advisory, or behind its latest version without an entry in
+# `.dependency-holds.json`, fails the release. That gate — not a stream of
+# Dependabot version-bump PRs — is this project's chosen currency mechanism, so
+# no `updates:` entry enables version updates for those trees here. GitHub's
+# repo-level Dependabot security updates still cover them.
+#
+# The entries below exist for the OPPOSITE reason: several directories pin OLD,
+# KNOWN-VULNERABLE dependencies ON PURPOSE. They are the scanner's own test
+# corpus, benchmark fixtures, and the tutorial demo app — the SCA/SBOM/CVE
+# detectors and the docs need real findings to surface, and
+# `scanner/test/demo-app.test.js` asserts a CVE finding on a pinned dep.
+# "Upgrading" them would gut the fixtures and break the tests. An
+# `ignore: "*"` entry suppresses both version-update and security-update PRs for
+# the listed directories, which is exactly what a deliberately-vulnerable
+# fixture needs.
+# ─────────────────────────────────────────────────────────────────────────────
+
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/examples/demo-app"
+      - "/scanner/test/fixtures/**"
+      - "/bench/**"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/examples/demo-app"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "*"
