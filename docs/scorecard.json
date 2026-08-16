@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.137.1",
     "bundleSha256": "c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c",
-    "commit": "5681ccced1758057b7107ef2830c91cad39f1bf0",
+    "commit": "1eee11e7d1b62eee4b63abbcebc91b2843f6afde",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-16T14:16:19.912Z"
+    "generatedAt": "2026-08-16T14:45:47.345Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -831,7 +831,7 @@
         {
           "language": "c#",
           "taint": {
-            "n": 1,
+            "n": 4,
             "d": 21
           }
         },
@@ -887,7 +887,7 @@
         {
           "language": "python",
           "taint": {
-            "n": 7,
+            "n": 10,
             "d": 32
           }
         },

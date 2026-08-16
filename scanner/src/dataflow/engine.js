@@ -960,6 +960,24 @@ function step(node, stateIn, callContext) {
     }
 
     case 'return': {
+      // Taint-engine PRD P1: `return sink(x)` was invisible — this only ever
+      // asked whether the returned value is TAINTED (for interprocedural
+      // callers, below), never whether the call expression itself is a sink.
+      // JS is accidentally immune (Babel emits a redundant standalone 'call'
+      // node for every CallExpression, including ones nested in a return
+      // argument, so case 'call' above already caught it there). Every
+      // hand-rolled parser does not do that, so `return
+      // File.ReadAllText(path)` — idiomatic ASP.NET Core — was structurally
+      // blind. Mirrors case 'call''s sink-check exactly; deliberately does
+      // NOT mirror its summary-cache/mutation/higher-order machinery, which
+      // is about a callee's OWN internal findings and mutated params — an
+      // unrelated concern from whether this return statement's own call
+      // expression is directly a sink.
+      if (node.value && node.value.kind === 'call') {
+        const { cat, argTaints } = _matchCallCatalog(node.value.callee, node.value.args, state, callContext);
+        findings.push(..._sinkFindingsForCall(
+          node.value.callee, node.value.args, cat, argTaints, state, callContext, node.line).findings);
+      }
       if (exprTaint(node.value, state, callContext)) {
         callContext._returnTainted = true;
       }

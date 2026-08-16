@@ -2,12 +2,12 @@
   "generatedAt": "2026-08-16",
   "entriesScored": 214,
   "taintByLanguage": {
-    "python": 7,
+    "python": 10,
     "go": 3,
     "js/ts": 8,
     "php": 2,
     "java": 1,
-    "c#": 1,
+    "c#": 4,
     "ruby": 1,
     "c/c++": 2
   },
