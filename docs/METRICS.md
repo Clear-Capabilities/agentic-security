@@ -18,9 +18,10 @@ cd scanner && npm run bench:layer-recall:check    # gate against baseline.json
 
 **As of the docs-overhaul-era measurement work, the printed matrix and
 `docs/SCORECARD.md`'s "Taint-layer recall by language" section both report
-two views, not one.** The whole-corpus view below is diluted: ~96% of this
-corpus is caught by the pattern/structural layers without needing taint,
-so a near-zero rate for a language here does not by itself mean the taint
+two views, not one.** The whole-corpus view below is diluted: the large
+majority of this corpus is caught by the pattern/structural layers without
+needing taint at all (reproduce with `npm run bench:layer-recall`), so a
+near-zero rate for a language here does not by itself mean the taint
 engine cannot see that language. The **deep-tier-only** breakout — printed
 as a second table by the same command, and as its own section in the
 scorecard — is scoped to entries that are *required*, before they can be

@@ -11,11 +11,11 @@ that produced them.
 | --- | --- |
 | Engine version | 0.137.1 |
 | Bundle SHA-256 | `c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c` |
-| Commit | `8b10209c90c0b1e6aebe2f228bed1d86802fb588` |
+| Commit | `d3eb4e1e97a1be0b4fb498685f7bc519f2e2039e` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 214 (214 scored) |
-| Generated (UTC) | 2026-08-16T06:56:41.725Z |
+| Generated (UTC) | 2026-08-16T08:50:03.923Z |
 
 ## What these numbers are, and what they are not
 
@@ -141,7 +141,8 @@ needs a labelled population containing both true and false positives; this
 section's denominator is all-vulnerable by construction (`pre/` fixtures),
 so it cannot supply one. The false-positive side is instrumented instead as
 a gate, not a rate: `bench/self-scan/fixtures/polyglot/` carries one
-untainted, negative-control fixture per language (nine languages), and
+untainted, negative-control fixture per language, covering eight of the
+nine first-class languages (C/C++ has no fixture in this set yet), and
 `bench:self-scan:check`'s existing exact per-file drift gate fails the
 build the moment any of them stops reading zero. See the self-scan section
 below for current counts.
@@ -174,6 +175,8 @@ Entries scored: 6
 | js/ts | 3/3 (100.0%) |
 | php | 1/1 (100.0%) |
 | python | 1/1 (100.0%) |
+
+Not yet measured on this subset: c#, go, java, json, kotlin, ruby, terraform
 
 ## Precision-side signal: self-scan (measured this run)
 

@@ -339,7 +339,8 @@ export function renderScorecardMarkdown(m) {
   L.push('section\'s denominator is all-vulnerable by construction (`pre/` fixtures),');
   L.push('so it cannot supply one. The false-positive side is instrumented instead as');
   L.push('a gate, not a rate: `bench/self-scan/fixtures/polyglot/` carries one');
-  L.push('untainted, negative-control fixture per language (nine languages), and');
+  L.push('untainted, negative-control fixture per language, covering eight of the');
+  L.push('nine first-class languages (C/C++ has no fixture in this set yet), and');
   L.push('`bench:self-scan:check`\'s existing exact per-file drift gate fails the');
   L.push('build the moment any of them stops reading zero. See the self-scan section');
   L.push('below for current counts.');
@@ -368,6 +369,19 @@ export function renderScorecardMarkdown(m) {
     L.push('No deep-tier entries scored this run.');
   }
   L.push('');
+  // INTEGRITY CONTRACT above requires unmeasured things "disclosed by name",
+  // not just described generically — so name the languages that are present
+  // in the whole-corpus view but have no deep-tier entry at all, rather than
+  // leaving that as an unnamed implication of the two tables above.
+  const deepLangs = new Set(m.taintRecall.deepTierOnly.byLanguage.map(r => r.language));
+  const notYetMeasured = m.taintRecall.wholeCorpus.byLanguage
+    .map(r => r.language)
+    .filter(l => !deepLangs.has(l))
+    .sort();
+  if (notYetMeasured.length) {
+    L.push(`Not yet measured on this subset: ${notYetMeasured.join(', ')}`);
+    L.push('');
+  }
   L.push('## Precision-side signal: self-scan (measured this run)');
   L.push('');
   L.push('The engine scanned its own repository. These are absolute finding');
