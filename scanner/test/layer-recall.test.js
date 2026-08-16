@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { matcherFor, matchingFindings } from '../src/posture/corpus-match.js';
-import { layersOf, buildMatrix, LAYER_TAINT } from '../../bench/layer-recall/attribute.mjs';
+import { layersOf, buildMatrix, summarize, LAYER_TAINT } from '../../bench/layer-recall/attribute.mjs';
 
 const manifest = { cwe: 'CWE-89', expected: { vuln_match: 'SQL Injection' } };
 
@@ -83,4 +83,32 @@ test('taintRecall is reported over all entries, not over detected ones', () => {
     { language: 'ruby', detected: true, layers: ['REGEX'] },
   ]);
   assert.equal(m.ruby.taintRecall, 0.5);
+});
+
+test('summarize() reports entriesScored, taintByLanguage, and totalByLanguage', () => {
+  const rows = [
+    { language: 'ruby', detected: true, layers: ['IR-TAINT'] },
+    { language: 'ruby', detected: true, layers: ['REGEX'] },
+    { language: 'go', detected: false, layers: [] },
+  ];
+  const s = summarize(rows);
+  assert.equal(s.entriesScored, 3);
+  assert.deepEqual(s.taintByLanguage, { ruby: 1 });
+  assert.deepEqual(s.totalByLanguage, { ruby: 2, go: 1 });
+});
+
+test('summarize() on an empty row set reports zero everywhere, not undefined', () => {
+  const s = summarize([]);
+  assert.equal(s.entriesScored, 0);
+  assert.deepEqual(s.taintByLanguage, {});
+  assert.deepEqual(s.totalByLanguage, {});
+});
+
+test('summarize() never puts a language in taintByLanguage with zero taint hits', () => {
+  // A language present in totalByLanguage but absent from taintByLanguage means
+  // "zero taint recall", not "not measured" — the two must stay distinguishable,
+  // and a stray zero-valued key would blur that in downstream JSON consumers.
+  const s = summarize([{ language: 'kotlin', detected: true, layers: ['REGEX'] }]);
+  assert.deepEqual(s.totalByLanguage, { kotlin: 1 });
+  assert.equal('kotlin' in s.taintByLanguage, false);
 });

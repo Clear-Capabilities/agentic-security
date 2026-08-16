@@ -80,3 +80,27 @@ export function languageOf(manifest, files) {
   const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   return ranked.length ? ranked[0][0] : '(unknown)';
 }
+
+/**
+ * Reduce per-entry rows to the summary shape the corpus baseline and the
+ * scorecard both consume: total entries scored, and per-language taint /
+ * total counts. Extracted from what `runner.mjs` used to build inline so it
+ * can be called twice — once over every row, once over a tier-filtered
+ * subset (deep-tier only) — without duplicating the reduction logic.
+ *
+ * A language present in `totalByLanguage` but absent from `taintByLanguage`
+ * means zero taint recall for that language — deliberately not a zero-valued
+ * key, so "zero" and "not measured" stay distinguishable downstream.
+ */
+export function summarize(rows) {
+  const taintByLanguage = {};
+  const totalByLanguage = {};
+  for (const r of rows || []) {
+    const lang = r.language || '(unknown)';
+    totalByLanguage[lang] = (totalByLanguage[lang] || 0) + 1;
+    if ((r.layers || []).includes(LAYER_TAINT)) {
+      taintByLanguage[lang] = (taintByLanguage[lang] || 0) + 1;
+    }
+  }
+  return { entriesScored: (rows || []).length, taintByLanguage, totalByLanguage };
+}
