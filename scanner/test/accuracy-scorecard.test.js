@@ -370,3 +370,67 @@ test('independent population: the F1 omission reason no longer denies the popula
   assert.doesNotMatch(m.methodology.f1OmissionReason, /no labelled real-world population/);
   assert.match(m.methodology.f1OmissionReason, /fixture design|third-party population/);
 });
+
+// ── Taint-recall section (hand-computable fixture) ─────────────────────────
+//
+//   whole corpus:  ruby  1 taint / 4 total   |  go  0 taint / 2 total
+//   deep-tier:     ruby  1 taint / 1 total   |  go  0 taint / 0 total (no entry)
+const FIXTURE_LAYER_RECALL = {
+  generatedAt: '2026-01-01',
+  entriesScored: 6,
+  taintByLanguage: { ruby: 1 },
+  totalByLanguage: { ruby: 4, go: 2 },
+  deepTier: {
+    entriesScored: 1,
+    taintByLanguage: { ruby: 1 },
+    totalByLanguage: { ruby: 1 },
+  },
+};
+
+test('buildScorecard: taintRecall.wholeCorpus reports {n,d} per language, sorted', () => {
+  const model = buildScorecard({ ...fixtureInputs(), layerRecall: FIXTURE_LAYER_RECALL });
+  assert.equal(model.taintRecall.measuredThisRun, true);
+  assert.deepEqual(model.taintRecall.wholeCorpus.byLanguage, [
+    { language: 'go', taint: { n: 0, d: 2 } },
+    { language: 'ruby', taint: { n: 1, d: 4 } },
+  ]);
+});
+
+test('buildScorecard: taintRecall.deepTierOnly reports the same shape over the deep-tier subset', () => {
+  const model = buildScorecard({ ...fixtureInputs(), layerRecall: FIXTURE_LAYER_RECALL });
+  assert.deepEqual(model.taintRecall.deepTierOnly.byLanguage, [
+    { language: 'ruby', taint: { n: 1, d: 1 } },
+  ]);
+  // go has no deep-tier entry at all — it must be ABSENT from deepTierOnly,
+  // not present with d:0, which would misreport "measured zero" as "not measured".
+  assert.equal(model.taintRecall.deepTierOnly.byLanguage.some(r => r.language === 'go'), false);
+});
+
+test('buildScorecard: missing layerRecall input degrades to an empty, well-shaped section', () => {
+  // A scorecard run must never crash because one optional input was omitted —
+  // matches every other section's degrade-gracefully convention in this file.
+  const model = buildScorecard(fixtureInputs());
+  assert.equal(model.taintRecall.measuredThisRun, false);
+  assert.deepEqual(model.taintRecall.wholeCorpus.byLanguage, []);
+  assert.deepEqual(model.taintRecall.deepTierOnly.byLanguage, []);
+});
+
+test('renderScorecardMarkdown: taint section renders every rate through formatRate (n/d visible)', () => {
+  const model = buildScorecard({ ...fixtureInputs(), layerRecall: FIXTURE_LAYER_RECALL });
+  const md = renderScorecardMarkdown(model);
+  assert.match(md, /## Taint-layer recall by language/);
+  // Whole-corpus ruby row: 1/4.
+  assert.match(md, /ruby[^\n]*1\/4/);
+  // Deep-tier ruby row: 1/1.
+  assert.match(md, /ruby[^\n]*1\/1/);
+  // Never a bare percentage with no denominator anywhere in this section.
+  // Same strip-then-check approach as the document-wide check above
+  // ("rendered document emits no bare percentage"): remove every legitimate
+  // `N/D (P%)` form produced by formatRate(), then assert nothing
+  // percent-shaped survives.
+  const section = md.split('## Taint-layer recall by language')[1].split('\n## ')[0];
+  const stripped = section.replace(/\b\d+\/\d+ \(\d+\.\d+%\)/g, '');
+  const leftovers = stripped.match(/\d+(?:\.\d+)?\s*%/g) || [];
+  assert.deepEqual(leftovers, [],
+    `bare percentage(s) rendered without numerator/denominator: ${leftovers.join(', ')}`);
+});

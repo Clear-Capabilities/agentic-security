@@ -66,6 +66,24 @@ function sliceBy(scored, key) {
 }
 
 /**
+ * Build the { byLanguage: [{language, taint:{n,d}}] } shape for one
+ * taintByLanguage/totalByLanguage pair. Sorted by language so the rendered
+ * document is stable run-to-run, matching every other byX array here.
+ *
+ * A language present in `total` but absent from `taint` reports n:0 — a real
+ * measured zero. A language absent from BOTH is simply not included in the
+ * output at all, so "measured zero" and "not measured on this subset" never
+ * collapse into the same row (see the deepTierOnly caller below).
+ */
+function taintRateByLanguage(taintByLanguage, totalByLanguage) {
+  const langs = Object.keys(totalByLanguage || {}).sort();
+  return langs.map(language => ({
+    language,
+    taint: { n: (taintByLanguage || {})[language] || 0, d: totalByLanguage[language] },
+  }));
+}
+
+/**
  * Aggregate the per-entry detail records emitted by the corpus runner.
  *
  * Input records: { cve, tier, cwe, language, status, error? } where status is
@@ -141,6 +159,24 @@ export function buildScorecard(inputs) {
       byTier: corpus.byTier,
     },
     selfScan: { measuredThisRun: true, targets, polyglot: selfScan.polyglot || { total: 0, byLanguage: {} } },
+    taintRecall: (() => {
+      const lr = inputs.layerRecall;
+      if (!lr) {
+        return { measuredThisRun: false, wholeCorpus: { entriesScored: 0, byLanguage: [] }, deepTierOnly: { entriesScored: 0, byLanguage: [] } };
+      }
+      const deep = lr.deepTier || { entriesScored: 0, taintByLanguage: {}, totalByLanguage: {} };
+      return {
+        measuredThisRun: true,
+        wholeCorpus: {
+          entriesScored: lr.entriesScored || 0,
+          byLanguage: taintRateByLanguage(lr.taintByLanguage, lr.totalByLanguage),
+        },
+        deepTierOnly: {
+          entriesScored: deep.entriesScored || 0,
+          byLanguage: taintRateByLanguage(deep.taintByLanguage, deep.totalByLanguage),
+        },
+      };
+    })(),
     committedInputs: {
       corpusBaseline: committed.corpusBaseline
         ? { source: 'bench/cve-replay/corpus-baseline.json', generatedAt: committed.corpusBaseline.generatedAt, total: committed.corpusBaseline.total, passing: committed.corpusBaseline.passing }
@@ -278,6 +314,59 @@ export function renderScorecardMarkdown(m) {
   L.push('| Tier | Entries | Detection (`pre/`) | Correct silence (`post/`) |');
   L.push('| --- | --- | --- | --- |');
   for (const r of c.byTier) L.push(rateRow(r));
+  L.push('');
+  L.push('## Taint-layer recall by language');
+  L.push('');
+  L.push('Two views of the same layer-recall instrument, because reporting only the');
+  L.push('first would silently overstate taint capability and reporting only the');
+  L.push('second would understate coverage of what the corpus actually contains:');
+  L.push('');
+  L.push('- **Whole corpus** — diagnostic only. The large majority of this corpus is');
+  L.push('  caught by the pattern/structural layers without needing taint at all, so a language\'s');
+  L.push('  rate here is diluted by every entry that never exercised the taint');
+  L.push('  engine. A language reading near-zero here is not necessarily a taint');
+  L.push('  defect — see `docs/METRICS.md`.');
+  L.push('- **Deep-tier only (the taint-shaped subset)** — the number to quote for');
+  L.push('  taint capability. Every entry in this bucket is required, before it can');
+  L.push('  be committed, to be provably invisible with the deep engine off and');
+  L.push('  detected with it on (`bench/cve-replay/CONTRIBUTING.md`, "deep/" tier).');
+  L.push('  A language absent from this table has no deep-tier entry yet — that is');
+  L.push('  "not yet measured", never "zero capability".');
+  L.push('');
+  L.push('**No taint-specific precision percentage is reported here, deliberately —');
+  L.push('same reasoning as the corpus-wide F1 omission above.** A precision figure');
+  L.push('needs a labelled population containing both true and false positives; this');
+  L.push('section\'s denominator is all-vulnerable by construction (`pre/` fixtures),');
+  L.push('so it cannot supply one. The false-positive side is instrumented instead as');
+  L.push('a gate, not a rate: `bench/self-scan/fixtures/polyglot/` carries one');
+  L.push('untainted, negative-control fixture per language (nine languages), and');
+  L.push('`bench:self-scan:check`\'s existing exact per-file drift gate fails the');
+  L.push('build the moment any of them stops reading zero. See the self-scan section');
+  L.push('below for current counts.');
+  L.push('');
+  L.push('### Whole corpus (diagnostic)');
+  L.push('');
+  L.push(`Entries scored: ${m.taintRecall.wholeCorpus.entriesScored}`);
+  L.push('');
+  L.push('| Language | IR-TAINT recall |');
+  L.push('| --- | --- |');
+  for (const r of m.taintRecall.wholeCorpus.byLanguage) {
+    L.push(`| ${r.language} | ${formatRate(r.taint.n, r.taint.d)} |`);
+  }
+  L.push('');
+  L.push('### Deep-tier only — taint-shaped subset (headline)');
+  L.push('');
+  L.push(`Entries scored: ${m.taintRecall.deepTierOnly.entriesScored}`);
+  L.push('');
+  if (m.taintRecall.deepTierOnly.byLanguage.length) {
+    L.push('| Language | IR-TAINT recall |');
+    L.push('| --- | --- |');
+    for (const r of m.taintRecall.deepTierOnly.byLanguage) {
+      L.push(`| ${r.language} | ${formatRate(r.taint.n, r.taint.d)} |`);
+    }
+  } else {
+    L.push('No deep-tier entries scored this run.');
+  }
   L.push('');
   L.push('## Precision-side signal: self-scan (measured this run)');
   L.push('');
