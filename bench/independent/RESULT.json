@@ -1,8 +1,8 @@
 {
   "schema": "agentic-security/independent-population-result@1",
   "source": "bench/independent/runner.mjs",
-  "measuredAt": "2026-08-09",
-  "engineVersion": "0.135.0",
+  "measuredAt": "2026-08-15",
+  "engineVersion": "0.136.10",
   "population": {
     "totalEntries": 110,
     "scoredEntries": 110,

@@ -70,7 +70,7 @@ every denominator, and reported by name. It is not a miss. The precedent is
 counted against them, because the alternative silently penalises infrastructure
 failure as if it were a detection failure.
 
-## Measured result — 2026-08-09, n=110, 0 unscored
+## Measured result — 2026-08-15 (re-measured; unchanged since 2026-08-09), n=110, 0 unscored
 
 | | Advisory-local (**the claim**) | Wide (diagnostic) |
 |---|---|---|
@@ -79,6 +79,12 @@ failure as if it were a detection failure.
 | F1 | **0.203** | 0.402 |
 
 By language (advisory-local): JavaScript 4/18, Python 7/57, TypeScript 3/35.
+
+### R16: re-measured 2026-08-15 on engine 0.136.10 — identical to the 2026-08-09 result, byte-for-byte
+
+The detection-gap remediation PRD (`docs/DETECTION_GAP_REMEDIATION_PRD.md`) landed six themes between the last measurement (engine 0.135.0) and this one (0.136.10): CHA-gated receiver typing and member-call resolution (R6/R10/R11), member-write DOM XSS sinks and `for`-of loop-element taint (R13), annotation-shaped sources for Spring/ASP.NET Core/NestJS (R14a), synthetic module-level IR for Python/PHP/Ruby (R14b), and control-flow-body fidelity plus call-graph derivation for Java/C#/Kotlin/PHP (R8/R9) — each independently proven real via dedicated unit tests, and several moving the internal regression corpus. This re-measurement (fresh fetch of all 110 entries, scan state wiped before scoring, run against 0.136.10) reproduces every single number above **exactly** — same TP/FP/FN/TN, same per-language split, same recall for every one of the ~40 individual CWE categories in the full breakdown. Not one of the 110 entries' scored outcomes changed.
+
+This is reported plainly rather than explained away, but it is not a mystery: the independent population's language distribution is JavaScript/Python/TypeScript only (0 Java, C#, Kotlin, PHP, Ruby, or Go entries in these 110). R8/R9 — "the single largest, riskiest item in the whole PRD" per its own plan — therefore could not have moved this benchmark at all, structurally, regardless of how real the underlying fix is; the same corpus-shape mismatch R8's own status entries already document at length for `bench/layer-recall`. That leaves R6/R10/R11/R13/R14a as the themes that *could* have moved a JS/TS/Python entry, and none of them did either — meaning either their fixed shapes don't happen to occur in these particular 110 real-world advisories, or a fix's effect was masked by something else in the same scan (an unrelated FP suppressing the file, a sanitizer-gate demotion, reachability filtering). This measurement cannot distinguish those cases from each other; it can only report that the net observable outcome, entry by entry, did not change. Confirming which explanation applies to which entry is future work, not something this re-run settles.
 
 **Quote the advisory-local column.** "Wide" is the same scans scored without
 restricting findings to the files the fix commit touched — it asks only whether

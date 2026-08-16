@@ -10,12 +10,12 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.136.10 |
-| Bundle SHA-256 | `50849c9a4f596cfe91ca814f0ea52d203f76614b32fdcb2f70f5ab644e52dd34` |
-| Commit | `abbe88e913256370f3aca88dd1b06c7f70f0a34b` |
+| Bundle SHA-256 | `44ff94f8ac515c4e60dabe7274aa4f8eade98c071988afd5b66ec462f38e03f7` |
+| Commit | `d0ffee1e43918b15d19295893ead3ffa496cc0a8` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 214 (214 scored) |
-| Generated (UTC) | 2026-08-13T13:51:25.583Z |
+| Generated (UTC) | 2026-08-16T01:08:29.592Z |
 
 ## What these numbers are, and what they are not
 
@@ -145,7 +145,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 612 |
+| `scanner/src` | 621 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -161,7 +161,7 @@ construction. `bench/independent/` is the other instrument — real upstream cod
 at the commit where a vulnerability really existed, with the CWE assigned by a
 public advisory database rather than by this project.
 
-**Measured 2026-08-09 on engine 0.135.0, n=110, 0 unscored** (*committed artifact*, `bench/independent/RESULT.json` — read, not re-run: scoring takes ~32 minutes).
+**Measured 2026-08-15 on engine 0.136.10, n=110, 0 unscored** (*committed artifact*, `bench/independent/RESULT.json` — read, not re-run: scoring takes ~32 minutes).
 
 | | Advisory-local (**the claim**) | Wide (diagnostic) |
 | --- | --- | --- |
