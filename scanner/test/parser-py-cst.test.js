@@ -347,3 +347,67 @@ _maybe('a nested function/class at module scope does not itself count as module 
   assert.equal(ir.functions.find(f => f.name === '<module>'), undefined);
   assert.equal(ir.topLevel, null);
 });
+
+// ─── Taint-recall PRD (80%): subscript-assignment lowering ────────────────
+// `response["X-Trace"] = value` has a Subscript target, which _assign_target
+// has no branch for — it previously fell through to `target: None`, an
+// untracked no-op invisible to every sink check. Now lowered as a synthetic
+// `<receiver>.__setitem__(key, value)` call so the write flows through the
+// same argument-based sink-matching machinery every other call already uses.
+
+_maybe('a bare-name subscript assignment lowers to a synthetic __setitem__ call', async () => {
+  const code = `def f(response, val):
+    response["X-Trace"] = val
+`;
+  const [ir] = await parsePythonFilesBatch([{ file: 'sub1.py', content: code }]);
+  const fn = ir.functions.find(f => f.name === 'f');
+  assert.ok(fn);
+  const nodes = Object.values(fn.cfg.nodes);
+  const call = nodes.find(n => n.kind === 'call' && n.callee === 'response.__setitem__');
+  assert.ok(call, `expected a response.__setitem__ call node, got: ${JSON.stringify(nodes)}`);
+  assert.equal(call.args.length, 2);
+  assert.equal(call.args[1].kind, 'ident');
+  assert.equal(call.args[1].name, 'val');
+});
+
+_maybe('a dotted-receiver subscript assignment (resp.headers[...] = ...) flattens the full receiver chain', async () => {
+  const code = `def f(resp, val):
+    resp.headers["X-Trace"] = val
+`;
+  const [ir] = await parsePythonFilesBatch([{ file: 'sub2.py', content: code }]);
+  const fn = ir.functions.find(f => f.name === 'f');
+  const nodes = Object.values(fn.cfg.nodes);
+  const call = nodes.find(n => n.kind === 'call' && n.callee === 'resp.headers.__setitem__');
+  assert.ok(call, `expected a resp.headers.__setitem__ call node, got: ${JSON.stringify(nodes)}`);
+});
+
+_maybe('an ordinary dict subscript assignment still lowers cleanly (no crash, no false catalog match)', async () => {
+  const code = `def f(val):
+    d = {}
+    d["k"] = val
+    return d
+`;
+  const [ir] = await parsePythonFilesBatch([{ file: 'sub3.py', content: code }]);
+  const fn = ir.functions.find(f => f.name === 'f');
+  assert.ok(fn, 'expected the function to parse without crashing on a plain dict subscript-assign');
+  const nodes = Object.values(fn.cfg.nodes);
+  assert.ok(nodes.some(n => n.kind === 'call' && n.callee === 'd.__setitem__'));
+});
+
+_maybe('end-to-end: taint flows through response["X-Trace"] = request.GET["trace"] into the new sink', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-py-setitem-'));
+  fs.writeFileSync(path.join(dir, 'views.py'), `
+def trace(request):
+    response = HttpResponse("ok")
+    response["X-Trace"] = request.GET["trace"]
+    return response
+`);
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(irFindings.some(f => /response.split|crlf|header/i.test(f.vuln)),
+    `expected an IR-TAINT response-splitting finding, got: ${JSON.stringify((scan.findings || []).map(f => ({parser: f.parser, vuln: f.vuln})))}`);
+});

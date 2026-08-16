@@ -347,6 +347,31 @@ class CfgBuilder:
                 cur = self._add({"kind": "noop", "line": line})
             self._link(prev, cur)
             return cur
+        if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Subscript):
+            # Taint-recall PRD (80%): `response["X-Trace"] = tainted` / a
+            # subscript-assignment target. `_assign_target` has no branch for
+            # ast.Subscript, so this previously fell through to `target: None`
+            # — an untracked, effectively no-op assign; the write itself was
+            # invisible to every sink check (matchMemberWriteSink needs a
+            # dotted `target` string; the RHS-is-a-call check doesn't apply
+            # since the RHS here is rarely a call). Lowered instead as a
+            # synthetic `<receiver>.__setitem__(key, value)` call so it flows
+            # through the SAME argument-based sink-matching machinery every
+            # other call already uses — no new engine mechanism, argIndex 1
+            # for the value. `d[k] = v` for an ordinary dict still produces
+            # this same shape; it's harmless (no catalog entry matches
+            # '__setitem__' without a receiver constraint, so it resolves as
+            # an ordinary unrecognized call, same effective no-op as before).
+            receiver = _flatten_callee(stmt.targets[0].value)
+            key_expr = _lower_expr(stmt.targets[0].slice)
+            cur = self._add({
+                "kind": "call",
+                "callee": f"{receiver}.__setitem__" if receiver else "__setitem__",
+                "args": [key_expr, _lower_expr(stmt.value)],
+                "line": line,
+            })
+            self._link(prev, cur)
+            return cur
         if isinstance(stmt, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
             # AugAssign: x += y  → assign x = x + y
             # AnnAssign: x: int = y → assign x = y (or noop if no value)

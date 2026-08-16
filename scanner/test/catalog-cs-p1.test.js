@@ -130,3 +130,38 @@ public class C {
   assert.ok(taint.some(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)),
     `expected LDAP Injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
+
+// Taint-recall PRD (80%): the idiomatic real-world shape — property
+// assignment, not a constructor argument. Verified against the real corpus
+// fixture (bench/cve-replay/capability/CVE-2020-1722-csharp-ldap) that the
+// entry above does NOT fire on this shape; that fixture itself additionally
+// lacks a recognized source (bare unannotated param), so it needs Tier 2
+// fixture enrichment on top of this sink before it flips in the corpus.
+test('cs-directorysearcher-filter: searcher.Filter = concatenated value fires LDAP injection via IR-TAINT (property-assignment shape)', async () => {
+  const dir = mkTmp('ldap-filter', `
+public class C {
+    public void Handler([FromQuery] string uid) {
+        var searcher = new DirectorySearcher();
+        searcher.Filter = "(uid=" + uid + ")";
+        searcher.FindAll();
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected LDAP Injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-directorysearcher-filter precision: an unrelated .Filter assignment on a non-search-named receiver does not fire', async () => {
+  const dir = mkTmp('ldap-filter-clean', `
+public class C {
+    public void Handler([FromQuery] string mode) {
+        var imageOptions = new ImageOptions();
+        imageOptions.Filter = mode;
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.equal(taint.filter(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)).length, 0,
+    `an unrelated .Filter= must not trigger the LDAP sink, got: ${taint.map(f => f.vuln).join(', ')}`);
+});

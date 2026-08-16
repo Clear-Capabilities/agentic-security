@@ -651,6 +651,15 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-flask-redirect', language: 'py', framework: 'flask', match: { type: 'call', callee: 'redirect' }, argIndex: 0,
     vuln: { name: 'Open Redirect (flask.redirect)', severity: 'medium', cwe: 'CWE-601',
             remediation: 'Validate redirect target against an allow-list; never pass req-derived strings straight to redirect.' } },
+  // Response header injection. `response["X"] = tainted` / `resp.headers["X"] = tainted`
+  // is a subscript-assignment; parser-py.helper.py now lowers that shape as a
+  // synthetic `<receiver>.__setitem__(key, value)` call so the existing
+  // argument-based sink machinery applies — argIndex 1 is the header value.
+  { kind: 'sink', id: 'py-response-setitem', language: 'py', framework: 'django/flask', match: { type: 'call', callee: '__setitem__', receiver: '^(?:response|resp|headers)$' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / CRLF Injection (response header set from tainted value)', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header. Prefer an allow-listed set of header values.' } },
+  { kind: 'source', id: 'py-flask-request-get-data', language: 'py', framework: 'flask', match: { type: 'call', callee: 'get_data' }, label: 'request.get_data() (Flask raw body)', provenance: 'http-body' },
+  { kind: 'source', id: 'py-django-request-body',    language: 'py', framework: 'django', match: { type: 'member', object: 'request', prop: 'body' }, label: 'request.body (Django raw body)', provenance: 'http-body' },
 
   // ─── SANITIZERS (Python) ───────────────────────────────────────────────────
   { kind: 'sanitizer', id: 'py-shlex-quote-v2',         language: 'py', match: { type: 'call', callee: 'quote' },          effect: 'strip', appliesTo: ['cmd'] },
@@ -725,6 +734,19 @@ export const CATALOG = [
             remediation: 'Set XmlResolver = null and DtdProcessing = DtdProcessing.Prohibit before parsing untrusted XML.' } },
   { kind: 'sink', id: 'cs-directorysearcher',  language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'DirectorySearcher' }, argIndex: 'all',
     vuln: { name: 'LDAP Injection (new DirectorySearcher with concatenated filter)', severity: 'high', cwe: 'CWE-90',
+            remediation: 'Escape LDAP special characters in filter components, or build the filter with a parameterized helper.' } },
+  // Taint-recall PRD (80%): the idiomatic real-world shape is NOT
+  // `new DirectorySearcher(taintedFilter)` (the entry above) — it's
+  // `new DirectorySearcher(); searcher.Filter = tainted; searcher.FindAll()`,
+  // a property assignment with no later call argument to check. Confirmed
+  // directly against bench/cve-replay's own CVE-2020-1722-csharp-ldap
+  // fixture that the constructor-argument entry above does not fire on it.
+  // Uses matchMemberWriteSink (R13(a)'s el.innerHTML= mechanism) instead —
+  // the assignment itself is the sink, receiver-scoped to variable names
+  // containing "search" (DirectorySearcher's overwhelmingly common naming
+  // convention) since "Filter" alone is too generic a property name.
+  { kind: 'sink', id: 'cs-directorysearcher-filter', language: 'cs', framework: 'stdlib', match: { type: 'member', object: '_any_', prop: 'Filter', receiver: '[Ss]earch' }, argIndex: 'rhs',
+    vuln: { name: 'LDAP Injection (DirectorySearcher.Filter assigned a concatenated value)', severity: 'high', cwe: 'CWE-90',
             remediation: 'Escape LDAP special characters in filter components, or build the filter with a parameterized helper.' } },
 
   // ─── SANITIZERS (C#) ─────────────────────────────────────────────────────
@@ -1201,7 +1223,23 @@ export function matchMemberWriteSink(targetPath, file) {
   if (!raw) return null;
   const hits = filterByProvenance(raw)
     .filter(h => _languageAllowed(h, file))
-    .filter(h => h.kind === 'sink');
+    .filter(h => h.kind === 'sink')
+    // Taint-recall PRD (80%): optional `match.receiver`, same purpose as
+    // `_receiverAllowed` for calls. innerHTML/outerHTML never needed this
+    // (unambiguous DOM-only names); a property name like C#'s `Filter`
+    // (DirectorySearcher.Filter — LDAP injection when set from a tainted
+    // value) is common enough elsewhere (UI filters, LINQ, image
+    // processing) that an unscoped match would be a real precision risk.
+    // Segments are the dotted prefix before the final prop — same
+    // "any segment matches" semantics as _receiverAllowed's string-callee
+    // branch, just computed directly from targetPath since there's no
+    // expression object here to walk.
+    .filter(h => {
+      const pat = h.match && h.match.receiver;
+      if (!pat) return true;
+      const segs = targetPath.slice(0, targetPath.length - prop.length - 1).split('.');
+      return segs.some(s => new RegExp(pat).test(s));
+    });
   return hits.length ? hits : null;
 }
 
