@@ -1,8 +1,8 @@
-import sys
+def identity(payload):
+    return payload
 
 
-def emit(payload):
-    sys.stderr.write(payload)
-    fh = open("/tmp/out.log", "w")
-    fh.write(payload)
+def emit():
+    path = identity("/tmp/out.log")
+    fh = open(path, "w")
     fh.close()

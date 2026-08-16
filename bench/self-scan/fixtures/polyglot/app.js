@@ -1,5 +1,10 @@
-function emit(payload) {
-  process.stdout.write(payload);
+function identity(payload) {
+  return payload;
 }
 
-module.exports = { emit };
+function emit() {
+  const cmd = identity('status: ok');
+  require('child_process').exec(cmd);
+}
+
+module.exports = { identity, emit };
