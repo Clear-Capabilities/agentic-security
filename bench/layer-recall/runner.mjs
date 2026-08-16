@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { disableStateWrites, purgeScanState } from '../_lib/tree-integrity.mjs';
 import { runScan } from '../../scanner/src/runScan.js';
 import { matcherFor, matchingFindings } from '../../scanner/src/posture/corpus-match.js';
-import { layersOf, buildMatrix, summarize, languageOf, LAYER_TAINT } from './attribute.mjs';
+import { layersOf, buildMatrix, summarize, taintMissedEntries, languageOf, LAYER_TAINT } from './attribute.mjs';
 
 await disableStateWrites();
 
@@ -129,6 +129,7 @@ const pct = (n, d) => d ? `${Math.round((100 * n) / d)}%` : '—';
 const allSummary = summarize(rows);
 const deepRows = rows.filter(r => r.tier === 'deep');
 const deepSummary = summarize(deepRows);
+const missed = taintMissedEntries(deepRows);
 
 if (!JSON_OUT) {
   console.log('\nPer-layer recall over the CVE-replay corpus (deep mode forced on for every entry)\n');
@@ -179,6 +180,12 @@ if (!JSON_OUT) {
       console.log(`\n  languages with NO deep-tier entry yet: ${deepLangsWithNoEntry.join(', ')}`);
       console.log(`  (not zero recall — simply not measured on the taint-shaped subset)`);
     }
+    if (missed.length) {
+      console.log(`\n  ⚠ deep-tier entries detected, but NOT by IR-TAINT (caught by another deep-mode layer instead):`);
+      for (const m of missed) console.log(`    ${m.id} (${m.language}) — caught by: ${m.layers.join(', ') || '(unattributed)'}`);
+      console.log(`  These pass every gate in this repo today. A language here is a real P1 candidate,`);
+      console.log(`  not a language already served by taint.`);
+    }
   }
 }
 
@@ -186,6 +193,10 @@ const summary = {
   generatedAt: new Date().toISOString().slice(0, 10),
   ...allSummary,
   deepTier: deepSummary,
+  // Not baselined — see attribute.mjs's taintMissedEntries doc comment for why.
+  // Live-computed on every run so a new deep-tier entry that lands caught by a
+  // non-taint layer is visible immediately, not only once someone reads the table.
+  taintMissedInDeepTier: missed,
 };
 
 if (JSON_OUT) {

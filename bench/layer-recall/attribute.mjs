@@ -104,3 +104,29 @@ export function summarize(rows) {
   }
   return { entriesScored: (rows || []).length, taintByLanguage, totalByLanguage };
 }
+
+/**
+ * Deep-tier entries that ARE detected under deep mode but NOT by IR-TAINT
+ * specifically — a signal the baseline's per-language taint counts alone
+ * cannot surface, and a distinct failure mode from both "entry undetected"
+ * (already caught by the corpus gate) and "language has no deep-tier entry
+ * yet" (already printed as a warning below the deep-tier table).
+ *
+ * Every deep-tier entry is admitted on the rule "provably invisible with
+ * deep mode OFF" (bench/cve-replay/CONTRIBUTING.md) — that does not promise
+ * IR-TAINT is the layer that catches it under deep mode ON; some other
+ * deep-mode-gated analysis could. When that happens, the corpus gate and the
+ * whole-corpus/deep-tier recall counts all stay green, because `detected`
+ * only asks "some layer fired" — so nothing else in this repo's gates would
+ * ever flag it. This is the entry-level list that would.
+ *
+ * Not persisted to baseline.json: there is no natural "before" value to
+ * regress against for a per-entry list the way there is for a per-language
+ * count, so this is surfaced live on every run rather than gated.
+ */
+export function taintMissedEntries(deepRows) {
+  return (deepRows || [])
+    .filter(r => r.detected && !(r.layers || []).includes(LAYER_TAINT))
+    .map(r => ({ id: r.id, language: r.language, layers: r.layers }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+}

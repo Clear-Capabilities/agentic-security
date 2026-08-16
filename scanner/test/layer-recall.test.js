@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { matcherFor, matchingFindings } from '../src/posture/corpus-match.js';
-import { layersOf, buildMatrix, summarize, LAYER_TAINT } from '../../bench/layer-recall/attribute.mjs';
+import { layersOf, buildMatrix, summarize, taintMissedEntries, LAYER_TAINT } from '../../bench/layer-recall/attribute.mjs';
 
 const manifest = { cwe: 'CWE-89', expected: { vuln_match: 'SQL Injection' } };
 
@@ -111,4 +111,31 @@ test('summarize() never puts a language in taintByLanguage with zero taint hits'
   const s = summarize([{ language: 'kotlin', detected: true, layers: ['REGEX'] }]);
   assert.deepEqual(s.totalByLanguage, { kotlin: 1 });
   assert.equal('kotlin' in s.taintByLanguage, false);
+});
+
+test('taintMissedEntries flags a deep-tier entry detected by another layer but not by IR-TAINT', () => {
+  const rows = [
+    { id: 'js-interproc-cmdi-shape', language: 'javascript', detected: true, layers: ['IR-TAINT'] },
+    { id: 'java-interproc-sqli-shape', language: 'java', detected: true, layers: ['REGEX'] },
+  ];
+  const missed = taintMissedEntries(rows);
+  assert.deepEqual(missed, [{ id: 'java-interproc-sqli-shape', language: 'java', layers: ['REGEX'] }]);
+});
+
+test('taintMissedEntries does not flag an undetected entry — that is the corpus gate\'s job', () => {
+  const rows = [{ id: 'x', language: 'ruby', detected: false, layers: [] }];
+  assert.deepEqual(taintMissedEntries(rows), []);
+});
+
+test('taintMissedEntries does not flag an entry IR-TAINT itself caught, even alongside other layers', () => {
+  const rows = [{ id: 'x', language: 'go', detected: true, layers: ['REGEX', 'IR-TAINT'] }];
+  assert.deepEqual(taintMissedEntries(rows), []);
+});
+
+test('taintMissedEntries sorts by id for stable output', () => {
+  const rows = [
+    { id: 'z-entry', language: 'go', detected: true, layers: ['REGEX'] },
+    { id: 'a-entry', language: 'go', detected: true, layers: ['REGEX'] },
+  ];
+  assert.deepEqual(taintMissedEntries(rows).map(e => e.id), ['a-entry', 'z-entry']);
 });
