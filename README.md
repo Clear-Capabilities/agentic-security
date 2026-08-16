@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.136.10-blue)]()
+[![Version](https://img.shields.io/badge/version-0.137.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -112,9 +112,9 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 
 **Experimental**
 - **`labs`** — Experimental + AI-driven. Modes: claude-audit / model-rescan / synthesize-rule / cross-repo / risk-dollars / time-to-fix / llm.
-- **`hunt`** — LLM discovery over the call-graph partition, gated by the deterministic engine (see [What makes it different](#what-makes-it-different)). Run it as `agentic-security hunt --root <dir>`; `--lens a,b` narrows the angles. Needs `AGENTIC_SECURITY_LLM_ENDPOINT`, is token-expensive, capped at 2000 files, and is advisory — it never gates a build and never writes to `last-scan.json`.
+- **`hunt`** *(CLI-only — no slash command)* — LLM discovery over the call-graph partition, gated by the deterministic engine (see [What makes it different](#what-makes-it-different)). Run it as `agentic-security hunt --root <dir>`; `--lens a,b` narrows the angles. Needs `AGENTIC_SECURITY_LLM_ENDPOINT`, is token-expensive, capped at 2000 files, and is advisory — it never gates a build and never writes to `last-scan.json`.
 
-Every command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:scan`). Every legacy single-purpose alias still works and is redirected to its new mode automatically.
+Every slash command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:scan`); `hunt` is the one CLI-only exception. Every legacy single-purpose alias still works and is redirected to its new mode automatically.
 
 ---
 

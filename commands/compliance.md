@@ -16,7 +16,7 @@ Compliance + auditor flows dispatcher.
 | `--attestation` | Render buyer-facing security posture artifact. `--format badge|onepager|page` |
 | `--audit <target>` | Filters `last-scan.json`'s findings by keyword per target: `db`, `auth`, `rate-limit`, `webhook`, `env`, `csp-cors`, `llm-cost`, `prompt`. `deploy` and `launch` instead run `/secure`'s real readiness check for that intent, not a findings filter. |
 | `--pr` | Generate a PR-description block: findings delta vs a persisted baseline + MITRE ATT&CK techniques on new findings + suggested reviewers by family + links to posture artifacts |
-| `--gap` | Show only the **Not-Compliant** controls, each with the exact command that closes it |
+| `--gap` | Show only the failing controls, each with its observations — a worklist of what isn't clearing (see the `--gap` section below) |
 | `--privacy` | NIST Privacy Framework 1.1 assessment with remediation per gap. Artifacts: `.agentic-security/privacy-framework.{json,md}` |
 
 Bare `/compliance` (no flag) prints this mode menu. `--report` and `--gap` accept `--format cli|json`.

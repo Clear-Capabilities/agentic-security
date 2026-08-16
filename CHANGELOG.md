@@ -9,12 +9,37 @@
 > make the history less accurate, not more.
 
 
-## Unreleased — Theme B+D, Theme C, and Theme E of the detection-gap remediation PRD (R6, R8, R10, R11, R13, R14(a), R14(b))
+## 0.137.0 — detection-gap remediation Themes B+D, C, E, plus R9 and the R16 close-out
 
-Five independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land
-together here. Each has its own subsection below, and each subsection carries
-its own verification paragraph — the numbers in one do not describe the
-other.
+Seven independent slices of `docs/DETECTION_GAP_REMEDIATION_PRD.md` land
+together here (R6, R8, R9, R10, R11, R13, R14(a), R14(b), R16). Each has its
+own subsection below, and each subsection carries its own verification
+paragraph — the numbers in one do not describe the other.
+
+### R9 — Java call-graph edges existed in the CFG but never reached the call graph
+
+`ir/parser-java.js` never emitted `fn.calls`, leaving every Java function's
+call-graph edges permanently empty (`callgraph.js` reads `fn.calls`
+exclusively). Wired the same shared, language-agnostic call-extraction helper
+six other parsers already use — no new extraction logic, matching the
+identical precedent set by Ruby's earlier fix. A final-review fix wave
+rebuilt the bundle, corrected doc overclaims, and added a resolution proof
+test (`test/parser-java-calls.test.js`, 94 lines).
+
+### R16 — independent population re-measured; the finding is the absence of movement
+
+Re-ran `bench/independent` (110 GHSA-labelled entries, fresh fetch, scan
+state wiped) after seven PRD themes landed since the last measurement. Result
+is identical, entry for entry, to the 2026-08-09 run — same TP/FP/FN/TN, same
+per-language split, same recall across all ~40 CWE categories. Reported
+plainly rather than explained away: the independent population has zero
+Java/C#/Kotlin/PHP/Ruby/Go entries, so R8/R9 could not have moved it
+structurally; Theme A (the plan's own hypothesized dominant lever, which also
+landed after the baseline) plus R6/R10/R11/R13/R14(a) could have moved a
+JS/TS/Python entry and none did. This measurement cannot distinguish "fix
+doesn't occur in these 110 entries' shapes" from "effect masked elsewhere in
+the same scan" — only that the net observable outcome per entry is unchanged.
+The PRD backlog is closed on this basis.
 
 ### Theme B+D (R6, R10, R11) — semantic grounding and interprocedural completeness
 

@@ -37,8 +37,19 @@ attacker has to find it.
    - Service-account JSON (`type: "service_account"`) → GCP
 
 3. **Print the EXACT revoke URL** for that provider's console. Don't
-   paraphrase — copy from the canonical list. (See `commands/rotate-key-auto.md`
-   for the full provider matrix.)
+   paraphrase — copy from this canonical list:
+
+   | Provider | Revoke at |
+   |---|---|
+   | OpenAI | https://platform.openai.com/api-keys |
+   | Anthropic | https://console.anthropic.com/settings/keys |
+   | GitHub PAT | https://github.com/settings/tokens |
+   | Slack | https://api.slack.com/apps → your app → OAuth & Permissions → Revoke |
+   | AWS access key | https://console.aws.amazon.com/iam/home#/security_credentials |
+   | Google API key | https://console.cloud.google.com/apis/credentials |
+   | Supabase service-role | https://supabase.com/dashboard/project/_/settings/api |
+   | GCP service account | https://console.cloud.google.com/iam-admin/serviceaccounts |
+   | Stripe | https://dashboard.stripe.com/apikeys |
 
 4. **Estimate blast radius BEFORE the rotation, not after**:
    - Stripe = real money. Check dashboard for unauthorized charges

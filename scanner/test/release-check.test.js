@@ -107,6 +107,13 @@ test('release-gate — version extraction pulls every occurrence from a source',
     extractVersionsFromSource('scanner/package.json', '{"name":"x","version":"9.9.9"}'),
     ['9.9.9']
   );
+  // gemini-extension.json drifted ~60 minor versions behind before it was
+  // added to VERSION_FILES (docs-overhaul PRD, P0 item 0.1) — top-level
+  // "version" only, same as package.json/plugin.json.
+  assert.deepEqual(
+    extractVersionsFromSource('gemini-extension.json', '{"name":"x","version":"9.9.9"}'),
+    ['9.9.9']
+  );
 });
 
 // ---------------------------------------------------------------- check 3
@@ -301,15 +308,17 @@ test('release-gate — attestation-self-check passes on a real compute/verify ro
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all sixteen checks in order', () => {
+test('release-gate — full run plans all seventeen checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
   // A Stage-6 correctness follow-up added attestation-self-check +
   // nist-catalog-freshness — both fast, both give a previously-orphaned
   // verifier/checker (verifyRunAttestation, build-catalog.py --check) a
-  // real, automated caller for the first time.
+  // real, automated caller for the first time. The docs-overhaul PRD (P0
+  // item 0.8) added doc-links — fast, gates dangling links in the
+  // user-facing markdown surface via check-doc-drift.mjs --gate.
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 16);
+  assert.equal(ids.length, 17);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -336,16 +345,16 @@ test('release-gate — --fast skips only the slow gates, keeping 1-5, the two ne
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 6);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 10);
+  assert.equal(ids.length, 11);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
   // The four cheap correctness gates, the two new fast checks,
-  // package-contents, and both provenance gates must survive --fast: they
-  // are what make a fast run still meaningful.
+  // package-contents, both provenance gates, and the doc-link gate must
+  // survive --fast: they are what make a fast run still meaningful.
   for (const keep of [
     'working-tree-clean', 'version-consistency', 'changelog-entry',
     'bundle-integrity', 'scorecard-freshness', 'attestation-self-check',
     'nist-catalog-freshness', 'package-contents',
-    'head-pushed', 'remote-ci-green',
+    'head-pushed', 'remote-ci-green', 'doc-links',
   ]) {
     assert.ok(ids.includes(keep), `--fast must still run ${keep}`);
   }

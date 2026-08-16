@@ -36,9 +36,44 @@ The router is **trend-aware**: when two or more scans exist it compares the late
 
 | Flag | Behaviour |
 |---|---|
-| `--tour` | Walk through the plugin's main capabilities with example commands |
+| `--tour` | Walk through the plugin's main capabilities with example commands (below) |
 | `--help` | Task-oriented command guide + old→new alias map (below) |
-| `--daily` | Post daily security digest to Slack / Discord / webhook |
+| `--daily` | Post the security digest to Slack or Discord (below) |
+
+## `--tour` (guided walkthrough)
+
+Give the user a short guided tour — conversational, not a wall of text. Walk
+through these five stops in order, one short paragraph each with the example
+command, then offer to run stop 1 for them:
+
+1. **Scan** — `/scan` runs the 12-pillar scan; findings land in
+   `.agentic-security/last-scan.json` and every other command reads from there.
+2. **Understand** — `/triage --show` ranks what the scan found;
+   `/triage --explain <id>` explains one finding in plain English with the
+   dollar-cost estimate.
+3. **Fix** — `/fix --finding <id> --preview` shows the patch first; every
+   applied fix is re-verified (rescan-clean, no new ≥ medium, lint) before it
+   touches disk. `/find-and-fix-everything` is the one-shot version.
+4. **Guard** — `/setup --hooks` installs the write-time bodyguard;
+   `/setup --ci` generates a CI gate so regressions can't merge.
+5. **Prove** — `/posture --report-card` grades the project;
+   `/compliance --report <framework>` produces an auditor-ready attestation.
+
+If the project has never been scanned, end by offering to run `/scan` now.
+
+## `--daily` (digest to Slack / Discord)
+
+Runs the real CLI digest against the last scan (requires a prior scan — it
+does not scan):
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs digest --slack <webhook-url>
+# or: … digest --discord <webhook-url>
+```
+
+Ask for the webhook URL if the user didn't provide one, and suggest wiring it
+into CI (`/setup --ci`) for a genuinely daily cadence — this command posts
+once per invocation.
 
 ## `--help` (task-oriented)
 

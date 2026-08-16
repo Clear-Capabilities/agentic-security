@@ -44,10 +44,22 @@
 //   node scripts/check-doc-drift.mjs               # human report, exit 0
 //   node scripts/check-doc-drift.mjs --json         # machine-readable
 //   node scripts/check-doc-drift.mjs --strict       # exit 1 if any found
+//   node scripts/check-doc-drift.mjs --gate         # LINK CHECK ONLY, exit 1
+//                                                   # on any dangling link
 //
-// This is a LINT, not a release gate — wiring it into release-check.mjs
-// would need a period of tuning against false positives first. Run it by
-// hand or from a CI lint step.
+// The CLAUDE.md path-drift half is a LINT, not a release gate — wiring it
+// into release-check.mjs would need a period of tuning against false
+// positives first. Run it by hand or from a CI lint step.
+//
+// The LINK-INTEGRITY half (docs-overhaul PRD, P0 item 0.8) IS a release
+// gate: `--gate` scans the user-facing markdown surface (README.md,
+// docs/**, commands/**, skills/**, agents/**) for relative markdown links
+// and local <img src> references that resolve to nothing, and exits
+// non-zero on any hit. Unlike the path-drift lint this check is
+// deterministic and low-false-positive (a relative link either resolves
+// or it doesn't), which is what qualifies it to block a release.
+// CHANGELOG.md is deliberately excluded: its header explains that old
+// entries cite since-deleted PRD files as a matter of historical record.
 'use strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -211,6 +223,90 @@ function lineNumberAt(text, index) {
   return text.slice(0, index).split('\n').length;
 }
 
+// ---------------------------------------------------------------------------
+// Link integrity (the `--gate` half)
+// ---------------------------------------------------------------------------
+
+// The user-facing markdown surface. CHANGELOG.md is excluded by design (see
+// header); bench/ and scanner/ hold contributor material already covered by
+// the CLAUDE.md lint above.
+const LINK_DOC_ROOTS = ['docs', 'commands', 'skills', 'agents'];
+const LINK_DOC_ROOT_FILES = ['README.md', 'SECURITY.md'];
+
+function findLinkDocs(root) {
+  const out = [];
+  for (const f of LINK_DOC_ROOT_FILES) {
+    const p = path.join(root, f);
+    if (fs.existsSync(p)) out.push(p);
+  }
+  const skipDirs = new Set(['node_modules', '.git', 'dist', 'coverage']);
+  const walk = (dir) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (skipDirs.has(e.name)) continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(full); continue; }
+      if (e.isFile() && e.name.endsWith('.md')) out.push(full);
+    }
+  };
+  for (const d of LINK_DOC_ROOTS) walk(path.join(root, d));
+  return out;
+}
+
+// Standard markdown links/images plus raw HTML <img src>. Nested parens in
+// URLs are rare in this tree and deliberately unsupported — a false NEGATIVE
+// there is acceptable, a false positive is not.
+const MD_LINK_RE = /!?\[[^\]]*\]\(([^()\s]+)(?:\s+"[^"]*")?\)/g;
+const HTML_SRC_RE = /<(?:img|source)\b[^>]*\bsrc="([^"]+)"/g;
+
+function isExternalTarget(t) {
+  return /^(?:https?:|mailto:|data:|#)/i.test(t);
+}
+
+export function checkLinksInFile(mdPath) {
+  const raw = fs.readFileSync(mdPath, 'utf8');
+  // Also blank inline code spans (`…`) — a `[text](url)` shown as an
+  // illustrative example inside backticks is not a real link. Only done for
+  // the link scan: the CLAUDE.md path lint above *depends* on backtick spans.
+  const scanned = stripCodeFences(raw).replace(/`[^`\n]*`/g, (m) => ' '.repeat(m.length));
+  const findings = [];
+  const seen = new Set();
+  const record = (target, index) => {
+    if (isExternalTarget(target)) return;
+    // Drop any #fragment; a bare-fragment link was already skipped above.
+    let rel = target.split('#')[0];
+    if (!rel) return;
+    try { rel = decodeURIComponent(rel); } catch { /* keep raw */ }
+    // Markdown links resolve relative to the containing file's directory.
+    // Absolute-path links (`/docs/x.md`) are treated as repo-rooted, which is
+    // how this repo's few root-anchored references are meant to read.
+    const resolved = rel.startsWith('/')
+      ? path.join(REPO, rel)
+      : path.resolve(path.dirname(mdPath), rel);
+    const key = `${mdPath}:${rel}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (!fs.existsSync(resolved)) {
+      findings.push({
+        file: mdPath, line: lineNumberAt(raw, index),
+        kind: 'dangling-link', ref: target,
+      });
+    }
+  };
+  for (const re of [new RegExp(MD_LINK_RE.source, 'g'), new RegExp(HTML_SRC_RE.source, 'g')]) {
+    let m;
+    while ((m = re.exec(scanned))) record(m[1], m.index);
+  }
+  return findings;
+}
+
+export function checkAllLinks(root = REPO) {
+  const out = [];
+  for (const f of findLinkDocs(root)) out.push(...checkLinksInFile(f));
+  return out;
+}
+
 export function checkFile(claudeMdPath) {
   const raw = fs.readFileSync(claudeMdPath, 'utf8');
   const scanned = stripCodeFences(raw);
@@ -236,10 +332,26 @@ function main() {
   const args = process.argv.slice(2);
   const asJson = args.includes('--json');
   const strict = args.includes('--strict');
+  const gate = args.includes('--gate');
+
+  if (gate) {
+    // Release-gate mode: link integrity only (deterministic, low-FP).
+    const links = checkAllLinks(REPO);
+    if (!links.length) {
+      console.log('doc-links: all user-facing markdown links resolve.');
+      process.exit(0);
+    }
+    console.error(`doc-links: ${links.length} dangling link(s):`);
+    for (const f of links) {
+      console.error(`  ${path.relative(REPO, f.file)}:${f.line}  → ${f.ref}`);
+    }
+    process.exit(1);
+  }
 
   const files = findClaudeMdFiles(REPO);
   const allFindings = [];
   for (const f of files) allFindings.push(...checkFile(f));
+  allFindings.push(...checkAllLinks(REPO));
 
   if (asJson) {
     console.log(JSON.stringify({ scanned: files.length, findings: allFindings }, null, 2));
@@ -254,6 +366,8 @@ function main() {
         const rel = path.relative(REPO, f.file);
         if (f.kind === 'missing-path') {
           console.log(`  ${rel}:${f.line}  references \`${f.ref}\` — no file found at any plausible base path`);
+        } else if (f.kind === 'dangling-link') {
+          console.log(`  ${rel}:${f.line}  links to ${f.ref} — target does not exist`);
         } else {
           console.log(`  ${rel}:${f.line}  references \`${f.ref}\` — ${f.resolved} exists but does not export/mention "${f.ref.split(/[#:]/).pop()}"`);
         }

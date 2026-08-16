@@ -86,13 +86,19 @@ export const CHECKS = [
     title: 'Version string consistent across all release artifacts',
     slow: false,
     remedy: 'Set the same version in scanner/package.json, .claude-plugin/plugin.json, ' +
-      '.claude-plugin/marketplace.json (BOTH occurrences), CLAUDE.md and README.md.',
+      '.claude-plugin/marketplace.json (BOTH occurrences), gemini-extension.json, CLAUDE.md and README.md.',
   },
   {
     id: 'changelog-entry',
     title: 'Changelog entry exists for this version',
     slow: false,
     remedy: 'Add a `## <version> — <title>` section to CHANGELOG.md and scanner/CHANGELOG.md.',
+  },
+  {
+    id: 'doc-links',
+    title: 'User-facing doc links resolve (README, docs/, commands/, skills/, agents/)',
+    slow: false,
+    remedy: 'Run `node scripts/check-doc-drift.mjs --gate` and fix or remove each dangling link it lists.',
   },
   {
     id: 'bundle-integrity',
@@ -257,7 +263,7 @@ const VERSION_RE = String.raw`(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)`;
 export function extractVersionsFromSource(label, content) {
   if (typeof content !== 'string') return [];
   const all = (re) => [...content.matchAll(re)].map(m => m[1]);
-  if (label.endsWith('package.json') || label.endsWith('plugin.json')) {
+  if (label.endsWith('package.json') || label.endsWith('plugin.json') || label.endsWith('gemini-extension.json')) {
     // Top-level "version" only — the first occurrence in these files.
     const m = content.match(new RegExp(String.raw`"version"\s*:\s*"${VERSION_RE}"`));
     return m ? [m[1]] : [];
@@ -553,6 +559,7 @@ const VERSION_FILES = [
   'scanner/package.json',
   '.claude-plugin/plugin.json',
   '.claude-plugin/marketplace.json',
+  'gemini-extension.json',
   'CLAUDE.md',
   'README.md',
 ];
@@ -726,6 +733,11 @@ function main(argv) {
         content: readTextOrNull(path.join(REPO, rel)),
       })),
     });
+  });
+
+  evaluate('doc-links', () => {
+    const r = run('node', [path.join(REPO, 'scripts', 'check-doc-drift.mjs'), '--gate'], { cwd: REPO });
+    return evaluateCommandGate({ label: 'node scripts/check-doc-drift.mjs --gate', exitCode: r.status });
   });
 
   evaluate('bundle-integrity', () => evaluateBundleIntegrity(bundleHashes()));

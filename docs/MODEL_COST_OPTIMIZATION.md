@@ -50,9 +50,9 @@ You can also create/edit `.agentic-security/model-optimizer.json` by hand:
 }
 ```
 
-- **`costQualityTradeoff`** — a 0–10 dial (default 7), borrowed from OpenRouter's
-  `cost_quality_tradeoff`. `0` = pure quality (never suggests a downgrade); `10` =
-  cheapest (suggests on any saving). It sets how eagerly tips appear.
+- **`costQualityTradeoff`** — a 0–10 dial (default 7). `0` = pure quality (never
+  suggests a downgrade); `10` = cheapest (suggests on any saving). It sets how
+  eagerly tips appear.
 - **`minSavingsUsd`** — an absolute anti-noise floor; sub-cent savings never nag.
 - **`assumedCachedTokens`** — leave `null` to let the optimizer estimate your
   growing conversation cache (see "Cache-aware" below); set a number to pin it, or
@@ -70,8 +70,8 @@ export AGENTIC_SECURITY_MODEL_OPTIMIZER=off
 
 | Mode | Behavior |
 |---|---|
-| `off` *(default)* | Does nothing. No output. |
-| `advise` | Shows a one-line tip on prompts that could run cheaper. |
+| `off` | Does nothing. No output. |
+| `advise` *(default)* | Shows a one-line tip on prompts that could run cheaper. |
 
 ### `advise` — a tip when it matters
 

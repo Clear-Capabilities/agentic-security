@@ -37,9 +37,9 @@
 //   disable per-project via model-optimizer.json mode:"off" or the kill switch).
 //   Kill switch: env AGENTIC_SECURITY_MODEL_OPTIMIZER=off.
 //
-// Two ideas borrowed from OpenRouter (see the plan/PRD):
-//   • cost_quality_tradeoff dial (their 0–10, default 7) — one knob trading
-//     quality for cost; here it sets how eagerly we surface a downgrade.
+// Two core ideas (see the plan/PRD):
+//   • cost_quality_tradeoff dial (0–10, default 7) — one knob trading
+//     quality for cost; it sets how eagerly we surface a downgrade.
 //   • prompt-cache economics — switching models mid-session discards the cached
 //     context prefix, so a switch's true cost includes a one-time cache rewarm.
 //     We net that out, and prefer cache-preserving effort-only downgrades.
@@ -97,7 +97,7 @@ const TIER_DEPTH = { simple: 'low', medium: 'low', complex: 'high' };
 const EFFORT_RANK = { low: 1, medium: 2, high: 3, xhigh: 4, max: 5 };
 function effortRank(e) { return e ? (EFFORT_RANK[String(e).toLowerCase()] ?? 3) : 0; }
 
-// ── Prompt-cache economics (learned from OpenRouter) ─────────────────────────
+// ── Prompt-cache economics ───────────────────────────────────────────────────
 // Switching models mid-session throws away the cached context prefix: the new
 // model re-ingests it cold (a cache WRITE ≈ 1.25× input) instead of the cheap
 // cache READ ≈ 0.1× input you keep by staying. So a switch carries a one-time
@@ -118,7 +118,7 @@ function cacheRewarmPenalty(cachedTokens, curId, recId, modelsOverride) {
   return (cachedTokens / 1e6) * perMillion;
 }
 
-// Cost-quality dial (OpenRouter's cost_quality_tradeoff): 0 = pure quality
+// Cost-quality dial (cost_quality_tradeoff): 0 = pure quality
 // (never downgrade) … 10 = cheapest (advise on any saving). Maps to the minimum
 // fraction of the current cost a downgrade must save before we surface it.
 function savingsFractionFloor(dial) {
