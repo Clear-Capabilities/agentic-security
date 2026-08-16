@@ -49,10 +49,21 @@ import * as crypto from 'node:crypto';
 import { callSitesFromCfg } from './call-sites.js';
 import { matchBalancedCall } from './balanced-call.js';
 
+// Taint-engine PRD P1: the modifier group used to be MANDATORY (at least
+// one of public/private/.../partial required before the return type), so a
+// bare, implicitly-private method — legal and common for private helpers,
+// e.g. `void Render() { ... }` — never matched at all: the whole method,
+// and any sink inside it, was invisible to the IR. Each modifier now
+// consumes its own trailing whitespace and the whole group is zero-or-more,
+// so zero modifiers is a valid match. Safe against false positives:
+// control-flow keywords (if/for/while/using/catch/...) have only ONE token
+// before their parens, never this pattern's "type name(args)" two-token
+// shape, so they cannot start matching just because the modifier
+// requirement was dropped — pinned by a dedicated precision test.
 const METHOD_RE = new RegExp(
-  '(?:^|[\\s;{}])(?:public|private|protected|internal|static|virtual|override|async|sealed|abstract|new|readonly|partial)' +
-  '(?:\\s+(?:public|private|protected|internal|static|virtual|override|async|sealed|abstract|new|readonly|partial))*' +
-  '\\s+([A-Za-z_][A-Za-z0-9_<>?\\[\\],\\s]*?)' +    // return type (group 1)
+  '(?:^|[\\s;{}])' +
+  '(?:(?:public|private|protected|internal|static|virtual|override|async|sealed|abstract|new|readonly|partial)\\s+)*' +
+  '([A-Za-z_][A-Za-z0-9_<>?\\[\\],\\s]*?)' +    // return type (group 1)
   '\\s+([A-Za-z_][A-Za-z0-9_]*)' +                  // method name (group 2)
   '\\s*\\(([^)]*)\\)' +                             // params (group 3)
   '\\s*\\{', 'g');

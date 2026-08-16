@@ -363,6 +363,113 @@ public class C {
   assert.ok(calls.some(c => c.callee === 'conn.Open'), 'expected the following statement to still lower correctly');
 });
 
+// Taint-engine PRD P1: METHOD_RE required a mandatory leading modifier
+// keyword (public/private/static/...), so a bare, implicitly-private method
+// — legal and common in C# for private helpers, e.g. `void Render() { ... }`
+// — never matched at all: the whole method, and any sink inside it, was
+// invisible to the IR.
+test('parseCSharpFile: a method with no modifier keyword is still captured', () => {
+  const code = `
+public class C {
+    void Render(string id) {
+        var cmd = new SqlCommand("SELECT * FROM t WHERE id=" + id);
+        db.Execute(cmd);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => f.name === 'Render');
+  assert.ok(fn, `expected an IR function for the no-modifier method "Render", got: ${JSON.stringify(ir.functions.map(f => f.name))}`);
+  const calls = callNodes(ir, 'Render');
+  assert.ok(calls.some(c => c.callee === 'Execute' || c.callee === 'db.Execute'),
+    `expected the sink call inside the no-modifier method, got: ${JSON.stringify(calls)}`);
+});
+
+test('parseCSharpFile: a no-modifier method does not swallow a sibling method that follows it', () => {
+  // The real risk of loosening METHOD_RE: a control-flow statement or other
+  // two-token-then-parens shape matching by accident and corrupting the
+  // scan position for everything after it in the file.
+  const code = `
+public class C {
+    void Helper(string id) {
+        Log(id);
+    }
+    public void Handler(string id) {
+        var cmd = new SqlCommand("SELECT * FROM t WHERE id=" + id);
+        db.Execute(cmd);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  assert.ok(ir);
+  const names = ir.functions.map(f => f.name);
+  assert.ok(names.includes('Helper'), `expected Helper to be captured, got: ${JSON.stringify(names)}`);
+  assert.ok(names.includes('Handler'), `expected Handler to still be captured after a no-modifier method precedes it, got: ${JSON.stringify(names)}`);
+  const handlerCalls = callNodes(ir, 'Handler');
+  assert.ok(handlerCalls.some(c => c.callee === 'Execute' || c.callee === 'db.Execute'),
+    `expected Handler's own sink call to survive, got: ${JSON.stringify(handlerCalls)}`);
+});
+
+test('parseCSharpFile: control-flow keywords are never mis-captured as no-modifier methods', () => {
+  // Precision half — if/for/while/using/catch have only ONE token before
+  // their parens ("if", "for", ...), never the "type name(args)" two-token
+  // shape a method declaration has, so loosening the modifier requirement
+  // must not start matching them.
+  const code = `
+public class C {
+    public void Handler(string id, bool flag) {
+        if (flag) {
+            Log("a");
+        }
+        for (int i = 0; i < 3; i++) {
+            Log("b");
+        }
+        using (var conn = Open()) {
+            Log("c");
+        }
+        try {
+            Log("d");
+        } catch (System.Exception ex) {
+            Log("e");
+        }
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  assert.ok(ir);
+  const names = ir.functions.map(f => f.name);
+  assert.deepEqual(names, ['Handler'],
+    `control-flow keywords must never be captured as their own function, got: ${JSON.stringify(names)}`);
+  const calls = callNodes(ir, 'Handler');
+  const logCalls = calls.filter(c => c.callee === 'Log');
+  assert.equal(logCalls.length, 5,
+    `expected all 5 Log calls (one per control-flow body) inside Handler's own CFG, got ${logCalls.length}: ${JSON.stringify(calls)}`);
+});
+
+test('parseCSharpFile: end-to-end runScan detects taint through a no-modifier private helper', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-nomodifier-'));
+  fs.writeFileSync(path.join(dir, 'C.cs'), `
+public class C {
+    void RunQuery(string id) {
+        var cmd = new SqlCommand("SELECT * FROM t WHERE id=" + id);
+        conn.ExecuteQuery(cmd);
+    }
+    public void Handler([FromQuery] string id) {
+        RunQuery(id);
+    }
+}
+`);
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(irFindings.length >= 1,
+    `expected an IR-TAINT finding through the no-modifier RunQuery helper, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
+});
+
 test('parseCSharpFile: end-to-end runScan detects a source flowing through a using-wrapped ADO.NET block into a sink', async () => {
   const { runScan } = await import('../src/runScan.js');
   const fs = await import('node:fs');
