@@ -1,30 +1,42 @@
 {
-  "generatedAt": "2026-08-15",
+  "generatedAt": "2026-08-16",
   "entriesScored": 214,
   "taintByLanguage": {
-    "c#": 1,
-    "c/c++": 2,
-    "go": 3,
-    "java": 1,
-    "js/ts": 8,
-    "json": 0,
-    "kotlin": 0,
-    "php": 2,
     "python": 7,
+    "go": 3,
+    "js/ts": 8,
+    "php": 2,
+    "java": 1,
+    "c#": 1,
     "ruby": 1,
-    "terraform": 0
+    "c/c++": 2
   },
   "totalByLanguage": {
-    "c#": 21,
-    "c/c++": 11,
-    "go": 22,
-    "java": 25,
     "js/ts": 38,
-    "json": 1,
-    "kotlin": 20,
-    "php": 23,
+    "java": 25,
     "python": 32,
     "ruby": 20,
+    "php": 23,
+    "go": 22,
+    "kotlin": 20,
+    "c#": 21,
+    "c/c++": 11,
+    "json": 1,
     "terraform": 1
+  },
+  "deepTier": {
+    "entriesScored": 6,
+    "taintByLanguage": {
+      "c/c++": 1,
+      "js/ts": 3,
+      "php": 1,
+      "python": 1
+    },
+    "totalByLanguage": {
+      "c/c++": 1,
+      "js/ts": 3,
+      "php": 1,
+      "python": 1
+    }
   }
 }

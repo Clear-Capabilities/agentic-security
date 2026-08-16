@@ -11,11 +11,11 @@ that produced them.
 | --- | --- |
 | Engine version | 0.137.1 |
 | Bundle SHA-256 | `c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c` |
-| Commit | `f83a9ca8760b130f9d417b9120c7d80bf8330be3` |
+| Commit | `8b10209c90c0b1e6aebe2f228bed1d86802fb588` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 214 (214 scored) |
-| Generated (UTC) | 2026-08-16T05:05:21.020Z |
+| Generated (UTC) | 2026-08-16T06:56:41.725Z |
 
 ## What these numbers are, and what they are not
 
@@ -116,6 +116,64 @@ All corpus entries scored; no entry was excluded.
 | capability | 205 | 205/205 (100.0%) | 205/205 (100.0%) |
 | deep | 6 | 6/6 (100.0%) | 6/6 (100.0%) |
 | regression | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
+
+## Taint-layer recall by language
+
+Two views of the same layer-recall instrument, because reporting only the
+first would silently overstate taint capability and reporting only the
+second would understate coverage of what the corpus actually contains:
+
+- **Whole corpus** — diagnostic only. The large majority of this corpus is
+  caught by the pattern/structural layers without needing taint at all, so a language's
+  rate here is diluted by every entry that never exercised the taint
+  engine. A language reading near-zero here is not necessarily a taint
+  defect — see `docs/METRICS.md`.
+- **Deep-tier only (the taint-shaped subset)** — the number to quote for
+  taint capability. Every entry in this bucket is required, before it can
+  be committed, to be provably invisible with the deep engine off and
+  detected with it on (`bench/cve-replay/CONTRIBUTING.md`, "deep/" tier).
+  A language absent from this table has no deep-tier entry yet — that is
+  "not yet measured", never "zero capability".
+
+**No taint-specific precision percentage is reported here, deliberately —
+same reasoning as the corpus-wide F1 omission above.** A precision figure
+needs a labelled population containing both true and false positives; this
+section's denominator is all-vulnerable by construction (`pre/` fixtures),
+so it cannot supply one. The false-positive side is instrumented instead as
+a gate, not a rate: `bench/self-scan/fixtures/polyglot/` carries one
+untainted, negative-control fixture per language (nine languages), and
+`bench:self-scan:check`'s existing exact per-file drift gate fails the
+build the moment any of them stops reading zero. See the self-scan section
+below for current counts.
+
+### Whole corpus (diagnostic)
+
+Entries scored: 214
+
+| Language | IR-TAINT recall |
+| --- | --- |
+| c# | 1/21 (4.8%) |
+| c/c++ | 2/11 (18.2%) |
+| go | 3/22 (13.6%) |
+| java | 1/25 (4.0%) |
+| js/ts | 8/38 (21.1%) |
+| json | 0/1 (0.0%) |
+| kotlin | 0/20 (0.0%) |
+| php | 2/23 (8.7%) |
+| python | 7/32 (21.9%) |
+| ruby | 1/20 (5.0%) |
+| terraform | 0/1 (0.0%) |
+
+### Deep-tier only — taint-shaped subset (headline)
+
+Entries scored: 6
+
+| Language | IR-TAINT recall |
+| --- | --- |
+| c/c++ | 1/1 (100.0%) |
+| js/ts | 3/3 (100.0%) |
+| php | 1/1 (100.0%) |
+| python | 1/1 (100.0%) |
 
 ## Precision-side signal: self-scan (measured this run)
 

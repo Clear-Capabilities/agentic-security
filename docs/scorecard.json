@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.137.1",
     "bundleSha256": "c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c",
-    "commit": "f83a9ca8760b130f9d417b9120c7d80bf8330be3",
+    "commit": "8b10209c90c0b1e6aebe2f228bed1d86802fb588",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-16T05:05:21.020Z"
+    "generatedAt": "2026-08-16T06:56:41.725Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -821,6 +821,124 @@
     "polyglot": {
       "total": 0,
       "byLanguage": {}
+    }
+  },
+  "taintRecall": {
+    "measuredThisRun": true,
+    "wholeCorpus": {
+      "entriesScored": 214,
+      "byLanguage": [
+        {
+          "language": "c#",
+          "taint": {
+            "n": 1,
+            "d": 21
+          }
+        },
+        {
+          "language": "c/c++",
+          "taint": {
+            "n": 2,
+            "d": 11
+          }
+        },
+        {
+          "language": "go",
+          "taint": {
+            "n": 3,
+            "d": 22
+          }
+        },
+        {
+          "language": "java",
+          "taint": {
+            "n": 1,
+            "d": 25
+          }
+        },
+        {
+          "language": "js/ts",
+          "taint": {
+            "n": 8,
+            "d": 38
+          }
+        },
+        {
+          "language": "json",
+          "taint": {
+            "n": 0,
+            "d": 1
+          }
+        },
+        {
+          "language": "kotlin",
+          "taint": {
+            "n": 0,
+            "d": 20
+          }
+        },
+        {
+          "language": "php",
+          "taint": {
+            "n": 2,
+            "d": 23
+          }
+        },
+        {
+          "language": "python",
+          "taint": {
+            "n": 7,
+            "d": 32
+          }
+        },
+        {
+          "language": "ruby",
+          "taint": {
+            "n": 1,
+            "d": 20
+          }
+        },
+        {
+          "language": "terraform",
+          "taint": {
+            "n": 0,
+            "d": 1
+          }
+        }
+      ]
+    },
+    "deepTierOnly": {
+      "entriesScored": 6,
+      "byLanguage": [
+        {
+          "language": "c/c++",
+          "taint": {
+            "n": 1,
+            "d": 1
+          }
+        },
+        {
+          "language": "js/ts",
+          "taint": {
+            "n": 3,
+            "d": 3
+          }
+        },
+        {
+          "language": "php",
+          "taint": {
+            "n": 1,
+            "d": 1
+          }
+        },
+        {
+          "language": "python",
+          "taint": {
+            "n": 1,
+            "d": 1
+          }
+        }
+      ]
     }
   },
   "committedInputs": {
