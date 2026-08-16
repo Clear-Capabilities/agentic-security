@@ -74,6 +74,9 @@ async function main() {
   process.stderr.write('· running the self-scan precision harness…\n');
   const selfScan = runJson('bench/self-scan/measure.mjs', ['--json'], 'self-scan');
 
+  process.stderr.write('· running the per-language taint layer-recall breakout…\n');
+  const layerRecall = runJson('bench/layer-recall/runner.mjs', ['--json'], 'layer-recall');
+
   const pkg = JSON.parse(fs.readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8'));
   let bundleSha256 = 'unbuilt';
   try {
@@ -97,6 +100,7 @@ async function main() {
     },
     corpusDetail: corpus.detail || [],
     selfScan,
+    layerRecall,
     committed: {
       corpusBaseline: readJsonIfPresent('bench/cve-replay/corpus-baseline.json'),
       proofCorpus: readJsonIfPresent('bench/proof-corpus/results/summary.json'),
