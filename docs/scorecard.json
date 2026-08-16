@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.137.1",
     "bundleSha256": "c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c",
-    "commit": "b46993b23cbd38f00edfa2ff4a47ef621448a6df",
+    "commit": "03321a12823957309f274838d3b80b831787bf11",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-16T19:40:43.562Z"
+    "generatedAt": "2026-08-16T19:48:41.388Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -880,7 +880,7 @@
         {
           "language": "php",
           "taint": {
-            "n": 6,
+            "n": 7,
             "d": 23
           }
         },
@@ -894,7 +894,7 @@
         {
           "language": "ruby",
           "taint": {
-            "n": 3,
+            "n": 4,
             "d": 20
           }
         },

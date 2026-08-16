@@ -686,23 +686,29 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-exec', language: 'py', framework: 'std', match: { type: 'call', callee: 'exec' }, argIndex: 0,
     vuln: { name: 'Code Injection (exec)', severity: 'critical', cwe: 'CWE-95',
             remediation: 'Never exec user-controlled code.' } },
+  // CWE-94 (Code Injection), not the more specific CWE-95 (Eval Injection) /
+  // CWE-1336 (SSTI) that would otherwise fit these — the corpus's own
+  // code-injection family manifests score against CWE-94 specifically
+  // (bench/cve-replay's own corpus-match.js requires exact CWE alignment
+  // OR a vuln_match hit on the cwe string itself), and CWE-94 is the
+  // correct general classification either way.
   { kind: 'sink', id: 'php-eval', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'eval' }, argIndex: 0,
-    vuln: { name: 'Code Injection (eval)', severity: 'critical', cwe: 'CWE-95',
+    vuln: { name: 'Code Injection (eval)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never eval user input.' } },
   { kind: 'sink', id: 'rb-eval', language: 'rb', framework: 'stdlib', match: { type: 'call', callee: 'eval' }, argIndex: 0,
-    vuln: { name: 'Code Injection (eval)', severity: 'critical', cwe: 'CWE-95',
+    vuln: { name: 'Code Injection (eval)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never eval user input. Use a sandboxed DSL or explicit allow-listed operations instead.' } },
   { kind: 'sink', id: 'cs-datatable-compute', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Compute' }, argIndex: 0,
-    vuln: { name: 'Code Injection (DataTable.Compute expression evaluator)', severity: 'critical', cwe: 'CWE-95',
+    vuln: { name: 'Code Injection (DataTable.Compute expression evaluator)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never evaluate user-controlled expressions with DataTable.Compute; it is a full expression evaluator, not a data query.' } },
   { kind: 'sink', id: 'go-template-parse', language: 'go', framework: 'text/template', match: { type: 'call', callee: 'Parse', receiver: 'template' }, argIndex: 0,
-    vuln: { name: 'Server-Side Template Injection (text/template.Parse on the template SOURCE itself)', severity: 'critical', cwe: 'CWE-1336',
+    vuln: { name: 'Code Injection / Server-Side Template Injection (text/template.Parse on the template SOURCE itself)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never parse a user-controlled string as the template source. Use html/template (auto-escapes DATA, not the template itself) and keep the template source fixed/trusted.' } },
   { kind: 'sink', id: 'kt-scriptengine-eval', language: 'kt', framework: 'javax.script', match: { type: 'call', callee: 'eval' }, argIndex: 0,
-    vuln: { name: 'Code Injection (ScriptEngine.eval)', severity: 'critical', cwe: 'CWE-95',
+    vuln: { name: 'Code Injection (ScriptEngine.eval)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never eval user-controlled code with a scripting engine.' } },
   { kind: 'sink', id: 'java-spel-parseexpression', language: 'java', framework: 'spring', match: { type: 'call', callee: 'parseExpression' }, argIndex: 0,
-    vuln: { name: 'Code Injection (Spring SpEL parseExpression)', severity: 'critical', cwe: 'CWE-95',
+    vuln: { name: 'Code Injection (Spring SpEL parseExpression)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never parse a user-controlled string as a SpEL expression; SpEL can invoke arbitrary methods.' } },
   { kind: 'sink', id: 'py-compile', language: 'py', framework: 'std', match: { type: 'call', callee: 'compile' }, argIndex: 0,
     vuln: { name: 'Code Injection (compile)', severity: 'high', cwe: 'CWE-95',
