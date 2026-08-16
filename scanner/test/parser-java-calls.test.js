@@ -35,7 +35,7 @@ public class App {
   assert.ok(callees.includes('db.execute'), `expected db.execute in fn.calls, got: ${JSON.stringify(callees)}`);
 });
 
-test('buildCallGraph records a call edge from handler to buildCmd (though unresolved due to class qualification)', async () => {
+test('buildCallGraph resolves a bare same-class call (taint-engine PRD P1)', async () => {
   // buildCallGraph's actual signature (confirmed by reading callgraph.js
   // and mirroring test/parser-rb-calls.test.js's identical Ruby test):
   // buildCallGraph(perFileIR, fileContents) where perFileIR is a
@@ -44,13 +44,12 @@ test('buildCallGraph records a call edge from handler to buildCmd (though unreso
   // — edges is an ARRAY of { caller, site, callee, calleeName, line }
   // objects, and callersOf is a Map<calleeQid, edge[]>, not a Set.
   //
-  // NOTE: Java's class-qualified names ('App.buildCmd') don't match bare
-  // method calls ('buildCmd'), so the call site cannot be resolved by
-  // callgraph's name matching. This test verifies that the call edge is
-  // AT LEAST CREATED with calleeName intact, which is the critical change
-  // this PR makes — previously, fn.calls was absent entirely, so no edge
-  // would be created at all. A bare call to 'buildCmd' in Java will
-  // resolve as null, leaving it to the generic taint-on-call-args fallback.
+  // Java's class-qualified fn.name ('App.buildCmd') never matched a bare
+  // call site's callee ('buildCmd') — this test used to document that gap
+  // as "though unresolved due to class qualification". callgraph.js now
+  // carries a per-file bare-tail fallback (mirroring the existing
+  // ~bare~-key collision-refusal pattern C++ already used), so the most
+  // idiomatic Java call shape — private-helper delegation — resolves.
   const ir = await parseJavaFile('App.java', `
 public class App {
   void buildCmd(String id) {
@@ -63,15 +62,68 @@ public class App {
 `);
   const callGraph = buildCallGraph({ 'App.java': ir }, {});
   const handlerFn = ir.functions.find(f => f.name === 'App.handler');
+  const buildCmdFn = ir.functions.find(f => f.name === 'App.buildCmd');
   assert.ok(handlerFn, 'expected handler function');
-  // The critical observable: an edge exists from handler, with the call
-  // name recorded, even if unresolved.
+  assert.ok(buildCmdFn, 'expected buildCmd function');
   const handlerEdges = callGraph.edges.filter(e => e.caller === handlerFn.qid);
-  assert.ok(handlerEdges.length > 0,
-    `expected at least one edge from handler; all edges: ${JSON.stringify(callGraph.edges)}`);
   const buildCmdEdge = handlerEdges.find(e => e.calleeName === 'buildCmd');
   assert.ok(buildCmdEdge,
     `expected a buildCmd edge from handler; handler edges: ${JSON.stringify(handlerEdges)}`);
+  assert.equal(buildCmdEdge.callee, buildCmdFn.qid,
+    `expected the bare same-class call to RESOLVE to the real callee qid, not stay unresolved (got callee: ${buildCmdEdge.callee})`);
+});
+
+test('buildCallGraph resolves a this.-qualified same-class call, not a fabricated "unknown" callee', async () => {
+  // parser-java.js's primaryPrefix/primarySuffix call-lowering had no
+  // fqnOrRefType branch for `this.foo(x)` (prefix is a ThisExpression, not
+  // an FQN) and fell back to the literal callee string "unknown" — worse
+  // than unresolved, since it fabricates a wrong name rather than failing
+  // closed. The method name lives in a SIBLING primarySuffix (Dot +
+  // Identifier), not the invocation suffix itself.
+  const ir = await parseJavaFile('App.java', `
+public class App {
+  void buildCmd(String id) {
+    Runtime.getRuntime().exec("echo " + id);
+  }
+  void handler(String id) {
+    this.buildCmd(id);
+  }
+}
+`);
+  const callGraph = buildCallGraph({ 'App.java': ir }, {});
+  const handlerFn = ir.functions.find(f => f.name === 'App.handler');
+  const buildCmdFn = ir.functions.find(f => f.name === 'App.buildCmd');
+  const handlerEdges = callGraph.edges.filter(e => e.caller === handlerFn.qid);
+  assert.ok(handlerEdges.some(e => e.calleeName === 'unknown') === false,
+    `this.buildCmd(id) must never fabricate calleeName "unknown"; edges: ${JSON.stringify(handlerEdges)}`);
+  const buildCmdEdge = handlerEdges.find(e => e.calleeName === 'buildCmd');
+  assert.ok(buildCmdEdge, `expected a buildCmd edge from handler; handler edges: ${JSON.stringify(handlerEdges)}`);
+  assert.equal(buildCmdEdge.callee, buildCmdFn.qid,
+    `expected this.buildCmd(id) to resolve to the real callee qid (got callee: ${buildCmdEdge.callee})`);
+});
+
+test('buildCallGraph refuses to guess when a bare name is ambiguous across two classes in the same file', async () => {
+  // The bare-tail fallback must mirror the ~bare~-key collision-refusal
+  // pattern: two different classes with a same-named method in ONE file
+  // must resolve to null, never a guess — a wrong edge invents a data-flow
+  // path that doesn't exist, worse than a missing one.
+  const ir = await parseJavaFile('App.java', `
+class A {
+  void run() { helper(); }
+  void helper() { System.out.println("A"); }
+}
+class B {
+  void helper() { System.out.println("B"); }
+}
+`);
+  const callGraph = buildCallGraph({ 'App.java': ir }, {});
+  const runFn = ir.functions.find(f => f.name === 'A.run');
+  assert.ok(runFn, 'expected A.run function');
+  const runEdges = callGraph.edges.filter(e => e.caller === runFn.qid);
+  const helperEdge = runEdges.find(e => e.calleeName === 'helper');
+  assert.ok(helperEdge, `expected a helper edge from A.run; edges: ${JSON.stringify(runEdges)}`);
+  assert.equal(helperEdge.callee, null,
+    `ambiguous bare name "helper" (A.helper vs B.helper) must refuse to resolve, not guess (got: ${helperEdge.callee})`);
 });
 
 test('buildCallGraph resolves a cross-class Java call to the real target qid', async () => {

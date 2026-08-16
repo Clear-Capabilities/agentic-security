@@ -12,6 +12,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../src/runScan.js';
@@ -19,6 +21,14 @@ import { buildProjectIR, buildProjectIRAsync } from '../src/ir/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIX = (n) => path.join(__dirname, 'fixtures', n);
+
+function mkTmp(name, files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-java-intraclass-${name}-`));
+  for (const [rel, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(dir, rel), content);
+  }
+  return dir;
+}
 
 async function deepScan(dir) {
   process.env.AGENTIC_SECURITY_DEEP = '1';
@@ -106,4 +116,55 @@ test('two overloaded Java methods with the same name both survive into the call 
   const { callGraph } = await buildProjectIRAsync({ 'A.java': src });
   const fns = [...callGraph.functions.values()].filter(f => f.file === 'A.java');
   assert.equal(fns.length, 2, `expected both overloads to survive, got ${fns.length}: ${fns.map(f => f.qid).join(', ')}`);
+});
+
+// Taint-engine PRD P1 — the real payoff of callgraph.js's bare-tail
+// resolution fix: a private-helper delegation (the single most idiomatic
+// Java call shape) now carries interprocedural taint end to end, not just
+// an unresolved edge.
+//
+// Sink deliberately uses a pre-bound receiver (`stmt.executeUpdate(query)`),
+// not a chained call like `Runtime.getRuntime().exec(x)` — parser-java.js
+// has a SEPARATE, pre-existing bug where a chained call's outer invocation
+// is dropped from the CFG entirely (only the inner call survives, with its
+// own empty arg list), confirmed by direct inspection while writing this
+// test and unrelated to the intra-class resolution fix these tests cover.
+// Logged as a real, separate finding — not fixed here, to keep this task
+// scoped to the resolution bug it was written for.
+test('IR-TAINT: tainted data flows through a same-class bare-call helper into a sink', async () => {
+  const dir = mkTmp('bare', {
+    'App.java': `
+public class App {
+  void buildQuery(String id, java.sql.Statement stmt) throws Exception {
+    stmt.executeUpdate("SELECT * FROM t WHERE id=" + id);
+  }
+  void handler(javax.servlet.http.HttpServletRequest req, java.sql.Statement stmt) throws Exception {
+    String id = req.getParameter("id");
+    buildQuery(id, stmt);
+  }
+}
+`,
+  });
+  const taint = (await deepScan(dir)).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /sql/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected buildQuery(id, stmt) called bare from handler to fire SQL Injection via IR-TAINT, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('IR-TAINT: tainted data flows through a this.-qualified same-class call into a sink', async () => {
+  const dir = mkTmp('this', {
+    'App.java': `
+public class App {
+  void buildQuery(String id, java.sql.Statement stmt) throws Exception {
+    stmt.executeUpdate("SELECT * FROM t WHERE id=" + id);
+  }
+  void handler(javax.servlet.http.HttpServletRequest req, java.sql.Statement stmt) throws Exception {
+    String id = req.getParameter("id");
+    this.buildQuery(id, stmt);
+  }
+}
+`,
+  });
+  const taint = (await deepScan(dir)).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /sql/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected this.buildQuery(id, stmt) called from handler to fire SQL Injection via IR-TAINT, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });

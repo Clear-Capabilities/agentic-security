@@ -48,15 +48,37 @@ export function buildCallGraph(perFileIR, fileContents) {
     }
   }
 
+  // Taint-engine PRD P1: per-file bare-tail index. Java's fn.name is
+  // class-qualified ("App.buildCmd"), so byNameInFile's exact-match lookup
+  // above never matches a bare call site's callee ("buildCmd") — the most
+  // idiomatic Java call shape (private-helper delegation) was permanently
+  // unresolved. Scoped per-file (not project-wide) and refuses to guess on
+  // a same-file collision, mirroring the existing `~bare~`-key
+  // ambiguity-refusal pattern the C++ qualified-name index already uses —
+  // a wrong edge invents a data-flow path that doesn't exist, worse than a
+  // missing one.
+  const bareTailInFile = new Map(); // file -> Map<bareTail, qid|null>
+
   for (const file of Object.keys(perFileIR || {})) {
     const ir = perFileIR[file];
     if (!ir || !ir.functions) continue;
     byNameInFile.set(file, new Map());
+    bareTailInFile.set(file, new Map());
     for (const fn of ir.functions) {
       functions.set(fn.qid, fn);
       byNameInFile.get(file).set(fn.name, fn.qid);
       const m = fn.qid.match(/::([A-Z]\w*)::(\w+)@/);
       if (m) classMethods.set(`${m[1]}.${m[2]}`, fn.qid);
+      if (fn.name && fn.name.includes('.')) {
+        const tail = fn.name.split('.').pop();
+        const fileMap = bareTailInFile.get(file);
+        if (fileMap.has(tail)) {
+          const cur = fileMap.get(tail);
+          if (cur !== null && cur !== fn.qid) fileMap.set(tail, null); // ambiguous — refuse to guess
+        } else {
+          fileMap.set(tail, fn.qid);
+        }
+      }
     }
   }
 
@@ -151,6 +173,9 @@ export function buildCallGraph(perFileIR, fileContents) {
                        classMethods.get(c.callee) ||
                        // 2. ClassName.method form
                        (c.callee.includes('.') ? classMethods.get(c.callee) : null) ||
+                       // 2b. Bare-tail fallback, same file only, refuses to
+                       // guess on ambiguity (see bareTailInFile above).
+                       (!c.callee.includes('.') ? (bareTailInFile.get(fn.file)?.get(c.callee) || null) : null) ||
                        // 3. Cross-TU qualified-name index (C++ header/source
                        // pairing) — gated on the CALLER carrying a `qname`
                        // (only parser-cpp.js emits one) so a same-named call
@@ -220,6 +245,15 @@ export function buildCallGraph(perFileIR, fileContents) {
     if (callerFile) {
       const local = byNameInFile.get(callerFile);
       if (local && local.has(name)) return local.get(name);
+      // Bare-tail fallback, same file only (see bareTailInFile above) — an
+      // exact or intentionally-qualified match, not a guess: it is scoped
+      // to the caller's own file and already refuses ambiguity at index-
+      // build time, so it runs unconditionally like the other exact-match
+      // branches, not gated behind allowTailGuess.
+      if (!name.includes('.')) {
+        const tail = bareTailInFile.get(callerFile)?.get(name);
+        if (tail) return tail;
+      }
     }
     for (const m of byNameInFile.values()) {
       if (m.has(name) && !isCrossLanguageUnsafe(m.get(name), callerFile)) return m.get(name);

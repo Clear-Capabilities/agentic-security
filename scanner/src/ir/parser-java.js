@@ -73,7 +73,23 @@ function exprFromCst(node) {
         .find(Boolean);
       if (invocation) {
         const fqn = prefix?.children?.fqnOrRefType?.[0];
-        const callee = fqn ? _flattenFqnToString(fqn) : 'unknown';
+        let callee = fqn ? _flattenFqnToString(fqn) : null;
+        if (!callee) {
+          // Taint-engine PRD P1: no FQN prefix — e.g. `this.foo(x)`,
+          // `super.foo(x)` (prefix is a keyword expression, not an
+          // fqnOrRefType). The method name is NOT on the invocation suffix
+          // itself (that only ever carries the argument list) — it lives on
+          // a SIBLING primarySuffix shaped {Dot, Identifier}. Previously
+          // fell back to the literal string 'unknown', fabricating a wrong
+          // callee rather than failing closed. Take the LAST
+          // Identifier-bearing, non-invocation suffix before the call — the
+          // immediate method name, not an intermediate field in a chain
+          // like `this.foo.bar()`.
+          const nameSuffixes = suffixes.filter(
+            s => s.children?.Identifier && !s.children?.methodInvocationSuffix);
+          const last = nameSuffixes[nameSuffixes.length - 1];
+          callee = last?.children?.Identifier?.[0]?.image || 'unknown';
+        }
         const args = (invocation.children?.argumentList?.[0]?.children?.expression || [])
           .map(exprFromCst);
         return { kind: 'call', callee, args };
