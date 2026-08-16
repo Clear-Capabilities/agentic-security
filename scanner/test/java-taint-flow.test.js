@@ -168,3 +168,52 @@ public class App {
   assert.ok(taint.some(f => /sql/i.test(`${f.vuln} ${f.cwe}`)),
     `expected this.buildQuery(id, stmt) called from handler to fire SQL Injection via IR-TAINT, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
+
+// Taint-recall PRD (80%): `(String) xp.evaluate(...)` — a reference-type cast
+// wrapping a sink call as a return value — fell through exprFromCst's
+// generic "recurse the first child" branch, which for a castExpression's
+// shape hit its own raw LBrace token first (sorted before the actual
+// operand in the CST's key order) and corrupted the parse into
+// `{kind:'ident', name:'('}`, silently losing the entire call and its
+// tainted argument. Confirmed against the real corpus fixture
+// (CVE-2018-1320-xpath-injection). Casts are semantically transparent for
+// taint purposes.
+test('IR-TAINT: a reference-type cast wrapping a sink call as a return value does not corrupt the parse', async () => {
+  const dir = mkTmp('cast-ref', {
+    'Lookup.java': `
+import javax.xml.xpath.*;
+import org.w3c.dom.Document;
+public class Lookup {
+  public String find(Document doc, String name) throws Exception {
+    XPath xp = XPathFactory.newInstance().newXPath();
+    return (String) xp.evaluate("//user[@name='" + name + "']", doc, XPathConstants.STRING);
+  }
+  void handler(javax.servlet.http.HttpServletRequest req, Document doc) throws Exception {
+    XPath xp = XPathFactory.newInstance().newXPath();
+    find(doc, req.getParameter("name"));
+  }
+}
+`,
+  });
+  const taint = (await deepScan(dir)).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /xpath/i.test(f.vuln)),
+    `expected an XPath Injection finding through the cast expression, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('IR-TAINT: a primitive-type cast wrapping a sink call as a return value does not corrupt the parse', async () => {
+  const dir = mkTmp('cast-prim', {
+    'Calc.java': `
+public class Calc {
+  int update(String id, java.sql.Statement stmt) throws Exception {
+    return (int) stmt.executeUpdate("SELECT * FROM t WHERE id=" + id);
+  }
+  void handler(javax.servlet.http.HttpServletRequest req, java.sql.Statement stmt) throws Exception {
+    update(req.getParameter("id"), stmt);
+  }
+}
+`,
+  });
+  const taint = (await deepScan(dir)).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /sql/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected a SQL Injection finding through the primitive-type cast, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});

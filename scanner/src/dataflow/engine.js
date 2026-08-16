@@ -268,7 +268,7 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext) {
   const { qid, fn } = target;
   const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
   const entry = paramNames.length
-    ? entryStateFromCall(paramNames, argExprs || [], state)
+    ? entryStateFromCall(paramNames, argExprs || [], state, (a) => exprTaint(a, state, callContext))
     : new Set();
   let sum = callContext._summaryCache.get(qid, entry);
   if (!sum && fn && fn.cfg) {
@@ -314,12 +314,28 @@ function exprTaint(expr, state, callContext) {
     case 'object':            return (expr.props || []).some(p => exprTaint(p.value, state, callContext));
     case 'array':             return (expr.elements || []).some(e => exprTaint(e, state, callContext));
     case 'call': {
-      // The call's own arguments (unchanged from before) OR — PRD R10 — the
-      // resolved callee's own return-taint summary. Args-tainted is checked
-      // FIRST and short-circuits: it's the cheap, no-resolve-attempt case and
-      // was already correct.
-      if ((expr.args || []).some(a => exprTaint(a, state, callContext))) return true;
-      return _nestedCallReturnTainted(expr.callee, expr.args, state, callContext);
+      // The call's own arguments OR — PRD R10 — the resolved callee's own
+      // return-taint summary. Taint-recall PRD (80%): this used to
+      // short-circuit on args-tainted and SKIP _nestedCallReturnTainted
+      // entirely — but that call's real job isn't just the boolean it
+      // returns, it's the _mergeSummaryFindings side effect that surfaces
+      // the CALLEE's own internal sink findings (e.g. `return
+      // helper(taintedArg)` where `helper`'s body itself contains
+      // `sink(param)`). Short-circuiting on "args are tainted" (the
+      // overwhelmingly common interprocedural shape — a tainted value IS
+      // usually passed as an argument) silently dropped exactly the
+      // findings this mechanism exists to surface. Confirmed via direct
+      // fixture debugging (PHP: `$name = get_name(); return
+      // find_user($doc, $name);` produced zero findings until this fix,
+      // even though find_user's own body has a cataloged sink fed by
+      // $name) — not language-specific, this is generic exprTaint logic.
+      // Both sides always evaluated now (no short-circuit either
+      // direction) so the merge always runs when a call expression is
+      // visited; _resolveCalleeForSummary + SummaryCache make repeat
+      // resolution/computation for the same (qid, entry-state) cheap.
+      const argsTainted = (expr.args || []).some(a => exprTaint(a, state, callContext));
+      const nestedTainted = _nestedCallReturnTainted(expr.callee, expr.args, state, callContext);
+      return argsTainted || nestedTainted;
     }
     case 'unknown':           return false;
     default:                  return false;
@@ -694,7 +710,7 @@ function step(node, stateIn, callContext) {
           const callArgs = (node.source.args || []);
           const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
           const entry = paramNames.length
-            ? entryStateFromCall(paramNames, callArgs, callerTainted)
+            ? entryStateFromCall(paramNames, callArgs, callerTainted, (a) => exprTaint(a, callerTainted, callContext))
             : new Set();
           let sum = callContext._summaryCache.get(qid, entry);
           if (!sum && fn && fn.cfg) {
@@ -825,7 +841,7 @@ function step(node, stateIn, callContext) {
         if (typeof qid === 'string' && fn && Array.isArray(fn.params)) {
           const paramNames = fn.params;
           const entry = paramNames.length
-            ? entryStateFromCall(paramNames, node.args || [], state)
+            ? entryStateFromCall(paramNames, node.args || [], state, (a) => exprTaint(a, state, callContext))
             : new Set();
           let sum = callContext._summaryCache.get(qid, entry);
           // FR-SEM-2: context-sensitive lazy compute at the plain-call site,

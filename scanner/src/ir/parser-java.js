@@ -96,6 +96,26 @@ function exprFromCst(node) {
       }
       return exprFromCst(prefix);
     }
+    // Taint-recall PRD (80%): a cast expression — `(String) xp.evaluate(...)`,
+    // `(int) computeVal(x)` — was falling through to the generic "recurse the
+    // first child" branch below, which for a castExpression's shape hits its
+    // own `primaryPrefix.children.castExpression` sub-node with no dedicated
+    // branch, and beneath THAT the raw `LBrace`/`LParen` token sorts first in
+    // key order — silently corrupting the parse into `{kind:'ident',
+    // name:'('}` and losing the entire operand (the actual call, and
+    // whatever tainted argument it carried). Confirmed via a real corpus
+    // fixture (CVE-2018-1320-xpath-injection). Casts are semantically
+    // transparent for taint purposes — unwrap to the operand, reference-type
+    // (`(String) x` → unaryExpressionNotPlusMinus) or primitive
+    // (`(int) x` → unaryExpression) shaped.
+    if (node.children.castExpression) {
+      const ce = node.children.castExpression[0];
+      const rtc = ce.children?.referenceTypeCastExpression?.[0];
+      const pc = ce.children?.primitiveCastExpression?.[0];
+      const operand = rtc?.children?.unaryExpressionNotPlusMinus?.[0]
+        || pc?.children?.unaryExpression?.[0];
+      if (operand) return exprFromCst(operand);
+    }
     // FQN ref
     if (node.children.fqnOrRefType) return _fqnExpr(node.children.fqnOrRefType[0]);
     if (node.children.unqualifiedClassInstanceCreationExpression) {

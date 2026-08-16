@@ -455,6 +455,38 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-xpath-compile', language: 'java', framework: 'xpath', match: { type: 'call', callee: 'compile' }, argIndex: 0,
     vuln: { name: 'XPath Injection (XPath.compile)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Use XPathVariableResolver or setXPathVariableResolver; never concat user input into the expression.' } },
+  // Taint-recall PRD (80%) Tier 1: XPath.evaluate() called directly (no
+  // .compile() call site to catch it via the entry above) — javax.xml.xpath's
+  // other common idiom. Receiver-scoped: "evaluate" is generic elsewhere.
+  { kind: 'sink', id: 'java-xpath-evaluate', language: 'java', framework: 'xpath', match: { type: 'call', callee: 'evaluate', receiver: '^(?:xp|xpath|expr)$' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (XPath.evaluate)', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Use XPathVariableResolver or setXPathVariableResolver; never concat user input into the expression.' } },
+  { kind: 'sink', id: 'cs-xml-selectnodes', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'SelectNodes' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (XmlDocument.SelectNodes)', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Use XPathExpression with bound variables (SetContext/AddVariable); never concat user input into the expression string.' } },
+  { kind: 'sink', id: 'kt-xpath-compile', language: 'kt', framework: 'xpath', match: { type: 'call', callee: 'compile' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (XPath.compile)', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Use XPathVariableResolver; never concat user input into the expression.' } },
+  { kind: 'sink', id: 'py-lxml-xpath', language: 'py', framework: 'lxml', match: { type: 'call', callee: 'xpath' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (lxml .xpath())', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Pass variables via the lxml `xpath(expr, var=value)` binding mechanism; never concat user input into the expression string.' } },
+  { kind: 'sink', id: 'rb-nokogiri-xpath', language: 'rb', framework: 'nokogiri', match: { type: 'call', callee: 'xpath' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (Nokogiri .xpath())', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Never interpolate user input into the expression string; validate/allow-list the queried attribute value instead.' } },
+  { kind: 'sink', id: 'js-xpath-select', language: 'js', framework: 'xpath', match: { type: 'call', callee: 'select', receiver: 'xpath' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (xpath.select())', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Never concat user input into the expression string; validate/allow-list the queried value instead.' } },
+  // Receiver-scoped: DOMXPath's own `query()` collides on bare name with
+  // php-pdo-query's SQL sink below (also unscoped `callee: 'query'`) — a
+  // pre-existing precision gap in that entry, not fixed here, but this
+  // entry's own receiver constraint keeps IT from firing on unrelated
+  // PDO/mysqli query() calls.
+  { kind: 'sink', id: 'php-domxpath-query', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'query', receiver: '(?:xp|xpath|dom)' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (DOMXPath::query)', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Never concat user input into the expression string; validate/allow-list the queried attribute value instead.' } },
+  { kind: 'sink', id: 'go-htmlquery-find', language: 'go', framework: 'htmlquery', match: { type: 'call', callee: 'Find', receiver: 'htmlquery' }, argIndex: 1,
+    vuln: { name: 'XPath Injection (htmlquery.Find)', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Never concat user input into the expression string; validate/allow-list the queried attribute value instead.' } },
 
   // ─── SINKS (regex DoS / ReDoS) ────────────────────────────────────────────
   { kind: 'sink', id: 'js-RegExp-new', language: 'js', framework: 'core', match: { type: 'call', callee: 'RegExp' }, argIndex: 0,

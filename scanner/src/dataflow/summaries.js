@@ -214,20 +214,45 @@ function _summaryEq(a, b) {
 // Build the entry-taint-state for a callee from a call site:
 //   given the callee's param names + the caller's tainted-var set + the
 //   call args, return a Set of param names that are tainted at entry.
-export function entryStateFromCall(paramNames, callArgs, callerTaintedVars) {
+//
+// `isArgTaintedExpr` (optional) — Taint-recall PRD (80%): the ident/member
+// checks above only recognize an arg that is (or reads off) an ALREADY
+// state-tracked local variable. A source used directly INLINE as a call
+// argument — `helper(request.getParameter("id"))`, never first assigned to
+// a local — has no entry in `callerTaintedVars` at all (that set tracks
+// variable PROVENANCE via assignment, not "is this arbitrary expression a
+// source when evaluated"), so it was silently invisible here even though
+// the engine's own exprTaint/exprIsSource would recognize it immediately.
+// Confirmed via a real corpus fixture: `find_user($doc, $_GET['name'])`
+// with no intermediate variable produced zero interprocedural findings.
+// Callers pass a closure over their own exprTaint (this module has no
+// access to matchSource/exprIsSource — engine.js does) rather than this
+// module reaching across the layering boundary. Falls back to the
+// ident/member-only checks above when not provided, so every other caller
+// of this function is unaffected.
+export function entryStateFromCall(paramNames, callArgs, callerTaintedVars, isArgTaintedExpr) {
   const out = new Set();
   if (!Array.isArray(paramNames) || !Array.isArray(callArgs)) return out;
   for (let i = 0; i < paramNames.length && i < callArgs.length; i++) {
     const arg = callArgs[i];
     if (!arg) continue;
+    // Each check is independent — arg SHAPE (ident vs. member) selecting a
+    // branch must not skip the fallback when that branch's own membership
+    // check comes back false. An earlier version used if/else-if keyed on
+    // shape alone, so `helper($_GET['name'])` (a member arg whose base
+    // "$_GET" is never itself in callerTaintedVars — that set tracks
+    // ASSIGNED locals, not raw globals) took the member branch, found
+    // nothing, and — being an else-if — never reached isArgTaintedExpr at
+    // all. Confirmed via a real corpus fixture.
+    let tainted = false;
     if (arg.kind === 'ident' && callerTaintedVars.has(arg.name)) {
-      out.add(paramNames[i]);
+      tainted = true;
     } else if (arg.kind === 'member' && arg.object?.kind === 'ident') {
       const base = arg.object.name;
-      if (callerTaintedVars.has(base) || callerTaintedVars.has(`${base}.${arg.prop}`)) {
-        out.add(paramNames[i]);
-      }
+      if (callerTaintedVars.has(base) || callerTaintedVars.has(`${base}.${arg.prop}`)) tainted = true;
     }
+    if (!tainted && typeof isArgTaintedExpr === 'function' && isArgTaintedExpr(arg)) tainted = true;
+    if (tainted) out.add(paramNames[i]);
   }
   return out;
 }
