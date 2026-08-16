@@ -16,6 +16,18 @@ cd scanner && npm run bench:layer-recall          # print the matrix
 cd scanner && npm run bench:layer-recall:check    # gate against baseline.json
 ```
 
+**As of the docs-overhaul-era measurement work, the printed matrix and
+`docs/SCORECARD.md`'s "Taint-layer recall by language" section both report
+two views, not one.** The whole-corpus view below is diluted: ~96% of this
+corpus is caught by the pattern/structural layers without needing taint,
+so a near-zero rate for a language here does not by itself mean the taint
+engine cannot see that language. The **deep-tier-only** breakout — printed
+as a second table by the same command, and as its own section in the
+scorecard — is scoped to entries that are *required*, before they can be
+committed, to be provably invisible with the deep engine off and detected
+with it on. That is the number to quote for taint capability; the
+whole-corpus number below is diagnostic context, not the claim.
+
 Deep mode is **forced on for every entry**, unlike the corpus gate, which
 enables it only for the 6 `deep`-tier entries. Measuring under the corpus's own
 configuration would report the tier layout rather than the engine's capability,
