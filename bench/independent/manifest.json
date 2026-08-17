@@ -2,6 +2,22 @@
   "schema": "agentic-security/independent-population@1",
   "entries": [
     {
+      "id": "GHSA-225x-3jhx-wh4q",
+      "cve": "CVE-2026-64664",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Statamic: Missing authorization on Control Panel endpoint allows disclosure of user existence",
+      "repo": "statamic/cms",
+      "fixCommit": "aea68053cedab5c79d10102820b57345a7d7102e",
+      "parentCommit": "fb490167ad1559152456e90dabec0508a3751c8e",
+      "files": [
+        "src/Http/Controllers/CP/Users/UserWizardController.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:47.445Z"
+    },
+    {
       "id": "GHSA-22jq-vg5j-6vgg",
       "cve": "CVE-2026-54272",
       "cwe": "CWE-20",
@@ -53,6 +69,75 @@
       "minedAt": "2026-08-09T21:46:48.559Z"
     },
     {
+      "id": "GHSA-26gq-p25f-99cp",
+      "cve": "CVE-2026-73564",
+      "cwe": "CWE-129",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "frp: Unauthenticated Remote Denial of Service in the frp SSH Tunnel Gateway via Integer Overflow",
+      "repo": "fatedier/frp",
+      "fixCommit": "7dc7be930e2452ae93fd32f2a77f8c6fcd0b652b",
+      "parentCommit": "d486018885a548ef9680c36920343df568207bac",
+      "files": [
+        "pkg/ssh/server.go",
+        "pkg/util/version/version.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:43.184Z"
+    },
+    {
+      "id": "GHSA-28f5-38xr-jh2w",
+      "cve": "CVE-2026-43910",
+      "cwe": "CWE-441",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "java-client Allows Network Pivot via Unvalidated directConnect Redirect in AppiumCommandExecutor",
+      "repo": "appium/java-client",
+      "fixCommit": "2b9cd442b9dbf56ccc6f1e83aeeb411c0ec230c9",
+      "parentCommit": "6b7597f62bb02b15310f637dd76fd49500d98133",
+      "files": [
+        "src/main/java/io/appium/java_client/remote/AppiumCommandExecutor.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:00.805Z"
+    },
+    {
+      "id": "GHSA-28gm-jrmw-xx93",
+      "cve": "CVE-2026-54632",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "SIPSorcery: Malformed UDP packet on the RTP/ICE socket can remotely terminate a media session (DoS)",
+      "repo": "sipsorcery-org/sipsorcery",
+      "fixCommit": "bdb76cbc0c7216e3126f743fb78e8525af56cea2",
+      "parentCommit": "a76383e797f4dc8ecd737127989140ae01352401",
+      "files": [
+        "src/SIPSorcery/net/RTP/RTPChannel.cs",
+        "src/SIPSorcery/net/RTP/UdpReceiver.cs",
+        "src/SIPSorcery/net/STUN/STUNAttributes/STUNAddressAttribute.cs",
+        "src/SIPSorcery/net/STUN/STUNAttributes/STUNAttribute.cs",
+        "src/SIPSorcery/net/STUN/STUNAttributes/STUNXORAddressAttribute.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:21.975Z"
+    },
+    {
+      "id": "GHSA-28hh-pr2h-2w89",
+      "cve": "CVE-2026-54619",
+      "cwe": "CWE-416",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "sqlite3-ruby has Use-After-Free When Redefining SQLite Functions with Different Arity",
+      "repo": "sparklemotion/sqlite3-ruby",
+      "fixCommit": "2bd436d17f77cdd4c31b00fe9d50b0d21cbaf033",
+      "parentCommit": "b24e1e6076528b7f95f99acf7a81c70d0004c726",
+      "files": [
+        "lib/sqlite3/database.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:58.077Z"
+    },
+    {
       "id": "GHSA-2956-977x-2w3r",
       "cve": "CVE-2026-67429",
       "cwe": "CWE-22",
@@ -89,6 +174,42 @@
       "minedAt": "2026-08-09T18:46:02.778Z"
     },
     {
+      "id": "GHSA-29pj-957v-52mc",
+      "cve": "CVE-2026-71478",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "league/commonmark: AttributesExtension href/src unsafe-link filter bypass via embedded control bytes",
+      "repo": "thephpleague/commonmark",
+      "fixCommit": "493a5aa7d65754b73846006eaff9c2c4431a8e2c",
+      "parentCommit": "1902f60f984235023acbe03db6ad614a37b3c3e7",
+      "files": [
+        "src/Util/RegexHelper.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:44.251Z"
+    },
+    {
+      "id": "GHSA-29rf-f4vv-pvq6",
+      "cve": "CVE-2026-35511",
+      "cwe": "CWE-287",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Authorizer: Zero-click account takeover via OAuth identity linking to unverified email accounts",
+      "repo": "authorizerdev/authorizer",
+      "fixCommit": "66fe488fd2a4e7acf1e517334344d5e8f3ddd296",
+      "parentCommit": "9c3ac813b05480c3bfef8186364ce8b0b32a4b68",
+      "files": [
+        "cmd/root.go",
+        "e2e-playground/mocks/mock-oauth/server.ts",
+        "e2e-playground/playwright.config.ts",
+        "internal/authenticators/totp/totp.go",
+        "internal/config/config.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:10.763Z"
+    },
+    {
       "id": "GHSA-2f54-p244-32q6",
       "cve": "CVE-2026-70493",
       "cwe": "CWE-1333",
@@ -121,6 +242,194 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:15.679Z"
+    },
+    {
+      "id": "GHSA-2jc5-xhx8-qj6h",
+      "cve": "CVE-2026-44163",
+      "cwe": "CWE-770",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "fluent-plugin-opentelemetry Has Denial of Service (DoS) via Large Payloads and Decompression Bombs in `in_opentelemetry`",
+      "repo": "fluent-plugins-nursery/fluent-plugin-opentelemetry",
+      "fixCommit": "ce6c1f2a7741592c8a79afbe75fded9e8ebfa92d",
+      "parentCommit": "e67eb56e01ca620b3ecd4420984cd69fde7c0c8f",
+      "files": [
+        "lib/fluent/plugin/in_opentelemetry.rb",
+        "lib/fluent/plugin/opentelemetry/http_input_handler.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:05.120Z"
+    },
+    {
+      "id": "GHSA-2m8m-jhrm-w6j2",
+      "cve": "CVE-2026-71312",
+      "cwe": "CWE-78",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "rclone: PowerShell Smart-Quote Filename Injection Enables SFTP Server-Side Command Execution",
+      "repo": "rclone/rclone",
+      "fixCommit": "e122fba1a57641b63a580aa26c026903a84e2e88",
+      "parentCommit": "7543a7a87884aca957590b20b0714078d51af87b",
+      "files": [
+        "backend/sftp/sftp.go",
+        "backend/sftp/sftp_internal_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:18.563Z"
+    },
+    {
+      "id": "GHSA-2mhj-fhvg-v428",
+      "cve": "CVE-2026-55072",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Pimcore: ClassDefinition UID regex missing end anchor allows SQL injection via Block.php unquoted table name",
+      "repo": "pimcore/pimcore",
+      "fixCommit": "33a0e1887e1e31b4283b016ac5440c35ea5697b4",
+      "parentCommit": "f7565e26ca7ad5f3811db833ba486d0c105734f5",
+      "files": [
+        "models/DataObject/ClassDefinition.php",
+        "models/DataObject/ClassDefinition/Data/Block.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:33.191Z"
+    },
+    {
+      "id": "GHSA-2mrg-gjxq-2gvr",
+      "cve": "CVE-2026-59932",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "PHPSpreadsheet: Gnumeric reader unbounded gzip expansion causes memory exhaustion",
+      "repo": "PHPOffice/PhpSpreadsheet",
+      "fixCommit": "85f2556b0bf5269061bf45932ecda8a128d81750",
+      "parentCommit": "0577c74889e080c088e5af4585f3d71db9467804",
+      "files": [
+        "src/PhpSpreadsheet/Reader/Gnumeric.php",
+        "src/PhpSpreadsheet/Shared/OLERead.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:53.308Z"
+    },
+    {
+      "id": "GHSA-2qj4-mmr9-4v2f",
+      "cve": "CVE-2026-59902",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Netty: Memory Exhaustion in SctpMessageCompletionHandler",
+      "repo": "netty/netty",
+      "fixCommit": "1b5abc6443b63726c72cdd285af2feb7ddbb8ff7",
+      "parentCommit": "36fbf5788c73e7040e6f18fed841a2cdfcae1452",
+      "files": [
+        "codec-http/src/main/java/io/netty/handler/codec/http/cors/CorsHandler.java",
+        "codec-mqtt/src/main/java/io/netty/handler/codec/mqtt/MqttCodecUtil.java",
+        "codec-mqtt/src/main/java/io/netty/handler/codec/mqtt/MqttDecoder.java",
+        "codec-mqtt/src/main/java/io/netty/handler/codec/mqtt/MqttEncoder.java",
+        "codec-mqtt/src/main/java/io/netty/handler/codec/mqtt/MqttIdentifierRejectedException.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:06:58.360Z"
+    },
+    {
+      "id": "GHSA-2rp4-x2j7-qmcc",
+      "cve": null,
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Craft CMS: Stored XSS in the control panel via unescaped draft name",
+      "repo": "craftcms/cms",
+      "fixCommit": "06c799148537ce960f6bc86e162b499947040eda",
+      "parentCommit": "2a884727c8cece4904d6e3b3d39f251aa75d043b",
+      "files": [
+        "src/helpers/Cp.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:40.542Z"
+    },
+    {
+      "id": "GHSA-2x63-gw47-w4mm",
+      "cve": "CVE-2026-61666",
+      "cwe": "CWE-248",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "websocket-driver-ruby: Denial of service via malformed Host header",
+      "repo": "faye/websocket-driver-ruby",
+      "fixCommit": "7d6fd87759a2fdc83590d3b49ffa661dc53fa128",
+      "parentCommit": "5cab908d5e72d40345751edbd4f1e1ef75d53d89",
+      "files": [
+        "lib/websocket/http/request.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:00.914Z"
+    },
+    {
+      "id": "GHSA-2xmw-f8j8-wfxc",
+      "cve": "CVE-2026-54659",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Pagy I18n locale option is not validated before being used in a file path",
+      "repo": "ddnexus/pagy",
+      "fixCommit": "efcf09690e9fa7d7abdfb987b785a55f87e287df",
+      "parentCommit": "cbc77ebba1fc839345e78714eef41e3f672b6205",
+      "files": [
+        "gem/lib/pagy/modules/abilities/configurable.rb",
+        "gem/lib/pagy/modules/i18n/i18n.rb",
+        "src/wand.ts"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:56.009Z"
+    },
+    {
+      "id": "GHSA-32h4-44jj-c5vx",
+      "cve": "CVE-2026-9795",
+      "cwe": "CWE-266",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Keycloak has privilege escalation via improper scope mapping enforcement",
+      "repo": "keycloak/keycloak",
+      "fixCommit": "8894c027e788904c740ff9a1a60fcfaa34a10d13",
+      "parentCommit": "c4e7976547335e2a9afba0603be8ceab89cc8f60",
+      "files": [
+        "services/src/main/java/org/keycloak/services/resources/admin/ScopeMappedClientResource.java",
+        "services/src/main/java/org/keycloak/services/resources/admin/ScopeMappedResource.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:13.508Z"
+    },
+    {
+      "id": "GHSA-33ph-fccm-39pj",
+      "cve": "CVE-2026-54464",
+      "cwe": "CWE-770",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "websocket-driver: Resource limit bypass via message compression",
+      "repo": "faye/websocket-driver-ruby",
+      "fixCommit": "fa8641724f10bf3273585f1dcf9041f540bbd036",
+      "parentCommit": "d0141f041f6e3677a951255d547a313e732ccbe0",
+      "files": [
+        "lib/websocket/driver/hybi.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:03.215Z"
+    },
+    {
+      "id": "GHSA-34rh-wp3j-6cxc",
+      "cve": "CVE-2026-54909",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Pion STUN vulnerable to remote denial of service via panic while parsing a malformed XOR-MAPPED-ADDRESS attribute",
+      "repo": "pion/stun",
+      "fixCommit": "fa9f074a33a8059c76c960b1fbee39f308002423",
+      "parentCommit": "01aa5b8eefd0c0934c6aebd2bd6b6fa7d3c7d715",
+      "files": [
+        "xoraddr.go",
+        "xoraddr_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:24.016Z"
     },
     {
       "id": "GHSA-3769-jgqc-cxm7",
@@ -188,6 +497,56 @@
       "minedAt": "2026-08-09T21:47:16.858Z"
     },
     {
+      "id": "GHSA-3hrf-2gc2-mx32",
+      "cve": "CVE-2026-59860",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Microsoft Kiota: XML Doc-Comment Newline Breakout Code Injection",
+      "repo": "microsoft/kiota",
+      "fixCommit": "ebb632db90aa8e3c20949337d9faa2720d64ca44",
+      "parentCommit": "81eaad1f1ab420def771fed18d0c029ac7e349c7",
+      "files": [
+        "src/Kiota.Builder/Extensions/OpenApiUrlTreeNodeExtensions.cs",
+        "src/Kiota.Builder/Writers/CSharp/CSharpConventionService.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:26.254Z"
+    },
+    {
+      "id": "GHSA-3pwp-g2mj-5p3v",
+      "cve": "CVE-2026-45293",
+      "cwe": "CWE-95",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "WordPress Coding Standards (WordPressCS) contains an arbitrary code execution vulnerability",
+      "repo": "WordPress/WordPress-Coding-Standards",
+      "fixCommit": "a29048d0bbef5cf25d42349c74e4072d3cbc8325",
+      "parentCommit": "54719c089aeba115791c6f2a2f1782f85bb03300",
+      "files": [
+        "WordPress/Sniffs/WP/EnqueuedResourceParametersSniff.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:51.137Z"
+    },
+    {
+      "id": "GHSA-3q9r-p662-5j8m",
+      "cve": "CVE-2026-54764",
+      "cwe": "CWE-345",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Traefik: ForwardAuth middleware leaks X-Forwarded-Port spoofing via untrusted X-Forwarded-Proto when trustForwardHeader=false",
+      "repo": "traefik/traefik",
+      "fixCommit": "7ae92d8c2c10ac04ef5a03df0ed5019ce0f44b2d",
+      "parentCommit": "ad1c1fc2f20c0dcb24df59685afedbf83c8232ec",
+      "files": [
+        "pkg/middlewares/auth/forward.go",
+        "pkg/middlewares/auth/forward_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:14.834Z"
+    },
+    {
       "id": "GHSA-3r7g-q6cg-q2vx",
       "cve": "CVE-2026-70491",
       "cwe": "CWE-200",
@@ -222,6 +581,25 @@
       "minedAt": "2026-08-09T18:46:04.931Z"
     },
     {
+      "id": "GHSA-3v2j-6fw9-f57c",
+      "cve": "CVE-2026-52882",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "MantisBT: REST and SOAP API Issue Update Accepts Unreleased Product Versions From Updaters",
+      "repo": "mantisbt/mantisbt",
+      "fixCommit": "17072d4c322c85f7135ebec3417a6d90b525d12f",
+      "parentCommit": "78c0af63d1fe0118004744cab21ca3bf2cea0f5c",
+      "files": [
+        "api/soap/mc_issue_api.php",
+        "bug_update.php",
+        "core/commands/IssueAddCommand.php",
+        "core/version_api.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:08:00.282Z"
+    },
+    {
       "id": "GHSA-3vf6-64vr-3g56",
       "cve": "CVE-2026-70483",
       "cwe": "CWE-862",
@@ -236,6 +614,39 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:11.091Z"
+    },
+    {
+      "id": "GHSA-3x6r-wxxg-53vv",
+      "cve": null,
+      "cwe": "CWE-248",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "rclone: Infinite Scale TUS Creation Transport Error Causes a Nil-Response Panic",
+      "repo": "rclone/rclone",
+      "fixCommit": "5871d98c368751a6d992ed64f8cd22cb78c44cee",
+      "parentCommit": "52cf74dc5937e8b841488f33b57db01de9cf4770",
+      "files": [
+        "backend/webdav/tus.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:20.091Z"
+    },
+    {
+      "id": "GHSA-42cj-m3vj-89wv",
+      "cve": "CVE-2026-65602",
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Traefik CRD IngressRouteTCP ServersTransport Cross-Provider Namespace Bypass",
+      "repo": "traefik/traefik",
+      "fixCommit": "67501cbe7bc7774e26ecbd1c29af97f098e14b0b",
+      "parentCommit": "18fbd82afa6215c602e1e3e2a6f8091ff505a732",
+      "files": [
+        "pkg/provider/kubernetes/crd/kubernetes_tcp.go",
+        "pkg/provider/kubernetes/crd/kubernetes_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:16.458Z"
     },
     {
       "id": "GHSA-442q-2j6p-642g",
@@ -254,6 +665,38 @@
       "minedAt": "2026-08-09T21:47:33.698Z"
     },
     {
+      "id": "GHSA-45pq-889g-fcgh",
+      "cve": "CVE-2026-71309",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "rclone: Incomplete path validation allows backend root escape in serve restic",
+      "repo": "rclone/rclone",
+      "fixCommit": "cc5a189f00efe68ed0ddb32d3237b42549a9f264",
+      "parentCommit": "208d7df87758249be8ba9833d714a5a605cf5c6c",
+      "files": [
+        "cmd/serve/restic/restic.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:21.168Z"
+    },
+    {
+      "id": "GHSA-464c-974j-9xm6",
+      "cve": null,
+      "cwe": "CWE-311",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "AWS CDK CodeBuild S3 Log Encryption Boolean Inversion",
+      "repo": "aws/aws-cdk",
+      "fixCommit": "40319185dc645d2afc6acf1d25547a86250e97af",
+      "parentCommit": "99d0a5ba83771e46aca9971d00af027f42078f4a",
+      "files": [
+        "packages/aws-cdk-lib/aws-codebuild/lib/project.ts"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-17T19:07:04.203Z"
+    },
+    {
       "id": "GHSA-47pj-3jcm-6whg",
       "cve": "CVE-2026-71433",
       "cwe": "CWE-200",
@@ -270,6 +713,40 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:04.804Z"
+    },
+    {
+      "id": "GHSA-48rx-c7pg-q66r",
+      "cve": "CVE-2026-54171",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Excon does not redact additional sensitive/risky headers when following redirects",
+      "repo": "excon/excon",
+      "fixCommit": "ea89a35308a12f4b791b6c50f2cbd33f94889fa3",
+      "parentCommit": "74e175420e3163308ece5b4ded03077b9c6b715a",
+      "files": [
+        "lib/excon.rb",
+        "lib/excon/middlewares/redirect_follower.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:04.130Z"
+    },
+    {
+      "id": "GHSA-49h3-cwhj-4737",
+      "cve": "CVE-2026-55495",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Cloudreve: Path Traversal in WOPI PUT_RELATIVE Allows Arbitrary File Creation in Owner Account",
+      "repo": "cloudreve/cloudreve",
+      "fixCommit": "7968e50429efab40ffa8f57fecdfbd5a73d23630",
+      "parentCommit": "26b6b1044b0253c5ead7d5a90eaa10ff67ac2582",
+      "files": [
+        "pkg/wopi/wopi.go",
+        "service/explorer/viewer.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:46.763Z"
     },
     {
       "id": "GHSA-4cwx-7wf7-3272",
@@ -320,6 +797,22 @@
       "minedAt": "2026-08-09T18:46:19.713Z"
     },
     {
+      "id": "GHSA-4j9m-h44m-2hv8",
+      "cve": "CVE-2026-50268",
+      "cwe": "CWE-256",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Steeltoe: OAEP setting silently selects PKCS#1 v1.5 padding",
+      "repo": "SteeltoeOSS/Steeltoe",
+      "fixCommit": "6cfee5cccddf8f9a31de69b0ca5ccdd771b73e5b",
+      "parentCommit": "8dd97cc6c4b184121a4bd1f92f9ac16918433471",
+      "files": [
+        "src/Configuration/src/Encryption/Cryptography/RsaKeyStoreDecryptor.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:27.517Z"
+    },
+    {
       "id": "GHSA-4jc5-g844-4x33",
       "cve": "CVE-2026-67435",
       "cwe": "CWE-200",
@@ -334,6 +827,143 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:25.132Z"
+    },
+    {
+      "id": "GHSA-4jwf-m4wg-8p66",
+      "cve": "CVE-2026-59864",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Microsoft Kiota: Path/URL injection into generated Copilot plugin manifest via x-ai-* extensions",
+      "repo": "microsoft/kiota",
+      "fixCommit": "9a185994a4e549b7bba3cc2beffb9736aa902e79",
+      "parentCommit": "cccd798027f0a20db796b3df6c64f9897a39d7b1",
+      "files": [
+        "src/Kiota.Builder/OpenApiExtensions/OpenApiAiCapabilitiesExtension.cs",
+        "src/Kiota.Builder/Plugins/PluginsGenerationService.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:24.676Z"
+    },
+    {
+      "id": "GHSA-4mrv-5p47-p938",
+      "cve": "CVE-2026-54522",
+      "cwe": "CWE-416",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "MessagePack::Buffer#clear Use-After-Free that Enables Cross-Buffer Disclosure",
+      "repo": "msgpack/msgpack-ruby",
+      "fixCommit": "5627d71606b565641d2dd501b82aae862f4abe90",
+      "parentCommit": "cce24855888162cee947436693e8107a5d187853",
+      "files": [
+        "spec/cruby/buffer_spec.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:52.056Z"
+    },
+    {
+      "id": "GHSA-4p3g-4hcj-wpvx",
+      "cve": "CVE-2026-54735",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "prebid-server's request forgery vulnerability allows for possible host environment data extraction",
+      "repo": "prebid/prebid-server",
+      "fixCommit": "494ac271cd4b5024df9123ef25ca3cff96390be3",
+      "parentCommit": "f0a03396bd5189af815ed4f5b26f08076f64f475",
+      "files": [
+        "adapters/acuityads/acuityads.go",
+        "adapters/acuityads/params_test.go",
+        "adapters/adhese/adhese.go",
+        "adapters/adhese/params_test.go",
+        "adapters/bidmachine/bidmachine.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:31.708Z"
+    },
+    {
+      "id": "GHSA-4rj6-vrwv-wr8m",
+      "cve": "CVE-2026-59863",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Microsoft Kiota Workspace-config poisoning: out-of-repo file write + generation-time SSRF",
+      "repo": "microsoft/kiota",
+      "fixCommit": "4049327872db7846ace35c9003774d3e3878e4e9",
+      "parentCommit": "dc812dbbf88ef7edf53a890d36b2f9d1460e947d",
+      "files": [
+        "src/Kiota.Builder/WorkspaceManagement/BaseApiConsumerConfiguration.cs",
+        "src/Kiota.Builder/WorkspaceManagement/WorkspaceConfigurationStorageService.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:23.520Z"
+    },
+    {
+      "id": "GHSA-4vmm-5qvc-w5p7",
+      "cve": "CVE-2026-55651",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Easy!Appointments Vulnerable to Appointments Takeover via Excessive Data Exposure",
+      "repo": "alextselegidis/easyappointments",
+      "fixCommit": "ebbe41130dafa58b0716426c56c8cfd4c22dbceb",
+      "parentCommit": "8ec11cd3cd8698322a7381198ea7b8e6a33e166c",
+      "files": [
+        "application/controllers/Customers.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:50.591Z"
+    },
+    {
+      "id": "GHSA-4vpf-w7qv-5h3q",
+      "cve": "CVE-2026-52883",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "MantisBT: Injection of TIME_TRACKING and REMINDER Notes via REST and SOAP APIs",
+      "repo": "mantisbt/mantisbt",
+      "fixCommit": "de2f71fd88746e963386c214c3ae65a3c4c851b7",
+      "parentCommit": "c6ccd554cf14377159aebcbf958f64e1432b6f82",
+      "files": [
+        "api/soap/mc_issue_api.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:59.797Z"
+    },
+    {
+      "id": "GHSA-4vv7-jj25-4gh6",
+      "cve": "CVE-2026-59866",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Microsoft Kiota: Arbitrary file write + code-injection via x-ms-kiota-info clientClassName and clientNamespaceName",
+      "repo": "microsoft/kiota",
+      "fixCommit": "dc812dbbf88ef7edf53a890d36b2f9d1460e947d",
+      "parentCommit": "e1d6d76c6eecbe50785429166faaf8c831e036c6",
+      "files": [
+        "src/Kiota.Builder/Configuration/GenerationConfiguration.cs",
+        "src/Kiota.Builder/LanguageInformation.cs",
+        "src/kiota/KiotaConfigurationExtensions.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:22.496Z"
+    },
+    {
+      "id": "GHSA-4w3q-qpfq-v992",
+      "cve": "CVE-2026-59954",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Apollo ConfigService access key authentication bypass via appId parsing and non-canonical matching",
+      "repo": "apolloconfig/apollo",
+      "fixCommit": "310809d557e01c6803051736cd525e333ffe00ec",
+      "parentCommit": "17879a9dc9fa6546db6ae725341908a377e601cb",
+      "files": [
+        "apollo-configservice/src/main/java/com/ctrip/framework/apollo/configservice/ConfigServiceAutoConfiguration.java",
+        "apollo-configservice/src/main/java/com/ctrip/framework/apollo/configservice/util/AccessKeyUtil.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:08.371Z"
     },
     {
       "id": "GHSA-4wx2-7gvj-qfq3",
@@ -386,6 +1016,22 @@
       "minedAt": "2026-08-09T18:46:20.775Z"
     },
     {
+      "id": "GHSA-52jp-gj8w-j6xh",
+      "cve": "CVE-2026-67430",
+      "cwe": "CWE-401",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "MCP Ruby SDK: Unbounded session retention in StreamableHTTPTransport allows memory exhaustion via initialize flood",
+      "repo": "modelcontextprotocol/ruby-sdk",
+      "fixCommit": "afb968c468c178c4d3294b423fcce250621692f4",
+      "parentCommit": "8b1a41aedd7a20fb6f232a3a5d939f55d2f52cc4",
+      "files": [
+        "lib/mcp/server/transports/streamable_http_transport.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:53.845Z"
+    },
+    {
       "id": "GHSA-539m-9xh6-q6rr",
       "cve": null,
       "cwe": "CWE-73",
@@ -400,6 +1046,23 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:16.333Z"
+    },
+    {
+      "id": "GHSA-53g2-mvcc-q9x3",
+      "cve": "CVE-2026-73428",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Trix: Stored XSS via HTMLParser attribute injection on paste",
+      "repo": "basecamp/trix",
+      "fixCommit": "9c0a993d9fc2ffe9d56b013b030bc238f9c0557c",
+      "parentCommit": "e62fcc3b5872a310a79cecb47472bd16bf6499ad",
+      "files": [
+        "action_text-trix/app/assets/javascripts/trix.js",
+        "src/trix/models/string_piece.js"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-17T19:08:58.560Z"
     },
     {
       "id": "GHSA-54fx-42gc-7vw4",
@@ -450,6 +1113,74 @@
       "minedAt": "2026-08-09T18:46:03.433Z"
     },
     {
+      "id": "GHSA-5fqm-cc34-fcf5",
+      "cve": "CVE-2026-49447",
+      "cwe": "CWE-287",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Cosmos-Server's constellation public-devices endpoint accepts arbitrary bearer tokens",
+      "repo": "azukaar/Cosmos-Server",
+      "fixCommit": "59c561d686c8f9843b3e092b50f6346c481d8bbf",
+      "parentCommit": "88de73dcca50172393a75de0e4dc3ab93622825c",
+      "files": [
+        "client/src/api/deployments.tsx",
+        "client/src/api/index.tsx",
+        "client/src/pages/constellation/index.jsx",
+        "client/src/pages/constellation/vpn.jsx",
+        "client/src/pages/servapps/index.jsx"
+      ],
+      "language": "typescript",
+      "minedAt": "2026-08-17T19:08:35.896Z"
+    },
+    {
+      "id": "GHSA-5gvw-p9qm-jgwh",
+      "cve": "CVE-2026-59889",
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "jackson-databind: @JsonView bypassed for @JsonUnwrapped container properties on deserialization",
+      "repo": "FasterXML/jackson-databind",
+      "fixCommit": "d627a8a86fcb062429282f79f3f256f181ed2c7b",
+      "parentCommit": "bc1613c765704703ec7385e314fa8b19448e1ddd",
+      "files": [
+        "src/main/java/com/fasterxml/jackson/databind/deser/impl/UnwrappedPropertyHandler.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:07.022Z"
+    },
+    {
+      "id": "GHSA-5p9g-j988-pcwv",
+      "cve": "CVE-2026-67431",
+      "cwe": "CWE-284",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "MCP Ruby SDK: Ruby SSE Session Poisoning",
+      "repo": "modelcontextprotocol/ruby-sdk",
+      "fixCommit": "35466605319a34e4c7808712ae9bb1ca1afb2356",
+      "parentCommit": "4b400be6ed0327dcec1f4563fb661edf3c585e30",
+      "files": [
+        "lib/mcp/server/transports/streamable_http_transport.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:52.664Z"
+    },
+    {
+      "id": "GHSA-5qhf-9phg-95m2",
+      "cve": null,
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Loofah `allowed_uri?` does not detect `javascript:` URIs split by numeric character references without semicolons",
+      "repo": "flavorjones/loofah",
+      "fixCommit": "f1be9d893b5a8dd79240441a912d8897e74c38c0",
+      "parentCommit": "5e91af861e3cdab47b91dd0b81f3afdfd13a5e19",
+      "files": [
+        "lib/loofah/html5/scrub.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:59.982Z"
+    },
+    {
       "id": "GHSA-5vjc-7cxw-4w6j",
       "cve": "CVE-2026-53504",
       "cwe": "CWE-400",
@@ -482,6 +1213,73 @@
       "minedAt": "2026-08-09T18:46:16.396Z"
     },
     {
+      "id": "GHSA-62fc-8686-hfmq",
+      "cve": "CVE-2026-71325",
+      "cwe": "CWE-653",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Traefik: `allowCrossNamespace=false` bypass via `@kubernetescrd` TraefikService backendRef",
+      "repo": "traefik/traefik",
+      "fixCommit": "65ebf4b47fbdc33e3856803a5844a404e094d52d",
+      "parentCommit": "8f5213ed83628e16d36a4309337d8f3eba0819f5",
+      "files": [
+        "pkg/provider/kubernetes/crd/kubernetes_http.go",
+        "pkg/provider/kubernetes/crd/kubernetes_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:14.287Z"
+    },
+    {
+      "id": "GHSA-6765-c87h-8mrf",
+      "cve": "CVE-2026-71326",
+      "cwe": "CWE-287",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Traefik: BasicAuth singleflight key collision allows authenticated identity spoofing",
+      "repo": "traefik/traefik",
+      "fixCommit": "b5ace8eb5d6779980567f5e75efd2d9e08b7e350",
+      "parentCommit": "c25bed34075eaa8a23dfbefcf1ebbb1c032aaf4b",
+      "files": [
+        "pkg/middlewares/auth/basic_auth.go",
+        "pkg/middlewares/auth/basic_auth_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:15.938Z"
+    },
+    {
+      "id": "GHSA-68r5-9hpg-7qw9",
+      "cve": null,
+      "cwe": "CWE-73",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "OpenDJ unauthenticated SSRF, local file read and unbounded-read DoS in the DSMLv2 gateway",
+      "repo": "OpenIdentityPlatform/OpenDJ",
+      "fixCommit": "131e8576dcf3613f944c3e02527959bbf52370c3",
+      "parentCommit": "5fa8ed760437453c7694ce9e8bd76d21e2f5d683",
+      "files": [
+        "opendj-dsml-servlet/src/main/java/org/opends/dsml/protocol/ByteStringUtility.java",
+        "opendj-dsml-servlet/src/main/java/org/opends/dsml/protocol/DSMLServlet.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:02.226Z"
+    },
+    {
+      "id": "GHSA-6hq5-7373-42rg",
+      "cve": "CVE-2026-59931",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "PHPSpreadsheet: SSRF bypass via HTTP redirect in WEBSERVICE() domain whitelist",
+      "repo": "PHPOffice/PhpSpreadsheet",
+      "fixCommit": "7ef7b25e8548a6ded79dac74e2e2c7acdac38d8d",
+      "parentCommit": "85f2556b0bf5269061bf45932ecda8a128d81750",
+      "files": [
+        "src/PhpSpreadsheet/Calculation/Web/Service.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:53.762Z"
+    },
+    {
       "id": "GHSA-6hr6-w5qg-qmwg",
       "cve": "CVE-2026-71554",
       "cwe": "CWE-444",
@@ -496,6 +1294,59 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:04.179Z"
+    },
+    {
+      "id": "GHSA-6p8f-p8j2-rqmv",
+      "cve": "CVE-2026-54765",
+      "cwe": "CWE-284",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Traefik: Gateway HTTPRoute backendRef filters can leak backend context across routes sharing a Service:port",
+      "repo": "traefik/traefik",
+      "fixCommit": "8aada7a7d52e4588a75386d8b86d270f6fe8d549",
+      "parentCommit": "224c6a93048490b5ec200743cb2b6258099d249c",
+      "files": [
+        "pkg/provider/kubernetes/gateway/grpcroute.go",
+        "pkg/provider/kubernetes/gateway/httproute.go",
+        "pkg/provider/kubernetes/gateway/kubernetes_test.go",
+        "pkg/provider/kubernetes/gateway/tcproute.go",
+        "pkg/provider/kubernetes/gateway/tlsroute.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:13.760Z"
+    },
+    {
+      "id": "GHSA-6pvm-2vjj-rx4w",
+      "cve": "CVE-2026-47132",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "phpMyFAQ: SQL LIKE Wildcard Injection in Chat User Search Allows Authenticated User Enumeration",
+      "repo": "thorsten/phpMyFAQ",
+      "fixCommit": "bd4b08b012234ccfcff07bfe6518062475b29e0a",
+      "parentCommit": "ba729961c1ad1ff86d15bc623863387238d3f149",
+      "files": [
+        "phpmyfaq/src/phpMyFAQ/Chat.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:33.683Z"
+    },
+    {
+      "id": "GHSA-6r28-9ppf-4hj5",
+      "cve": "CVE-2026-54345",
+      "cwe": "CWE-191",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "GoPacket's Diameter AVP decoder: uint32 underflow on vendor header size leads to unbounded ~4 GiB allocation (unauthenticated remote DoS)",
+      "repo": "gopacket/gopacket",
+      "fixCommit": "145859d0eaee1a6f5925ffb93851c976449c3311",
+      "parentCommit": "95d1ae3e197eee3a25d24abb7b079a60b578854d",
+      "files": [
+        "layers/diameter_avp_decoders.go",
+        "layers/diameter_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:38.239Z"
     },
     {
       "id": "GHSA-6vh2-wg4h-4vwj",
@@ -535,6 +1386,26 @@
       "minedAt": "2026-08-09T21:47:20.528Z"
     },
     {
+      "id": "GHSA-6x2c-phff-wx57",
+      "cve": "CVE-2026-64859",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "New API: User List API Leaks Root User Access Token Leading to Privilege Escalation",
+      "repo": "QuantumNous/new-api",
+      "fixCommit": "0936e2504655a5cbf7bc3c388f6d3e2bb24916d3",
+      "parentCommit": "5dd0d3bcbd7b1d523bd046a5f9cf9fc8ce28d579",
+      "files": [
+        "controller/custom_oauth.go",
+        "controller/passkey.go",
+        "controller/task_video.go",
+        "controller/twofa.go",
+        "controller/user.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:09.629Z"
+    },
+    {
       "id": "GHSA-6xhv-rxhv-pwm4",
       "cve": "CVE-2026-70487",
       "cwe": "CWE-862",
@@ -551,6 +1422,26 @@
       "minedAt": "2026-08-09T21:47:07.944Z"
     },
     {
+      "id": "GHSA-6xj8-qv9j-xcjq",
+      "cve": "CVE-2026-73505",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Oh My Posh: Arbitrary command execution via template injection in the path segment",
+      "repo": "JanDeDobbeleer/oh-my-posh",
+      "fixCommit": "88ddbe0b0a4dd13cc345996108c9869493f2c690",
+      "parentCommit": "7ec9fb8eb0f091354795eca7b024332a59e6614f",
+      "files": [
+        "src/color/colors.go",
+        "src/color/palette.go",
+        "src/config/config.go",
+        "src/config/segment.go",
+        "src/prompt/engine.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:40.768Z"
+    },
+    {
       "id": "GHSA-73cq-mcgh-379c",
       "cve": "CVE-2026-70489",
       "cwe": "CWE-400",
@@ -565,6 +1456,41 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:07.420Z"
+    },
+    {
+      "id": "GHSA-7683-3w9x-ch42",
+      "cve": "CVE-2026-63119",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "MCP Ruby SDK: Unbounded line buffer in stdio transports leads to memory exhaustion (DoS)",
+      "repo": "modelcontextprotocol/ruby-sdk",
+      "fixCommit": "267b8fa6285453525c81ce43db6b7dcd7a8a8c2f",
+      "parentCommit": "5518e8db032517896e0025119a9073f4aa946ba4",
+      "files": [
+        "lib/mcp/client/stdio.rb",
+        "lib/mcp/server/transports/stdio_transport.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:54.377Z"
+    },
+    {
+      "id": "GHSA-794g-x443-36f7",
+      "cve": "CVE-2026-2092",
+      "cwe": "CWE-1287",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Keycloak: Unauthorized access via improper validation of encrypted SAML assertions",
+      "repo": "keycloak/keycloak",
+      "fixCommit": "b40a25908d937bb0563ea516487bc2c7c1d92508",
+      "parentCommit": "08ae2bebaa8f05a0f548da495dd61b091723219e",
+      "files": [
+        "adapters/saml/core/src/main/java/org/keycloak/adapters/saml/profile/AbstractSamlAuthenticationHandler.java",
+        "saml-core/src/main/java/org/keycloak/saml/processing/core/saml/v2/util/AssertionUtil.java",
+        "services/src/main/java/org/keycloak/broker/saml/SAMLEndpoint.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:13.088Z"
     },
     {
       "id": "GHSA-79qm-7rj5-m7r9",
@@ -616,6 +1542,24 @@
       "minedAt": "2026-08-09T18:46:10.104Z"
     },
     {
+      "id": "GHSA-7p4m-qxvv-g567",
+      "cve": "CVE-2026-71313",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "rclone: Local Encoding Path Traversal",
+      "repo": "rclone/rclone",
+      "fixCommit": "6a69713864b1d8f6edbc03d8af735f9624576d6e",
+      "parentCommit": "cc5a189f00efe68ed0ddb32d3237b42549a9f264",
+      "files": [
+        "backend/local/clone_darwin.go",
+        "backend/local/local.go",
+        "backend/local/local_internal_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:17.546Z"
+    },
+    {
       "id": "GHSA-7p8r-x3mc-p8w7",
       "cve": "CVE-2026-18446",
       "cwe": "CWE-436",
@@ -632,6 +1576,55 @@
       "minedAt": "2026-08-09T21:46:52.220Z"
     },
     {
+      "id": "GHSA-7v6w-c3f4-9wpq",
+      "cve": "CVE-2026-54640",
+      "cwe": "CWE-611",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "OpenRemote has an incomplete fix for CVE-2026-40882: XXE in KNXProtocol.startAssetImport() allows arbitrary file read via unprotected XMLInputFactory",
+      "repo": "openremote/openremote",
+      "fixCommit": "c28d3c60ebc2da68d9b6c4a6d7a5ad875a255ee9",
+      "parentCommit": "d756014f08d9c24463ebbb780e08c9fb7ed02f15",
+      "files": [
+        "agent/src/main/java/org/openremote/agent/protocol/knx/KNXProtocol.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:09.916Z"
+    },
+    {
+      "id": "GHSA-7wmf-pw8j-mc78",
+      "cve": "CVE-2026-63220",
+      "cwe": "CWE-348",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "CodeIgniter: Spoofable forwarded HTTPS headers in IncomingRequest::isSecure()",
+      "repo": "codeigniter4/CodeIgniter4",
+      "fixCommit": "ecbf044666bed41d23f07518096d9843fe6c08b0",
+      "parentCommit": "72476b3aaad3ccd72921dcab67b0db6484741d0a",
+      "files": [
+        "system/HTTP/IncomingRequest.php",
+        "system/HTTP/RequestTrait.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:36.999Z"
+    },
+    {
+      "id": "GHSA-7x2p-4jvh-6384",
+      "cve": "CVE-2026-55555",
+      "cwe": "CWE-203",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Dompdf: File existence oracle via font-face stylesheet declaration",
+      "repo": "dompdf/dompdf",
+      "fixCommit": "75c39a083bf7298044fb27399b4cc183054438b4",
+      "parentCommit": "1b3b61ec4f6962678e56ee8a42920b4f835ab006",
+      "files": [
+        "src/Css/Stylesheet.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:55.247Z"
+    },
+    {
       "id": "GHSA-8359-h9fx-j6v9",
       "cve": "CVE-2026-55389",
       "cwe": "CWE-22",
@@ -646,6 +1639,44 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:28.392Z"
+    },
+    {
+      "id": "GHSA-86cx-wwf4-phq4",
+      "cve": null,
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "OpenList: Arbitrary File Read via Path Prefix Confusion in Share Creation API",
+      "repo": "OpenListTeam/OpenList",
+      "fixCommit": "59bd3431408578f420895457554700cc9a52375a",
+      "parentCommit": "757f9d383db8e61d06a35c0b79701d6f85f75804",
+      "files": [
+        "internal/op/sharing.go",
+        "server/handles/search.go",
+        "server/handles/sharing.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:41.737Z"
+    },
+    {
+      "id": "GHSA-87fv-vqqr-m4jr",
+      "cve": "CVE-2026-73080",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "SeaweedFS: Unauthenticated SSRF with response read-back via VolumeServer.FetchAndWriteNeedle",
+      "repo": "seaweedfs/seaweedfs",
+      "fixCommit": "69da20bdaec923e5a43d8aa71bf3c0a2051fc019",
+      "parentCommit": "5e8f99f40a8abc7b449aefd260516443377041c7",
+      "files": [
+        "weed/command/mini.go",
+        "weed/command/server.go",
+        "weed/command/volume.go",
+        "weed/remote_storage/s3/s3_storage_client.go",
+        "weed/server/volume_grpc_remote.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:11.722Z"
     },
     {
       "id": "GHSA-88pr-878c-24wf",
@@ -666,6 +1697,39 @@
       "minedAt": "2026-08-09T18:46:20.231Z"
     },
     {
+      "id": "GHSA-8c48-q9wj-3w37",
+      "cve": "CVE-2026-71311",
+      "cwe": "CWE-93",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "rclone: FTP Command Arguments Permit CRLF Injection When Custom Encoding Preserves Newlines",
+      "repo": "rclone/rclone",
+      "fixCommit": "1df2b70753286c1dfe8366078cbedfdf7f96472c",
+      "parentCommit": "5871d98c368751a6d992ed64f8cd22cb78c44cee",
+      "files": [
+        "backend/ftp/ftp.go",
+        "backend/ftp/ftp_internal_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:19.562Z"
+    },
+    {
+      "id": "GHSA-8fq9-273g-6mrg",
+      "cve": "CVE-2026-55518",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Avo: Missing Authorization in Avo Association Attach Endpoint Allows Unauthorized Relationship Manipulation and Privilege Escalation",
+      "repo": "avo-hq/avo",
+      "fixCommit": "995928e586fd1788dd496bd51c4dbe4a79cb2b9c",
+      "parentCommit": "336ffc967fcbd965ffbdc37f4bb833f625ea3d8e",
+      "files": [
+        "app/controllers/avo/associations_controller.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:06.833Z"
+    },
+    {
       "id": "GHSA-8gj2-2cvc-6xx7",
       "cve": null,
       "cwe": "CWE-862",
@@ -680,6 +1744,56 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:17.551Z"
+    },
+    {
+      "id": "GHSA-8hg6-c449-896m",
+      "cve": "CVE-2026-59941",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Dompdf: Uncontrolled resource consumption based on declared BMP dimensions",
+      "repo": "dompdf/dompdf",
+      "fixCommit": "7c65e7bbeccf146b2409740405af73949ad129d0",
+      "parentCommit": "89164eaabe0bb50c462f0b24f740044ba5fb0f99",
+      "files": [
+        "src/Image/Cache.php",
+        "src/Options.php",
+        "src/Renderer/AbstractRenderer.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:54.715Z"
+    },
+    {
+      "id": "GHSA-8hm4-r66f-29wr",
+      "cve": "CVE-2026-52841",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Easy!Appointments: Authorization bypass in Google OAuth provider binding lets any backend user rebind a peer provider's Google sync",
+      "repo": "alextselegidis/easyappointments",
+      "fixCommit": "4b2d245d2cd2058dc76e05f6eb65b26699268471",
+      "parentCommit": "6eb9336a91cfb276379506625e81f5bd9ed3a536",
+      "files": [
+        "application/controllers/Google.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:48.988Z"
+    },
+    {
+      "id": "GHSA-8j3g-f24p-4mpw",
+      "cve": "CVE-2026-54465",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "websocket-driver: Memory exhaustion in HTTP header parser",
+      "repo": "faye/websocket-driver-ruby",
+      "fixCommit": "17b569f232896e71d458404ccf4854f80e987710",
+      "parentCommit": "fa8641724f10bf3273585f1dcf9041f540bbd036",
+      "files": [
+        "lib/websocket/http/headers.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:02.804Z"
     },
     {
       "id": "GHSA-8j4g-w8fx-2239",
@@ -715,6 +1829,57 @@
       "minedAt": "2026-08-09T21:47:30.001Z"
     },
     {
+      "id": "GHSA-8r7f-r8hj-r3rv",
+      "cve": "CVE-2026-55496",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Cloudreve: Information Exposure in `GET /api/v4/user/search`: `SearchActive` omits the active-status predicate, leaking inactive/banned account emails",
+      "repo": "cloudreve/cloudreve",
+      "fixCommit": "7e1289d552794bdbeb551be78456115c87dcb3da",
+      "parentCommit": "7968e50429efab40ffa8f57fecdfbd5a73d23630",
+      "files": [
+        "inventory/user.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:46.290Z"
+    },
+    {
+      "id": "GHSA-8rxv-jg7p-wvg3",
+      "cve": "CVE-2026-67309",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Traefik: Kubernetes Ingress NGINX RewriteTarget Path Traversal Allows Route-Level Authentication Bypass",
+      "repo": "traefik/traefik",
+      "fixCommit": "759515bec1b9f628b21ea8968ef63da853be5e29",
+      "parentCommit": "304bdfe14d0377a394bf69de4c2139a242dc721a",
+      "files": [
+        "pkg/middlewares/ingressnginx/rewritetarget/rewrite_target.go",
+        "pkg/middlewares/ingressnginx/rewritetarget/rewrite_target_test.go",
+        "pkg/middlewares/ingressnginx/snippet/action.go",
+        "pkg/middlewares/ingressnginx/snippet/snippet_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:13.227Z"
+    },
+    {
+      "id": "GHSA-8whx-365g-h9vv",
+      "cve": "CVE-2026-73491",
+      "cwe": "CWE-184",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Loofah `allowed_uri?` does not detect `javascript:` URIs split by named whitespace character references",
+      "repo": "flavorjones/loofah",
+      "fixCommit": "5e91af861e3cdab47b91dd0b81f3afdfd13a5e19",
+      "parentCommit": "20867b9be689521887364b74822c41ef830523c9",
+      "files": [
+        "lib/loofah/html5/scrub.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:01.404Z"
+    },
+    {
       "id": "GHSA-8x5v-cpv7-8jjp",
       "cve": "CVE-2026-70485",
       "cwe": "CWE-918",
@@ -731,6 +1896,39 @@
       "minedAt": "2026-08-09T21:47:09.517Z"
     },
     {
+      "id": "GHSA-9299-c6m4-mjhc",
+      "cve": "CVE-2024-7708",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Eclipse Jetty: DoS attack triggering OutOfMemory with 100-Continue requests",
+      "repo": "jetty/jetty.project",
+      "fixCommit": "8259eabbc70ae7fc2d525f1e95b43fbdfd2ad097",
+      "parentCommit": "2aec6cbbc82f47a2d05404b055e38fde039bb193",
+      "files": [
+        "jetty-server/src/main/java/org/eclipse/jetty/server/HttpConnection.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:05.925Z"
+    },
+    {
+      "id": "GHSA-93qh-5269-9wcf",
+      "cve": "CVE-2026-64665",
+      "cwe": "CWE-287",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Statamic: Account takeover via OAuth email matching without email-verification check",
+      "repo": "statamic/cms",
+      "fixCommit": "e59dd342c83bc45de26573cfb0536a0bca98255a",
+      "parentCommit": "c56c1c34e2e96a2390491ade798a48997d9823d3",
+      "files": [
+        "src/Http/Controllers/OAuthController.php",
+        "src/OAuth/Provider.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:46.945Z"
+    },
+    {
       "id": "GHSA-944x-pm95-3jpr",
       "cve": "CVE-2026-53948",
       "cwe": "CWE-434",
@@ -745,6 +1943,41 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:15.112Z"
+    },
+    {
+      "id": "GHSA-945v-v9p3-v5xw",
+      "cve": null,
+      "cwe": "CWE-732",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "rclone local `--metadata` applies attacker-controlled mode/uid - setuid binary planted from an untrusted remote",
+      "repo": "rclone/rclone",
+      "fixCommit": "e58f09739a35774ca82b5211d2377ac0f2051500",
+      "parentCommit": "7e78929575b05d71ffcfa9f3b1066fe7682a54b6",
+      "files": [
+        "backend/local/local.go",
+        "backend/local/local_internal_test.go",
+        "backend/local/metadata.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:21.716Z"
+    },
+    {
+      "id": "GHSA-94pj-82f3-465w",
+      "cve": "CVE-2026-67339",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Guzzle: Proxy-Authorization headers can be sent to origin servers",
+      "repo": "guzzle/guzzle",
+      "fixCommit": "9e4580d4b9981e903dc6323fe37f50a96e85b05e",
+      "parentCommit": "6b1d2429a2c312474c523aa9017fba0c07b5f4a0",
+      "files": [
+        "src/Handler/CurlFactory.php",
+        "src/Handler/StreamHandler.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:58.785Z"
     },
     {
       "id": "GHSA-954p-556p-r752",
@@ -765,6 +1998,124 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:30.556Z"
+    },
+    {
+      "id": "GHSA-95cv-r8x4-vh75",
+      "cve": "CVE-2026-73509",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "OpenList: Authenticated users can rename files outside their base path via batch rename `src_name` traversal",
+      "repo": "OpenListTeam/OpenList",
+      "fixCommit": "651da18da4c647d96648d4bb64462baac1c37e04",
+      "parentCommit": "5a5d8d6e0ea9df89237be0a313b74211bb5c72c1",
+      "files": [
+        "server/handles/fsbatch.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:42.228Z"
+    },
+    {
+      "id": "GHSA-964w-f6gj-5236",
+      "cve": "CVE-2026-66064",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "goshs has ACL Bypass & Path Traversal",
+      "repo": "goshs-labs/goshs",
+      "fixCommit": "f3ef599e409151d1380866e47de8b1afb0bb54fa",
+      "parentCommit": "ddd2eb9470237e68f0d6c828dd75173708e60277",
+      "files": [
+        "httpserver/handler.go",
+        "httpserver/updown.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:32.300Z"
+    },
+    {
+      "id": "GHSA-97jw-64cj-jc58",
+      "cve": "CVE-2026-54498",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "ViewComponent: around_render HTML-Safety Bypass",
+      "repo": "ViewComponent/view_component",
+      "fixCommit": "48e5fd2d602344c7d33019fbc5c8b087e315bb78",
+      "parentCommit": "c35ec3f2b38344ed193cbc113546843a0fb613f4",
+      "files": [
+        "lib/view_component/base.rb",
+        "lib/view_component/collection.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:02.374Z"
+    },
+    {
+      "id": "GHSA-98pp-vccm-qm25",
+      "cve": "CVE-2026-53599",
+      "cwe": "CWE-434",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Redaxo has a Mediapool isAllowedExtension bypass via multi-segment filename that leads to authenticated RCE on Apache mod_php multi-extension handlers",
+      "repo": "redaxo/core",
+      "fixCommit": "462e36896bb65d292ba22d711044c23c9cfb0340",
+      "parentCommit": "6000931bde9e0f2ecb233d83044f5bcaced56e46",
+      "files": [
+        "redaxo/src/addons/mediapool/lib/mediapool.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:47.911Z"
+    },
+    {
+      "id": "GHSA-996f-334j-67g7",
+      "cve": "CVE-2026-52838",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Easy!Appointments disable_booking_message rendered as raw HTML on public booking page — Stored XSS",
+      "repo": "alextselegidis/easyappointments",
+      "fixCommit": "629a0415f54f75556c17f4f5d9c77fda1fdbdeae",
+      "parentCommit": "51dd4d7a306ba5bead36b08736e7c0603db84a3f",
+      "files": [
+        "application/controllers/Booking_settings.php",
+        "application/views/pages/booking_message.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:48.434Z"
+    },
+    {
+      "id": "GHSA-9h85-g7w3-rh49",
+      "cve": "CVE-2026-54497",
+      "cwe": "CWE-362",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "ViewComponent: Reused Component Instances Retain Stale Render Context",
+      "repo": "ViewComponent/view_component",
+      "fixCommit": "7b05073be28037f7d5ff141e9dd42f3cf47956a4",
+      "parentCommit": "48e5fd2d602344c7d33019fbc5c8b087e315bb78",
+      "files": [
+        "lib/view_component/base.rb",
+        "lib/view_component/collection.rb",
+        "lib/view_component/config.rb",
+        "lib/view_component/errors.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:01.891Z"
+    },
+    {
+      "id": "GHSA-9p7c-v5x3-rfx8",
+      "cve": "CVE-2026-14793",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Craft CMS: Missing authorization check allows non-admin control panel users to reorder Global Sets",
+      "repo": "craftcms/cms",
+      "fixCommit": "9bd05c91e6a7e6da5e949ec41a31c220c059aa04",
+      "parentCommit": "c65b8f752c009744ce53e014b692270bf9c29601",
+      "files": [
+        "src/controllers/GlobalsController.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:42.241Z"
     },
     {
       "id": "GHSA-9pf5-hg6p-4pwp",
@@ -799,6 +2150,39 @@
       "minedAt": "2026-08-09T21:47:03.231Z"
     },
     {
+      "id": "GHSA-9rjg-x2p2-h68h",
+      "cve": "CVE-2026-54164",
+      "cwe": "CWE-843",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "API Platform Core: Relation IRIs are not type-checked: a related resource can be denormalised as the wrong resource type (type confusion)",
+      "repo": "api-platform/core",
+      "fixCommit": "6bcbeb2dbee53db5bb9b4b8e343bffdf7732de1e",
+      "parentCommit": "92e03dfa386a273033c483520671b437f44df76b",
+      "files": [
+        "src/Serializer/AbstractItemNormalizer.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:37.621Z"
+    },
+    {
+      "id": "GHSA-9wjq-cp2p-hrgf",
+      "cve": "CVE-2026-73490",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Loofah: SVG `href` attribute bypasses local-reference restriction",
+      "repo": "flavorjones/loofah",
+      "fixCommit": "20867b9be689521887364b74822c41ef830523c9",
+      "parentCommit": "5f3bff46b610c1221c4bdb4e5b5b90e1178576cc",
+      "files": [
+        "lib/loofah/html5/safelist.rb",
+        "lib/loofah/html5/scrub.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:00.462Z"
+    },
+    {
       "id": "GHSA-9xq3-3fqg-4vg7",
       "cve": "CVE-2026-54574",
       "cwe": "CWE-61",
@@ -815,6 +2199,58 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:26.376Z"
+    },
+    {
+      "id": "GHSA-c2w2-prh8-qm98",
+      "cve": "CVE-2026-59882",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "guzzlehttp/psr7: Host Confusion via Weak URI Host Validation",
+      "repo": "guzzle/psr7",
+      "fixCommit": "ddd64f17d4cc1f7e5ffe6fd2c989ec7221712580",
+      "parentCommit": "5ec8b151cfda84f9c3d582c23459333ee17e4b4b",
+      "files": [
+        "src/Uri.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:56.261Z"
+    },
+    {
+      "id": "GHSA-c32j-vqhx-rx3x",
+      "cve": "CVE-2026-45363",
+      "cwe": "CWE-287",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "ruby-jwt: Empty-key HMAC bypass; cross-language sibling of CVE-2026-44351",
+      "repo": "jwt/ruby-jwt",
+      "fixCommit": "db560b769a07bd9724e77ff505011ac01872106f",
+      "parentCommit": "ffef4f2cc49f4c07447fa67601b396880e519704",
+      "files": [
+        "lib/jwt/jwa/hmac.rb",
+        "lib/jwt/version.rb",
+        "spec/integration/readme_examples_spec.rb",
+        "spec/jwt/jwa/hmac_spec.rb",
+        "spec/jwt/jwt_spec.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:07.325Z"
+    },
+    {
+      "id": "GHSA-c3jm-gv5r-9wcp",
+      "cve": "CVE-2026-62323",
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Cloudreve WOPI view sessions can write files and WOPI access token secret is ignored",
+      "repo": "cloudreve/cloudreve",
+      "fixCommit": "f3347130ac48f2ff996af9ef66c97be2dda9cba9",
+      "parentCommit": "83375198c8488974b33a44bcbf39c72407569d4c",
+      "files": [
+        "middleware/wopi.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:43.699Z"
     },
     {
       "id": "GHSA-c5px-58j2-7fqp",
@@ -868,6 +2304,40 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:22.101Z"
+    },
+    {
+      "id": "GHSA-c9w5-rwh3-7pm9",
+      "cve": "CVE-2026-63221",
+      "cwe": "CWE-89",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "CodeIgniter: SQL injection in Query Builder deleteBatch() when used with where() conditions",
+      "repo": "codeigniter4/CodeIgniter4",
+      "fixCommit": "f5e463b9a3e986389ce285963e51a7f1fab6559f",
+      "parentCommit": "ecbf044666bed41d23f07518096d9843fe6c08b0",
+      "files": [
+        "system/Database/BaseBuilder.php",
+        "system/Database/OCI8/Builder.php",
+        "system/Database/Postgre/Builder.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:36.542Z"
+    },
+    {
+      "id": "GHSA-cgfv-jrfp-2r7v",
+      "cve": null,
+      "cwe": "CWE-89",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "OpenRemote has Authenticated SQL Injection via Datapoint Crosstab Export",
+      "repo": "openremote/openremote",
+      "fixCommit": "02ac83074b81617add814b2a72d459abdf374147",
+      "parentCommit": "a2838215eccd33ef17b0180b5dd3d4253394f490",
+      "files": [
+        "manager/src/main/java/org/openremote/manager/datapoint/AssetDatapointService.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:09.464Z"
     },
     {
       "id": "GHSA-ch52-px8q-f22j",
@@ -957,6 +2427,22 @@
       "minedAt": "2026-08-09T18:46:11.155Z"
     },
     {
+      "id": "GHSA-cj75-f6xr-r4g7",
+      "cve": "CVE-2026-73648",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Rails HTML Sanitizers: Possible XSS vulnerability with certain configurations",
+      "repo": "rails/rails-html-sanitizer",
+      "fixCommit": "74dcb8053e6da9921246ce71b06ad9fd65b19586",
+      "parentCommit": "11ee44059551bef771503a5afd5914903914dd8a",
+      "files": [
+        "lib/rails/html/scrubbers.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:59.502Z"
+    },
+    {
       "id": "GHSA-cjc9-q5gf-327p",
       "cve": "CVE-2026-70593",
       "cwe": "CWE-22",
@@ -990,6 +2476,23 @@
       "minedAt": "2026-08-09T21:47:19.479Z"
     },
     {
+      "id": "GHSA-cxjq-mrr5-89rv",
+      "cve": "CVE-2026-65600",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Traefik: Authentication Bypass via Path Traversal in ReplacePathRegex Middleware",
+      "repo": "traefik/traefik",
+      "fixCommit": "3f10dd442479530560f010167cac2947676d9b29",
+      "parentCommit": "1983c43b5372eb147779f3535caf00d498aa3e75",
+      "files": [
+        "pkg/middlewares/replacepathregex/replace_path_regex.go",
+        "pkg/middlewares/replacepathregex/replace_path_regex_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:12.709Z"
+    },
+    {
       "id": "GHSA-f23p-vx2j-j53r",
       "cve": "CVE-2026-71850",
       "cwe": "CWE-488",
@@ -1006,6 +2509,42 @@
       "minedAt": "2026-08-09T18:46:01.279Z"
     },
     {
+      "id": "GHSA-f25v-x6vr-962g",
+      "cve": null,
+      "cwe": "CWE-1392",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Pheditor: Authentication Bypass in Forced Password-Change Flow via Unverified Current Password",
+      "repo": "pheditor/pheditor",
+      "fixCommit": "0978bcda644832b67357340e2f271e32d86fdf86",
+      "parentCommit": "bf4fe06c0564ae47ef07dc5ada5c1bf41482805f",
+      "files": [
+        "pheditor.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:51.744Z"
+    },
+    {
+      "id": "GHSA-f283-ghqc-fg79",
+      "cve": "CVE-2026-67353",
+      "cwe": "CWE-770",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Guzzle: Unbounded response cookies risk denial of service",
+      "repo": "guzzle/guzzle",
+      "fixCommit": "7b68220d6543f6f80fe62e633361fc9d4ead14d4",
+      "parentCommit": "90bd104afeb0fcc2190c9eb6fd8a441447e4b30d",
+      "files": [
+        "src/Cookie/CookieJar.php",
+        "src/Cookie/FileCookieJar.php",
+        "src/Cookie/SessionCookieJar.php",
+        "src/Cookie/SetCookie.php",
+        "src/RedirectMiddleware.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:57.736Z"
+    },
+    {
       "id": "GHSA-f42x-p2mx-hm8r",
       "cve": "CVE-2026-50558",
       "cwe": "CWE-22",
@@ -1020,6 +2559,82 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:27.350Z"
+    },
+    {
+      "id": "GHSA-f5wm-88jv-g5hx",
+      "cve": null,
+      "cwe": "CWE-693",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Craft CMS: Authenticated RCE through Twig sandbox escape",
+      "repo": "craftcms/cms",
+      "fixCommit": "0b8be1556be4e030578ec779c3e17ffe2e69d7db",
+      "parentCommit": "7dda2810baa9ff67aa90d37dd1df394db385b178",
+      "files": [
+        "src/base/BlockElementInterface.php",
+        "src/base/Element.php",
+        "src/base/ElementInterface.php",
+        "src/elements/Address.php",
+        "src/elements/Asset.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:41.688Z"
+    },
+    {
+      "id": "GHSA-f7g3-2cg6-f5hj",
+      "cve": "CVE-2026-48204",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Apache Camel: camel-mongodb-gridfs producer allows GridFS operation override and NoSQL operator injection via unfiltered  gridfs.*  HTTP headers",
+      "repo": "apache/camel",
+      "fixCommit": "8f0b1acfb89867bc28805d8281fa5c70192e2122",
+      "parentCommit": "b865ecb9fe2d2984995c2ed1d73fa9cbeda9e5f0",
+      "files": [
+        "components/camel-mongodb-gridfs/src/main/java/org/apache/camel/component/mongodb/gridfs/GridFsConstants.java",
+        "dsl/camel-endpointdsl/src/generated/java/org/apache/camel/builder/endpoint/dsl/GridFsEndpointBuilderFactory.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:12.541Z"
+    },
+    {
+      "id": "GHSA-fgjj-px3w-67xx",
+      "cve": "CVE-2026-71327",
+      "cwe": "CWE-694",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Traefik: Gateway API route identity collision allows cross-namespace backend hijacking",
+      "repo": "traefik/traefik",
+      "fixCommit": "a764166656f0cd337f917ac76315c381cca844f9",
+      "parentCommit": "b5ace8eb5d6779980567f5e75efd2d9e08b7e350",
+      "files": [
+        "pkg/provider/kubernetes/gateway/grpcroute.go",
+        "pkg/provider/kubernetes/gateway/httproute.go",
+        "pkg/provider/kubernetes/gateway/kubernetes.go",
+        "pkg/provider/kubernetes/gateway/kubernetes_test.go",
+        "pkg/provider/kubernetes/gateway/tcproute.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:15.410Z"
+    },
+    {
+      "id": "GHSA-fh2f-xfxc-q9cc",
+      "cve": "CVE-2026-54650",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "openhole-server vulnerable to path traversal via URL-decoded request path",
+      "repo": "bablilayoub/openhole",
+      "fixCommit": "a28c27adde2a7ed0c347b730c8707208c0f78ed3",
+      "parentCommit": "d0ca8050416df69abe4095497b9ebe8f1078f3de",
+      "files": [
+        "internal/client/local_proxy.go",
+        "internal/client/local_proxy_test.go",
+        "internal/server/public_proxy.go",
+        "internal/shared/version.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:32.881Z"
     },
     {
       "id": "GHSA-fm2f-4339-4p2f",
@@ -1055,6 +2670,22 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:46:59.967Z"
+    },
+    {
+      "id": "GHSA-fq3f-m5qm-99f5",
+      "cve": "CVE-2026-54712",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "OpenTelemetry Javaagent RMI context propagation allows resource exhaustion",
+      "repo": "open-telemetry/opentelemetry-java-instrumentation",
+      "fixCommit": "6ef18806d5daa4913619e4cb33d2d7ed6a853c22",
+      "parentCommit": "fdc861c6d9c4dcfbd6dbedf0931bf0d7a1478ea6",
+      "files": [
+        "instrumentation/rmi/javaagent/src/main/java/io/opentelemetry/javaagent/instrumentation/rmi/context/ContextPayload.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:06:59.887Z"
     },
     {
       "id": "GHSA-fr6g-7cq8-fg82",
@@ -1093,6 +2724,24 @@
       "minedAt": "2026-08-09T21:47:00.488Z"
     },
     {
+      "id": "GHSA-fwjx-9p69-h25h",
+      "cve": "CVE-2026-73506",
+      "cwe": "CWE-150",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Oh My Posh: Terminal escape sequence injection via unsanitized prompt segment data",
+      "repo": "JanDeDobbeleer/oh-my-posh",
+      "fixCommit": "edcf3c88f3fb582e84358b385c49d33d04c04224",
+      "parentCommit": "88ddbe0b0a4dd13cc345996108c9869493f2c690",
+      "files": [
+        "src/terminal/writer.go",
+        "src/terminal/writer_hyperlink_test.go",
+        "src/terminal/writer_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:41.272Z"
+    },
+    {
       "id": "GHSA-fxqj-rqcc-2cmp",
       "cve": "CVE-2026-69153",
       "cwe": "CWE-22",
@@ -1107,6 +2756,38 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T21:46:52.625Z"
+    },
+    {
+      "id": "GHSA-g2gp-3wwq-f4ph",
+      "cve": null,
+      "cwe": "CWE-407",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "league/commonmark: Denial of service via adjacent inline attribute blocks",
+      "repo": "thephpleague/commonmark",
+      "fixCommit": "2d4c0fafa62501be919262064cffa6d71687430b",
+      "parentCommit": "6cfa16c7f37e2748114c56d9375a09af656b995c",
+      "files": [
+        "src/Extension/Attributes/Event/AttributesListener.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:43.745Z"
+    },
+    {
+      "id": "GHSA-g35j-m5xg-vh3q",
+      "cve": "CVE-2026-57497",
+      "cwe": "CWE-770",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "webtransport-go: Memory Exhaustion Attack due to Buffering of Unknown Capsules",
+      "repo": "quic-go/webtransport-go",
+      "fixCommit": "3aecd11736579530ff067651c30a543eb0b4b8c4",
+      "parentCommit": "683e2207daa923ac928cdcb82710c94d1ea25a3d",
+      "files": [
+        "session.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:44.266Z"
     },
     {
       "id": "GHSA-g366-23fw-ggp6",
@@ -1125,6 +2806,22 @@
       "minedAt": "2026-08-09T18:46:12.809Z"
     },
     {
+      "id": "GHSA-g3hq-hphg-8fhh",
+      "cve": null,
+      "cwe": "CWE-78",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Pheditor: Terminal command-allowlist bypass via argument injection leads to RCE — surviving vector after the metacharacter-sanitization fixes",
+      "repo": "pheditor/pheditor",
+      "fixCommit": "f40f5070d5a171b65359bc87568734d31de498e1",
+      "parentCommit": "a64eb935ce699e43f1ea60e46d47f33e2f87ffd6",
+      "files": [
+        "pheditor.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:52.334Z"
+    },
+    {
       "id": "GHSA-g423-grf7-98rv",
       "cve": "CVE-2026-70484",
       "cwe": "CWE-862",
@@ -1139,6 +2836,70 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:10.042Z"
+    },
+    {
+      "id": "GHSA-g446-98w2-8p5w",
+      "cve": "CVE-2026-59883",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Guzzle: Cookie Disclosure and Injection via IP-Address Domains",
+      "repo": "guzzle/guzzle",
+      "fixCommit": "b9944c161b12d9ee9c9334cfc5b9659ecd7451f8",
+      "parentCommit": "1289bf2975291b73e29e9422da675c87f56d28f1",
+      "files": [
+        "src/Cookie/SetCookie.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:58.206Z"
+    },
+    {
+      "id": "GHSA-g65v-27r3-5p6m",
+      "cve": "CVE-2016-1000305",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "guard-livereload has a directory traversal vulnerability",
+      "repo": "guard/guard-livereload",
+      "fixCommit": "0e98469e6b9d81a5bd415781534a23d087c271f8",
+      "parentCommit": "09ecacc320029f41b86d70cc55f239651b904c02",
+      "files": [
+        "lib/guard/livereload/websocket.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:51.032Z"
+    },
+    {
+      "id": "GHSA-g6v3-7xmc-w563",
+      "cve": "CVE-2026-54332",
+      "cwe": "CWE-770",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "GoPacket's sFlow ExtendedGatewayFlow decoder: unbounded attacker-controlled allocation (104-byte UDP datagram -> up to 16 GiB make) -> unauthenticated remote Do",
+      "repo": "gopacket/gopacket",
+      "fixCommit": "76119086f5936aacd7088bdf97d565501bb6c4cc",
+      "parentCommit": "145859d0eaee1a6f5925ffb93851c976449c3311",
+      "files": [
+        "layers/sflow.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:37.719Z"
+    },
+    {
+      "id": "GHSA-g9j2-8w95-3vwv",
+      "cve": "CVE-2026-55497",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Cloudreve: Denial of Service - Image decompression / pixel bomb in thumbnail & avatar decoding crashes the server",
+      "repo": "cloudreve/cloudreve",
+      "fixCommit": "3607f79bb44c35d0be4fa8b6e24c0502b51415a9",
+      "parentCommit": "7e1289d552794bdbeb551be78456115c87dcb3da",
+      "files": [
+        "pkg/thumb/builtin.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:45.791Z"
     },
     {
       "id": "GHSA-gcvv-72q8-9v76",
@@ -1156,6 +2917,54 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:11.677Z"
+    },
+    {
+      "id": "GHSA-gf8h-gq53-288j",
+      "cve": "CVE-2026-62263",
+      "cwe": "CWE-502",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "OpenAM: WebAuthn Java deserialization RCE via ObjectInputFilter depth>1 bypass",
+      "repo": "OpenIdentityPlatform/OpenAM",
+      "fixCommit": "9dd0fbe07f70f118cf45042d3a9ffb32f3c21e08",
+      "parentCommit": "57a39069631f4c79d7d21b86cf244fcfc650ba1a",
+      "files": [
+        "openam-authentication/openam-auth-webauthn/src/main/java/org/openidentityplatform/openam/authentication/modules/webauthn/WebAuthnAuthentication.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:03.671Z"
+    },
+    {
+      "id": "GHSA-ghhp-3qvg-889p",
+      "cve": "CVE-2026-54463",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "websocket-driver: Memory exhaustion via abuse of protocol length headers",
+      "repo": "faye/websocket-driver-ruby",
+      "fixCommit": "d0141f041f6e3677a951255d547a313e732ccbe0",
+      "parentCommit": "1e4475e3753e3b614c49739e8eb0bc3e0d1c2580",
+      "files": [
+        "lib/websocket/driver/draft75.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:03.631Z"
+    },
+    {
+      "id": "GHSA-ghrq-5wpp-hxx5",
+      "cve": "CVE-2026-52856",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Wings: Maliciously crafted packet during SFTP connection handshake causes denial of service",
+      "repo": "pterodactyl/wings",
+      "fixCommit": "8e49c7c0eda815d3ada171831876a1c14c493026",
+      "parentCommit": "8929a7f854ce2f711953a55ffa5bc845f062ee93",
+      "files": [
+        "sftp/server.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:27.179Z"
     },
     {
       "id": "GHSA-gm37-52c6-37mw",
@@ -1195,6 +3004,163 @@
       "minedAt": "2026-08-09T18:46:16.990Z"
     },
     {
+      "id": "GHSA-gwfq-86j8-7qhv",
+      "cve": null,
+      "cwe": "CWE-209",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "rclone: Verbose Stack Trace Disclosure in RC API Error Responses",
+      "repo": "rclone/rclone",
+      "fixCommit": "ff43a1e3ae17627c80e523a0ca7445f96516d199",
+      "parentCommit": "1df2b70753286c1dfe8366078cbedfdf7f96472c",
+      "files": [
+        "fs/rc/jobs/job.go",
+        "fs/rc/jobs/job_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:22.228Z"
+    },
+    {
+      "id": "GHSA-gx4c-2hqx-cw2r",
+      "cve": null,
+      "cwe": "CWE-319",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "rclone: S3 backend does not strip X-Amz-Security-Token on a same-host HTTPS->HTTP redirect",
+      "repo": "rclone/rclone",
+      "fixCommit": "1a28451ea6fc8ac1806b0e9923dcb5b3f543f7fa",
+      "parentCommit": "dade21c1616035b044df0eef7ee6a85aeb06a139",
+      "files": [
+        "backend/s3/s3.go",
+        "backend/s3/s3_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:18.070Z"
+    },
+    {
+      "id": "GHSA-h2wf-967x-gxvw",
+      "cve": "CVE-2026-62944",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "MantisBT: Stored XSS in print_all_bug_page_word.php",
+      "repo": "mantisbt/mantisbt",
+      "fixCommit": "bdd0e364f62759de272dfd4c89b4f51d27be9daa",
+      "parentCommit": "5f7bc4b9529c8e9982b323ac950ec4ef335153e1",
+      "files": [
+        "print_all_bug_page_word.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:59.238Z"
+    },
+    {
+      "id": "GHSA-h4mf-4v27-hggj",
+      "cve": null,
+      "cwe": "CWE-319",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "rclone: WebDAV Credentials Survive a Same-Host HTTPS-to-HTTP Redirect",
+      "repo": "rclone/rclone",
+      "fixCommit": "59b513b0e74fd2943ccbb8891d5ce00f860e6d26",
+      "parentCommit": "ed983c952d401fd032fa7eb9fa9ad46940c92db7",
+      "files": [
+        "backend/webdav/webdav.go",
+        "lib/rest/rest.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:19.022Z"
+    },
+    {
+      "id": "GHSA-h4pc-58cc-hc95",
+      "cve": "CVE-2026-59955",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Apollo ConfigService access key authentication bypass via raw config file appId parsing",
+      "repo": "apolloconfig/apollo",
+      "fixCommit": "310809d557e01c6803051736cd525e333ffe00ec",
+      "parentCommit": "17879a9dc9fa6546db6ae725341908a377e601cb",
+      "files": [
+        "apollo-configservice/src/main/java/com/ctrip/framework/apollo/configservice/ConfigServiceAutoConfiguration.java",
+        "apollo-configservice/src/main/java/com/ctrip/framework/apollo/configservice/util/AccessKeyUtil.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:07.940Z"
+    },
+    {
+      "id": "GHSA-h669-8m4g-r2hc",
+      "cve": "CVE-2026-67432",
+      "cwe": "CWE-770",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "MCP Ruby SDK: Unbounded JSON-RPC request body causes uncontrolled memory allocation in StreamableHTTPTransport",
+      "repo": "modelcontextprotocol/ruby-sdk",
+      "fixCommit": "772e0cb1f9db69312006926eee59a7287ad50166",
+      "parentCommit": "0ede5fc14654db59e2f8ed23d2b1285e3c849287",
+      "files": [
+        "lib/mcp/client/stdio.rb",
+        "lib/mcp/server/transports/streamable_http_transport.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:53.230Z"
+    },
+    {
+      "id": "GHSA-h8w8-99g7-qmvj",
+      "cve": "CVE-2026-54904",
+      "cwe": "CWE-835",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Concurrent Ruby : `AtomicReference#update` livelocks when the stored value is `Float::NAN`",
+      "repo": "ruby-concurrency/concurrent-ruby",
+      "fixCommit": "6e37e0644b83b182971dc540d2e4bee38df61386",
+      "parentCommit": "2825cfa12cb708b76557803957f76862eb1151a2",
+      "files": [
+        "lib/concurrent-ruby/concurrent/atomic_reference/numeric_cas_wrapper.rb",
+        "spec/concurrent/atomic/atomic_reference_spec.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:06.328Z"
+    },
+    {
+      "id": "GHSA-h95v-h523-3mw8",
+      "cve": "CVE-2026-67354",
+      "cwe": "CWE-201",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Guzzle: URI fragments disclosed in redirect Referer headers",
+      "repo": "guzzle/guzzle",
+      "fixCommit": "7b68220d6543f6f80fe62e633361fc9d4ead14d4",
+      "parentCommit": "90bd104afeb0fcc2190c9eb6fd8a441447e4b30d",
+      "files": [
+        "src/Cookie/CookieJar.php",
+        "src/Cookie/FileCookieJar.php",
+        "src/Cookie/SessionCookieJar.php",
+        "src/Cookie/SetCookie.php",
+        "src/RedirectMiddleware.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:56.790Z"
+    },
+    {
+      "id": "GHSA-hcm8-x79p-wx2w",
+      "cve": "CVE-2026-48205",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Apache Camel DNS Has Improper Input Validation, Leading to Server-Side Request Forgery (SSRF) ",
+      "repo": "apache/camel",
+      "fixCommit": "bdd40cf23f2b22cd293ddad319069a7b3b3c6c70",
+      "parentCommit": "8f0b1acfb89867bc28805d8281fa5c70192e2122",
+      "files": [
+        "components/camel-dns/src/main/java/org/apache/camel/component/dns/DnsComponent.java",
+        "components/camel-dns/src/main/java/org/apache/camel/component/dns/DnsConstants.java",
+        "components/camel-dns/src/main/java/org/apache/camel/component/dns/DnsWikipediaProducer.java",
+        "dsl/camel-endpointdsl/src/generated/java/org/apache/camel/builder/endpoint/dsl/DnsEndpointBuilderFactory.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:12.022Z"
+    },
+    {
       "id": "GHSA-hh9p-6wh2-4mfc",
       "cve": null,
       "cwe": "CWE-73",
@@ -1211,6 +3177,110 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:02.706Z"
+    },
+    {
+      "id": "GHSA-hhmc-q9hp-r662",
+      "cve": "CVE-2026-63222",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "CodeIgniter: Path traversal in UploadedFile::move() when using client-provided filenames",
+      "repo": "codeigniter4/CodeIgniter4",
+      "fixCommit": "20ebcf4694d96d3c97fbc3938e360730e4f54618",
+      "parentCommit": "f5e463b9a3e986389ce285963e51a7f1fab6559f",
+      "files": [
+        "system/HTTP/Files/UploadedFile.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:36.063Z"
+    },
+    {
+      "id": "GHSA-hp74-gm6m-2qm5",
+      "cve": null,
+      "cwe": "CWE-287",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Pocket ID has a reauthentication bypass via one-time access token login — passkey step-up requirement defeated by JWT freshness check that accepts any login met",
+      "repo": "pocket-id/pocket-id",
+      "fixCommit": "978ac87deffec58beaccd15aead975e91b94c8a5",
+      "parentCommit": "59fe481af9284406e0c45385be729a293e90ffaa",
+      "files": [
+        "backend/internal/service/oidc_service.go",
+        "backend/internal/service/oidc_service_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:39.238Z"
+    },
+    {
+      "id": "GHSA-hpcc-26xq-25fv",
+      "cve": "CVE-2026-56816",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Netty: Memory Exhaustion via HTTP/3 Reserved Frame Types",
+      "repo": "netty/netty",
+      "fixCommit": "5b68c61f37aa4a3045cba624cbea239655c9003b",
+      "parentCommit": "de5d27666a5b5ff52fc7b115122bede78c2b0b24",
+      "files": [
+        "codec-compression/src/main/java/io/netty/handler/codec/compression/Bzip2BlockDecompressor.java",
+        "codec-dns/src/main/java/io/netty/handler/codec/dns/DefaultDnsRecordDecoder.java",
+        "codec-dns/src/main/java/io/netty/handler/codec/dns/DnsCodecUtil.java",
+        "codec-haproxy/src/main/java/io/netty/handler/codec/haproxy/HAProxyMessage.java",
+        "codec-haproxy/src/main/java/io/netty/handler/codec/haproxy/HAProxyMessageDecoder.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:06.528Z"
+    },
+    {
+      "id": "GHSA-hq33-8jgp-8qq3",
+      "cve": "CVE-2026-64863",
+      "cwe": "CWE-284",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "goshs --no-delete WebDAV MOVE bypass allows file deletion/overwrite",
+      "repo": "goshs-labs/goshs",
+      "fixCommit": "0444ac6b1a8176ddae70d940adf7a26b2e5a6c29",
+      "parentCommit": "ad7d32d1b26aa98cd23b63887d0b71c0f3f2deb9",
+      "files": [
+        "httpserver/server.go",
+        "httpserver/webdav_acl.go",
+        "httpserver/webdav_acl_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:34.311Z"
+    },
+    {
+      "id": "GHSA-hq88-5x99-x3gf",
+      "cve": "CVE-2026-55502",
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Cloudreve OAuth Admin.Read scope can update OneDrive storage policy credentials",
+      "repo": "cloudreve/cloudreve",
+      "fixCommit": "9e9fb43e7288924cca052e5fdbb70d5365ef1ede",
+      "parentCommit": "0b00dd308f132d6e6e8476857ef79f4865600bbc",
+      "files": [
+        "routers/router.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:44.741Z"
+    },
+    {
+      "id": "GHSA-hq9q-27g5-qwpj",
+      "cve": "CVE-2026-59865",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Microsoft Kiota: Command injection via x-ms-kiota-info dependencyInstallCommand surfaced by `kiota info`",
+      "repo": "microsoft/kiota",
+      "fixCommit": "e1d6d76c6eecbe50785429166faaf8c831e036c6",
+      "parentCommit": "5aa4a01c663c5dad0ada245f0117797385c26c6e",
+      "files": [
+        "src/Kiota.Builder/LanguageInformation.cs",
+        "src/Kiota.Builder/OpenApiExtensions/OpenApiKiotaExtension.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:23.028Z"
     },
     {
       "id": "GHSA-hr7p-wg7r-hg9m",
@@ -1233,6 +3303,91 @@
       "minedAt": "2026-08-09T21:47:24.083Z"
     },
     {
+      "id": "GHSA-j6gc-4893-qwmp",
+      "cve": "CVE-2026-64865",
+      "cwe": "CWE-362",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "New API: Redis user quota cache overwrite via PUT /api/user/self allows quota bypass",
+      "repo": "QuantumNous/new-api",
+      "fixCommit": "dfc0d6324b40c1d6c2972e524409f933541bfb0f",
+      "parentCommit": "bfddc5fea0ba9010a14d7f88f43f08478aac9446",
+      "files": [
+        "controller/subscription.go",
+        "controller/user.go",
+        "model/user.go",
+        "model/user_cache.go",
+        "router/api-router.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:08.023Z"
+    },
+    {
+      "id": "GHSA-j7fr-3v8c-3qc3",
+      "cve": "CVE-2026-54620",
+      "cwe": "CWE-416",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "sqlite3-ruby has Use-After-Free in SQLite Aggregate Function Callbacks",
+      "repo": "sparklemotion/sqlite3-ruby",
+      "fixCommit": "b24e1e6076528b7f95f99acf7a81c70d0004c726",
+      "parentCommit": "9abc9550a62859c182f6976813d96b777941be44",
+      "files": [
+        "lib/sqlite3/database.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:57.539Z"
+    },
+    {
+      "id": "GHSA-j8qw-6jw8-r297",
+      "cve": "CVE-2026-59943",
+      "cwe": "CWE-209",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Dompdf: Embedded SVG images can leak existence of files and directories within the filesystem",
+      "repo": "dompdf/dompdf",
+      "fixCommit": "6a58996865db05d8fede748507e50ac4b8c5bfd0",
+      "parentCommit": "75c39a083bf7298044fb27399b4cc183054438b4",
+      "files": [
+        "src/Helpers.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:54.231Z"
+    },
+    {
+      "id": "GHSA-j92g-9f8w-j867",
+      "cve": "CVE-2026-54291",
+      "cwe": "CWE-636",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "PostgreSQL JDBC Driver: Silent channel-binding authentication downgrade via unsupported certificate algorithms",
+      "repo": "pgjdbc/pgjdbc",
+      "fixCommit": "77df98e4e66c12936ded3478a0954f6f580bad99",
+      "parentCommit": "68c53a435291fea8be40eb1d9c550311743d326d",
+      "files": [
+        "pgjdbc/src/main/java/org/postgresql/core/v3/ScramAuthenticator.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:07.496Z"
+    },
+    {
+      "id": "GHSA-jfm3-95jq-q3rf",
+      "cve": null,
+      "cwe": "CWE-407",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "league/commonmark:  Denial of service via duplicate footnote definitions",
+      "repo": "thephpleague/commonmark",
+      "fixCommit": "66028124a17ba193da7b11cc3dfda92df21bfbf4",
+      "parentCommit": "5c9b67ac6c1f44ee23696208181a05c13afb492f",
+      "files": [
+        "src/Extension/Footnote/Event/GatherFootnotesListener.php",
+        "src/Extension/Footnote/Event/NumberFootnotesListener.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:43.211Z"
+    },
+    {
       "id": "GHSA-jm22-3w23-5q7w",
       "cve": "CVE-2026-70590",
       "cwe": "CWE-200",
@@ -1252,6 +3407,23 @@
       "minedAt": "2026-08-09T18:46:12.202Z"
     },
     {
+      "id": "GHSA-jm28-2wcr-qf3h",
+      "cve": "CVE-2026-67439",
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "OliveTin: StartActionAndWait Endpoints Bypass `logs` Permission and Return Action Output",
+      "repo": "OliveTin/OliveTin",
+      "fixCommit": "e421780c9885aa5024d2f47b4ed4898f2f18eb90",
+      "parentCommit": "995ff79736f2bccc364448a3ece84087b550b232",
+      "files": [
+        "service/internal/api/api.go",
+        "service/internal/api/api_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:29.403Z"
+    },
+    {
       "id": "GHSA-jm78-9fvv-mhgr",
       "cve": null,
       "cwe": "CWE-74",
@@ -1266,6 +3438,96 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:02.187Z"
+    },
+    {
+      "id": "GHSA-jp94-3292-c3xv",
+      "cve": "CVE-2026-40295",
+      "cwe": "CWE-601",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Devise has an Open Redirect via Unvalidated `request.referrer` in Timeoutable Session Timeout Handler",
+      "repo": "heartcombo/devise",
+      "fixCommit": "025fe2124f9928766fc46520e999633b598d0360",
+      "parentCommit": "7ca7ed9c174525a4d36167441b35af4a0991b6af",
+      "files": [
+        "lib/devise/controllers/store_location.rb",
+        "lib/devise/failure_app.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:07.816Z"
+    },
+    {
+      "id": "GHSA-jpcw-4wr7-c3vq",
+      "cve": "CVE-2026-73502",
+      "cwe": "CWE-476",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "kin-openapi openapi3filter: unauthenticated nil-pointer panic when validating a request against a `content` parameter whose media type has no schema",
+      "repo": "getkin/kin-openapi",
+      "fixCommit": "68ac2affa325514d7d6e731204d6a1edf6bdff64",
+      "parentCommit": "3e5d7f4d5a0c335d8085de5c0e552efe61e37e03",
+      "files": [
+        "openapi3filter/req_resp_decoder.go",
+        "openapi3filter/validate_request_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:40.208Z"
+    },
+    {
+      "id": "GHSA-jqwh-526h-c92j",
+      "cve": "CVE-2026-59859",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Microsoft Kiota: Code Generation Literal Injection in Kiota PHP Generator",
+      "repo": "microsoft/kiota",
+      "fixCommit": "5e2a211ac4261988fbdc72c3b268596ea8837b87",
+      "parentCommit": "165b07e3e4924d0fb648d52215884f98033574fe",
+      "files": [
+        "src/Kiota.Builder/Writers/Php/CodeEnumWriter.cs",
+        "src/Kiota.Builder/Writers/Php/CodeMethodWriter.cs",
+        "src/Kiota.Builder/Writers/Php/CodePropertyWriter.cs",
+        "src/Kiota.Builder/Writers/Php/PhpConventionService.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:25.203Z"
+    },
+    {
+      "id": "GHSA-jr4p-4xjh-fwvw",
+      "cve": "CVE-2026-50552",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Koel: Server-Side Request Forgery (SSRF) in radio station creation due to missing validation bail",
+      "repo": "koel/koel",
+      "fixCommit": "5f6ce2cefd08f437a269236b677ad971517ccbb6",
+      "parentCommit": "8ee1de0f5589ef34d3e3bbb9c9555a5de69eaf06",
+      "files": [
+        "app/Ai/Tools/AddRadioStation.php",
+        "app/Http/Requests/API/Radio/RadioStationStoreRequest.php",
+        "app/Http/Requests/API/Radio/RadioStationUpdateRequest.php",
+        "app/Http/Requests/Subsonic/CreateInternetRadioStationRequest.php",
+        "app/Http/Requests/Subsonic/UpdateInternetRadioStationRequest.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:08:01.835Z"
+    },
+    {
+      "id": "GHSA-jwjp-4649-v8jp",
+      "cve": null,
+      "cwe": "CWE-125",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "SIPSorcery vulnerable to Denial of Service via out-of-bounds read in SCTP SACK chunk parsing",
+      "repo": "sipsorcery-org/sipsorcery",
+      "fixCommit": "a2466550bb2a28821c73fb1961bc33dcc467f8cf",
+      "parentCommit": "70a3219bbcd2ca42bac2bf83ca903d7e03dceb23",
+      "files": [
+        "src/SIPSorcery/net/SCTP/Chunks/SctpSackChunk.cs",
+        "src/SIPSorcery/net/WebRTC/RTCSctpTransport.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:20.392Z"
     },
     {
       "id": "GHSA-jx74-cqjv-2c67",
@@ -1304,6 +3566,22 @@
       "minedAt": "2026-08-09T21:47:08.470Z"
     },
     {
+      "id": "GHSA-jxpj-9j24-w337",
+      "cve": "CVE-2025-32781",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Apollo Portal: There is a risk of unauthorized access to the Apollo configuration center",
+      "repo": "apolloconfig/apollo",
+      "fixCommit": "362735ded4f13b62f6ab9df135d7096066e8e291",
+      "parentCommit": "33318b0f951870afb534f75d39e2a9328a1c2024",
+      "files": [
+        "apollo-portal/src/main/java/com/ctrip/framework/apollo/portal/controller/ReleaseController.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:08.902Z"
+    },
+    {
       "id": "GHSA-m34r-v34r-rf9q",
       "cve": "CVE-2026-54655",
       "cwe": "CWE-94",
@@ -1319,6 +3597,38 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:31.903Z"
+    },
+    {
+      "id": "GHSA-m6jg-wr9m-cg2f",
+      "cve": "CVE-2026-55062",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "uniget CLI has Path Traversal in Hook Files - Directory Escape Vulnerability",
+      "repo": "uniget-org/cli",
+      "fixCommit": "7b4f18a9f00f0955f830c7ccf266ed0de5f9fd91",
+      "parentCommit": "2bb8a4a6cb8f37a88e426aac3dd802512803a87e",
+      "files": [
+        "cmd/uniget/hooks.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:07.038Z"
+    },
+    {
+      "id": "GHSA-m7jc-g4rc-jmvh",
+      "cve": "CVE-2026-32593",
+      "cwe": "CWE-89",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Winter: SQL Injection in Backend Filter Widget numberrange Scope via numbersFromAjax",
+      "repo": "wintercms/winter",
+      "fixCommit": "50713de95adf5298536d93f4d999652525d36d43",
+      "parentCommit": "555e67c84b503b60aa0a5775382087c5da97b7ca",
+      "files": [
+        "modules/backend/widgets/Filter.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:34.135Z"
     },
     {
       "id": "GHSA-mfx4-hv73-q22v",
@@ -1351,6 +3661,56 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:11.615Z"
+    },
+    {
+      "id": "GHSA-mj63-m3rc-8ppr",
+      "cve": null,
+      "cwe": "CWE-405",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "league/commonmark: Denial of service via deeply nested XML output",
+      "repo": "thephpleague/commonmark",
+      "fixCommit": "b5ac8c3947ca81844e85a09c7e0a5b4148bde2e1",
+      "parentCommit": "2d4c0fafa62501be919262064cffa6d71687430b",
+      "files": [
+        ".phpstorm.meta.php",
+        "src/Environment/Environment.php",
+        "src/Xml/XmlRenderer.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:42.703Z"
+    },
+    {
+      "id": "GHSA-mjqf-28ph-426h",
+      "cve": "CVE-2026-54680",
+      "cwe": "CWE-74",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Logging operator has Fluentd configuration injection that allows remote code execution",
+      "repo": "kube-logging/logging-operator",
+      "fixCommit": "cf437d7f1e056c78740bf5716ac8bdebcf002425",
+      "parentCommit": "8c34e9a61e6587f15acbf147fc1be895898c6b67",
+      "files": [
+        "pkg/sdk/logging/model/render/fluent.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:31.107Z"
+    },
+    {
+      "id": "GHSA-mmj4-63m4-r6h5",
+      "cve": "CVE-2026-63223",
+      "cwe": "CWE-434",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "CodeIgniter: Uploaded file extension validation bypass in `is_image` and `mime_in` rules",
+      "repo": "codeigniter4/CodeIgniter4",
+      "fixCommit": "b6e9a4fa1dca2df3d3f261bdf61532df8c6420aa",
+      "parentCommit": "20ebcf4694d96d3c97fbc3938e360730e4f54618",
+      "files": [
+        "system/Validation/StrictRules/FileRules.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:35.615Z"
     },
     {
       "id": "GHSA-mq44-7p77-q5h7",
@@ -1404,6 +3764,40 @@
       "minedAt": "2026-08-09T21:46:50.211Z"
     },
     {
+      "id": "GHSA-mx5j-mp4f-g8jg",
+      "cve": "CVE-2026-53510",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Savon::Model evaluates WSDL operation names as Ruby source",
+      "repo": "savonrb/savon",
+      "fixCommit": "8f22eb543e7436f6247172c9be47e22792d375e9",
+      "parentCommit": "3309d9acad1a670a571c49068a30f1a83ae71a3c",
+      "files": [
+        "lib/savon/model.rb",
+        "spec/savon/model_spec.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:51.547Z"
+    },
+    {
+      "id": "GHSA-p279-2cqp-84jg",
+      "cve": "CVE-2026-73644",
+      "cwe": "CWE-285",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "OpenDJ SASL PLAIN authzid bypassing the proxy ACI scope check",
+      "repo": "OpenIdentityPlatform/OpenDJ",
+      "fixCommit": "5c326850f1ab945cfca7ac9c5aaf77d1052c6bed",
+      "parentCommit": "131e8576dcf3613f944c3e02527959bbf52370c3",
+      "files": [
+        "opendj-server-legacy/src/main/java/org/opends/server/extensions/PlainSASLMechanismHandler.java",
+        "opendj-server-legacy/src/main/java/org/opends/server/extensions/SASLContext.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:01.772Z"
+    },
+    {
       "id": "GHSA-p538-c434-8v24",
       "cve": null,
       "cwe": "CWE-88",
@@ -1436,6 +3830,75 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:21.816Z"
+    },
+    {
+      "id": "GHSA-p845-629j-rcj6",
+      "cve": "CVE-2026-64866",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "New API: Admin can reset passkeys for same-level or higher-privileged users",
+      "repo": "QuantumNous/new-api",
+      "fixCommit": "0936e2504655a5cbf7bc3c388f6d3e2bb24916d3",
+      "parentCommit": "5dd0d3bcbd7b1d523bd046a5f9cf9fc8ce28d579",
+      "files": [
+        "controller/custom_oauth.go",
+        "controller/passkey.go",
+        "controller/task_video.go",
+        "controller/twofa.go",
+        "controller/user.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:08.569Z"
+    },
+    {
+      "id": "GHSA-p8x7-9vfw-p7vc",
+      "cve": null,
+      "cwe": "CWE-285",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Craft CMS: Arbitrary user password reset leading to administrator account takeover",
+      "repo": "craftcms/cms",
+      "fixCommit": "cbdf45fbd3ab548b147d7de375f6f6f580b7c294",
+      "parentCommit": "06c799148537ce960f6bc86e162b499947040eda",
+      "files": [
+        "src/elements/User.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:41.105Z"
+    },
+    {
+      "id": "GHSA-pfvc-3p5h-x7h6",
+      "cve": "CVE-2026-52855",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Wings exposes node configuration secrets through egg configuration-file templating",
+      "repo": "pterodactyl/wings",
+      "fixCommit": "eb65e27ae077a63e38518c490768486af1cd86a9",
+      "parentCommit": "c2de795725e4178dc8c3eb359466dcde8ae3e681",
+      "files": [
+        "parser/helpers.go",
+        "parser/parser.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:27.698Z"
+    },
+    {
+      "id": "GHSA-pfvm-w89x-94jw",
+      "cve": null,
+      "cwe": "CWE-248",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "SIPSorcery: Malformed UDP datagram crashes TurnServer receive loop with no restart, disabling TURN UDP relay for all clients (DoS)",
+      "repo": "sipsorcery-org/sipsorcery",
+      "fixCommit": "ccb0b5a845efa2fb131fd00de4f5321bae627f29",
+      "parentCommit": "b5786e4409714a7813fd3391880e86ef660deadb",
+      "files": [
+        "src/SIPSorcery/net/TURN/TurnServer.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:19.894Z"
     },
     {
       "id": "GHSA-pgwh-4jj4-qm8v",
@@ -1474,6 +3937,56 @@
       "minedAt": "2026-08-09T21:47:18.433Z"
     },
     {
+      "id": "GHSA-pmhh-3w7g-xqp8",
+      "cve": "CVE-2026-71497",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "jsoup: Cleaner may expose markup with custom raw-text elements",
+      "repo": "jhy/jsoup",
+      "fixCommit": "92f1aca552548b484bc7d4b94c51e48b8e6eca70",
+      "parentCommit": "a682fd5bc8acdf841e5f858e8a19e3d2c92c4df8",
+      "files": [
+        "src/main/java/org/jsoup/parser/TagSet.java",
+        "src/main/java/org/jsoup/parser/Token.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:06:58.782Z"
+    },
+    {
+      "id": "GHSA-pmwx-rm49-xv39",
+      "cve": null,
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "ActiveRecord::Tenanted::Storage::DiskService#path_for has a possible path traversal",
+      "repo": "basecamp/activerecord-tenanted",
+      "fixCommit": "b242c8ad9bf58bbd7f5a032d153b0f29db54b9ba",
+      "parentCommit": "fd97ea2a4815a903f7c7a07756b50a0afa5f5478",
+      "files": [
+        "lib/active_record/tenanted/storage.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:55.479Z"
+    },
+    {
+      "id": "GHSA-pp92-crg2-gfv9",
+      "cve": "CVE-2026-54603",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "OAuth2::Client#request: Protocol-relative redirect Location overrides authority, leaking bearer Authorization to attacker host",
+      "repo": "ruby-oauth/oauth2",
+      "fixCommit": "0f0a474f1b38453e119e660c2daca742d4378ce9",
+      "parentCommit": "1118527f311a23d06feede403b88b8f6bd2a4eed",
+      "files": [
+        "lib/oauth2/client.rb",
+        "spec/oauth2/client_spec.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:56.525Z"
+    },
+    {
       "id": "GHSA-pr22-p9rp-2cqv",
       "cve": "CVE-2026-70596",
       "cwe": "CWE-79",
@@ -1490,6 +4003,195 @@
       ],
       "language": "javascript",
       "minedAt": "2026-08-09T18:46:08.204Z"
+    },
+    {
+      "id": "GHSA-prq8-7wvh-44qh",
+      "cve": "CVE-2026-54605",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "OAuth: Cross-origin token-request redirects can expose signed request metadata",
+      "repo": "ruby-oauth/oauth",
+      "fixCommit": "d069dc8c4c9631947451215f07460d6cdf0caf3f",
+      "parentCommit": "d898ad3e5ec33f413a2c7b8d1460068585c3476e",
+      "files": [
+        "lib/oauth/consumer.rb",
+        "spec/oauth/consumer_spec.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:57.060Z"
+    },
+    {
+      "id": "GHSA-pxcc-8665-phx8",
+      "cve": "CVE-2026-49342",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "YARD static cache reads raw traversal paths before router sanitization",
+      "repo": "lsegal/yard",
+      "fixCommit": "f78c19f0dd33a407085b4ed181bb60c0aa0078b4",
+      "parentCommit": "d29a77cd5fe7ea2be352e4079c93c5dc216ccefe",
+      "files": [
+        "lib/yard/server/commands/base.rb",
+        "lib/yard/server/static_caching.rb",
+        "spec/server/commands/base_spec.rb",
+        "spec/server/static_caching_spec.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:04.570Z"
+    },
+    {
+      "id": "GHSA-q6hh-gp44-4hcm",
+      "cve": "CVE-2026-52857",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Wings: Maliciously or erroneously created parsed config files can cause wings process to OOM",
+      "repo": "pterodactyl/wings",
+      "fixCommit": "5f71f65711b6b9e6f913bec94a7b36d9a5eaae49",
+      "parentCommit": "3317ce1a6e869fb6851c13a43d075a8b158f9c4c",
+      "files": [
+        "parser/parser.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:28.181Z"
+    },
+    {
+      "id": "GHSA-q939-rpr3-3284",
+      "cve": "CVE-2026-48798",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "SSH.NET: ScpClient Recursive Download Allows Arbitrary File Write via Server-Controlled SCP Filenames",
+      "repo": "sshnet/SSH.NET",
+      "fixCommit": "600be0de543765995a189b5d7cd4efac5007f3ce",
+      "parentCommit": "c66b9f8fb06c12e71761e58a577b1e796026310f",
+      "files": [
+        "src/Renci.SshNet/ScpClient.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:20.819Z"
+    },
+    {
+      "id": "GHSA-qcxp-gm7m-4j5v",
+      "cve": "CVE-2026-50559",
+      "cwe": "CWE-41",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Quarkus: Authentication/Authorization Bypass via Advanced Path Normalization Vulnerabilities",
+      "repo": "quarkusio/quarkus",
+      "fixCommit": "919b80017d85564143a845b38e9cca54aff5b3cc",
+      "parentCommit": "2f0c9effa7962955bc28782bc318956cbbc4ed66",
+      "files": [
+        "extensions/keycloak-authorization/runtime/src/main/java/io/quarkus/keycloak/pep/runtime/KeycloakPolicyEnforcerAuthorizer.java",
+        "extensions/keycloak-authorization/runtime/src/main/java/io/quarkus/keycloak/pep/runtime/VertxHttpFacade.java",
+        "extensions/oidc/runtime/src/main/java/io/quarkus/oidc/runtime/StaticTenantResolver.java",
+        "extensions/resteasy-reactive/rest-csrf/runtime/src/main/java/io/quarkus/csrf/reactive/runtime/CsrfRequestResponseReactiveFilter.java",
+        "extensions/undertow/runtime/src/main/java/io/quarkus/undertow/runtime/ServletHttpSecurityPolicy.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:00.376Z"
+    },
+    {
+      "id": "GHSA-qf5v-m7p4-95rp",
+      "cve": "CVE-2026-50570",
+      "cwe": "CWE-269",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Fission: Incomplete capability denylist in Environment/Function PodSpec validation allows tenant-added CAP_SYS_TIME and cross-tenant node wall-clock corruption",
+      "repo": "fission/fission",
+      "fixCommit": "2569b42bfadbcb7d78b55a00a60f77937e522699",
+      "parentCommit": "0deed6bf3f26bc0f10e9130cd0d479b0b9f5f609",
+      "files": [
+        "pkg/apis/core/v1/podspec_safety.go",
+        "pkg/apis/core/v1/podspec_safety_test.go",
+        "pkg/apis/core/v1/types.go",
+        "pkg/executor/util/merge.go",
+        "pkg/executor/util/merge_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:37.220Z"
+    },
+    {
+      "id": "GHSA-qh8c-7588-qfrv",
+      "cve": "CVE-2026-64662",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Statamic: Missing authorization on navigation endpoint allows disclosure of restricted entries",
+      "repo": "statamic/cms",
+      "fixCommit": "6557f1d8a0d61c0e7ad9c9a8f42cb3288607495d",
+      "parentCommit": "aea68053cedab5c79d10102820b57345a7d7102e",
+      "files": [
+        "src/Http/Controllers/CP/Navigation/NavigationPagesController.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:46.443Z"
+    },
+    {
+      "id": "GHSA-qhr7-v3xp-vw9m",
+      "cve": "CVE-2026-71434",
+      "cwe": "CWE-434",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Statamic: Missing file upload validation on frontend forms allows uploading disallowed file types",
+      "repo": "statamic/cms",
+      "fixCommit": "8be7b6c961536d3173ec4e0965d17b1cf820b7ae",
+      "parentCommit": "bc8744c0e307803aa4b82122993a9bbb37be860a",
+      "files": [
+        "src/Http/Requests/FrontendFormRequest.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:45.777Z"
+    },
+    {
+      "id": "GHSA-qj55-47fp-p62j",
+      "cve": "CVE-2026-53551",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "free5GC AUSF: null byte injection in supiOrSuci causes HTTP 500 internal service failure",
+      "repo": "free5gc/ausf",
+      "fixCommit": "bfc4a10094dbacbd862baa4686829f3fcc06ce1e",
+      "parentCommit": "b2399f4d4fd5abe5e18d6dfab3b2a3259fe40403",
+      "files": [
+        "internal/sbi/processor/ue_authentication.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:25.157Z"
+    },
+    {
+      "id": "GHSA-qmcq-xw74-w667",
+      "cve": "CVE-2026-55061",
+      "cwe": "CWE-88",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "uniget CLI has an EDITOR Command Injection",
+      "repo": "uniget-org/cli",
+      "fixCommit": "7b4f18a9f00f0955f830c7ccf266ed0de5f9fd91",
+      "parentCommit": "2bb8a4a6cb8f37a88e426aac3dd802512803a87e",
+      "files": [
+        "cmd/uniget/hooks.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:07.549Z"
+    },
+    {
+      "id": "GHSA-qq9q-x9w4-chhj",
+      "cve": "CVE-2026-65601",
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Traefik Gateway API HTTPRoute BackendRef ExtensionRef Namespace Confusion",
+      "repo": "traefik/traefik",
+      "fixCommit": "655d6324ab4a1475892a958d4bae389720a67ea9",
+      "parentCommit": "86ae68c6dbd6044f6d99715c890bac673c7d76a4",
+      "files": [
+        "pkg/provider/kubernetes/gateway/httproute.go",
+        "pkg/provider/kubernetes/gateway/kubernetes_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:16.968Z"
     },
     {
       "id": "GHSA-qq9q-xgm3-xv9g",
@@ -1510,6 +4212,40 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:23.675Z"
+    },
+    {
+      "id": "GHSA-qvc3-6q9x-95pj",
+      "cve": "CVE-2026-53913",
+      "cwe": "CWE-287",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Apache Camel: KeycloakSecurityPolicy has Improper Authentication, Missing Authentication for Critical Function and Failing Open Vulnerabilities",
+      "repo": "apache/camel",
+      "fixCommit": "1477cb4e87b2c301f1cdcddca5b153fbbef6934b",
+      "parentCommit": "8e318ba97beb0c23d0612f8f458392a938809a96",
+      "files": [
+        "components/camel-keycloak/src/main/java/org/apache/camel/component/keycloak/security/KeycloakSecurityProcessor.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:11.534Z"
+    },
+    {
+      "id": "GHSA-r2v3-8gwf-7ghm",
+      "cve": "CVE-2026-54725",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "vault-addr annotation SSRF -- webhook makes outbound HTTP call to attacker URL during admission; vault-serviceaccount enables cluster-wide SA token theft via To",
+      "repo": "bank-vaults/vault-secrets-webhook",
+      "fixCommit": "76db45976fee0f54cafd94dffa425e6b542f65a0",
+      "parentCommit": "71cfbb8907b2b7197e892570975428a447e615be",
+      "files": [
+        "pkg/webhook/config.go",
+        "pkg/webhook/webhook.go",
+        "pkg/webhook/webhook_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:25.754Z"
     },
     {
       "id": "GHSA-r5vv-ff45-prp2",
@@ -1582,6 +4318,26 @@
       "minedAt": "2026-08-09T21:47:33.111Z"
     },
     {
+      "id": "GHSA-rg4h-fpcp-2qm8",
+      "cve": "CVE-2026-59867",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Microsoft Kiota: Generation-time SSRF + remote/local file inclusion via unrestricted $ref",
+      "repo": "microsoft/kiota",
+      "fixCommit": "cccd798027f0a20db796b3df6c64f9897a39d7b1",
+      "parentCommit": "592a06cda464cfc8051482284c6a0bd52d433a08",
+      "files": [
+        "src/Kiota.Builder/Configuration/GenerationConfiguration.cs",
+        "src/Kiota.Builder/Lock/KiotaLock.cs",
+        "src/Kiota.Builder/Lock/KiotaLockComparer.cs",
+        "src/Kiota.Builder/OpenApiDocumentDownloadService.cs",
+        "src/Kiota.Builder/WorkspaceManagement/ApiClientConfigurationComparer.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:24.113Z"
+    },
+    {
       "id": "GHSA-rg76-677x-56q9",
       "cve": "CVE-2026-71851",
       "cwe": "CWE-331",
@@ -1612,6 +4368,179 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:04.446Z"
+    },
+    {
+      "id": "GHSA-rjg7-r26h-cfp2",
+      "cve": "CVE-2026-54494",
+      "cwe": "CWE-918",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Koel: Full-read SSRF via podcast enclosure URL: isPublicHost() filter_var guard does not reject NAT64 (64:ff9b::/96) or 6to4 (2002::/16) IPv6-transition wrapper",
+      "repo": "koel/koel",
+      "fixCommit": "5f6ce2cefd08f437a269236b677ad971517ccbb6",
+      "parentCommit": "8ee1de0f5589ef34d3e3bbb9c9555a5de69eaf06",
+      "files": [
+        "app/Ai/Tools/AddRadioStation.php",
+        "app/Http/Requests/API/Radio/RadioStationStoreRequest.php",
+        "app/Http/Requests/API/Radio/RadioStationUpdateRequest.php",
+        "app/Http/Requests/Subsonic/CreateInternetRadioStationRequest.php",
+        "app/Http/Requests/Subsonic/UpdateInternetRadioStationRequest.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:08:01.345Z"
+    },
+    {
+      "id": "GHSA-rjhh-76wf-8xmw",
+      "cve": "CVE-2026-62996",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Smarty Security stream restriction bypass through stream: resource",
+      "repo": "smarty-php/smarty",
+      "fixCommit": "3c9f77a2e06ce319ae0092496af32cc8f3adc52e",
+      "parentCommit": "042dff64a912c272e7692a442590880a3388c4b9",
+      "files": [
+        "src/Resource/StreamPlugin.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:38.180Z"
+    },
+    {
+      "id": "GHSA-rjr6-rcgv-9m7m",
+      "cve": "CVE-2026-63118",
+      "cwe": "CWE-346",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "MCP Ruby SDK: Streamable HTTP transport lacks DNS-rebinding (Host/Origin) protection",
+      "repo": "modelcontextprotocol/ruby-sdk",
+      "fixCommit": "ba543083a7594e7892b29464b89091816446ff7a",
+      "parentCommit": "5518e8db032517896e0025119a9073f4aa946ba4",
+      "files": [
+        "lib/mcp/server/transports/streamable_http_transport.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:08:54.927Z"
+    },
+    {
+      "id": "GHSA-rjrw-mjq6-hpmm",
+      "cve": "CVE-2026-62325",
+      "cwe": "CWE-306",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "goshs SFTP authentication bypass via empty password (incomplete fix of CVE-2026-40884)",
+      "repo": "goshs-labs/goshs",
+      "fixCommit": "32f4a0e1790a709f722d0f3b2341f139d003180a",
+      "parentCommit": "ead99b9b5081d473c61743cfed5e8290702317d2",
+      "files": [
+        "sftpserver/sftpserver.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:35.214Z"
+    },
+    {
+      "id": "GHSA-rmxw-pq4x-3fvh",
+      "cve": "CVE-2026-54719",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "goshs: File-based .goshs ACL authorization bypass via the ?bulk zip-download route (unauthenticated read; residual of GHSA-wvhv-qcqf-f3cx)",
+      "repo": "goshs-labs/goshs",
+      "fixCommit": "7cf911a26ace737e1a55b7dc073e307a25f7fd1d",
+      "parentCommit": "dbe91ee404f6f004740ce16b4a8267b60f7725ae",
+      "files": [
+        "assets/js/src/collab.js",
+        "httpserver/mux_test.go",
+        "httpserver/updown.go"
+      ],
+      "language": "javascript",
+      "minedAt": "2026-08-17T19:08:34.750Z"
+    },
+    {
+      "id": "GHSA-rvmm-v933-jgxq",
+      "cve": null,
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Craft CMS: Missing authorization check allows non-admin control panel users access to user registration metrics",
+      "repo": "craftcms/cms",
+      "fixCommit": "9ee53efc1314e6aba32771c66a13e072a246f4ce",
+      "parentCommit": "9bd05c91e6a7e6da5e949ec41a31c220c059aa04",
+      "files": [
+        "src/controllers/ChartsController.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:39.956Z"
+    },
+    {
+      "id": "GHSA-rxrh-4j9h-xgg9",
+      "cve": "CVE-2026-50267",
+      "cwe": "CWE-312",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Steeltoe: TLS private keys written to /tmp with default permissions, never deleted",
+      "repo": "SteeltoeOSS/Steeltoe",
+      "fixCommit": "8dd97cc6c4b184121a4bd1f92f9ac16918433471",
+      "parentCommit": "64ed5ffec68b0886ee50920e55da3a154ac07bf0",
+      "files": [
+        "src/Configuration/src/Abstractions/ConfigurationDictionaryMapper.cs",
+        "src/Configuration/src/Abstractions/PostProcessorConfigurationProvider.cs",
+        "src/Configuration/src/CloudFoundry/ServiceBindings/PostProcessors/CloudFoundryPostProcessor.cs",
+        "src/Configuration/src/CloudFoundry/ServiceBindings/PostProcessors/MySqlCloudFoundryPostProcessor.cs",
+        "src/Configuration/src/CloudFoundry/ServiceBindings/PostProcessors/PostgreSqlCloudFoundryPostProcessor.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:28.247Z"
+    },
+    {
+      "id": "GHSA-v6w6-358x-2433",
+      "cve": null,
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Cloudreve Admin.Read OAuth tokens can trigger server-side node test requests",
+      "repo": "cloudreve/cloudreve",
+      "fixCommit": "332a9d800205082a2469e555fd66a63f18d9d5dc",
+      "parentCommit": "f3347130ac48f2ff996af9ef66c97be2dda9cba9",
+      "files": [
+        "routers/router.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:42.730Z"
+    },
+    {
+      "id": "GHSA-v7cf-8gh9-gxmj",
+      "cve": "CVE-2026-32257",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Winter: Stored XSS through Brand Settings custom styles",
+      "repo": "wintercms/winter",
+      "fixCommit": "d28f0b9474af79cfaa80eeb9d691f7a7c4469720",
+      "parentCommit": "29f823bb21742e10b758c5d1dfdf7a1297688edf",
+      "files": [
+        "modules/backend/models/BrandSetting.php",
+        "modules/backend/models/EditorSetting.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:35.131Z"
+    },
+    {
+      "id": "GHSA-v828-m3pf-vq9q",
+      "cve": "CVE-2026-64868",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "New API: Unauthenticated payment webhooks allow memory and disk DoS via unbounded body reads and full-body logging",
+      "repo": "QuantumNous/new-api",
+      "fixCommit": "d2f7f9ee3adf3ef66798783a60d7bc712451c85c",
+      "parentCommit": "83068d115ea9384c6415a472c2d8843f991bceef",
+      "files": [
+        "common/init.go",
+        "constant/env.go",
+        "router/api-router.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:09.077Z"
     },
     {
       "id": "GHSA-v833-3823-cmhp",
@@ -1647,6 +4576,57 @@
       "minedAt": "2026-08-09T21:46:49.113Z"
     },
     {
+      "id": "GHSA-vchh-r53j-8mpw",
+      "cve": "CVE-2026-50569",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Fission: HTTPTrigger admission omits RelativeURL / Prefix validation; kubectl apply bypasses CLI checks",
+      "repo": "fission/fission",
+      "fixCommit": "0deed6bf3f26bc0f10e9130cd0d479b0b9f5f609",
+      "parentCommit": "d2a8704070251e28d70913a2a2e274a1382f7e3b",
+      "files": [
+        "pkg/apis/core/v1/types.go",
+        "pkg/apis/core/v1/validation.go",
+        "pkg/apis/core/v1/validation_validators_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:36.698Z"
+    },
+    {
+      "id": "GHSA-vcrw-4xvv-jh49",
+      "cve": "CVE-2026-52881",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "MantisBT: Reflected XSS in admin/install.php via unescaped printf ",
+      "repo": "mantisbt/mantisbt",
+      "fixCommit": "297773fbb238c39a153bd888431b41a176132098",
+      "parentCommit": "0f32ceabadc745239754962df91a51d5d51e3fd7",
+      "files": [
+        "admin/install.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:08:00.803Z"
+    },
+    {
+      "id": "GHSA-vgp4-2fc4-qff2",
+      "cve": "CVE-2026-32258",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Winter: Stored XSS through Editor Settings custom styles",
+      "repo": "wintercms/winter",
+      "fixCommit": "d28f0b9474af79cfaa80eeb9d691f7a7c4469720",
+      "parentCommit": "29f823bb21742e10b758c5d1dfdf7a1297688edf",
+      "files": [
+        "modules/backend/models/BrandSetting.php",
+        "modules/backend/models/EditorSetting.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:34.639Z"
+    },
+    {
       "id": "GHSA-vmv7-4m6c-3cg5",
       "cve": "CVE-2026-69255",
       "cwe": "CWE-94",
@@ -1661,6 +4641,38 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:24.366Z"
+    },
+    {
+      "id": "GHSA-vqxv-6xrh-49cp",
+      "cve": "CVE-2026-62280",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "OpenAM Reflected XSS in the OAuth2/OIDC `wap` consent page",
+      "repo": "OpenIdentityPlatform/OpenAM",
+      "fixCommit": "98cee2dfe701c2e16e5bcee34e6fd9d913925118",
+      "parentCommit": "9dd0fbe07f70f118cf45042d3a9ffb32f3c21e08",
+      "files": [
+        "openam-oauth2/src/main/java/org/forgerock/oauth2/restlet/ConsentRequiredResource.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:03.150Z"
+    },
+    {
+      "id": "GHSA-vvp7-h4fj-m28w",
+      "cve": "CVE-2026-54910",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "FileBrowser Quantum's path traversal issue in subtitle handler allows any authenticated user to read arbitrary files",
+      "repo": "gtsteffaniak/filebrowser",
+      "fixCommit": "f3f4bbe80cb569d664174aea874d7bfa008c3b5a",
+      "parentCommit": "863f8f64a3d055ac8fb712c0e7bfcf3ac7f173f0",
+      "files": [
+        "backend/http/media.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:22.882Z"
     },
     {
       "id": "GHSA-vx7x-vcc2-c44g",
@@ -1695,6 +4707,107 @@
       "minedAt": "2026-08-09T21:47:12.140Z"
     },
     {
+      "id": "GHSA-w3cp-g2pf-65wh",
+      "cve": "CVE-2026-54717",
+      "cwe": "CWE-79",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Silverstripe: XSS in breadcrumbs in page list view",
+      "repo": "silverstripe/silverstripe-cms",
+      "fixCommit": "62f9912baa18c80304f3fa8b6eca71bb5dc2d21e",
+      "parentCommit": "306502393e02f5b5cd1b54a3a654d7e417f912b2",
+      "files": [
+        "code/Controllers/CMSMain.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:44.777Z"
+    },
+    {
+      "id": "GHSA-w4q6-qw23-4rg7",
+      "cve": "CVE-2026-47427",
+      "cwe": "CWE-476",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "GitHub MCP Server has Nil Pointer Dereference DoS in completion/complete Handler",
+      "repo": "github/github-mcp-server",
+      "fixCommit": "c88d2ecdd3bb07f7bdd75296e3ee676febf14f58",
+      "parentCommit": "7e394af647018d1c90b5aa4d492a553447b1b697",
+      "files": [
+        "pkg/github/server.go",
+        "pkg/github/server_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:38.802Z"
+    },
+    {
+      "id": "GHSA-w62w-66v9-vvgv",
+      "cve": "CVE-2026-54917",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "SeaweedFS: Path traversal in the S3 and Iceberg REST gateways allows cross-bucket access",
+      "repo": "seaweedfs/seaweedfs",
+      "fixCommit": "dd1b4287899eed3dfd73c2f3b1de001996fda229",
+      "parentCommit": "1355c7a102194d6c461baf090eff50367b575afb",
+      "files": [
+        "weed/s3api/iceberg/server.go",
+        "weed/s3api/s3_constants/header.go",
+        "weed/s3api/s3_constants/header_test.go",
+        "weed/s3api/s3api_server.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:11.236Z"
+    },
+    {
+      "id": "GHSA-w6p7-2fxx-4f44",
+      "cve": "CVE-2026-43983",
+      "cwe": "CWE-285",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Pocket ID: OIDC refresh token flow bypasses authorization revocation, account disabling, and group restrictions",
+      "repo": "pocket-id/pocket-id",
+      "fixCommit": "978ac87deffec58beaccd15aead975e91b94c8a5",
+      "parentCommit": "59fe481af9284406e0c45385be729a293e90ffaa",
+      "files": [
+        "backend/internal/service/oidc_service.go",
+        "backend/internal/service/oidc_service_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:39.699Z"
+    },
+    {
+      "id": "GHSA-w8x7-h2px-xmq8",
+      "cve": "CVE-2026-55499",
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Cloudreve: Broken Access Control in file event stream: a single-file share recipient is subscribed to the owner's parent folder and receives activity events for",
+      "repo": "cloudreve/cloudreve",
+      "fixCommit": "0b00dd308f132d6e6e8476857ef79f4865600bbc",
+      "parentCommit": "3607f79bb44c35d0be4fa8b6e24c0502b51415a9",
+      "files": [
+        "service/explorer/events.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:45.279Z"
+    },
+    {
+      "id": "GHSA-w8xc-8g92-v77h",
+      "cve": "CVE-2026-52839",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Easy!Appointments appointments/store and appointments/update allow cross-provider appointment injection — Authorization Bypass",
+      "repo": "alextselegidis/easyappointments",
+      "fixCommit": "725eafa647308846ce887657db12771a829e42ef",
+      "parentCommit": "629a0415f54f75556c17f4f5d9c77fda1fdbdeae",
+      "files": [
+        "application/controllers/Appointments.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:50.037Z"
+    },
+    {
       "id": "GHSA-wchh-9x6h-7f6p",
       "cve": null,
       "cwe": "CWE-1395",
@@ -1713,6 +4826,75 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:26.970Z"
+    },
+    {
+      "id": "GHSA-wg23-69c2-gjc8",
+      "cve": null,
+      "cwe": "CWE-294",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "Craft CMS: Passkey login accepts replayed WebAuthn assertions",
+      "repo": "craftcms/cms",
+      "fixCommit": "d71a66d69cf8852bcfca4484ca718750b5a316d6",
+      "parentCommit": "66a3cfdc7deecfb1a949ef4b36985ae8f2788153",
+      "files": [
+        "src/controllers/AuthController.php",
+        "src/controllers/UsersController.php",
+        "src/elements/User.php",
+        "src/services/Auth.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:38.698Z"
+    },
+    {
+      "id": "GHSA-wg2q-39h6-66x9",
+      "cve": "CVE-2026-66063",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "goshs has a Path Traversal issue",
+      "repo": "goshs-labs/goshs",
+      "fixCommit": "f3ef599e409151d1380866e47de8b1afb0bb54fa",
+      "parentCommit": "ddd2eb9470237e68f0d6c828dd75173708e60277",
+      "files": [
+        "httpserver/handler.go",
+        "httpserver/updown.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:33.882Z"
+    },
+    {
+      "id": "GHSA-wg4g-wm44-ch5j",
+      "cve": "CVE-2026-54908",
+      "cwe": "CWE-125",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Pion DTLS vulnerable to denial of service via panic while parsing a crafted ECDHE_PSK ServerKeyExchange message",
+      "repo": "pion/dtls",
+      "fixCommit": "49458d604a4f3ebce1bf9587a0f3e5f3f6b4a55e",
+      "parentCommit": "e4b257d7ea9ce71c683f62a8533e06ffe1c433ee",
+      "files": [
+        "pkg/protocol/handshake/message_server_key_exchange.go",
+        "pkg/protocol/handshake/message_server_key_exchange_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:23.473Z"
+    },
+    {
+      "id": "GHSA-wg5r-wc3x-39vc",
+      "cve": "CVE-2026-62379",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "critical",
+      "summary": "OpenAM: Unauthenticated Remote Code Execution via Class.forName in AuthXMLUtils.createCustomCallback",
+      "repo": "OpenIdentityPlatform/OpenAM",
+      "fixCommit": "edcf968cad91a78b932dba4ad559ef94cbf35f5a",
+      "parentCommit": "98cee2dfe701c2e16e5bcee34e6fd9d913925118",
+      "files": [
+        "openam-core/src/main/java/com/sun/identity/authentication/share/AuthXMLUtils.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:02.672Z"
     },
     {
       "id": "GHSA-wg86-r78f-74mp",
@@ -1735,6 +4917,23 @@
       "minedAt": "2026-08-09T21:46:46.780Z"
     },
     {
+      "id": "GHSA-whmm-qj9r-wvr2",
+      "cve": "CVE-2026-54638",
+      "cwe": "CWE-770",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "td has pre-auth denial of service via unbounded memory allocation in proto.UnencryptedMessage.Decode",
+      "repo": "gotd/td",
+      "fixCommit": "9d5d1f31ea5022d9798d84ccce15de2e91ba6baa",
+      "parentCommit": "83879426c1dce45fba83c5eacb10285155fd9a78",
+      "files": [
+        "proto/unencrypted_message.go",
+        "proto/unencrypted_message_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:33.418Z"
+    },
+    {
       "id": "GHSA-wjv6-jcfj-mf9r",
       "cve": "CVE-2026-54654",
       "cwe": "CWE-94",
@@ -1749,6 +4948,26 @@
       ],
       "language": "python",
       "minedAt": "2026-08-09T21:47:27.868Z"
+    },
+    {
+      "id": "GHSA-wm3w-8rrp-j577",
+      "cve": "CVE-2026-67355",
+      "cwe": "CWE-201",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Guzzle: Host-only cookie scope is not preserved",
+      "repo": "guzzle/guzzle",
+      "fixCommit": "7b68220d6543f6f80fe62e633361fc9d4ead14d4",
+      "parentCommit": "90bd104afeb0fcc2190c9eb6fd8a441447e4b30d",
+      "files": [
+        "src/Cookie/CookieJar.php",
+        "src/Cookie/FileCookieJar.php",
+        "src/Cookie/SessionCookieJar.php",
+        "src/Cookie/SetCookie.php",
+        "src/RedirectMiddleware.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:57.239Z"
     },
     {
       "id": "GHSA-wm8w-6qjm-cv43",
@@ -1787,6 +5006,40 @@
       "minedAt": "2026-08-09T21:46:47.379Z"
     },
     {
+      "id": "GHSA-wqqc-jjcq-vfxm",
+      "cve": "CVE-2026-54787",
+      "cwe": "CWE-324",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "sigstore-go fails to check signature timestamps against a signing key's validity period",
+      "repo": "sigstore/sigstore-go",
+      "fixCommit": "4594ab4c779d08be1f4419803a8249188f35ed5f",
+      "parentCommit": "3ad400caec47a75027e4f7188046d0ee07bbdcec",
+      "files": [
+        "pkg/testing/data/data.go",
+        "pkg/verify/signed_entity.go",
+        "pkg/verify/signed_entity_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:24.533Z"
+    },
+    {
+      "id": "GHSA-wvh6-f5jh-8gw4",
+      "cve": "CVE-2026-55554",
+      "cwe": "CWE-20",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "Dompdf: Chroot Validation Bypass",
+      "repo": "dompdf/dompdf",
+      "fixCommit": "1b3b61ec4f6962678e56ee8a42920b4f835ab006",
+      "parentCommit": "bf60448d8bd965b0081b1b09ac182fbd113d8f08",
+      "files": [
+        "src/Options.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:55.748Z"
+    },
+    {
       "id": "GHSA-wvp2-4qqp-4h3r",
       "cve": "CVE-2026-53944",
       "cwe": "CWE-184",
@@ -1819,6 +5072,26 @@
       "minedAt": "2026-08-09T21:47:01.659Z"
     },
     {
+      "id": "GHSA-wxhm-2mq7-7697",
+      "cve": "CVE-2026-53598",
+      "cwe": "CWE-22",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Prompty: Arbitrary file read via file reference expansion",
+      "repo": "microsoft/prompty",
+      "fixCommit": "88ac9948d7d37995edbb2f6d36913436626c39e1",
+      "parentCommit": "90171a7738f9ff5a186416381cbfad9077cdf637",
+      "files": [
+        "runtime/csharp/Prompty.Core.Tests/LoaderTests.cs",
+        "runtime/csharp/Prompty.Core.Tests/SpecVectorTests.cs",
+        "runtime/csharp/Prompty.Core/PromptyLoader.cs",
+        "runtime/csharp/Prompty.Core/ReferenceResolver.cs",
+        "runtime/python/prompty/prompty/_version.py"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:26.943Z"
+    },
+    {
       "id": "GHSA-x3hf-7cj6-3r4m",
       "cve": "CVE-2026-69259",
       "cwe": "CWE-94",
@@ -1837,6 +5110,25 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:22.358Z"
+    },
+    {
+      "id": "GHSA-x677-9fxg-v5c5",
+      "cve": "CVE-2026-54763",
+      "cwe": "CWE-178",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Traefik: Incomplete fix for CVE-2026-33433 + CVE-2026-39858 cross-cohort: headerField underscore-variant identity spoofing in BasicAuth / DigestAuth / ForwardAu",
+      "repo": "traefik/traefik",
+      "fixCommit": "108a5264473a2cbc8f12d6d691a3c6553cdf2c1b",
+      "parentCommit": "0056f09a0c4aff3cdd789bcad44a6dd196884180",
+      "files": [
+        "integration/simple_test.go",
+        "pkg/config/static/entrypoints.go",
+        "pkg/server/server_entrypoint_tcp.go",
+        "pkg/server/server_entrypoint_tcp_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:12.183Z"
     },
     {
       "id": "GHSA-x6vm-w76m-8j7g",
@@ -1872,6 +5164,227 @@
       ],
       "language": "typescript",
       "minedAt": "2026-08-09T18:46:21.247Z"
+    },
+    {
+      "id": "GHSA-xc5w-4v5w-7x65",
+      "cve": "CVE-2026-67438",
+      "cwe": "CWE-78",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "OliveTin OS Command Injection via Custom regex: Argument Type Bypassing Shell Safety Check",
+      "repo": "OliveTin/OliveTin",
+      "fixCommit": "995ff79736f2bccc364448a3ece84087b550b232",
+      "parentCommit": "ec114e95d297b806c3ca0c37bc139b3c9c517b3f",
+      "files": [
+        "service/internal/executor/arguments.go",
+        "service/internal/executor/arguments_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:28.729Z"
+    },
+    {
+      "id": "GHSA-xg2h-5xr2-29jw",
+      "cve": "CVE-2026-59861",
+      "cwe": "CWE-94",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "Microsoft Kiota: Code Generation Literal Injection in Kiota Ruby Generator",
+      "repo": "microsoft/kiota",
+      "fixCommit": "fee1b648bb4394ba7ba72de9c0ce4f2a0bad0cb6",
+      "parentCommit": "5958d6280724046a906717eff7fc9a5d27c3a9b0",
+      "files": [
+        "src/Kiota.Builder/Writers/Ruby/CodeMethodWriter.cs",
+        "src/Kiota.Builder/Writers/Ruby/RubyConventionService.cs"
+      ],
+      "language": "csharp",
+      "minedAt": "2026-08-17T19:07:25.746Z"
+    },
+    {
+      "id": "GHSA-xghw-p77p-3r7x",
+      "cve": "CVE-2026-53658",
+      "cwe": "CWE-90",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Fabric CA Developer's Guide: LDAP Injection via Unescaped Username in GetUser Filter",
+      "repo": "hyperledger/fabric-ca",
+      "fixCommit": "d379df823534d56dec0166a6da8f0415e3beee24",
+      "parentCommit": "489a658619140e5332c8e72632037728564a3173",
+      "files": [
+        "cmd/fabric-ca-client/command/main_test.go",
+        "lib/client_test.go",
+        "lib/server/ldap/client.go",
+        "lib/server/ldap/client_test.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:10.102Z"
+    },
+    {
+      "id": "GHSA-xgr6-pqjv-3pf8",
+      "cve": "CVE-2026-52837",
+      "cwe": "CWE-200",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Easy!Appointments has unauthenticated customer PII disclosure on booking reschedule page",
+      "repo": "alextselegidis/easyappointments",
+      "fixCommit": "40bb0b31b531540bc9006efce4220eb0a437ed2b",
+      "parentCommit": "39eff0b2a30dd03d1c61ba76338a8b013c1a2f1a",
+      "files": [
+        "application/controllers/Booking.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:49.522Z"
+    },
+    {
+      "id": "GHSA-xh5m-36r6-47m3",
+      "cve": "CVE-2026-59933",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "PHPSpreadsheet: XLS/OLE sector-chain self-loop causes memory exhaustion",
+      "repo": "PHPOffice/PhpSpreadsheet",
+      "fixCommit": "85f2556b0bf5269061bf45932ecda8a128d81750",
+      "parentCommit": "0577c74889e080c088e5af4585f3d71db9467804",
+      "files": [
+        "src/PhpSpreadsheet/Reader/Gnumeric.php",
+        "src/PhpSpreadsheet/Shared/OLERead.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:52.847Z"
+    },
+    {
+      "id": "GHSA-xhf4-832v-7xcr",
+      "cve": "CVE-2026-71310",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "rclone: Unbounded HTTP CONNECT Response Headers Can Exhaust rclone Memory",
+      "repo": "rclone/rclone",
+      "fixCommit": "21d8cd3b92cd81d987f485051d454ea675d91a2b",
+      "parentCommit": "ff43a1e3ae17627c80e523a0ca7445f96516d199",
+      "files": [
+        "lib/proxy/http.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:20.612Z"
+    },
+    {
+      "id": "GHSA-xj53-j257-hxvg",
+      "cve": "CVE-2026-49439",
+      "cwe": "CWE-862",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "OpenRemote read-only asset users can write predicted datapoints",
+      "repo": "openremote/openremote",
+      "fixCommit": "583dbbfb96076ba099be8729ddf506acf9e48325",
+      "parentCommit": "3be8849e29a185c09fff097523582693c7399277",
+      "files": [
+        "manager/src/main/java/org/openremote/manager/datapoint/AssetPredictedDatapointResourceImpl.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:11.027Z"
+    },
+    {
+      "id": "GHSA-xpxj-f2fm-rqch",
+      "cve": "CVE-2026-67437",
+      "cwe": "CWE-400",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "OliveTin: Unauthenticated DoS via OAuth2 State Memory Exhaustion (Unbounded Map Growth)",
+      "repo": "OliveTin/OliveTin",
+      "fixCommit": "ec114e95d297b806c3ca0c37bc139b3c9c517b3f",
+      "parentCommit": "42f2572616603854b2ef8da1de2489abfa398eb8",
+      "files": [
+        "service/internal/auth/otoauth2/restapi_auth_oauth2.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:29.920Z"
+    },
+    {
+      "id": "GHSA-xqr9-4wvv-gvch",
+      "cve": "CVE-2026-54641",
+      "cwe": "CWE-639",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "OpenRemote has Cross-Realm User Information Disclosure in UserResourceImpl",
+      "repo": "openremote/openremote",
+      "fixCommit": "de89b8d3af272d717bf297934c2cbc97243f08b7",
+      "parentCommit": "3dd5fd93f2b9971c52660dbae48af94c108991a5",
+      "files": [
+        "manager/src/main/java/org/openremote/manager/security/UserResourceImpl.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:10.461Z"
+    },
+    {
+      "id": "GHSA-xv9w-7v6q-hpjh",
+      "cve": "CVE-2026-44162",
+      "cwe": "CWE-770",
+      "labelSource": "github-security-advisory",
+      "severity": "low",
+      "summary": "fluent-plugin-s3 Vulnerable to Denial of Service (DoS) via Decompression Bomb in `in_s3`",
+      "repo": "fluent/fluent-plugin-s3",
+      "fixCommit": "e085aee001d15bcc4bd073507e74075e30550fd0",
+      "parentCommit": "61f24d361709e1dbd834e61350ecf38c471c0b8c",
+      "files": [
+        "lib/fluent/plugin/in_s3.rb",
+        "lib/fluent/plugin/s3_extractor_gzip_command.rb",
+        "lib/fluent/plugin/s3_extractor_lzma2.rb",
+        "lib/fluent/plugin/s3_extractor_lzo.rb"
+      ],
+      "language": "ruby",
+      "minedAt": "2026-08-17T19:09:05.879Z"
+    },
+    {
+      "id": "GHSA-xvg2-cgv6-6h7v",
+      "cve": null,
+      "cwe": "CWE-693",
+      "labelSource": "github-security-advisory",
+      "severity": "high",
+      "summary": "netfoil: Incorrect block responses could lead to localhost traffic",
+      "repo": "tinfoil-factory/netfoil",
+      "fixCommit": "891d3513c77999a9deef9f23506807d9653ee448",
+      "parentCommit": "b3aef666cfa913116eb5b75c29b041d80316c9fd",
+      "files": [
+        "dns/dns_proxy.go",
+        "dns/filter.go"
+      ],
+      "language": "go",
+      "minedAt": "2026-08-17T19:08:30.546Z"
+    },
+    {
+      "id": "GHSA-xx22-p4ch-683r",
+      "cve": "CVE-2026-59949",
+      "cwe": "CWE-125",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "LZ4 Java: Native XXHash implementations can crash the JVM when passed invalid byte array ranges",
+      "repo": "yawkat/lz4-java",
+      "fixCommit": "dbd86d04b8dd716e1c2bc626be54189997d910da",
+      "parentCommit": "5a5bd584a60058e64b8abd3cd0987b68d22d6392",
+      "files": [
+        "src/java/net/jpountz/util/ByteBufferUtils.java",
+        "src/java/net/jpountz/util/SafeUtils.java",
+        "src/java/net/jpountz/xxhash/StreamingXXHash32JNI.java",
+        "src/java/net/jpountz/xxhash/StreamingXXHash64JNI.java"
+      ],
+      "language": "java",
+      "minedAt": "2026-08-17T19:07:04.838Z"
+    },
+    {
+      "id": "GHSA-xxpx-f366-4xpq",
+      "cve": null,
+      "cwe": "CWE-863",
+      "labelSource": "github-security-advisory",
+      "severity": "medium",
+      "summary": "Craft CMS:Authorization bypass: view-only Categories user can modify category structure via structures/move-element",
+      "repo": "craftcms/cms",
+      "fixCommit": "eb63721b8476ef53f21d7de53d156eef531cb57d",
+      "parentCommit": "578fb5f72667dc6fbdb800da09baf13cd814e5ac",
+      "files": [
+        "src/elements/Category.php"
+      ],
+      "language": "php",
+      "minedAt": "2026-08-17T19:07:39.374Z"
     }
   ]
 }
