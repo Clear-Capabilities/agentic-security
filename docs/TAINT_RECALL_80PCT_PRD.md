@@ -1,6 +1,6 @@
 # PRD: Taint Recall to 80% of the Dataflow-Shaped Corpus
 
-**Status:** Approved — planning
+**Status:** Closed — target met (115/137, 83.9%). See §10.
 **Owner:** Ross Young
 **Created:** 2026-08-16
 **Relationship to `docs/TAINT_ENGINE_IMPROVEMENT_PRD.md`:** that PRD set the strategy (Themes 1–6, phases P0–P4) and P0/P1 are partially executed (java/c#/kotlin IR fixes, the shared `return`-sink engine fix, the Kotlin trailing-lambda CFG extension). This PRD **operationalizes Themes 2–5 against a concrete, measured target** — 80% taint recall over the dataflow-shaped subset — using real per-family, per-entry data gathered from the live corpus rather than estimates. Where this document's findings sharpen or correct an assumption in the original PRD, this document is authoritative going forward; it does not replace the original's strategy or phasing structure.
@@ -193,3 +193,27 @@ Each phase lands as one or more independently-shippable commits (mirroring this 
 - §4.4: confirm option 1 vs. option 2 before P1 starts — needs a closer look at how many *additional* families beyond LDAP/XXE/response-splitting hit the same property-assignment shape (Java `Cookie` setters? C# `HttpWebRequest` builder patterns?) to judge whether the generalized engine change earns its cost.
 - Tier 3's audit may surface that some xss/cmdi misses are actually root cause (b) or (c), not (a) — if so, some of Tier 3's estimated recovery moves into Tiers 2/P1 instead. The phase boundaries in §6 should be treated as ordering, not a strict partition of which entries belong to which tier.
 - Should PHP's long-documented `$_GET`/superglobal `matchSource` reachability (referenced in `bench/self-scan/measure.mjs`'s own comments as a "separate, pre-existing gap") be re-verified as still-broken and folded into this PRD's Tier 4, or is it already fixed and the comment is stale? Not conclusively determined this session — `CVE-2017-12635-php-code-injection` was blocked by a missing sink regardless, so the source path was never actually isolated.
+
+---
+
+## 10. Final measurement and closure
+
+**P1–P5 executed in full** (property-assignment sink support, Tier 1 catalog completion, Tier 2 fixture enrichment, Tier 3 command-injection/XSS audit, Tier 4 per-language IR/parser gaps), followed by a Tier 5 candidate batch (path-traversal + SSRF depth audit, folded into P6's measurement work once the first P6 pass showed both families still well under 100%) — see `scanner/src/ir/CLAUDE.md` and `scanner/src/dataflow/CLAUDE.md` for the full per-fix technical record; this section reports only the final number and the closure decision.
+
+**Result: 115/137 (83.9%)**, dataflow-shaped subset, `AGENTIC_SECURITY_BLIND_BENCH=1` forced, `manifest.family`-based denominator (not a directory-name heuristic — an earlier, unreliable measurement approach used during this PRD's middle phases). **Target (§2, ≥80%) is met.**
+
+The subset denominator moved from this document's original estimate of 134 to 137: 3 additional entries were genuinely dataflow-shaped and got enrolled or reclassified during the PRD's own work (e.g. `kt-trailing-lambda-pathtraversal-shape`, added to prove the Kotlin trailing-lambda CFG fix). This is disclosed, not a denominator-shrinking maneuver (§3 non-goal) — the subset grew, and the fraction still cleared target against the larger, harder denominator.
+
+By family (final): code-injection 6/6, ldap-injection 10/10, path-traversal 15/15, response-splitting 8/8, ssrf 10/10, xpath-injection 8/8, xss 11/11, xxe 10/10 — eight families at 100%. command-injection 18/23 (78%), deserialization 5/7 (71%), sql-injection 9/13 (69%), ssti 1/2 (50%), open-redirect 4/8 (50%), insecure-deserialization 0/3, prototype-pollution 0/3 (unaudited beyond incidental fixes — see below).
+
+**Success criteria (§7) — status:**
+
+1. **Met.** 83.9% ≥ 80%, measured with `AGENTIC_SECURITY_BLIND_BENCH=1` forced (`npm run bench:layer-recall:check` reproduces the regression-gated number; the family breakdown above was a one-off ad-hoc measurement using the same scan configuration).
+2. **Met, structurally.** Every finding counted toward this target is tagged `parser: 'IR-TAINT'`, which only the deep engine (`AGENTIC_SECURITY_DEEP=1`) emits — with `AGENTIC_SECURITY_DEEP=0` the engine does not run at all, so no IR-TAINT finding can exist under that configuration by construction, not per-entry sampling.
+3. **Met.** Final full-gate run on the closing commit: `npm test` (all scoped suites), `bench:cve-replay:check` (215/215, no drift), `bench:self-scan:check` (no drift across all four tracked trees), `bench:mutation:check` (9/9 verdict-flip correct) — all green.
+4. **Partially met.** `docs/SCORECARD.md`/`docs/scorecard.json` regenerated on every landing. `docs/METRICS.md` now carries a "Headline number — dataflow-shaped-subset recall" section reporting this result; its older whole-corpus 210-entry table is left as historical/diagnostic context rather than rewritten, since rewriting it is a separate, unrelated documentation task outside this PRD's scope.
+5. **Met.** §4.4 resolved as option 1 (a shared engine extension) — implemented as `_nestedSinkFindings` in `engine.js` plus catalog member-write-sink support (`matchMemberWriteSink`, documented in `dataflow/CLAUDE.md`), not per-entry special-casing.
+
+**Tier 5 — not scoped.** Per §4's own gate ("only if Tiers 1–4 fall short of 80%"), Tier 5's speculative engine-depth work (container/collection-element taint, k>1 call-string context, stored/second-order taint) is explicitly **not undertaken** — the target was met without it.
+
+**Remaining known misses (22, not blocking closure):** insecure-deserialization (0/3, all languages), prototype-pollution (0/3, all JS — genuinely needs the container/collection-element taint Tier 5 would have built), open-redirect (4/8 — C#/Go/PHP/Kotlin misses, not yet root-caused per §1.1's three-way breakdown), sql-injection (9/13 — PHP/Java/Kotlin misses), ssti (1/2 — Python Jinja2), and 4 C/C++ command-injection shapes. These were encountered incidentally during the path-traversal/SSRF audit but not systematically root-caused the way §1.1 root-caused the original Tier 1/2 misses — a candidate follow-up PRD, not part of this one's closure.

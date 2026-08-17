@@ -37,6 +37,33 @@ therefore means the taint engine cannot see the entry — not that it was never
 asked. Scoring reuses `corpus-match.js`'s predicate, the same one the gate and
 corpus enrolment use.
 
+### Headline number — dataflow-shaped-subset recall (`docs/TAINT_RECALL_80PCT_PRD.md`)
+
+Whole-corpus recall (below) is diluted by families no source→sink walker
+could ever catch (hardcoded secrets, weak RNG, timing side-channels, IaC
+misconfig, …). The PRD fixed the denominator to just the families a taint
+engine can plausibly reach — sqli, xss, cmdi, path-traversal, xxe, ldap,
+ssrf, deserialization, open-redirect, response-splitting, xpath,
+code-injection, ssti, prototype-pollution (`manifest.family`-based, not a
+directory-name heuristic) — and set an 80% target against that subset.
+
+**Result: 115/137 (83.9%)**, `AGENTIC_SECURITY_BLIND_BENCH=1` forced —
+target met. (The subset denominator grew from the PRD's original 134 to
+137 as genuinely dataflow-shaped entries were enrolled during the PRD's own
+work, e.g. `kt-trailing-lambda-pathtraversal-shape`.) By family: code-injection
+6/6, ldap-injection 10/10, path-traversal 15/15, response-splitting 8/8,
+ssrf 10/10, xpath-injection 8/8, xss 11/11, xxe 10/10, command-injection
+18/23, deserialization 5/7, sql-injection 9/13, ssti 1/2, open-redirect 4/8,
+insecure-deserialization 0/3, prototype-pollution 0/3.
+
+Per the PRD's §4 Tier 5 gate ("only if Tiers 1–4 fall short of 80%"), Tier 5
+(genuine engine depth — container/collection-element taint, k>1 call-string
+context, stored/second-order taint) is **not scoped** — the target was met
+without it. The remaining 22 misses (deserialization/insecure-deserialization,
+open-redirect, sql-injection, ssti, prototype-pollution, and 4 C/C++
+command-injection shapes) are documented as candidate future work, not a
+blocker.
+
 ### Result — 210 entries, engine v0.136.3
 
 | language | entries | detected (any layer) | **detected by IR-TAINT** |
