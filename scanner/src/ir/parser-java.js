@@ -68,31 +68,52 @@ function exprFromCst(node) {
     if (node.children.primaryPrefix) {
       const prefix = node.children.primaryPrefix[0];
       const suffixes = node.children.primarySuffix || [];
-      const invocation = suffixes
-        .map(s => s.children?.methodInvocationSuffix?.[0])
-        .find(Boolean);
-      if (invocation) {
-        const fqn = prefix?.children?.fqnOrRefType?.[0];
-        let callee = fqn ? _flattenFqnToString(fqn) : null;
-        if (!callee) {
-          // Taint-engine PRD P1: no FQN prefix — e.g. `this.foo(x)`,
-          // `super.foo(x)` (prefix is a keyword expression, not an
-          // fqnOrRefType). The method name is NOT on the invocation suffix
-          // itself (that only ever carries the argument list) — it lives on
-          // a SIBLING primarySuffix shaped {Dot, Identifier}. Previously
-          // fell back to the literal string 'unknown', fabricating a wrong
-          // callee rather than failing closed. Take the LAST
-          // Identifier-bearing, non-invocation suffix before the call — the
-          // immediate method name, not an intermediate field in a chain
-          // like `this.foo.bar()`.
-          const nameSuffixes = suffixes.filter(
-            s => s.children?.Identifier && !s.children?.methodInvocationSuffix);
-          const last = nameSuffixes[nameSuffixes.length - 1];
-          callee = last?.children?.Identifier?.[0]?.image || 'unknown';
+      // Taint-recall PRD (80%): java-parser models a CHAIN
+      // (`X().Y().Z(tainted)`) as ONE primary node with a FLAT array of
+      // primarySuffix entries — each is EITHER a methodInvocationSuffix
+      // (a `(...)` call) OR a {Dot, Identifier} member-access pair, in
+      // source order. The old code used `.find(Boolean)` to grab the
+      // FIRST methodInvocationSuffix in the whole array and stopped there
+      // — for `DocumentBuilderFactory.newInstance().newDocumentBuilder()
+      // .parse(s)` this returned just the `newInstance()` call with
+      // args: [], silently dropping `.newDocumentBuilder().parse(s)`
+      // entirely (confirmed via a real corpus fixture; the same shape
+      // also explains the earlier-documented, never-fixed
+      // `Runtime.getRuntime().exec(...)` gap). Now walks every suffix in
+      // order, building the callee name from member-access suffixes and,
+      // at each invocation suffix, folding that call's args into the
+      // running result — outermost-first (the LATEST call's own args are
+      // prepended), same convention as _followChain in the other 5
+      // hand-rolled parsers, so an existing `argIndex: 0` catalog entry
+      // keyed to the outermost call is unaffected while `argIndex: 'all'`
+      // can still find taint an inner call in the chain carried.
+      let chainCallee = '';
+      const fqn = prefix?.children?.fqnOrRefType?.[0];
+      if (fqn) chainCallee = _flattenFqnToString(fqn);
+      // No FQN prefix — e.g. `this.foo(x)`, `super.foo(x)` (prefix is a
+      // keyword expression). chainCallee starts empty; the walk below
+      // supplies the real name from the first member-access suffix.
+      let chainArgs = null;
+      let pendingName = [];
+      const appendPending = () => {
+        if (!pendingName.length) return;
+        chainCallee = chainCallee ? `${chainCallee}.${pendingName.join('.')}` : pendingName.join('.');
+        pendingName = [];
+      };
+      for (const suf of suffixes) {
+        const inv = suf.children?.methodInvocationSuffix?.[0];
+        if (inv) {
+          appendPending();
+          const args = (inv.children?.argumentList?.[0]?.children?.expression || []).map(exprFromCst);
+          chainArgs = chainArgs === null ? args : args.concat(chainArgs);
+          continue;
         }
-        const args = (invocation.children?.argumentList?.[0]?.children?.expression || [])
-          .map(exprFromCst);
-        return { kind: 'call', callee, args };
+        const ident = suf.children?.Identifier?.[0]?.image;
+        if (ident) pendingName.push(ident);
+      }
+      if (chainArgs !== null) {
+        appendPending(); // a trailing member access after the last call (e.g. a field read)
+        return { kind: 'call', callee: chainCallee || 'unknown', args: chainArgs };
       }
       return exprFromCst(prefix);
     }

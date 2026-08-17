@@ -10,12 +10,12 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.137.1 |
-| Bundle SHA-256 | `c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c` |
-| Commit | `246c83b33f10aac6a314378ef3407b6834fc6812` |
+| Bundle SHA-256 | `17bc5d90f347c623d938269b2d3b0ee218370491b18960cb8828360a14f4bcea` |
+| Commit | `be4d0351d0a1cd13459957b6094c68fc73be6312` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-17T05:46:54.719Z |
+| Generated (UTC) | 2026-08-17T06:09:55.349Z |
 
 ## What these numbers are, and what they are not
 
@@ -156,7 +156,7 @@ Entries scored: 215
 | c# | 11/21 (52.4%) |
 | c/c++ | 2/11 (18.2%) |
 | go | 8/22 (36.4%) |
-| java | 6/25 (24.0%) |
+| java | 8/25 (32.0%) |
 | js/ts | 12/38 (31.6%) |
 | json | 0/1 (0.0%) |
 | kotlin | 6/21 (28.6%) |

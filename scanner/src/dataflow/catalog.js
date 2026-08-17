@@ -756,6 +756,19 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-spel-parseexpression', language: 'java', framework: 'spring', match: { type: 'call', callee: 'parseExpression' }, argIndex: 0,
     vuln: { name: 'Code Injection (Spring SpEL parseExpression)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never parse a user-controlled string as a SpEL expression; SpEL can invoke arbitrary methods.' } },
+  // Taint-recall PRD (80%): the idiomatic real-world shape is chained —
+  // `new SpelExpressionParser().parseExpression(userExpr).getValue()`.
+  // Once the parser's chained-call fix correctly joins this into one call
+  // node, bare-name matching only ever sees the TERMINAL segment
+  // ("getValue") — "parseExpression" above is now a middle segment and can
+  // never match on its own for this shape. Receiver-scoped tightly to the
+  // literal preceding segment (not bare "getValue", far too generic
+  // elsewhere in Java) since argIndex 'all' is needed anyway (the tainted
+  // value's position among the combined args depends on how many args the
+  // outer call itself has).
+  { kind: 'sink', id: 'java-spel-getvalue', language: 'java', framework: 'spring', match: { type: 'call', callee: 'getValue', receiver: '^parseExpression$' }, argIndex: 'all',
+    vuln: { name: 'Code Injection (Spring SpEL parseExpression().getValue())', severity: 'critical', cwe: 'CWE-94',
+            remediation: 'Never parse a user-controlled string as a SpEL expression; SpEL can invoke arbitrary methods.' } },
   { kind: 'sink', id: 'py-compile', language: 'py', framework: 'std', match: { type: 'call', callee: 'compile' }, argIndex: 0,
     vuln: { name: 'Code Injection (compile)', severity: 'high', cwe: 'CWE-95',
             remediation: 'compile() followed by exec is equivalent to eval. Avoid on untrusted input.' } },

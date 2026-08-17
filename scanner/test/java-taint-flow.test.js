@@ -217,3 +217,57 @@ public class Calc {
   assert.ok(taint.some(f => /sql/i.test(`${f.vuln} ${f.cwe}`)),
     `expected a SQL Injection finding through the primitive-type cast, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
+
+// Taint-recall PRD (80%): java-parser models a chained call
+// (`X().Y().Z(tainted)`) as one `primary` node with a FLAT array of
+// primarySuffix entries (each either a call `(...)` or a `.member` access,
+// in source order). exprFromCst's old code grabbed only the FIRST
+// methodInvocationSuffix in that array via `.find(Boolean)` and stopped —
+// `DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(s)`
+// collapsed to just `newInstance()`, args: [], silently dropping
+// `.newDocumentBuilder().parse(s)` (and its tainted argument) entirely.
+// This is the SAME defect class as the earlier-documented, never-fixed
+// `Runtime.getRuntime().exec(...)` gap (ir/CLAUDE.md) — confirmed here to
+// now resolve correctly, though note: Runtime.exec's OWN corpus entry
+// remains separately blocked by an unrelated, pre-existing precision
+// filter (literalSkeletonMatchesFamily's _SHELL_META check requires the
+// STATIC portion of a concat to contain a shell metacharacter — `"ping "
+// + host` has none, so CWE-78 findings on this exact realistic shape are
+// filtered regardless of taint; out of scope for this fix, not touched).
+test('IR-TAINT: a 2-level chained call (X().Y(tainted)) resolves the OUTER call, not just the first invocation in the chain', async () => {
+  const dir = mkTmp('chain2', {
+    'Parser.java': `
+import javax.xml.parsers.*;
+import org.springframework.web.bind.annotation.RequestBody;
+public class Parser {
+  public org.w3c.dom.Document parse(java.io.InputStream xml) throws Exception {
+    return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(xml);
+  }
+  void handler(@RequestBody java.io.InputStream xml) throws Exception {
+    parse(xml);
+  }
+}
+`,
+  });
+  const taint = (await deepScan(dir)).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /xxe/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected an XXE finding through the 3-level chain, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('IR-TAINT: a chained call where a NEW SqlCommand() constructor starts the chain resolves the outer call', async () => {
+  const dir = mkTmp('chain-new', {
+    'Query.java': `
+public class Query {
+  Object run(String expr) throws Exception {
+    return new org.springframework.expression.spel.standard.SpelExpressionParser().parseExpression(expr).getValue();
+  }
+  void handler(javax.servlet.http.HttpServletRequest req) throws Exception {
+    run(req.getParameter("expr"));
+  }
+}
+`,
+  });
+  const taint = (await deepScan(dir)).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /code injection/i.test(f.vuln)),
+    `expected a Code Injection finding through the new-expression-started chain, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
