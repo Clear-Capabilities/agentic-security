@@ -13,12 +13,20 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../src/runScan.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIX = (n) => path.join(__dirname, 'fixtures', n);
+
+function mkTmp(name, code) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-kt-safecall-${name}-`));
+  fs.writeFileSync(path.join(dir, 'App.kt'), code);
+  return dir;
+}
 
 async function deepScan(dir) {
   process.env.AGENTIC_SECURITY_DEEP = '1';
@@ -46,4 +54,36 @@ test('IR-TAINT: the same kotlin sink with a constant does not fire', async () =>
   const taint = findings.filter(f => f.parser === 'IR-TAINT');
   assert.equal(taint.filter(f => /sql/i.test(`${f.vuln} ${f.cwe}`)).length, 0,
     `constant-built SQL must not produce an IR-TAINT finding, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
+test('IR-TAINT: a call through the `?.` safe-call operator is not silently dropped', async () => {
+  const dir = mkTmp('safecall', `
+class UserController {
+  fun handle(req: HttpServletRequest, stmt: Statement) {
+    val q = req?.getParameter("q")
+    val sql = "SELECT * FROM users WHERE name = '" + q + "'"
+    stmt?.executeUpdate(sql)
+  }
+}
+`);
+  const findings = await deepScan(dir);
+  const taint = findings.filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /sql/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected an IR-TAINT SQL finding through ?.-qualified calls, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('IR-TAINT: elvis operator `?:` and a nullable type marker are unaffected by the `?.` fix', async () => {
+  const dir = mkTmp('elvis', `
+class UserController {
+  fun handle(req: HttpServletRequest?, stmt: Statement) {
+    val q: String? = req?.getParameter("q") ?: "admin"
+    val sql = "SELECT * FROM users WHERE name = '" + q + "'"
+    stmt.executeUpdate(sql)
+  }
+}
+`);
+  const findings = await deepScan(dir);
+  const taint = findings.filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /sql/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected an IR-TAINT SQL finding, elvis fallback must not break parsing, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });

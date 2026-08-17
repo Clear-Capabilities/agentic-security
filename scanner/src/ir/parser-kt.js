@@ -743,6 +743,45 @@ function _lineAt(src, idx) {
   return line;
 }
 
+// Taint-recall PRD (80%): Kotlin's null-safety `?.` operator is invisible to
+// every regex-based matcher in this file — the callee-matching regexes
+// (`[\w.]+`-style), the plain-dotted-ident check, the trailing-lambda
+// trigger, and `_followChain`'s continuation regex all key off a character
+// class that excludes `?`. Unlike `::` (parser-rb.js) or a chain
+// continuation, this is NOT limited to a later segment of a chain — the
+// safe-call operator can appear on the very FIRST segment of an expression
+// (`str?.trim()`, `xs?.forEach { … }`, even a bare property read `x?.y`),
+// so patching individual regexes one at a time would miss call sites this
+// file doesn't yet enumerate. Normalized once, globally, at the very top of
+// the parse pipeline instead: string-literal-aware (so `"a?.b"` inside a
+// literal string is left untouched) and strips only the `?` immediately
+// before a `.` (so the elvis operator `?:` and a bare nullable-type marker
+// `String?` are both unaffected — neither is followed by `.`). Dropping the
+// `?` (not replacing with a same-length filler) is safe for this file's
+// line-number bookkeeping specifically because `_lineStarts`/`_lineAt`/
+// `_lineForOffset` are all purely newline-position-based — removing a
+// non-newline character can shift a later character's COLUMN but never its
+// LINE, and column offsets are never relied on anywhere in this file.
+function _stripSafeCallOperator(code) {
+  let out = '';
+  let inStr = null;
+  let escape = false;
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i];
+    if (escape) { out += c; escape = false; continue; }
+    if (inStr) {
+      out += c;
+      if (c === '\\') { escape = true; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === '\'') { inStr = c; out += c; continue; }
+    if (c === '?' && code[i + 1] === '.') { out += '.'; i++; continue; }
+    out += c;
+  }
+  return out;
+}
+
 function _qid(file, name, line, body) {
   const sha = crypto.createHash('sha256').update(body).digest('hex').slice(0, 8);
   return `${file}::${name}@${line}#${sha}`;
@@ -750,6 +789,7 @@ function _qid(file, name, line, body) {
 
 export function parseKotlinFile(file, code) {
   if (!file || typeof code !== 'string') return null;
+  code = _stripSafeCallOperator(code);
   const functions = [];
   FUN_RE.lastIndex = 0;
   let m;
