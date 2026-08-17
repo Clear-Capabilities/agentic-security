@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.137.1-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
-<img src="docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
+<img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
 
 <h3>
 Build faster with an<br>
@@ -26,7 +26,7 @@ is now the default.
 
 ## What you get
 
-<img src="docs/brand/patch-alert.svg" align="right" width="120" alt="Patch · ALERT — finding detected">
+<img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-alert.svg" align="right" width="120" alt="Patch · ALERT — finding detected">
 
 ```text
 ─────────────────────────────────────────────────────────────────
