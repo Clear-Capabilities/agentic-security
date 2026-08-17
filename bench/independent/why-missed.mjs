@@ -61,13 +61,21 @@ export function classifySuppressions(suppressions, entry, inferFamilySync = null
   const wanted = new Set((entry.files || []).map(String));
   if (wanted.size === 0) return [];
   const scoped = localiseToAdvisory(suppressions || [], entry.files);
-  return scoped.map(s => ({
-    file: s.file, line: s.line, vuln: s.vuln, reason: s.reason,
-    mechanism: mechanismOf(s.reason),
-    familyMatch: inferFamilySync
-      ? inferFamilySync({ cwe: entry.cwe }) === inferFamilySync({ vuln: s.vuln })
-      : null,
-  }));
+  return scoped.map(s => {
+    // Both sides unknown (_inferFamily returns null for an unrecognized CWE
+    // or vuln keyword) must report null, not true — `null === null` would
+    // otherwise read as a match between two things nobody actually classified.
+    // Caught by hand on GHSA-22p9-r2f5-22mf (CWE-59): unrelated DoS/rate-limit
+    // suppressions on the same file scored familyMatch:true purely because
+    // neither side resolved to a known family.
+    let familyMatch = null;
+    if (inferFamilySync) {
+      const cweFamily = inferFamilySync({ cwe: entry.cwe });
+      const vulnFamily = inferFamilySync({ vuln: s.vuln });
+      familyMatch = (cweFamily != null && vulnFamily != null) ? (cweFamily === vulnFamily) : null;
+    }
+    return { file: s.file, line: s.line, vuln: s.vuln, reason: s.reason, mechanism: mechanismOf(s.reason), familyMatch };
+  });
 }
 
 async function whyMissed(entry) {

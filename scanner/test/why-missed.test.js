@@ -47,6 +47,22 @@ test('familyMatch is false when the suppressed finding is a different vuln class
   assert.equal(out[0].familyMatch, false);
 });
 
+test('familyMatch is null, not true, when both sides are unknown families', () => {
+  // Regression: CWE-59 has no _CWE_FAMILY entry, and an unrelated DoS finding's
+  // vuln text doesn't match any _KEYWORD_FAMILY pattern either — both infer to
+  // null. null === null must not read as a match. Found by hand while sanity-
+  // checking against GHSA-22p9-r2f5-22mf (Plan Task 3): every suppression on
+  // that CWE-59 entry was an unrelated DoS/rate-limit finding, yet the buggy
+  // version reported familyMatch:true for most of them.
+  const unknownCweEntry = { cwe: 'CWE-59', files: ['send_base_mode.py'] };
+  const suppressions = [
+    { vuln: 'Missing Timeout on Outbound HTTP Request (DoS)', file: 'send_base_mode.py', line: 0, snippet: '', reason: 'context-mismatch:cli' },
+  ];
+  const inferFamilySync = (shape) => (shape.cwe ? null : null); // neither side known
+  const out = classifySuppressions(suppressions, unknownCweEntry, inferFamilySync);
+  assert.equal(out[0].familyMatch, null);
+});
+
 test('familyMatch is null when no inference function is supplied', () => {
   const suppressions = [
     { vuln: 'SQL Injection', file: 'src/db/query.js', line: 5, snippet: '', reason: 'sanitized:x' },
