@@ -1,7 +1,11 @@
 // R19 — route-level BOLA/BFLA tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { scanApiBrokenAuthz } from '../src/sast/api-authz.js';
+import { runScan } from '../src/runScan.js';
 
 const R = (over) => ({ method: 'GET', path: '/x', file: 'routes.js', line: 1, hasAuth: false, ...over });
 
@@ -77,4 +81,55 @@ test('#9 precision: no CWE-306 when the app has NO auth anywhere (can\'t trust d
     R({ method: 'DELETE', path: '/widgets/:id', file: 'b.js', line: 9, hasAuth: false }),
     R({ method: 'GET', path: '/widgets', file: 'b.js', line: 1, hasAuth: false }),
   ]).length, 0);
+});
+
+// Regression: found while root-causing independent-population false negative
+// GHSA-fm2f-4339-4p2f. engine.js's scanRoutes() hasAuth-detection regex
+// didn't recognize permission-string-based RBAC middleware (checkPermission/
+// checkAnyPermission), so a route family entirely gated by it — GET/DELETE
+// guarded, PUT left open — was seen as having ZERO authed routes and the
+// whole-file BFLA inconsistency check never fired. This exercises the real
+// scanRoutes() regex end-to-end, not a mocked hasAuth boolean.
+test('BFLA end-to-end: checkAnyPermission-guarded siblings are recognized as authed, so the unguarded PUT fires', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'checkpermission-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'package.json'), '{"name":"t","version":"1.0.0"}');
+    fs.writeFileSync(
+      path.join(dir, 'executions.js'),
+      [
+        "const router = require('express').Router();",
+        "",
+        "router.get('/', checkAnyPermission('executions:view'), executionController.getAll);",
+        "",
+        "",
+        "",
+        "",
+        "router.delete('/:id', checkAnyPermission('executions:delete'), executionController.remove);",
+        "",
+        "",
+        "",
+        "",
+        "router.put('/:id', executionController.updateExecution);",
+        "",
+        'module.exports = router;',
+      ].join('\n')
+    );
+    const { scan } = await runScan(dir);
+    const putRoute = (scan.routes || []).find(r => r.method === 'PUT');
+    const getRoute = (scan.routes || []).find(r => r.method === 'GET');
+    assert.ok(getRoute, 'GET route must be inventoried');
+    assert.equal(getRoute.hasAuth, true, 'checkAnyPermission(...) must be recognized as auth');
+    assert.ok(putRoute, 'PUT route must be inventoried');
+    assert.equal(putRoute.hasAuth, false, 'the genuinely unguarded PUT must still read as unauthed');
+    // PUT /:id carries an id param, so api-authz.js classifies the finding as
+    // BOLA (Object Level) rather than BFLA (Function Level) — either is the
+    // correct broken-access-control family; what this test actually pins is
+    // that the inconsistency fires AT ALL now that the guarded siblings are
+    // recognized as authed (previously the whole file read as unauthenticated,
+    // so `authed === group.length` in api-authz.js's own precision gate
+    // (authed < 1 || authed === group.length → skip) was 0 === 3, silently
+    // skipping the file entirely).
+    const putFindings = scanApiBrokenAuthz(scan.routes || []).filter(f => f.line === putRoute.line);
+    assert.ok(putFindings.length > 0, 'the unguarded PUT among checkAnyPermission-guarded siblings must fire a broken-access-control finding');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

@@ -14,7 +14,7 @@
 
 // Inline role checks — on the route's OWN registration line (middleware args).
 const INLINE_PATTERNS = [
-  /\b(?:requireRole|hasRole|hasAnyRole|checkRole|ensureRole|restrictTo|requireScope|hasAuthority|hasPermission|requirePermission)\s*\(\s*\[?\s*['"]([A-Za-z0-9_.:-]+)['"]/i,
+  /\b(?:requireRole|hasRole|hasAnyRole|checkRole|ensureRole|restrictTo|requireScope|hasAuthority|hasPermission|hasAnyPermission|requirePermission|checkPermission|checkAnyPermission)\s*\(\s*\[?\s*['"]([A-Za-z0-9_.:-]+)['"]/i,
   /\brole\s*(?:===?|==)\s*['"]([A-Za-z0-9_.:-]+)['"]/i,
 ];
 // Decorator/attribute role checks — on the line(s) directly ABOVE the handler.
