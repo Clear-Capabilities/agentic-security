@@ -363,6 +363,25 @@ export const CATALOG = [
   { kind: 'sink', id: 'rb-sinatra-erb',    language: 'rb', framework: 'sinatra',  match: { type: 'call', callee: 'erb' },           argIndex: 0,
     vuln: { name: 'Server-Side Template Injection (Sinatra ERB)', severity: 'high', cwe: 'CWE-1336',
             remediation: 'Use ERB auto-escaping. Never pass user input as the template name.' } },
+  // Taint-recall PRD (80%) — Theme 3 catalog parity gap the parent PRD's
+  // own Ruby wishlist named explicitly (redirect_to), plus three more found
+  // by direct audit of still-0%-taint corpus entries after the CFG rebuild.
+  { kind: 'sink', id: 'rb-redirect-to', language: 'rb', framework: 'rails', match: { type: 'call', callee: 'redirect_to' }, argIndex: 0,
+    vuln: { name: 'Open Redirect (Rails redirect_to)', severity: 'medium', cwe: 'CWE-601',
+            remediation: 'Validate the redirect target against an allow-list; never pass a request-derived string straight to redirect_to.' } },
+  // "render" alone is broad, but Rails' render is a wide surface (inline
+  // templates, partial paths, json/xml) and any tainted arg reaching it is
+  // a real risk (XSS via inline:, path traversal via partial:), matching
+  // this codebase's recall-preserving default.
+  { kind: 'sink', id: 'rb-render', language: 'rb', framework: 'rails', match: { type: 'call', callee: 'render' }, argIndex: 'all',
+    vuln: { name: 'Reflected XSS (Rails render with tainted content)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'Never interpolate untrusted input into render inline:/partial:. Use view templates with auto-escaping and pass data as locals.' } },
+  { kind: 'sink', id: 'rb-uri-open', language: 'rb', framework: 'stdlib', match: { type: 'call', callee: 'open', receiver: '^URI$' }, argIndex: 0,
+    vuln: { name: 'SSRF (URI.open with user-controlled URL)', severity: 'high', cwe: 'CWE-918',
+            remediation: 'Validate the target URL against an allow-list before opening it.' } },
+  { kind: 'sink', id: 'rb-file-read', language: 'rb', framework: 'stdlib', match: { type: 'call', callee: 'read', receiver: '^File$' }, argIndex: 0,
+    vuln: { name: 'Path Traversal (File.read with concatenated path)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Canonicalize and verify the path stays within an allowed base directory before reading.' } },
 
   // ─── SINKS (SQL — PHP / Symfony / Doctrine) ───────────────────────────────
   { kind: 'sink', id: 'php-symfony-createquery',language:'php',framework:'symfony',match:{type:'call',callee:'createQuery'},   argIndex: 0,
@@ -565,6 +584,13 @@ export const CATALOG = [
   { kind: 'sink', id: 'rb-nokogiri-xml', language: 'rb', framework: 'nokogiri', match: { type: 'call', callee: 'XML', receiver: 'Nokogiri' }, argIndex: 0,
     vuln: { name: 'XXE (Nokogiri::XML with dtdload/noent enabled)', severity: 'high', cwe: 'CWE-611',
             remediation: 'Do not enable config.dtdload/config.noent for untrusted XML — Nokogiri is safe by default.' } },
+  // `response.headers["X-Trace"] = tainted` — parser-rb.js now lowers a
+  // subscript-assignment on a member chain as a synthetic
+  // `<receiver>.[]=(key, value)` call, mirroring parser-py.helper.py's
+  // __setitem__ synthesis (Taint-recall PRD 80%). argIndex 1 is the value.
+  { kind: 'sink', id: 'rb-response-setitem', language: 'rb', framework: 'rails', match: { type: 'call', callee: '[]=', receiver: '^(?:response|resp|headers)$' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / CRLF Injection (response header set from tainted value)', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header. Prefer an allow-listed set of header values.' } },
   { kind: 'sink', id: 'php-domdocument-loadxml', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'loadXML' }, argIndex: 0,
     vuln: { name: 'XXE (DOMDocument::loadXML with LIBXML_NOENT)', severity: 'high', cwe: 'CWE-611',
             remediation: 'Do not pass LIBXML_NOENT for untrusted XML, and set libxml_disable_entity_loader(true) (PHP < 8) / avoid external entity loading.' } },

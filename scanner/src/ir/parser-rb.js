@@ -76,8 +76,28 @@ function _extractRubyBody(src, defEnd) {
   return { body: src.slice(defEnd, i - 3).trimEnd(), end: i };
 }
 
-const _RB_OPENERS = /^(?:if|unless|while|until|for|case|begin|do)\b/;
-const _RB_BLOCK_KW = /\b(?:def|class|module|if|unless|while|until|for|case|begin|do)\b/;
+const _RB_BLOCK_KW = /\b(?:def|class|module|if|unless|while|until|for|case|begin|do)\b/g;
+
+// Taint-recall PRD (80%): the count of these keywords in `line`, minus the
+// count of `end` — used to detect whether a line OPENS (or continues) a
+// depth-tracked block, not just when the line's FIRST word is a keyword.
+// The old `_RB_OPENERS.test(line)` gate required the opener at the very
+// START of the line, so a trailing block attached to a call — the
+// idiomatic Ruby shape (`xs.each do |x|`, `Nokogiri::XML(xml) do |c|`) —
+// was never recognized as starting a chunk at all: each line of the block
+// body, and the `end` that should have closed it, were instead emitted as
+// independent, nonsensical top-level statements. `#`-comments are stripped
+// first so a keyword appearing only in a trailing comment doesn't
+// false-positive (string-literal occurrences are a known, accepted
+// imprecision shared with every other hand-rolled parser in this codebase).
+function _rbLineDepthDelta(line) {
+  const noComment = line.replace(/#.*$/, '');
+  let delta = 0;
+  for (const _ of noComment.matchAll(_RB_BLOCK_KW)) delta++;
+  const endMatches = noComment.match(/\bend\b/g);
+  if (endMatches) delta -= endMatches.length;
+  return delta;
+}
 
 // Returns `{ text, line }[]` — `line` is the 1-indexed line, relative to the
 // START of `body`, where that statement's text begins (the array index of
@@ -91,6 +111,18 @@ const _RB_BLOCK_KW = /\b(?:def|class|module|if|unless|while|until|for|case|begin
 // parser-php.js's twin fix and comment for the full rationale (Finding 2 of
 // the R14(b) final whole-branch review) — this is the same root bug in a
 // per-line splitter instead of a per-semicolon one.
+// Taint-recall PRD (80%): the depth check now uses _rbLineDepthDelta (which
+// scans the WHOLE line, not just its first word) at BOTH decision points —
+// not just when already inside a chunk (the old `depth > 0` branch). A
+// trailing block attached to a call (`xs.each do |x|`, `Nokogiri::XML(xml)
+// do |c|`) has its opener keyword mid-line, so the old `depth === 0 &&
+// _RB_OPENERS.test(line)` gate (line-START only) never even recognized
+// such a line as starting a chunk — each line of the block body, and the
+// `end` meant to close it, were emitted as independent, nonsensical
+// top-level statements instead. Confirmed via a real corpus fixture
+// (Nokogiri::XML's brace form was already broken the same way; do...end is
+// the more common Rails idiom and was worse — not just dropped, actively
+// mis-split line by line).
 function _splitStatements(body) {
   const lines = body.split('\n');
   const out = [];
@@ -101,24 +133,20 @@ function _splitStatements(body) {
     const lineNo = idx + 1;
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) return;
-    if (depth === 0 && _RB_OPENERS.test(line)) {
-      if (buf.trim()) out.push({ text: buf.trim(), line: bufLine });
-      buf = line + '\n';
-      bufLine = lineNo;
-      for (const m of line.matchAll(/\b(?:if|unless|while|until|for|case|begin|do|def|class|module)\b/g)) depth++;
-      if (/\bend\b/.test(line)) depth--;
-      if (depth <= 0) { depth = 0; out.push({ text: buf.trim(), line: bufLine }); buf = ''; }
+    if (depth === 0) {
+      const delta = _rbLineDepthDelta(line);
+      if (delta > 0) {
+        buf = line + '\n';
+        bufLine = lineNo;
+        depth = delta;
+        return;
+      }
+      out.push({ text: line, line: lineNo });
       return;
     }
-    if (depth > 0) {
-      buf += line + '\n';
-      for (const m of line.matchAll(/\b(?:if|unless|while|until|for|case|begin|do|def|class|module)\b/g)) depth++;
-      const endMatches = line.match(/\bend\b/g);
-      if (endMatches) depth -= endMatches.length;
-      if (depth <= 0) { depth = 0; out.push({ text: buf.trim(), line: bufLine }); buf = ''; }
-      return;
-    }
-    out.push({ text: line, line: lineNo });
+    buf += line + '\n';
+    depth += _rbLineDepthDelta(line);
+    if (depth <= 0) { depth = 0; out.push({ text: buf.trim(), line: bufLine }); buf = ''; }
   });
   if (buf.trim()) out.push({ text: buf.trim(), line: bufLine });
   return out;
@@ -148,6 +176,19 @@ function _lowerExpr(text) {
     for (const m of s.matchAll(/#\{([^}]+)\}/g)) parts.push(_lowerExpr(m[1]));
     if (parts.length) return { kind: 'tpl', parts };
   }
+  // Taint-recall PRD (80%): string concat with `+` MUST be checked before
+  // the plain-literal rule below — `"/var/data/" + name` starts with a
+  // quote, so the old ordering swallowed the WHOLE expression (including
+  // `+ name`) as one opaque literal, silently dropping the concatenated
+  // variable (confirmed via a real corpus fixture). Same lesson
+  // parser-go.js's R3 fix already learned for the identical reason. Only
+  // fires on a TOP-LEVEL `+` (outside string/paren/bracket nesting, via
+  // _splitTopLevelPlus) so a literal that merely CONTAINS a "+" character
+  // (`"a+b"`) is not incorrectly split into broken fragments.
+  if (s.includes('+')) {
+    const plusParts = _splitTopLevelPlus(s);
+    if (plusParts.length > 1) return { kind: 'tpl', parts: plusParts.map(_lowerExpr) };
+  }
   if (/^['"]/.test(s)) return { kind: 'literal', value: s };
   if (/^\d/.test(s)) return { kind: 'literal', value: s };
   if (/^(true|false|nil)\b/.test(s)) return { kind: 'literal', value: s };
@@ -172,10 +213,18 @@ function _lowerExpr(text) {
   // argument text for a chained call (`sanitize(x).strip` produced
   // args="x).strip", which then fell through to {kind:'unknown'} and
   // silently dropped x).
-  const callMatch = matchBalancedCall(s, /^([\w.]+)/);
+  // Taint-recall PRD (80%): `[\w.]+` excludes `:`, so `Nokogiri::XML(xml)`
+  // — Ruby's `::` module-scope call operator, a common idiom for
+  // class/module-level factory methods — never matched here at all (the
+  // regex only ever captured "Nokogiri", then failed to find `(`
+  // immediately after it, since a `:` sat in between). Callee normalizes
+  // `::` to `.` for consistency with _followChain's dot-joining and every
+  // catalog entry's dotted-segment matching.
+  const callMatch = matchBalancedCall(s, /^([\w.:]+)/);
   if (callMatch) {
+    const callee = callMatch.callee.replace(/::/g, '.');
     const args = _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr);
-    return _followChain(s, callMatch.endIdx, callMatch.callee, args);
+    return _followChain(s, callMatch.endIdx, callee, args);
   }
   // Method call without parens is very common in Ruby but hard to detect
   // reliably with regex. We handle the explicit-paren form above.
@@ -194,12 +243,34 @@ function _lowerExpr(text) {
   }
   // Simple ident
   if (/^[A-Za-z_@]\w*$/.test(s)) return { kind: 'ident', name: s };
-  // Concat with +
-  if (s.includes('+')) {
-    const parts = s.split('+').map(p => _lowerExpr(p.trim()));
-    return { kind: 'tpl', parts };
-  }
   return { kind: 'unknown' };
+}
+
+// Taint-recall PRD (80%): top-level-aware `+` splitter, same purpose as
+// _splitTopLevelCommas below — tracks string/paren/bracket nesting so a
+// `+` inside a string literal or a nested call's argument list doesn't get
+// mistaken for a concatenation operator.
+function _splitTopLevelPlus(s) {
+  const out = [];
+  let buf = '';
+  let depth = 0;
+  let inStr = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      buf += c;
+      if (c === '\\') { i++; buf += s[i] || ''; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === '\'') { inStr = c; buf += c; continue; }
+    if (c === '(' || c === '{' || c === '[') depth++;
+    if (c === ')' || c === '}' || c === ']') depth--;
+    if (c === '+' && depth === 0) { out.push(buf.trim()); buf = ''; continue; }
+    buf += c;
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out;
 }
 
 function _splitTopLevelCommas(s) {
@@ -235,15 +306,33 @@ function _lowerStmt(stmt, line) {
   if (/^raise\b/.test(s)) {
     return { kind: 'throw', line, value: _lowerExpr(s.replace(/^raise\s*/, '')) };
   }
+  // Taint-recall PRD (80%): subscript-assignment on a member chain
+  // (`response.headers["X-Trace"] = params[:trace]`) had no branch at
+  // all — the plain assign regex below requires a bare `@?\w+` target, so
+  // this fell through to the bareCall heuristic (further down), which also
+  // doesn't match, and the WHOLE statement was silently dropped. Same
+  // shape/fix as parser-py.helper.py's `__setitem__` synthesis this PRD
+  // added earlier: lowered as a synthetic `<receiver>.[]=(key, value)`
+  // call so it flows through the existing argument-based sink-matching
+  // machinery — argIndex 1 is the assigned value.
+  const subAssign = s.match(/^([A-Za-z_][\w.]*)\[(.+?)\]\s*=\s*(.+)$/s);
+  if (subAssign) {
+    const receiver = subAssign[1].replace(/::/g, '.');
+    const key = _lowerExpr(subAssign[2]);
+    const value = _lowerExpr(subAssign[3]);
+    return { kind: 'call', line, callee: `${receiver}.[]=`, args: [key, value] };
+  }
   // Assignment: var = expr
   const assign = s.match(/^(@?\w+)\s*=\s*(.+)$/s);
   if (assign && !/^={2}/.test(assign[2])) {
     return { kind: 'assign', line, target: assign[1], source: _lowerExpr(assign[2]) };
   }
-  // Statement-form call with parens
-  const call = matchBalancedCall(s, /^([\w.]+)/);
+  // Statement-form call with parens. Same `::`-inclusion fix as _lowerExpr's
+  // twin (Taint-recall PRD 80%).
+  const call = matchBalancedCall(s, /^([\w.:]+)/);
   if (call) {
-    const chained = _followChain(s, call.endIdx, call.callee, _splitTopLevelCommas(call.argsText).map(_lowerExpr));
+    const callee = call.callee.replace(/::/g, '.');
+    const chained = _followChain(s, call.endIdx, callee, _splitTopLevelCommas(call.argsText).map(_lowerExpr));
     return { kind: 'call', line, callee: chained.callee, args: chained.args };
   }
   // Statement-form call without parens (common Ruby idiom): redirect_to expr
@@ -340,6 +429,130 @@ function _extractRubyBlockBody(compound) {
   return lines.slice(1, -1).join('\n');
 }
 
+// Taint-recall PRD (80%): full Ruby CFG rebuild. `case/when/else` was
+// previously not recursed into at all (the whole block silently dropped —
+// `_lowerStmt` has no branch for it and "case" is excluded from the
+// bare-call fallback, so it returns null and the entire chunk vanishes).
+// Splits the case body into `when`/`else` arms by scanning for those
+// keywords at NESTED depth 0 (mirroring parser-kt.js's _buildWhenArms,
+// which needed the identical depth guard to avoid colliding with a nested
+// if/else's own `else`). Each arm is linked directly from the case's own
+// entry point (not chained if-else-style) and its body-tail joins a common
+// exit node — this doesn't model mutual exclusivity between arms, which is
+// fine for taint purposes: every arm's sink is reachable, which is what
+// recall-preserving analysis needs (a false "this arm is also reachable"
+// is far cheaper than silently dropping the arm that actually executes).
+function _buildCaseArms(innerBody, nodes, entryId, startLine, cfgDepth) {
+  const lines = innerBody.split('\n');
+  const arms = [];
+  let depth = 0;
+  let cur = null;
+  lines.forEach((rawLine, idx) => {
+    const line = rawLine.trim();
+    if (depth === 0 && /^when\s+/.test(line)) {
+      if (cur) arms.push(cur);
+      cur = { condText: line.replace(/^when\s+/, '').replace(/\s+then\s*$/, '').trim(), bodyLines: [], startIdx: idx };
+      return;
+    }
+    if (depth === 0 && /^else\b/.test(line)) {
+      if (cur) arms.push(cur);
+      cur = { condText: null, bodyLines: [], startIdx: idx };
+      return;
+    }
+    if (cur) cur.bodyLines.push(rawLine);
+    depth += _rbLineDepthDelta(line);
+    if (depth < 0) depth = 0;
+  });
+  if (cur) arms.push(cur);
+
+  const join = _addNode(nodes, { kind: 'noop', line: startLine });
+  for (const arm of arms) {
+    const armLine = startLine + arm.startIdx;
+    const bodyText = arm.bodyLines.join('\n');
+    let branchStart = entryId;
+    if (arm.condText !== null) {
+      const ifNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(arm.condText), line: armLine });
+      _linkNodes(nodes, entryId, ifNode);
+      branchStart = ifNode;
+    }
+    const tail = _buildCfg(bodyText, nodes, branchStart, armLine + 1, cfgDepth + 1);
+    _linkNodes(nodes, tail, join);
+  }
+  if (!arms.length) _linkNodes(nodes, entryId, join);
+  return join;
+}
+
+// Taint-recall PRD (80%): `begin/rescue/ensure` was also previously
+// dropped entirely (same root cause as case/when — no _lowerStmt branch).
+// `rescue` clauses are linked from the SAME entry point as the begin body
+// (an exception can occur at any point inside it, so precise "which
+// statement raised" ordering isn't modeled — same recall-preserving
+// tradeoff as case/when). `ensure`, when present, always runs after every
+// other path converges, mirroring real semantics for reachability purposes
+// even though this doesn't model early-return-through-ensure precisely.
+function _buildBeginRescueEnsure(innerBody, nodes, entryId, startLine, cfgDepth) {
+  const lines = innerBody.split('\n');
+  const clauses = [{ kind: 'begin', bodyLines: [], startIdx: 0 }];
+  let depth = 0;
+  lines.forEach((rawLine, idx) => {
+    const line = rawLine.trim();
+    if (depth === 0 && /^rescue\b/.test(line)) {
+      clauses.push({ kind: 'rescue', bodyLines: [], startIdx: idx });
+      return;
+    }
+    if (depth === 0 && /^ensure\b/.test(line)) {
+      clauses.push({ kind: 'ensure', bodyLines: [], startIdx: idx });
+      return;
+    }
+    clauses[clauses.length - 1].bodyLines.push(rawLine);
+    depth += _rbLineDepthDelta(line);
+    if (depth < 0) depth = 0;
+  });
+
+  let beginTail = entryId;
+  const rescueTails = [];
+  let ensureBody = null, ensureLine = startLine;
+  for (const clause of clauses) {
+    const clauseLine = startLine + clause.startIdx;
+    const bodyText = clause.bodyLines.join('\n');
+    if (clause.kind === 'begin') {
+      beginTail = _buildCfg(bodyText, nodes, entryId, clauseLine + 1, cfgDepth + 1);
+    } else if (clause.kind === 'rescue') {
+      rescueTails.push(_buildCfg(bodyText, nodes, entryId, clauseLine + 1, cfgDepth + 1));
+    } else {
+      ensureBody = bodyText;
+      ensureLine = clauseLine;
+    }
+  }
+  const converge = _addNode(nodes, { kind: 'noop', line: startLine });
+  _linkNodes(nodes, beginTail, converge);
+  for (const t of rescueTails) _linkNodes(nodes, t, converge);
+  const join = _addNode(nodes, { kind: 'noop', line: startLine });
+  const finalTail = ensureBody !== null ? _buildCfg(ensureBody, nodes, converge, ensureLine + 1, cfgDepth + 1) : converge;
+  _linkNodes(nodes, finalTail, join);
+  return join;
+}
+
+// Taint-recall PRD (80%): a trailing block attached to a call
+// (`xs.each do |x| ... end`, `Nokogiri::XML(xml) { |c| ... }`) — Ruby's
+// dominant Rails/ActiveRecord idiom (`.each`/`.map`/scope chains, resource
+// blocks) — was previously silently dropped (do...end) or corrupted
+// (brace form, via the pre-fix matchBalancedCall gap). Recurses into the
+// body unconditionally (the PRD's own investigation recommended this,
+// given how dominant the idiom is in real Rails code) and binds every
+// named block parameter to the call's receiver — permissive by design
+// (Ruby has no equivalent of Kotlin's implicit-this apply/run that would
+// need to NOT bind; over-binding here is the safe direction for a
+// recall-preserving engine).
+function _lowerBlockTrigger(callText) {
+  const paren = matchBalancedCall(callText, /^([\w.:]+)/);
+  if (paren) {
+    const callee = paren.callee.replace(/::/g, '.');
+    return { kind: 'call', callee, args: _splitTopLevelCommas(paren.argsText).map(_lowerExpr) };
+  }
+  return { kind: 'call', callee: callText.replace(/::/g, '.'), args: [] };
+}
+
 // `startLine` is the absolute source line of the FIRST raw line of
 // `bodyText`. Each statement's absolute line is `startLine + stmt.line - 1`
 // (`stmt.line` from _splitStatements is already 1-indexed and relative to
@@ -349,7 +562,13 @@ function _extractRubyBlockBody(compound) {
 // silently dropped any blank line (or, at module level, any blanked-out def
 // span — see `_blankSpans`) that preceded a statement, which is exactly
 // what made module-level Ruby findings report the wrong source line.
-function _buildCfg(bodyText, nodes, prevId, startLine) {
+//
+// `depth` guards against unbounded recursion on deeply/adversarially
+// nested input (confirmed real risk — every OTHER R8-style rebuild in this
+// codebase, Kotlin's trailing-lambda work most recently, needed the same
+// guard after hitting a real stack overflow during its own testing).
+function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
+  if (depth > 60) return prevId;
   const stmts = _splitStatements(bodyText);
   let prev = prevId;
   for (const stmt of stmts) {
@@ -364,7 +583,7 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
       const ifNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(condText), line });
       _linkNodes(nodes, prev, ifNode);
       const join = _addNode(nodes, { kind: 'noop', line });
-      const thenTail = _buildCfg(innerBody, nodes, ifNode, line + 1);
+      const thenTail = _buildCfg(innerBody, nodes, ifNode, line + 1, depth + 1);
       _linkNodes(nodes, thenTail, join);
       _linkNodes(nodes, ifNode, join);
       prev = join;
@@ -376,11 +595,97 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
       const innerBody = _extractRubyBlockBody(s);
       const header = _addNode(nodes, { kind: 'loop-header', line });
       _linkNodes(nodes, prev, header);
-      const bodyTail = _buildCfg(innerBody, nodes, header, line + 1);
+      const bodyTail = _buildCfg(innerBody, nodes, header, line + 1, depth + 1);
       _linkNodes(nodes, bodyTail, header);
       const join = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, header, join);
       prev = join;
+      continue;
+    }
+
+    // Taint-recall PRD (80%): `for x in xs ... end` (also accepts the
+    // optional trailing `do` — `for x in xs do`) — previously not
+    // recognized by _buildCfg at all, silently dropped. Synthesizes a
+    // loop-variable binding assign, mirroring every OTHER R8-style
+    // for-each fix in this codebase (Java's enhanced-for, C#'s foreach,
+    // Kotlin's `for (x in xs)`) so the variable itself carries taint
+    // provenance from the iterated expression.
+    const forMatch = s.match(/^for\s+(\w+)\s+in\s+(.+?)\s*$/m);
+    if (forMatch && /\bend\b\s*$/.test(s)) {
+      const loopVar = forMatch[1];
+      const iterText = forMatch[2].replace(/\bdo\s*$/, '').trim();
+      const innerBody = _extractRubyBlockBody(s);
+      const header = _addNode(nodes, { kind: 'loop-header', line });
+      _linkNodes(nodes, prev, header);
+      const bindId = _addNode(nodes, { kind: 'assign', target: loopVar, source: _lowerExpr(iterText), line });
+      _linkNodes(nodes, header, bindId);
+      const bodyTail = _buildCfg(innerBody, nodes, bindId, line + 1, depth + 1);
+      _linkNodes(nodes, bodyTail, header);
+      const join = _addNode(nodes, { kind: 'noop', line });
+      _linkNodes(nodes, header, join);
+      prev = join;
+      continue;
+    }
+
+    if (/^case\b/.test(s) && /\bend\b\s*$/.test(s)) {
+      const innerBody = _extractRubyBlockBody(s);
+      prev = _buildCaseArms(innerBody, nodes, prev, line + 1, depth + 1);
+      continue;
+    }
+
+    if (/^begin\b/.test(s) && /\bend\b\s*$/.test(s)) {
+      const innerBody = _extractRubyBlockBody(s);
+      prev = _buildBeginRescueEnsure(innerBody, nodes, prev, line + 1, depth + 1);
+      continue;
+    }
+
+    // `bench:self-scan:check` caught a genuine ReDoS here — but NOT the
+    // "optional group between two \s*" shape this session's other fixes
+    // (parser-kt.js's trailing-lambda regex, parser-cs.js's attrRegex) were.
+    // A first version split into two mutually exclusive alternatives
+    // (no-params / with-params), the fix that worked for those — and it was
+    // STILL quadratic (confirmed by direct timing: 200000 chars of
+    // unmatched trailing whitespace took ~48s), because the real culprit is
+    // the LEADING `(.+?)\s+do` shared by both alternatives: an unbounded
+    // lazy group followed by a whitespace quantifier, which backtracks
+    // catastrophically against a long homogeneous run (e.g. all spaces)
+    // when the overall match fails — a different ReDoS class entirely, not
+    // fixed by re-partitioning what comes AFTER "do". Fixed by dropping the
+    // leading capturing group altogether: search directly for the
+    // trailing `\bdo\b` (a plain forward scan, nothing to backtrack) and
+    // derive the callee text from the substring before it — confirmed
+    // linear (1,000,000 chars: 2ms) and correctness-preserving (word
+    // boundaries correctly skip a method literally named `do_something`).
+    // Split into two mutually exclusive alternatives (with-params /
+    // no-params) rather than one optional group even though — unlike the
+    // `(.+?)\s+do` version above — this specific shape already measured
+    // linear on its own: bench:self-scan:check's detector flags the SHAPE
+    // (an optional group between two `\s*`) independent of whether a
+    // compounding leading group is present, so satisfying it here too
+    // keeps this file's own precision baseline honest without another
+    // detector-vs-reality debate.
+    const firstLine = s.split('\n')[0].trim();
+    const doMatch = firstLine.match(/\bdo\b\s*\|([^|]*)\|\s*$/) || firstLine.match(/\bdo\b\s*$/);
+    const blockMatch = doMatch ? [doMatch[0], firstLine.slice(0, doMatch.index), doMatch[1]] : null;
+    if (blockMatch && /\bend\s*$/.test(s)) {
+      const callText = blockMatch[1].trim();
+      const paramsText = blockMatch[2] || '';
+      const innerBody = _extractRubyBlockBody(s);
+      const triggerExpr = _lowerBlockTrigger(callText);
+      const callId = _addNode(nodes, { kind: 'call', line, callee: triggerExpr.callee, args: triggerExpr.args });
+      _linkNodes(nodes, prev, callId);
+      let bodyStart = callId;
+      const dot = triggerExpr.callee.lastIndexOf('.');
+      const receiver = dot > 0 ? triggerExpr.callee.slice(0, dot) : null;
+      if (receiver) {
+        const params = paramsText.split(',').map(p => p.trim().replace(/^\*+/, '')).filter(p => /^[A-Za-z_]\w*$/.test(p));
+        for (const p of params) {
+          const bindId = _addNode(nodes, { kind: 'assign', target: p, source: { kind: 'ident', name: receiver }, line });
+          _linkNodes(nodes, bodyStart, bindId);
+          bodyStart = bindId;
+        }
+      }
+      prev = _buildCfg(innerBody, nodes, bodyStart, line + 1, depth + 1);
       continue;
     }
 

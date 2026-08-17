@@ -11,11 +11,11 @@ that produced them.
 | --- | --- |
 | Engine version | 0.137.1 |
 | Bundle SHA-256 | `c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c` |
-| Commit | `356b6eee3d53e2686812f0e72c16aeba5eae7463` |
+| Commit | `246c83b33f10aac6a314378ef3407b6834fc6812` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-17T05:14:55.613Z |
+| Generated (UTC) | 2026-08-17T05:46:54.719Z |
 
 ## What these numbers are, and what they are not
 
@@ -162,7 +162,7 @@ Entries scored: 215
 | kotlin | 6/21 (28.6%) |
 | php | 7/23 (30.4%) |
 | python | 17/32 (53.1%) |
-| ruby | 4/20 (20.0%) |
+| ruby | 8/20 (40.0%) |
 | terraform | 0/1 (0.0%) |
 
 ### Deep-tier only — taint-shaped subset (headline)
