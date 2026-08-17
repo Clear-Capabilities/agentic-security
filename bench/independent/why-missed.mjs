@@ -1,0 +1,141 @@
+#!/usr/bin/env node
+// Diagnose WHY a false negative in the independent population is a false
+// negative — not just that the labelled CWE didn't match, but whether
+// something fired and got suppressed, and if so by which named mechanism.
+//
+// This exists because DETECTION_GAP_REMEDIATION_PRD.md's R16 finding could
+// not distinguish "this shape doesn't occur in these 110 real advisories"
+// from "a real detection was masked downstream" — six themes of verified
+// fixes landed and the independent recall number did not move. This script
+// is the instrument built to tell those two explanations apart, per entry.
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { scanDirRaw, matchesCwe, localiseToAdvisory } from './runner.mjs';
+import { entryDir, entryComplete } from './fetch.mjs';
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.resolve(HERE, '..', '..');
+const MANIFEST = path.join(HERE, 'manifest.json');
+const OUT_DIR = path.join(HERE, 'why-missed-output');
+
+// Reuses the engine's own CWE-to-family table rather than a second one —
+// finding-defaults.js already backfills `family` for shipped findings from
+// exactly this table, and a suppression-log entry needs the same inference
+// since it carries only `vuln`, not `cwe` (see engine.js:2441, :8935).
+async function inferFamily(shape) {
+  const mod = await import(path.join(REPO, 'scanner', 'src', 'posture', 'finding-defaults.js'));
+  return mod._internals._inferFamily(shape);
+}
+
+const MECHANISM_OF = [
+  [/^inline pragma:|^inline-pragma:/, 'ignore-pragma'],
+  [/^sanitized:/, 'sanitized'],
+  [/^custom-rule:/, 'custom-rule'],
+  [/^bench-/, 'bench-shape'],
+  [/^universal-/, 'bench-shape'],
+];
+
+function mechanismOf(reason) {
+  const r = String(reason || '');
+  for (const [re, name] of MECHANISM_OF) if (re.test(r)) return name;
+  return 'other';
+}
+
+/**
+ * Pure: which of this scan's suppressions plausibly explain a miss on
+ * `entry`? Scoped to the advisory's own files (via the same suffix-matching
+ * runner.mjs's scoring already uses, so "which file" answers the identical
+ * question both places), annotated with a family-match signal an agent can
+ * use as a starting point — not a verdict; the diff still has to be read.
+ *
+ * `inferFamilySync`, if given, is `(shape) => familyString`, called with
+ * `{cwe: entry.cwe}` and `{vuln: s.vuln}` — synchronous because the real
+ * inference is a dynamic import the caller resolves once, up front, for
+ * every distinct vuln name in this batch (see whyMissed below). Omitted in
+ * tests that don't need familyMatch, which then reports null rather than a
+ * fabricated guess.
+ */
+export function classifySuppressions(suppressions, entry, inferFamilySync = null) {
+  const wanted = new Set((entry.files || []).map(String));
+  if (wanted.size === 0) return [];
+  const scoped = localiseToAdvisory(suppressions || [], entry.files);
+  return scoped.map(s => ({
+    file: s.file, line: s.line, vuln: s.vuln, reason: s.reason,
+    mechanism: mechanismOf(s.reason),
+    familyMatch: inferFamilySync
+      ? inferFamilySync({ cwe: entry.cwe }) === inferFamilySync({ vuln: s.vuln })
+      : null,
+  }));
+}
+
+async function whyMissed(entry) {
+  const dir = entryDir(entry.id);
+  const preDir = path.join(dir, 'pre');
+  let findings, suppressions;
+  try {
+    ({ findings, suppressions } = await scanDirRaw(preDir));
+  } catch (err) {
+    return { id: entry.id, bucket: 'scan-error', detail: err.message };
+  }
+
+  if (matchesCwe(findings, entry.cwe, entry.files)) {
+    return { id: entry.id, bucket: 'not-actually-missing', detail: 'scores TP on this re-scan — FN list is stale, re-measure first' };
+  }
+  if (matchesCwe(findings, entry.cwe, null)) {
+    return { id: entry.id, bucket: 'finding-present-wrong-file-or-cwe' };
+  }
+
+  const cweFamily = await inferFamily({ cwe: entry.cwe });
+  const familyByVuln = new Map();
+  for (const s of suppressions) {
+    if (!familyByVuln.has(s.vuln)) familyByVuln.set(s.vuln, await inferFamily({ vuln: s.vuln }));
+  }
+  const inferFamilySync = (shape) => (shape.cwe ? cweFamily : familyByVuln.get(shape.vuln));
+  const suppressed = classifySuppressions(suppressions, entry, inferFamilySync);
+  if (suppressed.length) {
+    return { id: entry.id, bucket: 'finding-present-but-suppressed', suppressed };
+  }
+
+  // Guard-window drop is not logged to _suppressionLog — the only way to see
+  // it is a before/after diff with recognition disabled (engine.js:8307).
+  process.env.AGENTIC_SECURITY_NO_GUARD_RECOGNITION = '1';
+  let findingsNoGuard;
+  try {
+    ({ findings: findingsNoGuard } = await scanDirRaw(preDir));
+  } finally {
+    delete process.env.AGENTIC_SECURITY_NO_GUARD_RECOGNITION;
+  }
+  if (matchesCwe(findingsNoGuard, entry.cwe, entry.files)) {
+    return {
+      id: entry.id, bucket: 'finding-present-but-suppressed',
+      suppressed: [{ mechanism: 'guard-window', reason: 'present only with AGENTIC_SECURITY_NO_GUARD_RECOGNITION=1' }],
+    };
+  }
+
+  return { id: entry.id, bucket: 'no-finding-at-all' };
+}
+
+async function main() {
+  // Scanning third-party trees: state writes must be off, exactly like
+  // runner.mjs's own main(), or the scan mutates the tree it's diagnosing.
+  await disableStateWrites();
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
+  const onlyIds = process.argv.includes('--all') ? null : process.argv.slice(2).filter(a => !a.startsWith('--'));
+  const targets = manifest.entries.filter(e => !onlyIds || onlyIds.includes(e.id));
+
+  const summary = { total: 0, byBucket: {} };
+  for (const e of targets) {
+    if (!entryComplete(e)) { process.stderr.write(`  skip ${e.id} — not fetched\n`); continue; }
+    const result = await whyMissed(e);
+    summary.total++;
+    summary.byBucket[result.bucket] = (summary.byBucket[result.bucket] || 0) + 1;
+    fs.writeFileSync(path.join(OUT_DIR, `${e.id}.json`), JSON.stringify({ ...e, ...result }, null, 2) + '\n');
+    process.stderr.write(`  ${e.id}  ${result.bucket}\n`);
+  }
+  process.stderr.write(`\n${JSON.stringify(summary, null, 2)}\n`);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) main();

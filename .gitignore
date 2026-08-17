@@ -103,5 +103,8 @@ scanner/reports/
 # Independent evaluation population: upstream source is FETCHED, never vendored.
 bench/independent/cache/
 
+# why-missed.mjs's per-entry diagnostic output — regenerated working data.
+bench/independent/why-missed-output/
+
 # Cross-run discovery memory (PRD C4) — per-project state, never committed.
 .agentic-security/discovery-memory.json
