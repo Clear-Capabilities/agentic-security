@@ -34,6 +34,36 @@ test('clean Python: secure_filename + uuid → no findings', () => {
   assert.equal(scanFileUpload('clean/upload.py', fx('clean/upload.py')).length, 0);
 });
 
+test('vulnerable: client mimetype trusted as stored Content-Type fires', () => {
+  const code = [
+    "const file = { mimetype: req.file.mimetype };",
+    "const stored = { type: file.mimetype, path: dest };",
+    "storage.save(stored);",
+  ].join('\n');
+  const f = scanFileUpload('routes/files.js', code);
+  assert.equal(f.length, 1);
+  assert.equal(f[0].subfamily, 'client-mimetype-trusted');
+  assert.equal(f[0].cwe, 'CWE-434');
+});
+
+test('clean: mimetype used only for fileFilter validation, not stored → no finding', () => {
+  // Real shape from the clean fixture's own guarded multer() config.
+  const code = "cb(null, /^image\\/(png|jpe?g)$/.test(file.mimetype));";
+  assert.equal(scanFileUpload('routes/files.js', code).length, 0);
+});
+
+test('clean: type derived via mime.lookup() nearby, not the raw client mimetype → no finding', () => {
+  // Same `type: x.mimetype` shape the detector matches on, but with a
+  // mime.lookup() call in the surrounding window — the suppression this
+  // detector is meant to respect (the vibecoder derived it properly).
+  const code = [
+    "const derivedType = mime.lookup(file.originalname) || 'application/octet-stream';",
+    "const stored = { type: file.mimetype, actualType: derivedType, path: dest };",
+    "storage.save(stored);",
+  ].join('\n');
+  assert.equal(scanFileUpload('routes/files.js', code).length, 0);
+});
+
 test('non-upload file → no findings (relevance gate)', () => {
   assert.equal(scanFileUpload('a.js', 'function add(a, b) { return a + b; }\n').length, 0);
   assert.equal(scanFileUpload('a.go', 'package main').length, 0); // unsupported ext

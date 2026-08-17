@@ -14,6 +14,16 @@
 //     sanitizer (basename / uuid / randomUUID / sanitize / whitelist) nearby.
 // A validated upload (fileFilter+limits, or a generated/sanitized name) does
 // NOT match.
+//
+// Content-type spoofing subfamily (client-mimetype-trusted): the client-
+// supplied `.mimetype` (multer/Express) is trusted as the stored/served
+// Content-Type with no derivation from the actual file extension — an
+// attacker who names a file `shell.php` but sets its multipart Content-Type
+// to `image/png` gets that lie stored and later served back as truth. This
+// is a distinct CWE-434 subtype from the filename-as-path-traversal one
+// above (found via CVE-2026-70490, GHSA-944x-pm95-3jpr: Ghost's file-serving
+// endpoint stored `type: frame.file.mimetype` verbatim instead of deriving
+// it from the on-disk filename via `mime.lookup()`).
 import { blankComments } from './_comment-strip.js';
 
 const JS_EXT = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
@@ -23,6 +33,10 @@ const _lineOf = (raw, idx) => raw.substring(0, idx).split('\n').length;
 const _snip = (raw, line) => (raw.split('\n')[line - 1] || '').trim().slice(0, 200);
 // A sanitizer for the destination filename anywhere in the ±6-line window.
 const NAME_SANITIZER = /\b(?:basename|randomUUID|uuidv4|uuid4|uuid\.v4|nanoid|sanitize[-_]?filename|sanitizeFilename|slugify|crypto\.random|secure_filename|werkzeug)\b/i;
+// A client-supplied `.mimetype` assigned straight to a `type:`-ish stored/
+// served field, with no extension-derived lookup nearby.
+const MIMETYPE_TO_TYPE_FIELD = /\btype\s*:\s*\S*\.mimetype\b/;
+const MIMETYPE_DERIVED = /\b(?:mime\.lookup|mime\.getType|mimeTypes\.lookup|mimetypes\.guess_type)\s*\(/i;
 
 function _window(raw, line, half = 6) {
   const lines = raw.split('\n');
@@ -82,6 +96,20 @@ function scanJs(file, raw, code, out, seen) {
       'The uploaded file is written using its client-controlled name. An attacker can choose the extension (upload `shell.php`) or embed path traversal (`../../etc/x`) to escape the upload directory.',
       'Never trust the uploaded filename. Generate a server-side name (uuid/nanoid) and validate the extension against an allow-list; write with path.basename() into a fixed directory outside the web root.'));
   }
+
+  // 3) Client-supplied `.mimetype` trusted as the stored/served Content-Type,
+  //    with no derivation from the actual file extension (content-type
+  //    spoofing — an attacker can name a file `shell.php` but set its
+  //    multipart Content-Type to `image/png`).
+  for (let i = 0; i < lines.length; i++) {
+    if (!MIMETYPE_TO_TYPE_FIELD.test(lines[i])) continue;
+    const line = i + 1;
+    if (MIMETYPE_DERIVED.test(_window(raw, line))) continue; // derived from extension → safe
+    push(line, mk(file, raw, line, 'client-mimetype-trusted', 'medium',
+      'Unrestricted file upload — client-supplied mimetype trusted as the stored Content-Type',
+      'The uploaded file\'s Content-Type is taken directly from the client-supplied `.mimetype` and stored/served as-is. An attacker can upload a malicious file (e.g. `shell.php`) while claiming an innocuous Content-Type (`image/png`), and later requests will trust that lie.',
+      'Derive the served Content-Type from the actual file extension (e.g. `mime.lookup(filename)`), never from the client-supplied multipart Content-Type header.'));
+  }
 }
 
 function scanPy(file, raw, code, out, seen) {
@@ -108,7 +136,7 @@ export function scanFileUpload(fp, raw) {
   const isJs = JS_EXT.test(fp), isPy = PY_EXT.test(fp);
   if (!isJs && !isPy) return [];
   // Cheap relevance gate — skip files with no upload surface.
-  if (!/\b(?:multer|originalname|req\.files|UploadFile|\.filename|createWriteStream|\.mv\s*\()/i.test(raw)) return [];
+  if (!/\b(?:multer|originalname|req\.files|UploadFile|\.filename|\.mimetype|createWriteStream|\.mv\s*\()/i.test(raw)) return [];
   const code = blankComments(raw, isPy ? 'py' : null);
   const out = [];
   const seen = new Set();
