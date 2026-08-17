@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.137.1",
-    "bundleSha256": "b904880d6001800faffeddc0600c1b8ea0d08d96f3ec81fc97723aa7b5e1b6c1",
-    "commit": "965ea170eba3d5be8978afaef69ee27cf4bd88c9",
+    "bundleSha256": "cac211b88764227f5f1fda4bd9fc16643953d95b716951be7c88870f6d69e4a2",
+    "commit": "80b1e6e1ef8fa749f8e05a64025b4a661b09de15",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-17T15:50:41.545Z"
+    "generatedAt": "2026-08-17T16:52:32.054Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -845,21 +845,21 @@
         {
           "language": "go",
           "taint": {
-            "n": 12,
+            "n": 13,
             "d": 22
           }
         },
         {
           "language": "java",
           "taint": {
-            "n": 10,
+            "n": 13,
             "d": 25
           }
         },
         {
           "language": "js/ts",
           "taint": {
-            "n": 19,
+            "n": 22,
             "d": 38
           }
         },
@@ -873,28 +873,28 @@
         {
           "language": "kotlin",
           "taint": {
-            "n": 8,
+            "n": 10,
             "d": 21
           }
         },
         {
           "language": "php",
           "taint": {
-            "n": 10,
+            "n": 12,
             "d": 23
           }
         },
         {
           "language": "python",
           "taint": {
-            "n": 19,
+            "n": 21,
             "d": 32
           }
         },
         {
           "language": "ruby",
           "taint": {
-            "n": 9,
+            "n": 11,
             "d": 20
           }
         },

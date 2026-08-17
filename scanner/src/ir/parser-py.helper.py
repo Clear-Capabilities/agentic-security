@@ -127,12 +127,7 @@ def _lower_expr(node: ast.AST) -> dict[str, Any]:
         op = type(node.ops[0]).__name__ if node.ops else "Eq"
         return {"kind": "binary", "op": op, "left": left, "right": right}
     if isinstance(node, ast.Call):
-        callee = _flatten_callee(node.func)
-        args = [_lower_expr(a) for a in (node.args or [])]
-        # Keyword args lowered as positional — taint analysis treats them similarly.
-        for kw in (node.keywords or []):
-            args.append(_lower_expr(kw.value))
-        return {"kind": "call", "callee": callee, "args": args}
+        return _lower_call_chain(node)
     if isinstance(node, ast.List) or isinstance(node, ast.Tuple) or isinstance(node, ast.Set):
         return {"kind": "array", "elements": [_lower_expr(e) for e in (node.elts or [])]}
     if isinstance(node, ast.Dict):
@@ -184,6 +179,59 @@ def _lower_expr(node: ast.AST) -> dict[str, Any]:
     if isinstance(node, ast.YieldFrom):
         return _lower_expr(node.value)
     return {"kind": "unknown"}
+
+
+def _lower_call_chain(node: ast.Call) -> dict[str, Any]:
+    """Lowers a (possibly chained) call expression, e.g. `open(x).read()` or
+    `a.b(x).c(y).d(z)`, WITHOUT losing an inner call's own arguments.
+
+    _flatten_callee's "mixed shape" fallback (`func()[0].attr` -> just the
+    last segment name) previously ALSO caught this shape — `.read` on a
+    Call value is not an ast.Attribute-of-ast.Name chain, so it fell to
+    that same fallback, which returns ONLY the bare terminal name and
+    discards the entire inner Call node, including its arguments. Opening
+    a path built from a tainted suffix and immediately reading it in one
+    chained expression meant the tainted portion vanished completely — not
+    just misattributed to the wrong arg index, but never represented in
+    the IR at all. Confirmed via a real corpus fixture
+    (CVE-2019-10097-python-path-traversal — see its pre/srv.py fixture for
+    the exact disclosed shape this fixes).
+
+    Walks the chain from the OUTERMOST call inward, collecting each level's
+    (name segment, own args) — mirrors every hand-rolled parser's
+    `_followChain` convention in this codebase: the reconstructed callee is
+    the dot-joined names in SOURCE order (inner-to-outer, since we walked
+    outer-to-inner), and the args are kept in OUTERMOST-FIRST order (a
+    trailing no-arg call like `.read()` contributes nothing, so the
+    innermost call's real argument — the tainted path — survives as
+    `args[0]`, exactly where `argIndex: 0` catalog entries expect it).
+    """
+    segments: list[tuple[Any, list[dict[str, Any]]]] = []
+    cur: Any = node
+    while isinstance(cur, ast.Call):
+        args = [_lower_expr(a) for a in (cur.args or [])]
+        for kw in (cur.keywords or []):
+            args.append(_lower_expr(kw.value))
+        func = cur.func
+        if isinstance(func, ast.Attribute):
+            segments.append((func.attr, args))
+            cur = func.value
+        elif isinstance(func, ast.Name):
+            segments.append((func.id, args))
+            cur = None
+        else:
+            # e.g. a subscript-returned callable (`handlers[key](x)`) —
+            # no further name segment to extract; stop walking but keep
+            # this level's own args.
+            segments.append((None, args))
+            cur = None
+    prefix = _flatten_callee(cur) if cur is not None else None
+    names = ([prefix] if prefix else []) + [s[0] for s in reversed(segments) if s[0]]
+    callee = ".".join(names) if names else None
+    all_args: list[dict[str, Any]] = []
+    for _, args in segments:
+        all_args = all_args + args
+    return {"kind": "call", "callee": callee, "args": all_args}
 
 
 def _flatten_callee(node: ast.AST) -> Any:

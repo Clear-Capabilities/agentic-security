@@ -494,6 +494,30 @@ export const CATALOG = [
     vuln: { name: 'SSRF (urllib.request.urlopen)', severity: 'high', cwe: 'CWE-918', remediation: 'Validate the URL host before opening.' } },
   { kind: 'sink', id: 'go-http-get',       language: 'go', framework: 'net/http', match: { type: 'call', callee: 'Get' },   argIndex: 0,
     vuln: { name: 'SSRF (http.Get)', severity: 'high', cwe: 'CWE-918', remediation: 'Validate the URL host before fetching; reject RFC1918 + metadata endpoints.' } },
+  // Taint-recall PRD (80%) Tier 2/3: SSRF audit found PHP/Java/JS entirely
+  // uncataloged for their dominant outbound-HTTP libraries.
+  { kind: 'sink', id: 'php-curl-init',     language: 'php', framework: 'core',   match: { type: 'call', callee: 'curl_init' }, argIndex: 0,
+    vuln: { name: 'SSRF (curl_init)', severity: 'high', cwe: 'CWE-918',
+            remediation: 'Validate the target URL against an allow-list before opening it.' } },
+  // Taint-recall PRD (80%): "terminal segment shift" — `new URL(url)
+  // .openStream()` is the dominant real-world shape (bare `new URL(url)`
+  // with nothing chained is comparatively rare), and after Java's own
+  // chained-call CST fix (elsewhere in this PRD) the chain collapses into
+  // one dotted callee whose LAST segment is "openStream", not "URL" —
+  // receiver-scoped to the now-middle "URL" segment, same pattern as
+  // kt-xpath-evaluate/java-spel-getvalue/go-r-uquery-get elsewhere in this
+  // PRD.
+  { kind: 'sink', id: 'java-url-openstream', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'openStream', receiver: '^URL$' }, argIndex: 'all',
+    vuln: { name: 'SSRF (new URL(...).openStream)', severity: 'high', cwe: 'CWE-918',
+            remediation: 'Validate the target URL against an allow-list before opening a connection.' } },
+  // Receiver-scoped to `axios`/`http`/`https` — the module/instance names
+  // real code actually uses for outbound HTTP (axios, NestJS's injected
+  // HttpService — conventionally named `http` — and Node's built-in
+  // http/https modules, which have the identical `.get(url)` SSRF shape).
+  // `.get()` bare is far too common a method name to leave unscoped.
+  { kind: 'sink', id: 'js-axios-http-get', language: 'js', framework: 'axios', match: { type: 'call', callee: 'get', receiver: '^(?:axios|http|https)$' }, argIndex: 0,
+    vuln: { name: 'SSRF (axios/http.get)', severity: 'high', cwe: 'CWE-918',
+            remediation: 'Validate the target URL against an allow-list before fetching; reject RFC1918 + metadata endpoints.' } },
 
   // ─── SINKS (command exec) ─────────────────────────────────────────────────
   { kind: 'sink', id: 'py-subprocess-run',      language: 'py', framework: 'subprocess', match: { type: 'call', callee: 'run' }, argIndex: 0,
@@ -575,12 +599,35 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-open',          language: 'py', framework: 'stdlib', match: { type: 'call', callee: 'open' }, argIndex: 0,
     vuln: { name: 'Path Traversal (open)', severity: 'high', cwe: 'CWE-22',
             remediation: 'Canonicalize the path with os.path.realpath + verify it stays within an allow-list of base directories.' } },
+  // Taint-recall PRD (80%): "terminal segment shift" — the same pattern
+  // documented elsewhere in this PRD. `open(tainted).read()` — an
+  // extremely common idiomatic Python one-liner — collapses into one
+  // chained call whose LAST segment is "read", not "open", making the
+  // entry above (keyed to bare "open") invisible to the catalog's last-
+  // segment lookup. Receiver-scoped to the now-middle "open" segment.
+  { kind: 'sink', id: 'py-open-read-chained', language: 'py', framework: 'stdlib', match: { type: 'call', callee: 'read', receiver: '^open$' }, argIndex: 'all',
+    vuln: { name: 'Path Traversal (open(...).read())', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Canonicalize the path with os.path.realpath + verify it stays within an allow-list of base directories.' } },
   { kind: 'sink', id: 'java-new-File',    language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'File' }, argIndex: 0,
     vuln: { name: 'Path Traversal (new File)', severity: 'high', cwe: 'CWE-22',
             remediation: 'Canonicalize with Path.normalize + startsWith(base).' } },
   { kind: 'sink', id: 'go-os-open',       language: 'go', framework: 'os',      match: { type: 'call', callee: 'Open' }, argIndex: 0,
     vuln: { name: 'Path Traversal (os.Open)', severity: 'high', cwe: 'CWE-22',
             remediation: 'Use filepath.Clean + verify the path is rooted in your allow-list dir.' } },
+  // Taint-recall PRD (80%) Tier 2/3: path-traversal audit found four
+  // real-world APIs entirely uncataloged.
+  { kind: 'sink', id: 'go-os-readfile',   language: 'go', framework: 'os',      match: { type: 'call', callee: 'ReadFile', receiver: '^os$' }, argIndex: 0,
+    vuln: { name: 'Path Traversal (os.ReadFile)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Use filepath.Clean + verify the path is rooted in your allow-list dir.' } },
+  { kind: 'sink', id: 'java-files-readallbytes', language: 'java', framework: 'nio', match: { type: 'call', callee: 'readAllBytes' }, argIndex: 'all',
+    vuln: { name: 'Path Traversal (Files.readAllBytes)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Canonicalize the resolved Path and verify it stays within an allow-listed base directory.' } },
+  { kind: 'sink', id: 'php-readfile',     language: 'php', framework: 'core',   match: { type: 'call', callee: 'readfile' }, argIndex: 0,
+    vuln: { name: 'Path Traversal (readfile)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Canonicalize with realpath() and confirm the result stays within an allowed base directory.' } },
+  { kind: 'sink', id: 'js-koa-send',      language: 'js', framework: 'koa',     match: { type: 'call', callee: 'send' }, argIndex: 1,
+    vuln: { name: 'Path Traversal (koa-send)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'koa-send already guards against ../ escapes from its root, but a caller-supplied absolute or symlinked path can still escape it — validate the path before passing it to send().' } },
 
   // ─── SINKS (LDAP / XPath) ─────────────────────────────────────────────────
   { kind: 'sink', id: 'java-ldap-search', language: 'java', framework: 'jndi',  match: { type: 'call', callee: 'search' }, argIndex: 1,
@@ -1093,10 +1140,19 @@ export const CATALOG = [
   { kind: 'sink', id: 'kt-runtime-exec',       language: 'kt', framework: 'stdlib', match: { type: 'call', callee: 'exec' },         argIndex: 0,
     vuln: { name: 'Command Injection (Runtime.exec / ProcessBuilder string-form, Kotlin)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Use ProcessBuilder(listOf("cmd", "arg")) — never pass a single string to exec.' } },
-  { kind: 'sink', id: 'kt-file-readtext',      language: 'kt', framework: 'stdlib', match: { type: 'call', callee: 'readText' },     argIndex: 0,
+  // Taint-recall PRD (80%): `readText()` is Kotlin's generic
+  // "read-everything" extension function — available on File, URL, and
+  // several other receiver types — so these two entries collided on every
+  // call regardless of which type actually received it: a File(...)
+  // .readText() spuriously ALSO fired the SSRF entry and vice versa
+  // (confirmed via CVE-2022-22965-kt-ssrf, which produced both a correct
+  // SSRF finding and a spurious Path Traversal one). Receiver-scoped to
+  // the actual chain prefix, same as every other terminal-segment-shift
+  // fix in this PRD.
+  { kind: 'sink', id: 'kt-file-readtext',      language: 'kt', framework: 'stdlib', match: { type: 'call', callee: 'readText', receiver: '^File$' }, argIndex: 0,
     vuln: { name: 'Path Traversal (File(name).readText)', severity: 'high', cwe: 'CWE-22',
             remediation: 'Canonicalize: `File(name).canonicalFile` and verify path stays inside an allow-listed base.' } },
-  { kind: 'sink', id: 'kt-url-readtext',       language: 'kt', framework: 'stdlib', match: { type: 'call', callee: 'readText' },     argIndex: 'all',
+  { kind: 'sink', id: 'kt-url-readtext',       language: 'kt', framework: 'stdlib', match: { type: 'call', callee: 'readText', receiver: '^URL$' }, argIndex: 'all',
     vuln: { name: 'SSRF (URL(...).readText with user URL)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Validate the URL host against an allow-list before reading.' } },
   { kind: 'sink', id: 'kt-objectinputstream', language: 'kt', framework: 'stdlib', match: { type: 'call', callee: 'readObject' },    argIndex: 'all',

@@ -664,6 +664,36 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
   return { findings };
 }
 
+// Taint-recall PRD (80%): a sink call NESTED inside another call's own
+// argument (`render(File.read(tainted))`, Rails' idiomatic wrap-and-render
+// pattern) was invisible to sink-matching entirely. `_sinkFindingsForCall`
+// only ever checks the CFG NODE'S OWN callee/args — a node representing
+// `render(...)` never independently examines whether one of `render`'s OWN
+// arguments is itself a sink-shaped call expression. Confirmed via a real
+// corpus fixture: `File.read` is a correctly-cataloged sink and `name` a
+// correctly-cataloged source, but nested one level inside `render`'s own
+// arg list, neither `case 'call'` nor `case 'assign'` ever checked it — the
+// exact "sink nested inside another call's own argument" limitation
+// documented in this PRD's Ruby/C#/Go/Kotlin corpus notes, now closed for
+// the general case rather than left as a permanent gap. Recall-preserving:
+// walks every arg looking for a nested call expression, checks each
+// independently against the catalog, and recurses further (an arg's arg
+// can itself be a call) — bounded by JS's own call-stack depth on
+// pathologically deep expressions, no explicit cap needed at this level of
+// real-world nesting. Deliberately does NOT re-check the TOP-LEVEL call
+// itself (the caller already did that via its own _matchCallCatalog +
+// _sinkFindingsForCall), so this never duplicates a finding.
+function _nestedSinkFindings(argExprs, state, callContext, line) {
+  const findings = [];
+  for (const arg of (argExprs || [])) {
+    if (!arg || arg.kind !== 'call') continue;
+    const { cat, argTaints } = _matchCallCatalog(arg.callee, arg.args, state, callContext);
+    findings.push(..._sinkFindingsForCall(arg.callee, arg.args, cat, argTaints, state, callContext, line).findings);
+    findings.push(..._nestedSinkFindings(arg.args, state, callContext, line));
+  }
+  return findings;
+}
+
 // PRD R13(a): finding shape for a member-write sink match (el.innerHTML =
 // tainted). Distinct from _sinkFindingsForCall because there is no call
 // argument list to index into — the "argument" of interest is the whole
@@ -752,6 +782,7 @@ function step(node, stateIn, callContext) {
         findings.push(..._sinkFindingsForCall(
           node.source.callee, node.source.args, _sinkCat, _sinkArgTaints,
           state, callContext, node.line).findings);
+        findings.push(..._nestedSinkFindings(node.source.args, state, callContext, node.line));
       }
       // PRD R13(a): the assignment TARGET can itself be a sink shape
       // (el.innerHTML = tainted) — additive to the RHS-call-sink check
@@ -1009,6 +1040,7 @@ function step(node, stateIn, callContext) {
         if (_arrRecv) state.add(_arrRecv);
       }
       findings.push(..._sinkFindingsForCall(node.callee, node.args, cat, argTaints, state, callContext, node.line).findings);
+      findings.push(..._nestedSinkFindings(node.args, state, callContext, node.line));
       // 2. P1.3 — higher-order taint flow. When the call is `arr.map(fn)` or
       //    `promise.then(fn)` and the receiver is tainted, propagate taint
       //    into the callback's first parameter. v1: we propagate AT THE
@@ -1089,6 +1121,7 @@ function step(node, stateIn, callContext) {
         const { cat, argTaints } = _matchCallCatalog(node.value.callee, node.value.args, state, callContext);
         findings.push(..._sinkFindingsForCall(
           node.value.callee, node.value.args, cat, argTaints, state, callContext, node.line).findings);
+        findings.push(..._nestedSinkFindings(node.value.args, state, callContext, node.line));
       }
       if (exprTaint(node.value, state, callContext)) {
         callContext._returnTainted = true;

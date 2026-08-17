@@ -177,7 +177,12 @@ test('JVM family: java-language sources still match on a .kt file', () => {
 });
 
 test('JVM family: a kt-language sink still matches on a .java file', () => {
-  const hits = matchSinkOrSanitizer('readText', 'A.java') || [];
+  // Taint-recall PRD (80%): kt-file-readtext/kt-url-readtext are now
+  // receiver-scoped (readText() is Kotlin's generic "read everything"
+  // extension function, shared by File and URL — a bare, receiver-less
+  // match collided between the two) — a realistic dotted-string callee is
+  // required to exercise the match, not the bare method name alone.
+  const hits = matchSinkOrSanitizer('File.readText', 'A.java') || [];
   assert.ok(hits.some(h => h.language === 'kt' && h.kind === 'sink'),
     "kt sink 'readText' must match on a .java file — the JVM is one family in both directions");
 });

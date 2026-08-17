@@ -88,12 +88,46 @@ function exprFromCst(node) {
       // keyed to the outermost call is unaffected while `argIndex: 'all'`
       // can still find taint an inner call in the chain carried.
       let chainCallee = '';
-      const fqn = prefix?.children?.fqnOrRefType?.[0];
-      if (fqn) chainCallee = _flattenFqnToString(fqn);
-      // No FQN prefix — e.g. `this.foo(x)`, `super.foo(x)` (prefix is a
-      // keyword expression). chainCallee starts empty; the walk below
-      // supplies the real name from the first member-access suffix.
       let chainArgs = null;
+      const fqn = prefix?.children?.fqnOrRefType?.[0];
+      // Taint-recall PRD (80%): a `new X(args)` CONSTRUCTOR starting the
+      // chain (`new URL(url).openStream()`) is a DIFFERENT CST shape than
+      // an fqnOrRefType prefix — `prefix.children.fqnOrRefType` is absent,
+      // so `fqn` above is undefined and, before this fix, BOTH the
+      // constructor's own class name AND its own arguments were silently
+      // dropped: `chainCallee` stayed empty and the suffix walk below only
+      // ever contributes the CHAINED method's name, producing a callee
+      // like bare "openStream" with the constructor's tainted argument
+      // nowhere in the IR at all — not misattributed, genuinely absent, a
+      // strictly worse failure than the terminal-segment-shift class this
+      // PRD fixes elsewhere with a receiver-scoped catalog entry (there is
+      // no catalog fix possible for taint the IR never represents).
+      // Confirmed via a real corpus fixture (CVE-2019-3799-spring-ssrf-
+      // shape). The actual CST path is one level deeper than the analogous
+      // fqnOrRefType check above: `primaryPrefix.children.newExpression[0]
+      // .children.unqualifiedClassInstanceCreationExpression[0]` — found by
+      // dumping `prefix.children` directly rather than guessing (the
+      // standalone, NON-chained `new X(args)` branch further below reaches
+      // `unqualifiedClassInstanceCreationExpression` straight off `node`,
+      // one level shallower, which is what made the wrapping `newExpression`
+      // layer easy to miss here). Seeds `chainCallee` with the class name
+      // and `chainArgs` with the constructor's OWN args (same
+      // argumentList.expression shape that standalone branch already
+      // extracts) — the suffix loop's existing `chainArgs === null ? args :
+      // args.concat(chainArgs)` then correctly prepends each chained call's
+      // own args ahead of the constructor's, preserving the outermost-first
+      // convention.
+      const ctorPrefix = prefix?.children?.newExpression?.[0]?.children?.unqualifiedClassInstanceCreationExpression?.[0];
+      if (fqn) {
+        chainCallee = _flattenFqnToString(fqn);
+      } else if (ctorPrefix) {
+        chainCallee = ctorPrefix.children?.classOrInterfaceTypeToInstantiate?.[0]?.children?.Identifier?.[0]?.image || '';
+        chainArgs = (ctorPrefix.children?.argumentList?.[0]?.children?.expression || []).map(exprFromCst);
+      }
+      // No FQN/constructor prefix — e.g. `this.foo(x)`, `super.foo(x)`
+      // (prefix is a keyword expression). chainCallee starts empty; the
+      // walk below supplies the real name from the first member-access
+      // suffix.
       let pendingName = [];
       const appendPending = () => {
         if (!pendingName.length) return;
