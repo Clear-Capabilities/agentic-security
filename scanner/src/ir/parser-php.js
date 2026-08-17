@@ -167,6 +167,19 @@ function _splitStatements(body) {
       if (i < body.length) { push('\n'); curLine++; }
       continue;
     }
+    // Taint-recall PRD (80%): PHP's THIRD line-comment form — `#`-comments
+    // were entirely invisible to this splitter (only `//`/`/* */` were
+    // handled), so a `#`-comment's text was treated as literal code:
+    // string-toggling apostrophes, brace/paren/bracket depth corruption,
+    // and — if it happened to contain a stray `;` — a bogus statement
+    // boundary. PHP 8 attributes (`#[Attribute]`) use the same leading `#`
+    // but are NOT a comment, so `#[` is excluded (checked via the next
+    // character) exactly like `_extractBody`'s twin fix does.
+    if (c === '#' && body[i + 1] !== '[') {
+      while (i < body.length && body[i] !== '\n') i++;
+      if (i < body.length) { push('\n'); curLine++; }
+      continue;
+    }
     if (c === '/' && body[i + 1] === '*') {
       // Block comment (incl. PHPDoc, e.g. `/** @param string $x */`).
       // Skip to the matching `*/`, counting any newlines crossed so line
@@ -305,8 +318,25 @@ function _lowerExpr(text) {
   // common real PHP SQL-injection shapes. Simple (`$var`, `$var->prop`,
   // `$var[key]`) and complex (`{$expr}`) interpolation forms are both
   // lowered into a template, same shape as the `.`-concat branch below.
-  if (/^"/.test(s) && s.includes('$')) {
-    const inner = s.slice(1, -1);
+  // Taint-recall PRD (80%): the old guard (`/^"/.test(s) && s.includes('$')`)
+  // treated ANY string simply STARTING with `"` and containing a `$`
+  // ANYWHERE as a self-contained double-quoted literal, then blindly sliced
+  // off the first and last characters as its quotes (`s.slice(1, -1)`).
+  // For a concat expression like `"SELECT ... id = " . $id` — arguably the
+  // single most common real-world PHP SQL-injection shape — `s` starts
+  // with `"` and contains a `$` (in `$id`, OUTSIDE the string, after the
+  // `.`), so this branch fired and treated the WHOLE concat expression's
+  // text as interpolation content: `inner` became `SELECT ... id = " . $i`
+  // (sliced off the true FIRST character and the true LAST character,
+  // neither of which bounds the actual string literal), corrupting both
+  // the literal text and truncating `$id` to `$i`. Now requires the ENTIRE
+  // trimmed expression to be exactly one closed double-quoted literal
+  // (anchored start AND end) before treating it as interpolation-only —
+  // `"literal" . $var` fails this (trailing ` . $var` breaks the end
+  // anchor) and correctly falls through to the concat branch below instead.
+  const dqLiteral = s.match(/^"((?:[^"\\]|\\.)*)"$/);
+  if (dqLiteral && s.includes('$')) {
+    const inner = dqLiteral[1];
     const re = /\{(\$[^}]+)\}|(\$[A-Za-z_]\w*(?:->[A-Za-z_]\w*|\[[^\]]+\])?)/g;
     let lastIndex = 0;
     const parts = [];
@@ -323,7 +353,16 @@ function _lowerExpr(text) {
       return { kind: 'tpl', parts };
     }
   }
-  if (/^"/.test(s) || /^'/.test(s)) return { kind: 'literal', value: s };
+  // Taint-recall PRD (80%): same unanchored-prefix defect as the
+  // interpolation branch above, one layer down — `/^"/.test(s)` only checks
+  // that `s` STARTS with a quote, not that it IS (only) a closed literal.
+  // For `"literal" . $id`, this fallback used to catch what the (now fixed)
+  // interpolation branch missed and swallow the ENTIRE concat expression —
+  // trailing ` . $id` included — into one opaque literal `value` string,
+  // silently dropping `$id`'s taint just as badly, only one level later.
+  // Anchored at both ends so a genuinely unclosed/concatenated string falls
+  // through to the concat branch below instead of being misread as whole.
+  if (/^"(?:[^"\\]|\\.)*"$/.test(s) || /^'(?:[^'\\]|\\.)*'$/.test(s)) return { kind: 'literal', value: s };
   if (/^\d/.test(s)) return { kind: 'literal', value: s };
   if (/^(true|false|null|NULL)\b/.test(s)) return { kind: 'literal', value: s };
   // Superglobals
@@ -454,6 +493,20 @@ function _lowerStmt(stmt, line) {
   return null;
 }
 
+// Taint-recall PRD (80%): `_extractBody` used to have ZERO comment
+// awareness — worse than `_splitStatements` below, which at least skips
+// `//`/`/* */` (though not `#`). An apostrophe inside ANY comment (`//`,
+// `#`, or `/* */`) — "don't", "it's", "won't", all extremely common in real
+// PHP — toggled `inStr` exactly as if a string literal had started. Every
+// `{`/`}` from that point on was then invisible to depth-tracking until a
+// SECOND apostrophe was found (typically much later, or never), so `depth`
+// either never returns to 0 (the function's body extraction fails outright,
+// returning `null` — silently dropping the ENTIRE FILE's IR, since a single
+// failed top-level function match corrupts every span downstream of it) or
+// returns to 0 at the wrong `}` (extracting a truncated or over-extended
+// body). Now skips all three PHP comment forms exactly like
+// `_splitStatements` already does for `//`/`/* */`, plus `#` (PHP 8
+// attributes `#[...]` are NOT a comment — checked via the next character).
 function _extractBody(src, openBrace) {
   let depth = 1;
   let i = openBrace + 1;
@@ -466,6 +519,20 @@ function _extractBody(src, openBrace) {
       if (c === '\\') { escape = true; i++; continue; }
       if (c === inStr) inStr = null;
       i++; continue;
+    }
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '#' && src[i + 1] !== '[') {
+      while (i < src.length && src[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      i += 2;
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+      if (i < src.length) i += 2;
+      continue;
     }
     if (c === '"' || c === '\'') { inStr = c; i++; continue; }
     if (c === '{') depth++;

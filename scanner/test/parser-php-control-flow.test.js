@@ -504,3 +504,119 @@ function f($x, $conn) {
   const ifNodes = Object.values(fn.cfg.nodes).filter(n => n.kind === 'if');
   assert.equal(ifNodes.length, 1, 'expected exactly ONE if-node for this single if/else construct — a premature `}`-flush caused by the comment defeating the lookahead would otherwise still parse cleanly here (this exact shape happens to survive either way), so this assertion is a stability pin, not proof of the fix by itself; see the `catch`/`finally` tests above for that proof');
 });
+
+// --- Taint-recall PRD (80%): _extractBody / _splitStatements comment-
+// unawareness, and the "literal" . $var concat mis-parse -------------------
+//
+// `_extractBody` (the function-BODY brace-matcher, distinct from
+// `_splitStatements`'s own body-internal comment handling above) had ZERO
+// comment awareness at all: an apostrophe inside ANY comment ("don't",
+// "it's" — extremely common in real PHP) toggled its string-tracking state
+// exactly as if a string literal had started, corrupting brace-depth
+// counting for everything after it. Depending on what followed, this either
+// made `_extractBody` return null (silently dropping the ENTIRE FILE's IR —
+// a single failed top-level function match corrupts every span downstream)
+// or extracted a wrong body. Fixed by making `_extractBody` skip all three
+// PHP comment forms (`//`, `#`, `/* */`) exactly like `_splitStatements`
+// already did for two of them.
+
+test('parsePhpFile: an apostrophe inside a // comment BEFORE a function does not drop the whole file\'s IR', () => {
+  const code = `<?php
+// This won't work if we don't handle apostrophes right.
+function f($conn) {
+    mysqli_query($conn, 'x');
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  assert.equal(ir.functions.length, 1, `expected function f to be found, got: ${JSON.stringify(ir.functions.map(fn => fn.name))}`);
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'mysqli_query'), 'expected the sink inside the function to still be captured');
+});
+
+test('parsePhpFile: an apostrophe inside a // comment INSIDE a function body does not corrupt or drop that function\'s IR', () => {
+  const code = `<?php
+function f($conn) {
+    // don't forget to sanitize this someday
+    mysqli_query($conn, 'x');
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  assert.equal(ir.functions.length, 1, 'expected function f to still be found');
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'mysqli_query'), 'expected the sink to still be captured despite the apostrophe in the preceding comment');
+});
+
+// `#`-style comments (PHP's third comment form) were entirely invisible to
+// `_splitStatements` — only `//`/`/* */` were handled — so a `#`-comment's
+// text (including any apostrophe, brace, or stray `;`) was parsed as
+// literal code. PHP 8 attributes (`#[Attribute]`) share the leading `#` but
+// are NOT a comment; `#[` is excluded from both the `_extractBody` and
+// `_splitStatements` fixes.
+test('parsePhpFile: a #-style comment (PHP\'s third comment form) with an apostrophe does not corrupt the CFG', () => {
+  const code = `<?php
+function f($conn) {
+    # don't forget to sanitize this someday
+    mysqli_query($conn, 'x');
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  assert.equal(ir.functions.length, 1, 'expected function f to still be found');
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'mysqli_query'), 'expected the sink to still be captured despite the # comment');
+});
+
+test('parsePhpFile: a PHP 8 attribute (#[...]) immediately before a function is not mistaken for a comment', () => {
+  const code = `<?php
+#[Route("/users")]
+function f($conn) {
+    mysqli_query($conn, 'x');
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  assert.equal(ir.functions.length, 1, 'expected function f to still be found with a #[...] attribute preceding it');
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'mysqli_query'), 'expected the sink inside the function to still be captured');
+});
+
+// `"literal" . $var` — arguably the single most common real-world PHP SQL
+// injection shape — used to be swallowed whole into one opaque `literal`
+// node (first by the double-quoted-interpolation branch misreading the
+// concat's trailing ` . $var` as string content, then — once that was
+// fixed — by the plain string-literal fallback doing the exact same
+// unanchored-prefix mistake one layer down). Both `_lowerExpr` branches now
+// require the FULL trimmed expression to be one CLOSED literal (anchored
+// start and end) before treating it as a bare string, so a concat correctly
+// falls through to the `.`-splitting branch instead.
+test('parsePhpFile: "literal" . $var concat preserves $var\'s taint as a real ident node (not swallowed into one literal)', () => {
+  const code = `<?php
+function f($conn) {
+    $id = $_GET['id'];
+    $sql = "SELECT * FROM users WHERE id = " . $id;
+    $conn->query($sql);
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const fn = ir.functions.find(fnc => fnc.name === 'f');
+  const assign = Object.values(fn.cfg.nodes).find(n => n.kind === 'assign' && n.target === '$sql');
+  assert.ok(assign, 'expected an assign node for $sql');
+  assert.equal(assign.source.kind, 'tpl', `expected a tpl (concat) node, got kind: ${assign.source.kind}`);
+  const identPart = assign.source.parts.find(p => p.kind === 'ident' && p.name === '$id');
+  assert.ok(identPart, `expected $id to survive as a real ident part, got parts: ${JSON.stringify(assign.source.parts)}`);
+});
+
+test('parsePhpFile: end-to-end — "literal" . $_GET-derived $var into a PDO sink fires SQL Injection via IR-TAINT', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const dir = mkTmp({
+    'run.php': `<?php
+function handler($conn) {
+    $id = $_GET['id'];
+    $sql = "SELECT * FROM users WHERE id = " . $id;
+    $conn->query($sql);
+}
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const taint = (scan.findings || []).filter(fd => fd.parser === 'IR-TAINT');
+  assert.ok(taint.some(fd => /sql injection/i.test(fd.vuln)),
+    `expected a SQL Injection finding, got: ${taint.map(fd => fd.vuln).join(', ') || '(none)'}`);
+});
