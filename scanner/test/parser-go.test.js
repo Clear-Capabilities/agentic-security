@@ -202,3 +202,54 @@ func f(x int) int {
     assert.ok(Array.isArray(node.pred), 'node missing pred');
   }
 });
+
+// Taint-recall PRD (80%): inline anonymous closures — Go's dominant HTTP-
+// handler-registration idiom (`app.Get(path, func(c *Ctx) error { ... })`,
+// used by net/http, gin, echo, fiber, chi) — previously had ZERO support:
+// FUNC_RE requires a name between `func` and `(`, so an inline closure never
+// matched it, and _lowerExpr's generic call-matching regex mis-parsed
+// `func(params) rtype { body }` as a call to something literally named
+// "func", silently discarding the entire closure body. Fixed by inlining a
+// trailing-closure argument's body directly into the enclosing function's
+// CFG, mirroring the Kotlin trailing-lambda / Ruby trailing-block precedent.
+test('parseGoFile: an inline closure passed as the last call argument has its body inlined into the CFG', () => {
+  const code = `package main
+
+func main() {
+	app := fiber.New()
+	app.Get("/p", func(c *fiber.Ctx) error {
+		host := c.Query("host")
+		out, _ := exec.Command("/bin/sh", "-c", "ping -c 1 " + host).Output()
+		return c.Send(out)
+	})
+}
+`;
+  const ir = parseGoFile('main.go', code);
+  assert.ok(ir);
+  const nodes = Object.values(ir.functions[0].cfg.nodes);
+  const assigns = nodes.filter(n => n.kind === 'assign');
+  assert.ok(assigns.some(a => a.target === 'host' && a.source.callee === 'c.Query'),
+    'expected the closure body\'s `host := c.Query("host")` to become a real assign node');
+  const calls = nodes.filter(n => n.kind === 'call' || (n.kind === 'assign' && n.source && n.source.kind === 'call'));
+  assert.ok(calls.some(c => (c.callee || c.source?.callee) === 'app.Get'),
+    'expected the registration call itself to still be captured');
+  const outAssign = nodes.find(n => n.kind === 'assign' && n.target === 'out');
+  assert.ok(outAssign, 'expected the closure body\'s exec.Command(...).Output() assign to be captured');
+  assert.equal(outAssign.source.callee, 'exec.Command.Output');
+  const hostArg = outAssign.source.args.find(a => a.kind === 'tpl');
+  assert.ok(hostArg, 'expected the tainted concat arg to survive the chained call');
+  assert.ok(hostArg.parts.some(p => p.kind === 'ident' && p.name === 'host'),
+    'expected host to survive as a real ident inside the concat');
+});
+
+test('parseGoFile: a call with no trailing closure argument is unaffected by the closure-inlining fix', () => {
+  const code = `package main
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	db.Query("SELECT * FROM users WHERE id = " + r.FormValue("id"))
+}
+`;
+  const ir = parseGoFile('main.go', code);
+  const calls = Object.values(ir.functions[0].cfg.nodes).filter(n => n.kind === 'call');
+  assert.ok(calls.some(c => c.callee === 'db.Query'), 'expected the ordinary call to still be captured normally');
+});

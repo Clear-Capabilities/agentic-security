@@ -273,6 +273,52 @@ function _lowerStmt(stmt, line) {
   return null;
 }
 
+// Taint-recall PRD (80%): Go's dominant HTTP-handler-registration idiom
+// across every framework this file targets (net/http, gin, echo, fiber,
+// chi) is an inline anonymous closure passed as the LAST argument to a
+// registration call — `app.Get("/p", func(c *fiber.Ctx) error { ... })`,
+// `http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+// ... })`. This parser previously had ZERO support for anonymous
+// functions: `FUNC_RE` requires a NAME between `func` and `(`, so an
+// inline closure never matched it at all, and `_lowerExpr`'s generic
+// call-matching regex mis-parsed `func(params) rtype { body }` as a call
+// to something literally named "func" — `matchBalancedCall` correctly
+// captured only `(params)` as that "call"'s own args, and the return-type
+// token plus the ENTIRE closure body were silently discarded (no
+// `.method(...)` continuation follows a return type, so `_followChain`
+// found nothing to recover). This was very likely this PRD's single most
+// consequential Go gap: it made every framework's route-handler BODY
+// invisible to taint analysis regardless of what it did — found via this
+// PRD's Tier 3 audit, not the parent PRD's original per-language sweep.
+const CLOSURE_ARG_RE = /^func\s*\(([^)]*)\)\s*(?:\([^)]*\)|[\w*[\].\s]*)?\s*\{/;
+
+// If the LAST top-level comma-separated part of `argsText` is an inline
+// closure literal, extracts its body text and returns `{ body, closureText,
+// prefixParts }` — `prefixParts` are the OTHER top-level args (unchanged,
+// still to be lowered normally), `closureText` is the exact substring
+// matched (used by the caller to locate its start line within the
+// enclosing statement). Returns null when there is no trailing closure —
+// every existing call site is unaffected.
+function _extractTrailingClosureArg(argsText) {
+  const parts = _splitTopLevelCommas(argsText);
+  if (!parts.length) return null;
+  const last = parts[parts.length - 1];
+  const m = last.match(CLOSURE_ARG_RE);
+  if (!m) return null;
+  const openBrace = last.indexOf('{', m[0].length - 1);
+  if (openBrace < 0) return null;
+  const extracted = _extractBody(last, openBrace);
+  if (!extracted) return null;
+  return { body: extracted.body, closureText: last, prefixParts: parts.slice(0, -1) };
+}
+
+function _countNewlinesUpTo(s, upTo) {
+  let n = 0;
+  const end = Math.min(upTo, s.length);
+  for (let i = 0; i < end; i++) if (s[i] === '\n') n++;
+  return n;
+}
+
 function _extractBody(src, openBrace) {
   let depth = 1;
   let i = openBrace + 1;
@@ -407,6 +453,36 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
       prev = join;
       line += (s.match(/\n/g) || []).length + 1;
       continue;
+    }
+
+    // Statement-form call whose LAST top-level argument is an inline
+    // closure literal — see `_extractTrailingClosureArg` above. Recall-
+    // preserving inlining: the closure genuinely runs later (often
+    // asynchronously, on a request), but for taint analysis what matters
+    // is that its statements become real CFG nodes at all. The closure's
+    // OWN parameter (`c`, `w`, `r`) needs no synthetic taint binding, unlike
+    // e.g. Kotlin's `.forEach { x -> ... }`: a framework context object
+    // isn't itself a taint source — `c.Query(...)` is recognized by the
+    // EXISTING member/call-source catalog matching regardless of which
+    // function scope `c` was declared in. Chained calls before the closure
+    // arg (`app.Group("/api").Get(path, func(){...})`) are not specially
+    // handled — out of scope for this fix, matches this file's existing
+    // "handle the dominant shape" precedent elsewhere.
+    const closureCall = matchBalancedCall(s, /^([\w.]+)/);
+    if (closureCall) {
+      const closure = _extractTrailingClosureArg(closureCall.argsText);
+      if (closure) {
+        const outerArgs = closure.prefixParts.map(_lowerExpr);
+        const callId = _addNode(nodes, { kind: 'call', line, callee: closureCall.callee, args: outerArgs });
+        _link(nodes, prev, callId);
+        const closureOffset = s.indexOf(closure.closureText);
+        const bodyStartLine = closureOffset >= 0
+          ? line + _countNewlinesUpTo(s, closureOffset)
+          : line;
+        prev = _buildCfg(closure.body, nodes, callId, bodyStartLine);
+        line += (s.match(/\n/g) || []).length + 1;
+        continue;
+      }
     }
 
     // Regular statement

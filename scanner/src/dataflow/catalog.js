@@ -346,6 +346,16 @@ export const CATALOG = [
   { kind: 'sink', id: 'php-shell-exec',    language: 'php', framework: 'core',    match: { type: 'call', callee: 'shell_exec' },    argIndex: 0,
     vuln: { name: 'Command Injection (shell_exec)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Avoid shell_exec(); sanitize with escapeshellarg() if unavoidable.' } },
+  // Taint-recall PRD (80%): passthru()/proc_open() were entirely uncataloged
+  // for PHP — verified via this PRD's Tier 3 command-injection audit
+  // (CVE-2016-10033-phpmailer-cmdi-shape's exact real shape,
+  // `passthru("gzip " . $file)`).
+  { kind: 'sink', id: 'php-passthru',      language: 'php', framework: 'core',    match: { type: 'call', callee: 'passthru' },      argIndex: 0,
+    vuln: { name: 'Command Injection (passthru)', severity: 'critical', cwe: 'CWE-78',
+            remediation: 'Avoid passthru(); use escapeshellarg() on each argument if unavoidable.' } },
+  { kind: 'sink', id: 'php-proc-open',     language: 'php', framework: 'core',    match: { type: 'call', callee: 'proc_open' },     argIndex: 0,
+    vuln: { name: 'Command Injection (proc_open)', severity: 'critical', cwe: 'CWE-78',
+            remediation: 'Pass the command as an array (argv form) instead of a shell string.' } },
 
   // ─── SINKS (SQL/CMD — Ruby) ───────────────────────────────────────────────
   { kind: 'sink', id: 'rb-ar-where-string', language: 'rb', framework: 'rails',   match: { type: 'call', callee: 'where' },         argIndex: 0,
@@ -360,6 +370,14 @@ export const CATALOG = [
   { kind: 'sink', id: 'rb-exec',           language: 'rb', framework: 'stdlib',   match: { type: 'call', callee: 'exec' },          argIndex: 0,
     vuln: { name: 'Command Injection (Kernel.exec)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Use the array form: exec("cmd", arg1, arg2).' } },
+  // Taint-recall PRD (80%): Ruby's backtick shell-execution operator
+  // (`` `finger #{user}` ``, equivalent to %x{...}) — parser-rb.js's
+  // _lowerExpr now lowers it to a synthetic call named
+  // `__ruby_backtick_exec__` (see that file for why), so this sink targets
+  // that synthetic callee exactly like any other call-shaped sink.
+  { kind: 'sink', id: 'rb-backtick-exec',  language: 'rb', framework: 'stdlib',   match: { type: 'call', callee: '__ruby_backtick_exec__' }, argIndex: 0,
+    vuln: { name: 'Command Injection (backtick shell execution)', severity: 'critical', cwe: 'CWE-78',
+            remediation: 'Avoid backtick/%x{} shell execution with interpolated input; use Kernel#exec or Process.spawn with an argv array.' } },
   { kind: 'sink', id: 'rb-sinatra-erb',    language: 'rb', framework: 'sinatra',  match: { type: 'call', callee: 'erb' },           argIndex: 0,
     vuln: { name: 'Server-Side Template Injection (Sinatra ERB)', severity: 'high', cwe: 'CWE-1336',
             remediation: 'Use ERB auto-escaping. Never pass user input as the template name.' } },
@@ -426,9 +444,35 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-runtime-exec',      language: 'java', framework: 'stdlib',   match: { type: 'call', callee: 'exec' }, argIndex: 0,
     vuln: { name: 'Command Injection (Runtime.exec string-form)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Use Runtime.exec(String[]) or ProcessBuilder(String[]).' } },
-  { kind: 'sink', id: 'go-os-exec-command',     language: 'go', framework: 'os/exec',    match: { type: 'call', callee: 'Command' }, argIndex: 0,
+  // Taint-recall PRD (80%): `argIndex: 0` was checking the WRONG argument.
+  // This entry's own vuln description names the actual dangerous shape —
+  // `exec.Command("/bin/sh", "-c", tainted)` — where the tainted shell
+  // string sits at arg index 2, but arg 0 is always the literal "/bin/sh"/
+  // "bash" itself, never tainted. `argIndex: 0` therefore could never fire
+  // on this entry's own documented shape. Widened to `'all'` — any tainted
+  // arg anywhere in the call fires, correct for both the 3-arg /bin/sh -c
+  // form and a directly-tainted argv[0] (`exec.Command(tainted)`).
+  { kind: 'sink', id: 'go-os-exec-command',     language: 'go', framework: 'os/exec',
+    match: { type: 'call', callee: 'Command', requireLiteralArg: { index: 0, pattern: '^"(?:/bin/)?(?:sh|bash)"$' } }, argIndex: 'all',
     vuln: { name: 'Command Injection (exec.Command via /bin/sh -c)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'When the first arg is "/bin/sh" or "bash" with a -c string built from user input, the shell parses it. Pass argv array values directly to exec.Command.' } },
+  // Taint-recall PRD (80%): "terminal segment shift" — the same pattern
+  // documented elsewhere in this PRD (kt-xpath-evaluate, java-spel-getvalue,
+  // go-r-uquery-get). `exec.Command(...).Output()` / `.Run()` /
+  // `.CombinedOutput()` / `.Start()` — chaining a Cmd-execution method
+  // directly onto the `exec.Command(...)` call, by far the most common Go
+  // idiom for actually RUNNING the command — collapses the chained call
+  // into one dotted string whose LAST segment becomes "Output"/"Run"/etc.,
+  // not "Command", making the entry above (keyed to bare "Command")
+  // invisible to the catalog's last-segment lookup. Receiver-scoped to the
+  // now-middle "Command" segment, argIndex 'all' for the same reason as
+  // above.
+  ...['Output', 'Run', 'CombinedOutput', 'Start'].map((method) => ({
+    kind: 'sink', id: `go-exec-command-${method.toLowerCase()}`, language: 'go', framework: 'os/exec',
+    match: { type: 'call', callee: method, receiver: '^Command$', requireLiteralArg: { index: 0, pattern: '^"(?:/bin/)?(?:sh|bash)"$' } }, argIndex: 'all',
+    vuln: { name: 'Command Injection (exec.Command via /bin/sh -c)', severity: 'critical', cwe: 'CWE-78',
+            remediation: 'When the first arg is "/bin/sh" or "bash" with a -c string built from user input, the shell parses it. Pass argv array values directly to exec.Command.' },
+  })),
 
   // ─── SINKS (deserialization) ──────────────────────────────────────────────
   // `load`/`loads` are among the most overloaded names in Python: `json.load`,
@@ -871,7 +915,21 @@ export const CATALOG = [
   { kind: 'sink', id: 'cs-dapper-query',       language: 'cs', framework: 'dapper', match: { type: 'call', callee: 'Query' },          argIndex: 0,
     vuln: { name: 'SQL Injection (Dapper Query with string concat)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Pass parameters as the 2nd arg: `Query<T>("SELECT … WHERE id=@id", new { id })`.' } },
-  { kind: 'sink', id: 'cs-process-start',      language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Start' },          argIndex: 0,
+  // Taint-recall PRD (80%): same `argIndex: 0` bug as Go's exec.Command,
+  // found in this PRD's Tier 3 audit — the two-arg string-form shape this
+  // entry's OWN name/remediation documents is `Process.Start("cmd.exe", "/c
+  // " + tainted)`; arg 0 is always the literal shell/interpreter name, arg
+  // 1 carries the tainted content. `argIndex: 0` could never fire on this
+  // entry's own documented shape. Widened to `'all'`, gated by
+  // `requireLiteralArg` (arg 0 must literally be a shell-invoking
+  // interpreter) for the same reason as Go's fix: the safe, non-shell form
+  // (`Process.Start(psi)` with a `ProcessStartInfo.ArgumentList`) is a
+  // single-arg call that never matches this shape at all, but a
+  // `Process.Start("convert", tainted)`-style two-arg call with a
+  // NON-shell filename is a materially different risk this entry was never
+  // scoped to model precisely.
+  { kind: 'sink', id: 'cs-process-start',      language: 'cs', framework: 'stdlib',
+    match: { type: 'call', callee: 'Start', requireLiteralArg: { index: 0, pattern: '^"cmd(?:\\.exe)?"$|^"(?:/bin/)?(?:sh|bash)"$' } }, argIndex: 'all',
     vuln: { name: 'Command Injection (Process.Start string-form)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Use ProcessStartInfo with separated FileName + Arguments; never pass /c with concat.' } },
   { kind: 'sink', id: 'cs-file-readall',       language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadAllText' },    argIndex: 0,

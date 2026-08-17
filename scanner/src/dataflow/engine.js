@@ -478,7 +478,6 @@ function exprIsSource(expr) {
 
 const _SQL_KEYWORDS = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|UNION|WHERE|FROM|JOIN|INTO|VALUES|SET|EXEC|EXECUTE)\b/i;
 const _HTML_META = /[<>'"&]|innerHTML|outerHTML|document\.write/;
-const _SHELL_META = /[;|`$(){}]|&&|\|\|/;
 
 function _literalPartsOfExpr(expr) {
   if (!expr) return [];
@@ -495,7 +494,25 @@ function literalSkeletonMatchesFamily(expr, cwe) {
   if (!joined.trim()) return true;
   if (cwe === 'CWE-89' || cwe === 'CWE-943') return _SQL_KEYWORDS.test(joined);
   if (cwe === 'CWE-79') return _HTML_META.test(joined);
-  if (cwe === 'CWE-78') return _SHELL_META.test(joined);
+  // Taint-recall PRD (80%): CWE-78 (command injection) deliberately does NOT
+  // require the STATIC portion of the concat to contain a shell
+  // metacharacter. The SQL/HTML checks above make sense because their sinks
+  // (a generic `.raw()`/`.query()` call, an `innerHTML` assignment) can
+  // legitimately carry non-SQL, non-HTML strings — the skeleton check filters
+  // those out. Command-injection's sink catalog has no such ambiguity: every
+  // CWE-78 entry (`os.system`, `subprocess.call`, `Runtime.exec`,
+  // `child_process.exec`, …) is an unambiguous shell-execution API, so a
+  // tainted argument reaching one is inherently suspicious regardless of what
+  // the static prefix looks like. Requiring a metacharacter in the STATIC
+  // portion gets the vulnerability backwards: the textbook shape is
+  // `exec("ping " + host)` — the attacker supplies the metacharacter via the
+  // TAINTED value, not the template, so the static prefix is legitimately
+  // metacharacter-free in the overwhelmingly common case. Confirmed this was
+  // blocking CVE-2016-10033-java-cmdi's exact real-world shape; found while
+  // investigating this PRD's Java chained-call fix and left deferred until
+  // now, when the corpus's Tier 2/3 audit showed it plausibly gates a large
+  // fraction of the whole command-injection family, not just one entry.
+  if (cwe === 'CWE-78') return true;
   return true;
 }
 
@@ -590,6 +607,27 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         const taintedArgExpr = (argExprs || [])[taintedArgIdx];
         // String content analysis: skip if literal skeleton doesn't match injection family
         if (e.vuln && taintedArgExpr && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
+        // Taint-recall PRD (80%): `match.requireLiteralArg` — a precision
+        // gate for sinks whose danger depends on a SIBLING argument's
+        // literal value, not the tainted one. Go's `exec.Command(path,
+        // args...)` is only actually shell-interpreted (so a metacharacter
+        // in a tainted arg is dangerous) when `path` is "/bin/sh"/"bash"/
+        // "sh" and the next arg is "-c" — the array-execve form
+        // (`exec.Command("ping", "-c", "1", host)`) never invokes a shell
+        // at all, so `host` becomes one opaque argv element regardless of
+        // its content and is SAFE even when tainted. `argIndex: 'all'`
+        // alone can't express this (it only asks "is ANY arg tainted", not
+        // "is the INVOCATION FORM itself dangerous"). Fails CLOSED on
+        // precision: if the checked arg isn't a literal at all (a
+        // variable — we can't statically know its value), the requirement
+        // is NOT satisfied, same direction proof-gate.js and every other
+        // precision annotator in this codebase take when evidence is
+        // simply unavailable rather than affirmatively clean.
+        if (e.match && e.match.requireLiteralArg) {
+          const { index, pattern } = e.match.requireLiteralArg;
+          const checkArg = (argExprs || [])[index];
+          if (!checkArg || checkArg.kind !== 'literal' || !new RegExp(pattern).test(String(checkArg.value))) continue;
+        }
         // Premortem #10: attribute the source for THIS sink to the
         // source(s) that taint the actual argument expression — not the
         // first source the worklist happened to record. We walk the

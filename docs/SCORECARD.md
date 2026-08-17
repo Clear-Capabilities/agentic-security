@@ -10,12 +10,12 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.137.1 |
-| Bundle SHA-256 | `ea38c53a0d4a54d9806c3eba38f3022a9dc57eb54f3d81af72d6a0fc8896bf93` |
-| Commit | `5c47e5638273531bef04a8d8687574e624b44430` |
+| Bundle SHA-256 | `edbdba3dd4dee69d03b18cab54219ebbd38fab270be008455068bc0979a15449` |
+| Commit | `e207cf79b30f5a17e4b1644ebb79831c52229aad` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-17T12:44:35.255Z |
+| Generated (UTC) | 2026-08-17T15:16:01.649Z |
 
 ## What these numbers are, and what they are not
 
@@ -153,16 +153,16 @@ Entries scored: 215
 
 | Language | IR-TAINT recall |
 | --- | --- |
-| c# | 11/21 (52.4%) |
+| c# | 12/21 (57.1%) |
 | c/c++ | 2/11 (18.2%) |
-| go | 8/22 (36.4%) |
-| java | 8/25 (32.0%) |
-| js/ts | 12/38 (31.6%) |
+| go | 12/22 (54.5%) |
+| java | 9/25 (36.0%) |
+| js/ts | 15/38 (39.5%) |
 | json | 0/1 (0.0%) |
-| kotlin | 6/21 (28.6%) |
-| php | 7/23 (30.4%) |
-| python | 17/32 (53.1%) |
-| ruby | 8/20 (40.0%) |
+| kotlin | 7/21 (33.3%) |
+| php | 9/23 (39.1%) |
+| python | 18/32 (56.3%) |
+| ruby | 9/20 (45.0%) |
 | terraform | 0/1 (0.0%) |
 
 ### Deep-tier only — taint-shaped subset (headline)
@@ -207,7 +207,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 623 |
+| `scanner/src` | 624 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as

@@ -170,6 +170,32 @@ function _followChain(s, endIdx, calleeSoFar, argsSoFar) {
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
+  // Taint-recall PRD (80%): Ruby's BACKTICK shell-execution operator
+  // (`` `finger #{user}` `` — Kernel#`, equivalent to %x{...}) is a
+  // completely distinct syntax from a double-quoted string, but this file
+  // had no recognizer for it at all — it fell through every branch below to
+  // {kind:'unknown'}, silently dropping the shell command (and any
+  // interpolated taint inside it) entirely. Confirmed via
+  // CVE-2022-25927-rails-cmdi-shape's exact real shape. Lowered to a
+  // synthetic call (`__ruby_backtick_exec__`, an identifier Ruby code can
+  // never actually name a method — backtick itself IS a valid Ruby method
+  // name, but never dotted as `__ruby_backtick_exec__`) carrying the
+  // interpolated command as its sole argument, so a normal `callee`-keyed
+  // catalog sink entry can target it exactly like any other call-shaped
+  // sink — no new match.type needed.
+  if (/^`[\s\S]*`$/.test(s)) {
+    const inner = s.slice(1, -1);
+    const parts = [];
+    let lastIndex = 0;
+    for (const m of inner.matchAll(/#\{([^}]+)\}/g)) {
+      if (m.index > lastIndex) parts.push({ kind: 'literal', value: inner.slice(lastIndex, m.index) });
+      parts.push(_lowerExpr(m[1]));
+      lastIndex = m.index + m[0].length;
+    }
+    if (lastIndex < inner.length) parts.push({ kind: 'literal', value: inner.slice(lastIndex) });
+    const cmdExpr = parts.length ? { kind: 'tpl', parts } : { kind: 'literal', value: inner };
+    return { kind: 'call', callee: '__ruby_backtick_exec__', args: [cmdExpr] };
+  }
   // String interpolation before plain literal check
   if (/^".*#\{/.test(s)) {
     const parts = [];
@@ -305,6 +331,19 @@ function _lowerStmt(stmt, line) {
   }
   if (/^raise\b/.test(s)) {
     return { kind: 'throw', line, value: _lowerExpr(s.replace(/^raise\s*/, '')) };
+  }
+  // Taint-recall PRD (80%): a bare backtick shell-execution statement
+  // (`` `finger #{user}` `` as its own statement — the LAST expression of a
+  // do/end block, which Ruby implicitly returns, is exactly this shape)
+  // matched none of the branches below (assignment needs `=`, the call
+  // regexes below all expect an identifier before any parens/args) and was
+  // silently dropped as a statement, even though `_lowerExpr` already knows
+  // how to lower the expression itself (used when it's an assignment RHS).
+  // Delegate directly so the statement-form case gets the same synthetic
+  // `__ruby_backtick_exec__` call node.
+  if (/^`[\s\S]*`$/.test(s)) {
+    const expr = _lowerExpr(s);
+    return { kind: 'call', line, callee: expr.callee, args: expr.args };
   }
   // Taint-recall PRD (80%): subscript-assignment on a member chain
   // (`response.headers["X-Trace"] = params[:trace]`) had no branch at
