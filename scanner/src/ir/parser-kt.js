@@ -212,6 +212,25 @@ function _lowerExpr(text) {
     if (parts.length === 1) return { kind: 'ident', name: parts[0] };
     return _buildMemberChain(parts);
   }
+  // Taint-recall PRD (80%): subscript/bracket access (`map[key]`,
+  // `call.parameters["q"]`) had NO recognizer at all — Kotlin's
+  // `operator fun get(key)` bracket syntax, used pervasively for Maps,
+  // arrays, and (critically) Ktor's `call.parameters[...]`, fell through
+  // every branch below to {kind:'unknown'}, silently dropping the value —
+  // and any taint on it — entirely. Lowered to the same synthetic `'[]'`
+  // prop convention parser-go.js's own Indexing branch uses: the base
+  // (everything before the first top-level `[`) becomes a real member
+  // chain, wrapped in one more member layer with `prop: '[]'`. This is
+  // what lets a cataloged MEMBER source on the base (e.g. `call.parameters`
+  // — `kt-ktor-parameters`) still taint the subscripted read: `exprIsSource`
+  // recurses into `expr.object` when the outer member itself doesn't match,
+  // landing on the base member it already knows.
+  const subscriptMatch = s.match(/^([A-Za-z_][\w.]*)\[(.+)\]$/s);
+  if (subscriptMatch) {
+    const parts = subscriptMatch[1].split('.');
+    const base = parts.length === 1 ? { kind: 'ident', name: parts[0] } : _buildMemberChain(parts);
+    return { kind: 'member', object: base, prop: '[]' };
+  }
   // Call. Taint-recall PRD (80%): this used to be the naive
   // `/^([\w.]+)\s*\((.*)\)\s*$/s` pattern every OTHER hand-rolled parser
   // (cs/go/php/rb) also started with and has since moved off of —

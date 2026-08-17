@@ -134,3 +134,39 @@ test('cs: a top-level concat still lowers to a tpl', async () => {
   const assign = Object.values(out.functions[0].cfg.nodes).find(n => n.kind === 'assign');
   assert.equal(assign.source.kind, 'tpl');
 });
+
+// Taint-recall PRD (80%) Tier 3: Kotlin's _lowerExpr had NO subscript/
+// bracket-access support at all (`map[key]`, `call.parameters["q"]`) — a
+// general gap far bigger than the XSS audit that found it. Found via
+// CVE-2021-29447-kotlin-xss's `call.parameters["q"]` inside a string
+// interpolation, but the fix is generic (any bracket-subscript expression).
+test('kt: bracket-subscript access (map[key]) lowers to a real member expression, not unknown', () => {
+  const ir = parseKotlinFile('Demo.kt', `
+fun handle(params: Map<String, String>) {
+    val x = params["q"]
+}
+`);
+  const nodes = Object.values(ir.functions[0].cfg.nodes);
+  const assign = nodes.find(n => n.kind === 'assign' && n.target === 'x');
+  assert.ok(assign, 'expected an assign node for x');
+  assert.equal(assign.source.kind, 'member', `expected a member expr, got kind: ${assign.source.kind}`);
+  assert.equal(assign.source.prop, '[]');
+  assert.equal(assign.source.object.kind, 'ident');
+  assert.equal(assign.source.object.name, 'params');
+});
+
+test('kt: a cataloged member SOURCE still taints a subscripted read off it (call.parameters["q"])', () => {
+  const ir = parseKotlinFile('Demo.kt', `
+fun handle(call: ApplicationCall) {
+    val q = call.parameters["q"]
+}
+`);
+  const nodes = Object.values(ir.functions[0].cfg.nodes);
+  const assign = nodes.find(n => n.kind === 'assign' && n.target === 'q');
+  assert.ok(assign, 'expected an assign node for q');
+  assert.equal(assign.source.kind, 'member');
+  assert.equal(assign.source.prop, '[]');
+  assert.equal(assign.source.object.kind, 'member');
+  assert.equal(assign.source.object.prop, 'parameters');
+  assert.equal(assign.source.object.object.name, 'call');
+});

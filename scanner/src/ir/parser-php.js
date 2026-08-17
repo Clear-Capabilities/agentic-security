@@ -478,6 +478,19 @@ function _lowerStmt(stmt, line) {
   if (/^throw\b/.test(s)) {
     return { kind: 'throw', line, value: _lowerExpr(s.replace(/^throw\s+/, '')) };
   }
+  // Taint-recall PRD (80%): `echo`/`print` are PHP LANGUAGE CONSTRUCTS, not
+  // function calls — `echo "<div>" . $_GET['q'] . "</div>";` has no `(`
+  // immediately after the keyword, so the statement-form call regex below
+  // never matched it, and the entire echoed expression (including any
+  // reflected taint) was silently dropped. `echo` can take multiple
+  // comma-separated expressions; lowered to a synthetic call
+  // (`__php_echo__`) carrying each as an argument, so a normal callee-keyed
+  // catalog sink can target it exactly like any other call-shaped sink —
+  // same convention as parser-rb.js's `__ruby_backtick_exec__`.
+  if (/^(?:echo|print)\b/.test(s)) {
+    const rest = s.replace(/^(?:echo|print)\s*/, '');
+    return { kind: 'call', line, callee: '__php_echo__', args: _splitTopLevelCommas(rest).map(_lowerExpr) };
+  }
   // Assignment: $var = expr
   const assign = s.match(/^(\$[\w]+(?:->[\w]+)*)\s*=\s*(.+)$/s);
   if (assign) {

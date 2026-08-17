@@ -10,12 +10,12 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.137.1 |
-| Bundle SHA-256 | `edbdba3dd4dee69d03b18cab54219ebbd38fab270be008455068bc0979a15449` |
-| Commit | `e207cf79b30f5a17e4b1644ebb79831c52229aad` |
+| Bundle SHA-256 | `b904880d6001800faffeddc0600c1b8ea0d08d96f3ec81fc97723aa7b5e1b6c1` |
+| Commit | `965ea170eba3d5be8978afaef69ee27cf4bd88c9` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-17T15:16:01.649Z |
+| Generated (UTC) | 2026-08-17T15:50:41.545Z |
 
 ## What these numbers are, and what they are not
 
@@ -156,12 +156,12 @@ Entries scored: 215
 | c# | 12/21 (57.1%) |
 | c/c++ | 2/11 (18.2%) |
 | go | 12/22 (54.5%) |
-| java | 9/25 (36.0%) |
-| js/ts | 15/38 (39.5%) |
+| java | 10/25 (40.0%) |
+| js/ts | 19/38 (50.0%) |
 | json | 0/1 (0.0%) |
-| kotlin | 7/21 (33.3%) |
-| php | 9/23 (39.1%) |
-| python | 18/32 (56.3%) |
+| kotlin | 8/21 (38.1%) |
+| php | 10/23 (43.5%) |
+| python | 19/32 (59.4%) |
 | ruby | 9/20 (45.0%) |
 | terraform | 0/1 (0.0%) |
 

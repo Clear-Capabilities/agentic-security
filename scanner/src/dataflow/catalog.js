@@ -53,6 +53,15 @@ export const CATALOG = [
   { kind: 'source', id: 'js-req-cookies',  language: 'js', framework: 'express', match: { type: 'member', object: 'req',     prop: 'cookies' }, label: 'req.cookies',  provenance: 'cookie' },
   { kind: 'source', id: 'js-request-body', language: 'js', framework: 'express', match: { type: 'member', object: 'request', prop: 'body'    }, label: 'request.body', provenance: 'http-body' },
   { kind: 'source', id: 'js-ctx-request',  language: 'js', framework: 'koa',     match: { type: 'member', object: 'ctx',     prop: 'request' }, label: 'ctx.request',  provenance: 'http-body' },
+  // Taint-recall PRD (80%) Tier 3: Koa's own direct-on-context shortcuts
+  // (`ctx.query`, `ctx.params`, `ctx.headers`, `ctx.cookies` — aliases for
+  // the equivalent `ctx.request.*`) were entirely uncataloged, only the
+  // `ctx.request` umbrella above was. Found via CVE-2021-26701-koa-xss's
+  // `ctx.query.name` — mirrors the Express req.* coverage above.
+  { kind: 'source', id: 'js-ctx-query',    language: 'js', framework: 'koa',     match: { type: 'member', object: 'ctx',     prop: 'query'   }, label: 'ctx.query',    provenance: 'url-param' },
+  { kind: 'source', id: 'js-ctx-params',   language: 'js', framework: 'koa',     match: { type: 'member', object: 'ctx',     prop: 'params'  }, label: 'ctx.params',   provenance: 'path-param' },
+  { kind: 'source', id: 'js-ctx-headers',  language: 'js', framework: 'koa',     match: { type: 'member', object: 'ctx',     prop: 'headers' }, label: 'ctx.headers',  provenance: 'header' },
+  { kind: 'source', id: 'js-ctx-cookies',  language: 'js', framework: 'koa',     match: { type: 'member', object: 'ctx',     prop: 'cookies' }, label: 'ctx.cookies',  provenance: 'cookie' },
   // Browser DOM-derived (XSS sources).
   { kind: 'source', id: 'js-location',     language: 'js', framework: 'dom', match: { type: 'global', name: 'location' },                       label: 'window.location', provenance: 'url-fragment' },
   { kind: 'source', id: 'js-doc-cookie',   language: 'js', framework: 'dom', match: { type: 'member', object: 'document', prop: 'cookie' },     label: 'document.cookie', provenance: 'cookie' },
@@ -278,6 +287,14 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-sa-text',            language: 'py', framework: 'sqlalchemy', match: { type: 'call', callee: 'text' }, argIndex: 0,
     vuln: { name: 'SQL Injection (sqlalchemy.text)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use sqlalchemy.text with bound parameters: `text("SELECT :x").bindparams(x=v)`.' } },
+  // Taint-recall PRD (80%) Tier 3: Python carried zero XSS sink entries.
+  // Flask's `render_template_string(tainted)` compiles a user-influenced
+  // string AS a Jinja2 template — both an XSS vector (unescaped output) and
+  // SSTI-adjacent (server-side template compilation), scored CWE-79 to
+  // match this corpus's own manifest classification for the shape.
+  { kind: 'sink', id: 'py-flask-render-template-string', language: 'py', framework: 'flask', match: { type: 'call', callee: 'render_template_string' }, argIndex: 0,
+    vuln: { name: 'Reflected XSS / SSTI (Flask render_template_string)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'Never build the TEMPLATE from user input. Use render_template with a static template file and pass user data as context variables (auto-escaped).' } },
 
   // ─── SINKS (SQL — Java) ───────────────────────────────────────────────────
   { kind: 'sink', id: 'java-stmt-executeQuery',  language: 'java', framework: 'jdbc',     match: { type: 'call', callee: 'executeQuery' },  argIndex: 0,
@@ -303,6 +320,18 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-jpa-createNativeQuery', language: 'java', framework: 'jpa', match: { type: 'call', callee: 'createNativeQuery' }, argIndex: 0,
     vuln: { name: 'Native SQL Injection (EntityManager.createNativeQuery)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use setParameter on the resulting Query.' } },
+
+  // Taint-recall PRD (80%) Tier 3: Java carried zero XSS sink entries —
+  // `resp.getWriter().write(...)`/`.print(...)` (Servlet's canonical
+  // response-write idiom, `HttpServletResponse.getWriter()`) is the
+  // dominant shape. Receiver-scoped to the `getWriter` chain segment (both
+  // `write` and `print` collide with countless unrelated APIs bare).
+  { kind: 'sink', id: 'java-writer-write', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'write', receiver: '^getWriter$' }, argIndex: 0,
+    vuln: { name: 'Reflected XSS (PrintWriter.write)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'HTML-escape user-derived content before writing to the response, or use a templating engine with auto-escaping.' } },
+  { kind: 'sink', id: 'java-writer-print', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'print', receiver: '^getWriter$' }, argIndex: 0,
+    vuln: { name: 'Reflected XSS (PrintWriter.print)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'HTML-escape user-derived content before writing to the response, or use a templating engine with auto-escaping.' } },
 
   // ─── SINKS (SQL — Go) ──────────────────────────────────────────────────────
   { kind: 'sink', id: 'go-db-query',    language: 'go', framework: 'database/sql', match: { type: 'call', callee: 'Query' },    argIndex: 0,
@@ -408,6 +437,12 @@ export const CATALOG = [
   { kind: 'sink', id: 'php-doctrine-nativequery',language:'php',framework:'doctrine',match:{type:'call',callee:'createNativeQuery'},argIndex:0,
     vuln: { name: 'SQL Injection (Doctrine createNativeQuery)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use bound parameters with createNativeQuery.' } },
+  // Taint-recall PRD (80%) Tier 3: PHP carried zero XSS sink entries —
+  // `echo`/`print` are language constructs (parser-php.js now lowers them
+  // to a synthetic `__php_echo__` call, see that file for why).
+  { kind: 'sink', id: 'php-echo-xss', language: 'php', framework: 'core', match: { type: 'call', callee: '__php_echo__' }, argIndex: 'all',
+    vuln: { name: 'Reflected XSS (echo)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'Escape output with htmlspecialchars() before echoing user-derived content.' } },
 
   // ─── SINKS (XSS / template — JS/TS / browser) ─────────────────────────────
   { kind: 'sink', id: 'js-innerHTML-assign', language: 'js', framework: 'dom', match: { type: 'member', object: '_any_', prop: 'innerHTML' }, argIndex: 'rhs',
@@ -422,6 +457,32 @@ export const CATALOG = [
   { kind: 'sink', id: 'react-dangerouslySetInnerHTML', language: 'js', framework: 'react', match: { type: 'member', object: '_any_', prop: 'dangerouslySetInnerHTML' }, argIndex: 'rhs',
     vuln: { name: 'XSS via dangerouslySetInnerHTML', severity: 'high', cwe: 'CWE-79',
             remediation: 'Sanitize the __html field via DOMPurify before passing it to dangerouslySetInnerHTML — better, render text via children.' } },
+  // Taint-recall PRD (80%) Tier 3: the JSX ATTRIBUTE form
+  // (`<div dangerouslySetInnerHTML={{__html: html}} />`, as opposed to a
+  // plain-JS member WRITE `x.dangerouslySetInnerHTML = {...}`, which the
+  // entry above already covers) needed its own sink — see parser-js.js's
+  // JSXElement case for why it's a synthetic call, not a member write.
+  { kind: 'sink', id: 'react-jsx-dangerouslySetInnerHTML', language: 'js', framework: 'react', match: { type: 'call', callee: '__jsx_dangerously_set_inner_html__' }, argIndex: 0,
+    vuln: { name: 'XSS via dangerouslySetInnerHTML', severity: 'high', cwe: 'CWE-79',
+            remediation: 'Sanitize the __html field via DOMPurify before passing it to dangerouslySetInnerHTML — better, render text via children.' } },
+  // Taint-recall PRD (80%) Tier 3: XSS audit found java/php/kotlin/python
+  // carried ZERO XSS sink entries in the catalog at all, and Express/Koa's
+  // own response-write idioms (`res.send`, `ctx.body =`) were also
+  // uncataloged for JS despite the innerHTML/dangerouslySetInnerHTML
+  // entries above already covering the DOM side.
+  { kind: 'sink', id: 'js-express-res-send', language: 'js', framework: 'express', match: { type: 'call', callee: 'send', receiver: '^(?:res|response)$' }, argIndex: 0,
+    vuln: { name: 'Reflected XSS (Express res.send)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'Escape user-derived HTML before sending, or use res.json for data responses.' } },
+  // `matchMemberWriteSink` indexes member-WRITE sinks under a fixed
+  // `_any_.<prop>` key and applies object-specificity afterward via
+  // `match.receiver` — the same shape `react-dangerouslySetInnerHTML` above
+  // uses. An entry with a literal `object: 'ctx'` (instead of `_any_`)
+  // would be indexed under a completely different key and never be found by
+  // this lookup at all — confirmed by testing this entry with `object:
+  // 'ctx'` first, which silently never fired.
+  { kind: 'sink', id: 'js-koa-ctx-body', language: 'js', framework: 'koa', match: { type: 'member', object: '_any_', prop: 'body', receiver: '^ctx$' }, argIndex: 'rhs',
+    vuln: { name: 'Reflected XSS (Koa ctx.body)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'Escape user-derived HTML before assigning to ctx.body, or use ctx.body = { ... } for a JSON response.' } },
 
   // ─── SINKS (HTTP outbound / SSRF) ─────────────────────────────────────────
   { kind: 'sink', id: 'py-requests-get',   language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiverTypeIn: ['requests|session|client|http'] },   argIndex: 0,
@@ -668,6 +729,14 @@ export const CATALOG = [
   { kind: 'sanitizer', id: 'java-stringutils-escapeHtml',    language: 'java', match: { type: 'call', callee: 'escapeHtml4' },          effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'java-stringutils-escapeXml',     language: 'java', match: { type: 'call', callee: 'escapeXml' },            effect: 'strip', appliesTo: ['xml','xss'] },
   { kind: 'sanitizer', id: 'java-html-utils',                language: 'java', match: { type: 'call', callee: 'htmlEscape' },           effect: 'strip', appliesTo: ['xss'] },
+  // Taint-recall PRD (80%): Kotlin/JVM interop means Spring's
+  // HtmlUtils.htmlEscape is equally valid, idiomatic Kotlin code — the
+  // java-html-utils entry above is language-scoped to 'java' and
+  // `_languageAllowed` rejects it for a .kt file. Found via a Kotlin XSS
+  // corpus fixture's post/ (safe) variant firing a spurious finding once
+  // the sink itself + a subscript-access parser gap were both fixed —
+  // without this entry, the sanitized value still reads as unsanitized.
+  { kind: 'sanitizer', id: 'kt-html-utils',                  language: 'kt',   match: { type: 'call', callee: 'htmlEscape' },           effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'java-integer-parseInt',          language: 'java', match: { type: 'call', callee: 'parseInt' },             effect: 'strip', appliesTo: ['*'] },
   { kind: 'sanitizer', id: 'java-long-parseLong',            language: 'java', match: { type: 'call', callee: 'parseLong' },            effect: 'strip', appliesTo: ['*'] },
   { kind: 'sanitizer', id: 'java-uuid-fromString',           language: 'java', match: { type: 'call', callee: 'fromString' },           effect: 'strip', appliesTo: ['*'] },
@@ -797,6 +866,12 @@ export const CATALOG = [
   { kind: 'sink', id: 'kt-scriptengine-eval', language: 'kt', framework: 'javax.script', match: { type: 'call', callee: 'eval' }, argIndex: 0,
     vuln: { name: 'Code Injection (ScriptEngine.eval)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never eval user-controlled code with a scripting engine.' } },
+  // Taint-recall PRD (80%) Tier 3: Kotlin carried zero XSS sink entries —
+  // Ktor's canonical HTML-response idiom (`call.respondText(html,
+  // ContentType.Text.Html)`).
+  { kind: 'sink', id: 'kt-ktor-respondtext', language: 'kt', framework: 'ktor', match: { type: 'call', callee: 'respondText' }, argIndex: 0,
+    vuln: { name: 'Reflected XSS (Ktor call.respondText)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'HTML-escape user-derived content before responding, or use a templating engine with auto-escaping.' } },
   { kind: 'sink', id: 'java-spel-parseexpression', language: 'java', framework: 'spring', match: { type: 'call', callee: 'parseExpression' }, argIndex: 0,
     vuln: { name: 'Code Injection (Spring SpEL parseExpression)', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never parse a user-controlled string as a SpEL expression; SpEL can invoke arbitrary methods.' } },

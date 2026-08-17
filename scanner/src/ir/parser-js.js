@@ -99,8 +99,48 @@ function exprOf(n) {
     case 'ArrayExpression':   return { kind: 'array', elements: (n.elements || []).map(exprOf) };
     case 'SpreadElement':     return exprOf(n.argument);
     case 'ThisExpression':    return { kind: 'ident', name: '_this_' };
+    // Taint-recall PRD (80%) Tier 3: JSX had ZERO IR modeling at all — every
+    // JSXElement fell through to {kind:'unknown'}, so `return <div
+    // dangerouslySetInnerHTML={{__html: html}} />` (React's canonical XSS
+    // sink, and the shape of a real corpus miss) silently dropped `html`'s
+    // taint entirely. Deliberately narrow: only the `dangerouslySetInnerHTML`
+    // attribute is extracted (found on this element or, recursively, any
+    // descendant — the attribute can sit on a nested element, not just the
+    // one directly returned) and lowered to a synthetic call
+    // (`__jsx_dangerously_set_inner_html__`) carrying the `__html` object
+    // property's value, so the existing `react-dangerouslySetInnerHTML`
+    // member-write sink's SIBLING call-shaped catalog entry can target it.
+    // Full JSX modeling (arbitrary attributes, children, expressions) is
+    // explicitly out of scope — children are React-auto-escaped by default,
+    // so `<div>{unsafeText}</div>` is not itself a vulnerability the way
+    // `dangerouslySetInnerHTML` is.
+    case 'JSXElement': {
+      const found = _findDangerouslySetInnerHTML(n);
+      if (found) return { kind: 'call', callee: '__jsx_dangerously_set_inner_html__', args: [exprOf(found)] };
+      return { kind: 'unknown' };
+    }
     default:                   return { kind: 'unknown' };
   }
+}
+
+function _findDangerouslySetInnerHTML(jsxElement) {
+  const attrs = jsxElement?.openingElement?.attributes || [];
+  for (const attr of attrs) {
+    if (attr.type !== 'JSXAttribute' || attr.name?.name !== 'dangerouslySetInnerHTML') continue;
+    const val = attr.value;
+    if (val?.type !== 'JSXExpressionContainer') continue;
+    const obj = val.expression;
+    if (obj?.type !== 'ObjectExpression') continue;
+    const htmlProp = (obj.properties || []).find(p => p.type === 'ObjectProperty' && (p.key?.name === '__html' || p.key?.value === '__html'));
+    if (htmlProp) return htmlProp.value;
+  }
+  for (const child of jsxElement?.children || []) {
+    if (child.type === 'JSXElement') {
+      const nested = _findDangerouslySetInnerHTML(child);
+      if (nested) return nested;
+    }
+  }
+  return null;
 }
 
 // Reduce a Babel LHS node to a string path used as a dataflow variable key.
