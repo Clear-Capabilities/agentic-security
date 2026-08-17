@@ -10,8 +10,12 @@
 // denominator.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesCwe, scoreCounts, MIN_RELIABLE_N } from '../../bench/independent/runner.mjs';
+import { matchesCwe, scoreCounts, MIN_RELIABLE_N, purgeScanState, scanDirRaw } from '../../bench/independent/runner.mjs';
 import { fixCommitOf, languageOf } from '../../bench/independent/mine.mjs';
+import { setStateWritesEnabled } from '../src/posture/state-dir.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 // ------------------------------------------------------------ CWE matching
 test('matching is exact on the CWE number, not a prefix', () => {
@@ -100,4 +104,48 @@ test('language is derived from the file, and an unknown extension is null', () =
   assert.equal(languageOf('src/a.ts'), 'typescript');
   assert.equal(languageOf('src/a.py'), 'python');
   assert.equal(languageOf('README.md'), null);
+});
+
+// ------------------------------------------------------------ raw scan export
+test('scanDirRaw returns both findings and the suppression log', async () => {
+  // The independent-population harness scans code it doesn't own; state
+  // writes must be off, same as runner.mjs's own main() (disableStateWrites())
+  // — otherwise the scan mutates the very tree it's about to score.
+  setStateWritesEnabled(false);
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'scandirraw-'));
+  try {
+    fs.writeFileSync(path.join(d, 'package.json'), '{"name":"t","version":"1.0.0"}');
+    // A file with an inline-ignore pragma: the engine finds it, then drops it,
+    // logging the drop. This is the exact mechanism why-missed.mjs depends on.
+    // Shape mirrors test/ignore-pragma.test.js's own positive control — a bare
+    // tainted parameter is not enough to fire the shallow detector; it needs a
+    // recognizable HTTP-source-to-exec-sink shape.
+    fs.writeFileSync(
+      path.join(d, 'app.js'),
+      [
+        "const { exec } = require('child_process');",
+        'module.exports = function h(req, res) {',
+        "  exec('ping ' + req.query.host, (e, o) => res.send(o)); // agentic-security-ignore",
+        '};',
+      ].join('\n')
+    );
+    const { findings, suppressions } = await scanDirRaw(d);
+    assert.ok(Array.isArray(findings), 'findings must be an array');
+    assert.ok(Array.isArray(suppressions), 'suppressions must be an array');
+    assert.ok(
+      suppressions.some(s => /inline pragma/.test(s.reason || '')),
+      `expected an inline-pragma suppression entry, got: ${JSON.stringify(suppressions)}`
+    );
+  } finally { setStateWritesEnabled(true); fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test('purgeScanState removes .agentic-security before a scan', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-'));
+  try {
+    const sd = path.join(d, '.agentic-security');
+    fs.mkdirSync(sd, { recursive: true });
+    fs.writeFileSync(path.join(sd, 'last-scan.json'), '{}');
+    purgeScanState(d);
+    assert.equal(fs.existsSync(sd), false);
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });

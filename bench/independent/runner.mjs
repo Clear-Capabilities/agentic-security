@@ -116,7 +116,7 @@ function pct(r) {
  * and nothing this project produced. Purging only afterwards would still leave a
  * window where an interrupted run poisons the next one.
  */
-function purgeScanState(dir) {
+export function purgeScanState(dir) {
   let removed = 0;
   const walk = (d, depth = 0) => {
     if (depth > 12) return;
@@ -134,7 +134,7 @@ function purgeScanState(dir) {
   return removed;
 }
 
-async function scanDir(dir) {
+export async function scanDirRaw(dir) {
   // Pristine input, every time. See purgeScanState.
   purgeScanState(dir);
   // Snapshot AFTER the purge: the purge is a deliberate removal, so including
@@ -150,7 +150,14 @@ async function scanDir(dir) {
   // Defence in depth: even with a pristine input, refuse to score a finding
   // whose path is inside our own state directory. A single guard that can be
   // bypassed by a mid-run write is not a guard.
-  return findings.filter(f => !String(f.file || '').includes('.agentic-security'));
+  return {
+    findings: findings.filter(f => !String(f.file || '').includes('.agentic-security')),
+    suppressions: scan.suppressions || [],
+  };
+}
+
+async function scanDir(dir) {
+  return (await scanDirRaw(dir)).findings;
 }
 
 async function main() {
