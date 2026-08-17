@@ -93,6 +93,7 @@ function scanRateLimit(file, content) {
       findings.push({
         id: `rate-limit:RATE_LIMIT_${cat.toUpperCase()}:${file}:${lineNum}`,
         title: meta.title,
+        vuln: meta.title,
         severity: meta.severity,
         file, line: lineNum,
         description: meta.description,
@@ -113,6 +114,7 @@ function scanRateLimit(file, content) {
       findings.push({
         id: `rate-limit:RATE_LIMIT_${cat.toUpperCase()}:${file}:${handlerLine}`,
         title: meta.title,
+        vuln: meta.title,
         severity: meta.severity,
         file, line: handlerLine,
         description: meta.description,
