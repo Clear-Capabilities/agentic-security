@@ -25,7 +25,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 // Directories whose scripts are deliberately not run FROM this repo:
 //   - ci-templates: copied INTO a consumer repo; the consumer runs them, not us.
 //   - fixtures/results/corpus data dirs: not scripts, or test-only inputs.
-const SKIP_DIR = /(?:^|\/)(?:node_modules|\.bench-cache|dist|build|\.git|coverage|ci-templates|fixtures|results|corpus|\.agentic-security)(?:$|\/)/;
+const SKIP_DIR = /(?:^|\/)(?:node_modules|\.bench-cache|dist|build|\.git|coverage|ci-templates|fixtures|results|corpus|\.agentic-security|bench\/independent\/cache)(?:$|\/)/;
 
 // Each entry needs a reason. This is the same contract as no-dead-modules.js's
 // ALLOWLIST: small, reviewed, justified.
