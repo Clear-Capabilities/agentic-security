@@ -67,6 +67,7 @@
 
 import * as crypto from 'node:crypto';
 import { callSitesFromCfg } from './call-sites.js';
+import { matchBalancedCall } from './balanced-call.js';
 
 const FUN_RE = new RegExp(
   '(?:^|[\\s;{}])(?:public|private|internal|protected|inline|suspend|tailrec|operator|infix|open|abstract|override|final|external)?' +
@@ -169,6 +170,25 @@ function _buildMemberChain(parts) {
   return cur;
 }
 
+// Taint-recall PRD (80%): same architectural fix as parser-cs.js/
+// parser-go.js/parser-php.js/parser-rb.js — a chained call
+// (`ScriptEngineManager().getEngineByName("js").eval(userCode)`) previously
+// stopped at (or, here, actively corrupted the parse at) the FIRST call,
+// leaving `.method(args)` continuations unconsumed or garbled. Args from
+// EVERY level are kept, outermost-first — a first version kept only the
+// outermost, which broke `xp.compile(taintedExpr).evaluate(doc,
+// XPathConstants.NODESET)`: the tainted value sits on the INNER call
+// (.compile), not the final one, and keeping only the outer args (doc,
+// NODESET) silently dropped it — see parser-cs.js's twin function for the
+// full reasoning.
+function _followChain(s, endIdx, calleeSoFar, argsSoFar) {
+  const rest = s.slice(endIdx);
+  const outer = matchBalancedCall(rest, /^\.(\w+)/);
+  if (!outer) return { kind: 'call', callee: calleeSoFar, args: argsSoFar };
+  const outerArgs = _splitTopLevelCommas(outer.argsText).map(_lowerExpr);
+  return _followChain(rest, outer.endIdx, `${calleeSoFar}.${outer.callee}`, outerArgs.concat(argsSoFar));
+}
+
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
@@ -192,14 +212,23 @@ function _lowerExpr(text) {
     if (parts.length === 1) return { kind: 'ident', name: parts[0] };
     return _buildMemberChain(parts);
   }
-  // Call
-  const callMatch = s.match(/^([\w.]+)\s*\((.*)\)\s*$/s);
+  // Call. Taint-recall PRD (80%): this used to be the naive
+  // `/^([\w.]+)\s*\((.*)\)\s*$/s` pattern every OTHER hand-rolled parser
+  // (cs/go/php/rb) also started with and has since moved off of —
+  // `(.*)` matches GREEDILY against the LAST `)` in the string, not the
+  // one balancing the FIRST `(`, so a chained call
+  // (`ScriptEngineManager().getEngineByName("js").eval(userCode)`)
+  // corrupted the args text into garbage rather than just dropping the
+  // chain. Kotlin never got migrated to matchBalancedCall when the other
+  // four were — confirmed via a real corpus fixture (this exact
+  // ScriptEngineManager shape). Now uses the same balanced-scan +
+  // chain-following approach: only the OUTERMOST call's own arguments are
+  // kept (see parser-cs.js's _followChain comment for why), each level's
+  // name dot-joined into one callee string.
+  const callMatch = matchBalancedCall(s, /^([\w.]+)/);
   if (callMatch) {
-    return {
-      kind: 'call',
-      callee: callMatch[1],
-      args: _splitTopLevelCommas(callMatch[2]).map(_lowerExpr),
-    };
+    const args = _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr);
+    return _followChain(s, callMatch.endIdx, callMatch.callee, args);
   }
   // Concat
   if (s.includes('+') && /["']/.test(s)) {
@@ -227,9 +256,13 @@ function _lowerStmt(stmt, line) {
   if (assign && !/[=!<>]=/.test(s.slice(0, s.indexOf('=')+1).slice(0, -1))) {
     return { kind: 'assign', line, target: assign[1], source: _lowerExpr(assign[2]) };
   }
-  // Statement-form call
-  const cm = s.match(/^([\w.]+)\s*\((.*)\)\s*$/s);
-  if (cm) return { kind: 'call', line, callee: cm[1], args: _splitTopLevelCommas(cm[2]).map(_lowerExpr) };
+  // Statement-form call — same matchBalancedCall + chain-following as the
+  // expression-form case above (Taint-recall PRD 80%).
+  const cm = matchBalancedCall(s, /^([\w.]+)/);
+  if (cm) {
+    const chained = _followChain(s, cm.endIdx, cm.callee, _splitTopLevelCommas(cm.argsText).map(_lowerExpr));
+    return { kind: 'call', line, callee: chained.callee, args: chained.args };
+  }
   // R8: trailing-lambda call — `recv.method(args)? { lambda }`, Kotlin's
   // idiomatic collection-operator / scope-function syntax
   // (`xs.forEach { x -> … }`, `xs.reduce(0) { acc, x -> … }`). Without this

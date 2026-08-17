@@ -73,6 +73,33 @@ function _splitStatements(body) {
   return out;
 }
 
+// Taint-recall PRD (80%): a chained call (`w.Header().Set("X", tainted)`,
+// `template.New("page").Parse(userTemplate)`) previously stopped at the
+// FIRST balanced call, leaving any `.Method(args)` continuation
+// unconsumed — matchBalancedCall's own deliberate design, correct for not
+// corrupting the parse, but it meant the OUTER call — frequently the one
+// actually carrying the sink and its tainted argument — was silently
+// absent from the CFG. Confirmed via two real corpus fixtures (Go's
+// response-splitting and code-injection entries both hit this). Same
+// dot-joining approach as parser-cs.js's twin fix.
+//
+// Args from EVERY level are kept, outermost-first (`outerArgs.concat(prior)`
+// at each step) — NOT just the outermost. A first version kept only the
+// outermost call's args, which broke a real 3-level chain
+// (`X().getEngineByName("js").eval(userCode)`-shaped) where the tainted
+// value sits on an INNER call, not the final one — the outer call's own
+// args (if any) correctly stay at the front so an existing `argIndex: 0`
+// catalog entry keyed to the outermost call is unaffected; the inner
+// levels' args are appended after so an `argIndex: 'all'` entry can still
+// find taint that only an inner call actually carried.
+function _followChain(s, endIdx, calleeSoFar, argsSoFar) {
+  const rest = s.slice(endIdx);
+  const outer = matchBalancedCall(rest, /^\.(\w+)/);
+  if (!outer) return { kind: 'call', callee: calleeSoFar, args: argsSoFar };
+  const outerArgs = _splitTopLevelCommas(outer.argsText).map(_lowerExpr);
+  return _followChain(rest, outer.endIdx, `${calleeSoFar}.${outer.callee}`, outerArgs.concat(argsSoFar));
+}
+
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
@@ -104,7 +131,7 @@ function _lowerExpr(text) {
   const callMatch = matchBalancedCall(s, /^([\w.]+)/);
   if (callMatch) {
     const args = _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr);
-    return { kind: 'call', callee: callMatch.callee, args };
+    return _followChain(s, callMatch.endIdx, callMatch.callee, args);
   }
   // String concat with + — a SECOND occurrence of the same check as above
   // (line ~92), reached when the expression didn't match any branch in
@@ -240,7 +267,8 @@ function _lowerStmt(stmt, line) {
   // Statement-form call: obj.Method(args) or Method(args)
   const cm = matchBalancedCall(s, /^([\w.]+)/);
   if (cm) {
-    return { kind: 'call', line, callee: cm.callee, args: _splitTopLevelCommas(cm.argsText).map(_lowerExpr) };
+    const chained = _followChain(s, cm.endIdx, cm.callee, _splitTopLevelCommas(cm.argsText).map(_lowerExpr));
+    return { kind: 'call', line, callee: chained.callee, args: chained.args };
   }
   return null;
 }

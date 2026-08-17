@@ -199,6 +199,16 @@ export const CATALOG = [
   { kind: 'source', id: 'go-r-body',     language: 'go', framework: 'net/http', match: { type: 'member', object: 'r', prop: 'Body' },     label: 'r.Body' },
   { kind: 'source', id: 'go-r-formvalue',language: 'go', framework: 'net/http', match: { type: 'call',   callee: 'FormValue' },           label: 'r.FormValue' },
   { kind: 'source', id: 'go-r-uquery',   language: 'go', framework: 'net/http', match: { type: 'call',   callee: 'Query' },               label: 'r.URL.Query' },
+  // Taint-recall PRD (80%): the idiomatic single-value-read form,
+  // `r.URL.Query().Get("key")` — bare-name callee matching only ever sees
+  // the TERMINAL segment of a chained callee string, so once the
+  // chained-call parser fix let this shape's real callee become
+  // "r.URL.Query.Get" (previously silently collapsed to just "r.URL.Query",
+  // dropping the .Get(...) entirely), go-r-uquery's `callee: 'Query'` no
+  // longer matches — "Get" is now what's terminal. Needs its own entry
+  // rather than widening go-r-uquery itself, since "Get" alone is far too
+  // generic for every Go framework in this catalog to safely bare-match.
+  { kind: 'source', id: 'go-r-uquery-get', language: 'go', framework: 'net/http', match: { type: 'call', callee: 'Get', receiver: '^Query$' }, label: 'r.URL.Query().Get(key)' },
   { kind: 'source', id: 'go-gin-query',  language: 'go', framework: 'gin',      match: { type: 'call',   callee: 'Query' },               label: 'c.Query (gin)' },
   { kind: 'source', id: 'go-gin-bindjson',language:'go', framework: 'gin',      match: { type: 'call',   callee: 'BindJSON' },            label: 'c.BindJSON (gin)' },
   { kind: 'source', id: 'go-echo-param', language: 'go', framework: 'echo',     match: { type: 'call',   callee: 'Param' },               label: 'c.Param (echo)' },
@@ -494,6 +504,16 @@ export const CATALOG = [
             remediation: 'Use XPathExpression with bound variables (SetContext/AddVariable); never concat user input into the expression string.' } },
   { kind: 'sink', id: 'kt-xpath-compile', language: 'kt', framework: 'xpath', match: { type: 'call', callee: 'compile' }, argIndex: 0,
     vuln: { name: 'XPath Injection (XPath.compile)', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Use XPathVariableResolver; never concat user input into the expression.' } },
+  // Taint-recall PRD (80%): the idiomatic real-world shape is chained —
+  // `xp.compile(taintedExpr).evaluate(doc, NODESET)`. Once the parser's
+  // chained-call fix correctly joins this into one call node, bare-name
+  // matching only ever sees the TERMINAL segment ("evaluate") — "compile"
+  // above is now a middle segment and can never match on its own for this
+  // shape. argIndex 'all' since the tainted value's position among the
+  // combined args depends on how many args the outer call itself has.
+  { kind: 'sink', id: 'kt-xpath-evaluate', language: 'kt', framework: 'xpath', match: { type: 'call', callee: 'evaluate', receiver: '^(?:xp|xpath|expr)$' }, argIndex: 'all',
+    vuln: { name: 'XPath Injection (XPath.compile().evaluate())', severity: 'high', cwe: 'CWE-643',
             remediation: 'Use XPathVariableResolver; never concat user input into the expression.' } },
   { kind: 'sink', id: 'py-lxml-xpath', language: 'py', framework: 'lxml', match: { type: 'call', callee: 'xpath' }, argIndex: 0,
     vuln: { name: 'XPath Injection (lxml .xpath())', severity: 'high', cwe: 'CWE-643',

@@ -11,11 +11,11 @@ that produced them.
 | --- | --- |
 | Engine version | 0.137.1 |
 | Bundle SHA-256 | `c8726408d88159f1954448e223340231893809e7cfeaa72d0fce196a39a1395c` |
-| Commit | `03321a12823957309f274838d3b80b831787bf11` |
+| Commit | `356b6eee3d53e2686812f0e72c16aeba5eae7463` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-16T19:48:41.388Z |
+| Generated (UTC) | 2026-08-17T05:14:55.613Z |
 
 ## What these numbers are, and what they are not
 
@@ -153,13 +153,13 @@ Entries scored: 215
 
 | Language | IR-TAINT recall |
 | --- | --- |
-| c# | 10/21 (47.6%) |
+| c# | 11/21 (52.4%) |
 | c/c++ | 2/11 (18.2%) |
-| go | 6/22 (27.3%) |
+| go | 8/22 (36.4%) |
 | java | 6/25 (24.0%) |
 | js/ts | 12/38 (31.6%) |
 | json | 0/1 (0.0%) |
-| kotlin | 5/21 (23.8%) |
+| kotlin | 6/21 (28.6%) |
 | php | 7/23 (30.4%) |
 | python | 17/32 (53.1%) |
 | ruby | 4/20 (20.0%) |

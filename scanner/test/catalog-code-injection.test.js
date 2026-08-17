@@ -1,15 +1,10 @@
-// Taint-recall PRD (80%): code-injection sink catalog entries. Only
-// php-eval and rb-eval are exercised end-to-end here — the java/cs/go/kt
-// entries added alongside them (java-spel-parseexpression,
-// cs-datatable-compute, go-template-parse, kt-scriptengine-eval) are all
-// independently correct but their corpus fixtures are blocked by the
-// chained-call CFG-drop bug (parser-java.js CST-based; parser-cs.js/
-// parser-go.js via the shared matchBalancedCall helper) — confirmed via
-// direct CFG inspection for all four, tracked as the next P5 item in
-// docs/TAINT_RECALL_80PCT_PRD.md rather than re-verified with a dedicated
-// unit test here (there is nothing to test until that lands — the sink
-// entries themselves have no bug, the parser never hands them a call to
-// match against).
+// Taint-recall PRD (80%): code-injection sink catalog entries. cs/go/kt now
+// have real end-to-end tests too — the chained-call CFG-drop bug that
+// originally blocked them (parser-cs.js/parser-go.js/parser-kt.js, all via
+// the shared matchBalancedCall-based chain-following) has since been fixed.
+// java-spel-parseexpression remains untested here: Java uses a SEPARATE,
+// CST-based parser (parser-java.js) with its own, still-unfixed chained-call
+// defect — a distinct P5 item, not the one this fix closed.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -60,4 +55,63 @@ end
   const taint = await taintFindings(dir);
   assert.equal(taint.filter(f => /code injection/i.test(f.vuln)).length, 0,
     `a hardcoded eval() must not fire, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
+test('cs-datatable-compute: new DataTable().Compute(expr, "") fires Code Injection via IR-TAINT (chained-call fix)', async () => {
+  const dir = mkTmp('cs', 'Calculator.cs', `
+using System.Data;
+using Microsoft.AspNetCore.Mvc;
+
+class Calculator {
+    object Eval([FromQuery] string expr) {
+        return new DataTable().Compute(expr, "");
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /code injection/i.test(f.vuln)),
+    `expected Code Injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('go-template-parse: template.New("page").Parse(userTemplate) fires Code Injection via IR-TAINT (chained-call fix)', async () => {
+  const dir = mkTmp('go', 'render.go', `
+package render
+
+import (
+	"io"
+	"net/http"
+	"text/template"
+)
+
+func Render(userTemplate string, w io.Writer, data any) {
+	t, _ := template.New("page").Parse(userTemplate)
+	t.Execute(w, data)
+}
+
+func Handler(w http.ResponseWriter, r *http.Request) {
+	Render(r.URL.Query().Get("tpl"), w, nil)
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /code injection/i.test(f.vuln)),
+    `expected Code Injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('kt-scriptengine-eval: ScriptEngineManager().getEngineByName("js").eval(userCode) fires Code Injection via IR-TAINT (3-level chain)', async () => {
+  const dir = mkTmp('kt', 'ScriptRunner.kt', `
+import javax.script.ScriptEngineManager
+import javax.servlet.http.HttpServletRequest
+
+class ScriptRunner {
+    fun run(userCode: String): Any? {
+        return ScriptEngineManager().getEngineByName("js").eval(userCode)
+    }
+    fun handler(request: HttpServletRequest): Any? {
+        return run(request.getParameter("code"))
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /code injection/i.test(f.vuln)),
+    `expected Code Injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });

@@ -271,6 +271,26 @@ function _splitStatements(body) {
   return out;
 }
 
+// Taint-recall PRD (80%): same architectural fix as parser-cs.js/
+// parser-go.js — a chained call (`sanitize($x)->encode()`, or a real sink
+// shape like `$xp->query(...)` reached through a chain) previously stopped
+// at the FIRST balanced call, leaving `->method(args)` unconsumed. `callee`
+// arrives already normalized to dots (->/:: both become "."), so the
+// continuation check looks for a literal "->" or "::" in the SOURCE text
+// (PHP's own syntax) even though the join uses ".". Args from EVERY level
+// are kept, outermost-first — see parser-cs.js's twin function for why
+// (a first version that kept only the outermost broke a real chain shape
+// where the tainted value sits on an INNER call).
+function _followChain(s, endIdx, calleeSoFar, argsSoFar) {
+  const rest = s.slice(endIdx);
+  const m = rest.match(/^(?:->|::)(\w+)/);
+  if (!m) return { kind: 'call', callee: calleeSoFar, args: argsSoFar };
+  const outer = matchBalancedCall(rest, /^(?:->|::)(\w+)/);
+  if (!outer) return { kind: 'call', callee: calleeSoFar, args: argsSoFar };
+  const outerArgs = _splitTopLevelCommas(outer.argsText).map(_lowerExpr);
+  return _followChain(rest, outer.endIdx, `${calleeSoFar}.${outer.callee}`, outerArgs.concat(argsSoFar));
+}
+
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
@@ -328,12 +348,13 @@ function _lowerExpr(text) {
   if (methodCall) {
     const callee = methodCall.callee.replace(/->/g, '.').replace(/::/g, '.');
     const args = _splitTopLevelCommas(methodCall.argsText).map(_lowerExpr);
-    return { kind: 'call', callee, args };
+    return _followChain(s, methodCall.endIdx, callee, args);
   }
   // Function call: func(args)
   const funcCall = matchBalancedCall(s, /^([A-Za-z_][\w]*)/);
   if (funcCall) {
-    return { kind: 'call', callee: funcCall.callee, args: _splitTopLevelCommas(funcCall.argsText).map(_lowerExpr) };
+    const args = _splitTopLevelCommas(funcCall.argsText).map(_lowerExpr);
+    return _followChain(s, funcCall.endIdx, funcCall.callee, args);
   }
   // Concat with .
   //
@@ -427,7 +448,8 @@ function _lowerStmt(stmt, line) {
   const call = matchBalancedCall(s, /^(\$[\w]+(?:->[\w]+)*|[A-Za-z_][\w]*(?:::[\w]+)*)/);
   if (call) {
     const callee = call.callee.replace(/->/g, '.').replace(/::/g, '.');
-    return { kind: 'call', line, callee, args: _splitTopLevelCommas(call.argsText).map(_lowerExpr) };
+    const chained = _followChain(s, call.endIdx, callee, _splitTopLevelCommas(call.argsText).map(_lowerExpr));
+    return { kind: 'call', line, callee: chained.callee, args: chained.args };
   }
   return null;
 }

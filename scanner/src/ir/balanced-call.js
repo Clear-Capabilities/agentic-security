@@ -51,5 +51,15 @@ export function matchBalancedCall(s, calleeRe) {
   }
   if (depth !== 0 || s[i] !== ')') return null; // unbalanced — refuse to guess
   const callee = m[1] !== undefined ? m[1] : m[0];
-  return { callee, argsText: s.slice(openIdx + 1, i) };
+  // Taint-recall PRD (80%): `endIdx` (the index right after the matched
+  // closing paren) lets a caller detect and recurse into a CHAINED
+  // continuation (`X(args).Y(args2)`) instead of silently leaving it
+  // unconsumed. Additive — existing callers that only destructure
+  // {callee, argsText} are unaffected. Confirmed via real corpus fixtures
+  // that the outer call in a chain is frequently the one carrying the
+  // actual sink and its tainted argument (`new DataTable().Compute(expr)`,
+  // `template.New("page").Parse(userTemplate)`,
+  // `w.Header().Set("X", tainted)`) — silently dropping it, not just
+  // leaving it unconsumed, is what this field exists to let callers fix.
+  return { callee, argsText: s.slice(openIdx + 1, i), endIdx: i + 1 };
 }

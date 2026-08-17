@@ -55,7 +55,14 @@ class Lookup {
     `expected XPath Injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
-test('kt-xpath-compile: XPath.compile(concatenated) fires XPath Injection via IR-TAINT', async () => {
+// Taint-recall PRD (80%): this fixture's chained shape
+// (`xp.compile(tainted).evaluate(doc, NODESET)`) is exactly what exposed
+// the args-union bug in the chained-call fix — the tainted value lives on
+// the INNER call (.compile), not the outer one (.evaluate), and a
+// kt-xpath-evaluate catalog entry (argIndex 'all') is what makes it
+// reachable now that bare-name matching only ever sees "evaluate" (the
+// terminal segment) once the two calls are joined into one node.
+test('kt-xpath-compile: XPath.compile(concatenated).evaluate(...) fires XPath Injection via IR-TAINT', async () => {
   const dir = mkTmp('kt', 'Lookup.kt', `
 import javax.xml.xpath.*
 import org.w3c.dom.Document

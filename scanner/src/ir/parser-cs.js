@@ -260,6 +260,43 @@ function _splitTopLevelSemi(s) {
   return out;
 }
 
+// Taint-recall PRD (80%): a chained call (`new DataTable().Compute(expr)`,
+// `Response.Headers.Add(...)` chains further, etc.) previously stopped at
+// the FIRST balanced call and left any `.Method(args)` continuation
+// unconsumed (by matchBalancedCall's own design — see its header) —
+// correct for not corrupting the parse, but it meant the OUTER call, which
+// is frequently the one actually carrying the sink and its tainted
+// argument, was silently absent from the CFG entirely. Confirmed via a
+// real corpus fixture: `new DataTable().Compute(expr, "")` collapsed to
+// just the constructor call, args: [], dropping `.Compute(expr, "")`
+// completely.
+//
+// Walks forward from `endIdx` (the position right after the just-matched
+// call's closing paren) following every `.Method(args)` continuation,
+// dot-joining each level's name into one callee string (`DataTable.Compute`,
+// `template.New.Parse`) so both bare-name matching (last segment) and
+// receiver-pattern matching (earlier segments) keep working unchanged.
+//
+// Args from EVERY level are kept, outermost-first (`outerArgs.concat(prior)`
+// at each step) — NOT just the outermost. A first version kept only the
+// outermost call's args, which broke a real chain shape
+// (`xp.compile(taintedExpr).evaluate(doc, XPathConstants.NODESET)`-style,
+// found in Kotlin but the identical defect class applies here) where the
+// tainted value sits on an INNER call, not the final one — the outer call's
+// own args (if any) correctly stay at the front so an existing
+// `argIndex: 0` catalog entry keyed to the outermost call is unaffected;
+// inner levels' args are appended after so an `argIndex: 'all'` entry can
+// still find taint that only an inner call actually carried.
+function _followChain(s, endIdx, calleeSoFar, argsSoFar, isNew) {
+  const rest = s.slice(endIdx);
+  const m = rest.match(/^\.(\w+)/);
+  if (!m) return { kind: 'call', callee: calleeSoFar, args: argsSoFar, isNew };
+  const outer = matchBalancedCall(rest, /^\.(\w+)/);
+  if (!outer) return { kind: 'call', callee: calleeSoFar, args: argsSoFar, isNew };
+  const outerArgs = _splitTopLevelCommas(outer.argsText).map(_lowerExpr);
+  return _followChain(rest, outer.endIdx, `${calleeSoFar}.${outer.callee}`, outerArgs.concat(argsSoFar), false);
+}
+
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
@@ -289,7 +326,7 @@ function _lowerExpr(text) {
   if (newMatch) {
     const callee = newMatch.callee.split('.').pop();
     const args = _splitTopLevelCommas(newMatch.argsText).map(_lowerExpr);
-    return { kind: 'call', callee, args, isNew: true };
+    return _followChain(s, newMatch.endIdx, callee, args, true);
   }
   // Call: foo.bar(args) or Bar(args). matchBalancedCall finds the paren
   // that actually balances the FIRST '(' — not the greedy-to-end-of-string
@@ -299,7 +336,7 @@ function _lowerExpr(text) {
   const callMatch = matchBalancedCall(s, /^([\w.]+)/);
   if (callMatch) {
     const args = _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr);
-    return { kind: 'call', callee: callMatch.callee, args };
+    return _followChain(s, callMatch.endIdx, callMatch.callee, args, false);
   }
   // String concat / interpolation — heuristic.
   //
@@ -420,7 +457,8 @@ function _lowerStmt(stmt, line) {
   // statement-form call
   const cm = matchBalancedCall(s, /^([A-Za-z_][\w.]*)/);
   if (cm) {
-    return { kind: 'call', line, callee: cm.callee, args: _splitTopLevelCommas(cm.argsText).map(_lowerExpr) };
+    const chained = _followChain(s, cm.endIdx, cm.callee, _splitTopLevelCommas(cm.argsText).map(_lowerExpr), false);
+    return { kind: 'call', line, callee: chained.callee, args: chained.args };
   }
   return { kind: 'unknown', line, text: s };
 }

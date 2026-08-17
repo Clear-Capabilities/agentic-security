@@ -124,6 +124,21 @@ function _splitStatements(body) {
   return out;
 }
 
+// Taint-recall PRD (80%): same architectural fix as parser-cs.js/
+// parser-go.js/parser-php.js — a chained call (`sanitize(x).strip`, or a
+// real sink shape like `Nokogiri::XML(x).at_xpath(...)`) previously stopped
+// at the FIRST balanced call, leaving `.method(args)` unconsumed. Args from
+// EVERY level are kept, outermost-first — see parser-cs.js's twin function
+// for why (a first version that kept only the outermost broke a real chain
+// shape where the tainted value sits on an INNER call).
+function _followChain(s, endIdx, calleeSoFar, argsSoFar) {
+  const rest = s.slice(endIdx);
+  const outer = matchBalancedCall(rest, /^\.(\w+)/);
+  if (!outer) return { kind: 'call', callee: calleeSoFar, args: argsSoFar };
+  const outerArgs = _splitTopLevelCommas(outer.argsText).map(_lowerExpr);
+  return _followChain(rest, outer.endIdx, `${calleeSoFar}.${outer.callee}`, outerArgs.concat(argsSoFar));
+}
+
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
@@ -159,7 +174,8 @@ function _lowerExpr(text) {
   // silently dropped x).
   const callMatch = matchBalancedCall(s, /^([\w.]+)/);
   if (callMatch) {
-    return { kind: 'call', callee: callMatch.callee, args: _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr) };
+    const args = _splitTopLevelCommas(callMatch.argsText).map(_lowerExpr);
+    return _followChain(s, callMatch.endIdx, callMatch.callee, args);
   }
   // Method call without parens is very common in Ruby but hard to detect
   // reliably with regex. We handle the explicit-paren form above.
@@ -227,7 +243,8 @@ function _lowerStmt(stmt, line) {
   // Statement-form call with parens
   const call = matchBalancedCall(s, /^([\w.]+)/);
   if (call) {
-    return { kind: 'call', line, callee: call.callee, args: _splitTopLevelCommas(call.argsText).map(_lowerExpr) };
+    const chained = _followChain(s, call.endIdx, call.callee, _splitTopLevelCommas(call.argsText).map(_lowerExpr));
+    return { kind: 'call', line, callee: chained.callee, args: chained.args };
   }
   // Statement-form call without parens (common Ruby idiom): redirect_to expr
   //
