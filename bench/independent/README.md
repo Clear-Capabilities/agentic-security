@@ -88,6 +88,17 @@ This matters because Theme A was the plan's own hypothesized dominant lever: its
 
 Reported plainly rather than explained away, but not a total mystery: the independent population's language distribution is JavaScript/Python/TypeScript only (0 Java, C#, Kotlin, PHP, Ruby, or Go entries in these 110). R8/R9 — "the single largest, riskiest item in the whole PRD" per its own plan — could not have moved this benchmark at all, structurally, regardless of how real the underlying fix is; the same corpus-shape mismatch R8's own status entries already document at length for `bench/layer-recall`. That still leaves Theme A, R15, R6/R10/R11/R13/R14a as work that *could* have moved a JS/TS/Python entry, and none of it did — meaning either these fixed shapes don't happen to occur in these particular 110 real-world advisories, or a fix's effect was masked by something else in the same scan (an unrelated FP suppressing the file, a sanitizer-gate demotion, reachability filtering, or one of the hard-drop/severity-mutation mechanisms Theme F's R15 targeted). This measurement cannot distinguish those cases from each other; it can only report that the net observable outcome, entry by entry, did not change across six themes of real, independently-verified fixes. Confirming which explanation applies to which entry — and whether per-milestone re-measurement earlier would have changed how this PRD was sequenced — is future work, not something this single re-run settles.
 
+**Follow-up root-cause audit (2026-08-17):** see
+[`docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md`](../../docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md)
+for the per-entry breakdown of all 96 false negatives from this
+measurement (83 genuine deeper-engine gaps, 6 missing-catalog, 5
+corpus-scoping issues, 1 not-actually-a-miss, and exactly 1 real
+masked-downstream case — a `rate-limit.js` bug that had silently
+discarded every finding that detector ever produced, project-wide,
+since it was written), three landed fixes, and the language-coverage
+mining that brought java/c#/php/go/ruby off zero (kotlin remains
+unmeasurable — no admissible advisory found this pass).
+
 **Quote the advisory-local column.** "Wide" is the same scans scored without
 restricting findings to the files the fix commit touched — it asks only whether
 the CWE appeared *anywhere* in the package. Over scopes holding up to 1740
