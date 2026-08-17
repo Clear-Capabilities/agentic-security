@@ -294,6 +294,30 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext) {
   return !!(sum && sum.returnTainted);
 }
 
+// Taint-recall PRD (80%): is a call's own RECEIVER tainted? Handles the two
+// distinct shapes this codebase's IR frontends use for a call's `callee`:
+// parser-js.js (Babel) emits a structured {kind:'member', object, prop}
+// node, so the receiver is `callee.object`, checked via a normal exprTaint
+// recursion. parser-cs.js/parser-go.js/parser-kt.js/parser-php.js/
+// parser-rb.js/parser-java.js/parser-py.js instead emit a flat, dot-joined
+// STRING callee ("it.toString", "user.getName") — there is no sub-expression
+// to recurse into, so the receiver is recovered by slicing off the string
+// after its LAST '.' and checking that prefix directly against the access-
+// path lattice via `isCoveredBy` (handles both a bare var and a longer
+// chain, e.g. "req.session.user.toString" -> receiver "req.session.user").
+function _calleeReceiverTainted(callee, state, callContext) {
+  if (!callee) return false;
+  if (typeof callee === 'string') {
+    const idx = callee.lastIndexOf('.');
+    if (idx <= 0) return false;
+    return isCoveredBy(state, callee.slice(0, idx));
+  }
+  if (callee.kind === 'member' && callee.object) {
+    return exprTaint(callee.object, state, callContext);
+  }
+  return false;
+}
+
 function exprTaint(expr, state, callContext) {
   if (expr && (expr.kind === 'member' || expr.kind === 'call' || expr.kind === 'ident') && exprIsSource(expr)) return true;
   if (!expr) return false;
@@ -335,7 +359,23 @@ function exprTaint(expr, state, callContext) {
       // resolution/computation for the same (qid, entry-state) cheap.
       const argsTainted = (expr.args || []).some(a => exprTaint(a, state, callContext));
       const nestedTainted = _nestedCallReturnTainted(expr.callee, expr.args, state, callContext);
-      return argsTainted || nestedTainted;
+      // Taint-recall PRD (80%): a call's RECEIVER can itself be tainted
+      // independent of its arguments — `tainted.toString()`, `tainted.trim()`,
+      // `it.getBytes()` — and neither argsTainted (there are no/unrelated
+      // args) nor nestedTainted (that resolves a FUNCTION-NAME callee via the
+      // call graph; a bare method name like "toString" never resolves) sees
+      // it. Confirmed via `req.getBytes()` (Java @RequestBody InputStream) and
+      // the general shape this codebase's five hand-rolled parsers all
+      // produce for a chained call: `expr.callee` there is a flat DOT-JOINED
+      // STRING ("it.toString"), not a structured {kind:'member', object,
+      // prop} node like parser-js.js emits — so the two shapes need distinct
+      // handling. Deliberately receiver-taint-propagates for ANY call on a
+      // tainted receiver (not just no-arg ones): `tainted.replace(a,b)`'s
+      // receiver taint matters exactly as much as `tainted.toString()`'s, and
+      // this is already OR'd with argsTainted so it only WIDENS recall,
+      // matching this engine's recall-preserving precedent everywhere else.
+      const receiverTainted = _calleeReceiverTainted(expr.callee, state, callContext);
+      return argsTainted || nestedTainted || receiverTainted;
     }
     case 'unknown':           return false;
     default:                  return false;

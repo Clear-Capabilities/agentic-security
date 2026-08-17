@@ -115,3 +115,36 @@ class ScriptRunner {
   assert.ok(taint.some(f => /code injection/i.test(f.vuln)),
     `expected Code Injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
+
+test('py-compile: bare compile(tainted, ...) still fires Code Injection via IR-TAINT (receiverExclude precision fix)', async () => {
+  const dir = mkTmp('py-compile', 'run.py', `
+def run():
+    code = input()
+    compiled = compile(code, "<string>", "exec")
+    exec(compiled)
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /code injection/i.test(f.vuln)),
+    `expected a bare compile() Code Injection finding, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('py-compile precision: re.compile(tainted-pattern) does NOT fire Code Injection (regex compilation is not code execution)', async () => {
+  // Taint-recall PRD (80%): found via this project's own self-scan once the
+  // cross-cutting receiver-taint engine fix (_calleeReceiverTainted) started
+  // correctly propagating taint through .get()-style calls on a tainted
+  // dict/file-read chain — py-compile's bare-name match (`callee: 'compile'`)
+  // collided with re.compile, an ordinary regex compiler with no code-
+  // execution capability, via the catalog's last-segment fallback lookup.
+  // Fixed with `receiverExclude: '^re$'` on the py-compile sink entry.
+  const dir = mkTmp('py-compile-clean', 'run.py', `
+import re
+
+def run():
+    term = input()
+    pattern = re.compile("prefix-" + re.escape(term) + "-suffix")
+    return pattern
+`);
+  const taint = await taintFindings(dir);
+  assert.equal(taint.filter(f => /code injection/i.test(f.vuln)).length, 0,
+    `re.compile() must not be misidentified as the dangerous compile() builtin, got: ${taint.map(f => f.vuln).join(', ')}`);
+});

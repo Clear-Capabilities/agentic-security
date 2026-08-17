@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-16T07:10:20.621Z",
-  "commit": "b6f36151397a216c1f4bafb0deb13137ac2f17c9",
+  "generatedAt": "2026-08-17T11:20:49.808Z",
+  "commit": "f75ffd2b9bb70f9a9d22760e5d7bd6e48f76f177",
   "targets": {
     "hooks": {
       "total": 25,
@@ -37,7 +37,7 @@
       }
     },
     "scanner/src": {
-      "total": 621,
+      "total": 623,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -52,7 +52,7 @@
         "discovery/memory.js": 1,
         "history-scan.js": 2,
         "integrations/index.js": 10,
-        "integrations/tickets.js": 8,
+        "integrations/tickets.js": 9,
         "ir/cpp-preprocessor.js": 2,
         "ir/ir-stats.js": 1,
         "ir/parser-cpp.js": 6,
@@ -116,7 +116,7 @@
         "posture/execution-proof.js": 1,
         "posture/exploitability-probability.js": 3,
         "posture/feature-flags.js": 3,
-        "posture/federated-learning.js": 7,
+        "posture/federated-learning.js": 8,
         "posture/findings-memory.js": 1,
         "posture/fix-history.js": 12,
         "posture/fix-metrics.js": 1,

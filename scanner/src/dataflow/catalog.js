@@ -769,7 +769,7 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-spel-getvalue', language: 'java', framework: 'spring', match: { type: 'call', callee: 'getValue', receiver: '^parseExpression$' }, argIndex: 'all',
     vuln: { name: 'Code Injection (Spring SpEL parseExpression().getValue())', severity: 'critical', cwe: 'CWE-94',
             remediation: 'Never parse a user-controlled string as a SpEL expression; SpEL can invoke arbitrary methods.' } },
-  { kind: 'sink', id: 'py-compile', language: 'py', framework: 'std', match: { type: 'call', callee: 'compile' }, argIndex: 0,
+  { kind: 'sink', id: 'py-compile', language: 'py', framework: 'std', match: { type: 'call', callee: 'compile', receiverExclude: '^re$' }, argIndex: 0,
     vuln: { name: 'Code Injection (compile)', severity: 'high', cwe: 'CWE-95',
             remediation: 'compile() followed by exec is equivalent to eval. Avoid on untrusted input.' } },
   // Deserialization.
@@ -1144,8 +1144,31 @@ function _receiverAllowed(entry, calleeExpr) {
   // even though it still matches `receiver` on its own. Existing entries
   // that only set `receiver` are unaffected.
   const basePat = entry.match && entry.match.receiverBase;
-  if (!pat && !basePat) return true;
+  // `receiverExclude` (Taint-recall PRD 80%, cross-cutting engine fix
+  // follow-up): the ONLY negative form — `receiver`/`receiverBase` can only
+  // ever REQUIRE a match (see the R6 comment block below), which cannot
+  // express "fire on a bare call, but not on THIS specific receiver."
+  // `py-compile` needs exactly that: Python's dangerous `compile()` builtin
+  // (`compile(source, filename, mode)`, equivalent to eval when followed by
+  // exec) is called BARE, with no receiver — but the catalog's bare-name
+  // matching (`_calleeIndexHits`, last-segment fallback) makes the SAME
+  // catalog key also match `re.compile(pattern)`, an ordinary regex
+  // compilation with no code-execution capability whatsoever. Confirmed via
+  // this project's own self-scan (`scripts/_compliance_lib.py`) once the
+  // receiver-taint engine fix (`_calleeReceiverTainted`) started correctly
+  // propagating taint through `.get()`-style no-arg-adjacent calls on a
+  // tainted dict/file-read chain — the sink itself was always mismatched,
+  // the engine fix just gave taint a path to reach it. Unlike `receiver`/
+  // `receiverBase`, which reject a BARE call outright (`segs.length === 0`
+  // -> false) once either is set, `receiverExclude` is checked FIRST and
+  // independently — a bare call (no segments) can never match an exclude
+  // pattern, so `receiverExclude` alone never blocks the no-receiver case
+  // it exists to preserve.
+  const excludePat = entry.match && entry.match.receiverExclude;
+  if (!pat && !basePat && !excludePat) return true;
   const segs = _receiverSegments(calleeExpr);
+  if (excludePat && segs.some((s) => new RegExp(excludePat).test(String(s)))) return false;
+  if (!pat && !basePat) return true;
   if (!segs.length) return false;      // bare `write(x)` — not a DOM call
   if (pat && !segs.some((s) => new RegExp(pat).test(String(s)))) return false;
   if (basePat && !segs.some((s) => new RegExp(basePat).test(String(s)))) return false;
