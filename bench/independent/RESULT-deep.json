@@ -1,0 +1,6556 @@
+{
+  "scoredEntries": 315,
+  "overall": {
+    "tp": 23,
+    "fp": 23,
+    "fn": 292,
+    "tn": 292,
+    "precision": {
+      "n": 23,
+      "d": 46,
+      "value": 0.5
+    },
+    "recall": {
+      "n": 23,
+      "d": 315,
+      "value": 0.07301587301587302
+    },
+    "f1": 0.12742382271468145,
+    "scored": 315
+  },
+  "taintCaughtCount": 4,
+  "perEntry": [
+    {
+      "id": "GHSA-225x-3jhx-wh4q",
+      "cwe": "CWE-200",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 212
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-22jq-vg5j-6vgg",
+      "cwe": "CWE-20",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-22p9-r2f5-22mf",
+      "cwe": "CWE-59",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2364-jh4q-m9vm",
+      "cwe": "CWE-639",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-26gq-p25f-99cp",
+      "cwe": "CWE-129",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 207,
+          "ts": 36,
+          "js": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-28f5-38xr-jh2w",
+      "cwe": "CWE-441",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 48
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-28gm-jrmw-xx93",
+      "cwe": "CWE-20",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 265
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-28hh-pr2h-2w89",
+      "cwe": "CWE-416",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 12
+        },
+        "patternOnly": {
+          "c": 13
+        },
+        "languages": [
+          "c",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2956-977x-2w3r",
+      "cwe": "CWE-22",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-29g2-3rmr-qm68",
+      "cwe": "CWE-1333",
+      "language": "javascript",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "LOGIC",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-29pj-957v-52mc",
+      "cwe": "CWE-79",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 298
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-29rf-f4vv-pvq6",
+      "cwe": "CWE-287",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 545,
+          "ts": 98,
+          "js": 5,
+          "py": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "py",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2f54-p244-32q6",
+      "cwe": "CWE-1333",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2gx6-7gx2-wwcf",
+      "cwe": "CWE-79",
+      "language": "javascript",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "unknown",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2jc5-xhx8-qj6h",
+      "cwe": "CWE-770",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 2,
+          "rb": 25
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2m8m-jhrm-w6j2",
+      "cwe": "CWE-78",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 6
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2mhj-fhvg-v428",
+      "cwe": "CWE-20",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 260
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2mrg-gjxq-2gvr",
+      "cwe": "CWE-400",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 531
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2qj4-mmr9-4v2f",
+      "cwe": "CWE-400",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 2438,
+          "js": 1
+        },
+        "patternOnly": {
+          "c": 37
+        },
+        "languages": [
+          "c",
+          "java",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2rp4-x2j7-qmcc",
+      "cwe": "CWE-79",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 42
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2x63-gw47-w4mm",
+      "cwe": "CWE-248",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 22,
+          "java": 1
+        },
+        "patternOnly": {
+          "c": 1
+        },
+        "languages": [
+          "c",
+          "java",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-2xmw-f8j8-wfxc",
+      "cwe": "CWE-22",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 7,
+          "rb": 86,
+          "ts": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "rb",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-32h4-44jj-c5vx",
+      "cwe": "CWE-266",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 405
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-33ph-fccm-39pj",
+      "cwe": "CWE-770",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 22,
+          "java": 1
+        },
+        "patternOnly": {
+          "c": 1
+        },
+        "languages": [
+          "c",
+          "java",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-34rh-wp3j-6cxc",
+      "cwe": "CWE-20",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 33
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3769-jgqc-cxm7",
+      "cwe": "CWE-94",
+      "language": "typescript",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "JS",
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-386q-5hp3-95m9",
+      "cwe": "CWE-94",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3cg5-48j3-v4gv",
+      "cwe": "CWE-862",
+      "language": "python",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "REGEX",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3f7w-8rr8-f37f",
+      "cwe": "CWE-22",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3hrf-2gc2-mx32",
+      "cwe": "CWE-94",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 395
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3pwp-g2mj-5p3v",
+      "cwe": "CWE-95",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 82
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3q9r-p662-5j8m",
+      "cwe": "CWE-345",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 56
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3r7g-q6cg-q2vx",
+      "cwe": "CWE-200",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3rrr-jr9j-h3q3",
+      "cwe": "CWE-1321",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3v2j-6fw9-f57c",
+      "cwe": "CWE-639",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 36,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 457,
+          "js": 13
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3vf6-64vr-3g56",
+      "cwe": "CWE-862",
+      "language": "python",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "REGEX",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-3x6r-wxxg-53vv",
+      "cwe": "CWE-248",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 9
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-42cj-m3vj-89wv",
+      "cwe": "CWE-863",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 201
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-442q-2j6p-642g",
+      "cwe": "CWE-22",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-45pq-889g-fcgh",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 184
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-464c-974j-9xm6",
+      "cwe": "CWE-311",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 31
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-47pj-3jcm-6whg",
+      "cwe": "CWE-200",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-48rx-c7pg-q66r",
+      "cwe": "CWE-200",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 48
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-49h3-cwhj-4737",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 442
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4cwx-7wf7-3272",
+      "cwe": "CWE-200",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4gmw-gg2m-w46p",
+      "cwe": "CWE-88",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4j8x-x6v7-w9rq",
+      "cwe": "CWE-94",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4j9m-h44m-2hv8",
+      "cwe": "CWE-256",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 114
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4jc5-g844-4x33",
+      "cwe": "CWE-200",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4jwf-m4wg-8p66",
+      "cwe": "CWE-22",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 396
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4mrv-5p47-p938",
+      "cwe": "CWE-416",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 23,
+          "java": 10
+        },
+        "patternOnly": {
+          "c": 27
+        },
+        "languages": [
+          "c",
+          "java",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4p3g-4hcj-wpvx",
+      "cwe": "CWE-918",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 288
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4rj6-vrwv-wr8m",
+      "cwe": "CWE-22",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 395
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4vmm-5qvc-w5p7",
+      "cwe": "CWE-200",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 53
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4vpf-w7qv-5h3q",
+      "cwe": "CWE-20",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 30
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4vv7-jj25-4gh6",
+      "cwe": "CWE-22",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 463,
+          "php": 1,
+          "ts": 61
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs",
+          "php",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4w3q-qpfq-v992",
+      "cwe": "CWE-20",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 36
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4wx2-7gvj-qfq3",
+      "cwe": "CWE-20",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-4xrf-jv44-h6hh",
+      "cwe": "CWE-20",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-52fh-8v99-63c2",
+      "cwe": "CWE-184",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-52jp-gj8w-j6xh",
+      "cwe": "CWE-401",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 61
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-539m-9xh6-q6rr",
+      "cwe": "CWE-73",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-53g2-mvcc-q9x3",
+      "cwe": "CWE-79",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 123,
+          "rb": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-54fx-42gc-7vw4",
+      "cwe": "CWE-407",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-5578-w22f-pfx9",
+      "cwe": "CWE-94",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-55q2-fjhq-7xh7",
+      "cwe": "CWE-79",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-5fqm-cc34-fcf5",
+      "cwe": "CWE-287",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 249,
+          "ts": 23,
+          "go": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-5gvw-p9qm-jgwh",
+      "cwe": "CWE-863",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 101
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-5p9g-j988-pcwv",
+      "cwe": "CWE-284",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 61
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-5qhf-9phg-95m2",
+      "cwe": "CWE-79",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 19
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-5vjc-7cxw-4w6j",
+      "cwe": "CWE-400",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-5xvg-pmgg-3mxr",
+      "cwe": "CWE-94",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-62fc-8686-hfmq",
+      "cwe": "CWE-653",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 280
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6765-c87h-8mrf",
+      "cwe": "CWE-287",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 68
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-68r5-9hpg-7qw9",
+      "cwe": "CWE-73",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 12
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6hq5-7373-42rg",
+      "cwe": "CWE-918",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 207
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6hr6-w5qg-qmwg",
+      "cwe": "CWE-444",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6p8f-p8j2-rqmv",
+      "cwe": "CWE-284",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 209
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6pvm-2vjj-rx4w",
+      "cwe": "CWE-20",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 11,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 638
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6r28-9ppf-4hj5",
+      "cwe": "CWE-191",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 165,
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6vh2-wg4h-4vwj",
+      "cwe": "CWE-639",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 7,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6x26-6r6f-m537",
+      "cwe": "CWE-1333",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 4
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6x2c-phff-wx57",
+      "cwe": "CWE-200",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 4,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 65
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6xhv-rxhv-pwm4",
+      "cwe": "CWE-862",
+      "language": "python",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "REGEX",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-6xj8-qv9j-xcjq",
+      "cwe": "CWE-94",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 296,
+          "js": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-73cq-mcgh-379c",
+      "cwe": "CWE-400",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-7683-3w9x-ch42",
+      "cwe": "CWE-400",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 61
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-794g-x443-36f7",
+      "cwe": "CWE-1287",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 15,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 54,
+          "java": 5450,
+          "ts": 798,
+          "py": 1
+        },
+        "patternOnly": {
+          "c": 1
+        },
+        "languages": [
+          "c",
+          "java",
+          "js",
+          "py",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-79qm-7rj5-m7r9",
+      "cwe": "CWE-200",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-7h3g-4w2f-fj2f",
+      "cwe": "CWE-668",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-7mpp-r37j-x5wh",
+      "cwe": "CWE-384",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-7p4m-qxvv-g567",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 25
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-7p8r-x3mc-p8w7",
+      "cwe": "CWE-436",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-7v6w-c3f4-9wpq",
+      "cwe": "CWE-611",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 6
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-7wmf-pw8j-mc78",
+      "cwe": "CWE-348",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 33
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-7x2p-4jvh-6384",
+      "cwe": "CWE-203",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 80
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8359-h9fx-j6v9",
+      "cwe": "CWE-22",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-86cx-wwf4-phq4",
+      "cwe": "CWE-639",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 735
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-87fv-vqqr-m4jr",
+      "cwe": "CWE-918",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": null,
+      "preIrTaintCount": 82,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 1409,
+          "js": 4
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-88pr-878c-24wf",
+      "cwe": "CWE-22",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8c48-q9wj-3w37",
+      "cwe": "CWE-93",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8fq9-273g-6mrg",
+      "cwe": "CWE-639",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 182,
+          "js": 66
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8gj2-2cvc-6xx7",
+      "cwe": "CWE-862",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8hg6-c449-896m",
+      "cwe": "CWE-400",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 80
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8hm4-r66f-29wr",
+      "cwe": "CWE-639",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 56
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8j3g-f24p-4mpw",
+      "cwe": "CWE-400",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 22,
+          "java": 1
+        },
+        "patternOnly": {
+          "c": 1
+        },
+        "languages": [
+          "c",
+          "java",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8j4g-w8fx-2239",
+      "cwe": "CWE-1333",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8m8r-38jm-f355",
+      "cwe": "CWE-94",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8r7f-r8hj-r3rv",
+      "cwe": "CWE-200",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 19
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8rxv-jg7p-wvg3",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 79
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8whx-365g-h9vv",
+      "cwe": "CWE-184",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 19
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-8x5v-cpv7-8jjp",
+      "cwe": "CWE-918",
+      "language": "python",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "SSRF-METADATA",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-9299-c6m4-mjhc",
+      "cwe": "CWE-400",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 162
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-93qh-5269-9wcf",
+      "cwe": "CWE-287",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 1641,
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-944x-pm95-3jpr",
+      "cwe": "CWE-434",
+      "language": "javascript",
+      "tp": 1,
+      "fn": 0,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": "FILE-UPLOAD",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-945v-v9p3-v5xw",
+      "cwe": "CWE-732",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 267
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-94pj-82f3-465w",
+      "cwe": "CWE-200",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 47
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-954p-556p-r752",
+      "cwe": "CWE-918",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-95cv-r8x4-vh75",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 89
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-964w-f6gj-5236",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 7,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 84,
+          "js": 15
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-97jw-64cj-jc58",
+      "cwe": "CWE-79",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 59
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-98pp-vccm-qm25",
+      "cwe": "CWE-434",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 14,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 281,
+          "js": 9
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-996f-334j-67g7",
+      "cwe": "CWE-79",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 868
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-9h85-g7w3-rh49",
+      "cwe": "CWE-362",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 59
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-9p7c-v5x3-rfx8",
+      "cwe": "CWE-862",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 51
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-9pf5-hg6p-4pwp",
+      "cwe": "CWE-346",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {},
+        "patternOnly": {},
+        "languages": []
+      }
+    },
+    {
+      "id": "GHSA-9rj7-rf2p-w77r",
+      "cwe": "CWE-88",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-9rjg-x2p2-h68h",
+      "cwe": "CWE-843",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 20
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-9wjq-cp2p-hrgf",
+      "cwe": "CWE-79",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 19
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-9xq3-3fqg-4vg7",
+      "cwe": "CWE-61",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 3,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-c2w2-prh8-qm98",
+      "cwe": "CWE-20",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 32
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-c32j-vqhx-rx3x",
+      "cwe": "CWE-287",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 47
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-c3jm-gv5r-9wcp",
+      "cwe": "CWE-863",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 10
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-c5px-58j2-7fqp",
+      "cwe": "CWE-22",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-c6xh-wv4j-ppv5",
+      "cwe": "CWE-918",
+      "language": "typescript",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "IR-TAINT",
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-c9hr-64h3-gxpc",
+      "cwe": "CWE-918",
+      "language": "python",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "IR-TAINT",
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-c9w5-rwh3-7pm9",
+      "cwe": "CWE-89",
+      "language": "php",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "PHP",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 52
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-cgfv-jrfp-2r7v",
+      "cwe": "CWE-89",
+      "language": "java",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "JAVA",
+      "preIrTaintCount": 5,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 28,
+          "js": 1,
+          "java": 144
+        },
+        "patternOnly": {},
+        "languages": [
+          "java",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-ch52-px8q-f22j",
+      "cwe": "CWE-367",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-chgm-3698-jm42",
+      "cwe": "CWE-204",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-chm3-vqcf-52rx",
+      "cwe": "CWE-285",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-cj54-hpcc-gj6h",
+      "cwe": "CWE-22",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-cj62-hvv2-2q5h",
+      "cwe": "CWE-22",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-cj75-f6xr-r4g7",
+      "cwe": "CWE-79",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 4
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-cjc9-q5gf-327p",
+      "cwe": "CWE-22",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1,
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-cqjp-jf4r-h5q9",
+      "cwe": "CWE-20",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-cxjq-mrr5-89rv",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 56
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-f23p-vx2j-j53r",
+      "cwe": "CWE-488",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-f25v-x6vr-962g",
+      "cwe": "CWE-1392",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 3,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-f283-ghqc-fg79",
+      "cwe": "CWE-770",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 47
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-f42x-p2mx-hm8r",
+      "cwe": "CWE-22",
+      "language": "python",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "REGEX",
+      "preIrTaintCount": 3,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-f5wm-88jv-g5hx",
+      "cwe": "CWE-693",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 1255,
+          "js": 69
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-f7g3-2cg6-f5hj",
+      "cwe": "CWE-20",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 324,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 3,
+          "py": 12,
+          "java": 11958
+        },
+        "patternOnly": {},
+        "languages": [
+          "java",
+          "js",
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-fgjj-px3w-67xx",
+      "cwe": "CWE-694",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 201
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-fh2f-xfxc-q9cc",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 13,
+          "js": 2,
+          "go": 23
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-fm2f-4339-4p2f",
+      "cwe": "CWE-862",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 2,
+          "js": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-fp3f-mc75-235c",
+      "cwe": "CWE-400",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-fq3f-m5qm-99f5",
+      "cwe": "CWE-400",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 19
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-fr6g-7cq8-fg82",
+      "cwe": "CWE-200",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-fwg2-594c-jp42",
+      "cwe": "CWE-834",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-fwjx-9p69-h25h",
+      "cwe": "CWE-150",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-fxqj-rqcc-2cmp",
+      "cwe": "CWE-22",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-g2gp-3wwq-f4ph",
+      "cwe": "CWE-407",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 300
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-g35j-m5xg-vh3q",
+      "cwe": "CWE-770",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 16,
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-g366-23fw-ggp6",
+      "cwe": "CWE-918",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-g3hq-hphg-8fhh",
+      "cwe": "CWE-78",
+      "language": "php",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "IR-TAINT",
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-g423-grf7-98rv",
+      "cwe": "CWE-862",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-g446-98w2-8p5w",
+      "cwe": "CWE-200",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 45
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-g65v-27r3-5p6m",
+      "cwe": "CWE-22",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-g6v3-7xmc-w563",
+      "cwe": "CWE-770",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 165,
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-g9j2-8w95-3vwv",
+      "cwe": "CWE-400",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 173
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-gcvv-72q8-9v76",
+      "cwe": "CWE-918",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-gf8h-gq53-288j",
+      "cwe": "CWE-502",
+      "language": "java",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "JAVA-DESER",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 154
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-ghhp-3qvg-889p",
+      "cwe": "CWE-400",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 22,
+          "java": 1
+        },
+        "patternOnly": {
+          "c": 1
+        },
+        "languages": [
+          "c",
+          "java",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-ghrq-5wpp-hxx5",
+      "cwe": "CWE-20",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 119
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-gm37-52c6-37mw",
+      "cwe": "CWE-1333",
+      "language": "python",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "LOGIC",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-gmmw-qg98-6j6p",
+      "cwe": "CWE-284",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-gwfq-86j8-7qhv",
+      "cwe": "CWE-209",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 141,
+          "js": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-gx4c-2hqx-cw2r",
+      "cwe": "CWE-319",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 267
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-h2wf-967x-gxvw",
+      "cwe": "CWE-79",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 36,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 457,
+          "js": 13
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-h4mf-4v27-hggj",
+      "cwe": "CWE-319",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 772,
+          "php": 2,
+          "py": 2,
+          "js": 3
+        },
+        "patternOnly": {
+          "c": 1
+        },
+        "languages": [
+          "c",
+          "go",
+          "js",
+          "php",
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-h4pc-58cc-hc95",
+      "cwe": "CWE-20",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 36
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-h669-8m4g-r2hc",
+      "cwe": "CWE-770",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 61
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-h8w8-99g7-qmvj",
+      "cwe": "CWE-835",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 244,
+          "java": 15
+        },
+        "patternOnly": {
+          "c": 7
+        },
+        "languages": [
+          "c",
+          "java",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-h95v-h523-3mw8",
+      "cwe": "CWE-201",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 47
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-hcm8-x79p-wx2w",
+      "cwe": "CWE-20",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 324,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 3,
+          "py": 12,
+          "java": 11958
+        },
+        "patternOnly": {},
+        "languages": [
+          "java",
+          "js",
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-hh9p-6wh2-4mfc",
+      "cwe": "CWE-73",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-hhmc-q9hp-r662",
+      "cwe": "CWE-22",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 33
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-hp74-gm6m-2qm5",
+      "cwe": "CWE-287",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 108,
+          "js": 2,
+          "go": 153
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-hpcc-26xq-25fv",
+      "cwe": "CWE-400",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 2425,
+          "js": 1
+        },
+        "patternOnly": {
+          "c": 37
+        },
+        "languages": [
+          "c",
+          "java",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-hq33-8jgp-8qq3",
+      "cwe": "CWE-284",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 7,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 84,
+          "js": 15
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-hq88-5x99-x3gf",
+      "cwe": "CWE-863",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 14
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-hq9q-27g5-qwpj",
+      "cwe": "CWE-94",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 395
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-hr7p-wg7r-hg9m",
+      "cwe": "CWE-522",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-j6gc-4893-qwmp",
+      "cwe": "CWE-362",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 14,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 570,
+          "js": 408,
+          "ts": 973
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-j7fr-3v8c-3qc3",
+      "cwe": "CWE-416",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 12
+        },
+        "patternOnly": {
+          "c": 13
+        },
+        "languages": [
+          "c",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-j8qw-6jw8-r297",
+      "cwe": "CWE-209",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 80
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-j92g-9f8w-j867",
+      "cwe": "CWE-636",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 3,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 293
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jfm3-95jq-q3rf",
+      "cwe": "CWE-407",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 300
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jm22-3w23-5q7w",
+      "cwe": "CWE-200",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 4
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jm28-2wcr-qf3h",
+      "cwe": "CWE-863",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 27,
+          "go": 79,
+          "py": 22,
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "py",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jm78-9fvv-mhgr",
+      "cwe": "CWE-74",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jp94-3292-c3xv",
+      "cwe": "CWE-601",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 78
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jpcw-4wr7-c3vq",
+      "cwe": "CWE-476",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 94
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jqwh-526h-c92j",
+      "cwe": "CWE-94",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 395
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jr4p-4xjh-fwvw",
+      "cwe": "CWE-918",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 4,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 873
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jwjp-4649-v8jp",
+      "cwe": "CWE-125",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 269
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jx74-cqjv-2c67",
+      "cwe": "CWE-306",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jxc9-xmc4-gr23",
+      "cwe": "CWE-639",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-jxpj-9j24-w337",
+      "cwe": "CWE-639",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 68,
+          "java": 230
+        },
+        "patternOnly": {},
+        "languages": [
+          "java",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-m34r-v34r-rf9q",
+      "cwe": "CWE-94",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-m6jg-wr9m-cg2f",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 62
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-m7jc-g4rc-jmvh",
+      "cwe": "CWE-89",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 97,
+          "js": 29
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-mfx4-hv73-q22v",
+      "cwe": "CWE-444",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-mj5r-jf49-m3w7",
+      "cwe": "CWE-284",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-mj63-m3rc-8ppr",
+      "cwe": "CWE-405",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 300
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-mjqf-28ph-426h",
+      "cwe": "CWE-74",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 240
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-mmj4-63m4-r6h5",
+      "cwe": "CWE-434",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 14
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-mq44-7p77-q5h7",
+      "cwe": "CWE-20",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-mw3h-qjxj-6xg9",
+      "cwe": "CWE-347",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-mwp4-54f8-5fhr",
+      "cwe": "CWE-20",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-mx5j-mp4f-g8jg",
+      "cwe": "CWE-94",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 24
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-p279-2cqp-84jg",
+      "cwe": "CWE-285",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 109
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-p538-c434-8v24",
+      "cwe": "CWE-88",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-p5w8-m249-4r4v",
+      "cwe": "CWE-863",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-p845-629j-rcj6",
+      "cwe": "CWE-862",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 4,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 65
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-p8x7-9vfw-p7vc",
+      "cwe": "CWE-285",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 133
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-pfvc-3p5h-x7h6",
+      "cwe": "CWE-200",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 119
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-pfvm-w89x-94jw",
+      "cwe": "CWE-248",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 269
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-pgwh-4jj4-qm8v",
+      "cwe": "CWE-918",
+      "language": "python",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "IR-TAINT",
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-phj3-59pf-cp83",
+      "cwe": "CWE-400",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-pmhh-3w7g-xqp8",
+      "cwe": "CWE-79",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 96
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-pmwx-rm49-xv39",
+      "cwe": "CWE-22",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 27
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-pp92-crg2-gfv9",
+      "cwe": "CWE-200",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 16,
+          "js": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-pr22-p9rp-2cqv",
+      "cwe": "CWE-79",
+      "language": "javascript",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "unknown",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-prq8-7wvh-44qh",
+      "cwe": "CWE-200",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 47,
+          "js": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-pxcc-8665-phx8",
+      "cwe": "CWE-22",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 256,
+          "js": 4
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-q6hh-gp44-4hcm",
+      "cwe": "CWE-400",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 119
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-q939-rpr3-3284",
+      "cwe": "CWE-22",
+      "language": "csharp",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "CSHARP",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 339
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-qcxp-gm7m-4j5v",
+      "cwe": "CWE-41",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 3,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 5077,
+          "js": 2043,
+          "kt": 65
+        },
+        "patternOnly": {},
+        "languages": [
+          "java",
+          "js",
+          "kt"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-qf5v-m7p4-95rp",
+      "cwe": "CWE-269",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 355
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-qh8c-7588-qfrv",
+      "cwe": "CWE-639",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 212
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-qhr7-v3xp-vw9m",
+      "cwe": "CWE-434",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 212
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-qj55-47fp-p62j",
+      "cwe": "CWE-20",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 20
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-qmcq-xw74-w667",
+      "cwe": "CWE-88",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 62
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-qq9q-x9w4-chhj",
+      "cwe": "CWE-863",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 210
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-qq9q-xgm3-xv9g",
+      "cwe": "CWE-201",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-qvc3-6q9x-95pj",
+      "cwe": "CWE-287",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 21
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-r2v3-8gwf-7ghm",
+      "cwe": "CWE-918",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 15
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-r5vv-ff45-prp2",
+      "cwe": "CWE-200",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-r745-8hwv-h473",
+      "cwe": "CWE-639",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 3,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rffm-9q57-q649",
+      "cwe": "CWE-918",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rfr2-mq9m-x2qx",
+      "cwe": "CWE-918",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rg4h-fpcp-2qm8",
+      "cwe": "CWE-22",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 395
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rg76-677x-56q9",
+      "cwe": "CWE-331",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rhh3-jpg6-66xh",
+      "cwe": "CWE-606",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rjg7-r26h-cfp2",
+      "cwe": "CWE-918",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 4,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 873
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rjhh-76wf-8xmw",
+      "cwe": "CWE-22",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 168
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rjr6-rcgv-9m7m",
+      "cwe": "CWE-346",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 2,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 61
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rjrw-mjq6-hpmm",
+      "cwe": "CWE-306",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 7,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 84,
+          "js": 15
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rmxw-pq4x-3fvh",
+      "cwe": "CWE-862",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 8,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 77,
+          "js": 15
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rvmm-v933-jgxq",
+      "cwe": "CWE-862",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 51
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-rxrh-4j9h-xgg9",
+      "cwe": "CWE-312",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 114
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-v6w6-358x-2433",
+      "cwe": "CWE-863",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 14
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-v7cf-8gh9-gxmj",
+      "cwe": "CWE-79",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 12
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-v828-m3pf-vq9q",
+      "cwe": "CWE-400",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 16,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 536,
+          "js": 410,
+          "ts": 891
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-v833-3823-cmhp",
+      "cwe": "CWE-863",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-v8fg-2rw7-q452",
+      "cwe": "CWE-89",
+      "language": "javascript",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "JS-FW",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-vchh-r53j-8mpw",
+      "cwe": "CWE-20",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 12
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-vcrw-4xvv-jh49",
+      "cwe": "CWE-79",
+      "language": "php",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "REGEX",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 27
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-vgp4-2fc4-qff2",
+      "cwe": "CWE-79",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 12
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-vmv7-4m6c-3cg5",
+      "cwe": "CWE-94",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-vqxv-6xrh-49cp",
+      "cwe": "CWE-79",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 224
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-vvp7-h4fj-m28w",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 20,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 139,
+          "js": 43,
+          "ts": 21
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-vx7x-vcc2-c44g",
+      "cwe": "CWE-350",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-w2rx-84hp-gg95",
+      "cwe": "CWE-918",
+      "language": "python",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "SSRF-METADATA",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-w3cp-g2pf-65wh",
+      "cwe": "CWE-79",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 38,
+          "php": 45
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-w4q6-qw23-4rg7",
+      "cwe": "CWE-476",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 9,
+          "go": 98,
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-w62w-66v9-vvgv",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 6,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 169
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-w6p7-2fxx-4f44",
+      "cwe": "CWE-285",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 108,
+          "js": 2,
+          "go": 153
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-w8x7-h2px-xmq8",
+      "cwe": "CWE-863",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 41
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-w8xc-8g92-v77h",
+      "cwe": "CWE-639",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 56
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wchh-9x6h-7f6p",
+      "cwe": "CWE-1395",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wg23-69c2-gjc8",
+      "cwe": "CWE-294",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 1426,
+          "js": 70
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wg2q-39h6-66x9",
+      "cwe": "CWE-22",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 7,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 84,
+          "js": 15
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wg4g-wm44-ch5j",
+      "cwe": "CWE-125",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 144
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wg5r-wc3x-39vc",
+      "cwe": "CWE-94",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "java": 110
+        },
+        "patternOnly": {},
+        "languages": [
+          "java"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wg86-r78f-74mp",
+      "cwe": "CWE-95",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 6,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-whmm-qj9r-wvr2",
+      "cwe": "CWE-770",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 15
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wjv6-jcfj-mf9r",
+      "cwe": "CWE-94",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wm3w-8rrp-j577",
+      "cwe": "CWE-201",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 47
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wm8w-6qjm-cv43",
+      "cwe": "CWE-524",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wp74-f5hh-5f3r",
+      "cwe": "CWE-862",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 2,
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wqqc-jjcq-vfxm",
+      "cwe": "CWE-324",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 38
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wvh6-f5jh-8gw4",
+      "cwe": "CWE-20",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 80
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wvp2-4qqp-4h3r",
+      "cwe": "CWE-184",
+      "language": "javascript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "js"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wvpp-8hx9-p66j",
+      "cwe": "CWE-88",
+      "language": "python",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-wxhm-2mq7-7697",
+      "cwe": "CWE-22",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 5,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 121,
+          "cs": 252,
+          "py": 116,
+          "js": 1,
+          "go": 58
+        },
+        "patternOnly": {
+          "rs": 112
+        },
+        "languages": [
+          "cs",
+          "go",
+          "js",
+          "py",
+          "rs",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-x3hf-7cj6-3r4m",
+      "cwe": "CWE-94",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 5
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-x677-9fxg-v5c5",
+      "cwe": "CWE-178",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 399,
+          "js": 53,
+          "ts": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-x6vm-w76m-8j7g",
+      "cwe": "CWE-94",
+      "language": "typescript",
+      "tp": 1,
+      "fn": 0,
+      "fp": 1,
+      "tn": 0,
+      "matchedParser": "JS",
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 2
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xc48-889x-5qmw",
+      "cwe": "CWE-184",
+      "language": "typescript",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 3
+        },
+        "patternOnly": {},
+        "languages": [
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xc5w-4v5w-7x65",
+      "cwe": "CWE-78",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 27,
+          "go": 79,
+          "py": 22,
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "py",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xg2h-5xr2-29jw",
+      "cwe": "CWE-94",
+      "language": "csharp",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "cs": 395
+        },
+        "patternOnly": {},
+        "languages": [
+          "cs"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xghw-p77p-3r7x",
+      "cwe": "CWE-90",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 98,
+          "py": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xgr6-pqjv-3pf8",
+      "cwe": "CWE-200",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 56
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xh5m-36r6-47m3",
+      "cwe": "CWE-400",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 531
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xhf4-832v-7xcr",
+      "cwe": "CWE-400",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 111
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xj53-j257-hxvg",
+      "cwe": "CWE-862",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 5,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 27,
+          "js": 1,
+          "java": 144
+        },
+        "patternOnly": {},
+        "languages": [
+          "java",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xpxj-f2fm-rqch",
+      "cwe": "CWE-400",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "js": 27,
+          "go": 79,
+          "py": 22,
+          "ts": 1
+        },
+        "patternOnly": {},
+        "languages": [
+          "go",
+          "js",
+          "py",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xqr9-4wvv-gvch",
+      "cwe": "CWE-639",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 5,
+      "preAnalysisTier": {
+        "irTaint": {
+          "ts": 27,
+          "js": 1,
+          "java": 144
+        },
+        "patternOnly": {},
+        "languages": [
+          "java",
+          "js",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xv9w-7v6q-hpjh",
+      "cwe": "CWE-770",
+      "language": "ruby",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "rb": 11
+        },
+        "patternOnly": {},
+        "languages": [
+          "rb"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xvg2-cgv6-6h7v",
+      "cwe": "CWE-693",
+      "language": "go",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "go": 14
+        },
+        "patternOnly": {},
+        "languages": [
+          "go"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xx22-p4ch-683r",
+      "cwe": "CWE-125",
+      "language": "java",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 1,
+      "preAnalysisTier": {
+        "irTaint": {
+          "py": 1,
+          "java": 44
+        },
+        "patternOnly": {
+          "c": 2
+        },
+        "languages": [
+          "c",
+          "java",
+          "py"
+        ]
+      }
+    },
+    {
+      "id": "GHSA-xxpx-f366-4xpq",
+      "cwe": "CWE-863",
+      "language": "php",
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "matchedParser": null,
+      "preIrTaintCount": 0,
+      "preAnalysisTier": {
+        "irTaint": {
+          "php": 102
+        },
+        "patternOnly": {},
+        "languages": [
+          "php"
+        ]
+      }
+    }
+  ]
+}
