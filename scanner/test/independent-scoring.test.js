@@ -72,6 +72,29 @@ test('changedLineRanges reports the changed span, [] when identical, null when a
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
 
+test('changedLineRanges anchors a PURE INSERTION at its point, not an empty range', () => {
+  // A fix that only ADDS lines (nothing removed) produces a unified-diff hunk
+  // like `@@ -82,0 +85 @@` — pre-side length 0. That is the single most
+  // common shape for a security fix (add a check, delete nothing), and a
+  // version of this function that only pushed ranges when `len > 0` silently
+  // dropped every one of them — found via GHSA-2364-jh4q-m9vm, whose fix
+  // (assertStripeIdMatchesSession inserted after line 82) never localized
+  // no matter which line the detector reported, because the insertion
+  // point contributed no range at all to compare against.
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ranges-ins-'));
+  try {
+    const pre = path.join(d, 'pre.js'), post = path.join(d, 'post.js');
+    const base = Array.from({ length: 10 }, (_, i) => `line${i + 1}`);
+    fs.writeFileSync(pre, base.join('\n') + '\n');
+    const inserted = [...base.slice(0, 5), 'NEW_CHECK', ...base.slice(5)];
+    fs.writeFileSync(post, inserted.join('\n') + '\n');
+    const ranges = changedLineRanges(pre, post);
+    assert.ok(Array.isArray(ranges) && ranges.length >= 1, `expected a range for a pure insertion, got ${JSON.stringify(ranges)}`);
+    assert.ok(isLocalized(5, ranges, 0) || isLocalized(6, ranges, 0),
+      `the insertion point (around pre-side line 5) should localize, got ${JSON.stringify(ranges)}`);
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
 // ─────────────────────────────────────────────── T0.5 CWE hierarchy
 test('an exact CWE always satisfies itself', () => {
   assert.equal(cweSatisfies('CWE-89', 'CWE-89'), true);

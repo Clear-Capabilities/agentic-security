@@ -153,7 +153,13 @@ export function changedLineRanges(preFile, postFile) {
   for (const m of String(r.stdout || '').matchAll(/^@@ -(\d+)(?:,(\d+))? /gm)) {
     const start = parseInt(m[1], 10);
     const len = m[2] === undefined ? 1 : parseInt(m[2], 10);
-    if (len > 0) ranges.push([start, start + len - 1]);
+    // len===0 is unified diff's notation for a PURE INSERTION (`-82,0`) — the
+    // most common shape a security fix takes (add a check, delete nothing).
+    // Dropping it entirely, rather than anchoring a point range at `start`,
+    // meant no finding could ever localize against an insertion-only fix —
+    // found via GHSA-2364-jh4q-m9vm, whose fix inserts one line and nothing
+    // else, so every one of its 8 hunks but one was silently excluded.
+    ranges.push(len > 0 ? [start, start + len - 1] : [start, start]);
   }
   return ranges;
 }
