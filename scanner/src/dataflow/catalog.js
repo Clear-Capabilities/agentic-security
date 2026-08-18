@@ -202,6 +202,32 @@ export const CATALOG = [
   { kind: 'source', id: 'js-nestjs-param',   language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Param' },   label: '@Param() (NestJS)',   provenance: 'path-param' },
   { kind: 'source', id: 'js-nestjs-headers', language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Headers' }, label: '@Headers() (NestJS)', provenance: 'header' },
 
+  // Python annotation sources (PRD T3.1). Unlocked by parser-py.helper.py
+  // emitting the `paramAnnotations` side-channel, which it did not before —
+  // JS/C#/Java all populated it and Python emitted nothing, so no annotation
+  // source could ever match a Python parameter however well cataloged.
+  //
+  // Two shapes, both arriving through the same {index,name,decorator} channel:
+  // FastAPI's PER-PARAMETER default markers, and FUNCTION-level decorators
+  // whose presence makes every parameter an entry point.
+  //
+  // `Path` is deliberately ABSENT despite being a real FastAPI marker: a
+  // parameter default of `= Path(...)` is at least as likely to be pathlib.Path
+  // as a FastAPI path parameter, and a source that fires on ordinary filesystem
+  // code would taint half of every Python codebase. Taking the miss.
+  { kind: 'source', id: 'py-fastapi-param-query',  language: 'py', framework: 'fastapi', match: { type: 'annotation', name: 'Query' },  label: 'Query(...) (FastAPI)',  provenance: 'url-param' },
+  { kind: 'source', id: 'py-fastapi-param-body',   language: 'py', framework: 'fastapi', match: { type: 'annotation', name: 'Body' },   label: 'Body(...) (FastAPI)',   provenance: 'http-body' },
+  { kind: 'source', id: 'py-fastapi-param-form',   language: 'py', framework: 'fastapi', match: { type: 'annotation', name: 'Form' },   label: 'Form(...) (FastAPI)',   provenance: 'http-body' },
+  { kind: 'source', id: 'py-fastapi-param-header', language: 'py', framework: 'fastapi', match: { type: 'annotation', name: 'Header' }, label: 'Header(...) (FastAPI)', provenance: 'header' },
+  { kind: 'source', id: 'py-fastapi-param-cookie', language: 'py', framework: 'fastapi', match: { type: 'annotation', name: 'Cookie' }, label: 'Cookie(...) (FastAPI)', provenance: 'header' },
+  { kind: 'source', id: 'py-fastapi-param-file',   language: 'py', framework: 'fastapi', match: { type: 'annotation', name: 'File' },   label: 'File(...) (FastAPI)',   provenance: 'http-body' },
+  // MCP tool parameters are filled by a model acting on untrusted content —
+  // the agent-tool trust boundary this project's own threat model names
+  // (docs/AGENT_THREAT_MODEL.md). Matched on the dotted form so an unrelated
+  // `.tool()` method cannot satisfy it.
+  { kind: 'source', id: 'py-mcp-tool', language: 'py', framework: 'mcp', match: { type: 'annotation', name: 'mcp.tool' }, label: '@mcp.tool() parameter', provenance: 'agent-tool' },
+  { kind: 'source', id: 'py-mcp-server-tool', language: 'py', framework: 'mcp', match: { type: 'annotation', name: 'server.tool' }, label: '@server.tool() parameter', provenance: 'agent-tool' },
+
   // ─── SOURCES (Go) ─────────────────────────────────────────────────────────
   { kind: 'source', id: 'go-r-form',     language: 'go', framework: 'net/http', match: { type: 'member', object: 'r', prop: 'Form' },     label: 'r.Form' },
   { kind: 'source', id: 'go-r-postform', language: 'go', framework: 'net/http', match: { type: 'member', object: 'r', prop: 'PostForm' }, label: 'r.PostForm' },

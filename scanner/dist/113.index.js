@@ -415,8 +415,8 @@ var external_node_child_process_ = __webpack_require__(1421);
 var external_node_fs_ = __webpack_require__(3024);
 // EXTERNAL MODULE: external "node:path"
 var external_node_path_ = __webpack_require__(6760);
-// EXTERNAL MODULE: ./src/engine.js + 196 modules
-var engine = __webpack_require__(2739);
+// EXTERNAL MODULE: ./src/engine.js + 198 modules
+var engine = __webpack_require__(4771);
 ;// CONCATENATED MODULE: ./src/posture/fix-honesty-gate.js
 // Deterministic honesty gates on fix / finding output (#7).
 //

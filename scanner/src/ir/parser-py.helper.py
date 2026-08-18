@@ -641,7 +641,7 @@ def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
         line = node.lineno or 0
         builder = CfgBuilder(node.name)
         builder.lower(node.body)
-        fns.append({
+        fn_rec = {
             "qid": _qid(file, node.name, line),
             "name": node.name,
             "line": line,
@@ -652,8 +652,95 @@ def _extract_functions(tree: ast.Module, file: str) -> list[dict[str, Any]]:
                 "exit": builder.exit,
                 "nodes": builder.nodes,
             },
-        })
+        }
+        pa = _param_annotations(node, params)
+        if pa:
+            fn_rec["paramAnnotations"] = pa
+        fns.append(fn_rec)
     return fns
+
+
+def _decorator_names(node: Any) -> list[str]:
+    """Every decorator on a function, as both its dotted form and its last
+    segment.
+
+    Both are emitted because the receiver of a decorator is a local naming
+    choice — `@mcp.tool()`, `@server.tool()` and `@app.tool()` are the same
+    framework concept — while the last segment alone (`tool`) is too generic
+    to key a taint source on by itself. Emitting both lets the catalog choose
+    how specific it wants to be, and costs nothing when it matches neither.
+    """
+    out: list[str] = []
+    for d in getattr(node, "decorator_list", []) or []:
+        expr = d.func if isinstance(d, ast.Call) else d
+        parts: list[str] = []
+        while isinstance(expr, ast.Attribute):
+            parts.append(expr.attr)
+            expr = expr.value
+        if isinstance(expr, ast.Name):
+            parts.append(expr.id)
+        if not parts:
+            continue
+        parts.reverse()
+        dotted = ".".join(parts)
+        out.append(dotted)
+        if len(parts) > 1:
+            out.append(parts[-1])
+    return out
+
+
+def _param_annotations(node: Any, params: list[str]) -> list[dict[str, Any]]:
+    """Entry-point markers on a function's parameters, in the IR's shared
+    `{index, name, decorator}` side-channel shape (see ir/CLAUDE.md).
+
+    Python expresses "this parameter is attacker-controlled" two ways, and both
+    are captured here:
+
+      1. A FUNCTION-level decorator that makes the whole function an entry
+         point — `@mcp.tool()`, `@app.route(...)`, `@celery.task`. Every
+         parameter inherits it.
+      2. A PER-PARAMETER default marker — FastAPI's
+         `q: str = Query(...)` / `Body(...)` / `Form(...)` / `Header(...)`.
+
+    Nothing is decided here about which of these is untrusted. The IR emits the
+    fact that the decorator exists; dataflow/catalog.js decides whether it
+    names a source, exactly as it already does for Java/C#/NestJS. That
+    separation is why emitting broadly is safe: an unrecognised decorator
+    (`@staticmethod`, `@lru_cache`) resolves to no catalog entry and therefore
+    to no taint.
+    """
+    out: list[dict[str, Any]] = []
+
+    for dec in _decorator_names(node):
+        for idx, pname in enumerate(params):
+            if pname in ("self", "cls"):
+                continue
+            out.append({"index": idx, "name": pname, "decorator": dec})
+
+    # Per-parameter markers: the default value is a call, e.g. `= Query(...)`.
+    args = node.args
+    positional = list(getattr(args, "posonlyargs", [])) + list(args.args)
+    defaults = list(args.defaults)
+    # `defaults` right-aligns with the positional parameters.
+    offset = len(positional) - len(defaults)
+    pairs = [(positional[offset + i], d) for i, d in enumerate(defaults) if 0 <= offset + i < len(positional)]
+    pairs += [(a, d) for a, d in zip(args.kwonlyargs, args.kw_defaults) if d is not None]
+    for arg, default in pairs:
+        expr = default.func if isinstance(default, ast.Call) else default
+        marker = None
+        if isinstance(expr, ast.Name):
+            marker = expr.id
+        elif isinstance(expr, ast.Attribute):
+            marker = expr.attr
+        if not marker:
+            continue
+        try:
+            idx = params.index(arg.arg)
+        except ValueError:
+            continue
+        out.append({"index": idx, "name": arg.arg, "decorator": marker})
+
+    return out
 
 
 # ─── Driver ──────────────────────────────────────────────────────────────────
