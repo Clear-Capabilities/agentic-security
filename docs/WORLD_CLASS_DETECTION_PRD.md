@@ -278,7 +278,7 @@ Updated 2026-08-17. Only items verified by a command run are marked landed.
 | **T4.1 CWE-88 argument injection** | **Partial, via Theme 6** | The GitPython family is both shapes at once; no dedicated per-tool dangerous-flag table exists. |
 | **Theme 6 convention deviation** | **Landed, gate NOT met** (`40bd210`, `0a7cfdc`) | Project-scoped mining implemented. Gate still 1/10 — root-caused to benchmark materialisation scope, not the detector. See below. |
 | **Precision fixes found en route** | **Landed** (`640da42`, `27ebf66`, `9f2591e`) | `rate-limit.js` discarded 100% of its own findings project-wide; `scanRoutes` missed permission-string RBAC middleware; subprocess sinks labelled argv-array calls `shell=True`; `py-requests-get` reported `dict.get()` as SSRF. |
-| T1.1 family-matched guard suppression | **Not started** | The main lever on fix-discrimination (currently 2/6). |
+| **T1.1 family-matched guard suppression** | **ATTEMPTED, REVERTED — incompatible with a gated invariant** | See §8b. |
 | T1.3 validate-then-mutate invalidation | **Not started** | 7 entries. |
 | T1.4 differential mode | **Not started** | |
 | T2.1 top-detector precision audit | **Not started** | The four fixes above were found incidentally, not by the systematic audit this item specifies. |
@@ -292,6 +292,44 @@ Updated 2026-08-17. Only items verified by a command run are marked landed.
 | **T4.5 TOCTOU on resolution** | **Landed** (`0595d0d`) | 3 entries. Took two precision tightenings, both forced by real FPs on this repo's own detector modules; final self-scan drift zero. |
 | **T5.1–T5.4 business-logic authz** | **Landed** | 19 entries — the largest family. Four sub-rules (ownership, tenant-scope, branch-inconsistency, lifecycle gate), each recognising ANY `*Id` parameter rather than the `id`/`userId` heuristic that made the existing rules miss these. Only 1 self-scan delta, on the detector's own regex. |
 | **Theme 6 JS/TS unit extractor** | **Landed** (`cf9acc8`) | 6 of the 10 sibling-omission entries are TypeScript. Adds brace-language unit extraction, JS spread option-bags, and camelCase guard recognition. |
+
+### 8b. T1.1 was attempted and reverted — and the reason changes this PRD's plan
+
+T1.1 proposed suppressing a finding once the proof gate has PROVEN it clean
+(family-matched sanitizer dominating every reaching path), rather than merely
+demoting it. It was implemented against exactly that signal —
+`proof.verdict === 'proven-clean'`, never a bare label — and routed to the same
+suppression ledger every other suppression uses.
+
+**`bench:mutation:check` rejected it immediately: metamorphic correctness fell
+from 5/5 to 2/5.** That gate requires a sanitized finding to remain PRESENT and
+LABELLED across semantics-preserving rewrites; suppression removes it, which
+reads as a verdict change. That behaviour is not an accident of the gate's
+construction — it is `scanner/src/dataflow/CLAUDE.md`'s stated doctrine
+("sanitizer entries are RECORDED, never trusted to kill taint"), enforced.
+
+The change was reverted. The gate was NOT adjusted to accommodate it: the
+mutation gate is this project's anti-overfitting control, and editing its
+expectations so a new change can pass is precisely the failure it exists to
+catch.
+
+**Consequence for goal 2 (fix-discrimination 9.5% -> 80%).** That number cannot
+be raised by suppressing findings on fixed code without breaking an invariant
+the project treats as foundational. Two legitimate routes remain, and the
+second is already demonstrated:
+
+1. **Count a demoted finding as discriminated.** If the proof gate demotes a
+   finding to a low-confidence tier on the fixed revision, arguably the engine
+   *did* distinguish the two revisions and the metric — not the engine — is
+   what should register it. That is a T0.2 measurement change, and it should be
+   argued on its merits rather than assumed.
+2. **Detectors that do not fire on fixed code in the first place.** Every rule
+   added by Themes 4, 5 and 6 keys on the ABSENCE of the specific control its
+   advisory's fix introduced, so it goes silent on the fixed revision by
+   construction — no suppression, no invariant touched. This is the more
+   durable route and the one remaining detector work should follow.
+
+---
 
 ### Theme 6 — measured against its own exit gate, which it does not yet pass
 
