@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-18T05:13:10.882Z",
-  "commit": "de2cbe7882f61bb3031149fea13e70f412a2e7b7",
+  "generatedAt": "2026-08-18T05:25:39.084Z",
+  "commit": "0595d0d157044e9ef12e4c6fa555d964b246b533",
   "targets": {
     "hooks": {
       "total": 25,
@@ -38,7 +38,7 @@
       }
     },
     "scanner/src": {
-      "total": 629,
+      "total": 630,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -234,6 +234,7 @@
         "sast/mutation-xss.js": 1,
         "sast/null-byte-injection.js": 1,
         "sast/open-redirect.js": 4,
+        "sast/ownership-authz.js": 1,
         "sast/php.js": 2,
         "sast/pipeline.js": 1,
         "sast/post-quantum-crypto.js": 1,

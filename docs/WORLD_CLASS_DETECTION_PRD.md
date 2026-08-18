@@ -286,12 +286,12 @@ Updated 2026-08-17. Only items verified by a command run are marked landed.
 | T3.2 cross-file / stored taint | **Not started** | 12 entries — the largest remaining taint gap. |
 | T3.3 container/collection-element taint | **Not started** | |
 | T3.4 multi-source correlation | **Not started** | |
-| T4.2 resource exhaustion | **Not started** | 14 entries — largest unimplemented class. |
-| T4.3 code-generation as a sink | **Not started** | 5 entries. |
-| T4.4 redirect / header-forwarding | **Not started** | 8 entries. |
-| T4.5 TOCTOU on resolution | **Not started** | 3 entries. |
-| T5.1–T5.4 business-logic authz | **Not started** | 19 entries — the largest family in the evidence table. |
-| Theme 6 JS/TS unit extractor | **Not started** | 6 of the 10 sibling-omission entries are TypeScript and unreachable without it. |
+| **T4.2 resource exhaustion** | **Landed** (`cf9acc8`) | 14 entries. Fires only when a caller-controlled size reaches a bounded-cost operation with no upper-bound check — the check being exactly the fix each advisory shipped. Zero FPs on this repo's ~700 files. |
+| **T4.3 code-generation as a sink** | **Landed** (`0595d0d`) | 5 entries. A new sink CATEGORY: no dangerous call exists — a file is written, the file is source, another process runs it later. |
+| **T4.4 redirect / header-forwarding** | **Landed** (`0595d0d`) | 8 entries. The inverse of open-redirect: the app is the CLIENT and the danger is what its own request does when redirected. |
+| **T4.5 TOCTOU on resolution** | **Landed** (`0595d0d`) | 3 entries. Took two precision tightenings, both forced by real FPs on this repo's own detector modules; final self-scan drift zero. |
+| **T5.1–T5.4 business-logic authz** | **Landed** | 19 entries — the largest family. Four sub-rules (ownership, tenant-scope, branch-inconsistency, lifecycle gate), each recognising ANY `*Id` parameter rather than the `id`/`userId` heuristic that made the existing rules miss these. Only 1 self-scan delta, on the detector's own regex. |
+| **Theme 6 JS/TS unit extractor** | **Landed** (`cf9acc8`) | 6 of the 10 sibling-omission entries are TypeScript. Adds brace-language unit extraction, JS spread option-bags, and camelCase guard recognition. |
 
 ### Theme 6 — measured against its own exit gate, which it does not yet pass
 
