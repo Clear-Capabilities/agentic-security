@@ -95,7 +95,7 @@ export function scanFastapiHardening(file, raw) {
     // one in the next handler does not.
     const bodyStart = m.index + m[0].length;
     const rest = raw.slice(bodyStart);
-    const nextHandler = rest.search(/\n@\s*(?:app|router)\.|\n(?:async\s+)?def\s+/);
+    const nextHandler = rest.search(/\n@\s{0,8}(?:app|router)\.|\n(?:async\s{1,8})?def\s{1,8}/);
     const body = nextHandler === -1 ? rest : rest.slice(0, nextHandler);
 
     const evidence = routeAuthEvidence({ params, body });

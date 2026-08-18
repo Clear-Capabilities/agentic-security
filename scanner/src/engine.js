@@ -65,6 +65,7 @@ import { scanRust, extractRustImportMap } from './sast/rust.js';
 import { scanGoExtended } from './sast/go-extended.js';
 import { scanDatabaseRLS } from './sast/db-rls.js';
 import { scanRateLimit } from './sast/rate-limit.js';
+import { scanConventionDeviation } from './sast/convention-deviation.js';
 import { scanAuthProvider } from './sast/auth-provider.js';
 import { scanEnvHygiene } from './sast/env-hygiene.js';
 import { scanWebhook } from './sast/webhook.js';
@@ -7765,7 +7766,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       aF.push(...scanRust(p,c));
       aF.push(...scanGoExtended(p,c));
       aF.push(...scanDatabaseRLS(p,c));
-      aF.push(...scanRateLimit(p,c));
+      aF.push(...scanRateLimit(p,c));aF.push(...scanConventionDeviation(p,c));
       aF.push(...scanAuthProvider(p,c));
       aF.push(...scanEnvHygiene(p,c));
       aF.push(...scanWebhook(p,c));

@@ -54,7 +54,7 @@ const AUTH_NAME_RE = new RegExp([
  * A dependency-injection wrapper: FastAPI Depends()/Security(), NestJS, etc.
  * Group 1 is the wrapper, group 2 the injected callee (absent for `Security()`).
  */
-const DI_CALL_RE = /\b(Depends|Security)\s*\(\s*([A-Za-z_$][\w$.]*)?/g;
+const DI_CALL_RE = /\b(Depends|Security)\s{0,8}\(\s{0,8}([A-Za-z_$][\w$.]{0,128})?/g;
 
 /**
  * Does a handler's PARAMETER LIST carry injected auth?
@@ -105,10 +105,15 @@ export function hasAuthInBody(bodyText) {
   if (!body.trim()) return null;
   // Call shape: <name>(...) where the callee name is auth-shaped AND reads as
   // an action (check/require/verify/ensure/assert/validate/has/can/enforce).
-  const callRe = /\b((?:[A-Za-z_$][\w$]*\.)*)([A-Za-z_$][\w$]*)\s*\(/g;
+  // Bounded repetition throughout: this walks third-party source, so a
+  // pathological identifier chain must not become a scanner-side ReDoS.
+  // Only the FINAL segment is used, so the dotted qualifier is not matched at
+  // all — which also keeps this free of the nested quantifier the project's own
+  // redos-nfa.js correctly flags on `(?:\w+\.)*` shapes.
+  const callRe = /\b([A-Za-z_$][\w$]{0,63})\s{0,8}\(/g;
   let m;
   while ((m = callRe.exec(body))) {
-    const callee = m[2];
+    const callee = m[1];
     const actiony = /^(?:check|require|ensure|verify|assert|validate|enforce|has|can|is|get|authorize|authorise|guard)/i.test(callee);
     if (actiony && AUTH_NAME_RE.test(callee)) {
       return { authenticated: true, reason: `explicit authorization call in body: ${callee}()` };

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-17T15:06:24.809Z",
-  "commit": "e207cf79b30f5a17e4b1644ebb79831c52229aad",
+  "generatedAt": "2026-08-18T00:38:35.435Z",
+  "commit": "fe75ddab2a3cc1514d8a73807795765ba413d8f0",
   "targets": {
     "hooks": {
       "total": 25,
@@ -37,7 +37,7 @@
       }
     },
     "scanner/src": {
-      "total": 624,
+      "total": 628,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -189,6 +189,7 @@
         "report/index.js": 3,
         "runScan.js": 1,
         "sandbox/backend-namespace.js": 1,
+        "sast/_auth-signals.js": 1,
         "sast/_secret-entropy.js": 1,
         "sast/agent-untrusted-flow.js": 4,
         "sast/authz.js": 2,
@@ -198,6 +199,7 @@
         "sast/claude-settings.js": 1,
         "sast/client-side.js": 6,
         "sast/cloud-iam.js": 1,
+        "sast/convention-deviation.js": 2,
         "sast/cpp-dataflow.js": 6,
         "sast/cpp.js": 4,
         "sast/cross-service.js": 1,
@@ -209,7 +211,7 @@
         "sast/defi-deep.js": 2,
         "sast/env-hygiene.js": 1,
         "sast/event-entrypoint.js": 2,
-        "sast/fastapi-hardening.js": 2,
+        "sast/fastapi-hardening.js": 3,
         "sast/file-upload.js": 1,
         "sast/host-header.js": 1,
         "sast/iac-terraform.js": 1,
