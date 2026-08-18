@@ -105,3 +105,35 @@ test('Java SQLi: a real Statement.execute(sql) is STILL reported', async () => {
   assert.ok(f.some(x => /SQL Injection/i.test(String(x.vuln || ''))),
     'the precision fix must not silence real JDBC injection');
 });
+
+test('Java weak PRNG: a Random with no security context is not a finding', async () => {
+  // 36 findings in a 24-entry sample, on netty's leak-detector sampling,
+  // round-robin address selection and a microbenchmark. The JS sibling rule
+  // (sast/weak-randomness.js) has always required a security-context keyword;
+  // this rule had no such requirement at all.
+  const f = await findings('Pool.java', [
+    'package t;',
+    'import java.util.concurrent.ThreadLocalRandom;',
+    'public class Pool {',
+    '  int pick(int n) {',
+    '    return n == 1 ? 0 : ThreadLocalRandom.current().nextInt(n);',
+    '  }',
+    '}',
+  ].join('\n'));
+  const prng = f.filter(x => /Weak PRNG/.test(String(x.vuln || '')));
+  assert.deepEqual(prng, [], `round-robin selection is not a security use of randomness: ${JSON.stringify(prng.map(x => x.snippet))}`);
+});
+
+test('Java weak PRNG: randomness used for a token IS still reported', async () => {
+  const f = await findings('Tok.java', [
+    'package t;',
+    'import java.util.Random;',
+    'public class Tok {',
+    '  String sessionToken() {',
+    '    return String.valueOf(new Random().nextInt());',
+    '  }',
+    '}',
+  ].join('\n'));
+  assert.ok(f.some(x => /Weak PRNG/.test(String(x.vuln || ''))),
+    'a weak PRNG feeding a session token must still fire');
+});

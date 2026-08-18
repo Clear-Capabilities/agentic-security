@@ -281,7 +281,7 @@ Updated 2026-08-17. Only items verified by a command run are marked landed.
 | **T1.1 family-matched guard suppression** | **ATTEMPTED, REVERTED — incompatible with a gated invariant** | See §8b. |
 | T1.3 validate-then-mutate invalidation | **Not started** | 7 entries. |
 | T1.4 differential mode | **Not started** | |
-| **T2.1 top-detector precision audit** | **Partially landed** | Ranking built and run over a stratified sample; the top rule by volume and the FastAPI missing-auth rule adjudicated and both fixed. The remaining ~13 ranked rules are not yet adjudicated. |
+| **T2.1 top-detector precision audit** | **Substantially landed** | 8 of the top-volume rules adjudicated; **6 were defective and are fixed** (PHP backtick-in-comments 105 findings, Hardcoded Secret on OAuth protocol constants 70, Java weak-PRNG with no security context 36, Java SQLi on `Executor.execute` 8, Missing-Timeout name-substring match, and this session's own FastAPI auth fix). Non-Constant-Time Comparison adjudicated CORRECT. Missing-CSRF on Laravel GET reads flagged, NOT yet fixed. ~7 lower-volume rules unadjudicated. |
 | T2.3 fixed-code negative controls | **Not started** | |
 | **T3.2 cross-file / stored taint** | **Landed** | 12 entries. Registry admission moved from a closed field-name list to PROVENANCE; sink families extended beyond XSS to SSRF/path/exec with per-family CWEs and per-family guards. Also fixed the underlying comment-stripping bug that made a detector's illustrative docblock examples register as real ORM writes. |
 | T3.3 container/collection-element taint | **Not started** | |

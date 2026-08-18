@@ -3173,6 +3173,19 @@ const JAVA_FAMILY_RULES = [
     sinkRe: /\bnew\s+(?:java\s*\.\s*util\s*\.\s*)?Random\s*\(|\bMath\s*\.\s*random\s*\(\s*\)|\bThreadLocalRandom\s*\.\s*current\s*\(\s*\)\s*\.\s*next/,
     sanitizerRe: /\bSecureRandom\b/,
     requiresSource: false,
+    // T2.1 audit — a weak PRNG is only a vulnerability when its output is used
+    // for something that must be UNPREDICTABLE. This rule had no such
+    // requirement, so it fired on netty's leak-detector sampling
+    // (`ThreadLocalRandom.current().nextInt(samplingInterval)`), round-robin
+    // address selection, and a `new Random(0L)` inside a microbenchmark — 36
+    // findings in a 24-entry sample, none of them security-relevant.
+    //
+    // The JS sibling rule (sast/weak-randomness.js) has always required a
+    // security-context keyword; this is the same gate, applied file-wide
+    // because Java's randomness helpers are usually a few lines from what they
+    // seed. Returning truthy SUPPRESSES, so this reads "no security context
+    // anywhere in the file".
+    fileSafePredicate: (cleaned) => !/\b(?:token|secret|password|passwd|nonce|salt|iv\b|session|cookie|csrf|otp|mfa|api_?key|apikey|credential|auth|jwt|sign|cipher|encrypt|decrypt|random_?id|uuid|guid|reset|verif|captcha|challenge|ticket|voucher|coupon)\w*/i.test(cleaned),   // NOT `seed`: benchmarks seed RNGs deterministically on purpose
   },
   {
     family: 'sql-injection',
