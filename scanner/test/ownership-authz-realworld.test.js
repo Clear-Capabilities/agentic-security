@@ -82,3 +82,58 @@ test('REFUSES: responding with the id is not acting on it', () => {
     '}',
   ].join('\n')), [], 'res.*/log calls are not object access');
 });
+
+// Second real entry: GHSA-r745-8hwv-h473 (Flowise oauth2 routes). Found via a
+// near-miss sweep of the independent population — this handler was flagged
+// ownership-missing even though it scopes its lookup by `workspaceId`, taken
+// from the request's own session via getActiveWorkspaceIdForRequest(req).
+// Workspace/tenant scoping IS an ownership check at a coarser grain; T5.1
+// only checked OWNERSHIP_RE (req.user/current_user/ownerId:), so it couldn't
+// see it. Verbatim from bench/independent/cache/GHSA-r745-8hwv-h473/pre.
+const TENANT_SCOPED_PRE = [
+  "router.post('/authorize/:credentialId', async (req: Request, res: Response, next: NextFunction) => {",
+  '    try {',
+  '        const { credentialId } = req.params',
+  '        const workspaceId = getActiveWorkspaceIdForRequest(req)',
+  '',
+  '        const appServer = getRunningExpressApp()',
+  '        const credentialRepository = appServer.AppDataSource.getRepository(Credential)',
+  '',
+  '        let credential = await credentialRepository.findOneBy({',
+  '            id: credentialId,',
+  '            workspaceId',
+  '        })',
+  '    } catch (error) {',
+  '        next(error)',
+  '    }',
+  '})',
+].join('\n');
+
+// The sibling handler in the SAME real file, unchanged — genuinely unscoped,
+// and must still fire. Distinguishes "tenant scoping suppresses this" from
+// "TENANT_RE anywhere in the file suppresses everything."
+const UNSCOPED_SIBLING = [
+  "router.post('/refresh/:credentialId', async (req: Request, res: Response, next: NextFunction) => {",
+  '    try {',
+  '        const { credentialId } = req.params',
+  '        const appServer = getRunningExpressApp()',
+  '        const credentialRepository = appServer.AppDataSource.getRepository(Credential)',
+  '',
+  '        const credential = await credentialRepository.findOneBy({',
+  '            id: credentialId',
+  '        })',
+  '    } catch (error) {',
+  '        next(error)',
+  '    }',
+  '})',
+].join('\n');
+
+test('REAL CODE: workspace/tenant scoping counts as an ownership check', () => {
+  assert.deepEqual(scanOwnershipAuthz('index.ts', TENANT_SCOPED_PRE), [],
+    'a lookup scoped by workspaceId (from the request session) is guarded, not vulnerable');
+});
+
+test('REAL CODE: a sibling handler with NO scoping at all still fires', () => {
+  const f = scanOwnershipAuthz('index.ts', UNSCOPED_SIBLING);
+  assert.ok(f.some(x => x.subfamily === 'ownership-missing'));
+});

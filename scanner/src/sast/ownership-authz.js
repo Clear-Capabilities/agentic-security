@@ -172,8 +172,15 @@ export function scanOwnershipAuthz(file, raw) {
     const sinkLine = touchesObject ? _lineOf(code, openIdx + sinkIdx) : line;
 
     // T5.1 — an object id from the request reaches a lookup/mutation and
-    // nothing ties the operation to the authenticated principal.
-    if (ids.length && touchesObject && !OWNERSHIP_RE.test(body)) {
+    // nothing ties the operation to the authenticated principal. TENANT_RE is
+    // checked too, not just OWNERSHIP_RE: GHSA-r745-8hwv-h473's /authorize
+    // handler scopes its lookup by `workspaceId` (from
+    // getActiveWorkspaceIdForRequest(req)) with no per-user ownership
+    // predicate at all — workspace/tenant scoping IS an ownership check at a
+    // coarser grain, and a rule that can't see that flags well-guarded
+    // multi-tenant code as vulnerable. The sibling /refresh handler in the
+    // same file, which has neither, still fires correctly.
+    if (ids.length && touchesObject && !OWNERSHIP_RE.test(body) && !TENANT_RE.test(body)) {
       push(mk(file, sinkLine, 'ownership-missing', 'CWE-639',
         `${name}() looks up or mutates by request-supplied '${ids[0]}' with no ownership check`,
         `The object identifier '${ids[0]}' comes straight from the request and is used to read or change a record, `
