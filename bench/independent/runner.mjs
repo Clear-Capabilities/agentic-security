@@ -446,8 +446,17 @@ async function main() {
       .map(([k, rows]) => [k, { entries: rows.length, ...scoreCounts(sum(rows)) }]));
   };
 
+  // Self-describing: the previous RESULT.json had to be hand-assembled from
+  // stdout, which is how it came to carry a stale measuredAt/engineVersion
+  // while claiming to be current. A report states its own provenance.
+  let engineVersion = null;
+  try { engineVersion = JSON.parse(fs.readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8')).version; } catch { /* leave null */ }
+
   const report = {
     schema: 'agentic-security/independent-population-result@2',
+    source: 'bench/independent/runner.mjs',
+    measuredAt: new Date().toISOString().slice(0, 10),
+    engineVersion,
     configuration,
     population: {
       totalEntries: manifest.entries.length,
