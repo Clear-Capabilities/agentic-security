@@ -67,6 +67,8 @@ import { scanDatabaseRLS } from './sast/db-rls.js';
 import { scanRateLimit } from './sast/rate-limit.js';
 import { scanConventionDeviationProject } from './sast/convention-deviation.js';
 import { scanResourceExhaustion } from './sast/resource-exhaustion.js';
+import { scanRedirectToctou } from './sast/redirect-toctou.js';
+import { scanCodegenSink } from './sast/codegen-sink.js';
 import { scanAuthProvider } from './sast/auth-provider.js';
 import { scanEnvHygiene } from './sast/env-hygiene.js';
 import { scanWebhook } from './sast/webhook.js';
@@ -7767,7 +7769,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       aF.push(...scanRust(p,c));
       aF.push(...scanGoExtended(p,c));
       aF.push(...scanDatabaseRLS(p,c));
-      aF.push(...scanRateLimit(p,c));aF.push(...scanResourceExhaustion(p,c));
+      aF.push(...scanRateLimit(p,c));aF.push(...scanResourceExhaustion(p,c));aF.push(...scanRedirectToctou(p,c));aF.push(...scanCodegenSink(p,c));
       aF.push(...scanAuthProvider(p,c));
       aF.push(...scanEnvHygiene(p,c));
       aF.push(...scanWebhook(p,c));
