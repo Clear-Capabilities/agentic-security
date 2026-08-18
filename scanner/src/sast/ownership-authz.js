@@ -60,13 +60,18 @@ const REQ_ID_DESTRUCTURE_RE =
  * echoing an id back to the caller is not acting on the object it names.
  */
 const NON_ACTING_RECEIVER_RE = /^(?:res|response|reply|ctx|console|logger|log|next|JSON|Number|String|Boolean|parseInt|Array|Object)$/i;
-function _usesId(body, id) {
+/** Index of the acting call within `body`, or -1. Line attribution needs the
+ * SINK, not the handler's opening brace — GHSA-2364's fix lands 8 lines into
+ * the body, well outside the ±3 localization window a handler-line finding
+ * would need to land in. */
+function _usesIdAt(body, id) {
   const esc = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`\\b(\\w{1,60})\\s{0,4}\\.\\s{0,4}\\w{1,60}\\s{0,4}\\([^)]{0,200}\\b${esc}\\b`, 'g');
   let m;
-  while ((m = re.exec(body))) if (!NON_ACTING_RECEIVER_RE.test(m[1])) return true;
-  return false;
+  while ((m = re.exec(body))) if (!NON_ACTING_RECEIVER_RE.test(m[1])) return m.index;
+  return -1;
 }
+function _usesId(body, id) { return _usesIdAt(body, id) !== -1; }
 
 /** Evidence the caller's identity constrains the operation. */
 const OWNERSHIP_RE = new RegExp([
@@ -155,12 +160,21 @@ export function scanOwnershipAuthz(file, raw) {
       const esc = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       for (const a of body.matchAll(new RegExp(`(?:const|let|var)\\s{1,4}(\\w{1,60})\\s{0,4}=[^\\n]{0,80}\\b${esc}\\b`, 'g'))) names.push(a[1]);
     }
-    const touchesObject = names.some(n => _usesId(body, n));
+    // Attribute the finding to where the id is actually USED, not the handler
+    // declaration — a fix inserted mid-body would otherwise sit well outside
+    // any localization window keyed to the finding's line.
+    let sinkIdx = -1;
+    for (const n of names) {
+      const idx = _usesIdAt(body, n);
+      if (idx !== -1) { sinkIdx = idx; break; }
+    }
+    const touchesObject = sinkIdx !== -1;
+    const sinkLine = touchesObject ? _lineOf(code, openIdx + sinkIdx) : line;
 
     // T5.1 — an object id from the request reaches a lookup/mutation and
     // nothing ties the operation to the authenticated principal.
     if (ids.length && touchesObject && !OWNERSHIP_RE.test(body)) {
-      push(mk(file, line, 'ownership-missing', 'CWE-639',
+      push(mk(file, sinkLine, 'ownership-missing', 'CWE-639',
         `${name}() looks up or mutates by request-supplied '${ids[0]}' with no ownership check`,
         `The object identifier '${ids[0]}' comes straight from the request and is used to read or change a record, `
         + 'but nothing in this handler compares that record — or constrains the query — against the authenticated '
@@ -178,7 +192,7 @@ export function scanOwnershipAuthz(file, raw) {
     // where assertStripeIdMatchesSession(id, req.user...) silenced T5.1 and
     // T5.2 immediately fired in its place.
     if (fileUsesTenant && ids.length && touchesObject && !TENANT_RE.test(body) && !OWNERSHIP_RE.test(body)) {
-      push(mk(file, line, 'tenant-scope-missing', 'CWE-863',
+      push(mk(file, sinkLine, 'tenant-scope-missing', 'CWE-863',
         `${name}() queries by id without the workspace/tenant scope this file uses elsewhere`,
         'Other code in this file constrains queries by a workspace/organization/tenant dimension; this handler '
         + 'looks up by primary key alone. In a multi-tenant system that returns records belonging to other '
@@ -221,4 +235,4 @@ export function scanOwnershipAuthz(file, raw) {
   return out;
 }
 
-export const _internals = { REQ_ID_RE, REQ_ID_DESTRUCTURE_RE, _usesId, OWNERSHIP_RE, TENANT_RE, PERMISSION_CALL_RE, LIFECYCLE_FIELD_RE };
+export const _internals = { REQ_ID_RE, REQ_ID_DESTRUCTURE_RE, _usesId, _usesIdAt, OWNERSHIP_RE, TENANT_RE, PERMISSION_CALL_RE, LIFECYCLE_FIELD_RE };
