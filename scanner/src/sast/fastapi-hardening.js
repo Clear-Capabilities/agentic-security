@@ -9,6 +9,8 @@
 //   6. HTTPBearer used without auto_error checks
 //   7. app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
+import { routeAuthEvidence } from './_auth-signals.js';
+
 const _PY_RE = /\.py$/i;
 
 function _line(raw, idx) {
@@ -76,12 +78,29 @@ export function scanFastapiHardening(file, raw) {
   }
 
   // 3. Mutating endpoint without Depends() injecting security
+  //
+  // PRD T1.2 — this rule previously keyed on a CLOSED list of blessed
+  // dependency names (get_current_user|require_auth|verify_jwt|require_admin|
+  // oauth2_scheme) and never looked at the handler BODY at all. Measured
+  // consequence (independent-population entry GHSA-3cg5-48j3-v4gv): it
+  // asserted that a handler declaring `user=Depends(get_verified_user)` and
+  // calling `await check_folders_permission(request, user, db=db)` had no auth
+  // dependency. Both halves now go through the shared resolver in
+  // _auth-signals.js, which recognises the SHAPE rather than an enumeration.
   const mutatingRouteRe = /@\s*(?:app|router)\.(?:post|put|patch|delete)\s*\(\s*['"][^'"]+['"][^)]*\)\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)/g;
   for (const m of raw.matchAll(mutatingRouteRe)) {
     const params = m[2];
-    // Look for Security(...) or Depends(...) pointing at an auth dep, or a current_user param.
-    if (/\b(?:Security\s*\(|Depends\s*\(\s*(?:get_current_user|require_auth|verify_jwt|require_admin|oauth2_scheme))/.test(params)) continue;
-    if (/\b(?:current_user|user\s*:\s*User|token\s*:\s*str\s*=\s*Depends)/.test(params)) continue;
+    // The handler body: from the end of the signature to the next top-level
+    // decorator/def, so an authorization call inside THIS handler counts and
+    // one in the next handler does not.
+    const bodyStart = m.index + m[0].length;
+    const rest = raw.slice(bodyStart);
+    const nextHandler = rest.search(/\n@\s*(?:app|router)\.|\n(?:async\s+)?def\s+/);
+    const body = nextHandler === -1 ? rest : rest.slice(0, nextHandler);
+
+    const evidence = routeAuthEvidence({ params, body });
+    if (evidence) continue;
+
     findings.push({
       id: `fastapi:no-auth-dep:${file}:${_line(raw, m.index)}:${m[1]}`,
       file, line: _line(raw, m.index),
@@ -90,8 +109,11 @@ export function scanFastapiHardening(file, raw) {
       family: 'fastapi-missing-auth',
       cwe: 'CWE-862',
       confidence: 0.7,
-      description: 'A POST/PUT/PATCH/DELETE handler is declared without a Security(...) or Depends(get_current_user) parameter. Unless a global middleware enforces auth (rare), this endpoint is callable anonymously.',
+      description: 'A POST/PUT/PATCH/DELETE handler is declared without a Security(...) or Depends(get_current_user) parameter, and its body performs no recognisable authorization check. Unless a global middleware enforces auth (rare), this endpoint is callable anonymously.',
       remediation: 'Add: current_user: User = Depends(get_current_user) — or Security(oauth2_scheme, scopes=["admin"]) — as a parameter to the route handler.',
+      // T2.2 — an absence-claim must record what it looked for, so a reviewer
+      // (or a refutation lens) can falsify it.
+      checkedFor: 'Depends()/Security() auth dependency in the signature; authorization call or explicit 401/403 in the body',
     });
   }
 
