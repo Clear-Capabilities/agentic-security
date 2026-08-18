@@ -265,6 +265,50 @@ Measured on the **held-out slice**, in both configurations, with the strict (loc
 
 ---
 
+## 8a. Implementation status
+
+Updated 2026-08-17. Only items verified by a command run are marked landed.
+
+| Item | Status | Evidence |
+|---|---|---|
+| **T0.1–T0.7 (whole of P0)** | **Landed** (`bac5e12`) | Localized scoring, fix-discrimination, `--deep` as a runner configuration, per-layer attribution, conservative CWE hierarchy, UNSCORED repair, deterministic held-out slice. 17 unit tests. Validated on a 4-entry ground-truth slice: file-scoped says 4/4, localized credits the 2 real findings and refuses both known coincidences. |
+| **T1.2 auth resolver** | **Landed** (`fe75dda`) | `sast/_auth-signals.js`; the real GHSA-3cg5 false positive no longer fires, a genuinely unprotected handler still does, body evidence scoped per handler. 11 tests. |
+| **Theme 6 convention deviation** | **Landed, gate NOT met** (`40bd210`) | See below. |
+| T1.1, T1.3, T1.4, T2.1–T2.3 | Not started | |
+| Theme 3 (all), Theme 4 (all), Theme 5 (all) | Not started | T4.1's target family is partly covered incidentally by Theme 6, since the GitPython argument-injection entries are both shapes at once. |
+
+### Theme 6 — measured against its own exit gate, which it does not yet pass
+
+The stated gate was "fires on ≥ 5 of the 10 known sibling-omission entries."
+Measured result: **1 of 10** (1 of the 4 entries the detector is even eligible
+for). Reported as a miss rather than adjusted after the fact.
+
+Two distinct causes, both diagnosed rather than guessed:
+
+1. **6 of the 10 entries are TypeScript**; the detector is Python-only today.
+   A JS/TS unit extractor is the obvious next increment.
+2. **Convention mining is file-scoped, and the convention is project-scoped.**
+   `Git.check_unsafe_options` is called from `git/repo/base.py` (5 sites),
+   `git/index/base.py` (2) and `git/objects/commit.py` (1). Project-wide that is
+   a strong, unambiguous convention; per-file it fragments into populations of
+   5, 2 and 1, and only the first clears `MIN_GUARDED_SIBLINGS = 3`. So
+   GHSA-hh9p and GHSA-p538 are missed for a structural reason, not a tuning
+   one — lowering the threshold would be the wrong fix, because it would weaken
+   the precision control on every file rather than restore the population that
+   actually exists.
+
+**What did work, and is the reason to keep going:** on the entry it does fire
+on, it reports `Repo.init()` on the vulnerable revision and goes **silent on the
+fixed revision**. That is correct differential behaviour — the property the
+engine as a whole currently exhibits only 9.5% of the time — achieved by a
+detector that was given no signature for this bug class.
+
+**Next increments, in order:** (a) cross-file convention mining, keyed on the
+guard callee rather than the file, which addresses cause 2 without touching the
+thresholds; (b) a JS/TS unit extractor, which addresses cause 1.
+
+---
+
 ## 9. Reproducing every number in §1
 
 ```bash
