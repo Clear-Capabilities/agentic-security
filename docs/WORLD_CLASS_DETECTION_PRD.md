@@ -320,6 +320,49 @@ is the argument for finishing this item: 13 ranked rules remain unadjudicated.
 
 ---
 
+### 8d. The five new detector families are SILENT on the real population
+
+Re-measured after Themes 4/5/6 landed (315 entries, pattern-only, engine
+0.137.1): localized recall **6/315 = 1.90%, unchanged**. Fix-discrimination
+unchanged at 2/6. Localized precision moved 26.09% -> 27.27%. File-scoped TPs
+fell 21 -> 20 (a coincidental TP correctly removed by a precision fix).
+
+`byLayer` attributes all six localized TPs to LOGIC / FILE-UPLOAD / JAVA /
+ZIP-SLIP / AUTHZ-MATRIX. **Not one comes from RESOURCE, REDIRECT-TOCTOU,
+CODEGEN, OWNERSHIP-AUTHZ or CONVENTION.** Across 16 stratified entries those
+five detectors produce **zero findings of any kind**.
+
+Diagnosed rather than guessed. Running each detector directly against the
+advisory file it was designed from — files confirmed present, so not a
+materialisation gap — returns 0 for all four probed. Reading the code shows
+why. For GHSA-2364 the real handler is:
+
+```ts
+const { subscriptionId } = req.query
+const result = await identityManager.getAdditionalSeatsQuantity(subscriptionId)
+```
+
+`REQ_ID_RE` matches `req.query.<name>` member access, not DESTRUCTURING;
+`LOOKUP_RE` expects findOne/findOneBy/get/update, not a domain method named
+`getAdditionalSeatsQuantity`. Two independent mismatches, and the cause of both
+is the same: **the rules were written from this document's root-cause prose, not
+from the vulnerable files.** A rule can match the shape described in a summary
+and still miss the code the summary was abstracted from.
+
+**This is R16 repeating, in a PRD written to criticise R16.** Five detector
+families were built across four rounds with no measurement in between, exactly
+the milestone-gate omission §8 names. The process control was available and
+was not applied.
+
+**Consequence for sequencing.** The next work is NOT T3.3/T3.4/T1.3. It is:
+(a) rebuild the five families fixture-first — extract the real vulnerable
+snippet from each target entry into a test fixture, then write the rule until
+it fires on that fixture and stays silent on the `post/` revision; and
+(b) re-measure after EACH family, not after a batch. Building a sixth family
+before doing this would repeat the same mistake a third time.
+
+---
+
 ### 8b. T1.1 was attempted and reverted — and the reason changes this PRD's plan
 
 T1.1 proposed suppressing a finding once the proof gate has PROVEN it clean
