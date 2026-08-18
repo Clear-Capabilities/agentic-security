@@ -48,10 +48,23 @@ const URL_VALIDATION_RE =
   /\b(?:validate_?url|check_?url|is_?allowed|allow_?list|allowlist|deny_?list|is_?private|is_?internal|ssrf|_validate_url_for_fetch)\w{0,20}\s{0,4}\(/i;
 
 /** T4.5: a resolution whose result is checked. */
-const RESOLVE_RE = /\b(?:getaddrinfo|gethostbyname|resolve|dns\.lookup|socket\.getaddrinfo|realpath|os\.path\.realpath|resolve\(\))\b/i;
+const RESOLVE_RE = /\b(?:getaddrinfo|gethostbyname|resolve|\w*[dD]ns\w*\.lookup|socket\.getaddrinfo|realpath|os\.path\.realpath|resolve\(\))\b/i;
 
 /** T4.5 mitigation: the checked result is PINNED and reused, not re-resolved. */
 const PIN_RE = /\b(?:pin|pinned|resolved_?ip|cached_?ip|use_?resolved|connect_?to_?ip|sock\.connect\(\s*\(?\s*resolved)/i;
+
+/**
+ * T4.5's OTHER mitigation shape, found via GHSA-ch52-px8q-f22j: instead of
+ * pinning the checked value, the fix installs a custom resolver/lookup hook so
+ * the SAME resolution used to connect is the one that gets validated — a
+ * connect-time revalidation gate rather than a cache. Window-scoped like PIN_RE
+ * would miss this: the hook is typically a sibling function, not adjacent to
+ * the original resolve-and-check call it supersedes. File-scoped is safe here
+ * because assignment to `.lookup`/`.resolveLookup`/an http(s) agent's `lookup`
+ * option is a specific code shape, not a word that appears in prose or pattern
+ * tables the way "resolve" or "getaddrinfo" do.
+ */
+const CONNECT_TIME_REVALIDATION_RE = /\.\s{0,2}(?:lookup|resolveLookup)\s{0,4}=\s{0,4}(?:async\s{1,4})?\(/;
 
 const _lineOf = (raw, i) => raw.slice(0, i).split('\n').length;
 const _win = (raw, line, half = 14) => {
@@ -126,7 +139,7 @@ export function scanRedirectToctou(file, raw) {
   // The resolved value must be BOUND to a name and that same name checked —
   // window co-occurrence alone was still too loose (it fired on catalog.js and
   // two structural detectors, whose rule tables merely mention these APIs).
-  const RESOLVE_BIND_RE = /\b(\w{1,60})\s{0,4}=\s{0,4}[^\n]{0,120}\b(?:getaddrinfo|gethostbyname|dns\.lookup|realpath)\b/g;
+  const RESOLVE_BIND_RE = /\b(\w{1,60})\s{0,4}=\s{0,4}[^\n]{0,120}\b(?:getaddrinfo|gethostbyname|\w*[dD]ns\w*\.lookup|realpath)\b/g;
   let rmm;
   while ((rmm = RESOLVE_BIND_RE.exec(code))) {
     const bound = rmm[1];
@@ -136,6 +149,7 @@ export function scanRedirectToctou(file, raw) {
     const checked = new RegExp(`${URL_VALIDATION_RE.source.replace(/^\\b/, '\\b')}[^)]{0,80}\\b${bound}\\b`, 'i');
     if (!checked.test(win)) continue;             // the resolved value is not what is checked
     if (PIN_RE.test(win)) continue;               // the checked value is reused — the fix
+    if (CONNECT_TIME_REVALIDATION_RE.test(code)) continue; // a custom lookup hook revalidates at connect time — the other fix
     push(mk(file, line, 'toctou-resolve', 'medium', 'CWE-367',
       'Validated address is re-resolved before use (TOCTOU / DNS rebinding)',
       'A name is resolved and the result is validated, but the resolved value is not pinned — the connection (or '
@@ -150,4 +164,4 @@ export function scanRedirectToctou(file, raw) {
   return out;
 }
 
-export const _internals = { FOLLOWS_REDIRECTS_RE, HEADER_STRIP_RE, PER_HOP_CHECK_RE, URL_VALIDATION_RE, PIN_RE };
+export const _internals = { FOLLOWS_REDIRECTS_RE, HEADER_STRIP_RE, PER_HOP_CHECK_RE, URL_VALIDATION_RE, PIN_RE, CONNECT_TIME_REVALIDATION_RE };
