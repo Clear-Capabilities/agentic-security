@@ -55,9 +55,13 @@ test('T5.2: an unscoped lookup in a file that scopes by tenant elsewhere fires',
     '}',
     'export async function getOne(req, res) {',
     '  const chatflowId = req.params.chatflowId;',
-    '  return await repo.findOneBy({ id: chatflowId, userId: req.user.id });',
+    '  return await repo.findOneBy({ id: chatflowId });',
     '}',
   ].join('\n'));
+  // NOTE: the handler must NOT already scope by the principal. An explicit
+  // ownership predicate IS scoping, so T5.2 deliberately stays silent then —
+  // otherwise T5.2 simply replaces T5.1 the moment a fix lands and the entry
+  // never discriminates (observed on GHSA-2364's post/ revision).
   assert.ok(sub(f).includes('tenant-scope-missing'));
 });
 

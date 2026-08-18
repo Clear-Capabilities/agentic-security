@@ -36,13 +36,37 @@ const SRC_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs|py)$/i;
 const HANDLER_RE =
   /\b(?:async\s{1,4})?(?:function\s{1,4})?(\w{1,60})\s{0,4}\([^)]{0,300}\b(?:req|request|ctx|event)\b[^)]{0,300}\)\s{0,4}(?:=>\s{0,4})?\{/g;
 
-/** An object identifier read off the request — ANY *Id name, not just `id`. */
+/**
+ * An object identifier read off the request — ANY *Id name, not just `id`.
+ *
+ * Three surface forms, all seen in the real entries. The DESTRUCTURING form is
+ * what the code this rule was designed from actually uses
+ * (`const { customerId } = req.query`), and the first version of this rule
+ * matched only member access — which is why it returned zero findings on its
+ * own target entry.
+ */
 const REQ_ID_RE =
   /\b(?:req|request|ctx)\s{0,2}\.\s{0,2}(?:params|query|body|args)\s{0,2}(?:\.\s{0,2}(\w{0,40}[iI]d)\b|\[\s*['"](\w{0,40}[iI]d)['"]\s*\])/g;
+const REQ_ID_DESTRUCTURE_RE =
+  /(?:const|let|var)\s{1,4}\{([^}]{0,200})\}\s{0,4}=\s{0,4}(?:await\s{1,4})?(?:req|request|ctx)\s{0,2}\.\s{0,2}(?:params|query|body|args)\b/g;
 
-/** A lookup or mutation keyed by that id. */
-const LOOKUP_RE =
-  /\.(?:findOneBy|findOne|findById|findByPk|findUnique|get|load|fetch|update|delete|remove|destroy|save)\s{0,4}\(/;
+/**
+ * The id is HANDED TO something that acts on it.
+ *
+ * A fixed ORM verb list was the second reason this rule missed its own target:
+ * the real sink is `identityManager.getCustomerWithDefaultSource(customerId)`,
+ * a domain method that matches no generic vocabulary. Any receiver-qualified
+ * call taking the id counts, EXCEPT the response/logging/control shapes below —
+ * echoing an id back to the caller is not acting on the object it names.
+ */
+const NON_ACTING_RECEIVER_RE = /^(?:res|response|reply|ctx|console|logger|log|next|JSON|Number|String|Boolean|parseInt|Array|Object)$/i;
+function _usesId(body, id) {
+  const esc = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`\\b(\\w{1,60})\\s{0,4}\\.\\s{0,4}\\w{1,60}\\s{0,4}\\([^)]{0,200}\\b${esc}\\b`, 'g');
+  let m;
+  while ((m = re.exec(body))) if (!NON_ACTING_RECEIVER_RE.test(m[1])) return true;
+  return false;
+}
 
 /** Evidence the caller's identity constrains the operation. */
 const OWNERSHIP_RE = new RegExp([
@@ -115,8 +139,23 @@ export function scanOwnershipAuthz(file, raw) {
     const line = _lineOf(code, h.index);
 
     REQ_ID_RE.lastIndex = 0;
+    REQ_ID_DESTRUCTURE_RE.lastIndex = 0;
     const ids = [...body.matchAll(REQ_ID_RE)].map(m => m[1] || m[2]).filter(Boolean);
-    const touchesObject = LOOKUP_RE.test(body);
+    for (const d of body.matchAll(REQ_ID_DESTRUCTURE_RE)) {
+      for (const part of String(d[1]).split(',')) {
+        const nm = part.split(':').pop().trim();
+        if (/^\w{0,40}[iI]d$/.test(nm)) ids.push(nm);
+      }
+    }
+    // Aliases: `const x = req.params.credentialId` then `repo.findOneBy({id: x})`.
+    // The rewrite keyed on the id NAME appearing at the call, which the old
+    // verb-list check handled implicitly; without this an aliased id is missed.
+    const names = [...ids];
+    for (const id of ids) {
+      const esc = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      for (const a of body.matchAll(new RegExp(`(?:const|let|var)\\s{1,4}(\\w{1,60})\\s{0,4}=[^\\n]{0,80}\\b${esc}\\b`, 'g'))) names.push(a[1]);
+    }
+    const touchesObject = names.some(n => _usesId(body, n));
 
     // T5.1 — an object id from the request reaches a lookup/mutation and
     // nothing ties the operation to the authenticated principal.
@@ -133,7 +172,12 @@ export function scanOwnershipAuthz(file, raw) {
     }
 
     // T5.2 — tenant-scoped codebase, unscoped lookup.
-    if (fileUsesTenant && ids.length && touchesObject && !TENANT_RE.test(body)) {
+    // An explicit ownership assertion IS scoping. Without this, T5.2 simply
+    // takes over from T5.1 the moment the maintainer's fix lands, and the
+    // entry never discriminates — observed on GHSA-2364's post/ revision,
+    // where assertStripeIdMatchesSession(id, req.user...) silenced T5.1 and
+    // T5.2 immediately fired in its place.
+    if (fileUsesTenant && ids.length && touchesObject && !TENANT_RE.test(body) && !OWNERSHIP_RE.test(body)) {
       push(mk(file, line, 'tenant-scope-missing', 'CWE-863',
         `${name}() queries by id without the workspace/tenant scope this file uses elsewhere`,
         'Other code in this file constrains queries by a workspace/organization/tenant dimension; this handler '
@@ -177,4 +221,4 @@ export function scanOwnershipAuthz(file, raw) {
   return out;
 }
 
-export const _internals = { REQ_ID_RE, OWNERSHIP_RE, TENANT_RE, PERMISSION_CALL_RE, LIFECYCLE_FIELD_RE };
+export const _internals = { REQ_ID_RE, REQ_ID_DESTRUCTURE_RE, _usesId, OWNERSHIP_RE, TENANT_RE, PERMISSION_CALL_RE, LIFECYCLE_FIELD_RE };
