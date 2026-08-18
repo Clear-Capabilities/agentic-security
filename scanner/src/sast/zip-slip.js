@@ -77,6 +77,57 @@ export function scanZipSlip(fp, raw) {
     // filter="data" / filter=tarfile.data_filter in the same call. File-level
     // suppression was too aggressive — a safe function later in the file would
     // hide an unsafe one earlier.
+    /**
+     * The OTHER real mitigation: intercept per-member extraction and refuse
+     * any destination outside the target directory. Both halves are required —
+     * GHSA-f42x-p2mx-hm8r's VULNERABLE revision also patched `_extract_member`,
+     * but only to add a write bit, with no path validation. Recognising the
+     * patch alone would therefore silence the vulnerable code too.
+     *
+     * `filter="data"` needs Python 3.12; this interception form is what
+     * codebases supporting older Pythons actually ship, so treating it as
+     * exotic left the finding surviving its own fix.
+     */
+    // Resolved through the ASSIGNED FUNCTION'S OWN BODY, never a text window.
+    // A window is useless here: penelope.py is 5000+ lines, and any window
+    // wide enough to reach the interceptor also sweeps up unrelated
+    // os.path.realpath calls, which silenced the VULNERABLE revision too.
+    const CONTAINMENT_RE = /\b(?:commonpath|realpath|abspath)\s*\(|\w{0,20}(?:is_?within|inside_?dir|safe_?path|within_?dir)\w{0,20}\s*\(|\.startswith\s*\(/i;
+    const MEMBER_PATCH_RE = /\b_extract_member\s*=\s*([A-Za-z_]\w*)/g;
+    /** Body of a Python `def name(...)`, by indentation. */
+    const _pyBody = (name) => {
+      const d = new RegExp(`^([ \\t]*)def\\s+${name}\\s*\\(`, 'm').exec(code);
+      if (!d) return null;
+      const indent = d[1].length;
+      // Start at the line AFTER the signature. Slicing at the end of the
+      // matched `def name(` leaves the rest of that same line as element 0
+      // with zero indentation, which ends the body before it begins.
+      const nl = code.indexOf('\n', d.index);
+      if (nl === -1) return null;
+      const rest = code.slice(nl + 1).split('\n');
+      const body = [];
+      for (const ln of rest) {
+        if (ln.trim() && (ln.length - ln.trimStart().length) <= indent) break;
+        body.push(ln);
+      }
+      return body.join('\n');
+    };
+    const _isContainmentGuardedExtract = () => {
+      MEMBER_PATCH_RE.lastIndex = 0;
+      let a;
+      while ((a = MEMBER_PATCH_RE.exec(code))) {
+        const body = _pyBody(a[1]);
+        if (!body) continue;
+        // The interceptor must REFUSE, not merely observe. penelope's
+        // vulnerable revision also patched _extract_member — to add a write
+        // bit (`args[0].mode |= 0o200`) with no validation and no early
+        // return — so requiring a conditional refusal is what separates the
+        // two revisions.
+        const refuses = /\bif\b[\s\S]{0,400}?\b(?:return|raise|continue)\b/.test(body);
+        if (refuses && CONTAINMENT_RE.test(body)) return true;
+      }
+      return false;
+    };
     const _isFilteredExtract = (afterIdx) => {
       let depth = 0;
       let inS = null;
@@ -101,7 +152,7 @@ export function scanZipSlip(fp, raw) {
       let m;
       while ((m = reA.exec(code))) {
         const openParen = m.index + m[0].length - 1; // position of '('
-        if (_isFilteredExtract(openParen)) continue;
+        if (_isFilteredExtract(openParen) || _isContainmentGuardedExtract()) continue;
         const line = _lineOf(raw, m.index);
         push({
           id: `zip-slip:${fp}:${line}:py-tarfile`,
@@ -119,7 +170,7 @@ export function scanZipSlip(fp, raw) {
       const reB = new RegExp(PY_TARFILE_EXTRACTALL_SHORT_RE.source, PY_TARFILE_EXTRACTALL_SHORT_RE.flags);
       while ((m = reB.exec(code))) {
         const openParen = m.index + m[0].length - 1;
-        if (_isFilteredExtract(openParen)) continue;
+        if (_isFilteredExtract(openParen) || _isContainmentGuardedExtract()) continue;
         const line = _lineOf(raw, m.index);
         push({
           id: `zip-slip:${fp}:${line}:py-tarfile-bare`,
