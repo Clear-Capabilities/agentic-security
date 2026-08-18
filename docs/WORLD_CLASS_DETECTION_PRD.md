@@ -271,11 +271,27 @@ Updated 2026-08-17. Only items verified by a command run are marked landed.
 
 | Item | Status | Evidence |
 |---|---|---|
-| **T0.1–T0.7 (whole of P0)** | **Landed** (`bac5e12`) | Localized scoring, fix-discrimination, `--deep` as a runner configuration, per-layer attribution, conservative CWE hierarchy, UNSCORED repair, deterministic held-out slice. 17 unit tests. Validated on a 4-entry ground-truth slice: file-scoped says 4/4, localized credits the 2 real findings and refuses both known coincidences. |
-| **T1.2 auth resolver** | **Landed** (`fe75dda`) | `sast/_auth-signals.js`; the real GHSA-3cg5 false positive no longer fires, a genuinely unprotected handler still does, body evidence scoped per handler. 11 tests. |
-| **Theme 6 convention deviation** | **Landed, gate NOT met** (`40bd210`) | See below. |
-| T1.1, T1.3, T1.4, T2.1–T2.3 | Not started | |
-| Theme 3 (all), Theme 4 (all), Theme 5 (all) | Not started | T4.1's target family is partly covered incidentally by Theme 6, since the GitPython argument-injection entries are both shapes at once. |
+| **T0.1–T0.7 (whole of P0)** | **Landed** (`bac5e12`, `db3e646`) | Localized scoring, fix-discrimination, `--deep` as a runner configuration, per-layer attribution, conservative CWE hierarchy, UNSCORED repair, deterministic held-out slice. First honest measurement published: localized **6/315 (1.90%)** vs file-scoped 21/315 (6.67%); fix-discrimination 2/6; held-out 1/66 vs development 5/249 (no overfitting signal). |
+| **T1.2 auth resolver** | **Landed** (`fe75dda`) | `sast/_auth-signals.js`. The real GHSA-3cg5 false positive no longer fires; a genuinely unprotected handler still does. |
+| **T2.2 claim-checkable findings** | **Partial** | `checkedFor` added to the two detectors touched (fastapi-hardening, convention-deviation). Not applied across the other absence-claiming rules. |
+| **T3.1 entry-point taint inference** | **Largely landed** (`07d743d`, `9f2591e`) | Python emitted 0 `paramAnnotations` against 3/4/3 in JS/C#/Java — the whole `match.type:'annotation'` mechanism was unreachable for Python. Now FastAPI param markers, `@mcp.tool()`, and argparse. A/B verified genuinely new (0 findings with the entries stripped). **Not done:** SDK/network-response sources, library-mode public-API params. |
+| **T4.1 CWE-88 argument injection** | **Partial, via Theme 6** | The GitPython family is both shapes at once; no dedicated per-tool dangerous-flag table exists. |
+| **Theme 6 convention deviation** | **Landed, gate NOT met** (`40bd210`, `0a7cfdc`) | Project-scoped mining implemented. Gate still 1/10 — root-caused to benchmark materialisation scope, not the detector. See below. |
+| **Precision fixes found en route** | **Landed** (`640da42`, `27ebf66`, `9f2591e`) | `rate-limit.js` discarded 100% of its own findings project-wide; `scanRoutes` missed permission-string RBAC middleware; subprocess sinks labelled argv-array calls `shell=True`; `py-requests-get` reported `dict.get()` as SSRF. |
+| T1.1 family-matched guard suppression | **Not started** | The main lever on fix-discrimination (currently 2/6). |
+| T1.3 validate-then-mutate invalidation | **Not started** | 7 entries. |
+| T1.4 differential mode | **Not started** | |
+| T2.1 top-detector precision audit | **Not started** | The four fixes above were found incidentally, not by the systematic audit this item specifies. |
+| T2.3 fixed-code negative controls | **Not started** | |
+| T3.2 cross-file / stored taint | **Not started** | 12 entries — the largest remaining taint gap. |
+| T3.3 container/collection-element taint | **Not started** | |
+| T3.4 multi-source correlation | **Not started** | |
+| T4.2 resource exhaustion | **Not started** | 14 entries — largest unimplemented class. |
+| T4.3 code-generation as a sink | **Not started** | 5 entries. |
+| T4.4 redirect / header-forwarding | **Not started** | 8 entries. |
+| T4.5 TOCTOU on resolution | **Not started** | 3 entries. |
+| T5.1–T5.4 business-logic authz | **Not started** | 19 entries — the largest family in the evidence table. |
+| Theme 6 JS/TS unit extractor | **Not started** | 6 of the 10 sibling-omission entries are TypeScript and unreachable without it. |
 
 ### Theme 6 — measured against its own exit gate, which it does not yet pass
 
