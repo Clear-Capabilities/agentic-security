@@ -87,14 +87,31 @@ export function scanFastapiHardening(file, raw) {
   // calling `await check_folders_permission(request, user, db=db)` had no auth
   // dependency. Both halves now go through the shared resolver in
   // _auth-signals.js, which recognises the SHAPE rather than an enumeration.
-  const mutatingRouteRe = /@\s*(?:app|router)\.(?:post|put|patch|delete)\s*\(\s*['"][^'"]+['"][^)]*\)\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)/g;
+  // The parameter list is captured by BALANCED paren matching, not `[^)]*`.
+  //
+  // T2.1 audit finding, against this rule's own earlier fix: FastAPI
+  // signatures routinely contain nested parens as parameter DEFAULTS —
+  // `delete_file: bool = Query(True)` — and `[^)]*` stops at the first `)`,
+  // truncating the capture BEFORE the auth dependency that usually follows.
+  // Measured: all 8 surviving missing-auth findings across the cached
+  // independent population were on handlers that visibly declare
+  // `user=Depends(get_verified_user)`, which the truncated capture never saw.
+  const mutatingRouteRe = /@\s*(?:app|router)\.(?:post|put|patch|delete)\s*\([^\n]{0,300}\n?[^\n]{0,300}?\)\s*(?:async\s+)?def\s+(\w+)\s*\(/g;
   for (const m of raw.matchAll(mutatingRouteRe)) {
-    const params = m[2];
+    // Walk from the '(' that opened the signature to its true partner.
+    const sigOpen = m.index + m[0].length - 1;
+    let depth = 0, sigClose = -1;
+    for (let i = sigOpen; i < raw.length && i < sigOpen + 4000; i++) {
+      const ch = raw[i];
+      if (ch === '(') depth++;
+      else if (ch === ')') { depth--; if (depth === 0) { sigClose = i; break; } }
+    }
+    if (sigClose === -1) continue;
+    const params = raw.slice(sigOpen + 1, sigClose);
     // The handler body: from the end of the signature to the next top-level
     // decorator/def, so an authorization call inside THIS handler counts and
     // one in the next handler does not.
-    const bodyStart = m.index + m[0].length;
-    const rest = raw.slice(bodyStart);
+    const rest = raw.slice(sigClose + 1);
     const nextHandler = rest.search(/\n@\s{0,8}(?:app|router)\.|\n(?:async\s{1,8})?def\s{1,8}/);
     const body = nextHandler === -1 ? rest : rest.slice(0, nextHandler);
 

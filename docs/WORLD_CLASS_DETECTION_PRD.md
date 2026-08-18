@@ -281,7 +281,7 @@ Updated 2026-08-17. Only items verified by a command run are marked landed.
 | **T1.1 family-matched guard suppression** | **ATTEMPTED, REVERTED — incompatible with a gated invariant** | See §8b. |
 | T1.3 validate-then-mutate invalidation | **Not started** | 7 entries. |
 | T1.4 differential mode | **Not started** | |
-| T2.1 top-detector precision audit | **Not started** | The four fixes above were found incidentally, not by the systematic audit this item specifies. |
+| **T2.1 top-detector precision audit** | **Partially landed** | Ranking built and run over a stratified sample; the top rule by volume and the FastAPI missing-auth rule adjudicated and both fixed. The remaining ~13 ranked rules are not yet adjudicated. |
 | T2.3 fixed-code negative controls | **Not started** | |
 | **T3.2 cross-file / stored taint** | **Landed** | 12 entries. Registry admission moved from a closed field-name list to PROVENANCE; sink families extended beyond XSS to SSRF/path/exec with per-family CWEs and per-family guards. Also fixed the underlying comment-stripping bug that made a detector's illustrative docblock examples register as real ORM writes. |
 | T3.3 container/collection-element taint | **Not started** | |
@@ -292,6 +292,33 @@ Updated 2026-08-17. Only items verified by a command run are marked landed.
 | **T4.5 TOCTOU on resolution** | **Landed** (`0595d0d`) | 3 entries. Took two precision tightenings, both forced by real FPs on this repo's own detector modules; final self-scan drift zero. |
 | **T5.1–T5.4 business-logic authz** | **Landed** | 19 entries — the largest family. Four sub-rules (ownership, tenant-scope, branch-inconsistency, lifecycle gate), each recognising ANY `*Id` parameter rather than the `id`/`userId` heuristic that made the existing rules miss these. Only 1 self-scan delta, on the detector's own regex. |
 | **Theme 6 JS/TS unit extractor** | **Landed** (`cf9acc8`) | 6 of the 10 sibling-omission entries are TypeScript. Adds brace-language unit extraction, JS spread option-bags, and camelCase guard recognition. |
+
+### 8c. T2.1 — first two adjudications, both defects, one in this session's own fix
+
+Ranking detectors by finding VOLUME over a stratified sample of the
+independent population (3 entries per language, 24 scanned) put one rule far
+ahead of every other: **PHP backtick command injection, 105 findings**. The
+sampled instance was a COMMENT — `// Abort if \`taxonomies\` resource is
+disabled` — backticks quoting a word in English, read as PHP's shell-execution
+operator. `sast/php.js` scanned raw source with no comment stripping at all,
+which `sast/CLAUDE.md` names as its first gotcha.
+
+The second adjudication was of this session's own T1.2 fix, and it had NOT
+held on real code. All 8 surviving `fastapi-missing-auth` findings across the
+cached population were on handlers that visibly declare
+`user=Depends(get_verified_user)`. Cause: the signature capture used
+`\(([^)]*)\)`, which stops at the first `)` — and FastAPI signatures routinely
+carry nested parens as parameter defaults (`delete_file: bool = Query(True)`),
+truncating the capture before the auth dependency that follows. Replaced with
+balanced paren matching: 8 findings → 2, and both survivors are correct
+(`oauth_backchannel_logout` genuinely has only a DB-session dependency, so the
+crude adjudication heuristic — "any `Depends(` nearby" — was what over-flagged
+them, not the detector).
+
+**Both defects were high-volume and neither was visible from unit tests**, which
+is the argument for finishing this item: 13 ranked rules remain unadjudicated.
+
+---
 
 ### 8b. T1.1 was attempted and reverted — and the reason changes this PRD's plan
 

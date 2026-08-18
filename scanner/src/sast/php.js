@@ -1,3 +1,4 @@
+import { blankComments } from './_comment-strip.js';
 // PHP-specific detectors. Covers the canonical PHP foot-guns:
 //
 //   - $_REQUEST / $_GET / $_POST flowing into eval / system / exec / passthru / shell_exec / `` / popen / proc_open
@@ -37,9 +38,18 @@ const RE = {
 
 function lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
 
-export function scanPhp(fp, raw) {
+export function scanPhp(fp, rawInput) {
   if (!/\.(?:php|phtml|phar)$/i.test(fp)) return [];
-  if (!raw || raw.length > 500_000) return [];
+  if (!rawInput || rawInput.length > 500_000) return [];
+  // T2.1 audit — this module scanned raw source with NO comment stripping,
+  // which sast/CLAUDE.md names as its first gotcha. Measured cost: the
+  // backtick command-injection rule was the single highest-volume rule across
+  // the independent population (105 findings from 24 entries), and the sampled
+  // ones were PROSE — `// Abort if \`taxonomies\` resource is disabled` — where
+  // backticks quoting a word in English read as PHP's shell-execution
+  // operator. blankComments preserves line numbers, so reported lines are
+  // unaffected.
+  const raw = blankComments(rawInput, 'php');
   const findings = [];
   const seen = new Set();
   const push = (f) => { if (!seen.has(f.id)) { seen.add(f.id); findings.push(f); } };
