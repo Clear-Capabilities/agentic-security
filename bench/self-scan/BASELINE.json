@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-18T05:25:39.084Z",
-  "commit": "0595d0d157044e9ef12e4c6fa555d964b246b533",
+  "generatedAt": "2026-08-18T14:02:27.629Z",
+  "commit": "8ed2b947b4859878336aab3866f814fee9a81d1f",
   "targets": {
     "hooks": {
       "total": 25,
@@ -38,7 +38,7 @@
       }
     },
     "scanner/src": {
-      "total": 630,
+      "total": 629,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -197,7 +197,6 @@
         "sast/cache-poisoning.js": 1,
         "sast/claude-hook-injection.js": 2,
         "sast/claude-md-prompt-injection.js": 7,
-        "sast/claude-settings.js": 1,
         "sast/client-side.js": 6,
         "sast/cloud-iam.js": 1,
         "sast/convention-deviation.js": 3,

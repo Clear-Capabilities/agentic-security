@@ -1683,7 +1683,7 @@ const LOGIC_PATTERNS=[
   // ── Missing Bounds on Financial/Quantity Fields ──────────────────────────────
   {regex:/(?:req|request|ctx)\s*(?:\.\s*body|\[\s*['"]body['"]\s*\])\s*[.[\s]*(?:quantity|amount|price|units|count|qty)\b(?![^;]{0,200}(?:Number\.isInteger|isNaN|Math\.abs|>=\s*1|>\s*0|>0|>=1|max\s*:))/g,vuln:"Missing Positive-Integer Validation on Financial Field",severity:"medium",cwe:"CWE-20",stride:"Tampering",fix:"Validate that financial/quantity fields are positive integers before processing. Negative values can create credit or reverse transactions.",code:"// BEFORE\nawait Order.create({ quantity: req.body.quantity, price: product.price });\n\n// AFTER\nconst qty = req.body.quantity;\nif (!Number.isInteger(qty) || qty < 1 || qty > 10000)\n  return res.status(400).json({ error: 'quantity must be 1-10000' });\nawait Order.create({ quantity: qty, price: product.price });"},
   // ── #22: Missing timeout on outbound HTTP requests (DoS) ─────────────────────
-  {regex:/(?:await\s+)?(?:fetch|axios\.(?:get|post|put|patch|delete|request)|http\.(?:get|request)|https\.(?:get|request)|got)\s*\(/gi,vuln:"Missing Timeout on Outbound HTTP Request (DoS)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",appliesTo:["server"],fix:"Set a timeout on all outbound requests to prevent event-loop starvation from stalled upstreams.",code:"// fetch (Node 18+)\nconst resp = await fetch(url, { signal: AbortSignal.timeout(5000) });\n\n// axios\nawait axios.get(url, { timeout: 5000 });\n\n// node http\nconst req = http.get(url, cb);\nreq.setTimeout(5000, () => req.destroy());"},
+  {regex:/(?:await\s+)?\b(?:fetch|axios\.(?:get|post|put|patch|delete|request)|http\.(?:get|request)|https\.(?:get|request)|got)\s*\(/gi,vuln:"Missing Timeout on Outbound HTTP Request (DoS)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",appliesTo:["server"],fix:"Set a timeout on all outbound requests to prevent event-loop starvation from stalled upstreams.",code:"// fetch (Node 18+)\nconst resp = await fetch(url, { signal: AbortSignal.timeout(5000) });\n\n// axios\nawait axios.get(url, { timeout: 5000 });\n\n// node http\nconst req = http.get(url, cb);\nreq.setTimeout(5000, () => req.destroy());"},
   // ── #24: ORM collection queries without pagination limit (DoS) ───────────────
   {regex:/\.\s*(?:findAll|findMany|findAndCountAll)\s*\(\s*\{[^}]{0,500}\}/g,vuln:"ORM Collection Query Without Pagination Limit (DoS)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",appliesTo:["server"],fix:"Always set limit/take on collection queries to bound memory and DB load.",code:"const items = await Model.findAll({\n  where: { userId: req.user.id },\n  limit: Math.min(Number(req.query.limit) || 50, 100),\n  offset: Number(req.query.offset) || 0,\n});"},
   // ── #27: Missing audit log on sensitive mutations (Repudiation) ──────────────
@@ -2337,6 +2337,28 @@ function _isFalsePositiveCredential(fp, snippet, fullMatch){
   const pathLC = fp.replace(/\\\\/g,'/').toLowerCase();
   if (_CRED_PATH_RE.test(pathLC) || _CRED_FILE_RE.test(pathLC)) return {skip:true, reason:'path-filter'};
   // Extract LHS identifier from the snippet (handles `const x =`, `x =`, `{ x:`, etc.)
+// Well-known protocol / spec vocabulary that is public by definition: OAuth
+// and OIDC grant, token and response types, URN token-type identifiers, HTTP
+// auth schemes, JWT alg names, and common enum-ish method names. Anchored to
+// the WHOLE value so a real secret that merely contains one of these words is
+// unaffected.
+const _PROTOCOL_CONSTANT_VAL_RE = new RegExp('^(?:'
+  + 'urn:[\\w.:-]+'                                        // urn:ietf:params:oauth:...
+  + '|(?:refresh|access|id|device|bearer|mac|dpop)_token'
+  + '|authorization_code|client_credentials|implicit|password_grant'
+  + '|urn:ietf:params:oauth:grant-type:[\\w-]+'
+  + '|(?:client_secret|private_key)_(?:basic|post|jwt)'
+  + '|(?:Bearer|Basic|Digest|Negotiate|Hawk)'
+  + '|(?:HS|RS|ES|PS)(?:256|384|512)|none|EdDSA'
+  + '|(?:openid|profile|email|offline_access|address|phone)'
+  + '|code|token id_token|id_token token|query|fragment|form_post'
+  // Enum-ish auth vocabulary, NOT all snake_case: the value must end in a
+  // protocol-vocabulary word. A first draft allowed any snake_case string,
+  // which would have suppressed a genuine lowercase secret.
+  + '|[a-z][a-z0-9_]{0,40}_(?:auth|token|grant|type|method|scope|mode|flow)'
+  + '|(?:auth|token|grant|scope)_[a-z][a-z0-9_]{0,40}'
+  + ')$', 'i');
+
   const am = snippet.match(/(?:^|\W)(\w{2,})\s*[:=]\s*['"]/);
   const varName = am ? am[1] : '';
   if (varName && _CRED_VARNAME_RE.test(varName)) return {skip:true, reason:'var-name-placeholder'};
@@ -2345,6 +2367,19 @@ function _isFalsePositiveCredential(fp, snippet, fullMatch){
   const val = valM ? valM[1] : '';
   if (val.length < 8) return {skip:true, reason:'value-too-short'};
   if (_CRED_PLACEHOLDER_VAL_RE.test(val)) return {skip:true, reason:'placeholder-value'};
+  // T2.1 audit — PROTOCOL CONSTANTS are not secrets.
+  //
+  // "Hardcoded Secret" was the 2nd-highest-volume rule over the independent
+  // population (70 findings in a 24-entry sample), and the sampled instances
+  // were all OAuth/OIDC vocabulary declared as named constants:
+  //   GrantTypeRefreshToken   = "refresh_token"
+  //   TokenTypeURNAccessToken = "urn:ietf:params:oauth:token-type:access_token"
+  //   AuthRecipeMethodMobileBasicAuth = "mobile_basic_auth"
+  // These are PUBLIC identifiers from a published spec — every conforming
+  // implementation ships the identical string. The rule fired only because the
+  // constant's NAME contains token/auth. Flagging them teaches readers to
+  // ignore the whole class, which is what a noisy critical-severity rule costs.
+  if (_PROTOCOL_CONSTANT_VAL_RE.test(val)) return {skip:true, reason:'protocol-constant'};
   // Shannon-entropy + dictionary-word filter (Recommendation #1 from the
   // SCA/SAST improvement plan). The Juliet Java hardcoded-secret detector
   // was producing 468 FPs / 1 TP because test fixtures use short
