@@ -170,3 +170,24 @@ test('a larger fraction is a superset of a smaller one (no reshuffling as it gro
   const small = new Set(ids.filter(id => isHeldOut(id, 0.1)));
   for (const id of small) assert.equal(isHeldOut(id, 0.3), true, `${id} must stay held out`);
 });
+
+// ─────────────────────────────────────── changedLineRangesPost (T0.2 scoping)
+test('changedLineRangesPost reports the POST-side ranges the fix produced', async () => {
+  const { changedLineRangesPost } = await import('../../bench/independent/runner.mjs');
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ranges-post-'));
+  try {
+    const pre = path.join(d, 'pre.js'), post = path.join(d, 'post.js');
+    const base = Array.from({ length: 10 }, (_, i) => `line${i + 1}`);
+    fs.writeFileSync(pre, base.join('\n') + '\n');
+    // Insert two guard lines after line 5 — the shape of a real security fix.
+    const fixed = [...base.slice(0, 5), 'GUARD_A', 'GUARD_B', ...base.slice(5)];
+    fs.writeFileSync(post, fixed.join('\n') + '\n');
+    const ranges = changedLineRangesPost(pre, post);
+    assert.ok(Array.isArray(ranges) && ranges.length >= 1, JSON.stringify(ranges));
+    // The inserted guards land at POST lines 6-7; pre-side ranges would say 5.
+    assert.ok(isLocalized(6, ranges, 0) && isLocalized(7, ranges, 0),
+      `post-side range should cover the inserted lines, got ${JSON.stringify(ranges)}`);
+    // A line far from the change must not be considered part of the fix.
+    assert.equal(isLocalized(12, ranges, 0), false);
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});

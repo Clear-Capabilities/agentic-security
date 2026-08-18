@@ -165,6 +165,35 @@ export function changedLineRanges(preFile, postFile) {
 }
 
 /**
+ * Line ranges on the POST side that the fix produced — the `+P,Q` half of each
+ * unified-diff hunk header, mirroring changedLineRanges' pre-side `-N,M`.
+ *
+ * Needed because `survivedFix` asked "does ANY matching finding remain in the
+ * advisory's files", which is a different claim from the one the metric
+ * reports ("localized TPs that correctly disappear once the vulnerability is
+ * fixed"). A file with several vulnerable sites where the fix addresses only
+ * some — GHSA-chm3-vqcf-52rx patches 5 handlers and leaves other unscoped ones
+ * untouched, GHSA-q939-rpr3-3284 guards 2 of 4 sinks — always reported
+ * "survived", even when the detector went silent on every site the fix
+ * actually changed. Scoping to the post-side changed lines asks whether the
+ * finding still fires on the code the fix PRODUCED.
+ */
+export function changedLineRangesPost(preFile, postFile) {
+  if (!fs.existsSync(preFile) || !fs.existsSync(postFile)) return null;
+  const r = cp.spawnSync('diff', ['-u0', preFile, postFile], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  if (r.error || typeof r.status !== 'number' || r.status > 1) return null;
+  const ranges = [];
+  for (const m of String(r.stdout || '').matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? /gm)) {
+    const start = parseInt(m[1], 10);
+    const len = m[2] === undefined ? 1 : parseInt(m[2], 10);
+    // len===0 is a pure DELETION — anchor a point range, same as the
+    // pure-insertion case on the pre side.
+    ranges.push(len > 0 ? [start, start + len - 1] : [start, start]);
+  }
+  return ranges;
+}
+
+/**
  * T0.7 — deterministic held-out slice.
  *
  * Detection work must not be tuned against every entry it is scored on, the
@@ -364,8 +393,18 @@ async function main() {
     // T0.2 — did the SAME finding go away once the bug was fixed? A finding
     // that survives its own fix has reported the presence of an API, not the
     // presence of a vulnerability.
-    const postMatches = findMatchingFindings(postFindings, e.cwe, e.files, { hierarchy: true });
+    // Scoped to the lines the fix PRODUCED, not the whole file — see
+    // changedLineRangesPost. `postMatchesAnywhere` is retained alongside so the
+    // stricter and looser readings stay distinguishable in the report.
+    const postRangesByFile = new Map();
+    for (const rel of (e.files || [])) {
+      postRangesByFile.set(rel, changedLineRangesPost(path.join(dir, 'pre', rel), path.join(dir, 'post', rel)));
+    }
+    const postMatchesAnywhere = findMatchingFindings(postFindings, e.cwe, e.files, { hierarchy: true });
+    const postMatches = postMatchesAnywhere
+      .filter(f => isLocalized(f.line, postRangesByFile.get(relOf(f))));
     const survivedFix = hitPreLocal && postMatches.length > 0;
+    const survivedFixWide = hitPreLocal && postMatchesAnywhere.length > 0;
     // T0.4 — which analysis layer actually produced the credited finding.
     const matchedParser = hitPreLocal ? (localizedMatches[0].parser || 'unknown') : null;
 
@@ -379,6 +418,7 @@ async function main() {
       tpLocal: hitPreLocal ? 1 : 0, fnLocal: hitPreLocal ? 0 : 1,
       fpLocal: (hitPost && !hitPreLocal) ? 1 : 0, tnLocal: (hitPost && !hitPreLocal) ? 0 : 1,
       survivedFix: survivedFix ? 1 : 0,
+      survivedFixWide: survivedFixWide ? 1 : 0,
       matchedParser,
       matchedLine: hitPreLocal ? (localizedMatches[0].line ?? null) : null,
       preFindings: preFindings.length, postFindings: postFindings.length,
@@ -428,7 +468,18 @@ async function main() {
   const fixDiscrimination = {
     n: localTps.length - survived, d: localTps.length,
     value: localTps.length ? (localTps.length - survived) / localTps.length : null,
-    meaning: 'localized TPs that correctly disappear once the vulnerability is fixed',
+    meaning: 'localized TPs whose finding disappears from the lines the fix produced',
+  };
+  // The previous, looser reading, kept so the definition change is auditable
+  // rather than a silent improvement: ANY matching finding remaining anywhere
+  // in the advisory's files counts as survival. It understates a detector that
+  // correctly silenced every site the fix touched while still reporting other,
+  // genuinely unfixed sites in the same file.
+  const survivedWide = localTps.filter(r => r.survivedFixWide === 1).length;
+  const fixDiscriminationFileScoped = {
+    n: localTps.length - survivedWide, d: localTps.length,
+    value: localTps.length ? (localTps.length - survivedWide) / localTps.length : null,
+    meaning: 'localized TPs with NO matching finding anywhere in the advisory files afterwards',
   };
 
   // T0.4 — which layer earned each localized true positive. This is the
@@ -479,6 +530,7 @@ async function main() {
     // THE CLAIM (T0.1). Everything below it is diagnostic.
     localized: { ...localized, meaning: 'matching finding landed on code the fix actually changed (±' + LOCALIZATION_WINDOW + ' lines)' },
     fixDiscrimination,
+    fixDiscriminationFileScoped,
     byLayer,
     heldOut: {
       meaning: 'never tune against these; scored separately (T0.7)',
