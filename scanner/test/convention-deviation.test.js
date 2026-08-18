@@ -18,7 +18,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  scanConventionDeviation, analyseUnits, pythonUnits,
+  scanConventionDeviation, scanConventionDeviationProject, analyseUnits, pythonUnits,
   MIN_GUARDED_SIBLINGS, MIN_GUARDED_RATIO,
 } from '../src/sast/convention-deviation.js';
 
@@ -129,4 +129,38 @@ test('analyseUnits is pure and reports the consensus guard', () => {
   assert.equal(out[0].name, 'init');
   assert.equal(out[0].consensusGuard, 'Git.check_unsafe_options');
   assert.equal(out[0].receiver, 'self.git'.split('.').pop());
+});
+
+// ─────────────────────────────── project-scoped convention mining
+test('the convention is mined ACROSS files, not per-file', () => {
+  // Split the same convention over three files so that NO single file clears
+  // MIN_GUARDED_SIBLINGS on its own. Per-file analysis sees populations of
+  // 2/1/1 and stays silent; project-scoped sees 4 and reports the deviant.
+  // This is the GitPython shape: Git.check_unsafe_options spans repo/base.py,
+  // index/base.py and objects/commit.py.
+  const guarded = (i) => [
+    `class C${i}:`,
+    `    def guarded_${i}(self, path, **kwargs):`,
+    '        Git.check_unsafe_options(options=kwargs, unsafe_options=self.unsafe_opts)',
+    `        return self.git.cmd_${i}(path, **kwargs)`,
+  ].join('\n');
+  const files = {
+    'a.py': guarded(1) + '\n' + guarded(2).split('\n').slice(1).join('\n'),
+    'b.py': guarded(3),
+    'c.py': guarded(4) + '\n' +
+      '    def init(self, path, **kwargs):\n' +
+      '        return self.git.init(path, **kwargs)\n',
+  };
+  // Per-file: no file has >=3 guarded, so nothing fires.
+  for (const [f, src] of Object.entries(files)) {
+    assert.deepEqual(scanConventionDeviation(f, src), [], `${f} alone must be silent`);
+  }
+  // Project-wide: the convention is visible and the deviant is reported.
+  const out = scanConventionDeviationProject(files);
+  assert.equal(out.length, 1, `expected the one deviant, got ${JSON.stringify(out.map(x => x.vuln))}`);
+  assert.match(out[0].vuln, /init\(\)/);
+  assert.equal(out[0].file, 'c.py');
+  // Evidence cites peers from other files, qualified by path.
+  assert.ok(out[0].evidenceSiblings.some(x => x.includes('a.py') || x.includes('b.py')),
+    `expected cross-file evidence, got ${JSON.stringify(out[0].evidenceSiblings)}`);
 });

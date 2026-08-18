@@ -65,7 +65,7 @@ import { scanRust, extractRustImportMap } from './sast/rust.js';
 import { scanGoExtended } from './sast/go-extended.js';
 import { scanDatabaseRLS } from './sast/db-rls.js';
 import { scanRateLimit } from './sast/rate-limit.js';
-import { scanConventionDeviation } from './sast/convention-deviation.js';
+import { scanConventionDeviationProject } from './sast/convention-deviation.js';
 import { scanAuthProvider } from './sast/auth-provider.js';
 import { scanEnvHygiene } from './sast/env-hygiene.js';
 import { scanWebhook } from './sast/webhook.js';
@@ -7766,7 +7766,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       aF.push(...scanRust(p,c));
       aF.push(...scanGoExtended(p,c));
       aF.push(...scanDatabaseRLS(p,c));
-      aF.push(...scanRateLimit(p,c));aF.push(...scanConventionDeviation(p,c));
+      aF.push(...scanRateLimit(p,c));
       aF.push(...scanAuthProvider(p,c));
       aF.push(...scanEnvHygiene(p,c));
       aF.push(...scanWebhook(p,c));
@@ -7980,6 +7980,9 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   setProgress({current:i,total:files.length,file:"Session taint...",phase:"Linking"});const sess=crossSessionTaint(fc);aF.push(...sess);
   setProgress({current:i,total:files.length,file:"Call graph...",phase:"Linking"});const callGraph=buildCallGraph(fc);
   // R19 (PRD §5): cross-route BOLA/BFLA over the aggregated route inventory.
+  // Convention deviation is PROJECT-scoped by design: the convention is a
+  // property of the codebase, not of one file (see convention-deviation.js).
+  try{aF.push(...scanConventionDeviationProject(fc));}catch(_){}
   try{aF.push(...scanApiBrokenAuthz(aR));}catch(_){}
   // R22 (PRD §5): cross-service edges inferred from code (client call → matched route).
   try{aF.push(...scanCrossService(aR,fc));}catch(_){}

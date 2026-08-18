@@ -78,12 +78,21 @@ export function pythonUnits(code) {
 }
 
 /**
- * The core, pure analysis: given sibling units, group those that forward
- * caller-controlled options into a shared primitive and report the ones that
- * skip the guard their neighbours apply.
+ * The core, pure analysis. Takes units from the WHOLE PROJECT — each tagged
+ * with its file — and reports sites that skip the guard their peers apply.
+ *
+ * WHY PROJECT-SCOPED, NOT PER-FILE. The first version analysed one file at a
+ * time and measured 1 of 10 against its own exit gate. Diagnosis: the
+ * convention is a property of the CODEBASE, not of a file.
+ * `Git.check_unsafe_options` is called from git/repo/base.py (5 sites),
+ * git/index/base.py (2) and git/objects/commit.py (1) — project-wide an
+ * unambiguous 8-site convention, but per-file it fragments into populations of
+ * 5, 2 and 1, and only the first clears MIN_GUARDED_SIBLINGS. Lowering the
+ * threshold would have been the wrong fix: it weakens the precision control
+ * everywhere instead of restoring the population that genuinely exists.
  */
 export function analyseUnits(units) {
-  // group key -> { guarded: [{name, guard}], unguarded: [{name, line, into}] }
+  // receiver -> { guarded: [...], unguarded: [...] }
   const groups = new Map();
   for (const u of units) {
     if (!/\*\*\w+/.test(u.sig)) continue;                    // takes no option bag
@@ -92,15 +101,16 @@ export function analyseUnits(units) {
     const guard = u.body.match(GUARD_CALL_RE);
     for (const f of forwards) {
       const receiver = f[1];
-      // `self.<method>` delegates to a sibling in the same class; the guard, if
-      // any, belongs to that sibling. Grouping on it would compare a method
-      // against itself one hop away.
+      // `self.<method>` delegates to a sibling; the guard, if any, belongs to
+      // that sibling. Grouping on it would compare a method against itself
+      // one hop away.
       if (receiver === 'self' || receiver === 'cls' || receiver === 'this') continue;
       if (!groups.has(receiver)) groups.set(receiver, { guarded: [], unguarded: [] });
       const g = groups.get(receiver);
-      const row = { name: u.name, line: u.line, into: `${f[1]}.${f[2]}` };
-      if (guard) { if (!g.guarded.some(x => x.name === u.name)) g.guarded.push({ ...row, guard: guard[1] }); }
-      else if (!g.unguarded.some(x => x.name === u.name)) g.unguarded.push(row);
+      const key = `${u.file}::${u.name}`;
+      const row = { name: u.name, line: u.line, file: u.file, into: `${f[1]}.${f[2]}` };
+      if (guard) { if (!g.guarded.some(x => `${x.file}::${x.name}` === key)) g.guarded.push({ ...row, guard: guard[1] }); }
+      else if (!g.unguarded.some(x => `${x.file}::${x.name}` === key)) g.unguarded.push(row);
     }
   }
 
@@ -109,16 +119,13 @@ export function analyseUnits(units) {
     if (g.guarded.length < MIN_GUARDED_SIBLINGS) continue;
     const total = g.guarded.length + g.unguarded.length;
     if (g.guarded.length / total < MIN_GUARDED_RATIO) continue;
-    // The guard the neighbours agree on (most common callee).
     const tally = new Map();
     for (const x of g.guarded) tally.set(x.guard, (tally.get(x.guard) || 0) + 1);
     const consensusGuard = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0];
     for (const u of g.unguarded) {
       out.push({
-        ...u,
-        receiver,
-        consensusGuard,
-        guardedSiblings: g.guarded.map(x => x.name),
+        ...u, receiver, consensusGuard,
+        guardedSiblings: g.guarded.map(x => (x.file === u.file ? x.name : `${x.file}:${x.name}`)),
         ratio: g.guarded.length / total,
       });
     }
@@ -126,34 +133,51 @@ export function analyseUnits(units) {
   return out;
 }
 
-export function scanConventionDeviation(file, raw) {
-  if (!raw || typeof raw !== 'string' || raw.length > 500_000) return [];
-  if (!PY_RE.test(file)) return [];                 // Python first; see module header
-  if (!/\*\*\w+/.test(raw)) return [];              // cheap relevance gate
-  const code = blankComments(raw, 'py');
-  let deviations;
-  try { deviations = analyseUnits(pythonUnits(code)); } catch { return []; }
-  return deviations.map(d => ({
-    id: `convention-deviation:guard-omitted:${file}:${d.line}:${d.name}`,
-    file, line: d.line,
-    vuln: `Convention deviation — ${d.name}() forwards caller-controlled options to ${d.into} without the ${d.consensusGuard}() guard its siblings apply`,
+function _finding(d) {
+  return {
+    id: `convention-deviation:guard-omitted:${d.file}:${d.line}:${d.name}`,
+    file: d.file, line: d.line,
+    vuln: `Convention deviation — ${d.name}() forwards caller-controlled options to ${d.into} without the ${d.consensusGuard}() guard its peers apply`,
     severity: 'medium',
     cwe: 'CWE-88',
     family: 'convention-deviation',
     parser: 'CONVENTION',
     confidence: 0.55,
     description:
-      `${d.guardedSiblings.length} sibling method(s) in this file — ${d.guardedSiblings.join(', ')} — call ` +
+      `${d.guardedSiblings.length} other method(s) in this project — ${d.guardedSiblings.slice(0, 6).join(', ')} — call ` +
       `${d.consensusGuard}() before forwarding an option bag to ${d.receiver}.*, and ${d.name}() does not. ` +
       'Where those options become command-line flags, an unvalidated option bag lets a caller inject flags the ' +
       'author never intended (arbitrary file read/write, or code execution via a hook-installing flag).',
     remediation:
       `Apply the same guard the neighbouring methods use — ${d.consensusGuard}() — to ${d.name}()'s options before ` +
       'forwarding them, or document why this call site is exempt.',
-    // T2.2 — an absence-claim states what it looked for and what it compared against.
-    checkedFor: `${d.consensusGuard}() call in ${d.name}(); compared against siblings forwarding into ${d.receiver}.*`,
+    checkedFor: `${d.consensusGuard}() call in ${d.name}(); compared against ${d.guardedSiblings.length} peer(s) forwarding into ${d.receiver}.*`,
     evidenceSiblings: d.guardedSiblings,
-  }));
+  };
+}
+
+/**
+ * Project-level entry point. `fileContents` is the engine's `fc` map
+ * (path -> source), so the convention population spans the whole codebase.
+ */
+export function scanConventionDeviationProject(fileContents) {
+  if (!fileContents || typeof fileContents !== 'object') return [];
+  const units = [];
+  for (const [file, raw] of Object.entries(fileContents)) {
+    if (!PY_RE.test(file)) continue;
+    if (!raw || typeof raw !== 'string' || raw.length > 500_000) continue;
+    if (!/\*\*\w+/.test(raw)) continue;                     // cheap relevance gate
+    try {
+      for (const u of pythonUnits(blankComments(raw, 'py'))) units.push({ ...u, file });
+    } catch { /* per-file best-effort, same as every other detector here */ }
+  }
+  if (!units.length) return [];
+  try { return analyseUnits(units).map(_finding); } catch { return []; }
+}
+
+/** Single-file convenience wrapper — the project view of one file. */
+export function scanConventionDeviation(file, raw) {
+  return scanConventionDeviationProject({ [file]: raw });
 }
 
 export const _internals = { GUARD_CALL_RE, FORWARD_INTO_RE, pythonUnits, analyseUnits };

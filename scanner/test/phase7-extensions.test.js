@@ -57,7 +57,10 @@ test('catalog: every JS source has a provenance label', () => {
 });
 
 test('catalog: provenance values come from a known set', () => {
-  const KNOWN = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'env', 'cli', 'file-read', 'stdin', 'url-fragment', 'network']);
+  // 'agent-tool' — a parameter filled by a model acting on untrusted content
+  // (an MCP tool argument). A distinct trust boundary from the HTTP ones,
+  // and the one docs/AGENT_THREAT_MODEL.md is entirely about.
+  const KNOWN = new Set(['http-body', 'url-param', 'path-param', 'header', 'cookie', 'env', 'cli', 'file-read', 'stdin', 'url-fragment', 'network', 'agent-tool']);
   for (const e of CATALOG) {
     if (e.kind !== 'source' || !e.provenance) continue;
     assert.ok(KNOWN.has(e.provenance), `unknown provenance '${e.provenance}' on ${e.id}`);
