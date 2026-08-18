@@ -3190,7 +3190,16 @@ const JAVA_FAMILY_RULES = [
     // SqlSession.{selectList,selectOne,selectMap,update,insert,delete} (MyBatis),
     // JdbcTemplate.{queryForStream,queryForRowSet}, R2DBC DatabaseClient.sql,
     // JdbcOperations / JdbcAggregateOperations.* (Spring Data JDBC).
-    sinkRe: /\.\s*(?:executeQuery|executeUpdate|execute|executeBatch|prepareStatement|prepareCall|createQuery|createNativeQuery|createSQLQuery|createCriteriaQuery|createSqlQuery|createStatement|addBatch|queryForObject|queryForList|queryForMap|queryForLong|queryForInt|queryForRowSet|queryForStream|batchUpdate|find_by_sql|sqlRestriction|selectList|selectOne|selectMap|selectCursor|sql)\s*\(/,
+    // T2.1 audit: bare `execute` was in this list, and in Java that is
+    // overwhelmingly java.util.concurrent.Executor.execute(Runnable) — a
+    // THREAD POOL, not a database. Measured on the independent population
+    // it produced high-severity SQL-injection findings on netty's
+    // DefaultChannelPipeline, NonStickyEventExecutorGroup and
+    // ThreadExecutorMap (`executor.execute(command)`), and on Appium's
+    // AppiumCommandExecutor. Statement.execute(sql) IS real JDBC, so the
+    // verb is kept but now requires a database-shaped receiver. This is the
+    // same correction the comment above records for update/insert/delete.
+    sinkRe: /(?:\.\s*(?:executeQuery|executeUpdate|executeBatch|prepareStatement|prepareCall|createQuery|createNativeQuery|createSQLQuery|createCriteriaQuery|createSqlQuery|createStatement|addBatch|queryForObject|queryForList|queryForMap|queryForLong|queryForInt|queryForRowSet|queryForStream|batchUpdate|find_by_sql|sqlRestriction|selectList|selectOne|selectMap|selectCursor|sql)\s*\(|\b(?:stmt|statement|st|ps|pstmt|preparedStatement|cstmt|conn|connection|jdbc\w{0,20}|jdbcTemplate|template|session|entityManager|em|db|database|dataSource|sqlSession)\s*\.\s*execute\s*\()/i,
     sanitizerRe: null,
     useTaint: true,
   },

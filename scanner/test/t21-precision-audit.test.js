@@ -72,3 +72,36 @@ test('PHP: a real backtick shell execution still fires', () => {
   const real = '<?php\n$out = `ls $dir`;\n';
   assert.equal(scanPhp('a.php', real).filter(f => /backtick/.test(f.vuln)).length, 1);
 });
+
+test('Java SQLi: Executor.execute(Runnable) is a thread pool, not a database', async () => {
+  // Highest-severity defect found by the audit: bare `execute` in the JDBC
+  // sink list matched java.util.concurrent.Executor, producing SQL-injection
+  // findings on netty's DefaultChannelPipeline / NonStickyEventExecutorGroup /
+  // ThreadExecutorMap and Appium's AppiumCommandExecutor.
+  const f = await findings('Pool.java', [
+    'package t;',
+    'import java.util.concurrent.Executor;',
+    'public class Pool {',
+    '  void run(Executor executor, Runnable command) {',
+    '    executor.execute(command);',
+    '  }',
+    '}',
+  ].join('\n'));
+  const sqli = f.filter(x => /Java JDBC/.test(String(x.vuln || '')));
+  assert.deepEqual(sqli, [], `thread-pool execution is not SQL: ${JSON.stringify(sqli.map(x => x.snippet))}`);
+});
+
+test('Java SQLi: a real Statement.execute(sql) is STILL reported', async () => {
+  const f = await findings('Dao.java', [
+    'package t;',
+    'import java.sql.*;',
+    'public class Dao {',
+    '  void find(Connection conn, String name) throws Exception {',
+    '    Statement stmt = conn.createStatement();',
+    '    stmt.execute("SELECT * FROM users WHERE name = \'" + name + "\'");',
+    '  }',
+    '}',
+  ].join('\n'));
+  assert.ok(f.some(x => /SQL Injection/i.test(String(x.vuln || ''))),
+    'the precision fix must not silence real JDBC injection');
+});
