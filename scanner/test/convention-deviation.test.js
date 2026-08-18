@@ -18,7 +18,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  scanConventionDeviation, scanConventionDeviationProject, analyseUnits, pythonUnits,
+  scanConventionDeviation, scanConventionDeviationProject, analyseUnits, pythonUnits, _internals,
   MIN_GUARDED_SIBLINGS, MIN_GUARDED_RATIO,
 } from '../src/sast/convention-deviation.js';
 
@@ -163,4 +163,45 @@ test('the convention is mined ACROSS files, not per-file', () => {
   // Evidence cites peers from other files, qualified by path.
   assert.ok(out[0].evidenceSiblings.some(x => x.includes('a.py') || x.includes('b.py')),
     `expected cross-file evidence, got ${JSON.stringify(out[0].evidenceSiblings)}`);
+});
+
+// ─────────────────────────────── JS/TS support (6 of the 10 known entries)
+const tsGuarded = (i) => [
+  `  async guarded${i}(path, ...opts) {`,
+  '    assertWorkspaceAccess(opts);',
+  `    return this.client.cmd${i}(path, ...opts);`,
+  '  }',
+].join('\n');
+
+test('JS/TS: an unguarded method among guarded peers fires', () => {
+  const files = {
+    'a.ts': 'class A {\n' + tsGuarded(1) + '\n' + tsGuarded(2) + '\n}',
+    'b.ts': 'class B {\n' + tsGuarded(3) + '\n}',
+    'c.ts': 'class C {\n' + tsGuarded(4) +
+      '\n  async remove(path, ...opts) {\n    return this.client.remove(path, ...opts);\n  }\n}',
+  };
+  const out = scanConventionDeviationProject(files);
+  assert.equal(out.length, 1, `got ${JSON.stringify(out.map(x => x.vuln))}`);
+  assert.match(out[0].vuln, /remove\(\)/);
+  assert.equal(out[0].file, 'c.ts');
+});
+
+test('JS/TS: camelCase guards are recognised (snake_case is not the only form)', () => {
+  // The Python convention is check_unsafe_options; the JS one is
+  // assertWorkspaceAccess. A verb-only match (`check(x)`) must NOT qualify.
+  const { GUARD_CALL_RE } = _internals;
+  assert.ok(GUARD_CALL_RE.test('assertWorkspaceAccess(opts)'));
+  assert.ok(GUARD_CALL_RE.test('Git.check_unsafe_options(o)'));
+  assert.ok(!GUARD_CALL_RE.test('check(x)'));
+  assert.ok(!GUARD_CALL_RE.test('requirement(x)'));
+});
+
+test('JS/TS FIX-DISCRIMINATION: adding the guard silences it', () => {
+  const files = {
+    'a.ts': 'class A {\n' + tsGuarded(1) + '\n' + tsGuarded(2) + '\n}',
+    'b.ts': 'class B {\n' + tsGuarded(3) + '\n}',
+    'c.ts': 'class C {\n' + tsGuarded(4) +
+      '\n  async remove(path, ...opts) {\n    assertWorkspaceAccess(opts);\n    return this.client.remove(path, ...opts);\n  }\n}',
+  };
+  assert.deepEqual(scanConventionDeviationProject(files), []);
 });

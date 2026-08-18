@@ -33,15 +33,20 @@
 import { blankComments } from './_comment-strip.js';
 
 const PY_RE = /\.py$/i;
+const JS_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
 
 /** Guard-shaped callee: an action verb applied to a checkable concern. */
 // The dotted qualifier is an OPTIONAL single-quantifier group rather than a
 // repeated one: `(?:\w+\.)*` is a nested quantifier, which this project's own
 // redos-nfa.js flags — correctly, since this scanner runs over untrusted code.
-const GUARD_CALL_RE = /\b((?:[\w.]{0,120}\.)?(?:check|verify|validate|assert|require|ensure|guard|sanitiz[e]?|authoriz[e]?)_\w{1,64})\s{0,8}\(/i;
+// Accepts both snake_case (`check_unsafe_options`) and camelCase
+// (`assertWorkspaceAccess`) so the same comparator works across Python and
+// JS/TS. The verb must be followed by `_` or an uppercase letter, so a bare
+// `check(x)` or an unrelated `requirement(x)` does not qualify.
+const GUARD_CALL_RE = /\b((?:[\w.]{0,120}\.)?(?:check|verify|validate|assert|require|ensure|guard|sanitiz[e]?|authoriz[e]?)(?:_\w{1,64}|[A-Z]\w{0,63}))\s{0,8}\(/;
 
 /** A call that forwards caller-controlled options onward: f(..., **kwargs). */
-const FORWARD_INTO_RE = /\b(\w{1,64})\s{0,8}\.\s{0,8}(\w{1,64})\s{0,8}\([^)]{0,400}\*\*\w{1,64}/g;
+const FORWARD_INTO_RE = /\b(\w{1,64})\s{0,8}\.\s{0,8}(\w{1,64})\s{0,8}\([^)]{0,400}(?:\*\*|\.{3})\w{1,64}/g;
 
 /** At least this many neighbours must already guard before absence means anything. */
 export const MIN_GUARDED_SIBLINGS = 3;
@@ -78,6 +83,48 @@ export function pythonUnits(code) {
 }
 
 /**
+ * Split brace-language source into function units.
+ *
+ * Recognises the four shapes that carry a guard-then-forward convention in
+ * JS/TS: `function name(...)`, `name(...) {` class methods, `name = (...) =>`,
+ * and `async` variants of each. The body is taken by brace matching from the
+ * opening `{`, which is sufficient for the sibling comparison this makes —
+ * this is a convention comparator, not a parser.
+ *
+ * 6 of the 10 known sibling-omission entries are TypeScript, and were
+ * unreachable while this module was Python-only.
+ */
+export function jsUnits(code) {
+  const units = [];
+  const lines = code.split('\n');
+  const DECL = /(?:^|\s)(?:(?:async\s{1,4})?function\s{1,4}(\w{1,80})\s{0,4}\(|(?:public|private|protected|static|async)\s{1,4}(\w{1,80})\s{0,4}\(|(?:const|let|var)\s{1,4}(\w{1,80})\s{0,4}=\s{0,4}(?:async\s{1,4})?\(|^\s{0,80}(\w{1,80})\s{0,4}\([^)]{0,400}\)\s{0,4}\{)/;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(DECL);
+    if (!m) continue;
+    const name = m[1] || m[2] || m[3] || m[4];
+    if (!name || /^(?:if|for|while|switch|catch|return|typeof|new)$/.test(name)) continue;
+    // Signature: from the decl to the first `{` (may span lines).
+    let sig = '', j = i, open = -1;
+    for (; j < lines.length && j < i + 20; j++) {
+      sig += lines[j];
+      const k = lines[j].indexOf('{', j === i ? m.index : 0);
+      if (k !== -1) { open = j; break; }
+    }
+    if (open === -1) continue;
+    // Body by brace matching from `open`.
+    let depth = 0, body = [], done = false;
+    for (let b = open; b < lines.length && !done; b++) {
+      const text = lines[b];
+      for (const ch of text) { if (ch === '{') depth++; else if (ch === '}') { depth--; if (depth === 0) { done = true; break; } } }
+      body.push(text);
+    }
+    units.push({ name, line: i + 1, sig, body: body.join('\n') });
+    i = open;
+  }
+  return units;
+}
+
+/**
  * The core, pure analysis. Takes units from the WHOLE PROJECT — each tagged
  * with its file — and reports sites that skip the guard their peers apply.
  *
@@ -95,7 +142,8 @@ export function analyseUnits(units) {
   // receiver -> { guarded: [...], unguarded: [...] }
   const groups = new Map();
   for (const u of units) {
-    if (!/\*\*\w+/.test(u.sig)) continue;                    // takes no option bag
+    // Python `**kwargs` / JS `...opts` — the option bag this compares on.
+    if (!/\*\*\w+|\.{3}\w/.test(u.sig)) continue;
     const forwards = [...u.body.matchAll(FORWARD_INTO_RE)];
     if (!forwards.length) continue;                          // never forwards it on
     const guard = u.body.match(GUARD_CALL_RE);
@@ -164,11 +212,15 @@ export function scanConventionDeviationProject(fileContents) {
   if (!fileContents || typeof fileContents !== 'object') return [];
   const units = [];
   for (const [file, raw] of Object.entries(fileContents)) {
-    if (!PY_RE.test(file)) continue;
     if (!raw || typeof raw !== 'string' || raw.length > 500_000) continue;
-    if (!/\*\*\w+/.test(raw)) continue;                     // cheap relevance gate
+    const isPy = PY_RE.test(file), isJs = JS_RE.test(file);
+    if (!isPy && !isJs) continue;
+    // Cheap relevance gate: the option-bag spread this detector compares on.
+    if (isPy && !/\*\*\w+/.test(raw)) continue;
+    if (isJs && !/\.{3}\w/.test(raw)) continue;
     try {
-      for (const u of pythonUnits(blankComments(raw, 'py'))) units.push({ ...u, file });
+      const us = isPy ? pythonUnits(blankComments(raw, 'py')) : jsUnits(blankComments(raw));
+      for (const u of us) units.push({ ...u, file, lang: isPy ? 'py' : 'js' });
     } catch { /* per-file best-effort, same as every other detector here */ }
   }
   if (!units.length) return [];
@@ -180,4 +232,4 @@ export function scanConventionDeviation(file, raw) {
   return scanConventionDeviationProject({ [file]: raw });
 }
 
-export const _internals = { GUARD_CALL_RE, FORWARD_INTO_RE, pythonUnits, analyseUnits };
+export const _internals = { GUARD_CALL_RE, FORWARD_INTO_RE, pythonUnits, jsUnits, analyseUnits };

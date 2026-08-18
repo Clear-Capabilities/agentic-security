@@ -11,7 +11,7 @@ export const modules = {
 /* harmony export */   renderPrDeltaText: () => (/* binding */ renderPrDeltaText)
 /* harmony export */ });
 /* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1421);
-/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4771);
+/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(136);
 // Shadowscan / security-DELTA on PR (v0.72).
 //
 // Most SAST PR-comment integrations show absolute counts — "12 findings

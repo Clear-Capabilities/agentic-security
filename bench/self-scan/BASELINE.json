@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-18T04:45:50.639Z",
-  "commit": "4f0bfff016803db142dace6fa05e7173bb497f8e",
+  "generatedAt": "2026-08-18T05:13:10.882Z",
+  "commit": "de2cbe7882f61bb3031149fea13e70f412a2e7b7",
   "targets": {
     "hooks": {
       "total": 25,
@@ -38,7 +38,7 @@
       }
     },
     "scanner/src": {
-      "total": 628,
+      "total": 629,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -200,7 +200,7 @@
         "sast/claude-settings.js": 1,
         "sast/client-side.js": 6,
         "sast/cloud-iam.js": 1,
-        "sast/convention-deviation.js": 2,
+        "sast/convention-deviation.js": 3,
         "sast/cpp-dataflow.js": 6,
         "sast/cpp.js": 4,
         "sast/cross-service.js": 1,
