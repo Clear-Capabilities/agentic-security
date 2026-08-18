@@ -1343,7 +1343,14 @@ function _hasSsrfHostGuard(ctx) { return _guardMatchNearSinkIdentifier(ctx, _SSR
 // A path-traversal containment guard near the file sink: a basename/strip
 // helper that removes directory components, a framework safe-join, or a
 // canonicalize-then-startsWith containment check.
-const _PATH_GUARD_RE = /\b(?:basename|GetFileName|secure_filename|sanitize_filename|send_from_directory|safe_join)\s*\(|\b(?:startsWith|startswith|StartsWith|HasPrefix)\s*\(|\bgetCanonicalPath\b|\btoRealPath\b|\bfilepath\s*\.\s*(?:Clean|Base|Abs)\b/;
+// The trailing alternative is a SHAPE, not a name: a project-local throwing
+// validator invoked on the value that reaches the sink. A closed list of
+// blessed helpers can never contain a codebase's own validator, so
+// GHSA-q939-rpr3-3284's fix (`EnsureValidLocalName(filename);` immediately
+// before `Path.Combine(..., filename)`) left the finding firing on the FIXED
+// revision. Safe to match on shape because _guardMatchNearSinkIdentifier
+// already requires the guard to name the same identifier as the sink.
+const _PATH_GUARD_RE = /\b(?:basename|GetFileName|secure_filename|sanitize_filename|send_from_directory|safe_join)\s*\(|\b(?:startsWith|startswith|StartsWith|HasPrefix)\s*\(|\bgetCanonicalPath\b|\btoRealPath\b|\bfilepath\s*\.\s*(?:Clean|Base|Abs)\b|\b(?:[Ee]nsure|[Vv]alidate|[Aa]ssert|[Rr]equire|[Vv]erify|[Cc]heck)\w{1,40}\s*\(/;
 function _hasPathGuard(ctx) { return _guardMatchNearSinkIdentifier(ctx, _PATH_GUARD_RE); }
 
 // Reflected-XSS output-encoding guard: an HTML escaper applied near the sink.
