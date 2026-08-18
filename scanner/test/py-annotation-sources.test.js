@@ -120,3 +120,33 @@ test('NEGATIVE CONTROL: pathlib Path(...) default does not taint', async () => {
   ].join('\n'));
   assert.deepEqual(f, [], 'pathlib.Path defaults must not be treated as an entry point');
 });
+
+// ─────────────────────────────────────────── T3.1 (cont.) CLI entry points
+//
+// The argparse source (parse_args() -> args.<flag>) is IMPLEMENTED but
+// WITHHELD in catalog.js; see the block comment there. It works, but enabling
+// it surfaces false positives from a pre-existing sink imprecision
+// (py-subprocess-run fires on argv-array calls with no shell=True). This test
+// pins the CURRENT, deliberate behaviour so the withholding is visible rather
+// than looking like an oversight, and so re-enabling it has to update a test.
+test('argparse parse_args() is deliberately NOT yet a source (see catalog.js)', async () => {
+  const f = await taintFindings('cli.py', [
+    'import argparse, subprocess',
+    'def main():',
+    '    parser = argparse.ArgumentParser()',
+    '    parser.add_argument("--host")',
+    '    args = parser.parse_args()',
+    '    subprocess.run("ping " + args.host, shell=True)',
+  ].join('\n'));
+  assert.deepEqual(f, [], 'withheld pending the subprocess shell=True sink fix');
+});
+
+test('NEGATIVE CONTROL: a hardcoded literal through the same sink does not taint', async () => {
+  const f = await taintFindings('lit.py', [
+    'import subprocess',
+    'def main():',
+    '    host = "localhost"',
+    '    subprocess.run("ping " + host, shell=True)',
+  ].join('\n'));
+  assert.deepEqual(f, [], 'a constant is not attacker-controlled');
+});

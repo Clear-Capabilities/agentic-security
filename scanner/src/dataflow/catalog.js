@@ -874,6 +874,27 @@ export const CATALOG = [
   { kind: 'source', id: 'py-sanic-body',       language: 'py', framework: 'sanic',     match: { type: 'member', object: 'request', prop: 'body' },  label: 'request.body (Sanic)', provenance: 'http-body' },
   // sys.argv — CLI input source. (os.environ already declared above.)
   { kind: 'source', id: 'py-sys-argv',      language: 'py', framework: 'std', match: { type: 'member', object: 'sys', prop: 'argv'   }, label: 'sys.argv', provenance: 'cli' },
+  // argparse (PRD T3.1) — IMPLEMENTED, THEN DELIBERATELY WITHHELD.
+  //
+  // `args = parser.parse_args()` then `args.<flag>` is the idiomatic CLI entry
+  // point (sys.argv above is cataloged but rarely read directly), and tainting
+  // the call's return does carry taint to every attribute correctly — verified
+  // working against a --host -> subprocess flow.
+  //
+  // It is not enabled because turning it on surfaced 15 new findings across 9
+  // of this repository's own hand-reviewed scripts/ files, and the ones
+  // inspected are FALSE POSITIVES exposing a PRE-EXISTING sink imprecision:
+  // py-subprocess-run fires on `subprocess.run(cmd, capture_output=True)` — an
+  // argv-ARRAY call with no shell=True, which cannot be command injection —
+  // while labelling it "subprocess.run shell=True". The sink never checks the
+  // keyword. `requireLiteralArg` cannot express it either: it matches a
+  // POSITIONAL literal, and shell=True is a keyword argument.
+  //
+  // PREREQUISITE before this source ships: a `requireKeyword`-style condition
+  // (plus the IR carrying Python keyword arguments) so the subprocess sinks
+  // fire only on the shell-interpreted form. Enabling the source first would
+  // knowingly trade real precision on reviewed code for recall — the exact
+  // trade this PRD's FP budget exists to refuse.
   // File reads.
   { kind: 'source', id: 'py-open-read',     language: 'py', framework: 'std', match: { type: 'call', callee: 'open' }, argIndex: 0, label: 'open()', provenance: 'file-read' },
   // input() already declared above as a stdlib source (line ~120).
