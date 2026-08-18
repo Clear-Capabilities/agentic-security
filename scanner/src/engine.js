@@ -5273,10 +5273,129 @@ function scanAliasedSinks(fp, raw){
 // path on patterns that lack any star/plus quantifier altogether.
 let _safeRegex;
 try { _safeRegex = _require('safe-regex'); } catch (_) { _safeRegex = null; }
+/**
+ * Is the pattern anchored at the start (`^`, or `\A`)?
+ *
+ * An UNANCHORED exec() retries from every start offset, so a greedy leading
+ * quantifier that fails late costs O(n) per offset — O(n^2) overall. That
+ * polynomial blow-up, not intrinsic backtracking, is the defect in
+ * GHSA-29g2-3rmr-qm68 (sveltejs/kit), whose entire fix was to prepend `^`.
+ * A start anchor leaves exactly one start position and removes the multiplier.
+ *
+ * Deliberately conservative: `^` inside an alternation (`^a|b`) does NOT
+ * anchor the whole pattern, since the `b` branch is still free-floating.
+ */
+function _isAnchoredRegex(body){
+  const s = String(body || '');
+  if (!/^(?:\^|\\A)/.test(s)) return false;
+  // A top-level `|` means some branch is unanchored — not a real anchor.
+  let depth = 0, cls = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '\\') { i++; continue; }
+    if (cls) { if (ch === ']') cls = false; continue; }
+    if (ch === '[') { cls = true; continue; }
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    else if (ch === '|' && depth === 0) return false;
+  }
+  return true;
+}
+/**
+ * A quantified group that itself contains a quantifier — `(a+)+`, `(?:\w+\s?)*`.
+ * This is the intrinsic, exponential form of catastrophic backtracking, and it
+ * is NOT cured by anchoring, which is why the anchor exemption below refuses
+ * to apply when this is present.
+ */
+function _hasNestedQuantifier(body){
+  const s = String(body || '');
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\') { i++; continue; }
+    if (s[i] !== '(') continue;
+    let depth = 0, cls = false, j = i;
+    for (; j < s.length; j++) {
+      const ch = s[j];
+      if (ch === '\\') { j++; continue; }
+      if (cls) { if (ch === ']') cls = false; continue; }
+      if (ch === '[') { cls = true; continue; }
+      if (ch === '(') depth++;
+      else if (ch === ')') { depth--; if (depth === 0) break; }
+    }
+    if (j >= s.length) continue;
+    const inner = s.slice(i + 1, j);
+    const after = s.slice(j + 1);
+    const groupQuantified = /^(?:[*+]|\{\d+,\d*\})/.test(after);
+    if (groupQuantified && /[*+]|\{\d+,/.test(inner)) return true;
+  }
+  return false;
+}
+/**
+ * Does an UNBOUNDED quantifier appear before the first REQUIRED literal?
+ *
+ * This is the mechanism behind polynomial (scan-and-retry) ReDoS. When a
+ * greedy `+`/`*` runs before the engine has any literal to discriminate on,
+ * an unanchored match must re-run that scan from every start offset — O(n^2).
+ * Once a required literal comes first, the engine can reject most offsets in
+ * O(1) and the blow-up disappears.
+ *
+ *   /([^/ \t]+)\/…/            → `+` before the required `/`   → true  (the
+ *                                 real defect in GHSA-29g2-3rmr-qm68)
+ *   /(?:^|[\\/])\.env(?:…)?$/  → required `.` first            → false
+ *
+ * Needed because the two analysers available here have opposite blind spots:
+ * redos-nfa.js models exponential backtracking only and clears BOTH revisions
+ * of the sveltejs pattern, while safe-regex's star-height heuristic flags
+ * plain `(?:^|[\\/])\.env…` file-matchers that cannot backtrack at all.
+ */
+function _hasLeadingUnboundedQuantifier(body){
+  const s = String(body || '');
+  const unboundedAt = (k) => s[k] === '+' || s[k] === '*'
+    || (s[k] === '{' && /^\{\d+,\s*\}/.test(s.slice(k)));
+  for (let i = 0; i < s.length; i++){
+    const ch = s[i];
+    if (ch === '\\'){
+      const nxt = s[i + 2];
+      if (unboundedAt(i + 2)) return true;
+      if (nxt !== '?' && nxt !== '*') return false;   // required escaped literal
+      i++; continue;
+    }
+    if (ch === '['){
+      let j = i + 1;
+      for (; j < s.length; j++){
+        if (s[j] === '\\'){ j++; continue; }
+        if (s[j] === ']') break;
+      }
+      if (unboundedAt(j + 1)) return true;
+      i = j; continue;
+    }
+    if (ch === '(' || ch === ')' || ch === '|' || ch === '^' || ch === '?'
+      || ch === ':' || ch === '=' || ch === '!' || ch === '<') continue;
+    if (ch === '.'){ if (unboundedAt(i + 1)) return true; continue; }
+    // A plain literal character: required unless immediately made optional.
+    if (unboundedAt(i + 1)) return true;
+    if (s[i + 1] !== '?') return false;
+  }
+  return false;
+}
 function _isLikelyUnsafeRegex(body){
   if (!body || body.length < 3) return false;
   // Cheap prefilter: must contain a quantifier *, +, or {n,} for ReDoS to be possible.
   if (!/[*+]|\{\d+,/.test(body)) return false;
+  // safe-regex (star-height heuristic) is the only signal below, and it
+  // over-reports on patterns that cannot backtrack — plain file matchers like
+  // /(?:^|[\\/])\.env(?:\.[\w-]+)?$/ were reported across this project's own
+  // source. Require a mechanism to actually be present: either intrinsic
+  // (a nested quantifier) or scan-and-retry (an unbounded quantifier ahead of
+  // the first required literal). redos-nfa.js is consulted as a second
+  // opinion for the intrinsic case only, since it does not model the
+  // polynomial one.
+  if (!_hasNestedQuantifier(body) && !_hasLeadingUnboundedQuantifier(body)) return false;
+  // FIX-DISCRIMINATION (GHSA-29g2-3rmr-qm68): an anchored pattern with no
+  // nested quantifier has neither failure mode — no start-offset multiplier,
+  // no intrinsic catastrophe. safe-regex's star-height heuristic cannot see
+  // anchoring at all and flagged the fixed revision identically to the
+  // vulnerable one, so the finding survived its own fix.
+  if (_isAnchoredRegex(body) && !_hasNestedQuantifier(body)) return false;
   if (_safeRegex) {
     try { if (!_safeRegex(body)) return true; } catch (_) { /* fall through */ }
   }
@@ -5360,6 +5479,44 @@ function _charSetsIntersect(a, b){
 function _inClass(ch, cls){
   return cls.negate ? !cls.members.has(ch) : cls.members.has(ch);
 }
+/**
+ * Extract regex-literal bodies, honouring character classes.
+ *
+ * The previous extractor was itself a regex:
+ *   /\/((?:\\.|[^\/\n])+)\/[gimsuy]{0,5}/g
+ * which has no notion of `[...]`, so an unescaped `/` inside a character
+ * class — legal, and extremely common in path/URL patterns — TERMINATED the
+ * literal early and emitted two phantom fragments in place of one real regex.
+ *
+ * Found via GHSA-29g2-3rmr-qm68, where
+ *   /^[ \t]*([^/ \t]+)\/([^; \t]+)[ \t]*(?:;[ \t]*q=([0-9.]+))?/
+ * was split into `^[ \t]*([^` and `([^; \t]+)[ \t]*(?:;[ \t]*q=([0-9.]+))?`.
+ * The second fragment never existed in the source, and — having lost the
+ * leading `^` to the split — was judged unanchored and reported as ReDoS on
+ * the FIXED revision, so the finding survived its own fix.
+ *
+ * Returns [{body, index}] with `index` at the opening slash.
+ */
+function _extractRegexLiterals(source){
+  const out = [];
+  const s = String(source || '');
+  for (let i = 0; i < s.length; i++){
+    if (s[i] !== '/') continue;
+    if (s[i + 1] === '/' || s[i + 1] === '*') continue;   // comment, not a literal
+    let j = i + 1, cls = false, body = '', closed = false;
+    for (; j < s.length; j++){
+      const ch = s[j];
+      if (ch === '\n') break;                              // literals never span lines
+      if (ch === '\\'){ body += ch + (s[j + 1] || ''); j++; continue; }
+      if (cls){ if (ch === ']') cls = false; body += ch; continue; }
+      if (ch === '['){ cls = true; body += ch; continue; }
+      if (ch === '/'){ closed = true; break; }
+      body += ch;
+    }
+    if (closed && body.length){ out.push({ body, index: i }); i = j; }
+  }
+  return out;
+}
 function scanReDoS(fp,raw){
   // ReDoS only applies to languages with regex-literal or RegExp() syntax.
   // Solidity, Java, Go, C/C++, Rust use `/` as the division operator —
@@ -5372,7 +5529,6 @@ function scanReDoS(fp,raw){
   // shapes. Otherwise lines like `// hello /world/` are mis-parsed as regexes
   // and safe-regex chokes on the text content.
   const cleaned = stripNoiseAndStrings(raw);
-  const litRe=/\/((?:\\.|[^\/\n])+)\/[gimsuy]{0,5}/g;
   const ctorRe=/new\s+RegExp\s*\(\s*['"`]((?:\\.|[^'"`\n])+)['"`]/g;
   function check(re, source){
     let m;while((m=re.exec(source))!==null){
@@ -5389,7 +5545,19 @@ function scanReDoS(fp,raw){
     }
   }
   // Regex literals: scan against `cleaned` so comment slashes don't fool us.
-  check(litRe, cleaned);
+  // Extracted with a character-class-aware walker rather than a regex — see
+  // _extractRegexLiterals for why the regex form was actively harmful.
+  for (const { body, index } of _extractRegexLiterals(cleaned)) {
+    if (!_isLikelyUnsafeRegex(body)) continue;
+    const line = cleaned.substring(0, index).split("\n").length;
+    out.push({
+      vuln:"Regex ReDoS — Catastrophic Backtracking",
+      severity:"medium",cwe:"CWE-1333",stride:"Denial of Service",
+      fix:"Rewrite the regex to avoid nested quantifiers and overlapping alternation. Consider the `re2` library for linear-time matching.",
+      code:"// Use the Google RE2 library which guarantees linear-time evaluation:\nconst RE2 = require('re2');\nconst re = new RE2(pattern);",
+      file:fp,line,snippet:lines[line-1]?.trim()||body
+    });
+  }
   // `new RegExp("...")` form: also via cleaned (comments out, but the literal
   // string pattern is the source we care about — already preserved by
   // stripNoiseAndStrings via the regex-literal carve-out... actually no, our
@@ -9706,4 +9874,9 @@ export {
   PAYLOAD_LIBRARY, CIPHER_REST_PATTERNS, CIPHER_TRANSIT_PATTERNS,
   STORED_TAINT_FIELD_PATTERNS, STORED_TAINT_SINK_PATTERNS,
   FIXES, NEW_FIXES,
+};
+
+/** Internals exposed for targeted unit tests (not part of the public API). */
+export const _internals = {
+  _isLikelyUnsafeRegex, _isAnchoredRegex, _hasNestedQuantifier, _extractRegexLiterals, _hasLeadingUnboundedQuantifier,
 };
