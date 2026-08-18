@@ -36,6 +36,18 @@ test('REFUSES: a local computation with no external surface', () => {
   assert.deepEqual(scanResourceExhaustion('a.py', 'def f():\n    n = compute_internal()\n    for i in range(n):\n        pass\n'), []);
 });
 
+test('REFUSES: a bare local variable named "headers" (not an HTTP request)', () => {
+  // Found via self-scan on scripts/nist-compliance/scan.py: an ASCII-table
+  // renderer's column-headers list, unrelated to any request surface.
+  assert.deepEqual(scanResourceExhaustion('table.py',
+    "def divider(headers):\n    parts = [c for i in range(len(headers))]\n    return parts\n"), []);
+});
+
+test('but a QUALIFIED req.headers still counts', () => {
+  assert.equal(scanResourceExhaustion('a.py',
+    'def f(req):\n    for i in range(len(req.headers)):\n        pass\n').length, 1);
+});
+
 test('JS: .repeat() sized from a request field fires, Math.min silences it', () => {
   assert.equal(scanResourceExhaustion('a.js', 'function pad(req){ return " ".repeat(req.query.width); }').length, 1);
   assert.deepEqual(
@@ -53,10 +65,14 @@ test('non-source files and files with no external surface are skipped cheaply', 
   assert.deepEqual(scanResourceExhaustion('a.py', 'def f():\n    return 1\n'), []);
 });
 
-test('the bound recogniser accepts the forms real fixes use', () => {
-  const { BOUND_RE } = _internals;
+test('the bound recogniser accepts the forms real fixes use, scoped to the identifier', () => {
+  const { _isBounded } = _internals;
   for (const ok of ['if n > 1000:', 'if n > MAX_ENTRIES:', 'min(n, 500)', 'Math.min(a,b)', 'raise ValueError', 'throw new Error']) {
-    assert.ok(BOUND_RE.test(ok), `${ok} should read as a bound`);
+    assert.ok(_isBounded('n', ok), `${ok} should read as a bound`);
   }
-  assert.ok(!BOUND_RE.test('n = params["stop"]'));
+  assert.ok(!_isBounded('n', 'n = params["stop"]'));
+  // A comparison on a DIFFERENT identifier must not count as bounding `n` —
+  // GHSA-phj3-59pf-cp83's `if new_width < 1` is a floor check on a derived
+  // value, not a ceiling on the source `value` the finding is about.
+  assert.ok(!_isBounded('value', 'if new_width < 1 or new_height < 1: return'));
 });

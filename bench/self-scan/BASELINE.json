@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-18T18:10:24.272Z",
-  "commit": "8f355b9c5b8b8bec3c530c2d1c6dbe6edd194d29",
+  "generatedAt": "2026-08-18T18:31:00.482Z",
+  "commit": "466f46314b0dfd4de07f52557d26cfab80a2b610",
   "targets": {
     "hooks": {
       "total": 25,
@@ -38,7 +38,7 @@
       }
     },
     "scanner/src": {
-      "total": 632,
+      "total": 634,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -240,6 +240,7 @@
         "sast/prompt-firewall.js": 1,
         "sast/rate-limit.js": 2,
         "sast/redirect-toctou.js": 1,
+        "sast/resource-exhaustion.js": 2,
         "sast/response-splitting.js": 3,
         "sast/rust.js": 1,
         "sast/sensitive-data-logging.js": 2,
