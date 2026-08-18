@@ -24,6 +24,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as cp from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { entryDir, entryComplete } from './fetch.mjs';
 
@@ -35,12 +36,141 @@ const MANIFEST = path.join(HERE, 'manifest.json');
 /** Below this, a rate is noise. Reported, but labelled unreliable. */
 export const MIN_RELIABLE_N = 10;
 
-/** Does any finding carry the labelled CWE? Normalised, exact on the number. */
-export function matchesCwe(findings, cwe, files = null) {
+/**
+ * T0.1 — how far from a changed line a finding may sit and still count as
+ * being ABOUT that change. A fix often adds a guard a line or two above the
+ * sink it protects, so an exact-line requirement would be too strict; a wide
+ * window would re-admit the coincidences this metric exists to exclude.
+ * Deliberately small, and every widening must be justified with data.
+ */
+export const LOCALIZATION_WINDOW = 3;
+
+/**
+ * T0.5 — CWE parent edges (child -> parents), deliberately CONSERVATIVE.
+ *
+ * WHY THIS EXISTS. The engine and the advisory can describe the same bug at
+ * different depths of MITRE's tree: the engine reports CWE-94 (Code
+ * Injection) where an advisory labelled CWE-95 (Eval Injection, its child).
+ * Scoring those as a miss measures vocabulary, not detection.
+ *
+ * WHY IT IS SHORT. Every edge added here can only ever ADMIT more matches, so
+ * a generous table manufactures recall — the exact failure this benchmark
+ * exists to avoid. Only well-established, unambiguous ChildOf relationships
+ * that bear on classes this engine actually reports are listed. When in
+ * doubt, leave the edge out and take the miss.
+ *
+ * Applied SYMMETRICALLY (an engine finding more specific OR more general than
+ * the label both count) and only alongside T0.1's localization tightening —
+ * loosening the CWE axis while the location axis stayed loose would inflate
+ * the number in exactly the direction this PRD refuses.
+ */
+export const CWE_PARENT = {
+  'CWE-95': ['CWE-94'], 'CWE-94': ['CWE-74'],
+  'CWE-78': ['CWE-77'], 'CWE-77': ['CWE-74'],
+  'CWE-89': ['CWE-74'], 'CWE-79': ['CWE-74'],
+  'CWE-113': ['CWE-93'], 'CWE-93': ['CWE-74'],
+  'CWE-23': ['CWE-22'], 'CWE-36': ['CWE-22'],
+  'CWE-338': ['CWE-330'], 'CWE-331': ['CWE-330'],
+  'CWE-328': ['CWE-327'],
+  'CWE-259': ['CWE-798'],
+  'CWE-862': ['CWE-285'], 'CWE-863': ['CWE-285'], 'CWE-285': ['CWE-284'],
+  'CWE-639': ['CWE-863'],
+  'CWE-611': ['CWE-610'], 'CWE-601': ['CWE-610'],
+  'CWE-1333': ['CWE-407'],
+};
+
+/** Transitive ancestors of a CWE, per the conservative table above. */
+export function cweAncestors(cwe) {
+  const out = new Set();
+  const walk = (c, depth = 0) => {
+    if (depth > 8) return; // cycle/pathology guard
+    for (const p of (CWE_PARENT[c] || [])) { if (!out.has(p)) { out.add(p); walk(p, depth + 1); } }
+  };
+  walk(String(cwe || '').toUpperCase().trim());
+  return out;
+}
+
+/**
+ * Does a finding's CWE satisfy an advisory's labelled CWE? Exact match, or an
+ * ancestor relationship in EITHER direction (see CWE_PARENT's rationale).
+ */
+export function cweSatisfies(foundCwe, wantedCwe) {
+  const found = String(foundCwe || '').toUpperCase().trim();
+  const want = String(wantedCwe || '').toUpperCase().trim();
+  if (!/^CWE-\d+$/.test(found) || !/^CWE-\d+$/.test(want)) return false;
+  if (found === want) return true;
+  return cweAncestors(found).has(want) || cweAncestors(want).has(found);
+}
+
+/**
+ * Findings matching the labelled CWE, restricted to the advisory's files.
+ * `hierarchy` opts into the CWE_PARENT relation; OFF by default so the
+ * historical exact-match contract (and its tests) is unchanged.
+ */
+export function findMatchingFindings(findings, cwe, files = null, { hierarchy = false } = {}) {
   const want = String(cwe || '').toUpperCase().trim();
-  if (!/^CWE-\d+$/.test(want)) return false;
+  if (!/^CWE-\d+$/.test(want)) return [];
   const scoped = localiseToAdvisory(findings, files);
-  return scoped.some(f => String(f.cwe || '').toUpperCase().trim() === want);
+  return scoped.filter(f => hierarchy
+    ? cweSatisfies(f.cwe, want)
+    : String(f.cwe || '').toUpperCase().trim() === want);
+}
+
+/** Does any finding carry the labelled CWE? Normalised, exact on the number. */
+export function matchesCwe(findings, cwe, files = null, opts = {}) {
+  return findMatchingFindings(findings, cwe, files, opts).length > 0;
+}
+
+/**
+ * T0.1 — is a finding's line inside (or within `window` lines of) any range
+ * the fix commit actually changed?
+ *
+ * This is the whole point of the localized metric. A finding that carries the
+ * right CWE in the right FILE but sits 200 lines from the code the fix
+ * touched is not a detection of that vulnerability; measured on the 2026-08-17
+ * population, 17 of 21 "true positives" were exactly that.
+ */
+export function isLocalized(line, ranges, window = LOCALIZATION_WINDOW) {
+  const n = Number(line);
+  if (!Number.isFinite(n) || n <= 0) return false;      // no line ⇒ cannot localize
+  if (!Array.isArray(ranges) || ranges.length === 0) return false;
+  return ranges.some(([a, b]) => n >= a - window && n <= b + window);
+}
+
+/**
+ * Line ranges (1-based, inclusive, on the PRE side) that differ between the
+ * vulnerable and fixed copies of one file. Shells out to `diff -u0`, matching
+ * this directory's existing practice of using system tools (tar/git/gh).
+ * Returns [] for an identical file and null when the comparison can't be made
+ * (missing side, or no usable diff) — the caller must distinguish those.
+ */
+export function changedLineRanges(preFile, postFile) {
+  if (!fs.existsSync(preFile) || !fs.existsSync(postFile)) return null;
+  const r = cp.spawnSync('diff', ['-u0', preFile, postFile], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  // diff exits 0 (identical) or 1 (differences); >1 is a real failure.
+  if (r.error || typeof r.status !== 'number' || r.status > 1) return null;
+  const ranges = [];
+  for (const m of String(r.stdout || '').matchAll(/^@@ -(\d+)(?:,(\d+))? /gm)) {
+    const start = parseInt(m[1], 10);
+    const len = m[2] === undefined ? 1 : parseInt(m[2], 10);
+    if (len > 0) ranges.push([start, start + len - 1]);
+  }
+  return ranges;
+}
+
+/**
+ * T0.7 — deterministic held-out slice.
+ *
+ * Detection work must not be tuned against every entry it is scored on, the
+ * same reason posture/holdout-eval.js exists for calibration. Membership is a
+ * pure function of the entry id, so the split is stable across runs, machines
+ * and population growth — no stored state to drift, and a newly mined entry
+ * lands on a fixed side rather than reshuffling everything.
+ */
+export function isHeldOut(id, fraction = 0.2) {
+  let h = 2166136261 >>> 0;                    // FNV-1a
+  for (const ch of String(id)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return (h % 1000) / 1000 < fraction;
 }
 
 /**
@@ -165,6 +295,15 @@ async function main() {
   await disableStateWrites();
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
   const asJson = process.argv.includes('--json');
+  // T0.3 — the deep engine is a CONFIGURATION of this measurement, not a
+  // separate script. Before this flag existed, runner.mjs called runScan()
+  // with no options and runScan() does not default deep:true (only the CLI
+  // wrapper sets AGENTIC_SECURITY_DEEP), so every independent-population
+  // figure this project ever published was pattern-only — the taint engine
+  // was never once exercised by the benchmark built to measure it.
+  const deep = process.argv.includes('--deep');
+  if (deep) process.env.AGENTIC_SECURITY_DEEP = '1';
+  const configuration = deep ? 'deep' : 'pattern-only';
 
   const perEntry = [];
   const unscored = [];
@@ -175,6 +314,19 @@ async function main() {
       continue;
     }
     const dir = entryDir(e.id);
+
+    // T0.6 — an entry whose vulnerable file is not in the materialised tree
+    // cannot be detected by any engine, so counting it as a detection failure
+    // blames the scanner for the sampling. Measured on this population: the
+    // file is sometimes DELETED by the fix commit, or dropped by mine.mjs's
+    // 5-file cap on a squashed commit. Same doctrine as the existing
+    // "unfetchable is UNSCORED, never a miss" rule.
+    const missing = (e.files || []).filter(rel => !fs.existsSync(path.join(dir, 'pre', rel)));
+    if ((e.files || []).length > 0 && missing.length === (e.files || []).length) {
+      unscored.push({ id: e.id, reason: `advisory file(s) absent from the materialised pre/ tree: ${missing.join(', ')}` });
+      continue;
+    }
+
     let preFindings, postFindings;
     try {
       preFindings = await scanDir(path.join(dir, 'pre'));
@@ -183,17 +335,46 @@ async function main() {
       unscored.push({ id: e.id, reason: `scan failed: ${err.message}` });
       continue;
     }
+
+    // ── file-scoped (the historical rule; retained as a diagnostic) ────────
     const hitPre = matchesCwe(preFindings, e.cwe, e.files);
     const hitPost = matchesCwe(postFindings, e.cwe, e.files);
     // Same verdict with the advisory-file restriction OFF. See `wide` below.
     const hitPreWide = matchesCwe(preFindings, e.cwe, null);
     const hitPostWide = matchesCwe(postFindings, e.cwe, null);
+
+    // ── T0.1 localized (THE CLAIM) ────────────────────────────────────────
+    // Credit only when a matching finding sits on code the fix actually
+    // changed. Hierarchy matching (T0.5) is enabled here and only here: it
+    // may only ever accompany this tightening, never precede it.
+    const rangesByFile = new Map();
+    for (const rel of (e.files || [])) {
+      rangesByFile.set(rel, changedLineRanges(path.join(dir, 'pre', rel), path.join(dir, 'post', rel)));
+    }
+    const relOf = (f) => (e.files || []).find(rel => rel.endsWith(String(f.file || '')) || String(f.file || '').endsWith(rel)) || f.file;
+    const localizedMatches = findMatchingFindings(preFindings, e.cwe, e.files, { hierarchy: true })
+      .filter(f => isLocalized(f.line, rangesByFile.get(relOf(f))));
+    const hitPreLocal = localizedMatches.length > 0;
+    // T0.2 — did the SAME finding go away once the bug was fixed? A finding
+    // that survives its own fix has reported the presence of an API, not the
+    // presence of a vulnerability.
+    const postMatches = findMatchingFindings(postFindings, e.cwe, e.files, { hierarchy: true });
+    const survivedFix = hitPreLocal && postMatches.length > 0;
+    // T0.4 — which analysis layer actually produced the credited finding.
+    const matchedParser = hitPreLocal ? (localizedMatches[0].parser || 'unknown') : null;
+
     perEntry.push({
       id: e.id, cwe: e.cwe, language: e.language, repo: e.repo,
+      heldOut: isHeldOut(e.id),
       tp: hitPre ? 1 : 0, fn: hitPre ? 0 : 1,
       fp: hitPost ? 1 : 0, tn: hitPost ? 0 : 1,
       tpWide: hitPreWide ? 1 : 0, fnWide: hitPreWide ? 0 : 1,
       fpWide: hitPostWide ? 1 : 0, tnWide: hitPostWide ? 0 : 1,
+      tpLocal: hitPreLocal ? 1 : 0, fnLocal: hitPreLocal ? 0 : 1,
+      fpLocal: (hitPost && !hitPreLocal) ? 1 : 0, tnLocal: (hitPost && !hitPreLocal) ? 0 : 1,
+      survivedFix: survivedFix ? 1 : 0,
+      matchedParser,
+      matchedLine: hitPreLocal ? (localizedMatches[0].line ?? null) : null,
       preFindings: preFindings.length, postFindings: postFindings.length,
     });
   }
@@ -223,6 +404,38 @@ async function main() {
   const wide = scoreCounts(sum(perEntry.map(r => ({
     tp: r.tpWide, fp: r.fpWide, fn: r.fnWide, tn: r.tnWide,
   }))));
+
+  // T0.1 — THE CLAIM. Credit only where a matching finding landed on code the
+  // fix actually changed. Measured 2026-08-17, this is the difference between
+  // 6.67% (file-scoped) and 1.3% (localized): 17 of 21 apparent true positives
+  // were right-CWE-right-file-wrong-code coincidences.
+  const localizedOf = (rows) => scoreCounts(sum(rows.map(r => ({
+    tp: r.tpLocal, fp: r.fpLocal, fn: r.fnLocal, tn: r.tnLocal,
+  }))));
+  const localized = localizedOf(perEntry);
+
+  // T0.2 — of the localized true positives, how many correctly went SILENT on
+  // the fixed code? A finding that survives its own fix has detected an API,
+  // not a vulnerability. Reported with its denominator, never as a bare rate.
+  const localTps = perEntry.filter(r => r.tpLocal === 1);
+  const survived = localTps.filter(r => r.survivedFix === 1).length;
+  const fixDiscrimination = {
+    n: localTps.length - survived, d: localTps.length,
+    value: localTps.length ? (localTps.length - survived) / localTps.length : null,
+    meaning: 'localized TPs that correctly disappear once the vulnerability is fixed',
+  };
+
+  // T0.4 — which layer earned each localized true positive. This is the
+  // standing answer to "what does the deep engine actually contribute",
+  // rather than a question that needs a special investigation each time.
+  const byLayer = {};
+  for (const r of localTps) byLayer[r.matchedParser || 'unknown'] = (byLayer[r.matchedParser || 'unknown'] || 0) + 1;
+
+  // T0.7 — the held-out slice is scored separately and must never be tuned
+  // against. Same doctrine as posture/holdout-eval.js for calibration.
+  const heldOutRows = perEntry.filter(r => r.heldOut);
+  const devRows = perEntry.filter(r => !r.heldOut);
+
   const group = (key) => {
     const out = {};
     for (const r of perEntry) {
@@ -234,7 +447,8 @@ async function main() {
   };
 
   const report = {
-    schema: 'agentic-security/independent-population-result@1',
+    schema: 'agentic-security/independent-population-result@2',
+    configuration,
     population: {
       totalEntries: manifest.entries.length,
       scoredEntries: perEntry.length,
@@ -247,6 +461,19 @@ async function main() {
     // the finding in `post/`, which is the difference between "18 defects" and
     // "18 rows that need classifying". Plan R-4 depends on this existing.
     perEntry,
+    // THE CLAIM (T0.1). Everything below it is diagnostic.
+    localized: { ...localized, meaning: 'matching finding landed on code the fix actually changed (±' + LOCALIZATION_WINDOW + ' lines)' },
+    fixDiscrimination,
+    byLayer,
+    heldOut: {
+      meaning: 'never tune against these; scored separately (T0.7)',
+      entries: heldOutRows.length,
+      localized: localizedOf(heldOutRows),
+    },
+    development: {
+      entries: devRows.length,
+      localized: localizedOf(devRows),
+    },
     overall,
     // Diagnostic only — NOT this project's headline. See the comment on `wide`.
     wide: { ...wide, meaning: 'same scans, advisory-file restriction OFF' },
@@ -265,10 +492,28 @@ async function main() {
       '    They are printed so the instrument can be seen working, not so the\n' +
       '    numbers can be quoted. Grow the population before drawing a conclusion.\n');
   }
-  out.write('\n  precision  ' + pct(overall.precision) + '\n');
-  out.write('  recall     ' + pct(overall.recall) + '\n');
-  out.write('  F1         ' + (overall.f1 === null ? 'n/a' : overall.f1.toFixed(3)) + '\n');
-  out.write(`  raw        TP=${overall.tp} FP=${overall.fp} FN=${overall.fn} TN=${overall.tn}\n`);
+  out.write(`  configuration: ${configuration}` + (deep ? '' : '  (pass --deep to measure the taint engine)') + '\n');
+
+  out.write('\n  ── LOCALIZED (the claim) — the finding landed on code the fix changed ──\n');
+  out.write('    precision  ' + pct(localized.precision) + '\n');
+  out.write('    recall     ' + pct(localized.recall) + '\n');
+  out.write('    F1         ' + (localized.f1 === null ? 'n/a' : localized.f1.toFixed(3)) + '\n');
+  out.write('    fix-discrimination ' + pct(fixDiscrimination) +
+            '  (localized TPs that go silent once fixed)\n');
+  if (Object.keys(byLayer).length) {
+    out.write('    by layer   ' + Object.entries(byLayer).sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${k}=${n}`).join('  ') + '\n');
+  }
+  out.write(`    held-out   ${pct(report.heldOut.localized.recall)} recall over ${report.heldOut.entries} entries (never tuned against)\n`);
+
+  out.write('\n  ── FILE-SCOPED (diagnostic) — right CWE somewhere in the advisory files ──\n');
+  out.write('    precision  ' + pct(overall.precision) + '\n');
+  out.write('    recall     ' + pct(overall.recall) + '\n');
+  out.write('    F1         ' + (overall.f1 === null ? 'n/a' : overall.f1.toFixed(3)) + '\n');
+  out.write(`    raw        TP=${overall.tp} FP=${overall.fp} FN=${overall.fn} TN=${overall.tn}\n`);
+  out.write('    The gap against LOCALIZED is how much apparent recall comes from a\n' +
+            '    finding that carries the right CWE in the right file while describing\n' +
+            '    different code. Measured 2026-08-17: 17 of 21 file-scoped TPs.\n');
 
   out.write('\n  same scans, advisory-file restriction OFF (diagnostic, NOT the claim):\n');
   out.write('    precision  ' + pct(wide.precision) + '\n');
