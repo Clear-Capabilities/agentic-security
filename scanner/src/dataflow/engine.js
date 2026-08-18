@@ -594,7 +594,7 @@ function _sanitizersForExpr(expr, callContext) {
 // expression (via callContext._taintSources, not the state Set itself).
 // line: source line to attach to any emitted finding.
 // Returns { findings }.
-function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callContext, line) {
+function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callContext, line, callKwargs) {
   const findings = [];
   if (cat) {
     for (const e of cat) {
@@ -627,6 +627,36 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
           const { index, pattern } = e.match.requireLiteralArg;
           const checkArg = (argExprs || [])[index];
           if (!checkArg || checkArg.kind !== 'literal' || !new RegExp(pattern).test(String(checkArg.value))) continue;
+        }
+        // `match.requireKeyword` — the KEYWORD-argument analogue of the
+        // positional gate above, for languages where the dangerous form is
+        // selected by a named argument rather than a positional literal.
+        //
+        // Python's `subprocess.run(cmd, shell=True)` is command injection;
+        // `subprocess.run([cmd], capture_output=True)` is an argv-array
+        // execve that cannot be, however tainted `cmd` is. requireLiteralArg
+        // cannot express the difference — it matches a POSITIONAL literal,
+        // and shell is a keyword. Measured cost of not having this: enabling
+        // the argparse CLI source surfaced 15 findings across 9 of this
+        // repository's own hand-reviewed scripts, on argv-array calls,
+        // labelled "shell=True".
+        //
+        // Fails CLOSED exactly like requireLiteralArg: a keyword that is
+        // absent, or present but not a statically-known literal matching the
+        // pattern, does NOT satisfy the requirement.
+        if (e.match && e.match.requireKeyword) {
+          const { name, pattern } = e.match.requireKeyword;
+          // A `**opts` splat means the keyword set is not enumerable: we
+          // cannot prove `shell` is absent, so we must not suppress. Failing
+          // closed here would be a FALSE NEGATIVE on a genuinely exploitable
+          // call — bench/cve-replay/deep/py-interproc-cmdi-shape exists
+          // precisely to pin that case (`subprocess.call(cmd, **SHELL_OPTS)`)
+          // and caught this the first time the gate was written without it.
+          const enumerable = !(callKwargs && callKwargs['**']);
+          if (enumerable) {
+            const kw = callKwargs && callKwargs[name];
+            if (!kw || kw.kind !== 'literal' || !new RegExp(pattern).test(String(kw.value))) continue;
+          }
         }
         // Premortem #10: attribute the source for THIS sink to the
         // source(s) that taint the actual argument expression — not the
@@ -781,7 +811,7 @@ function step(node, stateIn, callContext) {
           _matchCallCatalog(node.source.callee, node.source.args, state, callContext);
         findings.push(..._sinkFindingsForCall(
           node.source.callee, node.source.args, _sinkCat, _sinkArgTaints,
-          state, callContext, node.line).findings);
+          state, callContext, node.line, node.source.kwargs).findings);
         findings.push(..._nestedSinkFindings(node.source.args, state, callContext, node.line));
       }
       // PRD R13(a): the assignment TARGET can itself be a sink shape
@@ -1039,7 +1069,7 @@ function step(node, stateIn, callContext) {
         const _arrRecv = accessPathOf(node.callee.object);
         if (_arrRecv) state.add(_arrRecv);
       }
-      findings.push(..._sinkFindingsForCall(node.callee, node.args, cat, argTaints, state, callContext, node.line).findings);
+      findings.push(..._sinkFindingsForCall(node.callee, node.args, cat, argTaints, state, callContext, node.line, node.kwargs).findings);
       findings.push(..._nestedSinkFindings(node.args, state, callContext, node.line));
       // 2. P1.3 — higher-order taint flow. When the call is `arr.map(fn)` or
       //    `promise.then(fn)` and the receiver is tainted, propagate taint
@@ -1120,7 +1150,7 @@ function step(node, stateIn, callContext) {
       if (node.value && node.value.kind === 'call') {
         const { cat, argTaints } = _matchCallCatalog(node.value.callee, node.value.args, state, callContext);
         findings.push(..._sinkFindingsForCall(
-          node.value.callee, node.value.args, cat, argTaints, state, callContext, node.line).findings);
+          node.value.callee, node.value.args, cat, argTaints, state, callContext, node.line, node.value.kwargs).findings);
         findings.push(..._nestedSinkFindings(node.value.args, state, callContext, node.line));
       }
       if (exprTaint(node.value, state, callContext)) {

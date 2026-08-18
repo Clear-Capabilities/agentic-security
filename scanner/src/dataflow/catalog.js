@@ -511,10 +511,10 @@ export const CATALOG = [
             remediation: 'Escape user-derived HTML before assigning to ctx.body, or use ctx.body = { ... } for a JSON response.' } },
 
   // ─── SINKS (HTTP outbound / SSRF) ─────────────────────────────────────────
-  { kind: 'sink', id: 'py-requests-get',   language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiverTypeIn: ['requests|session|client|http'] },   argIndex: 0,
+  { kind: 'sink', id: 'py-requests-get',   language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$', receiverTypeIn: ['requests|session|client|http'] },   argIndex: 0,
     vuln: { name: 'SSRF (requests.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the URL host and reject RFC1918 + metadata endpoints before fetching. Use an allow-list.' } },
-  { kind: 'sink', id: 'py-requests-post',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'post' },  argIndex: 0,
+  { kind: 'sink', id: 'py-requests-post',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'post', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$' },  argIndex: 0,
     vuln: { name: 'SSRF (requests.post)', severity: 'high', cwe: 'CWE-918', remediation: 'Validate the URL host before posting.' } },
   { kind: 'sink', id: 'py-urlopen',        language: 'py', framework: 'urllib',   match: { type: 'call', callee: 'urlopen' }, argIndex: 0,
     vuln: { name: 'SSRF (urllib.request.urlopen)', severity: 'high', cwe: 'CWE-918', remediation: 'Validate the URL host before opening.' } },
@@ -546,7 +546,7 @@ export const CATALOG = [
             remediation: 'Validate the target URL against an allow-list before fetching; reject RFC1918 + metadata endpoints.' } },
 
   // ─── SINKS (command exec) ─────────────────────────────────────────────────
-  { kind: 'sink', id: 'py-subprocess-run',      language: 'py', framework: 'subprocess', match: { type: 'call', callee: 'run' }, argIndex: 0,
+  { kind: 'sink', id: 'py-subprocess-run',      language: 'py', framework: 'subprocess', match: { type: 'call', callee: 'run', requireKeyword: { name: 'shell', pattern: '^(?:true|True|1)$' } }, argIndex: 0,
     vuln: { name: 'Command Injection (subprocess.run shell=True)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Pass argv as a list; never pass a single string with shell=True.' } },
   { kind: 'sink', id: 'py-os-system',           language: 'py', framework: 'os',         match: { type: 'call', callee: 'system' }, argIndex: 0,
@@ -874,27 +874,19 @@ export const CATALOG = [
   { kind: 'source', id: 'py-sanic-body',       language: 'py', framework: 'sanic',     match: { type: 'member', object: 'request', prop: 'body' },  label: 'request.body (Sanic)', provenance: 'http-body' },
   // sys.argv — CLI input source. (os.environ already declared above.)
   { kind: 'source', id: 'py-sys-argv',      language: 'py', framework: 'std', match: { type: 'member', object: 'sys', prop: 'argv'   }, label: 'sys.argv', provenance: 'cli' },
-  // argparse (PRD T3.1) — IMPLEMENTED, THEN DELIBERATELY WITHHELD.
-  //
+  // argparse (PRD T3.1). sys.argv was cataloged but is rarely read directly —
   // `args = parser.parse_args()` then `args.<flag>` is the idiomatic CLI entry
-  // point (sys.argv above is cataloged but rarely read directly), and tainting
-  // the call's return does carry taint to every attribute correctly — verified
-  // working against a --host -> subprocess flow.
+  // point. Tainting the call's RETURN lets the existing access-path lattice
+  // carry it to every attribute without enumerating flag names.
   //
-  // It is not enabled because turning it on surfaced 15 new findings across 9
-  // of this repository's own hand-reviewed scripts/ files, and the ones
-  // inspected are FALSE POSITIVES exposing a PRE-EXISTING sink imprecision:
-  // py-subprocess-run fires on `subprocess.run(cmd, capture_output=True)` — an
-  // argv-ARRAY call with no shell=True, which cannot be command injection —
-  // while labelling it "subprocess.run shell=True". The sink never checks the
-  // keyword. `requireLiteralArg` cannot express it either: it matches a
-  // POSITIONAL literal, and shell=True is a keyword argument.
-  //
-  // PREREQUISITE before this source ships: a `requireKeyword`-style condition
-  // (plus the IR carrying Python keyword arguments) so the subprocess sinks
-  // fire only on the shell-interpreted form. Enabling the source first would
-  // knowingly trade real precision on reviewed code for recall — the exact
-  // trade this PRD's FP budget exists to refuse.
+  // This was implemented, withheld for one commit, and enabled only once its
+  // prerequisite landed: py-subprocess-* now carry
+  // `requireKeyword: {name:'shell'}`, so an argv-array call can no longer be
+  // reported as command injection. Before that, turning this source on
+  // surfaced 15 findings across 9 of this repository's own hand-reviewed
+  // scripts, every inspected one an argv-array call mislabelled "shell=True".
+  { kind: 'source', id: 'py-argparse-parse-args',       language: 'py', framework: 'argparse', match: { type: 'call', callee: 'parse_args' },       label: 'argparse parse_args()', provenance: 'cli' },
+  { kind: 'source', id: 'py-argparse-parse-known-args', language: 'py', framework: 'argparse', match: { type: 'call', callee: 'parse_known_args' }, label: 'argparse parse_known_args()', provenance: 'cli' },
   // File reads.
   { kind: 'source', id: 'py-open-read',     language: 'py', framework: 'std', match: { type: 'call', callee: 'open' }, argIndex: 0, label: 'open()', provenance: 'file-read' },
   // input() already declared above as a stdlib source (line ~120).
@@ -920,13 +912,13 @@ export const CATALOG = [
   { kind: 'sink', id: 'py-os-popen',      language: 'py', framework: 'std', match: { type: 'call', callee: 'popen'      }, argIndex: 0,
     vuln: { name: 'Command Injection (os.popen)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'os.popen is a shell wrapper; use subprocess.run with argv array.' } },
-  { kind: 'sink', id: 'py-subprocess-call', language: 'py', framework: 'std', match: { type: 'call', callee: 'call'      }, argIndex: 0,
+  { kind: 'sink', id: 'py-subprocess-call', language: 'py', framework: 'std', match: { type: 'call', callee: 'call', requireKeyword: { name: 'shell', pattern: '^(?:true|True|1)$' } }, argIndex: 0,
     vuln: { name: 'Command Injection (subprocess.call)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Pass argv as a list and ensure shell=False (the default). If shell=True is required, escape with shlex.quote.' } },
-  { kind: 'sink', id: 'py-subprocess-run-v2', language: 'py', framework: 'std', match: { type: 'call', callee: 'run'       }, argIndex: 0,
+  { kind: 'sink', id: 'py-subprocess-run-v2', language: 'py', framework: 'std', match: { type: 'call', callee: 'run', requireKeyword: { name: 'shell', pattern: '^(?:true|True|1)$' } }, argIndex: 0,
     vuln: { name: 'Command Injection (subprocess.run with shell=True)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Pass argv as a list and ensure shell=False.' } },
-  { kind: 'sink', id: 'py-subprocess-Popen', language: 'py', framework: 'std', match: { type: 'call', callee: 'Popen'   }, argIndex: 0,
+  { kind: 'sink', id: 'py-subprocess-Popen', language: 'py', framework: 'std', match: { type: 'call', callee: 'Popen', requireKeyword: { name: 'shell', pattern: '^(?:true|True|1)$' } }, argIndex: 0,
     vuln: { name: 'Command Injection (subprocess.Popen)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Pass argv as a list and shell=False.' } },
   { kind: 'sink', id: 'py-commands-getoutput', language: 'py', framework: 'std', match: { type: 'call', callee: 'getoutput' }, argIndex: 0,
@@ -998,7 +990,7 @@ export const CATALOG = [
     vuln: { name: 'Unsafe Deserialization (yaml.load)', severity: 'high', cwe: 'CWE-502',
             remediation: 'Use yaml.safe_load instead of yaml.load on untrusted YAML.' } },
   // SSRF / HTTP-out.
-  { kind: 'sink', id: 'py-requests-get-v2',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiverTypeIn: ['requests|session|client|http'] },  argIndex: 0,
+  { kind: 'sink', id: 'py-requests-get-v2',  language: 'py', framework: 'requests', match: { type: 'call', callee: 'get', receiver: '^(?:requests|httpx|session|Session|client|Client|http|urllib3|pool)$', receiverTypeIn: ['requests|session|client|http'] },  argIndex: 0,
     vuln: { name: 'SSRF (requests.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Resolve the host first, reject 169.254.169.254 / RFC1918 / localhost; or proxy through a server-side allow-list.' } },
   { kind: 'sink', id: 'py-requests-post-v2', language: 'py', framework: 'requests', match: { type: 'call', callee: 'post' }, argIndex: 0,

@@ -122,14 +122,11 @@ test('NEGATIVE CONTROL: pathlib Path(...) default does not taint', async () => {
 });
 
 // ─────────────────────────────────────────── T3.1 (cont.) CLI entry points
-//
-// The argparse source (parse_args() -> args.<flag>) is IMPLEMENTED but
-// WITHHELD in catalog.js; see the block comment there. It works, but enabling
-// it surfaces false positives from a pre-existing sink imprecision
-// (py-subprocess-run fires on argv-array calls with no shell=True). This test
-// pins the CURRENT, deliberate behaviour so the withholding is visible rather
-// than looking like an oversight, and so re-enabling it has to update a test.
-test('argparse parse_args() is deliberately NOT yet a source (see catalog.js)', async () => {
+test('argparse parse_args() taints every flag attribute it returns', async () => {
+  // sys.argv was already cataloged but is rarely read directly; the idiomatic
+  // form is `args = parser.parse_args()` then `args.<flag>`. Tainting the
+  // RETURN lets the access-path lattice carry it to each attribute without
+  // enumerating flag names.
   const f = await taintFindings('cli.py', [
     'import argparse, subprocess',
     'def main():',
@@ -138,7 +135,59 @@ test('argparse parse_args() is deliberately NOT yet a source (see catalog.js)', 
     '    args = parser.parse_args()',
     '    subprocess.run("ping " + args.host, shell=True)',
   ].join('\n'));
-  assert.deepEqual(f, [], 'withheld pending the subprocess shell=True sink fix');
+  assert.equal(f.length, 1, `expected one taint finding, got ${JSON.stringify(f.map(x => x.vuln))}`);
+});
+
+test('PREREQUISITE: an argv-array subprocess call is NOT command injection', async () => {
+  // requireKeyword. `subprocess.run([...], capture_output=True)` never invokes
+  // a shell, so a tainted element is one opaque argv entry — safe however
+  // tainted. Enabling the CLI source above without this fired on 15 argv-array
+  // calls across 9 of this repo's own hand-reviewed scripts, each labelled
+  // "shell=True" by a sink that never checked the keyword.
+  const f = await taintFindings('argv.py', [
+    'import argparse, subprocess',
+    'def main():',
+    '    parser = argparse.ArgumentParser()',
+    '    parser.add_argument("--host")',
+    '    args = parser.parse_args()',
+    '    subprocess.run(["ping", args.host], capture_output=True)',
+  ].join('\n'));
+  assert.deepEqual(f, [], 'an argv-array call cannot be command injection');
+});
+
+test('PREREQUISITE: requireKeyword stays RECALL-PRESERVING under a **splat', async () => {
+  // The dangerous inverse of the argv-array case. `shell=True` arriving via
+  // `**SHELL_OPTS` is still a real shell invocation, but the keyword set is
+  // not enumerable at the call site — so suppressing here would be a false
+  // NEGATIVE on exploitable code. The first draft of requireKeyword failed
+  // closed and broke bench/cve-replay/deep/py-interproc-cmdi-shape, which
+  // exists to pin exactly this shape; the corpus gate caught it.
+  const f = await taintFindings('splat.py', [
+    'import argparse, subprocess',
+    'SHELL_OPTS = {"shell": True}',
+    'def main():',
+    '    parser = argparse.ArgumentParser()',
+    '    parser.add_argument("--host")',
+    '    args = parser.parse_args()',
+    '    subprocess.call("ping " + args.host, **SHELL_OPTS)',
+  ].join('\n'));
+  assert.equal(f.length, 1, 'an unenumerable keyword set must not suppress the finding');
+});
+
+test('PREREQUISITE: a dict .get() is not an HTTP request (receiver constraint)', async () => {
+  // py-requests-get matched a BARE `.get()` with no enforced receiver
+  // (receiverTypeIn is a no-op for Python), so ordinary mapping lookups like
+  // FRAMEWORK_RUNNERS.get(name) were reported as SSRF.
+  const f = await taintFindings('dictget.py', [
+    'import argparse',
+    'RUNNERS = {"a": 1}',
+    'def main():',
+    '    parser = argparse.ArgumentParser()',
+    '    parser.add_argument("--name")',
+    '    args = parser.parse_args()',
+    '    return RUNNERS.get(args.name)',
+  ].join('\n'));
+  assert.deepEqual(f, [], 'a mapping lookup is not an outbound HTTP request');
 });
 
 test('NEGATIVE CONTROL: a hardcoded literal through the same sink does not taint', async () => {

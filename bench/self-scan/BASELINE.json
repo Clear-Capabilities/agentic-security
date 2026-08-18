@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-18T00:38:35.435Z",
-  "commit": "fe75ddab2a3cc1514d8a73807795765ba413d8f0",
+  "generatedAt": "2026-08-18T04:45:50.639Z",
+  "commit": "4f0bfff016803db142dace6fa05e7173bb497f8e",
   "targets": {
     "hooks": {
       "total": 25,
@@ -19,16 +19,17 @@
       }
     },
     "scripts": {
-      "total": 26,
+      "total": 33,
       "byFile": {
-        "_compliance_lib.py": 1,
+        "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
         "calibration-expand.mjs": 2,
         "check-doc-drift.mjs": 1,
         "detector-fuzz-runner.mjs": 3,
         "ghsa-to-hints.mjs": 3,
         "llm-cost-ceiling.py": 2,
-        "nist-compliance/scan.py": 2,
+        "nist-compliance/scan.py": 7,
+        "owasp-llm-top10/scan.py": 1,
         "release-check.mjs": 1,
         "rotate-key-auto.py": 1,
         "self-test-runner.mjs": 2,

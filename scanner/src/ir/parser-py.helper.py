@@ -207,11 +207,28 @@ def _lower_call_chain(node: ast.Call) -> dict[str, Any]:
     `args[0]`, exactly where `argIndex: 0` catalog entries expect it).
     """
     segments: list[tuple[Any, list[dict[str, Any]]]] = []
+    kwargs: dict[str, Any] = {}
     cur: Any = node
     while isinstance(cur, ast.Call):
         args = [_lower_expr(a) for a in (cur.args or [])]
         for kw in (cur.keywords or []):
             args.append(_lower_expr(kw.value))
+            # Keyword NAMES were previously dropped: `subprocess.run(cmd,
+            # shell=True)` lowered to args=[cmd, True] with no way to tell
+            # which argument was `shell`. That made it impossible for a sink
+            # to distinguish the shell-interpreted form from the safe
+            # argv-array form, so py-subprocess-run fired on both and
+            # labelled both "shell=True". Recorded alongside args rather than
+            # instead of them, so every existing argIndex consumer is
+            # unaffected. (PRD T3.1 prerequisite.)
+            if kw.arg:
+                kwargs.setdefault(kw.arg, _lower_expr(kw.value))
+            else:
+                # `**opts` — the keyword set is NOT enumerable here. Recorded
+                # under a reserved key so a requireKeyword gate can tell
+                # "this keyword is absent" from "we cannot see the keywords",
+                # and stay recall-preserving in the second case.
+                kwargs.setdefault("**", {"kind": "unknown"})
         func = cur.func
         if isinstance(func, ast.Attribute):
             segments.append((func.attr, args))
@@ -231,7 +248,10 @@ def _lower_call_chain(node: ast.Call) -> dict[str, Any]:
     all_args: list[dict[str, Any]] = []
     for _, args in segments:
         all_args = all_args + args
-    return {"kind": "call", "callee": callee, "args": all_args}
+    call: dict[str, Any] = {"kind": "call", "callee": callee, "args": all_args}
+    if kwargs:
+        call["kwargs"] = kwargs
+    return call
 
 
 def _flatten_callee(node: ast.AST) -> Any:
@@ -377,13 +397,22 @@ class CfgBuilder:
             # Bare expression — useful when it's a call (decorator pattern,
             # dispatch shape). For everything else, noop.
             if isinstance(stmt.value, ast.Call):
-                cur = self._add({
+                _node = {
                     "kind": "call",
                     "callee": _flatten_callee(stmt.value.func),
                     "args": [_lower_expr(a) for a in (stmt.value.args or [])]
                           + [_lower_expr(kw.value) for kw in (stmt.value.keywords or [])],
                     "line": line,
-                })
+                }
+                # Keyword names, so a sink can tell `subprocess.run(cmd,
+                # shell=True)` from the safe argv-array form. See
+                # _lower_call_chain for the full rationale.
+                _kw = {kw.arg: _lower_expr(kw.value) for kw in (stmt.value.keywords or []) if kw.arg}
+                if any(kw.arg is None for kw in (stmt.value.keywords or [])):
+                    _kw["**"] = {"kind": "unknown"}   # see _lower_call_chain
+                if _kw:
+                    _node["kwargs"] = _kw
+                cur = self._add(_node)
             elif isinstance(stmt.value, ast.NamedExpr):
                 cur = self._add({
                     "kind": "assign",
