@@ -2873,8 +2873,24 @@ const STORED_TAINT_SINK_PATTERNS=[
 
 function buildStoredTaintRegistry(fc){
   const registry={};
+  // PRD T3.2 — this used to REQUIRE the field name to be one of a closed list
+  // (bio|description|about|…). That is the same closed-enumeration bug found
+  // four separate times in this engine during the same audit (blessed auth
+  // dependencies, `id`/`userId`-only object ids, snake_case-only guards): real
+  // schemas name their fields whatever they like, and a field called `payload`,
+  // `src` or `mobiledoc` carries stored user input exactly as well as `bio`.
+  // The list is kept only as a CONFIDENCE signal now; admission is decided by
+  // whether the value side actually references a request source.
   const STRING_FIELDS=/(?:bio|description|about|message|content|body|note|comment|title|summary|text|review|feedback|username|displayName)/i;
-  for(const[fp,code] of Object.entries(fc)){
+  // Fields that are never user prose — registering them produces noise, not flows.
+  const NON_CONTENT_FIELDS=/^(?:id|_id|uuid|createdAt|updatedAt|deletedAt|version|type|status|role|password|hash|salt|token)$/i;
+  for(const[fp,rawCode] of Object.entries(fc)){
+    // Comments are not code. sast/CLAUDE.md's first gotcha is exactly this, and
+    // skipping it here registered phantom fields from ILLUSTRATIVE EXAMPLES in
+    // detector docblocks (`// Sequelize Model.create({ field: req.body.x })`),
+    // which then matched in unrelated files and produced 8 cross-file findings
+    // between this project's own source files.
+    const code=stripNoise(rawCode);   // engine-local, line-preserving
     const lines=code.split('\n');
     // Find ORM writes that include string-type fields likely to hold user input
     const ormWrite=/(?:create|update|save|upsert|findOrCreate)\s*\(\s*\{([^}]{0,800})\}/g;
@@ -2884,14 +2900,15 @@ function buildStoredTaintRegistry(fc){
       const fieldMatches=inner.match(/(\w+)\s*:/g)||[];
       for(const f of fieldMatches){
         const fn=f.replace(/\s*:/,'');
-        if(STRING_FIELDS.test(fn)){
-          // Only register if the value side references a request input
-          const fieldRe=new RegExp(fn+'\\s*:\\s*(?:req\\.|request\\.|ctx\\.|\\$_(?:POST|GET)|body\\[|params\\[|query\\[)','i');
-          if(fieldRe.test(inner)||/req\.|request\.|ctx\./i.test(inner)){
-            const line=code.substring(0,m.index).split('\n').length;
-            if(!registry[fn])registry[fn]=[];
-            registry[fn].push({file:fp,line,snippet:lines[line-1]?.trim()||''});
-          }
+        if(NON_CONTENT_FIELDS.test(fn))continue;
+        // Admission is by PROVENANCE, not by name: the value side must
+        // reference a request source. A recognised prose-ish name only raises
+        // confidence.
+        const fieldRe=new RegExp(fn+'\\s*:\\s*(?:req\\.|request\\.|ctx\\.|\\$_(?:POST|GET)|body\\[|params\\[|query\\[)','i');
+        if(fieldRe.test(inner)||/req\.|request\.|ctx\./i.test(inner)){
+          const line=code.substring(0,m.index).split('\n').length;
+          if(!registry[fn])registry[fn]=[];
+          registry[fn].push({file:fp,line,snippet:lines[line-1]?.trim()||'',named:STRING_FIELDS.test(fn)});
         }
       }
     }
@@ -2910,36 +2927,55 @@ function crossStoredTaint(fc, storedRegistry){
       if(writes.some(w=>w.file===fp))continue;
       const lines=code.split('\n');
       // Check if this file renders the stored field in a dangerous context
-      const sinkRe=new RegExp(
-        `(?:\`[^\`]*\\$\\{[^}]*\\b${field}\\b[^}]*\\}\`|(?:innerHTML|outerHTML)\\s*=[^;]{0,200}\\b${field}\\b|res\\s*\\.\\s*(?:send|write|json)\\s*\\([^;]{0,200}\\b${field}\\b)`,
-        'g'
-      );
+      // PRD T3.2 — sink families beyond XSS.
+      //
+      // This used to recognise ONLY render sinks (innerHTML / res.send /
+      // template literal), so a stored value flowing to a network, filesystem
+      // or shell sink was invisible. The evidence entry that forced this is
+      // Ghost's mobiledoc re-render (GHSA-g366-23fw-ggp6): stored post content
+      // is walked on a later render pass and its image `src` handed to an
+      // unguarded fetch — a stored SSRF, not stored XSS. Each family carries
+      // its own CWE so the finding is not mislabelled as XSS.
+      const F = field;
+      const STORED_SINK_FAMILIES = [
+        { re: `(?:\`[^\`]*\\$\\{[^}]*\\b${F}\\b[^}]*\\}\`|(?:innerHTML|outerHTML)\\s*=[^;]{0,200}\\b${F}\\b|res\\s*\\.\\s*(?:send|write|json)\\s*\\([^;]{0,200}\\b${F}\\b)`,
+          vuln: 'Stored XSS / Second-Order Injection', cwe: 'CWE-79', sanit: /(?:escape|DOMPurify|sanitize|encodeURIComponent|escapeHtml|textContent)\s*\(/ },
+        { re: `(?:fetch|axios(?:\\.\\w{1,10})?|got|request|urlopen|requests\\.\\w{1,10}|httpx\\.\\w{1,10}|getImageSize\\w{0,20})\\s*\\([^;]{0,200}\\b${F}\\b`,
+          vuln: 'Stored SSRF (second-order)', cwe: 'CWE-918', sanit: /(?:isAllowed|allowlist|allowList|denyList|isPrivate|ssrf|validateUrl|is_?internal)\s*\(/i },
+        { re: `(?:readFile|readFileSync|createReadStream|open|sendFile|path\\.join)\\s*\\([^;]{0,200}\\b${F}\\b`,
+          vuln: 'Stored path traversal (second-order)', cwe: 'CWE-22', sanit: /(?:basename|resolve|realpath|secure_filename|normalize)\s*\(/i },
+        { re: `(?:exec|execSync|spawn|system|popen)\\s*\\([^;]{0,200}\\b${F}\\b`,
+          vuln: 'Stored command injection (second-order)', cwe: 'CWE-78', sanit: /(?:shell-?escape|shlex\.quote|execFile)\s*\(/i },
+      ];
+      for (const fam of STORED_SINK_FAMILIES) {
+      const sinkRe=new RegExp(fam.re,'g');
       let m2;
       while((m2=sinkRe.exec(code))!==null){
         const sinkLine=code.substring(0,m2.index).split('\n').length;
         const snippet=lines[sinkLine-1]?.trim()||'';
         // Check for sanitizer in the vicinity
         const nearby=lines.slice(Math.max(0,sinkLine-5),sinkLine+2).join(' ');
-        const isSanitized=/(?:escape|DOMPurify|sanitize|encodeURIComponent|escapeHtml|textContent)\s*\(/.test(nearby);
+        const isSanitized=fam.sanit.test(nearby);
         if(!isSanitized){
           for(const write of writes){
             const id=`stored:${write.file}:${write.line}:${fp}:${sinkLine}:${field}`;
             findings.push({
               id,
               source:{label:`Stored field: ${field} (written at ${write.file.split('/').pop()}:${write.line})`,category:'Stored Taint',inputType:'stored',variable:field,line:write.line,file:write.file,snippet:write.snippet},
-              sink:{type:'Stored Sink',severity:'high',vuln:'Stored XSS / Second-Order Injection',cwe:'CWE-79',stride:'Tampering',line:sinkLine,file:fp,snippet,args:snippet},
+              sink:{type:'Stored Sink',severity:'high',vuln:fam.vuln,cwe:fam.cwe,stride:'Tampering',line:sinkLine,file:fp,snippet,args:snippet},
               path:[
                 {type:'source',label:`ORM write: ${field} = user_input`,line:write.line,snippet:write.snippet},
                 {type:'propagation',label:`Stored in database (${field})`,line:write.line,snippet:''},
                 {type:'sink',label:`Rendered unsanitized in ${fp.split('/').pop()}:${sinkLine}`,line:sinkLine,snippet}
               ],
               isSanitized:false,sanitizerType:null,
-              severity:'high',vuln:'Stored XSS / Second-Order Injection',cwe:'CWE-79',stride:'Tampering',
+              severity:'high',vuln:fam.vuln,cwe:fam.cwe,stride:'Tampering',
               file:`${write.file} -> ${fp}`,isCrossFile:true,parser:'STORED_TAINT'
             });
             break; // one finding per (field,sinkFile,sinkLine) is enough
           }
         }
+      }
       }
     }
   }

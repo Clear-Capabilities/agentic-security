@@ -283,7 +283,7 @@ Updated 2026-08-17. Only items verified by a command run are marked landed.
 | T1.4 differential mode | **Not started** | |
 | T2.1 top-detector precision audit | **Not started** | The four fixes above were found incidentally, not by the systematic audit this item specifies. |
 | T2.3 fixed-code negative controls | **Not started** | |
-| T3.2 cross-file / stored taint | **Not started** | 12 entries — the largest remaining taint gap. |
+| **T3.2 cross-file / stored taint** | **Landed** | 12 entries. Registry admission moved from a closed field-name list to PROVENANCE; sink families extended beyond XSS to SSRF/path/exec with per-family CWEs and per-family guards. Also fixed the underlying comment-stripping bug that made a detector's illustrative docblock examples register as real ORM writes. |
 | T3.3 container/collection-element taint | **Not started** | |
 | T3.4 multi-source correlation | **Not started** | |
 | **T4.2 resource exhaustion** | **Landed** (`cf9acc8`) | 14 entries. Fires only when a caller-controlled size reaches a bounded-cost operation with no upper-bound check — the check being exactly the fix each advisory shipped. Zero FPs on this repo's ~700 files. |
