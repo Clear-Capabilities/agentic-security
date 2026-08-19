@@ -32,6 +32,20 @@ async function taintFindings(filename, src) {
   setStateWritesEnabled(false);
   const prevDeep = process.env.AGENTIC_SECURITY_DEEP;
   process.env.AGENTIC_SECURITY_DEEP = '1';
+  // The engine auto-disables deep mode under CI unless this second opt-in is
+  // ALSO set (`_deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed)`),
+  // and when it skips it emits an informational finding that is itself tagged
+  // `parser: 'IR-TAINT'` — "deep mode skipped in CI environment".
+  //
+  // Every assertion below filters on that exact parser, so without this line
+  // the notice is counted AS a taint finding: the negative controls that expect
+  // `[]` receive one element, and the positive case's `f[0].vuln` is the notice
+  // rather than the injection. The whole file passed locally and failed all 8
+  // deep-mode assertions in CI for that reason alone. `deep-taint.test.js`,
+  // `kt-taint-flow.test.js` and the others already carry this opt-in; this file
+  // was the one that did not.
+  const prevInCi = process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+  process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'pyann-'));
   try {
     fs.writeFileSync(path.join(d, 'package.json'), '{"name":"t","version":"1.0.0"}');
@@ -41,6 +55,8 @@ async function taintFindings(filename, src) {
   } finally {
     if (prevDeep === undefined) delete process.env.AGENTIC_SECURITY_DEEP;
     else process.env.AGENTIC_SECURITY_DEEP = prevDeep;
+    if (prevInCi === undefined) delete process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+    else process.env.AGENTIC_SECURITY_DEEP_IN_CI = prevInCi;
     setStateWritesEnabled(true);
     fs.rmSync(d, { recursive: true, force: true });
   }
