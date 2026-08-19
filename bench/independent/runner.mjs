@@ -343,8 +343,38 @@ async function main() {
   const perEntry = [];
   const unscored = [];
 
+  // Per-entry progress, to STDERR so `--json` stdout stays machine-parseable.
+  //
+  // Without this the runner is completely opaque: it buffers the whole report
+  // and writes it at the end, so a 110-minute deep run looks identical at
+  // minute 5 and minute 105 — no way to tell "working" from "wedged", and a
+  // run killed at 95% leaves nothing at all. Rate and ETA come from measured
+  // elapsed time rather than a fixed estimate, because deep mode is ~2x
+  // slower than pattern-only and any hardcoded guess is wrong for one of them.
+  //
+  // Quiet when stderr is not a TTY (CI logs, `2>file`) unless the caller asks
+  // via AGENTIC_SECURITY_BENCH_PROGRESS=1, so redirected runs stay clean.
+  const total = manifest.entries.length;
+  const showProgress = process.env.AGENTIC_SECURITY_BENCH_PROGRESS === '1'
+    || (process.stderr.isTTY && process.env.AGENTIC_SECURITY_BENCH_PROGRESS !== '0');
+  const startedAt = Date.now();
+  let seen = 0;
+  const progress = (id, note = '') => {
+    if (!showProgress) return;
+    seen++;
+    const elapsed = (Date.now() - startedAt) / 1000;
+    const rate = seen / Math.max(elapsed, 0.001);
+    const etaS = rate > 0 ? Math.round((total - seen) / rate) : 0;
+    const mmss = (t) => `${Math.floor(t / 60)}m${String(Math.round(t % 60)).padStart(2, '0')}s`;
+    const pct = String(Math.round((seen / total) * 100)).padStart(3);
+    process.stderr.write(
+      `[${String(seen).padStart(String(total).length)}/${total}] ${pct}% `
+      + `elapsed ${mmss(elapsed)} eta ${mmss(etaS)}  ${id}${note ? ' — ' + note : ''}\n`);
+  };
+
   for (const e of manifest.entries) {
     if (!entryComplete(e)) {
+      progress(e.id, 'skipped: not fetched');
       unscored.push({ id: e.id, reason: 'not fetched — run `npm run bench:independent:fetch`' });
       continue;
     }
@@ -358,6 +388,7 @@ async function main() {
     // "unfetchable is UNSCORED, never a miss" rule.
     const missing = (e.files || []).filter(rel => !fs.existsSync(path.join(dir, 'pre', rel)));
     if ((e.files || []).length > 0 && missing.length === (e.files || []).length) {
+      progress(e.id, 'unscored: advisory files absent');
       unscored.push({ id: e.id, reason: `advisory file(s) absent from the materialised pre/ tree: ${missing.join(', ')}` });
       continue;
     }
@@ -367,6 +398,7 @@ async function main() {
       preFindings = await scanDir(path.join(dir, 'pre'));
       postFindings = await scanDir(path.join(dir, 'post'));
     } catch (err) {
+      progress(e.id, `unscored: scan failed — ${err.message}`);
       unscored.push({ id: e.id, reason: `scan failed: ${err.message}` });
       continue;
     }
@@ -423,6 +455,7 @@ async function main() {
       matchedLine: hitPreLocal ? (localizedMatches[0].line ?? null) : null,
       preFindings: preFindings.length, postFindings: postFindings.length,
     });
+    progress(e.id, hitPreLocal ? `localized TP (${matchedParser})` : (hitPre ? 'file-scoped only' : 'miss'));
   }
 
   const sum = (rows) => rows.reduce((a, r) => ({
