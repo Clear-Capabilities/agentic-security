@@ -65,6 +65,27 @@ import { resolveMethod, classOfVar } from '../ir/class-hierarchy.js';
 // AGENTIC_SECURITY_POINTS_TO=1).
 function _addPathAliasAware(state, path, callContext) {
   let s = addPath(state, path);
+  // T3.3 — a write through an UNKNOWN key taints the whole container.
+  //
+  // `parser-js.js` lowers a computed write whose key is not a literal
+  // (`bag[k] = tainted`) to the access path `bag.*`, and — as that parser's own
+  // comment states — `'*'` is a LITERAL property name here, not a
+  // match-anything token. `isCoveredBy` only propagates DOWN from a prefix, so
+  // `bag.*` covers nothing: a later read of `bag.anything` resolves to a
+  // different path entirely and the taint is unreachable from every correctly
+  // computed read.
+  //
+  // Since the key is statically unknown, the write may have landed on ANY
+  // property, so the sound abstraction is the container itself. Widening to the
+  // base is what makes the value observable again, and it is the same
+  // over-approximate direction the lattice already takes at branch joins.
+  //
+  // Scoped deliberately to a TRAILING `.*`. An interior wildcard
+  // (`bag.*.inner`) still describes a definite final property and does not
+  // justify tainting the root.
+  if (typeof path === 'string' && path.length > 2 && path.endsWith('.*')) {
+    s = addPath(s, path.slice(0, -2));
+  }
   const pt = callContext && callContext._pointsTo;
   const fnQid = callContext && callContext._currentFnQid;
   if (!pt || !fnQid || typeof path !== 'string') return s;
@@ -1055,19 +1076,53 @@ function step(node, stateIn, callContext) {
           });
         }
       }
-      // R4 (PRD §5): array-element taint. A mutating array method (push/unshift/
-      // splice/fill/copyWithin) called with a tainted argument taints the
-      // receiver array; an index read (a[0] → access path "a.0") is then covered
-      // by the receiver prefix. Object-property taint already flows via the
-      // access-path lattice — this closes the array case.
-      if (node.callee && node.callee.kind === 'member' && typeof node.callee.prop === 'string'
-          && /^(?:push|unshift|splice|fill|copyWithin)$/.test(node.callee.prop)
-          && Array.isArray(argTaints) && argTaints.some(Boolean)) {
+      // R4 (PRD §5) + T3.3: collection-element taint. A mutating collection
+      // method called with a tainted argument taints the receiver; an index or
+      // key read (`a[0]` → access path "a.0", `m.get(k)` → receiver taint via
+      // _calleeReceiverTainted) is then covered by the receiver prefix.
+      // Object-property taint already flows via the access-path lattice — this
+      // closes the container case.
+      //
+      // R4 covered JS arrays only, in both of its dimensions, and T3.3 widens
+      // each:
+      //   - METHODS: keyed collections mutate through `set`/`add`, and the
+      //     non-JS containers through `append`/`extend`/`insert`/`update`/
+      //     `addAll`/`putAll`/`put`. These are writes exactly as `push` is.
+      //   - CALLEE SHAPE: the `callee.kind === 'member'` test only ever matched
+      //     `parser-js.js` (Babel), the one frontend emitting a structured
+      //     callee. The seven hand-rolled parsers emit a flat dot-joined STRING
+      //     ("items.append"), so Python/Ruby/PHP/Go/Java/C#/Kotlin containers
+      //     never matched at all — measured: python's `items.append(tainted)`
+      //     produced no IR-TAINT finding, and only a PY-SAST pattern rule
+      //     caught the sink, which masked the taint-layer miss entirely. Same
+      //     frontend duality `_calleeReceiverTainted` documents and handles.
+      //
+      // `add`/`put` are deliberately NOT extended to bare-name calls: the
+      // receiver is what gets tainted, so a call with no receiver has nothing
+      // to taint and is skipped by both branches below.
+      if (Array.isArray(argTaints) && argTaints.some(Boolean)) {
+        // `__setitem__` is not a method anyone writes: `parser-py.js` lowers a
+        // subscript assignment (`bag['k'] = v`, `arr[i] = v`) to a CALL node
+        // with that flat callee rather than to an assign node with a member
+        // target, so it reaches this rule instead of the assign path. The
+        // matching read lowers to `bag.[]`, already covered by the tainted
+        // receiver prefix.
+        const _MUTATORS = /^(?:push|unshift|splice|fill|copyWithin|set|add|append|extend|insert|update|addAll|putAll|put|__setitem__)$/;
         // Mutate the state Set IN PLACE (the binding is const; the call case
-        // returns this same Set ref). Avoids touching the unrelated mutated-param
-        // paths in this case, keeping the blast radius to array-element taint only.
-        const _arrRecv = accessPathOf(node.callee.object);
-        if (_arrRecv) state.add(_arrRecv);
+        // returns this same Set ref). Avoids touching the unrelated
+        // mutated-param paths in this case, keeping the blast radius to
+        // collection-element taint only.
+        let _recv = null;
+        if (node.callee && node.callee.kind === 'member' && typeof node.callee.prop === 'string'
+            && _MUTATORS.test(node.callee.prop)) {
+          _recv = accessPathOf(node.callee.object);
+        } else if (typeof _plainCallCalleeName === 'string') {
+          const _dot = _plainCallCalleeName.lastIndexOf('.');
+          if (_dot > 0 && _MUTATORS.test(_plainCallCalleeName.slice(_dot + 1))) {
+            _recv = _plainCallCalleeName.slice(0, _dot);
+          }
+        }
+        if (_recv) state.add(_recv);
       }
       findings.push(..._sinkFindingsForCall(node.callee, node.args, cat, argTaints, state, callContext, node.line, node.kwargs).findings);
       findings.push(..._nestedSinkFindings(node.args, state, callContext, node.line));

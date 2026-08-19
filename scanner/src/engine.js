@@ -51,6 +51,7 @@ import { isJavaBarProvablySafe } from './sast/java-constant-fold.js';
 import { findTaintedCollections, extractionFromTaintedCollection } from './sast/java-collection-passthrough.js';
 import { deadBranchRanges as _deadBranchRanges, isLineInDeadRange as _isLineInDeadRange } from './sast/java-ast-folding.js';
 import { scanJavaDeserialization } from './sast/java-deserialization.js';
+import { blankComments } from './sast/_comment-strip.js';
 import { scanJwtExp } from './sast/jwt-exp.js';
 import { scanZipSlip } from './sast/zip-slip.js';
 import { scanFileUpload } from './sast/file-upload.js';
@@ -247,7 +248,59 @@ const localStorage = sessionStorage;
 const DATA_CLASSES={PII:{label:"PII",color:"#c792ea",patterns:["fname","lname","first_name","last_name","surname","full_name","dob","date_of_birth","ssn","social_security","tax_id","national_id","address_line","postal_code","zip_code","home_address","phone","mobile","email","drivers_license","passport_no","voter_id","geolocation","fingerprint","voice_print","dna_sequence","student_id","salary"]},PHI:{label:"PHI",color:"#ff6b9d",patterns:["ehr_id","mrn","medical_record_number","patient_id","patient_name","diagnosis","icd_code","cpt_code","prescription","blood_type","pregnancy_status","disability","mental_health","medical_history","treatment_plan","lab_result","medication","immunization","insurance_plan","policy_number","hipaa","phi"]},PCI:{label:"PCI",color:"#ff6b35",patterns:["pan","credit_card","card_number","cc_num","cardholder_name","cvv","cvc","cvv2","security_code","card_verification","exp_date","card_expiry","track_1","track_2","magstripe","pin_block","routing_number","bank_account","iban","swift_code","account_number"]},Confidential:{label:"Confidential",color:"#ffb800",patterns:["top_secret","secret","confidential","classified","cui","controlled","attorney_client","privileged","trade_secret","proprietary","internal_use_only","do_not_distribute","export_controlled","itar","cjis","password","passwd","api_key","secret_key","access_token","auth_token","connection_string","private_key"]}};
 function classifyField(n){const l=n.toLowerCase().replace(/[-\s]/g,"_");const m=[];for(const[c,info]of Object.entries(DATA_CLASSES))for(const p of info.patterns)if(l.includes(p)){m.push(c);break;}return m;}
 function classifyEndpoint(fields){const c=new Set();for(const f of fields)for(const x of classifyField(f))c.add(x);return[...c];}
-function stripNoise(code){let c=code.replace(/\/\*[\s\S]*?\*\//g,m=>m.replace(/[^\n]/g,' '));c=c.replace(/\/\/[^\n]*/g,m=>' '.repeat(m.length));return c;}
+// Which comment syntax a file uses. This has to be language-aware rather than
+// one regex for every file, because the same two characters mean OPPOSITE
+// things across languages: `#` opens a comment in Python/Ruby/shell but is a
+// preprocessor or region directive in C/C++/C# (`#include`, `#region`), and
+// `//` is a comment in the C family but FLOOR DIVISION in Python. Guessing
+// wrong does not merely leak a false positive — it deletes real code and
+// silently destroys every finding on the rest of the line.
+const _HASH_COMMENT_EXTS = new Set([
+  '.py', '.pyw', '.pyi', '.sh', '.bash', '.zsh',
+  '.yml', '.yaml', '.pl', '.pm', '.ex', '.exs', '.cr', '.nim', '.toml', '.cfg', '.ini',
+]);
+// Ruby: `#` lines plus `=begin`/`=end` blocks.
+const _RUBY_COMMENT_EXTS = new Set(['.rb', '.rake', '.gemspec', '.ru']);
+// PHP and HCL/Terraform accept `//`, `/* */` AND `#` simultaneously.
+const _ALL_COMMENT_EXTS = new Set(['.php', '.php5', '.phtml', '.tf', '.tfvars', '.hcl']);
+function _commentLangFor(fp) {
+  const base = (String(fp || '').toLowerCase().split(/[\\/]/).pop()) || '';
+  if (base === 'dockerfile' || base.startsWith('dockerfile.') || base === 'makefile') return 'py';
+  const dot = base.lastIndexOf('.');
+  const ext = dot > 0 ? base.slice(dot) : '';
+  if (_ALL_COMMENT_EXTS.has(ext)) return 'php';
+  if (_RUBY_COMMENT_EXTS.has(ext)) return 'rb';
+  if (_HASH_COMMENT_EXTS.has(ext)) return 'py';
+  return undefined; // C-family default: `//` and `/* */` only, `#` left alone.
+}
+// Single-entry memo for the comment-blanked view.
+//
+// `stripNoise` is called ~15 times for the SAME file within one pass
+// (performRegexAnalysis, scanRoutes, scanStructuralVulns, scanLogicVulns,
+// scanJavaSAST, scanCiphers, …), and the per-file dispatch computes `cc` on top
+// of that. The old implementation was two native regex replaces, so recomputing
+// was nearly free; `blankComments` is an interpreted character loop, so it is
+// not. Measured on a 307-file entry: 13.4 s → 16.0 s, a 19.7% regression,
+// before this memo.
+//
+// One slot is enough because the engine processes one file at a time, and
+// `fileContents[p]` hands back the SAME string reference on every call — so the
+// `===` guard is a pointer comparison, not a content comparison, and cannot
+// return a stale result for different content.
+let _blankMemoSrc = null, _blankMemoLang, _blankMemoOut = null;
+function _blankCached(src, lang) {
+  if (src === _blankMemoSrc && lang === _blankMemoLang) return _blankMemoOut;
+  const out = blankComments(src, lang);
+  _blankMemoSrc = src; _blankMemoLang = lang; _blankMemoOut = out;
+  return out;
+}
+
+// `fp` is optional for backwards compatibility with call sites that have no
+// path in scope. WITH a path this delegates to the shared, string-literal-aware
+// `blankComments`; without one it keeps the original C-family-only behaviour.
+function stripNoise(code, fp){
+  if (fp !== undefined && fp !== null) return _blankCached(code, _commentLangFor(fp));
+  let c=code.replace(/\/\*[\s\S]*?\*\//g,m=>m.replace(/[^\n]/g,' '));c=c.replace(/\/\/[^\n]*/g,m=>' '.repeat(m.length));return c;}
 // File-context inference. Used to gate rules that only apply in a given runtime
 // context — e.g. "Synchronous Blocking I/O (DoS Risk in Server Context)" should
 // not fire on CLI scripts / hooks / VS Code extensions.
@@ -1579,7 +1632,7 @@ function _detectAllowlistGuard(lines, varName, srcLine, sinkLine) {
   return null;
 }
 
-function performRegexAnalysis(fp,raw){if(_INTENTIONAL_VULN_PATH_RE.test(fp.replace(/\\/g,'/')))return{findings:[],sources:[],sinks:[],sanitizers:[]};const cleaned=stripNoise(raw);const cleanedNoStrings=stripNoiseAndStrings(raw);const lines=raw.split("\n");const findings=[],sources=[],sinks=[],sanitizers=[];
+function performRegexAnalysis(fp,raw){if(_INTENTIONAL_VULN_PATH_RE.test(fp.replace(/\\/g,'/')))return{findings:[],sources:[],sinks:[],sanitizers:[]};const cleaned=stripNoise(raw,fp);const cleanedNoStrings=stripNoiseAndStrings(raw);const lines=raw.split("\n");const findings=[],sources=[],sinks=[],sanitizers=[];
   for(const sp of SOURCE_PATTERNS){const re=new RegExp(sp.regex.source,sp.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const lt=lines[line-1]||"";let _srcVar=null;if(typeof sp.getVar==='function'){try{_srcVar=sp.getVar(m,lt)||null;}catch(_){_srcVar=null;}}if(!_srcVar){const am=lt.match(/(?:const|let|var|)\s*(\w+)\s*=/)||lt.match(/(\w+)\s*=/);_srcVar=am?am[1]:null;}const _itype=sp.inputType(m);if(_srcVar&&(_itype==='cookies'||_itype==='headers')){const _mc=lt.indexOf(m[0]);if(_mc>=0){const _before=lt.substring(0,_mc);if((_before.match(/\(/g)||[]).length>(_before.match(/\)/g)||[]).length)_srcVar=null;}}sources.push({label:sp.getLabel(m),category:sp.category,inputType:_itype,variable:_srcVar,line,file:fp,snippet:lt.trim()});}}
   // Feat-1: in-file Python helper-taint propagation. Pushes synthetic sources
   // for function parameters that are tainted via call-site argument flow.
@@ -1659,7 +1712,7 @@ function performAnalysis(fp, raw) {
     return performRegexAnalysis(fp, raw);
 }
 
-function scanRoutes(fp,raw){const cleaned=stripNoise(raw);const lines=raw.split("\n");const routes=[];const mwAuth=detectMiddlewareAuth(raw);for(const p of ROUTE_PATTERNS){const re=new RegExp(p.regex.source,p.regex.flags);let m;while((m=re.exec(cleaned))){let method="GET";if(p.mI&&m[p.mI]){const r=m[p.mI].toUpperCase();method=["GET","POST","PUT","PATCH","DELETE","ALL","OPTIONS","HEAD"].includes(r)?r:"GET";}if(p.mtI&&m[p.mtI]){const fm=m[p.mtI].replace(/['"]/g,"").split(",").map(s=>s.trim().toUpperCase());if(fm.length)method=fm[0];}const path=p.pI&&m[p.pI]?m[p.pI]:"(file-based)";const line=lineAt(cleaned,m.index);let hasAuth=false;const nearby=lines.slice(Math.max(0,line-3),line+3).join(" ");if(/(?:authenticate|auth|jwt\.verify|verifyToken|authMiddleware|checkAuth|protect|authorize|isAuthorized|expressJwt|denyAll|checkPermission|checkAnyPermission|hasAnyPermission|hasPermission|requirePermission)\s*[\(,]/i.test(nearby))hasAuth=true;if(!hasAuth)for(const mw of mwAuth)if(line>mw.line&&(mw.scope==="/"||path.startsWith(mw.scope)))hasAuth=true;const rp=[];for(const sp of SOURCE_PATTERNS){const re2=new RegExp(sp.regex.source,sp.regex.flags);const block=lines.slice(Math.max(0,line-2),Math.min(lines.length,line+30)).join("\n");let m2;while((m2=re2.exec(block))){const v=m2[2]||m2[3]||m2[1];if(v)rp.push(v);}}const cls=classifyEndpoint(rp);const classifiedFields={};rp.forEach(field=>{const fc=classifyField(field);if(fc.length)classifiedFields[field]=fc;});const uploadBlock2=lines.slice(Math.max(0,line-5),Math.min(lines.length,line+40)).join("\n");const hasFileUpload=/(?:multer|busboy|formidable|upload\.(?:single|array|fields|any|none)|req\.files?\b|request\.files?\b|request\.FILES|\$_FILES|\$request->(?:file|hasFile)|multipart\/form-data|r\.FormFile|r\.MultipartForm)/i.test(uploadBlock2);routes.push({method,path,framework:p.fw,file:fp,line,hasAuth,hasFileUpload,params:rp,classifications:cls,classifiedFields});}}return routes;}
+function scanRoutes(fp,raw){const cleaned=stripNoise(raw,fp);const lines=raw.split("\n");const routes=[];const mwAuth=detectMiddlewareAuth(raw);for(const p of ROUTE_PATTERNS){const re=new RegExp(p.regex.source,p.regex.flags);let m;while((m=re.exec(cleaned))){let method="GET";if(p.mI&&m[p.mI]){const r=m[p.mI].toUpperCase();method=["GET","POST","PUT","PATCH","DELETE","ALL","OPTIONS","HEAD"].includes(r)?r:"GET";}if(p.mtI&&m[p.mtI]){const fm=m[p.mtI].replace(/['"]/g,"").split(",").map(s=>s.trim().toUpperCase());if(fm.length)method=fm[0];}const path=p.pI&&m[p.pI]?m[p.pI]:"(file-based)";const line=lineAt(cleaned,m.index);let hasAuth=false;const nearby=lines.slice(Math.max(0,line-3),line+3).join(" ");if(/(?:authenticate|auth|jwt\.verify|verifyToken|authMiddleware|checkAuth|protect|authorize|isAuthorized|expressJwt|denyAll|checkPermission|checkAnyPermission|hasAnyPermission|hasPermission|requirePermission)\s*[\(,]/i.test(nearby))hasAuth=true;if(!hasAuth)for(const mw of mwAuth)if(line>mw.line&&(mw.scope==="/"||path.startsWith(mw.scope)))hasAuth=true;const rp=[];for(const sp of SOURCE_PATTERNS){const re2=new RegExp(sp.regex.source,sp.regex.flags);const block=lines.slice(Math.max(0,line-2),Math.min(lines.length,line+30)).join("\n");let m2;while((m2=re2.exec(block))){const v=m2[2]||m2[3]||m2[1];if(v)rp.push(v);}}const cls=classifyEndpoint(rp);const classifiedFields={};rp.forEach(field=>{const fc=classifyField(field);if(fc.length)classifiedFields[field]=fc;});const uploadBlock2=lines.slice(Math.max(0,line-5),Math.min(lines.length,line+40)).join("\n");const hasFileUpload=/(?:multer|busboy|formidable|upload\.(?:single|array|fields|any|none)|req\.files?\b|request\.files?\b|request\.FILES|\$_FILES|\$request->(?:file|hasFile)|multipart\/form-data|r\.FormFile|r\.MultipartForm)/i.test(uploadBlock2);routes.push({method,path,framework:p.fw,file:fp,line,hasAuth,hasFileUpload,params:rp,classifications:cls,classifiedFields});}}return routes;}
 
 const LOGIC_PATTERNS=[
   {regex:/Math\.random\s*\(\s*\)/g,vuln:"Weak Randomness",severity:"medium",cwe:"CWE-330",stride:"Spoofing",fix:"Use crypto.randomBytes or crypto.randomUUID for security-sensitive values.",code:"// BEFORE\nconst token = Math.random().toString(36);\n\n// AFTER\nconst token = crypto.randomBytes(32).toString('hex');"},
@@ -2161,7 +2214,7 @@ function scanStructuralVulns(fp, raw) {
   // Default cleaned view strips strings; if any pattern needs the literal-aware
   // view, we fall back to stripNoise for that one pattern.
   const cleaned = stripNoiseAndStrings(raw);
-  const cleanedNoise = stripNoise(raw);
+  const cleanedNoise = stripNoise(raw,fp);
   const lines = raw.split('\n');
   const findings = [];
   const ctx = inferFileContext(fp, raw);
@@ -2718,7 +2771,7 @@ function _buildProjectIndex(fileContents){
     if (typeof c !== 'string') continue;
     // Strip comments before checking — keywords in JSDoc / TODO / docstrings shouldn't
     // count as evidence of an e-commerce model. Only real code does.
-    const cleaned = stripNoise(c);
+    const cleaned = stripNoise(c,fp);
     if (_ECOMMERCE_MODEL_RE.test(cleaned)) hasEcommerce = true;
     const fileConsts = {};
     let m;
@@ -2849,7 +2902,7 @@ function scanLogicVulns(fp,raw){
   // string-literal route paths and key names, so the comment-stripped (but
   // string-preserving) view is the right default. Rules that explicitly only
   // describe a code shape can opt in via `stripsStrings: true`.
-  const cleaned=stripNoise(raw);
+  const cleaned=stripNoise(raw,fp);
   const cleanedFull=stripNoiseAndStrings(raw);
   const lines=raw.split("\n");const results=[];
   const ctx = inferFileContext(fp, raw);
@@ -2932,7 +2985,7 @@ function buildStoredTaintRegistry(fc){
     // detector docblocks (`// Sequelize Model.create({ field: req.body.x })`),
     // which then matched in unrelated files and produced 8 cross-file findings
     // between this project's own source files.
-    const code=stripNoise(rawCode);   // engine-local, line-preserving
+    const code=stripNoise(rawCode,fp);   // engine-local, line-preserving
     const lines=code.split('\n');
     // Find ORM writes that include string-type fields likely to hold user input
     const ormWrite=/(?:create|update|save|upsert|findOrCreate)\s*\(\s*\{([^}]{0,800})\}/g;
@@ -3909,7 +3962,7 @@ function _buildGlobalJavaTaintedMethodIndex(fileContents) {
   for (const [path, content] of Object.entries(fileContents)) {
     if (!/\.java$/i.test(path) || !content || content.length > 500_000) continue;
     if (!_GLOBAL_JAVA_SOURCE_RE_FOR_INDEX.test(content)) continue;
-    const cleaned = stripNoise(content);
+    const cleaned = stripNoise(content,path);
     // Same method-extraction pattern as _javaFindSanitizerMethods.
     const re = /\b(?:public|private|protected|static|final|\s)+\s*[\w.<>\[\]]+\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
     let m;
@@ -4617,7 +4670,7 @@ function _javaArgWrappedBySanitizer(argStr, family) {
 
 function scanJavaSAST(fp, raw) {
   if (!/\.java$/i.test(fp)) return [];
-  const cleaned = stripNoise(raw);
+  const cleaned = stripNoise(raw,fp);
   const lines = raw.split('\n');
   const findings = [];
   // hasSource: file has a direct user-input source OR calls a globally-known
@@ -5073,7 +5126,7 @@ function scanMiddlewareOrdering(fp, raw){
   if (!ctx.isServer) return [];
   // Need literal mount-path strings — keep comments stripped but preserve
   // string contents so the path argument is readable.
-  const cleaned = stripNoise(raw);
+  const cleaned = stripNoise(raw,fp);
   const findings = [];
   const lines = raw.split('\n');
   let firstAuthAt = Infinity;
@@ -5142,7 +5195,7 @@ function scanAliasedSinks(fp, raw){
   if (!/\.(js|jsx|ts|tsx|mjs|cjs)$/i.test(fp)) return [];
   // Comments-only strip; preserve string literals so bracket-access shapes
   // like cp['exec'](...) — which need to see the literal 'exec' — match.
-  const cleaned = stripNoise(raw);
+  const cleaned = stripNoise(raw,fp);
   const lines = raw.split('\n');
   const findings = [];
   // 1. Property-assigned aliases: const X = cp.exec
@@ -5570,7 +5623,7 @@ function scanReDoS(fp,raw){
   // stripNoiseAndStrings via the regex-literal carve-out... actually no, our
   // string-stripper blanks "..." contents. Use the comment-stripped view for
   // ctor form so the pattern string survives.).
-  check(ctorRe, stripNoise(raw));
+  check(ctorRe, stripNoise(raw,fp));
   return out;
 }
 
@@ -5678,7 +5731,7 @@ const EXTRA_STRUCTURAL_PATTERNS=[
 
 function scanExtraStructural(fp,raw){
   const cleaned=stripNoiseAndStrings(raw);
-  const cleanedNoise=stripNoise(raw);
+  const cleanedNoise=stripNoise(raw,fp);
   const lines=raw.split('\n');
   const findings=[];
   const ctx = inferFileContext(fp, raw);
@@ -6751,7 +6804,7 @@ const CIPHER_TRANSIT_PATTERNS=[
   {regex:/OpenSSL::SSL::SSLContext\.new/g,getLabel:()=>"Ruby OpenSSL::SSL::SSLContext",ctx:"Ruby ssl"},
 ];
 function classifyCipherStrength(cipher){const c=cipher.toUpperCase();if(/\bRC4\b|\bRC2\b|\bARCFOUR\b|SSLV2|SSLV3|\bNULL\b|\bEXPORT\b|\bANULL\b|\bENULL\b|\bECB\b|\bMD5\b|\bSHA1\b(?![\d_])/.test(c))return"weak";if(/\bDES\b/.test(c)&&!/3DES|EDE|TRIPLE/.test(c))return"weak";if(/3DES|TRIPLE.?DES|DES.EDE|TLS.?1.?1|TLSV1\.1/.test(c))return"weak";if(/BCRYPT|ARGON2|SCRYPT|PBKDF2|FERNET|CHACHA20|CHACHAPOLY|PASSWORD_BCRYPT|PASSWORD_ARGON/.test(c))return"strong";if(/\bAES\b|SHA256|SHA384|SHA512|SHA3|BLAKE2|HMACSHA256|HMACSHA512|\bGCM\b|\bCCM\b|ECDHE|DHE|TLS.?1.?[23]|TLSV1\.[23]|HTTPS.SERVER|TLS.SERVER|TLS.CERTIF|HS256|RS256|ES256/.test(c))return"strong";return"unknown";}
-function scanCiphers(fp,raw){const cleaned=stripNoise(raw);const lines=raw.split("\n");const atRest=[],inTransit=[];for(const pat of CIPHER_REST_PATTERNS){const re=new RegExp(pat.regex.source,pat.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const cipher=pat.getLabel(m);atRest.push({cipher,strength:classifyCipherStrength(cipher),ctx:pat.ctx,file:fp,line,snippet:(lines[line-1]||"").trim()});}}for(const pat of CIPHER_TRANSIT_PATTERNS){const re=new RegExp(pat.regex.source,pat.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const cipher=pat.getLabel(m);inTransit.push({cipher,strength:classifyCipherStrength(cipher),ctx:pat.ctx,file:fp,line,snippet:(lines[line-1]||"").trim()});}}const uniq=(a)=>a.filter((v,i,arr)=>arr.findIndex(x=>x.cipher===v.cipher&&x.file===v.file&&x.line===v.line)===i);return{atRest:uniq(atRest),inTransit:uniq(inTransit)};}
+function scanCiphers(fp,raw){const cleaned=stripNoise(raw,fp);const lines=raw.split("\n");const atRest=[],inTransit=[];for(const pat of CIPHER_REST_PATTERNS){const re=new RegExp(pat.regex.source,pat.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const cipher=pat.getLabel(m);atRest.push({cipher,strength:classifyCipherStrength(cipher),ctx:pat.ctx,file:fp,line,snippet:(lines[line-1]||"").trim()});}}for(const pat of CIPHER_TRANSIT_PATTERNS){const re=new RegExp(pat.regex.source,pat.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const cipher=pat.getLabel(m);inTransit.push({cipher,strength:classifyCipherStrength(cipher),ctx:pat.ctx,file:fp,line,snippet:(lines[line-1]||"").trim()});}}const uniq=(a)=>a.filter((v,i,arr)=>arr.findIndex(x=>x.cipher===v.cipher&&x.file===v.file&&x.line===v.line)===i);return{atRest:uniq(atRest),inTransit:uniq(inTransit)};}
 
 function scanCredentials(fp,raw){
   if(!CRED_PREFILTER.test(raw))return[];
@@ -7992,112 +8045,112 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   let i=0;for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});
     if(_ckptDone.has(p)&&_ckptReplay(p))continue;
     const _mk={aR:aR.length,aF:aF.length,aSrc:aSrc.length,aSink:aSink.length,aSan:aSan.length,aLogic:aLogic.length,aSecrets:aSecrets.length,aCR:aCiphersRest.length,aCT:aCiphersTransit.length,sup:_suppressionLog.length};
-    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}fc[p]=c;aR.push(...scanRoutes(p,c));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,c));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,c));aF.push(...scanExtraStructural(p,c));aF.push(...scanAliasedSinks(p,c));aF.push(...scanJavaSAST(p,c));aF.push(...scanJavaBenchExtras(p,c));aLogic.push(...scanMiddlewareOrdering(p,c));aLogic.push(...scanReDoS(p,c));if(/\.(?:java|cs|kt|py|php|phtml)$/i.test(p)){try{aLogic.push(...scanRegexReDoS(p,c));}catch(_){}}aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,c);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,c));aF.push(...scanIaC(p,c));aF.push(...scanTerraform(p,c));
+    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}const cc=_blankCached(c,_commentLangFor(p));fc[p]=c;aR.push(...scanRoutes(p,cc));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,cc));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,cc));aF.push(...scanExtraStructural(p,cc));aF.push(...scanAliasedSinks(p,cc));aF.push(...scanJavaSAST(p,cc));aF.push(...scanJavaBenchExtras(p,cc));aLogic.push(...scanMiddlewareOrdering(p,cc));aLogic.push(...scanReDoS(p,cc));if(/\.(?:java|cs|kt|py|php|phtml)$/i.test(p)){try{aLogic.push(...scanRegexReDoS(p,cc));}catch(_){}}aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,cc);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,cc));aF.push(...scanIaC(p,cc));aF.push(...scanTerraform(p,cc));
       aF.push(...scanLLM(p,c));
       aF.push(...scanLLMOwasp(p,c));
       aF.push(...scanLlmCost(p,c));
-      aLogic.push(...scanBusinessLogic(p,c));
-      aF.push(...scanPipeline(p,c));
-      aF.push(...scanContainer(p,c));
-      aF.push(...scanInstallScripts(p,c));
+      aLogic.push(...scanBusinessLogic(p,cc));
+      aF.push(...scanPipeline(p,cc));
+      aF.push(...scanContainer(p,cc));
+      aF.push(...scanInstallScripts(p,cc));
       aF.push(...scanMCP(p,c));
       aF.push(...scanClaudeSettings(p,c));
       aF.push(...scanClaudeMdPromptInjection(p,c));
       aF.push(...scanClaudeHookInjection(p,c));
-      aF.push(...scanDjangoHardening(p,c));
-      aF.push(...scanDefiDeep(p,c));
-      aF.push(...scanSpringbootHardening(p,c));
-      aF.push(...scanLaravelHardening(p,c));
-      aF.push(...scanSwift(p,c));
-      aF.push(...scanDartFlutter(p,c));
-      aF.push(...scanWeakRandomness(p,c));
-      aF.push(...scanGraphQLModule(p,c));
-      aF.push(...scanSensitiveDataLogging(p,c));
-      aF.push(...scanComparisonSafety(p,c));
-      aF.push(...scanWeakPasswordHash(p,c));
-      aF.push(...scanCachePoisoning(p,c));
-      aF.push(...scanNullByteInjection(p,c));
+      aF.push(...scanDjangoHardening(p,cc));
+      aF.push(...scanDefiDeep(p,cc));
+      aF.push(...scanSpringbootHardening(p,cc));
+      aF.push(...scanLaravelHardening(p,cc));
+      aF.push(...scanSwift(p,cc));
+      aF.push(...scanDartFlutter(p,cc));
+      aF.push(...scanWeakRandomness(p,cc));
+      aF.push(...scanGraphQLModule(p,cc));
+      aF.push(...scanSensitiveDataLogging(p,cc));
+      aF.push(...scanComparisonSafety(p,cc));
+      aF.push(...scanWeakPasswordHash(p,cc));
+      aF.push(...scanCachePoisoning(p,cc));
+      aF.push(...scanNullByteInjection(p,cc));
       aF.push(...scanLlmTradingAgent(p,c));
-      aF.push(...scanMobileManifest(p,c));
-      aF.push(...scanQuarkusHardening(p,c));
-      aF.push(...scanFastapiHardening(p,c));
-      aF.push(...scanAuthZ(p,c));
-      aF.push(...scanModelLoad(p,c));
+      aF.push(...scanMobileManifest(p,cc));
+      aF.push(...scanQuarkusHardening(p,cc));
+      aF.push(...scanFastapiHardening(p,cc));
+      aF.push(...scanAuthZ(p,cc));
+      aF.push(...scanModelLoad(p,cc));
       aF.push(...scanPromptTemplate(p,c));
-      aF.push(...scanXXE(p,c));
-      aF.push(...scanJNDI(p,c));
-      aF.push(...scanJavaDeserialization(p,c));
-      aF.push(...scanJwtExp(p,c));
-      aF.push(...scanZipSlip(p,c));
-      aF.push(...scanFileUpload(p,c));
-      aF.push(...scanHostHeader(p,c));
-      aF.push(...scanPythonSinks(p,c));
-      aF.push(...scanCSharp(p,c));
-      aF.push(...scanCpp(p,c));
-      aF.push(...scanSolidity(p,c));
-      aF.push(...scanRust(p,c));
-      aF.push(...scanGoExtended(p,c));
-      aF.push(...scanDatabaseRLS(p,c));
-      aF.push(...scanRateLimit(p,c));aF.push(...scanResourceExhaustion(p,c));aF.push(...scanRedirectToctou(p,c));aF.push(...scanCodegenSink(p,c));aF.push(...scanOwnershipAuthz(p,c));
-      aF.push(...scanAuthProvider(p,c));
-      aF.push(...scanEnvHygiene(p,c));
-      aF.push(...scanWebhook(p,c));
-      aF.push(...scanClientSide(p,c));
+      aF.push(...scanXXE(p,cc));
+      aF.push(...scanJNDI(p,cc));
+      aF.push(...scanJavaDeserialization(p,cc));
+      aF.push(...scanJwtExp(p,cc));
+      aF.push(...scanZipSlip(p,cc));
+      aF.push(...scanFileUpload(p,cc));
+      aF.push(...scanHostHeader(p,cc));
+      aF.push(...scanPythonSinks(p,cc));
+      aF.push(...scanCSharp(p,cc));
+      aF.push(...scanCpp(p,cc));
+      aF.push(...scanSolidity(p,cc));
+      aF.push(...scanRust(p,cc));
+      aF.push(...scanGoExtended(p,cc));
+      aF.push(...scanDatabaseRLS(p,cc));
+      aF.push(...scanRateLimit(p,cc));aF.push(...scanResourceExhaustion(p,cc));aF.push(...scanRedirectToctou(p,cc));aF.push(...scanCodegenSink(p,cc));aF.push(...scanOwnershipAuthz(p,cc));
+      aF.push(...scanAuthProvider(p,cc));
+      aF.push(...scanEnvHygiene(p,cc));
+      aF.push(...scanWebhook(p,cc));
+      aF.push(...scanClientSide(p,cc));
       aF.push(...scanPromptFirewall(p,c));
       aF.push(...scanLlmRedteam(p,c));
       aF.push(...scanJulietShape(p,c));
-      aF.push(...scanCppDataflow(p,c));
+      aF.push(...scanCppDataflow(p,cc));
       // Phase 1: new detectors.
-      aF.push(...scanMassAssignment(p,c));
-      aF.push(...scanPrototypePollution(p,c));
-      aF.push(...scanCSRF(p,c));
-      aF.push(...scanTOCTOU(p,c));
-      aF.push(...scanNoSQLInjection(p,c));
-      aF.push(...scanLDAPInjection(p,c));
-      aF.push(...scanXPathInjection(p,c));
-      aF.push(...scanSSTI(p,c));
-      aF.push(...scanOpenRedirect(p,c));
-      aF.push(...scanWrongContextSanitizer(p,c));
-      aF.push(...scanSanitizerContextMismatch(p,c));
-      aF.push(...scanFrontendHygiene(p,c));
-      aF.push(...scanCsvInjection(p,c));
+      aF.push(...scanMassAssignment(p,cc));
+      aF.push(...scanPrototypePollution(p,cc));
+      aF.push(...scanCSRF(p,cc));
+      aF.push(...scanTOCTOU(p,cc));
+      aF.push(...scanNoSQLInjection(p,cc));
+      aF.push(...scanLDAPInjection(p,cc));
+      aF.push(...scanXPathInjection(p,cc));
+      aF.push(...scanSSTI(p,cc));
+      aF.push(...scanOpenRedirect(p,cc));
+      aF.push(...scanWrongContextSanitizer(p,cc));
+      aF.push(...scanSanitizerContextMismatch(p,cc));
+      aF.push(...scanFrontendHygiene(p,cc));
+      aF.push(...scanCsvInjection(p,cc));
       // R16 — specialist crypto-hygiene classes (constant-time comparison,
       // secret zeroization). Narrow by design: keyed on the secret-ness of the
       // identifier, and silent whenever the correct constant-time or
       // guaranteed-wipe API is already present.
-      aF.push(...scanCryptoSpecialist(p,c));
-      aF.push(...scanStoredTaint(p,c));
-      aF.push(...scanJavaStructural(p,c));
-      aF.push(...scanCsharpStructural(p,c));
-      aF.push(...scanJsFrameworkStructural(p,c));
-      aF.push(...scanPythonStructural(p,c));
-      aF.push(...scanGoStructural(p,c));
-      aF.push(...scanSecretConcat(p,c));
-      aF.push(...scanXssReflectedMultilang(p,c));
-      aF.push(...scanCodeInjectionMultilang(p,c));
-      aF.push(...scanResponseSplitting(p,c));
+      aF.push(...scanCryptoSpecialist(p,cc));
+      aF.push(...scanStoredTaint(p,cc));
+      aF.push(...scanJavaStructural(p,cc));
+      aF.push(...scanCsharpStructural(p,cc));
+      aF.push(...scanJsFrameworkStructural(p,cc));
+      aF.push(...scanPythonStructural(p,cc));
+      aF.push(...scanGoStructural(p,cc));
+      aF.push(...scanSecretConcat(p,cc));
+      aF.push(...scanXssReflectedMultilang(p,cc));
+      aF.push(...scanCodeInjectionMultilang(p,cc));
+      aF.push(...scanResponseSplitting(p,cc));
       aF.push(...scanStoredPromptInjection(p,c));
       aF.push(...scanRAGPoisoning(p,c));
       aF.push(...scanAgentToolEscalation(p,c));
       aF.push(...scanAgentUntrustedFlow(p,c));
-      aF.push(...scanEventEntrypoints(p,c));
-      aF.push(...scanDbTaint(p,c));
-      aF.push(...scanSSRFCloudMetadata(p,c));
-      aF.push(...scanMutationXSS(p,c));
-      aF.push(...scanKotlin(p,c));
-      aF.push(...scanRuby(p,c));
-      aF.push(...scanPhp(p,c));
+      aF.push(...scanEventEntrypoints(p,cc));
+      aF.push(...scanDbTaint(p,cc));
+      aF.push(...scanSSRFCloudMetadata(p,cc));
+      aF.push(...scanMutationXSS(p,cc));
+      aF.push(...scanKotlin(p,cc));
+      aF.push(...scanRuby(p,cc));
+      aF.push(...scanPhp(p,cc));
       // Integration block: scaffolded SAST scanners. Gated by env var.
       if (process.env.AGENTIC_SECURITY_NO_INTEGRATION !== '1') {
         if (process.env.AGENTIC_SECURITY_NO_LLM_APP !== '1') aF.push(...scanLlmApp(p,c));
-        if (process.env.AGENTIC_SECURITY_NO_MOBILE  !== '1') aF.push(...scanMobile(p,c));
-        if (process.env.AGENTIC_SECURITY_NO_PQC     !== '1') aF.push(...scanPqc(p,c));
-        if (process.env.AGENTIC_SECURITY_NO_WEB3_ADV!== '1') aF.push(...scanWeb3Advanced(p,c));
-        if (process.env.AGENTIC_SECURITY_NO_DAPP    !== '1') aF.push(...scanDappFrontend(p,c));
-        if (process.env.AGENTIC_SECURITY_NO_CLOUD_IAM!== '1') aF.push(...scanCloudIam(p,c));
-        if (process.env.AGENTIC_SECURITY_NO_K8S_ADM !== '1') aF.push(...scanK8sAdmission(p,c));
-        if (process.env.AGENTIC_SECURITY_NO_CRYPTO_PROTO !== '1') aF.push(...scanCryptoProtocol(p,c));
-        if (process.env.AGENTIC_SECURITY_NO_ML_SUPPLY    !== '1') aF.push(...scanMlSupplyChain(p,c));
+        if (process.env.AGENTIC_SECURITY_NO_MOBILE  !== '1') aF.push(...scanMobile(p,cc));
+        if (process.env.AGENTIC_SECURITY_NO_PQC     !== '1') aF.push(...scanPqc(p,cc));
+        if (process.env.AGENTIC_SECURITY_NO_WEB3_ADV!== '1') aF.push(...scanWeb3Advanced(p,cc));
+        if (process.env.AGENTIC_SECURITY_NO_DAPP    !== '1') aF.push(...scanDappFrontend(p,cc));
+        if (process.env.AGENTIC_SECURITY_NO_CLOUD_IAM!== '1') aF.push(...scanCloudIam(p,cc));
+        if (process.env.AGENTIC_SECURITY_NO_K8S_ADM !== '1') aF.push(...scanK8sAdmission(p,cc));
+        if (process.env.AGENTIC_SECURITY_NO_CRYPTO_PROTO !== '1') aF.push(...scanCryptoProtocol(p,cc));
+        if (process.env.AGENTIC_SECURITY_NO_ML_SUPPLY    !== '1') aF.push(...scanMlSupplyChain(p,cc));
       }
       const _ftElapsed=Date.now()-_ft0;
       if(_ftElapsed>_perFileTimeoutMs){aF.push({id:`file-timeout:${p}`,file:p,line:0,vuln:`File analysis exceeded ${_perFileTimeoutMs}ms (${_ftElapsed}ms)`,severity:'info',parser:'ENGINE',confidence:0.5,_timeout:true});_filesTimedOut++;}
@@ -8191,7 +8244,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       continue;
     }
     // Annotation-based category for OWASP Benchmark: `@WebServlet("/cat-NN/...")`.
-    const cat = _javaWebServletCategory(stripNoise(c));
+    const cat = _javaWebServletCategory(stripNoise(c,p));
     if (cat) _benchCategoryByFile.set(p, cat);
   }
   // Pre-compute fileWide safe shapes per file. Used by _shouldKeep below.
@@ -8206,7 +8259,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
     const c = fc[p];
     if (!c) continue;
     const safeSet = new Set();
-    const cleanedP = stripNoise(c);
+    const cleanedP = stripNoise(c,p);
     for (const fam of Object.keys(_OWASP_SAFE_SHAPES || {})) {
       const cfg = _OWASP_SAFE_SHAPES[fam];
       if (cfg && cfg.fileWide && cfg.fileWide(cleanedP)) safeSet.add(fam);

@@ -321,8 +321,53 @@ export async function scanDirRaw(dir) {
   };
 }
 
+// A single pathological entry must not be able to end the measurement.
+//
+// Measured 2026-08-19: `GHSA-hcm8-x79p-wx2w` (apache/camel, a 649 MB tree, the
+// largest in the population) wedged a full run at entry 186 of 315 — process
+// alive, state `S`, 0.0% CPU, no progress for over six hours, so the run had to
+// be killed and 129 entries were never scored. Reproduced on a clean checkout
+// with no local changes, so this is a pre-existing property of the harness
+// rather than a regression: `runScan` has internal budgets
+// (AGENTIC_SECURITY_DEEP_TIMEOUT_MS, the per-file timeout) but nothing bounds
+// the WHOLE-ENTRY scan, and a block that never resolves is not a budget
+// overrun that any of them observe.
+//
+// The timeout marks the entry UNSCORED, which is the harness's existing
+// doctrine for an entry that could not be run (see the README: "An entry that
+// could not be fetched or scanned is UNSCORED, excluded from every denominator,
+// and reported by name") — never a miss, because blaming the engine for
+// infrastructure is exactly the error that doctrine exists to prevent.
+//
+// Note this bounds the awaited PROMISE, not the work: JS cannot cancel an
+// in-flight async operation, so a wedged scan keeps its handle and the runner
+// finishes with a non-zero exit rather than hanging forever. That is the
+// intended trade — a completed measurement naming its casualties beats an
+// indefinite hang naming nothing.
+const ENTRY_TIMEOUT_MS = Number(process.env.AGENTIC_SECURITY_BENCH_ENTRY_TIMEOUT_MS || 600_000);
+
+class EntryTimeout extends Error {}
+
+async function withEntryTimeout(promise, label) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new EntryTimeout(`entry scan exceeded ${ENTRY_TIMEOUT_MS}ms (${label})`)),
+          ENTRY_TIMEOUT_MS);
+        // Do not hold the event loop open on account of the watchdog itself.
+        if (typeof timer.unref === 'function') timer.unref();
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function scanDir(dir) {
-  return (await scanDirRaw(dir)).findings;
+  return (await withEntryTimeout(scanDirRaw(dir), dir)).findings;
 }
 
 async function main() {

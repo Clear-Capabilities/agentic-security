@@ -138,6 +138,25 @@ tuning against it.
 - **Small n is reported as small n.** Rates from a handful of entries are noise;
   the runner labels them unreliable rather than printing a confident percentage.
 
+- **A single entry can no longer end the run.** On 2026-08-19 a full run wedged
+  at entry 186 of 315 on `GHSA-hcm8-x79p-wx2w` (apache/camel, a 649 MB tree —
+  the largest in the population): the process stayed alive at 0.0% CPU with no
+  progress for over six hours, so it had to be killed and 129 entries were never
+  scored. Reproduced on a clean checkout, so this was a pre-existing property of
+  the harness: `runScan` carries a deep-mode walltime budget and a per-file
+  timeout, but nothing bounded a whole-entry scan, and a block that never
+  resolves is not an overrun any of them observe. There is now a per-entry
+  watchdog — `AGENTIC_SECURITY_BENCH_ENTRY_TIMEOUT_MS`, default 600 000 ms —
+  and a timed-out entry is **UNSCORED**, by the same doctrine as an unfetchable
+  one: excluded from every denominator, reported by name, never a miss.
+
+  It bounds the awaited promise, not the work — JS cannot cancel an in-flight
+  async operation — so a wedged scan keeps its handle and the run finishes via
+  the runner's explicit `process.exit` rather than hanging. A completed
+  measurement that names its casualties beats an indefinite hang that names
+  nothing. Worth knowing when reading any figure published before this date:
+  the harness that produced it could silently stall partway through.
+
 - **Scope is the containing package, not the whole repository.** `pre/` and
   `post/` hold the largest ancestor directory of the changed files that fits a
   400-source-file cap — in practice the package containing the fix (median 185

@@ -9,6 +9,119 @@
 > make the history less accurate, not more.
 
 
+## 0.138.0 — Findings come from code, not comments; container taint; a benchmark that can no longer hang
+
+### Comment blindness, enforced instead of documented
+
+`src/sast/CLAUDE.md` has always named this as its first gotcha for detector
+authors — "Comments confuse detectors. Always go through `blankComments()`" —
+but nothing enforced it, so whether a rule ignored comments depended on whether
+its author remembered. A probe over nine languages, in which *every* dangerous
+construct sat inside a comment and the only executable statement was
+`return 1`, produced **15 findings from code that can never run**. Three
+independent defects, each fixed after a failing test proved it:
+
+- `runFullScan` handed the **raw** file to every SAST module. 64 of 117 modules
+  called `blankComments()` themselves; roughly 40 of the rest ran regexes over
+  raw text. The per-file dispatch now computes one comment-blanked,
+  offset-preserving view and passes it to 99 detector call sites.
+- The engine's own `stripNoise()` understood `//` and `/* */` but **not `#`**,
+  so every engine-internal regex pass leaked on Python/Ruby/shell/HCL comments.
+  All 15 call sites now pass a path, and the mapping is language-aware because
+  it has to be: `#` opens a comment in Python but is `#include`/`#region` in the
+  C family, and `//` is a comment in C-family languages but **floor division in
+  Python**, where blanking it would delete real code.
+- `blankComments()` let a `'`/`"` string span a newline. An odd number of quotes
+  on one line — which regex literals produce routinely; `/"(?:sh|bash)"\s*,\s*(?!"[^"]*")/`
+  has seven — left the scanner stuck in string mode for the **entire rest of the
+  file**, silently disabling comment stripping from that point on. Found on this
+  repository's own `sast/go-extended.js`, where it resurrected a false positive
+  from a comment six lines below such a regex.
+
+Ruby `=begin`/`=end` blocks are now stripped too (a `#`-only pass left them
+wholly intact).
+
+**Measured, finding-by-finding rather than by totals.** Self-scan on this
+repository fell 458 → 427: **33 findings removed, all 33 on comment lines, zero
+real findings lost**; the 2 added were previously *masked* by the string-mode
+defect. On the 315-entry independent population of real upstream advisories,
+localized precision rose **40.74% → 44.00%** with true positives unchanged at
+11 — the fix buys precision, not recall, which is exactly what was predicted
+once it was established that none of the credited true positives sat on a
+comment line. Deliberately still reading raw source: the prompt-injection
+family (for an agentic tool, instructions hidden in a comment *are* the attack),
+the secrets scanners (a committed credential is leaked whether or not its line
+executes), and `scanTodosNearSecurity`, whose entire subject is comments.
+
+The property is pinned end-to-end by `test/comment-blindness.test.js`, including
+a positive control and a Python-floor-division guard, so a regression surfaces
+as a test failure rather than as quietly inflated findings.
+
+### Container / collection-element taint (PRD T3.3)
+
+Probed ten container shapes before writing anything, which showed the JS array
+cases already worked. Coverage went from 5/10 to 9/10:
+
+- A computed write with a non-literal key (`bag[k] = tainted`) lowers to access
+  path `bag.*`, and `'*'` is a *literal* property name, not a wildcard — the
+  lattice propagates only downward from a prefix, so the write was unreachable
+  from every correctly-computed read. An unknown key could be any key, so it now
+  widens to the container.
+- `Map.set` / `Set.add` joined the mutator list.
+- **The mutator rule required `callee.kind === 'member'`, a shape only Babel
+  emits**, so container writes in Python/Ruby/PHP/Go/Java/C#/Kotlin never matched
+  at all. The miss was invisible because a PY-SAST pattern rule caught the same
+  sink.
+- `__setitem__` is in the mutator list because `parser-py.js` lowers a Python
+  subscript *assignment* to a call node, not an assign node — established by
+  dumping the IR, not by inference.
+
+**Reported as capability, not as a recall gain:** `bench:layer-recall` is
+unchanged at 116/215 and the dataflow-shaped subset unchanged at 115/137,
+because the corpus holds no container-shaped entries. Pinned by
+`test/container-taint.test.js`, including two precision cases that must *not*
+fire.
+
+### Performance
+
+The comment work initially cost **19.7%** of end-to-end scan time on a 307-file
+entry, because `stripNoise` is called ~15× per file and an interpreted character
+loop had replaced two native regex passes. A single-slot memo (safe because the
+engine processes one file at a time and `fileContents[p]` returns the same
+string *reference*) plus a rewrite of `blankComments` to emit bulk slices
+instead of per-character appends brought that to **5.7%**. Byte offsets and line
+counts are preserved exactly — every finding's line number depends on it.
+
+### The independent benchmark could hang indefinitely
+
+A full run wedged at entry 186 of 315 on `GHSA-hcm8-x79p-wx2w` (apache/camel,
+649 MB): process alive, state `S`, 0.0% CPU, no progress for six hours, killed
+with 129 entries never scored. Reproduced on a clean checkout, so it was
+pre-existing. `runScan` carries a deep-mode walltime budget and a per-file
+timeout, but nothing bounded a whole-entry scan. There is now a per-entry
+watchdog (`AGENTIC_SECURITY_BENCH_ENTRY_TIMEOUT_MS`, default 600 s) that marks
+the entry UNSCORED — the harness's own documented doctrine for an entry that
+could not be run, never a miss. The run that produced this release's numbers
+named 6 such entries (all Java, all very large) and completed.
+
+Worth stating plainly: **every independent-population figure published before
+this release came from a harness that could silently stall partway through.**
+
+### Documentation corrected
+
+`docs/METRICS.md`'s taint table was ~5× stale (23/210 = 11%; actual 116/215 =
+54%) and its central claim that kotlin still had **0%** taint recall was false
+(48%). Both `bench/layer-recall/baseline.json` and the table are regenerated.
+The cause is recorded alongside the fix, because it is a gate-design lesson:
+`bench:layer-recall:check` compares against a **floor**, so an improvement from
+31 to 116 passed it exactly as a no-change run would.
+
+Also fixed two long-standing lifecycle failures: `jsUnits` — Theme 6's JS/TS
+extractor, which carries 6 of the 10 known sibling-omission entries — was wired
+into production with **no test at all**, and now has four; and a stale
+`profile.js::DEFAULTS` dead-code allowlist entry was removed.
+
+
 ## 0.137.1 — Dependabot policy for the deliberately-vulnerable fixtures
 
 Housekeeping release. Adds `.github/dependabot.yml` so Dependabot leaves the

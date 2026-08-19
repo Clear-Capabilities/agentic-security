@@ -18,7 +18,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  scanConventionDeviation, scanConventionDeviationProject, analyseUnits, pythonUnits, _internals,
+  scanConventionDeviation, scanConventionDeviationProject, analyseUnits, pythonUnits, jsUnits, _internals,
   MIN_GUARDED_SIBLINGS, MIN_GUARDED_RATIO,
 } from '../src/sast/convention-deviation.js';
 
@@ -204,4 +204,52 @@ test('JS/TS FIX-DISCRIMINATION: adding the guard silences it', () => {
       '\n  async remove(path, ...opts) {\n    assertWorkspaceAccess(opts);\n    return this.client.remove(path, ...opts);\n  }\n}',
   };
   assert.deepEqual(scanConventionDeviationProject(files), []);
+});
+
+// `jsUnits` is the JS/TS half of Theme 6 — 6 of the 10 known sibling-omission
+// entries are TypeScript, so it carries the majority of the family. It was
+// wired into `scanConventionDeviationProject` but had no test of its own; the
+// dead-export guard (`test/no-dead-modules.test.js`) is what surfaced that.
+// These pin the extractor directly, because a silent regression in unit
+// EXTRACTION reads downstream as "the convention does not exist" — a false
+// negative with no error anywhere.
+test('jsUnits extracts the four declaration shapes it claims to support', () => {
+  const code = [
+    'function plain(a, ...opts) { return a; }',
+    'const arrow = (b, ...opts) => { return b; };',
+    'class K {',
+    '  async method(c, ...opts) { return c; }',
+    '}',
+  ].join('\n');
+  const names = jsUnits(code).map((u) => u.name).sort();
+  assert.deepEqual(names, ['arrow', 'method', 'plain']);
+});
+
+test('jsUnits captures the body by brace matching, not to end-of-file', () => {
+  const code = [
+    'function first(a, ...opts) {',
+    '  guardOne(opts);',
+    '}',
+    'function second(b, ...opts) {',
+    '  guardTwo(opts);',
+    '}',
+  ].join('\n');
+  const units = jsUnits(code);
+  assert.equal(units.length, 2);
+  const first = units.find((u) => u.name === 'first');
+  assert.ok(first.body.includes('guardOne'), 'first unit should contain its own body');
+  assert.ok(!first.body.includes('guardTwo'),
+    `brace matching must stop at the closing brace; body leaked into the sibling:\n${first.body}`);
+});
+
+test('jsUnits does not treat control-flow keywords as function declarations', () => {
+  const code = 'function real(a, ...opts) {\n  if (a) { return 1; }\n  for (const x of a) { use(x); }\n  return 0;\n}';
+  assert.deepEqual(jsUnits(code).map((u) => u.name), ['real']);
+});
+
+test('jsUnits reports a 1-based line number for each unit', () => {
+  const code = ['// header', '', 'function target(a, ...opts) {', '  return a;', '}'].join('\n');
+  const [unit] = jsUnits(code);
+  assert.equal(unit.name, 'target');
+  assert.equal(unit.line, 3);
 });

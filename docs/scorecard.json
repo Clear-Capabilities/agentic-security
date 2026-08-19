@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.137.1",
-    "bundleSha256": "cac211b88764227f5f1fda4bd9fc16643953d95b716951be7c88870f6d69e4a2",
-    "commit": "80b1e6e1ef8fa749f8e05a64025b4a661b09de15",
+    "engineVersion": "0.138.0",
+    "bundleSha256": "364b7c595d66a50e05895bc2496a02d775f15aadcfd65342186747ed1003e957",
+    "commit": "735f4fca20ce4d778370e0c74bfb4f800ae13b10",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-17T16:52:32.054Z"
+    "generatedAt": "2026-08-19T17:24:33.451Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -559,15 +559,14 @@
     "measuredThisRun": true,
     "targets": {
       "hooks": {
-        "total": 25,
+        "total": 21,
         "byFile": {
-          "cache-invalidator-guard.js": 1,
           "conversation-context.js": 1,
           "lib/transcript.js": 1,
           "mascot.js": 1,
-          "model-cost-advisor.js": 2,
+          "model-cost-advisor.js": 1,
           "post-edit-scan.js": 2,
-          "pre-bash-guard.js": 3,
+          "pre-bash-guard.js": 1,
           "pre-edit-bodyguard.js": 5,
           "session-start-self-check.js": 4,
           "session-stop-drift-check.js": 2,
@@ -575,52 +574,44 @@
         }
       },
       "scanner/src": {
-        "total": 624,
+        "total": 427,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
-          "dataflow/exploit-prover.js": 2,
+          "dataflow/exploit-prover.js": 1,
           "dataflow/ifds-precise.js": 3,
           "dataflow/incremental.js": 7,
           "dataflow/index.js": 5,
-          "dataflow/polyglot.js": 2,
-          "dataflow/privacy-taint.js": 1,
-          "dataflow/sanitizer-proof.js": 1,
-          "dataflow/string-domain.js": 2,
+          "dataflow/polyglot.js": 1,
           "discovery/memory.js": 1,
-          "history-scan.js": 2,
+          "history-scan.js": 1,
           "integrations/index.js": 10,
           "integrations/tickets.js": 9,
-          "ir/cpp-preprocessor.js": 2,
+          "ir/cpp-preprocessor.js": 1,
           "ir/ir-stats.js": 1,
-          "ir/parser-cpp.js": 6,
-          "ir/parser-cs.js": 3,
-          "ir/parser-go.js": 6,
-          "ir/parser-kt.js": 2,
-          "ir/parser-php.js": 8,
+          "ir/parser-cpp.js": 4,
+          "ir/parser-cs.js": 1,
+          "ir/parser-go.js": 2,
+          "ir/parser-kt.js": 1,
+          "ir/parser-php.js": 5,
           "ir/parser-py-cst.js": 1,
           "ir/parser-py.helper.py": 1,
-          "ir/parser-py.js": 2,
-          "ir/parser-rb.js": 3,
-          "ir/type-stubs.js": 10,
+          "ir/parser-rb.js": 2,
+          "ir/type-stubs.js": 8,
           "ir/universal-ir.js": 1,
           "leaderboard.js": 3,
           "llm-validator/consistency.js": 1,
-          "llm-validator/cost-ceiling.js": 1,
           "llm-validator/index.js": 5,
-          "llm-validator/redact.js": 2,
           "lsp/server.js": 3,
           "mcp/audit.js": 8,
-          "mcp/redact.js": 3,
           "mcp/server.js": 1,
-          "mcp/tools.js": 7,
+          "mcp/tools.js": 6,
           "poc-video.js": 1,
           "posture/adversarial-self-test.js": 1,
           "posture/adversary-agent.js": 5,
           "posture/agents-memory.js": 8,
-          "posture/ai-code-fingerprint.js": 2,
           "posture/aibom.js": 3,
-          "posture/api-contract.js": 2,
+          "posture/api-contract.js": 1,
           "posture/attack-playbooks.js": 2,
           "posture/auditor-walkthrough.js": 2,
           "posture/auth-posture-import.js": 3,
@@ -632,22 +623,14 @@
           "posture/calibration.js": 1,
           "posture/claude-authorship.js": 1,
           "posture/compliance-policy.js": 5,
-          "posture/concurrency-checker.js": 3,
-          "posture/container-runtime.js": 3,
           "posture/corpus-enroll.js": 2,
-          "posture/cross-lang-graphql.js": 5,
-          "posture/cross-lang-grpc.js": 1,
-          "posture/cross-lang-orm.js": 1,
-          "posture/cross-lang-queues.js": 5,
           "posture/cross-repo-memory.js": 2,
-          "posture/csharp-analysis.js": 1,
           "posture/custom-rules.js": 2,
-          "posture/cve-alert-daemon.js": 6,
+          "posture/cve-alert-daemon.js": 5,
           "posture/cve-lookup.js": 4,
-          "posture/dead-code.js": 2,
+          "posture/dead-code.js": 1,
           "posture/dep-add-guard.js": 8,
           "posture/deploy-platform.js": 1,
-          "posture/deterministic-fix.js": 1,
           "posture/deterministic.js": 3,
           "posture/epss.js": 4,
           "posture/evidence-bundle.js": 2,
@@ -667,26 +650,22 @@
           "posture/grader-calibration.js": 4,
           "posture/harness-discovery.js": 1,
           "posture/holdout-eval.js": 3,
-          "posture/iac-reachability.js": 2,
           "posture/integrity.js": 6,
-          "posture/intent-context.js": 2,
+          "posture/intent-context.js": 1,
           "posture/learning.js": 3,
           "posture/license-graph.js": 3,
           "posture/license-policy.js": 3,
-          "posture/llm-redteam-prompts.js": 6,
+          "posture/llm-redteam-prompts.js": 1,
           "posture/llm-redteam.js": 1,
-          "posture/material-change.js": 1,
           "posture/mitigation-composite.js": 1,
           "posture/model-rescan.js": 1,
           "posture/network-policy-import.js": 3,
           "posture/poc-generator.js": 3,
-          "posture/poc-inprocess.js": 5,
-          "posture/policy-gate.js": 4,
+          "posture/policy-gate.js": 3,
           "posture/pr-augment.js": 1,
           "posture/pre-incident-archaeology.js": 1,
           "posture/profile.js": 4,
           "posture/realtime-cve-monitor.js": 5,
-          "posture/relevance.js": 1,
           "posture/risk-dollars.js": 4,
           "posture/root-cause-sweep.js": 1,
           "posture/router.js": 3,
@@ -702,8 +681,6 @@
           "posture/scan-checkpoint.js": 2,
           "posture/secret-live-check.js": 1,
           "posture/security-trend.js": 1,
-          "posture/semantic-clone.js": 1,
-          "posture/specification-mining.js": 1,
           "posture/stack-playbook.js": 1,
           "posture/state-dir.js": 1,
           "posture/streak.js": 1,
@@ -718,7 +695,7 @@
           "posture/triage.js": 4,
           "posture/validator-metrics.js": 3,
           "posture/verifier-ephemeral.js": 1,
-          "posture/verifier-target.js": 5,
+          "posture/verifier-target.js": 3,
           "posture/verifier.js": 2,
           "posture/version.js": 3,
           "posture/waf-ingest.js": 5,
@@ -727,89 +704,51 @@
           "report/index.js": 3,
           "runScan.js": 1,
           "sandbox/backend-namespace.js": 1,
-          "sast/_secret-entropy.js": 1,
-          "sast/agent-untrusted-flow.js": 4,
-          "sast/authz.js": 2,
-          "sast/cache-poisoning.js": 1,
-          "sast/claude-hook-injection.js": 2,
-          "sast/claude-md-prompt-injection.js": 7,
-          "sast/claude-settings.js": 1,
+          "sast/agent-untrusted-flow.js": 2,
+          "sast/claude-hook-injection.js": 1,
           "sast/client-side.js": 6,
-          "sast/cloud-iam.js": 1,
-          "sast/cpp-dataflow.js": 6,
-          "sast/cpp.js": 4,
-          "sast/cross-service.js": 1,
-          "sast/crypto-protocol.js": 18,
-          "sast/csharp-structural.js": 1,
-          "sast/csrf.js": 1,
-          "sast/dapp-frontend.js": 1,
-          "sast/db-taint.js": 2,
-          "sast/defi-deep.js": 2,
-          "sast/env-hygiene.js": 1,
-          "sast/event-entrypoint.js": 2,
-          "sast/fastapi-hardening.js": 2,
-          "sast/file-upload.js": 1,
+          "sast/cpp-dataflow.js": 2,
+          "sast/crypto-protocol.js": 2,
+          "sast/db-taint.js": 1,
+          "sast/fastapi-hardening.js": 1,
           "sast/host-header.js": 1,
-          "sast/iac-terraform.js": 1,
-          "sast/java-bench-extras.js": 8,
-          "sast/java-constant-fold.js": 2,
+          "sast/java-bench-extras.js": 5,
           "sast/java-deserialization.js": 2,
-          "sast/java-structural.js": 1,
-          "sast/juliet-shape.js": 1,
           "sast/k8s-admission.js": 1,
-          "sast/laravel-hardening.js": 1,
-          "sast/llm-app.js": 8,
-          "sast/llm-cost-advisor.js": 1,
-          "sast/llm-owasp.js": 13,
-          "sast/logic.js": 5,
-          "sast/mcp-audit.js": 2,
+          "sast/llm-app.js": 2,
+          "sast/llm-owasp.js": 7,
+          "sast/logic.js": 1,
           "sast/ml-supply-chain.js": 1,
-          "sast/mobile-manifest.js": 1,
           "sast/model-load.js": 1,
           "sast/mutation-xss.js": 1,
-          "sast/null-byte-injection.js": 1,
-          "sast/open-redirect.js": 4,
-          "sast/php.js": 2,
+          "sast/php.js": 1,
           "sast/pipeline.js": 1,
-          "sast/post-quantum-crypto.js": 1,
-          "sast/prompt-firewall.js": 1,
           "sast/rate-limit.js": 2,
-          "sast/response-splitting.js": 3,
-          "sast/rust.js": 1,
           "sast/sensitive-data-logging.js": 2,
-          "sast/solidity.js": 2,
+          "sast/solidity.js": 1,
           "sast/springboot-hardening.js": 1,
           "sast/ssrf-cloud-metadata.js": 2,
-          "sast/stored-taint.js": 6,
-          "sast/weak-password-hash.js": 3,
-          "sast/weak-randomness.js": 4,
-          "sast/wrong-context-sanitizer.js": 3,
-          "sast/xss-reflected-multilang.js": 1,
-          "sast/xxe.js": 1,
-          "sast/zip-slip.js": 2,
-          "sca/binary-metadata.js": 6,
-          "sca/container.js": 4,
+          "sast/weak-randomness.js": 2,
+          "sast/zip-slip.js": 1,
+          "sca/binary-metadata.js": 5,
+          "sca/container.js": 2,
           "sca/dep-confusion.js": 3,
-          "sca/import-reachability.js": 1,
-          "sca/install-script-analysis.js": 1,
           "sca/llm-function-extract.js": 2,
           "sca/py-package-functions.js": 1,
-          "sca/sigstore-verify.js": 7,
-          "sca/vendor-detect.js": 1,
-          "util/untrusted.js": 3
+          "sca/sigstore-verify.js": 6,
+          "util/untrusted.js": 1
         }
       },
       "scripts": {
-        "total": 26,
+        "total": 28,
         "byFile": {
-          "_compliance_lib.py": 1,
+          "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
           "calibration-expand.mjs": 2,
-          "check-doc-drift.mjs": 1,
           "detector-fuzz-runner.mjs": 3,
-          "ghsa-to-hints.mjs": 3,
-          "llm-cost-ceiling.py": 2,
-          "nist-compliance/scan.py": 2,
+          "llm-cost-ceiling.py": 1,
+          "nist-compliance/scan.py": 7,
+          "owasp-llm-top10/scan.py": 1,
           "release-check.mjs": 1,
           "rotate-key-auto.py": 1,
           "self-test-runner.mjs": 2,
@@ -957,90 +896,230 @@
     },
     "independent": {
       "source": "bench/independent/RESULT.json",
-      "measuredAt": "2026-08-15",
-      "engineVersion": "0.136.10",
+      "measuredAt": "2026-08-19",
+      "engineVersion": "0.138.0",
       "population": {
-        "totalEntries": 110,
-        "scoredEntries": 110,
-        "unscored": 0,
+        "totalEntries": 315,
+        "scoredEntries": 309,
+        "unscored": [
+          {
+            "id": "GHSA-2qj4-mmr9-4v2f",
+            "reason": "scan failed: entry scan exceeded 600000ms (/Users/ross/code/agentic-security/bench/independent/cache/GHSA-2qj4-mmr9-4v2f/pre)"
+          },
+          {
+            "id": "GHSA-794g-x443-36f7",
+            "reason": "scan failed: entry scan exceeded 600000ms (/Users/ross/code/agentic-security/bench/independent/cache/GHSA-794g-x443-36f7/pre)"
+          },
+          {
+            "id": "GHSA-f7g3-2cg6-f5hj",
+            "reason": "scan failed: entry scan exceeded 600000ms (/Users/ross/code/agentic-security/bench/independent/cache/GHSA-f7g3-2cg6-f5hj/pre)"
+          },
+          {
+            "id": "GHSA-hcm8-x79p-wx2w",
+            "reason": "scan failed: entry scan exceeded 600000ms (/Users/ross/code/agentic-security/bench/independent/cache/GHSA-hcm8-x79p-wx2w/pre)"
+          },
+          {
+            "id": "GHSA-hpcc-26xq-25fv",
+            "reason": "scan failed: entry scan exceeded 600000ms (/Users/ross/code/agentic-security/bench/independent/cache/GHSA-hpcc-26xq-25fv/pre)"
+          },
+          {
+            "id": "GHSA-qcxp-gm7m-4j5v",
+            "reason": "scan failed: entry scan exceeded 600000ms (/Users/ross/code/agentic-security/bench/independent/cache/GHSA-qcxp-gm7m-4j5v/pre)"
+          }
+        ],
         "labelSources": [
           "github-security-advisory"
         ]
       },
       "overall": {
-        "tp": 14,
-        "fp": 14,
-        "fn": 96,
-        "tn": 96,
+        "tp": 22,
+        "fp": 17,
+        "fn": 287,
+        "tn": 292,
         "precision": {
-          "n": 14,
-          "d": 28,
-          "value": 0.5
+          "n": 22,
+          "d": 39,
+          "value": 0.5641025641025641
         },
         "recall": {
-          "n": 14,
-          "d": 110,
-          "value": 0.12727272727272726
+          "n": 22,
+          "d": 309,
+          "value": 0.07119741100323625
         },
-        "f1": 0.2028985507246377
+        "f1": 0.1264367816091954,
+        "scored": 309
       },
       "wide": {
-        "tp": 37,
-        "fp": 37,
-        "fn": 73,
-        "tn": 73,
+        "tp": 41,
+        "fp": 35,
+        "fn": 268,
+        "tn": 274,
         "precision": {
-          "n": 37,
-          "d": 74,
-          "value": 0.5
+          "n": 41,
+          "d": 76,
+          "value": 0.5394736842105263
         },
         "recall": {
-          "n": 37,
-          "d": 110,
-          "value": 0.33636363636363636
+          "n": 41,
+          "d": 309,
+          "value": 0.13268608414239483
         },
-        "f1": 0.4021739130434782,
-        "meaning": "same scans, advisory-file restriction OFF — diagnostic only, never the claim"
+        "f1": 0.212987012987013,
+        "scored": 309,
+        "meaning": "same scans, advisory-file restriction OFF"
       },
       "byLanguage": {
-        "javascript": {
-          "entries": 18,
-          "recall": {
-            "n": 4,
-            "d": 18,
-            "value": 0.2222222222222222
-          },
+        "csharp": {
+          "entries": 15,
+          "tp": 1,
+          "fp": 1,
+          "fn": 14,
+          "tn": 14,
           "precision": {
-            "n": 4,
-            "d": 8,
+            "n": 1,
+            "d": 2,
             "value": 0.5
-          }
+          },
+          "recall": {
+            "n": 1,
+            "d": 15,
+            "value": 0.06666666666666667
+          },
+          "f1": 0.11764705882352941,
+          "scored": 15
+        },
+        "go": {
+          "entries": 72,
+          "tp": 0,
+          "fp": 1,
+          "fn": 72,
+          "tn": 71,
+          "precision": {
+            "n": 0,
+            "d": 1,
+            "value": 0
+          },
+          "recall": {
+            "n": 0,
+            "d": 72,
+            "value": 0
+          },
+          "f1": null,
+          "scored": 72
+        },
+        "java": {
+          "entries": 21,
+          "tp": 2,
+          "fp": 2,
+          "fn": 19,
+          "tn": 19,
+          "precision": {
+            "n": 2,
+            "d": 4,
+            "value": 0.5
+          },
+          "recall": {
+            "n": 2,
+            "d": 21,
+            "value": 0.09523809523809523
+          },
+          "f1": 0.16,
+          "scored": 21
+        },
+        "javascript": {
+          "entries": 20,
+          "tp": 6,
+          "fp": 3,
+          "fn": 14,
+          "tn": 17,
+          "precision": {
+            "n": 6,
+            "d": 9,
+            "value": 0.6666666666666666
+          },
+          "recall": {
+            "n": 6,
+            "d": 20,
+            "value": 0.3
+          },
+          "f1": 0.41379310344827586,
+          "scored": 20
+        },
+        "php": {
+          "entries": 55,
+          "tp": 3,
+          "fp": 2,
+          "fn": 52,
+          "tn": 53,
+          "precision": {
+            "n": 3,
+            "d": 5,
+            "value": 0.6
+          },
+          "recall": {
+            "n": 3,
+            "d": 55,
+            "value": 0.05454545454545454
+          },
+          "f1": 0.09999999999999999,
+          "scored": 55
         },
         "python": {
           "entries": 57,
-          "recall": {
-            "n": 7,
-            "d": 57,
-            "value": 0.12280701754385964
-          },
+          "tp": 5,
+          "fp": 4,
+          "fn": 52,
+          "tn": 53,
           "precision": {
-            "n": 7,
-            "d": 14,
-            "value": 0.5
-          }
+            "n": 5,
+            "d": 9,
+            "value": 0.5555555555555556
+          },
+          "recall": {
+            "n": 5,
+            "d": 57,
+            "value": 0.08771929824561403
+          },
+          "f1": 0.1515151515151515,
+          "scored": 57
+        },
+        "ruby": {
+          "entries": 32,
+          "tp": 0,
+          "fp": 0,
+          "fn": 32,
+          "tn": 32,
+          "precision": {
+            "n": 0,
+            "d": 0,
+            "value": null
+          },
+          "recall": {
+            "n": 0,
+            "d": 32,
+            "value": 0
+          },
+          "f1": null,
+          "scored": 32
         },
         "typescript": {
-          "entries": 35,
-          "recall": {
-            "n": 3,
-            "d": 35,
-            "value": 0.08571428571428572
-          },
+          "entries": 37,
+          "tp": 5,
+          "fp": 4,
+          "fn": 32,
+          "tn": 33,
           "precision": {
-            "n": 3,
-            "d": 6,
-            "value": 0.5
-          }
+            "n": 5,
+            "d": 9,
+            "value": 0.5555555555555556
+          },
+          "recall": {
+            "n": 5,
+            "d": 37,
+            "value": 0.13513513513513514
+          },
+          "f1": 0.2173913043478261,
+          "scored": 37
         }
       }
     },

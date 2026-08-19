@@ -9,13 +9,13 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.137.1 |
-| Bundle SHA-256 | `cac211b88764227f5f1fda4bd9fc16643953d95b716951be7c88870f6d69e4a2` |
-| Commit | `80b1e6e1ef8fa749f8e05a64025b4a661b09de15` |
+| Engine version | 0.138.0 |
+| Bundle SHA-256 | `364b7c595d66a50e05895bc2496a02d775f15aadcfd65342186747ed1003e957` |
+| Commit | `735f4fca20ce4d778370e0c74bfb4f800ae13b10` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-17T16:52:32.054Z |
+| Generated (UTC) | 2026-08-19T17:24:33.451Z |
 
 ## What these numbers are, and what they are not
 
@@ -199,15 +199,15 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `hooks` | 25 |
-| `scripts` | 26 |
+| `hooks` | 21 |
+| `scripts` | 28 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 624 |
+| `scanner/src` | 427 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -223,19 +223,24 @@ construction. `bench/independent/` is the other instrument — real upstream cod
 at the commit where a vulnerability really existed, with the CWE assigned by a
 public advisory database rather than by this project.
 
-**Measured 2026-08-15 on engine 0.136.10, n=110, 0 unscored** (*committed artifact*, `bench/independent/RESULT.json` — read, not re-run: scoring takes ~32 minutes).
+**Measured 2026-08-19 on engine 0.138.0, n=309, 6 unscored** (*committed artifact*, `bench/independent/RESULT.json` — read, not re-run: scoring takes ~32 minutes).
 
 | | Advisory-local (**the claim**) | Wide (diagnostic) |
 | --- | --- | --- |
-| Precision | **14/28 (50.0%)** | 37/74 (50.0%) |
-| Recall | **14/110 (12.7%)** | 37/110 (33.6%) |
-| F1 | **0.203** | 0.402 |
+| Precision | **22/39 (56.4%)** | 41/76 (53.9%) |
+| Recall | **22/309 (7.1%)** | 41/309 (13.3%) |
+| F1 | **0.126** | 0.213 |
 
 | Language | n | Recall | Precision |
 | --- | --- | --- | --- |
-| javascript | 18 | 4/18 (22.2%) | 4/8 (50.0%) |
-| python | 57 | 7/57 (12.3%) | 7/14 (50.0%) |
-| typescript | 35 | 3/35 (8.6%) | 3/6 (50.0%) |
+| csharp | 15 | 1/15 (6.7%) | 1/2 (50.0%) |
+| go | 72 | 0/72 (0.0%) | 0/1 (0.0%) |
+| java | 21 | 2/21 (9.5%) | 2/4 (50.0%) |
+| javascript | 20 | 6/20 (30.0%) | 6/9 (66.7%) |
+| php | 55 | 3/55 (5.5%) | 3/5 (60.0%) |
+| python | 57 | 5/57 (8.8%) | 5/9 (55.6%) |
+| ruby | 32 | 0/32 (0.0%) | 0/0 (n/a) |
+| typescript | 37 | 5/37 (13.5%) | 5/9 (55.6%) |
 
 **Quote the advisory-local column.** "Wide" scores the same scans without
 restricting findings to the files the advisory's fix commit touched — it asks

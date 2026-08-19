@@ -74,7 +74,8 @@ const ALLOWLIST = new Set([
   'material-change.js::parseDiff',
   'material-change.js::classifyHunk',
   'profile.js::PROFILES',
-  'profile.js::DEFAULTS',
+  // 'profile.js::DEFAULTS' was here until it gained a real call site in
+  // sast/fastapi-hardening.js. The stale-exception check is what caught it.
   // intent-context.js extractIntentSignals is also surfaced via SessionStart
   // hooks for "show me the current intent" tooling. The engine consumes
   // suppressByIntent; the extractor is the lower-level helper.

@@ -58,41 +58,71 @@ insecure-deserialization 0/3, prototype-pollution 0/3.
 
 Per the PRD's §4 Tier 5 gate ("only if Tiers 1–4 fall short of 80%"), Tier 5
 (genuine engine depth — container/collection-element taint, k>1 call-string
-context, stored/second-order taint) is **not scoped** — the target was met
-without it. The remaining 22 misses (deserialization/insecure-deserialization,
+context, stored/second-order taint) was **not scoped** — the target was met
+without it.
+
+> **Update 2026-08-19.** Container/collection-element taint has since landed
+> anyway (PRD T3.3; see `scanner/src/dataflow/CLAUDE.md`), and this subset
+> figure is **unchanged at 115/137** as a result. That is the expected outcome,
+> not a disappointment: the corpus contains no container-shaped entries, which
+> is precisely why the target was reachable without Tier 5 in the first place.
+> The capability is pinned by `test/container-taint.test.js` rather than by this
+> number, and must not be quoted as a recall gain. The remaining 22 misses (deserialization/insecure-deserialization,
 open-redirect, sql-injection, ssti, prototype-pollution, and 4 C/C++
 command-injection shapes) are documented as candidate future work, not a
 blocker.
 
-### Result — 210 entries, engine v0.136.3
+### Result — 215 entries, engine v0.137.1 (measured 2026-08-19)
 
 | language | entries | detected (any layer) | **detected by IR-TAINT** |
 |---|---:|---:|---:|
-| c# | 21 | 21 (100%) | 1 (5%) |
+| c# | 21 | 21 (100%) | 12 (57%) |
 | c/c++ | 11 | 11 (100%) | 2 (18%) |
-| go | 22 | 22 (100%) | 3 (14%) |
-| java | 25 | 25 (100%) | 1 (4%) |
-| js/ts | 36 | 36 (100%) | 7 (19%) |
-| kotlin | 20 | 20 (100%) | **0 (0%)** |
-| php | 23 | 23 (100%) | 1 (4%) |
-| python | 32 | 32 (100%) | 7 (22%) |
-| ruby | 20 | 20 (100%) | 1 (5%) |
-| **total** | **210** | **210 (100%)** | **23 (11%)** |
+| go | 22 | 22 (100%) | 13 (59%) |
+| java | 25 | 25 (100%) | 13 (52%) |
+| js/ts | 38 | 38 (100%) | 22 (58%) |
+| kotlin | 21 | 21 (100%) | 10 (48%) |
+| php | 23 | 23 (100%) | 12 (52%) |
+| python | 32 | 32 (100%) | 21 (66%) |
+| ruby | 20 | 20 (100%) | 11 (55%) |
+| json | 1 | 1 (100%) | 0 (0%) |
+| terraform | 1 | 1 (100%) | 0 (0%) |
+| **total** | **215** | **215 (100%)** | **116 (54%)** |
 
 **java**, **ruby** and **c#** were all **0 (0%)** on the first run of this
 instrument. None was a taint-engine limitation: all three were defects upstream
 of it, in the IR — a sync/async mismatch, a regex that crossed a newline, and a
 stack overflow. See items 2–4 below.
 
+#### Superseded: the v0.136.3 measurement this table replaced
+
+The previous table recorded **23/210 (11%)** with kotlin at **0 (0%)**, c# 1
+(5%), java 1 (4%), php 1 (4%), ruby 1 (5%). It is kept here as the prior
+data point rather than deleted, because the delta is the interesting part:
+taint-layer attribution rose ~5×, and the "one language still at zero" claim
+that framed this whole section is no longer true.
+
+**How it went stale without anyone noticing** is worth recording, because it is
+a gate-design lesson rather than an oversight. `npm run bench:layer-recall:check`
+compares against `baseline.json` as a **floor** — it fails on a *drop* in
+per-language taint counts and says nothing about a rise. So the engine improving
+from 31 to 116 attributed entries passed the gate silently, exactly as a
+no-change run would, and the published table kept its old numbers. A floor-only
+gate cannot tell "unchanged" from "much better", which is precisely the
+condition under which a baseline rots.
+
 ### What this says
 
-1. **One of nine first-class languages still has zero taint-layer recall** —
-   kotlin — and it is **not** a defect. Kotlin IR and assignment lowering both
-   work, and a servlet-source → `executeUpdate` flow does produce an IR-TAINT
-   finding (`test/kt-taint-flow.test.js`); its 20 corpus entries are simply not
+1. **Every first-class language now has non-zero taint-layer recall.** Kotlin
+   was the last at zero and is now 10/21 (48%). It was never a defect even then:
+   Kotlin IR and assignment lowering both worked, and a servlet-source →
+   `executeUpdate` flow produced an IR-TAINT finding
+   (`test/kt-taint-flow.test.js`); its corpus entries simply were not
    taint-shaped. The three languages that *were* at zero (java, ruby, c#) each
    had a different upstream defect, and **none** of them was "missing framework
-   sources" — the hypothesis this instrument was built to test.
+   sources" — the hypothesis this instrument was built to test. The two
+   remaining zeros, `json` and `terraform`, are correct: neither is code the
+   taint engine can walk.
 
 2. **Java's zero was three stacked defects, now fixed** (0 → 1). The deep path
    called the **sync** `buildProjectIR`, which has no Java branch at all because
