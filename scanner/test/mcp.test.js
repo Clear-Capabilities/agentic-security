@@ -1049,3 +1049,76 @@ test('server.js does not export a default handleRequest singleton', async () => 
     'handleRequest must NOT be exported as a singleton (footgun: binds to import-time cwd)');
   assert.equal(typeof mod.createServer, 'function');
 });
+
+// ─── OWASP A01 — the reserved list must match the CONTRACT, not a subset ─────
+//
+// `agents/_CONFINEMENT.md` states three refusal rules. The code enforced two:
+// paths escaping the root (rule 1) and scanner/SCM/dependency/CI state (rule 2).
+// Rule 3 — "a backup, lock, or build-output file (*.bak, *.lock, dist/, build/,
+// target/)" — was documented and entirely unimplemented.
+//
+// That gap has teeth in this repository specifically: `scanner/dist/` holds the
+// SHIPPED BUNDLE, which has its own SHA-256 integrity gate precisely because
+// what it contains matters. An apply_fix landing there would rewrite the
+// artifact users execute, while every other control reported success.
+//
+// A contract an agent is told to follow, and a check that enforces less than the
+// contract says, is worse than no contract: the agent's prompt asserts a
+// guarantee the code does not provide.
+for (const [label, rel] of [
+  ['build output under dist/', 'dist/bundle.js'],
+  ['build output under build/', 'build/out.js'],
+  ['build output under target/', 'target/app.jar'],
+  ['a backup file', 'src/app.js.bak'],
+  ['a generic lock file', 'src/deps.lock'],
+]) {
+  test(`apply_fix refuses ${label} (_CONFINEMENT rule 3)`, async () => {
+    const { handleRequest, root, cleanup } = await makeSession({
+      findings: [{ id: 'F1', severity: 'high', file: rel, line: 1, fix: { replacement: 'PWNED\n' } }],
+    });
+    const abs = path.join(root, rel);
+    await fsp.mkdir(path.dirname(abs), { recursive: true });
+    await fsp.writeFile(abs, 'original');
+    const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true });
+    const p = payload(r);
+    assert.equal(p.applied, false, `apply_fix must refuse ${rel}; payload: ${JSON.stringify(p)}`);
+    assert.match(String(p.reason || ''), /reserved path/);
+    // The disk check is the one that matters — a refusal that still writes is
+    // not a refusal.
+    assert.equal(await fsp.readFile(abs, 'utf8'), 'original',
+      `${rel} must be byte-identical after a refused write`);
+    await cleanup();
+  });
+}
+
+test('every category the contract documents is enforced BEHAVIOURALLY, not just mentioned', async () => {
+  // Guards the guard, and does it by BEHAVIOUR. The first version of this test
+  // grepped tools.js for each token, which is the same weak-proxy mistake as
+  // matching a bare identifier: it passed while `build/` was unenforced simply
+  // because the string appeared in a comment, and it failed once the
+  // implementation used path SEGMENTS ('build') instead of prefixes ('build/').
+  // A guard that can be satisfied by a comment is decoration.
+  //
+  // The contract file is still read rather than restated, so a NEW documented
+  // category with no enforcement fails here.
+  const contract = await fsp.readFile(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'agents', '_CONFINEMENT.md'), 'utf8');
+  const cases = [
+    ['dist/', 'dist/x.js'], ['build/', 'build/x.js'], ['target/', 'target/x.jar'],
+    ['.bak', 'src/x.js.bak'], ['.lock', 'src/x.lock'],
+  ];
+  for (const [token, rel] of cases) {
+    assert.ok(contract.includes(token), `precondition: the contract should still name ${token}`);
+    const { handleRequest, root, cleanup } = await makeSession({
+      findings: [{ id: 'F1', severity: 'high', file: rel, line: 1, fix: { replacement: 'PWNED\n' } }],
+    });
+    const abs = path.join(root, rel);
+    await fsp.mkdir(path.dirname(abs), { recursive: true });
+    await fsp.writeFile(abs, 'original');
+    const p = payload(await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true }));
+    assert.equal(p.applied, false,
+      `_CONFINEMENT.md documents ${token} as reserved; apply_fix wrote ${rel} anyway`);
+    assert.equal(await fsp.readFile(abs, 'utf8'), 'original');
+    await cleanup();
+  }
+});

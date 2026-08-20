@@ -96,7 +96,29 @@ const RESERVED_WRITE_SUFFIXES = [
   '.tfvars',
   'docker-compose.yml',
   'docker-compose.yaml',
+  // _CONFINEMENT rule 3 — backup and lock files. The specific lock BASENAMES
+  // above cover the ecosystems we know; this catches the rest (`deps.lock`,
+  // `foo.bak`) without needing to enumerate them. Nothing an autofix should
+  // ever be rewriting: a `.bak` is someone's safety copy and a `.lock` is
+  // generated state.
+  '.bak',
+  '.lock',
 ];
+// _CONFINEMENT rule 3 — build output. Matched as a PATH SEGMENT at any depth,
+// not as a top-level prefix, because build output is routinely nested
+// (`packages/web/dist/`, `services/api/target/`) and a top-level-only check
+// would refuse the monorepo root and allow every package inside it.
+//
+// This matters most in THIS repository: `scanner/dist/` holds the shipped
+// bundle, which carries its own SHA-256 integrity sidecar precisely because
+// what it contains matters. Before this, `apply_fix` would rewrite it and
+// report success.
+//
+// NOTE for a future change, deliberately not made here: the PREFIX list above
+// (`node_modules/`, `.git/`, …) is still top-level-only, so a nested
+// `packages/a/node_modules/` is not covered by it. That is a separate widening
+// with its own blast radius and belongs in its own change with its own tests.
+const RESERVED_WRITE_DIR_SEGMENTS = new Set(['dist', 'build', 'target']);
 function _isReservedWritePath(sessionRoot, absFile) {
   // Resolve sessionRoot symlinks so the relative path is computed against
   // the same canonical root as `absFile` (which _confine already realpath'd).
@@ -105,9 +127,15 @@ function _isReservedWritePath(sessionRoot, absFile) {
   const rootReal = fs.realpathSync(path.resolve(sessionRoot));
   const rel = path.relative(rootReal, absFile).replace(/\\/g, '/');
   if (RESERVED_WRITE_PREFIXES.some(p => rel === p.replace(/\/$/, '') || rel.startsWith(p))) return true;
-  const base = rel.split('/').pop() || '';
+  const segments = rel.split('/');
+  const base = segments[segments.length - 1] || '';
   if (RESERVED_WRITE_BASENAMES.has(base)) return true;
   if (RESERVED_WRITE_SUFFIXES.some(s => base === s || base.endsWith(s))) return true;
+  // Any DIRECTORY segment that names build output — checked over
+  // `segments.length - 1` so a source file legitimately called `build` or
+  // `dist` is not refused for its own name; only living inside such a
+  // directory counts.
+  if (segments.slice(0, -1).some(seg => RESERVED_WRITE_DIR_SEGMENTS.has(seg))) return true;
   return false;
 }
 
