@@ -293,6 +293,32 @@ That contrast is the whole story: **taint looks dominant on fixtures written her
 nearly invisible on code that was not.** The corpus is taint-shaped because it was
 written by the people who wrote the taint engine.
 
+**Measured 2026-08-20 — taint's REACH on real code, with control languages.** Prompted by
+a spot check where deep mode produced zero `IR-TAINT` findings on a real 60-finding Go
+package. Two control languages were included specifically so the result could not be
+misread as a Go quirk:
+
+| language | entries | with ANY taint finding | taint findings | all findings |
+|---|---:|---:|---:|---:|
+| go | 20 | 3 | **87** | 3013 |
+| python | 20 | 2 | 2 | 81 |
+| javascript | 20 | 1 | 8 | 222 |
+
+**The n=1 spot check did not generalise, and that correction matters:** Go has the HIGHEST
+taint volume of the three. Taint is not failing on Go specifically.
+
+What the population actually shows is **concentration**: only **6 of 60 real packages (10%)
+produce any taint finding at all**, and those few produce many. Set against
+`bench/layer-recall`, which attributes **54%** of corpus detections to taint, and against
+the independent population, where taint accounts for **1 of 12** localized TPs.
+
+The denominators differ — "was the labelled vuln caught by taint" is not "does this package
+yield any taint finding" — so these are not one ratio. But the direction is consistent
+across three independent measurements, and it is the corpus-provenance problem with numbers
+attached: **the corpus is taint-shaped because the people who wrote the taint engine wrote
+the corpus.** No conclusion is drawn here about whether T3.2 is correctly marked landed;
+that needs the per-entry instrument in F2.1, not this aggregate.
+
 **Work.**
 
 - **F2.1 — A taint-specific third-party instrument.** `bench/layer-recall` measures
