@@ -129,11 +129,39 @@ question is why they never match.
 
 **Work.**
 
-- **F1.1 — Root-cause the Go zero, entry by entry.** 72 entries is enough to be
-  conclusive. For each, record which stage dropped it using the
-  `recon-entrypoint → detector → taint → posture-filter → proof-gate` attribution that
-  `bench/realworld-recall/analyze-misses.mjs` already implements. Publish the histogram
-  before writing a single rule.
+- **F1.1 — Root-cause the Go zero, entry by entry. FIRST HISTOGRAM PUBLISHED 2026-08-20
+  (n=25 of 72).** Buckets: whether the advisory file was scanned, produced any finding,
+  produced the labelled CWE, and where.
+
+  | bucket | n | meaning |
+  |---|---:|---|
+  | `NO-FINDINGS` | **12 (48%)** | the vulnerable file produced no finding *of any kind* |
+  | `WRONG-CWE` | **11 (44%)** | findings on the right file, none of the labelled class |
+  | `WRONG-FILE` | 2 (8%) | labelled CWE fired elsewhere in the package |
+  | `LOCALIZED` | **0** | — |
+
+  **The obvious hypothesis is dead: this is not a recon, parsing or admission failure.**
+  Those same packages produced 195, 380, 507 findings — the engine reads Go fine. It simply
+  does not fire on the file the advisory is about, and when it does fire there, it names a
+  different weakness.
+
+  Second signal, from the CWEs that *do* land on Go advisory files: `CWE-1077` (float
+  comparison), `CWE-532` (log leak), `CWE-798`, `CWE-176`. The Go findings the engine
+  produces are dominated by low-value generic classes, while the labelled misses are
+  injection/authz/validation — `CWE-22`, `CWE-918`, `CWE-863`, `CWE-287`, `CWE-20`,
+  `CWE-129`.
+
+  **Where to start, and why:** `CWE-22` and `CWE-918` are the tractable subset — Go
+  detectors for both already exist (`go-structural.js` path traversal, `go-http-user-url`
+  SSRF) and still do not match the real shapes. A detector that exists and does not match is
+  a cheaper fix than a class with no rule at all, and it tests the fixture-first loop before
+  spending it on the harder classes.
+
+  Remaining: extend to all 72, and add per-stage attribution
+  (`recon-entrypoint → detector → taint → posture-filter → proof-gate`) via
+  `bench/realworld-recall/analyze-misses.mjs` to split `NO-FINDINGS` into "no rule" versus
+  "rule fired and something downstream dropped it" — the `rate-limit.js` failure mode, which
+  this bucketing cannot yet distinguish.
 - **F1.2 — Same for Ruby (32 entries).**
 - **F1.3 — Fixture-first rebuild for whichever stage dominates.** Extract the real
   vulnerable snippet from each target entry into a fixture, write the rule until it fires
@@ -441,10 +469,30 @@ broken IDE extension ships silently.
 
 **Work.**
 
-- **F11.1 — Smoke every surface in CI.** LSP: start, initialize, publish diagnostics on a
-  known-vulnerable fixture, shut down. MCP: enumerate tools, call each read-only tool,
-  assert the two write tools refuse out-of-tree paths. IDE packages: build and install.
-  None of this is deep testing; all of it is currently absent.
+- **F11.1 — Smoke every surface in CI. LSP DONE 2026-08-20; the rest stands.**
+  As with F7.5, the premise was partly wrong and was checked rather than assumed: MCP
+  already has ~1050 lines of tests (initialize, `tools/list`, per-tool), and
+  `test/lsp-server.test.js` covers `findingToDiagnostic`/`scanFile`.
+
+  The genuine gap was narrower and worse: **`bin/agentic-security-lsp.js` — the binary that
+  ships inside the JetBrains and Neovim plugins — was referenced by no test, no script and
+  no workflow.** The engine side was tested; the server was never started. An LSP that fails
+  to boot presents to the user as "the extension does nothing", and nothing in CI would have
+  noticed.
+
+  `test/lsp-protocol-smoke.test.js` now runs the shipped entry point as a subprocess and
+  speaks real LSP over stdio — `Content-Length` framing, `initialize` → `initialized` →
+  `didOpen` → `publishDiagnostics` → `shutdown` → `exit` — asserting it starts, advertises
+  capabilities, yields a renderable diagnostic (with an LSP range) for a command-injection
+  handler, and exits rather than hanging the editor. A second case feeds it a malformed
+  frame and requires it to survive. Runs in ~0.9 s.
+
+  It deliberately does **not** assert which rule fired or how many diagnostics: that is the
+  engine's business, measured elsewhere, and coupling it here would make an unrelated
+  detector change break the LSP test and teach people to weaken it.
+
+  Still open: MCP end-to-end over stdio (the two write tools refusing out-of-tree paths is
+  the case that matters), and IDE package build/install.
 - **F11.2 — Time-to-first-finding as a tracked metric.** The ICP is vibecoder-first
   (`docs/POSITIONING.md`). For that user the binding constraint is how long until the
   first useful result, not aggregate F1. Measure it on a cold cache for a mid-size repo,
