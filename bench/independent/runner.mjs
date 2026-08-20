@@ -551,6 +551,38 @@ async function main() {
   const byLayer = {};
   for (const r of localTps) byLayer[r.matchedParser || 'unknown'] = (byLayer[r.matchedParser || 'unknown'] || 0) + 1;
 
+  // PRD F2.1 — the same attribution, PER LANGUAGE.
+  //
+  // The aggregate `byLayer` answers "which layer earned our credited findings",
+  // which is the right question globally and the wrong one for deciding where to
+  // work. Taint contributing 1 of 12 overall could mean it is weak everywhere or
+  // strong in one language and absent in the rest, and those imply completely
+  // different next steps. The per-language split is what makes the difference
+  // visible, and it is what gives the taint figure a trend line rather than a
+  // single number re-derived by hand whenever someone asks.
+  //
+  // Entry counts are carried alongside so a zero is readable: 0 of 72 (go) and
+  // 0 of 15 (c#) are not the same claim, and neither is a language with no
+  // entries at all.
+  const byLanguageLayer = {};
+  for (const r of perEntry) {
+    const lang = r.language || 'unknown';
+    byLanguageLayer[lang] ||= { entries: 0, localizedTps: 0, byLayer: {} };
+    byLanguageLayer[lang].entries++;
+    if (r.tpLocal !== 1) continue;
+    byLanguageLayer[lang].localizedTps++;
+    const p = r.matchedParser || 'unknown';
+    byLanguageLayer[lang].byLayer[p] = (byLanguageLayer[lang].byLayer[p] || 0) + 1;
+  }
+  // Taint's attributable share, per language and overall — success criterion 4
+  // ("taint's attributable share of localized TPs is non-zero and growing")
+  // reported directly rather than left to be recomputed.
+  const taintShare = {
+    overall: { n: byLayer['IR-TAINT'] || 0, d: localTps.length },
+    byLanguage: Object.fromEntries(Object.entries(byLanguageLayer).map(
+      ([lang, v]) => [lang, { n: v.byLayer['IR-TAINT'] || 0, d: v.localizedTps }])),
+  };
+
   // T0.7 — the held-out slice is scored separately and must never be tuned
   // against. Same doctrine as posture/holdout-eval.js for calibration.
   const heldOutRows = perEntry.filter(r => r.heldOut);
@@ -595,6 +627,8 @@ async function main() {
     fixDiscrimination,
     fixDiscriminationFileScoped,
     byLayer,
+    byLanguageLayer,
+    taintShare,
     heldOut: {
       meaning: 'never tune against these; scored separately (T0.7)',
       entries: heldOutRows.length,
@@ -630,6 +664,25 @@ async function main() {
   out.write('    F1         ' + (localized.f1 === null ? 'n/a' : localized.f1.toFixed(3)) + '\n');
   out.write('    fix-discrimination ' + pct(fixDiscrimination) +
             '  (localized TPs that go silent once fixed)\n');
+  // PRD F2.1 — taint's attributable share, stated outright rather than left
+  // to be inferred from the layer table. Success criterion 4 is "non-zero and
+  // GROWING", which needs a figure someone can read off each run.
+  out.write('    taint share ' + taintShare.overall.n + '/' + taintShare.overall.d +
+            ' localized TPs attributed to IR-TAINT\n');
+  // Per language, because 1-of-12 overall cannot distinguish "weak everywhere"
+  // from "strong in one language, absent in the rest", and those imply
+  // completely different next steps. Entry counts travel with it so a zero is
+  // readable: 0 of 72 and 0 of 15 are not the same claim.
+  const langRows = Object.entries(byLanguageLayer).sort((a, b) => b[1].entries - a[1].entries);
+  if (langRows.length) {
+    out.write('\n    by language (localized TPs / entries, and which layer earned them)\n');
+    for (const [lang, v] of langRows) {
+      const layers = Object.entries(v.byLayer).sort((a, b) => b[1] - a[1])
+        .map(([k, n]) => k + ':' + n).join(' ');
+      out.write('      ' + lang.padEnd(12) + String(v.localizedTps).padStart(2) + '/' +
+                String(v.entries).padEnd(4) + (layers || '—') + '\n');
+    }
+  }
   if (Object.keys(byLayer).length) {
     out.write('    by layer   ' + Object.entries(byLayer).sort((a, b) => b[1] - a[1])
       .map(([k, n]) => `${k}=${n}`).join('  ') + '\n');
