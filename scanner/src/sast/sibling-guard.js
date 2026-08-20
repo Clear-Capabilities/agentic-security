@@ -55,7 +55,16 @@ const NOT_A_GUARD = /^(?:print|println|printf|sprintf|fprintf|log|logf|append|le
 // literal: every entry is either a filesystem call or the string-building step
 // that feeds one.
 const PATH_SINK = new RegExp([
-  String.raw`\bfmt\.Sprintf\s*\(\s*"[^"]*[/\\][^"]*"`,     // "%s/%s" style path joins
+  // "%s/%s" style path joins. FORWARD slash only, deliberately.
+  //
+  // This originally accepted `/` OR `\`, and that produced a false positive on
+  // real code (rclone `cmd/bisync/help.go:72`): a help-text formatter
+  // `fmt.Sprintf("- %s - (%s) %s  \n", …)` contains a BACKSLASH as part of the
+  // `\n` escape, which read as a path separator. A Go format string that builds
+  // a path uses `/`; a backslash in one is nearly always an escape sequence.
+  // Found on real code rather than by a fixture, which is the argument for
+  // measuring a new rule against the independent population before trusting it.
+  String.raw`\bfmt\.Sprintf\s*\(\s*"[^"]*/[^"]*"`,
   String.raw`\bfilepath\.(?:Join|Clean|Abs|Walk)\s*\(`,
   String.raw`\bpath\.Join\s*\(`,
   String.raw`\bos\.(?:Open|OpenFile|Create|Remove|RemoveAll|Rename|ReadFile|WriteFile|Stat|Mkdir|MkdirAll)\s*\(`,

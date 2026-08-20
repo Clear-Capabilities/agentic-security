@@ -129,3 +129,40 @@ test('the rule is reachable through a real scan, not just when called directly',
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('REGRESSION: an escape sequence in a format string is not a path separator', () => {
+  // FALSE POSITIVE found on real code (rclone cmd/bisync/help.go:72), not by a
+  // fixture. The sink heuristic accepted `fmt.Sprintf` whose format string
+  // contained `/` OR `\` — and `\n` contains a backslash, so an ordinary
+  // newline in a help-text formatter read as a path join. `toCamel` (a casing
+  // helper) then read as the "guard" and its sibling `flag.Value` as the
+  // unguarded field.
+  //
+  // It also fired identically before and after the upstream fix, which by this
+  // project's own standard means it had detected an API, not a vulnerability.
+  const src = `package h
+import ("fmt"; "strings")
+func GenerateParams() string {
+	builder := strings.Builder{}
+	fn := func(flag *pflag.Flag) {
+		builder.WriteString(fmt.Sprintf("- %s - (%s) %s  \\n", toCamel(flag.Name), flag.Value.Type(), flag.Usage))
+	}
+	return builder.String()
+}`;
+  assert.deepEqual(scanSiblingGuard('cmd/bisync/help.go', src), [],
+    'a format string whose only backslash is an escape sequence is not a path join');
+});
+
+test('a genuine forward-slash path join still fires', () => {
+  // The other half of the regression: tightening the separator must not lose
+  // the real shape.
+  const src = `package h
+import "fmt"
+func F(req *R, reqPath string) {
+	err := checkRelativePath(req.NewName)
+	if err != nil { return }
+	filePath := fmt.Sprintf("%s/%s", reqPath, req.SrcName)
+	fsRename(filePath, req.NewName)
+}`;
+  assert.equal(scanSiblingGuard('h.go', src).length, 1);
+});
