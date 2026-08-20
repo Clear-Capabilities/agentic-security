@@ -179,6 +179,29 @@ question is why they never match.
   `dataflow/CLAUDE.md` — any future "the control exists but is not applied HERE" rule
   needs the same treatment.
 
+  **Hypothesis tested and REJECTED, 2026-08-20 — the guard filter is not eating Go
+  findings.** The `sibling-guard` case above showed `dropGuardedFindings` deleting an
+  entire family structurally, which raised the obvious follow-up: how much of the
+  `NO-FINDINGS` bucket is findings the engine produced and then discarded? Measured by
+  A/B-scanning **all 72 Go entries** with guard recognition on and off:
+
+  | | |
+  |---|---:|
+  | Go entries scored (both configurations) | 72 |
+  | findings suppressed anywhere | 14 |
+  | **labelled-CWE findings suppressed on advisory files** | **0** |
+  | entries where the filter ate a labelled finding | **0** |
+
+  So `dropGuardedFindings` is **well-calibrated on Go**: 14 drops across 72 whole
+  packages, and not one of them was a candidate true positive for its advisory. The
+  sibling-guard blind spot was genuine but *structural and family-specific*, not the tip
+  of a pattern.
+
+  **This redirects the work, which is the point of running it.** The 12 `NO-FINDINGS`
+  entries are a real detector gap — missing rules — not a downstream-suppression
+  artifact. Effort should go into the rules themselves, and nobody should loosen the
+  guard-recognition window on the theory that it is hiding recall: it measurably is not.
+
   Remaining: extend to all 72, and add per-stage attribution
   (`recon-entrypoint → detector → taint → posture-filter → proof-gate`) via
   `bench/realworld-recall/analyze-misses.mjs` to split `NO-FINDINGS` into "no rule" versus
