@@ -202,11 +202,36 @@ question is why they never match.
   artifact. Effort should go into the rules themselves, and nobody should loosen the
   guard-recognition window on the theory that it is hiding recall: it measurably is not.
 
-  Remaining: extend to all 72, and add per-stage attribution
-  (`recon-entrypoint → detector → taint → posture-filter → proof-gate`) via
-  `bench/realworld-recall/analyze-misses.mjs` to split `NO-FINDINGS` into "no rule" versus
-  "rule fired and something downstream dropped it" — the `rate-limit.js` failure mode, which
-  this bucketing cannot yet distinguish.
+  **COMPLETE, 2026-08-20 — all 72 entries, and the pipeline is exonerated.** The remaining
+  question was whether `NO-FINDINGS` meant "no rule exists" or "a rule fired and something
+  downstream ate it" — the `rate-limit.js` failure mode, which this session produced five
+  separate instances of. Method: scan each advisory file twice, once inside its package and
+  once in isolation. A file that fires alone and is silent in context has been suppressed by
+  package context.
+
+  | bucket | n | % |
+  |---|---:|---:|
+  | `WRONG-CWE` — fires on the right file, names a different weakness | 37 | 51% |
+  | `NO-RULE` — silent both alone and in context: a genuine detector gap | 31 | 43% |
+  | `HIT` — labelled CWE on the advisory file | 4 | 6% |
+  | **`SUPPRESSED-BY-CONTEXT`** | **0** | **0%** |
+
+  **Nothing is being lost downstream.** Combined with the guard-recognition A/B (0 of 72),
+  the pipeline does not drop a single Go finding: no cross-file pass, dedupe, reachability
+  demotion, suppression or report filter is costing recall here. Every remaining miss is
+  upstream, in the rules themselves.
+
+  **This closes the diagnostic phase and leaves an unambiguous mandate.** No more pipeline
+  archaeology: 43% needs rules that do not exist, 51% needs the existing Go rules to name
+  the right weakness rather than a generic one. Start where §F1.1 already argues — `CWE-22`
+  and `CWE-918`, where detectors exist and mismatch — since that attacks the 51% with the
+  cheapest possible loop.
+
+  **One more signal, worth its own line.** 4 entries produce the labelled CWE *on the
+  advisory file* while the benchmark scores Go at **0/72 localized**. So those four fire on
+  the right file with the right class and still miss the fix hunk by more than ±3 lines.
+  That is a LOCALIZATION gap, not a detection gap, and it is invisible in the headline —
+  a reminder that `wide` and `localized` disagree for reasons worth reading, not averaging.
 - **F1.2 — Same for Ruby (32 entries).**
 - **F1.3 — Fixture-first rebuild for whichever stage dominates.** Extract the real
   vulnerable snippet from each target entry into a fixture, write the rule until it fires
