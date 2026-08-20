@@ -43,12 +43,21 @@ import { setStateWritesEnabled } from '../src/posture/state-dir.js';
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
 // Fixtures whose detector is currently unreachable through `runScan`. Each entry
-// is a defect with a diagnosed root cause, not an accepted exclusion.
-const KNOWN_DARK = new Map([
-  ['k8s-admission', '_isIaCFile admits YAML as k8s only under a directory named k8s/; the '
-    + 'documented "contains kind:" content check is unimplemented'],
-  ['install-script', 'package.json fails shouldScan(), so the dispatch loop never visits it'],
-]);
+// must carry a diagnosed root cause — it is a debt register, not an accepted
+// exclusion, and the second test below fails if an entry is no longer dark.
+//
+// EMPTY, and worth keeping empty. Both original entries were fixed rather than
+// tolerated:
+//   · k8s-admission  — the "contains kind:" content check its own comment
+//     promised was implemented (`isKubernetesManifest`), and applied at BOTH
+//     places that gate file admission. The second one is the reason the first
+//     fix appeared not to work: `runScan` admits the file, and then
+//     `runFullScan` re-filters the same list with `shouldScan()`.
+//     Now 17 findings on the vulnerable tree, 0 on the clean one.
+//   · install-script — `scanInstallScripts` now runs over depFileContents,
+//     where package.json actually lives, instead of sitting unreachable in the
+//     per-file SAST dispatch. Now 1 finding on vulnerable, 0 on clean.
+const KNOWN_DARK = new Map([]);
 
 function fixturesWithVulnerableTree() {
   if (!fs.existsSync(FIXTURES)) return [];

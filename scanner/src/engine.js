@@ -663,7 +663,8 @@ function _isIaCFile(p){
   if (IAC_FILENAMES.has(base)) return true;
   if (/\.dockerfile$/i.test(base)) return true;
   if (/\.tf$|\.tfvars$/i.test(base)) return true;
-  // K8s YAML heuristic: under k8s/ or contains "kind:" — caller checks content
+  // K8s YAML heuristic: under k8s/ — the CONTENT half of this rule lives in
+  // `isKubernetesManifest` below, because a path predicate cannot see content.
   if (/(?:^|\/)k8s(?:\/|$)/.test(p) && /\.ya?ml$/i.test(base)) return true;
   if (/(?:^|\/)\.github\/workflows\/.*\.ya?ml$/.test(p)) return true;
   if (/(?:^|\/)\.gitlab-ci\.ya?ml$/.test(p)) return true;
@@ -677,6 +678,34 @@ function _isIaCFile(p){
   if (/\.(?:prompt|j2|jinja2?|tmpl|mustache|hbs)$/i.test(base)) return true;
   if (/(?:^|\/)(?:prompts?|templates?\/prompts?)\//i.test(p)) return true;
   return false;
+}
+// PRD F11.4 — the content half of the Kubernetes-manifest rule.
+//
+// `_isIaCFile` admitted YAML as Kubernetes only when the path contained a
+// directory literally named `k8s/`, while its own comment claimed the caller
+// also checked for `kind:`. Nothing ever did. Measured consequence: the
+// k8s-admission detector returned 3 findings when called directly on its own
+// fixture and 0 through a scan, because `shouldScan()` never let the walker
+// keep the file — real manifests under `deploy/`, `manifests/`, `charts/`,
+// `kubernetes/`, `overlays/` or the repository root were invisible, and that is
+// where most projects actually put them.
+//
+// Keyed on CONTENT rather than on more directory names, because the set of
+// directory names people use is unbounded and the file format is not. A
+// Kubernetes object is defined by carrying BOTH `apiVersion:` and `kind:` at
+// the start of a line — requiring both, at line-start, is what keeps this from
+// matching ordinary YAML that merely mentions the word "kind" in a value.
+//
+// Only the head of the file is examined: a manifest declares these in its first
+// few lines, and reading further would put an unbounded regex on the hot path
+// of every YAML file in a repository.
+const _K8S_HEAD_BYTES = 2048;
+const _K8S_API_VERSION_RE = /^\s*apiVersion\s*:/m;
+const _K8S_KIND_RE = /^\s*kind\s*:\s*\S/m;
+export function isKubernetesManifest(relPath, content) {
+  if (typeof content !== 'string' || !/\.ya?ml$/i.test(relPath || '')) return false;
+  const head = content.length > _K8S_HEAD_BYTES ? content.slice(0, _K8S_HEAD_BYTES) : content;
+  return _K8S_API_VERSION_RE.test(head) && _K8S_KIND_RE.test(head);
 }
 function getExt(n){const p=n.split(".");return p.length>1?p.pop().toLowerCase():"";}
 function shouldScan(p){if(/\.(test|spec|mock)\./i.test(p))return false;if(/_test\.go$/i.test(p))return false;if(/_spec\.rb$/i.test(p))return false;if(/Test\.(?:java|cs|kt|scala)$/i.test(p))return false;if(/\.min\.[mc]?js$/i.test(p))return false;for(const x of p.split("/"))if(IGNORE_DIRS.has(x))return false;
@@ -7977,7 +8006,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   const _perFileTimeoutMs = parseInt(process.env.AGENTIC_SECURITY_PER_FILE_TIMEOUT_MS || '10000', 10);
   const _fileTimings = [];
   let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0;
-  const files=Object.keys(fileContents).filter(f=>shouldScan(f) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];
+  const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f])) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];
   // ---- R8: opt-in per-file checkpointing (AGENTIC_SECURITY_RESUME=1, or
   // runScan({resume:true})). Default OFF, so existing behaviour is untouched.
   // Only this loop is checkpointed; every cross-file pass below re-runs, so
@@ -8320,6 +8349,20 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   setProgress({current:i,total:files.length,file:"Config file cross-ref...",phase:"Linking"});aLogic.push(...scanConfigFiles(fc));
   setProgress({current:i,total:files.length,file:"OSV vulnerability database...",phase:"SCA"});
   const allFileContents={...fc, ...depFileContents};
+  // PRD F11.4 — malicious install hooks, scanned where package.json actually
+  // lives. `scanInstallScripts` was wired into the per-file SAST dispatch, but
+  // that loop iterates `files`, which comes from `fileContents` — and
+  // `package.json` is routed to depFileContents and fails `shouldScan()`, so
+  // the detector was never invoked by a real scan. Measured: 1 finding when
+  // called directly on its fixture, 0 through runScan.
+  //
+  // Fixed HERE rather than by admitting package.json into the SAST loop, which
+  // would put a manifest through all ~117 code detectors to satisfy one rule.
+  // A manifest detector belongs on the manifest path.
+  for (const [mp, mc] of Object.entries(depFileContents)) {
+    if (!/(?:^|\/)package\.json$/i.test(mp)) continue;
+    try { aF.push(...scanInstallScripts(mp, mc)); } catch (_) { /* never fail a scan on one manifest */ }
+  }
   const components=parseManifests(allFileContents);
   // R8 (PRD §5): OS packages from an extracted container image's package DBs
   // (dpkg/apk) — baked-in deps the Dockerfile never names. Feed the OSV/SBOM pipeline.

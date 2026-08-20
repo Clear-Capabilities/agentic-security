@@ -4,7 +4,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
 import { listFiles } from './util/glob.js';
-import { runFullScan, shouldScan } from './engine.js';
+import { runFullScan, shouldScan, isKubernetesManifest } from './engine.js';
 import { appendScanSnapshot } from './posture/security-trend.js';
 import { recover as recoverFixHistory } from './posture/fix-history.js';
 import { stampScan } from './posture/ruleset-version.js';
@@ -45,7 +45,10 @@ export async function readTree(root, { ignore = [] } = {}) {
     else if (/\.proto$/i.test(base)) depFileContents[rel] = content;
     else if (/\.(?:graphql|gql)$/i.test(base)) depFileContents[rel] = content;
     else if (/\.tf$/i.test(base)) depFileContents[rel] = content;
-    if (shouldScan(rel)) fileContents[rel] = content;
+    // A Kubernetes manifest is admitted on CONTENT, not on living under a
+    // directory named k8s/ — see isKubernetesManifest. Without this the
+    // k8s-admission detector is wired into the dispatch and never invoked by it.
+    if (shouldScan(rel) || isKubernetesManifest(rel, content)) fileContents[rel] = content;
     // Auxiliary files: .properties files are referenced by Java rules
     // (e.g. OWASP Benchmark's benchmark.properties resolves algorithm
     // aliases). They are not scannable for vulns themselves, but the
