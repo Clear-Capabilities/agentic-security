@@ -53,6 +53,7 @@ import { deadBranchRanges as _deadBranchRanges, isLineInDeadRange as _isLineInDe
 import { scanJavaDeserialization } from './sast/java-deserialization.js';
 import { blankComments } from './sast/_comment-strip.js';
 import { scanJwtExp } from './sast/jwt-exp.js';
+import { scanSiblingGuard } from './sast/sibling-guard.js';
 import { scanZipSlip } from './sast/zip-slip.js';
 import { scanFileUpload } from './sast/file-upload.js';
 import { scanHostHeader } from './sast/host-header.js';
@@ -1488,6 +1489,20 @@ export function dropGuardedFindings(findings, fileContents) {
     // sanitizer-dataflow pipeline, which records them in scan.suppressions.
     // Don't hard-drop them here or that bookkeeping is lost (smoke FP-3).
     if (f.isSanitized) return true;
+    // A finding whose CLAIM IS the guard's presence must survive guard
+    // recognition, or the evidence is read as the refutation.
+    //
+    // `sibling-guard-omission` reports "this file applies <guard> to X and not
+    // to its sibling Y". The window around Y therefore ALWAYS contains a
+    // containment guard — that is the whole point — so the generic check below
+    // dropped 100% of these findings, structurally, and no amount of detector
+    // work could ever have surfaced one. Found while writing the rule: it fired
+    // correctly in isolation and produced nothing through a scan, the same
+    // signature as the rate-limit.js defect.
+    //
+    // Scoped to this family rather than loosening the window heuristic, which
+    // is doing its job for every other CWE-22 emitter.
+    if (f.family === 'sibling-guard-omission') return true;
     const cwe = f.cwe || '';
     const isXss = cwe === 'CWE-79' && /reflected xss/i.test(f.vuln || '');
     if (cwe !== 'CWE-918' && cwe !== 'CWE-22' && !isXss) return true;
@@ -8110,7 +8125,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
       aF.push(...scanJNDI(p,cc));
       aF.push(...scanJavaDeserialization(p,cc));
       aF.push(...scanJwtExp(p,cc));
-      aF.push(...scanZipSlip(p,cc));
+      aF.push(...scanZipSlip(p,cc));aF.push(...scanSiblingGuard(p,cc));
       aF.push(...scanFileUpload(p,cc));
       aF.push(...scanHostHeader(p,cc));
       aF.push(...scanPythonSinks(p,cc));

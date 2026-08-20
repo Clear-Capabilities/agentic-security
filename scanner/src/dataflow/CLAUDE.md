@@ -45,6 +45,23 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
 
 ## Precision: centralized SSRF/path guard recognition
 
+> **A finding whose CLAIM is the guard's presence must be exempted, or the filter
+> reads the evidence as the refutation.** `dropGuardedFindings` drops a CWE-22
+> finding when the window around it contains a containment guard. For the
+> `sibling-guard-omission` family — "this function applies `checkRelativePath` to
+> `x.NewName` and not to its sibling `x.SrcName`" — that window ALWAYS contains a
+> guard, because the guard's presence on the sibling is the entire finding. The
+> filter therefore deleted 100% of that family, structurally, and no amount of
+> detector work could ever have surfaced one.
+>
+> Found while writing the rule: it fired correctly when called directly and
+> produced nothing through `runScan`, the same signature as the `rate-limit.js`
+> defect. The exemption is keyed on `f.family`, deliberately narrow — the window
+> heuristic is doing its job for every other CWE-22 emitter and was not loosened.
+> Any future rule that asserts "the control exists but is not applied HERE" needs
+> the same exemption, and should be added to that list rather than by widening the
+> guard patterns.
+
 `engine.js` `dropGuardedFindings(findings, fc)` runs after all detectors and drops a CWE-918 (SSRF) finding when the sink window has a host allow/deny check (deny/allow-list, `getHost`/`hostname` comparison, RFC1918/`169.254.169.254` prefix check, `ipaddress`/`getaddrinfo`/`ssrf-req-filter`), or a CWE-22 (path) finding when the window has a containment guard (`basename`/`GetFileName`/`secure_filename`/`send_from_directory`, or canonicalize+`startsWith`). It's the single source of truth so every emitter (regex, structural, per-language flow, PY-SAST, CSHARP, GO) is treated uniformly. The window is **comment-stripped** (a "no allow-list / 169.254…" vuln comment must not read as a guard). Opt out: `AGENTIC_SECURITY_NO_GUARD_RECOGNITION=1`.
 
 ## Entry points

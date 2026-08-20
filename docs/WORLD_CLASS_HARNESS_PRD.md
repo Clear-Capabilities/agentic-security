@@ -157,6 +157,28 @@ question is why they never match.
   a cheaper fix than a class with no rule at all, and it tests the fixture-first loop before
   spending it on the harder classes.
 
+  **First rule off this histogram, landed 2026-08-20 — and what it exposed.**
+  `sast/sibling-guard.js` (CWE-22, family `sibling-guard-omission`), written
+  fixture-first from `GHSA-95cv-r8x4-vh75`, one of the 12 `NO-FINDINGS` entries. The
+  shape: two fields of one request struct reach a filesystem rename and the project's
+  OWN guard is applied to only one. High precision by construction — the rule never
+  decides what a guard is, it observes one on a sibling, so every finding is
+  falsifiable from a single screen of code and carries the guard plus both field names.
+  On the real entry it fires at `server/handles/fsbatch.go:196` in `pre` and is silent
+  on that file in `post`. FP budget measured across 15 real Go packages: 17 findings,
+  **1.27%** of all findings, max 5 per repo.
+
+  **The structural discovery matters more than the rule.** It fired in isolation and
+  produced nothing through a scan — the `rate-limit.js` signature. Cause:
+  `dropGuardedFindings` drops a CWE-22 finding when its window contains a containment
+  guard, and for this family the window ALWAYS contains one, because the guard on the
+  sibling IS the finding. **The centralized precision filter could never have reported
+  this class, no matter how good the detector was**, and it plausibly contributes to the
+  12 `NO-FINDINGS` entries: findings produced, then silently dropped. Exemption keyed on
+  `family`, deliberately narrow; the window heuristic was not loosened. Recorded in
+  `dataflow/CLAUDE.md` — any future "the control exists but is not applied HERE" rule
+  needs the same treatment.
+
   Remaining: extend to all 72, and add per-stage attribution
   (`recon-entrypoint → detector → taint → posture-filter → proof-gate`) via
   `bench/realworld-recall/analyze-misses.mjs` to split `NO-FINDINGS` into "no rule" versus
