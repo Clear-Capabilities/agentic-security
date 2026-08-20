@@ -227,6 +227,42 @@ question is why they never match.
   and `CWE-918`, where detectors exist and mismatch — since that attacks the 51% with the
   cheapest possible loop.
 
+  **A rule was built against the 51% bucket, measured, and REVERTED. 2026-08-20.**
+  Recorded because the negative is the useful part, and because the next person will
+  otherwise have the same idea.
+
+  Target: `GHSA-45pq-889g-fcgh` (rclone, CWE-22), a textbook *bypassable* guard —
+  `if urlpath != "" && path.Clean(urlpath) != urlpath { reject }`. It does not work:
+  `Clean("../secret")` returns `"../secret"` unchanged, so a traversing path equals its
+  own cleaned form and passes the check written to stop it. The upstream fix swaps in
+  `iofs.ValidPath`. This is precisely why the entry sat in `WRONG-CWE` — to every
+  guard-aware path in the engine the file *looks* protected.
+
+  `sast/weak-path-guard.js` was written fixture-first, 9 tests green including
+  fix-discrimination and five refusal cases. Then measured against reality:
+
+  | | |
+  |---|---:|
+  | fires on the advisory it was derived from | **no** |
+  | findings across 72 real Go packages | **0** (of 11,607 total findings) |
+
+  **Why it misses its own source advisory:** in `restic.go` the guard is present but
+  `urlpath` is never used in a filesystem call *in that file* — the fix comment says so
+  outright ("The backends join the path with the Fs root"). The real flow is **cross-file**.
+  The rule requires the path use in the same function, and that requirement is what makes
+  it precise. Deleting it to manufacture a hit on this entry would be tuning to the
+  benchmark, which §2 lists as an explicit non-goal.
+
+  **Reverted rather than shipped dormant.** A rule with tests, zero real-world hits, and a
+  miss on its own source advisory is surface area without measured value — the same "ship
+  dead code" pattern `no-dead-modules.test.js` exists to prevent, and the same shape as the
+  `rate-limit.js` rule this session opened with.
+
+  **What it actually establishes:** the `Clean(x) != x` idiom is real, but its real-world
+  instances are cross-file, so this class needs **T3.2 (cross-file / stored taint)**, not a
+  pattern rule. That is a firmer result than a dormant detector, and it re-prioritises T3.2
+  above further Go pattern work for the CWE-22 family.
+
   **One more signal, worth its own line.** 4 entries produce the labelled CWE *on the
   advisory file* while the benchmark scores Go at **0/72 localized**. So those four fire on
   the right file with the right class and still miss the fix hunk by more than ±3 lines.
