@@ -360,9 +360,33 @@ bundles verifiable by public key, per-install HMAC run attestation, and
   held-out discipline exist; `calibration-drift.js` exists. Wire drift detection into the
   release gate so a miscalibrated confidence surface fails the build rather than being
   noticed later.
-- **F7.5 — Sandbox escape resistance.** Execution-proving runs attacker-influenced code.
-  The sandbox's isolation properties should be documented and adversarially tested, or the
-  feature is a liability. This gates F7.1 and must land first.
+- **F7.5 — Sandbox escape resistance. ~~Not started~~ → ALREADY SATISFIED; this entry was
+  wrong when written.** Verified 2026-08-20 by reading the code rather than assuming from
+  the feature list. `src/sandbox/` is a dedicated module with a 362-line `CLAUDE.md`, three
+  backends (`userspace`, `namespace`, `disabled`), functional rather than presence-based
+  backend detection, and **43 passing tests** across `test/sandbox-escape.test.js` and
+  `test/sandbox.test.js` — including adversarial cases for out-of-root writes, filesystem
+  re-binding, parent-environment leakage, outbound network, wall-clock overrun and fork
+  storms. `runConfined` never throws (documented there as the classic route to unconfined
+  execution). The proof evidence already records which `backend` produced an
+  `execution-proven` verdict, so a third party reading a bundle can see what confinement
+  actually held.
+
+  Two limitations are **already pinned by tests that assert the gap exists** rather than
+  hidden: the timeout bounds the direct child but does not reap the process tree, and fork-
+  storm containment is relative to ambient load, not absolute. Those are the honest residual
+  risk, and they are disclosed where a reader will find them.
+
+  **F7.1 is therefore NOT blocked**, and the phasing below is corrected accordingly. The
+  remaining work here is narrow and optional: surface the two known gaps in the
+  user-facing output of an execution-proven claim, not only in the module's tests.
+
+  *Why this entry was wrong:* it was written from the feature inventory in §1, which lists
+  what each feature *is*, not from `src/sandbox/`. That is the same error §8d of
+  `WORLD_CLASS_DETECTION_PRD.md` records — "the rules were written from this document's
+  root-cause prose, not from the vulnerable files" — reproduced in a document whose own
+  governing rule is *measure first*. Recorded rather than quietly edited, because a PRD that
+  hides its own misses is worth less than one that does not.
 
 **Exit gate.** Execution-proven coverage published per family with a stated ceiling;
 third-party verification demonstrated from a clean environment; calibration drift gates
@@ -485,7 +509,7 @@ mutation gate ≥ 30 cases.
 
 | Phase | Scope | Why here |
 |---|---|---|
-| **P0 — Cheap integrity** | F12.1, F12.2, F12.3, F11.4, F7.5 | Days of work; each closes a class of silent failure already observed. F7.5 gates F7.1. |
+| **P0 — Cheap integrity** | ~~F12.1, F12.2, F12.3, F11.4, F7.5~~ — **LANDED 2026-08-20** (`2aae26e`, `243e744`) | Each closed a class of silent failure already observed. F7.5 turned out to be already satisfied (see above) and blocks nothing. |
 | **P1 — Instrument the unmeasured** | F3.1–F3.2, F4.1, F5.1, F6.1, F11.1 | Nothing in P2 is trustworthy without these. Expect published numbers to *fall*. |
 | **P2 — The measured zeros** | F1.1–F1.4, F2.1–F2.2, F12.4 | Go + Ruby are a third of the population; the per-stage histogram decides the work. |
 | **P3 — Depth per feature** | F3.3–F3.5, F4.2–F4.5, F5.2–F5.5, F6.2–F6.5, F7.1–F7.4 | Capability, once each area can prove it moved. |
@@ -493,6 +517,33 @@ mutation gate ≥ 30 cases.
 
 **P0 and P1 block the rest.** Running P2–P4 against the current instruments would produce
 numbers nobody should trust, in either direction.
+
+### P0 outcome, recorded 2026-08-20
+
+Landed in `2aae26e` and `243e744`, both gated and on `origin/main` with hosted CI green:
+
+- **F12.1** — `test:ci-parity` (104 tests, 45 s) in the pre-push gate *before* the 4-minute
+  suite, plus a static invariant. The invariant's first draft was useless and **its own red
+  check proved it**: it matched the bare identifier, which the `finally` restore lines kept
+  present while the file was broken. It now requires an assignment.
+- **F12.2** — layer-recall gates on equality; improvement fails too, verified in both
+  directions against the real corpus.
+- **F12.3** — shared `bench/_lib/watchdog.mjs` with 5 tests; `bench/polyglot` skipped on
+  purpose (read-denied by the committed `.claude/settings.json`).
+- **F11.4** — detector liveness, which **found two dead detectors on its first run** and
+  both were then fixed: `k8s-admission` (the documented `kind:` content check had never been
+  implemented, so Kubernetes worked only for repos naming a directory `k8s/`) and
+  `install-script` (`package.json` fails `shouldScan`, so the rule was never invoked).
+  `KNOWN_DARK` is empty.
+
+**The k8s fix needed BOTH admission gates**, which is the durable lesson: `runScan` admits a
+file into `fileContents`, then `runFullScan` re-filters that same list with `shouldScan()`
+at `engine.js:7980`. With only the first opened, the predicate returned true, the walker
+collected the files, and the scan still returned zero.
+
+Blast radius measured rather than assumed: 16 of 1129 YAML files newly admitted (1.4%), all
+in fixtures/caches; self-scan unchanged at 427 — a drift that was **predicted and did not
+happen**.
 
 ---
 
