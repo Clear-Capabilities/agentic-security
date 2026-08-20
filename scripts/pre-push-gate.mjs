@@ -109,6 +109,24 @@ export const CHECKS = [
       'expectation file if the new shape is an intended, reviewed change to what ships.',
   },
   {
+    // PRD F12.1. On 2026-08-19 eight assertions passed locally AND passed this
+    // gate, then failed in hosted CI: the engine auto-disables deep mode under
+    // CI and emits a notice tagged `parser: 'IR-TAINT'`, which the tests counted
+    // as a real finding. Nothing local set CI=1, so nothing local could see it.
+    //
+    // This runs only the env-sensitive subset (every test touching the deep-mode
+    // env gate) rather than the whole suite a second time — measured 102 tests /
+    // ~35 s, against roughly 4 min to repeat everything. The static half of the
+    // same rule lives in test/ci-parity.test.js, which fails when a NEW test
+    // forgets the opt-in.
+    id: 'ci-parity',
+    title: 'Env-sensitive tests agree with hosted-CI conditions',
+    npmScript: 'test:ci-parity',
+    remedy: 'Run `npm run test:ci-parity` in scanner/. A test that enables deep mode '
+      + 'via AGENTIC_SECURITY_DEEP=1 must also set AGENTIC_SECURITY_DEEP_IN_CI=1, or it '
+      + 'silently measures the CI-skip notice instead of real findings.',
+  },
+  {
     id: 'test-suite',
     title: 'Full test suite passes',
     npmScript: 'test',

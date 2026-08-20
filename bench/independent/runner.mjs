@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { entryDir, entryComplete } from './fetch.mjs';
 
 import { snapshotTree, assertTreeUnchanged, disableStateWrites } from '../_lib/tree-integrity.mjs';
+import { withEntryTimeout, entryTimeoutMs } from '../_lib/watchdog.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const MANIFEST = path.join(HERE, 'manifest.json');
@@ -344,30 +345,14 @@ export async function scanDirRaw(dir) {
 // finishes with a non-zero exit rather than hanging forever. That is the
 // intended trade — a completed measurement naming its casualties beats an
 // indefinite hang naming nothing.
-const ENTRY_TIMEOUT_MS = Number(process.env.AGENTIC_SECURITY_BENCH_ENTRY_TIMEOUT_MS || 600_000);
-
-class EntryTimeout extends Error {}
-
-async function withEntryTimeout(promise, label) {
-  let timer;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new EntryTimeout(`entry scan exceeded ${ENTRY_TIMEOUT_MS}ms (${label})`)),
-          ENTRY_TIMEOUT_MS);
-        // Do not hold the event loop open on account of the watchdog itself.
-        if (typeof timer.unref === 'function') timer.unref();
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+// PRD F12.3. The watchdog itself, and the six-hour wedge that motivated it, are
+// documented in `../_lib/watchdog.mjs`; this harness was where it was measured.
+// A timed-out entry is UNSCORED — the catch in the scoring loop already reports
+// it by name and excludes it from every denominator, never as a miss.
+const ENTRY_TIMEOUT_MS = entryTimeoutMs();
 
 async function scanDir(dir) {
-  return (await withEntryTimeout(scanDirRaw(dir), dir)).findings;
+  return (await withEntryTimeout(scanDirRaw(dir), dir, ENTRY_TIMEOUT_MS)).findings;
 }
 
 async function main() {

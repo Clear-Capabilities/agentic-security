@@ -24,6 +24,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { disableStateWrites, purgeScanState } from '../_lib/tree-integrity.mjs';
 import { runScan } from '../../scanner/src/runScan.js';
+import { withEntryTimeout, entryTimeoutMs } from '../_lib/watchdog.mjs';
 import { matcherFor, matchingFindings } from '../../scanner/src/posture/corpus-match.js';
 import { layersOf, buildMatrix, summarize, taintMissedEntries, languageOf, LAYER_TAINT } from './attribute.mjs';
 
@@ -77,7 +78,12 @@ async function scoreEntry(entry) {
   process.env.AGENTIC_SECURITY_DEEP = '1';
   process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
   try {
-    const { scan } = await runScan(pre);
+    // PRD F12.3 — bound the whole-entry scan. Deep mode is forced on for every
+    // entry here, which is the slowest configuration the engine has, so this is
+    // exactly the harness where one pathological tree can wedge the run. The
+    // catch below already treats a throw as UNSCORED rather than as a miss, so
+    // a timeout lands in the right bucket without further plumbing.
+    const { scan } = await withEntryTimeout(runScan(pre), entry.id, entryTimeoutMs());
     const matched = matchingFindings(scan, manifest, matcherFor(manifest));
     return { id: entry.id, tier: entry.tier, language, detected: matched.length > 0, layers: layersOf(matched) };
   } catch (e) {
@@ -215,19 +221,50 @@ if (CHECK) {
     process.exit(1);
   }
   const base = JSON.parse(fs.readFileSync(BASELINE, 'utf8'));
+  // PRD F12.2 — this gate compares for EQUALITY, not against a floor.
+  //
+  // It used to fire only on `now < was`. That cannot distinguish "unchanged"
+  // from "much better", and the consequence was measured: taint attribution rose
+  // from 31 to 116 entries and the gate passed silently, exactly as a no-op run
+  // would, leaving docs/METRICS.md publishing 23/210 (11%) while the engine was
+  // actually at 116/215 (54%) — roughly 5x stale, for weeks, including a
+  // headline claim that kotlin was at 0% when it was at 48%.
+  //
+  // A floor-only gate is how a baseline rots: the only signal it can ever give
+  // is silence. Improvement now fails too, with a different message and a
+  // one-line remedy, so re-baselining is a deliberate act rather than something
+  // nobody was told to do.
   const regressions = [];
+  const improvements = [];
+  const compare = (label, was, now) => {
+    if (now < was) regressions.push(`${label}: taint recall ${was} → ${now}`);
+    else if (now > was) improvements.push(`${label}: taint recall ${was} → ${now}`);
+  };
   for (const [lang, was] of Object.entries(base.taintByLanguage || {})) {
-    const now = summary.taintByLanguage[lang] ?? 0;
-    if (now < was) regressions.push(`${lang}: taint recall ${was} → ${now}`);
+    compare(lang, was, summary.taintByLanguage[lang] ?? 0);
+  }
+  // A language that appears for the FIRST time is also drift the baseline must
+  // record — it is how "kotlin is at 0%" survived long after kotlin left zero.
+  for (const [lang, now] of Object.entries(summary.taintByLanguage || {})) {
+    if (!(lang in (base.taintByLanguage || {}))) improvements.push(`${lang}: newly non-zero (0 → ${now})`);
   }
   const baseDeep = (base.deepTier && base.deepTier.taintByLanguage) || {};
   for (const [lang, was] of Object.entries(baseDeep)) {
-    const now = (deepSummary.taintByLanguage && deepSummary.taintByLanguage[lang]) ?? 0;
-    if (now < was) regressions.push(`${lang} (deep-tier taint-shaped subset): taint recall ${was} → ${now}`);
+    compare(`${lang} (deep-tier taint-shaped subset)`,
+      was, (deepSummary.taintByLanguage && deepSummary.taintByLanguage[lang]) ?? 0);
   }
   if (regressions.length) {
-    console.error(`\n✖ taint-layer recall regressed:\n   ${regressions.join('\n   ')}`);
+    console.error(`\n✖ taint-layer recall REGRESSED:\n   ${regressions.join('\n   ')}`);
+    console.error('\n   Fix the regression. Re-baseline only if the loss is intended and understood.');
     process.exit(1);
   }
-  console.log('\n✓ no taint-layer recall regression (whole corpus or deep-tier subset)');
+  if (improvements.length) {
+    console.error(`\n✖ taint-layer recall IMPROVED beyond the baseline:\n   ${improvements.join('\n   ')}`);
+    console.error('\n   This is good news, and it still fails the gate on purpose: an unrecorded');
+    console.error('   improvement is how the published numbers went ~5x stale before. Run');
+    console.error('   `npm run bench:layer-recall:update-baseline`, then update the table in');
+    console.error('   docs/METRICS.md so the two agree.');
+    process.exit(1);
+  }
+  console.log('\n✓ taint-layer recall matches the baseline exactly (no regression, no unrecorded gain)');
 }

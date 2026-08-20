@@ -93,11 +93,17 @@ function loadEmitted(fp) {
 async function scanDir(dir) {
   const { runScan } = await import('../../scanner/src/runScan.js');
   const { normalizeFindings } = await import('../../scanner/src/report/index.js');
+  const { withEntryTimeout, entryTimeoutMs } = await import('../_lib/watchdog.mjs');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rw-recall-'));
   fs.cpSync(dir, tmp, { recursive: true, filter: (s) => !s.includes('.agentic-security') && !s.includes('node_modules') });
   process.env.AGENTIC_SECURITY_OFFLINE = '1';
   try {
-    const { scan } = await runScan(tmp);
+    // PRD F12.3 — bound the whole-entry scan. This harness scans real external
+    // checkouts, which is precisely where a single oversized tree can wedge the
+    // run indefinitely (measured on bench/independent: six hours, 0% CPU, 129
+    // entries never scored). A timeout propagates to the caller as an error, to
+    // be reported as unscored rather than as a recall miss.
+    const { scan } = await withEntryTimeout(runScan(tmp), path.basename(dir), entryTimeoutMs());
     return (normalizeFindings(scan) || []).map((f) => ({
       id: f.id || f.stableId, file: f.file, line: f.line, family: f.family, cwe: f.cwe, vuln: f.vuln,
       // Same fix as bench/independent-eval/runner.mjs: prefer the calibrated

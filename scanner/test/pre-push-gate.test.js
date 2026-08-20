@@ -105,10 +105,15 @@ test('pre-push-gate — no refs at all means nothing to push, so nothing to gate
 test('pre-push-gate — checks run cheapest-first: the guards and bundle integrity precede the suites', () => {
   // The two leading guards answer "is the thing I am about to spend two minutes
   // measuring actually the thing being pushed?", so they come before everything.
+  // `ci-parity` sits between package-contents and test-suite deliberately: it
+  // runs only the env-sensitive subset (~45 s) against the full suite's ~4 min,
+  // so under cheapest-first it precedes the suite. It exists because on
+  // 2026-08-19 eight assertions passed this gate and then failed in hosted CI —
+  // no local step set CI=1, so no local step could see it.
   const ids = orderedCheckIds();
   assert.deepEqual(ids, [
     'worktree-matches-push', 'push-blast-radius',
-    'bundle-integrity', 'package-contents', 'test-suite', 'corpus-gate', 'self-scan-gate',
+    'bundle-integrity', 'package-contents', 'ci-parity', 'test-suite', 'corpus-gate', 'self-scan-gate',
     'mutation-gate', 'layer-recall-gate',
   ]);
 });
