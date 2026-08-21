@@ -268,7 +268,50 @@ question is why they never match.
   the right file with the right class and still miss the fix hunk by more than ±3 lines.
   That is a LOCALIZATION gap, not a detection gap, and it is invisible in the headline —
   a reminder that `wide` and `localized` disagree for reasons worth reading, not averaging.
-- **F1.2 — Same for Ruby (32 entries).**
+- **F1.2 — Same for Ruby (32 entries). HISTOGRAM PUBLISHED 2026-08-21.** Same method as
+  F1.1, parameterised by language rather than copied: scan each advisory file inside its
+  package and again alone, then bucket.
+
+  | bucket | n | % |
+  |---|---:|---:|
+  | `NO-RULE` — silent alone AND in context | **19** | 59% |
+  | `WRONG-CWE` — fires, names a different weakness | 13 | 41% |
+  | `HIT` | 0 | 0% |
+  | **`SUPPRESSED-BY-CONTEXT`** | **0** | **0%** |
+
+  **The zero-suppression result replicates Go**, on a completely different engine path —
+  `parser-rb.js` is one of the hand-rolled parsers emitting flat dot-joined callees, not
+  Babel. Two languages, two independent measurements, nothing lost downstream in either.
+  The "the pipeline is eating findings" hypothesis is now dead twice over, and Ruby is
+  *more* rule-starved than Go (59% vs 43%).
+
+  **The largest cluster has a detector that does not cover the language.** Labelled CWEs:
+  `CWE-770` ×4 and `CWE-400` ×3 — **7 of 32 (22%)**, all `NO-RULE`. `sast/resource-exhaustion.js`
+  (T4.2, already landed for exactly this class) gates on `PY_RE` and `JS_RE` only.
+
+  Confirmed against the real code rather than inferred from the CWE label, because
+  recommending work from a label is the §8d mistake. `GHSA-33ph-fccm-39pj`
+  (websocket-driver) ships exactly this fix:
+
+  ```ruby
+  if payload.bytesize > @max_length
+    return fail(:too_large, 'WebSocket frame length too large')
+  end
+  ```
+
+  An added upper-bound check — precisely the absence that detector models, and its own
+  header states "a single `if (n > MAX)` silences it, and that is exactly the fix each of
+  these advisories shipped." So the fix-discrimination property holds for Ruby by
+  construction, as it does for Python and JS.
+
+  **Next, and cheap:** extend `resource-exhaustion.js` to Ruby, fixture-first from this
+  advisory. It is the single highest-yield Ruby item — the largest cluster, an existing
+  detector, and a verified shape match. After that, `CWE-22` ×4 and `CWE-79` ×4.
+
+  **Declared out of scope:** `CWE-416` ×3 and `CWE-401` ×1 are use-after-free and memory
+  leaks in C extensions. They are genuine vulnerabilities and not reachable by source
+  analysis of Ruby — counted here so the denominator stays honest rather than quietly
+  dropped.
 - **F1.3 — Fixture-first rebuild for whichever stage dominates.** Extract the real
   vulnerable snippet from each target entry into a fixture, write the rule until it fires
   on that fixture *and stays silent on the `post/` revision*, then re-measure. Per §8d,
