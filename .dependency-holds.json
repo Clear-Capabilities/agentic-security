@@ -8,6 +8,14 @@
       "reason": "Pinned as an ABI-matched pair with tree-sitter-wasms 0.1.13. Verified 2026-07-27 against web-tree-sitter 0.26.11: every prebuilt grammar in 0.1.13 fails to instantiate (empty Error from Language.load) because those grammars target the older grammar ABI, and 0.1.13 is the newest grammar bundle published. Upgrading the runtime alone therefore silently drops all six long-tail language grammars (rust, solidity, go, swift, cpp, c) with no error surfaced to the user. There is no matched pair to upgrade to; revisit when a grammar bundle built for the newer ABI is published. See scanner/src/ir/tree-sitter-loader.js.",
       "addedAt": "2026-07-28",
       "reviewBy": "2027-01-31"
+    },
+    {
+      "package": "@types/vscode",
+      "tree": "ide/vscode",
+      "heldAt": "1.125.0",
+      "reason": "@types/vscode is not an ordinary dependency: it declares the VS Code API SURFACE the extension compiles against, and VS Code's own guidance is that it tracks `engines.vscode` — the OLDEST host the extension supports — rather than the newest published types. Upgrading it to latest is actively harmful: it lets the extension compile against APIs that do not exist on the hosts it claims to support, and the failure surfaces as a runtime TypeError in a user's editor rather than a build error here. 'Latest' is therefore the wrong target for this package by construction, which is exactly the case this hold list exists for. FOLLOW-UP, deliberately not resolved inside a release: ide/vscode/package.json currently declares `engines.vscode: ^1.95.0` while holding `@types/vscode: ^1.125.0`, so the types are already AHEAD of the declared minimum host — the same latent mismatch, pointed the other way. Fixing it means either lowering the types to ^1.95.0 or raising `engines` to ^1.125.0, and the second narrows the supported host range, which is a product decision rather than a dependency bump. Re-test at the review date, decide the baseline deliberately, then align both fields.",
+      "addedAt": "2026-08-21",
+      "reviewBy": "2027-02-28"
     }
   ]
 }
