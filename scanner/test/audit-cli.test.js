@@ -22,8 +22,25 @@ function mkLog(entries) {
   return root;
 }
 
+// Budget for one CLI invocation. Deliberately generous, and here is the
+// measurement behind it: `bin/agentic-security-audit.js` takes ~2.7 s to start
+// and run on an IDLE machine. The previous budget was 4 s — a 1.5x margin — and
+// `npm test` runs many test files CONCURRENTLY, so under ordinary suite load
+// these spawns routinely exceeded it.
+//
+// The failure mode is what makes this worth fixing rather than retrying: it
+// surfaces as `status: null` with an empty stderr on a DIFFERENT test each run,
+// which reads as a real assertion failure and is not reproducible in isolation
+// (verified: three consecutive clean runs of this file alone). It blocked a
+// release push on 2026-08-21, on a commit whose entire diff was 8 lines of JSON
+// in a release-gate data file that cannot affect subprocess timing.
+//
+// 30 s is ~11x the idle cost — enough headroom for a loaded machine, still
+// bounded so a genuinely hung CLI fails the suite instead of stalling it.
+const CLI_TIMEOUT_MS = 30_000;
+
 function run(args, root) {
-  return cp.spawnSync('node', [BIN, ...args, '--root', root], { encoding: 'utf8', timeout: 4000 });
+  return cp.spawnSync('node', [BIN, ...args, '--root', root], { encoding: 'utf8', timeout: CLI_TIMEOUT_MS });
 }
 
 test('review prints filtered entries', () => {
