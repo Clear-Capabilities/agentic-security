@@ -118,7 +118,7 @@ export function loadFramework(scanRoot, id) {
 // `k8s-pod-privileged`; `nist-csf-2.json`/`hipaa-security-rule.json` map to
 // the compliance-side spelling `k8s-pod-security-privileged`, which no
 // detector ever emitted.
-const COMPLIANCE_FAMILY_ALIAS = {
+export const COMPLIANCE_FAMILY_ALIAS = {
   'auth-missing': ['broken-access-control', 'fastapi-missing-auth', 'springboot-missing-authz', 'laravel-missing-auth', 'quarkus-missing-authz'],
   'authz': ['broken-access-control', 'idor', 'springboot-missing-authz', 'quarkus-missing-authz'],
   'k8s-pod-security-privileged': ['k8s-pod-privileged'],
@@ -142,6 +142,35 @@ const COMPLIANCE_FAMILY_ALIAS = {
 // respectively — with no producer). Every control mapped to one of these
 // four reads `manual`/`engine-gap` rather than a false `present`, which is
 // the safe failure mode this whole mechanism exists to guarantee.
+
+// ...which the prose above ASSERTED but nothing enforced. A `family:` mapping
+// with no detector behind it produces an empty bucket, and an empty bucket was
+// reported as `✓ no open critical/high findings` — identical to a genuine pass.
+// So the four known-unevidenceable families read as fully evidenced controls,
+// which is precisely the outcome the comment says is avoided.
+//
+// Declaring them here makes the claim load-bearing: the evaluator consults this
+// map (see the `family:` branch below) and caps such a control at `partial`
+// with an explicit disclosure, and `test/compliance-mapping-liveness.test.js`
+// fails if an entry loses its reason, duplicates an alias, or stops being
+// referenced by any framework.
+//
+// Membership is deliberately conservative — these four come from the CMP-1
+// audit recorded above, each confirmed to be referenced only by CONSUMER
+// tables (attack-taxonomy, risk-dollars, threat-model classifiers) with no
+// producing detector. A family is NOT added here merely because a static grep
+// or a fixture sweep failed to observe it: several detectors pass `family`
+// positionally (`_shape(file, line, ruleId, vuln, fam, …)` in cloud-iam.js,
+// crypto-protocol.js, k8s-admission.js, ml-supply-chain.js), so neither source
+// enumerates the real vocabulary on its own. Wrongly declaring a live family a
+// gap would suppress a control that does work.
+export const COMPLIANCE_FAMILY_GAPS = {
+  'crypto-tls-version': 'crypto-protocol.js checks verify-disabled, not minimum TLS version; its own header names the never-implemented crypto-tls-min-version rule.',
+  'nosql-injection': 'referenced by cross-lang-meta.js chain detection, but no dedicated NoSQL-injection detector produces this family.',
+  'pii-exposure': 'referenced only by threat-model-auto.js as a classifier label; no detector emits it as a finding family.',
+  'data-exposure': 'referenced only as a Juliet benchmark answer-key label; no producer.',
+};
+
 export function evaluateFramework(scanRoot, fw, scan) {
   // CMP-2: last-scan.json (what this is actually handed in production) carries
   // findings across four separate channels — SAST (`findings`), secrets,
@@ -207,6 +236,18 @@ export function evaluateFramework(scanRoot, fw, scan) {
         // filtering is safe; findings with no subfamily set still count
         // (recall-preserving default — same precedent as relevance.js).
         const [fam, subfam] = m.slice('family:'.length).split(':');
+        // No detector produces this family, so its bucket is empty on EVERY
+        // scan. Reporting that as "no open findings" is a pass nothing checked
+        // — disclose it and cap the control at 'partial' (the same treatment a
+        // `rule:` mapping gets, and for the same reason: unverifiable is not
+        // evidence). Deliberately does NOT clear allCleared — the control is
+        // unknown, not failing.
+        if (COMPLIANCE_FAMILY_GAPS[fam]) {
+          obs.push(`⚠ ${fam}: no detector can evidence this control (engine-gap) — ${COMPLIANCE_FAMILY_GAPS[fam]}`);
+          anySignal = true;
+          hasUnverifiableMapping = true;
+          continue;
+        }
         const aliasFams = COMPLIANCE_FAMILY_ALIAS[fam] || [];
         const candidates = [fam, ...aliasFams].flatMap(k => families.get(k) || []);
         const scoped = subfam ? candidates.filter(f => !f.subfamily || f.subfamily === subfam) : candidates;
