@@ -106,6 +106,13 @@ function grabBody(text, openBraceIdx) {
   return null;
 }
 
+// Lock names come from a `\w+` capture so they cannot currently carry regex
+// metacharacters, but the guards below interpolate them into a pattern — escape
+// so that stays true if a capture ever widens.
+function escapeRe(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function findMissedUnlocks(fn, lang) {
   const out = [];
   const p = PATTERNS[lang];
@@ -128,10 +135,32 @@ function findMissedUnlocks(fn, lang) {
       // Lock+unlock both present, but check that the function has a defer/
       // try-finally guarantee. Go: `defer`; Java/Py: try/finally; otherwise
       // early-return-before-unlock is a risk.
+      //
+      // The guard must accept a QUALIFIED receiver (`defer s.mu.Unlock()`,
+      // `with self.lock:`), not just a bare one. A mutex is usually a struct
+      // field or an instance attribute, so the qualified form is the common
+      // shape in real code — and the acquire patterns already matched it
+      // (`\b(\w+)\.Lock\(\)` captures `mu` from `s.mu.Lock()`). While the two
+      // halves disagreed, correct idiomatic code was the most likely to be
+      // reported: on a 12-entry Go sample this was the bulk of the module's
+      // output.
+      //
+      // It is also matched PER LOCK NAME rather than body-wide. A function
+      // holding two mutexes must not have its second lock cleared just because
+      // the first one is deferred.
+      // The receiver prefix is `[\w$.]*` — a single character class — rather
+      // than the more obvious `(?:[\w$]+\.)*`, which nests a quantifier inside
+      // a quantifier and is exactly the catastrophic-backtracking shape this
+      // project's own CWE-1333 detector flags (it caught this line in the
+      // self-scan). `\b` before the lock name is what keeps the flat form
+      // precise: without it, `[\w$.]*` would happily match `s.not` and let
+      // `defer s.notmu.Unlock()` guard a lock named `mu`.
+      const q = escapeRe(name);
       const guarded =
-        (lang === 'go' && /defer\s+\w+\.Unlock\(\)/.test(fn.body)) ||
+        (lang === 'go' && new RegExp(`defer\\s+[\\w$.]*\\b${q}\\.Unlock\\(\\)`).test(fn.body)) ||
         (lang === 'java' && /try\s*\{[\s\S]*finally\s*\{[\s\S]*\.unlock\(\)/m.test(fn.body)) ||
-        (lang === 'py' && (/with\s+\w+:/.test(fn.body) || /try\s*:[\s\S]*finally\s*:[\s\S]*\.release\(\)/m.test(fn.body)));
+        (lang === 'py' && (new RegExp(`with\\s+[^:\\n]*\\b${q}\\b[^:\\n]*:`).test(fn.body)
+          || /try\s*:[\s\S]*finally\s*:[\s\S]*\.release\(\)/m.test(fn.body)));
       if (!guarded && /\breturn\b/.test(fn.body)) {
         out.push({
           kind: 'unguarded-lock',
@@ -229,6 +258,12 @@ export function scanConcurrency(fileContents) {
             ? `Concurrency: ${fn.name}() acquires ${bug.lock} but no matching unlock`
             : `Concurrency: ${fn.name}() can return without releasing ${bug.lock}`,
           severity: 'medium',
+          // CWE-667 Improper Locking. The findings schema in CLAUDE.md requires a
+          // cwe on every finding, and these carried none — so they arrived in
+          // every CWE-keyed report as null and could never match an advisory
+          // label. Found while auditing the wrong-CWE bucket: 57% of findings
+          // on a Go/Ruby sample had no cwe at all.
+          cwe: 'CWE-667',
           family: 'concurrency-bug',
           confidence: 0.5,
           remediation: bug.remediation || 'Release the lock on every exit path (defer / try-finally / context manager).',
@@ -241,6 +276,7 @@ export function scanConcurrency(fileContents) {
           line: bug.startLine,
           vuln: `Concurrency: fire-and-forget async call in ${fn.name}() — result not awaited`,
           severity: 'low',
+          cwe: 'CWE-703', // Improper Check or Handling of Exceptional Conditions
           family: 'concurrency-bug',
           confidence: 0.4,
           remediation: 'Await the promise / call .get() on the future / use asyncio.gather.',
@@ -255,6 +291,7 @@ export function scanConcurrency(fileContents) {
         line: bug.startLineA,
         vuln: `Concurrency: potential deadlock — ${bug.order}`,
         severity: 'high',
+        cwe: 'CWE-833', // Deadlock
         family: 'concurrency-bug',
         confidence: 0.4,
         remediation: 'Acquire locks in a consistent global order across all call sites.',
