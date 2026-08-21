@@ -304,9 +304,42 @@ question is why they never match.
   these advisories shipped." So the fix-discrimination property holds for Ruby by
   construction, as it does for Python and JS.
 
-  **Next, and cheap:** extend `resource-exhaustion.js` to Ruby, fixture-first from this
-  advisory. It is the single highest-yield Ruby item — the largest cluster, an existing
-  detector, and a verified shape match. After that, `CWE-22` ×4 and `CWE-79` ×4.
+  **ATTEMPTED AND REVERTED, 2026-08-21 — and the reason is a finding about the detector,
+  not about Ruby.** `resource-exhaustion.js` was extended to Ruby fixture-first
+  (`RB_SIZE_OPS`: sized reads, `Array.new`, `.times`, repetition). Measured through the
+  REAL pipeline:
+
+  | | |
+  |---|---:|
+  | Ruby entries scanned | 32 |
+  | resource findings | **5** |
+  | target `CWE-400`/`CWE-770` entries firing | **0 of 7** |
+
+  Four of the five landed in `examples/benchmark_*.rb`; the fifth on an unrelated CWE-22
+  entry. **The motivating advisory never fired**, in either revision.
+
+  **Root cause: the externality model is Python/JS-shaped.** `EXTERNAL_RE` is a fixed
+  vocabulary (`request`, `params`, `body`, `argv`, …) plus a Python decorator heuristic.
+  Ruby's signal in this advisory is `parse(chunk)` → `@frame.length` → `read(...)`: a
+  network chunk flowing into protocol state. Neither `chunk` nor `@frame` is expressible in
+  that vocabulary, and the module's own comment already concedes the limit ("EXTERNAL_RE's
+  fixed vocabulary cannot express it"). Extending the LANGUAGE without extending the
+  EXTERNALITY MODEL cannot work, and that is the real prerequisite for Ruby CWE-400/770.
+
+  **Two measurement errors made while establishing this, both worth recording** because
+  they nearly produced the opposite conclusion:
+
+  1. The first pass walked `.rb` files directly instead of calling `runScan`, bypassing the
+     ignore list. It reported 24 findings, **18 of them in `test/` and `spec/`** — code a
+     real scan never reads. A measurement must run the path the product runs.
+  2. A genuine FP class surfaced en route: `File.read(path)` and `io.read(n)` are identical
+     syntax with different meanings, and the first version conflated them, firing on
+     `File.read(File.join(__dir__, "…/data.json"))` because the PATH contained `data`.
+
+  **Still worth doing, in this order:** `CWE-22` ×4 and `CWE-79` ×4 (injection-shaped,
+  where the existing externality vocabulary does apply), and separately an evidence-driven
+  widening of the externality model — which would unlock the CWE-400/770 cluster for Ruby
+  and is a prerequisite, not a detail.
 
   **Declared out of scope:** `CWE-416` ×3 and `CWE-401` ×1 are use-after-free and memory
   leaks in C extensions. They are genuine vulnerabilities and not reachable by source
