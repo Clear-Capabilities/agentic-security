@@ -61,6 +61,21 @@ jobs:
           node-version: 'lts/*'
           registry-url: 'https://registry.npmjs.org'
 
+      # Trusted publishing (OIDC) needs npm >= 11.5.1, and `lts/*` can ship an
+      # older npm than that even on a current Node. Pinning the CLI is cheaper
+      # than pinning Node, and the failure it prevents is confusing: an npm
+      # without OIDC support ignores the id-token permission entirely and falls
+      # back to asking for interactive browser auth, which cannot succeed on a
+      # runner.
+      - name: Ensure npm supports trusted publishing (OIDC)
+        run: |
+          npm install -g npm@latest
+          node -e "const v=require('child_process').execSync('npm --version').toString().trim();
+            const [a,b,c]=v.split('.').map(Number);
+            const ok = a>11 || (a===11 && (b>5 || (b===5 && c>=1)));
+            console.log('npm', v, ok ? '(supports OIDC publishing)' : '(TOO OLD)');
+            if(!ok) process.exit(1);"
+
       - name: Install scanner dependencies
         working-directory: scanner
         run: npm ci
@@ -113,12 +128,31 @@ jobs:
       # a token. The gate is correct to refuse: unverifiable is not green. The
       # fix is to authenticate it, never --allow-unverified-ci, which would
       # publish without proving the commit is green at all.
-      - name: Publish with provenance
+      # PUBLISHED VIA TRUSTED PUBLISHING (OIDC) — deliberately no NODE_AUTH_TOKEN.
+      #
+      # npm authenticates this publish from the `id-token: write` OIDC claim
+      # above, matched against the trusted publisher configured on the package
+      # (organization, repository and THIS workflow filename). Nothing long-lived
+      # is stored in repository secrets, so there is no credential to rotate,
+      # leak, or scope wrongly — and npm can attest that the artifact was
+      # published by this repo running this workflow, rather than by whoever
+      # happened to hold a token.
+      #
+      # NODE_AUTH_TOKEN MUST STAY ABSENT. npm prefers an explicit token when one
+      # is present, which silently disables OIDC and reintroduces every failure
+      # mode this replaces. The history is worth keeping: v0.137.0 and v0.139.0
+      # failed at PUT with E404 (token lacked write access on the scoped
+      # package), and once that was fixed the next attempt fell back to
+      # interactive browser auth because npm requires a second factor for
+      # publishing a NEW version and a runner has no TTY. Trusted publishing
+      # removes the token from the path entirely rather than trying to find a
+      # token shape that satisfies both constraints — npm no longer issues
+      # 2FA-bypass tokens, so no such shape exists.
+      - name: Publish with provenance (trusted publishing, no token)
         if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
         working-directory: scanner
         env:
           GH_TOKEN: ${{ github.token }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public
 
       - name: Dry run — what would have been published
