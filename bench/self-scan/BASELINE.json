@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-19T04:36:15.791Z",
-  "commit": "735f4fca20ce4d778370e0c74bfb4f800ae13b10",
+  "generatedAt": "2026-08-21T21:53:14.608Z",
+  "commit": "4059ecab04604721faa198f460c1835e5461bbdb",
   "targets": {
     "hooks": {
       "total": 21,
@@ -35,7 +35,7 @@
       }
     },
     "scanner/src": {
-      "total": 427,
+      "total": 426,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -121,7 +121,7 @@
         "posture/mitigation-composite.js": 1,
         "posture/model-rescan.js": 1,
         "posture/network-policy-import.js": 3,
-        "posture/poc-generator.js": 3,
+        "posture/poc-generator.js": 2,
         "posture/policy-gate.js": 3,
         "posture/pr-augment.js": 1,
         "posture/pre-incident-archaeology.js": 1,

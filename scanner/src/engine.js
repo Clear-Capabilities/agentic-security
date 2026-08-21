@@ -35,6 +35,7 @@ import { scanLlmTradingAgent } from './sast/llm-trading-agent.js';
 import { scanMobileManifest } from './sast/mobile-manifest.js';
 import { scanQuarkusHardening } from './sast/quarkus-hardening.js';
 import { scanFastapiHardening } from './sast/fastapi-hardening.js';
+import { isDeterministic } from './posture/deterministic.js';
 import { scanAuthZ } from './sast/authz.js';
 import { scanApiBrokenAuthz } from './sast/api-authz.js';
 import { scanTerraform } from './sast/iac-terraform.js';
@@ -8019,6 +8020,23 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   try { _GLOBAL_JAVA_TAINTED_METHODS = _buildGlobalJavaTaintedMethodIndex(fileContents); }
   catch { _GLOBAL_JAVA_TAINTED_METHODS = new Set(); }
   const _perFileTimeoutMs = parseInt(process.env.AGENTIC_SECURITY_PER_FILE_TIMEOUT_MS || '10000', 10);
+// Per-file wall-clock timings are the slowest-first performance view, and they
+// leaked straight into --deterministic output: the `ms` values differ run to
+// run, and because the list is SORTED BY those values the ORDER differs too.
+// Zeroing the numbers alone would not have been enough — the sort key would
+// have become constant and the resulting order arbitrary. Under deterministic
+// mode the timings are therefore reported as 0 and ordered by filename, so the
+// field keeps its shape (consumers still see the same 20 entries) without
+// carrying anything a clock decided.
+function _deterministicFileTimings(timings) {
+  if (!isDeterministic()) return timings.sort((a, b) => b.ms - a.ms).slice(0, 20);
+  return timings
+    .slice()
+    .sort((a, b) => String(a.file).localeCompare(String(b.file)))
+    .slice(0, 20)
+    .map(t => ({ ...t, ms: 0 }));
+}
+
   const _fileTimings = [];
   let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0;
   const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f])) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];
@@ -9516,7 +9534,7 @@ async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, 
   // seen when only N-of-those-candidates were actually analyzed.
   // checkpoint.total intentionally keeps files.length — that field means the
   // full candidate set for resume bookkeeping, a different, correct meaning.
-  const _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_fileTimings.sort((a,b)=>b.ms-a.ms).slice(0,20),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length}};
+  const _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_deterministicFileTimings(_fileTimings),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length}};
   // R8: the scan completed, so the checkpoint has been fully consumed — remove
   // it. Anything that threw before this point leaves it in place to resume from.
   try { closeCheckpoint(_ckpt, { complete: true }); } catch (_) {}

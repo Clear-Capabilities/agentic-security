@@ -7,6 +7,7 @@
 // SPDX 2.3 schema reference:  https://spdx.github.io/spdx-spec/v2.3/
 
 import * as crypto from 'node:crypto';
+import { isDeterministic } from './deterministic.js';
 
 function _purl(c) {
   if (c.purl) return c.purl;
@@ -21,10 +22,39 @@ function _bomRef(c) {
   return `${c.ecosystem || 'pkg'}:${c.name}@${c.version}`;
 }
 
+// CycloneDX `serialNumber` and SPDX `documentNamespace` are both required to
+// identify a document, and both were minted with crypto.randomUUID() — so two
+// scans of identical input produced different bytes, and `--deterministic` did
+// not actually make an SBOM reproducible. An attestation over an SBOM is only
+// meaningful if the SBOM can be regenerated and compared.
+//
+// Under --deterministic the identifier is derived from the document's own
+// content instead of randomness. That preserves what the identifier is FOR:
+// different content still yields a different id, while identical content
+// yields an identical one — the standard reproducible-build treatment. Outside
+// deterministic mode the random UUID is unchanged, so ordinary scans keep
+// per-run-unique document ids.
+function _stableUuidFrom(seed) {
+  const h = crypto.createHash('sha256').update(String(seed)).digest('hex');
+  // Shape the digest as a v4-looking UUID: the version/variant nibbles are set
+  // so consumers that validate the format still accept it.
+  return [
+    h.slice(0, 8),
+    h.slice(8, 12),
+    `4${h.slice(13, 16)}`,
+    `${((parseInt(h[16], 16) & 0x3) | 0x8).toString(16)}${h.slice(17, 20)}`,
+    h.slice(20, 32),
+  ].join('-');
+}
+
+function _documentUuid(seed) {
+  return isDeterministic() ? _stableUuidFrom(seed) : crypto.randomUUID();
+}
+
 export function toCycloneDX(scan, meta = {}) {
   const components = scan.components || [];
   const supplyChain = (scan.supplyChain || []).filter(s => s.type === 'vulnerable_dep');
-  const serialNumber = `urn:uuid:${crypto.randomUUID()}`;
+  const serialNumber = `urn:uuid:${_documentUuid(JSON.stringify(components.map(_bomRef)))}`;
 
   const cdxComponents = components.map(c => ({
     type: 'library',
@@ -36,8 +66,12 @@ export function toCycloneDX(scan, meta = {}) {
     ...(c.scope ? { scope: c.scope === 'dev' ? 'optional' : 'required' } : {}),
   }));
 
-  const vulnerabilities = supplyChain.map(s => ({
-    'bom-ref': `${_bomRef({ ecosystem: s.ecosystem, name: s.name, version: s.version })}#${s.osvId || s.advisory || crypto.randomUUID()}`,
+  const vulnerabilities = supplyChain.map((s, i) => ({
+    // The last-resort id was crypto.randomUUID(), which reintroduced
+    // per-run drift for any advisory carrying neither an osvId nor an
+    // advisory string. Index within the (already deterministically sorted)
+    // supplyChain array identifies it just as well and is reproducible.
+    'bom-ref': `${_bomRef({ ecosystem: s.ecosystem, name: s.name, version: s.version })}#${s.osvId || s.advisory || `unidentified-${i}`}`,
     id: s.osvId || (s.cveAliases || [])[0] || s.advisory,
     source: { name: 'OSV.dev', url: `https://osv.dev/vulnerability/${s.osvId || ''}` },
     references: (s.cveAliases || []).map(cve => ({ id: cve, source: { name: 'NVD' } })),
@@ -72,7 +106,7 @@ export function toCycloneDX(scan, meta = {}) {
 export function toSPDX(scan, meta = {}) {
   const components = scan.components || [];
   const supplyChain = (scan.supplyChain || []).filter(s => s.type === 'vulnerable_dep');
-  const docNamespace = `https://agentic-security.local/spdx/${crypto.randomUUID()}`;
+  const docNamespace = `https://agentic-security.local/spdx/${_documentUuid(JSON.stringify(components.map(_bomRef)))}`;
   const ts = meta.startedAt || new Date().toISOString();
 
   const packages = components.map((c, i) => ({

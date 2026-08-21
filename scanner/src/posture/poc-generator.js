@@ -23,7 +23,23 @@
 //   - Per-language template variants beyond the primary host language.
 // Those land in P1.2.
 
+import * as crypto from 'node:crypto';
 import { CWE_TO_FAMILY, FAMILY_TO_PRIMARY_CWE } from './poc-cwe-map.js';
+
+// The XSS marker was `Math.random()`, evaluated at GENERATION time, so the
+// same finding produced a different PoC on every scan and `--deterministic`
+// could not make the JSON report byte-identical. (The XXE sentinel further
+// down also calls Math.random(), but that call is literal text inside the
+// EMITTED PoC — it runs when the PoC runs, so the artifact is already stable.
+// Leave it alone.)
+//
+// Derived from the finding instead: still distinct per finding, which is what
+// the marker is for — a token that will not collide with content already in
+// the response — but now reproducible.
+function _stableToken(f, n = 6) {
+  const seed = String((f && (f.stableId || f.id)) || `${f && f.file}:${f && f.line}`);
+  return crypto.createHash('sha256').update(seed).digest('hex').slice(0, n);
+}
 
 // ─── Template selectors ─────────────────────────────────────────────────────
 //
@@ -64,7 +80,7 @@ const TEMPLATES = [
     kind: 'http-payload',
     render: (f, ctx) => _httpPocNode(ctx, {
       header: 'Demonstrates reflected XSS by checking the script payload appears unencoded.',
-      payload: `"><script>__POC_XSS_${Math.random().toString(36).slice(2, 8)}</script>`,
+      payload: `"><script>__POC_XSS_${_stableToken(f)}</script>`,
       expect: 'response body contains the literal <script> payload (proves no HTML encoding)',
     }),
   },
