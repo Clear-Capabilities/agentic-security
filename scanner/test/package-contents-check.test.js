@@ -13,6 +13,7 @@ import {
   globToRegExp,
   pathsMatchingPattern,
   evaluatePackageContents,
+  packEntryOf,
 } from '../../scripts/package-contents-check.mjs';
 
 const EXPECTED = {
@@ -202,4 +203,51 @@ test('package-contents — independent violations are all reported, not just the
   assert.ok(r.errors.some(e => /removed: dist/.test(e)));
   assert.ok(r.errors.some(e => /Required file\(s\) missing/.test(e)));
   assert.ok(r.errors.some(e => /forbidden pattern/.test(e)));
+});
+
+// ─── npm's pack JSON changed shape between majors ───────────────────────────
+//
+// This broke the gate in CI on a release that had nothing to do with packaging:
+// the workflow installs a current npm for OIDC publishing, that resolved to
+// npm 12, and the JSON still PARSED — so the only symptom was "no files array"
+// from a check that worked the day before.
+//
+// Both shapes are pinned here because the inner object is identical between
+// them (verified against npm 11.13.0 and npm 12.0.2: same keys, same
+// {path,size,mode} file entries). Only the wrapper moved.
+test('packEntryOf reads npm 11 shape — an array of pack results', () => {
+  const parsed = [{ name: 'pkg', version: '1.0.0', files: [{ path: 'a.js', size: 1, mode: 420 }] }];
+  const entry = packEntryOf(parsed);
+  assert.equal(entry.name, 'pkg');
+  assert.equal(entry.files.length, 1);
+});
+
+test('packEntryOf reads npm 12 shape — an object keyed by package name', () => {
+  const parsed = {
+    '@clear-capabilities/agentic-security-scanner': {
+      name: '@clear-capabilities/agentic-security-scanner',
+      version: '0.139.1',
+      files: [{ path: 'CHANGELOG.md', size: 255770, mode: 420 }],
+    },
+  };
+  const entry = packEntryOf(parsed);
+  assert.equal(entry.version, '0.139.1');
+  assert.equal(entry.files[0].path, 'CHANGELOG.md');
+});
+
+test('packEntryOf refuses a multi-package object rather than guessing', () => {
+  // A single-package pack yields exactly one entry. More than one means npm is
+  // packing something this check does not model, and silently taking the first
+  // would report on the wrong package — a gate quietly measuring the wrong
+  // artifact is worse than one that fails.
+  assert.equal(packEntryOf({ a: { files: [] }, b: { files: [] } }), null);
+});
+
+test('packEntryOf returns null for shapes it does not understand', () => {
+  // Null propagates to `manifestError`, and an unrunnable check is a FAILURE,
+  // never a skip — so a third shape in some future npm fails loudly here
+  // instead of being read as "nothing to check".
+  for (const bad of [null, undefined, 'string', 42, []]) {
+    assert.equal(packEntryOf(bad), null, `expected null for ${JSON.stringify(bad)}`);
+  }
 });
