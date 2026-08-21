@@ -9,6 +9,46 @@
 > make the history less accurate, not more.
 
 
+## 0.139.1 — The same scanner, published with provenance
+
+**The shipped artifact is functionally identical to 0.139.0.** Only two commits
+separate them, and neither is in the published package: a test-harness timeout
+(`test/` does not ship) and a dependency hold (`.dependency-holds.json` does not
+ship). Nothing about how the scanner behaves has changed.
+
+This release exists for one reason: **0.139.0 was published without a provenance
+attestation.** It went out from a maintainer's laptop because the CI token
+lacked write access on the scoped package, so every tag-triggered publish failed
+at `PUT` with `E404` — after having already signed provenance to the Sigstore
+transparency log. The token has been replaced and verified (a re-run now returns
+`E403 "cannot publish over the previously published versions"`, which is the
+registry authenticating the write and rejecting only the duplicate version), so
+this is the first release published by CI with `--provenance`.
+
+For a security scanner that argues its case on *provable, measurable,
+reproducible*, "you can cryptographically verify this artifact was built from
+this commit in this repository" is a product property rather than a formality.
+Provenance is signed at publish time and cannot be retrofitted, which is why it
+takes a version number rather than an amendment to the last one.
+
+Fixes carried along, neither user-visible:
+
+- **`test/audit-cli.test.js` budgeted 4 s for a CLI that takes ~2.7 s idle** — a
+  1.5× margin in a suite that runs files concurrently. It failed as `status:
+  null` on a *different* test each run, was unreproducible in isolation, and
+  blocked a release push on a commit whose entire diff was 8 lines of JSON.
+  Now 30 s (~11× idle), still bounded so a genuinely hung CLI fails rather than
+  stalls.
+- **`@types/vscode` is held rather than upgraded.** It declares the VS Code API
+  surface the extension compiles against and should track `engines.vscode` — the
+  *oldest* supported host — not the newest published types. Chasing latest lets
+  the extension compile against APIs absent from hosts it claims to support, and
+  that failure lands as a runtime `TypeError` in a user's editor. The hold
+  records a pre-existing mismatch (`engines ^1.95.0` vs types `^1.125.0`) for a
+  deliberate decision at review time, since narrowing the supported host range
+  is a product call, not a dependency bump.
+
+
 ## 0.139.0 — Two detectors that were dead, a confinement rule that was documented but unenforced, and a new Go rule
 
 Every defect in this release is the same shape: **a control that exists, is
