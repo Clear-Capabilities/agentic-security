@@ -9,6 +9,35 @@ const __require = createRequire(import.meta.url);
 const PKG_VERSION = __require('../package.json').version;
 import { signLastScan as _signLastScan, verifyLastScan as _verifyLastScanShared } from '../src/posture/integrity.js';
 import { runScan } from '../src/runScan.js';
+
+// Every command is dispatched as `process.exit(await cmdX(args))`, and
+// process.exit() does NOT flush an asynchronous stdout. stdout is asynchronous
+// whenever it is a PIPE — which is every `> file`, `| jq`, and CI capture — so
+// anything still buffered when the process exits is discarded at the pipe
+// boundary: 64 KiB on macOS and Linux.
+//
+// That silently truncated `scan --format sarif` mid-token for any project
+// large enough to matter, i.e. the primary CI integration path, while still
+// exiting with a normal status. The consumer sees a JSON parse error with no
+// connection to its cause, or ingests a partial finding set.
+//
+// fs.writeSync(1, …) hands the bytes to the OS before returning, so a later
+// exit cannot lose them. A non-blocking pipe can still short-write or raise
+// EAGAIN, hence the loop — a partial write that is not retried is the same
+// truncation bug wearing a different hat.
+function writeStdout(s) {
+  const buf = Buffer.from(String(s), 'utf8');
+  let off = 0;
+  while (off < buf.length) {
+    try {
+      off += fs.writeSync(1, buf, off, buf.length - off);
+    } catch (e) {
+      if (e.code === 'EAGAIN') continue;   // pipe full; the reader will drain it
+      if (e.code === 'EPIPE') return;      // reader closed (`| head`) — not our error
+      throw e;
+    }
+  }
+}
 import { toJSON, toMarkdown, toSARIF, toSTIX, toCSV, toJUnit, toCLI, toCLIByProfile, toShipVerdict, toProTable, toHTML, toSummary, toVex, exitCodeFor, normalizeFindings } from '../src/report/index.js';
 import { toCycloneDX, toSPDX } from '../src/posture/sbom.js';
 import { toPBOM } from '../src/sast/pipeline.js';
@@ -679,7 +708,7 @@ async function cmdScan(args) {
   }
 
   if (output) await fsp.writeFile(output, body);
-  else process.stdout.write(body + '\n');
+  else writeStdout(body + '\n');
 
   // Persist last scan for /security-fix and /security-report
   const { isSafeStateDir: _isSafeStateDir, stateWritesEnabled: _writesOnScan } = await import('../src/posture/state-dir.js');
@@ -1251,7 +1280,7 @@ async function cmdHarness(args) {
     body += `\n\nHarnesses discovered: ${present.join(', ')}${includeHome ? ' (project + ~/)' : ' (project only)'}\n`;
   }
   if (args.flags.output) await fsp.writeFile(args.flags.output, body);
-  else process.stdout.write(body + '\n');
+  else writeStdout(body + '\n');
   return exitCodeFor(scan);
 }
 
@@ -1746,7 +1775,7 @@ async function cmdCompliance(args) {
 
   if (args.flags.list) {
     const fws = listFrameworks(scanRoot);
-    if (fmt === 'json') { console.log(JSON.stringify(fws, null, 2)); return 0; }
+    if (fmt === 'json') { writeStdout(JSON.stringify(fws, null, 2) + '\n'); return 0; }
     for (const f of fws) console.log(`  ${f.id.padEnd(20)} ${f.name}  [${f.source}]`);
     return 0;
   }
@@ -1780,7 +1809,7 @@ async function cmdCompliance(args) {
 
   const gapsOnly = !!args.flags.gap;
   if (fmt === 'json') {
-    console.log(JSON.stringify(gapsOnly ? { ...r, controls: r.controls.filter(c => c.bucket === 'gap') } : r, null, 2));
+    writeStdout(JSON.stringify(gapsOnly ? { ...r, controls: r.controls.filter(c => c.bucket === 'gap') } : r, null, 2) + '\n');
   } else if (fmt === 'md') {
     console.log(fs.readFileSync(statePath(scanRoot, 'privacy-framework.md'), 'utf8'));
   } else {
@@ -2018,7 +2047,7 @@ async function cmdFix(args) {
 
   // Default mode: print the canonical template (back-compat — security-fixer subagent applies it).
   if (!isPreview && !isApply) {
-    console.log(JSON.stringify(f, null, 2));
+    writeStdout(JSON.stringify(f, null, 2) + '\n');
     if (f.fix?.code) { console.log('\n--- suggested patch ---\n'); console.log(f.fix.code); }
     console.log('\nUse --preview to see a diff, or --apply to apply directly.');
     return 0;
@@ -2247,7 +2276,7 @@ async function main() {
         const { analyzeTranscript, formatCacheReport } = await import('../src/posture/cache-economics.js');
         const projectDir = path.resolve(args.flags.root || process.env.CLAUDE_PROJECT_DIR || process.cwd());
         const result = analyzeTranscript({ transcriptPath: args.flags.transcript, projectDir });
-        if (args.flags.json) console.log(JSON.stringify(result, null, 2));
+        if (args.flags.json) writeStdout(JSON.stringify(result, null, 2) + '\n');
         else console.log(formatCacheReport(result));
         process.exit(0);
       }
@@ -2291,7 +2320,7 @@ async function main() {
         });
         if (args.flags.json) {
           // Stringify Set/etc. safely.
-          console.log(JSON.stringify(r, null, 2));
+          writeStdout(JSON.stringify(r, null, 2) + '\n');
         } else if (!r.ok) {
           console.error(`cve-watch: ${r.reason || 'failed'}`);
         }
@@ -2307,7 +2336,7 @@ async function main() {
         const headRef = args.flags.head || args.flags.h || 'HEAD';
         if (!baseRef) { console.error('pr-delta: --base <ref> is required'); process.exit(2); }
         const delta = await computePrDelta(path.resolve(root), { baseRef, headRef });
-        if (args.flags.json) console.log(JSON.stringify(delta, null, 2));
+        if (args.flags.json) writeStdout(JSON.stringify(delta, null, 2) + '\n');
         else console.log(renderPrDeltaText(delta));
         // Exit non-zero if any critical/high introduced (useful as CI gate).
         const i = delta.summary?.introduced || {};
@@ -2359,7 +2388,7 @@ async function main() {
         const repo = args.flags.repo;
         if (!repo) { console.error('leaderboard-row: --repo <owner/name> is required'); process.exit(2); }
         const row = leaderboardRowFor({ scanRoot: path.resolve(root), repo });
-        console.log(JSON.stringify(row, null, 2));
+        writeStdout(JSON.stringify(row, null, 2) + '\n');
         process.exit(0);
       }
       case 'history': {
@@ -2372,7 +2401,7 @@ async function main() {
           since:    args.flags.since    || '6.months',
           interval: args.flags.interval || '1.month',
         });
-        if (args.flags.json) console.log(JSON.stringify(r, null, 2));
+        if (args.flags.json) writeStdout(JSON.stringify(r, null, 2) + '\n');
         else if (r.error) console.error(`history: ${r.error}`);
         else {
           console.log(`Scanned ${r.refs.length} refs.`);
@@ -2408,7 +2437,7 @@ async function main() {
           ? (Array.isArray(args.flags.remove) ? args.flags.remove : [args.flags.remove])
           : [];
         const r = await runWhatIf(path.resolve(root), { overlays, remove });
-        if (args.flags.json) console.log(JSON.stringify(r, null, 2));
+        if (args.flags.json) writeStdout(JSON.stringify(r, null, 2) + '\n');
         else {
           console.log(`baseline: ${r.baselineFindings} findings`);
           console.log(`what-if:  ${r.whatIfFindings} findings (delta ${r.delta >= 0 ? '+' : ''}${r.delta})`);
