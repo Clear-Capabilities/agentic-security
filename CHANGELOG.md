@@ -9,6 +9,79 @@
 > make the history less accurate, not more.
 
 
+## 0.140.0 — Five shipped bugs, found by measuring instead of reading
+
+Every fix here is a defect that was live in 0.139.1. None came from the feature
+backlog; all five came from measuring the engine against real code and taking
+failing signals seriously instead of explaining them away.
+
+### `scan --format sarif` produced INVALID SARIF in CI
+
+The CLI dispatches every command as `process.exit(await cmdX(args))`, and
+`process.exit()` does not flush an asynchronous stdout. stdout is asynchronous
+exactly when it is a pipe — every `> results.sarif`, `| jq`, and CI capture — so
+output was discarded at the 64 KiB pipe boundary, mid-token, with a normal exit
+status. On one directory that was 65,536 bytes emitted of 390,177: roughly 83%
+of the document silently dropped.
+
+**If you upload SARIF to code scanning, this affected you on any project large
+enough to matter.** A TTY and a file both flush synchronously, which is why it
+looked fine by hand and broke in automation.
+
+### LLM01 — Prompt Injection — could never fail
+
+Detectors emit the finding family as `<family>-<rule-slug>`
+(`prompt-injection-http-user-input-in-llm-`), while the compliance evaluator
+resolved `family:prompt-injection` as an exact key. It matched nothing, so the
+control reported as evidenced no matter what the scan found. The first control
+of the OWASP LLM Top 10 was structurally incapable of failing, along with ASVS
+V5.1 and NIST AI 600-1 MG-3.2-005.
+
+Two further compliance defects in the same matching code: an empty family
+bucket rendered as `✓ no open critical/high findings`, so two controls (ASVS
+V7.1, NIST Privacy CT.DP-P1) read `present` on every scan of every project; and
+a first attempt at fixing that wrongly declared four live families
+unevidenceable, degrading 15 working controls. Both directions are now gated —
+a control with no possible evidence cannot read `present`, and a family with a
+producer cannot be declared a gap.
+
+### `--deterministic` did not produce deterministic output
+
+Four of ten emitted formats differed run to run: CycloneDX/SPDX document ids and
+a CycloneDX bom-ref fallback from `crypto.randomUUID()`, a PoC marker from
+`Math.random()`, and per-file wall-clock timings (which also determined the
+sort ORDER, so blanking the values alone would not have been enough).
+
+**An attestation over an SBOM was therefore unverifiable** — the point of
+signing an artifact is that someone can regenerate and compare it.
+
+### 62% of concurrency findings on Go were false positives
+
+The lock guard matched a bare receiver (`defer mu.Unlock()`) but not a qualified
+one (`defer s.mu.Unlock()`), which is how a mutex held as a struct field is
+always written. The acquire pattern always matched the qualified form, so the
+two halves of the rule had disagreed since it was written — and the most
+idiomatic CORRECT code was the most likely to be reported. Measured: 170 of 273
+findings on a Go sample were false positives. Those findings also carried no
+CWE, so they were invisible to every CWE-keyed report.
+
+### New gates
+
+- `test/stdout-flush.test.js` — spawns the real CLI through a real pipe
+- `test/format-determinism.test.js` — every emitted format, byte-compared
+- `test/compliance-mapping-liveness.test.js` — both vacuous-pass directions
+- `test/concurrency-cwe.test.js` — per-lock guard discrimination
+- `bench/family-producers/OBSERVED.json` — 213 families observed across 331
+  real scan roots, recorded explicitly as a LOWER BOUND
+
+### Scope
+
+The world-class-harness PRD is **partially delivered**. F10.5 (determinism as a
+published property) is complete. F10.2 is half done — the enforcement half
+landed; the measurement half needs detectors to declare their families, because
+this release proved no textual search can enumerate them. Roughly 35 PRD items
+remain, several blocked on design decisions rather than implementation.
+
 ## 0.139.1 — The same scanner, published with provenance
 
 **The shipped artifact is functionally identical to 0.139.0.** Only two commits

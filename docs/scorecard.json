@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.139.1",
-    "bundleSha256": "6644269053578a17693b6dbb13795c1195ddf4faf6816063d8fb5e33c78bdbae",
-    "commit": "faa8a52393b519b781bb3717bded36c220f93b06",
+    "engineVersion": "0.140.0",
+    "bundleSha256": "620a1eb0d565f6495bd1ffd7240c7399d6b3c49b43354fc6f7d787a5a827d392",
+    "commit": "2b4b9bbf587c06dcd86cbe26e8943fb6ce200eb1",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-21T04:35:09.062Z"
+    "generatedAt": "2026-08-21T22:27:24.656Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -574,7 +574,7 @@
         }
       },
       "scanner/src": {
-        "total": 427,
+        "total": 426,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -660,7 +660,7 @@
           "posture/mitigation-composite.js": 1,
           "posture/model-rescan.js": 1,
           "posture/network-policy-import.js": 3,
-          "posture/poc-generator.js": 3,
+          "posture/poc-generator.js": 2,
           "posture/policy-gate.js": 3,
           "posture/pr-augment.js": 1,
           "posture/pre-incident-archaeology.js": 1,
