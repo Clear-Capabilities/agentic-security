@@ -9,6 +9,97 @@
 > make the history less accurate, not more.
 
 
+## 0.139.0 — Two detectors that were dead, a confinement rule that was documented but unenforced, and a new Go rule
+
+Every defect in this release is the same shape: **a control that exists, is
+documented, and does not hold end-to-end.** Unit tests passed in every case.
+Only checks that exercised the whole pipeline found them.
+
+### Two detectors produced nothing through a real scan
+
+Both worked when called directly and returned zero through `runScan` — the
+`rate-limit.js` signature (a rule that discarded 100% of its own findings,
+project-wide, from the day it was written).
+
+- **`k8s-admission`** — `_isIaCFile` admitted YAML as Kubernetes only when the
+  path contained a directory literally named `k8s/`. Its own comment claimed the
+  caller also checked for `kind:`; nothing ever did. **Manifests under
+  `deploy/`, `manifests/`, `charts/`, `kubernetes/` or the repository root were
+  invisible** — which is where most projects actually put them. Now admitted on
+  CONTENT (`apiVersion:` and `kind:` at line-start within the first 2 KB),
+  because the set of directory names people use is unbounded and the file
+  format is not.
+
+  The fix had to be applied at **both** admission gates: `runScan` admits a file
+  into `fileContents`, and then `runFullScan` independently re-filters that same
+  list with `shouldScan()`. With only the first opened, the predicate returned
+  true, the walker collected the files, and the scan still returned zero.
+
+- **`install-script`** — `package.json` is routed to `depFileContents` and fails
+  `shouldScan()`, so the per-file SAST loop never visited it and
+  `scanInstallScripts` was wired in but never invoked. Fixed on the manifest
+  path rather than by admitting `package.json` into the SAST loop, which would
+  push a manifest through all ~117 code detectors to satisfy one rule.
+
+Measured blast radius rather than assumed: 16 of 1129 YAML files in this tree
+are newly admitted (1.4%), all in fixtures and caches. Self-scan unchanged.
+
+### `_CONFINEMENT` rule 3 was documented and unimplemented
+
+`agents/_CONFINEMENT.md` states three refusal rules for every edit-capable agent
+and for the MCP write tools. The code enforced two. Rule 3 — *"a backup, lock, or
+build-output file (`*.bak`, `*.lock`, `dist/`, `build/`, `target/`)"* — was not
+enforced at all.
+
+The tests failed by **successfully writing**, which is what makes this more than
+pedantry: `scanner/dist/` holds the shipped bundle, which carries its own
+SHA-256 integrity sidecar precisely because its contents matter. `apply_fix`
+would have rewritten it and reported success. A contract an agent is instructed
+to follow, enforced less strictly than it claims, is worse than no contract.
+
+Build output is matched as a **path segment at any depth** — `packages/web/dist/`
+is the normal shape — while a source file *named* `dist.js` or `build.py` stays
+writable.
+
+### New: `sibling-guard-omission` (CWE-22, Go)
+
+From `GHSA-95cv-r8x4-vh75`: two fields of one request struct reach a filesystem
+rename and the project's **own** guard is applied to only one. High precision by
+construction — the rule never decides what a guard *is*, it observes one being
+applied to a sibling, so every finding reduces to "this file guards X and forgets
+Y", falsifiable from a single screen of code, with the guard name and both field
+names carried as evidence.
+
+Fires on the real advisory in `pre` and goes silent there in `post`. FP budget
+measured across 72 real Go packages: **1.12%** of findings, max 5 per repo.
+
+**It could never have shipped without a second fix.** `dropGuardedFindings` drops
+a CWE-22 finding when its window contains a containment guard — and for this
+family the window *always* contains one, because the guard on the sibling **is**
+the finding. The centralized precision filter was reading the evidence of the bug
+as proof of safety and would have deleted 100% of the family regardless of
+detector quality. Exemption keyed on `family`, deliberately narrow.
+
+A false positive in this rule was then found on real code (an `\n` escape read as
+a path separator) and fixed, with a regression test written from that code.
+
+### Instruments
+
+- **The shipped LSP is smoke-tested.** `bin/agentic-security-lsp.js` ships inside
+  the JetBrains and Neovim plugins and was referenced by no test, script or
+  workflow. It now runs as a subprocess speaking real LSP over stdio —
+  `initialize` → `didOpen` → `publishDiagnostics` → `shutdown` → `exit` — plus a
+  malformed-frame survival case.
+- **Per-language layer attribution** on the independent population, with taint's
+  attributable share stated outright each run.
+- **Gate integrity** (P0 of `docs/WORLD_CLASS_HARNESS_PRD.md`): CI-parity checks
+  so the local gate cannot disagree with hosted CI; layer-recall gates on
+  equality rather than a floor, so an unrecorded *improvement* fails too; a
+  shared per-entry bench watchdog; and a detector-liveness guard that requires
+  every rule fixture to produce a finding *through* `runScan`. That guard is what
+  found both dead detectors above.
+
+
 ## 0.138.0 — Findings come from code, not comments; container taint; a benchmark that can no longer hang
 
 ### Comment blindness, enforced instead of documented

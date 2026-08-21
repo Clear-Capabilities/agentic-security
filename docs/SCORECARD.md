@@ -9,13 +9,13 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.138.0 |
-| Bundle SHA-256 | `364b7c595d66a50e05895bc2496a02d775f15aadcfd65342186747ed1003e957` |
-| Commit | `735f4fca20ce4d778370e0c74bfb4f800ae13b10` |
+| Engine version | 0.139.0 |
+| Bundle SHA-256 | `6644269053578a17693b6dbb13795c1195ddf4faf6816063d8fb5e33c78bdbae` |
+| Commit | `262ed1473d22cadae7eafd262b95680022ada794` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-19T17:24:33.451Z |
+| Generated (UTC) | 2026-08-21T00:33:48.411Z |
 
 ## What these numbers are, and what they are not
 
