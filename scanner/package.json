@@ -127,5 +127,14 @@
     "test:ci-parity": "CI=true GITHUB_ACTIONS=true node --test test/backward-default.test.js test/ci-parity.test.js test/container-taint.test.js test/deep-taint.test.js test/engine-recall.test.js test/engine-reconnect.test.js test/gate-verdict-cache.test.js test/ignore-pragma.test.js test/java-taint-flow.test.js test/kt-taint-flow.test.js test/py-annotation-sources.test.js test/runscan-deep-option.test.js test/sanitizer-typed-flow.test.js"
   },
   "author": "Ross Young <ross@clearcapabilities.com>",
-  "license": "PolyForm-Internal-Use-1.0.0"
+  "license": "PolyForm-Internal-Use-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Clear-Capabilities/agentic-security.git",
+    "directory": "scanner"
+  },
+  "homepage": "https://github.com/Clear-Capabilities/agentic-security#readme",
+  "bugs": {
+    "url": "https://github.com/Clear-Capabilities/agentic-security/issues"
+  }
 }
