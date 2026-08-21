@@ -119,6 +119,10 @@ export function loadFramework(scanRoot, id) {
 // the compliance-side spelling `k8s-pod-security-privileged`, which no
 // detector ever emitted.
 export const COMPLIANCE_FAMILY_ALIAS = {
+  // ASVS spells it `sqli`; every detector emits `sql-injection` (or a
+  // language-prefixed variant, which the suffix rule below does NOT cover
+  // because the prefix is on the wrong end).
+  'sqli': ['sql-injection', 'dart-sql-injection', 'laravel-sql-injection'],
   'auth-missing': ['broken-access-control', 'fastapi-missing-auth', 'springboot-missing-authz', 'laravel-missing-auth', 'quarkus-missing-authz'],
   'authz': ['broken-access-control', 'idor', 'springboot-missing-authz', 'quarkus-missing-authz'],
   'k8s-pod-security-privileged': ['k8s-pod-privileged'],
@@ -265,7 +269,23 @@ export function evaluateFramework(scanRoot, fw, scan) {
           continue;
         }
         const aliasFams = COMPLIANCE_FAMILY_ALIAS[fam] || [];
-        const candidates = [fam, ...aliasFams].flatMap(k => families.get(k) || []);
+        // Several detectors emit the family as `<family>-<rule-slug>` — the
+        // observed vocabulary holds `prompt-injection-http-user-input-in-llm-`,
+        // `xpath-injection-query-built-via-string-c` and similar. This lookup
+        // used to be an exact Map key read, so `family:prompt-injection`
+        // matched none of them and the control read as evidenced whatever the
+        // scan found. That silenced LLM01 (Prompt Injection — the FIRST control
+        // of the OWASP LLM Top 10), ASVS V5.1 and NIST AI 600-1 MG-3.2-005.
+        //
+        // The `-` separator is load-bearing, not cosmetic: a bare substring or
+        // prefix test would let `nosql-injection` satisfy a `sql-injection`
+        // mapping, silently merging two different vulnerability classes. A test
+        // pins that boundary in the failing direction.
+        const bases = [fam, ...aliasFams];
+        const candidates = [];
+        for (const [key, list] of families) {
+          if (bases.some(b => key === b || key.startsWith(`${b}-`))) candidates.push(...list);
+        }
         const scoped = subfam ? candidates.filter(f => !f.subfamily || f.subfamily === subfam) : candidates;
         const open = scoped.filter(f => !f.intentSuppressed && !f.pastDecision && (f.severity === 'critical' || f.severity === 'high'));
         if (open.length) {

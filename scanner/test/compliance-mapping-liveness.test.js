@@ -145,3 +145,54 @@ test('a control on a real family with an open critical finding does not read "pr
   const [result] = evaluateFramework(HERE, fw, scan);
   assert.notEqual(result.status, 'present');
 });
+
+// Several detectors emit the family as `<family>-<rule-slug>` — the observed
+// vocabulary contains `prompt-injection-http-user-input-in-llm-`,
+// `xpath-injection-query-built-via-string-c` and similar. The evaluator looked
+// the mapped name up as an exact Map key, so `family:prompt-injection` matched
+// none of them.
+//
+// That silenced LLM01 — Prompt Injection, the first control of the OWASP LLM
+// Top 10 — along with ASVS V5.1 and NIST AI 600-1 MG-3.2-005. Each read as
+// evidenced no matter what the scan found.
+test('a rule-slug-suffixed family satisfies the base family mapping', () => {
+  const fw = {
+    name: 'test-framework',
+    controls: [{ id: 'LLM01', summary: 'prompt injection', mapsTo: ['family:prompt-injection'] }],
+  };
+  const scan = {
+    findings: [{ family: 'prompt-injection-http-user-input-in-llm-', severity: 'critical', file: 'a.js', line: 1 }],
+    secrets: [], logicVulns: [], supplyChain: [],
+  };
+  const [result] = evaluateFramework(HERE, fw, scan);
+  assert.notEqual(result.status, 'present', 'an open critical prompt-injection finding must reach this control');
+});
+
+test('the suffix match requires a separator, so nosql-injection is not sql-injection', () => {
+  // The boundary that keeps prefix resolution honest. `nosql-injection` must
+  // never satisfy a `family:sql-injection` mapping — it is a different class,
+  // and a substring match would silently merge them.
+  const fw = {
+    name: 'test-framework',
+    controls: [{ id: 'V5.1', summary: 'sql injection', mapsTo: ['family:sql-injection'] }],
+  };
+  const scan = {
+    findings: [{ family: 'nosql-injection', severity: 'critical', file: 'a.js', line: 1 }],
+    secrets: [], logicVulns: [], supplyChain: [],
+  };
+  const [result] = evaluateFramework(HERE, fw, scan);
+  assert.equal(result.status, 'present', 'a nosql finding must not be counted against the sql-injection control');
+});
+
+test('the compliance spelling `sqli` reaches the sql-injection detectors', () => {
+  const fw = {
+    name: 'test-framework',
+    controls: [{ id: 'V5.1', summary: 'sql injection', mapsTo: ['family:sqli'] }],
+  };
+  const scan = {
+    findings: [{ family: 'sql-injection', severity: 'critical', file: 'a.js', line: 1 }],
+    secrets: [], logicVulns: [], supplyChain: [],
+  };
+  const [result] = evaluateFramework(HERE, fw, scan);
+  assert.notEqual(result.status, 'present', 'family:sqli must resolve to the sql-injection family');
+});
