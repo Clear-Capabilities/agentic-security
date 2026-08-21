@@ -130,18 +130,23 @@ export const COMPLIANCE_FAMILY_ALIAS = {
 // real detector to alias, and `mcp-audit.js`/`sca/dep-confusion.js` were
 // fixed at the SOURCE (they now set `family` explicitly) rather than
 // aliased, since the finding constructors themselves were the root cause.
-// Four references have no matching detector at all — not a naming
-// mismatch, a genuine coverage gap that would need a new rule, out of
-// scope for an alias table: `crypto-tls-version` (crypto-protocol.js checks
-// verify-disabled, not minimum-TLS-version — the file's own header comment
-// even names the never-implemented `crypto-tls-min-version` rule id),
-// `nosql-injection` (referenced by cross-lang-meta.js's chain-detection
-// list, but no dedicated NoSQL-injection detector exists), `pii-exposure`
-// and `data-exposure` (both referenced only by consumers — threat-model-
-// auto.js's classifier and a Juliet-benchmark answer-key label
-// respectively — with no producer). Every control mapped to one of these
-// four reads `manual`/`engine-gap` rather than a false `present`, which is
-// the safe failure mode this whole mechanism exists to guarantee.
+//
+// CORRECTION (measured, not read): this comment used to claim four families
+// had no producer at all — `crypto-tls-version`, `nosql-injection`,
+// `pii-exposure` and `data-exposure` — and that every control mapped to one
+// of them therefore read `manual`/`engine-gap` rather than a false `present`.
+// BOTH halves were wrong. Nothing implemented the engine-gap treatment (see
+// COMPLIANCE_FAMILY_GAPS below), and all four families DO have producers:
+// a sweep of 331 real scan roots (bench/family-producers/OBSERVED.json)
+// observed crypto-tls-version, nosql-injection and data-exposure twice each,
+// and `pii-exposure` is emitted by dataflow/privacy-taint.js:129.
+//
+// The lesson is recorded because it cost a wrong commit: a family is not a
+// gap because a grep or a source comment says so. Several detectors pass
+// `family` POSITIONALLY (`_shape(file, line, ruleId, vuln, fam, …)` in
+// cloud-iam.js, crypto-protocol.js, k8s-admission.js, ml-supply-chain.js),
+// so no textual search enumerates the real vocabulary. Only running the
+// engine does.
 
 // ...which the prose above ASSERTED but nothing enforced. A `family:` mapping
 // with no detector behind it produces an empty bucket, and an empty bucket was
@@ -165,10 +170,21 @@ export const COMPLIANCE_FAMILY_ALIAS = {
 // enumerates the real vocabulary on its own. Wrongly declaring a live family a
 // gap would suppress a control that does work.
 export const COMPLIANCE_FAMILY_GAPS = {
-  'crypto-tls-version': 'crypto-protocol.js checks verify-disabled, not minimum TLS version; its own header names the never-implemented crypto-tls-min-version rule.',
-  'nosql-injection': 'referenced by cross-lang-meta.js chain detection, but no dedicated NoSQL-injection detector produces this family.',
-  'pii-exposure': 'referenced only by threat-model-auto.js as a classifier label; no detector emits it as a finding family.',
-  'data-exposure': 'referenced only as a Juliet benchmark answer-key label; no producer.',
+  // Deliberately EMPTY. Every family currently mapped by a bundled framework
+  // has a producer, verified against bench/family-producers/OBSERVED.json.
+  //
+  // The mechanism below is retained because the hazard is real and structural:
+  // the evaluator resolves `family:X` against a Map keyed by finding.family, so
+  // a mapping nothing produces yields an empty bucket, and an empty bucket used
+  // to render as `✓ no open critical/high findings` — a pass nothing checked.
+  // An entry here caps such a control at `partial` with an explicit disclosure
+  // instead.
+  //
+  // Adding an entry requires EVIDENCE that no detector emits the family — a
+  // sweep that does not observe it is a lower bound, not proof (SCA families
+  // need network access, and some rules need shapes no corpus entry has).
+  // Wrongly declaring a live family a gap silently suppresses a control that
+  // works, which is the mirror image of the bug this prevents.
 };
 
 export function evaluateFramework(scanRoot, fw, scan) {

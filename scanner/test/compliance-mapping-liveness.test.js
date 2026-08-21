@@ -5,14 +5,14 @@
 //
 // `COMPLIANCE_FAMILY_ALIAS` already fixes the cases where the compliance
 // spelling and the detector spelling differ. What had no mechanism was the
-// other case: a mapping with no detector behind it *at all*. Four were known
-// and documented in prose (`crypto-tls-version`, `nosql-injection`,
-// `pii-exposure`, `data-exposure`) but prose does not gate anything, and
-// nothing stopped a fifth from being added.
+// other case: a mapping with no detector behind it *at all*.
 //
-// These tests make the gap list load-bearing: a declared gap can never read
-// 'present', every gap must carry a reason, and a gap that stops being a gap
-// must be deleted rather than left to rot.
+// A source comment claimed four families were in that state. Measurement said
+// otherwise — all four have producers — so the gap registry is currently EMPTY
+// and these tests guard the mechanism rather than a list. The rules cut both
+// ways on purpose: a control with no possible evidence must never read
+// 'present', AND a family that has a producer must never be declared a gap,
+// because that silently caps a control that works.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -24,8 +24,17 @@ import {
   COMPLIANCE_FAMILY_ALIAS,
 } from '../src/posture/auditor-walkthrough.js';
 
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FRAMEWORK_DIR = path.join(HERE, '..', 'src', 'posture', 'compliance-frameworks');
+
+// Families a real scan was OBSERVED to emit. A lower bound, so it can prove a
+// family HAS a producer but never that it lacks one — which is exactly the
+// asymmetry the gap rules below rely on.
+const OBSERVED = JSON.parse(
+  fs.readFileSync(path.join(HERE, '..', '..', 'bench', 'family-producers', 'OBSERVED.json'), 'utf8'),
+).families;
+
 
 function mappedFamilies() {
   const out = new Map(); // family -> [{framework, control}]
@@ -67,23 +76,47 @@ test('every declared gap is actually referenced by some framework', () => {
   assert.deepEqual(orphaned, [], 'gap entries no framework references — delete them');
 });
 
-test('a control mapped only to an unevidenceable family never reads "present"', () => {
-  // The core property. Before this, an empty family bucket was reported as a
-  // clean check, so these controls read exactly like genuinely-passing ones.
-  const gapFamily = Object.keys(COMPLIANCE_FAMILY_GAPS)[0];
-  assert.ok(gapFamily, 'expected at least one declared gap to exercise');
+test('a declared gap must not name a family that has a producer', () => {
+  // The check that would have caught the mistake this file was first committed
+  // with: four families were declared gaps on the strength of a source comment,
+  // and every one of them turned out to be emitted by a real detector. A gap
+  // for a live family silently caps a control that actually works.
+  COMPLIANCE_FAMILY_GAPS['nosql-injection'] = 'temporarily declared to prove this check bites';
+  const wouldCatch = Object.keys(COMPLIANCE_FAMILY_GAPS).filter((f) => OBSERVED[f] != null);
+  delete COMPLIANCE_FAMILY_GAPS['nosql-injection'];
+  assert.deepEqual(wouldCatch, ['nosql-injection'], 'the check itself must detect a live family');
 
-  const fw = {
-    name: 'test-framework',
-    controls: [{ id: 'T1', summary: 'mapped only to a family nothing emits', mapsTo: [`family:${gapFamily}`] }],
-  };
-  const [result] = evaluateFramework(HERE, fw, { findings: [], secrets: [], logicVulns: [], supplyChain: [] });
-
-  assert.notEqual(result.status, 'present', `control on gap family "${gapFamily}" must not read as evidenced`);
-  assert.ok(
-    result.observations.some((o) => /no detector|cannot evidence|engine-gap/i.test(o)),
-    `observations must disclose the gap, got ${JSON.stringify(result.observations)}`,
+  const live = Object.keys(COMPLIANCE_FAMILY_GAPS).filter((f) => OBSERVED[f] != null);
+  assert.deepEqual(
+    live,
+    [],
+    'declared as unevidenceable but observed in a real scan — these are not gaps',
   );
+});
+
+test('an unevidenceable family caps its control below "present"', () => {
+  // COMPLIANCE_FAMILY_GAPS is currently empty, and an empty registry would make
+  // this assertion vacuous — so the MECHANISM is exercised with a synthetic
+  // family injected for the duration of the test. The hazard being guarded is
+  // structural (an empty family bucket rendering as a clean check), not tied to
+  // whichever names happen to be listed today.
+  const SYNTHETIC = '__test-family-no-detector-emits__';
+  COMPLIANCE_FAMILY_GAPS[SYNTHETIC] = 'injected by the test suite to exercise the disclosure path.';
+  try {
+    const fw = {
+      name: 'test-framework',
+      controls: [{ id: 'T1', summary: 'mapped only to a family nothing emits', mapsTo: [`family:${SYNTHETIC}`] }],
+    };
+    const [result] = evaluateFramework(HERE, fw, { findings: [], secrets: [], logicVulns: [], supplyChain: [] });
+
+    assert.notEqual(result.status, 'present', 'a control with no possible evidence must not read as evidenced');
+    assert.ok(
+      result.observations.some((o) => /no detector|cannot evidence|engine-gap/i.test(o)),
+      `observations must disclose the gap, got ${JSON.stringify(result.observations)}`,
+    );
+  } finally {
+    delete COMPLIANCE_FAMILY_GAPS[SYNTHETIC];
+  }
 });
 
 test('a control on a real family with a clean scan still reads "present"', () => {
