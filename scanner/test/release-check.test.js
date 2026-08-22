@@ -308,7 +308,7 @@ test('release-gate — attestation-self-check passes on a real compute/verify ro
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all seventeen checks in order', () => {
+test('release-gate — full run plans all eighteen checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
   // A Stage-6 correctness follow-up added attestation-self-check +
@@ -316,9 +316,12 @@ test('release-gate — full run plans all seventeen checks in order', () => {
   // verifier/checker (verifyRunAttestation, build-catalog.py --check) a
   // real, automated caller for the first time. The docs-overhaul PRD (P0
   // item 0.8) added doc-links — fast, gates dangling links in the
-  // user-facing markdown surface via check-doc-drift.mjs --gate.
+  // user-facing markdown surface via check-doc-drift.mjs --gate. PRD F7.4
+  // added calibration-holdout — fast, and it FAILS by default: an unverified
+  // confidence surface is not a calibrated one, so the absence of a held-out
+  // set is a failure waivable only by a dated entry that expires.
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 17);
+  assert.equal(ids.length, 18);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -340,12 +343,12 @@ test('release-gate — attestation-self-check and nist-catalog-freshness are reg
   assert.equal(nistFresh.slow, false);
 });
 
-test('release-gate — --fast skips only the slow gates, keeping 1-5, the two new fast checks, package-contents, and 9-10', () => {
+test('release-gate — --fast skips only the slow gates, keeping every fast check', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 6);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 11);
+  assert.equal(ids.length, 12);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
   // The four cheap correctness gates, the two new fast checks,
   // package-contents, both provenance gates, and the doc-link gate must
@@ -354,7 +357,7 @@ test('release-gate — --fast skips only the slow gates, keeping 1-5, the two ne
     'working-tree-clean', 'version-consistency', 'changelog-entry',
     'bundle-integrity', 'scorecard-freshness', 'attestation-self-check',
     'nist-catalog-freshness', 'package-contents',
-    'head-pushed', 'remote-ci-green', 'doc-links',
+    'head-pushed', 'remote-ci-green', 'doc-links', 'calibration-holdout',
   ]) {
     assert.ok(ids.includes(keep), `--fast must still run ${keep}`);
   }

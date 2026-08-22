@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-22T04:52:00.971Z",
-  "commit": "11fdb30475e554e4d1635250a2589ff8d63e386e",
+  "generatedAt": "2026-08-22T17:08:31.846Z",
+  "commit": "568d73db0de014510d5961732e7cb5d1bb9999b1",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,11 +18,12 @@
       }
     },
     "scripts": {
-      "total": 28,
+      "total": 29,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
         "calibration-expand.mjs": 2,
+        "calibration-holdout-check.mjs": 1,
         "detector-fuzz-runner.mjs": 3,
         "llm-cost-ceiling.py": 1,
         "nist-compliance/scan.py": 7,

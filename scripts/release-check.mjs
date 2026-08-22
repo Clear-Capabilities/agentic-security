@@ -58,6 +58,7 @@ import {
   gatherKeyParts, computeVerdictKey, loadCache, recordVerdict,
   evaluateCachedVerdict, renderProvenance, cachingDisabled,
 } from './gate-verdict-cache.mjs';
+import { runCalibrationHoldoutCheck } from './calibration-holdout-check.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -189,6 +190,14 @@ export const CHECKS = [
     slow: true,
     remedy: 'Run `npm run bench:layer-recall:check` in scanner/ and inspect which ' +
       "language's taint-layer recall regressed — see docs/METRICS.md.",
+  },
+  {
+    id: 'calibration-holdout',
+    title: 'Confidence surface verified on held-out data',
+    slow: false,
+    remedy: 'Add a held-out labelled set at bench/calibration-holdout/labels.jsonl, or ' +
+      'record a dated waiver in .calibration-waiver.json. An unverified confidence ' +
+      'surface is not a calibrated one.',
   },
   {
     id: 'head-pushed',
@@ -761,6 +770,11 @@ function main(argv) {
   evaluate('self-scan-gate', () => runNpmGate('bench:self-scan:check'));
   evaluate('mutation-gate', () => runNpmGate('bench:mutation:check'));
   evaluate('layer-recall-gate', () => runNpmGate('bench:layer-recall:check'));
+
+  evaluate('calibration-holdout', () => {
+    const r = runCalibrationHoldoutCheck(REPO);
+    return { ok: r.ok, errors: r.ok ? [] : [r.detail], warnings: r.warnings || [], detail: r.detail };
+  });
 
   evaluate('head-pushed', () =>
     evaluateHeadPushed({ headSha, remoteRefsContainingHead: remoteRefsContainingHead() }));

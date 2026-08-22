@@ -1,0 +1,7 @@
+{
+  "_comment": "PRD F7.4. The calibration-holdout release gate FAILS by default, because a confidence surface nobody measured is unverified, and unverified is not calibrated. This file waives that failure until a held-out labelled set exists. Same shape and same anti-rot rules as .dependency-holds.json: a reason nobody can evaluate, or a missing/expired reviewBy, fails the gate.",
+  "reason": "No held-out labelled set exists yet. calibration-seed.json is FITTING data (4 entries) and measuring ECE against it would reproduce exactly the error CLAUDE.md forbids — evaluating on the labels the table was fitted on. calibration-drift.js cannot substitute: it reads per-project triage feedback, which does not exist at release time in this repo, so it would return no-feedback-data and pass vacuously on every release. Producing a real held-out set means labelling scan output from projects outside the CVE corpus, which is corpus-construction work rather than a code change, and is tracked as PRD F7.4's remaining half. Until then the confidence numbers this engine reports are UNVERIFIED and this file says so out loud.",
+  "waivedAt": "2026-08-22",
+  "reviewBy": "2026-11-30",
+  "howToClear": "Write a labelled JSONL to bench/calibration-holdout/labels.jsonl with one {confidence, verdict, family, language} record per triaged finding, from projects NOT used to fit the calibration table. 30+ samples turns the gate from advisory into enforcing; below that the ECE is reported but not gated, because a tight threshold on a small sample fires on noise."
+}
