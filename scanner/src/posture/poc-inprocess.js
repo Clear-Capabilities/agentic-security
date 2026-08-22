@@ -38,7 +38,7 @@ const MARKER = 'PROVEN';
 // PoC observes the acceptance and records it. Both are execution-based — code
 // ran and behaved insecurely — but they are proven by different evidence, and
 // conflating them is how a template ends up asserting something it never saw.
-const SUPPORTED = new Set([
+export const SUPPORTED = new Set([
   'command-injection',
   'code-injection',
   'webhook-missing-signature-verification',
