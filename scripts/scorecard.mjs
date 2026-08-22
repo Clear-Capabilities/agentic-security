@@ -27,7 +27,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   buildScorecard,
   renderScorecardMarkdown,
@@ -84,6 +84,70 @@ async function main() {
     bundleSha256 = raw.trim().split(/\s+/)[0] || 'unbuilt';
   } catch { /* bundle not built — recorded as 'unbuilt', never fabricated */ }
 
+
+// PRD F12.6. Computed here rather than in the renderer so the document stays a
+// pure rendering of a measured model.
+function computeLimits() {
+  const out = {};
+
+  // 1. Proof coverage WITH its ceiling, measured over the CVE corpus scan that
+  //    this command already performs. `provable` alone is not publishable: the
+  //    harness is JavaScript-only, so most findings are unreachable rather than
+  //    merely unproven.
+  try {
+    const pc = readJsonIfPresent('bench/family-producers/PROOF-COVERAGE.json');
+    if (pc && pc.total) out.proof = pc;
+  } catch { /* absent -> section omitted rather than guessed */ }
+
+  // 2. Calibration status, read from the same waiver the release gate reads, so
+  //    the document cannot claim calibration the gate does not.
+  try {
+    const w = readJsonIfPresent('.calibration-waiver.json');
+    const holdout = readJsonIfPresent('bench/calibration-holdout/labels.jsonl');
+    if (holdout) out.calibration = 'Verified against a held-out labelled set.';
+    else if (w && w.reviewBy) {
+      out.calibration = `UNVERIFIED — no held-out labelled set exists. Waived until ${w.reviewBy}.`;
+    } else {
+      out.calibration = 'UNVERIFIED — no held-out labelled set and no waiver on record.';
+    }
+  } catch { /* leave unset */ }
+
+  // 3. Compliance control strength across the bundled frameworks.
+  try {
+    const dir = 'scanner/src/posture/compliance-frameworks';
+    let total = 0, notCodeTestable = 0, partiallyEvidenced = 0;
+    for (const f of fs.readdirSync(dir).filter(x => x.endsWith('.json'))) {
+      const fw = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      for (const c of fw.controls || []) {
+        total += 1;
+        if (c.codeTestable === 'no' || c.codeTestable === 'partial') notCodeTestable += 1;
+      }
+    }
+    // A control is weakly evidenced when every family it maps to is weak or
+    // unmeasured. Counted with the same module the evaluator uses.
+    partiallyEvidenced = countPartiallyEvidenced(dir);
+    if (total) out.compliance = { total, notCodeTestable, partiallyEvidenced };
+  } catch { /* leave unset */ }
+
+  return out;
+}
+
+function countPartiallyEvidenced(dir) {
+  try {
+    const out = cp.execFileSync(process.execPath, ['--input-type=module', '-e', `
+      import fs from 'node:fs'; import path from 'node:path';
+      const { isPartiallyEvidenced } = await import('${pathToFileURL(path.resolve('scanner/src/posture/coverage-strength.js')).href}');
+      let n = 0;
+      for (const f of fs.readdirSync(${JSON.stringify(dir)}).filter(x => x.endsWith('.json'))) {
+        const fw = JSON.parse(fs.readFileSync(path.join(${JSON.stringify(dir)}, f), 'utf8'));
+        for (const c of fw.controls || []) if (isPartiallyEvidenced(c)) n += 1;
+      }
+      process.stdout.write(String(n));
+    `], { encoding: 'utf8' });
+    return Number(out.trim()) || 0;
+  } catch { return 0; }
+}
+
   const model = buildScorecard({
     provenance: {
       engineVersion: pkg.version,
@@ -115,6 +179,10 @@ async function main() {
       // withdrawn. A number nobody regenerates is a number nobody corrects.
       independent: readJsonIfPresent('bench/independent/RESULT.json'),
     },
+    // PRD F12.6 — publish the LIMITS beside the rates. Each of these three is a
+    // caveat without which the corresponding number means something else than a
+    // reader would assume.
+    limits: computeLimits(),
   });
 
   const md = renderScorecardMarkdown(model);

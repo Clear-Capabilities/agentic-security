@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.140.0",
-    "bundleSha256": "620a1eb0d565f6495bd1ffd7240c7399d6b3c49b43354fc6f7d787a5a827d392",
-    "commit": "274b2d5db3a59f7dc0f3215f31ee71493043ff14",
-    "worktreeClean": true,
+    "bundleSha256": "58e27f5c8f403e873e1a2c9ccaf63c3681cc68a31450f3c6faaf0142df275197",
+    "commit": "74a694f13c3a0207369b1deddd5152c4f671539c",
+    "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-21T22:29:40.729Z"
+    "generatedAt": "2026-08-22T18:51:44.929Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -574,7 +574,7 @@
         }
       },
       "scanner/src": {
-        "total": 426,
+        "total": 427,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -624,6 +624,7 @@
           "posture/claude-authorship.js": 1,
           "posture/compliance-policy.js": 5,
           "posture/corpus-enroll.js": 2,
+          "posture/coverage-strength.js": 1,
           "posture/cross-repo-memory.js": 2,
           "posture/custom-rules.js": 2,
           "posture/cve-alert-daemon.js": 5,
@@ -740,11 +741,12 @@
         }
       },
       "scripts": {
-        "total": 28,
+        "total": 29,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
           "calibration-expand.mjs": 2,
+          "calibration-holdout-check.mjs": 1,
           "detector-fuzz-runner.mjs": 3,
           "llm-cost-ceiling.py": 1,
           "nist-compliance/scan.py": 7,

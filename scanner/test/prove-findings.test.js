@@ -621,3 +621,181 @@ test('synthesizes a PoC against the parameter that actually reaches the sink, no
   assert.equal(r.poc.paramSource, 'body', `expected the sink-adjacent 'body' param to be chosen; got ${JSON.stringify({ paramSource: r.poc.paramSource, paramKey: r.poc.paramKey })}`);
   assert.equal(r.poc.paramKey, 'name');
 });
+
+
+// ── LDAP injection (PRD F7.1) ───────────────────────────────────────────────
+//
+// Added because `ldap-injection` was the largest UNCLASSIFIED family in the
+// published proof-coverage breakdown. It earns a proof class for the same
+// reason SQL does: a decidable boundary that needs no running directory server.
+//
+// The distinction that makes it honest: an ESCAPING handler still puts the
+// sentinel in the filter — ldapjs's EqualityFilter and ldap_escape turn `(`,
+// `)` and `*` into \\28, \\29, \\2a — so a template matching the sentinel alone
+// would call a fixed handler vulnerable. The proof requires an UNESCAPED
+// metacharacter beside it, and the fixed fixture below is what holds that line.
+
+const LDAP_VULN = [
+  "const ldap = require('ldapjs');",
+  "const client = ldap.createClient({ url: 'ldap://localhost' });",
+  'module.exports.handler = function (req, res) {',
+  '  const user = req.query.user;',
+  "  client.search('ou=people,dc=x', { filter: '(uid=' + user + ')' }, function () { res.send('ok'); });",
+  '};',
+].join('\n');
+
+const LDAP_FIXED = [
+  "const ldap = require('ldapjs');",
+  "const client = ldap.createClient({ url: 'ldap://localhost' });",
+  "function esc(v) { return String(v).replace(/[\\\\()*\\0]/g, (c) => '\\\\' + c.charCodeAt(0).toString(16).padStart(2, '0')); }",
+  'module.exports.handler = function (req, res) {',
+  '  const user = esc(req.query.user);',
+  "  client.search('ou=people,dc=x', { filter: '(uid=' + user + ')' }, function () { res.send('ok'); });",
+  '};',
+].join('\n');
+
+const ldapi = (over = {}) => ({
+  family: 'ldap-injection', cwe: 'CWE-90', file: 'dir.js',
+  vuln: 'LDAP Injection (filter built from user input)', ...over,
+});
+
+test('an LDAP finding with no recognised client is refused, not guessed at', () => {
+  const r = synthesizeInProcessPoc(ldapi(), "module.exports.handler = function (req, res) { res.send(req.query.u); };");
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /no recognised LDAP client/);
+});
+
+test('the LDAP payload carries filter metacharacters, not just a sentinel', () => {
+  // A sentinel-only payload would be satisfied by an escaping handler, which is
+  // the failure mode this class has to avoid.
+  const r = synthesizeInProcessPoc(ldapi(), LDAP_VULN);
+  assert.equal(r.ok, true, r.reason);
+  assert.match(r.poc.code, /\*\)\(uid=/, 'payload must contain raw LDAP filter syntax');
+});
+
+test('LDAP injection proves in the sandbox, and an escaped filter does not', async (t) => {
+  if (!sandboxAvailable()) { t.skip('SKIPPED, NOT PASSED: no confinement backend'); return; }
+  const { proveFinding } = await import('../src/posture/execution-proof.js');
+  const { mergePocFiles } = await import('../src/posture/prove-findings.js');
+
+  const vulnPoc = synthesizeInProcessPoc(ldapi(), LDAP_VULN);
+  assert.equal(vulnPoc.ok, true, vulnPoc.reason);
+  const proven = await proveFinding({ ...ldapi(), poc: vulnPoc.poc },
+    { files: mergePocFiles(vulnPoc.poc, LDAP_VULN), ...BUDGET });
+  assert.equal(proven.proofTier, 'execution-proven', JSON.stringify(proven.proofEvidence));
+
+  // The escaped handler is still SYNTHESIZABLE — execution decides, not a
+  // source pattern. This direction is what catches a template matching the
+  // sentinel too loosely.
+  const fixedPoc = synthesizeInProcessPoc(ldapi(), LDAP_FIXED);
+  assert.equal(fixedPoc.ok, true, 'an escaping handler must still be attempted');
+  const fixed = await proveFinding({ ...ldapi(), poc: fixedPoc.poc },
+    { files: mergePocFiles(fixedPoc.poc, LDAP_FIXED), ...BUDGET });
+  assert.notEqual(fixed.proofTier, 'execution-proven',
+    'an escaped filter must never be reported as LDAP injection');
+  assert.equal(fixed.proofEvidence.ran, true, 'and the refusal must come from a RUN, not a skip');
+});
+
+
+// ── XXE (PRD F7.1) ──────────────────────────────────────────────────────────
+//
+// Provable in-process for the reason SSRF is NOT: the external entity points at
+// a LOCAL file the harness plants inside the sandbox, so no network is involved
+// and a failure can never be confinement talking.
+
+const XXE_VULN = [
+  "const libxmljs = require('libxmljs');",
+  'module.exports.handler = function (req, res) {',
+  '  const doc = libxmljs.parseXmlString(req.body.xml, { noent: true, dtdload: true });',
+  '  res.send(doc.toString());',
+  '};',
+].join('\n');
+
+const XXE_FIXED = [
+  "const libxmljs = require('libxmljs');",
+  'module.exports.handler = function (req, res) {',
+  '  const doc = libxmljs.parseXmlString(req.body.xml);',   // entity expansion off — the default
+  '  res.send(doc.toString());',
+  '};',
+].join('\n');
+
+const xxe = (over = {}) => ({
+  family: 'xxe', cwe: 'CWE-611', file: 'parse.js',
+  vuln: 'XXE (libxmljs parseXmlString)', ...over,
+});
+
+test('an XXE finding with no recognised XML parser is refused', () => {
+  const r = synthesizeInProcessPoc(xxe(), "module.exports.handler = function (req, res) { res.send(req.body.xml); };");
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /no recognised XML parser/);
+});
+
+test('the XXE proof keys on SENTINEL CONTENT, not on the entity name', () => {
+  // Matching the entity or the XML itself would be satisfied by a parser that
+  // never expanded anything — the sentinel string is only reachable by actually
+  // reading the planted file.
+  const r = synthesizeInProcessPoc(xxe(), XXE_VULN);
+  assert.equal(r.ok, true, r.reason);
+  assert.match(r.poc.code, /PROVEN_XXE_ENTITY_RESOLVED/);
+  assert.match(r.poc.code, /writeFileSync\("xxe-sentinel\.txt"/, 'the sentinel file must be planted by the PoC');
+});
+
+// The sandbox test below deliberately does NOT use a real XML library.
+//
+// Shipping a stub parser that resolves entities would prove the STUB, not the
+// application — the whole claim is about what the target's real parser does. And
+// no XML parser is in this repo's dependency tree, so there is nothing real to
+// exercise. Adding a native one for a single test is a poor trade.
+//
+// What IS worth testing in the sandbox is the DECISION BOUNDARY, which is the
+// part that was wrong in the LDAP class and would have reported an escaped
+// handler as exploited. So the fixture plays the role of the parser: one that
+// resolves `file://` entities, and one that does not. That verifies the marker
+// logic, the sentinel-content rule, and the negative direction end to end.
+//
+// It does NOT verify that any particular library is caught. That is stated here
+// rather than implied by a green test.
+const XXE_RESOLVING = [
+  "const fs = require('fs');",
+  // Tolerant require: the synthesizer recognises the parser by NAME, and no
+  // stub is shipped for this class on purpose — extraFiles would overwrite a
+  // real project's parser and break every genuine XXE proof. So the fixture
+  // must survive the module being absent here.
+  "let libxmljs; try { libxmljs = require('libxmljs'); } catch {}",
+  'module.exports.handler = function (req, res) {',
+  '  const xml = req.body.xml;',
+  '  // A parser that expands external entities: read the referenced file.',
+  '  const m = /SYSTEM "file:\\/\\/\\.\\/([^"]+)"/.exec(xml);',
+  '  let out = xml;',
+  '  if (m) { try { out = out.replace(/&x;/, fs.readFileSync(m[1], "utf8")); } catch {} }',
+  '  res.send(out);',
+  '};',
+].join('\n');
+
+const XXE_NON_RESOLVING = [
+  "let libxmljs; try { libxmljs = require('libxmljs'); } catch {}",
+  'module.exports.handler = function (req, res) {',
+  '  // Entity expansion disabled: the entity is returned unexpanded.',
+  '  res.send(String(req.body.xml));',
+  '};',
+].join('\n');
+
+test('the XXE harness proves entity resolution, and stays silent without it', async (t) => {
+  if (!sandboxAvailable()) { t.skip('SKIPPED, NOT PASSED: no confinement backend'); return; }
+  const { proveFinding } = await import('../src/posture/execution-proof.js');
+  const { mergePocFiles } = await import('../src/posture/prove-findings.js');
+
+  const vulnPoc = synthesizeInProcessPoc(xxe(), XXE_RESOLVING);
+  assert.equal(vulnPoc.ok, true, vulnPoc.reason);
+  const proven = await proveFinding({ ...xxe(), poc: vulnPoc.poc },
+    { files: mergePocFiles(vulnPoc.poc, XXE_RESOLVING), ...BUDGET });
+  assert.equal(proven.proofTier, 'execution-proven', JSON.stringify(proven.proofEvidence));
+
+  const safePoc = synthesizeInProcessPoc(xxe(), XXE_NON_RESOLVING);
+  assert.equal(safePoc.ok, true, 'a non-resolving parser must still be attempted');
+  const safe = await proveFinding({ ...xxe(), poc: safePoc.poc },
+    { files: mergePocFiles(safePoc.poc, XXE_NON_RESOLVING), ...BUDGET });
+  assert.notEqual(safe.proofTier, 'execution-proven',
+    'an unexpanded entity must never be reported as XXE');
+  assert.equal(safe.proofEvidence.ran, true, 'and the refusal must come from a RUN, not a skip');
+});

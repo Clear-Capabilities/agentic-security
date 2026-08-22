@@ -38,12 +38,28 @@ function cachePath(cveListKey) {
   return path.join(CACHE_DIR, h + '.json');
 }
 
+// PRD F3.4 — record how old the EPSS data actually is.
+//
+// EPSS scores decay in relevance: a probability computed months ago describes a
+// threat landscape that has moved. Unlike KEV, a stale EPSS score can err in
+// EITHER direction, so the age is reported rather than the value suppressed.
+let _epssMeta = { source: 'not-loaded', ageDays: null, stale: null };
+const EPSS_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+export function epssCacheMeta() { return { ..._epssMeta }; }
+
 function readCache(key) {
   const fp = cachePath(key);
   if (!fs.existsSync(fp)) return null;
   try {
     const stat = fs.statSync(fp);
-    if (Date.now() - stat.mtimeMs > TTL_MS) return null;
+    const age = Date.now() - stat.mtimeMs;
+    if (age > TTL_MS) return null;
+    _epssMeta = {
+      source: 'cache',
+      ageDays: Math.floor(age / 86400000),
+      stale: age > EPSS_STALE_AFTER_MS,
+      meaning: 'EPSS is a decaying probability; an old score describes a threat landscape that has moved.',
+    };
     return JSON.parse(fs.readFileSync(fp, 'utf8'));
   } catch { return null; }
 }

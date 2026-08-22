@@ -62,7 +62,11 @@ test('the three buckets partition the finding set exactly', () => {
   ];
   const cov = proofCoverage(findings);
   assert.equal(cov.total, findings.length);
-  assert.equal(cov.provable.n + cov.indeterminate.n + cov.unclassified.n, findings.length);
+  assert.equal(
+    cov.provable.n + cov.indeterminate.n + cov.unclassified.n + cov.ceiling.outOfScope.n,
+    findings.length,
+    'all FOUR buckets must partition the set — the ceiling bucket included',
+  );
 });
 
 test('every share carries its denominator', () => {
@@ -84,4 +88,69 @@ test('an empty finding set does not fabricate a rate', () => {
   const md = renderProofCoverage(proofCoverage([]));
   assert.match(md, /No findings/);
   assert.doesNotMatch(md, /100%|0%/, 'no percentage over an empty denominator');
+});
+
+// ── The stated ceiling (Feature 7 exit gate) ───────────────────────────────
+//
+// The in-process harness is JavaScript-only. Measured on the CVE corpus, 204 of
+// 280 findings are Python / Java / C# / PHP / Kotlin / Go / Ruby — so proof
+// coverage is 26% of ALL findings but 96% of the ones the harness can reach.
+// Publishing only the first understates the harness; only the second overstates
+// the product. Both, with denominators, or the number means whatever the reader
+// assumes.
+
+test('a non-JS finding is out-of-scope, NOT unclassified backlog', () => {
+  // The distinction that matters: backlog implies "awaiting work". A Python
+  // finding is not awaiting work on this harness — it is unreachable by it.
+  assert.equal(bucketOf({ family: 'sql-injection', file: 'app.py' }), 'out-of-scope');
+  assert.equal(bucketOf({ family: 'header-hardening', file: 'Main.java' }), 'out-of-scope');
+});
+
+test('language is decided BEFORE the proof class', () => {
+  // A Python SQL-injection finding must not read as provable however good the
+  // SQL class is. Checking the class first would report a ceiling case as a
+  // capability.
+  assert.equal(bucketOf({ family: 'sql-injection', file: 'a.py' }), 'out-of-scope');
+  assert.equal(bucketOf({ family: 'sql-injection', file: 'a.js' }), 'provable');
+});
+
+test('every JS flavour the harness loads counts as reachable', () => {
+  for (const f of ['a.js', 'a.cjs', 'a.mjs', 'a.jsx', 'a.ts', 'a.tsx']) {
+    assert.notEqual(bucketOf({ family: 'sql-injection', file: f }), 'out-of-scope', `${f} must be reachable`);
+  }
+});
+
+test('a finding with no file does NOT claim a ceiling', () => {
+  // Unknown is not the same as unreachable. Guessing here would inflate the
+  // ceiling and understate the backlog.
+  assert.notEqual(bucketOf({ family: 'header-hardening' }), 'out-of-scope');
+});
+
+test('provable is reported both over all findings and over reachable ones', () => {
+  const cov = proofCoverage([
+    { family: 'sql-injection', file: 'a.js' },
+    { family: 'sql-injection', file: 'b.py' },
+    { family: 'header-hardening', file: 'c.js' },
+  ]);
+  assert.deepEqual({ n: cov.provable.n, d: cov.provable.d }, { n: 1, d: 3 }, 'share of ALL findings');
+  assert.deepEqual(cov.provable.ofReachable, { n: 1, d: 2 }, 'share of REACHABLE findings');
+});
+
+test('the ceiling names the languages it excluded', () => {
+  const cov = proofCoverage([
+    { family: 'x', file: 'a.py' }, { family: 'x', file: 'b.py' }, { family: 'x', file: 'c.java' },
+  ]);
+  assert.deepEqual(cov.ceiling.outOfScope.byExtension, { '.py': 2, '.java': 1 });
+  assert.match(cov.ceiling.reason, /JavaScript/);
+});
+
+test('the rendered table states the ceiling and BOTH readings of the rate', () => {
+  const cov = proofCoverage([
+    { family: 'sql-injection', file: 'a.js' }, { family: 'x', file: 'b.py' },
+  ]);
+  const md = renderProofCoverage(cov);
+  assert.match(md, /Out of harness scope/);
+  assert.match(md, /Ceiling/);
+  assert.match(md, /1\/2 of ALL findings/);
+  assert.match(md, /1\/1 of the reachable/);
 });

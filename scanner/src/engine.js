@@ -6978,16 +6978,60 @@ async function _enrichWithEPSS(supplyChainResults){
 const _KEV_FEED_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 const _KEV_TTL_MS = 24 * 60 * 60 * 1000;
 
+// PRD F3.4 — a KEV catalog has no meaning without its age.
+//
+// The refresh TTL above only decides when to TRY the network. Every failure
+// path below falls back to `cached?.byCve` with NO age bound, so an offline
+// machine, a blocked egress rule or a CISA outage silently serves a catalog of
+// any age. A six-month-old catalog does not fail loudly — it quietly omits
+// every vulnerability added since, which UNDERSTATES risk. That is the worst
+// direction for this particular signal: KEV membership is used to escalate.
+//
+// The catalog is still used when stale (dropping it would understate risk even
+// harder), but its age is recorded and surfaced on the scan so a report can
+// state it, and `staleness` is a first-class value rather than an inference.
+const _KEV_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Populated by _loadKEVCatalog and read when the scan result is assembled.
+let _kevCatalogMeta = { source: 'not-loaded', fetchedAt: null, ageDays: null, stale: null, entries: 0 };
+export function kevCatalogMeta() { return { ..._kevCatalogMeta }; }
+
+function _setKevMeta(source, ts, entries) {
+  const ageMs = ts ? Date.now() - ts : null;
+  _kevCatalogMeta = {
+    source,
+    fetchedAt: ts ? new Date(ts).toISOString() : null,
+    ageDays: ageMs == null ? null : Math.floor(ageMs / 86400000),
+    stale: ageMs == null ? null : ageMs > _KEV_STALE_AFTER_MS,
+    entries: entries || 0,
+    meaning: 'KEV membership escalates severity. A stale catalog omits recently-added CVEs, so it understates risk rather than overstating it.',
+  };
+}
+
 async function _loadKEVCatalog(){
-  if (process.env.AGENTIC_SECURITY_OFFLINE === '1') return null;
+  if (process.env.AGENTIC_SECURITY_OFFLINE === '1') {
+    _setKevMeta('offline-skipped', null, 0);
+    return null;
+  }
   // Cached blob: { ts, byCve: { 'CVE-XXXX-YYYY': { dateAdded, ransomwareCampaign, vendor, product, vuln, action } } }
   const cached = _osvCacheGet('kev:catalog');
-  if (cached && cached.ts && (Date.now() - cached.ts < _KEV_TTL_MS)) return cached.byCve || null;
+  if (cached && cached.ts && (Date.now() - cached.ts < _KEV_TTL_MS)) {
+    _setKevMeta('cache-fresh', cached.ts, Object.keys(cached.byCve || {}).length);
+    return cached.byCve || null;
+  }
+  const fallback = () => {
+    if (cached && cached.byCve) {
+      _setKevMeta('cache-stale', cached.ts || null, Object.keys(cached.byCve).length);
+      return cached.byCve;
+    }
+    _setKevMeta('unavailable', null, 0);
+    return null;
+  };
   try {
     const res = await fetch(_KEV_FEED_URL, {
       headers: { 'User-Agent': 'agentic-security/0.1' },
     });
-    if (!res.ok) return cached?.byCve || null;
+    if (!res.ok) return fallback();
     const j = await res.json();
     const byCve = {};
     for (const v of (j.vulnerabilities || [])) {
@@ -7002,9 +7046,11 @@ async function _loadKEVCatalog(){
         dueDate: v.dueDate || null,
       };
     }
-    _osvCacheSet('kev:catalog', { ts: Date.now(), byCve });
+    const ts = Date.now();
+    _osvCacheSet('kev:catalog', { ts, byCve });
+    _setKevMeta('network', ts, Object.keys(byCve).length);
     return byCve;
-  } catch { return cached?.byCve || null; }
+  } catch { return fallback(); }
 }
 
 async function _enrichWithKEV(supplyChainResults){
@@ -9564,7 +9610,7 @@ function _deterministicFileTimings(timings) {
   // is the honest shape. Measured on the CVE corpus: 19% / 13% / 68%.
   let _proofCoverage = null;
   try { _proofCoverage = proofCoverage([...finalFindings, ...aLogic]); } catch { _proofCoverage = null; }
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

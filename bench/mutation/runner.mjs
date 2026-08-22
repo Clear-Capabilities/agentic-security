@@ -207,19 +207,91 @@ app.get('/s', (req, res) => {
   c.query(req.query.q);
 });`,
   },
+  // ── Go concurrency guard (PRD F12.5) ──────────────────────────────────────
+  //
+  // Encodes the defect fixed in a5ecb3b: the lock guard matched a BARE receiver
+  // (`defer mu.Unlock()`) but not a QUALIFIED one (`defer s.mu.Unlock()`), which
+  // is how a mutex held as a struct field is always written. 62% of this
+  // detector's findings on real Go were false positives against correct code.
+  //
+  // These belong in the mutation gate rather than only in a unit test because
+  // the failure was a NEAR-MISS discrimination failure — exactly what this gate
+  // scores. A rule that starts flagging correct code again fails here even if
+  // its unit tests are edited to match the new behaviour.
+  {
+    id: 'go-concurrency-bare-defer',
+    class: 'metamorphic',
+    dimension: 'detection',
+    file: 'svc.go',
+    parser: /^CONCURRENCY$/,
+    cwe: /CWE-667/,
+    expectDetected: false,
+    why: 'a bare `defer mu.Unlock()` releases on every path — no finding',
+    code: `func Get(k string) string {
+	mu.Lock()
+	defer mu.Unlock()
+	return d[k]
+}`,
+  },
+  {
+    id: 'go-concurrency-qualified-defer',
+    class: 'metamorphic',
+    dimension: 'detection',
+    file: 'svc.go',
+    parser: /^CONCURRENCY$/,
+    cwe: /CWE-667/,
+    expectDetected: false,
+    why: 'moving the mutex onto a struct field is the same program — still guarded',
+    code: `func (s *Store) Get(k string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data[k]
+}`,
+  },
+  {
+    id: 'go-concurrency-adversarial-other-lock',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'svc.go',
+    parser: /^CONCURRENCY$/,
+    cwe: /CWE-667/,
+    expectDetected: true,
+    why: 'the defer releases a DIFFERENT lock, so this one can leak — verdict must flip',
+    code: `func (s *Store) Move(k string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.other.Lock()
+	if k == "" {
+		return errEmpty
+	}
+	s.other.Unlock()
+	return nil
+}`,
+  },
 ];
 
 async function verdictFor(c, tmpRoot) {
   const dir = path.join(tmpRoot, c.id);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'app.js'), c.code);
+  // The filename was hardcoded to app.js, so this gate — the anti-overfitting
+  // control — could only ever cover JavaScript. Measured on the CVE corpus, 204
+  // of 280 findings are NOT JavaScript, so the check with the broadest mandate
+  // had the narrowest reach. A case may now name its own file; JS stays the
+  // default so every existing case is unchanged.
+  fs.writeFileSync(path.join(dir, c.file || 'app.js'), c.code);
   process.env.AGENTIC_SECURITY_DEEP = '1';
   process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
   try {
     const { scan } = await runScan(dir);
     const cweRe = c.cwe || DEFAULT_CWE;
+    // Default stays IR-TAINT: the original cases are all about whether the taint
+    // engine labels a flow sanitized. A case can opt into a different producer
+    // (`parser`) when it is testing a structural detector instead — without
+    // this, a non-taint case silently matches nothing and every verdict reads
+    // "not detected", which would look like a passing adversarial case.
+    const parserRe = c.parser || /^IR-TAINT$/;
     const hits = (scan.findings || []).filter(
-      f => f.parser === 'IR-TAINT' && cweRe.test(f.cwe || ''));
+      f => parserRe.test(f.parser || '') && cweRe.test(f.cwe || ''));
     return { detected: hits.length > 0, sanitized: hits.some(f => f.sanitized === true) };
   } finally {
     delete process.env.AGENTIC_SECURITY_DEEP;

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-22T17:08:31.846Z",
-  "commit": "568d73db0de014510d5961732e7cb5d1bb9999b1",
+  "generatedAt": "2026-08-22T19:33:18.703Z",
+  "commit": "74a694f13c3a0207369b1deddd5152c4f671539c",
   "targets": {
     "hooks": {
       "total": 21,
@@ -36,7 +36,7 @@
       }
     },
     "scanner/src": {
-      "total": 427,
+      "total": 426,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -95,7 +95,7 @@
         "posture/dep-add-guard.js": 8,
         "posture/deploy-platform.js": 1,
         "posture/deterministic.js": 3,
-        "posture/epss.js": 4,
+        "posture/epss.js": 3,
         "posture/evidence-bundle.js": 2,
         "posture/execution-proof.js": 1,
         "posture/exploitability-probability.js": 3,

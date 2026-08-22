@@ -428,6 +428,63 @@ export function renderScorecardMarkdown(m) {
   }
   L.push('Per-file counts are in `docs/scorecard.json`.');
   L.push('');
+  // PRD F12.6 — the honest scorecard publishes the LIMITS too, not only the
+  // rates. Three claims this project makes are only meaningful with their
+  // caveat attached, and each caveat was invisible before this section:
+  //   proof coverage  — "provable" means provable by a JAVASCRIPT-ONLY harness
+  //   calibration     — the confidence surface is currently UNVERIFIED
+  //   compliance      — most controls are backed by weak or unmeasured detectors
+  // Publishing a rate without its ceiling is how a number comes to mean
+  // whatever the reader assumes.
+  if (m.limits) {
+    L.push('## Stated limits — what these capabilities cannot do');
+    L.push('');
+    if (m.limits.proof) {
+      const pc = m.limits.proof;
+      L.push('### Execution proof coverage, with its ceiling');
+      L.push('');
+      L.push('| Bucket | Share of all findings |');
+      L.push('| --- | --- |');
+      L.push(`| Provable (a proof class exists) | ${pc.provable.n}/${pc.total} |`);
+      L.push(`| Declined on purpose, reason stated | ${pc.indeterminate.n}/${pc.total} |`);
+      L.push(`| No proof class yet (backlog) | ${pc.unclassified.n}/${pc.total} |`);
+      L.push(`| **Out of harness scope (not JavaScript)** | **${pc.outOfScope.n}/${pc.total}** |`);
+      L.push('');
+      L.push(`**The ceiling.** The in-process proof harness only loads JavaScript. Of ${pc.total} findings`);
+      L.push(`measured on the CVE corpus, ${pc.reachable.n} are reachable by it at all. Proof coverage is`);
+      L.push(`**${pc.provable.n}/${pc.total}** of ALL findings and **${pc.provable.n}/${pc.reachable.n}** of the reachable ones.`);
+      L.push('Both are given because they differ by a lot, and a reader shown only one will');
+      L.push('draw the wrong conclusion in whichever direction that one flatters.');
+      L.push('');
+      L.push('Adding more proof classes does not move the ceiling. A Python or Java finding is');
+      L.push('not backlog — it is unreachable by this harness at any effort.');
+      L.push('');
+    }
+    if (m.limits.calibration) {
+      L.push('### Confidence calibration');
+      L.push('');
+      L.push(`**${m.limits.calibration}**`);
+      L.push('');
+      L.push('Every finding carries a confidence number. That number is a claim about how');
+      L.push('often the engine is right, and it is only worth what the evidence behind it is');
+      L.push('worth. `calibration-seed.json` is FITTING data, so measuring against it would');
+      L.push('reproduce the error it was fitted to. The release gate fails on this by default;');
+      L.push('a dated waiver is what currently allows a release, and it expires.');
+      L.push('');
+    }
+    if (m.limits.compliance) {
+      const c = m.limits.compliance;
+      L.push('### Compliance control strength');
+      L.push('');
+      L.push(`Of ${c.total} bundled controls, **${c.partiallyEvidenced} are backed by a detector that is weak or was never`);
+      L.push('measured against an independent corpus**, and are flagged `partiallyEvidenced`.');
+      L.push(`A further **${c.notCodeTestable} are organisational or artifact-existence only** and can never`);
+      L.push('read as evidenced by a scanner. A control appearing in a coverage map is not a');
+      L.push('statement that the control is satisfied.');
+      L.push('');
+    }
+  }
+
   const ind = m.committedInputs.independent;
   if (ind && ind.overall) {
     L.push('## Independent evaluation population — the number that matters');

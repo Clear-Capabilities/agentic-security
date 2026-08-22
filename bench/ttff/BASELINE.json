@@ -1,0 +1,10 @@
+{
+ "schema": "ttff/v1",
+ "note": "Time-to-first-finding on a cold cache. This engine is batch, so this equals time-to-all-findings today.",
+ "target": "scanner/src/posture",
+ "regressionFactor": 1.6,
+ "ms": 4517,
+ "findings": 243,
+ "filesScanned": 173,
+ "recordedAt": "2026-08-22T19:15:11.653Z"
+}

@@ -10,12 +10,12 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.140.0 |
-| Bundle SHA-256 | `620a1eb0d565f6495bd1ffd7240c7399d6b3c49b43354fc6f7d787a5a827d392` |
-| Commit | `274b2d5db3a59f7dc0f3215f31ee71493043ff14` |
-| Worktree at measurement time | clean |
+| Bundle SHA-256 | `58e27f5c8f403e873e1a2c9ccaf63c3681cc68a31450f3c6faaf0142df275197` |
+| Commit | `74a694f13c3a0207369b1deddd5152c4f671539c` |
+| Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-21T22:29:40.729Z |
+| Generated (UTC) | 2026-08-22T18:51:44.929Z |
 
 ## What these numbers are, and what they are not
 
@@ -200,14 +200,14 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 21 |
-| `scripts` | 28 |
+| `scripts` | 29 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 426 |
+| `scanner/src` | 427 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as

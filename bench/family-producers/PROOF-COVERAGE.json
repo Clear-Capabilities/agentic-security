@@ -1,0 +1,63 @@
+{
+ "schema": "proof-coverage/v1",
+ "purpose": "Execution-proof coverage measured over the CVE-replay corpus, WITH the ceiling: the in-process harness is JavaScript-only, so most findings are unreachable by it rather than merely unproven. Published in docs/SCORECARD.md (PRD F7.2 + F12.6).",
+ "measuredOver": "bench/cve-replay pre/ trees, 215 roots",
+ "total": 280,
+ "provable": {
+  "n": 9
+ },
+ "indeterminate": {
+  "n": 15,
+  "byClass": {
+   "xss": 9,
+   "idor": 1,
+   "open-redirect": 2,
+   "ssrf": 2,
+   "broken-access-control": 1
+  }
+ },
+ "unclassified": {
+  "n": 52,
+  "topFamilies": [
+   [
+    "header-hardening",
+    12
+   ],
+   [
+    "(no family)",
+    7
+   ],
+   [
+    "missing-csrf-protection-on-state-changin",
+    4
+   ],
+   [
+    "hardcoded-secret",
+    3
+   ],
+   [
+    "prototype-pollution",
+    3
+   ],
+   [
+    "express-body-parser-without-size-limit-d",
+    2
+   ],
+   [
+    "weak-crypto",
+    2
+   ],
+   [
+    "crypto-weak-hash",
+    2
+   ]
+  ]
+ },
+ "outOfScope": {
+  "n": 204
+ },
+ "reachable": {
+  "n": 76
+ },
+ "caveat": "provable = a proof class exists AND the file is JavaScript. Adding proof classes does not move the ceiling."
+}

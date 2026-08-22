@@ -264,7 +264,7 @@ export function scanConcurrency(fileContents) {
           // label. Found while auditing the wrong-CWE bucket: 57% of findings
           // on a Go/Ruby sample had no cwe at all.
           cwe: 'CWE-667',
-          family: 'concurrency-bug',
+          family: 'concurrency-bug', parser: 'CONCURRENCY',
           confidence: 0.5,
           remediation: bug.remediation || 'Release the lock on every exit path (defer / try-finally / context manager).',
         });
@@ -277,7 +277,7 @@ export function scanConcurrency(fileContents) {
           vuln: `Concurrency: fire-and-forget async call in ${fn.name}() — result not awaited`,
           severity: 'low',
           cwe: 'CWE-703', // Improper Check or Handling of Exceptional Conditions
-          family: 'concurrency-bug',
+          family: 'concurrency-bug', parser: 'CONCURRENCY',
           confidence: 0.4,
           remediation: 'Await the promise / call .get() on the future / use asyncio.gather.',
         });
@@ -292,7 +292,7 @@ export function scanConcurrency(fileContents) {
         vuln: `Concurrency: potential deadlock — ${bug.order}`,
         severity: 'high',
         cwe: 'CWE-833', // Deadlock
-        family: 'concurrency-bug',
+        family: 'concurrency-bug', parser: 'CONCURRENCY',
         confidence: 0.4,
         remediation: 'Acquire locks in a consistent global order across all call sites.',
       });
