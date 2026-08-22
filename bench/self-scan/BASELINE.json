@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-22T19:33:18.703Z",
-  "commit": "74a694f13c3a0207369b1deddd5152c4f671539c",
+  "generatedAt": "2026-08-22T20:49:33.017Z",
+  "commit": "8fe33811d47b407fd04b7594e47dfb92f6403398",
   "targets": {
     "hooks": {
       "total": 21,
@@ -36,7 +36,7 @@
       }
     },
     "scanner/src": {
-      "total": 426,
+      "total": 427,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -120,6 +120,7 @@
         "posture/license-policy.js": 3,
         "posture/llm-redteam-prompts.js": 1,
         "posture/llm-redteam.js": 1,
+        "posture/mcp-rug-pull.js": 1,
         "posture/mitigation-composite.js": 1,
         "posture/model-rescan.js": 1,
         "posture/network-policy-import.js": 3,

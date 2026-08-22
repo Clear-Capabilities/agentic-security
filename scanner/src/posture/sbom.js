@@ -13,13 +13,22 @@ function _purl(c) {
   if (c.purl) return c.purl;
   const eco = c.ecosystem || 'generic';
   const name = encodeURIComponent(c.name || '');
-  const ver = encodeURIComponent(c.version || '');
+  // Same rule as _bomRef: no version means no `@version` segment at all, not an
+  // empty or undefined one. purl consumers treat `pkg:npm/x@` as malformed.
+  const ver = c.version ? encodeURIComponent(c.version) : '';
   // pkg:npm/<name>@<version> — pkg URL spec
-  return `pkg:${eco === 'npm' ? 'npm' : eco === 'pypi' ? 'pypi' : eco === 'maven' ? 'maven' : eco === 'cargo' ? 'cargo' : eco === 'go' ? 'golang' : eco === 'rubygems' ? 'gem' : eco === 'composer' ? 'composer' : eco}/${name}@${ver}`;
+  return `pkg:${eco === 'npm' ? 'npm' : eco === 'pypi' ? 'pypi' : eco === 'maven' ? 'maven' : eco === 'cargo' ? 'cargo' : eco === 'go' ? 'golang' : eco === 'rubygems' ? 'gem' : eco === 'composer' ? 'composer' : eco}/${name}${ver ? `@${ver}` : ''}`;
 }
 
 function _bomRef(c) {
-  return `${c.ecosystem || 'pkg'}:${c.name}@${c.version}`;
+  // A component with no version is ordinary — unpinned entries appear in real
+  // manifests — and the identifier must DEGRADE rather than interpolate a JS
+  // value. `npm:x@undefined` is not a version anyone can resolve, and it ships
+  // inside a document whose whole purpose is to be parsed by someone else's
+  // tooling, where it fails days later pointing at them rather than at us.
+  const eco = c.ecosystem || 'pkg';
+  const name = c.name || 'unknown';
+  return c.version ? `${eco}:${name}@${c.version}` : `${eco}:${name}`;
 }
 
 // CycloneDX `serialNumber` and SPDX `documentNamespace` are both required to

@@ -330,6 +330,18 @@ function _maybeOffload(sessionRoot, toolName, items) {
 }
 
 // ─── scan_diff ───────────────────────────────────────────────────────────────
+// Test seam for the write boundary (PRD F6.4).
+//
+// `_confine` and `isReservedWrite` ARE the confinement contract in
+// agents/_CONFINEMENT.md. A boundary is only worth what its refusals are worth,
+// and refusals cannot be adversarially tested through the public tools without
+// also exercising a real scan, a real patch and a real filesystem write — so
+// the check would be measuring four things and attributing failure to one.
+//
+// Exported under the `_internals` convention this codebase already uses
+// (see posture/poc-inprocess.js). Not part of the MCP tool surface.
+export const _internals = { _confine, isReservedWrite: _isReservedWritePath };
+
 export const scan_diff = {
   name: 'scan_diff',
   description: 'Scan a list of files for security findings. Use BEFORE writing a Write/Edit to disk so the agent can self-correct. Returns findings with severity, file:line, title, remediation. Snippets are redacted of obvious secret patterns. Paths confined to the session root; symlinks are refused.',

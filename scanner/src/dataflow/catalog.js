@@ -228,6 +228,32 @@ export const CATALOG = [
   { kind: 'source', id: 'py-mcp-tool', language: 'py', framework: 'mcp', match: { type: 'annotation', name: 'mcp.tool' }, label: '@mcp.tool() parameter', provenance: 'agent-tool' },
   { kind: 'source', id: 'py-mcp-server-tool', language: 'py', framework: 'mcp', match: { type: 'annotation', name: 'server.tool' }, label: '@server.tool() parameter', provenance: 'agent-tool' },
 
+  // PRD F5.3 — the SAME trust boundary in JavaScript/TypeScript.
+  //
+  // The agent-tool boundary was modelled for Python only, while the
+  // TypeScript SDK (@modelcontextprotocol/sdk) is the dominant implementation.
+  // A tool argument is attacker-influenced in exactly the way an HTTP body is:
+  // whatever the model was persuaded to pass, by a web page it read, a file it
+  // opened, or another tool's output. Treating it as trusted because "the model
+  // sent it" is the confused-deputy assumption this whole feature exists to
+  // reject.
+  //
+  // `request.params.arguments` is the CallToolRequest shape every SDK server
+  // handler receives; `extra.arguments` covers the newer callback signature.
+  { kind: 'source', id: 'js-mcp-call-args', language: 'js', framework: 'mcp', match: { type: 'member', object: 'params', prop: 'arguments' }, label: 'MCP tool call arguments', provenance: 'agent-tool' },
+  { kind: 'source', id: 'js-mcp-request-params', language: 'js', framework: 'mcp', match: { type: 'member', object: 'request', prop: 'params' }, label: 'MCP request.params', provenance: 'agent-tool' },
+  { kind: 'source', id: 'js-mcp-extra-args', language: 'js', framework: 'mcp', match: { type: 'member', object: 'extra', prop: 'arguments' }, label: 'MCP tool callback arguments', provenance: 'agent-tool' },
+
+  // TOOL OUTPUT is the other half of F5.3's shape (tool output -> model context
+  // -> tool invocation). Content returned by ANOTHER tool or an MCP resource is
+  // not the agent's own reasoning — it is third-party text that reached the
+  // context window. A server that reads a resource and passes it onward is the
+  // indirect-injection path, and it was invisible while only tool INPUT was a
+  // source.
+  { kind: 'source', id: 'js-mcp-tool-result', language: 'js', framework: 'mcp', match: { type: 'member', object: 'result', prop: 'content' }, label: 'MCP tool result content', provenance: 'agent-tool' },
+  { kind: 'source', id: 'js-mcp-resource-contents', language: 'js', framework: 'mcp', match: { type: 'member', object: 'resource', prop: 'contents' }, label: 'MCP resource contents', provenance: 'agent-tool' },
+  { kind: 'source', id: 'py-mcp-tool-result', language: 'py', framework: 'mcp', match: { type: 'member', object: 'result', prop: 'content' }, label: 'MCP tool result content', provenance: 'agent-tool' },
+
   // ─── SOURCES (Go) ─────────────────────────────────────────────────────────
   { kind: 'source', id: 'go-r-form',     language: 'go', framework: 'net/http', match: { type: 'member', object: 'r', prop: 'Form' },     label: 'r.Form' },
   { kind: 'source', id: 'go-r-postform', language: 'go', framework: 'net/http', match: { type: 'member', object: 'r', prop: 'PostForm' }, label: 'r.PostForm' },

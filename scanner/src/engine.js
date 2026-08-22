@@ -15,6 +15,7 @@ import { scanLlmCost } from './sast/llm-cost-advisor.js';
 import { scanBusinessLogic } from './sast/logic.js';
 import { scanPipeline } from './sast/pipeline.js';
 import { scanMCP } from './sast/mcp-audit.js';
+import { detectRugPull as _detectRugPull, saveBaseline as _saveMcpBaseline, fingerprintConfig as _fingerprintMcp } from './posture/mcp-rug-pull.js';
 import { scanClaudeSettings } from './sast/claude-settings.js';
 import { scanClaudeMdPromptInjection } from './sast/claude-md-prompt-injection.js';
 import { scanClaudeHookInjection } from './sast/claude-hook-injection.js';
@@ -711,6 +712,27 @@ export function isKubernetesManifest(relPath, content) {
   return _K8S_API_VERSION_RE.test(head) && _K8S_KIND_RE.test(head);
 }
 function getExt(n){const p=n.split(".");return p.length>1?p.pop().toLowerCase():"";}
+
+// Agent instruction files (CLAUDE.md, AGENTS.md, .cursorrules, …) are admitted
+// by CONTENT-INDEPENDENT NAME, the same way isKubernetesManifest admits a
+// manifest a path predicate cannot recognise.
+//
+// They fail shouldScan() because they are markdown, so `fileContents` never held
+// one, so scanClaudeMdPromptInjection / scanClaudeHookInjection / scanMCP at the
+// per-file dispatch could never run on them. The detectors were CORRECT and
+// fully tested when called directly — they were simply never called. That is the
+// same dark-detector shape as k8s-admission and install-script, and it is worse
+// here: for an agentic security tool a poisoned instruction file loaded into
+// every session is a flagship threat, and a normal scan could not see it.
+//
+// Matched on the naming convention only. A repository's ordinary docs stay out
+// of scope, so this admits a handful of files rather than every .md in the tree.
+const _INSTRUCTION_FILE_ADMIT_RE = /(?:^|[\\/])(?:CLAUDE|AGENTS|GEMINI|CURSOR|CODEX|KIRO|QWEN|TRAE|OPENCODE|SYSTEM_PROMPT)\.(?:md|markdown|txt|prompt|system\.md)$|(?:^|[\\/])\.(?:cursorrules|windsurfrules|aiderrules)$|(?:^|[\\/])\.(?:claude|cursor|codex|gemini)[\\/].*\.(?:md|json|ya?ml)$/i;
+
+export function isInstructionFile(relPath) {
+  return typeof relPath === 'string' && _INSTRUCTION_FILE_ADMIT_RE.test(relPath);
+}
+
 function shouldScan(p){if(/\.(test|spec|mock)\./i.test(p))return false;if(/_test\.go$/i.test(p))return false;if(/_spec\.rb$/i.test(p))return false;if(/Test\.(?:java|cs|kt|scala)$/i.test(p))return false;if(/\.min\.[mc]?js$/i.test(p))return false;for(const x of p.split("/"))if(IGNORE_DIRS.has(x))return false;
   // Mobile + framework manifest files needed by the v4 detectors.
   const base=p.split('/').pop();
@@ -1851,9 +1873,27 @@ const STRUCTURAL_VULN_PATTERNS=[
    type:"File Serve",vuln:"Path Traversal (sendFile with User Input)",severity:"high",cwe:"CWE-22",stride:"Information Disclosure",
    fix:"Allowlist file paths; never pass raw user input to sendFile"},
   // ── Command Injection ──────────────────────────────────────────────────────
-  {regex:/(?:exec|spawn|execSync|execFile)\s*\([^;)]*(?:req\.|\.body\.|\.query\.|\.params\.)[^;)]{0,200}\)/g,
+  // SHELL-INVOKING forms only. `exec`/`execSync` hand the whole string to a
+  // shell, so user input anywhere in the command is injection.
+  //
+  // `execFile`/`spawn` are DELIBERATELY NOT HERE. They take an argv array and
+  // do not spawn a shell, so a tainted ARGUMENT cannot inject a command — they
+  // are the canonical FIX for this very finding. The previous rule matched them
+  // and rated it critical, while its own remediation text read "Use execFile
+  // with argument array": following the advice could not clear the finding.
+  // Flagging the fix as the bug is how a team learns to ignore a scanner.
+  {regex:/(?:exec|execSync)\s*\([^;)]*(?:req\.|\.body\.|\.query\.|\.params\.)[^;)]{0,200}\)/g,
    type:"OS Command",vuln:"Command Injection (User-Controlled Input)",severity:"critical",cwe:"CWE-78",stride:"Elevation of Privilege",
    fix:"Use execFile with argument array; never interpolate user input into shell commands"},
+  // The two ways an argv-form call IS still injectable:
+  //   1. the tainted value is the COMMAND (first argument), not an argument to it
+  //   2. `shell: true` is passed, which re-introduces the shell the argv form avoids
+  {regex:/(?:execFile|spawn)(?:Sync)?\s*\(\s*[^,;)]*(?:req\.|\.body\.|\.query\.|\.params\.)[^,;)]{0,120}[,)]/g,
+   type:"OS Command",vuln:"Command Injection (User-Controlled Command Name)",severity:"critical",cwe:"CWE-78",stride:"Elevation of Privilege",
+   fix:"The COMMAND itself is user-controlled — an argv array does not help. Resolve the binary from a fixed allowlist."},
+  {regex:/(?:execFile|spawn)(?:Sync)?\s*\([^;]{0,300}shell\s*:\s*true[^;]{0,200}(?:req\.|\.body\.|\.query\.|\.params\.)|(?:execFile|spawn)(?:Sync)?\s*\([^;]{0,300}(?:req\.|\.body\.|\.query\.|\.params\.)[^;]{0,200}shell\s*:\s*true/g,
+   type:"OS Command",vuln:"Command Injection (argv form with shell:true)",severity:"critical",cwe:"CWE-78",stride:"Elevation of Privilege",
+   fix:"`shell: true` re-introduces the shell that the argv array exists to avoid. Drop the option, or escape the input."},
   {regex:/(?:vm\.runInContext|vm\.runInNewContext|new\s+vm\.Script)\s*\(/g,
    type:"VM Sandbox",vuln:"VM Sandbox Execution (RCE Risk)",severity:"critical",cwe:"CWE-94",stride:"Elevation of Privilege",
    fix:"Never execute user-supplied code in vm.runInContext; use a strict AST sandbox"},
@@ -8086,7 +8126,7 @@ function _deterministicFileTimings(timings) {
 
   const _fileTimings = [];
   let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0;
-  const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f])) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];
+  const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];
   // ---- R8: opt-in per-file checkpointing (AGENTIC_SECURITY_RESUME=1, or
   // runScan({resume:true})). Default OFF, so existing behaviour is untouched.
   // Only this loop is checkpointed; every cross-file pass below re-runs, so
@@ -8163,6 +8203,31 @@ function _deterministicFileTimings(timings) {
       aF.push(...scanContainer(p,cc));
       aF.push(...scanInstallScripts(p,cc));
       aF.push(...scanMCP(p,c));
+      // PRD F5.2 — rug-pull: a tool whose definition changed AFTER approval.
+      // Every scanMCP rule judges the CURRENT content, so a description that is
+      // innocuous today and hostile tomorrow passes both scans. This compares
+      // against a recorded baseline, which is the only way to see a change.
+      // Wired here rather than left as a tested module: a detector with no call
+      // site is a dark detector, which is the exact class this session keeps
+      // finding.
+      if (/(?:^|[\\/])\.?mcp(?:\.[a-z]+)?\.json$|(?:^|[\\/])\.mcp\.json$/i.test(p)) {
+        try {
+          const _cfg = JSON.parse(c);
+          const _rp = _detectRugPull(scanRoot, _cfg, { file: p });
+          aF.push(..._rp.findings);
+          // Record on first sight so the NEXT scan has something to compare
+          // against; refresh after reporting so a reviewed change is not
+          // re-reported forever.
+          _saveMcpBaseline(scanRoot, _fingerprintMcp(_cfg));
+        } catch (e) {
+          // Only a malformed config is tolerated here — scanMCP already reports
+          // what it can from one. Anything else is a programmer error and must
+          // not be swallowed: a bare `catch {}` around this block hid a
+          // ReferenceError (`root` vs `scanRoot`) that silently disabled the
+          // whole detector while every unit test still passed.
+          if (!(e instanceof SyntaxError)) throw e;
+        }
+      }
       aF.push(...scanClaudeSettings(p,c));
       aF.push(...scanClaudeMdPromptInjection(p,c));
       aF.push(...scanClaudeHookInjection(p,c));

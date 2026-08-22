@@ -201,7 +201,19 @@ export function buildAIBOM(scan, fileContents = {}, meta = {}) {
   return {
     aibomFormat: 'agentic-security AI-BOM',
     version: '1',
-    cyclonedxCompatible: '1.7-ml-bom',
+    // PRD F5.5 — this document is PROPRIETARY and now says so.
+    //
+    // It previously carried `cyclonedxCompatible: '1.7-ml-bom'`, which was an
+    // unverified claim: nothing validated it, and the document has no
+    // `bomFormat`, no `specVersion` and no CycloneDX `components` array, so it
+    // would not have parsed as CycloneDX at all. A consumer reading that field
+    // and feeding this to a CycloneDX tool would have got an error, not a BOM.
+    //
+    // The honest options F5.5 gives are "validate mechanically, or be labelled
+    // proprietary". Both are taken: the field below states the truth, and
+    // `toCycloneDXMLBOM()` emits a REAL ML-BOM that `validateMLBOM()` checks.
+    proprietary: true,
+    cyclonedxMlBom: 'not this document — call toCycloneDXMLBOM() for a CycloneDX 1.6 ML-BOM view',
     generatedAt: meta.startedAt || new Date().toISOString(),
     models,
     promptTemplates,
@@ -285,4 +297,101 @@ export function aibomToMarkdown(aibom) {
   }
 
   return out.join('\n');
+}
+
+
+// ── CycloneDX ML-BOM (PRD F5.5) ────────────────────────────────────────────
+//
+// A real CycloneDX 1.6 document describing the models this scan found, using the
+// ML-BOM shape: `components[].type: 'machine-learning-model'` carrying a
+// `modelCard`. Emitted separately from the proprietary AI-BOM rather than
+// pretending the proprietary one already conforms.
+//
+// The serial number derives from content under --deterministic, for the same
+// reason toCycloneDX's does: an attestation over a BOM is meaningless if the BOM
+// changes on every run.
+import * as _crypto from 'node:crypto';
+import { isDeterministic as _isDet } from './deterministic.js';
+
+function _mlbomSerial(seed) {
+  if (!_isDet()) return `urn:uuid:${_crypto.randomUUID()}`;
+  const h = _crypto.createHash('sha256').update(String(seed)).digest('hex');
+  return `urn:uuid:${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h[16], 16) & 0x3) | 0x8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
+export function toCycloneDXMLBOM(aibom, meta = {}) {
+  const models = (aibom && aibom.models) || [];
+  const components = models.map((m) => ({
+    type: 'machine-learning-model',
+    'bom-ref': `model:${m.provider || 'unknown'}/${m.name || 'unknown'}${m.version ? `@${m.version}` : ''}`,
+    name: m.name || 'unknown',
+    ...(m.version ? { version: m.version } : {}),
+    modelCard: {
+      modelParameters: {
+        ...(m.provider ? { approach: { type: 'supervised' } } : {}),
+        ...(m.task ? { task: m.task } : {}),
+      },
+      // `considerations` is where CycloneDX expects known risks to live. Pinning
+      // status is a real supply-chain property of a model reference: an unpinned
+      // model can change under you between runs.
+      considerations: {
+        technicalLimitations: m.pinned
+          ? []
+          : ['model reference is not pinned to a version; the served model can change between runs'],
+      },
+    },
+    properties: [
+      ...(m.provider ? [{ name: 'agentic-security:provider', value: String(m.provider) }] : []),
+      ...(m.file ? [{ name: 'agentic-security:declaredIn', value: String(m.file) }] : []),
+      { name: 'agentic-security:pinned', value: String(!!m.pinned) },
+    ],
+  }));
+
+  return {
+    bomFormat: 'CycloneDX',
+    specVersion: '1.6',
+    serialNumber: _mlbomSerial(JSON.stringify(components.map((c) => c['bom-ref']))),
+    version: 1,
+    metadata: {
+      timestamp: meta.startedAt || (aibom && aibom.generatedAt) || new Date().toISOString(),
+      tools: [{ vendor: 'Clear Capabilities', name: 'agentic-security', version: meta.engineVersion || 'dev' }],
+      component: { type: 'application', name: 'scan-target', version: '1.0.0' },
+    },
+    components,
+  };
+}
+
+/**
+ * Mechanical validation of an ML-BOM.
+ *
+ * STRUCTURAL, not full JSON-Schema validation: fetching the official CycloneDX
+ * schema at scan time would break the no-runtime-network rule, and vendoring it
+ * would add a file that silently rots against upstream. So this checks the
+ * required fields and the ML-BOM-specific shape, and SAYS that is what it does —
+ * a check labelled "validates against CycloneDX" that only tests a few keys
+ * would be the same unverified claim this item exists to remove.
+ */
+export function validateMLBOM(doc) {
+  const errors = [];
+  const req = (cond, msg) => { if (!cond) errors.push(msg); };
+
+  req(doc && typeof doc === 'object', 'not an object');
+  if (!doc || typeof doc !== 'object') return { ok: false, errors, checked: 'structural' };
+
+  req(doc.bomFormat === 'CycloneDX', `bomFormat must be "CycloneDX", got ${JSON.stringify(doc.bomFormat)}`);
+  req(/^1\.[4-9]$/.test(String(doc.specVersion || '')), `specVersion must be 1.4-1.9, got ${JSON.stringify(doc.specVersion)}`);
+  req(Number.isInteger(doc.version) && doc.version >= 1, 'version must be a positive integer');
+  req(/^urn:uuid:[0-9a-f-]{36}$/i.test(String(doc.serialNumber || '')), 'serialNumber must be a urn:uuid');
+  req(doc.metadata && typeof doc.metadata === 'object', 'metadata is required');
+  req(Array.isArray(doc.components), 'components must be an array');
+
+  for (const [i, c] of (Array.isArray(doc.components) ? doc.components : []).entries()) {
+    req(typeof c.name === 'string' && c.name, `components[${i}].name is required`);
+    req(typeof c.type === 'string' && c.type, `components[${i}].type is required`);
+    if (c.type === 'machine-learning-model') {
+      req(c.modelCard && typeof c.modelCard === 'object',
+        `components[${i}] is a machine-learning-model but carries no modelCard — that is the whole ML-BOM extension`);
+    }
+  }
+  return { ok: errors.length === 0, errors, checked: 'structural (required fields + ML-BOM component shape), NOT full JSON-Schema validation' };
 }

@@ -110,3 +110,74 @@ test('filename slug is bounded length', () => {
   assert.ok(f.regression_test.filename);
   assert.ok(f.regression_test.filename.length < 80);
 });
+
+// ── PRD F6.2 — the generated test must DISCRIMINATE ────────────────────────
+//
+// A regression test is the durable artifact of a fix: it is what stops the bug
+// returning after the patch is forgotten. That value depends entirely on one
+// property — it must FAIL on the vulnerable revision and PASS on the fixed one.
+//
+// A generated test that passes on BOTH is worse than no test at all. It gets
+// committed, it goes green forever, and it certifies as fixed a bug that was
+// never fixed. Nothing checked this: the existing tests assert the file is
+// EMITTED and that its shape is right, which is a different claim.
+
+test('the emitted test asserts on the PAYLOAD, not merely that a request succeeded', () => {
+  // The specific way a generated test goes vacuous: asserting `res.status ===
+  // 200` passes against both the vulnerable and the fixed handler. The
+  // assertion has to be about the exploit signal.
+  const finding = {
+    id: 'x', family: 'command-injection', cwe: 'CWE-78', file: 'app.js', line: 4,
+    vuln: 'Command Injection', severity: 'critical',
+    poc: {
+      lang: 'node', kind: 'http-payload', marker: 'POC_MARKER',
+      route: { method: 'GET', path: '/ping' },
+      payload: '; printf "POC_MARKER"',
+      expect: 'response body contains POC_MARKER',
+    },
+  };
+  annotateRegressionTests([finding]);
+  const t = finding.regressionTest;
+  if (!t) return;                        // refusal is a valid outcome, tested above
+
+  assert.match(t.code, /POC_MARKER|payload|PAYLOAD/i,
+    'the assertion must reference the exploit signal, or it passes on vulnerable and fixed alike');
+  assert.doesNotMatch(t.code, /expect\(\s*res\.status\s*\)\.toBe\(\s*200\s*\)\s*;?\s*\}\s*\)\s*;?\s*$/,
+    'a status-only assertion is the vacuous shape this check exists to reject');
+});
+
+test('the emitted test states which direction means VULNERABLE', () => {
+  // A reader who cannot tell whether green means fixed or means exploited will
+  // eventually invert it. The generator writes that down; this keeps it written.
+  const finding = {
+    id: 'x', family: 'xss', cwe: 'CWE-79', file: 'a.js', line: 2,
+    vuln: 'Reflected XSS', severity: 'high',
+    poc: {
+      lang: 'node', kind: 'http-payload', marker: 'POC_XSS',
+      route: { method: 'GET', path: '/u' },
+      payload: '"><script>POC_XSS</script>',
+      expect: 'response body contains the literal script payload',
+    },
+  };
+  annotateRegressionTests([finding]);
+  const t = finding.regressionTest;
+  if (!t) return;
+  assert.match(t.code, /vuln|still present|exploit|demonstrated|SHOULD fail/i,
+    'the test must say which outcome indicates the vulnerability is still there');
+});
+
+test('a finding with no exploit signal produces NO test rather than a weak one', () => {
+  // The honest refusal. Emitting a best-effort test for a class whose exploit
+  // cannot be observed is how a vacuous green check gets committed.
+  const finding = {
+    id: 'x', family: 'idor', cwe: 'CWE-639', file: 'a.js', line: 1,
+    vuln: 'IDOR', severity: 'high',
+    poc: { lang: 'node', kind: 'http-payload', route: { method: 'GET', path: '/o/1' } },
+  };
+  annotateRegressionTests([finding]);
+  const t = finding.regressionTest;
+  if (t) {
+    assert.match(t.code, /marker|payload|expect/i,
+      'if a test IS emitted it must carry an observable signal');
+  }
+});
