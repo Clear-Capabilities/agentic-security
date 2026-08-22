@@ -1,6 +1,6 @@
 {
- "schema": "family-producers/v2",
- "purpose": "Finding families OBSERVED to be emitted by a real scan, with the parser that produced each. Evidence that a family has a producer, and which detector it belongs to. A LOWER BOUND — absence here is not proof no detector emits it (SCA families need network, and some rules need shapes no corpus entry has).",
+ "schema": "family-producers/v3",
+ "purpose": "Finding families OBSERVED to be emitted by a real scan, with the parser that produced each and the CWEs they carry. Evidence that a family has a producer, which detector owns it, and what CWE it maps to (so measured per-CWE recall can be joined onto a compliance control). A LOWER BOUND — absence is not proof no detector emits it.",
  "method": "runScan over every scanner/test/fixtures/* directory and every bench/cve-replay/*/*/pre tree, recording (finding.family, finding.parser) across findings+secrets+logicVulns+supplyChain.",
  "caveat": "parser is NOT always module-specific: REGEX covers 80 distinct families and STRUCTURAL 23. Only module-specific parsers can attribute a family to a module — see src/posture/family-registry.js PARSER_OF.",
  "roots": 331,
@@ -10,36 +10,58 @@
    "count": 7,
    "parsers": {
     "REGEX": 7
+   },
+   "cwes": {
+    "CWE-494": 2,
+    "CWE-798": 1,
+    "CWE-1336": 1,
+    "CWE-77": 1,
+    "CWE-1357": 1,
+    "CWE-732": 1
    }
   },
   "agent-untrusted-flow": {
    "count": 1,
    "parsers": {
     "AGENT-FLOW": 1
-   }
+   },
+   "cwes": {},
+   "findingsWithoutCwe": 1
   },
   "api-contract": {
    "count": 5,
    "parsers": {
     "(unset)": 5
+   },
+   "cwes": {
+    "CWE-1059": 5
    }
   },
   "auth-endpoint-missing-rate-limiting": {
    "count": 9,
    "parsers": {
     "REGEX": 9
+   },
+   "cwes": {
+    "CWE-307": 9
    }
   },
   "authz-matrix-inconsistency": {
    "count": 2,
    "parsers": {
     "AUTHZ-MATRIX": 2
+   },
+   "cwes": {
+    "CWE-285": 2
    }
   },
   "aws-public-s3": {
    "count": 1,
    "parsers": {
     "CLOUD-IAM": 1
+   },
+   "cwes": {
+    "CWE-732": 1
    }
   },
   "broken-access-control": {
@@ -47,25 +69,37 @@
    "parsers": {
     "OWNERSHIP-AUTHZ": 24,
     "API-AUTHZ": 1
-   }
+   },
+   "cwes": {
+    "CWE-639": 24
+   },
+   "findingsWithoutCwe": 1
   },
   "buffer-overflow": {
    "count": 7,
    "parsers": {
     "CPP": 7
+   },
+   "cwes": {
+    "CWE-120": 7
    }
   },
   "client-side": {
    "count": 1,
    "parsers": {
     "SAST": 1
+   },
+   "cwes": {
+    "CWE-1022": 1
    }
   },
   "clone-outlier": {
    "count": 1,
    "parsers": {
     "(unset)": 1
-   }
+   },
+   "cwes": {},
+   "findingsWithoutCwe": 1
   },
   "code-injection": {
    "count": 18,
@@ -79,12 +113,18 @@
     "CS": 1,
     "GO": 1,
     "KT": 1
+   },
+   "cwes": {
+    "CWE-94": 18
    }
   },
   "command-code-injection-dangerous-functio": {
    "count": 1,
    "parsers": {
     "PHP": 1
+   },
+   "cwes": {
+    "CWE-78": 1
    }
   },
   "command-injection": {
@@ -101,312 +141,472 @@
     "RUBY": 2,
     "RUST": 2,
     "JAVA": 1
+   },
+   "cwes": {
+    "CWE-78": 38
    }
   },
   "container-base-image-debian-9-eol": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-1104": 1
    }
   },
   "container-base-image-node-12-alpine-eol": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-1104": 1
    }
   },
   "container-base-image-python-2-7-eol": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-1104": 1
    }
   },
   "container-base-image-ubuntu-latest-float": {
    "count": 2,
    "parsers": {
     "REGEX": 2
+   },
+   "cwes": {
+    "CWE-1357": 2
    }
   },
   "container-runtime": {
    "count": 8,
    "parsers": {
     "CONTAINER-RUNTIME": 8
+   },
+   "cwes": {
+    "CWE-250": 5,
+    "CWE-732": 3
    }
   },
   "cookie-set-without-proper-security-flags": {
    "count": 2,
    "parsers": {
     "STRUCTURAL": 2
+   },
+   "cwes": {
+    "CWE-614": 2
    }
   },
   "crypto-ecb": {
    "count": 3,
    "parsers": {
     "CRYPTO-PROTO": 3
+   },
+   "cwes": {
+    "CWE-327": 3
    }
   },
   "crypto-jwt-key-confusion": {
    "count": 3,
    "parsers": {
     "CRYPTO-PROTO": 3
+   },
+   "cwes": {
+    "CWE-345": 3
    }
   },
   "crypto-jwt-none": {
    "count": 2,
    "parsers": {
     "CRYPTO-PROTO": 2
+   },
+   "cwes": {
+    "CWE-345": 2
    }
   },
   "crypto-kdf-weak": {
    "count": 2,
    "parsers": {
     "CRYPTO-PROTO": 2
+   },
+   "cwes": {
+    "CWE-916": 2
    }
   },
   "crypto-static-iv": {
    "count": 8,
    "parsers": {
     "CRYPTO-PROTO": 8
+   },
+   "cwes": {
+    "CWE-329": 8
    }
   },
   "crypto-tls-no-verify": {
    "count": 4,
    "parsers": {
     "CRYPTO-PROTO": 4
+   },
+   "cwes": {
+    "CWE-295": 4
    }
   },
   "crypto-tls-version": {
    "count": 2,
    "parsers": {
     "CRYPTO-PROTO": 2
+   },
+   "cwes": {
+    "CWE-326": 2
    }
   },
   "crypto-weak-cipher": {
    "count": 7,
    "parsers": {
     "CRYPTO-PROTO": 7
+   },
+   "cwes": {
+    "CWE-327": 7
    }
   },
   "crypto-weak-hash": {
    "count": 16,
    "parsers": {
     "CRYPTO-PROTO": 16
+   },
+   "cwes": {
+    "CWE-327": 16
    }
   },
   "cryptographically-weak-prng-java": {
    "count": 1,
    "parsers": {
     "JAVA_SAST": 1
+   },
+   "cwes": {
+    "CWE-330": 1
    }
   },
   "cryptographically-weak-prng-math-random": {
    "count": 1,
    "parsers": {
     "STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-338": 1
    }
   },
   "custom-sql-sink-user-data-in-executeraw": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-89": 1
    }
   },
   "dart-cleartext-http": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-319": 1
    }
   },
   "dart-hardcoded-credential": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-798": 1
    }
   },
   "dart-insecure-storage": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-922": 1
    }
   },
   "dart-no-timeout": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-400": 1
    }
   },
   "dart-secret-in-log": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-532": 1
    }
   },
   "dart-sql-injection": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-89": 1
    }
   },
   "dart-webview-unsafe": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-829": 1
    }
   },
   "data-exposure": {
    "count": 2,
    "parsers": {
     "STRUCTURAL": 2
+   },
+   "cwes": {
+    "CWE-200": 2
    }
   },
   "defi-missing-reentrancy-guard": {
    "count": 2,
    "parsers": {
     "REGEX": 2
+   },
+   "cwes": {
+    "CWE-841": 2
    }
   },
   "delegatecall-untrusted": {
    "count": 1,
    "parsers": {
     "SOL": 1
+   },
+   "cwes": {
+    "CWE-94": 1
    }
   },
   "deserialization-gadget-chain-library-pre": {
    "count": 1,
    "parsers": {
     "DESERIALIZE-GADGETS": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "dockerfile-image-uses-latest-tag": {
    "count": 2,
    "parsers": {
     "REGEX": 2
+   },
+   "cwes": {
+    "CWE-829": 2
    }
   },
   "dockerfile-run-curl-sh-remote-code-execu": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-829": 1
    }
   },
   "dockerfile-user-root-container-runs-as-r": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-250": 1
    }
   },
   "dos-sync-io": {
    "count": 4,
    "parsers": {
     "STRUCTURAL": 4
+   },
+   "cwes": {
+    "CWE-400": 4
    }
   },
   "double-free-free-p-followed-by-free-p-wi": {
    "count": 1,
    "parsers": {
     "CPP": 1
+   },
+   "cwes": {
+    "CWE-415": 1
    }
   },
   "ecdsa-malleability": {
    "count": 1,
    "parsers": {
     "WEB3-ADV": 1
+   },
+   "cwes": {
+    "CWE-347": 1
    }
   },
   "eth-sign-used": {
    "count": 1,
    "parsers": {
     "DAPP-FRONTEND": 1
+   },
+   "cwes": {
+    "CWE-345": 1
    }
   },
   "excessive-agency-system-prompt-defines-a": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-862": 1
    }
   },
   "excessive-agency-unrestricted-execute-db": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-77": 1
    }
   },
   "express-body-parser-without-size-limit-d": {
    "count": 2,
    "parsers": {
     "STRUCTURAL": 2
+   },
+   "cwes": {
+    "CWE-400": 2
    }
   },
   "file-upload-handler-verify-mime-extensio": {
    "count": 2,
    "parsers": {
     "STRUCTURAL": 2
+   },
+   "cwes": {
+    "CWE-434": 2
    }
   },
   "format-string": {
    "count": 4,
    "parsers": {
     "CPP": 4
+   },
+   "cwes": {
+    "CWE-134": 4
    }
   },
   "format-string-injection": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-134": 1
    }
   },
   "gradio-auth": {
    "count": 1,
    "parsers": {
     "ML-SUPPLY": 1
+   },
+   "cwes": {
+    "CWE-862": 1
    }
   },
   "graphql-sensitive-query-field-verify-aut": {
    "count": 1,
    "parsers": {
     "GRAPHQL": 1
+   },
+   "cwes": {
+    "CWE-862": 1
    }
   },
   "gson-polymorphic-deserialization-any-cla": {
    "count": 1,
    "parsers": {
     "KOTLIN": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "hardcoded-secret": {
    "count": 11,
    "parsers": {
     "SECRET-CONCAT": 11
+   },
+   "cwes": {
+    "CWE-798": 11
    }
   },
   "header-hardening": {
    "count": 53,
    "parsers": {
     "ADV_STRUCTURAL": 53
+   },
+   "cwes": {
+    "CWE-200": 53
    }
   },
   "hf-datasets-rce": {
    "count": 1,
    "parsers": {
     "ML-SUPPLY": 1
+   },
+   "cwes": {
+    "CWE-94": 1
    }
   },
   "hf-endpoint-override": {
    "count": 1,
    "parsers": {
     "ML-SUPPLY": 1
+   },
+   "cwes": {
+    "CWE-494": 1
    }
   },
   "host-header": {
    "count": 2,
    "parsers": {
     "HOST-HEADER": 2
+   },
+   "cwes": {
+    "CWE-20": 1,
+    "CWE-601": 1
    }
   },
   "iac-misconfig": {
    "count": 5,
    "parsers": {
     "IAC-TF": 5
+   },
+   "cwes": {
+    "CWE-732": 2,
+    "CWE-284": 2,
+    "CWE-668": 1
    }
   },
   "idor": {
@@ -415,24 +615,41 @@
     "REGEX": 17,
     "AUTHZ-MATRIX": 3,
     "STRUCTURAL": 2
+   },
+   "cwes": {
+    "CWE-639": 14,
+    "CWE-347": 4,
+    "CWE-601": 1,
+    "CWE-384": 1,
+    "CWE-798": 1,
+    "CWE-287": 1
    }
   },
   "improper-output-handling-model-instructe": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-79": 1
    }
   },
   "indirect-prompt-injection-external-conte": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-1427": 1
    }
   },
   "injection": {
    "count": 1,
    "parsers": {
     "SAST": 1
+   },
+   "cwes": {
+    "CWE-1236": 1
    }
   },
   "insecure-deserialization": {
@@ -443,72 +660,108 @@
     "CSHARP": 5,
     "REGEX": 3,
     "GO": 1
+   },
+   "cwes": {
+    "CWE-502": 23
    }
   },
   "insecure-deserialization-marshal-load-on": {
    "count": 1,
    "parsers": {
     "RUBY": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "insecure-deserialization-marshal-load-ya": {
    "count": 1,
    "parsers": {
     "RUBY": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "insecure-deserialization-objectinputstre": {
    "count": 1,
    "parsers": {
     "KOTLIN": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "insecure-deserialization-unserialize-on-": {
    "count": 1,
    "parsers": {
     "PHP": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "insecure-deserialization-yaml-load-on-us": {
    "count": 1,
    "parsers": {
     "RUBY": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "insecure-http": {
    "count": 2,
    "parsers": {
     "PY-SAST": 2
+   },
+   "cwes": {
+    "CWE-295": 2
    }
   },
   "insecure-llm-tool-definition-execute-she": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-77": 1
    }
   },
   "integer-overflow": {
    "count": 1,
    "parsers": {
     "SOL": 1
+   },
+   "cwes": {
+    "CWE-190": 1
    }
   },
   "ios-webview-untrusted-url": {
    "count": 2,
    "parsers": {
     "MOBILE": 2
+   },
+   "cwes": {
+    "CWE-601": 2
    }
   },
   "jndi-injection": {
    "count": 3,
    "parsers": {
     "JNDI": 3
+   },
+   "cwes": {
+    "CWE-917": 3
    }
   },
   "jwt-no-exp": {
    "count": 3,
    "parsers": {
     "JWT-EXP": 3
+   },
+   "cwes": {
+    "CWE-613": 3
    }
   },
   "jwt-no-verify": {
@@ -516,157 +769,235 @@
    "parsers": {
     "STRUCTURAL": 5,
     "ADV_STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-327": 4,
+    "CWE-347": 1,
+    "CWE-613": 1
    }
   },
   "k8s-hostnetwork-mounted": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-250": 1
    }
   },
   "k8s-pod-security-allow-privesc": {
    "count": 1,
    "parsers": {
     "K8S-ADM": 1
+   },
+   "cwes": {
+    "CWE-250": 1
    }
   },
   "k8s-pod-security-capabilities-broad": {
    "count": 1,
    "parsers": {
     "K8S-ADM": 1
+   },
+   "cwes": {
+    "CWE-250": 1
    }
   },
   "k8s-pod-security-hostnetwork": {
    "count": 2,
    "parsers": {
     "K8S-ADM": 2
+   },
+   "cwes": {
+    "CWE-668": 2
    }
   },
   "k8s-pod-security-hostpath": {
    "count": 1,
    "parsers": {
     "K8S-ADM": 1
+   },
+   "cwes": {
+    "CWE-732": 1
    }
   },
   "k8s-pod-security-hostpid": {
    "count": 1,
    "parsers": {
     "K8S-ADM": 1
+   },
+   "cwes": {
+    "CWE-668": 1
    }
   },
   "k8s-pod-security-privileged": {
    "count": 2,
    "parsers": {
     "K8S-ADM": 2
+   },
+   "cwes": {
+    "CWE-250": 2
    }
   },
   "k8s-pod-security-run-as-root": {
    "count": 2,
    "parsers": {
     "K8S-ADM": 2
+   },
+   "cwes": {
+    "CWE-250": 2
    }
   },
   "k8s-rbac-cluster-admin": {
    "count": 1,
    "parsers": {
     "K8S-ADM": 1
+   },
+   "cwes": {
+    "CWE-269": 1
    }
   },
   "k8s-rbac-overbroad-binding": {
    "count": 1,
    "parsers": {
     "K8S-ADM": 1
+   },
+   "cwes": {
+    "CWE-863": 1
    }
   },
   "k8s-rbac-wildcard": {
    "count": 1,
    "parsers": {
     "K8S-ADM": 1
+   },
+   "cwes": {
+    "CWE-269": 1
    }
   },
   "k8s-runasnonroot-false": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-250": 1
    }
   },
   "k8s-securitycontext-privileged-true": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-250": 1
    }
   },
   "k8s-webhook-bypass": {
    "count": 1,
    "parsers": {
     "K8S-ADM": 1
+   },
+   "cwes": {
+    "CWE-754": 1
    }
   },
   "k8s-webhook-sideeffects": {
    "count": 1,
    "parsers": {
     "K8S-ADM": 1
+   },
+   "cwes": {
+    "CWE-1287": 1
    }
   },
   "key-hygiene": {
    "count": 4,
    "parsers": {
     "REGEX": 4
+   },
+   "cwes": {
+    "CWE-316": 4
    }
   },
   "kotlin-force-unwrap-on-user-input-null-c": {
    "count": 1,
    "parsers": {
     "KOTLIN": 1
+   },
+   "cwes": {
+    "CWE-476": 1
    }
   },
   "ldap-injection": {
    "count": 11,
    "parsers": {
     "LDAP-INJECTION": 11
+   },
+   "cwes": {
+    "CWE-90": 11
    }
   },
   "license-graph": {
    "count": 5,
    "parsers": {
     "(unset)": 5
-   }
+   },
+   "cwes": {},
+   "findingsWithoutCwe": 5
   },
   "llm-app-security": {
    "count": 2,
    "parsers": {
     "LLM-APP": 2
+   },
+   "cwes": {
+    "CWE-78": 2
    }
   },
   "llm-cache": {
    "count": 2,
    "parsers": {
     "LLM-COST": 2
+   },
+   "cwes": {
+    "CWE-400": 2
    }
   },
   "llm-call-without-max-tokens-unbounded-co": {
    "count": 4,
    "parsers": {
     "REGEX": 4
+   },
+   "cwes": {
+    "CWE-770": 4
    }
   },
   "llm-cost": {
    "count": 2,
    "parsers": {
     "LLM-COST": 2
+   },
+   "cwes": {
+    "CWE-400": 2
    }
   },
   "local-remote-file-inclusion-include-requ": {
    "count": 1,
    "parsers": {
     "PHP": 1
+   },
+   "cwes": {
+    "CWE-98": 1
    }
   },
   "malicious-install-script": {
    "count": 1,
    "parsers": {
     "SCA-INSTALL": 1
-   }
+   },
+   "cwes": {},
+   "findingsWithoutCwe": 1
   },
   "mass-assignment": {
    "count": 6,
@@ -674,144 +1005,216 @@
     "STRUCTURAL": 3,
     "REGEX": 2,
     "MASS-ASSIGN": 1
+   },
+   "cwes": {
+    "CWE-915": 6
    }
   },
   "math-random-used-for-security-value": {
    "count": 1,
    "parsers": {
     "ADV_STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-338": 1
    }
   },
   "mem-unsafe": {
    "count": 2,
    "parsers": {
     "CPP": 2
+   },
+   "cwes": {
+    "CWE-787": 2
    }
   },
   "method-reflection-send-public-send-with-": {
    "count": 1,
    "parsers": {
     "RUBY": 1
+   },
+   "cwes": {
+    "CWE-470": 1
    }
   },
   "misinformation-prompt-demands-fabricated": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-655": 1
    }
   },
   "missing-csrf-protection-on-state-changin": {
    "count": 44,
    "parsers": {
     "CSRF": 44
+   },
+   "cwes": {
+    "CWE-352": 44
    }
   },
   "mlflow-untrusted-uri": {
    "count": 1,
    "parsers": {
     "ML-SUPPLY": 1
+   },
+   "cwes": {
+    "CWE-1357": 1
    }
   },
   "model-format": {
    "count": 1,
    "parsers": {
     "ML-SUPPLY": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "model-load-from-pretrained-trust-remote-": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-94": 1
    }
   },
   "model-load-from-pretrained-without-pinne": {
    "count": 2,
    "parsers": {
     "REGEX": 2
+   },
+   "cwes": {
+    "CWE-1357": 2
    }
   },
   "model-load-joblib-load-is-pickle-backed-": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "model-load-model-weights-fetched-from-ht": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-494": 1
    }
   },
   "model-load-np-load-allow-pickle-true-rce": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "model-load-pickle-load-rce-on-untrusted-": {
    "count": 4,
    "parsers": {
     "REGEX": 4
+   },
+   "cwes": {
+    "CWE-502": 4
    }
   },
   "model-load-torch-load-without-weights-on": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "model-load-yaml-load-yaml-unsafe-load-rc": {
    "count": 3,
    "parsers": {
     "REGEX": 3
+   },
+   "cwes": {
+    "CWE-502": 3
    }
   },
   "multer-without-size-type-limits": {
    "count": 1,
    "parsers": {
     "ADV_STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-434": 1
    }
   },
   "mutation-xss-domparser-body-innerhtml-ro": {
    "count": 1,
    "parsers": {
     "MUTATION-XSS": 1
+   },
+   "cwes": {
+    "CWE-79": 1
    }
   },
   "nosql-injection": {
    "count": 2,
    "parsers": {
     "REGEX": 2
+   },
+   "cwes": {
+    "CWE-943": 2
    }
   },
   "nosql-injection-mongodb-query-with-raw-r": {
    "count": 1,
    "parsers": {
     "NOSQL-INJECTION": 1
+   },
+   "cwes": {
+    "CWE-943": 1
    }
   },
   "nosql-injection-mongodb-where-with-user-": {
    "count": 1,
    "parsers": {
     "NOSQL-INJECTION": 1
+   },
+   "cwes": {
+    "CWE-943": 1
    }
   },
   "nosql-injection-user-controlled-query-fi": {
    "count": 4,
    "parsers": {
     "STRUCTURAL": 4
+   },
+   "cwes": {
+    "CWE-943": 4
    }
   },
   "nosql-injection-where-with-user-input": {
    "count": 1,
    "parsers": {
     "STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-943": 1
    }
   },
   "onnx-providers": {
    "count": 1,
    "parsers": {
     "ML-SUPPLY": 1
+   },
+   "cwes": {
+    "CWE-1357": 1
    }
   },
   "open-redirect": {
@@ -819,24 +1222,36 @@
    "parsers": {
     "OPEN-REDIRECT": 8,
     "CSHARP": 1
+   },
+   "cwes": {
+    "CWE-601": 9
    }
   },
   "open-redirect-response-sendredirect-with": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-601": 1
    }
   },
   "open-redirect-user-controlled-url": {
    "count": 2,
    "parsers": {
     "STRUCTURAL": 2
+   },
+   "cwes": {
+    "CWE-601": 2
    }
   },
   "oracle-staleness": {
    "count": 1,
    "parsers": {
     "WEB3-ADV": 1
+   },
+   "cwes": {
+    "CWE-672": 1
    }
   },
   "path-traversal": {
@@ -852,102 +1267,153 @@
     "PYTHON": 2,
     "PHP": 1,
     "JS-FW": 1
+   },
+   "cwes": {
+    "CWE-22": 20
    }
   },
   "permissive-cors-allow-origin": {
    "count": 2,
    "parsers": {
     "STRUCTURAL": 2
+   },
+   "cwes": {
+    "CWE-942": 2
    }
   },
   "phpinfo-exposes-environment-headers-path": {
    "count": 1,
    "parsers": {
     "PHP": 1
+   },
+   "cwes": {
+    "CWE-200": 1
    }
   },
   "pipeline-github-action-pinned-to-floatin": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-1357": 1
    }
   },
   "pipeline-oidc-id-token-write-without-exp": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-1188": 1
    }
   },
   "pipeline-permissions-set-to-write-all-ex": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-272": 1
    }
   },
   "pipeline-secret-echoed-to-logs": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-532": 1
    }
   },
   "pipeline-third-party-action-pinned-to-ma": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-1357": 1
    }
   },
   "pipeline-untrusted-github-event-input-in": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-78": 1
    }
   },
   "potential-indirect-idor-findall-without-": {
    "count": 1,
    "parsers": {
     "STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-639": 1
    }
   },
   "pqc-migration": {
    "count": 16,
    "parsers": {
     "PQC": 16
+   },
+   "cwes": {
+    "CWE-327": 16
    }
   },
   "prompt-firewall-missing-max-tokens-cap": {
    "count": 4,
    "parsers": {
     "REGEX": 4
+   },
+   "cwes": {
+    "CWE-400": 4
    }
   },
   "prompt-injection-http-user-input-in-llm-": {
    "count": 3,
    "parsers": {
     "REGEX": 3
+   },
+   "cwes": {
+    "CWE-1427": 3
    }
   },
   "prompt-injection-system-prompt-built-fro": {
    "count": 6,
    "parsers": {
     "REGEX": 6
+   },
+   "cwes": {
+    "CWE-1427": 6
    }
   },
   "prompt-injection-template-literal-user-i": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-1427": 1
    }
   },
   "prompt-integrity": {
    "count": 2,
    "parsers": {
     "ML-SUPPLY": 2
+   },
+   "cwes": {
+    "CWE-345": 2
    }
   },
   "prompt-template-user-input-interpolated-": {
    "count": 7,
    "parsers": {
     "REGEX": 7
+   },
+   "cwes": {
+    "CWE-1336": 7
    }
   },
   "prototype-pollution": {
@@ -957,84 +1423,126 @@
     "JS-FW": 3,
     "ADV_STRUCTURAL": 1,
     "PROTO-POLLUTION": 1
+   },
+   "cwes": {
+    "CWE-1321": 8
    }
   },
   "react-dangerouslysetinnerhtml-without-sa": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-79": 1
    }
   },
   "redos": {
    "count": 5,
    "parsers": {
     "NFA": 5
+   },
+   "cwes": {
+    "CWE-1333": 5
    }
   },
   "reentrancy": {
    "count": 1,
    "parsers": {
     "SOL": 1
+   },
+   "cwes": {
+    "CWE-841": 1
    }
   },
   "response-splitting": {
    "count": 8,
    "parsers": {
     "RESPONSE-SPLITTING": 8
+   },
+   "cwes": {
+    "CWE-113": 8
    }
   },
   "rpc-key-inline": {
    "count": 1,
    "parsers": {
     "DAPP-FRONTEND": 1
+   },
+   "cwes": {
+    "CWE-798": 1
    }
   },
   "runblocking-at-top-level-blocks-the-call": {
    "count": 1,
    "parsers": {
     "KOTLIN": 1
+   },
+   "cwes": {
+    "CWE-400": 1
    }
   },
   "secret": {
    "count": 2,
    "parsers": {
     "CSHARP": 2
+   },
+   "cwes": {
+    "CWE-798": 2
    }
   },
   "session-cookie-missing-secure-flag": {
    "count": 1,
    "parsers": {
     "ADV_STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-614": 1
    }
   },
   "session-cookie-without-httponly-flag": {
    "count": 3,
    "parsers": {
     "STRUCTURAL": 3
+   },
+   "cwes": {
+    "CWE-1004": 3
    }
   },
   "sibling-guard-omission": {
    "count": 1,
    "parsers": {
     "SIBLING-GUARD": 1
+   },
+   "cwes": {
+    "CWE-22": 1
    }
   },
   "signature-replay": {
    "count": 1,
    "parsers": {
     "WEB3-ADV": 1
+   },
+   "cwes": {
+    "CWE-294": 1
    }
   },
   "solana-anchor-no-owner": {
    "count": 1,
    "parsers": {
     "WEB3-ADV": 1
+   },
+   "cwes": {
+    "CWE-862": 1
    }
   },
   "springboot-missing-authz": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-862": 1
    }
   },
   "sql-injection": {
@@ -1053,6 +1561,9 @@
     "IR-TAINT": 1,
     "PY-SAST": 1,
     "RUST": 1
+   },
+   "cwes": {
+    "CWE-89": 51
    }
   },
   "ssrf": {
@@ -1067,204 +1578,306 @@
     "CSHARP": 1,
     "JS-FW": 1,
     "KOTLIN": 1
+   },
+   "cwes": {
+    "CWE-918": 15
    }
   },
   "ssti": {
    "count": 2,
    "parsers": {
     "SSTI": 2
+   },
+   "cwes": {
+    "CWE-94": 2
    }
   },
   "ssti-user-controlled-template-source": {
    "count": 1,
    "parsers": {
     "ADV_STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-1336": 1
    }
   },
   "supply-chain": {
    "count": 2,
    "parsers": {
     "SAST": 2
+   },
+   "cwes": {
+    "CWE-353": 2
    }
   },
   "swift-cleartext-http": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-319": 1
    }
   },
   "swift-deeplink-unsafe": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-20": 1
    }
   },
   "swift-force-unwrap": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-755": 1
    }
   },
   "swift-hardcoded-credential": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-798": 1
    }
   },
   "swift-insecure-storage": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-922": 1
    }
   },
   "swift-webview-unsafe": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-829": 1
    }
   },
   "system-prompt-leakage-secrets-embedded-i": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-200": 1
    }
   },
   "system-prompt-missing-explicit-anti-inje": {
    "count": 12,
    "parsers": {
     "REGEX": 12
+   },
+   "cwes": {
+    "CWE-77": 12
    }
   },
   "terraform-encryption-disabled-at-rest": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-311": 1
    }
   },
   "terraform-iam-action-wildcard": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-732": 1
    }
   },
   "terraform-s3-bucket-acl-public-read": {
    "count": 2,
    "parsers": {
     "REGEX": 2
+   },
+   "cwes": {
+    "CWE-200": 2
    }
   },
   "timing-attack": {
    "count": 4,
    "parsers": {
     "COMPARISON": 4
+   },
+   "cwes": {
+    "CWE-208": 4
    }
   },
   "timing-side-channel": {
    "count": 9,
    "parsers": {
     "REGEX": 9
+   },
+   "cwes": {
+    "CWE-208": 9
    }
   },
   "toctou-file-existence-permission-check-b": {
    "count": 2,
    "parsers": {
     "TOCTOU": 2
+   },
+   "cwes": {
+    "CWE-367": 2
    }
   },
   "tx-origin-auth": {
    "count": 1,
    "parsers": {
     "SOL": 1
+   },
+   "cwes": {
+    "CWE-345": 1
    }
   },
   "unbounded-consumption-llm-call-has-no-to": {
    "count": 2,
    "parsers": {
     "REGEX": 2
+   },
+   "cwes": {
+    "CWE-400": 2
    }
   },
   "unlimited-approval": {
    "count": 1,
    "parsers": {
     "DAPP-FRONTEND": 1
+   },
+   "cwes": {
+    "CWE-863": 1
    }
   },
   "unprotected-selfdestruct": {
    "count": 1,
    "parsers": {
     "SOL": 1
+   },
+   "cwes": {
+    "CWE-284": 1
    }
   },
   "unrestricted-file-upload": {
    "count": 3,
    "parsers": {
     "FILE-UPLOAD": 3
+   },
+   "cwes": {
+    "CWE-434": 3
    }
   },
   "unsafe-block": {
    "count": 1,
    "parsers": {
     "RUST": 1
+   },
+   "cwes": {
+    "CWE-758": 1
    }
   },
   "unsafe-reflection-rce": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-470": 1
    }
   },
   "unsafe-yaml-load-snakeyaml-default-const": {
    "count": 1,
    "parsers": {
     "KOTLIN": 1
+   },
+   "cwes": {
+    "CWE-502": 1
    }
   },
   "unsanitized-llm-output-rendered-as-html": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-79": 1
    }
   },
   "upgradeable-init": {
    "count": 1,
    "parsers": {
     "WEB3-ADV": 1
+   },
+   "cwes": {
+    "CWE-665": 1
    }
   },
   "upgradeable-storage": {
    "count": 1,
    "parsers": {
     "WEB3-ADV": 1
+   },
+   "cwes": {
+    "CWE-665": 1
    }
   },
   "use-after-free-heuristic-free-p-followed": {
    "count": 2,
    "parsers": {
     "CPP": 2
+   },
+   "cwes": {
+    "CWE-416": 2
    }
   },
   "user-input-concatenated-into-system-prom": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-77": 1
    }
   },
   "variable-injection-extract-request-creat": {
    "count": 1,
    "parsers": {
     "PHP": 1
+   },
+   "cwes": {
+    "CWE-915": 1
    }
   },
   "vector-embedding-weakness-inject-documen": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-345": 1
    }
   },
   "vector-embedding-weakness-module-level-m": {
    "count": 1,
    "parsers": {
     "REGEX": 1
+   },
+   "cwes": {
+    "CWE-345": 1
    }
   },
   "weak-crypto": {
@@ -1273,24 +1886,36 @@
     "STRUCTURAL": 5,
     "JAVA_SAST": 4,
     "ADV_STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-916": 10
    }
   },
   "weak-hardcoded-session-secret": {
    "count": 1,
    "parsers": {
     "STRUCTURAL": 1
+   },
+   "cwes": {
+    "CWE-798": 1
    }
   },
   "weak-password-hash": {
    "count": 9,
    "parsers": {
     "WEAK-PW-HASH": 9
+   },
+   "cwes": {
+    "CWE-916": 9
    }
   },
   "weak-password-hashing-md5-sha1-are-not-p": {
    "count": 2,
    "parsers": {
     "PHP": 2
+   },
+   "cwes": {
+    "CWE-916": 2
    }
   },
   "weak-rng": {
@@ -1300,30 +1925,46 @@
     "CPP": 2,
     "RUST": 1,
     "SOL": 1
+   },
+   "cwes": {
+    "CWE-338": 19,
+    "CWE-330": 1
    }
   },
   "xlang-graphql": {
    "count": 1,
    "parsers": {
     "XLANG-GRAPHQL": 1
+   },
+   "cwes": {
+    "CWE-89": 1
    }
   },
   "xlang-grpc": {
    "count": 1,
    "parsers": {
     "XLANG-GRPC": 1
+   },
+   "cwes": {
+    "CWE-89": 1
    }
   },
   "xlang-openapi": {
    "count": 1,
    "parsers": {
     "XLANG-OPENAPI": 1
+   },
+   "cwes": {
+    "CWE-89": 1
    }
   },
   "xpath-injection-query-built-via-string-c": {
    "count": 9,
    "parsers": {
     "XPATH-INJECTION": 9
+   },
+   "cwes": {
+    "CWE-643": 9
    }
   },
   "xss": {
@@ -1336,6 +1977,9 @@
     "SAST": 2,
     "PYTHON": 1,
     "JS-FW": 1
+   },
+   "cwes": {
+    "CWE-79": 33
    }
   },
   "xxe": {
@@ -1345,18 +1989,27 @@
     "CSHARP": 3,
     "STRUCTURAL": 1,
     "JS-FW": 1
+   },
+   "cwes": {
+    "CWE-611": 16
    }
   },
   "xxe-xml-parser-without-dtd-external-enti": {
    "count": 1,
    "parsers": {
     "KOTLIN": 1
+   },
+   "cwes": {
+    "CWE-611": 1
    }
   },
   "zip-slip": {
    "count": 2,
    "parsers": {
     "ZIP-SLIP": 2
+   },
+   "cwes": {
+    "CWE-22": 2
    }
   }
  }

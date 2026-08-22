@@ -35,6 +35,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { statePath, stateWritesEnabled } from './state-dir.js';
+import { COMPLIANCE_FAMILY_ALIAS, resolveFamilyKeys } from './family-resolve.js';
+import { strengthOfControl as _strengthOfControl } from './coverage-strength.js';
+
+// Re-exported so existing callers/tests keep importing these from here.
+export { COMPLIANCE_FAMILY_ALIAS, resolveFamilyKeys };
 const BUNDLED_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), 'compliance-frameworks');
 function _readJson(fp) {
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
@@ -118,15 +123,6 @@ export function loadFramework(scanRoot, id) {
 // `k8s-pod-privileged`; `nist-csf-2.json`/`hipaa-security-rule.json` map to
 // the compliance-side spelling `k8s-pod-security-privileged`, which no
 // detector ever emitted.
-export const COMPLIANCE_FAMILY_ALIAS = {
-  // ASVS spells it `sqli`; every detector emits `sql-injection` (or a
-  // language-prefixed variant, which the suffix rule below does NOT cover
-  // because the prefix is on the wrong end).
-  'sqli': ['sql-injection', 'dart-sql-injection', 'laravel-sql-injection'],
-  'auth-missing': ['broken-access-control', 'fastapi-missing-auth', 'springboot-missing-authz', 'laravel-missing-auth', 'quarkus-missing-authz'],
-  'authz': ['broken-access-control', 'idor', 'springboot-missing-authz', 'quarkus-missing-authz'],
-  'k8s-pod-security-privileged': ['k8s-pod-privileged'],
-};
 
 // CMP-1 audit trail: every `family:` string referenced by the bundled
 // compliance-frameworks/*.json files was cross-checked against real
@@ -223,7 +219,19 @@ export function evaluateFramework(scanRoot, fw, scan) {
 
     if (maps.length === 0) {
       obs.push('No automated mapping — requires manual evidence collection.');
-      results.push({ control: c, status, observations: obs });
+      // PRD F10.2: carry the MEASURED strength of the backing detector, so a
+    // control mapped to a detector that finds 3 of 18 independent advisories
+    // cannot read the same as one backed by a detector that finds nearly
+    // everything. Import is lazy so the evaluator keeps working if the bench
+    // artifacts are absent (they degrade to `unmeasured`, never to a default).
+    let evidence = null;
+    try { evidence = _strengthOfControl(c); } catch { /* strength is additive; never block evaluation */ }
+    results.push({
+      control: c,
+      status,
+      observations: obs,
+      ...(evidence ? { evidence, partiallyEvidenced: evidence.tier === 'weak' || evidence.tier === 'unmeasured' } : {}),
+    });
       continue;
     }
 
@@ -268,7 +276,6 @@ export function evaluateFramework(scanRoot, fw, scan) {
           hasUnverifiableMapping = true;
           continue;
         }
-        const aliasFams = COMPLIANCE_FAMILY_ALIAS[fam] || [];
         // Several detectors emit the family as `<family>-<rule-slug>` — the
         // observed vocabulary holds `prompt-injection-http-user-input-in-llm-`,
         // `xpath-injection-query-built-via-string-c` and similar. This lookup
@@ -281,11 +288,8 @@ export function evaluateFramework(scanRoot, fw, scan) {
         // prefix test would let `nosql-injection` satisfy a `sql-injection`
         // mapping, silently merging two different vulnerability classes. A test
         // pins that boundary in the failing direction.
-        const bases = [fam, ...aliasFams];
-        const candidates = [];
-        for (const [key, list] of families) {
-          if (bases.some(b => key === b || key.startsWith(`${b}-`))) candidates.push(...list);
-        }
+        const candidates = resolveFamilyKeys(fam, families.keys())
+          .flatMap(k => families.get(k) || []);
         const scoped = subfam ? candidates.filter(f => !f.subfamily || f.subfamily === subfam) : candidates;
         const open = scoped.filter(f => !f.intentSuppressed && !f.pastDecision && (f.severity === 'critical' || f.severity === 'high'));
         if (open.length) {
@@ -365,7 +369,19 @@ export function evaluateFramework(scanRoot, fw, scan) {
     else if (!anyCleared) status = 'absent';
     else status = 'partial';
 
-    results.push({ control: c, status, observations: obs });
+    // PRD F10.2: carry the MEASURED strength of the backing detector, so a
+    // control mapped to a detector that finds 3 of 18 independent advisories
+    // cannot read the same as one backed by a detector that finds nearly
+    // everything. Import is lazy so the evaluator keeps working if the bench
+    // artifacts are absent (they degrade to `unmeasured`, never to a default).
+    let evidence = null;
+    try { evidence = _strengthOfControl(c); } catch { /* strength is additive; never block evaluation */ }
+    results.push({
+      control: c,
+      status,
+      observations: obs,
+      ...(evidence ? { evidence, partiallyEvidenced: evidence.tier === 'weak' || evidence.tier === 'unmeasured' } : {}),
+    });
   }
   return results;
 }

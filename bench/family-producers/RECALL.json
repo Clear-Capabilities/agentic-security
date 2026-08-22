@@ -1,0 +1,713 @@
+{
+ "schema": "detector-recall/v1",
+ "purpose": "Measured per-CWE recall of this engine against an INDEPENDENT corpus of third-party advisories. Consumed by posture/coverage-strength.js so a compliance control can report how good the detector behind it actually is (PRD F10.2).",
+ "source": "bench/independent — advisories mined from public sources, not authored here.",
+ "population": {
+  "totalEntries": 315,
+  "scoredEntries": 309,
+  "unscored": 6
+ },
+ "caveat": "Rates carry {n,d} so a percentage can never appear without its denominator. Many CWEs have d<5; treat those as indicative, not settled. A CWE absent here was never exercised by the corpus — that is UNMEASURED, not good.",
+ "engineVersion": "0.138.0",
+ "measuredAt": "2026-08-19",
+ "byCwe": {
+  "CWE-125": {
+   "recall": {
+    "n": 0,
+    "d": 3
+   },
+   "precision": null,
+   "entries": 3
+  },
+  "CWE-129": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-1321": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-1333": {
+   "recall": {
+    "n": 2,
+    "d": 5
+   },
+   "precision": {
+    "n": 2,
+    "d": 3
+   },
+   "entries": 5
+  },
+  "CWE-1392": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-1395": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-150": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-178": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-184": {
+   "recall": {
+    "n": 0,
+    "d": 4
+   },
+   "precision": null,
+   "entries": 4
+  },
+  "CWE-191": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-20": {
+   "recall": {
+    "n": 0,
+    "d": 18
+   },
+   "precision": null,
+   "entries": 18
+  },
+  "CWE-200": {
+   "recall": {
+    "n": 0,
+    "d": 19
+   },
+   "precision": null,
+   "entries": 19
+  },
+  "CWE-201": {
+   "recall": {
+    "n": 0,
+    "d": 3
+   },
+   "precision": null,
+   "entries": 3
+  },
+  "CWE-203": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-204": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-209": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  },
+  "CWE-22": {
+   "recall": {
+    "n": 2,
+    "d": 35
+   },
+   "precision": {
+    "n": 2,
+    "d": 4
+   },
+   "entries": 35
+  },
+  "CWE-248": {
+   "recall": {
+    "n": 0,
+    "d": 3
+   },
+   "precision": null,
+   "entries": 3
+  },
+  "CWE-256": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-266": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-269": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-284": {
+   "recall": {
+    "n": 0,
+    "d": 5
+   },
+   "precision": null,
+   "entries": 5
+  },
+  "CWE-285": {
+   "recall": {
+    "n": 0,
+    "d": 4
+   },
+   "precision": null,
+   "entries": 4
+  },
+  "CWE-287": {
+   "recall": {
+    "n": 0,
+    "d": 7
+   },
+   "precision": null,
+   "entries": 7
+  },
+  "CWE-294": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-306": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  },
+  "CWE-311": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-312": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-319": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  },
+  "CWE-324": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-331": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-345": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-346": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  },
+  "CWE-347": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-348": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-350": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-362": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  },
+  "CWE-367": {
+   "recall": {
+    "n": 1,
+    "d": 1
+   },
+   "precision": {
+    "n": 1,
+    "d": 1
+   },
+   "entries": 1
+  },
+  "CWE-384": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-400": {
+   "recall": {
+    "n": 1,
+    "d": 17
+   },
+   "precision": {
+    "n": 1,
+    "d": 1
+   },
+   "entries": 17
+  },
+  "CWE-401": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-405": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-407": {
+   "recall": {
+    "n": 0,
+    "d": 3
+   },
+   "precision": null,
+   "entries": 3
+  },
+  "CWE-416": {
+   "recall": {
+    "n": 0,
+    "d": 3
+   },
+   "precision": null,
+   "entries": 3
+  },
+  "CWE-434": {
+   "recall": {
+    "n": 1,
+    "d": 4
+   },
+   "precision": {
+    "n": 1,
+    "d": 1
+   },
+   "entries": 4
+  },
+  "CWE-436": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-441": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-444": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  },
+  "CWE-476": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  },
+  "CWE-488": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-502": {
+   "recall": {
+    "n": 1,
+    "d": 1
+   },
+   "precision": {
+    "n": 1,
+    "d": 2
+   },
+   "entries": 1
+  },
+  "CWE-522": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-524": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-59": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-601": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-606": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-61": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-611": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-636": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-639": {
+   "recall": {
+    "n": 2,
+    "d": 12
+   },
+   "precision": {
+    "n": 2,
+    "d": 3
+   },
+   "entries": 12
+  },
+  "CWE-653": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-668": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-693": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  },
+  "CWE-694": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-73": {
+   "recall": {
+    "n": 0,
+    "d": 3
+   },
+   "precision": null,
+   "entries": 3
+  },
+  "CWE-732": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-74": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  },
+  "CWE-770": {
+   "recall": {
+    "n": 0,
+    "d": 8
+   },
+   "precision": null,
+   "entries": 8
+  },
+  "CWE-78": {
+   "recall": {
+    "n": 1,
+    "d": 3
+   },
+   "precision": {
+    "n": 1,
+    "d": 1
+   },
+   "entries": 3
+  },
+  "CWE-79": {
+   "recall": {
+    "n": 3,
+    "d": 18
+   },
+   "precision": {
+    "n": 3,
+    "d": 6
+   },
+   "entries": 18
+  },
+  "CWE-834": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-835": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-843": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-862": {
+   "recall": {
+    "n": 1,
+    "d": 12
+   },
+   "precision": {
+    "n": 1,
+    "d": 2
+   },
+   "entries": 12
+  },
+  "CWE-863": {
+   "recall": {
+    "n": 0,
+    "d": 11
+   },
+   "precision": null,
+   "entries": 11
+  },
+  "CWE-88": {
+   "recall": {
+    "n": 1,
+    "d": 5
+   },
+   "precision": {
+    "n": 1,
+    "d": 2
+   },
+   "entries": 5
+  },
+  "CWE-89": {
+   "recall": {
+    "n": 3,
+    "d": 4
+   },
+   "precision": {
+    "n": 3,
+    "d": 6
+   },
+   "entries": 4
+  },
+  "CWE-90": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-918": {
+   "recall": {
+    "n": 1,
+    "d": 16
+   },
+   "precision": {
+    "n": 1,
+    "d": 3
+   },
+   "entries": 16
+  },
+  "CWE-93": {
+   "recall": {
+    "n": 0,
+    "d": 1
+   },
+   "precision": null,
+   "entries": 1
+  },
+  "CWE-94": {
+   "recall": {
+    "n": 2,
+    "d": 18
+   },
+   "precision": {
+    "n": 2,
+    "d": 4
+   },
+   "entries": 18
+  },
+  "CWE-95": {
+   "recall": {
+    "n": 0,
+    "d": 2
+   },
+   "precision": null,
+   "entries": 2
+  }
+ }
+}

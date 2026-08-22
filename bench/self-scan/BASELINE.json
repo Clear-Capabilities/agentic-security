@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-21T21:53:14.608Z",
-  "commit": "4059ecab04604721faa198f460c1835e5461bbdb",
+  "generatedAt": "2026-08-22T04:52:00.971Z",
+  "commit": "11fdb30475e554e4d1635250a2589ff8d63e386e",
   "targets": {
     "hooks": {
       "total": 21,
@@ -35,7 +35,7 @@
       }
     },
     "scanner/src": {
-      "total": 426,
+      "total": 427,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -85,6 +85,7 @@
         "posture/claude-authorship.js": 1,
         "posture/compliance-policy.js": 5,
         "posture/corpus-enroll.js": 2,
+        "posture/coverage-strength.js": 1,
         "posture/cross-repo-memory.js": 2,
         "posture/custom-rules.js": 2,
         "posture/cve-alert-daemon.js": 5,
