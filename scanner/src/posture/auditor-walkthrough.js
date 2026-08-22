@@ -363,6 +363,29 @@ export function evaluateFramework(scanRoot, fw, scan) {
     // any control that already reads 'partial' because of an inherently
     // unverifiable rule: mapping — that precedent (rule: caps at 'partial',
     // never reaching 'present' OR 'absent') is unchanged.
+    // PRD F10.3: a control NIST/the framework rates as not code-testable must
+    // never read as evidenced by this tool. Two shapes were reaching 'present'
+    // that should not have:
+    //
+    //   codeTestable:'no'      — organisational (policy, training, governance).
+    //                            Nothing a scanner observes can satisfy it.
+    //   codeTestable:'partial' — the only mappings are `module:` artifact
+    //                            EXISTENCE checks. "threat-model.json is
+    //                            present" is not evidence that threat modelling
+    //                            happened; it is evidence a file exists.
+    //
+    // Both are capped at 'partial' via the same unverifiable-mapping path a
+    // `rule:` mapping already uses, and the reason is stated in the
+    // observations so a reader is told WHY rather than left to infer it.
+    if (c.codeTestable === 'no') {
+      obs.push('⚠ this control is organisational, not code-testable — a scanner cannot evidence it (codeTestable: no).');
+      hasUnverifiableMapping = true;
+      anySignal = true;
+    } else if (c.codeTestable === 'partial' && maps.every(m => !m.startsWith('family:'))) {
+      obs.push('⚠ backed only by artifact-existence checks — a present file is weaker evidence than a detector finding nothing (codeTestable: partial).');
+      hasUnverifiableMapping = true;
+    }
+
     if (!anySignal) status = 'manual';
     else if (hasUnverifiableMapping) status = 'partial';
     else if (allCleared) status = 'present';

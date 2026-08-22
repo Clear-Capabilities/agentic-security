@@ -196,3 +196,47 @@ test('the compliance spelling `sqli` reaches the sql-injection detectors', () =>
   const [result] = evaluateFramework(HERE, fw, scan);
   assert.notEqual(result.status, 'present', 'family:sqli must resolve to the sql-injection family');
 });
+
+// PRD F10.3 — never claim a control the scanner cannot evidence.
+//
+// Two shapes were reaching 'present' without anything meaningful being checked:
+// organisational controls (policy, training, governance), and controls whose
+// only mappings are `module:` artifact-EXISTENCE checks. "threat-model.json is
+// present" is evidence that a file exists, not that threat modelling happened.
+//
+// Across the bundled frameworks this caps 106 of 163 controls — EU AI Act went
+// from 7 controls able to read 'present' to 1. That drop IS the honest picture.
+test('an organisational control can never read "present"', () => {
+  const fw = { name: 't', controls: [{ id: 'ORG', codeTestable: 'no', mapsTo: ['module:sbom-diff'] }] };
+  const [r] = evaluateFramework(HERE, fw, { findings: [], secrets: [], logicVulns: [], supplyChain: [] });
+  assert.notEqual(r.status, 'present');
+  assert.ok(r.observations.some((o) => /organisational|not code-testable/i.test(o)), 'must say WHY, not just downgrade');
+});
+
+test('a control backed only by artifact existence can never read "present"', () => {
+  const fw = { name: 't', controls: [{ id: 'ARTI', codeTestable: 'partial', mapsTo: ['module:sbom-diff'] }] };
+  const [r] = evaluateFramework(HERE, fw, { findings: [], secrets: [], logicVulns: [], supplyChain: [] });
+  assert.notEqual(r.status, 'present');
+  assert.ok(r.observations.some((o) => /artifact-existence/i.test(o)));
+});
+
+test('a real detector-backed control still reaches "present"', () => {
+  // Negative control. The cap must not swallow controls that genuinely check
+  // something, or the whole compliance surface becomes uniformly useless.
+  const fw = { name: 't', controls: [{ id: 'REAL', codeTestable: 'yes', mapsTo: ['family:sql-injection'] }] };
+  const [r] = evaluateFramework(HERE, fw, { findings: [], secrets: [], logicVulns: [], supplyChain: [] });
+  assert.equal(r.status, 'present');
+});
+
+test('every bundled control declares codeTestable', () => {
+  // Anti-rot: a control added without the rating would silently regain the
+  // ability to read 'present' on artifact existence alone.
+  const missing = [];
+  for (const file of fs.readdirSync(FRAMEWORK_DIR).filter((f) => f.endsWith('.json'))) {
+    const fw = JSON.parse(fs.readFileSync(path.join(FRAMEWORK_DIR, file), 'utf8'));
+    for (const c of fw.controls || []) {
+      if (!['yes', 'partial', 'no'].includes(c.codeTestable)) missing.push(`${file}:${c.id}`);
+    }
+  }
+  assert.deepEqual(missing, [], 'controls missing a codeTestable rating');
+});

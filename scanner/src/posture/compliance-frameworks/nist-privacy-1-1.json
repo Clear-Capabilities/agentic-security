@@ -5,6 +5,9 @@
   "license": "public-domain (US Federal publication)",
   "url": "https://www.nist.gov/privacy-framework",
   "note": "Each control carries NIST's own `codeTestable` rating (yes/partial/no). That rating says whether a control COULD be assessed from source code — it does not say this engine assesses it. `mapsTo` is present only where this engine produces a real signal; a control that NIST rates testable but which this engine cannot see is reported as an ENGINE GAP rather than silently passed.",
+  "scope": "FULL CATALOGUE, partially assessable. All 104 controls are present and each carries `codeTestable`. 48 are governance controls no scanner can assess; those report `manual`, never `satisfied`. See posture/privacy-framework.js.",
+  "controlsDigest": "447154af306c58d3",
+  "controlCount": 104,
   "controls": [
     {
       "id": "ID.IM-P1",

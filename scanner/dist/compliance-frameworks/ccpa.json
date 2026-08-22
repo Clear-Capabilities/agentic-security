@@ -4,29 +4,56 @@
   "publisher": "California Legislature",
   "license": "California statute (public)",
   "url": "https://leginfo.legislature.ca.gov/faces/codes_displayText.xhtml?division=3.&part=4.&lawCode=CIV&title=1.81.5",
+  "scope": "SELECTIVE SUBSET. 4 of the CCPA/CPRA obligations, chosen because a code scanner can produce evidence for them. The statute is far broader; the majority of its duties (notice, consumer request handling, contracts, retention policy) are organisational and are NOT represented here. Absence of a control is not a statement of compliance.",
+  "controlsDigest": "ebc1f708c329ab42",
+  "controlCount": 4,
   "controls": [
     {
       "id": "§1798.100",
       "summary": "Consumer right to know — businesses inform consumers about categories of personal info collected.",
-      "evidence": ["DPIA artifact lists every PII field with file:line provenance."],
-      "mapsTo": ["module:privacy-taint"]
+      "codeTestable": "partial",
+      "evidence": [
+        "DPIA artifact lists every PII field with file:line provenance."
+      ],
+      "mapsTo": [
+        "module:privacy-taint"
+      ]
     },
     {
       "id": "§1798.105",
       "summary": "Right to delete — businesses comply with verified deletion requests.",
-      "evidence": ["No data-exposure findings on PII storage paths."]
+      "codeTestable": "no",
+      "evidence": [
+        "No data-exposure findings on PII storage paths."
+      ]
     },
     {
       "id": "§1798.150",
       "summary": "Civil action for security breach affecting personal information.",
-      "evidence": ["Crypto findings cleared on PII handling code.", "TLS pinning checks pass."],
-      "mapsTo": ["family:crypto-weak-cipher", "family:crypto-tls-version", "family:crypto-tls-no-verify"]
+      "codeTestable": "yes",
+      "evidence": [
+        "Crypto findings cleared on PII handling code.",
+        "TLS pinning checks pass."
+      ],
+      "mapsTo": [
+        "family:crypto-weak-cipher",
+        "family:crypto-tls-version",
+        "family:crypto-tls-no-verify"
+      ]
     },
     {
       "id": "§1798.81.5",
       "summary": "Reasonable security procedures and practices.",
-      "evidence": ["No critical findings on user-data endpoints.", "Auth-missing zero on PII paths."],
-      "mapsTo": ["family:auth-missing", "family:authz", "family:hardcoded-secret"]
+      "codeTestable": "yes",
+      "evidence": [
+        "No critical findings on user-data endpoints.",
+        "Auth-missing zero on PII paths."
+      ],
+      "mapsTo": [
+        "family:auth-missing",
+        "family:authz",
+        "family:hardcoded-secret"
+      ]
     }
   ]
 }
