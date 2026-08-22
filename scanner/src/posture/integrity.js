@@ -39,6 +39,46 @@ function _keyPath() { return path.join(_keyDir(), 'scan-key'); }
 let _keySource = null;
 export function keyProvenance() { return _keySource || 'unresolved'; }
 
+// `writeFileSync(fp, …, {flag:'wx'})` is exclusive-CREATE, not atomic
+// create-with-content: it creates the file and THEN writes it. A concurrent
+// process that opens the path in that window reads an empty or partial file,
+// fails the hex check, and falls through to an ephemeral key — whose signatures
+// verify nowhere, forever, indistinguishable from real tampering. That is the
+// same failure the `wx` flag was added to prevent, just through a narrower
+// window, and CI caught it: 1 of 8 concurrently-generated signatures failed to
+// verify under the install key.
+//
+// Writing the full content to a temp file and hard-LINKING it into place closes
+// the window. link(2) is atomic and fails with EEXIST rather than clobbering, so
+// the destination path only ever appears with complete content, and the
+// first-writer-wins guarantee is preserved. Some filesystems (and Windows in
+// places) refuse hard links, so an unsupported link degrades to the previous
+// exclusive-create behaviour rather than failing the scan.
+function _publishKeyAtomically(fp, contents) {
+  const dir = _keyDir();
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const tmp = path.join(dir, `scan-key.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`);
+  try {
+    fs.writeFileSync(tmp, contents, { mode: 0o600 });
+    try {
+      fs.linkSync(tmp, fp);
+      return 'created';
+    } catch (e) {
+      if (e.code === 'EEXIST') return 'exists';
+      // Hard links unsupported here — fall back, accepting the narrower race.
+      try {
+        fs.writeFileSync(fp, contents, { mode: 0o600, flag: 'wx' });
+        return 'created';
+      } catch (e2) {
+        if (e2.code === 'EEXIST') return 'exists';
+        throw e2;
+      }
+    }
+  } finally {
+    try { fs.unlinkSync(tmp); } catch { /* best effort */ }
+  }
+}
+
 function _readOrGenerateKey() {
   const fromEnv = process.env.AGENTIC_SECURITY_HMAC_KEY;
   if (fromEnv && /^[0-9a-fA-F]{32,}$/.test(fromEnv.trim())) {
@@ -62,19 +102,30 @@ function _readOrGenerateKey() {
   // forever after, indistinguishable from real tampering.
   const buf = crypto.randomBytes(32);
   try {
-    fs.mkdirSync(_keyDir(), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(fp, buf.toString('hex') + '\n', { mode: 0o600, flag: 'wx' });
-    _keySource = 'per-install-new';
-    return buf;
+    const outcome = _publishKeyAtomically(fp, buf.toString('hex') + '\n');
+    if (outcome === 'created') { _keySource = 'per-install-new'; return buf; }
+    // Another process published first — fall through to the EEXIST path and
+    // adopt ITS key, exactly as before.
+    const e = new Error('key already published'); e.code = 'EEXIST'; throw e;
   } catch (e) {
     if (e.code === 'EEXIST') {
       // Another process won the race and persisted its key first — use
       // THAT key instead of the one we generated, or we'd return a key
       // that matches nothing on disk.
-      try {
-        const hex = fs.readFileSync(fp, 'utf8').trim();
-        if (/^[0-9a-fA-F]{32,}$/.test(hex)) { _keySource = 'per-install'; return Buffer.from(hex, 'hex'); }
-      } catch { /* fall through to ephemeral */ }
+      // Bounded retry, defence-in-depth. With the atomic link publish above the
+      // winner's key is complete the instant the path exists, so one read is
+      // enough. It is NOT enough when the link fell back to exclusive-create
+      // (filesystems without hard links), or when an older version of this file
+      // left a torn key behind — there the content can still be arriving. A few
+      // short retries cost nothing and the alternative is an ephemeral key whose
+      // signatures never verify again.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const hex = fs.readFileSync(fp, 'utf8').trim();
+          if (/^[0-9a-fA-F]{32,}$/.test(hex)) { _keySource = 'per-install'; return Buffer.from(hex, 'hex'); }
+        } catch { /* not readable yet */ }
+        try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2); } catch { /* no sleep available */ }
+      }
     }
     // Could not persist (or the winner's key was unreadable/malformed) —
     // this key lives for this process only, so nothing signed with it will
