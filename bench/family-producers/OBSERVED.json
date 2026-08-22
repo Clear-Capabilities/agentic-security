@@ -1,222 +1,1363 @@
 {
- "schema": "family-producers/v1",
- "purpose": "Finding families OBSERVED to be emitted by a real scan. Evidence that a compliance family: mapping has a producer behind it. A LOWER BOUND — absence here is not proof no detector emits it (SCA families need network, and some rules need shapes no corpus entry has).",
- "method": "runScan over every scanner/test/fixtures/* directory and every bench/cve-replay/*/*/pre tree, collecting distinct finding.family across findings+secrets+logicVulns+supplyChain.",
+ "schema": "family-producers/v2",
+ "purpose": "Finding families OBSERVED to be emitted by a real scan, with the parser that produced each. Evidence that a family has a producer, and which detector it belongs to. A LOWER BOUND — absence here is not proof no detector emits it (SCA families need network, and some rules need shapes no corpus entry has).",
+ "method": "runScan over every scanner/test/fixtures/* directory and every bench/cve-replay/*/*/pre tree, recording (finding.family, finding.parser) across findings+secrets+logicVulns+supplyChain.",
+ "caveat": "parser is NOT always module-specific: REGEX covers 80 distinct families and STRUCTURAL 23. Only module-specific parsers can attribute a family to a module — see src/posture/family-registry.js PARSER_OF.",
  "roots": 331,
  "distinctFamilies": 213,
  "families": {
-  "agent-tool-exec": 7,
-  "agent-untrusted-flow": 1,
-  "api-contract": 5,
-  "auth-endpoint-missing-rate-limiting": 9,
-  "authz-matrix-inconsistency": 2,
-  "aws-public-s3": 1,
-  "broken-access-control": 25,
-  "buffer-overflow": 7,
-  "client-side": 1,
-  "clone-outlier": 1,
-  "code-injection": 18,
-  "command-code-injection-dangerous-functio": 1,
-  "command-injection": 38,
-  "container-base-image-debian-9-eol": 1,
-  "container-base-image-node-12-alpine-eol": 1,
-  "container-base-image-python-2-7-eol": 1,
-  "container-base-image-ubuntu-latest-float": 2,
-  "container-runtime": 8,
-  "cookie-set-without-proper-security-flags": 2,
-  "crypto-ecb": 3,
-  "crypto-jwt-key-confusion": 3,
-  "crypto-jwt-none": 2,
-  "crypto-kdf-weak": 2,
-  "crypto-static-iv": 8,
-  "crypto-tls-no-verify": 4,
-  "crypto-tls-version": 2,
-  "crypto-weak-cipher": 7,
-  "crypto-weak-hash": 16,
-  "cryptographically-weak-prng-java": 1,
-  "cryptographically-weak-prng-math-random": 1,
-  "custom-sql-sink-user-data-in-executeraw": 1,
-  "dart-cleartext-http": 1,
-  "dart-hardcoded-credential": 1,
-  "dart-insecure-storage": 1,
-  "dart-no-timeout": 1,
-  "dart-secret-in-log": 1,
-  "dart-sql-injection": 1,
-  "dart-webview-unsafe": 1,
-  "data-exposure": 2,
-  "defi-missing-reentrancy-guard": 2,
-  "delegatecall-untrusted": 1,
-  "deserialization-gadget-chain-library-pre": 1,
-  "dockerfile-image-uses-latest-tag": 2,
-  "dockerfile-run-curl-sh-remote-code-execu": 1,
-  "dockerfile-user-root-container-runs-as-r": 1,
-  "dos-sync-io": 4,
-  "double-free-free-p-followed-by-free-p-wi": 1,
-  "ecdsa-malleability": 1,
-  "eth-sign-used": 1,
-  "excessive-agency-system-prompt-defines-a": 1,
-  "excessive-agency-unrestricted-execute-db": 1,
-  "express-body-parser-without-size-limit-d": 2,
-  "file-upload-handler-verify-mime-extensio": 2,
-  "format-string": 4,
-  "format-string-injection": 1,
-  "gradio-auth": 1,
-  "graphql-sensitive-query-field-verify-aut": 1,
-  "gson-polymorphic-deserialization-any-cla": 1,
-  "hardcoded-secret": 11,
-  "header-hardening": 53,
-  "hf-datasets-rce": 1,
-  "hf-endpoint-override": 1,
-  "host-header": 2,
-  "iac-misconfig": 5,
-  "idor": 22,
-  "improper-output-handling-model-instructe": 1,
-  "indirect-prompt-injection-external-conte": 1,
-  "injection": 1,
-  "insecure-deserialization": 23,
-  "insecure-deserialization-marshal-load-on": 1,
-  "insecure-deserialization-marshal-load-ya": 1,
-  "insecure-deserialization-objectinputstre": 1,
-  "insecure-deserialization-unserialize-on-": 1,
-  "insecure-deserialization-yaml-load-on-us": 1,
-  "insecure-http": 2,
-  "insecure-llm-tool-definition-execute-she": 1,
-  "integer-overflow": 1,
-  "ios-webview-untrusted-url": 2,
-  "jndi-injection": 3,
-  "jwt-no-exp": 3,
-  "jwt-no-verify": 6,
-  "k8s-hostnetwork-mounted": 1,
-  "k8s-pod-security-allow-privesc": 1,
-  "k8s-pod-security-capabilities-broad": 1,
-  "k8s-pod-security-hostnetwork": 2,
-  "k8s-pod-security-hostpath": 1,
-  "k8s-pod-security-hostpid": 1,
-  "k8s-pod-security-privileged": 2,
-  "k8s-pod-security-run-as-root": 2,
-  "k8s-rbac-cluster-admin": 1,
-  "k8s-rbac-overbroad-binding": 1,
-  "k8s-rbac-wildcard": 1,
-  "k8s-runasnonroot-false": 1,
-  "k8s-securitycontext-privileged-true": 1,
-  "k8s-webhook-bypass": 1,
-  "k8s-webhook-sideeffects": 1,
-  "key-hygiene": 4,
-  "kotlin-force-unwrap-on-user-input-null-c": 1,
-  "ldap-injection": 11,
-  "license-graph": 5,
-  "llm-app-security": 2,
-  "llm-cache": 2,
-  "llm-call-without-max-tokens-unbounded-co": 4,
-  "llm-cost": 2,
-  "local-remote-file-inclusion-include-requ": 1,
-  "malicious-install-script": 1,
-  "mass-assignment": 6,
-  "math-random-used-for-security-value": 1,
-  "mem-unsafe": 2,
-  "method-reflection-send-public-send-with-": 1,
-  "misinformation-prompt-demands-fabricated": 1,
-  "missing-csrf-protection-on-state-changin": 44,
-  "mlflow-untrusted-uri": 1,
-  "model-format": 1,
-  "model-load-from-pretrained-trust-remote-": 1,
-  "model-load-from-pretrained-without-pinne": 2,
-  "model-load-joblib-load-is-pickle-backed-": 1,
-  "model-load-model-weights-fetched-from-ht": 1,
-  "model-load-np-load-allow-pickle-true-rce": 1,
-  "model-load-pickle-load-rce-on-untrusted-": 4,
-  "model-load-torch-load-without-weights-on": 1,
-  "model-load-yaml-load-yaml-unsafe-load-rc": 3,
-  "multer-without-size-type-limits": 1,
-  "mutation-xss-domparser-body-innerhtml-ro": 1,
-  "nosql-injection": 2,
-  "nosql-injection-mongodb-query-with-raw-r": 1,
-  "nosql-injection-mongodb-where-with-user-": 1,
-  "nosql-injection-user-controlled-query-fi": 4,
-  "nosql-injection-where-with-user-input": 1,
-  "onnx-providers": 1,
-  "open-redirect": 9,
-  "open-redirect-response-sendredirect-with": 1,
-  "open-redirect-user-controlled-url": 2,
-  "oracle-staleness": 1,
-  "path-traversal": 20,
-  "permissive-cors-allow-origin": 2,
-  "phpinfo-exposes-environment-headers-path": 1,
-  "pipeline-github-action-pinned-to-floatin": 1,
-  "pipeline-oidc-id-token-write-without-exp": 1,
-  "pipeline-permissions-set-to-write-all-ex": 1,
-  "pipeline-secret-echoed-to-logs": 1,
-  "pipeline-third-party-action-pinned-to-ma": 1,
-  "pipeline-untrusted-github-event-input-in": 1,
-  "potential-indirect-idor-findall-without-": 1,
-  "pqc-migration": 16,
-  "prompt-firewall-missing-max-tokens-cap": 4,
-  "prompt-injection-http-user-input-in-llm-": 3,
-  "prompt-injection-system-prompt-built-fro": 6,
-  "prompt-injection-template-literal-user-i": 1,
-  "prompt-integrity": 2,
-  "prompt-template-user-input-interpolated-": 7,
-  "prototype-pollution": 8,
-  "react-dangerouslysetinnerhtml-without-sa": 1,
-  "redos": 5,
-  "reentrancy": 1,
-  "response-splitting": 8,
-  "rpc-key-inline": 1,
-  "runblocking-at-top-level-blocks-the-call": 1,
-  "secret": 2,
-  "session-cookie-missing-secure-flag": 1,
-  "session-cookie-without-httponly-flag": 3,
-  "sibling-guard-omission": 1,
-  "signature-replay": 1,
-  "solana-anchor-no-owner": 1,
-  "springboot-missing-authz": 1,
-  "sql-injection": 51,
-  "ssrf": 15,
-  "ssti": 2,
-  "ssti-user-controlled-template-source": 1,
-  "supply-chain": 2,
-  "swift-cleartext-http": 1,
-  "swift-deeplink-unsafe": 1,
-  "swift-force-unwrap": 1,
-  "swift-hardcoded-credential": 1,
-  "swift-insecure-storage": 1,
-  "swift-webview-unsafe": 1,
-  "system-prompt-leakage-secrets-embedded-i": 1,
-  "system-prompt-missing-explicit-anti-inje": 12,
-  "terraform-encryption-disabled-at-rest": 1,
-  "terraform-iam-action-wildcard": 1,
-  "terraform-s3-bucket-acl-public-read": 2,
-  "timing-attack": 4,
-  "timing-side-channel": 9,
-  "toctou-file-existence-permission-check-b": 2,
-  "tx-origin-auth": 1,
-  "unbounded-consumption-llm-call-has-no-to": 2,
-  "unlimited-approval": 1,
-  "unprotected-selfdestruct": 1,
-  "unrestricted-file-upload": 3,
-  "unsafe-block": 1,
-  "unsafe-reflection-rce": 1,
-  "unsafe-yaml-load-snakeyaml-default-const": 1,
-  "unsanitized-llm-output-rendered-as-html": 1,
-  "upgradeable-init": 1,
-  "upgradeable-storage": 1,
-  "use-after-free-heuristic-free-p-followed": 2,
-  "user-input-concatenated-into-system-prom": 1,
-  "variable-injection-extract-request-creat": 1,
-  "vector-embedding-weakness-inject-documen": 1,
-  "vector-embedding-weakness-module-level-m": 1,
-  "weak-crypto": 10,
-  "weak-hardcoded-session-secret": 1,
-  "weak-password-hash": 9,
-  "weak-password-hashing-md5-sha1-are-not-p": 2,
-  "weak-rng": 20,
-  "xlang-graphql": 1,
-  "xlang-grpc": 1,
-  "xlang-openapi": 1,
-  "xpath-injection-query-built-via-string-c": 9,
-  "xss": 33,
-  "xxe": 16,
-  "xxe-xml-parser-without-dtd-external-enti": 1,
-  "zip-slip": 2
+  "agent-tool-exec": {
+   "count": 7,
+   "parsers": {
+    "REGEX": 7
+   }
+  },
+  "agent-untrusted-flow": {
+   "count": 1,
+   "parsers": {
+    "AGENT-FLOW": 1
+   }
+  },
+  "api-contract": {
+   "count": 5,
+   "parsers": {
+    "(unset)": 5
+   }
+  },
+  "auth-endpoint-missing-rate-limiting": {
+   "count": 9,
+   "parsers": {
+    "REGEX": 9
+   }
+  },
+  "authz-matrix-inconsistency": {
+   "count": 2,
+   "parsers": {
+    "AUTHZ-MATRIX": 2
+   }
+  },
+  "aws-public-s3": {
+   "count": 1,
+   "parsers": {
+    "CLOUD-IAM": 1
+   }
+  },
+  "broken-access-control": {
+   "count": 25,
+   "parsers": {
+    "OWNERSHIP-AUTHZ": 24,
+    "API-AUTHZ": 1
+   }
+  },
+  "buffer-overflow": {
+   "count": 7,
+   "parsers": {
+    "CPP": 7
+   }
+  },
+  "client-side": {
+   "count": 1,
+   "parsers": {
+    "SAST": 1
+   }
+  },
+  "clone-outlier": {
+   "count": 1,
+   "parsers": {
+    "(unset)": 1
+   }
+  },
+  "code-injection": {
+   "count": 18,
+   "parsers": {
+    "JS": 5,
+    "REGEX": 5,
+    "STRUCTURAL": 2,
+    "PY-SAST": 1,
+    "RUBY": 1,
+    "JAVA": 1,
+    "CS": 1,
+    "GO": 1,
+    "KT": 1
+   }
+  },
+  "command-code-injection-dangerous-functio": {
+   "count": 1,
+   "parsers": {
+    "PHP": 1
+   }
+  },
+  "command-injection": {
+   "count": 38,
+   "parsers": {
+    "REGEX": 9,
+    "PY-SAST": 5,
+    "CPP": 5,
+    "GO": 4,
+    "STRUCTURAL": 3,
+    "KOTLIN": 3,
+    "CSHARP": 2,
+    "PHP": 2,
+    "RUBY": 2,
+    "RUST": 2,
+    "JAVA": 1
+   }
+  },
+  "container-base-image-debian-9-eol": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "container-base-image-node-12-alpine-eol": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "container-base-image-python-2-7-eol": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "container-base-image-ubuntu-latest-float": {
+   "count": 2,
+   "parsers": {
+    "REGEX": 2
+   }
+  },
+  "container-runtime": {
+   "count": 8,
+   "parsers": {
+    "CONTAINER-RUNTIME": 8
+   }
+  },
+  "cookie-set-without-proper-security-flags": {
+   "count": 2,
+   "parsers": {
+    "STRUCTURAL": 2
+   }
+  },
+  "crypto-ecb": {
+   "count": 3,
+   "parsers": {
+    "CRYPTO-PROTO": 3
+   }
+  },
+  "crypto-jwt-key-confusion": {
+   "count": 3,
+   "parsers": {
+    "CRYPTO-PROTO": 3
+   }
+  },
+  "crypto-jwt-none": {
+   "count": 2,
+   "parsers": {
+    "CRYPTO-PROTO": 2
+   }
+  },
+  "crypto-kdf-weak": {
+   "count": 2,
+   "parsers": {
+    "CRYPTO-PROTO": 2
+   }
+  },
+  "crypto-static-iv": {
+   "count": 8,
+   "parsers": {
+    "CRYPTO-PROTO": 8
+   }
+  },
+  "crypto-tls-no-verify": {
+   "count": 4,
+   "parsers": {
+    "CRYPTO-PROTO": 4
+   }
+  },
+  "crypto-tls-version": {
+   "count": 2,
+   "parsers": {
+    "CRYPTO-PROTO": 2
+   }
+  },
+  "crypto-weak-cipher": {
+   "count": 7,
+   "parsers": {
+    "CRYPTO-PROTO": 7
+   }
+  },
+  "crypto-weak-hash": {
+   "count": 16,
+   "parsers": {
+    "CRYPTO-PROTO": 16
+   }
+  },
+  "cryptographically-weak-prng-java": {
+   "count": 1,
+   "parsers": {
+    "JAVA_SAST": 1
+   }
+  },
+  "cryptographically-weak-prng-math-random": {
+   "count": 1,
+   "parsers": {
+    "STRUCTURAL": 1
+   }
+  },
+  "custom-sql-sink-user-data-in-executeraw": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "dart-cleartext-http": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "dart-hardcoded-credential": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "dart-insecure-storage": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "dart-no-timeout": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "dart-secret-in-log": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "dart-sql-injection": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "dart-webview-unsafe": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "data-exposure": {
+   "count": 2,
+   "parsers": {
+    "STRUCTURAL": 2
+   }
+  },
+  "defi-missing-reentrancy-guard": {
+   "count": 2,
+   "parsers": {
+    "REGEX": 2
+   }
+  },
+  "delegatecall-untrusted": {
+   "count": 1,
+   "parsers": {
+    "SOL": 1
+   }
+  },
+  "deserialization-gadget-chain-library-pre": {
+   "count": 1,
+   "parsers": {
+    "DESERIALIZE-GADGETS": 1
+   }
+  },
+  "dockerfile-image-uses-latest-tag": {
+   "count": 2,
+   "parsers": {
+    "REGEX": 2
+   }
+  },
+  "dockerfile-run-curl-sh-remote-code-execu": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "dockerfile-user-root-container-runs-as-r": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "dos-sync-io": {
+   "count": 4,
+   "parsers": {
+    "STRUCTURAL": 4
+   }
+  },
+  "double-free-free-p-followed-by-free-p-wi": {
+   "count": 1,
+   "parsers": {
+    "CPP": 1
+   }
+  },
+  "ecdsa-malleability": {
+   "count": 1,
+   "parsers": {
+    "WEB3-ADV": 1
+   }
+  },
+  "eth-sign-used": {
+   "count": 1,
+   "parsers": {
+    "DAPP-FRONTEND": 1
+   }
+  },
+  "excessive-agency-system-prompt-defines-a": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "excessive-agency-unrestricted-execute-db": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "express-body-parser-without-size-limit-d": {
+   "count": 2,
+   "parsers": {
+    "STRUCTURAL": 2
+   }
+  },
+  "file-upload-handler-verify-mime-extensio": {
+   "count": 2,
+   "parsers": {
+    "STRUCTURAL": 2
+   }
+  },
+  "format-string": {
+   "count": 4,
+   "parsers": {
+    "CPP": 4
+   }
+  },
+  "format-string-injection": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "gradio-auth": {
+   "count": 1,
+   "parsers": {
+    "ML-SUPPLY": 1
+   }
+  },
+  "graphql-sensitive-query-field-verify-aut": {
+   "count": 1,
+   "parsers": {
+    "GRAPHQL": 1
+   }
+  },
+  "gson-polymorphic-deserialization-any-cla": {
+   "count": 1,
+   "parsers": {
+    "KOTLIN": 1
+   }
+  },
+  "hardcoded-secret": {
+   "count": 11,
+   "parsers": {
+    "SECRET-CONCAT": 11
+   }
+  },
+  "header-hardening": {
+   "count": 53,
+   "parsers": {
+    "ADV_STRUCTURAL": 53
+   }
+  },
+  "hf-datasets-rce": {
+   "count": 1,
+   "parsers": {
+    "ML-SUPPLY": 1
+   }
+  },
+  "hf-endpoint-override": {
+   "count": 1,
+   "parsers": {
+    "ML-SUPPLY": 1
+   }
+  },
+  "host-header": {
+   "count": 2,
+   "parsers": {
+    "HOST-HEADER": 2
+   }
+  },
+  "iac-misconfig": {
+   "count": 5,
+   "parsers": {
+    "IAC-TF": 5
+   }
+  },
+  "idor": {
+   "count": 22,
+   "parsers": {
+    "REGEX": 17,
+    "AUTHZ-MATRIX": 3,
+    "STRUCTURAL": 2
+   }
+  },
+  "improper-output-handling-model-instructe": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "indirect-prompt-injection-external-conte": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "injection": {
+   "count": 1,
+   "parsers": {
+    "SAST": 1
+   }
+  },
+  "insecure-deserialization": {
+   "count": 23,
+   "parsers": {
+    "JAVA-DESER": 7,
+    "PY-SAST": 7,
+    "CSHARP": 5,
+    "REGEX": 3,
+    "GO": 1
+   }
+  },
+  "insecure-deserialization-marshal-load-on": {
+   "count": 1,
+   "parsers": {
+    "RUBY": 1
+   }
+  },
+  "insecure-deserialization-marshal-load-ya": {
+   "count": 1,
+   "parsers": {
+    "RUBY": 1
+   }
+  },
+  "insecure-deserialization-objectinputstre": {
+   "count": 1,
+   "parsers": {
+    "KOTLIN": 1
+   }
+  },
+  "insecure-deserialization-unserialize-on-": {
+   "count": 1,
+   "parsers": {
+    "PHP": 1
+   }
+  },
+  "insecure-deserialization-yaml-load-on-us": {
+   "count": 1,
+   "parsers": {
+    "RUBY": 1
+   }
+  },
+  "insecure-http": {
+   "count": 2,
+   "parsers": {
+    "PY-SAST": 2
+   }
+  },
+  "insecure-llm-tool-definition-execute-she": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "integer-overflow": {
+   "count": 1,
+   "parsers": {
+    "SOL": 1
+   }
+  },
+  "ios-webview-untrusted-url": {
+   "count": 2,
+   "parsers": {
+    "MOBILE": 2
+   }
+  },
+  "jndi-injection": {
+   "count": 3,
+   "parsers": {
+    "JNDI": 3
+   }
+  },
+  "jwt-no-exp": {
+   "count": 3,
+   "parsers": {
+    "JWT-EXP": 3
+   }
+  },
+  "jwt-no-verify": {
+   "count": 6,
+   "parsers": {
+    "STRUCTURAL": 5,
+    "ADV_STRUCTURAL": 1
+   }
+  },
+  "k8s-hostnetwork-mounted": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "k8s-pod-security-allow-privesc": {
+   "count": 1,
+   "parsers": {
+    "K8S-ADM": 1
+   }
+  },
+  "k8s-pod-security-capabilities-broad": {
+   "count": 1,
+   "parsers": {
+    "K8S-ADM": 1
+   }
+  },
+  "k8s-pod-security-hostnetwork": {
+   "count": 2,
+   "parsers": {
+    "K8S-ADM": 2
+   }
+  },
+  "k8s-pod-security-hostpath": {
+   "count": 1,
+   "parsers": {
+    "K8S-ADM": 1
+   }
+  },
+  "k8s-pod-security-hostpid": {
+   "count": 1,
+   "parsers": {
+    "K8S-ADM": 1
+   }
+  },
+  "k8s-pod-security-privileged": {
+   "count": 2,
+   "parsers": {
+    "K8S-ADM": 2
+   }
+  },
+  "k8s-pod-security-run-as-root": {
+   "count": 2,
+   "parsers": {
+    "K8S-ADM": 2
+   }
+  },
+  "k8s-rbac-cluster-admin": {
+   "count": 1,
+   "parsers": {
+    "K8S-ADM": 1
+   }
+  },
+  "k8s-rbac-overbroad-binding": {
+   "count": 1,
+   "parsers": {
+    "K8S-ADM": 1
+   }
+  },
+  "k8s-rbac-wildcard": {
+   "count": 1,
+   "parsers": {
+    "K8S-ADM": 1
+   }
+  },
+  "k8s-runasnonroot-false": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "k8s-securitycontext-privileged-true": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "k8s-webhook-bypass": {
+   "count": 1,
+   "parsers": {
+    "K8S-ADM": 1
+   }
+  },
+  "k8s-webhook-sideeffects": {
+   "count": 1,
+   "parsers": {
+    "K8S-ADM": 1
+   }
+  },
+  "key-hygiene": {
+   "count": 4,
+   "parsers": {
+    "REGEX": 4
+   }
+  },
+  "kotlin-force-unwrap-on-user-input-null-c": {
+   "count": 1,
+   "parsers": {
+    "KOTLIN": 1
+   }
+  },
+  "ldap-injection": {
+   "count": 11,
+   "parsers": {
+    "LDAP-INJECTION": 11
+   }
+  },
+  "license-graph": {
+   "count": 5,
+   "parsers": {
+    "(unset)": 5
+   }
+  },
+  "llm-app-security": {
+   "count": 2,
+   "parsers": {
+    "LLM-APP": 2
+   }
+  },
+  "llm-cache": {
+   "count": 2,
+   "parsers": {
+    "LLM-COST": 2
+   }
+  },
+  "llm-call-without-max-tokens-unbounded-co": {
+   "count": 4,
+   "parsers": {
+    "REGEX": 4
+   }
+  },
+  "llm-cost": {
+   "count": 2,
+   "parsers": {
+    "LLM-COST": 2
+   }
+  },
+  "local-remote-file-inclusion-include-requ": {
+   "count": 1,
+   "parsers": {
+    "PHP": 1
+   }
+  },
+  "malicious-install-script": {
+   "count": 1,
+   "parsers": {
+    "SCA-INSTALL": 1
+   }
+  },
+  "mass-assignment": {
+   "count": 6,
+   "parsers": {
+    "STRUCTURAL": 3,
+    "REGEX": 2,
+    "MASS-ASSIGN": 1
+   }
+  },
+  "math-random-used-for-security-value": {
+   "count": 1,
+   "parsers": {
+    "ADV_STRUCTURAL": 1
+   }
+  },
+  "mem-unsafe": {
+   "count": 2,
+   "parsers": {
+    "CPP": 2
+   }
+  },
+  "method-reflection-send-public-send-with-": {
+   "count": 1,
+   "parsers": {
+    "RUBY": 1
+   }
+  },
+  "misinformation-prompt-demands-fabricated": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "missing-csrf-protection-on-state-changin": {
+   "count": 44,
+   "parsers": {
+    "CSRF": 44
+   }
+  },
+  "mlflow-untrusted-uri": {
+   "count": 1,
+   "parsers": {
+    "ML-SUPPLY": 1
+   }
+  },
+  "model-format": {
+   "count": 1,
+   "parsers": {
+    "ML-SUPPLY": 1
+   }
+  },
+  "model-load-from-pretrained-trust-remote-": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "model-load-from-pretrained-without-pinne": {
+   "count": 2,
+   "parsers": {
+    "REGEX": 2
+   }
+  },
+  "model-load-joblib-load-is-pickle-backed-": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "model-load-model-weights-fetched-from-ht": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "model-load-np-load-allow-pickle-true-rce": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "model-load-pickle-load-rce-on-untrusted-": {
+   "count": 4,
+   "parsers": {
+    "REGEX": 4
+   }
+  },
+  "model-load-torch-load-without-weights-on": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "model-load-yaml-load-yaml-unsafe-load-rc": {
+   "count": 3,
+   "parsers": {
+    "REGEX": 3
+   }
+  },
+  "multer-without-size-type-limits": {
+   "count": 1,
+   "parsers": {
+    "ADV_STRUCTURAL": 1
+   }
+  },
+  "mutation-xss-domparser-body-innerhtml-ro": {
+   "count": 1,
+   "parsers": {
+    "MUTATION-XSS": 1
+   }
+  },
+  "nosql-injection": {
+   "count": 2,
+   "parsers": {
+    "REGEX": 2
+   }
+  },
+  "nosql-injection-mongodb-query-with-raw-r": {
+   "count": 1,
+   "parsers": {
+    "NOSQL-INJECTION": 1
+   }
+  },
+  "nosql-injection-mongodb-where-with-user-": {
+   "count": 1,
+   "parsers": {
+    "NOSQL-INJECTION": 1
+   }
+  },
+  "nosql-injection-user-controlled-query-fi": {
+   "count": 4,
+   "parsers": {
+    "STRUCTURAL": 4
+   }
+  },
+  "nosql-injection-where-with-user-input": {
+   "count": 1,
+   "parsers": {
+    "STRUCTURAL": 1
+   }
+  },
+  "onnx-providers": {
+   "count": 1,
+   "parsers": {
+    "ML-SUPPLY": 1
+   }
+  },
+  "open-redirect": {
+   "count": 9,
+   "parsers": {
+    "OPEN-REDIRECT": 8,
+    "CSHARP": 1
+   }
+  },
+  "open-redirect-response-sendredirect-with": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "open-redirect-user-controlled-url": {
+   "count": 2,
+   "parsers": {
+    "STRUCTURAL": 2
+   }
+  },
+  "oracle-staleness": {
+   "count": 1,
+   "parsers": {
+    "WEB3-ADV": 1
+   }
+  },
+  "path-traversal": {
+   "count": 20,
+   "parsers": {
+    "STRUCTURAL": 3,
+    "PY-SAST": 3,
+    "CSHARP": 2,
+    "KOTLIN": 2,
+    "RUBY": 2,
+    "GO": 2,
+    "JAVA": 2,
+    "PYTHON": 2,
+    "PHP": 1,
+    "JS-FW": 1
+   }
+  },
+  "permissive-cors-allow-origin": {
+   "count": 2,
+   "parsers": {
+    "STRUCTURAL": 2
+   }
+  },
+  "phpinfo-exposes-environment-headers-path": {
+   "count": 1,
+   "parsers": {
+    "PHP": 1
+   }
+  },
+  "pipeline-github-action-pinned-to-floatin": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "pipeline-oidc-id-token-write-without-exp": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "pipeline-permissions-set-to-write-all-ex": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "pipeline-secret-echoed-to-logs": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "pipeline-third-party-action-pinned-to-ma": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "pipeline-untrusted-github-event-input-in": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "potential-indirect-idor-findall-without-": {
+   "count": 1,
+   "parsers": {
+    "STRUCTURAL": 1
+   }
+  },
+  "pqc-migration": {
+   "count": 16,
+   "parsers": {
+    "PQC": 16
+   }
+  },
+  "prompt-firewall-missing-max-tokens-cap": {
+   "count": 4,
+   "parsers": {
+    "REGEX": 4
+   }
+  },
+  "prompt-injection-http-user-input-in-llm-": {
+   "count": 3,
+   "parsers": {
+    "REGEX": 3
+   }
+  },
+  "prompt-injection-system-prompt-built-fro": {
+   "count": 6,
+   "parsers": {
+    "REGEX": 6
+   }
+  },
+  "prompt-injection-template-literal-user-i": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "prompt-integrity": {
+   "count": 2,
+   "parsers": {
+    "ML-SUPPLY": 2
+   }
+  },
+  "prompt-template-user-input-interpolated-": {
+   "count": 7,
+   "parsers": {
+    "REGEX": 7
+   }
+  },
+  "prototype-pollution": {
+   "count": 8,
+   "parsers": {
+    "REGEX": 3,
+    "JS-FW": 3,
+    "ADV_STRUCTURAL": 1,
+    "PROTO-POLLUTION": 1
+   }
+  },
+  "react-dangerouslysetinnerhtml-without-sa": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "redos": {
+   "count": 5,
+   "parsers": {
+    "NFA": 5
+   }
+  },
+  "reentrancy": {
+   "count": 1,
+   "parsers": {
+    "SOL": 1
+   }
+  },
+  "response-splitting": {
+   "count": 8,
+   "parsers": {
+    "RESPONSE-SPLITTING": 8
+   }
+  },
+  "rpc-key-inline": {
+   "count": 1,
+   "parsers": {
+    "DAPP-FRONTEND": 1
+   }
+  },
+  "runblocking-at-top-level-blocks-the-call": {
+   "count": 1,
+   "parsers": {
+    "KOTLIN": 1
+   }
+  },
+  "secret": {
+   "count": 2,
+   "parsers": {
+    "CSHARP": 2
+   }
+  },
+  "session-cookie-missing-secure-flag": {
+   "count": 1,
+   "parsers": {
+    "ADV_STRUCTURAL": 1
+   }
+  },
+  "session-cookie-without-httponly-flag": {
+   "count": 3,
+   "parsers": {
+    "STRUCTURAL": 3
+   }
+  },
+  "sibling-guard-omission": {
+   "count": 1,
+   "parsers": {
+    "SIBLING-GUARD": 1
+   }
+  },
+  "signature-replay": {
+   "count": 1,
+   "parsers": {
+    "WEB3-ADV": 1
+   }
+  },
+  "solana-anchor-no-owner": {
+   "count": 1,
+   "parsers": {
+    "WEB3-ADV": 1
+   }
+  },
+  "springboot-missing-authz": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "sql-injection": {
+   "count": 51,
+   "parsers": {
+    "REGEX": 17,
+    "JS-FW": 7,
+    "PHP": 5,
+    "CSHARP": 4,
+    "PYTHON": 4,
+    "STRUCTURAL": 3,
+    "GO": 2,
+    "JAVA": 2,
+    "KOTLIN": 2,
+    "RUBY": 2,
+    "IR-TAINT": 1,
+    "PY-SAST": 1,
+    "RUST": 1
+   }
+  },
+  "ssrf": {
+   "count": 15,
+   "parsers": {
+    "REGEX": 5,
+    "GO": 3,
+    "PY-SAST": 1,
+    "PHP": 1,
+    "RUBY": 1,
+    "JAVA": 1,
+    "CSHARP": 1,
+    "JS-FW": 1,
+    "KOTLIN": 1
+   }
+  },
+  "ssti": {
+   "count": 2,
+   "parsers": {
+    "SSTI": 2
+   }
+  },
+  "ssti-user-controlled-template-source": {
+   "count": 1,
+   "parsers": {
+    "ADV_STRUCTURAL": 1
+   }
+  },
+  "supply-chain": {
+   "count": 2,
+   "parsers": {
+    "SAST": 2
+   }
+  },
+  "swift-cleartext-http": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "swift-deeplink-unsafe": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "swift-force-unwrap": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "swift-hardcoded-credential": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "swift-insecure-storage": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "swift-webview-unsafe": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "system-prompt-leakage-secrets-embedded-i": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "system-prompt-missing-explicit-anti-inje": {
+   "count": 12,
+   "parsers": {
+    "REGEX": 12
+   }
+  },
+  "terraform-encryption-disabled-at-rest": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "terraform-iam-action-wildcard": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "terraform-s3-bucket-acl-public-read": {
+   "count": 2,
+   "parsers": {
+    "REGEX": 2
+   }
+  },
+  "timing-attack": {
+   "count": 4,
+   "parsers": {
+    "COMPARISON": 4
+   }
+  },
+  "timing-side-channel": {
+   "count": 9,
+   "parsers": {
+    "REGEX": 9
+   }
+  },
+  "toctou-file-existence-permission-check-b": {
+   "count": 2,
+   "parsers": {
+    "TOCTOU": 2
+   }
+  },
+  "tx-origin-auth": {
+   "count": 1,
+   "parsers": {
+    "SOL": 1
+   }
+  },
+  "unbounded-consumption-llm-call-has-no-to": {
+   "count": 2,
+   "parsers": {
+    "REGEX": 2
+   }
+  },
+  "unlimited-approval": {
+   "count": 1,
+   "parsers": {
+    "DAPP-FRONTEND": 1
+   }
+  },
+  "unprotected-selfdestruct": {
+   "count": 1,
+   "parsers": {
+    "SOL": 1
+   }
+  },
+  "unrestricted-file-upload": {
+   "count": 3,
+   "parsers": {
+    "FILE-UPLOAD": 3
+   }
+  },
+  "unsafe-block": {
+   "count": 1,
+   "parsers": {
+    "RUST": 1
+   }
+  },
+  "unsafe-reflection-rce": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "unsafe-yaml-load-snakeyaml-default-const": {
+   "count": 1,
+   "parsers": {
+    "KOTLIN": 1
+   }
+  },
+  "unsanitized-llm-output-rendered-as-html": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "upgradeable-init": {
+   "count": 1,
+   "parsers": {
+    "WEB3-ADV": 1
+   }
+  },
+  "upgradeable-storage": {
+   "count": 1,
+   "parsers": {
+    "WEB3-ADV": 1
+   }
+  },
+  "use-after-free-heuristic-free-p-followed": {
+   "count": 2,
+   "parsers": {
+    "CPP": 2
+   }
+  },
+  "user-input-concatenated-into-system-prom": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "variable-injection-extract-request-creat": {
+   "count": 1,
+   "parsers": {
+    "PHP": 1
+   }
+  },
+  "vector-embedding-weakness-inject-documen": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "vector-embedding-weakness-module-level-m": {
+   "count": 1,
+   "parsers": {
+    "REGEX": 1
+   }
+  },
+  "weak-crypto": {
+   "count": 10,
+   "parsers": {
+    "STRUCTURAL": 5,
+    "JAVA_SAST": 4,
+    "ADV_STRUCTURAL": 1
+   }
+  },
+  "weak-hardcoded-session-secret": {
+   "count": 1,
+   "parsers": {
+    "STRUCTURAL": 1
+   }
+  },
+  "weak-password-hash": {
+   "count": 9,
+   "parsers": {
+    "WEAK-PW-HASH": 9
+   }
+  },
+  "weak-password-hashing-md5-sha1-are-not-p": {
+   "count": 2,
+   "parsers": {
+    "PHP": 2
+   }
+  },
+  "weak-rng": {
+   "count": 20,
+   "parsers": {
+    "WEAK-RNG": 16,
+    "CPP": 2,
+    "RUST": 1,
+    "SOL": 1
+   }
+  },
+  "xlang-graphql": {
+   "count": 1,
+   "parsers": {
+    "XLANG-GRAPHQL": 1
+   }
+  },
+  "xlang-grpc": {
+   "count": 1,
+   "parsers": {
+    "XLANG-GRPC": 1
+   }
+  },
+  "xlang-openapi": {
+   "count": 1,
+   "parsers": {
+    "XLANG-OPENAPI": 1
+   }
+  },
+  "xpath-injection-query-built-via-string-c": {
+   "count": 9,
+   "parsers": {
+    "XPATH-INJECTION": 9
+   }
+  },
+  "xss": {
+   "count": 33,
+   "parsers": {
+    "REGEX": 16,
+    "XSS-ML": 7,
+    "STRUCTURAL": 4,
+    "CSHARP": 2,
+    "SAST": 2,
+    "PYTHON": 1,
+    "JS-FW": 1
+   }
+  },
+  "xxe": {
+   "count": 16,
+   "parsers": {
+    "XXE": 11,
+    "CSHARP": 3,
+    "STRUCTURAL": 1,
+    "JS-FW": 1
+   }
+  },
+  "xxe-xml-parser-without-dtd-external-enti": {
+   "count": 1,
+   "parsers": {
+    "KOTLIN": 1
+   }
+  },
+  "zip-slip": {
+   "count": 2,
+   "parsers": {
+    "ZIP-SLIP": 2
+   }
+  }
  }
 }

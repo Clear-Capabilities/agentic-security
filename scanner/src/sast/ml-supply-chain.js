@@ -30,6 +30,28 @@
 
 import { blankComments } from './_comment-strip.js';
 
+// The finding families this module can emit (F10.2 producer registry).
+//
+// Declared HERE, next to the rules, because no external method enumerates them:
+// this module passes `family` POSITIONALLY (`_shape(file, line, ruleId, vuln,
+// fam, ...)`), so a textual search for `family:` finds nothing, and a corpus
+// sweep only ever reports a LOWER BOUND -- it sees whichever families a fixture
+// happened to trigger. This list is the union of both, and
+// `test/family-registry.test.js` fails if a scan produces a family from this
+// module that is not listed.
+//
+// Add the family here in the same edit that adds the rule.
+export const EMITS = [
+  'gradio-auth',
+  'hf-datasets-rce',
+  'hf-endpoint-override',
+  'mlflow-untrusted-uri',
+  'model-format',
+  'onnx-providers',
+  'prompt-integrity',
+  'streaming-dataset-url',
+];
+
 const _SCAN_EXT_RE = /\.(?:py|ipynb)$/i;
 const _NONPROD_PATH_RE = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|examples?|docs?|stories|codefixes|node_modules)\//i;
 

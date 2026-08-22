@@ -38,6 +38,33 @@
 
 import { blankComments } from './_comment-strip.js';
 
+// The finding families this module can emit (F10.2 producer registry).
+//
+// Declared HERE, next to the rules, because no external method enumerates them:
+// this module passes `family` POSITIONALLY (`_shape(file, line, ruleId, vuln,
+// fam, ...)`), so a textual search for `family:` finds nothing, and a corpus
+// sweep only ever reports a LOWER BOUND -- it sees whichever families a fixture
+// happened to trigger. This list is the union of both, and
+// `test/family-registry.test.js` fails if a scan produces a family from this
+// module that is not listed.
+//
+// Add the family here in the same edit that adds the rule.
+export const EMITS = [
+  'k8s-pod-security-allow-privesc',
+  'k8s-pod-security-capabilities-broad',
+  'k8s-pod-security-hostnetwork',
+  'k8s-pod-security-hostpath',
+  'k8s-pod-security-hostpid',
+  'k8s-pod-security-privileged',
+  'k8s-pod-security-run-as-root',
+  'k8s-rbac-anonymous',
+  'k8s-rbac-cluster-admin',
+  'k8s-rbac-overbroad-binding',
+  'k8s-rbac-wildcard',
+  'k8s-webhook-bypass',
+  'k8s-webhook-sideeffects',
+];
+
 const _IS_K8S_FILE = /\.(?:yaml|yml)$/i;
 
 function _line(raw, idx) { return raw.slice(0, idx).split('\n').length; }

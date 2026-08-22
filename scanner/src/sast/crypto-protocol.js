@@ -39,6 +39,29 @@
 
 import { blankComments } from './_comment-strip.js';
 
+// The finding families this module can emit (F10.2 producer registry).
+//
+// Declared HERE, next to the rules, because no external method enumerates them:
+// this module passes `family` POSITIONALLY (`_shape(file, line, ruleId, vuln,
+// fam, ...)`), so a textual search for `family:` finds nothing, and a corpus
+// sweep only ever reports a LOWER BOUND -- it sees whichever families a fixture
+// happened to trigger. This list is the union of both, and
+// `test/family-registry.test.js` fails if a scan produces a family from this
+// module that is not listed.
+//
+// Add the family here in the same edit that adds the rule.
+export const EMITS = [
+  'crypto-ecb',
+  'crypto-jwt-key-confusion',
+  'crypto-jwt-none',
+  'crypto-kdf-weak',
+  'crypto-static-iv',
+  'crypto-tls-no-verify',
+  'crypto-tls-version',
+  'crypto-weak-cipher',
+  'crypto-weak-hash',
+];
+
 function _line(raw, idx) { return raw.slice(0, idx).split('\n').length; }
 function _snip(raw, line) { return (raw.split('\n')[line - 1] || '').trim().slice(0, 200); }
 
