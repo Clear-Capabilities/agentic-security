@@ -2,7 +2,7 @@
 
 Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.142.0  
+**Version:** 0.143.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -36,6 +36,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `docs/standards/` | Upstream standards source material. A document lives here **only if a generator reads it** — currently just `NIST AI 600-1.xlsx`, consumed by `scripts/nist-compliance/build-catalog.py`. Never read at runtime. | `docs/standards/README.md` |
 | `docs/compliance/` | Per-framework coverage maps, derived from the framework JSON. One per framework linked in the README table. |  |
 | `docs/POSITIONING.md` | ICP statement: vibecoder-first; pro follow-on. |  |
+| `docs/OSCAL.md` | NIST OSCAL output: which model and why, and what an OSCAL document must REFUSE to claim (an unassessed control gets no finding). Read before changing `src/report/oscal.js`. |  |
 | `docs/HARNESS_ASSESSMENT_SPEC.md` | Six-domain rubric for scoring an AI agent harness (PRD-derived, versioned). |  |
 | `docs/HARNESS_ASSESSMENT_EVIDENCE.md` + `docs/schemas/harness-evidence.schema.json` | Wire format a conforming harness must emit so it can be scored. |  |
 | `ide/{jetbrains,nvim,vscode}/` | IDE distributions. |  |

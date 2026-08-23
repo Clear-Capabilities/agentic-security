@@ -39,6 +39,17 @@ function writeStdout(s) {
   }
 }
 import { toJSON, toMarkdown, toSARIF, toSTIX, toCSV, toJUnit, toCLI, toCLIByProfile, toShipVerdict, toProTable, toHTML, toSummary, toVex, exitCodeFor, normalizeFindings } from '../src/report/index.js';
+import { toOSCAL } from '../src/report/oscal.js';
+
+// Formats whose output is a machine artifact, not something a human reads in a
+// terminal. Three separate copies of this list used to be spelled out inline —
+// the MTTR line, the fix-duration line and the streak line — and each new
+// format had to be added to all three or it silently got human chatter
+// interleaved into its stdout/stderr. One list, one place to update.
+const MACHINE_FORMATS = new Set([
+  'json', 'sarif', 'oscal', 'cyclonedx', 'sbom', 'spdx', 'vex', 'openvex', 'pbom', 'aibom',
+]);
+function isMachineFormat(fmt) { return MACHINE_FORMATS.has(String(fmt)); }
 import { toCycloneDX, toSPDX } from '../src/posture/sbom.js';
 import { toPBOM } from '../src/sast/pipeline.js';
 import { buildAIBOM, aibomToMarkdown } from '../src/posture/aibom.js';
@@ -96,8 +107,13 @@ Commands:
   compliance [--privacy]       Assess the last scan against NIST Privacy Framework 1.1
                                --list                 show bundled + BYO frameworks
                                --walkthrough <id>     auditor narrative for any framework
+                               --report <id>          synonym for --walkthrough
                                --gap                  only the failing controls
-                               --format cli|json|md   (default cli)
+                               --format cli|json|md|oscal   (default cli)
+                               --format oscal         NIST OSCAL assessment-results.
+                                                      Controls the engine could not
+                                                      decide carry NO finding — see
+                                                      docs/OSCAL.md.
                                --fail-on gap          exit 1 when a control is failing
                                Reads .agentic-security/last-scan.json — run a scan first.
   version                      Print version
@@ -113,7 +129,7 @@ Commands:
 Options:
   --profile vibecoder|pro      Override profile for this run
   --only sast|sca|secrets      Limit scan to one pillar
-  --format <fmt>               cli | json | md | sarif | stix | junit | csv | html | cyclonedx | spdx | pbom | aibom | aibom-md
+  --format <fmt>               cli | json | md | sarif | oscal | stix | junit | csv | html | cyclonedx | spdx | pbom | aibom | aibom-md
   --pack <name>                Focus on a curated rule pack (repeatable): owasp-top-10 | cwe-top-25 | llm-security | supply-chain
   --baseline <ref>             Diff against a git ref; only findings new vs. that ref count (ci subcommand)
   --fail-on critical|high|medium|low|none  ci-mode exit policy (default: critical)
@@ -678,6 +694,10 @@ async function cmdScan(args) {
   if (format === 'json') body = JSON.stringify(toJSON(scan, meta, { includeSuppressed }), null, 2);
   else if (format === 'md' || format === 'markdown') body = toMarkdown(scan, meta);
   else if (format === 'sarif') body = JSON.stringify(toSARIF(scan, meta), null, 2);
+  // OSCAL assessment-results. Observations and risks only, never findings — an
+  // OSCAL finding is a statement about a control, and a source scan reviews no
+  // control catalog. See src/report/oscal.js.
+  else if (format === 'oscal') body = JSON.stringify(toOSCAL(scan, meta), null, 2);
   else if (format === 'stix') body = JSON.stringify(toSTIX(scan, meta), null, 2);
   else if (format === 'junit') body = toJUnit(scan, meta);
   else if (format === 'csv')   body = toCSV(scan);
@@ -759,7 +779,7 @@ async function cmdScan(args) {
         const removed = prevAll.filter(f => !currentFps.has(fingerprintFinding(f)));
         persistedScan.mttr = computeMTTR(removed);
         // Surface the SLA-breach line on human-readable formats (not JSON/CI pipes).
-        const isJson = format === 'json' || format === 'sarif' || format === 'cyclonedx' || format === 'sbom' || format === 'spdx' || format === 'vex' || format === 'openvex' || format === 'pbom' || format === 'aibom';
+        const isJson = isMachineFormat(format);
         if (!isJson) {
           const sla = renderSlaSummary(persistedScan.findings || []);
           if (sla) process.stderr.write(`⏰ agentic-security: ${sla}\n`);
@@ -789,7 +809,7 @@ async function cmdScan(args) {
         const fixMetrics = fixDurationReport(path.resolve(target));
         if (fixMetrics.attempts > 0) {
           persistedScan.fixMetrics = fixMetrics;
-          const isJsonFmt = format === 'json' || format === 'sarif' || format === 'cyclonedx' || format === 'sbom' || format === 'spdx' || format === 'vex' || format === 'openvex' || format === 'pbom' || format === 'aibom';
+          const isJsonFmt = isMachineFormat(format);
           const line = renderFixDurationSummary(fixMetrics);
           if (!isJsonFmt && line) process.stderr.write(`🔧 agentic-security: ${line}\n`);
         }
@@ -832,7 +852,7 @@ async function cmdScan(args) {
   try {
     const streak = persistedScan !== null ? recordScan(stateDirPath, persistedScan) : null;
     // Print celebration / streak line to stderr so it doesn't pollute --format json
-    if (streak && process.stderr.isTTY && format !== 'json' && format !== 'sarif') {
+    if (streak && process.stderr.isTTY && !isMachineFormat(format)) {
       const delta = formatGradeDelta(streak);
       const line = formatStreakLine(streak);
       if (delta) process.stderr.write('\n' + delta + '\n');
@@ -1791,14 +1811,27 @@ async function cmdCompliance(args) {
   // The engine records this two ways depending on the emit path; take either.
   scan.filesScanned = scan._scanMeta?.filesScanned ?? scan.scanned?.files ?? 0;
 
-  const wt = args.flags.walkthrough;
+  // `--report <fw>` is accepted as a synonym for `--walkthrough <fw>`: the
+  // slash-command surface has always spelled it that way, and it previously
+  // reached the frameworks only through an inlined node call in commands/
+  // rather than through this CLI. One code path, two spellings.
+  const wt = args.flags.walkthrough || args.flags.report;
   if (wt && wt !== true) {
     const fw = loadFramework(scanRoot, String(wt));
     if (!fw) {
       console.error(`Unknown framework "${wt}". Try --list.`);
       return 2;
     }
-    console.log(renderWalkthrough(fw, evaluateFramework(scanRoot, fw, scan), {}));
+    const evaluation = evaluateFramework(scanRoot, fw, scan);
+    if (fmt === 'oscal') {
+      const { toOSCALCompliance, complianceRowsFromEvaluation } = await import('../src/report/oscal.js');
+      writeStdout(JSON.stringify(
+        toOSCALCompliance(fw, complianceRowsFromEvaluation(evaluation), { startedAt: scan._scanMeta?.startedAt }),
+        null, 2) + '\n');
+      return 0;
+    }
+    if (fmt === 'json') { writeStdout(JSON.stringify(evaluation, null, 2) + '\n'); return 0; }
+    console.log(renderWalkthrough(fw, evaluation, {}));
     return 0;
   }
 
@@ -1808,6 +1841,19 @@ async function cmdCompliance(args) {
   if (!r) { console.error(`Framework ${PRIVACY_FRAMEWORK_ID} could not be loaded.`); return 2; }
 
   const gapsOnly = !!args.flags.gap;
+  if (fmt === 'oscal') {
+    // The privacy assessment's own bucket model, not evaluateFramework's — see
+    // complianceRowsFromPrivacy for why `engine-gap` must not become a control
+    // failure. `--gap` is deliberately NOT applied here: an OSCAL document that
+    // silently omitted the satisfied controls would understate what was
+    // reviewed, and reviewed-controls would then disagree with the findings.
+    const { toOSCALCompliance, complianceRowsFromPrivacy } = await import('../src/report/oscal.js');
+    const fwMeta = loadFramework(scanRoot, PRIVACY_FRAMEWORK_ID) || { id: PRIVACY_FRAMEWORK_ID, name: r.frameworkName };
+    writeStdout(JSON.stringify(
+      toOSCALCompliance(fwMeta, complianceRowsFromPrivacy(r), { startedAt: scan._scanMeta?.startedAt }),
+      null, 2) + '\n');
+    return args.flags['fail-on'] === 'gap' && r.summary.gap > 0 ? 1 : 0;
+  }
   if (fmt === 'json') {
     writeStdout(JSON.stringify(gapsOnly ? { ...r, controls: r.controls.filter(c => c.bucket === 'gap') } : r, null, 2) + '\n');
   } else if (fmt === 'md') {

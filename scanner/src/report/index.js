@@ -736,6 +736,26 @@ export function toMarkdown(scan, meta={}){
   return lines.join('\n');
 }
 
+// The load-bearing caveats every machine-readable artifact must carry, in one
+// place. A consumer that ingests our output without seeing these will read an
+// ordinal priority score as a probability, and will read a benchmark-tuned F1
+// as a general-purpose quality claim. Both are wrong, and both are the kind of
+// wrong that only shows up in somebody else's risk-acceptance decision.
+export const TOOL_CAVEATS = Object.freeze([
+  {
+    id: 'scores-are-ordinal',
+    name: 'ScoresAreOrdinal',
+    shortDescription: 'priority/exploitability scores are ordinal, not calibrated probabilities',
+    fullDescription: 'The properties.exploitability and properties.confidence fields on each result are ORDINAL priority scores used to rank findings within a scan. They are NOT calibrated probabilities; do not render them as percentages or feed them into pricing / risk-acceptance decisions. Use the tier labels (critical/high/medium/low) for coarse bucketing. See bench/README.md for the open calibration work.',
+  },
+  {
+    id: 'owasp-benchmark-tuning',
+    name: 'OwaspBenchmarkTuning',
+    shortDescription: 'engine ships OWASP-Benchmark-shape precision lifters; F1 numbers do not generalize',
+    fullDescription: 'The engine includes precision lifters (sast/primary-cwe-java.js, sast/java-constant-fold.js) whose heuristics are tuned to OWASP Benchmark v1.2 file shape (servlet-style files <=300 LoC, canonical variable names). F1 numbers cited against OWASP Benchmark do NOT generalize to arbitrary Java code. Expect higher FP rates on real-world codebases until per-customer tuning lands. See bench/README.md.',
+  },
+]);
+
 export function toSARIF(scan, meta={}){
   const findings = normalizeFindings(scan);
   const ruleMap = new Map();
@@ -758,22 +778,18 @@ export function toSARIF(scan, meta={}){
   // SARIF run itself so machine consumers see them. Without these, a CI that
   // ingests SARIF treats "confidence: 0.9" as a probability and the
   // benchmark-tuned 0.907 number as quality evidence.
-  const SARIF_NOTIFICATIONS = [
-    {
-      id: 'scores-are-ordinal',
-      name: 'ScoresAreOrdinal',
-      shortDescription: { text: 'priority/exploitability scores are ordinal, not calibrated probabilities' },
-      defaultConfiguration: { level: 'note' },
-      fullDescription: { text: 'The properties.exploitability and properties.confidence fields on each result are ORDINAL priority scores used to rank findings within a scan. They are NOT calibrated probabilities; do not render them as percentages or feed them into pricing / risk-acceptance decisions. Use the tier labels (critical/high/medium/low) for coarse bucketing. See bench/README.md for the open calibration work.' },
-    },
-    {
-      id: 'owasp-benchmark-tuning',
-      name: 'OwaspBenchmarkTuning',
-      shortDescription: { text: 'engine ships OWASP-Benchmark-shape precision lifters; F1 numbers do not generalize' },
-      defaultConfiguration: { level: 'note' },
-      fullDescription: { text: 'The engine includes precision lifters (sast/primary-cwe-java.js, sast/java-constant-fold.js) whose heuristics are tuned to OWASP Benchmark v1.2 file shape (servlet-style files <=300 LoC, canonical variable names). F1 numbers cited against OWASP Benchmark do NOT generalize to arbitrary Java code. Expect higher FP rates on real-world codebases until per-customer tuning lands. See bench/README.md.' },
-    },
-  ];
+  //
+  // The texts live in TOOL_CAVEATS (module scope) because SARIF is no longer
+  // the only machine format that has to carry them: report/oscal.js emits the
+  // same list as back-matter resources. Two copies of a caveat is one copy
+  // that goes stale, and the stale one is always the one somebody reads.
+  const SARIF_NOTIFICATIONS = TOOL_CAVEATS.map(c => ({
+    id: c.id,
+    name: c.name,
+    shortDescription: { text: c.shortDescription },
+    defaultConfiguration: { level: 'note' },
+    fullDescription: { text: c.fullDescription },
+  }));
   return {
     $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
     version: '2.1.0',

@@ -11,6 +11,101 @@
 
 
 
+## 0.143.0 — OSCAL output, and the finding an OSCAL document must refuse to make
+
+`--format oscal` was documented in `commands/compliance.md` long before anything
+implemented it. In 0.139.0 that was corrected to an explicit refusal rather than
+left aspirational. This release makes it real, in both places the request asked
+for: any scan, and any framework assessment.
+
+```bash
+agentic-security scan . --format oscal
+agentic-security compliance --report <framework> --format oscal
+agentic-security compliance --format oscal          # NIST Privacy Framework 1.1
+```
+
+Both emit NIST [OSCAL](https://pages.nist.gov/OSCAL-Reference/models/) 1.1.2
+`assessment-results`. `--report <fw>` is also now a real CLI synonym for
+`--walkthrough <fw>`; the slash command had always spelled it that way, and it
+previously reached the frameworks only through an inlined script in `commands/`.
+
+**The interesting part is what these documents refuse to say.** An OSCAL
+`finding` is a statement about a control, and its `status.state` is binary:
+satisfied or not-satisfied. There is no "unknown" and no "we did not look". So:
+
+- **A raw scan emits no findings at all.** Observations (what the scanner saw)
+  and risks (what it would mean), and a `reviewed-controls` block that says
+  plainly that no catalog was in scope. A SQL-injection hit is not an opinion
+  about a control; emitting one would publish a CWE→control mapping nobody
+  wrote. `include-all` is likewise absent — it would assert this scan reviewed
+  every control of an unnamed catalog.
+- **A control the engine could not decide carries no finding.** `manual`
+  controls, and on the privacy path `engine-gap` controls — where NIST rates the
+  control code-testable and *this scanner has no check for it* — become
+  observations with method `EXAMINE`. Calling them satisfied would be a false
+  compliance claim; calling them not-satisfied would blame the assessed system
+  for a hole in the tool.
+
+The distinction OSCAL cannot express rides along as an `assessment-status`
+property, so nothing is lost by the conversion. Full mapping table in
+`docs/OSCAL.md`.
+
+**A bug this found in itself.** The first adapter mapped `present` to satisfied,
+`partial` to not-satisfied, and everything else to unassessed. `evaluateFramework`
+also returns `absent` — signals exist and not one cleared, the strongest failure
+it can express — and the catch-all silently relabelled it "requires human
+judgement", deleting real control failures from the document and attaching a
+remark that was false. It was caught by running the exporter against a bundled
+framework and reading the output. There is now no catch-all: the mapping is
+exhaustive, and an unrecognised upstream status is reported *as* unrecognised,
+naming itself as an exporter defect rather than making a claim about the control.
+
+**Two more defects the checking found, both invisible at emit time.** OSCAL's
+`assessment-assets` — the block that identifies what performed the assessment —
+is scoped to the *result*, not the document (`assessment-results/local-definitions`
+carries objectives-and-methods and activities, and nothing else), and it requires
+at least one `assessment-platforms` entry. The first draft had it at document
+level with no platform. Both produce a document that emits cleanly and fails
+validation, which is precisely the failure mode of a format claim nobody ran
+through a validator.
+
+**Control identifiers are rewritten, and the originals kept.** OSCAL's `token`
+datatype is an NCName. The CCPA catalog bundled with this engine uses ids like
+`§1798.100`, which is not one — emitting it raw produces a document a validator
+rejects at the first control, the usual failure mode of an OSCAL export that was
+never run through one. Ids are sanitised to legal tokens and the publisher's
+original is carried on every observation and finding as `source-control-id`.
+
+**Checked, and the checks were checked.** `test/oscal-conformance.test.js` (15
+tests) validates required fields, the constrained datatypes (`uuid`, `token`,
+`dateTime-with-timezone`), the closed value sets, and referential integrity —
+every `*-uuid` and `#fragment` must resolve inside the document. It also pins the
+doctrine above, which is not a schema property and would otherwise be one
+refactor from reversing. Three deliberate regressions (neutering the token
+sanitiser, the deterministic uuid shaping, and the no-findings rule) were each
+confirmed to fail the suite before the source was restored. Scope is stated in
+the file: structural validation, not full JSON-Schema validation against NIST's
+published schema — fetching it at test time breaks the no-network rule and
+vendoring it adds a file that rots silently. Same call, same reasoning, as
+`test/sbom-conformance.test.js`.
+
+`oscal` joins the `format-determinism` gate, so two emits of one scan are
+byte-identical and an attestation over the document still verifies. That gate
+also exposed a real gap: every conformance test ran the `crypto.randomUUID()`
+branch, leaving the `--deterministic` branch — the one an attestation is
+actually taken over — untested. A digest slice is not a legal uuid; roughly 15
+in 16 fail on the variant nibble alone. It is now covered explicitly.
+
+**Also:** the two load-bearing caveats (ordinal scores are not probabilities;
+benchmark-tuned F1 does not generalize) now come from one exported constant
+rather than being spelled out inside `toSARIF`. SARIF carries them as run
+notifications, OSCAL as back-matter resources, from the same source — two copies
+of a caveat is one copy that goes stale, and the stale one is always the one
+somebody reads. The three inline "is this a machine format" lists in the CLI
+became one set, for the same reason: each new format previously had to be added
+to all three or it got human chatter interleaved into its output.
+
+
 ## 0.142.0 — The last five PRD items, and three criteria that now fail on evidence
 
 0.141.0 built instruments for the surfaces that had none. This closes the

@@ -19,7 +19,7 @@ Compliance + auditor flows dispatcher.
 | `--gap` | Show only the failing controls, each with its observations — a worklist of what isn't clearing (see the `--gap` section below) |
 | `--privacy` | NIST Privacy Framework 1.1 assessment with remediation per gap. Artifacts: `.agentic-security/privacy-framework.{json,md}` |
 
-Bare `/compliance` (no flag) prints this mode menu. `--report` and `--gap` accept `--format cli|json`.
+Bare `/compliance` (no flag) prints this mode menu. `--report` accepts `--format cli|json|oscal`; `--gap` accepts `--format cli|json`.
 
 ## `--gap` (close the deltas)
 
@@ -77,7 +77,11 @@ control · **2** nothing to assess, or an unknown framework.
 
 `--report <fw> --format json` emits the framework evaluation as structured JSON — one `{control, status, observations}` entry per control, `status` ∈ `present` (all mapped signals clear) / `partial` (some signal present but not all clear, or an unverifiable `rule:` mapping) / `manual` (no automated mapping at all). `--format cli` (default) renders the same evaluation as `--walkthrough`'s auditor narrative.
 
-**`--format oscal` does not exist.** No OSCAL (NIST's machine-readable assessment-results format) exporter is implemented anywhere in this codebase — earlier drafts of this doc described one that was never built. `--format oscal` is refused with an explicit error rather than silently falling back to `json`.
+## `--format oscal` (NIST OSCAL assessment-results)
+
+`--report <fw> --format oscal` emits an OSCAL 1.1.2 `assessment-results` document (`scanner/src/report/oscal.js`). The same flag works on the real CLI: `agentic-security compliance --report <fw> --format oscal`, and on the default NIST Privacy Framework assessment with no framework argument.
+
+The one thing to know before consuming it: **a control the engine could not decide carries no OSCAL finding.** An OSCAL finding requires a binary `satisfied` / `not-satisfied` state, so a `manual` control — and, on the privacy path, an `engine-gap` control, meaning this scanner has no check for something NIST rates code-testable — appears as an observation with method `EXAMINE`, never as a finding. Counting findings and calling the rest passing would invert exactly the distinction this command exists to preserve. `--format json` above is the lossless view; OSCAL is the interoperable one. Full mapping table, including how `absent` and `partial` land: [docs/OSCAL.md](../docs/OSCAL.md).
 
 ## Examples
 
@@ -111,10 +115,6 @@ case "$FLAG" in
     FW=$(fw_alias "$2")
     FMT="cli"
     if [ "$3" = "--format" ] && [ -n "$4" ]; then FMT="$4"; fi
-    if [ "$FMT" = "oscal" ]; then
-      echo '{"error": "oscal format is not implemented — no OSCAL exporter exists in this codebase. Use --format json for the structured evaluation instead."}'
-      exit 2
-    fi
     node -e "
       const fs = require('fs');
       import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/auditor-walkthrough.js').then(aw => {
@@ -126,7 +126,11 @@ case "$FLAG" in
         if (!fw) { console.error('Unknown framework \"' + fwId + '\". Try /compliance --walkthrough with --list, or a bundled id: nist-ai-600-1, owasp-asvs-5, owasp-llm-top-10, eu-ai-act, nist-csf-2, nist-privacy-1-1, gdpr, hipaa-security-rule, ccpa.'); process.exit(2); }
         const evaluation = aw.evaluateFramework('.', fw, scan);
         const format = process.argv[2];
-        if (format === 'json') {
+        if (format === 'oscal') {
+          import('${CLAUDE_PLUGIN_ROOT}/scanner/src/report/oscal.js').then(o => {
+            console.log(JSON.stringify(o.toOSCALCompliance(fw, o.complianceRowsFromEvaluation(evaluation), { startedAt: scan._scanMeta && scan._scanMeta.startedAt }), null, 2));
+          });
+        } else if (format === 'json') {
           console.log(JSON.stringify({ framework: { id: fw.id, name: fw.name }, evaluation }, null, 2));
         } else {
           console.log(aw.renderWalkthrough(fw, evaluation, {}));

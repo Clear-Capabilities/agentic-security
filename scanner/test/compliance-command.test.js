@@ -11,10 +11,11 @@
 // Wiring --attestation surfaced two real, previously-uninvoked-from-here
 // scripts: scripts/security-onepager.py and scripts/trust-page.py.
 //
-// The doc previously described `--format oscal` (a NIST OSCAL exporter) —
-// no such exporter exists anywhere in the codebase. That claim was corrected
-// rather than left aspirational; --format oscal now fails loudly instead of
-// silently doing nothing or pretending to be json.
+// `--format oscal` was documented here for a long time before anything
+// implemented it, and the doc was corrected to say so rather than left
+// aspirational. It is now real (scanner/src/report/oscal.js) and this file
+// checks the COMMAND SURFACE reaches it — the document's own structure is
+// pinned by test/oscal-conformance.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -85,17 +86,38 @@ test('S7: compliance.md --report nist --format json returns a real evaluation wi
     const parsed = JSON.parse(r.stdout);
     assert.equal(parsed.framework.id, 'nist-ai-600-1');
     assert.ok(Array.isArray(parsed.evaluation) && parsed.evaluation.length > 0);
-    for (const e of parsed.evaluation) assert.match(e.status, /^(present|partial|manual)$/);
+    // `absent` is the fourth status evaluateFramework can return (signals
+    // exist, none cleared). It happens not to occur on this fixture, so
+    // omitting it here passed — and the same omission in the OSCAL adapter
+    // silently relabelled real control failures as "needs human review".
+    for (const e of parsed.evaluation) assert.match(e.status, /^(present|partial|absent|manual)$/);
   } finally { await p.cleanup(); }
 });
 
-test('S7: compliance.md --report --format oscal refuses rather than fabricating OSCAL', async () => {
+test('S7: compliance.md --report --format oscal emits a real OSCAL assessment-results document', async () => {
   const script = extractImplementationBlock();
   const p = await scannedProject();
   try {
     const r = runMode(script, ['--report', 'nist', '--format', 'oscal'], p.dir);
-    assert.equal(r.status, 2);
-    assert.match(r.stdout, /oscal format is not implemented/);
+    assert.equal(r.status, 0, r.stderr);
+    const doc = JSON.parse(r.stdout);
+    // Enough to prove the command reached the exporter and produced the right
+    // MODEL, not a json evaluation with a different name. Field-level
+    // conformance is test/oscal-conformance.test.js's job, not this file's.
+    assert.match(doc.metadata['oscal-version'], /^1\./);
+    assert.ok(doc['import-ap'], 'assessment-results requires import-ap');
+    const result = doc.results[0];
+    assert.ok(result['reviewed-controls']['control-selections'][0]['include-controls'].length > 0,
+      'a control assessment must name the controls it reviewed');
+    // The doctrine, checked at the surface a user actually invokes: a control
+    // nobody could decide must not appear as a finding.
+    const unassessed = result.observations.filter(
+      (o) => o.props.some((x) => x.name === 'assessment-status' && x.value === 'manual'));
+    const targets = new Set((result.findings || []).map((f) => f.target['target-id']));
+    for (const o of unassessed) {
+      const id = o.props.find((x) => x.name === 'source-control-id').value;
+      assert.ok(!targets.has(id), `unassessed control ${id} was published as a finding`);
+    }
   } finally { await p.cleanup(); }
 });
 

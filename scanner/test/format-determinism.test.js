@@ -44,7 +44,7 @@ after(() => { try { fs.rmSync(TARGET, { recursive: true, force: true }); } catch
 
 // Every format the CLI can emit to stdout. A format added without being listed
 // here is a format nobody checks — see the completeness test at the end.
-const FORMATS = ['sarif', 'json', 'junit', 'csv', 'md', 'cyclonedx', 'sbom', 'spdx', 'vex', 'html'];
+const FORMATS = ['sarif', 'json', 'junit', 'csv', 'md', 'cyclonedx', 'sbom', 'spdx', 'vex', 'html', 'oscal'];
 
 function emit(format) {
   const r = spawnSync(process.execPath, [CLI, 'scan', '.', '--format', format, '--deterministic'], {
@@ -92,7 +92,7 @@ test('the format list still matches what the CLI accepts', () => {
   const text = `${help.stdout || ''}${help.stderr || ''}`;
   // Only assert on formats the help text actually enumerates; the point is to
   // catch an ADDED format, so a name in the help that we do not cover fails.
-  const advertised = [...text.matchAll(/\b(sarif|junit|cyclonedx|spdx|openvex|vex|sbom|pbom|aibom|csv|html|stix)\b/g)]
+  const advertised = [...text.matchAll(/\b(sarif|oscal|junit|cyclonedx|spdx|openvex|vex|sbom|pbom|aibom|csv|html|stix)\b/g)]
     .map((m) => m[1]);
   const uncovered = [...new Set(advertised)].filter((f) => !FORMATS.includes(f));
   assert.deepEqual(

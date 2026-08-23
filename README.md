@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.142.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.143.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -81,12 +81,14 @@ In your **terminal** (no Claude Code required):
 npx @clear-capabilities/agentic-security-scanner secure .
 ```
 
-**Want a shareable report?** Any scan can export a self-contained, browser-viewable HTML page (severity charts, STRIDE breakdown, filterable findings) — or JSON / Markdown / SARIF:
+**Want a shareable report?** Any scan can export a self-contained, browser-viewable HTML page (severity charts, STRIDE breakdown, filterable findings) — or JSON / Markdown / SARIF / OSCAL:
 
 ```bash
 npx @clear-capabilities/agentic-security-scanner scan . --format html --output report.html
-# open report.html   (formats: html · json · md · sarif · csv)
+# open report.html   (formats: html · json · md · sarif · oscal · csv)
 ```
+
+`--format oscal` emits a NIST [OSCAL](https://pages.nist.gov/OSCAL-Reference/models/) 1.1.2 `assessment-results` document, and `compliance --report <framework> --format oscal` emits a control-level one. Read [docs/OSCAL.md](docs/OSCAL.md) before consuming either: an OSCAL finding is a binary satisfied/not-satisfied claim about a control, so a control this engine could not decide carries **no finding at all** rather than a fabricated verdict.
 
 Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_COMPATIBILITY.md).
 
