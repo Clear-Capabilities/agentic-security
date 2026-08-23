@@ -1,0 +1,706 @@
+{
+  "prd": "F3.2",
+  "generatedAt": "2026-08-23T14:09:31.767Z",
+  "engineVersion": "0.141.0",
+  "oracle": "IMPORT-LEVEL, computed here from the project source by a reader sharing no code with the engine. A necessary condition for function reachability, not a sufficient one — see UNADJUDICATED-REACHABLE.",
+  "errorCosts": {
+    "falseUnreachable": "a MISSED EXPLOIT — the finding is demoted and a real vulnerability stops being shown",
+    "falseReachable": "noise — someone reads a finding that did not matter"
+  },
+  "all": {
+    "total": 70,
+    "falseUnreachable": {
+      "n": 0,
+      "d": 0,
+      "pct": null
+    },
+    "falseReachable": {
+      "n": 0,
+      "d": 0,
+      "pct": null
+    },
+    "correctUnreachable": {
+      "n": 0,
+      "d": 0,
+      "pct": null
+    },
+    "unadjudicatedReachable": 2,
+    "noClaim": 68,
+    "adjudicated": 0
+  },
+  "development": {
+    "total": 57,
+    "falseUnreachable": {
+      "n": 0,
+      "d": 0,
+      "pct": null
+    },
+    "falseReachable": {
+      "n": 0,
+      "d": 0,
+      "pct": null
+    },
+    "correctUnreachable": {
+      "n": 0,
+      "d": 0,
+      "pct": null
+    },
+    "unadjudicatedReachable": 2,
+    "noClaim": 55,
+    "adjudicated": 0
+  },
+  "heldOut": {
+    "total": 13,
+    "falseUnreachable": {
+      "n": 0,
+      "d": 0,
+      "pct": null
+    },
+    "falseReachable": {
+      "n": 0,
+      "d": 0,
+      "pct": null
+    },
+    "correctUnreachable": {
+      "n": 0,
+      "d": 0,
+      "pct": null
+    },
+    "unadjudicatedReachable": 0,
+    "noClaim": 13,
+    "adjudicated": 0
+  },
+  "unscored": [],
+  "rows": [
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "tar",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "ip",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "ansi-regex",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "semver",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "minimatch",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "http-cache-semantics",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "minimist",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "json-schema",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "tough-cookie",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "form-data",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "word-wrap",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "lodash",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "shell-quote",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "ws",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "request",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "@babel/helpers",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "@babel/traverse",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "ajv",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "yaml",
+      "heldOut": false,
+      "verdict": "reachable",
+      "imported": true,
+      "outcome": "UNADJUDICATED-REACHABLE"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "react-devtools-core",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "brace-expansion",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "qs",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "picomatch",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "js-yaml",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "uuid",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "json5",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "lodash.set",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "trim",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "marked",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "tar-fs",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "braces",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "get-func-name",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "cross-spawn",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "flatted",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "diff",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "@babel/core",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "npm-cli-8.5.0",
+      "ecosystem": "npm",
+      "package": "@tootallnate/once",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "express-4.18.1",
+      "ecosystem": "npm",
+      "package": "path-to-regexp",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "express-4.18.1",
+      "ecosystem": "npm",
+      "package": "body-parser",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "express-4.18.1",
+      "ecosystem": "npm",
+      "package": "qs",
+      "heldOut": false,
+      "verdict": "reachable",
+      "imported": true,
+      "outcome": "UNADJUDICATED-REACHABLE"
+    },
+    {
+      "id": "express-4.18.1",
+      "ecosystem": "npm",
+      "package": "cookie",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "express-4.18.1",
+      "ecosystem": "npm",
+      "package": "ejs",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "express-4.18.1",
+      "ecosystem": "npm",
+      "package": "send",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "express-4.18.1",
+      "ecosystem": "npm",
+      "package": "marked",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "express-4.18.1",
+      "ecosystem": "npm",
+      "package": "serve-static",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "express-4.18.1",
+      "ecosystem": "npm",
+      "package": "multiparty",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "jinja2",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "click",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "urllib3",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "requests",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "virtualenv",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "idna",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "certifi",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "pygments",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "python-dotenv",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "filelock",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "flask-2.0.0",
+      "ecosystem": "PyPI",
+      "package": "pytest",
+      "heldOut": false,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "requests",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "virtualenv",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "pyyaml",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "cleo",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "zipp",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": true,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "cryptography",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "py",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "urllib3",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "idna",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "certifi",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "msgpack",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "filelock",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    },
+    {
+      "id": "poetry-1.1.0",
+      "ecosystem": "PyPI",
+      "package": "pytest",
+      "heldOut": true,
+      "verdict": "unknown",
+      "imported": false,
+      "outcome": "UNKNOWN-NO-CLAIM"
+    }
+  ]
+}

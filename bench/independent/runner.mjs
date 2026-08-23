@@ -402,7 +402,27 @@ async function main() {
       + `elapsed ${mmss(elapsed)} eta ${mmss(etaS)}  ${id}${note ? ' — ' + note : ''}\n`);
   };
 
-  for (const e of manifest.entries) {
+  // ── Chunking: --offset N --limit M, and why it is not a convenience ────────
+  //
+  // A whole-population run wedged on 2026-08-23 at 0.0% CPU after 24 minutes of
+  // CPU time and 4.5 hours of wall clock — the exact signature documented for
+  // the six-hour stall that motivated the per-entry watchdog. The watchdog
+  // bounds the awaited PROMISE; it cannot free the handles a wedged scan still
+  // holds, so once one entry stalls the whole run is lost along with every
+  // entry already scored.
+  //
+  // Chunking puts each slice in its own PROCESS. A wedge then costs one chunk
+  // instead of the run, and the chunks that completed keep their results. The
+  // population is 1004 entries and growing; a measurement that can only be
+  // taken all-or-nothing will eventually never be taken at all.
+  const offset = Number((process.argv.find(a => a.startsWith('--offset=')) || '').split('=')[1] || 0);
+  const limitArg = Number((process.argv.find(a => a.startsWith('--limit=')) || '').split('=')[1] || 0);
+  const selected = limitArg > 0
+    ? manifest.entries.slice(offset, offset + limitArg)
+    : manifest.entries.slice(offset);
+  const chunked = offset > 0 || limitArg > 0;
+
+  for (const e of selected) {
     if (!entryComplete(e)) {
       progress(e.id, 'skipped: not fetched');
       unscored.push({ id: e.id, reason: 'not fetched — run `npm run bench:independent:fetch`' });
@@ -601,6 +621,14 @@ async function main() {
   // Self-describing: the previous RESULT.json had to be hand-assembled from
   // stdout, which is how it came to carry a stale measuredAt/engineVersion
   // while claiming to be current. A report states its own provenance.
+  // The CONFIGURATION is in the filename. Pattern-only and deep are different
+  // measurements of the same population, and a chunk file that did not say which
+  // it was would let a deep chunk silently overwrite a pattern-only one — the
+  // merge would then refuse (it checks) or, worse, a half-replaced set would
+  // look complete.
+  const RESULT_FILE = chunked
+    ? path.join(HERE, `RESULT-chunk-${deep ? 'deep' : 'pattern'}-${String(offset).padStart(5, '0')}.json`)
+    : path.join(HERE, deep ? 'RESULT-deep.json' : 'RESULT.json');
   let engineVersion = null;
   try { engineVersion = JSON.parse(fs.readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8')).version; } catch { /* leave null */ }
 
@@ -612,6 +640,10 @@ async function main() {
     configuration,
     population: {
       totalEntries: manifest.entries.length,
+      // A chunked run measured a SLICE. Reporting the manifest total here would
+      // let a partial result read as a whole-population figure, which is the
+      // provenance error this report's schema exists to prevent.
+      ...(chunked ? { chunk: { offset, limit: limitArg || null, entriesInSlice: selected.length } } : {}),
       scoredEntries: perEntry.length,
       unscored,
       labelSources: [...new Set(manifest.entries.map(e => e.labelSource))],
@@ -645,6 +677,10 @@ async function main() {
     byCwe: group('cwe'),
   };
 
+  // A chunk always writes its own file, whether or not stdout was asked for:
+  // the whole point of chunking is that a later chunk wedging must not cost the
+  // results of the ones that finished, and stdout of a killed process is lost.
+  if (chunked) fs.writeFileSync(RESULT_FILE, JSON.stringify(report, null, 2) + '\n');
   if (asJson) { process.stdout.write(JSON.stringify(report, null, 2) + '\n'); return 0; }
 
   const out = process.stdout;

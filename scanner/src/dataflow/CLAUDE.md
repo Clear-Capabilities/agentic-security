@@ -42,6 +42,15 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
 - **Call-string (k>1) context-sensitivity.** Context is the *value* abstraction — which params are tainted at entry — not the call stack. Two call paths that reach a helper with the same tainted-arg shape share a summary. Entry-state granularity is also param-level, not arbitrary access paths (`f(obj)` with `obj.a` tainted ≡ `obj.b` tainted).
 - **Contexts beyond the per-function cap.** Once a function has been computed under `AGENTIC_SECURITY_KCFA_MAX_CONTEXTS` distinct tainted-arg shapes, further shapes fall back to the empty-entry summary (an under-approximation, bounded on purpose).
 - **Implicit flow.** `implicit-flow.js` exists for `if (tainted) { x = "yes" }` propagation but is conservative-by-default.
+- **Sanitizer effect through a summarised return.** `_sanitizersByVar` records the sanitizer callees seen *in this function*, so a sanitizer hoisted into a helper —
+
+  ```js
+  function clean(v) { return escapeHtml(v); }
+  const name = clean(req.query.name);
+  ```
+
+  — is not attributed to the value at the sink, and the flow reads as **unsanitized**. Taint itself propagates through the return correctly (`SummaryCache`); only the sanitizer LABEL does not. Measured while writing the `bench/mutation` cases for PRD F12.5, and deliberately **not** added as a mutation case: it would make that gate permanently red, and a gate nobody can pass gets deleted. The error direction is precision (a clean flow reported at full confidence), never a missed vulnerability, which is why it is documented rather than treated as a release blocker.
+- **Sanitizer REVERSAL is modelled, but only for a named list.** `_UNSANITIZER_CALLEES` in `engine.js` carries the well-known inverses (`he.decode`, `unescape`, `html_entity_decode`, `decodeURIComponent`, …) and `sanitizer-gate.js` maps them to the family they reverse — percent-decoding does not undo HTML escaping, so the mapping is family-keyed rather than a flat list. A project-local decoder (`function unwrap(s) { … }`) is not recognised. Before this existed, `he.decode(escapeHtml(x))` reaching an HTML sink was reported as SANITIZED: a missed XSS, found by `bench/mutation`.
 
 ## Precision: centralized SSRF/path guard recognition
 

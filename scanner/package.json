@@ -107,6 +107,7 @@
     "bench:prompt-injection:fetch": "node ../bench/prompt-injection/fetch.mjs",
     "bench:secrets-precision": "node ../bench/secrets-precision/runner.mjs",
     "bench:sca-replay": "node ../bench/sca-replay/runner.mjs",
+    "bench:sca-replay:reachability": "node ../bench/sca-replay/reachability.mjs",
     "bench:sca-replay:fetch": "node ../bench/sca-replay/fetch.mjs",
     "bench:sca-replay:label": "node ../bench/sca-replay/label.mjs",
     "bench:layer-recall": "node ../bench/layer-recall/runner.mjs",
@@ -134,6 +135,8 @@
     "bench:independent:materialise": "node ../bench/independent/materialise-cli.mjs",
     "bench:independent:why-missed": "node ../bench/independent/why-missed.mjs",
     "bench:independent:materialise-new": "node ../bench/independent/materialise-new.mjs",
+    "bench:independent:merge": "node ../bench/independent/merge-chunks.mjs",
+    "bench:independent:agent-delta": "node ../bench/independent/agent-boundary-delta.mjs",
     "bench:independent:deep": "node ../bench/independent/runner.mjs --deep",
     "test:ci-parity": "CI=true GITHUB_ACTIONS=true node --test test/backward-default.test.js test/ci-parity.test.js test/container-taint.test.js test/deep-taint.test.js test/engine-recall.test.js test/engine-reconnect.test.js test/gate-verdict-cache.test.js test/ignore-pragma.test.js test/java-taint-flow.test.js test/kt-taint-flow.test.js test/py-annotation-sources.test.js test/runscan-deep-option.test.js test/sanitizer-typed-flow.test.js"
   },

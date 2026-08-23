@@ -106,6 +106,13 @@ bench/sca-replay/cache/
 bench/prompt-injection/cache/
 
 # why-missed.mjs's per-entry diagnostic output — regenerated working data.
+# Chunked-run intermediates. A whole-population pass wedged once and took every
+# already-scored entry with it, so runner.mjs now runs in slices; these are the
+# per-slice outputs. The MERGED artifacts (RESULT.json, RESULT-deep.json) are
+# committed and are what anything downstream reads — the chunks are
+# reproducible from a re-run and would add ~40 files per configuration.
+bench/independent/RESULT-chunk-*.json
+
 bench/independent/why-missed-output/
 
 # Cross-run discovery memory (PRD C4) — per-project state, never committed.

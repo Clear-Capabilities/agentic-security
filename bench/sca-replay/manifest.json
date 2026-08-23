@@ -17,7 +17,8 @@
         "package.json",
         "package-lock.json"
       ],
-      "heldOut": false
+      "heldOut": false,
+      "withSource": true
     },
     {
       "id": "next-13.4.0",
@@ -46,7 +47,8 @@
         "package.json"
       ],
       "negativeControl": "no lockfile. express pins every dependency EXACTLY in package.json, so the manifest is its own lockfile and the entry is scored normally. It was briefly mislabelled here as 'ranges only, label empty by construction' \u2014 which was wrong, and made the engine's 15 correct findings look like invention.",
-      "heldOut": false
+      "heldOut": false,
+      "withSource": true
     },
     {
       "id": "flask-2.0.0",
@@ -60,7 +62,8 @@
       "files": [
         "requirements/dev.txt"
       ],
-      "heldOut": false
+      "heldOut": false,
+      "withSource": true
     },
     {
       "id": "poetry-1.1.0",
@@ -75,7 +78,8 @@
         "pyproject.toml",
         "poetry.lock"
       ],
-      "heldOut": false
+      "heldOut": false,
+      "withSource": true
     },
     {
       "id": "home-assistant-2021.6.0",
@@ -192,5 +196,6 @@
       ],
       "heldOut": true
     }
-  ]
+  ],
+  "_withSource": "PRD F3.2/F3.1 \u2014 entries marked withSource also have their SOURCE fetched, because reachability cannot be scored from a lockfile: with no source the analysis has nothing to walk and the demotion rate is 0 by construction, which is what the first run of this bench reported for every entry. The subset is small deliberately \u2014 a whole-repo tarball per entry \u2014 and covers the two ecosystems the reachability analysis models (npm, PyPI)."
 }

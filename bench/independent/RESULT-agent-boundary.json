@@ -1,0 +1,266 @@
+{
+  "prd": "F5.3",
+  "generatedAt": "2026-08-23T15:06:04.345Z",
+  "engineVersion": "0.141.0",
+  "subPopulation": {
+    "entriesInspected": 1004,
+    "entriesWithAgentToolCode": 28,
+    "selectedBy": "computed from the tree — SDK surfaces, not the word \"mcp\" in a README"
+  },
+  "localizedTruePositives": {
+    "n": 0,
+    "d": 28
+  },
+  "delta": {
+    "n": 0,
+    "d": 0,
+    "pct": null,
+    "means": "localized TPs whose taint source carries agent-tool provenance — findings that would not exist without the boundary being modelled"
+  },
+  "heldOut": {
+    "entries": 4,
+    "localizedTruePositives": 0,
+    "delta": 0
+  },
+  "unscored": [
+    {
+      "id": "GHSA-794g-x443-36f7",
+      "reason": "timeout"
+    },
+    {
+      "id": "GHSA-f7g3-2cg6-f5hj",
+      "reason": "timeout"
+    },
+    {
+      "id": "GHSA-hcm8-x79p-wx2w",
+      "reason": "timeout"
+    }
+  ],
+  "rows": [
+    {
+      "id": "GHSA-29rf-f4vv-pvq6",
+      "cwe": "CWE-287",
+      "language": "go",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-2cf7-hpwf-47h9",
+      "cwe": "CWE-200",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-2xhg-73j7-rrgx",
+      "cwe": "CWE-918",
+      "language": "typescript",
+      "heldOut": true,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-382c-vx95-w3p5",
+      "cwe": "CWE-284",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-49mq-fc6q-3h46",
+      "cwe": "CWE-78",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-4h34-v6r8-mmjc",
+      "cwe": "CWE-200",
+      "language": "python",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-4hf8-5mjm-rfgq",
+      "cwe": "CWE-306",
+      "language": "javascript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-6vh2-wg4h-4vwj",
+      "cwe": "CWE-639",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-76pc-mqxp-3rq5",
+      "cwe": "CWE-22",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-7hgr-7h44-33w2",
+      "cwe": "CWE-306",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-86hp-qxqp-w9wv",
+      "cwe": "CWE-77",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-c5px-58j2-7fqp",
+      "cwe": "CWE-22",
+      "language": "python",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-c73c-x77g-854r",
+      "cwe": "CWE-352",
+      "language": "typescript",
+      "heldOut": true,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-f7wf-v2vw-mpcx",
+      "cwe": "CWE-22",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-fp27-88fp-2phg",
+      "cwe": "CWE-942",
+      "language": "python",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-j6gc-4893-qwmp",
+      "cwe": "CWE-362",
+      "language": "go",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-jxx9-px88-pj69",
+      "cwe": "CWE-284",
+      "language": "typescript",
+      "heldOut": true,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-m8wm-r5vq-qjpg",
+      "cwe": "CWE-672",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-p7w7-4929-vpj5",
+      "cwe": "CWE-306",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-pc2w-4mq8-32qw",
+      "cwe": "CWE-862",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-v828-m3pf-vq9q",
+      "cwe": "CWE-400",
+      "language": "go",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-w4q6-qw23-4rg7",
+      "cwe": "CWE-476",
+      "language": "go",
+      "heldOut": true,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-wg4g-395p-mqv3",
+      "cwe": "CWE-532",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-wp74-f5hh-5f3r",
+      "cwe": "CWE-862",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    },
+    {
+      "id": "GHSA-xc48-889x-5qmw",
+      "cwe": "CWE-184",
+      "language": "typescript",
+      "heldOut": false,
+      "localizedTPs": 0,
+      "agentSourced": 0,
+      "sourceLabels": []
+    }
+  ]
+}

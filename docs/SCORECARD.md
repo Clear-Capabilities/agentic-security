@@ -10,12 +10,12 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.141.0 |
-| Bundle SHA-256 | `deeb49d41f22000f35683bc1e9dc2c2368c4b79af6272740c5e96cece4732475` |
-| Commit | `b6af91fcfabb6e2fa985e5aef0ce1282f030000d` |
-| Worktree at measurement time | clean |
+| Bundle SHA-256 | `9b5c22a2088e4b17eafbbc3e70ea6fcb0a53fd5ae3e7d8d4848eeed8da6e2679` |
+| Commit | `248c4cf34e72631bfe9a378c602b9207c61fabc7` |
+| Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-23T11:47:06.245Z |
+| Generated (UTC) | 2026-08-23T19:05:12.999Z |
 
 ## What these numbers are, and what they are not
 
@@ -223,24 +223,25 @@ construction. `bench/independent/` is the other instrument — real upstream cod
 at the commit where a vulnerability really existed, with the CWE assigned by a
 public advisory database rather than by this project.
 
-**Measured 2026-08-19 on engine 0.138.0, n=309, 6 unscored** (*committed artifact*, `bench/independent/RESULT.json` — read, not re-run: scoring takes ~32 minutes).
+**Measured 2026-08-23 on engine 0.141.0, n=991, 13 unscored** (*committed artifact*, `bench/independent/RESULT.json` — read, not re-run: scoring takes ~32 minutes).
 
 | | Advisory-local (**the claim**) | Wide (diagnostic) |
 | --- | --- | --- |
-| Precision | **22/39 (56.4%)** | 41/76 (53.9%) |
-| Recall | **22/309 (7.1%)** | 41/309 (13.3%) |
-| F1 | **0.126** | 0.213 |
+| Precision | **71/130 (54.6%)** | 92/173 (53.2%) |
+| Recall | **71/991 (7.2%)** | 92/991 (9.3%) |
+| F1 | **0.127** | 0.158 |
 
 | Language | n | Recall | Precision |
 | --- | --- | --- | --- |
-| csharp | 15 | 1/15 (6.7%) | 1/2 (50.0%) |
-| go | 72 | 0/72 (0.0%) | 0/1 (0.0%) |
+| php | 73 | 4/73 (5.5%) | 4/7 (57.1%) |
+| ruby | 250 | 17/250 (6.8%) | 17/29 (58.6%) |
+| javascript | 124 | 16/124 (12.9%) | 16/31 (51.6%) |
+| typescript | 322 | 17/322 (5.3%) | 17/32 (53.1%) |
+| python | 100 | 9/100 (9.0%) | 9/17 (52.9%) |
+| go | 84 | 4/84 (4.8%) | 4/7 (57.1%) |
 | java | 21 | 2/21 (9.5%) | 2/4 (50.0%) |
-| javascript | 20 | 6/20 (30.0%) | 6/9 (66.7%) |
-| php | 55 | 3/55 (5.5%) | 3/5 (60.0%) |
-| python | 57 | 5/57 (8.8%) | 5/9 (55.6%) |
-| ruby | 32 | 0/32 (0.0%) | 0/0 (n/a) |
-| typescript | 37 | 5/37 (13.5%) | 5/9 (55.6%) |
+| csharp | 15 | 1/15 (6.7%) | 1/2 (50.0%) |
+| kotlin | 2 | 1/2 (50.0%) | 1/1 (100.0%) |
 
 **Quote the advisory-local column.** "Wide" scores the same scans without
 restricting findings to the files the advisory's fix commit touched — it asks

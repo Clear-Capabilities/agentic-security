@@ -41,7 +41,8 @@
     "before it was diagnosed. A self check is EXCLUDED, not trusted: it says nothing",
     "about the commit, so treating it as informational would be wrong for the same",
     "reason treating it as blocking is.",
-    "vscode-extension (added 0.141.0) is BLOCKING. It builds the shipped VS Code extension and asserts the built bundle carries the current scanner-resolution logic. The extension spent every release unable to find the scanner at all \u2014 a hardcoded cache-path version that no install creates \u2014 so this is a correctness gate, not a trend."
+    "vscode-extension (added 0.141.0) is BLOCKING. It builds the shipped VS Code extension and asserts the built bundle carries the current scanner-resolution logic. The extension spent every release unable to find the scanner at all \u2014 a hardcoded cache-path version that no install creates \u2014 so this is a correctness gate, not a trend.",
+    "nvim-plugin (0.142.0) is BLOCKING and jetbrains-plugin is INFORMATIONAL, and the split is the point. Loading a lua plugin headlessly costs seconds and fails only when the plugin is actually broken. Building the JetBrains plugin downloads a full IntelliJ distribution, so a red result there is far more often the network or a JetBrains release than a statement about this code \u2014 and a gate that is habitually red stops being read, which is the lesson realworld-bench already taught. The correctness half of the JetBrains surface (plugin.xml's factoryClass resolves to the Kotlin class it names) is asserted offline and blocking in test/ide-surfaces.test.js."
   ],
   "blocking": [
     "test",
@@ -51,11 +52,13 @@
     "determinism-attest (ubuntu-latest)",
     "determinism-attest (macos-latest)",
     "analyze (javascript-typescript)",
-    "vscode-extension"
+    "vscode-extension",
+    "nvim-plugin"
   ],
   "informational": [
     "realworld-bench",
-    "synthetic-bench"
+    "synthetic-bench",
+    "jetbrains-plugin"
   ],
   "self": [
     "publish"

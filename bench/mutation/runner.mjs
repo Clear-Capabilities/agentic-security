@@ -268,6 +268,504 @@ app.get('/s', (req, res) => {
 	return nil
 }`,
   },
+
+  // ── PRD F12.5 — the families 0.141.0 added ────────────────────────────────
+  //
+  // Every detector family shipped in that release owed a metamorphic pair and
+  // an adversarial near-miss, and none had one: the gate stood at 12 cases
+  // while five new families landed. A rule that fires on both variants of a
+  // control is not detecting the control, it is detecting the resource, and
+  // that failure is invisible to any recall-only measurement.
+  //
+  // These are `detection`-dimension by construction. There is no sanitizer in
+  // an infrastructure template to have an opinion about — the question is only
+  // whether the misconfiguration is recognised and its hardened twin is not.
+
+  // CloudFormation — unrestricted ingress.
+  {
+    id: 'cfn-baseline-open-admin-port',
+    class: 'baseline',
+    dimension: 'detection',
+    file: 'infra/stack.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-284/,
+    expectDetected: true,
+    why: 'SSH open to 0.0.0.0/0 is the control',
+    code: `AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: web
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+`,
+  },
+  {
+    id: 'cfn-metamorphic-property-order',
+    class: 'metamorphic',
+    dimension: 'detection',
+    file: 'infra/stack.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-284/,
+    expectDetected: true,
+    why: 'YAML mappings are unordered — reordering the ingress keys is the same template',
+    code: `AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: web
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          ToPort: 22
+          FromPort: 22
+          IpProtocol: tcp
+`,
+  },
+  {
+    id: 'cfn-metamorphic-quoted-scalars',
+    class: 'metamorphic',
+    dimension: 'detection',
+    file: 'infra/stack.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-284/,
+    expectDetected: true,
+    why: 'quoting a YAML scalar does not change its value',
+    code: `AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: web
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: "0.0.0.0/0"
+`,
+  },
+  {
+    id: 'cfn-adversarial-public-web-port',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'infra/stack.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-284/,
+    expectDetected: false,
+    why: '443 open to the world is a public web listener, not a finding — the verdict must flip on the PORT alone',
+    code: `AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: web
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+`,
+  },
+  {
+    id: 'cfn-adversarial-restricted-cidr',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'infra/stack.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-284/,
+    expectDetected: false,
+    why: 'the same port scoped to a private range is the hardened form',
+    code: `AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: web
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/8
+`,
+  },
+
+  // CloudFormation — public object storage.
+  {
+    id: 'cfn-baseline-public-bucket',
+    class: 'baseline',
+    dimension: 'detection',
+    file: 'infra/storage.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-732/,
+    expectDetected: true,
+    why: 'a PublicRead canned ACL is the control',
+    code: `AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  Assets:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: PublicRead
+`,
+  },
+  {
+    id: 'cfn-adversarial-private-bucket',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'infra/storage.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-732/,
+    expectDetected: false,
+    why: 'one word changes the meaning entirely',
+    code: `AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  Assets:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+`,
+  },
+
+  // Bicep.
+  {
+    id: 'bicep-baseline-public-blob',
+    class: 'baseline',
+    dimension: 'detection',
+    file: 'infra/main.bicep',
+    parser: /^IAC$/,
+    cwe: /CWE-732/,
+    expectDetected: true,
+    why: 'anonymous public blob access is the control',
+    code: `resource assets 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+  name: 'companyassets'
+  location: 'westeurope'
+  properties: {
+    allowBlobPublicAccess: true
+  }
+}
+`,
+  },
+  {
+    id: 'bicep-metamorphic-property-order',
+    class: 'metamorphic',
+    dimension: 'detection',
+    file: 'infra/main.bicep',
+    parser: /^IAC$/,
+    cwe: /CWE-732/,
+    expectDetected: true,
+    why: 'object property order carries no meaning in Bicep',
+    code: `resource assets 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+  properties: {
+    allowBlobPublicAccess: true
+    supportsHttpsTrafficOnly: true
+  }
+  location: 'westeurope'
+  name: 'companyassets'
+}
+`,
+  },
+  {
+    id: 'bicep-adversarial-private-blob',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'infra/main.bicep',
+    parser: /^IAC$/,
+    cwe: /CWE-732/,
+    expectDetected: false,
+    why: 'false is the hardened form and must not report',
+    code: `resource assets 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+  name: 'companyassets'
+  location: 'westeurope'
+  properties: {
+    allowBlobPublicAccess: false
+  }
+}
+`,
+  },
+
+  // Helm chart values.
+  {
+    id: 'helm-baseline-privileged-default',
+    class: 'baseline',
+    dimension: 'detection',
+    file: 'charts/app/values.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-250/,
+    expectDetected: true,
+    why: 'a chart that defaults to privileged runs privileged on every install that does not override it',
+    code: `image:
+  repository: registry.example.com/app
+  tag: "1.0.0"
+securityContext:
+  privileged: true
+`,
+  },
+  {
+    id: 'helm-metamorphic-key-order',
+    class: 'metamorphic',
+    dimension: 'detection',
+    file: 'charts/app/values.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-250/,
+    expectDetected: true,
+    why: 'moving the block above the image stanza changes nothing',
+    code: `securityContext:
+  privileged: true
+image:
+  repository: registry.example.com/app
+  tag: "1.0.0"
+`,
+  },
+  {
+    id: 'helm-adversarial-not-privileged',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'charts/app/values.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-250/,
+    expectDetected: false,
+    why: 'the hardened default must be silent',
+    code: `image:
+  repository: registry.example.com/app
+  tag: "1.0.0"
+securityContext:
+  privileged: false
+  runAsNonRoot: true
+`,
+  },
+  {
+    id: 'helm-adversarial-template-not-values',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'charts/app/templates/deployment.yaml',
+    parser: /^IAC$/,
+    cwe: /CWE-250/,
+    expectDetected: false,
+    why: 'templates/ is Go template source, not YAML — reading text inside {{ }} would report the template rather than the configuration. A DELIBERATE scope limit, pinned so it cannot drift into coverage by accident.',
+    code: `securityContext:
+  privileged: true
+`,
+  },
+
+  // Dockerfile base-image pinning.
+  {
+    id: 'docker-baseline-floating-tag',
+    class: 'baseline',
+    dimension: 'detection',
+    file: 'Dockerfile',
+    parser: /^IAC$/,
+    cwe: /CWE-1104/,
+    expectDetected: true,
+    why: 'a mutable tag makes the build non-reproducible',
+    code: `FROM ubuntu:latest
+USER app
+CMD ["/bin/sh"]
+`,
+  },
+  {
+    id: 'docker-metamorphic-implicit-latest',
+    class: 'metamorphic',
+    dimension: 'detection',
+    file: 'Dockerfile',
+    parser: /^IAC$/,
+    cwe: /CWE-1104/,
+    expectDetected: true,
+    why: 'omitting the tag IS :latest — the same program, written differently',
+    code: `FROM ubuntu
+USER app
+CMD ["/bin/sh"]
+`,
+  },
+  {
+    id: 'docker-adversarial-digest-pinned',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'Dockerfile',
+    parser: /^IAC$/,
+    cwe: /CWE-1104/,
+    expectDetected: false,
+    why: 'a digest is the MOST pinned form there is; reporting it inverts the advice. This case is the regression pin for a real false positive on the hardened configuration.',
+    code: `FROM ubuntu@sha256:5e5f6f0a2ea0c9e6e2e6b1e33b8b1e0c8a9d3f2e1b0a9c8d7e6f5a4b3c2d1e0f
+USER app
+CMD ["/bin/sh"]
+`,
+  },
+  {
+    id: 'docker-adversarial-build-stage-ref',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'Dockerfile',
+    parser: /^IAC$/,
+    cwe: /CWE-1104/,
+    expectDetected: false,
+    why: 'FROM builder references a named stage in this same file, not a registry pull',
+    code: `FROM node:20-alpine AS builder
+RUN echo build
+FROM builder
+USER app
+`,
+  },
+
+  // Ruby File.join path traversal.
+  {
+    id: 'ruby-baseline-pathjoin',
+    class: 'baseline',
+    dimension: 'detection',
+    file: 'lib/cache.rb',
+    parser: /^RUBY$/,
+    cwe: /CWE-22/,
+    expectDetected: true,
+    why: 'a request-derived component joined to a root and opened, with no traversal check',
+    code: `def serve(request)
+  cache_path = File.join(document_root, request.path)
+  File.read(cache_path)
+end
+`,
+  },
+  {
+    id: 'ruby-metamorphic-rename',
+    class: 'metamorphic',
+    dimension: 'detection',
+    file: 'lib/cache.rb',
+    parser: /^RUBY$/,
+    cwe: /CWE-22/,
+    expectDetected: true,
+    why: 'renaming the local changes nothing about the flow',
+    code: `def serve(request)
+  resolved_target = File.join(document_root, request.path)
+  File.read(resolved_target)
+end
+`,
+  },
+  {
+    id: 'ruby-metamorphic-predicate-sink',
+    class: 'metamorphic',
+    dimension: 'detection',
+    file: 'lib/cache.rb',
+    parser: /^RUBY$/,
+    cwe: /CWE-22/,
+    expectDetected: true,
+    why: 'File.exist? is as much a filesystem operation as File.read — this is the shape a trailing \\b silently excluded, so it is pinned',
+    code: `def serve(request)
+  cache_path = File.join(document_root, request.path)
+  return nil unless File.exist?(cache_path)
+  cache_path
+end
+`,
+  },
+  {
+    id: 'ruby-adversarial-guard-added',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'lib/cache.rb',
+    parser: /^RUBY$/,
+    cwe: /CWE-22/,
+    expectDetected: false,
+    why: 'rejecting traversal segments is exactly the fix the real advisories shipped — the verdict must flip',
+    code: `def serve(request)
+  return nil if request.path.split("/").intersect?(%w[. ..])
+  cache_path = File.join(document_root, request.path)
+  File.read(cache_path)
+end
+`,
+  },
+  {
+    id: 'ruby-adversarial-constant-root',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'lib/cache.rb',
+    parser: /^RUBY$/,
+    cwe: /CWE-22/,
+    expectDetected: false,
+    why: 'a path assembled from the project layout is not attacker-reachable — the false positive that got an earlier Ruby rule reverted',
+    code: `def load_fixture(name)
+  File.read(File.join(__dir__, "fixtures", name))
+end
+`,
+  },
+  {
+    id: 'ruby-adversarial-literal-leaf',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'lib/cache.rb',
+    parser: /^RUBY$/,
+    cwe: /CWE-22/,
+    expectDetected: false,
+    why: 'a constant filename cannot traverse',
+    code: `def index
+  File.read(File.join(document_root, "index.html"))
+end
+`,
+  },
+
+  // ── Sanitization dimension, kept in proportion ────────────────────────────
+  // The additions above are all `detection`, because an infrastructure template
+  // has no sanitizer. Left alone, that would tilt the gate almost entirely to
+  // one dimension and quietly retire the property it was built for — whether
+  // the taint engine tracks SANITIZATION through a rewrite.
+  {
+    id: 'metamorphic-template-literal',
+    class: 'metamorphic',
+    expectSanitized: true,
+    why: 'template-literal interpolation and concatenation are the same operation',
+    code: `app.get('/i', (req, res) => {
+  const name = escapeHtml(req.query.name);
+  el.insertAdjacentHTML('beforeend', \`<p>\${name}</p>\`);
+});`,
+  },
+  // NOT A CASE, deliberately: hoisting the sanitizer into a helper
+  //
+  //     function clean(v) { return escapeHtml(v); }
+  //     const name = clean(req.query.name);
+  //
+  // is a semantics-preserving rewrite that the engine DOES get wrong — it
+  // reports the flow as unsanitized, because `_sanitizersByVar` records callees
+  // seen in this function and sanitizer effect is not propagated through a
+  // summarised return. Adding it as a case would make this gate permanently
+  // red, and a gate nobody can pass is a gate that gets deleted.
+  //
+  // It is recorded instead: in `dataflow/CLAUDE.md` under what the engine does
+  // not model, and in the PRD. The error direction is precision, not safety —
+  // a correctly sanitized flow is reported at full confidence — which is why it
+  // is a documented limitation rather than a release blocker.
+  {
+    id: 'adversarial-sanitizer-on-other-var',
+    class: 'adversarial',
+    expectSanitized: false,
+    why: 'the sanitizer is applied to a DIFFERENT request field; the one reaching the sink is raw',
+    code: `app.get('/i', (req, res) => {
+  const other = escapeHtml(req.query.other);
+  el.insertAdjacentHTML('beforeend', req.query.name);
+});`,
+  },
+  {
+    id: 'adversarial-html-decoded-after-escape',
+    class: 'adversarial',
+    expectSanitized: false,
+    why: 'he.decode puts back exactly what escapeHtml removed — the value reaching the sink is raw again. This case FAILED when written: the engine reported it SANITIZED, a missed XSS, because nothing modelled a sanitizer being undone.',
+    code: `app.get('/i', (req, res) => {
+  const escaped = escapeHtml(req.query.name);
+  const name = he.decode(escaped);
+  el.insertAdjacentHTML('beforeend', name);
+});`,
+  },
+  {
+    id: 'metamorphic-url-decode-is-not-an-html-reversal',
+    class: 'metamorphic',
+    expectSanitized: true,
+    why: 'decodeURIComponent undoes percent-encoding and does NOTHING to HTML entities, so it must not void an xss sanitization claim. The reversal list is family-keyed for exactly this reason; a flat list would fail here.',
+    code: `app.get('/i', (req, res) => {
+  const raw = decodeURIComponent(req.query.name);
+  const name = escapeHtml(raw);
+  el.insertAdjacentHTML('beforeend', name);
+});`,
+  },
 ];
 
 async function verdictFor(c, tmpRoot) {
@@ -278,7 +776,14 @@ async function verdictFor(c, tmpRoot) {
   // of 280 findings are NOT JavaScript, so the check with the broadest mandate
   // had the narrowest reach. A case may now name its own file; JS stays the
   // default so every existing case is unchanged.
-  fs.writeFileSync(path.join(dir, c.file || 'app.js'), c.code);
+  // A case may name a NESTED path, and several must: IaC admission is
+  // path-sensitive (`charts/app/values.yaml` is a chart's values file,
+  // `charts/app/templates/…` is Go template source and deliberately out of
+  // scope), so writing every case at the tree root would test a different
+  // program than the one the case describes.
+  const target = path.join(dir, c.file || 'app.js');
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, c.code);
   process.env.AGENTIC_SECURITY_DEEP = '1';
   process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
   try {

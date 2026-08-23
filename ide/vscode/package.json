@@ -63,12 +63,14 @@
   },
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
-    "package": "vsce package"
+    "package": "vsce package",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@types/vscode": "^1.125.0",
     "@vscode/vsce": "^3.9.2",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
   }
 }

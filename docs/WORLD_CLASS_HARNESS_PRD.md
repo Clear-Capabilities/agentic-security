@@ -27,15 +27,15 @@ item as claimed-but-unpinned and verify before quoting it.
 |---|---|---|
 | F1.1 Go zero, root-caused | landed | `scanner/test/sibling-guard.test.js`; histograms in §3 |
 | F1.2 Ruby zero, root-caused | landed | histogram in §3; the extension was **attempted and reverted** |
-| **F1.3** first family rebuilt | **this session** | `scanner/src/sast/ruby.js`, `scanner/test/ruby-path-join.test.js` |
+| **F1.3** first family rebuilt | **landed; confirmed on the population** | `scanner/src/sast/ruby.js`, `scanner/test/ruby-path-join.test.js` |
 | **F1.4** three silent families | **this session — two were misdiagnosed** | `scanner/src/sast/convention-deviation.js`; `CODEGEN` left to the maintainer |
-| F2.1 taint instrument | landed | `bench/independent/runner.mjs` |
+| **F2.1** taint instrument | **measured both configurations 2026-08-23 — taint = 1 of 28** | `bench/independent/runner.mjs`, `merge-chunks.mjs` |
 | F2.2 container/collection taint | landed | `scanner/test/container-taint.test.js` |
 | F2.3 entry-point breadth | landed | `scanner/test/entrypoint-breadth.test.js` |
 | F2.4 hang classes | landed (commit `a8755b8`) | **no dedicated test names it** |
 | F2.5 comment-strip cost | landed | `scanner/test/comment-strip-cost.test.js` |
 | **F3.1** `bench/sca-replay` | **this session** | `bench/sca-replay/`, `scanner/test/dep-file-admission.test.js` |
-| F3.2 reachability as its own claim | landed | `scanner/test/reachability-claim.test.js` |
+| **F3.2** reachability as its own claim | **SCORED 2026-08-23 — 3 of 3 adjudicable demotions were false; 3 engine defects fixed** | `bench/sca-replay/reachability.mjs` |
 | F3.3 SBOM conformance | landed | `scanner/test/sbom-conformance.test.js` |
 | F3.4 KEV/EPSS freshness | landed | `scanner/src/engine.js` |
 | F3.5 malicious-package scope | landed | agent prompt downgraded to advisory |
@@ -46,7 +46,7 @@ item as claimed-but-unpinned and verify before quoting it.
 | F4.5 deploy-gate telemetry | landed | `scanner/test/deploy-gate-replay.test.js` |
 | **F5.1** prompt-injection corpus | **this session** | `bench/prompt-injection/`, `scanner/test/prompt-injection-payloads.test.js` |
 | F5.2 MCP audit vs real servers | landed | `scanner/test/mcp-rug-pull.test.js` |
-| F5.3 agent trust-boundary taint | landed | dataflow catalog |
+| **F5.3** agent trust-boundary taint | **delta measured 2026-08-23 — 0 of 0, undefined; 28 MCP entries, 0 localized TPs** | `bench/independent/agent-boundary-delta.mjs` |
 | F5.4 raw-source carve-out test | landed | `scanner/test/comment-blindness.test.js` |
 | F5.5 AI-BOM vs a standard | landed | ML-BOM validation |
 | F6.1 fix quality, three axes | landed | `bench/agent-tasks` |
@@ -64,7 +64,7 @@ item as claimed-but-unpinned and verify before quoting it.
 | F10.3 no unevidenceable claims | landed | mapping audit |
 | F10.4 framework version pinning | landed | `scanner/test/framework-provenance.test.js` |
 | F10.5 determinism, all formats | landed | `scanner/test/format-determinism.test.js` |
-| **F11.1** every surface smoked | **this session (MCP + IDE); LSP 2026-08-20** | `scanner/test/mcp-protocol-smoke.test.js`, `scanner/test/ide-surfaces.test.js` |
+| **F11.1** every surface smoked | **complete 2026-08-23 — LSP, MCP, VS Code (+type-check), Neovim, JetBrains** | `scanner/test/mcp-protocol-smoke.test.js`, `scanner/test/ide-surfaces.test.js` |
 | F11.2 time-to-first-finding | landed | `bench/ttff` |
 | F11.3 incremental scanning | landed | parity-gated |
 | F11.4 detector liveness | landed (P0) | `scanner/test/detector-liveness.test.js` |
@@ -72,14 +72,16 @@ item as claimed-but-unpinned and verify before quoting it.
 | F12.1 CI-condition pre-push run | landed (P0) | `scanner/test/ci-parity.test.js` |
 | F12.2 gates assert equality | landed (P0) | `bench/layer-recall` |
 | F12.3 watchdog on every bench | landed (P0) | `bench/_lib/watchdog.mjs` |
-| **F12.4** population 315 → 1004 | **this session** | `bench/independent/manifest.json`, `mine.mjs` pagination fix |
-| F12.5 mutation gate expanded | landed | `bench/mutation` |
+| **F12.4** population 315 → 1004, re-measured | **landed 2026-08-23** | `bench/independent/manifest.json`, `mine.mjs` pagination fix |
+| **F12.5** mutation gate expanded | **12 → 34 cases 2026-08-23; found 2 live engine bugs** | `bench/mutation/runner.mjs` |
 | F12.6 honest scorecard published | landed | `docs/SCORECARD.md` |
 
-**Open, and named as such:** Feature 8 (compliance) has no accuracy instrument. Feature 5
-is scored only for its payload detector. `CODEGEN` is measured dead and awaiting a
-retire-or-fix decision. And the headline numbers in §1.2 have not been re-derived since
-the population tripled — see F12.4.
+**Open, and named as such** (2026-08-23): **Feature 8 (compliance) has no accuracy
+instrument** — the last feature measured by nothing. `CODEGEN` is measured dead and
+awaiting a retire-or-fix decision. **Fix-discrimination is 71.43%, below its 80% floor**,
+and **taint contributes 1 of 28 localized TPs**; both are now measured, and both are in
+§14. Feature 5's payload detector is scored (F5.1) and its taint delta measured (F5.3);
+its code-shape modules remain unscored.
 
 ---
 
@@ -130,42 +132,88 @@ attached.
 entries are self-authored fixtures**, and that has not changed — nor should it. It is a
 regression net, and the instruments above are the accuracy measurements.
 
-### 1.2 The measured baseline for the two features that *are* instrumented
+### 1.2 The measured baseline
 
-> **STALE AS OF 2026-08-22, in both dimensions.** Every figure in this section comes from
-> `bench/independent/RESULT.json` at **engine 0.138.0** over a **315-entry** population.
-> The population is now **1004** (F12.4) and the engine is 0.141.0 with several detection
-> fixes landed since. Quote these numbers only as *"engine 0.138.0, 315 entries,
-> 2026-08-19"* — they are not the current accuracy of anything. Re-running is a
-> multi-hour job and was not attempted in the session that grew the population; the
-> command is in F12.4.
+**Re-measured 2026-08-23 — engine 0.141.0, the full 1004-entry population, 991
+scored and 13 unscored.** The previous figures in this section were engine
+0.138.0 over 315 entries and have been replaced rather than kept alongside: a
+number measured on a third of the population is not a comparison, it is a
+different question.
 
-From `bench/independent/RESULT.json`, 2026-08-19, engine 0.138.0, 309 scored / 6 unscored:
-
-| | value |
-|---|---|
-| localized recall (**the claim**) | **11/309 = 3.56%** |
-| localized precision | 11/25 = 44.00% |
-| fix-discrimination | 9/11 = 81.8% |
-| wide recall / precision (diagnostic) | 13.27% / 53.95% |
-| taint's share of localized TPs | **1 of 12** (deep configuration) |
-
-Per language, and this is the sharpest signal in the document:
-
-| language | n | recall |
+| | 0.138.0 / 315 entries | **0.141.0 / 991 entries** |
 |---|---:|---:|
-| javascript | 20 | 30.0% |
-| typescript | 37 | 13.5% |
-| java | 21 | 9.5% |
-| python | 57 | 8.8% |
-| c# | 15 | 6.7% |
-| php | 55 | 5.5% |
-| **go** | **72** | **0.0%** |
-| **ruby** | **32** | **0.0%** |
+| localized recall (**the claim**) | 3.56% | **28/991 = 2.83%** |
+| localized precision | 44.00% | **28/77 = 36.36%** |
+| fix-discrimination | 81.8% | **20/28 = 71.43%** |
+| held-out localized recall | — | **6/205 = 2.93%** |
 
-**104 of 309 entries — a third of the population — are in two languages where the
-engine finds nothing at all.** By CWE, the zeros are just as concentrated:
-CWE-200 (0/19), CWE-20 (0/18), CWE-863 (0/11), CWE-770 (0/8), CWE-287 (0/7).
+**The headline went DOWN, and that is the population working.** The corpus
+tripled by paging past the first hundred advisories per ecosystem (F12.4), and
+what it pulled in is recent, TypeScript-heavy, and dominated by authorization
+classes — the classes §1.2 has always recorded at or near zero. A number that
+falls because the question got harder is not a regression; holding it steady by
+not asking the harder question would have been the failure.
+
+Held-out (2.93%) tracks development almost exactly, so nothing here is fitted.
+
+**Two metrics wear similar names, so read the label.** "Localized" here is the
+STRICT one — a matching finding within ±3 lines of the code the fix actually
+changed — and it is what this section and the per-language table below report.
+`docs/SCORECARD.md` publishes **advisory-local** (a matching CWE anywhere in the
+advisory's files, `71/991 = 7.2%`) as its headline, with `wide` as its
+diagnostic. Neither document is wrong; they are different questions, and the
+looser one is always the larger number. When comparing anything across the two,
+check which column it came from.
+
+**Per language — and the two measured zeros are no longer zero:**
+
+| language | n | recall | was |
+|---|---:|---:|---:|
+| csharp | 15 | 6.67% | 6.7% |
+| java | 21 | 4.76% | 9.5% |
+| **ruby** | **250** | **3.20%** | **0.0%** |
+| typescript | 322 | 3.11% | 13.5% |
+| python | 100 | 3.00% | 8.8% |
+| javascript | 124 | 2.42% | 30.0% |
+| **go** | **84** | **1.19%** | **0.0%** |
+| **php** | **73** | **0.00%** | 5.5% |
+| kotlin | 2 | 50.00% | (none) |
+
+Ruby and Go come off zero on populations 8× and 1.2× their old size. **PHP is
+now the zero**, on 73 entries — a new fact, and the next per-language
+investigation, using the same histogram method F1.1 and F1.2 used.
+
+The large per-language *drops* (javascript 30% → 2.42%, typescript 13.5% →
+3.11%) are almost entirely denominator: javascript went from 20 entries to 124,
+typescript from 37 to 322. A 30% recall over 20 entries was 6 findings.
+
+**Which layer earns a localized true positive, across all 28:**
+
+`OWNERSHIP-AUTHZ` 4 · `RUBY` 6 · `LOGIC` 3 · `STRUCTURAL` 3 · `JS-FW` 1 ·
+`CSRF` 1 · `FILE-UPLOAD` 1 · **`CONVENTION` 1** · `JAVA` 1 · `ZIP-SLIP` 1 ·
+**`SIBLING-GUARD` 1** · `AUTHZ-MATRIX` 1 · `RESOURCE` 1 · `CSHARP` 1 ·
+`CRYPTO-PROTO` 1 · `REGEX` 1
+
+Two of those are this session's work, confirmed on the real population rather
+than on their own fixtures: `RUBY` includes `lsegal/yard` (GHSA-pxcc-8665-phx8),
+the `File.join` rule from F1.3, and **`CONVENTION` earns its first localized TP
+ever** on `gitpython-developers/GitPython` — the family §3 recorded as
+permanently silent until F1.4 found it was mislocalized by five lines.
+
+**Taint's share is measured separately**, in the deep configuration, because
+pattern-only mode does not run the taint engine at all and a 0 there would be
+trivially true. See F2.1.
+
+**How this was measured, and why it is not one command.** A whole-population run
+**wedged** at 0.0% CPU after 24 minutes of CPU time and 4.5 hours of wall clock
+— the signature the per-entry watchdog was built for, and which it cannot fix:
+the watchdog bounds the awaited promise, not the handles a stalled scan holds,
+so one bad entry costs the run and everything already scored with it.
+`runner.mjs` now takes `--offset=` / `--limit=` and each slice runs in its own
+process; `merge-chunks.mjs` reassembles them, **recomputing** every aggregate
+from the per-entry rows and refusing to write unless that arithmetic reproduces
+each chunk's own published numbers exactly. It caught its own first bug that
+way: `survivedFix` is a count, not a boolean.
 
 ### 1.3 The rule this PRD is built on
 
@@ -217,7 +265,7 @@ nobody here wrote.
 
 ## 3. Feature 1 — Pattern & structural detection (SAST)
 
-**Measured today:** localized recall 3.56%, precision 44.00%. Owned by
+**Measured today (0.141.0, 991 entries):** localized recall 2.83%, precision 36.36%. Owned by
 `WORLD_CLASS_DETECTION_PRD.md`; only the parts that document does not cover appear here.
 
 **The gap this document adds: the two zero languages.** Go (0/72) and Ruby (0/32) are not
@@ -596,10 +644,45 @@ that needs the per-entry instrument in F2.1, not this aggregate.
 
 **Work.**
 
-- **F2.1 — A taint-specific third-party instrument.** `bench/layer-recall` measures
-  attribution over a self-authored corpus and therefore cannot answer "is our taint engine
-  good." Build the same per-layer attribution over `bench/independent`, reported per
-  language, so the 1-of-12 figure has a trend line.
+- **F2.1 — A taint-specific third-party instrument. MEASURED IN BOTH
+  CONFIGURATIONS 2026-08-23, and the answer is one.**
+
+  `bench/independent` now runs pattern-only and `--deep` over the same 1004-entry
+  population, so taint's contribution is a subtraction rather than an inference.
+
+  | | pattern-only | deep |
+  |---|---:|---:|
+  | scored entries | 991 | 990 |
+  | localized recall | 28/991 = 2.83% | 28/990 = 2.83% |
+  | localized precision | 28/77 = 36.36% | 28/82 = **34.15%** |
+  | fix-discrimination | 71.43% | 67.86% |
+  | **taint's share of localized TPs** | — | **1 of 28** |
+
+  **Deep mode finds exactly one thing pattern-only does not, loses one, and
+  costs five false positives.** Entry by entry:
+
+  - gained: `GHSA-g3hq-hphg-8fhh` — php, CWE-78, attributed to `IR-TAINT`. This
+    is the taint engine's entire contribution to the claim, on 990 real
+    advisories.
+  - lost: `GHSA-fh2f-xfxc-q9cc` — go, CWE-22, found by `SIBLING-GUARD` in
+    pattern-only and **not** found in deep. A deep-mode pass suppressing a
+    pattern finding is a regression shape, not a trade, and it is recorded here
+    rather than netted off.
+  - false positives: 49 → 54.
+
+  **Against success criterion 4 — "taint's share > 1 and rising" — this is a
+  clear NO.** It was 1 of 12 at 315 entries and is 1 of 28 at 990: the absolute
+  count did not move while the population tripled, so the *share* fell from 8.3%
+  to 3.6%. The PRD's own instruction for this case is explicit — "If Feature 2's
+  work completes and taint still contributes ~1, that is a finding to act on,
+  not to explain away."
+
+  **Per language, taint attributes 1 of 1 in php and 0 of everything else** —
+  0 of 10 typescript, 0 of 8 ruby, 0 of 3 javascript, 0 of 3 python, 0 of 1 each
+  in java/csharp/kotlin. Set against `bench/layer-recall`, which attributes
+  **54%** of corpus detections to taint, the gap between the self-authored corpus
+  and real code is now measured twice, in both configurations, and has not
+  narrowed.
 - **F2.2 — Finish container/collection taint.** 9 of 10 probed shapes now flow
   (`test/container-taint.test.js`); the open one is Python comprehensions
   (`[x for x in request.args.getlist(...)]`). Also unmodelled: cross-file/stored flow
@@ -702,10 +785,64 @@ public advisory database in minutes.
   in a parent POM it does not fetch, so Maven is *unmeasured*, not covered. 13 entries is
   small. Both sides consult the same advisory database, so this measures resolution and
   matching fidelity, never whether the database is right.
-- **F3.2 — Score reachability as its own claim.** "Vulnerable version present" and "the
-  vulnerable *function* is reachable" are different assertions with different error costs.
-  A false "unreachable" is a missed exploit; a false "reachable" is noise. Report them
-  separately, each with `{n, d}`, and publish the demotion rate.
+- **F3.2 — Score reachability as its own claim. SCORED 2026-08-23, and the first
+  three adjudicable demotions were all wrong in the expensive direction.**
+
+  `summarizeReachability` reported the demotion RATE, which is not an accuracy
+  claim — and `bench/sca-replay` reported that rate as **0 for every entry**,
+  because it fetches lockfiles and the analysis had no source to walk. A number
+  that is structurally zero looks like a measurement and is not one.
+
+  Source is now fetched for a subset (`withSource`), and
+  `bench/sca-replay/reachability.mjs` scores the verdict against an
+  **import-level oracle** computed here from the project's own source, by a
+  reader sharing no code with the engine.
+
+  **What that oracle can and cannot settle**, stated because it decides how the
+  number should be read:
+
+  | engine says | package imported | verdict |
+  |---|---|---|
+  | unreachable | **yes** | **wrong, and expensively** — a missed exploit |
+  | reachable | no | noise |
+  | reachable | yes | **NOT ADJUDICATED** — the vulnerable *function* may still be unused |
+
+  The unadjudicated bucket is reported by name. An oracle that quietly scored it
+  as correct would report near-perfect accuracy for an analysis that had never
+  demoted anything.
+
+  **First run: 3 adjudicable demotions, 3 false-unreachable — 100% wrong.**
+  `express`/`cookie`, `express`/`send`, `poetry`/`requests`. Each verified by
+  hand: `var cookie = require('cookie')` at the top of `lib/response.js`,
+  `import requests` in `poetry/publishing/uploader.py`. All three had been
+  demoted to `info` — out of the report entirely.
+
+  **Three engine defects behind it, each fixed:**
+
+  1. **Absence of proof was reported as proof of absence.** The verdict was
+     `functionReachable ? 'reachable' : 'unreachable'`, so a site the analysis
+     could not reason about became a positive claim of unreachability. Now
+     `unknown` — a first-class state the code already used elsewhere.
+  2. **A project with no routes was still asked "reachable from a route?"** For a
+     LIBRARY that question has no answer: its callers are its users, who are not
+     in the tree. `unreachable` now requires the project to have routes at all.
+     This is the library-vs-application distinction §4 already flags for the
+     taint engine (F2.3), surfacing here as a false demotion instead of a false
+     negative.
+  3. **`_enclosingFn` recognised two declaration forms out of four.** It matched
+     `function name(` and `const name = (`, but not `res.cookie = function (…)` —
+     how most of the JS ecosystem defines a public method. The scan walked past
+     it and attributed the call site to an unrelated function further up the
+     file. It now also carries whether that function is **exported**, because a
+     public-API function with no in-tree caller is the normal case, not dead code.
+
+  **After the fixes: 0 adjudicable errors — and 0 adjudicable demotions.**
+  The engine now declines to claim on 68 of 70 findings in this sub-corpus. That
+  is the honest result and it is not a victory: the false demotions are gone, and
+  the feature currently demotes nothing here. Whether that is correct caution or
+  excessive caution cannot be settled by these four entries — three of them are
+  libraries. Deciding it needs applications with real routes in the source-bearing
+  set, which is the next piece of work and is named rather than implied.
 - **F3.3 — SBOM conformance, mechanically.** Validate emitted SBOMs against the CycloneDX
   and SPDX schemas in CI. "We emit an SBOM" is worth nothing if a consumer's parser
   rejects it; this is a cheap, binary, external check.
@@ -947,10 +1084,51 @@ measuring against an external, versioned benchmark rather than a corpus written 
   coverage. Score it against a corpus of real published MCP servers, including
   known-malicious tool definitions. Tool-poisoning and rug-pull (a tool whose definition
   changes after approval) are the two shapes with no detector today.
-- **F5.3 — Agent-trust-boundary taint.** `agent-untrusted-flow.js` and
-  `agent-tool-escalation.js` are pattern-based. The real shape is a dataflow one: tool
-  output → model context → tool invocation. Model it in the taint engine, where
-  `@mcp.tool()` parameters are already sources (T3.1), rather than as regexes.
+- **F5.3 — Agent-trust-boundary taint, with the localized-TP delta the exit gate
+  asked for. MEASURED 2026-08-23, and the delta is undefined for a reason worth
+  reading.**
+
+  The modelling landed earlier; the delta never did, so the claim was "we built
+  it" rather than "it finds things". `bench/independent/agent-boundary-delta.mjs`
+  measures the second.
+
+  **The sub-population exists by accident, and that is the good news.** Until
+  F12.4 fixed the miner's pagination, the population held essentially no agent
+  code. It now contains **28 entries with real MCP-server code and real
+  advisories** — TypeScript 17, Go 4, Python 3, JavaScript 1 — from
+  `github/github-mcp-server`, `FlowiseAI/Flowise`, `dynatrace-oss/dynatrace-mcp`,
+  `contentful/contentful-mcp-server` and others. Membership is computed from the
+  tree on every run, never hardcoded, so it grows with the corpus.
+
+  | | |
+  |---|---:|
+  | entries inspected | 1004 |
+  | entries with agent-tool code | 28 |
+  | scored (3 timed out, excluded by name) | 25 |
+  | **localized true positives on them** | **0** |
+  | **agent-boundary delta** | **0 of 0 — undefined** |
+
+  **The delta is undefined, not zero-because-the-feature-is-useless.** There are
+  no localized true positives on this sub-population at all, so there is nothing
+  for the boundary modelling to have contributed to. Reporting "0%" would imply
+  the feature was measured and failed; it was not measured, because the
+  denominator is empty.
+
+  **And the engine is not silent on these files — it names the wrong weakness.**
+  Spot-checked by hand on two entries: 21 findings each, every one *on the
+  advisory's own files*, and **none of the labelled CWE class**. That is the
+  `WRONG-CWE` bucket F1.1 identified for Go, reappearing on the surface this
+  product is most differentiated on. The labelled classes here are
+  authorization and access control — CWE-306 ×3, CWE-862 ×2, CWE-284 ×2,
+  CWE-200 ×2 — plus CWE-22 ×3 and CWE-78/CWE-77, which are precisely the classes
+  §1.2 already records at or near zero.
+
+  **What this changes about the work.** The agent trust boundary being modelled
+  in the taint layer is necessary and not sufficient: a source is only useful if
+  some rule names the weakness the flow reaches. The next move for Feature 5 is
+  not more sources — it is the authorization classes on this sub-population,
+  which now has 25 scoreable entries and a held-out slice of 4, and which can be
+  re-measured with one command after every change.
 - **F5.4 — The comment-blindness carve-out needs its own test.** 20 detectors deliberately
   read raw source because for an agentic tool, instructions hidden in a comment *are* the
   attack. That decision is currently protected only by a code comment. It needs a test
@@ -1215,10 +1393,31 @@ broken IDE extension ships silently.
   the JetBrains `plugin.xml` `factoryClass` resolves to the Kotlin class. A
   `vscode-extension` CI job builds the extension and fails on a stale committed bundle.
 
-  **Still open, stated rather than implied:** no gradle build of the JetBrains plugin (JDK
-  + network), no `vsce package`, no Neovim host, and no type-check of the VS Code source —
-  `typescript` is not a dependency of that tree and the build is esbuild, which strips
-  types without checking them, so a TYPE error there still ships silently.
+  **The three remaining surfaces, closed 2026-08-23.**
+
+  - **VS Code type-check.** `typescript` is now a devDependency of that tree and
+    `npm run typecheck` runs in CI. Adding it found real errors on the first run:
+    the tsconfig declared no `types` at all, so `process`, `setTimeout` and
+    `NodeJS.Timeout` were every one of them unresolved — `@types/node` was already
+    installed and nothing consumed it — plus two implicit `any` parameters on the
+    `execFile` callback. The extension had never been type-checked.
+  - **Neovim.** A headless job loads the plugin from runtimepath, resolves the
+    module, runs `setup()` and asserts the load guard is set. No LSP server is
+    started — `setup()` only registers a FileType autocmd, and starting a real
+    server is `lsp-protocol-smoke`'s job. A syntax error or missing function in
+    the lua presents to a user as "the plugin does nothing", the same failure the
+    LSP binary had.
+  - **JetBrains.** `gradle buildPlugin`, asserting a distribution zip is
+    produced. **Classified INFORMATIONAL**, deliberately: it downloads a full
+    IntelliJ distribution, so red is far more often the network or a JetBrains
+    release than a statement about this code — and a gate that is habitually red
+    stops being read, which is the lesson `realworld-bench` already taught. The
+    correctness half (plugin.xml's `factoryClass` resolves to the Kotlin class it
+    names) is asserted offline and BLOCKING in `test/ide-surfaces.test.js`.
+
+  **Still open, stated rather than implied:** no `vsce package` — producing the
+  marketplace artifact is a publish step, not a correctness check, and nothing
+  about it has ever broken.
 - **F11.2 — Time-to-first-finding as a tracked metric.** The ICP is vibecoder-first
   (`docs/POSITIONING.md`). For that user the binding constraint is how long until the
   first useful result, not aggregate F1. Measure it on a cold cache for a mid-size repo,
@@ -1262,8 +1461,8 @@ in a single day on 2026-08-19.
   notice on improvement.
 - **F12.3 — Every long-running bench gets a watchdog.** `bench/independent` now has one.
   `layer-recall`, `proof-corpus`, `polyglot` and `realworld-recall` do not.
-- **F12.4 — Grow the independent population toward 750+ and enforce the held-out slice.
-  DONE 2026-08-22 — 315 → 1004 — after fixing the reason it could not grow.**
+- **F12.4 — Grow the independent population toward 750+, enforce the held-out slice,
+  AND re-measure. DONE 2026-08-23 — 315 → 1004, re-measured, §1.2 replaced.**
 
   **The miner was not paginating.** `mine.mjs` requested `&page=N`, and the advisories
   endpoint **ignores that parameter** — page 1 and page 2 return byte-identical results,
@@ -1293,22 +1492,68 @@ in a single day on 2026-08-19.
   rather than guessing. The held-out slice needs no maintenance — `isHeldOut` hashes the
   entry id, so ~20% holds automatically across the new population.
 
-  **What is NOT done, stated plainly: the headline numbers have not been re-measured.**
-  `bench/independent/RESULT.json` still describes the 315-entry population at engine
-  0.138.0. Every figure quoted in §1.2 of this document — 3.56% localized recall, the
-  per-language table, taint's 1-of-12 share — is therefore **stale with respect to the
-  population, not just the engine**. Re-running is a multi-hour job on 1004 entries and
-  was not attempted here. Until it is, quote §1.2 as *"engine 0.138.0, 315 entries"* and
-  nothing more:
+  **Re-measured 2026-08-23.** §1.2 now carries engine 0.141.0 over 991 scored entries:
+  localized recall **2.83%**, precision **36.36%**, held-out **2.93%**. The headline
+  fell, which is the population working — it tripled and got harder — and Ruby and Go
+  came off zero in the process.
+
+  **The re-run is why chunking exists.** A whole-population pass wedged at 0.0% CPU after
+  4.5 hours, taking every already-scored entry with it. `runner.mjs --offset= --limit=`
+  plus `merge-chunks.mjs` now make the measurement restartable and a wedge cost one slice:
 
   ```bash
-  cd bench/independent && node fetch.mjs      # materialise the new entries
-  cd scanner && npm run bench:independent -- --json
+  cd bench/independent && node fetch.mjs                      # materialise
+  for o in $(seq 0 50 1000); do node runner.mjs --offset=$o --limit=50; done
+  node merge-chunks.mjs            # + --deep for the deep configuration
   ```
-- **F12.5 — Expand the mutation gate.** It is the anti-overfitting control and has **12
-  cases**. Every new detector family should ship a metamorphic pair (verdict must hold)
-  and an adversarial near-miss (verdict must flip). Scale it with the engine.
-- **F12.6 — Publish the honest scorecard, prominently.** 3.56% localized recall is a low
+- **F12.5 — Expand the mutation gate. DONE 2026-08-23 — 12 → 34 cases, and it
+  found two live bugs on its first run.**
+
+  The exit gate asked for ≥ 30. It stood at 12 while 0.141.0 shipped five new
+  detector families (CloudFormation, Bicep, Helm values, Dockerfile pinning, Ruby
+  `File.join`) — none of which owed a case until now, which is precisely the
+  debt F12.5 exists to prevent.
+
+  Every new family gets a baseline, a **semantics-preserving rewrite** (the
+  verdict must hold) and a **semantics-changing near-miss** (the verdict must
+  flip). Verdict-flip correctness now scores **34/34**.
+
+  **What it caught, neither of which any recall measurement could see:**
+
+  1. **The CloudFormation ingress rule was keyed on key ORDER.** It anchored on
+     `- IpProtocol`, so `- CidrIp:` first — the same template, since YAML
+     mappings are unordered — matched nothing. The metamorphic case failed
+     immediately. Now the ingress LIST is split into items and each is read as a
+     mapping.
+  2. **A sanitizer could be UNDONE and the flow still read as clean.**
+     `he.decode(escapeHtml(req.query.name))` reaching an HTML sink was reported
+     **sanitized** — a missed XSS, because the decode restores exactly what the
+     escape removed. Nothing modelled reversal: the catalog holds sanitizers, a
+     decoder is the opposite, so it was never even recorded on the path.
+
+     Fixed across three layers, and the third is the interesting one: the walk
+     now collects un-sanitizer callees, `sanitizer-gate.js` maps them to the
+     family they reverse (percent-decoding does not undo HTML escaping, so a
+     flat list would be wrong), and the finding-projection **allowlist** in
+     `dataflow/engine.js` had to learn the new field — the fix looked inert
+     through three rounds of debugging because the field was being silently
+     dropped there. That allowlist's own comment warns about exactly this.
+
+  **A case was deliberately NOT added**, and the reason belongs here. Hoisting a
+  sanitizer into a helper —
+
+  ```js
+  function clean(v) { return escapeHtml(v); }
+  const name = clean(req.query.name);
+  ```
+
+  — is a semantics-preserving rewrite the engine gets **wrong**: sanitizer effect
+  does not propagate through a summarised return, so the flow reads unsanitized.
+  Adding it would make this gate permanently red, and a gate nobody can pass is
+  a gate that gets deleted. It is recorded in `dataflow/CLAUDE.md` instead. The
+  error direction is precision, never a missed vulnerability, which is why it is
+  a documented limitation rather than a blocker.
+- **F12.6 — Publish the honest scorecard, prominently.** 2.83% localized recall is a low
   number. Publishing it, with the methodology that makes it low, is a stronger market
   position than a corpus-derived F1 that does not survive contact with real code — and it
   is the only position consistent with the project's stated moat.
@@ -1361,24 +1606,34 @@ happen**.
 
 ---
 
-## 14. Success criteria — scored 2026-08-22
+## 14. Success criteria — scored 2026-08-23
 
-Measured on the **held-out slice**, in both configurations, with the strict metric.
+Measured on the **held-out slice**, in both configurations, with the strict
+metric. Every figure comes from a run made this day against the 1004-entry
+population at engine 0.141.0.
 
 | # | criterion | status |
 |---|---|---|
-| 1 | **Ten instruments, one per feature**, third-party labelled, `{n, d}`, held-out slice | **8 of 10.** Six new instruments landed (F3.1, F4.1, F4.3, F5.1, F6.3, F11.1). Feature 8 (compliance) still has none; Feature 5 is partial — only the payload detector is scored. |
-| 2 | **Go and Ruby off zero** (≥ 5% localized recall each) | **not met, and not re-measured.** The population grew 315 → 1004 and the headline has not been re-run. Ruby's first localized true positive in CWE-22/79 landed (F1.3); the rate is unknown. |
-| 3 | **Fix-discrimination ≥ 80% sustained** | **not re-measured** — same reason. Every new rule ships with a fix-discrimination test, and the IaC bench scores verdict-flip by construction. |
-| 4 | **Taint's attributable share of localized TPs > 1 and rising** | **not re-measured.** |
-| 5 | **Every compliance control carries the measured strength of its backing detector** | **met** (F10.2, landed earlier). |
-| 6 | **No published number without its configuration** | **met, and enforced by example**: §1.2 now carries an explicit staleness banner naming both its engine version and its population size. |
+| 1 | **Ten instruments, one per feature**, third-party labelled, `{n, d}`, held-out slice | **9 of 10.** Eight new instruments now exist (F3.1, F3.2, F4.1, F4.3, F5.1, F5.3, F6.3, F11.1). Feature 8 (compliance) still has none — the only feature with no accuracy measurement at all. |
+| 2 | **Go and Ruby off zero** (≥ 5% each) | **off zero, below 5%.** ruby **3.20%** (8/250, was 0/32), go **1.19%** (1/84, was 0/72). PHP is the new zero at **0/73**. |
+| 3 | **Fix-discrimination ≥ 80% sustained** | **NOT met — 71.43%** (20/28) pattern-only, 67.86% deep. Was 81.8% at 315 entries. |
+| 4 | **Taint's share of localized TPs > 1 and rising** | **NOT met — 1 of 28.** It was 1 of 12; the count did not move while the population tripled, so the share fell 8.3% → 3.6%. See F2.1. |
+| 5 | **Every compliance control carries the measured strength of its backing detector** | **met** (F10.2). |
+| 6 | **No published number without its configuration** | **met.** §1.2 states engine, population size and date; F2.1 reports pattern-only and deep separately rather than merging them. |
 
-**The honest summary: the instruments are built and the capability moved; the headline
-has not been re-derived.** Criteria 2–4 all depend on one multi-hour run against a
-population that tripled in the same session. Re-running it is the single highest-value
-next action, and until it happens no number in §1.2 should be quoted without its date,
-engine version and entry count.
+**Three of six are unmet, and all three are now measured rather than unknown** —
+which is the difference between this scoring and the previous one. The instruments
+exist, they run on one command each, and they disagree with the product's
+ambitions in specific, addressable places:
+
+- **Fix-discrimination fell below its floor.** 8 of 28 localized true positives
+  still fire on the code the fix produced. That is the criterion most worth
+  acting on: a finding that survives its own fix has detected an API, not a
+  vulnerability.
+- **Taint contributes one finding.** Not a trend, not a share worth quoting — one.
+  The PRD's own instruction applies: act on it, do not explain it away.
+- **Feature 8 has no instrument.** Compliance is the feature where being wrong is
+  most expensive, and it is the one still measured by nothing.
 
 ---
 

@@ -51,7 +51,7 @@ async function runScan(folder: string): Promise<any | null> {
     cp.execFile(
       'node', [scanner, 'scan', folder, '--no-network', '--format', 'json'],
       { maxBuffer: 16 * 1024 * 1024 },
-      (err, stdout) => {
+      (err: (Error & { code?: number | string }) | null, stdout: string) => {
         if (err && err.code !== undefined && Number(err.code) > 3) {
           // exit codes 0–3 are valid scan results; > 3 is an error
           resolve(null); return;

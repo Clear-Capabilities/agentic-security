@@ -60,10 +60,19 @@ function scanCloudFormation(fp, raw) {
   // block rather than matched independently, so `CidrIp: 0.0.0.0/0` on port 443
   // — which is what a public web listener looks like and is not a finding —
   // does not match.
-  const ingressBlock = /-\s*IpProtocol\s*:[\s\S]{0,400}?(?=\n\s*-\s|\n\s*\w+\s*:\s*\n|$)/g;
+  // Split the ingress LIST into items, rather than anchoring on `- IpProtocol`.
+  //
+  // YAML mappings are unordered, so `- CidrIp:` first and `- IpProtocol:` first
+  // are the same template — and the anchored form only matched the second.
+  // bench/mutation's `cfn-metamorphic-property-order` case is exactly that
+  // rewrite, and it failed: the rule was keyed on the author's key order, which
+  // is syntax, not meaning.
+  const ingressBlock = /(?:^|\n)([ \t]*)-[ \t]+(?=[\w"']+[ \t]*:)([\s\S]*?)(?=\n[ \t]*-[ \t]|\n[ \t]{0,8}\w[\w.]*[ \t]*:|$)/g;
   let m;
   while ((m = ingressBlock.exec(raw))) {
     const block = m[0];
+    // Only list items that actually describe an ingress rule.
+    if (!/IpProtocol\s*:/.test(block) || !/Cidr(?:Ip|Ipv6)\s*:/.test(block)) continue;
     const cidr = block.match(/Cidr(?:Ip|Ipv6)\s*:\s*["']?([^\s"',]+)/);
     if (!cidr || !OPEN_CIDRS.test(cidr[1])) continue;
     const from = block.match(/FromPort\s*:\s*["']?(\d+)/);

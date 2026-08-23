@@ -76,12 +76,68 @@ jobs:
             }
             console.log("built bundle OK: resolution logic present, no dead path, all commands registered");
           '
-      # No type-check step: `typescript` is not a dependency of this tree and
-      # the build is esbuild, which strips types without checking them. So a
-      # TYPE error in extension.ts still ships silently. Recorded as a known
-      # gap rather than closed by adding a compiler this tree does not
-      # otherwise need — F11.1 asks for the surface to be gated, and staleness
-      # is the failure that has actually occurred here.
+      # The build is esbuild, which STRIPS types without checking them, so a
+      # type error in extension.ts shipped silently. This was a recorded gap
+      # until 0.142.0; closing it found real errors immediately — the tsconfig
+      # pulled in no Node types at all, so `process`, `setTimeout` and
+      # `NodeJS.Timeout` were all unresolved, plus two implicit `any`
+      # parameters on the execFile callback.
+      - name: Type-check
+        run: npm run typecheck
+
+  # PRD F11.1 — the Neovim distribution, actually loaded.
+  #
+  # `ide/nvim` ships a plugin that Neovim auto-loads from runtimepath. Nothing
+  # ever started an editor and asked whether it loads: a syntax error or a
+  # missing function in the lua would present to a user as "the plugin does
+  # nothing", which is exactly the failure mode the LSP binary had before
+  # test/lsp-protocol-smoke.test.js.
+  #
+  # Headless, no LSP server started: `setup()` only registers a FileType
+  # autocmd, so this asserts the plugin LOADS, its module resolves, setup()
+  # runs without error, and the load guard is set. Starting a real server
+  # belongs to the LSP smoke test, which already does it.
+  nvim-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Neovim
+        run: sudo apt-get update && sudo apt-get install -y neovim
+      - name: The plugin loads and setup() runs
+        run: |
+          nvim --headless -u NONE \
+            --cmd "set runtimepath+=$PWD/ide/nvim" \
+            -c "runtime! plugin/*.lua" \
+            -c "lua local ok, m = pcall(require, 'agentic-security'); if not ok then error('require failed: ' .. tostring(m)) end; local ok2, err = pcall(m.setup, {}); if not ok2 then error('setup() failed: ' .. tostring(err)) end; if vim.g.loaded_agentic_security ~= 1 then error('plugin/ did not set its load guard') end; print('nvim plugin OK')" \
+            -c "qa!"
+
+  # PRD F11.1 — the JetBrains distribution, actually built.
+  #
+  # INFORMATIONAL, deliberately (see .github/required-checks.json). The build
+  # downloads a full IntelliJ distribution, so a failure here is far more often
+  # the network or a JetBrains release than a statement about this code, and a
+  # gate that is habitually red stops being read. The correctness half — that
+  # plugin.xml's factoryClass resolves to the Kotlin class it names — is a
+  # blocking assertion in test/ide-surfaces.test.js and runs offline in
+  # milliseconds.
+  jetbrains-plugin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ide/jetbrains
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the plugin
+        run: gradle --no-daemon buildPlugin
+      - name: A distribution zip was produced
+        run: |
+          test -n "$(find build/distributions -name '*.zip' -print -quit)" \
+            || { echo "FAIL: buildPlugin produced no distribution zip"; exit 1; }
 
   # Exercises the kernel-namespace confinement backend for real.
   #

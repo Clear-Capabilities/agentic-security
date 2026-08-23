@@ -8,6 +8,11 @@
     "strict": true,
     "esModuleInterop": true,
     "allowJs": true,
+    // Without this the compiler has no Node globals at all — `process`,
+    // `setTimeout`, `NodeJS.Timeout` — so every one of them was an error the
+    // moment a type-check was actually run. @types/node was already a
+    // devDependency; nothing was consuming it.
+    "types": ["node"],
     "skipLibCheck": true
   },
   "exclude": ["node_modules", "dist"]

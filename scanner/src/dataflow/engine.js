@@ -572,6 +572,62 @@ function _matchCallCatalog(calleeExpr, argExprs, state, callContext) {
 // labels the finding, and the proof gate demotes it. Recall-preserving, same
 // precedent as falsification.js / proof-gate.js: never removed, never
 // severity-touched.
+// Calls that UNDO an encoding. The catalog has no entry for these — it models
+// sanitizers, and a decoder is the opposite — so they would never be recorded
+// on the path and `sanitizer-gate.js` could not see them.
+//
+// Measured by bench/mutation: `he.decode(escapeHtml(req.query.name))` reaching
+// an HTML sink was labelled SANITIZED. The decode puts back exactly what the
+// escape removed, so that was a missed XSS reported as clean.
+//
+// Deliberately a NAME list rather than a catalog kind: these are not analysis
+// entries with families and effects, they are a short list of well-known
+// inverses, and the gate maps them to the family they reverse.
+const _UNSANITIZER_CALLEES = new Set([
+  'unescape', 'unescapeHtml', 'unescapeHtml3', 'unescapeHtml4',
+  'StringEscapeUtils.unescapeHtml3', 'StringEscapeUtils.unescapeHtml4',
+  'he.decode', 'entities.decode', 'html.decode', 'decodeHTML',
+  'decodeHTMLStrict', 'decodeEntities', 'html.unescape',
+  'html_entity_decode', 'htmlspecialchars_decode', '_.unescape', 'lodash.unescape',
+  'decodeURI', 'decodeURIComponent', 'unquote', 'unquote_plus',
+  'URLDecoder.decode', 'urldecode', 'querystring.unescape',
+]);
+
+// `callee` is an IR NODE, not a string: `{kind:'ident',name:'escapeHtml'}` or
+// `{kind:'member',object:{kind:'ident',name:'he'},prop:'decode'}`. Flattened to
+// the dotted form the name list is written in, plus the bare leaf so a call
+// through an alias (`const {decode} = he`) still matches on an unambiguous name.
+function _calleeNames(callee) {
+  if (!callee || typeof callee !== 'object') return [];
+  if (callee.kind === 'ident' && callee.name) return [callee.name];
+  if (callee.kind === 'member' && callee.prop) {
+    const obj = callee.object;
+    const base = obj && obj.kind === 'ident' && obj.name ? obj.name : null;
+    return base ? [`${base}.${callee.prop}`, callee.prop] : [callee.prop];
+  }
+  return [];
+}
+
+function _unsanitizersInExprTree(expr, out) {
+  if (!expr || typeof expr !== 'object') return;
+  if (expr.kind === 'call') {
+    for (const n of _calleeNames(expr.callee)) {
+      // The bare leaf is accepted only when it is unambiguous on its own.
+      // `decode` is not — jwt.decode, base64 decode, protobuf decode — and
+      // matching it would void correct sanitization claims all over the tree.
+      if (n === 'decode') continue;
+      if (_UNSANITIZER_CALLEES.has(n)) { out.add(n); break; }
+    }
+  }
+  for (const k of ['left', 'right', 'callee', 'object', 'property', 'value']) {
+    if (expr[k] && typeof expr[k] === 'object') _unsanitizersInExprTree(expr[k], out);
+  }
+  for (const k of ['args', 'parts', 'branches', 'elements']) {
+    if (Array.isArray(expr[k])) for (const e of expr[k]) _unsanitizersInExprTree(e, out);
+  }
+  if (Array.isArray(expr.props)) for (const p of expr.props) _unsanitizersInExprTree(p && p.value, out);
+}
+
 function _sanitizersInExprTree(expr, out) {
   if (!expr || typeof expr !== 'object') return;
   if (expr.kind === 'call') {
@@ -592,6 +648,26 @@ function _sanitizersInExprTree(expr, out) {
 }
 
 // Sanitizers applied to `expr`: those called inline within it, plus those
+// Un-sanitizers applied to `expr`, by the same rule: inline in the expression,
+// or inherited from a variable it reads. The inheritance half is what makes it
+// work at all — `const escaped = escapeHtml(x); const name = he.decode(escaped);
+// sink(name)` puts the decode on an ASSIGNMENT, so an expression-tree walk of
+// the sink argument sees only `name` and would never find it.
+function _unsanitizersForExpr(expr, callContext) {
+  const out = new Set();
+  _unsanitizersInExprTree(expr, out);
+  const byVar = callContext && callContext._unsanitizersByVar;
+  if (byVar && byVar.size) {
+    const vars = new Set();
+    _collectExprVars(expr, vars);
+    for (const v of vars) {
+      const s = byVar.get(v);
+      if (s) for (const n of s) out.add(n);
+    }
+  }
+  return out;
+}
+
 // recorded against any variable it reads (`const safe = escapeHtml(x); sink(safe)`).
 function _sanitizersForExpr(expr, callContext) {
   const out = new Set();
@@ -695,8 +771,10 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         // covers the finding's threat class — an xss escaper on a SQL sink
         // must not read as sanitised.
         const _sanNames = _sanitizersForExpr(taintedArgExpr, callContext);
+        const _unsanNames = _unsanitizersForExpr(taintedArgExpr, callContext);
         findings.push({
           ...(_sanNames.size ? { _sanitizersOnPath: [..._sanNames] } : {}),
+          ...(_unsanNames.size ? { _unsanitizersOnPath: [..._unsanNames] } : {}),
           kind: 'taint',
           sinkId: e.id,
           vuln: e.vuln?.name || 'Tainted Sink',
@@ -759,8 +837,10 @@ function _memberWriteSinkFindings(hits, sourceExpr, state, callContext, line, ta
     const reachingSources = _sourcesReachingExpr(sourceExpr, state, callContext._taintSources);
     const traceForThisFinding = reachingSources.length ? reachingSources.slice(0, 5) : [];
     const _sanNames = _sanitizersForExpr(sourceExpr, callContext);
+    const _unsanNames = _unsanitizersForExpr(sourceExpr, callContext);
     findings.push({
       ...(_sanNames.size ? { _sanitizersOnPath: [..._sanNames] } : {}),
+      ...(_unsanNames.size ? { _unsanitizersOnPath: [..._unsanNames] } : {}),
       kind: 'taint',
       sinkId: e.id,
       vuln: e.vuln?.name || 'Tainted Sink',
@@ -859,6 +939,13 @@ function step(node, stateIn, callContext) {
         const _byVar = (callContext._sanitizersByVar ||= new Map());
         if (_san.size) _byVar.set(target, _san);
         else _byVar.delete(target);
+        // The same bookkeeping for reversals, and for the same reason: a clean
+        // re-assignment must clear it, or a decode recorded once would void
+        // every later sanitization claim on that name.
+        const _unsan = _unsanitizersForExpr(node.source, callContext);
+        const _unByVar = (callContext._unsanitizersByVar ||= new Map());
+        if (_unsan.size) _unByVar.set(target, _unsan);
+        else _unByVar.delete(target);
       }
       // Constant propagation: track variables assigned from literals
       if (target && _activeConstantVars) {
@@ -1710,6 +1797,14 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         // dropped — which is what previously left sanitizer-gate.js inert.
         ...(Array.isArray(f._sanitizersOnPath) && f._sanitizersOnPath.length
           ? { _sanitizersOnPath: f._sanitizersOnPath } : {}),
+        // The reversal half, and it hit the very trap this comment warns about:
+        // the walk collected `he.decode` correctly, the gate was wired to
+        // consume it, and the field was dropped HERE — so the fix looked inert
+        // through three rounds of debugging. An explicit allowlist is the right
+        // design and this is its standing cost: every new field must be added
+        // in two places, and the omission is silent.
+        ...(Array.isArray(f._unsanitizersOnPath) && f._unsanitizersOnPath.length
+          ? { _unsanitizersOnPath: f._unsanitizersOnPath } : {}),
         // _funcQid: the enclosing function's qid, set upstream during the walk
         // but silently dropped by this allowlist before backward.js's
         // annotateBackwardSlices ever saw it — the same class of omission

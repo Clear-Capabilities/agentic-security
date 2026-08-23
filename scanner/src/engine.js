@@ -6607,6 +6607,11 @@ function _annotateFunctionReachability(supplyChain, routes, callGraph, fc){
     if (!sites.length) { sc.functionReachable = 'unknown'; sc.routeReachable = false; continue; }
     let functionReachable = false;
     let routeReachable = false;
+    // Did ANY call site yield enough structure to reason about? If not, the
+    // honest answer is `unknown` — see the verdict assignment below.
+    let analysable = false;
+    // At least one call site sits inside an exported function — see below.
+    let publicApiSite = false;
     for (const site of sites) {
       // Classifier 1: site is inline inside a route handler (within 25 lines
       // of the route def, no intervening function declaration). This is the
@@ -6629,8 +6634,16 @@ function _annotateFunctionReachability(supplyChain, routes, callGraph, fc){
       // If any caller-chain hits a known route-handler function, the site
       // is route-reachable-via-function. If no caller at all, we keep
       // functionReachable=false for this site.
-      const enclosing = _enclosingFn(fc[site.file] || '', site.line);
+      const encInfo = _enclosingFnInfo(fc[site.file] || '', site.line);
+      const enclosing = encInfo && encInfo.name;
+      // Not being able to name the enclosing function is INCONCLUSIVE, not
+      // evidence of unreachability. Tracked so the verdict below can say so.
       if (!enclosing) continue;
+      // A public-API function with no in-tree caller is the NORMAL case, not
+      // dead code: its callers are its users. Only a private function can be
+      // shown unreachable by the absence of callers.
+      if (encInfo.exported) { publicApiSite = true; continue; }
+      analysable = true;
       const callers = _reverseCallGraphReachable(callGraph, enclosing, 4);
       if (callers.size > 1) functionReachable = true; // at least one caller exists
       for (const callerFn of callers) {
@@ -6642,17 +6655,75 @@ function _annotateFunctionReachability(supplyChain, routes, callGraph, fc){
       }
       if (routeReachable) break;
     }
-    sc.functionReachable = functionReachable ? 'reachable' : 'unreachable';
+    // ABSENCE OF PROOF IS NOT PROOF OF ABSENCE.
+    //
+    // This read `functionReachable ? 'reachable' : 'unreachable'`, so a site the
+    // analysis could not reason about — no recognisable enclosing function, no
+    // routes in the project at all — was reported as UNREACHABLE and the finding
+    // demoted to `info`. For a LIBRARY that is every site: express has no routes,
+    // so `cookie` and `send`, both required at the top of `lib/response.js` and
+    // called directly, were demoted out of the report.
+    //
+    // Measured by bench/sca-replay's reachability scorer (PRD F3.2): of the three
+    // demotions it could adjudicate against an import-level oracle, ALL THREE were
+    // false — express/cookie, express/send, poetry/requests, each genuinely
+    // imported. A false `unreachable` is a MISSED EXPLOIT, the expensive
+    // direction, so inconclusive now yields `unknown`: the finding keeps its
+    // severity and the analysis stops making a claim it cannot support.
+    // A project with NO ROUTES is a library, and "not reachable from any route"
+    // is not a claim that can be made about one: its callers are its users, who
+    // are not in this tree. express requires `cookie` and `send` at the top of
+    // lib/response.js and calls both directly — there is simply no route to
+    // trace them to, and reporting that as `unreachable` demoted two live
+    // dependencies to `info`. Same shape for poetry/requests.
+    //
+    // This is the library-vs-application distinction the PRD already flags for
+    // the taint engine (F2.3, "for a library the caller IS the attacker"),
+    // showing up here as a false demotion instead of a false negative.
+    const projectHasRoutes = Array.isArray(routes) && routes.length > 0;
+    sc.functionReachable = functionReachable
+      ? 'reachable'
+      : (analysable && projectHasRoutes && !publicApiSite ? 'unreachable' : 'unknown');
     sc.routeReachable = routeReachable;
   }
 }
-function _enclosingFn(content,line){
+// The declaration form of the function enclosing `line`, scanning backwards.
+//
+// Recognises four shapes, not one. The original matched only `function name(`
+// and `const name = (`, so an ANONYMOUS function assigned to a member —
+// `res.cookie = function (name, value, options) {`, which is how most of
+// express, and most of the JS ecosystem, defines a public method — was invisible.
+// The scan then walked past it and attributed the call site to whatever
+// unrelated function appeared further up the file.
+//
+// `exported` matters as much as the name: a function assigned to a member or to
+// module.exports is PUBLIC API, so having no caller inside this repository is
+// the normal case and says nothing about whether it can be reached. Treating it
+// as evidence of unreachability is what demoted express's live `cookie`
+// dependency to `info`.
+function _enclosingFnInfo(content,line){
   const lines=content.split('\n');
   for(let i=line-2;i>=0;i--){
-    const m=lines[i].match(/(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\()/);
-    if(m)return m[1]||m[2]||null;
+    const l=lines[i];
+    let m=l.match(/(?:^|\s)(?:async\s+)?function\s+(\w+)\s*\(/);
+    if(m)return {name:m[1],exported:/^\s*export\b/.test(l)};
+    m=l.match(/^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(/);
+    if(m)return {name:m[1],exported:/^\s*export\b/.test(l)};
+    // `X.y = function (…)` / `X.y = async (…) => ` / `module.exports.y = …`
+    m=l.match(/^\s*(?:module\.)?(\w+)\.(\w+)\s*=\s*(?:async\s*)?(?:function\b|\()/);
+    if(m)return {name:m[2],exported:true};
+    // `module.exports = function name(…)`
+    m=l.match(/^\s*module\.exports\s*=\s*(?:async\s*)?function\s*(\w*)\s*\(/);
+    if(m)return {name:m[1]||'module.exports',exported:true};
+    // Object-literal method / class method: `cookie: function (` or `cookie(a) {`
+    m=l.match(/^\s*(\w+)\s*:\s*(?:async\s*)?(?:function\b|\()/);
+    if(m)return {name:m[1],exported:false};
   }
   return null;
+}
+function _enclosingFn(content,line){
+  const info=_enclosingFnInfo(content,line);
+  return info?info.name:null;
 }
 
 // 0.6.0 Feat-2: Toxic-combinations score — composes multi-signal risk into 0–100.
@@ -9067,13 +9138,24 @@ function _deterministicFileTimings(timings) {
     // sanitizer would then hide a real vulnerability outright, whereas a label
     // only demotes confidence here. Recall-preserving, on purpose.
     const sanitizersOnPath = {};
+    // The same shape for calls that UNDO an encoding. A sanitizer whose effect
+    // is reversed later on the path is not a sanitizer, and the gate could not
+    // see that before: the catalog only models sanitizers, so a decoder was
+    // never recorded at all and `he.decode(escapeHtml(x))` read as clean.
+    const unsanitizersOnPath = {};
     for (const f of finalFindings) {
       const names = f && f._sanitizersOnPath;
-      if (!Array.isArray(names) || !names.length) continue;
-      if (f.id) sanitizersOnPath[f.id] = names;
-      if (f.stableId) sanitizersOnPath[f.stableId] = names;
+      if (Array.isArray(names) && names.length) {
+        if (f.id) sanitizersOnPath[f.id] = names;
+        if (f.stableId) sanitizersOnPath[f.stableId] = names;
+      }
+      const undo = f && f._unsanitizersOnPath;
+      if (Array.isArray(undo) && undo.length) {
+        if (f.id) unsanitizersOnPath[f.id] = undo;
+        if (f.stableId) unsanitizersOnPath[f.stableId] = undo;
+      }
     }
-    _runAnnotator("applySanitizerGate", () => { applySanitizerGate(finalFindings, { sanitizersOnPath }); });
+    _runAnnotator("applySanitizerGate", () => { applySanitizerGate(finalFindings, { sanitizersOnPath, unsanitizersOnPath }); });
     _runAnnotator("annotateProofGate", () => { annotateProofGate(finalFindings); });
   }
   // Addition #1 — default falsification pass. Actively tries to DISPROVE each

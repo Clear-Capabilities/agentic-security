@@ -25,7 +25,12 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 // Directories whose scripts are deliberately not run FROM this repo:
 //   - ci-templates: copied INTO a consumer repo; the consumer runs them, not us.
 //   - fixtures/results/corpus data dirs: not scripts, or test-only inputs.
-const SKIP_DIR = /(?:^|\/)(?:node_modules|\.bench-cache|dist|build|\.git|coverage|ci-templates|fixtures|results|corpus|\.agentic-security|bench\/independent\/cache)(?:$|\/)/;
+const SKIP_DIR = /(?:^|\/)(?:node_modules|\.bench-cache|dist|build|\.git|coverage|ci-templates|fixtures|results|corpus|\.agentic-security|bench\/independent\/cache|bench\/[\w-]+\/cache)(?:$|\/)/;
+// Any bench `cache/` holds FETCHED third-party source, not this project's
+// scripts. It was listed by exact path, so `bench/sca-replay/cache/` — added
+// when that bench started fetching source to score reachability — was walked,
+// and npm/cli's own tap snapshots were reported as orphan scripts of ours.
+// Matched by shape now, so the next bench that fetches source is covered.
 
 // Each entry needs a reason. This is the same contract as no-dead-modules.js's
 // ALLOWLIST: small, reviewed, justified.
