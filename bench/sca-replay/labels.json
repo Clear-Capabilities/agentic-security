@@ -1,0 +1,4378 @@
+{
+  "generatedAt": "2026-08-23",
+  "source": "osv.dev querybatch",
+  "entries": {
+    "npm-cli-8.5.0": {
+      "status": "OK",
+      "componentsEnumerated": 766,
+      "vulnerable": [
+        {
+          "ecosystem": "npm",
+          "name": "@babel/core",
+          "version": "7.12.9",
+          "advisories": [
+            "GHSA-4x5r-pxfx-6jf8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/core",
+          "version": "7.16.0",
+          "advisories": [
+            "GHSA-4x5r-pxfx-6jf8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/helpers",
+          "version": "7.14.0",
+          "advisories": [
+            "GHSA-968p-4wvh-cqc8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/helpers",
+          "version": "7.16.3",
+          "advisories": [
+            "GHSA-968p-4wvh-cqc8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/traverse",
+          "version": "7.14.2",
+          "advisories": [
+            "GHSA-67hx-6x53-jw92"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/traverse",
+          "version": "7.16.3",
+          "advisories": [
+            "GHSA-67hx-6x53-jw92"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@tootallnate/once",
+          "version": "1.1.2",
+          "advisories": [
+            "GHSA-vpq2-c234-7xj6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@tootallnate/once",
+          "version": "2.0.0",
+          "advisories": [
+            "GHSA-vpq2-c234-7xj6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ajv",
+          "version": "6.12.6",
+          "advisories": [
+            "GHSA-2g4f-4pwh-qvx6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ansi-regex",
+          "version": "3.0.0",
+          "advisories": [
+            "GHSA-93q8-gq69-wqmw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ansi-regex",
+          "version": "5.0.0",
+          "advisories": [
+            "GHSA-93q8-gq69-wqmw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "brace-expansion",
+          "version": "1.1.11",
+          "advisories": [
+            "GHSA-3jxr-9vmj-r5cp",
+            "GHSA-f886-m6hf-6m8v",
+            "GHSA-mh99-v99m-4gvg",
+            "GHSA-rgw5-rvv9-x895",
+            "GHSA-v6h2-p8h4-qcjw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "braces",
+          "version": "3.0.2",
+          "advisories": [
+            "GHSA-grv7-fg5c-xmjg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "cross-spawn",
+          "version": "7.0.3",
+          "advisories": [
+            "GHSA-3xgq-45jj-v275"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "diff",
+          "version": "4.0.2",
+          "advisories": [
+            "GHSA-73rr-hh4g-fpgx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "diff",
+          "version": "5.0.0",
+          "advisories": [
+            "GHSA-73rr-hh4g-fpgx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "flatted",
+          "version": "3.1.1",
+          "advisories": [
+            "GHSA-25h7-pfq9-p65f",
+            "GHSA-rf6f-7fwh-wjgh"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "form-data",
+          "version": "2.3.3",
+          "advisories": [
+            "GHSA-fjxv-7rqg-78g4",
+            "GHSA-hmw2-7cc7-3qxx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "form-data",
+          "version": "4.0.0",
+          "advisories": [
+            "GHSA-fjxv-7rqg-78g4",
+            "GHSA-hmw2-7cc7-3qxx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "get-func-name",
+          "version": "2.0.0",
+          "advisories": [
+            "GHSA-4q6p-r6v2-jvc5"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "http-cache-semantics",
+          "version": "4.1.0",
+          "advisories": [
+            "GHSA-rc47-6667-2j5j"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ip",
+          "version": "1.1.5",
+          "advisories": [
+            "GHSA-2p57-rm9w-gvfp",
+            "GHSA-78xj-cgh5-2h22"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "version": "3.14.1",
+          "advisories": [
+            "GHSA-52cp-r559-cp3m",
+            "GHSA-5p4m-2wfm-xmqj",
+            "GHSA-h67p-54hq-rp68",
+            "GHSA-mh29-5h37-fv8m"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "version": "4.1.0",
+          "advisories": [
+            "GHSA-52cp-r559-cp3m",
+            "GHSA-5p4m-2wfm-xmqj",
+            "GHSA-h67p-54hq-rp68",
+            "GHSA-mh29-5h37-fv8m"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "json-schema",
+          "version": "0.2.3",
+          "advisories": [
+            "GHSA-896r-f27r-55mw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "json5",
+          "version": "2.2.0",
+          "advisories": [
+            "GHSA-9c47-m6qq-7p4h"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "lodash.set",
+          "version": "4.3.2",
+          "advisories": [
+            "GHSA-p6mc-m468-83gw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "lodash",
+          "version": "4.17.21",
+          "advisories": [
+            "GHSA-f23m-r3pf-42rh",
+            "GHSA-r5fr-rjxr-66jc",
+            "GHSA-xxjr-mmjv-4gpg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "marked",
+          "version": "0.7.0",
+          "advisories": [
+            "GHSA-5v2h-r2cx-5xgj",
+            "GHSA-rrrm-qjm4-v8hf"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "minimatch",
+          "version": "3.0.4",
+          "advisories": [
+            "GHSA-23c5-xmqv-rm74",
+            "GHSA-3ppc-4f35-3m26",
+            "GHSA-7r86-cg39-jmmj",
+            "GHSA-f8q6-p94x-37v3"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "minimist",
+          "version": "1.2.5",
+          "advisories": [
+            "GHSA-xvch-5gv4-984h"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "picomatch",
+          "version": "2.3.0",
+          "advisories": [
+            "GHSA-3v7f-55p6-f55p",
+            "GHSA-c2c7-rcm5-vvqj"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "qs",
+          "version": "6.5.2",
+          "advisories": [
+            "GHSA-6rw7-vpxm-498p",
+            "GHSA-hrpp-h998-j3pp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "react-devtools-core",
+          "version": "4.21.0",
+          "advisories": [
+            "GHSA-rxrc-rgv4-jpvx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "request",
+          "version": "2.88.2",
+          "advisories": [
+            "GHSA-p8p7-x288-28g6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "5.7.1",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "6.3.0",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "7.3.5",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "shell-quote",
+          "version": "1.7.3",
+          "advisories": [
+            "GHSA-395f-4hp3-45gv",
+            "GHSA-w7jw-789q-3m8p"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tar-fs",
+          "version": "2.1.1",
+          "advisories": [
+            "GHSA-8cj5-5rvv-wf4v",
+            "GHSA-pq67-2wwv-3xjx",
+            "GHSA-vj76-c3g6-qr5v"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tar",
+          "version": "6.1.11",
+          "advisories": [
+            "GHSA-23hp-3jrh-7fpw",
+            "GHSA-34x7-hfp2-rc4v",
+            "GHSA-83g3-92jg-28cx",
+            "GHSA-8qq5-rm4j-mr97",
+            "GHSA-8x88-c5mf-7j5w",
+            "GHSA-9ppj-qmqm-q256",
+            "GHSA-f5x3-32g6-xq36",
+            "GHSA-gvwx-54wh-qm9j",
+            "GHSA-qffp-2rhf-9h96",
+            "GHSA-r292-9mhp-454m",
+            "GHSA-r6q2-hw4h-h46w",
+            "GHSA-vmf3-w455-68vh",
+            "GHSA-w8wr-v893-vjvp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tough-cookie",
+          "version": "2.5.0",
+          "advisories": [
+            "GHSA-72xf-g2v4-qvf3"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tough-cookie",
+          "version": "4.0.0",
+          "advisories": [
+            "GHSA-72xf-g2v4-qvf3"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "trim",
+          "version": "0.0.1",
+          "advisories": [
+            "GHSA-w5p7-h5w8-2hfq"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "uuid",
+          "version": "3.4.0",
+          "advisories": [
+            "GHSA-w5hq-g745-h8pq"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "word-wrap",
+          "version": "1.2.3",
+          "advisories": [
+            "GHSA-j8xg-fqg3-53r7"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ws",
+          "version": "7.5.5",
+          "advisories": [
+            "GHSA-3h5v-q93c-6h6q",
+            "GHSA-96hv-2xvq-fx4p"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ws",
+          "version": "8.2.3",
+          "advisories": [
+            "GHSA-3h5v-q93c-6h6q",
+            "GHSA-58qx-3vcg-4xpx",
+            "GHSA-96hv-2xvq-fx4p"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "yaml",
+          "version": "1.10.2",
+          "advisories": [
+            "GHSA-48c2-rrv3-qjmp"
+          ]
+        }
+      ]
+    },
+    "next-13.4.0": {
+      "status": "OK",
+      "componentsEnumerated": 3097,
+      "vulnerable": [
+        {
+          "ecosystem": "npm",
+          "name": "@babel/core",
+          "version": "7.18.0",
+          "advisories": [
+            "GHSA-4x5r-pxfx-6jf8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/helpers",
+          "version": "7.18.2",
+          "advisories": [
+            "GHSA-968p-4wvh-cqc8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/plugin-transform-modules-systemjs",
+          "version": "7.14.5",
+          "advisories": [
+            "GHSA-fv7c-fp4j-7gwp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/plugin-transform-modules-systemjs",
+          "version": "7.18.4",
+          "advisories": [
+            "GHSA-fv7c-fp4j-7gwp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/plugin-transform-modules-systemjs",
+          "version": "7.19.6",
+          "advisories": [
+            "GHSA-fv7c-fp4j-7gwp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/runtime-corejs3",
+          "version": "7.12.13",
+          "advisories": [
+            "GHSA-968p-4wvh-cqc8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/runtime",
+          "version": "7.15.4",
+          "advisories": [
+            "GHSA-968p-4wvh-cqc8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/runtime",
+          "version": "7.16.7",
+          "advisories": [
+            "GHSA-968p-4wvh-cqc8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@babel/traverse",
+          "version": "7.18.0",
+          "advisories": [
+            "GHSA-67hx-6x53-jw92"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@firebase/util",
+          "version": "0.2.47",
+          "advisories": [
+            "GHSA-fpm5-vv97-jfwg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@grpc/grpc-js",
+          "version": "0.8.1",
+          "advisories": [
+            "GHSA-5375-pq7m-f5r2",
+            "GHSA-7v5v-9h63-cj86",
+            "GHSA-99f4-grh7-6pcq",
+            "GHSA-pp75-xfpw-37g9"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@npmcli/git",
+          "version": "2.0.4",
+          "advisories": [
+            "GHSA-hxwm-x553-x359"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@octokit/plugin-paginate-rest",
+          "version": "2.9.1",
+          "advisories": [
+            "GHSA-h5c3-5r3r-rr8q"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@octokit/request-error",
+          "version": "2.0.5",
+          "advisories": [
+            "GHSA-xx4v-prfh-6cgc"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@octokit/request",
+          "version": "5.4.14",
+          "advisories": [
+            "GHSA-rmvr-2pp2-xj38"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@protobufjs/utf8",
+          "version": "1.1.0",
+          "advisories": [
+            "GHSA-q6x5-8v7m-xcrf"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@tootallnate/once",
+          "version": "1.1.2",
+          "advisories": [
+            "GHSA-vpq2-c234-7xj6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@tootallnate/once",
+          "version": "2.0.0",
+          "advisories": [
+            "GHSA-vpq2-c234-7xj6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ajv",
+          "version": "6.12.6",
+          "advisories": [
+            "GHSA-2g4f-4pwh-qvx6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ajv",
+          "version": "8.11.0",
+          "advisories": [
+            "GHSA-2g4f-4pwh-qvx6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ansi-regex",
+          "version": "3.0.0",
+          "advisories": [
+            "GHSA-93q8-gq69-wqmw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ansi-regex",
+          "version": "4.1.0",
+          "advisories": [
+            "GHSA-93q8-gq69-wqmw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "bn.js",
+          "version": "4.11.9",
+          "advisories": [
+            "GHSA-378v-28hj-76wf"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "bn.js",
+          "version": "5.1.2",
+          "advisories": [
+            "GHSA-378v-28hj-76wf"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "body-parser",
+          "version": "1.19.0",
+          "advisories": [
+            "GHSA-qwcr-r2fm-qrc7",
+            "GHSA-v422-hmwv-36x6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "body-parser",
+          "version": "1.20.1",
+          "advisories": [
+            "GHSA-qwcr-r2fm-qrc7",
+            "GHSA-v422-hmwv-36x6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "brace-expansion",
+          "version": "1.1.11",
+          "advisories": [
+            "GHSA-3jxr-9vmj-r5cp",
+            "GHSA-f886-m6hf-6m8v",
+            "GHSA-mh99-v99m-4gvg",
+            "GHSA-rgw5-rvv9-x895",
+            "GHSA-v6h2-p8h4-qcjw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "brace-expansion",
+          "version": "2.0.1",
+          "advisories": [
+            "GHSA-3jxr-9vmj-r5cp",
+            "GHSA-f886-m6hf-6m8v",
+            "GHSA-mh99-v99m-4gvg",
+            "GHSA-rgw5-rvv9-x895",
+            "GHSA-v6h2-p8h4-qcjw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "braces",
+          "version": "2.3.2",
+          "advisories": [
+            "GHSA-grv7-fg5c-xmjg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "braces",
+          "version": "3.0.2",
+          "advisories": [
+            "GHSA-grv7-fg5c-xmjg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "browserify-sign",
+          "version": "4.2.0",
+          "advisories": [
+            "GHSA-x9w5-v3q2-3rhw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "cipher-base",
+          "version": "1.0.4",
+          "advisories": [
+            "GHSA-cpq7-6gpm-g9rc"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "color-string",
+          "version": "1.5.4",
+          "advisories": [
+            "GHSA-257v-vj4p-3w2h"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "cookie",
+          "version": "0.4.0",
+          "advisories": [
+            "GHSA-pxg6-pf52-xh8x"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "cookie",
+          "version": "0.4.1",
+          "advisories": [
+            "GHSA-pxg6-pf52-xh8x"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "cookiejar",
+          "version": "2.1.2",
+          "advisories": [
+            "GHSA-h452-7996-h45h"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "cross-spawn",
+          "version": "4.0.2",
+          "advisories": [
+            "GHSA-3xgq-45jj-v275"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "cross-spawn",
+          "version": "6.0.5",
+          "advisories": [
+            "GHSA-3xgq-45jj-v275"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "cross-spawn",
+          "version": "7.0.3",
+          "advisories": [
+            "GHSA-3xgq-45jj-v275"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "css-what",
+          "version": "5.0.0",
+          "advisories": [
+            "GHSA-q8pj-2vqx-8ggc"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "dd-trace",
+          "version": "2.3.0",
+          "advisories": [
+            "GHSA-wxqq-gcq8-c443"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "debug",
+          "version": "0.8.1",
+          "advisories": [
+            "GHSA-9vvw-cc9w-f27h",
+            "GHSA-gxpj-cx7g-858c"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "debug",
+          "version": "4.1.1",
+          "advisories": [
+            "GHSA-gxpj-cx7g-858c"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "decode-uri-component",
+          "version": "0.2.0",
+          "advisories": [
+            "GHSA-w573-4hg7-7wgq"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "devalue",
+          "version": "2.0.1",
+          "advisories": [
+            "GHSA-33hq-fvwr-56pm",
+            "GHSA-8qm3-746x-r74r",
+            "GHSA-cfw5-2vxh-hr84",
+            "GHSA-vj54-72f3-p5jv"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "dicer",
+          "version": "0.2.5",
+          "advisories": [
+            "GHSA-wm7h-9275-46v2"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "diff",
+          "version": "4.0.2",
+          "advisories": [
+            "GHSA-73rr-hh4g-fpgx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "diff",
+          "version": "5.1.0",
+          "advisories": [
+            "GHSA-73rr-hh4g-fpgx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "dot-prop",
+          "version": "4.2.0",
+          "advisories": [
+            "GHSA-ff7x-qrg7-qggm"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ejs",
+          "version": "3.1.8",
+          "advisories": [
+            "GHSA-ghr5-ch3p-vcr6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "elliptic",
+          "version": "6.5.3",
+          "advisories": [
+            "GHSA-434g-2637-qmqr",
+            "GHSA-49q7-c7j4-3p7m",
+            "GHSA-848j-6mx2-7j84",
+            "GHSA-977x-g7h5-7qgw",
+            "GHSA-f7q4-pwc6-w24p",
+            "GHSA-fc9h-whq2-v747",
+            "GHSA-r9p9-mrjm-926w",
+            "GHSA-vjh7-7g9h-fjfh"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "es5-ext",
+          "version": "0.10.53",
+          "advisories": [
+            "GHSA-4gmj-3p3h-gm8h"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "express",
+          "version": "4.17.0",
+          "advisories": [
+            "GHSA-qw6h-vgh9-j6wx",
+            "GHSA-rv95-896h-c2vc"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "firebase",
+          "version": "7.14.5",
+          "advisories": [
+            "GHSA-3wf4-68gx-mph8"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "flatted",
+          "version": "3.2.7",
+          "advisories": [
+            "GHSA-25h7-pfq9-p65f",
+            "GHSA-rf6f-7fwh-wjgh"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "follow-redirects",
+          "version": "1.9.0",
+          "advisories": [
+            "GHSA-74fj-2j2h-c42q",
+            "GHSA-cxjh-pqwp-8mfp",
+            "GHSA-jchw-25xp-jwwc",
+            "GHSA-pw2r-vq6v-hr8c",
+            "GHSA-r4q5-vmmm-2653"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "form-data",
+          "version": "2.3.3",
+          "advisories": [
+            "GHSA-fjxv-7rqg-78g4",
+            "GHSA-hmw2-7cc7-3qxx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "form-data",
+          "version": "2.5.1",
+          "advisories": [
+            "GHSA-fjxv-7rqg-78g4",
+            "GHSA-hmw2-7cc7-3qxx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "form-data",
+          "version": "3.0.1",
+          "advisories": [
+            "GHSA-fjxv-7rqg-78g4",
+            "GHSA-hmw2-7cc7-3qxx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "form-data",
+          "version": "4.0.0",
+          "advisories": [
+            "GHSA-fjxv-7rqg-78g4",
+            "GHSA-hmw2-7cc7-3qxx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "got",
+          "version": "10.7.0",
+          "advisories": [
+            "GHSA-pfrx-2q88-qq97"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "got",
+          "version": "7.1.0",
+          "advisories": [
+            "GHSA-pfrx-2q88-qq97"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "got",
+          "version": "9.6.0",
+          "advisories": [
+            "GHSA-pfrx-2q88-qq97"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "handlebars",
+          "version": "4.7.7",
+          "advisories": [
+            "GHSA-2qvq-rjwj-gvw9",
+            "GHSA-2w6w-674q-4c4q",
+            "GHSA-3mfm-83xf-c92r",
+            "GHSA-442j-39wm-28r2",
+            "GHSA-7rx3-28cr-v5wh",
+            "GHSA-9cx6-37pm-9jff",
+            "GHSA-xhpv-hc6g-r9c6",
+            "GHSA-xjpj-3mr7-gcpf"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "hosted-git-info",
+          "version": "2.8.5",
+          "advisories": [
+            "GHSA-43f8-2h32-f4cj"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "http-cache-semantics",
+          "version": "4.1.0",
+          "advisories": [
+            "GHSA-rc47-6667-2j5j"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "image-size",
+          "version": "0.9.3",
+          "advisories": [
+            "GHSA-5p2g-fcmc-qvqq",
+            "GHSA-w3rx-r6r6-pgpr"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "image-size",
+          "version": "1.0.0",
+          "advisories": [
+            "GHSA-5p2g-fcmc-qvqq",
+            "GHSA-w3rx-r6r6-pgpr"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "immutable",
+          "version": "4.1.0",
+          "advisories": [
+            "GHSA-v56q-mh7h-f735",
+            "GHSA-wf6x-7x77-mvgw",
+            "GHSA-xvcm-6775-5m9r"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "import-in-the-middle",
+          "version": "1.2.1",
+          "advisories": [
+            "GHSA-5r27-rw8r-7967"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ip",
+          "version": "2.0.0",
+          "advisories": [
+            "GHSA-2p57-rm9w-gvfp",
+            "GHSA-78xj-cgh5-2h22"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "is-svg",
+          "version": "3.0.0",
+          "advisories": [
+            "GHSA-7r28-3m3f-r2pr",
+            "GHSA-r8j5-h5cx-65gg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "version": "3.14.1",
+          "advisories": [
+            "GHSA-52cp-r559-cp3m",
+            "GHSA-5p4m-2wfm-xmqj",
+            "GHSA-h67p-54hq-rp68",
+            "GHSA-mh29-5h37-fv8m"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "js-yaml",
+          "version": "4.1.0",
+          "advisories": [
+            "GHSA-52cp-r559-cp3m",
+            "GHSA-5p4m-2wfm-xmqj",
+            "GHSA-h67p-54hq-rp68",
+            "GHSA-mh29-5h37-fv8m"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "json-schema",
+          "version": "0.2.3",
+          "advisories": [
+            "GHSA-896r-f27r-55mw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "json5",
+          "version": "1.0.1",
+          "advisories": [
+            "GHSA-9c47-m6qq-7p4h"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "jsonpointer",
+          "version": "4.1.0",
+          "advisories": [
+            "GHSA-282f-qqgm-c34q"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "jszip",
+          "version": "3.7.1",
+          "advisories": [
+            "GHSA-36fh-84j7-cv5h"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "jws",
+          "version": "3.2.2",
+          "advisories": [
+            "GHSA-869p-cjfg-cm3x"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "loader-utils",
+          "version": "1.4.0",
+          "advisories": [
+            "GHSA-3rfm-jhwj-7488",
+            "GHSA-76p3-8jx3-jpfq",
+            "GHSA-hhq3-ff78-jv3g"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "loader-utils",
+          "version": "2.0.0",
+          "advisories": [
+            "GHSA-3rfm-jhwj-7488",
+            "GHSA-76p3-8jx3-jpfq",
+            "GHSA-hhq3-ff78-jv3g"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "loader-utils",
+          "version": "3.1.3",
+          "advisories": [
+            "GHSA-3rfm-jhwj-7488",
+            "GHSA-hhq3-ff78-jv3g"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "lodash.pick",
+          "version": "4.4.0",
+          "advisories": [
+            "GHSA-p6mc-m468-83gw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "lodash.template",
+          "version": "4.5.0",
+          "advisories": [
+            "GHSA-35jh-r3h4-6jhm",
+            "GHSA-r5fr-rjxr-66jc"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "lodash",
+          "version": "4.17.20",
+          "advisories": [
+            "GHSA-29mw-wpgm-hmr9",
+            "GHSA-35jh-r3h4-6jhm",
+            "GHSA-f23m-r3pf-42rh",
+            "GHSA-r5fr-rjxr-66jc",
+            "GHSA-xxjr-mmjv-4gpg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "lodash",
+          "version": "4.17.21",
+          "advisories": [
+            "GHSA-f23m-r3pf-42rh",
+            "GHSA-r5fr-rjxr-66jc",
+            "GHSA-xxjr-mmjv-4gpg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "micromatch",
+          "version": "3.1.10",
+          "advisories": [
+            "GHSA-952p-6rrq-rcjv"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "micromatch",
+          "version": "4.0.4",
+          "advisories": [
+            "GHSA-952p-6rrq-rcjv"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "micromatch",
+          "version": "4.0.5",
+          "advisories": [
+            "GHSA-952p-6rrq-rcjv"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "minimatch",
+          "version": "3.0.4",
+          "advisories": [
+            "GHSA-23c5-xmqv-rm74",
+            "GHSA-3ppc-4f35-3m26",
+            "GHSA-7r86-cg39-jmmj",
+            "GHSA-f8q6-p94x-37v3"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "minimatch",
+          "version": "3.1.2",
+          "advisories": [
+            "GHSA-23c5-xmqv-rm74",
+            "GHSA-3ppc-4f35-3m26",
+            "GHSA-7r86-cg39-jmmj"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "minimatch",
+          "version": "5.1.0",
+          "advisories": [
+            "GHSA-23c5-xmqv-rm74",
+            "GHSA-3ppc-4f35-3m26",
+            "GHSA-7r86-cg39-jmmj"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "moment",
+          "version": "2.24.0",
+          "advisories": [
+            "GHSA-8hfj-j24r-96c4",
+            "GHSA-wc69-rhjr-hc9g"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "multer",
+          "version": "1.4.4",
+          "advisories": [
+            "GHSA-44fp-w29j-9vj5",
+            "GHSA-4pg4-qvpc-4q3h",
+            "GHSA-5528-5vmv-3xc2",
+            "GHSA-72gw-mp4g-v24j",
+            "GHSA-fjgf-rc76-4x9p",
+            "GHSA-g5hg-p3ph-g8qg",
+            "GHSA-v52c-386h-88mc",
+            "GHSA-xf7r-hgr6-v32p"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "nanoid",
+          "version": "3.1.30",
+          "advisories": [
+            "GHSA-28wg-ghj8-5hjv",
+            "GHSA-2v37-7h3g-55p8",
+            "GHSA-mwcw-c2x4-8c55",
+            "GHSA-qrpm-p2h7-hrv2"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "nanoid",
+          "version": "3.1.32",
+          "advisories": [
+            "GHSA-28wg-ghj8-5hjv",
+            "GHSA-2v37-7h3g-55p8",
+            "GHSA-mwcw-c2x4-8c55"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "nanoid",
+          "version": "3.3.4",
+          "advisories": [
+            "GHSA-28wg-ghj8-5hjv",
+            "GHSA-2v37-7h3g-55p8",
+            "GHSA-mwcw-c2x4-8c55"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "node-fetch",
+          "version": "1.7.3",
+          "advisories": [
+            "GHSA-r683-j2x4-v87g"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "node-fetch",
+          "version": "2.6.1",
+          "advisories": [
+            "GHSA-r683-j2x4-v87g"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "normalize-url",
+          "version": "4.5.0",
+          "advisories": [
+            "GHSA-px4h-xg32-q955"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "nth-check",
+          "version": "1.0.2",
+          "advisories": [
+            "GHSA-rp65-9cf3-cjxr"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "nth-check",
+          "version": "2.0.0",
+          "advisories": [
+            "GHSA-rp65-9cf3-cjxr"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "on-headers",
+          "version": "1.0.2",
+          "advisories": [
+            "GHSA-76c9-3jph-rj3q"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "parse-git-config",
+          "version": "1.1.1",
+          "advisories": [
+            "GHSA-8g77-54rh-46hx"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "parse-path",
+          "version": "4.0.1",
+          "advisories": [
+            "GHSA-3j8f-xvm3-ffx4"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "parse-url",
+          "version": "5.0.1",
+          "advisories": [
+            "GHSA-4p35-cfcx-8653",
+            "GHSA-7f3x-x4pr-wqhj",
+            "GHSA-j9fq-vwqv-2fm2",
+            "GHSA-jpp7-7chh-cf67",
+            "GHSA-pqw5-jmp5-px4v",
+            "GHSA-q6wq-5p59-983w"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "path-to-regexp",
+          "version": "0.1.7",
+          "advisories": [
+            "GHSA-37ch-88jc-xwx2",
+            "GHSA-9wv6-86v2-598j",
+            "GHSA-rhx6-c78j-4q9w"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "path-to-regexp",
+          "version": "6.1.0",
+          "advisories": [
+            "GHSA-9wv6-86v2-598j"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "pbkdf2",
+          "version": "3.1.1",
+          "advisories": [
+            "GHSA-h7cp-r72f-jxh6",
+            "GHSA-v62p-rq8g-8h59"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "picomatch",
+          "version": "2.2.3",
+          "advisories": [
+            "GHSA-3v7f-55p6-f55p",
+            "GHSA-c2c7-rcm5-vvqj"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "picomatch",
+          "version": "2.3.1",
+          "advisories": [
+            "GHSA-3v7f-55p6-f55p",
+            "GHSA-c2c7-rcm5-vvqj"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "postcss",
+          "version": "5.2.18",
+          "advisories": [
+            "GHSA-566m-qj78-rww5",
+            "GHSA-6g55-p6wh-862q",
+            "GHSA-7fh5-64p2-3v2j",
+            "GHSA-fxqj-rqcc-2cmp",
+            "GHSA-qx2v-qp2m-jg93",
+            "GHSA-r28c-9q8g-f849"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "postcss",
+          "version": "6.0.23",
+          "advisories": [
+            "GHSA-566m-qj78-rww5",
+            "GHSA-6g55-p6wh-862q",
+            "GHSA-7fh5-64p2-3v2j",
+            "GHSA-fxqj-rqcc-2cmp",
+            "GHSA-qx2v-qp2m-jg93",
+            "GHSA-r28c-9q8g-f849"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "postcss",
+          "version": "7.0.14",
+          "advisories": [
+            "GHSA-566m-qj78-rww5",
+            "GHSA-6g55-p6wh-862q",
+            "GHSA-7fh5-64p2-3v2j",
+            "GHSA-fxqj-rqcc-2cmp",
+            "GHSA-hwj9-h5mp-3pm3",
+            "GHSA-qx2v-qp2m-jg93",
+            "GHSA-r28c-9q8g-f849"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "postcss",
+          "version": "7.0.32",
+          "advisories": [
+            "GHSA-566m-qj78-rww5",
+            "GHSA-6g55-p6wh-862q",
+            "GHSA-7fh5-64p2-3v2j",
+            "GHSA-fxqj-rqcc-2cmp",
+            "GHSA-hwj9-h5mp-3pm3",
+            "GHSA-qx2v-qp2m-jg93",
+            "GHSA-r28c-9q8g-f849"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "postcss",
+          "version": "8.2.13",
+          "advisories": [
+            "GHSA-6g55-p6wh-862q",
+            "GHSA-7fh5-64p2-3v2j",
+            "GHSA-fxqj-rqcc-2cmp",
+            "GHSA-qx2v-qp2m-jg93",
+            "GHSA-r28c-9q8g-f849"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "postcss",
+          "version": "8.4.14",
+          "advisories": [
+            "GHSA-6g55-p6wh-862q",
+            "GHSA-7fh5-64p2-3v2j",
+            "GHSA-fxqj-rqcc-2cmp",
+            "GHSA-qx2v-qp2m-jg93",
+            "GHSA-r28c-9q8g-f849"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "postcss",
+          "version": "8.4.5",
+          "advisories": [
+            "GHSA-6g55-p6wh-862q",
+            "GHSA-7fh5-64p2-3v2j",
+            "GHSA-fxqj-rqcc-2cmp",
+            "GHSA-qx2v-qp2m-jg93",
+            "GHSA-r28c-9q8g-f849"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "protobufjs",
+          "version": "6.11.2",
+          "advisories": [
+            "GHSA-2pr8-phx7-x9h3",
+            "GHSA-66ff-xgx4-vchm",
+            "GHSA-685m-2w69-288q",
+            "GHSA-75px-5xx7-5xc7",
+            "GHSA-f38q-mgvj-vph7",
+            "GHSA-fx83-v9x8-x52w",
+            "GHSA-g954-5hwp-pp24",
+            "GHSA-h755-8qp9-cq85",
+            "GHSA-jggg-4jg4-v7c6",
+            "GHSA-jvwf-75h9-cwgg",
+            "GHSA-q6x5-8v7m-xcrf",
+            "GHSA-wcpc-wj8m-hjx6",
+            "GHSA-xq3m-2v4x-88gg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "qs",
+          "version": "6.11.0",
+          "advisories": [
+            "GHSA-6rw7-vpxm-498p",
+            "GHSA-w7fw-mjwx-w883"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "qs",
+          "version": "6.5.2",
+          "advisories": [
+            "GHSA-6rw7-vpxm-498p",
+            "GHSA-hrpp-h998-j3pp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "qs",
+          "version": "6.7.0",
+          "advisories": [
+            "GHSA-6rw7-vpxm-498p",
+            "GHSA-hrpp-h998-j3pp",
+            "GHSA-w7fw-mjwx-w883"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "request",
+          "version": "2.88.2",
+          "advisories": [
+            "GHSA-p8p7-x288-28g6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "rollup",
+          "version": "2.35.1",
+          "advisories": [
+            "GHSA-gcx4-mw62-g8wm",
+            "GHSA-mw96-cpmx-2vgc"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "5.5.0",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "5.7.1",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "6.3.0",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "7.0.0",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "7.3.2",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "7.3.7",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "semver",
+          "version": "7.3.8",
+          "advisories": [
+            "GHSA-c2qf-rxjj-qqgw"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "send",
+          "version": "0.17.1",
+          "advisories": [
+            "GHSA-m6fv-jmcg-4jfg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "serialize-javascript",
+          "version": "4.0.0",
+          "advisories": [
+            "GHSA-5c6j-r48x-rmvq"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "serialize-javascript",
+          "version": "6.0.0",
+          "advisories": [
+            "GHSA-5c6j-r48x-rmvq",
+            "GHSA-76p7-773f-r4q5",
+            "GHSA-qj8w-gfj5-8c6v"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "serve-static",
+          "version": "1.14.1",
+          "advisories": [
+            "GHSA-cm22-4g7w-348p"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "sha.js",
+          "version": "2.4.11",
+          "advisories": [
+            "GHSA-95m3-7q98-8xr5"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "shell-quote",
+          "version": "1.7.3",
+          "advisories": [
+            "GHSA-395f-4hp3-45gv",
+            "GHSA-w7jw-789q-3m8p"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "shelljs",
+          "version": "0.8.4",
+          "advisories": [
+            "GHSA-4rq4-32rv-6wp6",
+            "GHSA-64g7-mvw6-v9qj"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "svgo",
+          "version": "1.3.2",
+          "advisories": [
+            "GHSA-2p49-hgcm-8545"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "svgo",
+          "version": "2.8.0",
+          "advisories": [
+            "GHSA-2p49-hgcm-8545",
+            "GHSA-xpqw-6gx7-v673"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tar",
+          "version": "4.4.10",
+          "advisories": [
+            "GHSA-23hp-3jrh-7fpw",
+            "GHSA-34x7-hfp2-rc4v",
+            "GHSA-3jfq-g458-7qm9",
+            "GHSA-5955-9wpr-37jh",
+            "GHSA-83g3-92jg-28cx",
+            "GHSA-8qq5-rm4j-mr97",
+            "GHSA-8x88-c5mf-7j5w",
+            "GHSA-9ppj-qmqm-q256",
+            "GHSA-9r2w-394v-53qc",
+            "GHSA-f5x3-32g6-xq36",
+            "GHSA-gvwx-54wh-qm9j",
+            "GHSA-qffp-2rhf-9h96",
+            "GHSA-qq89-hq3f-393p",
+            "GHSA-r292-9mhp-454m",
+            "GHSA-r628-mhmh-qjhw",
+            "GHSA-r6q2-hw4h-h46w",
+            "GHSA-vmf3-w455-68vh",
+            "GHSA-w8wr-v893-vjvp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tar",
+          "version": "4.4.13",
+          "advisories": [
+            "GHSA-23hp-3jrh-7fpw",
+            "GHSA-34x7-hfp2-rc4v",
+            "GHSA-3jfq-g458-7qm9",
+            "GHSA-5955-9wpr-37jh",
+            "GHSA-83g3-92jg-28cx",
+            "GHSA-8qq5-rm4j-mr97",
+            "GHSA-8x88-c5mf-7j5w",
+            "GHSA-9ppj-qmqm-q256",
+            "GHSA-9r2w-394v-53qc",
+            "GHSA-f5x3-32g6-xq36",
+            "GHSA-gvwx-54wh-qm9j",
+            "GHSA-qffp-2rhf-9h96",
+            "GHSA-qq89-hq3f-393p",
+            "GHSA-r292-9mhp-454m",
+            "GHSA-r628-mhmh-qjhw",
+            "GHSA-r6q2-hw4h-h46w",
+            "GHSA-vmf3-w455-68vh",
+            "GHSA-w8wr-v893-vjvp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tar",
+          "version": "6.1.11",
+          "advisories": [
+            "GHSA-23hp-3jrh-7fpw",
+            "GHSA-34x7-hfp2-rc4v",
+            "GHSA-83g3-92jg-28cx",
+            "GHSA-8qq5-rm4j-mr97",
+            "GHSA-8x88-c5mf-7j5w",
+            "GHSA-9ppj-qmqm-q256",
+            "GHSA-f5x3-32g6-xq36",
+            "GHSA-gvwx-54wh-qm9j",
+            "GHSA-qffp-2rhf-9h96",
+            "GHSA-r292-9mhp-454m",
+            "GHSA-r6q2-hw4h-h46w",
+            "GHSA-vmf3-w455-68vh",
+            "GHSA-w8wr-v893-vjvp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "terser",
+          "version": "5.10.0",
+          "advisories": [
+            "GHSA-4wf5-vphf-c2xc"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "terser",
+          "version": "5.14.1",
+          "advisories": [
+            "GHSA-4wf5-vphf-c2xc"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "terser",
+          "version": "5.5.1",
+          "advisories": [
+            "GHSA-4wf5-vphf-c2xc"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tmp",
+          "version": "0.0.33",
+          "advisories": [
+            "GHSA-52f5-9888-hmc6",
+            "GHSA-ph9p-34f9-6g65"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tmp",
+          "version": "0.2.1",
+          "advisories": [
+            "GHSA-52f5-9888-hmc6",
+            "GHSA-ph9p-34f9-6g65"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tough-cookie",
+          "version": "2.5.0",
+          "advisories": [
+            "GHSA-72xf-g2v4-qvf3"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "tough-cookie",
+          "version": "4.0.0",
+          "advisories": [
+            "GHSA-72xf-g2v4-qvf3"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "trim-newlines",
+          "version": "1.0.0",
+          "advisories": [
+            "GHSA-7p7h-4mm5-852v"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "trim-newlines",
+          "version": "3.0.0",
+          "advisories": [
+            "GHSA-7p7h-4mm5-852v"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "trim-off-newlines",
+          "version": "1.0.1",
+          "advisories": [
+            "GHSA-38fc-wpqx-33j7"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "trim",
+          "version": "0.0.1",
+          "advisories": [
+            "GHSA-w5p7-h5w8-2hfq"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "turbo",
+          "version": "1.6.3",
+          "advisories": [
+            "GHSA-3qcw-2rhx-2726",
+            "GHSA-hcf7-66rw-9f5r"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ua-parser-js",
+          "version": "0.7.31",
+          "advisories": [
+            "GHSA-fhg7-m89q-25r3"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "undici",
+          "version": "5.22.0",
+          "advisories": [
+            "GHSA-2mjp-6q6p-2qxm",
+            "GHSA-35p6-xmwp-9g52",
+            "GHSA-3787-6prv-h9w3",
+            "GHSA-4992-7rv2-5pvq",
+            "GHSA-8xcm-r25x-g524",
+            "GHSA-9qxr-qj54-h672",
+            "GHSA-c76h-2ccp-4975",
+            "GHSA-cxrh-j4jr-qwg3",
+            "GHSA-g8m3-5g58-fq7m",
+            "GHSA-g9mf-h72j-4rw9",
+            "GHSA-m4v8-wqvr-p9f7",
+            "GHSA-m8rv-5g2x-5cg5",
+            "GHSA-p88m-4jfj-68fv",
+            "GHSA-v3r7-h72x-cjcm",
+            "GHSA-v9p9-hfj2-hcw8",
+            "GHSA-vrm6-8vpv-qv8q",
+            "GHSA-vxpw-j846-p89q",
+            "GHSA-wqq4-5wpv-mx2g"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "uuid",
+          "version": "3.3.3",
+          "advisories": [
+            "GHSA-w5hq-g745-h8pq"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "uuid",
+          "version": "8.3.2",
+          "advisories": [
+            "GHSA-w5hq-g745-h8pq"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "webpack",
+          "version": "5.74.0",
+          "advisories": [
+            "GHSA-38r7-794h-5758",
+            "GHSA-4vvj-4cpr-p986",
+            "GHSA-8fgc-7cc6-rx7x",
+            "GHSA-hc6q-2mpp-qw7j"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "websocket-driver",
+          "version": "0.7.3",
+          "advisories": [
+            "GHSA-mp7j-qc5w-4988",
+            "GHSA-xv26-6w52-cph6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "websocket-extensions",
+          "version": "0.1.3",
+          "advisories": [
+            "GHSA-g78m-2chm-r7qv"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "word-wrap",
+          "version": "1.2.3",
+          "advisories": [
+            "GHSA-j8xg-fqg3-53r7"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ws",
+          "version": "7.5.3",
+          "advisories": [
+            "GHSA-3h5v-q93c-6h6q",
+            "GHSA-96hv-2xvq-fx4p"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ws",
+          "version": "8.2.3",
+          "advisories": [
+            "GHSA-3h5v-q93c-6h6q",
+            "GHSA-58qx-3vcg-4xpx",
+            "GHSA-96hv-2xvq-fx4p"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ws",
+          "version": "8.4.2",
+          "advisories": [
+            "GHSA-3h5v-q93c-6h6q",
+            "GHSA-58qx-3vcg-4xpx",
+            "GHSA-96hv-2xvq-fx4p"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "y18n",
+          "version": "4.0.0",
+          "advisories": [
+            "GHSA-c4w7-xm78-47vh"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "yaml",
+          "version": "1.10.2",
+          "advisories": [
+            "GHSA-48c2-rrv3-qjmp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "yargs-parser",
+          "version": "15.0.0",
+          "advisories": [
+            "GHSA-p9pc-299p-vxgp"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "zod",
+          "version": "3.21.4",
+          "advisories": [
+            "GHSA-m95q-7qp3-xv42"
+          ]
+        }
+      ]
+    },
+    "express-4.18.1": {
+      "status": "OK",
+      "componentsEnumerated": 36,
+      "vulnerable": [
+        {
+          "ecosystem": "npm",
+          "name": "body-parser",
+          "version": "1.20.0",
+          "advisories": [
+            "GHSA-qwcr-r2fm-qrc7",
+            "GHSA-v422-hmwv-36x6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "cookie",
+          "version": "0.5.0",
+          "advisories": [
+            "GHSA-pxg6-pf52-xh8x"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "ejs",
+          "version": "3.1.7",
+          "advisories": [
+            "GHSA-ghr5-ch3p-vcr6"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "marked",
+          "version": "0.7.0",
+          "advisories": [
+            "GHSA-5v2h-r2cx-5xgj",
+            "GHSA-rrrm-qjm4-v8hf"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "morgan",
+          "version": "1.10.0",
+          "advisories": [
+            "GHSA-4vj7-5mj6-jm8m"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "multiparty",
+          "version": "4.2.3",
+          "advisories": [
+            "GHSA-65x3-rw7q-gx94",
+            "GHSA-qxch-whhj-8956",
+            "GHSA-xh3c-6gcq-g4rv"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "path-to-regexp",
+          "version": "0.1.7",
+          "advisories": [
+            "GHSA-37ch-88jc-xwx2",
+            "GHSA-9wv6-86v2-598j",
+            "GHSA-rhx6-c78j-4q9w"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "qs",
+          "version": "6.10.3",
+          "advisories": [
+            "GHSA-6rw7-vpxm-498p",
+            "GHSA-w7fw-mjwx-w883"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "send",
+          "version": "0.18.0",
+          "advisories": [
+            "GHSA-m6fv-jmcg-4jfg"
+          ]
+        },
+        {
+          "ecosystem": "npm",
+          "name": "serve-static",
+          "version": "1.15.0",
+          "advisories": [
+            "GHSA-cm22-4g7w-348p"
+          ]
+        }
+      ]
+    },
+    "flask-2.0.0": {
+      "status": "OK",
+      "componentsEnumerated": 55,
+      "vulnerable": [
+        {
+          "ecosystem": "PyPI",
+          "name": "certifi",
+          "version": "2020.12.5",
+          "advisories": [
+            "GHSA-43fp-rhv2-5gv8",
+            "GHSA-xqr8-7jwr-rhp7",
+            "PYSEC-2022-42986",
+            "PYSEC-2023-135",
+            "PYSEC-2024-230"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "click",
+          "version": "8.0.0",
+          "advisories": [
+            "PYSEC-2026-2132"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "filelock",
+          "version": "3.0.12",
+          "advisories": [
+            "GHSA-qmgc-5h2g-mvrw",
+            "GHSA-w853-jp5j-5j7f",
+            "PYSEC-2026-1374",
+            "PYSEC-2026-1375"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "idna",
+          "version": "2.10",
+          "advisories": [
+            "GHSA-65pc-fj4g-8rjx",
+            "GHSA-jjg7-2v4v-x38h",
+            "PYSEC-2024-60",
+            "PYSEC-2026-215"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "jinja2",
+          "version": "2.11.3",
+          "advisories": [
+            "GHSA-cpwx-vrp4-4pq7",
+            "GHSA-h5c8-rqwp-cp95",
+            "GHSA-h75v-3vvj-5mfj",
+            "GHSA-q2x7-8rv6-6q7h",
+            "PYSEC-2026-1471",
+            "PYSEC-2026-1473",
+            "PYSEC-2026-1474",
+            "PYSEC-2026-1475"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "pygments",
+          "version": "2.9.0",
+          "advisories": [
+            "GHSA-5239-wwwm-4pmq",
+            "GHSA-mrwq-x4v8-fh7p",
+            "PYSEC-2023-117",
+            "PYSEC-2026-2987"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "pytest",
+          "version": "6.2.4",
+          "advisories": [
+            "GHSA-6w46-j5rx-g56g",
+            "PYSEC-2026-1845"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "python-dotenv",
+          "version": "0.17.1",
+          "advisories": [
+            "GHSA-mf9w-mj56-hr94",
+            "PYSEC-2026-2270"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "requests",
+          "version": "2.25.1",
+          "advisories": [
+            "GHSA-9hjg-9r4m-mvj7",
+            "GHSA-9wx4-h78v-vm56",
+            "GHSA-gc5v-m9x4-r6x2",
+            "GHSA-j8r2-6x86-q33q",
+            "PYSEC-2023-74",
+            "PYSEC-2026-1872",
+            "PYSEC-2026-1873",
+            "PYSEC-2026-2275"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "urllib3",
+          "version": "1.26.4",
+          "advisories": [
+            "GHSA-2xpw-w6gg-jr37",
+            "GHSA-34jh-p97f-mpxf",
+            "GHSA-38jv-5279-wg99",
+            "GHSA-g4mx-q9vg-27p4",
+            "GHSA-gm62-xv2j-4w53",
+            "GHSA-pq67-6m6q-mj2v",
+            "GHSA-q2q7-5pp4-w6pg",
+            "GHSA-qccp-gfcp-xxvc",
+            "GHSA-v845-jxx5-vc9f",
+            "PYSEC-2021-108",
+            "PYSEC-2023-192",
+            "PYSEC-2023-212",
+            "PYSEC-2026-141",
+            "PYSEC-2026-1994",
+            "PYSEC-2026-1995",
+            "PYSEC-2026-1996",
+            "PYSEC-2026-1998",
+            "PYSEC-2026-1999"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "virtualenv",
+          "version": "20.4.6",
+          "advisories": [
+            "GHSA-597g-3phw-6986",
+            "GHSA-rqc4-2hc7-8c8v",
+            "PYSEC-2024-187",
+            "PYSEC-2026-2009"
+          ]
+        }
+      ]
+    },
+    "poetry-1.1.0": {
+      "status": "OK",
+      "componentsEnumerated": 83,
+      "vulnerable": [
+        {
+          "ecosystem": "PyPI",
+          "name": "certifi",
+          "version": "2020.6.20",
+          "advisories": [
+            "GHSA-43fp-rhv2-5gv8",
+            "GHSA-xqr8-7jwr-rhp7",
+            "PYSEC-2022-42986",
+            "PYSEC-2023-135",
+            "PYSEC-2024-230"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "cleo",
+          "version": "0.8.1",
+          "advisories": [
+            "PYSEC-2022-43178"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "cryptography",
+          "version": "3.1.1",
+          "advisories": [
+            "GHSA-3ww4-gg4f-jr7f",
+            "GHSA-537c-gmf6-5ccf",
+            "GHSA-5cpq-8wj7-hf2v",
+            "GHSA-9v9h-cgj8-h64p",
+            "GHSA-hggm-jpg3-v476",
+            "GHSA-jfhm-5ghh-2f97",
+            "GHSA-jm77-qphf-c4w8",
+            "GHSA-jwv3-5hgf-82ww",
+            "GHSA-m2h6-j472-rp4c",
+            "GHSA-m959-cc7f-wv43",
+            "GHSA-r6ph-v2qm-q3c2",
+            "GHSA-rhm9-p9w5-fwm7",
+            "GHSA-v8gr-m533-ghj9",
+            "GHSA-w7pp-m8wf-vj6r",
+            "GHSA-x4qr-2fvf-3mr5",
+            "PYSEC-2021-62",
+            "PYSEC-2021-63",
+            "PYSEC-2023-11",
+            "PYSEC-2023-254",
+            "PYSEC-2026-1283",
+            "PYSEC-2026-1285",
+            "PYSEC-2026-2141",
+            "PYSEC-2026-35",
+            "PYSEC-2026-3553",
+            "PYSEC-2026-3554",
+            "PYSEC-2026-800"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "filelock",
+          "version": "3.0.12",
+          "advisories": [
+            "GHSA-qmgc-5h2g-mvrw",
+            "GHSA-w853-jp5j-5j7f",
+            "PYSEC-2026-1374",
+            "PYSEC-2026-1375"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "idna",
+          "version": "2.10",
+          "advisories": [
+            "GHSA-65pc-fj4g-8rjx",
+            "GHSA-jjg7-2v4v-x38h",
+            "PYSEC-2024-60",
+            "PYSEC-2026-215"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "msgpack",
+          "version": "1.0.0",
+          "advisories": [
+            "GHSA-6v7p-g79w-8964",
+            "PYSEC-2026-3625"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "py",
+          "version": "1.9.0",
+          "advisories": [
+            "GHSA-hj5v-574p-mj7c",
+            "PYSEC-2020-92"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "pytest",
+          "version": "4.6.11",
+          "advisories": [
+            "GHSA-6w46-j5rx-g56g",
+            "PYSEC-2026-1845"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "pytest",
+          "version": "5.4.3",
+          "advisories": [
+            "GHSA-6w46-j5rx-g56g",
+            "PYSEC-2026-1845"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "pyyaml",
+          "version": "5.3.1",
+          "advisories": [
+            "GHSA-8q59-q68h-6hv4",
+            "PYSEC-2021-142"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "requests",
+          "version": "2.24.0",
+          "advisories": [
+            "GHSA-9hjg-9r4m-mvj7",
+            "GHSA-9wx4-h78v-vm56",
+            "GHSA-gc5v-m9x4-r6x2",
+            "GHSA-j8r2-6x86-q33q",
+            "PYSEC-2023-74",
+            "PYSEC-2026-1872",
+            "PYSEC-2026-1873",
+            "PYSEC-2026-2275"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "urllib3",
+          "version": "1.25.10",
+          "advisories": [
+            "GHSA-2xpw-w6gg-jr37",
+            "GHSA-34jh-p97f-mpxf",
+            "GHSA-38jv-5279-wg99",
+            "GHSA-g4mx-q9vg-27p4",
+            "GHSA-gm62-xv2j-4w53",
+            "GHSA-pq67-6m6q-mj2v",
+            "GHSA-q2q7-5pp4-w6pg",
+            "GHSA-qccp-gfcp-xxvc",
+            "GHSA-v845-jxx5-vc9f",
+            "PYSEC-2021-108",
+            "PYSEC-2023-192",
+            "PYSEC-2023-212",
+            "PYSEC-2026-141",
+            "PYSEC-2026-1994",
+            "PYSEC-2026-1995",
+            "PYSEC-2026-1996",
+            "PYSEC-2026-1998",
+            "PYSEC-2026-1999"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "virtualenv",
+          "version": "20.0.31",
+          "advisories": [
+            "GHSA-597g-3phw-6986",
+            "GHSA-rqc4-2hc7-8c8v",
+            "PYSEC-2024-187",
+            "PYSEC-2026-2009"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "zipp",
+          "version": "1.2.0",
+          "advisories": [
+            "GHSA-jfmj-5v4g-7637",
+            "PYSEC-2026-2074"
+          ]
+        }
+      ]
+    },
+    "home-assistant-2021.6.0": {
+      "status": "OK",
+      "componentsEnumerated": 17,
+      "vulnerable": [
+        {
+          "ecosystem": "PyPI",
+          "name": "aiohttp",
+          "version": "3.7.4.post0",
+          "advisories": [
+            "GHSA-2fqr-mr3j-6wp8",
+            "GHSA-2vrm-gr82-f7m5",
+            "GHSA-3wq7-rqq7-wx6j",
+            "GHSA-45c4-8wx5-qw6w",
+            "GHSA-4fvr-rgm6-gqmc",
+            "GHSA-4m7w-qmgq-4wj5",
+            "GHSA-54jq-c3m8-4m76",
+            "GHSA-5h86-8mv2-jq9f",
+            "GHSA-5m98-qgg9-wh84",
+            "GHSA-63hf-3vf5-4wqf",
+            "GHSA-63hw-fmq6-xxg2",
+            "GHSA-69f9-5gxw-wvc2",
+            "GHSA-6jhg-hg63-jvvf",
+            "GHSA-6mq8-rvhq-8wgg",
+            "GHSA-7gpw-8wmc-pm8g",
+            "GHSA-8495-4g3g-x7pr",
+            "GHSA-8qpw-xqxj-h4r2",
+            "GHSA-9548-qrrj-x5pj",
+            "GHSA-966j-vmvw-g2g9",
+            "GHSA-9x8q-7h8h-wcw9",
+            "GHSA-c427-h43c-vf67",
+            "GHSA-cq5v-8q36-5273",
+            "GHSA-fh55-r93g-j68g",
+            "GHSA-g3cq-j2xw-wf74",
+            "GHSA-g84x-mcqj-x9qq",
+            "GHSA-gfw2-4jvh-wgfg",
+            "GHSA-hcc4-c3v8-rx92",
+            "GHSA-hg6j-4rv6-33pg",
+            "GHSA-hpj7-wq8m-9hgp",
+            "GHSA-jg22-mg44-37j8",
+            "GHSA-jj3x-wxrx-4x23",
+            "GHSA-m5qp-6w8w-w647",
+            "GHSA-m6qw-4cw2-hm4m",
+            "GHSA-mfx4-hv73-q22v",
+            "GHSA-mq44-7p77-q5h7",
+            "GHSA-mqqc-3gqh-h2x8",
+            "GHSA-mwh4-6h8g-pg8w",
+            "GHSA-p998-jp59-783m",
+            "GHSA-pjjw-qhg8-p2p9",
+            "GHSA-q3qx-c6g2-7pw2",
+            "GHSA-qvrw-v9rv-5rjx",
+            "GHSA-w2fm-2cpv-w7v5",
+            "GHSA-xcgm-r5h9-7989",
+            "GHSA-xx9p-xxvh-7g8j",
+            "PYSEC-2023-120",
+            "PYSEC-2023-246",
+            "PYSEC-2023-247",
+            "PYSEC-2023-250",
+            "PYSEC-2023-251",
+            "PYSEC-2024-24",
+            "PYSEC-2024-26",
+            "PYSEC-2026-1097",
+            "PYSEC-2026-1098",
+            "PYSEC-2026-1099",
+            "PYSEC-2026-1100",
+            "PYSEC-2026-1101",
+            "PYSEC-2026-1102",
+            "PYSEC-2026-1103",
+            "PYSEC-2026-1104",
+            "PYSEC-2026-1105",
+            "PYSEC-2026-1106",
+            "PYSEC-2026-1107",
+            "PYSEC-2026-1109",
+            "PYSEC-2026-2094",
+            "PYSEC-2026-2095",
+            "PYSEC-2026-2096",
+            "PYSEC-2026-2097",
+            "PYSEC-2026-2098",
+            "PYSEC-2026-2099",
+            "PYSEC-2026-2100",
+            "PYSEC-2026-2101",
+            "PYSEC-2026-2102",
+            "PYSEC-2026-2103",
+            "PYSEC-2026-2104",
+            "PYSEC-2026-2105",
+            "PYSEC-2026-2106",
+            "PYSEC-2026-2107",
+            "PYSEC-2026-2108",
+            "PYSEC-2026-2109",
+            "PYSEC-2026-2110",
+            "PYSEC-2026-2111",
+            "PYSEC-2026-2112",
+            "PYSEC-2026-2113",
+            "PYSEC-2026-237",
+            "PYSEC-2026-3545",
+            "PYSEC-2026-3546",
+            "PYSEC-2026-3547"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "cryptography",
+          "version": "3.3.2",
+          "advisories": [
+            "GHSA-3ww4-gg4f-jr7f",
+            "GHSA-537c-gmf6-5ccf",
+            "GHSA-5cpq-8wj7-hf2v",
+            "GHSA-9v9h-cgj8-h64p",
+            "GHSA-jfhm-5ghh-2f97",
+            "GHSA-jm77-qphf-c4w8",
+            "GHSA-jwv3-5hgf-82ww",
+            "GHSA-m2h6-j472-rp4c",
+            "GHSA-m959-cc7f-wv43",
+            "GHSA-r6ph-v2qm-q3c2",
+            "GHSA-v8gr-m533-ghj9",
+            "GHSA-w7pp-m8wf-vj6r",
+            "GHSA-x4qr-2fvf-3mr5",
+            "PYSEC-2023-11",
+            "PYSEC-2023-254",
+            "PYSEC-2026-1283",
+            "PYSEC-2026-1285",
+            "PYSEC-2026-2141",
+            "PYSEC-2026-35",
+            "PYSEC-2026-3553",
+            "PYSEC-2026-3554",
+            "PYSEC-2026-800"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "httpx",
+          "version": "0.18.0",
+          "advisories": [
+            "GHSA-h8pj-cxx2-jfg2",
+            "PYSEC-2022-183"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "PyJWT",
+          "version": "1.7.1",
+          "advisories": [
+            "GHSA-752w-5fwx-jx9f",
+            "GHSA-ffqj-6fqr-9h24",
+            "GHSA-xgmm-8j9v-c9wx",
+            "PYSEC-2022-202",
+            "PYSEC-2025-183",
+            "PYSEC-2026-120",
+            "PYSEC-2026-175",
+            "PYSEC-2026-177",
+            "PYSEC-2026-179"
+          ]
+        },
+        {
+          "ecosystem": "PyPI",
+          "name": "requests",
+          "version": "2.25.1",
+          "advisories": [
+            "GHSA-9hjg-9r4m-mvj7",
+            "GHSA-9wx4-h78v-vm56",
+            "GHSA-gc5v-m9x4-r6x2",
+            "GHSA-j8r2-6x86-q33q",
+            "PYSEC-2023-74",
+            "PYSEC-2026-1872",
+            "PYSEC-2026-1873",
+            "PYSEC-2026-2275"
+          ]
+        }
+      ]
+    },
+    "discourse-2.8.0": {
+      "status": "OK",
+      "componentsEnumerated": 226,
+      "vulnerable": [
+        {
+          "ecosystem": "RubyGems",
+          "name": "actionmailer",
+          "version": "6.1.4.1",
+          "advisories": [
+            "GHSA-h47h-mwp9-c6q6"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "actionpack",
+          "version": "6.1.4.1",
+          "advisories": [
+            "GHSA-4g8v-vg43-wpgf",
+            "GHSA-8xww-x3g3-6jcv",
+            "GHSA-fwhr-88qx-h9g7",
+            "GHSA-mm33-5vfq-3mm3",
+            "GHSA-p84v-45xj-wwqj",
+            "GHSA-qphc-hf5q-v8fc",
+            "GHSA-vfg9-r3fq-jvx4",
+            "GHSA-vfm5-rmrh-j26v",
+            "GHSA-wh98-p28r-vrc9",
+            "GHSA-x76w-6vjr-8xgj"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "actionview",
+          "version": "6.1.4.1",
+          "advisories": [
+            "GHSA-ch3h-j2vf-95pv",
+            "GHSA-v55j-83pf-r9cq",
+            "GHSA-xp5h-f8jf-rc8q"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "activerecord",
+          "version": "6.1.4.1",
+          "advisories": [
+            "GHSA-3hhc-qp5v-9p2j",
+            "GHSA-579w-22j4-4749",
+            "GHSA-76r7-hhxj-r776",
+            "GHSA-hq7p-j377-6v63"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "activesupport",
+          "version": "6.1.4.1",
+          "advisories": [
+            "GHSA-2j26-frm8-cmj9",
+            "GHSA-89vf-4333-qx8v",
+            "GHSA-cg4j-q9v8-6v38",
+            "GHSA-cr5q-6q9f-rq6q",
+            "GHSA-j6gc-792m-qgm2",
+            "GHSA-pj73-v5mw-pm9j"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "addressable",
+          "version": "2.8.0",
+          "advisories": [
+            "GHSA-h27x-rffw-24p4"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "aws-sdk-s3",
+          "version": "1.96.1",
+          "advisories": [
+            "GHSA-2xgq-q749-89fq"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "concurrent-ruby",
+          "version": "1.1.9",
+          "advisories": [
+            "GHSA-6wx8-w4f5-wwcr",
+            "GHSA-h8w8-99g7-qmvj",
+            "GHSA-wv3x-4vxv-whpp"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "css_parser",
+          "version": "1.11.0",
+          "advisories": [
+            "GHSA-9pmc-p236-855h",
+            "GHSA-ff6c-w6qf-7xqc"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "diffy",
+          "version": "3.4.0",
+          "advisories": [
+            "GHSA-5ww9-9qp2-x524"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "excon",
+          "version": "0.89.0",
+          "advisories": [
+            "GHSA-48rx-c7pg-q66r"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "faraday",
+          "version": "1.9.3",
+          "advisories": [
+            "GHSA-33mh-2634-fwr2",
+            "GHSA-98m9-hrrm-r99r"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "globalid",
+          "version": "1.0.0",
+          "advisories": [
+            "GHSA-23c2-gwp5-pxw9"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "jmespath",
+          "version": "1.5.0",
+          "advisories": [
+            "GHSA-5c5f-7vfq-3732"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "jwt",
+          "version": "2.3.0",
+          "advisories": [
+            "GHSA-c32j-vqhx-rx3x"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "loofah",
+          "version": "2.13.0",
+          "advisories": [
+            "GHSA-228g-948r-83gx",
+            "GHSA-3x8r-x6xp-q4vm",
+            "GHSA-486f-hjj9-9vhh",
+            "GHSA-9wjq-cp2p-hrgf"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "msgpack",
+          "version": "1.4.2",
+          "advisories": [
+            "GHSA-4mrv-5p47-p938"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "nokogiri",
+          "version": "1.12.5",
+          "advisories": [
+            "GHSA-2qc6-mcvw-92cw",
+            "GHSA-353f-x4gh-cqq8",
+            "GHSA-59gp-qqm7-cw4j",
+            "GHSA-5prr-v3j2-97mh",
+            "GHSA-5v8h-3h3q-446p",
+            "GHSA-5w6v-399v-w3cc",
+            "GHSA-8678-w3jw-xfc2",
+            "GHSA-9cv2-cfxc-v4v2",
+            "GHSA-c4rq-3m3g-8wgx",
+            "GHSA-cgx6-hpwq-fhv5",
+            "GHSA-crjr-9rc5-ghw8",
+            "GHSA-fq42-c5rg-92c2",
+            "GHSA-gx8x-g87m-h5q6",
+            "GHSA-jc36-42cf-vqwj",
+            "GHSA-mrxw-mxhj-p664",
+            "GHSA-p67v-3w7g-wjg7",
+            "GHSA-phwj-rprq-35pp",
+            "GHSA-pxvg-2qj5-37jq",
+            "GHSA-r95h-9x8f-r3f7",
+            "GHSA-v2fc-qm4h-8hqv",
+            "GHSA-v6gp-9mmm-c6p5",
+            "GHSA-vvfq-8hwr-qm4m",
+            "GHSA-wfpw-mmfh-qq69",
+            "GHSA-wjv4-x9w8-wm3h",
+            "GHSA-wx95-c6cv-8532",
+            "GHSA-xc9x-jj77-9p9j",
+            "GHSA-xh29-r2w5-wx8m",
+            "GHSA-xxx9-3xcr-gjj3"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "oauth",
+          "version": "0.5.8",
+          "advisories": [
+            "GHSA-prq8-7wvh-44qh"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "oauth2",
+          "version": "1.4.7",
+          "advisories": [
+            "GHSA-pp92-crg2-gfv9"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "oj",
+          "version": "3.13.2",
+          "advisories": [
+            "GHSA-2cw7-v8ff-p88r",
+            "GHSA-35w3-pjm6-wj95",
+            "GHSA-3m6q-jj5j-38c9",
+            "GHSA-3v45-f3vh-wg7m",
+            "GHSA-475m-ph3x-64gp",
+            "GHSA-9cv6-qcjw-4grx",
+            "GHSA-9ppp-w3g4-fh4q",
+            "GHSA-fm7p-mprw-wjm9",
+            "GHSA-m578-w5vf-rfcm",
+            "GHSA-q2gm-54r6-8fwm",
+            "GHSA-vwm4-62gf-x745"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "omniauth",
+          "version": "1.9.1",
+          "advisories": [
+            "GHSA-pm55-qfxr-h247",
+            "GHSA-ww4x-rwq6-qpgf"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "puma",
+          "version": "5.5.2",
+          "advisories": [
+            "GHSA-2vqw-3mp8-cgmx",
+            "GHSA-68xg-gqqm-vgj8",
+            "GHSA-9hf4-67fc-4vf4",
+            "GHSA-c2f4-cvqm-65w2",
+            "GHSA-h99w-9q5r-gjq9",
+            "GHSA-qpgp-93vx-g8v8",
+            "GHSA-rmj8-8hhh-gv5h"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "rack",
+          "version": "2.2.3",
+          "advisories": [
+            "GHSA-22f2-v57c-j9cx",
+            "GHSA-3h57-hmj3-gj3p",
+            "GHSA-54rr-7fvw-6x8f",
+            "GHSA-625h-95r8-8xpm",
+            "GHSA-65f5-mfpf-vfhj",
+            "GHSA-6xw4-3v39-52mm",
+            "GHSA-7g2v-jj9q-g3rg",
+            "GHSA-7mqq-6cf9-v2qp",
+            "GHSA-7wqh-767x-r66v",
+            "GHSA-8cgq-6mh2-7j6v",
+            "GHSA-8vqr-qjwx-82mw",
+            "GHSA-93pm-5p5f-3ghx",
+            "GHSA-c6qg-cjj8-47qp",
+            "GHSA-gjh7-p2fx-99vx",
+            "GHSA-h2jq-g4cq-5ppq",
+            "GHSA-hxqx-xwvh-44m2",
+            "GHSA-mxw3-3hh2-x2mh",
+            "GHSA-p543-xpfm-54cp",
+            "GHSA-q2ww-5357-x388",
+            "GHSA-q4qf-9j86-f5mh",
+            "GHSA-qv7j-4883-hwh7",
+            "GHSA-r657-rxjc-j557",
+            "GHSA-rqv2-275x-2jq5",
+            "GHSA-v569-hp3g-36wr",
+            "GHSA-vgpv-f759-9wx3",
+            "GHSA-vpfw-47h7-xj4g",
+            "GHSA-w9pc-fmgc-vxvw",
+            "GHSA-whrj-4476-wvmp",
+            "GHSA-wpv5-97wm-hp9c",
+            "GHSA-wq4h-7r42-5hrr",
+            "GHSA-x8cg-fq8g-mxfx",
+            "GHSA-xj5v-6v4g-jfw6"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "rails-html-sanitizer",
+          "version": "1.4.2",
+          "advisories": [
+            "GHSA-5x79-w82f-gw8w",
+            "GHSA-9h9g-93gc-623h",
+            "GHSA-cj75-f6xr-r4g7",
+            "GHSA-mcvf-2q2m-x72m",
+            "GHSA-pg8v-g4xq-hww9",
+            "GHSA-rrfc-7g8p-99q8"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "rexml",
+          "version": "3.2.5",
+          "advisories": [
+            "GHSA-2rxp-v6pw-ch6m",
+            "GHSA-4xqq-m2hx-25v8",
+            "GHSA-5866-49gr-22v4",
+            "GHSA-r55c-59qm-vjw6",
+            "GHSA-vg3r-rm7w-2xgh",
+            "GHSA-vmwr-mc7x-5vc3"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "sanitize",
+          "version": "6.0.0",
+          "advisories": [
+            "GHSA-f5ww-cq3m-q3g7",
+            "GHSA-fw3g-2h3j-qmm7"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "sidekiq",
+          "version": "6.3.1",
+          "advisories": [
+            "GHSA-3qc2-v3hp-6cv8",
+            "GHSA-jrfj-98qg-qjgv"
+          ]
+        }
+      ]
+    },
+    "rails-6.1.0": {
+      "status": "OK",
+      "componentsEnumerated": 213,
+      "vulnerable": [
+        {
+          "ecosystem": "RubyGems",
+          "name": "actionmailer",
+          "version": "6.1.0",
+          "advisories": [
+            "GHSA-h47h-mwp9-c6q6"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "actionpack",
+          "version": "6.1.0",
+          "advisories": [
+            "GHSA-2rqw-v265-jf8c",
+            "GHSA-4g8v-vg43-wpgf",
+            "GHSA-5hq2-xf89-9jxq",
+            "GHSA-7wjx-3g7j-8584",
+            "GHSA-8877-prq4-9xfw",
+            "GHSA-8xww-x3g3-6jcv",
+            "GHSA-fwhr-88qx-h9g7",
+            "GHSA-g8ww-46x2-2p65",
+            "GHSA-hjg4-8q5f-x6fm",
+            "GHSA-mm33-5vfq-3mm3",
+            "GHSA-p84v-45xj-wwqj",
+            "GHSA-qphc-hf5q-v8fc",
+            "GHSA-vfg9-r3fq-jvx4",
+            "GHSA-vfm5-rmrh-j26v",
+            "GHSA-wh98-p28r-vrc9",
+            "GHSA-x76w-6vjr-8xgj"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "actiontext",
+          "version": "6.1.0",
+          "advisories": [
+            "GHSA-wwhv-wxv9-rpgw"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "actionview",
+          "version": "6.1.0",
+          "advisories": [
+            "GHSA-ch3h-j2vf-95pv",
+            "GHSA-v55j-83pf-r9cq",
+            "GHSA-xp5h-f8jf-rc8q"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "activerecord",
+          "version": "6.1.0",
+          "advisories": [
+            "GHSA-3hhc-qp5v-9p2j",
+            "GHSA-579w-22j4-4749",
+            "GHSA-76r7-hhxj-r776",
+            "GHSA-8hc4-xxm3-5ppp",
+            "GHSA-hq7p-j377-6v63"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "activestorage",
+          "version": "6.1.0",
+          "advisories": [
+            "GHSA-73f9-jhhh-hr5m",
+            "GHSA-8h22-8cf7-hq6g",
+            "GHSA-9xrj-h377-fr87",
+            "GHSA-p9fm-f462-ggrg",
+            "GHSA-qcfx-2mfw-w4cg",
+            "GHSA-r46p-8f7g-vvvg",
+            "GHSA-r4mg-4433-c7g3",
+            "GHSA-w749-p3v6-hccq",
+            "GHSA-xr9x-r78c-5hrm"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "activesupport",
+          "version": "6.1.0",
+          "advisories": [
+            "GHSA-2j26-frm8-cmj9",
+            "GHSA-89vf-4333-qx8v",
+            "GHSA-cg4j-q9v8-6v38",
+            "GHSA-cr5q-6q9f-rq6q",
+            "GHSA-j6gc-792m-qgm2",
+            "GHSA-pj73-v5mw-pm9j"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "addressable",
+          "version": "2.7.0",
+          "advisories": [
+            "GHSA-h27x-rffw-24p4",
+            "GHSA-jxhc-q857-3j6g"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "aws-sdk-s3",
+          "version": "1.60.1",
+          "advisories": [
+            "GHSA-2xgq-q749-89fq"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "bcrypt",
+          "version": "3.1.13",
+          "advisories": [
+            "GHSA-f27w-vcwj-c954"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "bcrypt",
+          "version": "3.1.13-java",
+          "advisories": [
+            "GHSA-f27w-vcwj-c954"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "concurrent-ruby",
+          "version": "1.1.7",
+          "advisories": [
+            "GHSA-6wx8-w4f5-wwcr",
+            "GHSA-h8w8-99g7-qmvj",
+            "GHSA-wv3x-4vxv-whpp"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "dalli",
+          "version": "2.7.10",
+          "advisories": [
+            "GHSA-3xg8-cc8f-9wv2"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "em-http-request",
+          "version": "1.1.5",
+          "advisories": [
+            "GHSA-q27f-v3r6-9v77"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "faraday",
+          "version": "1.0.1",
+          "advisories": [
+            "GHSA-33mh-2634-fwr2",
+            "GHSA-98m9-hrrm-r99r"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "faye-websocket",
+          "version": "0.10.9",
+          "advisories": [
+            "GHSA-2v5c-755p-p4gv"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "faye",
+          "version": "1.2.4",
+          "advisories": [
+            "GHSA-3q49-h8f9-9fr9",
+            "GHSA-qpg4-4w7w-2mq5"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "fugit",
+          "version": "1.3.3",
+          "advisories": [
+            "GHSA-2m96-52r3-2f3g"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "globalid",
+          "version": "0.4.2",
+          "advisories": [
+            "GHSA-23c2-gwp5-pxw9"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "image_processing",
+          "version": "1.10.2",
+          "advisories": [
+            "GHSA-cxf7-qrc5-9446"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "jmespath",
+          "version": "1.4.0",
+          "advisories": [
+            "GHSA-5c5f-7vfq-3732"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "jwt",
+          "version": "2.2.2",
+          "advisories": [
+            "GHSA-c32j-vqhx-rx3x"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "loofah",
+          "version": "2.8.0",
+          "advisories": [
+            "GHSA-228g-948r-83gx",
+            "GHSA-3x8r-x6xp-q4vm",
+            "GHSA-486f-hjj9-9vhh",
+            "GHSA-9wjq-cp2p-hrgf"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "msgpack",
+          "version": "1.3.1",
+          "advisories": [
+            "GHSA-4mrv-5p47-p938"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "msgpack",
+          "version": "1.3.1-java",
+          "advisories": [
+            "GHSA-4mrv-5p47-p938"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "nokogiri",
+          "version": "1.10.10",
+          "advisories": [
+            "GHSA-286v-pcf5-25rc",
+            "GHSA-2qc6-mcvw-92cw",
+            "GHSA-2rr5-8q37-2w7h",
+            "GHSA-353f-x4gh-cqq8",
+            "GHSA-59gp-qqm7-cw4j",
+            "GHSA-5prr-v3j2-97mh",
+            "GHSA-5v8h-3h3q-446p",
+            "GHSA-5w6v-399v-w3cc",
+            "GHSA-7rrm-v45f-jp64",
+            "GHSA-8678-w3jw-xfc2",
+            "GHSA-9cv2-cfxc-v4v2",
+            "GHSA-c4rq-3m3g-8wgx",
+            "GHSA-cgx6-hpwq-fhv5",
+            "GHSA-crjr-9rc5-ghw8",
+            "GHSA-fq42-c5rg-92c2",
+            "GHSA-gx8x-g87m-h5q6",
+            "GHSA-jc36-42cf-vqwj",
+            "GHSA-jw9f-hh49-cvp9",
+            "GHSA-mrxw-mxhj-p664",
+            "GHSA-p67v-3w7g-wjg7",
+            "GHSA-phwj-rprq-35pp",
+            "GHSA-pxvg-2qj5-37jq",
+            "GHSA-r95h-9x8f-r3f7",
+            "GHSA-v2fc-qm4h-8hqv",
+            "GHSA-v4f8-2847-rwm7",
+            "GHSA-v6gp-9mmm-c6p5",
+            "GHSA-vr8q-g5c7-m54m",
+            "GHSA-vvfq-8hwr-qm4m",
+            "GHSA-wfpw-mmfh-qq69",
+            "GHSA-wjv4-x9w8-wm3h",
+            "GHSA-wx95-c6cv-8532",
+            "GHSA-xc9x-jj77-9p9j",
+            "GHSA-xh29-r2w5-wx8m",
+            "GHSA-xxx9-3xcr-gjj3"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "nokogiri",
+          "version": "1.10.10-java",
+          "advisories": [
+            "GHSA-286v-pcf5-25rc",
+            "GHSA-2qc6-mcvw-92cw",
+            "GHSA-2rr5-8q37-2w7h",
+            "GHSA-353f-x4gh-cqq8",
+            "GHSA-59gp-qqm7-cw4j",
+            "GHSA-5prr-v3j2-97mh",
+            "GHSA-5v8h-3h3q-446p",
+            "GHSA-5w6v-399v-w3cc",
+            "GHSA-7rrm-v45f-jp64",
+            "GHSA-8678-w3jw-xfc2",
+            "GHSA-9cv2-cfxc-v4v2",
+            "GHSA-c4rq-3m3g-8wgx",
+            "GHSA-cgx6-hpwq-fhv5",
+            "GHSA-crjr-9rc5-ghw8",
+            "GHSA-fq42-c5rg-92c2",
+            "GHSA-gx8x-g87m-h5q6",
+            "GHSA-jc36-42cf-vqwj",
+            "GHSA-jw9f-hh49-cvp9",
+            "GHSA-mrxw-mxhj-p664",
+            "GHSA-p67v-3w7g-wjg7",
+            "GHSA-phwj-rprq-35pp",
+            "GHSA-pxvg-2qj5-37jq",
+            "GHSA-r95h-9x8f-r3f7",
+            "GHSA-v2fc-qm4h-8hqv",
+            "GHSA-v4f8-2847-rwm7",
+            "GHSA-v6gp-9mmm-c6p5",
+            "GHSA-vr8q-g5c7-m54m",
+            "GHSA-vvfq-8hwr-qm4m",
+            "GHSA-wfpw-mmfh-qq69",
+            "GHSA-wjv4-x9w8-wm3h",
+            "GHSA-wx95-c6cv-8532",
+            "GHSA-xc9x-jj77-9p9j",
+            "GHSA-xh29-r2w5-wx8m",
+            "GHSA-xxx9-3xcr-gjj3"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "puma",
+          "version": "5.0.4",
+          "advisories": [
+            "GHSA-48w2-rm65-62xx",
+            "GHSA-68xg-gqqm-vgj8",
+            "GHSA-9hf4-67fc-4vf4",
+            "GHSA-c2f4-cvqm-65w2",
+            "GHSA-h99w-9q5r-gjq9",
+            "GHSA-q28m-8xjw-8vr5",
+            "GHSA-rmj8-8hhh-gv5h"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "puma",
+          "version": "5.0.4-java",
+          "advisories": [
+            "GHSA-48w2-rm65-62xx",
+            "GHSA-68xg-gqqm-vgj8",
+            "GHSA-9hf4-67fc-4vf4",
+            "GHSA-c2f4-cvqm-65w2",
+            "GHSA-h99w-9q5r-gjq9",
+            "GHSA-q28m-8xjw-8vr5",
+            "GHSA-rmj8-8hhh-gv5h"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "rack",
+          "version": "2.2.3",
+          "advisories": [
+            "GHSA-22f2-v57c-j9cx",
+            "GHSA-3h57-hmj3-gj3p",
+            "GHSA-54rr-7fvw-6x8f",
+            "GHSA-625h-95r8-8xpm",
+            "GHSA-65f5-mfpf-vfhj",
+            "GHSA-6xw4-3v39-52mm",
+            "GHSA-7g2v-jj9q-g3rg",
+            "GHSA-7mqq-6cf9-v2qp",
+            "GHSA-7wqh-767x-r66v",
+            "GHSA-8cgq-6mh2-7j6v",
+            "GHSA-8vqr-qjwx-82mw",
+            "GHSA-93pm-5p5f-3ghx",
+            "GHSA-c6qg-cjj8-47qp",
+            "GHSA-gjh7-p2fx-99vx",
+            "GHSA-h2jq-g4cq-5ppq",
+            "GHSA-hxqx-xwvh-44m2",
+            "GHSA-mxw3-3hh2-x2mh",
+            "GHSA-p543-xpfm-54cp",
+            "GHSA-q2ww-5357-x388",
+            "GHSA-q4qf-9j86-f5mh",
+            "GHSA-qv7j-4883-hwh7",
+            "GHSA-r657-rxjc-j557",
+            "GHSA-rqv2-275x-2jq5",
+            "GHSA-v569-hp3g-36wr",
+            "GHSA-vgpv-f759-9wx3",
+            "GHSA-vpfw-47h7-xj4g",
+            "GHSA-w9pc-fmgc-vxvw",
+            "GHSA-whrj-4476-wvmp",
+            "GHSA-wpv5-97wm-hp9c",
+            "GHSA-wq4h-7r42-5hrr",
+            "GHSA-x8cg-fq8g-mxfx",
+            "GHSA-xj5v-6v4g-jfw6"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "rails-html-sanitizer",
+          "version": "1.3.0",
+          "advisories": [
+            "GHSA-5x79-w82f-gw8w",
+            "GHSA-9h9g-93gc-623h",
+            "GHSA-cj75-f6xr-r4g7",
+            "GHSA-mcvf-2q2m-x72m",
+            "GHSA-pg8v-g4xq-hww9",
+            "GHSA-rrfc-7g8p-99q8"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "rdoc",
+          "version": "6.2.1",
+          "advisories": [
+            "GHSA-ggxm-pgc9-g7fp"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "redcarpet",
+          "version": "3.2.3",
+          "advisories": [
+            "GHSA-q3wr-qw3g-3p4h"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "resque-scheduler",
+          "version": "4.4.0",
+          "advisories": [
+            "GHSA-9hmq-fm33-x4xx"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "resque",
+          "version": "2.0.0",
+          "advisories": [
+            "GHSA-gc3j-vvwf-4rp8",
+            "GHSA-r8xx-8vm8-x6wj",
+            "GHSA-r9mq-m72x-257g"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "rexml",
+          "version": "3.2.4",
+          "advisories": [
+            "GHSA-2rxp-v6pw-ch6m",
+            "GHSA-4xqq-m2hx-25v8",
+            "GHSA-5866-49gr-22v4",
+            "GHSA-8cr8-4vfw-mr7h",
+            "GHSA-r55c-59qm-vjw6",
+            "GHSA-vg3r-rm7w-2xgh",
+            "GHSA-vmwr-mc7x-5vc3"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "sidekiq",
+          "version": "6.1.2",
+          "advisories": [
+            "GHSA-3qc2-v3hp-6cv8",
+            "GHSA-grh7-935j-hg6w",
+            "GHSA-jrfj-98qg-qjgv"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "sinatra",
+          "version": "2.0.7",
+          "advisories": [
+            "GHSA-2x8x-jmrp-phxw",
+            "GHSA-hxx2-7vcw-mqr3",
+            "GHSA-mr3q-g2mv-mr4q",
+            "GHSA-qp49-3pvw-x4m5"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "sqlite3",
+          "version": "1.4.2",
+          "advisories": [
+            "GHSA-28hh-pr2h-2w89"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "websocket-driver",
+          "version": "0.7.1",
+          "advisories": [
+            "GHSA-2x63-gw47-w4mm",
+            "GHSA-33ph-fccm-39pj",
+            "GHSA-8j3g-f24p-4mpw",
+            "GHSA-ghhp-3qvg-889p"
+          ]
+        },
+        {
+          "ecosystem": "RubyGems",
+          "name": "websocket-extensions",
+          "version": "0.1.4",
+          "advisories": [
+            "GHSA-g6wq-qcwm-j5g2"
+          ]
+        }
+      ]
+    },
+    "prometheus-2.30.0": {
+      "status": "OK",
+      "componentsEnumerated": 187,
+      "vulnerable": [
+        {
+          "ecosystem": "Go",
+          "name": "github.com/aws/aws-sdk-go",
+          "version": "1.40.37",
+          "advisories": [
+            "GO-2022-0635",
+            "GO-2022-0646"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/containerd/containerd",
+          "version": "1.5.4",
+          "advisories": [
+            "GHSA-259w-8hf6-59c2",
+            "GHSA-265r-hfxg-fhmg",
+            "GHSA-2qjp-425j-52j9",
+            "GHSA-5ffw-gxpp-mxpf",
+            "GHSA-5j5w-g665-5m35",
+            "GHSA-7ww5-4wqc-m92c",
+            "GHSA-c2h3-6mxw-7mvq",
+            "GHSA-c9cp-9c75-9v8c",
+            "GHSA-crp2-qrr5-8pq7",
+            "GHSA-hmfx-3pcx-653p",
+            "GHSA-m6hq-p25p-ffr2",
+            "GHSA-mvff-h3cj-wj9c",
+            "GHSA-pwhc-rpq9-4c8w",
+            "GO-2022-0278",
+            "GO-2022-0344",
+            "GO-2022-0360",
+            "GO-2022-0482",
+            "GO-2022-0938",
+            "GO-2022-1147",
+            "GO-2023-1573",
+            "GO-2023-1574",
+            "GO-2023-2412",
+            "GO-2024-2846",
+            "GO-2025-3528",
+            "GO-2025-4100",
+            "GO-2025-4108",
+            "GO-2026-5064",
+            "GO-2026-5338",
+            "GO-2026-5622"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/docker/distribution",
+          "version": "2.7.1+incompatible",
+          "advisories": [
+            "GHSA-hqxw-f8mx-cpmw",
+            "GHSA-qq97-vm5h-rrhg",
+            "GO-2022-0379"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/docker/docker",
+          "version": "20.10.8+incompatible",
+          "advisories": [
+            "GHSA-232p-vwff-86mp",
+            "GHSA-2mm7-x5h6-5pvq",
+            "GHSA-33pg-m6jh-5237",
+            "GHSA-3fwx-pjgw-3558",
+            "GHSA-4vq8-7jfc-9cvp",
+            "GHSA-6wrf-mxfj-pf5p",
+            "GHSA-jq35-85cj-fj4p",
+            "GHSA-mq39-4gv4-mvpx",
+            "GHSA-pxq6-2prw-chj9",
+            "GHSA-rc4r-wh2q-q6c4",
+            "GHSA-rg2x-37c3-w2rh",
+            "GHSA-v23v-6jw2-98fq",
+            "GHSA-v994-f8vw-g7j4",
+            "GHSA-vp35-85q5-9f25",
+            "GHSA-vp62-88p7-qqf5",
+            "GHSA-x744-4wpc-v9h2",
+            "GHSA-x86f-5xw2-fm2r",
+            "GHSA-xmmx-7jpf-fx42",
+            "GHSA-xw73-rw38-6vjc",
+            "GO-2022-0390",
+            "GO-2022-0985",
+            "GO-2022-1107",
+            "GO-2023-1699",
+            "GO-2023-1700",
+            "GO-2023-1701",
+            "GO-2024-2500",
+            "GO-2024-2512",
+            "GO-2024-2913",
+            "GO-2024-2914",
+            "GO-2024-3005",
+            "GO-2025-3829",
+            "GO-2026-4883",
+            "GO-2026-4887",
+            "GO-2026-5617",
+            "GO-2026-5668",
+            "GO-2026-5746"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/golang-jwt/jwt/v4",
+          "version": "4.0.0",
+          "advisories": [
+            "GHSA-29wx-vh33-7x7r",
+            "GHSA-mh63-6h87-95cp",
+            "GO-2024-3250",
+            "GO-2025-3553"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/golang/glog",
+          "version": "0.0.0-20160126235308-23def4e6c14b",
+          "advisories": [
+            "GHSA-6wxm-mpqj-6jpf",
+            "GO-2025-3372"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/opencontainers/image-spec",
+          "version": "1.0.1",
+          "advisories": [
+            "GHSA-77vh-xpmg-72qh"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/prometheus/alertmanager",
+          "version": "0.23.0",
+          "advisories": [
+            "GHSA-v86x-5fm3-5p7j",
+            "GO-2023-2020"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/prometheus/client_golang",
+          "version": "1.11.0",
+          "advisories": [
+            "GHSA-cg3q-j54f-5p7p",
+            "GO-2022-0322"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/prometheus/exporter-toolkit",
+          "version": "0.6.1",
+          "advisories": [
+            "GHSA-7rg2-cxvp-9p7p",
+            "GO-2022-1130"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/sirupsen/logrus",
+          "version": "1.7.0",
+          "advisories": [
+            "GHSA-4f99-4q7p-p3gh",
+            "GO-2025-4188"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "go.mongodb.org/mongo-driver",
+          "version": "1.5.1",
+          "advisories": [
+            "GHSA-cp6g-7hqx-qxhp",
+            "GO-2026-5327"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/crypto",
+          "version": "0.0.0-20210616213533-5ff15b29337e",
+          "advisories": [
+            "GHSA-45gg-vh54-h5m9",
+            "GHSA-45x7-px36-x8w8",
+            "GHSA-5cgq-3rg8-m6cv",
+            "GHSA-78mq-xcr3-xm33",
+            "GHSA-89gr-r52h-f8rx",
+            "GHSA-8c26-wmh5-6g9v",
+            "GHSA-9m57-25v3-79x9",
+            "GHSA-f5wc-c3c7-36mc",
+            "GHSA-f6x5-jh6r-wrfv",
+            "GHSA-gwc9-m7rh-j2ww",
+            "GHSA-hcg3-q754-cr77",
+            "GHSA-j5w8-q4qc-rx2x",
+            "GHSA-jppx-rxg9-jmrx",
+            "GHSA-q4h4-gmj2-qvw2",
+            "GHSA-qpw4-5x99-6vjp",
+            "GHSA-rm3j-f69w-wqmq",
+            "GHSA-v778-237x-gjrc",
+            "GHSA-vgwf-h737-ff37",
+            "GHSA-w879-237q-wc7r",
+            "GHSA-x527-x647-q7gg",
+            "GO-2021-0356",
+            "GO-2022-0968",
+            "GO-2023-2402",
+            "GO-2024-2961",
+            "GO-2024-3321",
+            "GO-2025-3487",
+            "GO-2025-4116",
+            "GO-2025-4134",
+            "GO-2025-4135",
+            "GO-2026-5005",
+            "GO-2026-5006",
+            "GO-2026-5013",
+            "GO-2026-5014",
+            "GO-2026-5015",
+            "GO-2026-5016",
+            "GO-2026-5017",
+            "GO-2026-5018",
+            "GO-2026-5019",
+            "GO-2026-5020",
+            "GO-2026-5021",
+            "GO-2026-5023",
+            "GO-2026-5033",
+            "GO-2026-5932"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/mod",
+          "version": "0.4.2",
+          "advisories": [
+            "GO-2026-6179",
+            "GO-2026-6180"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/net",
+          "version": "0.0.0-20210903162142-ad29c8ab022f",
+          "advisories": [
+            "GHSA-2wrh-6pvc-2jm9",
+            "GHSA-4374-p667-p6c8",
+            "GHSA-4v7x-pqxf-cx7m",
+            "GHSA-5cv4-jp36-h3mw",
+            "GHSA-69cg-p879-7622",
+            "GHSA-qppj-fm5r-hxr3",
+            "GHSA-qxp5-gwg8-xv66",
+            "GHSA-vvgc-356p-c3xw",
+            "GHSA-vvpx-j8f3-3w6h",
+            "GHSA-xrjj-mj9h-534m",
+            "GO-2022-0288",
+            "GO-2022-0969",
+            "GO-2022-1144",
+            "GO-2023-1571",
+            "GO-2023-1988",
+            "GO-2023-2102",
+            "GO-2024-2687",
+            "GO-2024-3333",
+            "GO-2025-3503",
+            "GO-2025-3595",
+            "GO-2026-4440",
+            "GO-2026-4441",
+            "GO-2026-4918",
+            "GO-2026-5025",
+            "GO-2026-5026",
+            "GO-2026-5027",
+            "GO-2026-5028",
+            "GO-2026-5029",
+            "GO-2026-5030",
+            "GO-2026-5942"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/oauth2",
+          "version": "0.0.0-20210819190943-2bc19b11175f",
+          "advisories": [
+            "GHSA-6v2p-p543-phr9",
+            "GO-2025-3488"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/sys",
+          "version": "0.0.0-20210906170528-6f6e22806c34",
+          "advisories": [
+            "GHSA-p782-xgp4-8hr8",
+            "GO-2022-0493",
+            "GO-2026-5024"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/text",
+          "version": "0.3.6",
+          "advisories": [
+            "GHSA-69ch-w2m2-3vjp",
+            "GHSA-ppp9-7jff-5vj2",
+            "GO-2021-0113",
+            "GO-2022-1059",
+            "GO-2026-5970"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "google.golang.org/grpc",
+          "version": "1.40.0",
+          "advisories": [
+            "GHSA-hrxh-6v49-42gf",
+            "GHSA-m425-mq94-257g",
+            "GHSA-p77j-4mvh-x3m3",
+            "GO-2023-2153",
+            "GO-2026-4762",
+            "GO-2026-6061"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "google.golang.org/protobuf",
+          "version": "1.27.1",
+          "advisories": [
+            "GHSA-8r3f-844c-mc37",
+            "GO-2024-2611"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "gopkg.in/yaml.v3",
+          "version": "3.0.0-20210107192922-496545a6307b",
+          "advisories": [
+            "GHSA-hp87-p4gw-j4gq",
+            "GO-2022-0603"
+          ]
+        }
+      ]
+    },
+    "consul-1.10.0": {
+      "status": "OK",
+      "componentsEnumerated": 171,
+      "vulnerable": [
+        {
+          "ecosystem": "Go",
+          "name": "github.com/aws/aws-sdk-go",
+          "version": "1.25.41",
+          "advisories": [
+            "GHSA-6jvc-q2x7-pchv",
+            "GHSA-7f33-f4f5-xwgw",
+            "GHSA-f5pg-7wfw-84q9",
+            "GO-2022-0391",
+            "GO-2022-0635",
+            "GO-2022-0646"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/coredns/coredns",
+          "version": "1.1.2",
+          "advisories": [
+            "GHSA-2wpx-qpw2-g5h5",
+            "GHSA-527x-5wrf-22m2",
+            "GHSA-63cw-r7xf-jmwr",
+            "GHSA-c9v3-4pv7-87pr",
+            "GHSA-ch7v-37xg-75ph",
+            "GHSA-cvx7-x8pj-x2gw",
+            "GHSA-gv9j-4w24-q7vx",
+            "GHSA-h75p-j8xm-m278",
+            "GHSA-h828-v5pv-33qx",
+            "GHSA-h8mm-c463-wjq3",
+            "GHSA-h92q-fgpp-qhrq",
+            "GHSA-hfmw-7g3m-gj6q",
+            "GHSA-m9w6-wp3h-vq8g",
+            "GHSA-qhmp-q7xh-99rh",
+            "GHSA-vp29-5652-4fw9",
+            "GO-2022-0368",
+            "GO-2024-2785",
+            "GO-2024-3130",
+            "GO-2024-3134",
+            "GO-2025-3743",
+            "GO-2026-4289",
+            "GO-2026-4630",
+            "GO-2026-4635",
+            "GO-2026-4969",
+            "GO-2026-5164",
+            "GO-2026-5417",
+            "GO-2026-5583",
+            "GO-2026-5667"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/dgrijalva/jwt-go",
+          "version": "3.2.0+incompatible",
+          "advisories": [
+            "GHSA-w73w-5m7g-f7qc",
+            "GO-2020-0017"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/gogo/protobuf",
+          "version": "1.2.2-0.20190723190241-65acae22fc9d",
+          "advisories": [
+            "GHSA-c3h9-896r-86jm",
+            "GO-2021-0053"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/golang/glog",
+          "version": "0.0.0-20160126235308-23def4e6c14b",
+          "advisories": [
+            "GHSA-6wxm-mpqj-6jpf",
+            "GO-2025-3372"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/hashicorp/go-retryablehttp",
+          "version": "0.6.7",
+          "advisories": [
+            "GHSA-v6v8-xj6m-xwqh",
+            "GO-2024-2947"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/prometheus/client_golang",
+          "version": "1.4.0",
+          "advisories": [
+            "GHSA-cg3q-j54f-5p7p",
+            "GO-2022-0322"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "github.com/sirupsen/logrus",
+          "version": "1.4.2",
+          "advisories": [
+            "GHSA-4f99-4q7p-p3gh",
+            "GO-2025-4188"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/crypto",
+          "version": "0.0.0-20210513164829-c07d793c2f9a",
+          "advisories": [
+            "GHSA-45gg-vh54-h5m9",
+            "GHSA-45x7-px36-x8w8",
+            "GHSA-5cgq-3rg8-m6cv",
+            "GHSA-78mq-xcr3-xm33",
+            "GHSA-89gr-r52h-f8rx",
+            "GHSA-8c26-wmh5-6g9v",
+            "GHSA-9m57-25v3-79x9",
+            "GHSA-f5wc-c3c7-36mc",
+            "GHSA-f6x5-jh6r-wrfv",
+            "GHSA-gwc9-m7rh-j2ww",
+            "GHSA-hcg3-q754-cr77",
+            "GHSA-j5w8-q4qc-rx2x",
+            "GHSA-jppx-rxg9-jmrx",
+            "GHSA-q4h4-gmj2-qvw2",
+            "GHSA-qpw4-5x99-6vjp",
+            "GHSA-rm3j-f69w-wqmq",
+            "GHSA-v778-237x-gjrc",
+            "GHSA-vgwf-h737-ff37",
+            "GHSA-w879-237q-wc7r",
+            "GHSA-x527-x647-q7gg",
+            "GO-2021-0356",
+            "GO-2022-0968",
+            "GO-2023-2402",
+            "GO-2024-2961",
+            "GO-2024-3321",
+            "GO-2025-3487",
+            "GO-2025-4116",
+            "GO-2025-4134",
+            "GO-2025-4135",
+            "GO-2026-5005",
+            "GO-2026-5006",
+            "GO-2026-5013",
+            "GO-2026-5014",
+            "GO-2026-5015",
+            "GO-2026-5016",
+            "GO-2026-5017",
+            "GO-2026-5018",
+            "GO-2026-5019",
+            "GO-2026-5020",
+            "GO-2026-5021",
+            "GO-2026-5023",
+            "GO-2026-5033",
+            "GO-2026-5932"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/mod",
+          "version": "0.2.0",
+          "advisories": [
+            "GO-2026-6179",
+            "GO-2026-6180"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/net",
+          "version": "0.0.0-20210410081132-afb366fc7cd1",
+          "advisories": [
+            "GHSA-2wrh-6pvc-2jm9",
+            "GHSA-4374-p667-p6c8",
+            "GHSA-4v7x-pqxf-cx7m",
+            "GHSA-5cv4-jp36-h3mw",
+            "GHSA-69cg-p879-7622",
+            "GHSA-83g2-8m93-v3w7",
+            "GHSA-h86h-8ppg-mxmh",
+            "GHSA-qppj-fm5r-hxr3",
+            "GHSA-qxp5-gwg8-xv66",
+            "GHSA-vvgc-356p-c3xw",
+            "GHSA-vvpx-j8f3-3w6h",
+            "GHSA-xrjj-mj9h-534m",
+            "GO-2021-0238",
+            "GO-2022-0236",
+            "GO-2022-0288",
+            "GO-2022-0969",
+            "GO-2022-1144",
+            "GO-2023-1571",
+            "GO-2023-1988",
+            "GO-2023-2102",
+            "GO-2024-2687",
+            "GO-2024-3333",
+            "GO-2025-3503",
+            "GO-2025-3595",
+            "GO-2026-4440",
+            "GO-2026-4441",
+            "GO-2026-4918",
+            "GO-2026-5025",
+            "GO-2026-5026",
+            "GO-2026-5027",
+            "GO-2026-5028",
+            "GO-2026-5029",
+            "GO-2026-5030",
+            "GO-2026-5942"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/oauth2",
+          "version": "0.0.0-20190604053449-0f29369cfe45",
+          "advisories": [
+            "GHSA-6v2p-p543-phr9",
+            "GO-2025-3488"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/sys",
+          "version": "0.0.0-20210330210617-4fbd30eecc44",
+          "advisories": [
+            "GHSA-p782-xgp4-8hr8",
+            "GO-2022-0493",
+            "GO-2026-5024"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "golang.org/x/text",
+          "version": "0.3.6",
+          "advisories": [
+            "GHSA-69ch-w2m2-3vjp",
+            "GHSA-ppp9-7jff-5vj2",
+            "GO-2021-0113",
+            "GO-2022-1059",
+            "GO-2026-5970"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "google.golang.org/grpc",
+          "version": "1.25.1",
+          "advisories": [
+            "GHSA-hrxh-6v49-42gf",
+            "GHSA-m425-mq94-257g",
+            "GHSA-p77j-4mvh-x3m3",
+            "GO-2023-2153",
+            "GO-2026-4762",
+            "GO-2026-6061"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "gopkg.in/square/go-jose.v2",
+          "version": "2.5.1",
+          "advisories": [
+            "GHSA-c5q2-7r4c-mv6g",
+            "GO-2024-2631"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "gopkg.in/yaml.v3",
+          "version": "3.0.0-20200313102051-9f266ea9e77c",
+          "advisories": [
+            "GHSA-hp87-p4gw-j4gq",
+            "GO-2022-0603"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "k8s.io/apimachinery",
+          "version": "0.16.9",
+          "advisories": [
+            "GHSA-33c5-9fx5-fvjm",
+            "GO-2024-2748"
+          ]
+        },
+        {
+          "ecosystem": "Go",
+          "name": "k8s.io/client-go",
+          "version": "0.16.9",
+          "advisories": [
+            "GHSA-8cfg-vx93-jvxw",
+            "GHSA-jmrx-5g74-6v2f",
+            "GO-2021-0064",
+            "GO-2021-0065"
+          ]
+        }
+      ]
+    },
+    "dubbo-3.0.0": {
+      "status": "OK",
+      "componentsEnumerated": 7,
+      "vulnerable": []
+    },
+    "magento2-2.4.3": {
+      "status": "OK",
+      "componentsEnumerated": 198,
+      "vulnerable": [
+        {
+          "ecosystem": "Packagist",
+          "name": "aws/aws-sdk-php",
+          "version": "3.178.4",
+          "advisories": [
+            "GHSA-27qh-8cxx-2cr5",
+            "GHSA-557v-xcg6-rm5m",
+            "GHSA-x8cp-jf6f-r4xh"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "codeception/codeception",
+          "version": "4.1.20",
+          "advisories": [
+            "GHSA-4574-qv3w-fcmg"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "composer/composer",
+          "version": "1.10.21",
+          "advisories": [
+            "GHSA-499r-g7pc-vmp9",
+            "GHSA-f9f8-rm49-7jv2",
+            "GHSA-frqg-7g38-6gcf",
+            "GHSA-g6xq-892h-64w3",
+            "GHSA-gjfg-22fp-rrxx",
+            "GHSA-gqw4-4w2p-838q",
+            "GHSA-h5h8-pc6h-jvvx",
+            "GHSA-jm6m-4632-36hf",
+            "GHSA-wg36-wvj6-r67p",
+            "GHSA-x7cr-6qr6-2hh6"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "guzzlehttp/guzzle",
+          "version": "6.5.5",
+          "advisories": [
+            "GHSA-25mq-v84q-4j7r",
+            "GHSA-94pj-82f3-465w",
+            "GHSA-cwmx-hcrq-mhc3",
+            "GHSA-cwxw-98qj-8qjx",
+            "GHSA-f283-ghqc-fg79",
+            "GHSA-f2wf-25xc-69c9",
+            "GHSA-f7vp-7xgx-4w4r",
+            "GHSA-g446-98w2-8p5w",
+            "GHSA-h95v-h523-3mw8",
+            "GHSA-q559-8m2m-g699",
+            "GHSA-v5mv-p594-2x33",
+            "GHSA-w248-ffj2-4v5q",
+            "GHSA-wm3w-8rrp-j577",
+            "GHSA-wpwq-4j6v-78m3"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "guzzlehttp/psr7",
+          "version": "1.8.1",
+          "advisories": [
+            "GHSA-34xg-wgjx-8xph",
+            "GHSA-c2w2-prh8-qm98",
+            "GHSA-hq7v-mx3g-29hw",
+            "GHSA-q7rv-6hp3-vh96",
+            "GHSA-vm85-hxw5-5432",
+            "GHSA-wxmh-65f7-jcvw"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "league/flysystem",
+          "version": "2.0.5",
+          "advisories": [
+            "GHSA-9f46-5r25-5wfm"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "mtdowling/jmespath.php",
+          "version": "2.6.0",
+          "advisories": [
+            "GHSA-pcw8-m77r-2528"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "mustache/mustache",
+          "version": "2.13.0",
+          "advisories": [
+            "GHSA-4rmr-c2jx-vx27"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "paragonie/sodium_compat",
+          "version": "1.15.3",
+          "advisories": [
+            "GHSA-mrfv-m5wm-5w6w"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "phpseclib/phpseclib",
+          "version": "2.0.31",
+          "advisories": [
+            "GHSA-2528-jw5q-ww88",
+            "GHSA-3qpq-r242-jqj7",
+            "GHSA-94g3-g5v7-q4jg",
+            "GHSA-f2qx-66wf-wvvx",
+            "GHSA-ff7q-6vwh-v9m4",
+            "GHSA-m557-wrgg-6rp4",
+            "GHSA-r854-jrxh-36qx"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "phpunit/phpunit",
+          "version": "9.2.6",
+          "advisories": [
+            "GHSA-vvj3-c3rp-c85p"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "spomky-labs/otphp",
+          "version": "10.0.1",
+          "advisories": [
+            "GHSA-2jx3-65f3-xr8r",
+            "GHSA-g7m4-839x-ch6v"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "squizlabs/php_codesniffer",
+          "version": "3.5.8",
+          "advisories": [
+            "GHSA-hmqg-cxww-wqhq"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "symfony/http-foundation",
+          "version": "5.2.4",
+          "advisories": [
+            "GHSA-3rg7-wf37-54rm",
+            "GHSA-mrqx-rp3w-jpjp"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "symfony/http-kernel",
+          "version": "4.4.21",
+          "advisories": [
+            "GHSA-h7vf-5wrv-9fhv"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "symfony/mime",
+          "version": "5.2.6",
+          "advisories": [
+            "GHSA-qpmx-3rfj-7rhv",
+            "GHSA-vqc8-7275-q272"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "symfony/polyfill-intl-idn",
+          "version": "1.22.1",
+          "advisories": [
+            "GHSA-2xf4-cg6j-vhgq"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "symfony/process",
+          "version": "4.4.20",
+          "advisories": [
+            "GHSA-qq5c-677p-737q",
+            "GHSA-r39x-jcww-82v6"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "symfony/yaml",
+          "version": "5.2.5",
+          "advisories": [
+            "GHSA-4qpc-3hr4-r2p4",
+            "GHSA-9frc-8383-795m",
+            "GHSA-c2p3-7m5p-cv8x"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "web-token/jwt-framework",
+          "version": "2.2.10",
+          "advisories": [
+            "GHSA-3prj-6hqw-cm82",
+            "GHSA-5739-39v2-5754",
+            "GHSA-jc38-x7x8-2xc8"
+          ]
+        },
+        {
+          "ecosystem": "Packagist",
+          "name": "webonyx/graphql-php",
+          "version": "0.13.9",
+          "advisories": [
+            "GHSA-68jq-c3rv-pcrr",
+            "GHSA-fc86-6rv6-2jpm",
+            "GHSA-r7cg-qjjm-xhqq"
+          ]
+        }
+      ]
+    },
+    "ripgrep-13.0.0": {
+      "status": "OK",
+      "componentsEnumerated": 66,
+      "vulnerable": [
+        {
+          "ecosystem": "crates.io",
+          "name": "atty",
+          "version": "0.2.14",
+          "advisories": [
+            "GHSA-g98v-hv3f-hcfr",
+            "RUSTSEC-2021-0145",
+            "RUSTSEC-2024-0375"
+          ]
+        },
+        {
+          "ecosystem": "crates.io",
+          "name": "crossbeam-utils",
+          "version": "0.8.5",
+          "advisories": [
+            "GHSA-qc84-gqf4-9926",
+            "RUSTSEC-2022-0041"
+          ]
+        },
+        {
+          "ecosystem": "crates.io",
+          "name": "memmap2",
+          "version": "0.3.0",
+          "advisories": [
+            "RUSTSEC-2026-0186"
+          ]
+        },
+        {
+          "ecosystem": "crates.io",
+          "name": "regex",
+          "version": "1.5.4",
+          "advisories": [
+            "GHSA-m5pq-gvj9-9vr8",
+            "RUSTSEC-2022-0013"
+          ]
+        },
+        {
+          "ecosystem": "crates.io",
+          "name": "thread_local",
+          "version": "1.1.3",
+          "advisories": [
+            "GHSA-9hpw-r23r-xgm5",
+            "RUSTSEC-2022-0006"
+          ]
+        }
+      ]
+    }
+  }
+}

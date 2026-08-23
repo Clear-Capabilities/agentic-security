@@ -1,0 +1,127 @@
+{
+  "prd": "F6.3",
+  "generatedAt": "2026-08-23T11:39:13.839Z",
+  "engineVersion": "0.141.0",
+  "groundTruth": "the upstream fix commit for each bench/independent entry — third-party, not authored here",
+  "population": {
+    "entriesScanned": 45,
+    "entriesUnscored": 0,
+    "localizedTruePositives": 6,
+    "entriesWithALocalizedTruePositive": 2
+  },
+  "synthesisCoverage": {
+    "n": 0,
+    "d": 6,
+    "pct": 0
+  },
+  "locationAgreement": {
+    "n": 0,
+    "d": 0,
+    "pct": null
+  },
+  "approachAgreement": {
+    "n": 0,
+    "d": 0,
+    "pct": null
+  },
+  "heldOut": {
+    "localizedTruePositives": 1,
+    "synthesized": 0
+  },
+  "upstreamRemediationMix": {
+    "add-guard": {
+      "d": 5,
+      "synthesized": 0
+    },
+    "rewrite-pattern": {
+      "d": 1,
+      "synthesized": 0
+    }
+  },
+  "rows": [
+    {
+      "id": "GHSA-2364-jh4q-m9vm",
+      "cwe": "CWE-639",
+      "language": "typescript",
+      "file": "packages/server/src/enterprise/controllers/organization.controller.ts",
+      "heldOut": false,
+      "upstreamCategory": "add-guard",
+      "upstreamHunks": 8,
+      "synthesized": false,
+      "source": null,
+      "locationAgreement": null,
+      "categoryAgreement": null,
+      "ourCategory": null
+    },
+    {
+      "id": "GHSA-2364-jh4q-m9vm",
+      "cwe": "CWE-639",
+      "language": "typescript",
+      "file": "packages/server/src/enterprise/controllers/organization.controller.ts",
+      "heldOut": false,
+      "upstreamCategory": "add-guard",
+      "upstreamHunks": 8,
+      "synthesized": false,
+      "source": null,
+      "locationAgreement": null,
+      "categoryAgreement": null,
+      "ourCategory": null
+    },
+    {
+      "id": "GHSA-2364-jh4q-m9vm",
+      "cwe": "CWE-639",
+      "language": "typescript",
+      "file": "packages/server/src/enterprise/controllers/organization.controller.ts",
+      "heldOut": false,
+      "upstreamCategory": "add-guard",
+      "upstreamHunks": 8,
+      "synthesized": false,
+      "source": null,
+      "locationAgreement": null,
+      "categoryAgreement": null,
+      "ourCategory": null
+    },
+    {
+      "id": "GHSA-2364-jh4q-m9vm",
+      "cwe": "CWE-639",
+      "language": "typescript",
+      "file": "packages/server/src/enterprise/controllers/organization.controller.ts",
+      "heldOut": false,
+      "upstreamCategory": "add-guard",
+      "upstreamHunks": 8,
+      "synthesized": false,
+      "source": null,
+      "locationAgreement": null,
+      "categoryAgreement": null,
+      "ourCategory": null
+    },
+    {
+      "id": "GHSA-2364-jh4q-m9vm",
+      "cwe": "CWE-639",
+      "language": "typescript",
+      "file": "packages/server/src/enterprise/controllers/organization.controller.ts",
+      "heldOut": false,
+      "upstreamCategory": "add-guard",
+      "upstreamHunks": 8,
+      "synthesized": false,
+      "source": null,
+      "locationAgreement": null,
+      "categoryAgreement": null,
+      "ourCategory": null
+    },
+    {
+      "id": "GHSA-29g2-3rmr-qm68",
+      "cwe": "CWE-1333",
+      "language": "javascript",
+      "file": "packages/kit/src/utils/http.js",
+      "heldOut": true,
+      "upstreamCategory": "rewrite-pattern",
+      "upstreamHunks": 1,
+      "synthesized": false,
+      "source": null,
+      "locationAgreement": null,
+      "categoryAgreement": null,
+      "ourCategory": null
+    }
+  ]
+}

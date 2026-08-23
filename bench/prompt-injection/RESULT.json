@@ -1,0 +1,263 @@
+{
+  "prd": "F5.1",
+  "generatedAt": "2026-08-23T11:39:18.551Z",
+  "engineVersion": "0.141.0",
+  "corpus": {
+    "dataset": "deepset/prompt-injections",
+    "license": "apache-2.0",
+    "fetchedAt": "2026-08-23"
+  },
+  "scoredSurface": "scanClaudeMdPromptInjection — the payload detector for instruction files. The code-shape LLM modules take source as input and are NOT scored here.",
+  "taxonomyOwner": "this bench, from the corpus text — never from the engine's patterns",
+  "all": {
+    "injections": {
+      "n": 48,
+      "d": 263
+    },
+    "legitimate": {
+      "correctSilence": 399,
+      "d": 399,
+      "falsePositives": []
+    },
+    "byTechnique": {
+      "override": {
+        "n": 18,
+        "d": 43,
+        "pct": 41.86
+      },
+      "exfiltration": {
+        "n": 6,
+        "d": 10,
+        "pct": 60
+      },
+      "other": {
+        "n": 12,
+        "d": 197,
+        "pct": 6.09
+      },
+      "role-play": {
+        "n": 17,
+        "d": 17,
+        "pct": 100
+      },
+      "encoding-obfuscated": {
+        "n": 0,
+        "d": 1,
+        "pct": 0
+      },
+      "indirect-context": {
+        "n": 0,
+        "d": 1,
+        "pct": 0
+      }
+    },
+    "byLanguage": {
+      "unknown": {
+        "injections": {
+          "n": 4,
+          "d": 29,
+          "pct": 13.79
+        },
+        "falsePositives": 0,
+        "legitimate": 109
+      },
+      "en": {
+        "injections": {
+          "n": 42,
+          "d": 147,
+          "pct": 28.57
+        },
+        "falsePositives": 0,
+        "legitimate": 153
+      },
+      "de": {
+        "injections": {
+          "n": 2,
+          "d": 87,
+          "pct": 2.3
+        },
+        "falsePositives": 0,
+        "legitimate": 137
+      }
+    },
+    "recall": {
+      "n": 48,
+      "d": 263,
+      "pct": 18.25
+    },
+    "correctSilence": {
+      "n": 399,
+      "d": 399,
+      "pct": 100
+    },
+    "precision": {
+      "n": 48,
+      "d": 48,
+      "pct": 100
+    }
+  },
+  "development": {
+    "injections": {
+      "n": 41,
+      "d": 203
+    },
+    "legitimate": {
+      "correctSilence": 343,
+      "d": 343,
+      "falsePositives": []
+    },
+    "byTechnique": {
+      "override": {
+        "n": 17,
+        "d": 35,
+        "pct": 48.57
+      },
+      "exfiltration": {
+        "n": 4,
+        "d": 6,
+        "pct": 66.67
+      },
+      "other": {
+        "n": 11,
+        "d": 152,
+        "pct": 7.24
+      },
+      "role-play": {
+        "n": 14,
+        "d": 14,
+        "pct": 100
+      },
+      "encoding-obfuscated": {
+        "n": 0,
+        "d": 1,
+        "pct": 0
+      }
+    },
+    "byLanguage": {
+      "unknown": {
+        "injections": {
+          "n": 4,
+          "d": 24,
+          "pct": 16.67
+        },
+        "falsePositives": 0,
+        "legitimate": 92
+      },
+      "en": {
+        "injections": {
+          "n": 35,
+          "d": 113,
+          "pct": 30.97
+        },
+        "falsePositives": 0,
+        "legitimate": 133
+      },
+      "de": {
+        "injections": {
+          "n": 2,
+          "d": 66,
+          "pct": 3.03
+        },
+        "falsePositives": 0,
+        "legitimate": 118
+      }
+    },
+    "recall": {
+      "n": 41,
+      "d": 203,
+      "pct": 20.2
+    },
+    "correctSilence": {
+      "n": 343,
+      "d": 343,
+      "pct": 100
+    },
+    "precision": {
+      "n": 41,
+      "d": 41,
+      "pct": 100
+    }
+  },
+  "heldOut": {
+    "injections": {
+      "n": 7,
+      "d": 60
+    },
+    "legitimate": {
+      "correctSilence": 56,
+      "d": 56,
+      "falsePositives": []
+    },
+    "byTechnique": {
+      "role-play": {
+        "n": 3,
+        "d": 3,
+        "pct": 100
+      },
+      "other": {
+        "n": 1,
+        "d": 45,
+        "pct": 2.22
+      },
+      "exfiltration": {
+        "n": 2,
+        "d": 4,
+        "pct": 50
+      },
+      "override": {
+        "n": 1,
+        "d": 8,
+        "pct": 12.5
+      },
+      "indirect-context": {
+        "n": 0,
+        "d": 1,
+        "pct": 0
+      }
+    },
+    "byLanguage": {
+      "en": {
+        "injections": {
+          "n": 7,
+          "d": 34,
+          "pct": 20.59
+        },
+        "falsePositives": 0,
+        "legitimate": 20
+      },
+      "unknown": {
+        "injections": {
+          "n": 0,
+          "d": 5,
+          "pct": 0
+        },
+        "falsePositives": 0,
+        "legitimate": 17
+      },
+      "de": {
+        "injections": {
+          "n": 0,
+          "d": 21,
+          "pct": 0
+        },
+        "falsePositives": 0,
+        "legitimate": 19
+      }
+    },
+    "recall": {
+      "n": 7,
+      "d": 60,
+      "pct": 11.67
+    },
+    "correctSilence": {
+      "n": 56,
+      "d": 56,
+      "pct": 100
+    },
+    "precision": {
+      "n": 7,
+      "d": 7,
+      "pct": 100
+    }
+  }
+}

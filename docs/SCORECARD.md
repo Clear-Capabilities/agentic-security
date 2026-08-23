@@ -9,13 +9,13 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.140.0 |
-| Bundle SHA-256 | `58e27f5c8f403e873e1a2c9ccaf63c3681cc68a31450f3c6faaf0142df275197` |
-| Commit | `74a694f13c3a0207369b1deddd5152c4f671539c` |
+| Engine version | 0.141.0 |
+| Bundle SHA-256 | `deeb49d41f22000f35683bc1e9dc2c2368c4b79af6272740c5e96cece4732475` |
+| Commit | `a8755b88cc7601bc5800730af68f33368bd46a23` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
-| Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-22T18:51:44.929Z |
+| Corpus entries | 215 (214 scored) |
+| Generated (UTC) | 2026-08-23T11:44:34.385Z |
 
 ## What these numbers are, and what they are not
 
@@ -54,10 +54,13 @@ cannot defend would cost more credibility than the number is worth.
 
 | Population | Detected / correctly silent |
 | --- | --- |
-| Vulnerable fixtures (`pre/`) — detection | 215/215 (100.0%) |
-| Fixed counterparts (`post/`) — correct silence | 215/215 (100.0%) |
+| Vulnerable fixtures (`pre/`) — detection | 214/214 (100.0%) |
+| Fixed counterparts (`post/`) — correct silence | 214/214 (100.0%) |
 
-All corpus entries scored; no entry was excluded.
+**1 corpus entry could not be scored.** Excluded from every
+denominator above rather than counted as a miss:
+
+- `py-interproc-cmdi-shape` (python): env-error — python-cst-parser-degraded (helper-batch-timeout)
 
 ### By language
 
@@ -72,7 +75,7 @@ All corpus entries scored; no entry was excluded.
 | json | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | kotlin | 21 | 21/21 (100.0%) | 21/21 (100.0%) |
 | php | 23 | 23/23 (100.0%) | 23/23 (100.0%) |
-| python | 32 | 32/32 (100.0%) | 32/32 (100.0%) |
+| python | 31 | 31/31 (100.0%) | 31/31 (100.0%) |
 | ruby | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
 | terraform | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 
@@ -99,7 +102,7 @@ All corpus entries scored; no entry was excluded.
 | CWE-601 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-611 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-643 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-78 | 23 | 23/23 (100.0%) | 23/23 (100.0%) |
+| CWE-78 | 22 | 22/22 (100.0%) | 22/22 (100.0%) |
 | CWE-787 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-79 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
 | CWE-798 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
@@ -114,7 +117,7 @@ All corpus entries scored; no entry was excluded.
 | Tier | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
 | capability | 205 | 205/205 (100.0%) | 205/205 (100.0%) |
-| deep | 7 | 7/7 (100.0%) | 7/7 (100.0%) |
+| deep | 6 | 6/6 (100.0%) | 6/6 (100.0%) |
 | regression | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 
 ## Taint-layer recall by language
@@ -207,7 +210,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 427 |
+| `scanner/src` | 428 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as

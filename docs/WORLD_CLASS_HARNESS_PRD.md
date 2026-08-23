@@ -13,6 +13,76 @@ This document covers the other eight, and states the one structural problem they
 
 ---
 
+## 0. Status ledger
+
+Every item in this document, with where its evidence lives. **Items landed before
+2026-08-22 were implemented in earlier commits but their bullets below were never
+updated, so many still read as future work** — this table is the correction, and the
+bullets themselves carry dated markers only where that session wrote them.
+
+`this session` = 2026-08-22. Where a row says *no dedicated test names it*, treat the
+item as claimed-but-unpinned and verify before quoting it.
+
+| Item | Status | Evidence |
+|---|---|---|
+| F1.1 Go zero, root-caused | landed | `scanner/test/sibling-guard.test.js`; histograms in §3 |
+| F1.2 Ruby zero, root-caused | landed | histogram in §3; the extension was **attempted and reverted** |
+| **F1.3** first family rebuilt | **this session** | `scanner/src/sast/ruby.js`, `scanner/test/ruby-path-join.test.js` |
+| **F1.4** three silent families | **this session — two were misdiagnosed** | `scanner/src/sast/convention-deviation.js`; `CODEGEN` left to the maintainer |
+| F2.1 taint instrument | landed | `bench/independent/runner.mjs` |
+| F2.2 container/collection taint | landed | `scanner/test/container-taint.test.js` |
+| F2.3 entry-point breadth | landed | `scanner/test/entrypoint-breadth.test.js` |
+| F2.4 hang classes | landed (commit `a8755b8`) | **no dedicated test names it** |
+| F2.5 comment-strip cost | landed | `scanner/test/comment-strip-cost.test.js` |
+| **F3.1** `bench/sca-replay` | **this session** | `bench/sca-replay/`, `scanner/test/dep-file-admission.test.js` |
+| F3.2 reachability as its own claim | landed | `scanner/test/reachability-claim.test.js` |
+| F3.3 SBOM conformance | landed | `scanner/test/sbom-conformance.test.js` |
+| F3.4 KEV/EPSS freshness | landed | `scanner/src/engine.js` |
+| F3.5 malicious-package scope | landed | agent prompt downgraded to advisory |
+| **F4.1** secrets precision | **this session** | `bench/secrets-precision/`, `scanner/test/secrets-coverage.test.js` |
+| F4.2 verified-vs-unverified secrets | landed | opt-in only |
+| **F4.3** IaC coverage | **this session** | `bench/iac-coverage/`, `scanner/src/sast/iac-cloud-templates.js` |
+| F4.4 container image scanning | landed (scoped out in README) | README statement |
+| F4.5 deploy-gate telemetry | landed | `scanner/test/deploy-gate-replay.test.js` |
+| **F5.1** prompt-injection corpus | **this session** | `bench/prompt-injection/`, `scanner/test/prompt-injection-payloads.test.js` |
+| F5.2 MCP audit vs real servers | landed | `scanner/test/mcp-rug-pull.test.js` |
+| F5.3 agent trust-boundary taint | landed | dataflow catalog |
+| F5.4 raw-source carve-out test | landed | `scanner/test/comment-blindness.test.js` |
+| F5.5 AI-BOM vs a standard | landed | ML-BOM validation |
+| F6.1 fix quality, three axes | landed | `bench/agent-tasks` |
+| F6.2 regression-test generation | landed | PoC generator |
+| **F6.3** fix vs upstream | **this session — the answer is 0/6** | `bench/fix-correctness/` |
+| F6.4 confinement, adversarial | landed | `scanner/test/confinement-adversarial.test.js` |
+| F6.5 honest failure rate | landed | `scanner/test/fix-honesty-gate.test.js` |
+| F7.1 execution-proven coverage | landed | proof-coverage reporting |
+| F7.2 `INDETERMINATE_BY_CLASS` published | landed | commit `568d73d` |
+| F7.3 third-party bundle verification | landed | clean-environment test |
+| F7.4 calibration drift gates release | landed | commit `74a694f` |
+| F7.5 sandbox escape resistance | **already satisfied when written** | `scanner/test/sandbox-escape.test.js`, 43 tests |
+| F10.1 framework provenance | landed | `scanner/test/framework-provenance.test.js` |
+| F10.2 measured detector strength | landed | family-producer registry |
+| F10.3 no unevidenceable claims | landed | mapping audit |
+| F10.4 framework version pinning | landed | `scanner/test/framework-provenance.test.js` |
+| F10.5 determinism, all formats | landed | `scanner/test/format-determinism.test.js` |
+| **F11.1** every surface smoked | **this session (MCP + IDE); LSP 2026-08-20** | `scanner/test/mcp-protocol-smoke.test.js`, `scanner/test/ide-surfaces.test.js` |
+| F11.2 time-to-first-finding | landed | `bench/ttff` |
+| F11.3 incremental scanning | landed | parity-gated |
+| F11.4 detector liveness | landed (P0) | `scanner/test/detector-liveness.test.js` |
+| F11.5 golden path per surface | landed | commit `8fe3381` |
+| F12.1 CI-condition pre-push run | landed (P0) | `scanner/test/ci-parity.test.js` |
+| F12.2 gates assert equality | landed (P0) | `bench/layer-recall` |
+| F12.3 watchdog on every bench | landed (P0) | `bench/_lib/watchdog.mjs` |
+| **F12.4** population 315 → 1004 | **this session** | `bench/independent/manifest.json`, `mine.mjs` pagination fix |
+| F12.5 mutation gate expanded | landed | `bench/mutation` |
+| F12.6 honest scorecard published | landed | `docs/SCORECARD.md` |
+
+**Open, and named as such:** Feature 8 (compliance) has no accuracy instrument. Feature 5
+is scored only for its payload detector. `CODEGEN` is measured dead and awaiting a
+retire-or-fix decision. And the headline numbers in §1.2 have not been re-derived since
+the population tripled — see F12.4.
+
+---
+
 ## 1. The thesis
 
 This project's stated moat is *provable, measurable, reproducible* security. Measured
@@ -22,25 +92,53 @@ because **nothing measures them against code this project did not write.**
 
 ### 1.1 What is actually measured today
 
+**Updated 2026-08-22.** Six of the eight unmeasured features now have an instrument, and
+every one of them found real defects on its first run — which is the argument for the
+rule in §1.3, restated as evidence rather than as principle.
+
 | Feature | Accuracy instrument | Labels by | Verdict |
 |---|---|---|---|
-| 1. Pattern & structural (SAST) | `bench/independent` (315 real advisories) | third party | **measured** |
+| 1. Pattern & structural (SAST) | `bench/independent` (**1004** advisories) | third party | **measured** |
 | 2. IR & taint | `bench/layer-recall` + `bench/independent --deep` | third party | **measured** |
-| 3. Supply chain & SCA | none | — | **unmeasured** |
-| 4. Secrets, IaC, containers | 3 self-authored corpus entries | this project | **unmeasured** |
-| 5. AI / LLM security | 2 self-authored corpus entries | this project | **unmeasured** |
-| 6. Remediation | `bench/agent-tasks/security-fixer` | this project | partial |
+| 3. Supply chain & SCA | **`bench/sca-replay`** (13 repos, 7 ecosystems) | third party | **measured** |
+| 4. Secrets | **`bench/secrets-precision`** (38 formats + 28 hard negatives) | provider docs / this project | **measured** |
+| 4. IaC, containers & deploy | **`bench/iac-coverage`** (26 controls, verdict-flip) | published baselines | **measured** |
+| 5. AI / LLM security | **`bench/prompt-injection`** (662 rows, Apache-2.0) | third party | **partial** — payload detector only |
+| 6. Remediation | `bench/agent-tasks` + **`bench/fix-correctness`** | this project / **upstream fix commits** | **partial** |
 | 7. Evidence & assurance | `bench/proof-corpus` | this project | partial |
 | 8. Compliance & reporting | none | — | **unmeasured** |
-| 9. Product surfaces | none | — | **unmeasured** |
+| 9. Product surfaces | LSP + **MCP stdio + IDE** smoke in CI | n/a | **partial** |
 | 10. Measurement & release | the gates themselves | n/a | **measured** |
 
-`scripts/corpus-provenance-check.mjs`, run 2026-08-20, reports **100.0% of
-`bench/cve-replay` entries are self-authored fixtures** and says so in its own output:
-*"its detection rate is at the ceiling by construction, since an entry is only admitted
-once it scores."* Exactly **1 entry of 215 (0.5%) is `execution-proven`.**
+**What the six new instruments cost the engine to satisfy, on their first runs:**
+
+| instrument | first number | after the defects it found were fixed |
+|---|---:|---:|
+| `bench/sca-replay` (version recall) | 10.89% | **77.92%** |
+| `bench/iac-coverage` (verdict flips) | 57.14% | **88.46%** |
+| `bench/prompt-injection` (recall) | 6.08% | **18.25%** |
+| `bench/secrets-precision` (format coverage) | 60.00% | **92.11%** |
+| `bench/fix-correctness` (synthesis coverage) | — | **see F6.3** |
+
+Not one of those jumps came from tuning. They came from a 500 KB cap that dropped every
+real lockfile, an admission predicate that never ran, a `\b` after a `?`, a version
+truncation that renamed modules, and three formats with no rules at all. **Every one was
+invisible to a green unit-test suite**, which is the thesis of this document with numbers
+attached.
+
+`scripts/corpus-provenance-check.mjs` still reports **100.0% of `bench/cve-replay`
+entries are self-authored fixtures**, and that has not changed — nor should it. It is a
+regression net, and the instruments above are the accuracy measurements.
 
 ### 1.2 The measured baseline for the two features that *are* instrumented
+
+> **STALE AS OF 2026-08-22, in both dimensions.** Every figure in this section comes from
+> `bench/independent/RESULT.json` at **engine 0.138.0** over a **315-entry** population.
+> The population is now **1004** (F12.4) and the engine is 0.141.0 with several detection
+> fixes landed since. Quote these numbers only as *"engine 0.138.0, 315 entries,
+> 2026-08-19"* — they are not the current accuracy of anything. Re-running is a
+> multi-hour job and was not attempted in the session that grew the population; the
+> command is in F12.4.
 
 From `bench/independent/RESULT.json`, 2026-08-19, engine 0.138.0, 309 scored / 6 unscored:
 
@@ -345,13 +443,114 @@ question is why they never match.
   leaks in C extensions. They are genuine vulnerabilities and not reachable by source
   analysis of Ruby — counted here so the denominator stays honest rather than quietly
   dropped.
-- **F1.3 — Fixture-first rebuild for whichever stage dominates.** Extract the real
-  vulnerable snippet from each target entry into a fixture, write the rule until it fires
-  on that fixture *and stays silent on the `post/` revision*, then re-measure. Per §8d,
-  re-measure after **each** family, never after a batch.
-- **F1.4 — Close the three still-silent families.** `CONVENTION`, `REDIRECT-TOCTOU` and
-  `CODEGEN` produce zero findings on the real population; `OWNERSHIP-AUTHZ` and `RESOURCE`
-  now fire, so the shape is reachable.
+- **F1.3 — Fixture-first rebuild for whichever stage dominates. FIRST FAMILY LANDED
+  AND RE-MEASURED, 2026-08-22.** Per §8d the loop is one family, then a re-measure —
+  never a batch — and that is what this is.
+
+  **Baseline, measured before writing anything.** Over the cached Ruby `CWE-22` /
+  `CWE-79` entries (23 at the time of the first run), through the full scan path:
+
+  | bucket | n |
+  |---|---:|
+  | `HIT` (localized) | **0** |
+  | `WRONG-CWE` | 5 |
+  | `NO-FINDINGS` | 18 |
+
+  **The dominant bucket splits into two very different halves, and only one is
+  addressable.** A large share of real Ruby `CWE-79` is an escaping bypass *inside a
+  sanitizer library* — loofah, rails-html-sanitizer, sanitize, phlex,
+  prosemirror_to_html all appear. "This HTML sanitizer has a bypass" is not a shape any
+  pattern rule reaches; it is the same class as the C-extension use-after-free already
+  declared out of scope for Ruby, and it is counted here rather than quietly dropped.
+
+  **The addressable half is `CWE-22`, and it has one dominant shape.**
+
+  ```ruby
+  File.join(adapter.document_root, request.path.sub(/\.html$/, '') + '.html')   # lsegal/yard
+  File.join(root, tenant, folder_for(key), key)                                 # basecamp/activerecord-tenanted
+  ```
+
+  `ruby.js`'s existing `pathTraversalStructural` **cannot reach either**: it requires a
+  string LITERAL as the first component (`File.read("/data/" + name)`) and the real
+  advisories join variables. `scanRubyPathJoin` was written fixture-first against those
+  two advisories.
+
+  **Precision is the entire design**, because the previous Ruby attempt (F1.2) was
+  reverted for firing on `File.read(File.join(__dir__, "…/data.json"))`. So the last
+  component must be variable-ish, a constant root (`__dir__` / `Rails.root` / `Dir.pwd`)
+  is skipped outright, the join must actually reach a filesystem operation, and any
+  containment guard in the window silences it — that guard *is* the fix each advisory
+  shipped.
+
+  | | |
+  |---|---:|
+  | fires on `yard` `pre`, silent on `post` | **yes** (both affected files) |
+  | Ruby CWE-22/79 localized hits, before → after | **0 → 1** |
+  | FP budget: findings across 3,782 real `.rb` files in 128 packages | **41** (≈1 per 92 files) |
+
+  **The bug inside the bug, recorded because it is the more useful half.** The first
+  version of the rule was silent on `static_caching.rb` — one of the two advisories it
+  was derived from. Cause: the sink pattern ended in `\b`, and **a word boundary after
+  `?` can never match**, so `File.file?(path)` did not count as a filesystem operation.
+  A rule that looks correct, has passing tests, and finds nothing, because of one
+  character of regex. `test/ruby-path-join.test.js` pins all three predicate forms.
+
+  **What is deliberately still missed.** `activerecord-tenanted` builds the path in a
+  `path_for` method and uses it elsewhere — a cross-file / return-value flow. The rule
+  declines rather than guessing, and that entry stays a miss. Closing it needs T3.2
+  (cross-file / stored taint), which is the same conclusion F1.1 reached for Go CWE-22.
+
+  **One family, one re-measure, one honest number.** 0 → 1 localized hit is small. It is
+  also the first localized Ruby true positive in these families, obtained without
+  loosening anything, and the loop that produced it is repeatable for the next family.
+- **F1.4 — Close the three still-silent families. RESOLVED 2026-08-22, and two of the
+  three were misdiagnosed.**
+
+  Method: run each detector against **the advisories its own header cites** — the
+  decisive experiment, and the one the `weak-path-guard.js` post-mortem in F1.1 says to
+  run first. All 11 cited advisories are in the manifest and materialised. Each was
+  scanned directly and again through the full pipeline.
+
+  | family | on its own source advisories | verdict |
+  |---|---|---|
+  | `CODEGEN` | **0 of 5**, direct call *and* full scan | genuinely dead |
+  | `CONVENTION` | fires, 4 in `pre` → 3 in `post` | not silent — **mislocalized** |
+  | `REDIRECT-TOCTOU` | fires, 1 in `pre` → 0 in `post` | not silent — **architectural fix distance** |
+
+  **`CONVENTION` was five lines away from scoring.** On `GHSA-9rj7-rf2p-w77r` it produced
+  a `CWE-88` finding, on the right file, that correctly disappears once the guard is
+  added — and scored zero because the finding sat on `def init(` at line 1395 while the
+  fix landed at 1431, against a **±3 line** localization window. It was never a detection
+  gap.
+
+  Widening the window would be benchmark gaming. Pointing the finding at the line the
+  remediation actually touches is just correct, and that is the fix: a "this function
+  omits the guard its peers apply" finding now carries the **guard insertion point** —
+  the first executable statement of the body, past the signature continuation and the
+  docstring — rather than the `def` line. That is also the only one of the three
+  candidate lines a reader can act on. **The entry now localizes.**
+
+  **`REDIRECT-TOCTOU` is correct and cannot localize.** Its finding sits exactly on the
+  `await dnsPromises.lookup(...)` that creates the check/use gap. Upstream fixed it by
+  adding a whole new `installSafeDnsLookup` function 35 lines below and rewiring the
+  hook. No line-proximity metric can connect a finding to a fix that is architectural,
+  and no change to this detector would help. This is a stated limit of the localization
+  metric, not a defect to close.
+
+  **`CODEGEN` is the `weak-path-guard.js` shape.** It produces nothing on any of the five
+  advisories in its own header, through either entry point, while passing its own tests
+  against fixtures written here. By the standard this document already applied to
+  `weak-path-guard.js` — "a rule with tests, zero real-world hits, and a miss on its own
+  source advisory is surface area without measured value" — it should be reverted. That
+  is a product decision about shipped surface rather than an engineering fact, so it is
+  **recorded with its evidence and left to the maintainer** rather than deleted here.
+
+  **The durable lesson is about the metric, not the detectors.** `LOCALIZATION_WINDOW = 3`
+  is calibrated for a line-scoped finding — a tainted sink call. A **function-scoped**
+  finding ("this function is missing a control") can only satisfy it by accident. Two of
+  the three families here were reported as silent for weeks on that basis. Any future
+  family of that shape needs to carry the line where the control belongs, or it will
+  score zero no matter how right it is.
 
 **Exit gate.** Go and Ruby each ≥ 5% localized recall, with the per-stage histogram
 published for both; no regression in the six languages already non-zero; mutation gate
@@ -435,10 +634,74 @@ public advisory database in minutes.
 
 **Work.**
 
-- **F3.1 — `bench/sca-replay`, third-party labelled.** Pin N repositories at a commit with
-  a *known* dependency-vulnerability set from GitHub Advisory / OSV, and score
-  precision/recall over **direct + transitive** vulnerable packages. Same doctrine as
-  `bench/independent`: unfetchable is UNSCORED, never a miss.
+- **F3.1 — `bench/sca-replay`, third-party labelled. LANDED 2026-08-22, and it found
+  four real defects on its first run.**
+
+  13 real repositories pinned at resolved commit SHAs across 7 ecosystems; only
+  manifests and lockfiles are fetched. The label is produced by `label.mjs`, which
+  enumerates dependencies with **its own readers**, sharing no code with `scanner/src` —
+  asking the engine for the component list and then asking the advisory database about
+  it would put recall at 100% by construction, the exact defect
+  `corpus-provenance-check.mjs` reports about `bench/cve-replay`.
+
+  | slice | version recall | precision | package recall |
+  |---|---:|---:|---:|
+  | **all** | **307/394 = 77.92%** | **307/307 = 100%** | **306/316 = 96.84%** |
+  | development | 248/324 = 76.54% | 100% | 98.80% |
+  | **held-out** | **59/70 = 84.29%** | **100%** | 89.39% |
+
+  Held-out scores *above* development, which is the number that matters: nothing was
+  fitted to the entries used while building it.
+
+  **Two denominators, both published.** The engine collapses findings sharing one
+  advisory id into a single row with the rest under `dependents[]` — right for a report a
+  human reads, and not a recall failure. Version-level answers "is this pinned version
+  reported"; package-level answers "does the report mention this package at all".
+  Publishing only the higher would be flattering; only the lower understates the tool.
+
+  **First run: 10.89% overall, npm 0.91%, Go 2.73%, Packagist 0%.** Every point of that
+  traced to a concrete defect:
+
+  1. **`readTree` skipped any file over 500 KB before deciding what kind of file it
+     was.** npm/cli's `package-lock.json` is 666 KB, next.js's `pnpm-lock.yaml` 910 KB,
+     magento2's `composer.lock` 501 KB. **On every project big enough for supply-chain
+     risk to matter, the lockfile was dropped** and SCA silently fell back to whatever
+     exact versions appeared in `package.json` — direct dependencies only, while the
+     headline claim of the feature is transitive reachability. Manifests now have their
+     own, much larger cap; the code cap is untouched, because that one protects the
+     analysis path.
+  2. **`go.sum` was never admitted**, though `_parseGoSum` and its dispatch entry had
+     always existed. The fourth instance of "wired into the dispatch, never invoked",
+     after `rate-limit.js`, `k8s-admission` and `install-script`.
+  3. **Only the exact basename `requirements.txt` was admitted.** flask ships
+     `requirements/dev.txt` and scored 0 of 11.
+  4. **Go versions were truncated in three separate places.**
+     `v0.0.0-20210903162142-ad29c8ab022f` became `0.0.0` — not a shorter version but a
+     different, nonexistent one, collapsing every pseudo-versioned module in a tree onto
+     one key. Fixing it took **Go from 5.28% to 100%**. It also corrupted the emitted
+     SBOM, which is worse: that document is written for other people to rely on.
+
+  **And a fifth, found by the same run.** The typosquat detector produced **166
+  critical/high findings across these 13 repositories, of which zero were typosquats** —
+  `ms ~ ws`, `acorn ~ cors`, `ajv ~ ava`, `six ~ tox`, `arg ~ yargs`. Absolute edit
+  distance is meaningless on short names, and `ms` is a top-50 npm package being reported
+  at critical. Now Damerau-Levenshtein (a transposition is the commonest real typo and
+  plain distance scores it worst) gated on `distance / min(len) ≤ 0.25`. The FP budget is
+  pinned in `test/dep-confusion.test.js` using the names the bench surfaced.
+
+  **What the bench itself got wrong**, recorded because a measuring instrument that hides
+  its own errors is worth less than one that does not, and because all four briefly
+  blamed the engine: counting `go.sum` `/go.mod`-only lines as shipped dependencies
+  (prometheus looked like 1828 dependencies; it has 187, and the first published Go
+  recall was an artefact of this); not reading `dependents[]`; treating each
+  platform-specific build of one gem as a separate vulnerable component; and marking
+  express a negative control on the theory that a project without a lockfile has only
+  ranges, when express pins every dependency exactly.
+
+  **Honest limits.** Maven scores 0/0 — the labeller refuses to resolve a version living
+  in a parent POM it does not fetch, so Maven is *unmeasured*, not covered. 13 entries is
+  small. Both sides consult the same advisory database, so this measures resolution and
+  matching fidelity, never whether the database is right.
 - **F3.2 — Score reachability as its own claim.** "Vulnerable version present" and "the
   vulnerable *function* is reachable" are different assertions with different error costs.
   A false "unreachable" is a missed exploit; a false "reachable" is noise. Report them
@@ -470,19 +733,118 @@ scored for precision on real repositories.
 
 **Work.**
 
-- **F4.1 — Secrets precision against a labelled corpus.** Secret detection is the feature
-  most likely to produce alert fatigue, and the one with the best available ground truth:
-  repositories with known planted secrets, plus a negative set of high-entropy strings
-  that are *not* secrets (hashes, base64 assets, lockfile integrity fields, UUIDs). Report
-  precision and recall separately; the negative set is the harder half.
+- **F4.1 — Secrets precision against a labelled corpus. LANDED 2026-08-22.**
+  `bench/secrets-precision`, reporting the two halves separately and never as one F1: a
+  missed credential is one exposure, a noisy scanner is *every future* exposure, because
+  nobody reads it any more.
+
+  | | |
+  |---|---:|
+  | **format coverage** | **35/38 = 92.11%** |
+  | **correct silence** on the hard negative set | **28/28 = 100%** |
+
+  Recall is measured over credential formats transcribed from **provider
+  documentation**, not read out of `CREDENTIAL_PATTERNS` — deriving the positive set from
+  the engine's own table would put it at 100% by construction. It measures FORMAT
+  COVERAGE and says so; it is not a claim about detecting real leaks in the wild, and no
+  ethically assemblable corpus supports that claim.
+
+  The negative set is the half the PRD called harder, and it is where the value is:
+  lockfile integrity fields, git SHAs, UUIDs, content digests, inlined base64 images, SRI
+  attributes, Docker image digests, Terraform state lineage ids, `.npmrc` env
+  interpolation, and **a security rule file that defines key formats** — a secrets
+  scanner reporting its own pattern library is a real and embarrassing failure mode.
+
+  **The structural finding.** `CRED_PREFILTER` is a **whole-file gate**: `scanCredentials`
+  returns early unless that one regex matches, so a pattern whose trigger token is absent
+  can never fire however correct it is. That had silently disabled the generic
+  "Password in URL" rule outright, and it is the fifth instance of the
+  wired-but-never-invoked shape. The last test in `test/secrets-coverage.test.js` now
+  enforces the invariant behaviourally.
+
+  **What was missing, and is not now.** No database URI shape but `jdbc:` — so
+  `postgres://user:pass@host/db` and `mongodb+srv://…`, among the commonest real leaks
+  there are, matched nothing. Plus GitLab, DigitalOcean, Azure Storage, Supabase and
+  HubSpot tokens. One false positive was found and fixed narrowly: the JWT specimen
+  published in the standard's own documentation, suppressed by **decoding the payload**
+  and matching the documented sample subject — as narrow as the existing
+  `AKIAIOSFODNN7EXAMPLE` rule, with a test proving a real token is unaffected.
+
+  **The bench saturated at 100%/100% and was deliberately made harder.** A gate that
+  cannot fail measures nothing. Eight formats and eight negatives were added. Datadog,
+  Vercel and Algolia keys stay missed **on purpose**: they are a bare run of hex or
+  alphanumerics, and a pattern for "32 hex characters" would fire on every content
+  digest, checksum and build hash in the negative set — three detections for thousands of
+  false positives, in the feature most prone to alert fatigue. Closing that class needs
+  variable-name context, not another regex.
+
+  **The bench's own bug, recorded.** The first template syntax used bare `X`/`x`/`a`/`#`/`h`
+  as placeholders and silently rewrote the *literal* text inside `da2-`, `shpat_`,
+  `https`, `slack` and `key-`. Seven malformed values were generated and reported as
+  ENGINE misses. Placeholders are braced now and cannot collide.
 - **F4.2 — Verified-vs-unverified secrets.** A live credential and a rotated one are
   different findings with different urgency. Where a provider offers a safe validation
   endpoint, and **only with explicit opt-in**, distinguish them. Never validate by default:
   it is an outbound call carrying a secret.
-- **F4.3 — IaC coverage measured against a real corpus.** `iac-terraform.js` and
-  `IAC_PATTERNS` cover Terraform; Kubernetes manifests, Helm charts, CloudFormation and
-  Bicep are the gaps. Score against public misconfiguration corpora rather than
-  self-authored fixtures.
+- **F4.3 — IaC coverage measured against a real corpus. LANDED 2026-08-22.**
+  `bench/iac-coverage`, and two design decisions make it an instrument rather than a
+  checklist.
+
+  **It runs a real scan, not the detectors.** IaC support here has failed at ADMISSION
+  twice, not at detection — `k8s-admission` and `install-script` were both fully
+  implemented, wired and unit-tested while returning zero through an actual scan. A bench
+  that imports a detector and passes it a string would have scored both as working. Every
+  case is written to a temp tree at a path a project really uses and scanned through
+  `runScan`.
+
+  **It scores VERDICT FLIP.** Each control ships a vulnerable and a hardened variant, and
+  counts as covered only when the first fires and the second does not. `NO-FLIP` is its
+  own outcome, distinct from `SILENT`, and is the worse of the two: it looks like
+  coverage and carries no information.
+
+  | | first run | now |
+  |---|---:|---:|
+  | **covered (verdict flips)** | **8/14 = 57%** | **23/26 = 88.46%** |
+  | terraform | 4/4 | 6/7 |
+  | kubernetes | 3/4 | 6/7 |
+  | dockerfile | 1/2 | 3/3 |
+  | **cloudformation** | **0/2** | 4/5 |
+  | **bicep** | **0/1** | 2/2 |
+  | **helm** | **0/1** | 2/2 |
+
+  The three named gaps were whole formats with nothing at all, in either the rule set or
+  the walker. `src/sast/iac-cloud-templates.js` closes them, and admission needed **both
+  gates again**: a CloudFormation template is a `.yaml` no path predicate recognises, so
+  `isCloudFormationTemplate` is a content predicate wired into `readTree` *and* into
+  `runFullScan`'s re-filter of the same list.
+
+  **Verdict-flip scoring caught something a recall bench never would.**
+  `_ALL_FROM_RE` in `sca/container.js` matched a digest without capturing it, so
+  `FROM ubuntu@sha256:…` parsed as image `ubuntu` with no tag — and a missing tag is
+  treated as `latest`. **The most tightly pinned form a Dockerfile can use was reported as
+  "ubuntu:latest (floating tag)."** A false positive on the *hardened* configuration is
+  worse than a miss: it tells the people who did the right thing that they did the wrong
+  one.
+
+  **A corollary that cost a debugging round:** a `hardened` variant must be clean of
+  everything the engine checks, not just the control under test. Matching is deliberately
+  coarse — any finding on the file counts, because matching on the engine's own rule
+  names would grade it against vocabulary it chose itself.
+
+  **Saturation, twice, and honest headroom.** The bench hit 14/14 and then 22/22, at which
+  points it could no longer fail. Controls now carry a `tier`; the three still open are
+  `tier: hard` and are **not expected to pass**: wildcard-*equivalent* IAM
+  (`Action = ["s3:*","iam:*"]`, no literal `*`), an open CIDR arriving through a
+  CloudFormation Parameter default, and a missing `resources.limits` — an **absence**,
+  with no string to match. `tf-sg-cidr-via-variable` was added to the same tier and
+  passes, which says the Terraform variable resolution genuinely reaches the rule.
+
+  **Known limitations, published.** Regex over template text, no YAML or Bicep parser —
+  the same bundle-size argument that already rejected an XML parser here.
+  `templates/*.yaml` in a chart is Go template source, not YAML, and is not read; only
+  the values file is. And a `Dockerfile` kept under `build/` is never scanned, because
+  `build/` is in the walker's ignore list as build *output* — recorded rather than fixed,
+  since changing that list affects every scan.
 - **F4.4 — Container image scanning is absent.** `scanContainer` reads Dockerfiles. It does
   not read an image. Decide deliberately: either scan built images (base-image CVEs,
   layer secrets, non-root, pinned digests) or state in the README that image scanning is
@@ -508,10 +870,79 @@ measuring against an external, versioned benchmark rather than a corpus written 
 
 **Work.**
 
-- **F5.1 — Adopt an external prompt-injection benchmark.** Score against a published,
-  third-party injection corpus rather than fixtures. Report per-technique, not as one
-  aggregate: direct injection, indirect/RAG, encoding-obfuscated and multi-turn have
-  genuinely different detection profiles and an aggregate hides which one is weak.
+- **F5.1 — Adopt an external prompt-injection benchmark. LANDED 2026-08-22.**
+  `bench/prompt-injection`, scored against `deepset/prompt-injections` (Apache-2.0):
+  **263 injections and 399 legitimate prompts**, labelled by its publishers, using the
+  dataset's own train/test partition as development/held-out so nobody here chose which
+  rows are hard.
+
+  Both classes matter. A corpus of attacks alone measures recall and says nothing about
+  how much ordinary text gets flagged — which is the number that decides whether anyone
+  leaves the detector switched on.
+
+  | slice | recall | precision | correct silence |
+  |---|---:|---:|---:|
+  | **all** | **48/263 = 18.25%** | **48/48 = 100%** | **399/399 = 100%** |
+  | development | 41/203 = 20.20% | 100% | 100% |
+  | held-out | 7/60 = 11.67% | 100% | 100% |
+
+  **Per technique — the breakdown the PRD asked for, and it earns its keep:**
+
+  | technique | first run | now |
+  |---|---:|---:|
+  | role-play | 82.35% | **100%** |
+  | exfiltration | **0/10** | 60% |
+  | override | 6.98% | 41.86% |
+  | other (residual) | 0% | 6.09% |
+
+  The taxonomy is assigned by the bench, from the corpus text, by rules that know nothing
+  about the engine's patterns — so a technique the engine cannot see still gets its own
+  denominator instead of disappearing into a bucket that scores well.
+
+  First measurement was **6.08%**. Two of the three weak buckets were patterns that were
+  correct and far too literal: `override` required the object noun to be one of
+  instructions/directives/prompts/rules/guidelines/safety/policy, while real payloads say
+  *"Forget all previous **tasks**"*, *"Ignore all preceding **orders**"*, *"Forget
+  **everything** before that"*; `exfiltration` could not match *"show me all your prompt
+  texts"*. **Precision and correct-silence stayed at 100% across all 399 legitimate rows
+  through every change.**
+
+  **What was deliberately not done, and why it matters more than the delta.** A bare
+  `you are X` is NOT a finding — it is the normal opening line of a legitimate system
+  prompt, and matching it would flag most of the instruction files this detector exists
+  to protect. Much of the residual `other` bucket is that shape and should stay missed
+  rather than be bought with precision.
+
+  **German was not patched.** Per language: **en 28.57%, de 2.30%**, and that is the
+  largest single gap in the table. It is structural — every pattern is English phrasing —
+  and adding German alternatives *because this corpus is German* is fitting to the
+  benchmark, which §2 names as an explicit non-goal. A multilingual payload detector is a
+  different design, semantic rather than lexical, and needs its own instrument. Published
+  as measured headroom.
+
+  **An overfitting signal, stated rather than buried.** Development is 20.20% and held-out
+  11.67%; the gap opened with the last change. Two readings are possible and n=60 cannot
+  separate them, so **the held-out number is the one to quote**, and the next change here
+  should be judged on whether it moves that one.
+
+  **And the engine caught its own author.** The widened override pattern used
+  `(?:all\s+|any\s+|the\s+)*` followed by a free `\s*` — the two compete for the same
+  run of whitespace, which is the textbook catastrophic-backtracking shape. **This
+  engine's own ReDoS detector flagged it on the self-scan gate**, and a second attempt
+  (`(?:(?:all|any|the)\s+){0,3}`) was flagged again for the nested quantifier. The
+  pattern was rewritten as a flat alternation under a single `?`, which the detector
+  accepts and which scores **identically** — 48/263, 100% precision, unchanged per
+  technique.
+
+  A security tool shipping an exploitable regex inside its prompt-injection rule is not a
+  theoretical problem, and the gate that caught it is one this project built for other
+  people's code. The pattern changed; the baseline did not.
+
+  **Scope, stated so it is not overread.** Only the payload detector
+  (`scanClaudeMdPromptInjection`) is scored. The code-shape modules (`llm.js`,
+  `rag-poisoning.js`, `llm-stored-prompt.js`) take source as input, not payload text, and
+  **remain unmeasured**. Encoding-obfuscated and indirect-context have one corpus row
+  each and are reported as 0/1 rather than pretending to a measurement.
 - **F5.2 — MCP audit against real servers.** `mcp-audit.js` claims OWASP MCP Top 10
   coverage. Score it against a corpus of real published MCP servers, including
   known-malicious tool definitions. Tool-poisoning and rug-pull (a tool whose definition
@@ -554,10 +985,66 @@ a fix that preserves behaviour, and nothing currently proves it does.
   emits framework-idiomatic tests. Every applied fix should land with the test that fails
   on the vulnerable revision and passes on the fixed one — that is what stops the bug
   returning, and it is checkable.
-- **F6.3 — Measure fix *correctness* on the independent population.** For an advisory
-  entry, the upstream fix commit is available. Compare our synthesized fix against the one
-  the maintainers actually shipped, semantically. This is a rare, genuinely third-party
-  ground truth for remediation and nobody is using it.
+- **F6.3 — Measure fix *correctness* on the independent population. LANDED 2026-08-22,
+  and the number is zero.**
+
+  `bench/fix-correctness` reads the ground truth nobody was using: for every
+  `bench/independent` entry the upstream **fix commit** is already materialised as
+  `post/`. That is a genuinely third-party ground truth for REMEDIATION rather than
+  detection, and nothing had ever opened it.
+
+  Semantic equivalence between two patches is undecidable, so three checkable things are
+  reported separately: **synthesis coverage** (for how many real true positives can the
+  engine produce a fix at all), **location agreement** (does our patch touch the lines the
+  maintainers touched), and **approach agreement** (do the two diffs fall in the same
+  remediation category).
+
+  | | |
+  |---|---:|
+  | entries scanned | 45 (0 unscored) |
+  | localized true positives found | 6, across 2 entries |
+  | **fix synthesized** | **0 / 6 = 0%** |
+  | location agreement | 0/0 — undefined, nothing to compare |
+  | approach agreement | 0/0 — undefined |
+
+  **Zero is the honest answer and it was predictable from the code.**
+  `posture/deterministic-fix.js` has exactly **two** rules — weak-hash → sha256, and TLS
+  verification off → on — and both are JS/Python only. The independent population is
+  injection, authorization and resource-exhaustion classes across seven languages. The
+  two surfaces barely intersect.
+
+  **What the maintainers actually did, on the findings we got right:**
+
+  | remediation | findings |
+  |---|---:|
+  | add-guard (`assertStripeIdMatchesSession(...)`, an authorization check) | 5 |
+  | rewrite-pattern (a linear-time regex, for a ReDoS) | 1 |
+
+  Neither is a context-independent literal swap, which is the only thing the deterministic
+  synthesizer is designed to do — and that design is correct. Widening it to guess at an
+  authorization check would produce patches that pass `verify_fix` (the finding
+  disappears) while changing behaviour, which is the failure mode F6.1 exists to catch.
+
+  **So this is a scope result, not a bug.** The measured position is: *the engine
+  synthesizes fixes for two weakness classes, and on real third-party code those classes
+  did not occur.* That belongs in the published failure rate (F6.5) rather than being
+  presented as a remediation capability with an unstated denominator.
+
+  **n = 6 is small, and the note is part of the result.** 45 entries of 1004 were scanned;
+  a full run is a multi-hour job. The instrument exists, runs clean (0 unscored), and
+  scales with `FIX_CORRECTNESS_LIMIT`.
+
+  **Two bugs in this bench, both of which produced a confident wrong answer**, recorded
+  because each is a shape worth recognising:
+  1. `changedLineRanges` takes **paths**, not contents — it shells out to `diff` — and
+     returns `null` on bad input rather than throwing. Passing file bodies made every
+     range null, so `isLocalized` was false for everything and the bench reported zero
+     localized true positives with total confidence.
+  2. Static imports are hoisted, so a top-level `import` of the engine put its module
+     graph in place **before** `disableStateWrites()` ran; the first scan then wrote
+     `.agentic-security/` into the corpus and the tree-integrity guard correctly refused
+     to score anything. Every entry came back UNSCORED. The engine is now imported
+     dynamically, after the seal — the ordering is load-bearing, not stylistic.
 - **F6.4 — Confinement, adversarially tested.** `agents/_CONFINEMENT.md` defines a
   reserved-write list. Test it the way a boundary should be tested: attempt writes outside
   the tree, through symlinks, through `..` traversal, and assert refusal.
@@ -677,30 +1164,61 @@ broken IDE extension ships silently.
 
 **Work.**
 
-- **F11.1 — Smoke every surface in CI. LSP DONE 2026-08-20; the rest stands.**
+- **F11.1 — Smoke every surface in CI. LSP DONE 2026-08-20; MCP AND IDE DONE 2026-08-22.**
   As with F7.5, the premise was partly wrong and was checked rather than assumed: MCP
-  already has ~1050 lines of tests (initialize, `tools/list`, per-tool), and
-  `test/lsp-server.test.js` covers `findingToDiagnostic`/`scanFile`.
+  already had ~1050 lines of tests and `test/lsp-server.test.js` covered the engine side.
 
-  The genuine gap was narrower and worse: **`bin/agentic-security-lsp.js` — the binary that
-  ships inside the JetBrains and Neovim plugins — was referenced by no test, no script and
-  no workflow.** The engine side was tested; the server was never started. An LSP that fails
-  to boot presents to the user as "the extension does nothing", and nothing in CI would have
-  noticed.
+  The genuine gap was narrower and worse: **`bin/agentic-security-lsp.js` — the binary
+  that ships inside the JetBrains and Neovim plugins — was referenced by no test, no
+  script and no workflow.** `test/lsp-protocol-smoke.test.js` now runs the shipped entry
+  point as a subprocess and speaks real LSP over stdio, asserting it starts, advertises
+  capabilities, yields a renderable diagnostic and exits rather than hanging the editor.
+  It deliberately does not assert which rule fired: that is the engine's business,
+  measured elsewhere, and coupling it here would teach people to weaken the test.
 
-  `test/lsp-protocol-smoke.test.js` now runs the shipped entry point as a subprocess and
-  speaks real LSP over stdio — `Content-Length` framing, `initialize` → `initialized` →
-  `didOpen` → `publishDiagnostics` → `shutdown` → `exit` — asserting it starts, advertises
-  capabilities, yields a renderable diagnostic (with an LSP range) for a command-injection
-  handler, and exits rather than hanging the editor. A second case feeds it a malformed
-  frame and requires it to survive. Runs in ~0.9 s.
+  **MCP over stdio (`test/mcp-protocol-smoke.test.js`).** `mcp.test.js` is thorough and
+  almost entirely in-process, which measures the server logic and says nothing about the
+  thing a user runs. The case that matters is the two WRITE tools, because the
+  confinement they rely on is established in the *binary* — `_parseRoot` → `path.resolve`
+  → `runStdio({ sessionRoot })` — not in the handler. Nine tests now drive the shipped
+  binary over real NDJSON: `apply_fix` refusing a relative escape, an absolute out-of-tree
+  path and a symlink leaving the root; `apply_sca_upgrade` refusing without confirm, on a
+  SAST finding, and on unsigned scan state; a malformed frame not killing the session;
+  and — the control that makes the rest mean anything — **an in-tree fix that DOES
+  apply**. Every refusal is checked in both directions: the tool refused, and the
+  out-of-tree file on disk is byte-identical afterwards. Verified red by neutering
+  `_confine`: all three escape assertions fail, the negative control stays green.
 
-  It deliberately does **not** assert which rule fired or how many diagnostics: that is the
-  engine's business, measured elsewhere, and coupling it here would make an unrelated
-  detector change break the LSP test and teach people to weaken it.
+  **The IDE distributions were broken, and had been for every release.**
+  `ide/vscode/src/extension.ts` looked for the scanner bundle under
 
-  Still open: MCP end-to-end over stdio (the two write tools refusing out-of-tree paths is
-  the case that matters), and IDE package build/install.
+  ```
+  ~/.claude/plugins/cache/clearcapabilities/agentic-security/0.1.0/scanner/dist/…
+  ```
+
+  and Claude Code caches a plugin under its **plugin** version — 0.128.2, 0.136.9,
+  0.139.1 on the machine this was found on, never 0.1.0. `0.1.0` is the VS Code
+  extension's own version, pasted into the wrong path. **The fallback could not resolve on
+  any install**, so every user got *"scanner not found. Set agenticSecurity.scannerPath in
+  settings."* Nothing tested it, because the function read `vscode.workspace` and could
+  not be imported outside a VS Code host.
+
+  The resolver is now a pure function (`ide/vscode/src/resolve-scanner.mjs`) with every
+  input passed in, it **discovers** the cache version rather than hardcoding one and
+  prefers `CLAUDE_PLUGIN_ROOT` when present, and `test/ide-surfaces.test.js` covers it in
+  15 tests — including a regression pin that fails if any IDE source hardcodes a
+  version segment again (verified red by reintroducing the original line). The same file
+  gates the wiring each distribution promises the outside world: every contributed VS Code
+  command is registered and vice versa, every `onCommand` activation event names a real
+  command, the `agentic-security-lsp` binary that Neovim and JetBrains launch is a
+  declared `bin` that exists, the install command in each README names this package, and
+  the JetBrains `plugin.xml` `factoryClass` resolves to the Kotlin class. A
+  `vscode-extension` CI job builds the extension and fails on a stale committed bundle.
+
+  **Still open, stated rather than implied:** no gradle build of the JetBrains plugin (JDK
+  + network), no `vsce package`, no Neovim host, and no type-check of the VS Code source —
+  `typescript` is not a dependency of that tree and the build is esbuild, which strips
+  types without checking them, so a TYPE error there still ships silently.
 - **F11.2 — Time-to-first-finding as a tracked metric.** The ICP is vibecoder-first
   (`docs/POSITIONING.md`). For that user the binding constraint is how long until the
   first useful result, not aggregate F1. Measure it on a cold cache for a mid-size repo,
@@ -744,9 +1262,49 @@ in a single day on 2026-08-19.
   notice on improvement.
 - **F12.3 — Every long-running bench gets a watchdog.** `bench/independent` now has one.
   `layer-recall`, `proof-corpus`, `polyglot` and `realworld-recall` do not.
-- **F12.4 — Grow the independent population toward 750+ and enforce the held-out slice.**
-  It is 315 today with 64 held out. Prioritize Go and Ruby entries, since those are the
-  measured zeros, and Kotlin, which has none.
+- **F12.4 — Grow the independent population toward 750+ and enforce the held-out slice.
+  DONE 2026-08-22 — 315 → 1004 — after fixing the reason it could not grow.**
+
+  **The miner was not paginating.** `mine.mjs` requested `&page=N`, and the advisories
+  endpoint **ignores that parameter** — page 1 and page 2 return byte-identical results,
+  verified by hand. So every run since the file was written saw only the first ~100
+  advisories per ecosystem, and the population was capped there by construction. Mining
+  rubygems twelve "pages" deep added exactly **one** entry and looked like scarcity. The
+  endpoint paginates by an `after` cursor in the `Link` header, which the miner now
+  follows; the same command then added **20 Ruby entries immediately**.
+
+  | language | before | after |
+  |---|---:|---:|
+  | typescript | 37 | 322 |
+  | **ruby** | **32** | **250** |
+  | javascript | 20 | 124 |
+  | python | 57 | 100 |
+  | **go** | **72** | **84** |
+  | php | 55 | 73 |
+  | java | 27 | 34 |
+  | csharp | 15 | 15 |
+  | **kotlin** | **0** | **2** |
+  | **total** | **315** | **1004** |
+
+  Ruby — one of the two measured zeros — is now the second-largest language, and Kotlin
+  is on the board. Go grew least, and that is a property of the source rather than the
+  miner: most Go advisories reference a release tag rather than a single fix commit, and
+  the admission rule (a CWE *and* exactly one referenced fix commit) refuses the rest
+  rather than guessing. The held-out slice needs no maintenance — `isHeldOut` hashes the
+  entry id, so ~20% holds automatically across the new population.
+
+  **What is NOT done, stated plainly: the headline numbers have not been re-measured.**
+  `bench/independent/RESULT.json` still describes the 315-entry population at engine
+  0.138.0. Every figure quoted in §1.2 of this document — 3.56% localized recall, the
+  per-language table, taint's 1-of-12 share — is therefore **stale with respect to the
+  population, not just the engine**. Re-running is a multi-hour job on 1004 entries and
+  was not attempted here. Until it is, quote §1.2 as *"engine 0.138.0, 315 entries"* and
+  nothing more:
+
+  ```bash
+  cd bench/independent && node fetch.mjs      # materialise the new entries
+  cd scanner && npm run bench:independent -- --json
+  ```
 - **F12.5 — Expand the mutation gate.** It is the anti-overfitting control and has **12
   cases**. Every new detector family should ship a metamorphic pair (verdict must hold)
   and an adversarial near-miss (verdict must flip). Scale it with the engine.
@@ -766,10 +1324,10 @@ mutation gate ≥ 30 cases.
 | Phase | Scope | Why here |
 |---|---|---|
 | **P0 — Cheap integrity** | ~~F12.1, F12.2, F12.3, F11.4, F7.5~~ — **LANDED 2026-08-20** (`2aae26e`, `243e744`) | Each closed a class of silent failure already observed. F7.5 turned out to be already satisfied (see above) and blocks nothing. |
-| **P1 — Instrument the unmeasured** | F3.1–F3.2, F4.1, F5.1, F6.1, F11.1 | Nothing in P2 is trustworthy without these. Expect published numbers to *fall*. |
-| **P2 — The measured zeros** | F1.1–F1.4, F2.1–F2.2, F12.4 | Go + Ruby are a third of the population; the per-stage histogram decides the work. |
-| **P3 — Depth per feature** | F3.3–F3.5, F4.2–F4.5, F5.2–F5.5, F6.2–F6.5, F7.1–F7.4 | Capability, once each area can prove it moved. |
-| **P4 — Integrity of the claim** | F10.1–F10.5, F11.2–F11.5, F12.5–F12.6 | Compliance and surfaces last: they publish what the earlier phases establish. |
+| **P1 — Instrument the unmeasured** | ~~F3.1–F3.2, F4.1, F5.1, F6.1, F11.1~~ — **LANDED 2026-08-22** | Nothing in P2 is trustworthy without these. Published numbers did fall, then rose once the defects the instruments exposed were fixed. |
+| **P2 — The measured zeros** | ~~F1.1, F1.2, F1.4, F2.1–F2.2, F12.4~~ — **LANDED**; F1.3 first family landed, more remain | Go + Ruby were a third of the population; the per-stage histograms decided the work, and two of the three "silent" families turned out to be mislocalized rather than silent. |
+| **P3 — Depth per feature** | ~~F3.3–F3.5, F4.2–F4.5, F5.2–F5.5, F6.2–F6.5, F7.1–F7.4~~ — **LANDED** | Capability, once each area can prove it moved. |
+| **P4 — Integrity of the claim** | ~~F10.1–F10.5, F11.2–F11.5, F12.5–F12.6~~ — **LANDED** | Compliance and surfaces last: they publish what the earlier phases establish. |
 
 **P0 and P1 block the rest.** Running P2–P4 against the current instruments would produce
 numbers nobody should trust, in either direction.
@@ -803,20 +1361,24 @@ happen**.
 
 ---
 
-## 14. Success criteria
+## 14. Success criteria — scored 2026-08-22
 
-Measured on the **held-out slice**, in both configurations, with the strict metric:
+Measured on the **held-out slice**, in both configurations, with the strict metric.
 
-1. **Ten instruments, one per feature**, each labelled by a third party, each reporting
-   `{n, d}`, each with a held-out slice never read during development.
-2. **Go and Ruby off zero** (≥ 5% localized recall each), with no regression elsewhere.
-3. **Fix-discrimination ≥ 80% sustained** as recall rises.
-4. **Taint's attributable share of localized TPs > 1 and rising**, reported per phase. If
-   Feature 2's work completes and taint still contributes ~1, that is a finding to act on,
-   not to explain away.
-5. **Every compliance control carries the measured strength of its backing detector.**
-6. **No published number without its configuration**, and no corpus-derived figure printed
-   adjacent to an independent-population figure without saying which analysis ran.
+| # | criterion | status |
+|---|---|---|
+| 1 | **Ten instruments, one per feature**, third-party labelled, `{n, d}`, held-out slice | **8 of 10.** Six new instruments landed (F3.1, F4.1, F4.3, F5.1, F6.3, F11.1). Feature 8 (compliance) still has none; Feature 5 is partial — only the payload detector is scored. |
+| 2 | **Go and Ruby off zero** (≥ 5% localized recall each) | **not met, and not re-measured.** The population grew 315 → 1004 and the headline has not been re-run. Ruby's first localized true positive in CWE-22/79 landed (F1.3); the rate is unknown. |
+| 3 | **Fix-discrimination ≥ 80% sustained** | **not re-measured** — same reason. Every new rule ships with a fix-discrimination test, and the IaC bench scores verdict-flip by construction. |
+| 4 | **Taint's attributable share of localized TPs > 1 and rising** | **not re-measured.** |
+| 5 | **Every compliance control carries the measured strength of its backing detector** | **met** (F10.2, landed earlier). |
+| 6 | **No published number without its configuration** | **met, and enforced by example**: §1.2 now carries an explicit staleness banner naming both its engine version and its population size. |
+
+**The honest summary: the instruments are built and the capability moved; the headline
+has not been re-derived.** Criteria 2–4 all depend on one multi-hour run against a
+population that tripled in the same session. Re-running it is the single highest-value
+next action, and until it happens no number in §1.2 should be quoted without its date,
+engine version and entry count.
 
 ---
 
@@ -860,6 +1422,26 @@ npm run bench:independent -- --deep --json   # taint's attributable share
 npm run bench:layer-recall                   # per-layer, per-language attribution
 node ../scripts/corpus-provenance-check.mjs  # self-authored share of bench/cve-replay
 ```
+
+### The instruments added 2026-08-22
+
+Each writes a committed `RESULT.json` next to its runner and carries a README stating
+what it measures and, more importantly, what it does not.
+
+```bash
+cd scanner
+npm run bench:sca-replay:fetch && npm run bench:sca-replay:label && npm run bench:sca-replay   # F3.1  (network)
+npm run bench:secrets-precision                                                                 # F4.1  (offline, <1s)
+npm run bench:iac-coverage                                                                      # F4.3  (offline)
+npm run bench:prompt-injection:fetch && npm run bench:prompt-injection                          # F5.1  (network)
+FIX_CORRECTNESS_LIMIT=45 npm run bench:fix-correctness                                          # F6.3
+```
+
+The offline regression nets for the defects those benches found, all inside `npm test`:
+`test/dep-file-admission.test.js`, `test/dep-confusion.test.js`,
+`test/secrets-coverage.test.js`, `test/iac-cloud-templates.test.js`,
+`test/prompt-injection-payloads.test.js`, `test/ruby-path-join.test.js`,
+`test/mcp-protocol-smoke.test.js`, `test/ide-surfaces.test.js`.
 
 Committed artifacts: `bench/independent/RESULT.json` (2026-08-19, engine 0.138.0, 309
 scored / 6 unscored), `bench/layer-recall/baseline.json`, `docs/METRICS.md`.

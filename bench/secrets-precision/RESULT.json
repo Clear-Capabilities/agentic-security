@@ -1,0 +1,424 @@
+{
+  "prd": "F4.1",
+  "generatedAt": "2026-08-23T11:38:10.232Z",
+  "engineVersion": "0.141.0",
+  "recall": {
+    "n": 35,
+    "d": 38,
+    "pct": 92.11,
+    "claim": "FORMAT COVERAGE over provider-documented credential formats — not detection of real leaks in the wild",
+    "missed": [
+      "Datadog/datadog-api-key",
+      "Vercel/vercel-token",
+      "Algolia/algolia-admin-key"
+    ]
+  },
+  "precision": {
+    "correctSilence": {
+      "n": 28,
+      "d": 28
+    },
+    "pct": 100,
+    "falsePositives": []
+  },
+  "formats": [
+    {
+      "id": "aws-access-key",
+      "provider": "AWS",
+      "detected": true,
+      "reportedAs": "AWS Access Key ID"
+    },
+    {
+      "id": "aws-session-token-id",
+      "provider": "AWS",
+      "detected": true,
+      "reportedAs": "AWS Access Key ID"
+    },
+    {
+      "id": "aws-appsync-key",
+      "provider": "AWS",
+      "detected": true,
+      "reportedAs": "AWS AppSync GraphQL Key"
+    },
+    {
+      "id": "google-api-key",
+      "provider": "Google",
+      "detected": true,
+      "reportedAs": "Google API Key"
+    },
+    {
+      "id": "google-oauth-token",
+      "provider": "Google",
+      "detected": true,
+      "reportedAs": "Google OAuth Access Token"
+    },
+    {
+      "id": "github-pat",
+      "provider": "GitHub",
+      "detected": true,
+      "reportedAs": "GitHub Personal Access Token"
+    },
+    {
+      "id": "github-oauth",
+      "provider": "GitHub",
+      "detected": true,
+      "reportedAs": "GitHub OAuth Access Token"
+    },
+    {
+      "id": "github-app-user",
+      "provider": "GitHub",
+      "detected": true,
+      "reportedAs": "GitHub App Token"
+    },
+    {
+      "id": "github-app-server",
+      "provider": "GitHub",
+      "detected": true,
+      "reportedAs": "GitHub App Token"
+    },
+    {
+      "id": "gitlab-pat",
+      "provider": "GitLab",
+      "detected": true,
+      "reportedAs": "GitLab Personal Access Token"
+    },
+    {
+      "id": "stripe-secret",
+      "provider": "Stripe",
+      "detected": true,
+      "reportedAs": "Stripe Secret Key"
+    },
+    {
+      "id": "stripe-restricted",
+      "provider": "Stripe",
+      "detected": true,
+      "reportedAs": "Stripe Restricted Key"
+    },
+    {
+      "id": "slack-bot-token",
+      "provider": "Slack",
+      "detected": true,
+      "reportedAs": "Slack API Token"
+    },
+    {
+      "id": "slack-webhook",
+      "provider": "Slack",
+      "detected": true,
+      "reportedAs": "Slack Webhook URL"
+    },
+    {
+      "id": "npm-token",
+      "provider": "npm",
+      "detected": true,
+      "reportedAs": "High-Entropy Credential Candidate"
+    },
+    {
+      "id": "openai-key",
+      "provider": "OpenAI",
+      "detected": true,
+      "reportedAs": "High-Entropy Credential Candidate"
+    },
+    {
+      "id": "anthropic-key",
+      "provider": "Anthropic",
+      "detected": true,
+      "reportedAs": "High-Entropy Credential Candidate"
+    },
+    {
+      "id": "sendgrid-key",
+      "provider": "SendGrid",
+      "detected": true,
+      "reportedAs": "SendGrid API Key"
+    },
+    {
+      "id": "twilio-sid",
+      "provider": "Twilio",
+      "detected": true,
+      "reportedAs": "Twilio API Key"
+    },
+    {
+      "id": "square-token",
+      "provider": "Square",
+      "detected": true,
+      "reportedAs": "Square Access Token"
+    },
+    {
+      "id": "shopify-token",
+      "provider": "Shopify",
+      "detected": true,
+      "reportedAs": "Shopify Access Token"
+    },
+    {
+      "id": "telegram-bot",
+      "provider": "Telegram",
+      "detected": true,
+      "reportedAs": "Telegram Bot API Key"
+    },
+    {
+      "id": "mailgun-key",
+      "provider": "Mailgun",
+      "detected": true,
+      "reportedAs": "Mailgun API Key"
+    },
+    {
+      "id": "digitalocean-pat",
+      "provider": "DigitalOcean",
+      "detected": true,
+      "reportedAs": "DigitalOcean Personal Access Token"
+    },
+    {
+      "id": "private-key-pem",
+      "provider": "PEM",
+      "detected": true,
+      "reportedAs": "RSA Private Key"
+    },
+    {
+      "id": "openssh-private-key",
+      "provider": "OpenSSH",
+      "detected": true,
+      "reportedAs": "OpenSSH Private Key"
+    },
+    {
+      "id": "jdbc-password",
+      "provider": "JDBC",
+      "detected": true,
+      "reportedAs": "Database Connection String"
+    },
+    {
+      "id": "postgres-uri",
+      "provider": "PostgreSQL",
+      "detected": true,
+      "reportedAs": "PostgreSQL Connection URI"
+    },
+    {
+      "id": "mongodb-uri",
+      "provider": "MongoDB",
+      "detected": true,
+      "reportedAs": "MongoDB Connection URI"
+    },
+    {
+      "id": "azure-storage-key",
+      "provider": "Azure",
+      "detected": true,
+      "reportedAs": "Azure Storage Account Key"
+    },
+    {
+      "id": "cloudflare-api-token",
+      "provider": "Cloudflare",
+      "detected": true,
+      "reportedAs": "High-Entropy Credential Candidate"
+    },
+    {
+      "id": "datadog-api-key",
+      "provider": "Datadog",
+      "detected": false,
+      "reportedAs": null
+    },
+    {
+      "id": "atlassian-api-token",
+      "provider": "Atlassian",
+      "detected": true,
+      "reportedAs": "High-Entropy Credential Candidate"
+    },
+    {
+      "id": "hubspot-key",
+      "provider": "HubSpot",
+      "detected": true,
+      "reportedAs": "HubSpot Private App Token"
+    },
+    {
+      "id": "vercel-token",
+      "provider": "Vercel",
+      "detected": false,
+      "reportedAs": null
+    },
+    {
+      "id": "supabase-service-key",
+      "provider": "Supabase",
+      "detected": true,
+      "reportedAs": "Supabase Service Key"
+    },
+    {
+      "id": "algolia-admin-key",
+      "provider": "Algolia",
+      "detected": false,
+      "reportedAs": null
+    },
+    {
+      "id": "firebase-server-key",
+      "provider": "Firebase",
+      "detected": true,
+      "reportedAs": "FCM Server Key"
+    }
+  ],
+  "negatives": [
+    {
+      "id": "git-sha-full",
+      "why": "a commit id, in every repo",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "npm-integrity",
+      "why": "package-lock.json integrity field",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "cargo-checksum",
+      "why": "Cargo.lock checksum",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "uuid-v4",
+      "why": "an identifier, not a credential",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "ulid",
+      "why": "sortable id",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "sha256-content-hash",
+      "why": "a content digest",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "base64-png",
+      "why": "an inlined image asset",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "subresource-integrity",
+      "why": "an SRI attribute in HTML",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "css-hash-classname",
+      "why": "a build-generated class name",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "docker-image-digest",
+      "why": "an image pin",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "jwt-shaped-public-payload",
+      "why": "a decoded example in documentation",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "hex-color-run",
+      "why": "a design token file",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "random-test-fixture",
+      "why": "a deterministic test vector",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "webpack-chunk-name",
+      "why": "a build artifact name",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "aws-example-key",
+      "why": "the provider's OWN published example value, in documentation",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "env-var-reference",
+      "why": "a reference, not a value",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "placeholder-value",
+      "why": "template scaffolding",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "go-module-hash",
+      "why": "a go.sum hash line",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "gemfile-lock-digest",
+      "why": "a bundler checksum",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "minified-bundle-line",
+      "why": "a real minified line, dense and high-entropy",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "aws-length-base64-blob",
+      "why": "a 20-char uppercase blob in a data file, AWS-key length but not AWS-shaped",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "detector-rule-definition",
+      "why": "a security rule file that DEFINES key shapes — the scanner scanning itself",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "npmrc-env-interpolation",
+      "why": "a reference to an env var, not a value",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "terraform-state-lineage",
+      "why": "a state-file lineage id",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "sass-variable-hash",
+      "why": "a build hash in a stylesheet variable",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "test-snapshot-blob",
+      "why": "a jest-style snapshot of random bytes",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "rotated-key-in-changelog",
+      "why": "a changelog noting a rotation, with the key masked",
+      "falsePositive": false,
+      "reportedAs": []
+    },
+    {
+      "id": "openapi-security-scheme",
+      "why": "an API spec declaring auth, naming no credential",
+      "falsePositive": false,
+      "reportedAs": []
+    }
+  ]
+}

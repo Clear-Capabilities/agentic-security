@@ -28,6 +28,7 @@
 //   node bench/independent/mine.mjs                    # default ecosystems
 //   node bench/independent/mine.mjs --limit 40
 //   node bench/independent/mine.mjs --ecosystem npm,pip
+//   node bench/independent/mine.mjs --ecosystem go,rubygems --pages 12 --limit 200
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -83,6 +84,21 @@ function forge(args) {
   try { return JSON.parse(r.stdout); } catch { return null; }
 }
 
+// Like forge(), but also returns the `after` cursor from the Link header.
+// `gh api -i` prints headers followed by a blank line and then the body.
+function forgeWithLink(args) {
+  const r = spawnSync(FORGE_CLI, [...args, '-i'], { encoding: 'utf8', shell: false, maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) return null;
+  const out = String(r.stdout || '');
+  const split = out.indexOf('\r\n\r\n') >= 0 ? out.indexOf('\r\n\r\n') + 4 : out.indexOf('\n\n') + 2;
+  const head = out.slice(0, split);
+  let body = null;
+  try { body = JSON.parse(out.slice(split)); } catch { return null; }
+  const link = head.split(/\r?\n/).find(l => /^link:/i.test(l)) || '';
+  const m = link.match(/[?&]after=([^&>]+)[^>]*>;\s*rel="next"/);
+  return { body, next: m ? m[1] : null };
+}
+
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
@@ -111,6 +127,7 @@ export function languageOf(file) {
 async function main() {
   const limit = parseInt(arg('limit', '25'), 10);
   const ecosystems = arg('ecosystem', 'npm,pip,go,maven,composer,rubygems').split(',');
+  const pages = parseInt(arg('pages', '3'), 10);
 
   const existing = fs.existsSync(MANIFEST)
     ? JSON.parse(fs.readFileSync(MANIFEST, 'utf8'))
@@ -120,9 +137,28 @@ async function main() {
   const added = [];
   for (const ecosystem of ecosystems) {
     if (added.length >= limit) break;
-    for (let page = 1; page <= 3 && added.length < limit; page++) {
-      const list = forge(['api', `/advisories?type=reviewed&ecosystem=${ecosystem}&per_page=100&page=${page}`]);
-      if (!Array.isArray(list)) break;
+    // PRD F12.4 — the population has to grow toward 750+, and three pages per
+    // ecosystem is where it stops finding anything. Ruby and Go are the measured
+    // zeros and are also the scarcest: an advisory needs a CWE and exactly one
+    // referenced fix commit, and most Ruby advisories reference a release note
+    // rather than a commit. Depth is a flag rather than a bigger constant so a
+    // routine top-up stays cheap.
+    // CURSOR pagination, not page numbers.
+    //
+    // This loop used `&page=N`, and the advisories endpoint IGNORES it — page 1
+    // and page 2 return byte-identical results, verified by hand. So every run
+    // since this file was written saw only the FIRST 100 advisories per
+    // ecosystem and the population was capped at that by construction: mining
+    // rubygems twelve pages deep added exactly one entry, and it looked like
+    // scarcity rather than a bug. The endpoint paginates by an `after` cursor
+    // handed back in the Link header, which is what this follows now.
+    let cursor = null;
+    for (let page = 1; page <= pages && added.length < limit; page++) {
+      const url = `/advisories?type=reviewed&ecosystem=${ecosystem}&per_page=100` + (cursor ? `&after=${cursor}` : '');
+      const res = forgeWithLink(['api', url]);
+      const list = res && res.body;
+      cursor = res && res.next;
+      if (!Array.isArray(list) || list.length === 0) break;
 
       for (const a of list) {
         if (added.length >= limit) break;

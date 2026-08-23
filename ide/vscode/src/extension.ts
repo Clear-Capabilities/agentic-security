@@ -12,7 +12,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cp from 'child_process';
-import * as fs from 'fs';
+import { resolveScanner } from './resolve-scanner.mjs';
 
 const SEV_MAP: Record<string, vscode.DiagnosticSeverity> = {
   critical: vscode.DiagnosticSeverity.Error,
@@ -28,14 +28,15 @@ let saveTimer: NodeJS.Timeout | null = null;
 
 function resolveScannerPath(): string | null {
   const config = vscode.workspace.getConfiguration('agenticSecurity');
-  const explicit = config.get<string>('scannerPath');
-  if (explicit && fs.existsSync(explicit)) return explicit;
-  // Try common Claude Code plugin cache location
-  const home = process.env.HOME || process.env.USERPROFILE || '';
-  const cached = path.join(home, '.claude', 'plugins', 'cache',
-    'clearcapabilities', 'agentic-security', '0.1.0', 'scanner', 'dist', 'agentic-security.mjs');
-  if (fs.existsSync(cached)) return cached;
-  return null;
+  // Every input is passed in; the resolution rules themselves live in
+  // resolve-scanner.js so they can be tested without a VS Code host.
+  const hit = resolveScanner({
+    explicit: config.get<string>('scannerPath') || undefined,
+    pluginRoot: process.env.CLAUDE_PLUGIN_ROOT || undefined,
+    home: process.env.HOME || process.env.USERPROFILE || undefined,
+    workspace: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+  });
+  return hit ? hit.path : null;
 }
 
 async function runScan(folder: string): Promise<any | null> {

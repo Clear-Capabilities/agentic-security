@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-22",
+  "note": "Real repositories pinned at real commits. Only dependency manifests and lockfiles are fetched \u2014 this bench measures dependency resolution and advisory matching, not source analysis. Every ref is a resolved commit SHA, never a tag: tags move.",
+  "heldOutNote": "heldOut entries are scored and reported in aggregate only. Per-entry detail is withheld unless --show-heldout is passed, so the development loop cannot be run against them.",
+  "entries": [
+    {
+      "id": "npm-cli-8.5.0",
+      "repo": "npm/cli",
+      "tag": "v8.5.0",
+      "commit": "20a981890ba96d946036419f0ac124fe598663b7",
+      "ecosystem": "npm",
+      "lockfiles": [
+        "package-lock.json"
+      ],
+      "files": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "heldOut": false
+    },
+    {
+      "id": "next-13.4.0",
+      "repo": "vercel/next.js",
+      "tag": "v13.4.0",
+      "commit": "fb12a6dc877c5ce2f21246f4921494a1b8e356a6",
+      "ecosystem": "npm",
+      "lockfiles": [
+        "pnpm-lock.yaml"
+      ],
+      "files": [
+        "pnpm-lock.yaml"
+      ],
+      "heldOut": false
+    },
+    {
+      "id": "express-4.18.1",
+      "repo": "expressjs/express",
+      "tag": "4.18.1",
+      "commit": "d854c43ea177d1faeea56189249fff8c24a764bd",
+      "ecosystem": "npm",
+      "lockfiles": [
+        "package.json"
+      ],
+      "files": [
+        "package.json"
+      ],
+      "negativeControl": "no lockfile. express pins every dependency EXACTLY in package.json, so the manifest is its own lockfile and the entry is scored normally. It was briefly mislabelled here as 'ranges only, label empty by construction' \u2014 which was wrong, and made the engine's 15 correct findings look like invention.",
+      "heldOut": false
+    },
+    {
+      "id": "flask-2.0.0",
+      "repo": "pallets/flask",
+      "tag": "2.0.0",
+      "commit": "2f0c62f5e6e290843f03c1fa70817c7a3c7fd661",
+      "ecosystem": "PyPI",
+      "lockfiles": [
+        "requirements/dev.txt"
+      ],
+      "files": [
+        "requirements/dev.txt"
+      ],
+      "heldOut": false
+    },
+    {
+      "id": "poetry-1.1.0",
+      "repo": "python-poetry/poetry",
+      "tag": "1.1.0",
+      "commit": "539d7f732c34c821258a9853cd3078cbda34a717",
+      "ecosystem": "PyPI",
+      "lockfiles": [
+        "poetry.lock"
+      ],
+      "files": [
+        "pyproject.toml",
+        "poetry.lock"
+      ],
+      "heldOut": false
+    },
+    {
+      "id": "home-assistant-2021.6.0",
+      "repo": "home-assistant/core",
+      "tag": "2021.6.0",
+      "commit": "51704d151d55110f59b2360384a8a4ca0e396ac0",
+      "ecosystem": "PyPI",
+      "lockfiles": [
+        "requirements.txt"
+      ],
+      "files": [
+        "requirements.txt"
+      ],
+      "heldOut": true
+    },
+    {
+      "id": "discourse-2.8.0",
+      "repo": "discourse/discourse",
+      "tag": "v2.8.0",
+      "commit": "3a5b75435ecc240877608d54dfc1490734f2e640",
+      "ecosystem": "RubyGems",
+      "lockfiles": [
+        "Gemfile.lock"
+      ],
+      "files": [
+        "Gemfile.lock"
+      ],
+      "heldOut": false
+    },
+    {
+      "id": "rails-6.1.0",
+      "repo": "rails/rails",
+      "tag": "v6.1.0",
+      "commit": "914caca2d31bd753f47f9168f2a375921d9e91cc",
+      "ecosystem": "RubyGems",
+      "lockfiles": [
+        "Gemfile.lock"
+      ],
+      "files": [
+        "Gemfile.lock"
+      ],
+      "heldOut": true
+    },
+    {
+      "id": "prometheus-2.30.0",
+      "repo": "prometheus/prometheus",
+      "tag": "v2.30.0",
+      "commit": "37468d88dce85ac507f3fb7864c7d1c078e3e27d",
+      "ecosystem": "Go",
+      "lockfiles": [
+        "go.sum"
+      ],
+      "files": [
+        "go.mod",
+        "go.sum"
+      ],
+      "heldOut": false
+    },
+    {
+      "id": "consul-1.10.0",
+      "repo": "hashicorp/consul",
+      "tag": "v1.10.0",
+      "commit": "27de64da7095570012e9f8f7aec16aaf66d2a773",
+      "ecosystem": "Go",
+      "lockfiles": [
+        "go.sum"
+      ],
+      "files": [
+        "go.mod",
+        "go.sum"
+      ],
+      "heldOut": true
+    },
+    {
+      "id": "dubbo-3.0.0",
+      "repo": "apache/dubbo",
+      "tag": "dubbo-3.0.0",
+      "commit": "236a45694e9a1925e0a57f42686996f6fbf4c694",
+      "ecosystem": "Maven",
+      "lockfiles": [
+        "pom.xml"
+      ],
+      "files": [
+        "pom.xml"
+      ],
+      "heldOut": false
+    },
+    {
+      "id": "magento2-2.4.3",
+      "repo": "magento/magento2",
+      "tag": "2.4.3",
+      "commit": "4c36116dcf878e127059d9be9566a119783583f2",
+      "ecosystem": "Packagist",
+      "lockfiles": [
+        "composer.lock"
+      ],
+      "files": [
+        "composer.json",
+        "composer.lock"
+      ],
+      "heldOut": false
+    },
+    {
+      "id": "ripgrep-13.0.0",
+      "repo": "BurntSushi/ripgrep",
+      "tag": "13.0.0",
+      "commit": "af6b6c543b224d348a8876f0c06245d9ea7929c5",
+      "ecosystem": "crates.io",
+      "lockfiles": [
+        "Cargo.lock"
+      ],
+      "files": [
+        "Cargo.lock"
+      ],
+      "heldOut": true
+    }
+  ]
+}

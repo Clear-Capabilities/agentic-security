@@ -4,7 +4,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
 import { listFiles } from './util/glob.js';
-import { runFullScan, shouldScan, isKubernetesManifest, isInstructionFile } from './engine.js';
+import { runFullScan, shouldScan, isKubernetesManifest, isCloudFormationTemplate, isInstructionFile } from './engine.js';
 import { appendScanSnapshot } from './posture/security-trend.js';
 import { recover as recoverFixHistory } from './posture/fix-history.js';
 import { stampScan } from './posture/ruleset-version.js';
@@ -13,10 +13,54 @@ const DEP_FILE_NAMES = new Set([
   'package.json','package-lock.json','yarn.lock','pnpm-lock.yaml',
   'requirements.txt','pyproject.toml','poetry.lock','Pipfile.lock',
   'composer.json','composer.lock','Gemfile','Gemfile.lock',
-  'go.mod','Cargo.toml','Cargo.lock',
+  // go.sum, not just go.mod: go.mod lists what this module REQUIRES, go.sum
+  // lists what was RESOLVED — the transitive graph that is actually shipped.
+  // `_parseGoSum` and its dispatch entry have always existed in engine.js; the
+  // file simply never reached them, so Go SCA saw direct requires only.
+  // Measured by bench/sca-replay at 15 of 549 labelled vulnerable versions.
+  'go.mod','go.sum','Cargo.toml','Cargo.lock',
   'pom.xml','build.gradle','build.gradle.kts',
   'pubspec.yaml','pubspec.lock',
 ]);
+
+// Python requirements files are `requirements/dev.txt`, `requirements-dev.txt`
+// and `requirements/base.txt` at least as often as they are the bare name.
+// pallets/flask ships `requirements/dev.txt` and scored 0 of 11 labelled
+// vulnerabilities until this matched.
+//
+// Deliberately narrow. An arbitrary `.txt` reaching the PyPI parser would
+// invent components out of prose, which is a worse failure than missing one:
+// a false dependency is unfalsifiable noise in a supply-chain report.
+const REQUIREMENTS_FILE = /^requirements(?:[._-][\w.-]+)?\.txt$/i;
+const REQUIREMENTS_DIR_FILE = /(?:^|\/)requirements\/[\w.-]+\.txt$/i;
+
+export function isDepFile(rel) {
+  const base = rel.split('/').pop();
+  if (DEP_FILE_NAMES.has(base)) return true;
+  if (REQUIREMENTS_FILE.test(base)) return true;
+  if (REQUIREMENTS_DIR_FILE.test(rel.split(path.sep).join('/'))) return true;
+  return false;
+}
+
+// Two caps, because the two kinds of file cost completely different amounts to
+// process.
+//
+// A CODE file over the cap is skipped to protect the analysis path: parsing and
+// walking an AST of a multi-megabyte generated file is where a scan goes from
+// slow to hung.
+//
+// A MANIFEST is read by JSON.parse or a line loop. Applying the code cap to it
+// bought nothing and cost everything: npm/cli's package-lock.json is 666 KB,
+// next.js's pnpm-lock.yaml is 910 KB, magento2's composer.lock is 501 KB — so
+// on every project large enough for supply-chain risk to matter, the lockfile
+// was dropped and SCA silently fell back to the exact versions that happened to
+// appear in package.json. That is DIRECT dependencies only, while the headline
+// claim of this feature is transitive reachability.
+//
+// The manifest cap is larger, not absent. Reading an unbounded file into memory
+// to parse it is how a scan becomes a denial of service against its own host.
+const MAX_CODE_BYTES = 500_000;
+const MAX_DEP_BYTES = 10_000_000;
 
 const DEFAULT_IGNORE = [
   '**/node_modules/**','**/.git/**','**/__pycache__/**','**/vendor/**',
@@ -33,11 +77,12 @@ export async function readTree(root, { ignore = [] } = {}) {
     const abs = path.join(root, rel);
     let stat;
     try { stat = await fs.stat(abs); } catch { continue; }
-    if (stat.size > 500_000) continue;
+    const dep = isDepFile(rel);
+    if (stat.size > (dep ? MAX_DEP_BYTES : MAX_CODE_BYTES)) continue;
     let content;
     try { content = await fs.readFile(abs, 'utf8'); } catch { continue; }
     const base = path.basename(rel);
-    if (DEP_FILE_NAMES.has(base)) depFileContents[rel] = content;
+    if (dep) depFileContents[rel] = content;
     // Cross-language taint module needs to see openapi/swagger specs even
     // though they aren't "code" per se. Stash them in depFileContents so
     // they ride through to runFullScan without polluting the SAST loop.
@@ -51,7 +96,10 @@ export async function readTree(root, { ignore = [] } = {}) {
     // BOTH gates must open, exactly as the k8s fix required: runScan admits a
     // file here, then runFullScan re-filters the same list. Opening only one
     // leaves the detector just as dark.
-    if (shouldScan(rel) || isKubernetesManifest(rel, content) || isInstructionFile(rel)) fileContents[rel] = content;
+    // A CloudFormation template is a `.yaml`/`.json` that no path predicate can
+    // recognise — same problem as a Kubernetes manifest, same fix, and the same
+    // requirement that BOTH gates open: runFullScan re-filters this exact list.
+    if (shouldScan(rel) || isKubernetesManifest(rel, content) || isCloudFormationTemplate(rel, content) || isInstructionFile(rel)) fileContents[rel] = content;
     // Auxiliary files: .properties files are referenced by Java rules
     // (e.g. OWASP Benchmark's benchmark.properties resolves algorithm
     // aliases). They are not scannable for vulns themselves, but the

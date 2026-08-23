@@ -1,6 +1,6 @@
 {
   "name": "agentic-security",
-  "version": "0.140.0",
+  "version": "0.141.0",
   "description": "Agentic-Security scanner + MCP server for Gemini CLI. Provides 17 MCP tools the Gemini agent can call directly: scan, query taint, explain finding, find rule module, look up CVE, synthesize / verify / apply fix, synthesize / apply SCA upgrade, append / read scratchpad, append / read AGENTS.md memory, query triage/findings memory, query cache telemetry.",
   "author": {
     "name": "Ross Young",

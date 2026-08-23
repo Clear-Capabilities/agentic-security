@@ -9,6 +9,154 @@
 > make the history less accurate, not more.
 
 
+
+## 0.141.0 — Six new instruments, and the seven live bugs they found
+
+The previous release fixed five bugs found by measuring. This one builds the
+instruments that do the measuring for the surfaces that had none — SCA, secrets,
+IaC, prompt injection, remediation, and the IDE/MCP surfaces — and then fixes
+what they reported. Every number below is reproducible with a command in
+`bench/*/README.md`.
+
+None of the improvements came from tuning. They came from files that were never
+read, patterns that could never fire, and versions that were silently rewritten.
+
+### SCA never read a transitive dependency tree on any real project
+
+`readTree` skipped **any file over 500 KB before deciding what kind of file it
+was.** npm/cli's `package-lock.json` is 666 KB, next.js's `pnpm-lock.yaml` is
+910 KB, magento2's `composer.lock` is 501 KB. On every project big enough for
+supply-chain risk to matter, the lockfile was dropped and SCA fell back to
+whatever exact versions appeared in `package.json` — direct dependencies only,
+while the headline claim of the feature is transitive reachability.
+
+Manifests now have their own, much larger cap. The 500 KB cap on **code** files
+is unchanged: that one protects the analysis path and was never the problem.
+
+Two more admission gaps in the same area: `go.sum` was never admitted though
+`_parseGoSum` and its dispatch entry had always existed, and only the exact
+basename `requirements.txt` was matched — so `requirements/dev.txt`, which is
+what pallets/flask ships, scored 0 of 11.
+
+**Measured effect (`bench/sca-replay`, 13 real repos, 7 ecosystems, labels from
+the advisory database via readers that share no code with the engine): version
+recall 10.89% → 77.92% at 100% precision, held-out 84.29%.**
+
+### Go dependency versions were rewritten into versions that do not exist
+
+`v0.0.0-20210903162142-ad29c8ab022f` became `0.0.0` in three separate places —
+not a shorter version but a different one, collapsing every pseudo-versioned
+module in a tree onto a single key. **Go went from 5.28% to 100%** once versions
+survived intact.
+
+This also corrupted the emitted SBOM, which is the worse half: an SBOM saying
+`golang.org/x/net@0.0.0` is wrong in a document other people are supposed to
+rely on.
+
+### The typosquat detector reported 166 findings, none of them typosquats
+
+Across 13 real repositories, at critical and high severity: `ms ~ ws`,
+`acorn ~ cors`, `ajv ~ ava`, `six ~ tox`, `arg ~ yargs`, `bail ~ babel`. Every
+one is a legitimate, popular package; `ms` is a top-50 npm package.
+
+Absolute edit distance is meaningless on short names — two edits on a
+four-character name changes half of it, and every two-character package is one
+edit from every other. Now Damerau-Levenshtein, so a transposition (`lodahs` for
+`lodash`, the commonest real typo) costs 1 rather than 2, gated on
+`distance / min(len) ≤ 0.25`.
+
+### The VS Code extension had never been able to find the scanner
+
+It looked for the bundle under a hardcoded
+`…/agentic-security/0.1.0/scanner/dist/…`, and Claude Code caches a plugin under
+its **plugin** version — 0.128.2, 0.136.9, 0.139.1, never 0.1.0. `0.1.0` was the
+extension's own version pasted into the wrong path, so the fallback could not
+resolve on any install and every user got *"scanner not found."*
+
+Nothing tested it, because the function read `vscode.workspace` and could not be
+imported outside a VS Code host. The resolver is now a pure function that
+discovers the version instead of hardcoding one, prefers `CLAUDE_PLUGIN_ROOT`,
+and is covered by 15 tests plus a CI job that fails on a stale committed bundle.
+
+### Three IaC formats had no rules at all
+
+CloudFormation, Bicep and Helm chart values scored **0** against every control
+tested — not weak rules, no rules, and for CloudFormation no file admission
+either, since a template is a `.yaml` that no path predicate recognises.
+
+`bench/iac-coverage` scores **verdict flip**: a control counts only when the
+misconfigured variant fires *and* the hardened one stays silent. That caught
+something a recall-only bench never would — `FROM ubuntu@sha256:…`, the most
+tightly pinned form a Dockerfile can use, was reported as *"ubuntu:latest
+(floating tag)"* because the digest was matched but not captured. A false
+positive on the hardened configuration tells the people who did the right thing
+that they did the wrong one.
+
+**Coverage 8/14 → 23/26**, with the three still open marked as needing semantic
+analysis rather than another pattern.
+
+### Credential patterns that could never fire
+
+`CRED_PREFILTER` is a whole-file gate: `scanCredentials` returns early unless
+that one regex matches, so a pattern whose trigger token is missing is dead code
+however correct it is. The generic "Password in URL" rule was in exactly that
+state.
+
+Also absent entirely: `postgres://user:pass@host/db` and `mongodb+srv://…` —
+among the commonest real leaks there are — plus GitLab, DigitalOcean, Azure
+Storage, Supabase and HubSpot tokens. Only `jdbc:` was covered.
+
+**Format coverage 60% → 92.11%, with correct silence at 28/28** on a hard
+negative set of lockfile integrity fields, git SHAs, content digests, Terraform
+state ids and a security rule file that defines key formats.
+
+### Prompt-injection patterns that were correct and far too literal
+
+The override rule required the object noun to be one of seven words, so *"Forget
+all previous **tasks**"* and *"Ignore all preceding **orders**"* missed.
+Exfiltration could not match *"show me all your prompt texts"*.
+
+**Recall 6.08% → 18.25% against `deepset/prompt-injections` (Apache-2.0, 263
+injections and 399 legitimate prompts), precision and correct-silence at 100%
+throughout.** Reported per technique, because an aggregate hides which one is
+weak: role-play 100%, exfiltration 60%, override 41.86%.
+
+And the engine caught its own author — the widened pattern was flagged by this
+project's own ReDoS detector on the self-scan gate, twice, before it was
+rewritten as a flat alternation that scores identically.
+
+## Measured, published, and deliberately not "fixed"
+
+- **Fix synthesis produces a patch for 0 of 6** real true positives on
+  third-party code (`bench/fix-correctness`, scored against the upstream fix
+  commit). The deterministic synthesizer has two rules, both JS/Python; the real
+  population is injection and authorization across seven languages. Widening it
+  to guess at an authorization check would produce patches that pass
+  verification while changing behaviour.
+- **German prompt injection scores 2.30% against English's 28.57%.** Patching it
+  because *this corpus* is German would be fitting to the benchmark.
+- **Datadog, Vercel and Algolia keys stay undetected.** They are a bare run of
+  hex; a pattern for "32 hex characters" would fire on every content digest and
+  checksum in existence.
+- **`CODEGEN` produces nothing on any of the five advisories in its own header.**
+  Measured dead, and left for a deliberate retire-or-fix decision rather than
+  removed silently.
+
+## Also
+
+- The advisory miner **was not paginating** — the API ignores `&page=N` — so the
+  evaluation population was capped at ~100 advisories per ecosystem by
+  construction. Fixed via the `Link` cursor: **315 → 1004 entries**, Ruby 32 →
+  250, Kotlin 0 → 2.
+- `File.join(<root>, …, <variable>)` reaching a filesystem call with no traversal
+  guard is now detected for Ruby (CWE-22), the dominant real-world shape the
+  existing rule could not reach.
+- A guard-shaped method **name** on a declaration line (`def check_static_cache(`)
+  no longer counts as a containment guard, which was silently dropping path
+  findings inside any method called `check*`/`validate*`/`ensure*`.
+- MCP is now smoke-tested end to end over stdio through the shipped binary, with
+  both write tools asserted to refuse out-of-tree paths in both directions.
+
 ## 0.140.0 — Five shipped bugs, found by measuring instead of reading
 
 Every fix here is a defect that was live in 0.139.1. None came from the feature

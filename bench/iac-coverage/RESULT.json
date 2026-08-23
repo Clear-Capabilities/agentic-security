@@ -1,0 +1,377 @@
+{
+  "prd": "F4.3",
+  "generatedAt": "2026-08-23T11:38:11.748Z",
+  "engineVersion": "0.141.0",
+  "scoring": "verdict flip — the vulnerable variant must fire AND the hardened variant must not",
+  "configuration": "runScan on a temp tree, --no-network, files at realistic project paths",
+  "coverage": {
+    "n": 23,
+    "d": 26,
+    "pct": 88.46
+  },
+  "byFormat": {
+    "terraform": {
+      "covered": 6,
+      "noFlip": 0,
+      "silent": 1,
+      "d": 7,
+      "pct": 85.71
+    },
+    "kubernetes": {
+      "covered": 6,
+      "noFlip": 0,
+      "silent": 1,
+      "d": 7,
+      "pct": 85.71
+    },
+    "cloudformation": {
+      "covered": 4,
+      "noFlip": 0,
+      "silent": 1,
+      "d": 5,
+      "pct": 80
+    },
+    "bicep": {
+      "covered": 2,
+      "noFlip": 0,
+      "silent": 0,
+      "d": 2,
+      "pct": 100
+    },
+    "helm": {
+      "covered": 2,
+      "noFlip": 0,
+      "silent": 0,
+      "d": 2,
+      "pct": 100
+    },
+    "dockerfile": {
+      "covered": 3,
+      "noFlip": 0,
+      "silent": 0,
+      "d": 3,
+      "pct": 100
+    }
+  },
+  "controls": [
+    {
+      "id": "tf-sg-world-ssh",
+      "format": "terraform",
+      "control": "Security groups must not allow unrestricted ingress from 0.0.0.0/0 to administrative ports",
+      "outcome": "COVERED",
+      "vulnerableFindings": 2,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Terraform: security-group ingress open to the world (0.0.0.0/0)",
+        "Publicly-exposed cloud resource (aws_security_group \"web\"): sg-open-22"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "tf-s3-public-acl",
+      "format": "terraform",
+      "control": "Object storage buckets must not grant public read access",
+      "outcome": "COVERED",
+      "vulnerableFindings": 3,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Terraform: S3 bucket ACL = public-read",
+        "Terraform: S3 bucket ACL is public",
+        "Publicly-exposed cloud resource (aws_s3_bucket \"assets\"): s3-public-acl"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "tf-unencrypted-storage",
+      "format": "terraform",
+      "control": "Managed database instances must have encryption at rest enabled",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Terraform: encryption disabled at rest"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "tf-iam-wildcard",
+      "format": "terraform",
+      "control": "IAM policies must not grant Action \"*\" on Resource \"*\"",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Terraform: IAM Action = \"*\" (wildcard)"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "k8s-privileged-container",
+      "format": "kubernetes",
+      "control": "Containers must not run in privileged mode",
+      "outcome": "COVERED",
+      "vulnerableFindings": 2,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Pod runs in privileged mode",
+        "K8s container privileged: true"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "k8s-host-network",
+      "format": "kubernetes",
+      "control": "Pods must not share the host network namespace",
+      "outcome": "COVERED",
+      "vulnerableFindings": 2,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Pod uses host network — shares node IP stack",
+        "K8s pod hostNetwork: true (host network namespace)"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "k8s-run-as-root",
+      "format": "kubernetes",
+      "control": "Containers must not run as the root user",
+      "outcome": "COVERED",
+      "vulnerableFindings": 2,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "K8s container runAsUser: 0 (root UID)",
+        "Pod runAsUser: 0 (root)"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "k8s-secret-in-env",
+      "format": "kubernetes",
+      "control": "Credentials must not be supplied as literal environment values in a manifest",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Kubernetes manifest sets DB_PASSWORD to a literal value"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "cfn-sg-world-ingress",
+      "format": "cloudformation",
+      "control": "Security groups must not allow unrestricted ingress from 0.0.0.0/0 to administrative ports",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "CloudFormation security group allows 0.0.0.0/0 to port 22"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "cfn-public-bucket",
+      "format": "cloudformation",
+      "control": "Object storage buckets must not grant public read access",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "CloudFormation bucket grants PublicRead access"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "bicep-public-blob",
+      "format": "bicep",
+      "control": "Blob storage containers must not allow anonymous public access",
+      "outcome": "COVERED",
+      "vulnerableFindings": 2,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Bicep storage account allows anonymous public blob access",
+        "Bicep storage account permits unencrypted HTTP traffic"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "helm-privileged-values",
+      "format": "helm",
+      "control": "Chart values must not default a workload to privileged execution",
+      "outcome": "COVERED",
+      "vulnerableFindings": 2,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Helm chart defaults the workload to privileged execution",
+        "Helm chart defaults the workload to UID 0 (root)"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "docker-root-user",
+      "format": "dockerfile",
+      "control": "Container images must not run as root",
+      "outcome": "COVERED",
+      "vulnerableFindings": 2,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Dockerfile USER root (container runs with root privileges)",
+        "Dockerfile: USER root — container runs as root"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "docker-unpinned-base",
+      "format": "dockerfile",
+      "control": "Base images must be pinned to an immutable reference",
+      "outcome": "COVERED",
+      "vulnerableFindings": 3,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Base image \"ubuntu:latest\" is not pinned to an immutable reference",
+        "Dockerfile: image uses :latest tag",
+        "Container base image: ubuntu:latest (floating tag)"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "k8s-host-pid",
+      "format": "kubernetes",
+      "control": "Pods must not share the host PID namespace",
+      "outcome": "COVERED",
+      "vulnerableFindings": 2,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Pod uses host PID namespace — can see/signal node processes",
+        "K8s pod hostPID: true (host PID namespace)"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "k8s-dangerous-capability",
+      "format": "kubernetes",
+      "control": "Containers must not add dangerous Linux capabilities",
+      "outcome": "COVERED",
+      "vulnerableFindings": 2,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Pod adds dangerous Linux capability (SYS_ADMIN / NET_ADMIN / SYS_PTRACE / ALL)",
+        "K8s securityContext capabilities.add: SYS_ADMIN"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "cfn-rds-public",
+      "format": "cloudformation",
+      "control": "Managed databases must not be publicly accessible",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "CloudFormation database instance is publicly accessible"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "cfn-iam-wildcard",
+      "format": "cloudformation",
+      "control": "IAM policies must not grant Action \"*\" on Resource \"*\"",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "CloudFormation IAM statement allows Action \"*\" on Resource \"*\""
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "bicep-nsg-world",
+      "format": "bicep",
+      "control": "Network security rules must not allow inbound from any source to administrative ports",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Bicep network security rule allows inbound from \"*\" to port 22"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "helm-host-network",
+      "format": "helm",
+      "control": "Chart values must not default a workload onto the host network",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Helm chart defaults the workload onto the host network"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "docker-add-remote",
+      "format": "dockerfile",
+      "control": "Remote content must not be fetched with ADD",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Dockerfile ADD with remote URL (TLS/MITM exposure; prefer COPY + verified checksum)"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "tf-ebs-unencrypted",
+      "format": "terraform",
+      "control": "Block storage volumes must be encrypted at rest",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Terraform: encryption disabled at rest"
+      ],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "tf-iam-wildcard-equivalent",
+      "format": "terraform",
+      "control": "IAM policies must not grant effectively unrestricted privilege",
+      "outcome": "SILENT",
+      "vulnerableFindings": 0,
+      "hardenedFindings": 0,
+      "reportedAs": [],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "cfn-cidr-via-parameter",
+      "format": "cloudformation",
+      "control": "Security groups must not allow unrestricted ingress from 0.0.0.0/0 to administrative ports",
+      "outcome": "SILENT",
+      "vulnerableFindings": 0,
+      "hardenedFindings": 0,
+      "reportedAs": [],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "k8s-no-resource-limits",
+      "format": "kubernetes",
+      "control": "Containers must declare CPU and memory limits",
+      "outcome": "SILENT",
+      "vulnerableFindings": 0,
+      "hardenedFindings": 0,
+      "reportedAs": [],
+      "stillReportedWhenHardened": []
+    },
+    {
+      "id": "tf-sg-cidr-via-variable",
+      "format": "terraform",
+      "control": "Security groups must not allow unrestricted ingress from 0.0.0.0/0 to administrative ports",
+      "outcome": "COVERED",
+      "vulnerableFindings": 1,
+      "hardenedFindings": 0,
+      "reportedAs": [
+        "Terraform: security-group ingress open to the world (0.0.0.0/0)"
+      ],
+      "stillReportedWhenHardened": []
+    }
+  ]
+}

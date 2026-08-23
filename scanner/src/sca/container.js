@@ -31,7 +31,16 @@ const _DOCKERFILE_RE = /(?:^|\/)(?:[Dd]ockerfile|[^/]+\.dockerfile)$/i;
 const _FROM_RE = /^\s*FROM\s+(?:--platform=\S+\s+)?([\w./-]+?)(?::([\w.\-]+))?(?:@sha256:[a-f0-9]{64})?(?:\s+AS\s+\S+)?\s*$/im;
 
 // FROM <image>:<tag> covering all FROM lines in the file
-const _ALL_FROM_RE = /^\s*FROM\s+(?:--platform=\S+\s+)?([\w./-]+?)(?::([\w.\-]+))?(?:@sha256:[a-f0-9]{64})?(?:\s+AS\s+\S+)?\s*$/img;
+// The digest is CAPTURED, not merely tolerated. Discarding it made
+// `FROM ubuntu@sha256:…` parse as image=ubuntu with no tag, which `_scoreTag`
+// then treats as `latest` — so the most tightly pinned form a Dockerfile can
+// use was reported as "ubuntu:latest (floating tag)". A false positive on the
+// hardened configuration is worse than a miss: it tells the people who did the
+// right thing that they did the wrong one.
+//
+// Found by bench/iac-coverage, whose verdict-flip scoring exists precisely to
+// catch a rule that fires on both variants of a control.
+const _ALL_FROM_RE = /^\s*FROM\s+(?:--platform=\S+\s+)?([\w./-]+?)(?::([\w.\-]+))?(?:@sha256:([a-f0-9]{64}))?(?:\s+AS\s+\S+)?\s*$/img;
 
 // `apt-get install -y pkg pkg pkg` / `apk add pkg pkg`
 const _APT_INSTALL_RE = /\bapt(?:-get)?\s+install\b[^\n]*?(?:--?[\w-]+\s+)*((?:[a-z0-9][\w.+-]*(?:=[\w.+:-]+)?\s*)+)/gi;
@@ -66,9 +75,17 @@ export function scanContainer(fp, raw) {
   while ((m = _ALL_FROM_RE.exec(raw))) {
     const image = m[1].split('/').pop(); // strip registry / namespace prefixes
     const tag = m[2] || '';
+    const digest = m[3] || '';
     const line = raw.substring(0, m.index).split('\n').length;
+    // Digest-pinned with no tag: there is nothing to score. The reference is
+    // immutable, which is the recommended form, and inventing a `latest` tag
+    // for it produces the exact opposite advice.
+    if (digest && !tag) continue;
     const score = _scoreTag(image, tag);
     if (!score) continue;
+    // `image:22.04@sha256:…` — the tag can still be end-of-life, and that is
+    // worth saying, but it is not a FLOATING tag: the digest pins it.
+    if (digest && !score.eol) continue;
     findings.push({
       id: `container-base:${fp}:${line}:${image}:${tag || 'latest'}`,
       kind: 'container', severity: score.sev,

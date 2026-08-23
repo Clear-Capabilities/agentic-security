@@ -16,7 +16,7 @@ This directory holds the seven specialized modules called from there.
 | `index.js` | Re-exports six public symbols from `../engine.js` so external consumers can `import { parseManifests, queryOSV, … } from '@…/sca'`. |
 | `binary-metadata.js` | **Opt-in via `AGENTIC_SECURITY_BINARY_SCA=1`.** Reads dependency metadata from compiled artifacts: JAR `META-INF/MANIFEST.MF` + `pom.properties`, Go binary `go.buildinfo`. Never executes the binary. JAR extraction uses `fs.mkdtemp` for an isolated scratch dir (premortem-derived: shared `/tmp` lets a hostile JAR plant a symlinked manifest that escapes the scratch). |
 | `container.js` | Dockerfile parser. Detects EOL `FROM` base images (alpine/debian/ubuntu/node/python) against `base-images.json`, and synthesizes lightweight SCA components from `apt-get install` / `apk add` package lists. No Docker daemon required. |
-| `dep-confusion.js` | Two related detectors. **Typosquat:** Levenshtein distance ≤ 2 against `popular-packages.json` — **188 packages (115 npm + 73 pypi), not "top-1000"** as this row previously said; re-derive the count from the file rather than trusting a hardcoded number here again. **Dependency confusion:** internal-scoped names (declared in `.agentic-security/internal-scopes.yml`) appearing on the public registry. Local-first; **this module does not itself call OSV** — it reads a flag set by an earlier, separate OSV/queryRegistries pass upstream (whether a dep "resolved by OSV"), which is different from "OSV consulted [by this module] to confirm confusion findings" as previously stated. |
+| `dep-confusion.js` | Two related detectors. **Typosquat:** Damerau-Levenshtein distance against `popular-packages.json`, accepted only when `distance / min(nameLen, popularLen) ≤ 0.25` — **188 packages (115 npm + 73 pypi), not "top-1000"** as this row previously said; re-derive the count from the file rather than trusting a hardcoded number here again. **Dependency confusion:** internal-scoped names (declared in `.agentic-security/internal-scopes.yml`) appearing on the public registry. Local-first; **this module does not itself call OSV** — it reads a flag set by an earlier, separate OSV/queryRegistries pass upstream (whether a dep "resolved by OSV"), which is different from "OSV consulted [by this module] to confirm confusion findings" as previously stated. |
 | `llm-function-extract.js` | **Opt-in via `AGENTIC_SECURITY_LLM_SCA=1`.** LLM-assisted extraction of vulnerable function names for CVEs that lack OSV `ecosystem_specific.vulnerable_functions` data. Cached per CVE under `~/.config/agentic-security/llm-sca-cache/`. Endpoint-dependent — degrades to no-op when unreachable. |
 | `py-package-functions.js` | **Opt-in via `AGENTIC_SECURITY_DEEP=1`** (Python only). Locates installed Python packages via `site-packages` and parses them with the CPython `ast` module (subprocess) to *validate* that an OSV-named vulnerable function exists in the installed version. Closes the "OSV says this function is vulnerable, but the version you installed actually removed it" false-positive class. |
 | `vendor-detect.js` | Detects libraries copied into `src/` (lodash, jQuery, Angular, React, etc.) via characteristic version strings and function signatures. Catches the case where a vulnerable library bypasses the lockfile because someone vendored it directly. |
@@ -130,9 +130,26 @@ if a detector forgets to set them.
 - **EOL base-image detection has a hand-curated cutoff.** `base-images.json`
   is updated periodically; an alpine-3.16 today might not appear EOL until
   the file is refreshed. Bias is toward false negatives.
-- **Typosquat threshold is a single distance.** Levenshtein ≤ 2 against
-  the popular-packages.json list (188 entries, not top-1000). Increasing the threshold blows up the FP rate;
-  decreasing it loses real typosquats. This is the calibrated default.
+- **Typosquat similarity is RELATIVE, and that is load-bearing.** The rule is
+  Damerau-Levenshtein ≤ 2 *and* `distance / min(len) ≤ 0.25` against
+  popular-packages.json (188 entries, not top-1000).
+
+  The absolute `Levenshtein ≤ 2` this used to be was measured by
+  `bench/sca-replay` over 13 real repositories and produced **166 findings at
+  critical/high, of which zero were typosquats** — `ms ~ ws`, `acorn ~ cors`,
+  `ajv ~ ava`, `six ~ tox`, `arg ~ yargs`, `bail ~ babel`. All short names: two
+  edits on a four-character name changes half of it, and every two-character
+  package is one edit from every other. The ratio gate is what removes them.
+
+  Damerau rather than plain Levenshtein because a TRANSPOSITION (`lodahs` for
+  `lodash`) is the most common real typo, and plain distance scores it 2 — the
+  same as two unrelated substitutions. Under the ratio gate that would have
+  thrown the genuine cases out along with the noise.
+
+  The FP budget is pinned in `test/dep-confusion.test.js` using the actual
+  names the bench surfaced. Widening the reference list is safe *because* of
+  the ratio gate; widening it under the old rule would have multiplied the
+  noise.
 
 ## Adding a new detector here
 

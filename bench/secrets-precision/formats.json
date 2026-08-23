@@ -1,0 +1,238 @@
+{
+  "version": 1,
+  "_doc": "Credential formats as PUBLISHED BY THE PROVIDER, transcribed here from provider documentation rather than from the engine's own pattern table. Deriving this list from `CREDENTIAL_PATTERNS` would make recall 100% by construction \u2014 the same defect corpus-provenance-check.mjs reports about bench/cve-replay.",
+  "_generator": "`body` is a template. Placeholders are BRACED so they cannot collide with literal text: {U:n} uppercase alnum, {L:n} lowercase alnum, {A:n} mixed alnum, {D:n} digits, {H:n} lowercase hex. An earlier version used bare X/x/a/#/h characters and silently rewrote the literals in `da2-`, `shpat_`, `https`, `slack` and `key-`, producing malformed values that were then reported as ENGINE misses. Recorded because attributing a fixture bug to the thing under test is the specific failure this project has paid for before.",
+  "_honestLimit": "This measures FORMAT COVERAGE \u2014 of the provider formats this file knows about, how many does the engine recognise. It is NOT a measurement of detection on real leaked credentials in the wild; no such labelled corpus exists that can be ethically assembled. The precision half of this bench is the one scored against third-party code.",
+  "formats": [
+    {
+      "id": "aws-access-key",
+      "provider": "AWS",
+      "body": "AKIA{U:16}",
+      "severity": "critical"
+    },
+    {
+      "id": "aws-session-token-id",
+      "provider": "AWS",
+      "body": "ASIA{U:16}",
+      "severity": "critical"
+    },
+    {
+      "id": "aws-appsync-key",
+      "provider": "AWS",
+      "body": "da2-{L:26}",
+      "severity": "high"
+    },
+    {
+      "id": "google-api-key",
+      "provider": "Google",
+      "body": "AIza{A:35}",
+      "severity": "high"
+    },
+    {
+      "id": "google-oauth-token",
+      "provider": "Google",
+      "body": "ya29.{A:30}",
+      "severity": "high"
+    },
+    {
+      "id": "github-pat",
+      "provider": "GitHub",
+      "body": "ghp_{A:36}",
+      "severity": "critical"
+    },
+    {
+      "id": "github-oauth",
+      "provider": "GitHub",
+      "body": "gho_{A:36}",
+      "severity": "critical"
+    },
+    {
+      "id": "github-app-user",
+      "provider": "GitHub",
+      "body": "ghu_{A:36}",
+      "severity": "critical"
+    },
+    {
+      "id": "github-app-server",
+      "provider": "GitHub",
+      "body": "ghs_{A:36}",
+      "severity": "critical"
+    },
+    {
+      "id": "gitlab-pat",
+      "provider": "GitLab",
+      "body": "glpat-{A:20}",
+      "severity": "critical"
+    },
+    {
+      "id": "stripe-secret",
+      "provider": "Stripe",
+      "body": "sk_live_{A:24}",
+      "severity": "critical"
+    },
+    {
+      "id": "stripe-restricted",
+      "provider": "Stripe",
+      "body": "rk_live_{A:24}",
+      "severity": "high"
+    },
+    {
+      "id": "slack-bot-token",
+      "provider": "Slack",
+      "body": "xoxb-{D:11}-{D:12}-{A:24}",
+      "severity": "critical"
+    },
+    {
+      "id": "slack-webhook",
+      "provider": "Slack",
+      "body": "https://hooks.slack.com/services/T{U:8}/B{U:8}/{A:24}",
+      "severity": "high"
+    },
+    {
+      "id": "npm-token",
+      "provider": "npm",
+      "body": "npm_{A:36}",
+      "severity": "critical"
+    },
+    {
+      "id": "openai-key",
+      "provider": "OpenAI",
+      "body": "sk-{A:48}",
+      "severity": "critical"
+    },
+    {
+      "id": "anthropic-key",
+      "provider": "Anthropic",
+      "body": "sk-ant-api03-{A:95}",
+      "severity": "critical"
+    },
+    {
+      "id": "sendgrid-key",
+      "provider": "SendGrid",
+      "body": "SG.{A:22}.{A:43}",
+      "severity": "critical"
+    },
+    {
+      "id": "twilio-sid",
+      "provider": "Twilio",
+      "body": "SK{H:32}",
+      "severity": "high"
+    },
+    {
+      "id": "square-token",
+      "provider": "Square",
+      "body": "sq0atp-{A:22}",
+      "severity": "critical"
+    },
+    {
+      "id": "shopify-token",
+      "provider": "Shopify",
+      "body": "shpat_{H:32}",
+      "severity": "critical"
+    },
+    {
+      "id": "telegram-bot",
+      "provider": "Telegram",
+      "body": "{D:10}:AA{A:33}",
+      "severity": "high"
+    },
+    {
+      "id": "mailgun-key",
+      "provider": "Mailgun",
+      "body": "key-{A:32}",
+      "severity": "high"
+    },
+    {
+      "id": "digitalocean-pat",
+      "provider": "DigitalOcean",
+      "body": "dop_v1_{H:64}",
+      "severity": "critical"
+    },
+    {
+      "id": "private-key-pem",
+      "provider": "PEM",
+      "body": "-----BEGIN RSA PRIVATE KEY-----",
+      "severity": "critical"
+    },
+    {
+      "id": "openssh-private-key",
+      "provider": "OpenSSH",
+      "body": "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "severity": "critical"
+    },
+    {
+      "id": "jdbc-password",
+      "provider": "JDBC",
+      "body": "jdbc:mysql://db.internal:3306/app?user=root&password={A:16}",
+      "severity": "high"
+    },
+    {
+      "id": "postgres-uri",
+      "provider": "PostgreSQL",
+      "body": "postgres://appuser:{A:16}@db.internal:5432/production",
+      "severity": "high"
+    },
+    {
+      "id": "mongodb-uri",
+      "provider": "MongoDB",
+      "body": "mongodb+srv://appuser:{A:16}@cluster0.{L:5}.mongodb.net/prod",
+      "severity": "high"
+    },
+    {
+      "id": "azure-storage-key",
+      "provider": "Azure",
+      "body": "DefaultEndpointsProtocol=https;AccountName=prodstore;AccountKey={A:86}==;EndpointSuffix=core.windows.net",
+      "severity": "critical"
+    },
+    {
+      "id": "cloudflare-api-token",
+      "provider": "Cloudflare",
+      "body": "{A:40}",
+      "severity": "high"
+    },
+    {
+      "id": "datadog-api-key",
+      "provider": "Datadog",
+      "body": "{H:32}",
+      "severity": "high"
+    },
+    {
+      "id": "atlassian-api-token",
+      "provider": "Atlassian",
+      "body": "ATATT3xFfGF0{A:180}",
+      "severity": "critical"
+    },
+    {
+      "id": "hubspot-key",
+      "provider": "HubSpot",
+      "body": "pat-na1-{H:8}-{H:4}-{H:4}-{H:4}-{H:12}",
+      "severity": "critical"
+    },
+    {
+      "id": "vercel-token",
+      "provider": "Vercel",
+      "body": "{A:24}",
+      "severity": "critical"
+    },
+    {
+      "id": "supabase-service-key",
+      "provider": "Supabase",
+      "body": "sbp_{H:40}",
+      "severity": "critical"
+    },
+    {
+      "id": "algolia-admin-key",
+      "provider": "Algolia",
+      "body": "{H:32}",
+      "severity": "high"
+    },
+    {
+      "id": "firebase-server-key",
+      "provider": "Firebase",
+      "body": "AAAA{A:7}:APA91b{A:134}",
+      "severity": "critical"
+    }
+  ],
+  "_context": "Each value is planted as an assignment to a provider-named variable \u2014 `const twilioCredential = \"...\"` \u2014 because several provider formats are only distinguishable WITH nearby context (a bare `SK`+32 hex is not identifiably Twilio), and because that is how a leaked credential actually appears in source.",
+  "_headroom": "Formats are added when the instrument saturates. A bench sitting at 100% cannot fail, and a gate that cannot fail measures nothing \u2014 the PRD's governing rule. The eight entries after digitalocean-pat were added for exactly that reason; several are context-dependent shapes (a bare 32-hex string is only identifiably a key because of the variable it is assigned to), which is the honest next difficulty tier rather than more prefixed tokens."
+}

@@ -144,3 +144,135 @@ export function scanRuby(fp, raw) {
   }
   return findings;
 }
+
+// ── PRD F1.3 — `File.join(<root>, …, <untrusted>)` ──────────────────────────
+//
+// The dominant Ruby CWE-22 shape on real code, and the one
+// `pathTraversalStructural` above cannot reach: that rule needs a STRING
+// LITERAL as the first component (`File.read("/data/" + name)`), and the real
+// advisories join variables.
+//
+//   File.join(adapter.document_root, request.path_info.sub(/\.html$/,'') + '.html')
+//     — lsegal/yard, GHSA-pxcc-8665-phx8; the fix rejects `..` segments
+//   File.join(root, tenant, folder_for(key), key)
+//     — basecamp/activerecord-tenanted, GHSA-pmwx-rm49-xv39; the fix raises on
+//       `key.split("/").intersect?(%w[. ..])`
+//
+// Measured baseline before this rule: 23 cached Ruby CWE-22/CWE-79 entries,
+// 0 localized hits, 18 of them producing no finding of any kind.
+//
+// PRECISION IS THE WHOLE DESIGN. The F1.2 attempt at Ruby resource-exhaustion
+// was reverted because it fired on `File.read(File.join(__dir__, "…/data.json"))`
+// — a path built entirely from constants. So:
+//
+//   · the LAST component must be a variable-ish expression, never a literal;
+//   · a join rooted at `__dir__` / `Rails.root` / `File.dirname(__FILE__)` /
+//     `Dir.pwd` is a project-relative constant path and is skipped outright;
+//   · the join must actually reach a filesystem operation, either wrapped
+//     directly or through a variable used by one nearby;
+//   · any containment guard in the enclosing window silences it — that is the
+//     whole vulnerability, so a guard means there is nothing to report.
+//
+// A single `if path.include?("..")` silences this, which is exactly the fix
+// each of these advisories shipped.
+
+// Trailing (?!\w) rather than \b: Ruby predicate methods end in \, and a
+// word boundary after a non-word character never matches, so \
+// silently failed to count as a filesystem operation — the miss that made this
+// rule silent on lsegal/yard's static_caching.rb, one of the two advisories it
+// was written from.
+// Trailing (?!\w) rather than \b. Ruby predicate methods end in `?`, and a word
+// boundary after a non-word character can never match — so `File.file?(x)` did
+// not count as a filesystem operation, and this rule was silent on
+// lsegal/yard's static_caching.rb, one of the two advisories it was written
+// from. The rule looked correct in isolation and found nothing; the bug was one
+// character of regex.
+const RB_FS_OP = /\b(?:File|IO|FileUtils|Dir)\s*\.\s*(?:read|open|new|readlines|binread|binwrite|write|foreach|delete|unlink|mkdir_p|rm_rf|cp|mv|file\?|exist\?|directory\?|entries|glob)(?!\w)/;
+// Constant roots: a path assembled from these is not attacker-reachable.
+const RB_CONST_ROOT = /\b(?:__dir__|__FILE__|Rails\.root|Dir\.pwd|Gem\.dir|File\.dirname\s*\(\s*__FILE__)/;
+// Any of these in the enclosing window means containment was considered.
+const RB_PATH_GUARD = /\b(?:expand_path[\s\S]{0,200}?start_with\?|start_with\?[\s\S]{0,200}?expand_path|include\?\s*\(\s*['"]\.\.|\.\.\s*['"]\s*\)|intersect\?\s*\(\s*%w\[|cleanpath|realpath|File\s*\.\s*basename|sanitize_filename|secure_filename|ValidPath|absolute_path\?)/;
+// A literal argument — the thing that must NOT be the last component.
+const RB_LITERAL_ARG = /^\s*(?:['"][^'"]*['"]|:[A-Za-z_]\w*)\s*$/;
+
+function _splitArgs(s) {
+  const out = [];
+  let depth = 0, cur = '';
+  for (const ch of s) {
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    if (ch === ',' && depth === 0) { out.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur);
+  return out;
+}
+
+/** File.join(...) whose last component is variable and which reaches the filesystem. */
+export function scanRubyPathJoin(fp, raw) {
+  if (!/\.rb$/i.test(fp)) return [];
+  if (!raw || raw.length > 500_000) return [];
+  const code = blankComments(raw, 'py');
+  const lines = code.split('\n');
+  const out = [];
+  const seen = new Set();
+
+  const JOIN = /\bFile\s*\.\s*join\s*\(/g;
+  let m;
+  while ((m = JOIN.exec(code))) {
+    // Balanced scan for the closing paren of this call.
+    let i = m.index + m[0].length, depth = 1;
+    for (; i < code.length && depth > 0; i++) {
+      if (code[i] === '(') depth++;
+      else if (code[i] === ')') depth--;
+    }
+    if (depth !== 0) continue;
+    const inner = code.slice(m.index + m[0].length, i - 1);
+    const args = _splitArgs(inner);
+    if (args.length < 2) continue;
+    const last = args[args.length - 1];
+    if (RB_LITERAL_ARG.test(last)) continue;                 // File.join(root, "index.html")
+    if (RB_CONST_ROOT.test(inner)) continue;                 // project-relative constant path
+
+    const line = code.slice(0, m.index).split('\n').length;
+
+    // The join must reach the filesystem: wrapped directly, or assigned to a
+    // variable that a nearby filesystem call uses.
+    const before = code.slice(Math.max(0, m.index - 120), m.index);
+    let reaches = RB_FS_OP.test(before);
+    let assigned = null;
+    if (!reaches) {
+      const am = before.match(/([A-Za-z_@][\w]*)\s*=\s*$/);
+      if (am) {
+        assigned = am[1];
+        const after = lines.slice(line, line + 12).join('\n');
+        const use = new RegExp(`${assigned.replace('@', '@')}\\b`);
+        reaches = RB_FS_OP.test(after) && use.test(after);
+      }
+    }
+    if (!reaches) continue;
+
+    // Containment guard anywhere in the enclosing window — that IS the fix.
+    const windowText = lines.slice(Math.max(0, line - 15), line + 15).join('\n');
+    if (RB_PATH_GUARD.test(windowText)) continue;
+
+    const id = `ruby-pathJoinUnguarded:${fp}:${line}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id, file: fp, line,
+      vuln: 'Path Traversal: File.join builds a filesystem path from a variable component with no containment check',
+      severity: 'high', cwe: 'CWE-22', family: 'path-traversal',
+      parser: 'RUBY', confidence: 0.7,
+      description:
+        `The last component of this File.join is a variable, the result reaches a filesystem operation, and nothing in ` +
+        `the surrounding code rejects \`..\` segments or asserts the resolved path stays under the base. A value ` +
+        `containing \`../\` walks out of the intended directory.`,
+      remediation:
+        'Reject traversal segments before joining — `raise if key.split("/").intersect?(%w[. ..])` — or canonicalize ' +
+        'and assert containment: `path = File.expand_path(File.join(base, name)); raise unless path.start_with?(base)`.',
+      snippet: (raw.split('\n')[line - 1] || '').trim().slice(0, 200),
+    });
+  }
+  return out;
+}

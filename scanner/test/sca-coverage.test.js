@@ -154,7 +154,15 @@ google.golang.org/grpc v1.50.1+incompatible/go.mod h1:fedcba=
   assert.equal(errors.ecosystem, 'golang');
   assert.equal(errors.isTransitive, true);
   const grpc = comps.find(c => c.name === 'google.golang.org/grpc');
-  assert.equal(grpc.version, '1.50.1', '+incompatible suffix stripped');
+  // `+incompatible` is KEPT. This expectation was reversed deliberately under
+  // PRD F3.1: `+incompatible` is part of the module version the advisory
+  // database matches on, and it is what belongs in an emitted SBOM. The same
+  // stripping habit destroyed Go pseudo-versions
+  // (v0.0.0-20210903162142-ad29c8ab022f → 0.0.0), collapsing every
+  // pseudo-versioned module in a tree onto one key; bench/sca-replay measured
+  // Go recall at 5.28% because of it, and 100% once the versions survived.
+  // Normalisation for a query belongs at the query — see _osvQueryVersion.
+  assert.equal(grpc.version, '1.50.1+incompatible', '+incompatible suffix preserved');
 });
 
 test('go.sum: malformed lines are skipped without error', () => {

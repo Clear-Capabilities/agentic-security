@@ -1,0 +1,631 @@
+{
+  "prd": "F3.1",
+  "generatedAt": "2026-08-23T11:42:09.227Z",
+  "engineVersion": "0.141.0",
+  "configuration": "scan --only sca --format json, network enabled, per-entry watchdog 600000ms",
+  "labelSource": "osv.dev querybatch",
+  "labelGeneratedAt": "2026-08-23",
+  "totals": {
+    "entries": 13,
+    "labelledVulnerable": 394,
+    "tp": 307,
+    "fn": 87,
+    "fp": 0,
+    "outOfLabel": 27,
+    "recall": {
+      "n": 307,
+      "d": 394,
+      "pct": 77.92
+    },
+    "precision": {
+      "n": 307,
+      "d": 307,
+      "pct": 100
+    },
+    "packageRecall": {
+      "n": 306,
+      "d": 316,
+      "pct": 96.84
+    }
+  },
+  "development": {
+    "entries": 9,
+    "labelledVulnerable": 324,
+    "tp": 248,
+    "fn": 76,
+    "fp": 0,
+    "outOfLabel": 24,
+    "recall": {
+      "n": 248,
+      "d": 324,
+      "pct": 76.54
+    },
+    "precision": {
+      "n": 248,
+      "d": 248,
+      "pct": 100
+    },
+    "packageRecall": {
+      "n": 247,
+      "d": 250,
+      "pct": 98.8
+    }
+  },
+  "heldOut": {
+    "entries": 4,
+    "labelledVulnerable": 70,
+    "tp": 59,
+    "fn": 11,
+    "fp": 0,
+    "outOfLabel": 3,
+    "recall": {
+      "n": 59,
+      "d": 70,
+      "pct": 84.29
+    },
+    "precision": {
+      "n": 59,
+      "d": 59,
+      "pct": 100
+    },
+    "packageRecall": {
+      "n": 59,
+      "d": 66,
+      "pct": 89.39
+    }
+  },
+  "byEcosystem": {
+    "npm": {
+      "entries": 3,
+      "labelledVulnerable": 229,
+      "tp": 161,
+      "fn": 68,
+      "fp": 0,
+      "outOfLabel": 14,
+      "recall": {
+        "n": 161,
+        "d": 229,
+        "pct": 70.31
+      },
+      "precision": {
+        "n": 161,
+        "d": 161,
+        "pct": 100
+      },
+      "packageRecall": {
+        "n": 153,
+        "d": 156,
+        "pct": 98.08
+      }
+    },
+    "PyPI": {
+      "entries": 3,
+      "labelledVulnerable": 30,
+      "tp": 29,
+      "fn": 1,
+      "fp": 0,
+      "outOfLabel": 4,
+      "recall": {
+        "n": 29,
+        "d": 30,
+        "pct": 96.67
+      },
+      "precision": {
+        "n": 29,
+        "d": 29,
+        "pct": 100
+      },
+      "packageRecall": {
+        "n": 29,
+        "d": 29,
+        "pct": 100
+      }
+    },
+    "RubyGems": {
+      "entries": 2,
+      "labelledVulnerable": 69,
+      "tp": 58,
+      "fn": 11,
+      "fp": 0,
+      "outOfLabel": 1,
+      "recall": {
+        "n": 58,
+        "d": 69,
+        "pct": 84.06
+      },
+      "precision": {
+        "n": 58,
+        "d": 58,
+        "pct": 100
+      },
+      "packageRecall": {
+        "n": 58,
+        "d": 65,
+        "pct": 89.23
+      }
+    },
+    "Go": {
+      "entries": 2,
+      "labelledVulnerable": 40,
+      "tp": 40,
+      "fn": 0,
+      "fp": 0,
+      "outOfLabel": 0,
+      "recall": {
+        "n": 40,
+        "d": 40,
+        "pct": 100
+      },
+      "precision": {
+        "n": 40,
+        "d": 40,
+        "pct": 100
+      },
+      "packageRecall": {
+        "n": 40,
+        "d": 40,
+        "pct": 100
+      }
+    },
+    "Maven": {
+      "entries": 1,
+      "labelledVulnerable": 0,
+      "tp": 0,
+      "fn": 0,
+      "fp": 0,
+      "outOfLabel": 0,
+      "recall": {
+        "n": 0,
+        "d": 0,
+        "pct": null
+      },
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "pct": null
+      },
+      "packageRecall": {
+        "n": 0,
+        "d": 0,
+        "pct": null
+      }
+    },
+    "Packagist": {
+      "entries": 1,
+      "labelledVulnerable": 21,
+      "tp": 14,
+      "fn": 7,
+      "fp": 0,
+      "outOfLabel": 8,
+      "recall": {
+        "n": 14,
+        "d": 21,
+        "pct": 66.67
+      },
+      "precision": {
+        "n": 14,
+        "d": 14,
+        "pct": 100
+      },
+      "packageRecall": {
+        "n": 21,
+        "d": 21,
+        "pct": 100
+      }
+    },
+    "crates.io": {
+      "entries": 1,
+      "labelledVulnerable": 5,
+      "tp": 5,
+      "fn": 0,
+      "fp": 0,
+      "outOfLabel": 0,
+      "recall": {
+        "n": 5,
+        "d": 5,
+        "pct": 100
+      },
+      "precision": {
+        "n": 5,
+        "d": 5,
+        "pct": 100
+      },
+      "packageRecall": {
+        "n": 5,
+        "d": 5,
+        "pct": 100
+      }
+    }
+  },
+  "unscored": [],
+  "entries": [
+    {
+      "id": "npm-cli-8.5.0",
+      "repo": "npm/cli",
+      "tag": "v8.5.0",
+      "ecosystem": "npm",
+      "heldOut": false,
+      "status": "SCORED",
+      "packageLevel": {
+        "tp": 37,
+        "d": 37,
+        "recall": 100
+      },
+      "labelled": {
+        "enumerated": 766,
+        "vulnerable": 49
+      },
+      "engine": {
+        "reported": 40,
+        "findings": 67
+      },
+      "tp": 39,
+      "fn": 10,
+      "fp": 0,
+      "outOfLabel": 1,
+      "recall": 79.59,
+      "precision": 100,
+      "reachability": {
+        "demoted": 0,
+        "demotionRate": 0
+      },
+      "examples": {
+        "fn": [
+          "npm|@babel/core|7.16.0",
+          "npm|@babel/helpers|7.16.3",
+          "npm|@babel/traverse|7.16.3",
+          "npm|@tootallnate/once|1.1.2",
+          "npm|ansi-regex|3.0.0"
+        ],
+        "fp": [],
+        "outOfLabel": [
+          "npm||1.0.1"
+        ]
+      }
+    },
+    {
+      "id": "next-13.4.0",
+      "repo": "vercel/next.js",
+      "tag": "v13.4.0",
+      "ecosystem": "npm",
+      "heldOut": false,
+      "status": "SCORED",
+      "packageLevel": {
+        "tp": 107,
+        "d": 109,
+        "recall": 98.17
+      },
+      "labelled": {
+        "enumerated": 3097,
+        "vulnerable": 170
+      },
+      "engine": {
+        "reported": 126,
+        "findings": 250
+      },
+      "tp": 113,
+      "fn": 57,
+      "fp": 0,
+      "outOfLabel": 13,
+      "recall": 66.47,
+      "precision": 100,
+      "reachability": {
+        "demoted": 0,
+        "demotionRate": 0
+      },
+      "examples": {
+        "fn": [
+          "npm|@babel/plugin-transform-modules-systemjs|7.18.4",
+          "npm|@babel/plugin-transform-modules-systemjs|7.19.6",
+          "npm|@babel/runtime-corejs3|7.12.13",
+          "npm|@babel/runtime|7.15.4",
+          "npm|@babel/runtime|7.16.7"
+        ],
+        "fp": [],
+        "outOfLabel": [
+          "npm||3.0.6",
+          "npm||27.0.6",
+          "npm||3.2.5",
+          "npm||15.2.6",
+          "npm||18.1.0"
+        ]
+      }
+    },
+    {
+      "id": "express-4.18.1",
+      "repo": "expressjs/express",
+      "tag": "4.18.1",
+      "ecosystem": "npm",
+      "heldOut": false,
+      "status": "SCORED",
+      "packageLevel": {
+        "tp": 9,
+        "d": 10,
+        "recall": 90
+      },
+      "labelled": {
+        "enumerated": 36,
+        "vulnerable": 10
+      },
+      "engine": {
+        "reported": 9,
+        "findings": 16
+      },
+      "tp": 9,
+      "fn": 1,
+      "fp": 0,
+      "outOfLabel": 0,
+      "recall": 90,
+      "precision": 100,
+      "reachability": {
+        "demoted": 0,
+        "demotionRate": 0
+      },
+      "examples": {
+        "fn": [
+          "npm|morgan|1.10.0"
+        ],
+        "fp": [],
+        "outOfLabel": []
+      }
+    },
+    {
+      "id": "flask-2.0.0",
+      "repo": "pallets/flask",
+      "tag": "2.0.0",
+      "ecosystem": "PyPI",
+      "heldOut": false,
+      "status": "SCORED",
+      "packageLevel": {
+        "tp": 11,
+        "d": 11,
+        "recall": 100
+      },
+      "labelled": {
+        "enumerated": 55,
+        "vulnerable": 11
+      },
+      "engine": {
+        "reported": 11,
+        "findings": 60
+      },
+      "tp": 11,
+      "fn": 0,
+      "fp": 0,
+      "outOfLabel": 0,
+      "recall": 100,
+      "precision": 100,
+      "reachability": {
+        "demoted": 0,
+        "demotionRate": 0
+      },
+      "examples": {
+        "fn": [],
+        "fp": [],
+        "outOfLabel": []
+      }
+    },
+    {
+      "id": "poetry-1.1.0",
+      "repo": "python-poetry/poetry",
+      "tag": "1.1.0",
+      "ecosystem": "PyPI",
+      "heldOut": false,
+      "status": "SCORED",
+      "packageLevel": {
+        "tp": 13,
+        "d": 13,
+        "recall": 100
+      },
+      "labelled": {
+        "enumerated": 83,
+        "vulnerable": 14
+      },
+      "engine": {
+        "reported": 14,
+        "findings": 82
+      },
+      "tp": 13,
+      "fn": 1,
+      "fp": 0,
+      "outOfLabel": 1,
+      "recall": 92.86,
+      "precision": 100,
+      "reachability": {
+        "demoted": 0,
+        "demotionRate": 0
+      },
+      "examples": {
+        "fn": [
+          "PyPI|pytest|5.4.3"
+        ],
+        "fp": [],
+        "outOfLabel": [
+          "PyPI|requests|2.18"
+        ]
+      }
+    },
+    {
+      "id": "home-assistant-2021.6.0",
+      "heldOut": true,
+      "status": "SCORED",
+      "withheld": "per-entry detail withheld; pass --show-heldout"
+    },
+    {
+      "id": "discourse-2.8.0",
+      "repo": "discourse/discourse",
+      "tag": "v2.8.0",
+      "ecosystem": "RubyGems",
+      "heldOut": false,
+      "status": "SCORED",
+      "packageLevel": {
+        "tp": 28,
+        "d": 28,
+        "recall": 100
+      },
+      "labelled": {
+        "enumerated": 226,
+        "vulnerable": 28
+      },
+      "engine": {
+        "reported": 29,
+        "findings": 142
+      },
+      "tp": 28,
+      "fn": 0,
+      "fp": 0,
+      "outOfLabel": 1,
+      "recall": 100,
+      "precision": 100,
+      "reachability": {
+        "demoted": 0,
+        "demotionRate": 0
+      },
+      "examples": {
+        "fn": [],
+        "fp": [],
+        "outOfLabel": [
+          "RubyGems|nokogiri|1.12.5-arm64-darwin"
+        ]
+      }
+    },
+    {
+      "id": "rails-6.1.0",
+      "heldOut": true,
+      "status": "SCORED",
+      "withheld": "per-entry detail withheld; pass --show-heldout"
+    },
+    {
+      "id": "prometheus-2.30.0",
+      "repo": "prometheus/prometheus",
+      "tag": "v2.30.0",
+      "ecosystem": "Go",
+      "heldOut": false,
+      "status": "SCORED",
+      "packageLevel": {
+        "tp": 21,
+        "d": 21,
+        "recall": 100
+      },
+      "labelled": {
+        "enumerated": 187,
+        "vulnerable": 21
+      },
+      "engine": {
+        "reported": 21,
+        "findings": 182
+      },
+      "tp": 21,
+      "fn": 0,
+      "fp": 0,
+      "outOfLabel": 0,
+      "recall": 100,
+      "precision": 100,
+      "reachability": {
+        "demoted": 0,
+        "demotionRate": 0
+      },
+      "examples": {
+        "fn": [],
+        "fp": [],
+        "outOfLabel": []
+      }
+    },
+    {
+      "id": "consul-1.10.0",
+      "heldOut": true,
+      "status": "SCORED",
+      "withheld": "per-entry detail withheld; pass --show-heldout"
+    },
+    {
+      "id": "dubbo-3.0.0",
+      "repo": "apache/dubbo",
+      "tag": "dubbo-3.0.0",
+      "ecosystem": "Maven",
+      "heldOut": false,
+      "status": "SCORED",
+      "packageLevel": {
+        "tp": 0,
+        "d": 0,
+        "recall": null
+      },
+      "labelled": {
+        "enumerated": 7,
+        "vulnerable": 0
+      },
+      "engine": {
+        "reported": 0,
+        "findings": 0
+      },
+      "tp": 0,
+      "fn": 0,
+      "fp": 0,
+      "outOfLabel": 0,
+      "recall": null,
+      "precision": null,
+      "reachability": {
+        "demoted": 0,
+        "demotionRate": null
+      },
+      "examples": {
+        "fn": [],
+        "fp": [],
+        "outOfLabel": []
+      }
+    },
+    {
+      "id": "magento2-2.4.3",
+      "repo": "magento/magento2",
+      "tag": "2.4.3",
+      "ecosystem": "Packagist",
+      "heldOut": false,
+      "status": "SCORED",
+      "packageLevel": {
+        "tp": 21,
+        "d": 21,
+        "recall": 100
+      },
+      "labelled": {
+        "enumerated": 198,
+        "vulnerable": 21
+      },
+      "engine": {
+        "reported": 22,
+        "findings": 67
+      },
+      "tp": 14,
+      "fn": 7,
+      "fp": 0,
+      "outOfLabel": 8,
+      "recall": 66.67,
+      "precision": 100,
+      "reachability": {
+        "demoted": 0,
+        "demotionRate": 0
+      },
+      "examples": {
+        "fn": [
+          "Packagist|composer/composer|1.10.21",
+          "Packagist|guzzlehttp/guzzle|6.5.5",
+          "Packagist|paragonie/sodium_compat|1.15.3",
+          "Packagist|squizlabs/php_codesniffer|3.5.8",
+          "Packagist|symfony/process|4.4.20"
+        ],
+        "fp": [],
+        "outOfLabel": [
+          "Packagist|laminas/laminas-http|2.6.0",
+          "Packagist|composer/composer|1.9",
+          "Packagist|guzzlehttp/guzzle|6.3.3",
+          "Packagist|symfony/process|4.4.0",
+          "Packagist|webonyx/graphql-php|0.13.8"
+        ]
+      }
+    },
+    {
+      "id": "ripgrep-13.0.0",
+      "heldOut": true,
+      "status": "SCORED",
+      "withheld": "per-entry detail withheld; pass --show-heldout"
+    }
+  ]
+}

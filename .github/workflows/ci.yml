@@ -35,6 +35,36 @@ jobs:
       - name: Verify committed bundle matches source
         run: git diff --exit-code dist/agentic-security.mjs dist/agentic-security.mjs.sha256
 
+  # PRD F11.1 — the VS Code extension is a shipped surface and its bundle is
+  # committed, so it can go stale exactly the way the scanner bundle can.
+  #
+  # This is the byte-exact half of the check. The dependency-free half runs in
+  # the scanner suite (test/ide-surfaces.test.js) and asserts the committed
+  # bundle carries the current resolution logic; it cannot rebuild, because CI
+  # only installs dependencies under scanner/. This job installs ide/vscode and
+  # does the real comparison.
+  vscode-extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ide/vscode
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm install
+      - name: Build the extension bundle
+        run: npm run build
+      - name: Verify the committed bundle matches source
+        run: git diff --exit-code dist/extension.js
+      # No type-check step: `typescript` is not a dependency of this tree and
+      # the build is esbuild, which strips types without checking them. So a
+      # TYPE error in extension.ts still ships silently. Recorded as a known
+      # gap rather than closed by adding a compiler this tree does not
+      # otherwise need — F11.1 asks for the surface to be gated, and staleness
+      # is the failure that has actually occurred here.
+
   # Exercises the kernel-namespace confinement backend for real.
   #
   # Hosted runners ship with unprivileged user-namespace creation restricted by

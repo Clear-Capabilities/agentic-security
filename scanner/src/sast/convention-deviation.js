@@ -73,7 +73,12 @@ export function pythonUnits(code) {
         depth += (lines[j].match(/\(/g) || []).length - (lines[j].match(/\)/g) || []).length;
         j++;
       } while (depth > 0 && j < lines.length && j < i + 40);
-      cur = { name: m[2], indent: m[1].length, line: i + 1, sig, body: [] };
+      // bodyStartLine: `body` collects from the line AFTER the decl, so an
+      // offset inside it maps to an absolute line through this.
+      // sigSpan: how many SOURCE lines the signature occupies. The loop above
+      // appends continuation lines to `body`, so without this the "first body
+      // line" is really still part of the parameter list.
+      cur = { name: m[2], indent: m[1].length, line: i + 1, bodyStartLine: i + 2, sigSpan: j - i, sig, body: [] };
     } else if (cur) {
       cur.body.push(lines[i]);
     }
@@ -118,7 +123,7 @@ export function jsUnits(code) {
       for (const ch of text) { if (ch === '{') depth++; else if (ch === '}') { depth--; if (depth === 0) { done = true; break; } } }
       body.push(text);
     }
-    units.push({ name, line: i + 1, sig, body: body.join('\n') });
+    units.push({ name, line: i + 1, bodyStartLine: open + 1, sig, body: body.join('\n') });
     i = open;
   }
   return units;
@@ -138,6 +143,47 @@ export function jsUnits(code) {
  * threshold would have been the wrong fix: it weakens the precision control
  * everywhere instead of restoring the population that genuinely exists.
  */
+
+// Where the missing guard BELONGS: the first executable statement of the body.
+//
+// A "this function omits the guard its peers apply" finding is function-scoped,
+// and the three candidate lines it could carry are not equivalent:
+//
+//   the `def` line        — not actionable, and furthest from the fix
+//   the forwarding call   — actionable, but the guard goes ABOVE it
+//   the first statement   — exactly where a remediation inserts the guard
+//
+// Measured on this detector's own source advisory (GHSA-9rj7-rf2p-w77r): the
+// upstream fix inserts `Git.check_unsafe_options(...)` as the first statement
+// of `init()`, at pre-line 1431. The `def` is at 1395 and the forwarding call
+// at 1439 — both far outside the ±3 localization window, while the insertion
+// point is inside it. The detector was never wrong about WHICH function; it was
+// pointing at the wrong line within it.
+//
+// Skips the docstring, because nobody inserts a guard above one.
+function guardInsertionLine(u) {
+  if (!Number.isInteger(u.bodyStartLine)) return u.line;
+  const lines = String(u.body || '').split('\n');
+  let i = 0;
+  // Python signature continuation lines land in the body; skip until the
+  // signature's parentheses have closed.
+  i = Math.max(0, (u.sigSpan || 1) - 1);
+  while (i < lines.length && !lines[i].trim()) i++;
+  const DOC = new RegExp('^[rubf]{0,2}(' + '"'.repeat(3) + "|'''" + ')');
+  const head = (lines[i] || '').trim();
+  const doc = head.match(DOC);
+  if (doc) {
+    const q = doc[1];
+    if (!head.slice(doc[0].length).includes(q)) {   // multi-line docstring
+      i++;
+      while (i < lines.length && !lines[i].includes(q)) i++;
+    }
+    i++;
+    while (i < lines.length && !lines[i].trim()) i++;
+  }
+  return u.bodyStartLine + Math.min(i, Math.max(lines.length - 1, 0));
+}
+
 export function analyseUnits(units) {
   // receiver -> { guarded: [...], unguarded: [...] }
   const groups = new Map();
@@ -156,7 +202,24 @@ export function analyseUnits(units) {
       if (!groups.has(receiver)) groups.set(receiver, { guarded: [], unguarded: [] });
       const g = groups.get(receiver);
       const key = `${u.file}::${u.name}`;
-      const row = { name: u.name, line: u.line, file: u.file, into: `${f[1]}.${f[2]}` };
+      // Report the FORWARDING CALL, not the `def` line.
+      //
+      // Two reasons, and the second is why it changed. (1) The call is where a
+      // reader has to look and where the guard has to go; a function signature
+      // is not actionable. (2) Measured against bench/independent, this
+      // detector fired on the right file with the right CWE on its own source
+      // advisory (GHSA-9rj7-rf2p-w77r) and still scored zero, because the
+      // finding sat on `def init(` at line 1395 while the fix landed at 1400 —
+      // five lines away, against a ±3 localization window. It was never a
+      // detection gap. Widening the window would have been benchmark gaming;
+      // pointing at the line the remediation actually touches is just correct.
+      const callLine = Number.isInteger(u.bodyStartLine)
+        ? u.bodyStartLine + u.body.slice(0, f.index).split('\n').length - 1
+        : u.line;
+      const row = {
+        name: u.name, line: guardInsertionLine(u), defLine: u.line, callLine,
+        file: u.file, into: `${f[1]}.${f[2]}`,
+      };
       if (guard) { if (!g.guarded.some(x => `${x.file}::${x.name}` === key)) g.guarded.push({ ...row, guard: guard[1] }); }
       else if (!g.unguarded.some(x => `${x.file}::${x.name}` === key)) g.unguarded.push(row);
     }

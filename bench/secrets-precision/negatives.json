@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "_doc": "The HARD half. Every string here is high-entropy, credential-shaped, and NOT a secret. These are the shapes that make a secret scanner unusable \u2014 a scanner that reports them trains its users to ignore it, which is worse than not scanning.",
+  "_selection": "Chosen because they occur in essentially every real repository, not because they are difficult in the abstract. Lockfile integrity fields alone number in the thousands per project.",
+  "cases": [
+    {
+      "id": "git-sha-full",
+      "why": "a commit id, in every repo",
+      "file": "docs/CHANGELOG.md",
+      "body": "Fixed in commit 4c36116dcf878e127059d9be9566a119783583f2."
+    },
+    {
+      "id": "npm-integrity",
+      "why": "package-lock.json integrity field",
+      "file": "package-lock.json",
+      "body": "{\"node_modules/x\":{\"version\":\"1.0.0\",\"integrity\":\"sha512-fzUuVI8FSWjrpV3qKrPkFKgHzYzjeIVUyLC3Jzp8U0AXAf13Qb1L6P8FVQnDmpZbLhFYLLYUFbrMSFT6oB6xNQ==\"}}"
+    },
+    {
+      "id": "cargo-checksum",
+      "why": "Cargo.lock checksum",
+      "file": "Cargo.lock",
+      "body": "checksum = \"1e6d5d3b5d5b1d9c1a8f3f8e6b9d0a5c4f2e1d0c9b8a7f6e5d4c3b2a1908f7e6\""
+    },
+    {
+      "id": "uuid-v4",
+      "why": "an identifier, not a credential",
+      "file": "src/config.js",
+      "body": "const tenantId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';"
+    },
+    {
+      "id": "ulid",
+      "why": "sortable id",
+      "file": "src/ids.js",
+      "body": "const requestId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';"
+    },
+    {
+      "id": "sha256-content-hash",
+      "why": "a content digest",
+      "file": "build/manifest.json",
+      "body": "{\"app.js\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}"
+    },
+    {
+      "id": "base64-png",
+      "why": "an inlined image asset",
+      "file": "src/logo.js",
+      "body": "export const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';"
+    },
+    {
+      "id": "subresource-integrity",
+      "why": "an SRI attribute in HTML",
+      "file": "index.html",
+      "body": "<script src=\"/app.js\" integrity=\"sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC\"></script>"
+    },
+    {
+      "id": "css-hash-classname",
+      "why": "a build-generated class name",
+      "file": "src/styles.css",
+      "body": ".button_a8f3e9c1b2d4 { color: #1a2b3c; }"
+    },
+    {
+      "id": "docker-image-digest",
+      "why": "an image pin",
+      "file": "Dockerfile",
+      "body": "FROM node@sha256:5e5f6f0a2ea0c9e6e2e6b1e33b8b1e0c8a9d3f2e1b0a9c8d7e6f5a4b3c2d1e0f"
+    },
+    {
+      "id": "jwt-shaped-public-payload",
+      "why": "a decoded example in documentation",
+      "file": "docs/auth.md",
+      "body": "A token looks like: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+    },
+    {
+      "id": "hex-color-run",
+      "why": "a design token file",
+      "file": "src/theme.js",
+      "body": "export const palette = { a: '#0f172a', b: '#1e293b', c: '#334155', d: '#475569', e: '#64748b' };"
+    },
+    {
+      "id": "random-test-fixture",
+      "why": "a deterministic test vector",
+      "file": "test/fixtures/vectors.js",
+      "body": "export const NONCE = '9f8e7d6c5b4a39281706f5e4d3c2b1a0';"
+    },
+    {
+      "id": "webpack-chunk-name",
+      "why": "a build artifact name",
+      "file": "dist/asset-manifest.json",
+      "body": "{\"main.js\":\"/static/js/main.a4b8c9d2e1f0.chunk.js\"}"
+    },
+    {
+      "id": "aws-example-key",
+      "why": "the provider's OWN published example value, in documentation",
+      "file": "docs/aws-setup.md",
+      "body": "Set AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE for the walkthrough."
+    },
+    {
+      "id": "env-var-reference",
+      "why": "a reference, not a value",
+      "file": "src/config.js",
+      "body": "const apiKey = process.env.STRIPE_SECRET_KEY;"
+    },
+    {
+      "id": "placeholder-value",
+      "why": "template scaffolding",
+      "file": ".env.example",
+      "body": "STRIPE_SECRET_KEY=sk_live_your_key_here_replace_me"
+    },
+    {
+      "id": "go-module-hash",
+      "why": "a go.sum hash line",
+      "file": "go.sum",
+      "body": "github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4="
+    },
+    {
+      "id": "gemfile-lock-digest",
+      "why": "a bundler checksum",
+      "file": "Gemfile.lock",
+      "body": "   BUNDLED WITH\n   2.3.7\n   CHECKSUMS\n     rails (6.1.0) sha256=8f3e2d1c0b9a8f7e6d5c4b3a29180706f5e4d3c2b1a09f8e7d6c5b4a39281706"
+    },
+    {
+      "id": "minified-bundle-line",
+      "why": "a real minified line, dense and high-entropy",
+      "file": "dist/vendor.js",
+      "body": "!function(e,t){\"object\"==typeof exports?module.exports=t():e.X=t()}(this,function(){var a4f8e9c1b2d3e4f5a6b7c8d9=1;return a4f8e9c1b2d3e4f5a6b7c8d9})"
+    },
+    {
+      "id": "aws-length-base64-blob",
+      "why": "a 20-char uppercase blob in a data file, AWS-key length but not AWS-shaped",
+      "file": "src/data/regions.js",
+      "body": "export const REGION_CODES = ['USEAST1PRIMARY0A2B3', 'EUWEST2SECONDARY9Z8'];"
+    },
+    {
+      "id": "detector-rule-definition",
+      "why": "a security rule file that DEFINES key shapes \u2014 the scanner scanning itself",
+      "file": "rules/secrets.yml",
+      "body": "patterns:\\n  - name: github-pat\\n    regex: 'ghp_[0-9a-zA-Z]{36}'\\n  - name: stripe\\n    regex: 'sk_live_[0-9a-zA-Z]{24}'"
+    },
+    {
+      "id": "npmrc-env-interpolation",
+      "why": "a reference to an env var, not a value",
+      "file": ".npmrc",
+      "body": "//registry.npmjs.org/:_authToken=${NPM_TOKEN}"
+    },
+    {
+      "id": "terraform-state-lineage",
+      "why": "a state-file lineage id",
+      "file": "terraform.tfstate",
+      "body": "{\"version\":4,\"lineage\":\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\"serial\":42}"
+    },
+    {
+      "id": "sass-variable-hash",
+      "why": "a build hash in a stylesheet variable",
+      "file": "src/_vars.scss",
+      "body": "$asset-revision: 'sk-9f8e7d6c5b4a39281706f5e4d3c2b1a0f9e8d7c6';"
+    },
+    {
+      "id": "test-snapshot-blob",
+      "why": "a jest-style snapshot of random bytes",
+      "file": "test/__snapshots__/crypto.test.js.snap",
+      "body": "exports[`derives a key 1`] = `\"c5d3e1f9a7b5c3d1e9f7a5b3c1d9e7f5a3b1c9d7e5f3a1b9c7d5e3f1a9b7c5d3\"`;"
+    },
+    {
+      "id": "rotated-key-in-changelog",
+      "why": "a changelog noting a rotation, with the key masked",
+      "file": "CHANGELOG.md",
+      "body": "- Rotated the production Stripe key (was sk_live_****************ab12) after the 2024 audit."
+    },
+    {
+      "id": "openapi-security-scheme",
+      "why": "an API spec declaring auth, naming no credential",
+      "file": "openapi.yaml",
+      "body": "components:\\n  securitySchemes:\\n    bearerAuth:\\n      type: http\\n      scheme: bearer\\n      bearerFormat: JWT"
+    }
+  ],
+  "_headroom": "Negatives are added when the instrument saturates, for the same reason as formats. The eight after minified-bundle-line are the harder tier: strings that are credential-SHAPED and appear in files a scanner will certainly read, including a rule file that defines key formats \u2014 a secrets scanner reporting its own pattern library is a real and embarrassing failure mode."
+}

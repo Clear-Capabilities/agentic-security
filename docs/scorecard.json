@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.140.0",
-    "bundleSha256": "58e27f5c8f403e873e1a2c9ccaf63c3681cc68a31450f3c6faaf0142df275197",
-    "commit": "74a694f13c3a0207369b1deddd5152c4f671539c",
+    "engineVersion": "0.141.0",
+    "bundleSha256": "deeb49d41f22000f35683bc1e9dc2c2368c4b79af6272740c5e96cece4732475",
+    "commit": "a8755b88cc7601bc5800730af68f33368bd46a23",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-22T18:51:44.929Z"
+    "generatedAt": "2026-08-23T11:44:34.385Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -20,16 +20,24 @@
   "corpus": {
     "measuredThisRun": true,
     "totalEntries": 215,
-    "scoredEntries": 215,
-    "notScored": [],
+    "scoredEntries": 214,
+    "notScored": [
+      {
+        "cve": "py-interproc-cmdi-shape",
+        "tier": "deep",
+        "language": "python",
+        "status": "env-error",
+        "error": "python-cst-parser-degraded (helper-batch-timeout)"
+      }
+    ],
     "overall": {
       "detection": {
-        "n": 215,
-        "d": 215
+        "n": 214,
+        "d": 214
       },
       "silence": {
-        "n": 215,
-        "d": 215
+        "n": 214,
+        "d": 214
       }
     },
     "byLanguage": [
@@ -143,14 +151,14 @@
       },
       {
         "key": "python",
-        "entries": 32,
+        "entries": 31,
         "detection": {
-          "n": 32,
-          "d": 32
+          "n": 31,
+          "d": 31
         },
         "silence": {
-          "n": 32,
-          "d": 32
+          "n": 31,
+          "d": 31
         }
       },
       {
@@ -409,14 +417,14 @@
       },
       {
         "key": "CWE-78",
-        "entries": 23,
+        "entries": 22,
         "detection": {
-          "n": 23,
-          "d": 23
+          "n": 22,
+          "d": 22
         },
         "silence": {
-          "n": 23,
-          "d": 23
+          "n": 22,
+          "d": 22
         }
       },
       {
@@ -531,14 +539,14 @@
       },
       {
         "key": "deep",
-        "entries": 7,
+        "entries": 6,
         "detection": {
-          "n": 7,
-          "d": 7
+          "n": 6,
+          "d": 6
         },
         "silence": {
-          "n": 7,
-          "d": 7
+          "n": 6,
+          "d": 6
         }
       },
       {
@@ -574,7 +582,7 @@
         }
       },
       "scanner/src": {
-        "total": 427,
+        "total": 428,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -633,7 +641,7 @@
           "posture/dep-add-guard.js": 8,
           "posture/deploy-platform.js": 1,
           "posture/deterministic.js": 3,
-          "posture/epss.js": 4,
+          "posture/epss.js": 3,
           "posture/evidence-bundle.js": 2,
           "posture/execution-proof.js": 1,
           "posture/exploitability-probability.js": 3,
@@ -658,6 +666,7 @@
           "posture/license-policy.js": 3,
           "posture/llm-redteam-prompts.js": 1,
           "posture/llm-redteam.js": 1,
+          "posture/mcp-rug-pull.js": 1,
           "posture/mitigation-composite.js": 1,
           "posture/model-rescan.js": 1,
           "posture/network-policy-import.js": 3,
@@ -736,7 +745,7 @@
           "sca/dep-confusion.js": 3,
           "sca/llm-function-extract.js": 2,
           "sca/py-package-functions.js": 1,
-          "sca/sigstore-verify.js": 6,
+          "sca/sigstore-verify.js": 7,
           "util/untrusted.js": 1
         }
       },

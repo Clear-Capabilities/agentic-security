@@ -1,0 +1,228 @@
+{
+  "version": 1,
+  "_doc": "Infrastructure-as-code misconfigurations, each stated as a control that public hardening benchmarks define, then instantiated in the formats a project actually ships. Control TEXT is third-party \u2014 these are the checks every published cloud/container hardening baseline agrees on \u2014 while the snippets are minimal instantiations written here, because no benchmark ships code.",
+  "_pairs": "Every control has a `vulnerable` and a `hardened` variant, and scoring is VERDICT-FLIP, not detection count: the vulnerable one must fire and the hardened one must not. A detector that reports both is not detecting the control, it is reporting the resource \u2014 and that failure is invisible to a recall-only bench. Same doctrine as bench/mutation.",
+  "_endToEnd": "The runner scans a real directory through the shipped scan path rather than calling detectors directly. Admission is where IaC support has actually failed before: `k8s-admission` was fully implemented, wired and unit-tested while returning zero through a scan, because the file never reached the walker.",
+  "controls": [
+    {
+      "id": "tf-sg-world-ssh",
+      "format": "terraform",
+      "file": "main.tf",
+      "control": "Security groups must not allow unrestricted ingress from 0.0.0.0/0 to administrative ports",
+      "vulnerable": "resource \"aws_security_group\" \"web\" {\n  name = \"web\"\n  ingress {\n    from_port   = 22\n    to_port     = 22\n    protocol    = \"tcp\"\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n}\n",
+      "hardened": "resource \"aws_security_group\" \"web\" {\n  name = \"web\"\n  ingress {\n    from_port   = 22\n    to_port     = 22\n    protocol    = \"tcp\"\n    cidr_blocks = [\"10.0.0.0/8\"]\n  }\n}\n"
+    },
+    {
+      "id": "tf-s3-public-acl",
+      "format": "terraform",
+      "file": "storage.tf",
+      "control": "Object storage buckets must not grant public read access",
+      "vulnerable": "resource \"aws_s3_bucket\" \"assets\" {\n  bucket = \"company-assets\"\n  acl    = \"public-read\"\n}\n",
+      "hardened": "resource \"aws_s3_bucket\" \"assets\" {\n  bucket = \"company-assets\"\n  acl    = \"private\"\n}\n"
+    },
+    {
+      "id": "tf-unencrypted-storage",
+      "format": "terraform",
+      "file": "db.tf",
+      "control": "Managed database instances must have encryption at rest enabled",
+      "vulnerable": "resource \"aws_db_instance\" \"main\" {\n  identifier        = \"prod\"\n  engine            = \"postgres\"\n  storage_encrypted = false\n}\n",
+      "hardened": "resource \"aws_db_instance\" \"main\" {\n  identifier        = \"prod\"\n  engine            = \"postgres\"\n  storage_encrypted = true\n}\n"
+    },
+    {
+      "id": "tf-iam-wildcard",
+      "format": "terraform",
+      "file": "iam.tf",
+      "control": "IAM policies must not grant Action \"*\" on Resource \"*\"",
+      "vulnerable": "resource \"aws_iam_policy\" \"admin\" {\n  name   = \"admin\"\n  policy = jsonencode({\n    Version = \"2012-10-17\"\n    Statement = [{ Effect = \"Allow\", Action = \"*\", Resource = \"*\" }]\n  })\n}\n",
+      "hardened": "resource \"aws_iam_policy\" \"admin\" {\n  name   = \"admin\"\n  policy = jsonencode({\n    Version = \"2012-10-17\"\n    Statement = [{ Effect = \"Allow\", Action = [\"s3:GetObject\"], Resource = \"arn:aws:s3:::assets/*\" }]\n  })\n}\n"
+    },
+    {
+      "id": "k8s-privileged-container",
+      "format": "kubernetes",
+      "file": "deploy/app.yaml",
+      "control": "Containers must not run in privileged mode",
+      "vulnerable": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  template:\n    spec:\n      containers:\n        - name: app\n          image: registry.example.com/app:1.0.0\n          securityContext:\n            privileged: true\n",
+      "hardened": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  template:\n    spec:\n      containers:\n        - name: app\n          image: registry.example.com/app:1.0.0\n          securityContext:\n            privileged: false\n            allowPrivilegeEscalation: false\n"
+    },
+    {
+      "id": "k8s-host-network",
+      "format": "kubernetes",
+      "file": "manifests/api.yaml",
+      "control": "Pods must not share the host network namespace",
+      "vulnerable": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: api\nspec:\n  hostNetwork: true\n  containers:\n    - name: api\n      image: registry.example.com/api:2.1.0\n",
+      "hardened": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: api\nspec:\n  hostNetwork: false\n  containers:\n    - name: api\n      image: registry.example.com/api:2.1.0\n"
+    },
+    {
+      "id": "k8s-run-as-root",
+      "format": "kubernetes",
+      "file": "kubernetes/worker.yaml",
+      "control": "Containers must not run as the root user",
+      "vulnerable": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: worker\nspec:\n  containers:\n    - name: worker\n      image: registry.example.com/worker:1.0.0\n      securityContext:\n        runAsUser: 0\n",
+      "hardened": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: worker\nspec:\n  containers:\n    - name: worker\n      image: registry.example.com/worker:1.0.0\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 10001\n"
+    },
+    {
+      "id": "k8s-secret-in-env",
+      "format": "kubernetes",
+      "file": "overlays/prod/app.yaml",
+      "control": "Credentials must not be supplied as literal environment values in a manifest",
+      "vulnerable": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: app\nspec:\n  containers:\n    - name: app\n      image: registry.example.com/app:1.0.0\n      env:\n        - name: DB_PASSWORD\n          value: \"Kd8fJ2mQx9Lp4Zt1\"\n",
+      "hardened": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: app\nspec:\n  containers:\n    - name: app\n      image: registry.example.com/app:1.0.0\n      env:\n        - name: DB_PASSWORD\n          valueFrom:\n            secretKeyRef:\n              name: app-secrets\n              key: db-password\n"
+    },
+    {
+      "id": "cfn-sg-world-ingress",
+      "format": "cloudformation",
+      "file": "infra/stack.yaml",
+      "control": "Security groups must not allow unrestricted ingress from 0.0.0.0/0 to administrative ports",
+      "vulnerable": "AWSTemplateFormatVersion: '2010-09-09'\nResources:\n  WebSecurityGroup:\n    Type: AWS::EC2::SecurityGroup\n    Properties:\n      GroupDescription: web\n      SecurityGroupIngress:\n        - IpProtocol: tcp\n          FromPort: 22\n          ToPort: 22\n          CidrIp: 0.0.0.0/0\n",
+      "hardened": "AWSTemplateFormatVersion: '2010-09-09'\nResources:\n  WebSecurityGroup:\n    Type: AWS::EC2::SecurityGroup\n    Properties:\n      GroupDescription: web\n      SecurityGroupIngress:\n        - IpProtocol: tcp\n          FromPort: 22\n          ToPort: 22\n          CidrIp: 10.0.0.0/8\n"
+    },
+    {
+      "id": "cfn-public-bucket",
+      "format": "cloudformation",
+      "file": "infra/storage.yaml",
+      "control": "Object storage buckets must not grant public read access",
+      "vulnerable": "AWSTemplateFormatVersion: '2010-09-09'\nResources:\n  AssetsBucket:\n    Type: AWS::S3::Bucket\n    Properties:\n      AccessControl: PublicRead\n",
+      "hardened": "AWSTemplateFormatVersion: '2010-09-09'\nResources:\n  AssetsBucket:\n    Type: AWS::S3::Bucket\n    Properties:\n      AccessControl: Private\n      PublicAccessBlockConfiguration:\n        BlockPublicAcls: true\n        BlockPublicPolicy: true\n"
+    },
+    {
+      "id": "bicep-public-blob",
+      "format": "bicep",
+      "file": "infra/main.bicep",
+      "control": "Blob storage containers must not allow anonymous public access",
+      "vulnerable": "resource assets 'Microsoft.Storage/storageAccounts@2022-09-01' = {\n  name: 'companyassets'\n  location: 'westeurope'\n  sku: { name: 'Standard_LRS' }\n  kind: 'StorageV2'\n  properties: {\n    allowBlobPublicAccess: true\n    supportsHttpsTrafficOnly: false\n  }\n}\n",
+      "hardened": "resource assets 'Microsoft.Storage/storageAccounts@2022-09-01' = {\n  name: 'companyassets'\n  location: 'westeurope'\n  sku: { name: 'Standard_LRS' }\n  kind: 'StorageV2'\n  properties: {\n    allowBlobPublicAccess: false\n    supportsHttpsTrafficOnly: true\n  }\n}\n"
+    },
+    {
+      "id": "helm-privileged-values",
+      "format": "helm",
+      "file": "charts/app/values.yaml",
+      "control": "Chart values must not default a workload to privileged execution",
+      "vulnerable": "image:\n  repository: registry.example.com/app\n  tag: \"1.0.0\"\nsecurityContext:\n  privileged: true\n  runAsUser: 0\n",
+      "hardened": "image:\n  repository: registry.example.com/app\n  tag: \"1.0.0\"\nsecurityContext:\n  privileged: false\n  runAsNonRoot: true\n  runAsUser: 10001\n"
+    },
+    {
+      "id": "docker-root-user",
+      "format": "dockerfile",
+      "file": "Dockerfile",
+      "control": "Container images must not run as root",
+      "vulnerable": "FROM node:20-alpine\nWORKDIR /app\nCOPY . .\nUSER root\nCMD [\"node\", \"server.js\"]\n",
+      "hardened": "FROM node:20-alpine\nWORKDIR /app\nCOPY . .\nRUN addgroup -S app && adduser -S app -G app\nUSER app\nCMD [\"node\", \"server.js\"]\n"
+    },
+    {
+      "id": "docker-unpinned-base",
+      "format": "dockerfile",
+      "file": "docker/Dockerfile",
+      "control": "Base images must be pinned to an immutable reference",
+      "vulnerable": "FROM ubuntu:latest\nRUN addgroup --system app && adduser --system --ingroup app app\nUSER app\nCMD [\"/bin/sh\"]\n",
+      "hardened": "FROM ubuntu@sha256:5e5f6f0a2ea0c9e6e2e6b1e33b8b1e0c8a9d3f2e1b0a9c8d7e6f5a4b3c2d1e0f\nRUN addgroup --system app && adduser --system --ingroup app app\nUSER app\nCMD [\"/bin/sh\"]\n",
+      "note": "Moved from `build/Dockerfile`. `build/` is in the walker's DEFAULT_IGNORE list as build OUTPUT, so a Dockerfile kept there is never scanned \u2014 a real limitation, recorded in the README rather than fixed here, because changing DEFAULT_IGNORE affects every scan and `build/` genuinely is an output directory for several toolchains."
+    },
+    {
+      "id": "k8s-host-pid",
+      "format": "kubernetes",
+      "file": "deploy/agent.yaml",
+      "control": "Pods must not share the host PID namespace",
+      "vulnerable": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: agent\nspec:\n  hostPID: true\n  containers:\n    - name: agent\n      image: registry.example.com/agent:1.0.0\n",
+      "hardened": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: agent\nspec:\n  hostPID: false\n  containers:\n    - name: agent\n      image: registry.example.com/agent:1.0.0\n"
+    },
+    {
+      "id": "k8s-dangerous-capability",
+      "format": "kubernetes",
+      "file": "deploy/net.yaml",
+      "control": "Containers must not add dangerous Linux capabilities",
+      "vulnerable": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: net\nspec:\n  containers:\n    - name: net\n      image: registry.example.com/net:1.0.0\n      securityContext:\n        capabilities:\n          add: [\"SYS_ADMIN\"]\n",
+      "hardened": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: net\nspec:\n  containers:\n    - name: net\n      image: registry.example.com/net:1.0.0\n      securityContext:\n        capabilities:\n          drop: [\"ALL\"]\n"
+    },
+    {
+      "id": "cfn-rds-public",
+      "format": "cloudformation",
+      "file": "infra/db.yaml",
+      "control": "Managed databases must not be publicly accessible",
+      "vulnerable": "AWSTemplateFormatVersion: '2010-09-09'\nResources:\n  Database:\n    Type: AWS::RDS::DBInstance\n    Properties:\n      Engine: postgres\n      PubliclyAccessible: true\n      StorageEncrypted: true\n",
+      "hardened": "AWSTemplateFormatVersion: '2010-09-09'\nResources:\n  Database:\n    Type: AWS::RDS::DBInstance\n    Properties:\n      Engine: postgres\n      PubliclyAccessible: false\n      StorageEncrypted: true\n"
+    },
+    {
+      "id": "cfn-iam-wildcard",
+      "format": "cloudformation",
+      "file": "infra/iam.yaml",
+      "control": "IAM policies must not grant Action \"*\" on Resource \"*\"",
+      "vulnerable": "AWSTemplateFormatVersion: '2010-09-09'\nResources:\n  AdminPolicy:\n    Type: AWS::IAM::ManagedPolicy\n    Properties:\n      PolicyDocument:\n        Version: '2012-10-17'\n        Statement:\n          - Effect: Allow\n            Action: '*'\n            Resource: '*'\n",
+      "hardened": "AWSTemplateFormatVersion: '2010-09-09'\nResources:\n  AdminPolicy:\n    Type: AWS::IAM::ManagedPolicy\n    Properties:\n      PolicyDocument:\n        Version: '2012-10-17'\n        Statement:\n          - Effect: Allow\n            Action: ['s3:GetObject']\n            Resource: 'arn:aws:s3:::assets/*'\n"
+    },
+    {
+      "id": "bicep-nsg-world",
+      "format": "bicep",
+      "file": "infra/network.bicep",
+      "control": "Network security rules must not allow inbound from any source to administrative ports",
+      "vulnerable": "resource nsg 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {\n  name: 'app-nsg'\n  location: 'westeurope'\n  properties: {\n    securityRules: [\n      {\n        name: 'ssh'\n        properties: {\n          protocol: 'Tcp'\n          sourceAddressPrefix: '*'\n          destinationPortRange: '22'\n          access: 'Allow'\n          direction: 'Inbound'\n        }\n      }\n    ]\n  }\n}\n",
+      "hardened": "resource nsg 'Microsoft.Network/networkSecurityGroups@2022-07-01' = {\n  name: 'app-nsg'\n  location: 'westeurope'\n  properties: {\n    securityRules: [\n      {\n        name: 'ssh'\n        properties: {\n          protocol: 'Tcp'\n          sourceAddressPrefix: '10.0.0.0/8'\n          destinationPortRange: '22'\n          access: 'Allow'\n          direction: 'Inbound'\n        }\n      }\n    ]\n  }\n}\n"
+    },
+    {
+      "id": "helm-host-network",
+      "format": "helm",
+      "file": "charts/api/values.yaml",
+      "control": "Chart values must not default a workload onto the host network",
+      "vulnerable": "image:\n  repository: registry.example.com/api\n  tag: \"2.0.0\"\nhostNetwork: true\n",
+      "hardened": "image:\n  repository: registry.example.com/api\n  tag: \"2.0.0\"\nhostNetwork: false\n"
+    },
+    {
+      "id": "docker-add-remote",
+      "format": "dockerfile",
+      "file": "Dockerfile",
+      "control": "Remote content must not be fetched with ADD",
+      "vulnerable": "FROM ubuntu@sha256:5e5f6f0a2ea0c9e6e2e6b1e33b8b1e0c8a9d3f2e1b0a9c8d7e6f5a4b3c2d1e0f\nADD https://example.com/installer.sh /tmp/installer.sh\nRUN addgroup --system app && adduser --system --ingroup app app\nUSER app\n",
+      "hardened": "FROM ubuntu@sha256:5e5f6f0a2ea0c9e6e2e6b1e33b8b1e0c8a9d3f2e1b0a9c8d7e6f5a4b3c2d1e0f\nCOPY installer.sh /tmp/installer.sh\nRUN addgroup --system app && adduser --system --ingroup app app\nUSER app\n"
+    },
+    {
+      "id": "tf-ebs-unencrypted",
+      "format": "terraform",
+      "file": "volumes.tf",
+      "control": "Block storage volumes must be encrypted at rest",
+      "vulnerable": "resource \"aws_ebs_volume\" \"data\" {\n  availability_zone = \"eu-west-1a\"\n  size              = 100\n  encrypted         = false\n}\n",
+      "hardened": "resource \"aws_ebs_volume\" \"data\" {\n  availability_zone = \"eu-west-1a\"\n  size              = 100\n  encrypted         = true\n}\n"
+    },
+    {
+      "id": "tf-iam-wildcard-equivalent",
+      "format": "terraform",
+      "file": "iam-broad.tf",
+      "tier": "hard",
+      "why": "wildcard-EQUIVALENT with no literal Action \"*\" \u2014 needs the rule to reason about what the actions add up to, not to match a character",
+      "control": "IAM policies must not grant effectively unrestricted privilege",
+      "vulnerable": "resource \"aws_iam_policy\" \"broad\" {\n  name   = \"broad\"\n  policy = jsonencode({\n    Version = \"2012-10-17\"\n    Statement = [{ Effect = \"Allow\", Action = [\"s3:*\", \"iam:*\", \"ec2:*\"], Resource = \"*\" }]\n  })\n}\n",
+      "hardened": "resource \"aws_iam_policy\" \"broad\" {\n  name   = \"broad\"\n  policy = jsonencode({\n    Version = \"2012-10-17\"\n    Statement = [{ Effect = \"Allow\", Action = [\"s3:GetObject\"], Resource = \"arn:aws:s3:::assets/*\" }]\n  })\n}\n"
+    },
+    {
+      "id": "cfn-cidr-via-parameter",
+      "format": "cloudformation",
+      "file": "infra/param-stack.yaml",
+      "tier": "hard",
+      "why": "the open CIDR arrives through a Parameter default \u2014 the literal never appears on the ingress rule, which is the indirection iac-terraform.js resolves for HCL and nothing resolves for CloudFormation",
+      "control": "Security groups must not allow unrestricted ingress from 0.0.0.0/0 to administrative ports",
+      "vulnerable": "AWSTemplateFormatVersion: '2010-09-09'\nParameters:\n  AllowedCidr:\n    Type: String\n    Default: 0.0.0.0/0\nResources:\n  WebSecurityGroup:\n    Type: AWS::EC2::SecurityGroup\n    Properties:\n      GroupDescription: web\n      SecurityGroupIngress:\n        - IpProtocol: tcp\n          FromPort: 22\n          ToPort: 22\n          CidrIp: !Ref AllowedCidr\n",
+      "hardened": "AWSTemplateFormatVersion: '2010-09-09'\nParameters:\n  AllowedCidr:\n    Type: String\n    Default: 10.0.0.0/8\nResources:\n  WebSecurityGroup:\n    Type: AWS::EC2::SecurityGroup\n    Properties:\n      GroupDescription: web\n      SecurityGroupIngress:\n        - IpProtocol: tcp\n          FromPort: 22\n          ToPort: 22\n          CidrIp: !Ref AllowedCidr\n"
+    },
+    {
+      "id": "k8s-no-resource-limits",
+      "format": "kubernetes",
+      "file": "deploy/nolimits.yaml",
+      "tier": "hard",
+      "why": "an ABSENCE, not a pattern \u2014 a container with no resources.limits can starve every other pod on the node, and there is no string to match",
+      "control": "Containers must declare CPU and memory limits",
+      "vulnerable": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: batch\nspec:\n  containers:\n    - name: batch\n      image: registry.example.com/batch:1.0.0\n",
+      "hardened": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: batch\nspec:\n  containers:\n    - name: batch\n      image: registry.example.com/batch:1.0.0\n      resources:\n        limits:\n          cpu: \"1\"\n          memory: 512Mi\n"
+    },
+    {
+      "id": "tf-sg-cidr-via-variable",
+      "format": "terraform",
+      "file": "sg-var.tf",
+      "tier": "hard",
+      "why": "the open CIDR is a variable default \u2014 iac-terraform.js resolves variables, so this one tests whether that resolution actually reaches the security-group rule",
+      "control": "Security groups must not allow unrestricted ingress from 0.0.0.0/0 to administrative ports",
+      "vulnerable": "variable \"ingress_cidrs\" {\n  type    = list(string)\n  default = [\"0.0.0.0/0\"]\n}\n\nresource \"aws_security_group\" \"db\" {\n  name = \"db\"\n  ingress {\n    from_port   = 5432\n    to_port     = 5432\n    protocol    = \"tcp\"\n    cidr_blocks = var.ingress_cidrs\n  }\n}\n",
+      "hardened": "variable \"ingress_cidrs\" {\n  type    = list(string)\n  default = [\"10.0.0.0/8\"]\n}\n\nresource \"aws_security_group\" \"db\" {\n  name = \"db\"\n  ingress {\n    from_port   = 5432\n    to_port     = 5432\n    protocol    = \"tcp\"\n    cidr_blocks = var.ingress_cidrs\n  }\n}\n"
+    }
+  ],
+  "_hardenedMeansHardened": "A `hardened` variant must be clean of EVERYTHING the engine checks, not just the control under test. Scoring is 'any finding on this file', deliberately \u2014 matching on the engine's own rule names would grade it against vocabulary it chose itself. The cost is that an unrelated true positive on the hardened variant reads as NO-FLIP. It happened once here: the hardened Dockerfile pinned its base by digest but still had no USER directive and still installed an unlicensed package, so two correct findings made a covered control look broken.",
+  "_headroom": "Controls are added whenever the bench saturates. A gate that cannot fail measures nothing \u2014 this PRD's governing rule \u2014 and it hit 14/14 immediately after CloudFormation, Bicep and Helm support landed. The eight controls after docker-unpinned-base were added for that reason and deliberately reach past what was just built: host PID namespace, Linux capabilities, publicly-reachable managed databases, wildcard IAM in CloudFormation, Azure network rules, and ADD-from-URL.",
+  "_tiers": "Controls carry an optional `tier`. Untiered ones are the direct shapes \u2014 a literal property with an unambiguous hardened opposite. `tier: \"hard\"` ones require something a regex cannot do: reasoning about what a set of actions adds up to, resolving a value through a parameter or variable, or noticing an ABSENCE. They are here so the bench keeps discriminating after the direct shapes are covered, and they are NOT expected to pass. Closing one should be a deliberate decision with its own design, not a wider pattern."
+}

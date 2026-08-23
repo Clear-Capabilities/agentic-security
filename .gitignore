@@ -102,6 +102,8 @@ scanner/reports/
 
 # Independent evaluation population: upstream source is FETCHED, never vendored.
 bench/independent/cache/
+bench/sca-replay/cache/
+bench/prompt-injection/cache/
 
 # why-missed.mjs's per-entry diagnostic output — regenerated working data.
 bench/independent/why-missed-output/

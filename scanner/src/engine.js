@@ -40,6 +40,7 @@ import { isDeterministic } from './posture/deterministic.js';
 import { proofCoverage } from './posture/proof-coverage.js';
 import { scanAuthZ } from './sast/authz.js';
 import { scanApiBrokenAuthz } from './sast/api-authz.js';
+import { scanCloudTemplates, isCloudFormationTemplate } from './sast/iac-cloud-templates.js';
 import { scanTerraform } from './sast/iac-terraform.js';
 import { scanCrossService } from './sast/cross-service.js';
 import { scanRbacConsistency } from './sast/rbac-consistency.js';
@@ -127,7 +128,7 @@ import { scanMutationXSS } from './sast/mutation-xss.js';
 import { scanDeserializationGadgets, _detectGadgets } from './sast/deserialization-gadgets.js';
 // Phase 2 — Kotlin / Ruby / PHP coverage.
 import { scanKotlin } from './sast/kotlin.js';
-import { scanRuby } from './sast/ruby.js';
+import { scanRuby, scanRubyPathJoin } from './sast/ruby.js';
 import { scanPhp } from './sast/php.js';
 import { classifySecretCandidate as _entropyClassifySecret } from './sast/_secret-entropy.js';
 // Phase 1 — precision-engineering posture modules.
@@ -667,6 +668,7 @@ function _isIaCFile(p){
   if (IAC_FILENAMES.has(base)) return true;
   if (/\.dockerfile$/i.test(base)) return true;
   if (/\.tf$|\.tfvars$/i.test(base)) return true;
+  if (/\.bicep$/i.test(base)) return true;
   // K8s YAML heuristic: under k8s/ — the CONTENT half of this rule lives in
   // `isKubernetesManifest` below, because a path predicate cannot see content.
   if (/(?:^|\/)k8s(?:\/|$)/.test(p) && /\.ya?ml$/i.test(base)) return true;
@@ -1425,6 +1427,10 @@ function _sinkLineIdentifiers(ctx) {
 // (excluding the sink line itself, which trivially contains its own
 // argument). Tries every match, not just the first, since a window can
 // contain several guard-shaped lines and only one need actually correlate.
+// A function/method declaration line, in every language this engine reads.
+// Matching a guard-shaped NAME here means a method is being defined, not called.
+const _DECL_LINE_RE = /^\s*(?:@\w+\s*)?(?:(?:public|private|protected|internal|static|final|abstract|override|async|export|default|func|fun|fn|def|sub|function)\s+)+[\w.<>\[\]]+\s*\(|^\s*def\s+\w|^\s*(?:async\s+)?function\s+\w|^\s*func\s+(?:\([^)]*\)\s*)?\w+\s*\(|^\s*(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/;
+
 function _guardMatchNearSinkIdentifier(ctx, guardRe, span = 2) {
   const w = _guardWindow(ctx);
   const re = new RegExp(guardRe.source, guardRe.flags.includes('g') ? guardRe.flags : guardRe.flags + 'g');
@@ -1435,6 +1441,19 @@ function _guardMatchNearSinkIdentifier(ctx, guardRe, span = 2) {
   let m;
   while ((m = re.exec(w))) {
     const guardLineIdx = w.slice(0, m.index).split('\n').length - 1; // 0-based within window
+    // A DECLARATION is not a guard. The shape alternative deliberately matches a
+    // project-local validator by name (`[Cc]heck\w+\(`, `[Ee]nsure\w+\(`, …), and
+    // that also matches the line that DEFINES such a method — so
+    // `def check_static_cache(request)` was read as containment being applied,
+    // and every path-traversal finding inside a method whose own name begins
+    // "check"/"validate"/"ensure"/"verify"/"assert"/"require" was dropped.
+    //
+    // Found by test/detector-liveness.test.js on the ruby-path-join fixture: the
+    // rule fired in isolation and produced nothing through a scan — the same
+    // signature as rate-limit.js and sibling-guard-omission. Narrow by design:
+    // it skips declaration LINES, and does not touch the window heuristic that
+    // every other CWE-22 and CWE-918 emitter depends on.
+    if (_DECL_LINE_RE.test(wLines[guardLineIdx] || '')) continue;
     const lo = Math.max(0, guardLineIdx - span);
     const hi = Math.min(wLines.length, guardLineIdx + span + 1);
     const local = wLines.slice(lo, hi).filter((l) => l !== sinkLineText).join('\n');
@@ -6892,6 +6911,19 @@ const CIPHER_TRANSIT_PATTERNS=[
 function classifyCipherStrength(cipher){const c=cipher.toUpperCase();if(/\bRC4\b|\bRC2\b|\bARCFOUR\b|SSLV2|SSLV3|\bNULL\b|\bEXPORT\b|\bANULL\b|\bENULL\b|\bECB\b|\bMD5\b|\bSHA1\b(?![\d_])/.test(c))return"weak";if(/\bDES\b/.test(c)&&!/3DES|EDE|TRIPLE/.test(c))return"weak";if(/3DES|TRIPLE.?DES|DES.EDE|TLS.?1.?1|TLSV1\.1/.test(c))return"weak";if(/BCRYPT|ARGON2|SCRYPT|PBKDF2|FERNET|CHACHA20|CHACHAPOLY|PASSWORD_BCRYPT|PASSWORD_ARGON/.test(c))return"strong";if(/\bAES\b|SHA256|SHA384|SHA512|SHA3|BLAKE2|HMACSHA256|HMACSHA512|\bGCM\b|\bCCM\b|ECDHE|DHE|TLS.?1.?[23]|TLSV1\.[23]|HTTPS.SERVER|TLS.SERVER|TLS.CERTIF|HS256|RS256|ES256/.test(c))return"strong";return"unknown";}
 function scanCiphers(fp,raw){const cleaned=stripNoise(raw,fp);const lines=raw.split("\n");const atRest=[],inTransit=[];for(const pat of CIPHER_REST_PATTERNS){const re=new RegExp(pat.regex.source,pat.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const cipher=pat.getLabel(m);atRest.push({cipher,strength:classifyCipherStrength(cipher),ctx:pat.ctx,file:fp,line,snippet:(lines[line-1]||"").trim()});}}for(const pat of CIPHER_TRANSIT_PATTERNS){const re=new RegExp(pat.regex.source,pat.regex.flags);let m;while((m=re.exec(cleaned))){const line=lineAt(cleaned,m.index);const cipher=pat.getLabel(m);inTransit.push({cipher,strength:classifyCipherStrength(cipher),ctx:pat.ctx,file:fp,line,snippet:(lines[line-1]||"").trim()});}}const uniq=(a)=>a.filter((v,i,arr)=>arr.findIndex(x=>x.cipher===v.cipher&&x.file===v.file&&x.line===v.line)===i);return{atRest:uniq(atRest),inTransit:uniq(inTransit)};}
 
+// True for the JWT specimen published in the standard's own documentation.
+// Decodes the payload rather than matching the encoded string, so a token that
+// merely shares a prefix is not suppressed.
+function _isSpecimenJwt(token){
+  try{
+    const parts=String(token).split('.');
+    if(parts.length!==3)return false;
+    const payload=Buffer.from(parts[1].replace(/-/g,'+').replace(/_/g,'/'),'base64').toString('utf8');
+    const d=JSON.parse(payload);
+    return d&&d.sub==='1234567890'&&typeof d.name==='string'&&d.name==='John Doe';
+  }catch(_){return false;}
+}
+
 function scanCredentials(fp,raw){
   if(!CRED_PREFILTER.test(raw))return[];
   const lines=raw.split("\n");const results=[];const seen=new Set();
@@ -6901,11 +6933,23 @@ function scanCredentials(fp,raw){
     while((m=re.exec(raw))!=null){
       const val=m[0];
       if(/placeholder|example|xxx+|your_|changeme|<[A-Z_]+>|MY_|INSERT_|REPLACE_|TODO|test_key|fake_|sample_|dummy_/i.test(val))continue;
+      // The published specimen token, which appears verbatim in essentially
+      // every piece of JWT documentation and in most auth tutorials. Its
+      // payload decodes to {"sub":"1234567890","name":"John Doe",…} — a
+      // documented example value in exactly the sense AKIAIOSFODNN7EXAMPLE is,
+      // and suppressed for the same reason and just as narrowly: the check is
+      // on the DECODED payload, so a real token that merely resembles it is
+      // unaffected. Found by bench/secrets-precision as the single false
+      // positive in its negative set.
+      if(pat.n==="Exposed JWT Token"&&_isSpecimenJwt(val))continue;
       const line=raw.substring(0,m.index).split("\n").length;
       const snippet=lines[line-1]?.trim()||"";
       // Per-pattern line-context gate: if ctx is set, the matched line must satisfy it
       if(pat.ctx&&!pat.ctx.test(snippet))continue;
-      if(pat.n==="Password in URL"&&/localhost|127\.0\.|0\.0\.0\.0|example\.com|test\.com|::1|user:pass|admin:admin|foo:bar|user:password|username:password|admin:password|root:password|test:test|john:doe|demo:demo|myuser:mypass|guest:guest/i.test(val))continue;
+      // The same placeholder-credential guard now covers every URI-with-inline-
+      // credentials pattern, not just the one it was written for. A connection
+      // string pointing at localhost with `user:pass` is a README, not a leak.
+      if((pat.n==="Password in URL"||pat.urlCreds)&&/localhost|127\.0\.|0\.0\.0\.0|example\.com|test\.com|::1|user:pass|admin:admin|foo:bar|user:password|username:password|admin:password|root:password|test:test|john:doe|demo:demo|myuser:mypass|guest:guest/i.test(val))continue;
       const key=`${fp}:${line}:${pat.n}`;
       if(seen.has(key))continue;seen.add(key);
       const severity=pat.s==="c"?"critical":pat.s==="h"?"high":"medium";
@@ -6914,10 +6958,18 @@ function scanCredentials(fp,raw){
       // unredacted-snippet leak as scanEntropySecrets — `snippet` carried
       // the raw source line (full credential value) straight through to
       // every report format. Redact the exact matched value here too.
-      results.push({vuln:pat.n,severity,cwe:"CWE-798",stride:"Information Disclosure",file:fp,line,snippet:snippet.split(val).join(masked),masked,fix:"Remove the hardcoded credential. Store secrets in environment variables or a secrets manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager). Rotate the exposed credential immediately, treat it as compromised.",code:`// Remove hardcoded value:\n// const secret = "${masked}";\n\n// Use environment variable instead:\nconst secret = process.env.${pat.n.toUpperCase().replace(/[^A-Z0-9]/g,"_")};`});
+      results.push({vuln:pat.n,severity,cwe:"CWE-798",stride:"Information Disclosure",file:fp,line,_urlCreds:!!pat.urlCreds,snippet:snippet.split(val).join(masked),masked,fix:"Remove the hardcoded credential. Store secrets in environment variables or a secrets manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager). Rotate the exposed credential immediately, treat it as compromised.",code:`// Remove hardcoded value:\n// const secret = "${masked}";\n\n// Use environment variable instead:\nconst secret = process.env.${pat.n.toUpperCase().replace(/[^A-Z0-9]/g,"_")};`});
     }
   }
-  return results;
+  // One secret, one finding. A `postgres://user:pass@host/db` matches both the
+  // specific PostgreSQL pattern and the generic "Password in URL" one, and
+  // reporting the same credential on the same line twice is noise that makes a
+  // secrets report look padded. The specific name wins: it tells the reader
+  // which system to go and rotate.
+  const specificUrlLines=new Set(results.filter(r=>r._urlCreds).map(r=>`${r.file}:${r.line}`));
+  const deduped=results.filter(r=>!(r.vuln==="Password in URL"&&specificUrlLines.has(`${r.file}:${r.line}`)));
+  for(const r of deduped)delete r._urlCreds;
+  return deduped;
 }
 
 /* ── OSV-backed SCA Engine ───────────────────────────────────────────────── */
@@ -7242,7 +7294,14 @@ function _parseGoMod(text,filePath){
     if(t===')'){inReq=false;continue;}
     let m=inReq?t.match(/^([^\s]+)\s+v([^\s/]+)/):t.match(/^require\s+([^\s]+)\s+v([^\s/]+)/);
     if(m){
-      const name=m[1];const ver=m[2].replace(/-.*$/,'');
+      // Keep the version VERBATIM. This used to do `.replace(/-.*$/,'')`,
+      // which turns every Go pseudo-version — v0.0.0-20210903162142-ad29c8ab022f
+      // — into a bare `0.0.0`. That is not a shorter version, it is a different
+      // and nonexistent one, and it made every pseudo-versioned module in a tree
+      // collapse onto the same key. Normalisation for an advisory query belongs
+      // at the query, where _osvQueryVersion does it; a component's recorded
+      // version is also what lands in the SBOM, where truncating it is worse.
+      const name=m[1];const ver=m[2];
       const isIndirect=t.includes('// indirect');
       out.push({name,version:ver,group:name.split('/').slice(0,2).join('/'),
         scope:isIndirect?'optional':'required',purl:_makePurl('golang',name,ver,''),
@@ -7637,8 +7696,10 @@ function _parseGoSum(text, filePath){
     const m = t.match(/^(\S+)\s+v([^\s]+)\s+h1:/);
     if (!m) continue;
     const name = m[1];
-    // Strip +incompatible / -timestamp-sha suffixes that aren't useful for OSV matching.
-    const ver = m[2].replace(/\+incompatible$/, '').replace(/^v?/, '');
+    // Verbatim, minus the leading `v`. The suffixes this used to strip
+    // (`+incompatible`, the pseudo-version timestamp+sha) are part of the
+    // module version the advisory database matches on — see _parseGoMod.
+    const ver = m[2].replace(/^v/, '');
     const dedupKey = `${name}@${ver}`;
     if (seen.has(dedupKey)) continue;
     seen.add(dedupKey);
@@ -7733,11 +7794,20 @@ function parseManifests(allFileContents){
     // R10: Gradle resolved transitive graph — `gradle dependencies > gradle-dependencies.txt`.
     'gradle-dependencies.txt':_parseGradleDependencies,
   };
+  // Requirements files are named a dozen ways and the basename table can only
+  // hold one of them. `requirements/dev.txt`, `requirements-dev.txt` and
+  // `requirements/base.txt` are all ordinary; matched by SHAPE so a new variant
+  // does not need a new table entry. Kept narrow on purpose — an arbitrary
+  // `.txt` reaching this parser would invent dependencies out of prose.
+  const _REQ_FILE=/^requirements(?:[._-][\w.-]+)?\.txt$/i;
+  const _REQ_DIR=/(?:^|\/)requirements\/[\w.-]+\.txt$/i;
+  const _pick=(fp,base)=>PARSERS[base]||((_REQ_FILE.test(base)||_REQ_DIR.test(fp))?_parseRequirementsTxt:null);
   const out=[],seen=new Set();
   for(const[fp,content]of Object.entries(allFileContents)){
     const base=fp.split('/').pop();
-    if(!PARSERS[base])continue;
-    for(const comp of PARSERS[base](content,fp)){
+    const parser=_pick(fp.split('\\').join('/'),base);
+    if(!parser)continue;
+    for(const comp of parser(content,fp)){
       const key=`${comp.ecosystem}:${comp.name}:${comp.version}`;
       if(!seen.has(key)){seen.add(key);out.push(comp);}
     }
@@ -7815,6 +7885,34 @@ function computeAttackPathComponents(findings,components,byFile){
   return{flagged,pathsByKey};
 }
 
+// The version string an advisory database can actually match on.
+//
+// This used to be `version.match(/(\d+\.\d+(?:\.\d+)*)/)`, which takes the
+// first dotted-number run and throws the rest away. For most ecosystems that is
+// harmless; for Go it is destructive. A Go pseudo-version is
+//
+//     v0.0.0-20210903162142-ad29c8ab022f
+//
+// and the leading `0.0.0` is a placeholder, not a version — every pseudo-version
+// in the tree collapsed to the same meaningless `0.0.0`, so the query asked
+// about a release that does not exist and the real one was never checked.
+// bench/sca-replay attributed nearly every remaining Go miss to exactly this.
+// `+incompatible` builds lost their suffix the same way.
+//
+// A WILDCARD is refused outright rather than truncated. `2.0.*` is a range; it
+// has no single version to be affected, and reporting "phpseclib 2.0.* is
+// vulnerable" names something that was never installed.
+function _osvQueryVersion(raw){
+  const s=String(raw||'').trim();
+  if(!s)return null;
+  if(/[*x]/i.test(s.replace(/^[\^~>=<\s]+/,'').replace(/[-+][\w.-]+$/,'')))return null;
+  // Strip only a leading range operator or `v`; keep the whole version after it.
+  const m=s.match(/^[\^~>=<\s]*v?(\d[\w.+-]*)$/);
+  if(m)return m[1];
+  const fallback=s.match(/(\d+\.\d+(?:\.\d+)*)/);
+  return fallback?fallback[1]:null;
+}
+
 async function queryOSV(components,allFileContents){
   const OSV_ECO={npm:'npm',pypi:'PyPI',packagist:'Packagist',rubygems:'RubyGems',golang:'Go',cargo:'crates.io',maven:'Maven',pub:'Pub'};
   const results=[];
@@ -7829,7 +7927,7 @@ async function queryOSV(components,allFileContents){
   const queries=[],uncached=[],vulnAffects={};
   for(const comp of queryable){
     const eco=OSV_ECO[comp.ecosystem];
-    const cleanVer=(comp.version.match(/(\d+\.\d+(?:\.\d+)*)/)||[])[1];
+    const cleanVer=_osvQueryVersion(comp.version);
     if(!cleanVer)continue;
     const ck=`comp:${eco}:${comp.name}:${cleanVer}`;
     const cached=_osvCacheGet(ck);
@@ -8126,7 +8224,7 @@ function _deterministicFileTimings(timings) {
 
   const _fileTimings = [];
   let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0;
-  const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];
+  const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f]) || isCloudFormationTemplate(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];
   // ---- R8: opt-in per-file checkpointing (AGENTIC_SECURITY_RESUME=1, or
   // runScan({resume:true})). Default OFF, so existing behaviour is untouched.
   // Only this loop is checkpointed; every cross-file pass below re-runs, so
@@ -8194,7 +8292,7 @@ function _deterministicFileTimings(timings) {
   let i=0;for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});
     if(_ckptDone.has(p)&&_ckptReplay(p))continue;
     const _mk={aR:aR.length,aF:aF.length,aSrc:aSrc.length,aSink:aSink.length,aSan:aSan.length,aLogic:aLogic.length,aSecrets:aSecrets.length,aCR:aCiphersRest.length,aCT:aCiphersTransit.length,sup:_suppressionLog.length};
-    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}const cc=_blankCached(c,_commentLangFor(p));fc[p]=c;aR.push(...scanRoutes(p,cc));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,cc));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,cc));aF.push(...scanExtraStructural(p,cc));aF.push(...scanAliasedSinks(p,cc));aF.push(...scanJavaSAST(p,cc));aF.push(...scanJavaBenchExtras(p,cc));aLogic.push(...scanMiddlewareOrdering(p,cc));aLogic.push(...scanReDoS(p,cc));if(/\.(?:java|cs|kt|py|php|phtml)$/i.test(p)){try{aLogic.push(...scanRegexReDoS(p,cc));}catch(_){}}aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,cc);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,cc));aF.push(...scanIaC(p,cc));aF.push(...scanTerraform(p,cc));
+    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}const cc=_blankCached(c,_commentLangFor(p));fc[p]=c;aR.push(...scanRoutes(p,cc));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,cc));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,cc));aF.push(...scanExtraStructural(p,cc));aF.push(...scanAliasedSinks(p,cc));aF.push(...scanJavaSAST(p,cc));aF.push(...scanJavaBenchExtras(p,cc));aLogic.push(...scanMiddlewareOrdering(p,cc));aLogic.push(...scanReDoS(p,cc));if(/\.(?:java|cs|kt|py|php|phtml)$/i.test(p)){try{aLogic.push(...scanRegexReDoS(p,cc));}catch(_){}}aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,cc);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,cc));aF.push(...scanIaC(p,cc));aF.push(...scanTerraform(p,cc));aF.push(...scanCloudTemplates(p,c));
       aF.push(...scanLLM(p,c));
       aF.push(...scanLLMOwasp(p,c));
       aF.push(...scanLlmCost(p,c));
@@ -8312,7 +8410,7 @@ function _deterministicFileTimings(timings) {
       aF.push(...scanSSRFCloudMetadata(p,cc));
       aF.push(...scanMutationXSS(p,cc));
       aF.push(...scanKotlin(p,cc));
-      aF.push(...scanRuby(p,cc));
+      aF.push(...scanRuby(p,cc));aF.push(...scanRubyPathJoin(p,cc));
       aF.push(...scanPhp(p,cc));
       // Integration block: scaffolded SAST scanners. Gated by env var.
       if (process.env.AGENTIC_SECURITY_NO_INTEGRATION !== '1') {
@@ -9885,6 +9983,30 @@ const CREDENTIAL_PATTERNS=[
   // Database / Infrastructure
   // ctx gate: JDBC URLs in docs/test configs without credentials are not findings; require @ or password= evidence
   {n:"Database Connection String",r:"jdbc:[a-z:]+://[A-Za-z0-9\\.\\-_:;=/@?,&]+",s:"h",ctx:/@|password=|passwd=|pwd=/i},
+  // PRD F4.1. bench/secrets-precision measured format coverage at 83% and every
+  // one of these five was a genuine absence, not a tuning problem. Four are
+  // among the most common real leaks there are — a database URI with the
+  // password inline is what a connection string looks like when someone pastes
+  // one into a config file.
+  //
+  // `jdbc:` was the ONLY database URI shape covered. `postgres://` and
+  // `mongodb+srv://` are far more common in the ecosystems this tool is aimed
+  // at, and the generic "Password in URL" pattern could not reach them: it is
+  // gated behind CRED_PREFILTER, which had no token for either scheme.
+  {n:"PostgreSQL Connection URI",r:"postgres(?:ql)?://[^\\s:@/]{1,64}:[^\\s:@/]{6,64}@[^\\s/\"']{1,128}",s:"h",urlCreds:true},
+  {n:"MongoDB Connection URI",r:"mongodb(?:\\+srv)?://[^\\s:@/]{1,64}:[^\\s:@/]{6,64}@[^\\s/\"']{1,128}",s:"h",urlCreds:true},
+  {n:"Azure Storage Account Key",r:"AccountKey=[A-Za-z0-9+/]{86}==",s:"c"},
+  {n:"GitLab Personal Access Token",r:"glpat-[0-9A-Za-z_-]{20}",s:"c"},
+  {n:"DigitalOcean Personal Access Token",r:"dop_v1_[a-f0-9]{64}",s:"c"},
+  {n:"Supabase Service Key",r:"sbp_[a-f0-9]{40}",s:"c"},
+  {n:"HubSpot Private App Token",r:"pat-(?:na|eu)[0-9]-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",s:"c"},
+  // NOT added, deliberately: Datadog, Vercel and Algolia keys are a bare run of
+  // hex or alphanumerics with no prefix. bench/secrets-precision reports them as
+  // misses and they should stay reported. A pattern for "32 hex characters"
+  // would fire on every content digest, Cargo checksum, test vector and build
+  // hash in the negative set — trading five detections for thousands of false
+  // positives, in the feature most prone to alert fatigue. Closing this needs
+  // variable-name context, not another regex.
   // Downgraded to medium; scanner also skips localhost/example hosts (see scanCredentials)
   {n:"Password in URL",r:"[a-zA-Z]{3,10}://[^/\\s:@]{3,20}:[^/\\s:@]{3,20}@.{1,100}[\"'\\s]",s:"m"},
   {n:"WordPress Secret Key",r:"define(.{0,20})?(DB_PASSWORD|AUTH_KEY|SECURE_AUTH_KEY|LOGGED_IN_KEY|AUTH_SALT|NONCE_KEY).{0,20}['\"].{10,120}['\"]",s:"h"},
@@ -9896,7 +10018,7 @@ const CREDENTIAL_PATTERNS=[
   // ctx gate: only report when the line contains a storage/assignment keyword, filters standalone examples in comments
   {n:"Exposed JWT Token",r:"eyJ[a-zA-Z0-9]{10,}\\.eyJ[a-zA-Z0-9]{10,}\\.[a-zA-Z0-9_\\-]{10,}",s:"m",ctx:/token|jwt|auth|bearer|secret|key|credential|sign|=|:/i},
 ];
-const CRED_PREFILTER=/AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA|da2-[a-z0-9]{10}|amzn\.mws|AIza|ya29\.[0-9A-Za-z]{15}|googleusercontent|[Hh][Ee][Rr][Oo][Kk][Uu]|dt0[A-Za-z][0-9]{2}\.|ghp_|gho_|ghu_|ghs_|ghr_|sk_live_|sk_test_|rk_live_|access_token\$production|sq0atp|sq0csp|xox[baprs]-[0-9a-zA-Z]{8}|hooks\.slack\.com|discord(?:app)?\.com\/api\/webhooks|outlook\.office\.com\/webhook|[0-9]{8,10}:AA[0-9A-Za-z]|AAAA[a-zA-Z0-9_-]{7}:|twilio|SG\.[a-zA-Z0-9_-]{15}|mailchimp|key-[0-9a-zA-Z]{20}|shpat_|shpss_|shpca_|shppa_|-----BEGIN .*(PRIVATE|PGP)|NRAA-|NRII-|NRIQ-|NRRA-|EAACEdEose0cBA|pypi-AgEIcH|hooks\.zapier\.com|jdbc:|cloudinary:\/\/|R_[0-9a-f]{20}|eyJ[a-zA-Z0-9]{10,}\.eyJ/i;
+const CRED_PREFILTER=/AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA|da2-[a-z0-9]{10}|amzn\.mws|AIza|ya29\.[0-9A-Za-z]{15}|googleusercontent|[Hh][Ee][Rr][Oo][Kk][Uu]|dt0[A-Za-z][0-9]{2}\.|ghp_|gho_|ghu_|ghs_|ghr_|sk_live_|sk_test_|rk_live_|access_token\$production|sq0atp|sq0csp|xox[baprs]-[0-9a-zA-Z]{8}|hooks\.slack\.com|discord(?:app)?\.com\/api\/webhooks|outlook\.office\.com\/webhook|[0-9]{8,10}:AA[0-9A-Za-z]|AAAA[a-zA-Z0-9_-]{7}:|twilio|SG\.[a-zA-Z0-9_-]{15}|mailchimp|key-[0-9a-zA-Z]{20}|shpat_|shpss_|shpca_|shppa_|-----BEGIN .*(PRIVATE|PGP)|NRAA-|NRII-|NRIQ-|NRRA-|EAACEdEose0cBA|pypi-AgEIcH|hooks\.zapier\.com|jdbc:|cloudinary:\/\/|R_[0-9a-f]{20}|eyJ[a-zA-Z0-9]{10,}\.eyJ|postgres(?:ql)?:\/\/|mongodb(?:\+srv)?:\/\/|AccountKey=|glpat-|dop_v1_|sbp_[a-f0-9]{10}|pat-(?:na|eu)[0-9]-|[a-z][a-z0-9+.-]{2,15}:\/\/[^\s:@\/]{3,64}:[^\s:@\/]{3,64}@/i;
 const SECRET_IMPACT_MAP={
   "AWS Access Key ID":"Provides programmatic access to AWS resources. With the paired secret key, an attacker can enumerate S3 buckets, exfiltrate databases, spin up EC2 instances for cryptomining, or pivot to any service the role permits. If the key belongs to an admin role, this is full cloud account takeover.",
   "AWS AppSync GraphQL Key":"Allows unauthenticated queries and mutations against your AppSync GraphQL API. Attackers can read application data, trigger mutations to corrupt records, or enumerate the schema to map further attack surface.",
@@ -10118,7 +10240,7 @@ export {
   classifyOrphans, classifyField, classifyEndpoint, shouldScan,
   _isFalsePositiveCredential, _detectSafeSinkShape,
   _loadCustomRules, _isCustomSuppressed, _isPathIgnored,
-  scanIaC, IAC_PATTERNS, _isIaCFile,
+  scanIaC, IAC_PATTERNS, _isIaCFile, isCloudFormationTemplate,
   payloadsForFinding, buildProofObligation,
   DATA_CLASSES, SOURCE_PATTERNS, SINK_PATTERNS, SANITIZER_PATTERNS,
   ROUTE_PATTERNS, AUTH_PATTERNS, IGNORE_DIRS, CODE_EXTS,

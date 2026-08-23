@@ -1,6 +1,10 @@
 // 0.9.0 Feat-15: Dependency confusion + typosquat detection (Levenshtein distance against top-1000 npm/PyPI packages).
 //
-// (a) Typosquat: Levenshtein distance 1–2 from a popular package.
+// (a) Typosquat: a small Damerau-Levenshtein distance from a popular package,
+//     where "small" is judged RELATIVE to the name length — see SIMILARITY
+//     below for why the absolute 1–2 this originally used produced 166
+//     critical/high false positives and zero true positives across 13 real
+//     dependency trees.
 // (b) Confusion: internal-scoped names (`@your-org/...`) that also appear on the
 //     public registry — declared via .agentic-security/internal-scopes.yml.
 //
@@ -50,6 +54,64 @@ export function levenshtein(a, b, maxDistance = 2) {
   return prev[b.length];
 }
 
+// Damerau-Levenshtein (optimal string alignment): a TRANSPOSITION costs 1.
+//
+// Plain Levenshtein charges 2 for a transposition, which is exactly backwards
+// for this problem — swapping two adjacent characters (`lodahs` for `lodash`,
+// `electorn` for `electron`) is the single most common real typo, and it is the
+// one plain distance scores as least similar. `levenshtein` above is kept
+// unchanged and separately tested; this is a second measure for a different
+// question.
+export function damerauLevenshtein(a, b, maxDistance = 2) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > maxDistance) return maxDistance + 1;
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  const d = Array.from({ length: m + 1 }, (_, i) => {
+    const row = new Array(n + 1).fill(0);
+    row[0] = i;
+    return row;
+  });
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    let rowMin = Infinity;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        v = Math.min(v, d[i - 2][j - 2] + 1);       // transposition
+      }
+      d[i][j] = v;
+      if (v < rowMin) rowMin = v;
+    }
+    if (rowMin > maxDistance) return maxDistance + 1;
+  }
+  return d[m][n];
+}
+
+// How much of a name may differ before it is a DIFFERENT name rather than a
+// misspelling of this one.
+//
+// Measured, not chosen by taste. At the previous "distance 1–2, any length"
+// rule, bench/sca-replay produced these across 13 real repositories:
+//
+//   ms ~ ws (d1)      acorn ~ cors (d2)   ajv ~ ava (d2)     six ~ tox (d2)
+//   abab ~ ava (d2)   arg ~ yargs (d2)    bail ~ babel (d2)  aws4 ~ ws (d2)
+//
+// Every one is a legitimate, popular package, and `ms` is a top-50 npm
+// package. The common factor is length: two edits on a four-character name
+// changes half of it. A quarter of the shorter name is the ceiling — it keeps
+// every genuine shape (one transposition, one dropped char, one doubled char
+// on a name of ordinary length) and rejects all of the above.
+const MAX_DIVERGENCE = 0.25;
+
+function _isTyposquatCandidate(name, popular, distance) {
+  if (distance <= 0) return false;
+  const shorter = Math.min(name.length, popular.length);
+  return distance / shorter <= MAX_DIVERGENCE;
+}
+
 function _loadInternalScopes(scanRoot) {
   if (!scanRoot) return [];
   for (const name of ['internal-scopes.yml', 'internal-scopes.yaml']) {
@@ -84,10 +146,14 @@ export function detectDepConfusion(components, scanRoot) {
     const lowerName = c.name.toLowerCase();
     // (1) Typosquat — only run if the dep is NOT itself in the popular set
     if (!popularSet.has(lowerName)) {
+      // Compare the BARE name. `@scope/react` is not a typosquat of `react`;
+      // the scope is the thing that identifies the publisher.
+      const bare = lowerName.replace(/^@[^/]+\//, '');
       let bestMatch = null, bestDist = 3;
       for (const popular of popularSet) {
-        const d = levenshtein(lowerName, popular, 2);
-        if (d > 0 && d <= 2 && d < bestDist) { bestMatch = popular; bestDist = d; }
+        const d = damerauLevenshtein(bare, popular, 2);
+        if (!_isTyposquatCandidate(bare, popular, d)) continue;
+        if (d < bestDist) { bestMatch = popular; bestDist = d; }
       }
       if (bestMatch) {
         const id = `dep-confusion:${c.ecosystem}:${c.name}@${c.version}:typosquat`;

@@ -47,11 +47,16 @@ test('Typosquat detection — flags 1–2 edit distance from popular packages', 
   ];
   const findings = detectDepConfusion(components, null);
   assert.equal(findings.length, 2, `expected 2 typosquat findings; got ${findings.length}: ${findings.map(f=>f.vuln).join(', ')}`);
-  // 1-edit (reactt) is critical, 2-edit (lodahs) is high
   const reactFinding = findings.find(f => /reactt/.test(f.vuln));
   assert.equal(reactFinding.severity, 'critical');
+  // `lodahs` USED to score `high` here, because plain Levenshtein charges 2
+  // for a transposition. Under Damerau-Levenshtein it is one adjacent swap and
+  // scores `critical`, which is the right answer: transposing two characters
+  // is the most common real typo and therefore the STRONGEST typosquat signal,
+  // not the weakest. The expectation was changed deliberately when the
+  // distance measure changed — see dep-confusion.js's MAX_DIVERGENCE note.
   const lodashFinding = findings.find(f => /lodahs/.test(f.vuln));
-  assert.equal(lodashFinding.severity, 'high');
+  assert.equal(lodashFinding.severity, 'critical');
 });
 
 // CMP-1 (Stage 6 follow-up): neither finding constructor here set `family`,
@@ -82,4 +87,78 @@ test('Typosquat — unrelated package names do not match', () => {
   const findings = detectDepConfusion(components, null);
   // Without internal-scopes.yml, the @mycompany/sdk shouldn't fire.
   assert.equal(findings.length, 0);
+});
+
+// ── PRD F3.1 — the typosquat FP budget, measured on real dependency trees ────
+//
+// `bench/sca-replay` ran this detector over 13 pinned real repositories and it
+// produced 166 findings at critical/high severity, of which ZERO were
+// typosquats. A representative sample:
+//
+//   ms ~ ws        acorn ~ cors     ajv ~ ava      six ~ tox
+//   abab ~ ava     arg ~ yargs      bail ~ babel   aws4 ~ ws
+//
+// npm/cli alone produced 37, next.js 128. Every one names a real, popular,
+// entirely legitimate package — `ms` is a top-50 npm package — at a severity
+// that puts it above genuine advisory matches in the report.
+//
+// The cause is that plain edit distance is meaningless on short names: at
+// distance 2, `ava` and `abab` differ by two thirds of their length, and any
+// two-character name is within one edit of any other. Two changes fix it:
+//
+//   1. Damerau-Levenshtein, so a TRANSPOSITION costs 1 rather than 2. That is
+//      the single most common real typo and the one plain Levenshtein scores
+//      worst — `lodahs` for `lodash` is one slip of the fingers, not two edits.
+//   2. The distance must be small RELATIVE to the name. A quarter of the
+//      shorter name is the threshold; beyond that it is a different word.
+//
+// These tests are the FP budget. They exist so that widening the reference
+// package list later cannot quietly reintroduce the noise.
+import { detectDepConfusion as _detect } from '../src/sca/dep-confusion.js';
+
+const REAL_FALSE_POSITIVES = [
+  ['ms', '2.1.2'], ['acorn', '8.7.0'], ['ajv', '8.10.0'], ['six', '1.15.0'],
+  ['abab', '2.0.5'], ['arg', '5.0.1'], ['bail', '1.0.5'], ['aws4', '1.11.0'],
+  ['docs', '1.0.0'], ['asap', '2.0.6'], ['alex', '9.1.0'],
+];
+
+test('typosquat: the real-world false positives measured by bench/sca-replay stay silent', () => {
+  const components = REAL_FALSE_POSITIVES.map(([name, version]) => ({
+    ecosystem: 'npm', name, version, filePath: 'package-lock.json',
+  }));
+  const findings = _detect(components, null).filter((f) => /typosquat/.test(f.id));
+  assert.deepEqual(
+    findings.map((f) => f.vuln), [],
+    'every one of these is a legitimate, popular package; none is a typosquat',
+  );
+});
+
+test('typosquat: real typosquat shapes still fire', () => {
+  // The transposition case is the one plain Levenshtein got wrong, and it is
+  // the most common real typo — so it must survive the tightening, not merely
+  // be tolerated by it.
+  const components = [
+    { ecosystem: 'npm', name: 'lodahs', version: '1.0.0', filePath: 'package.json' },   // transposition of lodash
+    { ecosystem: 'npm', name: 'reactt', version: '1.0.0', filePath: 'package.json' },   // doubled last char of react
+    { ecosystem: 'npm', name: 'expres', version: '1.0.0', filePath: 'package.json' },   // dropped char of express
+  ];
+  const flagged = _detect(components, null)
+    .filter((f) => /typosquat/.test(f.id)).map((f) => f.package).sort();
+  assert.deepEqual(flagged, ['expres', 'lodahs', 'reactt']);
+});
+
+test('typosquat: two-character names are never evidence', () => {
+  // `ms` vs `ws` is one edit on a two-character name — which is to say, every
+  // two-character package in existence is one edit from every other.
+  const findings = _detect([{ ecosystem: 'npm', name: 'ms', version: '2.1.2' }], null);
+  assert.equal(findings.length, 0);
+});
+
+test('typosquat: a flagged finding names the package in a field, not only in prose', () => {
+  // A supply-chain finding whose subject exists only inside an English
+  // sentence cannot be triaged, suppressed, or grouped by anything downstream.
+  const [f] = _detect([{ ecosystem: 'npm', name: 'lodahs', version: '1.0.0' }], null);
+  assert.equal(f.package, 'lodahs');
+  assert.equal(f.version, '1.0.0');
+  assert.equal(f.ecosystem, 'npm');
 });
