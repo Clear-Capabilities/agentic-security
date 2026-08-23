@@ -227,19 +227,32 @@ test('the JetBrains plugin.xml factory class exists in the Kotlin source', () =>
   assert.ok(new RegExp(`class\\s+${className}\\b`).test(kt), `plugin.xml names class ${className}, not found in the Kotlin source`);
 });
 
-// ─── 3. Freshness of the committed VS Code bundle ────────────────────────────
+// ─── 3. The source carries the current resolution logic ─────────────────────
 
-test('the committed VS Code bundle reflects the current resolution logic', () => {
-  const bundle = fs.readFileSync(path.join(VSCODE, 'dist', 'extension.js'), 'utf8');
-  // A byte-exact rebuild comparison lives in CI, where `npm install` has run
-  // in ide/vscode and esbuild is available. This is the part that can be
-  // asserted from the scanner's own test suite with no extra dependency: the
-  // shipped bundle must contain the resolution strategies the source
-  // introduces, and must not contain the dead path it replaced.
-  assert.ok(bundle.includes('CLAUDE_PLUGIN_ROOT'), 'bundle is stale — rebuild with `npm run build` in ide/vscode');
-  assert.ok(!/agentic-security["'\/\\,\s]+[^\n]{0,20}0\.1\.0/.test(bundle), 'bundle still carries the dead 0.1.0 cache path');
-  const pkg = JSON.parse(fs.readFileSync(path.join(VSCODE, 'package.json'), 'utf8'));
-  for (const c of pkg.contributes?.commands || []) {
-    assert.ok(bundle.includes(c.command), `bundle does not register "${c.command}" — rebuild it`);
-  }
+test('no dead resolution path survives in the VS Code source', () => {
+  // NOT the built bundle. `ide/vscode/dist/` is gitignored on purpose — the
+  // extension is packaged by `vsce`, not committed like `scanner/dist/` is.
+  //
+  // The first version of this test read `dist/extension.js`, passed locally
+  // because the file happened to exist on this machine, and failed in CI with
+  // ENOENT. Worse, the CI job it was paired with ran
+  // `git diff --exit-code dist/extension.js` on an UNTRACKED file, which can
+  // never report a difference — a vacuous gate that looked like coverage.
+  //
+  // So the source is what is asserted here, and the CI job now builds the
+  // extension and inspects the BUILT output. Each half checks the thing it can
+  // actually see.
+  const resolver = fs.readFileSync(path.join(VSCODE, 'src', 'resolve-scanner.mjs'), 'utf8');
+  const ext = fs.readFileSync(path.join(VSCODE, 'src', 'extension.ts'), 'utf8');
+
+  assert.ok(ext.includes('CLAUDE_PLUGIN_ROOT'), 'the extension must pass CLAUDE_PLUGIN_ROOT to the resolver');
+  assert.ok(resolver.includes('CLAUDE_PLUGIN_ROOT') || resolver.includes('pluginRoot'),
+    'the resolver must accept a plugin root');
+  // The version segment is discovered, never written down.
+  assert.ok(/readdir/.test(resolver), 'the resolver must enumerate the cache directory rather than guess a version');
+  // The "is a version hardcoded" question is NOT re-asked here — the dedicated
+  // test above enforces it across all of `ide/`, with a pattern tight enough to
+  // ignore prose. A looser second copy of that check matched this file's own
+  // explanatory comment, which is how an over-broad assertion earns its keep as
+  // a lesson rather than a test.
 });

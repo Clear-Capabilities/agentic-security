@@ -10,7 +10,7 @@
     "WHY THE SPLIT EXISTS. remote-ci-green previously required EVERY check on the",
     "commit. On 2026-08-09 a publish was blocked for 15+ minutes by realworld-bench",
     "while 8 of 9 checks were green. That job measures detection rate against public",
-    "vulnerable apps — a quality TREND, not a statement about whether this build is",
+    "vulnerable apps \u2014 a quality TREND, not a statement about whether this build is",
     "publishable. The same over-broad requirement is why routine pushes to main have",
     "been reporting 'Bypassed rule violations': protection demanded checks that are",
     "not correctness gates, so the bypass became habitual, and a rule that is",
@@ -18,7 +18,7 @@
     "",
     "BLOCKING means: red or pending here stops the release. Correctness.",
     "INFORMATIONAL means: still runs, still reported, and a FAILING one prints a loud",
-    "warning at publish time — but it does not gate. Trend regressions must stay",
+    "warning at publish time \u2014 but it does not gate. Trend regressions must stay",
     "visible; the point is that they are not release blockers, not that they are",
     "ignorable.",
     "",
@@ -27,7 +27,7 @@
     "",
     "THESE ARE CHECK-RUN NAMES (jobs), NOT WORKFLOW NAMES. The first draft of this",
     "file listed 'ci' and 'codeql', which are workflow names and never appear as",
-    "check runs — they would have matched nothing here, and if branch protection had",
+    "check runs \u2014 they would have matched nothing here, and if branch protection had",
     "been configured from this list, pull requests would have hung forever waiting on",
     "contexts that never report. The names below were read from",
     "`gh api repos/OWNER/REPO/commits/main/check-runs`. Verify the same way before",
@@ -35,12 +35,13 @@
     "",
     "SELF means: this check run IS the job the release gate is executing inside.",
     "The release workflow's publish job runs the gate, so the gate observes a check",
-    "named 'publish' that is in_progress — itself — and waits for it to finish. It",
+    "named 'publish' that is in_progress \u2014 itself \u2014 and waits for it to finish. It",
     "never can. Every tag push therefore failed the gate on a self-reference while",
     "all nine real checks were green, and both v0.135.0 and v0.136.0 failed this way",
     "before it was diagnosed. A self check is EXCLUDED, not trusted: it says nothing",
     "about the commit, so treating it as informational would be wrong for the same",
-    "reason treating it as blocking is."
+    "reason treating it as blocking is.",
+    "vscode-extension (added 0.141.0) is BLOCKING. It builds the shipped VS Code extension and asserts the built bundle carries the current scanner-resolution logic. The extension spent every release unable to find the scanner at all \u2014 a hardcoded cache-path version that no install creates \u2014 so this is a correctness gate, not a trend."
   ],
   "blocking": [
     "test",
@@ -49,7 +50,8 @@
     "determinism-compare",
     "determinism-attest (ubuntu-latest)",
     "determinism-attest (macos-latest)",
-    "analyze (javascript-typescript)"
+    "analyze (javascript-typescript)",
+    "vscode-extension"
   ],
   "informational": [
     "realworld-bench",

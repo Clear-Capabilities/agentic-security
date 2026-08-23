@@ -56,8 +56,26 @@ jobs:
       - run: npm install
       - name: Build the extension bundle
         run: npm run build
-      - name: Verify the committed bundle matches source
-        run: git diff --exit-code dist/extension.js
+      # `ide/vscode/dist/` is gitignored — the extension is packaged by `vsce`,
+      # not committed the way `scanner/dist/` is. The first version of this job
+      # ran `git diff --exit-code dist/extension.js` on an UNTRACKED file, which
+      # can never report a difference: a vacuous gate that looked like coverage.
+      # So the BUILT output is inspected instead, which is the thing this job is
+      # uniquely able to see.
+      - name: The built bundle carries the current resolution logic
+        run: |
+          node -e '
+            const fs = require("fs");
+            const b = fs.readFileSync("dist/extension.js", "utf8");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const fail = (m) => { console.error("FAIL: " + m); process.exit(1); };
+            if (!b.includes("CLAUDE_PLUGIN_ROOT")) fail("built bundle does not consult CLAUDE_PLUGIN_ROOT");
+            if (/agentic-security["\x27\/\\,\s]+[^\n]{0,20}0\.1\.0/.test(b)) fail("built bundle still carries the dead 0.1.0 cache path");
+            for (const c of (pkg.contributes && pkg.contributes.commands) || []) {
+              if (!b.includes(c.command)) fail("built bundle does not register " + c.command);
+            }
+            console.log("built bundle OK: resolution logic present, no dead path, all commands registered");
+          '
       # No type-check step: `typescript` is not a dependency of this tree and
       # the build is esbuild, which strips types without checking them. So a
       # TYPE error in extension.ts still ships silently. Recorded as a known
