@@ -67,7 +67,7 @@ exposed to anything in lodash" needs the package-level one. Publishing only the
 higher figure would be flattering and dishonest; publishing only the lower
 understates what the tool actually tells you.
 
-## Results — engine 0.141.0, labels 2026-08-23
+## Results — engine 0.142.0, labels 2026-08-23
 
 | slice | version recall | precision | package recall |
 |---|---:|---:|---:|

@@ -1,7 +1,7 @@
 {
   "prd": "F4.3",
-  "generatedAt": "2026-08-23T11:38:11.748Z",
-  "engineVersion": "0.141.0",
+  "generatedAt": "2026-08-23T21:49:23.530Z",
+  "engineVersion": "0.142.0",
   "scoring": "verdict flip — the vulnerable variant must fire AND the hardened variant must not",
   "configuration": "runScan on a temp tree, --no-network, files at realistic project paths",
   "coverage": {

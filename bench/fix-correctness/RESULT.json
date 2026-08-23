@@ -1,7 +1,7 @@
 {
   "prd": "F6.3",
-  "generatedAt": "2026-08-23T11:39:13.839Z",
-  "engineVersion": "0.141.0",
+  "generatedAt": "2026-08-23T21:50:25.827Z",
+  "engineVersion": "0.142.0",
   "groundTruth": "the upstream fix commit for each bench/independent entry — third-party, not authored here",
   "population": {
     "entriesScanned": 45,

@@ -135,7 +135,11 @@ regression net, and the instruments above are the accuracy measurements.
 ### 1.2 The measured baseline
 
 **Re-measured 2026-08-23 — engine 0.141.0, the full 1004-entry population, 991
-scored and 13 unscored.** The previous figures in this section were engine
+scored and 13 unscored.** The version string says 0.141.0 because that is what
+`scanner/package.json` read at measurement time; the CODE measured is what ships
+as 0.142.0 — the engine edits and these artifacts landed in the same commit and
+nothing under `scanner/src/` changed after. Re-running purely to relabel is a
+four-hour job and was deliberately not done. The previous figures in this section were engine
 0.138.0 over 315 entries and have been replaced rather than kept alongside: a
 number measured on a third of the population is not a comparison, it is a
 different question.

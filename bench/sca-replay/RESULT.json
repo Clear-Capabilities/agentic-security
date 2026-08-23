@@ -1,7 +1,7 @@
 {
   "prd": "F3.1",
-  "generatedAt": "2026-08-23T11:42:09.227Z",
-  "engineVersion": "0.141.0",
+  "generatedAt": "2026-08-23T21:53:37.599Z",
+  "engineVersion": "0.142.0",
   "configuration": "scan --only sca --format json, network enabled, per-entry watchdog 600000ms",
   "labelSource": "osv.dev querybatch",
   "labelGeneratedAt": "2026-08-23",

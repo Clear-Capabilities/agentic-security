@@ -1,7 +1,7 @@
 {
   "prd": "F3.2",
-  "generatedAt": "2026-08-23T14:09:31.767Z",
-  "engineVersion": "0.141.0",
+  "generatedAt": "2026-08-23T21:53:57.682Z",
+  "engineVersion": "0.142.0",
   "oracle": "IMPORT-LEVEL, computed here from the project source by a reader sharing no code with the engine. A necessary condition for function reachability, not a sufficient one — see UNADJUDICATED-REACHABLE.",
   "errorCosts": {
     "falseUnreachable": "a MISSED EXPLOIT — the finding is demoted and a real vulnerability stops being shown",

@@ -16,7 +16,7 @@ detector switched on.
 The dataset's own train/test partition is reused as development/held-out, so
 nobody here chose which rows are hard.
 
-## Results — engine 0.141.0
+## Results — engine 0.142.0
 
 | slice | recall | precision | correct silence |
 |---|---:|---:|---:|

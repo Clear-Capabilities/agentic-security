@@ -10,6 +10,141 @@
 
 
 
+
+## 0.142.0 — The last five PRD items, and three criteria that now fail on evidence
+
+0.141.0 built instruments for the surfaces that had none. This closes the
+remainder of `docs/WORLD_CLASS_HARNESS_PRD.md`: four of the five items found
+live engine bugs, and the fifth re-derived the headline the whole document rests
+on. Three success criteria now **fail** — measured, rather than unknown.
+
+### A sanitizer could be undone and the flow still read as clean
+
+`he.decode(escapeHtml(req.query.name))` reaching an HTML sink was reported
+**sanitized**. The decode puts back exactly what the escape removed, so this was
+a missed XSS presented as a clean flow.
+
+Nothing modelled reversal: the catalog holds sanitizers, a decoder is the
+opposite, so it was never even recorded on the path. Fixed across three layers —
+the taint walk now collects un-sanitizer callees, the gate maps them to the
+family they reverse (percent-decoding does **not** undo HTML escaping, so a flat
+list would be wrong), and the finding-projection allowlist had to learn the new
+field. That last one is why the fix looked inert through three rounds of
+debugging.
+
+Found by the mutation gate, which went from 12 to **34 cases** — the five
+detector families 0.141.0 shipped had owed a metamorphic pair and an adversarial
+near-miss and had none.
+
+### The CloudFormation ingress rule was keyed on YAML key order
+
+`- CidrIp:` first and `- IpProtocol:` first are the same template — YAML mappings
+are unordered — and only the second matched. The rule was keyed on the author's
+formatting, which is syntax, not meaning. Also caught by the mutation gate, by
+the metamorphic case that exists for exactly this.
+
+### Every reachability demotion we could adjudicate was wrong
+
+Reachability was reported as a demotion *rate*, and that rate was **0 for every
+entry by construction**: `bench/sca-replay` fetched lockfiles, so the analysis
+had no source to walk. A number that is structurally zero looks like a
+measurement and is not one.
+
+With source fetched and scored against an import-level oracle: **3 adjudicable
+demotions, 3 false-unreachable — 100% wrong, in the missed-exploit direction.**
+`express`/`cookie`, `express`/`send`, `poetry`/`requests` — each demoted to
+`info` and out of the report, each verified by hand as genuinely imported.
+
+Three defects behind it:
+
+- **Failure to prove reachability was reported as proof of unreachability.** A
+  site the analysis could not reason about became a positive claim. It is now
+  `unknown`, a state the code already used elsewhere.
+- **A project with no routes was still asked "reachable from a route?"** For a
+  library that question has no answer — its callers are its users, not in the
+  tree.
+- **`_enclosingFn` knew two of four declaration forms.** `res.cookie = function
+  (…)` — how most of the JS ecosystem defines a public method — was invisible, so
+  the scan attributed call sites to unrelated functions further up the file. It
+  now also tracks whether the enclosing function is **exported**, because a
+  public-API function with no in-tree caller is the normal case, not dead code.
+
+**If you use SCA reachability to triage, this affected you**: findings were being
+demoted out of your report on projects that genuinely import the vulnerable
+package.
+
+### The VS Code extension had never been type-checked
+
+`typescript` is now a devDependency and `npm run typecheck` runs in CI. It found
+errors immediately: the tsconfig declared no `types` at all, so `process`,
+`setTimeout` and `NodeJS.Timeout` were every one of them unresolved — `@types/node`
+was installed and nothing consumed it — plus two implicit `any` parameters. The
+build is esbuild, which strips types without checking them, so none of this had
+ever surfaced.
+
+Neovim and JetBrains are now smoke-tested in CI too. JetBrains is classified
+**informational**: it downloads a full IntelliJ distribution, so red there is more
+often the network than this code, and a habitually-red gate stops being read.
+
+## The population re-measured — and it is worse
+
+991 scored entries at engine 0.141.0 (the code that ships here), against 315 at
+0.138.0 before:
+
+| | before | **now** |
+|---|---:|---:|
+| localized recall | 3.56% | **2.83%** |
+| localized precision | 44.00% | **36.36%** |
+| fix-discrimination | 81.8% | **71.43%** |
+| held-out recall | — | **2.93%** |
+
+**The headline fell because the question got harder.** The corpus tripled once
+the advisory miner could page past the first hundred entries per ecosystem, and
+what it pulled in is recent, TypeScript-heavy and dominated by authorization
+classes. Held-out tracks development almost exactly, so nothing is fitted.
+
+**Ruby 0% → 3.20%. Go 0% → 1.19%.** Both measured zeros are off zero, on
+populations 8× and 1.2× their old size. **PHP is the new zero, at 0/73.**
+
+Two of this release's own fixes are confirmed on real code rather than their own
+fixtures: the Ruby `File.join` rule earns `lsegal/yard`, and `CONVENTION` earns
+its first localized true positive ever on GitPython — the family recorded as
+permanently silent until it turned out to be mislocalized by five lines.
+
+### Three success criteria now fail, on evidence
+
+- **Fix-discrimination is 71.43%**, below its 80% floor. 8 of 28 findings still
+  fire on the code the fix produced — those detected an API, not a vulnerability.
+- **Taint contributes 1 of 28** localized true positives. It was 1 of 12; the
+  count did not move while the population tripled. Deep mode also costs 5 extra
+  false positives and **loses** a Go finding that pattern-only makes.
+- **Compliance still has no accuracy instrument** — the last feature measured by
+  nothing.
+
+### Measured and deliberately not fixed
+
+- **The agent trust-boundary delta is 0 of 0 — undefined, not zero.** The
+  population now holds 28 entries of real MCP-server code; the engine produces no
+  localized true positives on any of them, so there is nothing for the boundary
+  modelling to have contributed to. It is not silent there — 21 findings per
+  entry, all on the advisory's own files, none of the labelled class. WRONG-CWE,
+  on the most differentiated surface in the product.
+- **Reachability now demotes nothing** on the source-bearing corpus. The false
+  demotions are gone; whether the new caution is correct needs applications with
+  real routes, which those four entries are not.
+
+## Also
+
+- A whole-population benchmark run **wedged** at 0.0% CPU after 4.5 hours, taking
+  every already-scored entry with it. `bench/independent/runner.mjs` now takes
+  `--offset`/`--limit` and `merge-chunks.mjs` reassembles the slices,
+  **recomputing** every aggregate from the per-entry rows and refusing to write
+  unless that reproduces each chunk's own numbers exactly. It caught two of its
+  own bugs that way.
+- A guard-shaped method NAME on a declaration line (`def check_static_cache(`) no
+  longer counts as a containment guard, which had been silently dropping path
+  findings inside any method called `check*` / `validate*` / `ensure*`.
+
 ## 0.141.0 — Six new instruments, and the seven live bugs they found
 
 The previous release fixed five bugs found by measuring. This one builds the
