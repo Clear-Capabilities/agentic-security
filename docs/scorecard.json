@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.141.0",
     "bundleSha256": "9b5c22a2088e4b17eafbbc3e70ea6fcb0a53fd5ae3e7d8d4848eeed8da6e2679",
-    "commit": "248c4cf34e72631bfe9a378c602b9207c61fabc7",
+    "commit": "83e463ebb3d806122eb608e07c51dbff311a9cad",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-23T19:05:12.999Z"
+    "generatedAt": "2026-08-23T19:14:59.591Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",

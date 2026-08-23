@@ -11,11 +11,11 @@ that produced them.
 | --- | --- |
 | Engine version | 0.141.0 |
 | Bundle SHA-256 | `9b5c22a2088e4b17eafbbc3e70ea6fcb0a53fd5ae3e7d8d4848eeed8da6e2679` |
-| Commit | `248c4cf34e72631bfe9a378c602b9207c61fabc7` |
+| Commit | `83e463ebb3d806122eb608e07c51dbff311a9cad` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-23T19:05:12.999Z |
+| Generated (UTC) | 2026-08-23T19:14:59.591Z |
 
 ## What these numbers are, and what they are not
 
