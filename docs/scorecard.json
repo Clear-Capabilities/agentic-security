@@ -3,10 +3,10 @@
   "provenance": {
     "engineVersion": "0.141.0",
     "bundleSha256": "deeb49d41f22000f35683bc1e9dc2c2368c4b79af6272740c5e96cece4732475",
-    "commit": "a8755b88cc7601bc5800730af68f33368bd46a23",
-    "worktreeClean": false,
+    "commit": "b6af91fcfabb6e2fa985e5aef0ce1282f030000d",
+    "worktreeClean": true,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-23T11:44:34.385Z"
+    "generatedAt": "2026-08-23T11:47:06.245Z"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -20,24 +20,16 @@
   "corpus": {
     "measuredThisRun": true,
     "totalEntries": 215,
-    "scoredEntries": 214,
-    "notScored": [
-      {
-        "cve": "py-interproc-cmdi-shape",
-        "tier": "deep",
-        "language": "python",
-        "status": "env-error",
-        "error": "python-cst-parser-degraded (helper-batch-timeout)"
-      }
-    ],
+    "scoredEntries": 215,
+    "notScored": [],
     "overall": {
       "detection": {
-        "n": 214,
-        "d": 214
+        "n": 215,
+        "d": 215
       },
       "silence": {
-        "n": 214,
-        "d": 214
+        "n": 215,
+        "d": 215
       }
     },
     "byLanguage": [
@@ -151,14 +143,14 @@
       },
       {
         "key": "python",
-        "entries": 31,
+        "entries": 32,
         "detection": {
-          "n": 31,
-          "d": 31
+          "n": 32,
+          "d": 32
         },
         "silence": {
-          "n": 31,
-          "d": 31
+          "n": 32,
+          "d": 32
         }
       },
       {
@@ -417,14 +409,14 @@
       },
       {
         "key": "CWE-78",
-        "entries": 22,
+        "entries": 23,
         "detection": {
-          "n": 22,
-          "d": 22
+          "n": 23,
+          "d": 23
         },
         "silence": {
-          "n": 22,
-          "d": 22
+          "n": 23,
+          "d": 23
         }
       },
       {
@@ -539,14 +531,14 @@
       },
       {
         "key": "deep",
-        "entries": 6,
+        "entries": 7,
         "detection": {
-          "n": 6,
-          "d": 6
+          "n": 7,
+          "d": 7
         },
         "silence": {
-          "n": 6,
-          "d": 6
+          "n": 7,
+          "d": 7
         }
       },
       {
