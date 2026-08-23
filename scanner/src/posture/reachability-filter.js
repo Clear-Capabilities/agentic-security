@@ -71,3 +71,47 @@ export function demoteUnreachable(findings, opts = {}) {
     f._reachabilityDemoted = before;
   }
 }
+
+// ── PRD F3.2 — reachability is its OWN claim, scored separately ────────────
+//
+// "A vulnerable version is present" and "the vulnerable FUNCTION is reachable"
+// are different assertions with different error costs, and they were reported as
+// one number.
+//
+//   A false "unreachable" is a MISSED EXPLOIT — the finding is demoted to info
+//   and a real vulnerability stops being shown.
+//   A false "reachable" is noise — someone reads a finding that did not matter.
+//
+// Those costs are not symmetric, so a single accuracy figure covering both is
+// the wrong instrument. This reports each separately with {n, d}, plus the
+// DEMOTION RATE, which is the number that says how much work the reachability
+// claim is doing: a demotion rate near zero means the feature is not earning
+// its risk, and a high one means a great deal rests on it being right.
+export function summarizeReachability(findings) {
+  const list = Array.isArray(findings) ? findings.filter(Boolean) : [];
+
+  // Only findings the analysis actually had an opinion about belong in the
+  // denominator. A finding with no reachability verdict is UNKNOWN, and folding
+  // unknowns into "reachable" would inflate the claim being measured.
+  const judged = list.filter((f) => f.unreachable === true || f.reachable === true || f.functionReachable != null);
+  const d = judged.length;
+
+  const demoted = judged.filter((f) => f.unreachable === true);
+  const reachable = judged.filter((f) => f.unreachable !== true);
+
+  return {
+    total: list.length,
+    judged: { n: d, d: list.length },
+    unknown: { n: list.length - d, d: list.length },
+    reachable: { n: reachable.length, d },
+    unreachable: { n: demoted.length, d },
+    demotionRate: { n: demoted.length, d },
+    errorCosts: {
+      falseUnreachable: 'a MISSED EXPLOIT — the finding is demoted to info and a real vulnerability stops being shown',
+      falseReachable: 'noise — someone reads a finding that did not matter',
+    },
+    caveat: d === 0
+      ? 'nothing was judged for reachability; every rate is 0/0 and means nothing'
+      : 'unknown is a first-class state and is NOT counted as reachable',
+  };
+}

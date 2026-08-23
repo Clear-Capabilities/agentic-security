@@ -1,0 +1,23 @@
+{
+ "schema": "hang-profile/v1",
+ "purpose": "PRD F2.4 - profile the six entries that exceed the 600s watchdog, BEFORE optimising. All six are Java, all very large trees.",
+ "entry": "GHSA-2qj4-mmr9-4v2f (netty) - the SMALLEST of the six: 3557 files on disk, 35MB",
+ "measured": {
+  "totalMs": 1049355,
+  "filesScanned": 2499,
+  "msPerFile": 419.9,
+  "filesTimedOut": 0,
+  "slowestFileMs": 3019,
+  "top8CombinedMs": 9696,
+  "findings": 280
+ },
+ "finding": "NOT a hang and NOT a pathological file. Zero files timed out, the slowest single file is 3.0s, and the eight slowest combined are under 10s of a 17.5-MINUTE scan. The cost is UNIFORM: ~420ms per file across 2438 Java files analysed at the irTaint tier.",
+ "implication": "There is no bug to find here - no quadratic, no catastrophic backtracking, no one hot file. The Java IR+taint per-file cost simply is what it is, so wall-clock scales linearly with tree size. At this rate the LARGEST of the six entries (25171 files) would need roughly 3 HOURS, which no watchdog value makes acceptable.",
+ "optionsNotTaken": [
+  "Raise the watchdog: does not help - the largest entry needs ~3h, and a benchmark that waits 3h per entry is not a benchmark.",
+  "Optimise the Java IR hot path: the legitimate fix, but it is engine work with real regression risk and must be driven by a CPU profile of the IR itself, not by this file-level timing.",
+  "Parallelise across files: the per-file work is independent, so this is the highest-leverage change; it is also a concurrency change to the scan core and needs its own correctness gate (parity with a serial run).",
+  "Bound the scan and report PARTIAL honestly: acceptable for a product, unacceptable for a benchmark entry, which must be scored or excluded - never silently truncated."
+ ],
+ "honestStatus": "The six entries remain EXCLUDED and disclosed by name in bench/independent/RESULT.json population.unscored. That is the correct handling until one of the options above lands. This profile exists so the next person starts from the measurement rather than from the assumption that something is hanging."
+}

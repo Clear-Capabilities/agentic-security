@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-22T20:49:33.017Z",
-  "commit": "8fe33811d47b407fd04b7594e47dfb92f6403398",
+  "generatedAt": "2026-08-22T22:47:44.007Z",
+  "commit": "e9657a77fe2d9093d204f6b580a9622765054582",
   "targets": {
     "hooks": {
       "total": 21,
@@ -36,7 +36,7 @@
       }
     },
     "scanner/src": {
-      "total": 427,
+      "total": 428,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -199,7 +199,7 @@
         "sca/dep-confusion.js": 3,
         "sca/llm-function-extract.js": 2,
         "sca/py-package-functions.js": 1,
-        "sca/sigstore-verify.js": 6,
+        "sca/sigstore-verify.js": 7,
         "util/untrusted.js": 1
       }
     }

@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  summarizeFixAxes, renderFixAxes,
   recordFixAttempt, loadFixAttempts, summarizeFixDurations,
   fixDurationReport, renderFixDurationSummary, bucketOf, FIX_STAGES, _internals,
 } from '../src/posture/fix-metrics.js';
@@ -185,4 +186,60 @@ test('a malformed record cannot enter a distribution', () => {
     );
     assert.equal(loadFixAttempts(root).length, 1, 'a record with no numeric totalMs is not a measurement');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+// ── PRD F6.1 — three axes, reported separately ─────────────────────────────
+//
+// All three legs existed and were collapsed into one boolean. That matters
+// because axis (a) — "the finding disappeared" — is satisfiable by DELETING
+// CODE: the rescan goes quiet, there is nothing left to fail, and on a project
+// with no detectable suite the attempt reaches ok:true having proven only that
+// the detector stopped firing.
+
+test('F6.1: the three axes are scored INDEPENDENTLY, not read off the verdict', () => {
+  // Reading each axis off `ok` would make them three copies of one number. A
+  // leg that passed inside a FAILED attempt still counts for its own axis.
+  const s = summarizeFixAxes([
+    { ok: false, rescanOk: false, testsRan: true, testsOk: true, pocOk: false },
+  ]);
+  assert.equal(s.findingDisappeared.n, 0, 'a failed rescan must not count as disappearance');
+  assert.equal(s.testsStillPass.n, 1, 'a passing suite inside a failed attempt still counts for axis (b)');
+});
+
+test('F6.1: aOnly isolates the code-deleting shape', () => {
+  // The number nobody was publishing: disappearance with NEITHER corroborating
+  // axis. A high aOnly beside a high headline is a remediation feature deleting
+  // code and calling it a fix.
+  const s = summarizeFixAxes([
+    { ok: true, rescanOk: true, testsRan: false, pocOk: false },   // suspicious
+    { ok: true, rescanOk: true, testsRan: true, testsOk: true, pocOk: true }, // real
+  ]);
+  assert.deepEqual(s.aOnly, { n: 1, d: 2 });
+  assert.deepEqual(s.satisfiesAll, { n: 1, d: 2 });
+});
+
+test('F6.1: "tests skipped" is never counted as "tests passed"', () => {
+  // A project with no detectable suite is a WEAKER check, not a passing one.
+  const s = summarizeFixAxes([{ ok: true, rescanOk: true, testsRan: false, pocOk: true }]);
+  assert.equal(s.testsStillPass.n, 0, 'a suite that never ran cannot have passed');
+});
+
+test('F6.1: every axis carries its denominator', () => {
+  const s = summarizeFixAxes([{ ok: true, rescanOk: true }, { ok: false }]);
+  for (const k of ['findingDisappeared', 'testsStillPass', 'verifierAgrees', 'satisfiesAll', 'aOnly']) {
+    assert.equal(s[k].d, 2, `${k} must carry the denominator`);
+  }
+});
+
+test('F6.1: zero attempts does not fabricate a rate', () => {
+  const s = summarizeFixAxes([]);
+  assert.equal(s.total, 0);
+  assert.match(s.caveat, /means nothing/);
+  assert.match(renderFixAxes(s), /No fix attempts/);
+});
+
+test('F6.1: the rendered table names the code-deleting risk explicitly', () => {
+  const md = renderFixAxes(summarizeFixAxes([{ ok: true, rescanOk: true }]));
+  assert.match(md, /deleting code/, 'the reader must be told what aOnly means');
+  assert.match(md, /the only row that means "fixed"/);
 });

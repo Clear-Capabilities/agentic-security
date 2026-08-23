@@ -195,3 +195,79 @@ export function renderFixDurationSummary(sum) {
 }
 
 export const _internals = { _dist, _pct, RELIABLE_N };
+
+
+// ── PRD F6.1 — score fixes on THREE AXES, not one ──────────────────────────
+//
+// The three axes the PRD names:
+//   (a) does the finding disappear      — the rescan leg
+//   (b) does the project's own suite pass — the tests leg
+//   (c) does an independent verifier agree — the PoC re-check leg
+//
+// All three were already computed by verifyFixCore and then collapsed into one
+// boolean, which is the problem: **(a) alone is satisfiable by deleting code.**
+// A patch that removes the vulnerable function passes the rescan, has nothing
+// left to fail, and — on a project with no detectable test suite — reaches
+// ok:true having proven only that the detector went quiet.
+//
+// Reporting the axes separately makes that visible. `aOnly` is the number that
+// matters most and the one nobody was publishing: attempts that satisfied ONLY
+// the disappearance axis. A high aOnly with a high headline is the shape of a
+// remediation feature that is deleting code and calling it a fix.
+export function summarizeFixAxes(attempts) {
+  const list = Array.isArray(attempts) ? attempts.filter(Boolean) : [];
+  const d = list.length;
+
+  const rate = (pred) => ({ n: list.filter(pred).length, d });
+
+  // Each axis is judged INDEPENDENTLY of the overall verdict, so a leg that
+  // passed inside a failed attempt still counts for its own axis. Reading them
+  // off `ok` would make the three axes three copies of the same number.
+  const findingDisappeared = rate((a) => a.rescanOk === true || (a.ok === true && a.rescanOk !== false));
+  const testsStillPass = rate((a) => a.testsRan === true && a.testsOk !== false);
+  const verifierAgrees = rate((a) => a.pocOk === true);
+
+  const satisfiesAll = rate((a) =>
+    (a.rescanOk === true || (a.ok === true && a.rescanOk !== false))
+    && a.testsRan === true && a.testsOk !== false
+    && a.pocOk === true);
+
+  // The honesty number: disappearance WITHOUT either corroborating axis.
+  const aOnly = rate((a) => {
+    const disappeared = a.rescanOk === true || (a.ok === true && a.rescanOk !== false);
+    const corroborated = (a.testsRan === true && a.testsOk !== false) || a.pocOk === true;
+    return disappeared && !corroborated;
+  });
+
+  return {
+    total: d,
+    findingDisappeared,
+    testsStillPass,
+    verifierAgrees,
+    satisfiesAll,
+    aOnly,
+    meaning:
+      'findingDisappeared = the detector went quiet; testsStillPass = the project suite ran AND passed; '
+      + 'verifierAgrees = an independent PoC re-check confirmed the hole is shut. '
+      + 'aOnly counts attempts that satisfied ONLY disappearance — the shape a code-deleting "fix" produces.',
+    caveat: d === 0
+      ? 'no attempts recorded; every rate is 0/0 and means nothing'
+      : 'rates carry {n,d}; a small d is indicative, not settled',
+  };
+}
+
+/** Markdown for a report. Denominators always attached. */
+export function renderFixAxes(sum) {
+  if (!sum || !sum.total) return '_No fix attempts recorded._\n';
+  const row = (label, r, note) => `| ${label} | ${r.n}/${r.d} | ${note} |`;
+  return [
+    '| Axis | Rate | Meaning |',
+    '|---|---|---|',
+    row('(a) finding disappeared', sum.findingDisappeared, 'the detector went quiet'),
+    row('(b) project tests pass', sum.testsStillPass, 'the suite RAN and passed'),
+    row('(c) verifier agrees', sum.verifierAgrees, 'an independent PoC re-check confirmed it'),
+    row('all three', sum.satisfiesAll, 'the only row that means "fixed"'),
+    row('(a) ALONE', sum.aOnly, 'satisfiable by deleting code — watch this number'),
+    '',
+  ].join('\n');
+}

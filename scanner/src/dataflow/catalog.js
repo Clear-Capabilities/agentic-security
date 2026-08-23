@@ -163,6 +163,41 @@ export const CATALOG = [
   // `dict.get(...)`/`config.get(...)` elsewhere in the file does not also
   // fire.
   { kind: 'source', id: 'py-flask-args-get',       language: 'py', framework: 'flask',   match: { type: 'call', callee: 'get', receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values/headers/cookies/json/data.get() (Flask/Django)', provenance: 'url-param' },
+  // PRD F2.2 — the MULTI-VALUE accessors, which were missing entirely.
+  //
+  // `getlist` is the standard Flask/Werkzeug and Django QueryDict API for a
+  // repeated query parameter (`?host=a&host=b`), and `getall` is its
+  // multidict equivalent. Only `get` was modelled, so every repeated-parameter
+  // flow was invisible to the taint engine.
+  //
+  // This is worth recording because the PRD attributed the miss to Python
+  // COMPREHENSIONS (`[x for x in request.args.getlist(...)]`) and proposed
+  // modelling them. Comprehensions already flow — verified with the same shape
+  // over `request.args.get()`, which the engine tracks end to end. The example
+  // failed on its SOURCE, not on its loop, and modelling comprehensions would
+  // have changed nothing while looking like a fix.
+  { kind: 'source', id: 'py-flask-args-getlist',   language: 'py', framework: 'flask',   match: { type: 'call', callee: 'getlist', receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values.getlist() (Flask/Django)', provenance: 'url-param' },
+  { kind: 'source', id: 'py-flask-args-getall',    language: 'py', framework: 'flask',   match: { type: 'call', callee: 'getall',  receiver: '^(?:args|form|values|headers|cookies|json|data|GET|POST|FILES|META)$', receiverBase: '^(?:request|req)$' }, label: 'request.args/form/values.getall() (multidict)', provenance: 'url-param' },
+
+  // PRD F2.3 — NETWORK-RESPONSE sources.
+  //
+  // Only two existed, both C++ (`recv`, `recvfrom`), so a response body from an
+  // external service was trusted input everywhere else. It is not: the upstream
+  // may be compromised, attacker-influenced (the far end of an SSRF), or simply
+  // a third party whose output this code renders, executes or shells out with.
+  // This is the same trust boundary as an HTTP request arriving — the direction
+  // is reversed, not the trust.
+  //
+  // Kept under its OWN provenance ('network') rather than folded into
+  // http-body, so a report can say where the value came from and a team that
+  // genuinely trusts its own internal API can filter on it. Collapsing them
+  // would remove exactly the fact needed to triage these.
+  { kind: 'source', id: 'js-fetch-json',   language: 'js', framework: 'fetch', match: { type: 'call', callee: 'json', receiverBase: '^(?:res|resp|response|r)$' }, label: 'HTTP response .json() [fetch]', provenance: 'network' },
+  { kind: 'source', id: 'js-fetch-text',   language: 'js', framework: 'fetch', match: { type: 'call', callee: 'text', receiverBase: '^(?:res|resp|response|r)$' }, label: 'HTTP response .text() [fetch]', provenance: 'network' },
+  { kind: 'source', id: 'js-axios-data',   language: 'js', framework: 'axios', match: { type: 'member', object: 'response', prop: 'data' }, label: 'axios response.data', provenance: 'network' },
+  { kind: 'source', id: 'py-requests-text', language: 'py', framework: 'requests', match: { type: 'member', object: 'resp', prop: 'text' }, label: 'requests response .text', provenance: 'network' },
+  { kind: 'source', id: 'py-requests-json', language: 'py', framework: 'requests', match: { type: 'call', callee: 'json', receiverBase: '^(?:resp|response|r)$' }, label: 'requests response .json()', provenance: 'network' },
+  { kind: 'source', id: 'py-urlopen-read',  language: 'py', framework: 'urllib',   match: { type: 'call', callee: 'read', receiverBase: '^(?:resp|response|r|f)$' }, label: 'urlopen read() [urllib]', provenance: 'network' },
   { kind: 'source', id: 'py-fastapi-request-query',language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Query'                  }, label: 'fastapi.Query()' },
   { kind: 'source', id: 'py-fastapi-request-body', language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Body'                   }, label: 'fastapi.Body()' },
   { kind: 'source', id: 'py-fastapi-form',         language: 'py', framework: 'fastapi', match: { type: 'call',   callee: 'Form'                   }, label: 'fastapi.Form()' },

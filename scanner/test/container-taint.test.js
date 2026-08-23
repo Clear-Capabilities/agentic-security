@@ -149,3 +149,60 @@ module.exports = (req, res) => {
   assert.deepEqual(t.map((f) => f.vuln), [],
     `the VALUE written is a literal; a tainted key alone must not make the contents tainted`);
 });
+
+// ── PRD F2.2 — the last open shape, and what it actually was ───────────────
+//
+// The PRD recorded Python COMPREHENSIONS as the remaining gap, citing
+// `[x for x in request.args.getlist(...)]`. Comprehensions already flowed: the
+// IR lowers them as a loop-var assignment plus an array of the element, and the
+// same shape over `request.args.get()` tracks end to end.
+//
+// The example failed on its SOURCE. `getlist` — the standard Flask/Werkzeug and
+// Django QueryDict accessor for a repeated parameter — was not in the catalog
+// at all, so every repeated-parameter flow was invisible. Modelling
+// comprehensions would have changed nothing while looking like a fix.
+import { CATALOG as _CATALOG } from '../src/dataflow/catalog.js';
+
+test('F2.2: the multi-value request accessors are sources', () => {
+  const ids = _CATALOG.filter((e) => e.kind === 'source').map((e) => e.id);
+  assert.ok(ids.includes('py-flask-args-getlist'),
+    'request.args.getlist() is the standard repeated-parameter API and was unmodelled');
+  assert.ok(ids.includes('py-flask-args-getall'), 'multidict getall() likewise');
+});
+
+test('F2.2: a comprehension over a multi-value source reaches a sink via TAINT', async () => {
+  // Asserts parser === IR-TAINT specifically. A pattern rule already matched
+  // this shape, which is exactly how the gap stayed hidden — the finding
+  // appeared, so nothing looked broken.
+  const fsx = await import('node:fs');
+  const osx = await import('node:os');
+  const pathx = await import('node:path');
+
+  const prevDeep = process.env.AGENTIC_SECURITY_DEEP;
+  const prevCi = process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+  process.env.AGENTIC_SECURITY_DEEP = '1';
+  process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
+  const d = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'f22-'));
+  try {
+    fsx.writeFileSync(pathx.join(d, 'app.py'), [
+      'import subprocess',
+      'from flask import request, Flask',
+      'app = Flask(__name__)',
+      "@app.route('/r')",
+      'def r():',
+      "    hosts = [h for h in request.args.getlist('host')]",
+      "    subprocess.run('ping ' + hosts[0], shell=True)",
+      "    return 'ok'",
+    ].join('\n'));
+    const { runScan } = await import('../src/runScan.js');
+    const { scan } = await runScan(d);
+    const cmdi = (scan.findings || []).filter((f) => String(f.cwe) === 'CWE-78');
+    assert.ok(cmdi.some((f) => f.parser === 'IR-TAINT'),
+      'the flow must be found by the TAINT engine, not only by a pattern rule');
+  } finally {
+    fsx.rmSync(d, { recursive: true, force: true });
+    if (prevDeep === undefined) delete process.env.AGENTIC_SECURITY_DEEP; else process.env.AGENTIC_SECURITY_DEEP = prevDeep;
+    if (prevCi === undefined) delete process.env.AGENTIC_SECURITY_DEEP_IN_CI; else process.env.AGENTIC_SECURITY_DEEP_IN_CI = prevCi;
+  }
+});

@@ -1,0 +1,25 @@
+{
+ "schema": "root-cause/v1",
+ "purpose": "PRD F1.1/F1.2 - root-cause the Go and Ruby recall zeros, entry by entry. The per-stage histogram decides the work; building detectors without it is how six themes of verified fixes landed previously and moved the number by nothing.",
+ "method": "For each entry: scan pre/ in deep mode, then classify. HIT = a finding with the advisory CWE on a file the fix touched. right-file-wrong-cwe = fired on the right file, different CWE. right-cwe-wrong-file = right CWE, elsewhere. fired-elsewhere-only = engine active, missed this shape. nothing-fired = total blindness.",
+ "sampleSize": {
+  "go": 20,
+  "ruby": 20,
+  "note": "a SAMPLE of the 72 go / 32 ruby entries, not the full population"
+ },
+ "buckets": {
+  "go": {
+   "fired-elsewhere-only": 8,
+   "right-file-wrong-cwe": 9,
+   "right-cwe-wrong-file": 3
+  },
+  "ruby": {
+   "fired-elsewhere-only": 10,
+   "right-file-wrong-cwe": 7,
+   "right-cwe-wrong-file": 3
+  }
+ },
+ "finding": "NEITHER language is blind: nothing-fired is ZERO in both samples. The engine fires on the exact file the fix touched in 45% of go and 35% of ruby cases, with a different CWE than the advisory assigned. A 0/72 and 0/32 recall does NOT mean 'no detectors'; the dominant bucket is CLASSIFICATION, not detection.",
+ "implication": "Writing more Go/Ruby detectors is unlikely to move recall - that experiment has already been run (see bench/independent/why-missed.mjs: six themes of verified fixes, no movement). The work indicated is per-entry CWE adjudication.",
+ "warning": "A bulk CWE remap to make the benchmark agree would be fitting to the answer key - precisely the overfitting bench/mutation exists to catch. Some of this gap is legitimate taxonomy disagreement (an advisory labelled CWE-287 where the engine reports the underlying injection is not obviously wrong), and separating that from real mapping defects requires per-entry adjudication, not a bulk relabel."
+}
