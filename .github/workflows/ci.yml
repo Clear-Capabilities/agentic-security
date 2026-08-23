@@ -131,7 +131,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # Gradle is PINNED. The action defaults to the newest release, and the
+      # plugin declares `org.jetbrains.intellij` 1.17.4, which Gradle 9 cannot
+      # apply at all: `Type DefaultArtifactPublicationSet not present`. The job
+      # then failed on a toolchain mismatch and told us nothing about the plugin.
+      #
+      # KNOWN GAP, recorded rather than papered over: 1.17.x is the SUPERSEDED
+      # major of that plugin (the IntelliJ Platform Gradle Plugin is on 2.x), so
+      # this distribution is building against an old toolchain by necessity.
+      # Migrating is real work on a surface with no users yet; pinning makes the
+      # job exercise the build instead of the version negotiation.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
       - name: Build the plugin
         run: gradle --no-daemon buildPlugin
       - name: A distribution zip was produced

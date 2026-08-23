@@ -1419,6 +1419,15 @@ broken IDE extension ships silently.
     correctness half (plugin.xml's `factoryClass` resolves to the Kotlin class it
     names) is asserted offline and BLOCKING in `test/ide-surfaces.test.js`.
 
+  **The JetBrains job found something on its first run.** The plugin declares
+  `org.jetbrains.intellij` **1.17.4**, which Gradle 9 cannot apply at all —
+  `Type DefaultArtifactPublicationSet not present`. That is the superseded major
+  of the plugin (the IntelliJ Platform Gradle Plugin is on 2.x), so this
+  distribution can only be built against an older toolchain. Gradle is pinned to
+  8.10 so the job exercises the build rather than the version negotiation, and
+  the staleness is recorded here rather than hidden by the pin. Migrating is real
+  work on a surface with no users yet.
+
   **Still open, stated rather than implied:** no `vsce package` — producing the
   marketplace artifact is a publish step, not a correctness check, and nothing
   about it has ever broken.

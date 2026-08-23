@@ -50,15 +50,26 @@ test('comment stripping sustains a high throughput on real source', () => {
   assert.ok(srcs.length > 50, 'the corpus must be large enough to time meaningfully');
   const bytes = srcs.reduce((a, c) => a + c.length, 0);
 
+  // One warm-up pass before timing. The first iteration pays JIT compilation
+  // and a cold cache, and that is not what this test is about — a reintroduced
+  // quadratic shows up in steady state, not in warm-up.
+  for (const c of srcs) blankComments(c);
+
   const t0 = process.hrtime.bigint();
   for (const c of srcs) blankComments(c);
   const ms = Number(process.hrtime.bigint() - t0) / 1e6;
   const mbPerSec = (bytes / 1e6) / (ms / 1000);
 
-  // Measured ~100 MB/s. The floor is set well below that so ordinary machine
-  // variation does not fail the build — this catches an ORDER-OF-MAGNITUDE
-  // regression (a reintroduced quadratic, a lost memo), not a slow afternoon.
-  assert.ok(mbPerSec > 20,
+  // Measured ~147 MB/s warm and ~92 MB/s cold on a developer machine. The floor
+  // is an ORDER OF MAGNITUDE below that, on purpose: this catches a reintroduced
+  // quadratic or a lost memo, not a slow afternoon.
+  //
+  // It was 20, which left no headroom at all — a hosted CI runner measured
+  // 19.1 MB/s on the cold pass and failed the build, producing exactly the
+  // "slow afternoon" failure the previous comment promised it would not. A
+  // performance floor set just under a fast machine's number is a coin flip on
+  // any slower one, and a gate that flips a coin gets ignored.
+  assert.ok(mbPerSec > 8,
     `comment stripping fell to ${mbPerSec.toFixed(1)} MB/s (${ms.toFixed(0)}ms for ${(bytes / 1e6).toFixed(1)}MB) — `
     + 'F2.5 was closed on the basis that this pass is negligible; at this rate that is no longer true');
 });
