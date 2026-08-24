@@ -144,7 +144,13 @@ jobs:
       # Platform Gradle Plugin 2.x.
       - uses: gradle/actions/setup-gradle@v4
       - name: Build and verify the plugin
-        run: ./gradlew --no-daemon buildPlugin verifyPluginProjectConfiguration verifyPluginStructure | tee /tmp/gradle.log
+        # `set -o pipefail` is load-bearing, not decoration. The default shell
+        # for a `run:` step is `bash -e {0}` — NO pipefail — so the exit status
+        # of `gradle | tee` is TEE's, and a failed build would report success.
+        # Verified: `bash -e -c 'false | tee /dev/null'` exits 0.
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon buildPlugin verifyPluginProjectConfiguration verifyPluginStructure | tee /tmp/gradle.log
       - name: No plugin configuration issues were reported
         # `verifyPluginProjectConfiguration` REPORTS problems and still exits 0.
         # It found two real ones on this plugin — compiling against Java 17 for a
@@ -297,7 +303,14 @@ jobs:
       - run: npm install
         working-directory: scanner
       - name: Compute run attestation
-        run: node scripts/attest-fixture.mjs --json | tee "attestation-${{ matrix.os }}.json"
+        # pipefail, same reason as the jetbrains-plugin build step: without it
+        # the step's exit status is TEE's, so attest-fixture.mjs could fail —
+        # including on its own "zero findings" refusal — and this BLOCKING job
+        # would go green having uploaded an empty attestation for
+        # determinism-compare to compare against.
+        run: |
+          set -o pipefail
+          node scripts/attest-fixture.mjs --json | tee "attestation-${{ matrix.os }}.json"
       - uses: actions/upload-artifact@v4
         with:
           name: attestation-${{ matrix.os }}

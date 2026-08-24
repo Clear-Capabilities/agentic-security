@@ -50,6 +50,24 @@ warning nothing fails on is a warning nobody reads, and it unpacks the zip to
 confirm the `factoryClass` named in `plugin.xml` is actually in the jar — an
 empty zip passed the old check.
 
+**A defect introduced by this fix, caught before it shipped.** The new CI step
+pipes Gradle into `tee` so a later step can grep the verifier's output. A `run:`
+step's default shell is `bash -e {0}` — no `pipefail` — so the pipeline's exit
+status is *tee's*, and a failed build would have reported success. That is the
+same "green gate that verifies nothing" this entire change is about, reintroduced
+by the change itself. Both pipe-to-tee steps in the workflow now set
+`set -o pipefail`, including the pre-existing one in `determinism-attest`: that
+job is BLOCKING, and without pipefail it could upload an empty attestation —
+including on `attest-fixture.mjs`'s own zero-findings refusal — for
+`determinism-compare` to compare against.
+
+The guard added for it was itself broken twice, in opposite directions, and only
+running the negative control in both found them: it first matched the word
+`pipefail` inside the comment explaining the fix (so deleting the real line still
+passed), then matched `| tee` inside a comment (so a correct workflow failed). A
+guard fooled by its own documentation is worse than no guard, because it reads as
+coverage.
+
 **A committed Gradle wrapper.** `ide/jetbrains/README.md` told contributors to
 run `./gradlew` for a long time while no wrapper existed; CI pinned a Gradle
 version in the workflow instead, so the two could drift. The wrapper is now

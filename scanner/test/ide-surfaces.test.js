@@ -347,3 +347,42 @@ test('the LSP4IJ dependency is not pinned below the platform floor', () => {
       `LSP4IJ ${dep[1]}.${dep[2]}.${dep[3]} requires platform 242+, but sinceBuild is ${since}`);
   }
 });
+
+test('no CI step pipes into tee without pipefail', () => {
+  // Not an IDE assertion, but it is here because this file's job is "the
+  // surfaces are gated" and it was introduced BY a gate added in this file's
+  // name. `run:` steps default to `bash -e {0}`, which has no pipefail, so the
+  // exit status of `cmd | tee log` is TEE's — always 0. Both pipe-to-tee steps
+  // in this workflow had it: the JetBrains build (a failed build reporting
+  // success) and determinism-attest, a BLOCKING job that would have uploaded an
+  // empty attestation for determinism-compare to compare against.
+  //
+  // Demonstrated, not assumed: `bash -e -c 'false | tee /dev/null'` exits 0.
+  const ci = fs.readFileSync(path.join(REPO, '.github', 'workflows', 'ci.yml'), 'utf8');
+  // Deliberately a text scan rather than a YAML parse: no yaml dependency is
+  // available here, and the pattern is unambiguous in the raw file.
+  const offenders = [];
+  const lines = ci.split('\n');
+  for (const [i, line] of lines.entries()) {
+    // A comment is neither a pipeline nor an offender. This one bit twice: the
+    // check first matched `pipefail` inside a comment and passed when it should
+    // have failed, then matched `| tee` inside a comment and failed when it
+    // should have passed. Both directions had to be exercised to find both.
+    if (/^\s*#/.test(line)) continue;
+    if (!/\|\s*tee\s/.test(line)) continue;
+    // Look back over the enclosing `run:` block for a pipefail. A single-line
+    // `run: cmd | tee x` has no room for one, so it is an offender by shape.
+    // COMMENTS ARE STRIPPED FIRST, and that is the whole trick. The first
+    // version of this check searched the raw window, and the step it guards
+    // carries a comment explaining why `set -o pipefail` is there — so deleting
+    // the actual pipefail line left the comment behind, the regex matched it,
+    // and the negative control passed. A guard fooled by its own documentation
+    // is worse than no guard: it reads as coverage.
+    const window = lines.slice(Math.max(0, i - 8), i + 1)
+      .filter((l) => !/^\s*#/.test(l))
+      .join('\n');
+    if (!/set -o pipefail/.test(window)) offenders.push(`line ${i + 1}: ${line.trim()}`);
+  }
+  assert.deepEqual(offenders, [],
+    `these CI steps pipe into tee without pipefail, so a failing command reports success:\n  ${offenders.join('\n  ')}`);
+});
