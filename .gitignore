@@ -117,3 +117,10 @@ bench/independent/why-missed-output/
 
 # Cross-run discovery memory (PRD C4) — per-project state, never committed.
 .agentic-security/discovery-memory.json
+
+# JetBrains plugin build output. `gradle/wrapper/` and `gradlew*` are NOT here —
+# the wrapper is committed on purpose (the README tells contributors to run
+# ./gradlew, and it pins the Gradle distribution by checksum).
+ide/jetbrains/.gradle/
+ide/jetbrains/.intellijPlatform/
+ide/jetbrains/build/

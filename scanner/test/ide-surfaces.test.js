@@ -256,3 +256,94 @@ test('no dead resolution path survives in the VS Code source', () => {
   // explanatory comment, which is how an over-broad assertion earns its keep as
   // a lesson rather than a test.
 });
+
+// ─── 4. The JetBrains build configuration agrees with itself ────────────────
+//
+// The `jetbrains-plugin` CI job is INFORMATIONAL — it downloads a full IntelliJ
+// distribution, so a red result there is more often JetBrains' CDN than this
+// code. The cost of that classification showed up on 2026-08-24: the job had
+// been failing on a REAL defect (`Plugin 'com.redhat.devtools.lsp4ij:0.19.4' is
+// not compatible to: IC-233.15026.9` — LSP4IJ dropped IC-233 at 0.18.0) and
+// nothing was blocked by it, so it stayed red.
+//
+// The answer is not to make a network-bound build a release blocker. It is to
+// move everything that can be checked WITHOUT the network into the blocking
+// offline gate. These are those checks.
+
+const JETBRAINS = path.join(IDE, 'jetbrains');
+const readJb = (...p) => fs.readFileSync(path.join(JETBRAINS, ...p), 'utf8');
+
+test('the JDK CI provisions is the JDK the JetBrains build asks for', () => {
+  // The exact bug class this exists for: the build compiled against Java 17 for
+  // an IntelliJ Platform that requires 21, produced a distribution zip, and
+  // exited 0. Only `verifyPluginProjectConfiguration` said the artifact was
+  // wrong, and only in text nothing was reading.
+  const gradle = readJb('build.gradle.kts');
+  const toolchain = gradle.match(/jvmToolchain\((\d+)\)/);
+  assert.ok(toolchain, 'build.gradle.kts must pin a jvmToolchain');
+
+  const ci = fs.readFileSync(path.join(REPO, '.github', 'workflows', 'ci.yml'), 'utf8');
+  const job = ci.slice(ci.indexOf('  jetbrains-plugin:'));
+  const end = job.indexOf('\n  ', job.indexOf('steps:'));
+  const jobBody = end === -1 ? job : job.slice(0, job.indexOf('\n\n  '));
+  const javaVersion = jobBody.match(/java-version:\s*'?(\d+)'?/);
+  assert.ok(javaVersion, 'the jetbrains-plugin job must pin a java-version');
+  assert.equal(
+    javaVersion[1], toolchain[1],
+    `CI provisions JDK ${javaVersion[1]} but the build asks for ${toolchain[1]} — `
+    + 'the build will either fail on a missing toolchain or silently compile for the wrong platform',
+  );
+});
+
+test('the JetBrains plugin does not resurrect the superseded Gradle plugin', () => {
+  const gradle = readJb('build.gradle.kts');
+  // `org.jetbrains.intellij` 1.x cannot be applied by Gradle 9 at all
+  // (`Type DefaultArtifactPublicationSet not present`), which is why CI used to
+  // pin Gradle 8.10. The 2.x plugin has a different id; matching on the bare
+  // old id must not also match the new one.
+  assert.ok(!/id\("org\.jetbrains\.intellij"\)/.test(gradle),
+    'org.jetbrains.intellij (1.x) is superseded and forces a Gradle version pin — use org.jetbrains.intellij.platform');
+  assert.match(gradle, /id\("org\.jetbrains\.intellij\.platform"\)/);
+});
+
+test('the Gradle wrapper is committed and pins its distribution by checksum', () => {
+  // The README told people to run `./gradlew` for a long time while no wrapper
+  // existed, so CI pinned a Gradle version in the workflow instead and the two
+  // could drift. A wrapper that downloads an unverified distribution is a
+  // supply-chain hole in a security tool's own build.
+  for (const f of ['gradlew', 'gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.properties']) {
+    assert.ok(fs.existsSync(path.join(JETBRAINS, f)), `${f} is missing — README tells contributors to run ./gradlew`);
+  }
+  const props = readJb('gradle', 'wrapper', 'gradle-wrapper.properties');
+  assert.match(props, /^distributionSha256Sum=[0-9a-f]{64}$/m,
+    'the wrapper must verify the Gradle distribution it downloads');
+  assert.ok((fs.statSync(path.join(JETBRAINS, 'gradlew')).mode & 0o111) !== 0,
+    'gradlew must be executable, or ./gradlew fails with permission denied');
+});
+
+test('the compatibility floor is the same number in the build and the README', () => {
+  const since = readJb('build.gradle.kts').match(/sinceBuild\s*=\s*"(\d+)"/);
+  assert.ok(since, 'build.gradle.kts must declare a sinceBuild');
+  const readme = readJb('README.md');
+  assert.ok(
+    readme.includes(`build ${since[1]}`),
+    `build.gradle.kts declares sinceBuild ${since[1]}; README.md does not say so. `
+    + 'A support floor users read and a support floor the artifact declares must be one number.',
+  );
+});
+
+test('the LSP4IJ dependency is not pinned below the platform floor', () => {
+  // LSP4IJ 0.18.0 is the first release requiring 242. Pairing a >=0.18 LSP4IJ
+  // with a sinceBuild under 242 is the precise configuration that broke the
+  // build, and it fails at dependency resolution — after the download, in CI,
+  // not here.
+  const gradle = readJb('build.gradle.kts');
+  const dep = gradle.match(/plugin\("com\.redhat\.devtools\.lsp4ij:(\d+)\.(\d+)\.(\d+)"\)/);
+  assert.ok(dep, 'build.gradle.kts must pin an LSP4IJ version');
+  const [, major, minor] = dep.map(Number);
+  const since = Number(gradle.match(/sinceBuild\s*=\s*"(\d+)"/)[1]);
+  if (major > 0 || minor >= 18) {
+    assert.ok(since >= 242,
+      `LSP4IJ ${dep[1]}.${dep[2]}.${dep[3]} requires platform 242+, but sinceBuild is ${since}`);
+  }
+});

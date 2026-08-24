@@ -11,6 +11,62 @@
 
 
 
+## Unreleased
+
+Nothing in this section has been published to npm. It is recorded here rather
+than folded into 0.143.0, which is already released.
+
+### The JetBrains plugin builds again — and its support floor moved
+
+`jetbrains-plugin` had been red in CI, classified INFORMATIONAL, and treated as
+a known toolchain gap. It was not a toolchain gap. LSP4IJ dropped IntelliJ 233
+support at its 0.18.0 release, so the pinned `com.redhat.devtools.lsp4ij:0.19.4`
+could never resolve against the pinned IDE 2023.3.6:
+
+```
+Plugin 'com.redhat.devtools.lsp4ij:0.19.4' is not compatible to: IC-233.15026.9
+```
+
+There is no configuration that supports IntelliJ 2023.3 *and* a maintained
+LSP4IJ. **`sinceBuild` moves 233 → 242**: IntelliJ 2023.3 and 2024.1 are no
+longer supported by this plugin. That is LSP4IJ's floor, not a preference. The
+build also moves off `org.jetbrains.intellij` 1.17.4 — the superseded major,
+which Gradle 9 cannot apply at all — onto the IntelliJ Platform Gradle Plugin
+2.18.1, which removes the reason CI had to pin Gradle 8.10.
+
+`untilBuild` is now open rather than `251.*`. The old cap had already gone stale
+(2025.2 exists), and a stale cap reaches the user as "plugin incompatible" on an
+IDE that would have worked.
+
+**Two defects the passing build was hiding.** Once it compiled, `buildPlugin`
+exited 0 and produced a zip — and `verifyPluginProjectConfiguration` reported,
+in text nothing was reading, that (1) the plugin was compiled for Java 17
+against a platform requiring Java 21, and (2) the Kotlin stdlib was being
+double-bundled, putting a 1.7 MB `kotlin-stdlib-2.1.0.jar` in the distribution
+next to 5 KB of plugin code and leaving the platform's class loader free to
+resolve stdlib classes from either. Both are fixed; the distribution zip went
+from 1.59 MB to 4 KB. The CI job now **fails on that verifier's output**, since a
+warning nothing fails on is a warning nobody reads, and it unpacks the zip to
+confirm the `factoryClass` named in `plugin.xml` is actually in the jar — an
+empty zip passed the old check.
+
+**A committed Gradle wrapper.** `ide/jetbrains/README.md` told contributors to
+run `./gradlew` for a long time while no wrapper existed; CI pinned a Gradle
+version in the workflow instead, so the two could drift. The wrapper is now
+committed and pins the Gradle distribution by SHA-256 — verified to reject a
+tampered checksum, which `gradle wrapper` does not configure by default and
+which is not optional in this repository.
+
+**The classification stays INFORMATIONAL, and why.** Making a job that downloads
+a full IntelliJ distribution into a release blocker trades one failure mode for a
+worse one. The lesson taken instead: everything checkable without the network
+moves into the blocking offline gate. `test/ide-surfaces.test.js` now asserts
+that the JDK CI provisions equals the `jvmToolchain` the build asks for, that the
+committed wrapper exists and pins its distribution by checksum, that the README's
+stated support floor is the `sinceBuild` the artifact declares, and that an
+LSP4IJ ≥ 0.18 is never paired with a `sinceBuild` below 242. Each was confirmed
+to fail when its subject is broken.
+
 ## 0.143.0 — OSCAL output, and the finding an OSCAL document must refuse to make
 
 `--format oscal` was documented in `commands/compliance.md` long before anything

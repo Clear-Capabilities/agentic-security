@@ -127,29 +127,48 @@ jobs:
         working-directory: ide/jetbrains
     steps:
       - uses: actions/checkout@v7
+      # JDK 21, not 17. IntelliJ Platform 2024.2 requires it; building against 17
+      # still produces a zip, and only `verifyPluginProjectConfiguration` says
+      # the artifact is wrong. See ide/jetbrains/build.gradle.kts.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
-      # Gradle is PINNED. The action defaults to the newest release, and the
-      # plugin declares `org.jetbrains.intellij` 1.17.4, which Gradle 9 cannot
-      # apply at all: `Type DefaultArtifactPublicationSet not present`. The job
-      # then failed on a toolchain mismatch and told us nothing about the plugin.
+          java-version: '21'
+      # No `gradle-version:` pin any more. The version lives in the committed
+      # wrapper (ide/jetbrains/gradle/wrapper/gradle-wrapper.properties, with the
+      # distribution checksum pinned), so CI and a developer's machine run the
+      # same Gradle by construction rather than by two settings agreeing.
       #
-      # KNOWN GAP, recorded rather than papered over: 1.17.x is the SUPERSEDED
-      # major of that plugin (the IntelliJ Platform Gradle Plugin is on 2.x), so
-      # this distribution is building against an old toolchain by necessity.
-      # Migrating is real work on a surface with no users yet; pinning makes the
-      # job exercise the build instead of the version negotiation.
+      # The pin existed because `org.jetbrains.intellij` 1.17.4 cannot be applied
+      # by Gradle 9 at all. That plugin is gone — this builds on the IntelliJ
+      # Platform Gradle Plugin 2.x.
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10'
-      - name: Build the plugin
-        run: gradle --no-daemon buildPlugin
-      - name: A distribution zip was produced
+      - name: Build and verify the plugin
+        run: ./gradlew --no-daemon buildPlugin verifyPluginProjectConfiguration verifyPluginStructure | tee /tmp/gradle.log
+      - name: No plugin configuration issues were reported
+        # `verifyPluginProjectConfiguration` REPORTS problems and still exits 0.
+        # It found two real ones on this plugin — compiling against Java 17 for a
+        # platform that requires 21, and double-bundling the Kotlin stdlib — while
+        # the build was green. A warning nothing fails on is a warning nobody
+        # reads, so the job fails on its output.
         run: |
-          test -n "$(find build/distributions -name '*.zip' -print -quit)" \
-            || { echo "FAIL: buildPlugin produced no distribution zip"; exit 1; }
+          if grep -q "plugin configuration issues were found" /tmp/gradle.log; then
+            echo "FAIL: verifyPluginProjectConfiguration reported issues:"
+            sed -n '/plugin configuration issues were found/,/^> Task/p' /tmp/gradle.log
+            exit 1
+          fi
+      - name: A distribution zip was produced, and it contains the plugin
+        run: |
+          ZIP="$(find build/distributions -name '*.zip' -print -quit)"
+          test -n "$ZIP" || { echo "FAIL: buildPlugin produced no distribution zip"; exit 1; }
+          # A zip on its own proves nothing — an empty one would pass. The
+          # factoryClass named in plugin.xml must be in the jar, or the plugin
+          # dies with ClassNotFoundException at IDE startup.
+          unzip -o -q "$ZIP" -d /tmp/plugzip
+          JAR="$(find /tmp/plugzip -name 'agentic-security-*.jar' -print -quit)"
+          test -n "$JAR" || { echo "FAIL: no plugin jar inside the distribution"; exit 1; }
+          unzip -l "$JAR" | grep -q 'com/clearcapabilities/agenticsec/AgenticSecurityServerFactory.class' \
+            || { echo "FAIL: the factoryClass plugin.xml names is not in the jar"; unzip -l "$JAR"; exit 1; }
 
   # Exercises the kernel-namespace confinement backend for real.
   #
