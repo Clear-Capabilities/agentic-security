@@ -16,6 +16,77 @@
 Nothing in this section has been published to npm. It is recorded here rather
 than folded into 0.143.0, which is already released.
 
+### npm publish no longer pays for the release gate twice
+
+`.github/workflows/release.yml`'s publish job ran the full uncached release
+gate as an explicit step, then called `npm publish` — which triggers
+scanner/package.json's `prepublishOnly`, itself `build && sync-changelog &&
+release-check.mjs`. Read from v0.143.0's actual workflow log: the explicit
+step took **280s**, and the one inside `npm publish` took **318s**, ten
+seconds later, on the same commit, same checkout, same runner. Caching could
+not have closed that gap by design — this workflow always passes `--no-cache`
+(a cross-machine cache would reintroduce the reproducibility claim
+`posture/attestation.js` explicitly declines to make), so the first run never
+wrote anything for the second to reuse. That is ~600s of a release entirely
+spent proving the same thing twice.
+
+`npm publish` now runs with `--ignore-scripts`, so `prepublishOnly` does not
+fire on the publish step. This is safe here specifically because it would not
+be safe in general: the three explicit steps immediately above it (build,
+changelog sync, gate) already did everything `prepublishOnly` would, so
+nothing it produces is missing from disk by the time `npm publish` runs. The
+local publish path is untouched — `scanner/package.json`'s `prepublishOnly`
+stays fully wired, because a local `npm publish` has no preceding gate step to
+make it redundant (root `CLAUDE.md`'s "Two publish paths" section still
+applies there unchanged). `test/release-workflow.test.js` pins the flag, pins
+that the three steps it stands in for still run first, and adds a tripwire: if
+`scanner/package.json` ever gains a `prepack`/`postpack` script,
+`--ignore-scripts` would silently skip it too, and that test fails until its
+effect is reproduced as an explicit step. Both new checks confirmed to fail
+when the fix is reverted, and the file is restored byte-identical after.
+
+### `npm test`: one `node --test` invocation instead of eleven
+
+`npm test` chained eleven separate `npm run test:<scope>` processes in series
+— `node --test` already runs a multi-file invocation's files CONCURRENTLY
+against the same cores, so eleven separate processes were paying eleven
+startup costs while getting zero overlap ACROSS scopes: `test:posture` could
+not start until `test:sast` had entirely finished. Repeated standalone timings
+on this machine put the old chain at roughly 258s and a single combined
+invocation over the same 397 files at 111-154s, run five times with an
+identical 3955/3955/0 (later 3964/3964/0, once this section's own tests were
+added) result every time — this machine has been under sustained load all
+session (`uptime` reports a load average over 5 on 8 cores while this was
+written), so the absolute local number is noisy; the authoritative figure is
+whatever the next hosted-CI run reports, on a dedicated runner. The mechanism
+is not in question: it is the same tests, run once instead of eleven times.
+
+`scripts/run-unit-tests.mjs` derives its file list from the existing
+`test:<scope>` scripts rather than hand-maintaining a second list — a
+duplicated list is exactly the shape that silently drifts (add a file to
+`test:sast`, forget to add it here, and the combined run quietly covers less
+than `npm run test:sast` alone does). It refuses to run if a `test:*` script
+using `node --test` is not accounted for in its `SCOPES` list, both as a hard
+failure from the script itself and as a named test
+(`test/run-unit-tests.test.js`) so the drift guard is visible in the suite,
+not just as a side effect nobody reads. `test/cpp-dataflow.test.js` and
+`test:python` are deliberately NOT folded in: cpp-dataflow sets its feature
+flag at module load rather than inside a test, and when included in the
+combined invocation its 26 tests silently contributed **zero** results to the
+totals — not a failure, not a skip, just absent — for a reason not chased to
+ground; python is a different runtime entirely. Both still run, as their own
+separate steps, exactly as before.
+
+`test/discovery-wiring.test.js`'s "a scope is wired into the full gate" check
+previously grepped the `test` script's text for the literal substring
+`test:discovery` — true when `npm test` was a literal chain, meaningless once
+it calls a derivation script instead (the substring never appears in the new
+`test` script whether or not discovery's files are covered). Rewritten to
+assert discovery's files are actually present in the union the runner
+computes, which is a stronger claim than the substring match ever was: it
+would have caught the runner's own extraction regex silently missing this
+scope's files, which the substring match could not have.
+
 ### The JetBrains plugin builds again — and its support floor moved
 
 `jetbrains-plugin` had been red in CI, classified INFORMATIONAL, and treated as

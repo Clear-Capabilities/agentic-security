@@ -121,13 +121,31 @@ jobs:
           AGENTIC_SECURITY_GATE_NO_CACHE: '1'
         run: node ../scripts/release-check.mjs --no-cache
 
-      # GH_TOKEN is needed HERE TOO, not just on the gate step above. `npm
-      # publish` runs prepublishOnly, which runs the same release-check a second
-      # time — and that run failed with "the forge CLI is not authenticated"
-      # while the explicit gate step passed, because only the explicit step had
-      # a token. The gate is correct to refuse: unverifiable is not green. The
-      # fix is to authenticate it, never --allow-unverified-ci, which would
-      # publish without proving the commit is green at all.
+      # --ignore-scripts IS LOAD-BEARING, not an optimization added lightly.
+      # Without it, `npm publish` runs prepublishOnly a SECOND time — the exact
+      # same `npm run build && sync-scanner-changelog.mjs && release-check.mjs`
+      # the three steps above this one just ran — and release-check.mjs alone
+      # measured 280-320s. That is not caching-avoidable: this workflow always
+      # passes --no-cache (see the file header — a cross-machine cache would
+      # reintroduce the reproducibility claim this project explicitly does not
+      # make), so a second uncached gate run was ~300s spent proving something
+      # already proven seconds earlier, on the same commit, same checkout, same
+      # runner. --ignore-scripts is safe here specifically because it is not
+      # safe in general: prepublishOnly is what makes a LOCAL `npm publish`
+      # trustworthy without a human running the gate first (see the root
+      # CLAUDE.md's "Two publish paths" section — scanner/package.json's
+      # prepublishOnly MUST stay wired for that path). This job is not that
+      # path: it already built the bundle, synced the changelog, and ran the
+      # full uncached gate as explicit, individually-visible steps immediately
+      # above. Skipping the redundant rerun changes nothing about what gets
+      # packed — prepublishOnly produces no artifact that is not already on
+      # disk from those steps.
+      #
+      # GH_TOKEN stays set here even though release-check.mjs no longer runs in
+      # this step — kept for the OIDC/gh-cli environment this step still needs
+      # for its own diagnostics on failure, and because a step that quietly
+      # loses a token it used to need is easy to miss when scanning a diff.
+      #
       # PUBLISHED VIA TRUSTED PUBLISHING (OIDC) — deliberately no NODE_AUTH_TOKEN.
       #
       # npm authenticates this publish from the `id-token: write` OIDC claim
@@ -153,7 +171,7 @@ jobs:
         working-directory: scanner
         env:
           GH_TOKEN: ${{ github.token }}
-        run: npm publish --provenance --access public
+        run: npm publish --ignore-scripts --provenance --access public
 
       - name: Dry run — what would have been published
         if: ${{ !startsWith(github.ref, 'refs/tags/v') || inputs.dry_run == true }}

@@ -52,7 +52,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 cd scanner/
 npm install
 npm run build          # bundles dist/agentic-security.mjs via @vercel/ncc; emits a SHA-256 sidecar
-npm test               # full CI gate (chains the scoped scripts below)
+npm test               # full CI gate (one node --test over the union of the scoped scripts below, plus cpp-dataflow + python separately)
 npm run test:smoke     # one-file fixture, fast
 npm run test:sast      # SAST detector tests
 npm run test:dataflow  # IR + taint engine + calibration + held-out eval

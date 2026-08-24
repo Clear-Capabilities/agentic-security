@@ -10,7 +10,7 @@ Node-only scan engine. ESM throughout, Node ≥ 24. The CLI bundle (`dist/agenti
 
 ## Test commands (scoped, premortem-derived)
 
-`npm test` is the full CI gate. For day-to-day work, use the scoped variants — they're faster and avoid blowing the context window:
+`npm test` is the full CI gate — `scripts/run-unit-tests.mjs` runs the scoped scripts below in ONE `node --test` invocation over their combined file list (derived from the scripts themselves, not hand-duplicated) rather than eleven separate processes, plus `test/cpp-dataflow.test.js` and `test:python` as their own steps afterward. For day-to-day work, use the scoped variants below individually — they're faster for one area and avoid blowing the context window:
 
 | Script | Covers | When to run |
 |--------|--------|-------------|
