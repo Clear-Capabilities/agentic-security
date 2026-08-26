@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - run: npm install
+      - run: npm ci
       - name: Unit + integration test gate
         run: npm test
       - name: Build bundle
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - run: npm install
+      - run: npm ci
       - name: Build the extension bundle
         run: npm run build
       # `ide/vscode/dist/` is gitignored — the extension is packaged by `vsce`,
@@ -196,7 +196,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - run: npm install
+      - run: npm ci
         working-directory: scanner
 
       - name: Host state before relaxing the restriction
@@ -256,7 +256,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - run: npm install
+      - run: npm ci
         working-directory: scanner
       - name: CVE-replay corpus baseline check (fails on any drift)
         run: npm run bench:cve-replay:check
@@ -300,7 +300,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - run: npm install
+      - run: npm ci
         working-directory: scanner
       - name: Compute run attestation
         # pipefail, same reason as the jetbrains-plugin build step: without it
