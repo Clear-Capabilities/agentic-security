@@ -279,7 +279,17 @@ test('FR-401 end-to-end: the REAL buildStoredTaintRegistry (not a hand-built sta
 
 test('FR-401 end-to-end: a real scan wires the real storedRegistry through to the privacy adapter without throwing', async () => {
   const root = path.resolve(process.cwd(), 'test/fixtures/vulnerable-js');
-  const { scan } = await runScan(root, { network: false, deep: true });
+  // ci-parity-exempt: {deep:true} alone is NOT exempt from the CI downgrade —
+  // engine.js's `_deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed)`
+  // gates on `_inCi` regardless of which of the two mechanisms (the env var or
+  // this option) made `_deepRequested` true. test/ci-parity.test.js's static
+  // checker currently treats the {deep:true} OPTION shape as exempt from
+  // needing the opt-in, which is incorrect for exactly this reason — this
+  // test genuinely needs `deepInCi`, and the checker's exemption comment is a
+  // known, separately-tracked gap in that safety net, not a reason to skip
+  // this fix. Passed as the clean `deepInCi` runScan option (not an env
+  // mutation) — see engine.js's own `deepInCi` parameter.
+  const { scan } = await runScan(root, { network: false, deep: true, deepInCi: true });
   assert.ok(scan.scanHealth, 'expected the scan to complete cleanly with the storage wiring in place');
   assert.equal(scan.scanHealth.deepAnalysis.enabled, true);
 });
@@ -288,7 +298,10 @@ test('FR-401 end-to-end: a real scan wires the real storedRegistry through to th
 
 test('a REAL scan with deep mode ON detects a genuine PII-to-log flow via the real IR (the actual A-06 fix, end to end)', async () => {
   const root = path.resolve(process.cwd(), 'test/fixtures/vulnerable-js');
-  const { scan } = await runScan(root, { network: false, deep: true });
+  // ci-parity-exempt: see the identical note on the test above — {deep:true}
+  // alone does not survive the CI downgrade; `deepInCi:true` is required for
+  // this assertion to hold under real hosted CI (CI=true), not just locally.
+  const { scan } = await runScan(root, { network: false, deep: true, deepInCi: true });
   // Not asserting a specific fixture finding (the fixture wasn't built for
   // this), but proving the WIRING: privacy-taint ran through the real IR
   // without throwing, and scan completed normally with deep mode on.

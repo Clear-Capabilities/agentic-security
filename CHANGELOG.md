@@ -155,6 +155,26 @@ risk to already-correct, heavily-relied-on infrastructure, and is recorded
 as a deliberate scope decision rather than attempted as an unproven partial
 fix.
 
+### A real CI-only test failure, caught by hosted CI rather than the local gate
+
+Two `privacy-ir-adapter.test.js` tests requested deep analysis via the
+`{deep: true}` runScan option and asserted `scanHealth.deepAnalysis.enabled
+=== true`. That held locally but failed on the hosted CI runner: the engine
+downgrades deep mode under `CI=true` unless a second opt-in
+(`AGENTIC_SECURITY_DEEP_IN_CI`) is also set, and this codebase's own
+`test:ci-parity` static checker — built specifically to catch this class of
+bug after a near-identical 2026-08-19 incident — incorrectly treats the
+`{deep:true}` OPTION shape as exempt from needing that opt-in ("does not go
+through the env gate," per its own comment). That reasoning is wrong: the
+option and the environment variable are two different ways to set the same
+internal `_deepRequested` flag, and both go through the identical
+`_inCi`/`_deepInCiAllowed` gate afterward. Fixed by passing `deepInCi: true`
+explicitly on both tests. The checker's incorrect exemption for the
+`{deep:true}` shape is a known, separately-tracked gap — roughly forty other
+test files use that same option, and this incident does not establish which
+of them are actually exposed to it; auditing that is future work, not done
+inside this release.
+
 ### npm publish no longer pays for the release gate twice
 
 `.github/workflows/release.yml`'s publish job ran the full uncached release
