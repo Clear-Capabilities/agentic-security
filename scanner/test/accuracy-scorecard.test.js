@@ -371,6 +371,110 @@ test('independent population: the F1 omission reason no longer denies the popula
   assert.match(m.methodology.f1OmissionReason, /fixture design|third-party population/);
 });
 
+// ── FR-904: "rule authors cannot optimize against the full scored
+//    population" — bench/independent/runner.mjs's T0.7 held-out slice
+//    (already computed, already tested at independent-scoring.test.js's
+//    isHeldOut level) must reach the PUBLISHED scorecard, not stop at
+//    RESULT.json. ──
+
+const HELD_OUT = {
+  meaning: 'never tune against these; scored separately (T0.7)',
+  entries: 205,
+  localized: {
+    tp: 6, fp: 14, fn: 199, tn: 191,
+    precision: { n: 6, d: 20, value: 0.3 },
+    recall: { n: 6, d: 205, value: 6 / 205 },
+    f1: 0.0533,
+  },
+};
+const DEVELOPMENT = {
+  entries: 786,
+  localized: {
+    tp: 22, fp: 35, fn: 764, tn: 751,
+    precision: { n: 22, d: 57, value: 22 / 57 },
+    recall: { n: 22, d: 786, value: 22 / 786 },
+    f1: 0.0522,
+  },
+};
+
+test('independent population: held-out and development pass through from committed input to the model unchanged', () => {
+  const inputs = fixtureInputs();
+  inputs.committed = { ...(inputs.committed || {}), independent: { ...INDEPENDENT, heldOut: HELD_OUT, development: DEVELOPMENT } };
+  const m = buildScorecard(inputs);
+  assert.deepEqual(m.committedInputs.independent.heldOut, HELD_OUT);
+  assert.deepEqual(m.committedInputs.independent.development, DEVELOPMENT);
+});
+
+test('independent population: a "Held-out slice" section renders with its own precision/recall/F1, distinct from and never confused with the merged overall figures', () => {
+  const inputs = fixtureInputs();
+  inputs.committed = { ...(inputs.committed || {}), independent: { ...INDEPENDENT, heldOut: HELD_OUT, development: DEVELOPMENT } };
+  const md = renderScorecardMarkdown(buildScorecard(inputs));
+  assert.match(md, /### Held-out slice — never tuned against/);
+  assert.match(md, /never tuned against/);
+  assert.match(md, /\| Entries \| 205 \| 786 \|/);
+  assert.match(md, /6\/20 \(30\.0%\)/, 'held-out precision with its denominator');
+  assert.match(md, /6\/205 \(2\.9%\)/, 'held-out recall with its denominator');
+  assert.match(md, /22\/57/, 'development precision is present and distinct from held-out');
+});
+
+test('independent population: the held-out section is cleanly OMITTED (not a fabricated 0/0 row) on a committed RESULT.json predating T0.7', () => {
+  const inputs = fixtureInputs();
+  inputs.committed = { ...(inputs.committed || {}), independent: INDEPENDENT }; // no heldOut/development — predates T0.7
+  const md = renderScorecardMarkdown(buildScorecard(inputs));
+  assert.doesNotMatch(md, /Held-out slice/);
+  assert.doesNotMatch(md, /never tuned against/);
+});
+
+// ── FR-905: missed-findings mechanism breakdown (why-missed.mjs) ───────────
+
+const WHY_MISSED = {
+  schema: 'agentic-security/why-missed-summary@1',
+  measuredAt: '2026-08-25T00:00:00.000Z',
+  scope: { mode: 'explicit-ids', requested: 920 },
+  total: 920,
+  skipped: 3,
+  byBucket: {
+    'no-finding-at-all': 700,
+    'finding-present-but-suppressed': 150,
+    'finding-present-wrong-file-or-cwe': 60,
+    'not-actually-missing': 10,
+  },
+};
+
+test('FR-905: whyMissed passes through from committed input to the model unchanged', () => {
+  const inputs = fixtureInputs();
+  inputs.committed = { ...(inputs.committed || {}), independent: INDEPENDENT, whyMissed: WHY_MISSED };
+  const m = buildScorecard(inputs);
+  assert.equal(m.committedInputs.whyMissed.source, 'bench/independent/why-missed-summary.json');
+  assert.equal(m.committedInputs.whyMissed.measuredAt, WHY_MISSED.measuredAt);
+  assert.deepEqual(m.committedInputs.whyMissed.scope, WHY_MISSED.scope);
+  assert.equal(m.committedInputs.whyMissed.total, 920);
+  assert.equal(m.committedInputs.whyMissed.skipped, 3);
+  assert.deepEqual(m.committedInputs.whyMissed.byBucket, WHY_MISSED.byBucket);
+});
+
+test('FR-905: a "Missed findings" section renders with the mechanism breakdown, largest bucket first', () => {
+  const inputs = fixtureInputs();
+  inputs.committed = { ...(inputs.committed || {}), independent: INDEPENDENT, whyMissed: WHY_MISSED };
+  const md = renderScorecardMarkdown(buildScorecard(inputs));
+  assert.match(md, /### Missed findings — why, not just how many/);
+  assert.match(md, /920 false negative\(s\) diagnosed, 3 skipped/);
+  const bucketTableStart = md.indexOf('| Mechanism | Count |');
+  assert.ok(bucketTableStart > -1, 'expected the mechanism table');
+  const noFindingIdx = md.indexOf('no-finding-at-all', bucketTableStart);
+  const suppressedIdx = md.indexOf('finding-present-but-suppressed', bucketTableStart);
+  assert.ok(noFindingIdx > -1 && suppressedIdx > -1 && noFindingIdx < suppressedIdx, 'the largest bucket (700) must appear before a smaller one (150)');
+});
+
+test('FR-905: the missed-findings section is cleanly OMITTED (not a fabricated empty table) when why-missed.mjs has never been run', () => {
+  const inputs = fixtureInputs();
+  inputs.committed = { ...(inputs.committed || {}), independent: INDEPENDENT }; // no whyMissed key at all
+  const m = buildScorecard(inputs);
+  assert.equal(m.committedInputs.whyMissed, null);
+  const md = renderScorecardMarkdown(m);
+  assert.doesNotMatch(md, /Missed findings/);
+});
+
 // ── Taint-recall section (hand-computable fixture) ─────────────────────────
 //
 //   whole corpus:  ruby  1 taint / 4 total   |  go  0 taint / 2 total
@@ -433,4 +537,35 @@ test('renderScorecardMarkdown: taint section renders every rate through formatRa
   const leftovers = stripped.match(/\d+(?:\.\d+)?\s*%/g) || [];
   assert.deepEqual(leftovers, [],
     `bare percentage(s) rendered without numerator/denominator: ${leftovers.join(', ')}`);
+});
+
+// ── FR-901: "Published results identify engine version, corpus version,
+//    commit, scope, and date" — corpusVersion + scope close the two named
+//    fields not already covered by engineVersion/commit/generatedAt. ──
+
+test('buildScorecard: corpusVersion and scope pass through from provenance input to the model unchanged', () => {
+  const inputs = fixtureInputs();
+  inputs.provenance.corpusVersion = 'f'.repeat(64);
+  inputs.provenance.scope = 'a described measurement scope';
+  const model = buildScorecard(inputs);
+  assert.equal(model.provenance.corpusVersion, 'f'.repeat(64));
+  assert.equal(model.provenance.scope, 'a described measurement scope');
+});
+
+test('renderScorecardMarkdown: Corpus version and Scope rows render when provided', () => {
+  const inputs = fixtureInputs();
+  inputs.provenance.corpusVersion = 'f'.repeat(64);
+  inputs.provenance.scope = 'a described measurement scope';
+  const model = buildScorecard(inputs);
+  const md = renderScorecardMarkdown(model);
+  assert.match(md, new RegExp('\\| Corpus version \\| `' + 'f'.repeat(64) + '` \\|'));
+  assert.match(md, /\| Scope \| a described measurement scope \|/);
+});
+
+test('renderScorecardMarkdown: Corpus version and Scope rows are omitted (not rendered as "undefined") when absent from provenance', () => {
+  const model = buildScorecard(fixtureInputs());
+  const md = renderScorecardMarkdown(model);
+  assert.doesNotMatch(md, /\| Corpus version \|/);
+  assert.doesNotMatch(md, /\| Scope \|/);
+  assert.doesNotMatch(md, /undefined/);
 });

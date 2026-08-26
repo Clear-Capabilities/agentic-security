@@ -9,6 +9,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { evaluateEgress } from '../egress/policy.js';
 
 const CACHE_DIR = process.env.XDG_CONFIG_HOME
   ? path.join(process.env.XDG_CONFIG_HOME, 'agentic-security', 'llm-sca-cache')
@@ -63,6 +64,11 @@ export async function extractVulnFunctionsViaLLM(supplyChain, opts = {}) {
   if (!isLlmScaEnabled()) return [];
   const config = _endpointConfig();
   if (!config) return [];
+  // FR-601: one decision for the whole batch (same endpoint for every CVE in
+  // this run) — evaluated before any of the per-candidate prompts below are
+  // built.
+  const egressDecision = evaluateEgress({ scanRoot: opts.scanRoot, purpose: 'sca-llm-function-extract', endpoint: config.endpoint });
+  if (!egressDecision.allowed) return [];
 
   const enriched = [];
   const candidates = (supplyChain || []).filter(sc =>

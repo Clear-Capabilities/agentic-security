@@ -8,9 +8,10 @@ export const modules = {
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   I3: () => (/* binding */ recordFixAttempt),
 /* harmony export */   fixDurationReport: () => (/* binding */ fixDurationReport),
-/* harmony export */   renderFixDurationSummary: () => (/* binding */ renderFixDurationSummary)
+/* harmony export */   renderFixDurationSummary: () => (/* binding */ renderFixDurationSummary),
+/* harmony export */   sU: () => (/* binding */ loadFixAttempts)
 /* harmony export */ });
-/* unused harmony exports FIX_STAGES, loadFixAttempts, bucketOf, summarizeFixDurations, _internals, summarizeFixAxes, renderFixAxes */
+/* unused harmony exports FIX_STAGES, bucketOf, summarizeFixDurations, _internals, summarizeFixAxes, renderFixAxes */
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
 /* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(1174);

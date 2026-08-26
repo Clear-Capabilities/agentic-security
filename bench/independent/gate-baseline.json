@@ -1,0 +1,67 @@
+{
+  "_comment": "FR-902 (assurance-hardening PRD). Floor, not equality (same shape as corpus-baseline.json/layer-recall baseline.json) -- fails on a drop below the recorded value, silent on an improvement. Seeded from RESULT.json at the point this gate was built; re-baseline deliberately (npm run bench:independent:update-gate-baseline) whenever RESULT.json is legitimately refreshed, never to silence a real regression.",
+  "source": "bench/independent/RESULT.json",
+  "measuredAt": "2026-08-23",
+  "engineVersion": "0.141.0",
+  "overall": {
+    "precision": 0.5461538461538461,
+    "recall": 0.07164480322906155,
+    "f1": 0.12667261373773417
+  },
+  "byLanguage": {
+    "php": {
+      "entries": 73,
+      "precision": 0.5714285714285714,
+      "recall": 0.0547945205479452,
+      "f1": 0.1
+    },
+    "ruby": {
+      "entries": 250,
+      "precision": 0.5862068965517241,
+      "recall": 0.068,
+      "f1": 0.12186379928315415
+    },
+    "javascript": {
+      "entries": 124,
+      "precision": 0.5161290322580645,
+      "recall": 0.12903225806451613,
+      "f1": 0.20645161290322578
+    },
+    "typescript": {
+      "entries": 322,
+      "precision": 0.53125,
+      "recall": 0.052795031055900624,
+      "f1": 0.096045197740113
+    },
+    "python": {
+      "entries": 100,
+      "precision": 0.5294117647058824,
+      "recall": 0.09,
+      "f1": 0.15384615384615385
+    },
+    "go": {
+      "entries": 84,
+      "precision": 0.5714285714285714,
+      "recall": 0.047619047619047616,
+      "f1": 0.08791208791208789
+    },
+    "java": {
+      "entries": 21,
+      "precision": 0.5,
+      "recall": 0.09523809523809523,
+      "f1": 0.16
+    },
+    "csharp": {
+      "entries": 15,
+      "precision": 0.5,
+      "recall": 0.06666666666666667,
+      "f1": 0.11764705882352941
+    },
+    "kotlin": {
+      "entries": 2,
+      "precision": 1,
+      "recall": 0.5,
+      "f1": 0.6666666666666666
+    }
+  }
+}

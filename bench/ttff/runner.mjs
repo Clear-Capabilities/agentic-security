@@ -86,11 +86,16 @@ console.log(`time-to-first-finding: ${run.ms} ms (${run.findings} findings, ${ru
 
 if (!isCheck) process.exit(0);
 
-if (!fs.existsSync(BASELINE)) {
+// Read-first, not existsSync()-then-readFileSync() — the file can vanish
+// between those two calls (this session's own D-0012 discipline).
+let baseRaw;
+try {
+  baseRaw = fs.readFileSync(BASELINE, 'utf8');
+} catch {
   console.error('✗ no baseline — run `npm run bench:ttff:update-baseline`. An unmeasurable gate is a failure, not a skip.');
   process.exit(1);
 }
-const base = JSON.parse(fs.readFileSync(BASELINE, 'utf8'));
+const base = JSON.parse(baseRaw);
 const limit = Math.round(base.ms * REGRESSION_FACTOR);
 
 // A finding-count change is reported but does NOT fail: this gate is about

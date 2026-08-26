@@ -50,6 +50,7 @@
 import crypto from 'node:crypto';
 import { isDeterministic, SCANNER_VERSION } from '../posture/deterministic.js';
 import { normalizeFindings, TOOL_CAVEATS } from './index.js';
+import { EVIDENCE_GRADE_DISCLAIMER } from '../posture/evidence-grade-wording.js';
 
 // The OSCAL release these documents declare conformance to. Bump deliberately:
 // `oscal-version` is a claim a validator checks the rest of the document
@@ -620,9 +621,13 @@ export function toOSCALCompliance(framework, rows, meta = {}) {
       observations,
       ...(findings.length ? { findings } : {}),
       ...(risks.length ? { risks } : {}),
+      // FR-507: names all three assurance tiers explicitly, not just "not
+      // certified" — see evidence-grade-wording.js for why that distinction
+      // matters (a reader who has never heard "attestation" used correctly
+      // has no way to know a real one is a different, valid artifact they
+      // might separately need).
       remarks:
-        'This document organizes automated scanner evidence against a control set. It is not an attestation '
-        + 'of compliance and no licensed assessor reviewed it. '
+        `${EVIDENCE_GRADE_DISCLAIMER} No licensed assessor reviewed this document. `
         + TOOL_CAVEATS.map(c => `${c.id}: ${c.shortDescription}`).join(' | '),
     }],
     'back-matter': { resources: [frameworkResource, ...caveats] },

@@ -61,14 +61,16 @@ import { listPacks, loadPack, applyPacks } from '../src/posture/rule-packs.js';
 import { writeLockfile, verifyLockfile, makeDeterministic, isDeterministic } from '../src/posture/deterministic.js';
 import { enrichWithEPSS } from '../src/posture/epss.js';
 import { enrichWithBlastRadius } from '../src/posture/blast-radius.js';
-import { applyCustomRules, runRuleTests, loadCustomRules } from '../src/posture/custom-rules.js';
-import { applyFix, undoLast, undoAll, listHistory, preview as previewDiff, compactLog } from '../src/posture/fix-history.js';
+import { applyCustomRules, runRuleTests, loadCustomRules, customRulesFreshness } from '../src/posture/custom-rules.js';
+import { undoLast, undoAll, listHistory, preview as previewDiff, compactLog } from '../src/posture/fix-history.js';
+import { applyVerifiedFix, confinePath } from '../src/fix/apply-fix-service.js';
 import { syncTickets } from '../src/integrations/tickets.js';
 import { decide as decideNextAction, explain as explainDecision } from '../src/posture/router.js';
 import * as triage from '../src/posture/triage.js';
 import { buildSlackDigest, buildDiscordDigest, postWebhook, buildJiraIssue, buildPrComment, buildSiemEvent, loadIntegrationConfig } from '../src/integrations/index.js';
 
 import { stateDir, statePath } from '../src/posture/state-dir.js';
+import { listGeneratedArtifacts } from '../src/posture/artifact-registry.js';
 // last-scan.json integrity helpers — implementation in posture/integrity.js
 // so the MCP server tools can share verification.
 function _verifyLastScan(body, sigFile) {
@@ -103,6 +105,17 @@ Commands:
   validator-cache stats|gc     Inspect / prune .agentic-security/llm-cache/ (use --older-than <days> --dry-run)
   verify [--finding <id>]      Re-run the verifier loop on last-scan findings (use --live --target <url> to execute PoCs)
   reset [--yes] [--keep ...]   Right-to-delete: wipe accumulated learned state under .agentic-security/ (preserves operator-authored config)
+                               --expired    only remove artifacts past their retention-class TTL
+                               Every run writes a deletion-report.json proving what was planned/deleted/preserved/failed.
+  export --out <dir>           Copy every present .agentic-security/ artifact to <dir> with a manifest (export-manifest.json,
+                               unsigned) proving what was exported and what failed — for migration or legal-preservation purposes.
+  legal-hold add --artifact <name> --owner <id> --reason <text> [--expires <date>]
+                               Exempt a registered artifact from retention TTL and reset (both --expired and plain)
+  legal-hold remove --artifact <name>   Lift a hold
+  legal-hold list [--all]      List active holds (--all also shows past holds whose expires_at has passed)
+  calibration-feedback record --finding-id <id> --outcome accepted-risk|realized-incident [--note <text>]
+                               Opt-in: report a real-world outcome for a past finding, for calibration validation
+  calibration-report [--format cli|json]   Aggregated, privacy-preserving calibration report from recorded feedback
   rule-synth [--dry-run]       Auto-synthesise suppression rules from repeated FP verdicts (proposes — does not activate)
   compliance [--privacy]       Assess the last scan against NIST Privacy Framework 1.1
                                --list                 show bundled + BYO frameworks
@@ -136,6 +149,9 @@ Options:
   --fail-on-new                (ci) block ONLY on findings this PR introduced vs
                                the baseline ref — never the pre-existing backlog
   --policy <file.rego>         ci-mode policy-as-code gate; deny[] rules fail the build (FR-SDLC-9)
+  --assurance advisory|standard|strict  (ci) incomplete-analysis behavior (default: standard).
+                               strict fails the build when any analyzer failed, timed out,
+                               or was silently skipped by policy — independent of --fail-on (FR-204)
   --columns standard|mitre|capec|owasp  Pro-mode column set (default: standard)
   --confidence <0..1>          Override per-profile confidence threshold
   --firehose                   Show ALL findings (ignore confidence threshold)
@@ -600,6 +616,18 @@ async function cmdScan(args) {
     }
   } catch {}
 
+  // FR-207: custom rule pack freshness. This is the one freshness leg that
+  // cannot be computed inside engine.js -- the pattern-rule DSL only runs
+  // here, after scan.scanHealth already exists -- so it's patched on via
+  // the same applyFreshness() engine.js uses for the other four legs (see
+  // that function's header comment in pipeline/scan-health.js).
+  if (scan.scanHealth) {
+    try {
+      const { applyFreshness } = await import('../src/pipeline/scan-health.js');
+      scan.scanHealth = applyFreshness(scan.scanHealth, { customRules: customRulesFreshness(targetAbs) });
+    } catch {}
+  }
+
   // EPSS exploit-prediction enrichment (skipped under --no-network / --deterministic).
   // Bumps severity on actively-exploited CVEs so they sort to the top.
   if (!args.flags['no-epss'] && !isDeterministic() && !noNet) {
@@ -975,8 +1003,23 @@ async function cmdCi(args) {
   const findings = normalizeFindings(scan);
   const sev = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const f of findings) sev[f.severity] = (sev[f.severity] || 0) + 1;
+  // FR-206: "reports show both finding count and scan-health status." A
+  // 0-finding scan-exit is not the same claim as "the scan actually
+  // finished cleanly" — an annotator error, a file timeout, or a skipped
+  // analyzer already demotes scan.scanHealth.status to 'partial'
+  // (scan-health.js), but until this line nothing in `ci`'s own printed
+  // report ever surfaced it, so a broken analyzer could pass CI silently.
+  // This is a REPORT fix, not a gate-policy change: whether an incomplete
+  // scan should itself FAIL the build regardless of --fail-on is FR-204's
+  // job (assurance modes advisory/standard/strict), not yet implemented —
+  // deliberately not conflated with this fix.
+  const _health = scan.scanHealth;
+  const _healthLine = (_health && _health.status && _health.status !== 'complete')
+    ? `[ci] ⚠ scan-health=${_health.status} — ${(_health.conditions || [])[0] || 'analysis did not complete cleanly'}${(_health.conditions || []).length > 1 ? ` (+${_health.conditions.length - 1} more)` : ''}\n`
+    : `[ci] scan-health=${_health && _health.status ? _health.status : 'unknown'}\n`;
   process.stderr.write(
     `[ci] ${findings.length} findings — ${sev.critical} critical · ${sev.high} high · ${sev.medium} medium · ${sev.low} low\n` +
+    _healthLine +
     (_canWriteCi
       ? `[ci] artifacts: .agentic-security/findings.{json,sarif,junit.xml}\n`
       : `[ci] artifacts: NOT written (state writes refused — set AGENTIC_SECURITY_DEBUG=1 for the reason)\n`) +
@@ -1000,6 +1043,23 @@ async function cmdCi(args) {
     }
     process.stderr.write(`[ci] policy gate PASSED (${r.runner}, 0 denials)\n`);
   }
+  // FR-204: assurance modes. Runs ALONGSIDE --fail-on and --policy, same
+  // precedent as FR-SDLC-9's policy gate above — any of the three can fail
+  // the build independently. `standard` (the default) never fails here;
+  // `strict` fails the build when the scan itself was not fully complete,
+  // regardless of how few/no findings resulted from the incomplete run.
+  const { evaluateAssuranceMode, ASSURANCE_MODES, DEFAULT_ASSURANCE_MODE } = await import('../src/pipeline/assurance-mode.js');
+  const assuranceMode = args.flags.assurance || DEFAULT_ASSURANCE_MODE;
+  if (!ASSURANCE_MODES.includes(assuranceMode)) {
+    console.error(`[ci] --assurance must be one of: ${ASSURANCE_MODES.join('|')} (got '${assuranceMode}')`);
+    return 1;
+  }
+  const assuranceVerdict = evaluateAssuranceMode(assuranceMode, scan.scanHealth);
+  if (!assuranceVerdict.ok) {
+    console.error(`[ci] assurance gate FAILED (mode=${assuranceMode}): ${assuranceVerdict.reason}`);
+    return 1;
+  }
+  if (assuranceMode === 'strict') process.stderr.write(`[ci] assurance gate PASSED (mode=strict)\n`);
   // R24 (PRD §5): PR-native net-new gate. With --fail-on-new and a baseline
   // ref, block ONLY on findings this PR INTRODUCED (vs the base ref), never on
   // the pre-existing backlog — the posture teams actually leave enabled.
@@ -1142,6 +1202,17 @@ async function cmdTriage(args) {
     console.log(`  Open:    critical=${t.openBySev.critical} high=${t.openBySev.high} medium=${t.openBySev.medium} low=${t.openBySev.low}`);
     if (t.medianMttrDays != null) console.log(`  MTTR median: ${t.medianMttrDays.toFixed(1)} days`);
     console.log(`  Total open: ${t.totalOpen}`);
+    // FR-907: longitudinal production feedback — aggregates 5 already-
+    // separate mechanisms (user suppression, accepted risk, invalid
+    // finding, fixed finding, verification outcome) into one view, rather
+    // than requiring an operator to check 5 different files by hand.
+    const { productionFeedbackReport, renderProductionFeedbackSummary } = await import('../src/posture/production-feedback.js');
+    const feedback = productionFeedbackReport(target, { sinceDays: days });
+    const feedbackSummary = renderProductionFeedbackSummary(feedback);
+    if (feedbackSummary) {
+      console.log('');
+      console.log(feedbackSummary);
+    }
     return 0;
   }
   console.error('triage list | assign <id> <assignee> | transition <id> <state> | trend [--since N]');
@@ -1586,57 +1657,263 @@ async function cmdReset(args) {
     console.log(`No state to reset at ${stateDirPath}`);
     return 0;
   }
-  const WIPE = new Set([
-    'validator-metrics.json',
-    'triage-feedback.json',
-    'scan-history.json',
-    'last-scan.json',
-    'last-scan.json.sig',
-    'shadow-findings.json',
-    'mcp-audit.log',
-    'hook-throttle.json',
-    'tickets.json',
-    'streak.json',
-    'findings.json',
-    'findings.sarif',
-    'findings.csv',
-  ]);
-  const WIPE_DIRS = new Set([
-    'llm-cache',
-    'fix-history',
-    'fix-plans',
-  ]);
+  // FR-703 (assurance-hardening PRD): registry-driven, not enumeration-
+  // driven. The registry (src/posture/artifact-registry.js) is built from an
+  // audit of every state-writing call site in src/ and bin/, not a
+  // hand-maintained list that drifts as new artifacts are added — see that
+  // module's header for the classification rules (generated vs
+  // operator-config) and the corrections it made to this project's own PRD
+  // evidence table along the way.
+  const GENERATED = new Set(listGeneratedArtifacts().map(a => a.name));
   const keep = new Set((args.flags.keep || '').split(',').filter(Boolean));
-  const targets = [];
-  for (const entry of await fsp.readdir(stateDirPath, { withFileTypes: true })) {
-    if (keep.has(entry.name)) continue;
-    if (WIPE.has(entry.name) || WIPE_DIRS.has(entry.name)) {
-      targets.push({ name: entry.name, dir: entry.isDirectory() });
+  // FR-702: `--expired` narrows the reset to only artifacts that are past
+  // their retention-class TTL (cache/scan/evidence/ticket/backup — see
+  // posture/retention-policy.js), rather than every registered generated
+  // artifact. Reuses this same command's existing confirm/keep/preserve
+  // machinery — a second, parallel deletion pathway would be a second
+  // place to get path-safety wrong.
+  let targets;
+  if (args.flags.expired) {
+    const { findExpiredArtifacts } = await import('../src/posture/retention-policy.js');
+    targets = findExpiredArtifacts(scanRoot)
+      .filter(a => !keep.has(a.name))
+      .map(a => ({ name: a.name, dir: a.isDir, ageDays: a.ageDays, ttlDays: a.ttlDays, retentionClass: a.retentionClass }));
+  } else {
+    targets = [];
+    for (const entry of await fsp.readdir(stateDirPath, { withFileTypes: true })) {
+      if (keep.has(entry.name)) continue;
+      if (GENERATED.has(entry.name)) {
+        targets.push({ name: entry.name, dir: entry.isDirectory() });
+      }
     }
   }
+  // FR-707: an artifact under an active legal hold is pulled OUT of the
+  // deletion targets regardless of mode — a hold must protect against a
+  // PLAIN `reset --yes` too (which otherwise deletes every registered
+  // 'generated' artifact unconditionally), not just `--expired`, which
+  // retention-policy.js's own findExpiredArtifacts already excludes on its
+  // own as a second, defense-in-depth enforcement of the same guarantee.
+  const { loadLegalHolds, isUnderHold } = await import('../src/posture/legal-hold.js');
+  const holds = loadLegalHolds(scanRoot);
+  const heldDetail = [];
+  targets = targets.filter(t => {
+    const hold = isUnderHold(t.name, holds);
+    if (!hold) return true;
+    heldDetail.push({ name: t.name, dir: !!t.dir, reason: `active legal hold (owner: ${hold.owner}, reason: ${hold.reason})` });
+    return false;
+  });
   if (!targets.length) {
-    console.log(`Nothing to reset under ${stateDirPath}.`);
+    console.log(args.flags.expired ? `Nothing expired under ${stateDirPath}.` : `Nothing to reset under ${stateDirPath}.`);
+    if (heldDetail.length) {
+      console.log(`Preserving ${heldDetail.length} artifact(s) under active legal hold: ${heldDetail.map(h => h.name).sort().join(', ')}`);
+    }
     return 0;
   }
-  console.log(`agentic-security reset — will remove from ${stateDirPath}:`);
-  for (const t of targets) console.log(`  ${t.name}${t.dir ? '/' : ''}`);
+  console.log(`agentic-security reset${args.flags.expired ? ' --expired' : ''} — will remove from ${stateDirPath}:`);
+  for (const t of targets) {
+    const ttlNote = args.flags.expired ? `  (${t.retentionClass}, ${t.ageDays.toFixed(1)}d old, ttl ${t.ttlDays}d)` : '';
+    console.log(`  ${t.name}${t.dir ? '/' : ''}${ttlNote}`);
+  }
   console.log('');
-  console.log('Preserving operator-authored config: rules.yml, rules/, license-policy.yml, trusted-keys.json, ruleset-version.json');
+  // FR-703: report what is ACTUALLY present and being left alone, rather
+  // than a hardcoded 5-name string that drifted behind the real config
+  // surface (risk-config.yml, profile.yml, suppressions.yml, and others were
+  // silently omitted from the old message even though they were already
+  // correctly never wiped).
+  const targetNames = new Set(targets.map(t => t.name));
+  const heldNames = new Set(heldDetail.map(h => h.name));
+  const preserved = heldDetail.map(h => h.name + (h.dir ? '/' : ''));
+  const preservedDetail = heldDetail.map(h => ({ name: h.name, reason: h.reason }));
+  for (const entry of await fsp.readdir(stateDirPath, { withFileTypes: true })) {
+    if (keep.has(entry.name) || targetNames.has(entry.name) || heldNames.has(entry.name)) continue;
+    if (!args.flags.expired && GENERATED.has(entry.name)) continue;
+    preserved.push(entry.name + (entry.isDirectory() ? '/' : ''));
+    preservedDetail.push({
+      name: entry.name,
+      reason: args.flags.expired && GENERATED.has(entry.name)
+        ? 'generated artifact still within its retention TTL'
+        : 'operator-authored configuration',
+    });
+  }
+  if (preserved.length) {
+    console.log(args.flags.expired
+      ? `Preserving operator-authored config and generated artifacts still within their TTL: ${preserved.sort().join(', ')}`
+      : `Preserving operator-authored config: ${preserved.sort().join(', ')}`);
+  }
+  // FR-706: every reset invocation — dry-run or applied — leaves a durable,
+  // structured record of what it planned, deleted, preserved, or failed to
+  // delete, not just console output that vanishes once the terminal
+  // scrolls past it.
+  const { buildDeletionReport, writeDeletionReport } = await import('../src/posture/state-lifecycle-report.js');
+  const mode = args.flags.expired ? 'reset --expired' : 'reset';
   if (!args.flags.yes) {
     console.log('');
     console.log('Pass --yes to proceed (or --keep <name,name> to spare specific items).');
+    writeDeletionReport(scanRoot, buildDeletionReport({
+      mode, dryRun: true, root: scanRoot,
+      items: targets.map(t => ({
+        name: t.name, dir: !!t.dir, status: 'planned',
+        retentionClass: t.retentionClass || null, ageDays: t.ageDays ?? null, ttlDays: t.ttlDays ?? null,
+      })),
+      preserved: preservedDetail,
+    }));
     return 0;
   }
+  const outcomes = [];
   for (const t of targets) {
     const p = path.join(stateDirPath, t.name);
+    const base = { name: t.name, dir: !!t.dir, retentionClass: t.retentionClass || null, ageDays: t.ageDays ?? null, ttlDays: t.ttlDays ?? null };
     try {
       if (t.dir) await fsp.rm(p, { recursive: true, force: true });
       else await fsp.rm(p, { force: true });
+      outcomes.push({ ...base, status: 'deleted' });
     } catch (e) {
       console.error(`reset: failed to remove ${p}: ${e.message}`);
+      outcomes.push({ ...base, status: 'failed', error: e.message });
     }
   }
-  console.log(`Reset ${targets.length} item(s). Operator-authored config preserved.`);
+  const failedCount = outcomes.filter(o => o.status === 'failed').length;
+  console.log(`Reset ${outcomes.length - failedCount} item(s)${failedCount ? `, ${failedCount} failed` : ''}. Operator-authored config preserved.`);
+  const reportPath = writeDeletionReport(scanRoot, buildDeletionReport({
+    mode, dryRun: false, root: scanRoot, items: outcomes, preserved: preservedDetail,
+  }));
+  if (reportPath) console.log(`Deletion report: ${path.relative(scanRoot, reportPath)}`);
+  return failedCount ? 1 : 0;
+}
+
+// `agentic-security export --out <dir> [--root <path>]`
+//
+// FR-706 (assurance-hardening PRD): the "exported" half of "operators can
+// prove what was exported, deleted, retained, or failed." Copies every
+// CURRENTLY-PRESENT registered artifact — generated AND operator-config —
+// from .agentic-security/ into an operator-chosen destination, alongside a
+// manifest naming exactly what was copied (with a content hash for files)
+// and what failed. Unlike `reset`, classification does not gate inclusion:
+// an export is a snapshot for the operator's own records, migration, or
+// legal-preservation purposes, not a deletion decision.
+async function cmdExport(args) {
+  const scanRoot = path.resolve(args.flags.root || '.');
+  const stateDirPath = stateDir(scanRoot);
+  if (!fs.existsSync(stateDirPath)) {
+    console.log(`No state to export at ${stateDirPath}`);
+    return 0;
+  }
+  if (!args.flags.out) {
+    console.error('export: --out <dir> is required.');
+    return 2;
+  }
+  const outDir = path.resolve(args.flags.out);
+  await fsp.mkdir(outDir, { recursive: true });
+
+  const { ARTIFACT_REGISTRY } = await import('../src/posture/artifact-registry.js');
+  const { buildExportReport, writeExportReport } = await import('../src/posture/state-lifecycle-report.js');
+  const { createHash } = await import('node:crypto');
+  const present = new Set((await fsp.readdir(stateDirPath, { withFileTypes: true })).map(e => e.name));
+
+  const items = [];
+  for (const artifact of ARTIFACT_REGISTRY) {
+    if (!present.has(artifact.name)) continue;
+    const src = path.join(stateDirPath, artifact.name);
+    const dest = path.join(outDir, artifact.name);
+    try {
+      await fsp.mkdir(path.dirname(dest), { recursive: true });
+      if (artifact.kind === 'dir') {
+        await fsp.cp(src, dest, { recursive: true });
+        items.push({ name: artifact.name, classification: artifact.classification, retentionClass: artifact.retentionClass || null, status: 'exported', sha256: null });
+      } else {
+        await fsp.copyFile(src, dest);
+        const sha256 = createHash('sha256').update(fs.readFileSync(src)).digest('hex');
+        items.push({ name: artifact.name, classification: artifact.classification, retentionClass: artifact.retentionClass || null, status: 'exported', sha256 });
+      }
+    } catch (e) {
+      items.push({ name: artifact.name, classification: artifact.classification, retentionClass: artifact.retentionClass || null, status: 'failed', error: e.message });
+    }
+  }
+
+  const report = buildExportReport({ root: scanRoot, outDir, items });
+  const manifestPath = path.join(outDir, 'export-manifest.json');
+  await fsp.writeFile(manifestPath, JSON.stringify(report, null, 2) + '\n');
+  writeExportReport(scanRoot, report); // last-action record kept under .agentic-security/ too, same as deletion-report.json
+
+  const failedCount = items.filter(i => i.status === 'failed').length;
+  console.log(`Exported ${items.length - failedCount} artifact(s) to ${outDir}${failedCount ? `, ${failedCount} failed` : ''}.`);
+  console.log(`Manifest: ${manifestPath}`);
+  return failedCount ? 1 : 0;
+}
+
+// `agentic-security legal-hold add --artifact <name> --owner <id> --reason <text> [--expires <date>]`
+// `agentic-security legal-hold remove --artifact <name>`
+// `agentic-security legal-hold list [--all]`
+//
+// FR-707 (assurance-hardening PRD): identity-bound (--owner), reasoned
+// (--reason), time-bounded where applicable (--expires is optional — an
+// indefinite hold has no end date), and auditable (`list` reads back
+// exactly what was recorded). See posture/legal-hold.js for the full
+// design rationale and how this is enforced inside `cmdReset`.
+async function cmdLegalHold(args) {
+  const scanRoot = path.resolve(args.flags.root || '.');
+  const sub = args._[1];
+  const { addLegalHold, removeLegalHold, listLegalHolds } = await import('../src/posture/legal-hold.js');
+
+  if (sub === 'add') {
+    const result = addLegalHold(scanRoot, {
+      artifact: args.flags.artifact, owner: args.flags.owner, reason: args.flags.reason, expires_at: args.flags.expires,
+    });
+    if (!result.ok) { console.error(`legal-hold add: ${result.reason}`); return 2; }
+    console.log(`Legal hold placed on "${result.hold.artifact}" (owner: ${result.hold.owner}${result.hold.expires_at ? `, expires ${result.hold.expires_at}` : ', indefinite'}).`);
+    return 0;
+  }
+  if (sub === 'remove') {
+    if (!args.flags.artifact) { console.error('legal-hold remove: --artifact <name> is required.'); return 2; }
+    const removedCount = removeLegalHold(scanRoot, args.flags.artifact);
+    console.log(removedCount ? `Removed ${removedCount} hold(s) on "${args.flags.artifact}".` : `No hold found on "${args.flags.artifact}".`);
+    return 0;
+  }
+  if (sub === 'list' || !sub) {
+    const holds = listLegalHolds(scanRoot, { includeExpired: !!args.flags.all });
+    if (!holds.length) { console.log(args.flags.all ? 'No legal holds recorded (ever).' : 'No active legal holds.'); return 0; }
+    for (const h of holds) {
+      console.log(`  ${h.artifact}  owner=${h.owner}  reason="${h.reason}"  expires=${h.expires_at || 'never'}  created=${h.created_at}`);
+    }
+    return 0;
+  }
+  console.error(`legal-hold: unknown subcommand "${sub}" (expected add|remove|list).`);
+  return 2;
+}
+
+// `agentic-security calibration-feedback record --finding-id <id> --outcome accepted-risk|realized-incident [--note <text>]`
+// `agentic-security calibration-report`
+//
+// FR-806 (assurance-hardening PRD): genuinely opt-in — nothing here is ever
+// written by a scan. See posture/calibration-feedback.js for the full
+// scoping rationale (why "aggregated" means within-installation, why the
+// record snapshots only prediction signals and never file/line/vuln text).
+async function cmdCalibrationFeedback(args) {
+  const scanRoot = path.resolve(args.flags.root || '.');
+  const sub = args._[1];
+  const { recordCalibrationFeedback, OUTCOMES } = await import('../src/posture/calibration-feedback.js');
+
+  if (sub === 'record') {
+    const result = recordCalibrationFeedback(scanRoot, {
+      findingId: args.flags['finding-id'], outcome: args.flags.outcome, note: args.flags.note,
+    });
+    if (!result.ok) { console.error(`calibration-feedback record: ${result.reason}`); return 2; }
+    // The persisted record.findingId is privacy-safe (a hash), not the
+    // caller's own input -- echo back what the operator actually typed.
+    console.log(`Recorded "${result.record.outcome}" for finding ${args.flags['finding-id']}.`);
+    return 0;
+  }
+  console.error(`calibration-feedback: unknown subcommand "${sub}" (expected record --finding-id <id> --outcome ${OUTCOMES.join('|')} [--note <text>]).`);
+  return 2;
+}
+
+async function cmdCalibrationReport(args) {
+  const scanRoot = path.resolve(args.flags.root || '.');
+  const { buildCalibrationReport, renderCalibrationReportSummary } = await import('../src/posture/calibration-feedback.js');
+  const report = buildCalibrationReport(scanRoot);
+  if (args.flags.format === 'json') { writeStdout(JSON.stringify(report, null, 2) + '\n'); return 0; }
+  const summary = renderCalibrationReportSummary(report);
+  console.log(summary || 'No calibration feedback recorded yet — this is opt-in; see `calibration-feedback record --help`.');
   return 0;
 }
 
@@ -1989,8 +2266,15 @@ async function cmdVerifyAttestation(args) {
   if (!file) { console.error('Usage: agentic-security verify-attestation <bundle.json|last-scan.json> [--public-key <path>] [--against <project-path>]'); return 2; }
 
   let bundle;
-  try { bundle = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8')); }
-  catch (e) { console.error(`Could not read bundle: ${e.message}`); return 2; }
+  try {
+    const raw = fs.readFileSync(path.resolve(file), 'utf8');
+    // FR-705: transparently decrypt if this is an encrypted artifact (e.g.
+    // an encrypted compliance-evidence.json) — a no-op for any plaintext
+    // file, including every artifact from before encryption was ever
+    // configured.
+    const { maybeDecryptForRead } = await import('../src/posture/encryption-provider.js');
+    bundle = JSON.parse(maybeDecryptForRead(raw));
+  } catch (e) { console.error(`Could not read bundle: ${e.message}`); return 2; }
 
   const runAttestation = _asRunAttestation(bundle);
   if (runAttestation) return cmdVerifyRunAttestation(runAttestation, args);
@@ -1999,6 +2283,24 @@ async function cmdVerifyAttestation(args) {
   let publicKeyPem = null;
   try { publicKeyPem = fs.readFileSync(path.resolve(keyFile), 'utf8'); }
   catch { console.error(`Could not read public key at ${keyFile}. Pass --public-key <path>.`); return 2; }
+
+  // FR-505: a compliance evidence manifest (@type: ComplianceEvidence) is a
+  // third distinct shape this same command can be handed — auto-detected
+  // the same way run-attestation-vs-finding-bundle already is, rather than
+  // adding a fourth CLI command for what is, from an operator's point of
+  // view, the same question ("is this artifact exactly what was signed").
+  if (bundle['@type'] === 'ComplianceEvidence') {
+    const { verifyComplianceEvidence } = await import('../src/posture/compliance-evidence-signing.js');
+    const cr = verifyComplianceEvidence(bundle, publicKeyPem);
+    if (!cr.ok) { console.error(`✗ INVALID — ${cr.reason}`); return 1; }
+    console.log('✓ VALID — the compliance evidence manifest is exactly what the signer produced.');
+    console.log('');
+    console.log(`  framework: ${bundle.framework}  version: ${bundle.version}`);
+    console.log(`  generated: ${bundle.generatedAt}`);
+    if (bundle.evidenceDigest) console.log(`  evidence digest: ${bundle.evidenceDigest}`);
+    console.log(`  compliant: ${bundle.summary?.compliant ?? 'n/a'}  non-compliant: ${bundle.summary?.nonCompliant ?? 'n/a'}  stale: ${bundle.summary?.stale ?? 0}  gap: ${bundle.summary?.gap ?? 0}`);
+    return 0;
+  }
 
   const r = verifyEvidenceBundle(bundle, publicKeyPem);
   if (!r.ok) {
@@ -2013,6 +2315,84 @@ async function cmdVerifyAttestation(args) {
   console.log('');
   console.log(`  proves:        ${bundle.proves}`);
   console.log(`  does NOT prove: ${bundle.doesNotProve}`);
+  return 0;
+}
+
+// FR-1001 (assurance-hardening PRD): "effective policy is explainable."
+// Loads whichever organization/repository/environment policy bundles exist
+// under .agentic-security/policy-bundles/, verifies each against an
+// operator-supplied public key, merges the valid ones (most-specific-wins),
+// and prints BOTH the effective policy with per-key provenance AND every
+// rejected bundle's scope and reason — a rejection is reported, never
+// silently absent, so "tampered or expired policy is rejected" is visible
+// through this same real command, not just a library-level guarantee.
+async function cmdPolicyExplain(args) {
+  const scanRoot = path.resolve(args.flags.root || '.');
+  const { loadPolicyBundles, loadPolicyPublicKey, resolveEffectivePolicy } = await import('../src/posture/policy-bundle.js');
+  const entries = loadPolicyBundles(scanRoot);
+  if (!entries.length) {
+    console.log('No policy bundles found under .agentic-security/policy-bundles/ (organization.json, repository.json, environment.json).');
+    return 0;
+  }
+  let publicKeyPem = null;
+  const keyFile = args.flags['public-key'];
+  if (keyFile) {
+    try { publicKeyPem = fs.readFileSync(path.resolve(keyFile), 'utf8'); }
+    catch (e) { console.error(`Could not read public key at ${keyFile}: ${e.message}`); return 2; }
+  } else {
+    publicKeyPem = loadPolicyPublicKey(scanRoot);
+  }
+  const { effective, provenance, accepted, rejected } = resolveEffectivePolicy(entries, publicKeyPem);
+
+  console.log(`Accepted (${accepted.length}): ${accepted.join(', ') || 'none'}`);
+  if (rejected.length) {
+    console.log(`Rejected (${rejected.length}):`);
+    for (const r of rejected) console.log(`  ✗ ${r.scope}: ${r.reason}`);
+  }
+  console.log('');
+  console.log('Effective policy:');
+  const keys = Object.keys(effective).sort();
+  if (!keys.length) {
+    console.log('  (empty — no accepted bundle contributed any key)');
+  } else {
+    for (const k of keys) console.log(`  ${k} = ${JSON.stringify(effective[k])}  [from: ${provenance[k]}]`);
+  }
+  return 0;
+}
+
+// FR-1001: the operator-facing signing side, mirroring cmdAttest's own
+// generate-key-if-absent pattern. Genuinely optional — an org can sign
+// bundles with any Ed25519 tooling that produces the same canonical bytes
+// (canonicalPolicyBytes is exported for exactly that interop reason) — but
+// without SOME real caller for ensurePolicyKeyPair, this codebase's own
+// dead-module guard is right to flag it: a key-generation function nobody
+// calls is exactly the kind of code this project's premortems exist to
+// catch, per posture/CLAUDE.md's dead-module convention.
+async function cmdPolicySign(args) {
+  const scanRoot = path.resolve(args.flags.root || '.');
+  const { ensurePolicyKeyPair, buildPolicyBundle, signPolicyBundle } = await import('../src/posture/policy-bundle.js');
+  const scope = args.flags.scope;
+  if (!['organization', 'repository', 'environment'].includes(scope)) {
+    console.error('Usage: agentic-security policy-sign --scope <organization|repository|environment> --policy <json-file> [--expires <ISO-date>] [--out <path>]');
+    return 2;
+  }
+  const policyFile = args.flags.policy;
+  if (!policyFile) { console.error('--policy <json-file> is required (the policy object to sign).'); return 2; }
+  let policy;
+  try { policy = JSON.parse(fs.readFileSync(path.resolve(policyFile), 'utf8')); }
+  catch (e) { console.error(`Could not read --policy file: ${e.message}`); return 2; }
+
+  const kp = ensurePolicyKeyPair();
+  if (kp.created) console.error(`Generated a new policy-signing key at ${kp.privateKey} (public: ${kp.publicKey}). Distribute the PUBLIC key to every repository that must trust bundles you sign.`);
+
+  const bundle = buildPolicyBundle(scope, policy, { expiresAt: args.flags.expires || null });
+  if (!bundle) { console.error('Could not build a bundle — check --scope and that --policy is a JSON object.'); return 2; }
+  const signed = signPolicyBundle(bundle, kp.privateKeyPem);
+
+  const outFile = args.flags.out || `${scope}.json`;
+  fs.writeFileSync(path.resolve(outFile), JSON.stringify(signed, null, 2) + '\n');
+  console.log(`✓ signed ${scope} policy bundle written to ${outFile}`);
+  console.log(`  public key for verification: ${kp.publicKey}`);
   return 0;
 }
 
@@ -2099,11 +2479,15 @@ async function cmdFix(args) {
     return 0;
   }
 
-  // Both --preview and --apply require an actual replacement to operate on.
-  // For now we accept either f.fix.replacement (full new file content) or
-  // f.fix.replaceLine (single-line replacement). Anything else falls back
-  // to the template output and tells the user to run the security-fixer subagent.
-  const absFile = path.resolve(scanRoot, f.file);
+  // FR-303 (assurance-hardening PRD): confine BEFORE the first read, not just
+  // before the write — a traversal or symlink-planted f.file was previously
+  // followed unquestioned for both the preview diff and the apply write (no
+  // check existed on this path at all, unlike MCP's apply_fix). Applies to
+  // preview too since both modes read from the same (until now, unconfined)
+  // location.
+  let absFile;
+  try { absFile = confinePath(scanRoot, f.file, 'finding.file'); }
+  catch (e) { console.error(`path-escape refused: ${e.message}`); return 4; }
   if (!fs.existsSync(absFile)) { console.error(`File not found: ${absFile}`); return 4; }
   const originalContent = await fsp.readFile(absFile, 'utf8');
   let newContent = null;
@@ -2127,16 +2511,56 @@ async function cmdFix(args) {
     return 0;
   }
 
-  // --apply. Premortem 4R-8: pass stableId from the engine directly so the
-  // recover() cross-check is robust against line-number drift (f.id is
-  // `${file}:${line}:${rule}` and rotates when the user edits the file).
-  const entry = await applyFix({
-    scanRoot, file: f.file, originalContent, newContent,
-    findingId: f.id, stableId: f.stableId || null,
-    ruleId: f.cwe || f.title, vuln: f.vuln || f.title,
+  // --apply. FR-301/FR-302/FR-304 (assurance-hardening PRD): this used to
+  // WARN on failed integrity and apply anyway, and skip verification
+  // entirely (no rescan, no lint) — the same write-time safety gate MCP's
+  // apply_fix already enforces for its caller-patch branch is now required
+  // here too, through the one shared service.
+  if (sigVerified !== true) {
+    console.error(`Refusing to apply: last-scan.json integrity check ${sigVerified === false ? 'failed (tampered)' : 'could not verify (unsigned)'} — re-run \`agentic-security scan\` to refresh.`);
+    return 4;
+  }
+  // FR-307/D-0024: before this, the CLI had no way to supply approval
+  // evidence at all — a high-impact change (auth/authZ/crypto/PII/schema/
+  // infra-privilege/public-API) was unconditionally refused via --apply
+  // with no path to ever approve it, since fixMeta was never built here.
+  // --approved-by/--approval-reason are optional and no-op for a candidate
+  // that isn't high-impact — only apply-fix-service.js's own gate decides
+  // whether they were needed.
+  const approvedBy = args.flags['approved-by'] || null;
+  const approvalReason = args.flags['approval-reason'] || null;
+  // FR-1003: --author is optional and only has an effect when an operator
+  // has opted into separation-of-duties in authorized-approvers.json — see
+  // approver-registry.js's checkSeparationOfDuties.
+  const patchAuthor = args.flags['author'] || null;
+  const fixMeta = (approvedBy || approvalReason || patchAuthor)
+    ? { approval: { approvedBy: approvedBy || '', reason: approvalReason || '' }, ...(patchAuthor ? { author: patchAuthor } : {}) }
+    : null;
+  const result = await applyVerifiedFix({
+    scanRoot,
+    finding: { file: f.file, id: f.id, stableId: f.stableId || null, ruleId: f.cwe || f.title, vuln: f.vuln || f.title },
+    files: { [f.file]: newContent },
+    fixMeta,
   });
-  console.log(`✓ applied fix ${entry.id}  (file: ${entry.file})`);
+  if (!result.ok) {
+    console.error(`Refusing to apply: ${result.reason}`);
+    if (result.budgetExceeded) console.error(`  (${result.attempts}/${result.maxAttempts} attempts already made for this finding)`);
+    return 4;
+  }
+  const entry = result.written[0];
+  console.log(`✓ applied fix ${entry.historyId}  (file: ${entry.file})`);
   console.log(`  backup: ${entry.backupPath}`);
+  // FR-305: this used to unconditionally print "lint" as part of the
+  // verified line, even when the linter was skipped (not installed) or no
+  // test runner existed — claiming a required leg ran when it did not is
+  // exactly the mislabeling FR-305 exists to prevent. Say plainly when the
+  // pass was degraded and name what was skipped.
+  if (result.verifiedFull) {
+    console.log('  verified: yes — fully verified (rescan clean, no new medium+ finding, lint, tests)');
+  } else {
+    const degraded = (result.verify?.degradedLegs || []).join('; ') || 'a required leg';
+    console.log(`  verified: yes, but NOT fully verified — rescan clean, no new medium+ finding; ${degraded}`);
+  }
   console.log(`  revert with: agentic-security undo`);
   return 0;
 }
@@ -2308,10 +2732,16 @@ async function main() {
       case 'validator-cache': process.exit(await cmdValidatorCache(args));
       case 'verify':   process.exit(await cmdVerify(args));
       case 'reset':    process.exit(await cmdReset(args));
+      case 'export':   process.exit(await cmdExport(args));
+      case 'legal-hold': process.exit(await cmdLegalHold(args));
+      case 'calibration-feedback': process.exit(await cmdCalibrationFeedback(args));
+      case 'calibration-report': process.exit(await cmdCalibrationReport(args));
       case 'hunt':     process.exit(await cmdHunt(args));
       case 'compliance': process.exit(await cmdCompliance(args));
       case 'attest':   process.exit(await cmdAttest(args));
       case 'verify-attestation': process.exit(await cmdVerifyAttestation(args));
+      case 'policy-explain': process.exit(await cmdPolicyExplain(args));
+      case 'policy-sign': process.exit(await cmdPolicySign(args));
       case 'rule-synth': process.exit(await cmdRuleSynth(args));
       case 'digest':   process.exit(await cmdDigest(args));
       case 'setup':    process.exit(await cmdSetup(args));

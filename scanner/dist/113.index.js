@@ -8,9 +8,10 @@ export const modules = {
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   I3: () => (/* binding */ recordFixAttempt),
 /* harmony export */   fixDurationReport: () => (/* binding */ fixDurationReport),
-/* harmony export */   renderFixDurationSummary: () => (/* binding */ renderFixDurationSummary)
+/* harmony export */   renderFixDurationSummary: () => (/* binding */ renderFixDurationSummary),
+/* harmony export */   sU: () => (/* binding */ loadFixAttempts)
 /* harmony export */ });
-/* unused harmony exports FIX_STAGES, loadFixAttempts, bucketOf, summarizeFixDurations, _internals, summarizeFixAxes, renderFixAxes */
+/* unused harmony exports FIX_STAGES, bucketOf, summarizeFixDurations, _internals, summarizeFixAxes, renderFixAxes */
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
 /* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(1174);
@@ -491,8 +492,8 @@ var external_node_child_process_ = __webpack_require__(1421);
 var external_node_fs_ = __webpack_require__(3024);
 // EXTERNAL MODULE: external "node:path"
 var external_node_path_ = __webpack_require__(6760);
-// EXTERNAL MODULE: ./src/engine.js + 200 modules
-var engine = __webpack_require__(3474);
+// EXTERNAL MODULE: ./src/engine.js + 211 modules
+var engine = __webpack_require__(7087);
 ;// CONCATENATED MODULE: ./src/posture/fix-honesty-gate.js
 // Deterministic honesty gates on fix / finding output (#7).
 //
@@ -637,23 +638,64 @@ function computeFixTier(signals) {
 }
 
 /**
- * Compose the three gates for a single fix's output.
+ * FR-308: cross-check a fix-completeness TIER against MECHANICAL evidence,
+ * when any is available. `signals` (computeFixTier's input) is agent-
+ * self-reported — this module cannot compute sinkSignatureChanged /
+ * allCallersRouted / testDiscriminates itself (see the header above: "the
+ * gate can only run against claims the AGENT self-reports... nothing here
+ * is server-computable"). `pocLeg` is different: fix-verify.js's PoC leg is
+ * a REAL execution result (posture/CLAUDE.md's execution-proof tiers), not
+ * a claim. When it is available and shows the proof-of-concept STILL
+ * demonstrates the vulnerability against the patch, a self-reported FULL
+ * tier is not merely internally inconsistent — it is REFUTED by fact. This
+ * is the literal "a mitigation or workaround cannot be represented as a
+ * full fix" acceptance criterion, now backed by mechanical evidence where
+ * it exists rather than by self-report consistency alone.
  *
- * ok = residual-honesty ok AND evidence-citation ok, further constrained by the
- * tier/residual consistency invariant:
+ * A `pocLeg` of `not-requested` or `inconclusive` carries no mechanical
+ * signal either way and is a no-op here — this check can only ever ADD a
+ * violation on real contrary evidence, never manufacture one from absence.
+ *
+ * @param {string} tier
+ * @param {{status: string, reason?: string}|null} pocLeg
+ * @returns {{ ok: boolean, violations: string[] }}
+ */
+function checkMechanicalTierEvidence(tier, pocLeg) {
+  if (!pocLeg || typeof pocLeg !== 'object') return { ok: true, violations: [] };
+  if (tier === 'FULL' && pocLeg.status === 'still-exploitable') {
+    return {
+      ok: false,
+      violations: [`tier 'FULL' is refuted by mechanical evidence: the proof-of-concept still demonstrates the vulnerability against the patch${pocLeg.reason ? ` (${pocLeg.reason})` : ''}`],
+    };
+  }
+  return { ok: true, violations: [] };
+}
+
+/**
+ * Compose the four gates for a single fix's output.
+ *
+ * ok = residual-honesty ok AND evidence-citation ok AND mechanical-tier-
+ * evidence ok, further constrained by the tier/residual consistency
+ * invariant:
  *   - a FULL tier must NOT carry a residual (a full fix has nothing left);
  *   - a non-FULL tier MUST document a residual (say what's still open).
  *
  * @param {{ residual?: string, verdict?: string, evidence?: any, signals?: object }} input
+ * @param {{ pocLeg?: object|null }} [mechanical] - FR-308: optional real
+ *   execution evidence (fix-verify.js's pocLeg) to cross-check the
+ *   self-reported tier against. Omitted entirely by any caller that has no
+ *   PoC leg to offer — this parameter never REQUIRES mechanical evidence,
+ *   it only USES it when present.
  * @returns {{ ok: boolean, tier: string, violations: string[] }}
  */
-function gateFixOutput({ residual, verdict, evidence, signals } = {}) {
+function gateFixOutput({ residual, verdict, evidence, signals } = {}, { pocLeg = null } = {}) {
   const tier = computeFixTier(signals);
   const residualCheck = checkResidualHonesty(residual);
   const evidenceCheck = requireCitedEvidence(verdict, evidence);
+  const mechanicalCheck = checkMechanicalTierEvidence(tier, pocLeg);
 
-  const violations = [...residualCheck.violations, ...evidenceCheck.violations];
-  let ok = residualCheck.ok && evidenceCheck.ok;
+  const violations = [...residualCheck.violations, ...evidenceCheck.violations, ...mechanicalCheck.violations];
+  let ok = residualCheck.ok && evidenceCheck.ok && mechanicalCheck.ok;
 
   const residualEmpty = typeof residual !== 'string' || residual.trim() === '';
   if (tier === 'FULL' && !residualEmpty) {
@@ -1011,12 +1053,6 @@ async function verifyFix({
   // and on the result so a caller cannot mistake it for a verified patch.
   const _testedPrePatch = !tests.skipped && _candidateDiffersFromDisk(scanRoot, files);
   const testsOk = tests.skipped ? true : tests.passed === true;
-  let honesty = null;
-  if (fixMeta && typeof fixMeta === 'object') {
-    try { honesty = gateFixOutput(fixMeta); } catch { honesty = null; }
-  }
-  _lap('honesty');
-
   // R5 — the PoC leg. Re-run the finding's proof-of-concept against the
   // CANDIDATE patch inside R1's sandbox. A patch that still lets the PoC
   // demonstrate the predicted effect has not fixed anything, however green the
@@ -1028,6 +1064,11 @@ async function verifyFix({
   // to run, or a sandbox that could not start, is recorded as `inconclusive`
   // and left out of the verdict entirely. Treating "could not prove it" as
   // "fixed" is exactly the false confidence this leg exists to prevent.
+  //
+  // Computed BEFORE the honesty gate (FR-308): a still-exploitable PoC is
+  // MECHANICAL evidence, not a self-report, and gateFixOutput cross-checks a
+  // self-reported FULL tier against it below — the ordering matters, not
+  // just the value.
   let pocLeg = { status: 'not-requested', reason: null, tier: null };
   if (poc?.code) {
     try {
@@ -1046,7 +1087,54 @@ async function verifyFix({
   _lap('poc');
   const pocOk = pocLeg.status !== 'still-exploitable';
 
+  // FR-308: "a mitigation or workaround cannot be represented as a full
+  // fix" — gateFixOutput's tier/residual check is a pure self-consistency
+  // check (fixMeta.signals is agent-self-reported; see fix-honesty-gate.js's
+  // header for why nothing there is server-computable). pocLeg IS
+  // server-computable — a real execution result, not a claim — so it is
+  // passed through as the one MECHANICAL cross-check available: a
+  // self-reported FULL tier is refuted, not just internally inconsistent,
+  // when the PoC still demonstrates the vulnerability against the patch.
+  // D-0024: `fixMeta` is a shared envelope — FR-307/FR-1002's `approval`
+  // key lives alongside FR-308's completeness self-report (`residual`/
+  // `verdict`/`evidence`/`signals`). Gating on mere object-truthiness meant
+  // a caller supplying ONLY `approval` (a real, common shape once the CLI's
+  // --approved-by flag and the MCP schema fix made that reachable) got
+  // silently gated on an UNRELATED FR-308 self-consistency check it never
+  // engaged with — computeFixTier(undefined) defaults to MITIGATION, which
+  // then demands a `residual` nobody was ever asked to supply, blocking an
+  // otherwise-genuine, approved fix for a reason that has nothing to do
+  // with completeness honesty. Scope the gate to fixMeta shapes that
+  // actually make a completeness-adjacent claim.
+  const hasHonestyClaim = fixMeta && typeof fixMeta === 'object' &&
+    (fixMeta.residual !== undefined || fixMeta.verdict !== undefined ||
+     fixMeta.evidence !== undefined || fixMeta.signals !== undefined);
+  let honesty = null;
+  if (hasHonestyClaim) {
+    try { honesty = gateFixOutput(fixMeta, { pocLeg }); } catch { honesty = null; }
+  }
+  _lap('honesty');
+
   const ok = rescan.ok && (lint.ok || lint.skipped) && testsOk && pocOk && (honesty ? honesty.ok : true);
+
+  // FR-305 (assurance-hardening PRD): `ok` alone conflates "every leg
+  // genuinely ran and passed" with "passed, but a required leg was skipped
+  // or unavailable" — `lint.ok`/`testsOk` are both true in the skipped case
+  // by design (this codebase does not fail-closed just because a repo has
+  // no linter or no detected test runner), so a caller checking only `ok`
+  // cannot tell the difference. `lint.skipped` is only ever true when a
+  // linter WAS configured but its binary could not be run (missing config
+  // entirely returns `runner: 'none'` with no `skipped` field at all — that
+  // is a genuine N/A, nothing was required, not a degradation). `verifiedFull`
+  // is the honest label: true only when nothing that WAS required was
+  // skipped. A caller must never present `ok: true, verifiedFull: false` as
+  // "fully verified" — `degradedLegs` names exactly what was skipped so a
+  // report can say so plainly instead of a bare pass.
+  const degradedLegs = [];
+  if (lint.skipped) degradedLegs.push(`lint: ${lint.runner} not installed`);
+  if (tests.skipped) degradedLegs.push(`tests: skipped (${tests.reason})`);
+  const verifiedFull = ok && degradedLegs.length === 0;
+
   const durations = { ...stages, totalMs: Date.now() - t0 };
   const summary = [
     `re-scan: ${rescan.ok ? 'PASS' : 'FAIL — ' + rescan.reason}`,
@@ -1068,6 +1156,8 @@ async function verifyFix({
       : pocLeg.status === 'still-exploitable' ? `poc:     FAIL — the proof-of-concept still demonstrates the vulnerability against the patch`
       : pocLeg.status === 'no-longer-proven' ? 'poc:     PASS (ran against the patch and no longer demonstrates the vulnerability)'
       : `poc:     inconclusive — not counted either way (${pocLeg.reason || 'no detail reported'})`,
+    // FR-305: never let a degraded pass read the same as a full one.
+    ok && !verifiedFull ? `NOTE:    PASSED, but NOT fully verified — ${degradedLegs.join('; ')}` : null,
   ].filter(Boolean).join('\n');
   // Persist the attempt so the distribution can be reported from real runs.
   // `testsRan` is the load-bearing field: it is what keeps "verified with no
@@ -1080,6 +1170,7 @@ async function verifyFix({
       at: new Date().toISOString(),
       stableId: originalFindingStableId || null,
       ok,
+      verifiedFull,
       testsRan: !tests.skipped,
       testsPassed: tests.skipped ? null : tests.passed === true,
       testedPrePatch: _testedPrePatch,
@@ -1092,7 +1183,7 @@ async function verifyFix({
     });
   }
 
-  return { ok, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary };
+  return { ok, verifiedFull, degradedLegs, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary };
 }
 
 

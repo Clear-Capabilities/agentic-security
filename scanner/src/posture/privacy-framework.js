@@ -36,6 +36,7 @@
 
 import { loadFramework, evaluateFramework } from './auditor-walkthrough.js';
 import { statePath, safeWriteState } from './state-dir.js';
+import { EVIDENCE_GRADE_DISCLAIMER_SHORT } from './evidence-grade-wording.js';
 
 export const PRIVACY_FRAMEWORK_ID = 'nist-privacy-1-1';
 
@@ -118,6 +119,24 @@ function severityFor(controlId) {
  * Returns `{ frameworkId, controls[], summary, findings[] }`. Never throws:
  * posture modules degrade to a null result rather than failing a scan.
  */
+// FR-405 (assurance-hardening PRD): controls whose ENTIRE mapping depends on
+// privacy-taint's signal — a "clean" (present) result from a NON-IR-backed
+// run (deep mode off, the default path) is not real evidence for these
+// specifically, even when the scan otherwise examined real files and is
+// `assessable` for every other control. Deliberately conservative: a control
+// with an ADDITIONAL, independent mapping (e.g. CT.DP-P1's `family:data-
+// exposure` alongside `family:pii-exposure`) is left alone, because that
+// other signal may still be real and this module cannot attribute which
+// specific mapping produced a "present" verdict. Confirmed by direct
+// execution against this exact framework file that CT.DP-P4/CT.DP-P5 (both
+// codeTestable:'yes', both mapped ONLY to `module:privacy-taint`) currently
+// read `satisfied` from a run with zero real IR-backed analysis — see
+// decisions.md for the reproduction.
+function _isPurelyPrivacyTaintDependent(control) {
+  const mapsTo = Array.isArray(control?.mapsTo) ? control.mapsTo : [];
+  return mapsTo.length > 0 && mapsTo.every(m => m === 'module:privacy-taint' || m === 'family:pii-exposure');
+}
+
 export function assessPrivacyFramework(scanRoot, scan, opts = {}) {
   const fw = loadFramework(scanRoot, PRIVACY_FRAMEWORK_ID);
   if (!fw) return null;
@@ -131,6 +150,9 @@ export function assessPrivacyFramework(scanRoot, scan, opts = {}) {
   const assessable = filesScanned > 0
     || (Array.isArray(scan?.findings) && scan.findings.length > 0)
     || (Array.isArray(scan?.components) && scan.components.length > 0);
+  // `null` (never ran) and `false` (ran but degraded) are both "not real
+  // IR-backed evidence" for the gate below; only `true` clears it.
+  const privacyIrBacked = scan?.privacyIrBacked === true;
 
   const controls = [];
   const findings = [];
@@ -138,7 +160,9 @@ export function assessPrivacyFramework(scanRoot, scan, opts = {}) {
 
   for (const r of evaluation) {
     const c = r.control || {};
-    const bucket = bucketOf(r, { assessable });
+    const privacyTaintGated = !privacyIrBacked && _isPurelyPrivacyTaintDependent(c);
+    const controlAssessable = assessable && !privacyTaintGated;
+    const bucket = bucketOf(r, { assessable: controlAssessable });
     summary[bucket] += 1;
     summary.total += 1;
 
@@ -153,9 +177,11 @@ export function assessPrivacyFramework(scanRoot, scan, opts = {}) {
     };
     if (bucket === 'engine-gap') {
       // Named, not counted as a pass. See the header.
-      row.disclosure = (Array.isArray(c.mapsTo) && c.mapsTo.length && !assessable)
-        ? 'This control is mapped, but the scan examined no files — a clean signal from a run that read nothing is not evidence. NOT assessed.'
-        : `NIST rates this control code-testable (${row.codeTestable}), but this engine has no signal for it. It was NOT assessed.`;
+      row.disclosure = privacyTaintGated
+        ? 'This control depends entirely on privacy-taint\'s signal, which ran without a real IR this scan (deep mode off, or an unsupported language) — a "no findings" result in that mode is not real evidence. NOT assessed.'
+        : (Array.isArray(c.mapsTo) && c.mapsTo.length && !assessable)
+          ? 'This control is mapped, but the scan examined no files — a clean signal from a run that read nothing is not evidence. NOT assessed.'
+          : `NIST rates this control code-testable (${row.codeTestable}), but this engine has no signal for it. It was NOT assessed.`;
     }
     if (bucket === 'manual') {
       row.disclosure = 'NIST rates this control not code-testable — it is a governance, policy, or process control and is outside any scanner\'s reach.';
@@ -228,8 +254,9 @@ function renderPrivacyMarkdown(result) {
   L.push(`| Satisfied | ${result.summary.satisfied} | Mapped, and the signal is clean |`);
   L.push('');
   L.push('> A control in *Not assessed* or *Manual* is not evidence of compliance.');
-  L.push('> This document organizes scanner evidence; it does not certify anything.');
-  L.push('> A licensed assessor is responsible for the attestation.');
+  // FR-507: sourced from evidence-grade-wording.js so this artifact stays in
+  // sync with every other compliance-adjacent disclaimer in the codebase.
+  L.push(`> ${EVIDENCE_GRADE_DISCLAIMER_SHORT}`);
   L.push('');
   for (const bucket of BUCKETS) {
     const rows = result.controls.filter(c => c.bucket === bucket);

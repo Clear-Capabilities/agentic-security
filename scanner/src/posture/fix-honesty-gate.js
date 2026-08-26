@@ -141,23 +141,64 @@ export function computeFixTier(signals) {
 }
 
 /**
- * Compose the three gates for a single fix's output.
+ * FR-308: cross-check a fix-completeness TIER against MECHANICAL evidence,
+ * when any is available. `signals` (computeFixTier's input) is agent-
+ * self-reported — this module cannot compute sinkSignatureChanged /
+ * allCallersRouted / testDiscriminates itself (see the header above: "the
+ * gate can only run against claims the AGENT self-reports... nothing here
+ * is server-computable"). `pocLeg` is different: fix-verify.js's PoC leg is
+ * a REAL execution result (posture/CLAUDE.md's execution-proof tiers), not
+ * a claim. When it is available and shows the proof-of-concept STILL
+ * demonstrates the vulnerability against the patch, a self-reported FULL
+ * tier is not merely internally inconsistent — it is REFUTED by fact. This
+ * is the literal "a mitigation or workaround cannot be represented as a
+ * full fix" acceptance criterion, now backed by mechanical evidence where
+ * it exists rather than by self-report consistency alone.
  *
- * ok = residual-honesty ok AND evidence-citation ok, further constrained by the
- * tier/residual consistency invariant:
+ * A `pocLeg` of `not-requested` or `inconclusive` carries no mechanical
+ * signal either way and is a no-op here — this check can only ever ADD a
+ * violation on real contrary evidence, never manufacture one from absence.
+ *
+ * @param {string} tier
+ * @param {{status: string, reason?: string}|null} pocLeg
+ * @returns {{ ok: boolean, violations: string[] }}
+ */
+export function checkMechanicalTierEvidence(tier, pocLeg) {
+  if (!pocLeg || typeof pocLeg !== 'object') return { ok: true, violations: [] };
+  if (tier === 'FULL' && pocLeg.status === 'still-exploitable') {
+    return {
+      ok: false,
+      violations: [`tier 'FULL' is refuted by mechanical evidence: the proof-of-concept still demonstrates the vulnerability against the patch${pocLeg.reason ? ` (${pocLeg.reason})` : ''}`],
+    };
+  }
+  return { ok: true, violations: [] };
+}
+
+/**
+ * Compose the four gates for a single fix's output.
+ *
+ * ok = residual-honesty ok AND evidence-citation ok AND mechanical-tier-
+ * evidence ok, further constrained by the tier/residual consistency
+ * invariant:
  *   - a FULL tier must NOT carry a residual (a full fix has nothing left);
  *   - a non-FULL tier MUST document a residual (say what's still open).
  *
  * @param {{ residual?: string, verdict?: string, evidence?: any, signals?: object }} input
+ * @param {{ pocLeg?: object|null }} [mechanical] - FR-308: optional real
+ *   execution evidence (fix-verify.js's pocLeg) to cross-check the
+ *   self-reported tier against. Omitted entirely by any caller that has no
+ *   PoC leg to offer — this parameter never REQUIRES mechanical evidence,
+ *   it only USES it when present.
  * @returns {{ ok: boolean, tier: string, violations: string[] }}
  */
-export function gateFixOutput({ residual, verdict, evidence, signals } = {}) {
+export function gateFixOutput({ residual, verdict, evidence, signals } = {}, { pocLeg = null } = {}) {
   const tier = computeFixTier(signals);
   const residualCheck = checkResidualHonesty(residual);
   const evidenceCheck = requireCitedEvidence(verdict, evidence);
+  const mechanicalCheck = checkMechanicalTierEvidence(tier, pocLeg);
 
-  const violations = [...residualCheck.violations, ...evidenceCheck.violations];
-  let ok = residualCheck.ok && evidenceCheck.ok;
+  const violations = [...residualCheck.violations, ...evidenceCheck.violations, ...mechanicalCheck.violations];
+  let ok = residualCheck.ok && evidenceCheck.ok && mechanicalCheck.ok;
 
   const residualEmpty = typeof residual !== 'string' || residual.trim() === '';
   if (tier === 'FULL' && !residualEmpty) {

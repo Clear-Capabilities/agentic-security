@@ -18,6 +18,7 @@ import { runIfdsTaintEngine } from './ifds.js';
 import { proveExploits } from './exploit-prover.js';
 import { applyStubAwareFilter } from './stub-aware-filter.js';
 import { loadProjectStubs } from '../ir/type-stubs.js';
+import { runPrivacyTaintEngine } from './privacy-deep-walker.js';
 
 export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // Path-feasibility pass over every function before the taint walk.
@@ -120,6 +121,23 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
         if (!existing.has(key)) findings.push(f);
       }
     } catch { /* IFDS failure should not fail the scan */ }
+  }
+  // FR-403 step 3 (assurance-hardening PRD, D-0047): opt-in, isolated
+  // privacy-taint walker. OFF by default. Mirrors the IFDS wiring above
+  // exactly -- an additional pass whose findings are merged in, never
+  // replacing the primary engine's output, and whose failure must never
+  // fail the scan. See dataflow/privacy-deep-walker.js's own header for why
+  // this is a wholly separate module rather than a change to runTaintEngine/
+  // step/exprTaint above.
+  if (process.env.AGENTIC_SECURITY_PRIVACY_DEEP === '1') {
+    try {
+      const privacyFindings = runPrivacyTaintEngine(callGraph, opts);
+      const existing = new Set(findings.map(f => `${f.file}:${f.line}:${f.sink?.label || f.cwe || ''}`));
+      for (const f of privacyFindings) {
+        const key = `${f.file}:${f.line}:${f.sink?.label || f.cwe || ''}`;
+        if (!existing.has(key)) findings.push(f);
+      }
+    } catch { /* privacy-deep failure should not fail the scan */ }
   }
   for (const f of findings) f._pathFeasibilityPruned = totalPruned;
   if (preSeededCache) {

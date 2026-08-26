@@ -59,6 +59,7 @@ import {
   evaluateCachedVerdict, renderProvenance, cachingDisabled,
 } from './gate-verdict-cache.mjs';
 import { runCalibrationHoldoutCheck } from './calibration-holdout-check.mjs';
+import { runIndependentPopulationGate } from './independent-population-gate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -192,12 +193,47 @@ export const CHECKS = [
       "language's taint-layer recall regressed — see docs/METRICS.md.",
   },
   {
+    // FR-906 (assurance-hardening PRD): the performance half of "add
+    // performance, memory, determinism, and fault-injection gates." The
+    // measurement (bench/ttff/runner.mjs, PRD F11.2) already existed and
+    // was already gateable (`--check` against a committed baseline) — it
+    // was simply never wired into a release gate. Wired here rather than
+    // rebuilt.
+    id: 'ttff-gate',
+    title: 'Time-to-first-finding baseline holds',
+    slow: true,
+    remedy: 'Run `npm run bench:ttff:check` in scanner/ — if the regression is a real, ' +
+      'accepted cost, re-baseline deliberately with `npm run bench:ttff:update-baseline` ' +
+      'and say why in the commit.',
+  },
+  {
+    // FR-906: the memory half. bench/memory/runner.mjs is new this cycle —
+    // no prior memory-budget measurement existed anywhere in this repo to
+    // reuse — built to the exact same baseline/regression-factor/--check
+    // shape bench/ttff/runner.mjs already established, not a new design.
+    id: 'memory-gate',
+    title: 'Peak memory (RSS) baseline holds',
+    slow: true,
+    remedy: 'Run `npm run bench:memory:check` in scanner/ — if the regression is a real, ' +
+      'accepted cost, re-baseline deliberately with `npm run bench:memory:update-baseline` ' +
+      'and say why in the commit.',
+  },
+  {
     id: 'calibration-holdout',
     title: 'Confidence surface verified on held-out data',
     slow: false,
     remedy: 'Add a held-out labelled set at bench/calibration-holdout/labels.jsonl, or ' +
       'record a dated waiver in .calibration-waiver.json. An unverified confidence ' +
       'surface is not a calibrated one.',
+  },
+  {
+    id: 'independent-population-gate',
+    title: 'Independent-population precision/recall/F1 holds at or above baseline',
+    slow: false,
+    remedy: 'Run `node scripts/independent-population-gate.mjs` for the failing detail, ' +
+      'then either fix the regression, run `node scripts/independent-population-gate.mjs ' +
+      '--update-baseline` if the drop is understood and intended, or record a dated ' +
+      'exception in .independent-population-waiver.json.',
   },
   {
     id: 'head-pushed',
@@ -770,9 +806,16 @@ function main(argv) {
   evaluate('self-scan-gate', () => runNpmGate('bench:self-scan:check'));
   evaluate('mutation-gate', () => runNpmGate('bench:mutation:check'));
   evaluate('layer-recall-gate', () => runNpmGate('bench:layer-recall:check'));
+  evaluate('ttff-gate', () => runNpmGate('bench:ttff:check'));
+  evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
 
   evaluate('calibration-holdout', () => {
     const r = runCalibrationHoldoutCheck(REPO);
+    return { ok: r.ok, errors: r.ok ? [] : [r.detail], warnings: r.warnings || [], detail: r.detail };
+  });
+
+  evaluate('independent-population-gate', () => {
+    const r = runIndependentPopulationGate(REPO);
     return { ok: r.ok, errors: r.ok ? [] : [r.detail], warnings: r.warnings || [], detail: r.detail };
   });
 

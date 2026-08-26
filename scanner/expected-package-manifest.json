@@ -14,7 +14,7 @@
     "dist/agentic-security.mjs.sha256"
   ],
   "fileCount": {
-    "expected": 461,
+    "expected": 542,
     "tolerance": 50
   }
 }

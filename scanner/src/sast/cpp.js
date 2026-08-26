@@ -16,6 +16,7 @@
 //   - hardcoded         hardcoded user/password in fopen / connect calls
 
 import { blankComments } from './_comment-strip.js';
+import { classifySecretCandidate as _entropyClassifySecret } from './_secret-entropy.js';
 
 // ── context detectors ───────────────────────────────────────────────────────
 
@@ -279,14 +280,8 @@ const FINDINGS = [
       const val = m && m[2];
       if (!val) return false;
       try {
-        // Lazy import — avoids a circular dep on the entropy module being
-        // present in older snapshots.
-        // eslint-disable-next-line no-unused-vars
-        const { classifySecretCandidate } = _entropyMod || {};
-        if (classifySecretCandidate) {
-          const r = classifySecretCandidate(val);
-          if (r.skip) return false;
-        }
+        const r = _entropyClassifySecret(val);
+        if (r.skip) return false;
       } catch { /* fail open */ }
       return true;
     },
@@ -318,12 +313,6 @@ const FINDINGS = [
     remediation: 'Use getrandom() (Linux), RAND_bytes() (OpenSSL), or BCryptGenRandom() (Windows) for any identifier that has to be unguessable. rand() outputs are predictable to within 2^31 internal states.',
   },
 ];
-
-// Late-bound entropy module — imported via a dynamic require shim so the
-// rule table can lazy-call it from inside gate functions without creating
-// a circular import at module load time.
-let _entropyMod = null;
-import('./_secret-entropy.js').then(m => { _entropyMod = m; }).catch(() => { _entropyMod = null; });
 
 function lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
 

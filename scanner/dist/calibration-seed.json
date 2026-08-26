@@ -1,6 +1,8 @@
 {
   "_doc": "Seed calibration corpus for P1.3 / FR-UX-1. Each entry is (family, tp, fp) from running the engine against labeled benchmarks. The runtime merges this with the customer's .agentic-security/validator-metrics.json. Customer counts override when their n is higher.",
   "_source": "OWASP Benchmark v1.2 (Java) + Juliet Java + Juliet C/C++ + synthetic-bench fixtures + curated NodeGoat — counts as-of v0.48.0. ~30 samples per family minimum for calibrated emit.",
+  "_generatedAt": "2026-05-18T19:15:00-07:00",
+  "_generatedAtNote": "FR-207: the actual git commit timestamp of this file (git log -1 --format=%aI), recorded here as a machine-readable field so posture/calibration.js's calibrationFreshness() can compute a real age instead of inferring one from the '_source' version string. Update this value only when the family counts below actually change.",
   "_caveat": "This is a SEED corpus, not a held-out test set. The PRD G1 target (Brier ≤ 0.10) requires a separate held-out labeled set; that work is queued for Phase 5 finalization. Calibrated values shipped now are honest empirical TP rates from this seed, with their Wilson 95% CI and N visible so consumers can judge.",
   "families": {
     "sql-injection": { "tp": 41, "fp": 3 },

@@ -16,12 +16,16 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
-import { applyFix as applyFixHistory, fixAcceptanceRate } from '../posture/fix-history.js';
+import { applyFix as applyFixHistory, fixAcceptanceRate, revertEntryById as revertFixEntry } from '../posture/fix-history.js';
+import { applyVerifiedFix } from '../fix/apply-fix-service.js';
+import { classifyFixMaterialRisk } from '../posture/material-change.js';
+import { loadApproverRegistry, verifyApprover, requiredRolesFor, checkSeparationOfDuties } from '../fix/approver-registry.js';
 import { synthesizeDeterministicPatch } from '../posture/deterministic-fix.js';
 import { verifyLastScan } from '../posture/integrity.js';
+import { withStateWritesDisabled } from '../posture/state-dir.js';
 import { analyzeTranscript, formatCacheReport, renderCacheStatusLine } from '../posture/cache-economics.js';
 import { redactString, redactFinding } from './redact.js';
-import { _remediationOf } from '../report/index.js';
+import { _remediationOf, normalizeFindings } from '../report/index.js';
 
 // Lazy-loaded: these transitively pull in npm packages (@babel/core and
 // friends) that aren't available in the plugin-cache install path
@@ -387,26 +391,44 @@ export const scan_diff = {
     // / MAX_TOTAL_SCAN_BYTES, so this does not turn scan_diff into a
     // full-project deep scan).
     const runScan = await getRunScan();
-    const result = await runScan(sessionRoot, { network: false, fileContents, deep: true, deepInCi: true });
+    // FR-704 (assurance-hardening PRD): this tool's own description promises
+    // "runs scan in memory" — without this, runFullScan's own state writers
+    // (dpia.md, ropa.md, privacy-framework.json, threat-model.json, and
+    // others) fire unconditionally on every call, silently mutating the
+    // user's real project on every pre-write self-correction scan. Confirmed
+    // by direct execution before this fix (11 state artifacts written by a
+    // single scan_diff-shaped call).
+    const result = await withStateWritesDisabled(() =>
+      runScan(sessionRoot, { network: false, fileContents, deep: true, deepInCi: true }));
     const wantSet = new Set(Object.keys(fileContents));
     const sevRank = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
     const min = sevRank[severity] ?? 0;
-    // Stage 6 correctness audit: this only ever read result.scan.findings
-    // (the SAST channel) — scan.secrets and scan.logicVulns are separate
-    // arrays on the raw runScan() result (report/index.js's normalizeFindings
-    // is what merges all four channels, and that merge hasn't run yet here).
-    // A file containing a bare hardcoded credential reported findingCount: 0
-    // through a tool whose own description promises "Use BEFORE writing a
-    // Write/Edit to disk so the agent can self-correct". Also reused
-    // _remediationOf so a fix-string detector (the majority of engine.js's
-    // own, ~127 call sites) doesn't silently report an empty `description`
-    // the way reading only `.remediation` did.
-    const findings = [...(result.scan.findings || []), ...(result.scan.secrets || []), ...(result.scan.logicVulns || [])]
+    // Stage 6 correctness audit (historical): this used to only read
+    // result.scan.findings (the SAST channel) — scan.secrets and
+    // scan.logicVulns are separate arrays on the raw runScan() result, and a
+    // hand-rolled 3-channel concat here was a second, divergent copy of the
+    // merge report/index.js's normalizeFindings() already does (four
+    // channels, plus per-channel defaulting and remediation-string
+    // resolution the old concat re-implemented separately and could drift
+    // from). Assurance-hardening PRD FR-105 ("JSON, SARIF, HTML, CSV, JUnit,
+    // and MCP outputs derive from the same validated object"): route through
+    // the same canonical merge every other output format uses.
+    //
+    // This closes the field-mapping/dedup divergence, but does NOT make
+    // scan_diff surface SCA/supply-chain findings end to end: this handler
+    // never builds a `depFileContents` map (everything a caller passes in
+    // `files`, manifests included, lands in `fileContents`), and manifest-
+    // based supply-chain detection in engine.js reads only `depFileContents`
+    // — so `result.scan.supplyChain` is always empty for this tool today
+    // regardless of this fix. That is a separate, real limitation (scan_diff
+    // was designed for pre-write code self-correction, not manifest
+    // scanning), left as-is rather than silently claimed fixed here.
+    const findings = normalizeFindings(result.scan)
       .filter(f => wantSet.has(String(f.file || '').replace(/\\/g, '/')) && (sevRank[f.severity] ?? 0) >= min)
       .map(f => redactFinding({
         id: f.id, severity: f.severity, file: f.file, line: f.line,
-        title: f.title || f.vuln, cwe: f.cwe,
-        description: f.description, remediation: _remediationOf(f),
+        title: f.vuln, cwe: f.cwe,
+        description: f.description, remediation: f.remediation,
       }));
     // Harness-anatomy #1: offload when the result exceeds OFFLOAD_THRESHOLD.
     // The agent gets a head+tail preview plus a path it can page through;
@@ -556,7 +578,7 @@ export const explain_finding = {
 // ─── apply_fix ───────────────────────────────────────────────────────────────
 export const apply_fix = {
   name: 'apply_fix',
-  description: 'Apply a fix for a finding. Two modes: (1) the stored fix.replacement, or (2) a caller-supplied `patch` (a files map) which is RE-VERIFIED inline (rescan-clean + no new ≥medium + lint) before any write — this unblocks findings that ship only a template or description. Refuses if last-scan.json fails its HMAC check, if the finding is shadow-marked, or if a path escapes the session root via lexical traversal OR a symlink. Requires confirm:true. Supports dry_run:true to preview without writing.',
+  description: 'Apply a fix for a finding. Two modes: (1) the stored fix.replacement, or (2) a caller-supplied `patch` (a files map) which is RE-VERIFIED inline (rescan-clean + no new ≥medium + lint) before any write — this unblocks findings that ship only a template or description. Refuses if last-scan.json fails its HMAC check, if the finding is shadow-marked, or if a path escapes the session root via lexical traversal OR a symlink. Requires confirm:true. Supports dry_run:true to preview without writing. On success, `verified:true` means verification passed but `verifiedFull:true` is the honest signal that every required leg (lint when configured, tests when a runner exists) genuinely ran — a false `verifiedFull` with `verified:true` means the pass is real but degraded (see `verify.degradedLegs`), not a full verification.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -597,6 +619,27 @@ export const apply_fix = {
               partialSanitization: { type: 'boolean' },
             },
           },
+          // FR-307/FR-1002: this schema had `additionalProperties: false`
+          // and never declared `approval` — the property apply-fix-
+          // service.js's high-impact-change gate has required since FR-307
+          // was built. A real MCP caller supplying fixMeta.approval was
+          // rejected by validate.js at the schema layer before the handler
+          // ever ran, silently making the approval gate (and FR-1002's
+          // identity check layered on it) unreachable from this tool's
+          // only real production entry point. See D-0024.
+          approval: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              approvedBy: { type: 'string', minLength: 1, maxLength: 200 },
+              reason: { type: 'string', minLength: 1, maxLength: 1000 },
+            },
+          },
+          // FR-1003: separation-of-duties. Self-reported the same way
+          // approvedBy is — this tool has no way to determine who actually
+          // wrote a patch, so `author` is a claim, checked against a
+          // configurable policy the same way `approval` is.
+          author: { type: 'string', minLength: 1, maxLength: 200 },
         },
       },
     },
@@ -671,20 +714,78 @@ export const apply_fix = {
           verify: { rescan: verdict.rescan, lint: { runner: verdict.lint?.runner, ok: verdict.lint?.ok }, honesty: verdict.honesty || null },
         };
       }
+      // FR-307/FR-1002/D-0024: this caller-supplied-patch branch writes via
+      // applyFixHistory() directly and never called applyVerifiedFix() — so
+      // the high-impact-change approval gate (auth/authZ/crypto/PII/schema/
+      // infra-privilege/public-API) built for the OTHER apply_fix branch
+      // (stored fix.replacement) never ran here at all, for any input. Since
+      // this is the branch the tool's own description calls the one that
+      // covers "~100% of findings that ship only a template," that gap was
+      // the larger of the two found this cycle. Same before/after content
+      // shape `apply-fix-service.js` already uses — read-first-in-try/catch
+      // (D-0012), never existsSync-then-readFileSync.
+      const filesForMaterialClassification = {};
+      for (const [rel, v] of Object.entries(confinedAbs)) {
+        let before = '';
+        try { before = await fsp.readFile(v.abs, 'utf8'); } catch { /* new file — before stays '' */ }
+        filesForMaterialClassification[rel] = { before, after: v.content };
+      }
+      const materialClassification = classifyFixMaterialRisk(filesForMaterialClassification);
       if (dry_run) {
-        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary };
+        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, materialClassification };
+      }
+      if (materialClassification.highImpactCategories.length) {
+        const approval = fixMeta && typeof fixMeta === 'object' ? fixMeta.approval : null;
+        const hasApprovalEvidence = !!(approval && typeof approval === 'object' &&
+          typeof approval.approvedBy === 'string' && approval.approvedBy.trim().length > 0 &&
+          typeof approval.reason === 'string' && approval.reason.trim().length > 0);
+        if (!hasApprovalEvidence) {
+          return {
+            _meta: META, applied: false,
+            reason: `high-impact change (${materialClassification.highImpactCategories.join(', ')}) requires approval evidence — pass fixMeta.approval: {approvedBy, reason} — before it can be applied`,
+            materialClassification,
+          };
+        }
+        const approverRegistry = loadApproverRegistry(ctx.sessionRoot);
+        const requiredRoles = requiredRolesFor(approverRegistry, materialClassification.highImpactCategories);
+        const identityCheck = verifyApprover(approverRegistry, approval.approvedBy, requiredRoles);
+        if (!identityCheck.verified) {
+          return {
+            _meta: META, applied: false,
+            reason: `high-impact change (${materialClassification.highImpactCategories.join(', ')}) approval rejected: ${identityCheck.reason}`,
+            materialClassification,
+          };
+        }
+        // FR-1003: separation-of-duties, same no-op-unless-configured gate
+        // as apply-fix-service.js's own copy — see approver-registry.js.
+        const sodCheck = checkSeparationOfDuties(approverRegistry, fixMeta?.author, approval.approvedBy);
+        if (!sodCheck.ok) {
+          return {
+            _meta: META, applied: false,
+            reason: `high-impact change (${materialClassification.highImpactCategories.join(', ')}) approval rejected: ${sodCheck.reason}`,
+            materialClassification,
+          };
+        }
       }
       const written = [];
       try {
         for (const [rel, v] of Object.entries(confinedAbs)) {
-          const originalContent = fs.existsSync(v.abs) ? await fsp.readFile(v.abs, 'utf8') : '';
+          const fileExisted = fs.existsSync(v.abs);
+          const originalContent = fileExisted ? await fsp.readFile(v.abs, 'utf8') : '';
           const entry = await applyFixHistory({
-            scanRoot: ctx.sessionRoot, file: rel, originalContent, newContent: v.content,
+            scanRoot: ctx.sessionRoot, file: rel, originalContent, newContent: v.content, fileExisted,
             findingId: f.id, stableId: f.stableId, ruleId: f.ruleId || f.cwe || f.family || null, vuln: f.vuln || f.title || null,
           });
           written.push({ file: rel, historyId: entry.id, backupPath: entry.backupPath });
         }
       } catch (e) {
+        // FR-306: roll back every file THIS batch already wrote before the
+        // failure — applyFixHistory already restored the one file that just
+        // failed; this covers the rest, so a multi-file patch never leaves
+        // some files patched and others not.
+        for (const w of written) {
+          try { await revertFixEntry(ctx.sessionRoot, w.historyId); } catch { /* best-effort; original error still propagates below */ }
+        }
         if (e && e.name === 'FixAttemptBudgetExceededError') {
           return { _meta: META, applied: false, reason: `budget-exceeded: ${e.message}`, budgetExceeded: true, attempts: e.attempts, maxAttempts: e.max, key: e.key };
         }
@@ -692,7 +793,7 @@ export const apply_fix = {
       }
       let acceptance = null;
       try { acceptance = fixAcceptanceRate(ctx.sessionRoot); } catch { /* best-effort */ }
-      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary }, acceptance };
+      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary }, acceptance, materialClassification };
     }
 
     if (typeof f.fix?.replacement !== 'string') {
@@ -729,41 +830,47 @@ export const apply_fix = {
       };
     }
 
-    let entry;
-    try {
-      entry = await applyFixHistory({
-        scanRoot: ctx.sessionRoot,
-        file: f.file,
-        originalContent,
-        newContent: f.fix.replacement,
-        findingId: f.id,
-        stableId: f.stableId || null,   // premortem 4R-8
-        ruleId: f.ruleId || f.cwe || f.family || null,
-        vuln: f.vuln || f.title || null,
-      });
-    } catch (e) {
-      // Harness-engineering: step-budget refusal (post-derived). The
-      // deterministic layer enforces at-most-N attempts per stableId. When
-      // exceeded, surface it as a structured `budget-exceeded` outcome the
-      // agent can recognize — not a generic error.
-      if (e && e.name === 'FixAttemptBudgetExceededError') {
-        return {
-          _meta: META,
-          applied: false,
-          reason: `budget-exceeded: ${e.message}`,
-          budgetExceeded: true,
-          attempts: e.attempts,
-          maxAttempts: e.max,
-          key: e.key,
-        };
+    // FR-301/A-08 (assurance-hardening PRD): this branch used to write
+    // f.fix.replacement straight to disk with NO fresh verification — no
+    // rescan, no lint, nothing confirming the stored replacement actually
+    // closes the finding it claims to fix. The caller-patch branch above
+    // already required this; there is no reason a STORED fix should be
+    // trusted more than a caller-supplied one just because it shipped with
+    // the finding. Routed through the same applyVerifiedFix() service the
+    // CLI's `fix --apply` now also uses (src/fix/apply-fix-service.js) —
+    // confinement/reserved-path are re-checked there too (harmless
+    // redundancy with the dry_run preview above, kept for that preview's
+    // size-diff shape) but the load-bearing addition is the verification
+    // gate before the write.
+    if (!f.stableId) {
+      return { _meta: META, applied: false, reason: 'finding has no stableId — cannot verify a stored fix against it' };
+    }
+    const result = await applyVerifiedFix({
+      scanRoot: ctx.sessionRoot,
+      finding: f,
+      files: { [f.file]: f.fix.replacement },
+      fixMeta,
+    });
+    if (!result.ok) {
+      if (result.budgetExceeded) {
+        return { _meta: META, applied: false, reason: result.reason, budgetExceeded: true, attempts: result.attempts, maxAttempts: result.maxAttempts, key: result.key };
       }
-      throw e;
+      return { _meta: META, applied: false, reason: result.reason, verify: result.verify || null };
     }
     // R25 (PRD §5): surface the running auto-fix acceptance rate after each
     // applied fix, so the closed loop reports its own success metric.
     let acceptance = null;
     try { acceptance = fixAcceptanceRate(ctx.sessionRoot); } catch { /* metric is best-effort */ }
-    return { _meta: META, applied: true, historyId: entry.id, file: f.file, backupPath: entry.backupPath, integrity: status, attemptOrdinal: entry.attemptOrdinal, acceptance };
+    const entry = result.written[0];
+    return {
+      // FR-305: verifiedFull distinguishes "every required leg (lint, tests)
+      // genuinely ran and passed" from "passed, but a required leg was
+      // skipped or unavailable" — verified:true alone conflates them.
+      _meta: META, applied: true, verified: true, verifiedFull: result.verifiedFull,
+      historyId: entry.historyId, file: entry.file, backupPath: entry.backupPath,
+      integrity: status, attemptOrdinal: entry.attemptOrdinal, acceptance,
+      verify: result.verify,
+    };
   },
 };
 

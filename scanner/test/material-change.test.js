@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { classifyDiff } from '../src/posture/material-change.js';
+import { classifyDiff, classifyFixMaterialRisk, HIGH_IMPACT_CATEGORY_OF_KIND } from '../src/posture/material-change.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesPath = path.join(__dirname, 'fixtures', 'material-change', 'diffs.json');
@@ -50,4 +50,53 @@ test('Material change detection — single auth-removed hunk lands as critical',
 test('Material change detection — pure comment add lands as none/low', () => {
   const r = classifyDiff(FIXTURES.routine_comment_only.diff);
   assert.ok(r.materialRisk === 'none' || r.materialRisk === 'low', `got ${r.materialRisk}`);
+});
+
+// ── FR-307: classifyFixMaterialRisk — before/after content, not diff text ──
+
+test('classifyFixMaterialRisk: new weak-crypto and schema-DDL kinds are classified with the correct FR-307 category', () => {
+  const r1 = classifyFixMaterialRisk({ 'a.js': { before: '', after: 'const h = md5(pw);\n' } });
+  assert.ok(r1.findings.some(f => f.kind === 'weak-crypto-added'));
+  assert.deepEqual(r1.highImpactCategories, ['crypto']);
+
+  const r2 = classifyFixMaterialRisk({ 'm.sql': { before: '', after: 'CREATE TABLE accounts (id INT);\n' } });
+  assert.ok(r2.findings.some(f => f.kind === 'schema-change'));
+  assert.deepEqual(r2.highImpactCategories, ['schema']);
+});
+
+test('classifyFixMaterialRisk: a new PII-shaped field is classified pii, reusing dataflow/privacy-taxonomy.js\'s field-name vocabulary', () => {
+  const r = classifyFixMaterialRisk({ 'u.js': { before: 'const x = 1;\n', after: 'const x = 1;\nconst email = req.body.email;\n' } });
+  assert.ok(r.findings.some(f => f.kind === 'new-pii-field'));
+  assert.deepEqual(r.highImpactCategories, ['pii']);
+});
+
+test('classifyFixMaterialRisk: identical before/after content produces no findings and no categories', () => {
+  const r = classifyFixMaterialRisk({ 'a.js': { before: 'const x = 1;\n', after: 'const x = 1;\n' } });
+  assert.equal(r.findings.length, 0);
+  assert.deepEqual(r.highImpactCategories, []);
+});
+
+test('classifyFixMaterialRisk: multiple files, multiple categories in one candidate are all surfaced, deduplicated and sorted', () => {
+  const r = classifyFixMaterialRisk({
+    'auth.js': { before: 'if(!requireAuth(req)) return;\n', after: '\n' },
+    'crypto.js': { before: '', after: 'const h = sha1(x);\n' },
+  });
+  assert.deepEqual(r.highImpactCategories, ['auth', 'crypto']);
+});
+
+test('classifyFixMaterialRisk: a routine, single-file, non-pattern-matching change has zero high-impact categories', () => {
+  const r = classifyFixMaterialRisk({ 'a.js': { before: 'const a = 1;\n', after: 'const a = 2;\n' } });
+  assert.deepEqual(r.highImpactCategories, []);
+});
+
+test('classifyFixMaterialRisk: missing/null before or after content degrades safely, never throws', () => {
+  assert.doesNotThrow(() => classifyFixMaterialRisk({ 'a.js': { after: 'const x = 1;\n' } }));
+  assert.doesNotThrow(() => classifyFixMaterialRisk({ 'a.js': {} }));
+  assert.doesNotThrow(() => classifyFixMaterialRisk({}));
+  assert.doesNotThrow(() => classifyFixMaterialRisk());
+});
+
+test('HIGH_IMPACT_CATEGORY_OF_KIND names exactly the 7 PRD categories: auth, authZ, crypto, pii, schema, infra-privilege, public-api', () => {
+  const categories = new Set(Object.values(HIGH_IMPACT_CATEGORY_OF_KIND));
+  assert.deepEqual([...categories].sort(), ['auth', 'authZ', 'crypto', 'infra-privilege', 'pii', 'public-api', 'schema']);
 });

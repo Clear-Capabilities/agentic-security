@@ -359,16 +359,43 @@ test('apply_fix refuses without confirm: true even when everything else is valid
 
 // ─── Happy path ──────────────────────────────────────────────────────────────
 
-test('apply_fix writes replacement when all gates pass', async () => {
+// FR-301/A-08 (assurance-hardening PRD): this test used to apply a stored
+// `fix.replacement` from a SYNTHETIC finding with no stableId and no real
+// vulnerability behind it ('ORIGINAL' -> 'SAFE', neither of which the engine
+// has any opinion about) — i.e. it asserted the exact unverified-write gap
+// FR-301 exists to close. apply_fix's stored-replacement branch now runs
+// the same fresh verifyFixCore gate the caller-patch branch already used, so
+// this needs a genuinely verifiable fixture: a real stableId and content the
+// engine actually flags. Same shape as the adjacent
+// "apply_fix (#3): a verifier-approved patch..." test below.
+test('apply_fix writes replacement when all gates pass — stored fix is now freshly verified, not trusted on arrival', async () => {
   const { handleRequest, root, cleanup } = await makeSession({
-    findings: [{ id: 'F1', severity: 'high', file: 'a.js', line: 1, rule: 'demo', vuln: 'demo', fix: { replacement: 'SAFE' } }],
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, rule: 'demo', vuln: 'Weak hash', cwe: 'CWE-328', description: 'md5 used', fix: { replacement: 'export function ok() { return 1; }\n' } }],
   });
-  await fsp.writeFile(path.join(root, 'a.js'), 'ORIGINAL');
+  await fsp.writeFile(path.join(root, 'app.js'), "const c=require('crypto');const h=c.createHash('md5');\n");
   const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true });
   const p = payload(r);
-  assert.equal(p.applied, true);
+  assert.equal(p.applied, true, `expected applied; got ${JSON.stringify(p)}`);
+  assert.equal(p.verified, true);
+  // FR-305: this session fixture has no test script and no linter config,
+  // so verification is genuinely degraded — verified:true must not be
+  // mistaken for a full verification.
+  assert.equal(p.verifiedFull, false, `expected a degraded (not fully verified) pass; got ${JSON.stringify(p.verify)}`);
   assert.equal(p.integrity, 'verified');
-  assert.equal(await fsp.readFile(path.join(root, 'a.js'), 'utf8'), 'SAFE');
+  assert.equal(await fsp.readFile(path.join(root, 'app.js'), 'utf8'), 'export function ok() { return 1; }\n');
+  await cleanup();
+});
+
+test('apply_fix REFUSES a stored fix.replacement that does not actually close the finding (the A-08 regression case)', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'app.js', line: 1, rule: 'demo', vuln: 'Weak hash', cwe: 'CWE-328', description: 'md5 used', fix: { replacement: "const c=require('crypto');const h=c.createHash('md5');// still here\n" } }],
+  });
+  const original = "const c=require('crypto');const h=c.createHash('md5');\n";
+  await fsp.writeFile(path.join(root, 'app.js'), original);
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true });
+  const p = payload(r);
+  assert.equal(p.applied, false, `a stored fix that does not close the finding must be rejected, got ${JSON.stringify(p)}`);
+  assert.equal(await fsp.readFile(path.join(root, 'app.js'), 'utf8'), original, 'disk must be untouched when the stored fix fails verification');
   await cleanup();
 });
 
@@ -422,6 +449,128 @@ test('apply_fix (#3): an honest fixMeta does not block a real write', async () =
   const p = payload(r);
   assert.equal(p.applied, true, `expected the write to succeed; got ${JSON.stringify(p)}`);
   assert.equal(await fsp.readFile(path.join(root, 'app.js'), 'utf8'), clean);
+  await cleanup();
+});
+
+// D-0024: the caller-supplied-patch branch of apply_fix wrote via
+// applyFixHistory() directly and never called applyVerifiedFix() — so
+// FR-307's high-impact-change approval gate never ran for this branch at
+// all, for ANY input, regardless of fixMeta. Separately, the tool's own
+// fixMeta inputSchema (additionalProperties:false) never declared an
+// `approval` property, so even the OTHER branch (stored fix.replacement,
+// which does call applyVerifiedFix) rejected a real caller's
+// fixMeta.approval at schema validation before the handler ran. Both are
+// fixed; these tests prove it through the real JSON-RPC handler, not
+// applyVerifiedFix() in isolation.
+const AUTH_REMOVED_BEFORE = 'function h(req,res){ if(!requireAuth(req)) return res.status(401).end(); doThing(); }\n';
+const AUTH_REMOVED_AFTER = 'function h(req,res){ doThing(); }\n';
+
+test('apply_fix (#3, D-0024): a high-impact patch (auth removed) via the caller-patch path is refused with no approval evidence', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'auth.js', line: 1, rule: 'demo', vuln: 'demo', description: 'demo' }],
+  });
+  await fsp.writeFile(path.join(root, 'auth.js'), AUTH_REMOVED_BEFORE);
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true, patch: { 'auth.js': AUTH_REMOVED_AFTER } });
+  const p = payload(r);
+  assert.equal(p.applied, false, `expected the high-impact patch to be refused with no approval; got ${JSON.stringify(p)}`);
+  assert.match(p.reason, /auth/);
+  assert.deepEqual(p.materialClassification?.highImpactCategories, ['auth']);
+  assert.equal(await fsp.readFile(path.join(root, 'auth.js'), 'utf8'), AUTH_REMOVED_BEFORE, 'file must be untouched when the write is refused');
+  await cleanup();
+});
+
+test('apply_fix (#3, D-0024): the same high-impact patch succeeds once fixMeta.approval is supplied through the real MCP schema', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'auth.js', line: 1, rule: 'demo', vuln: 'demo', description: 'demo' }],
+  });
+  await fsp.writeFile(path.join(root, 'auth.js'), AUTH_REMOVED_BEFORE);
+  const r = await call(handleRequest, 'apply_fix', {
+    finding_id: 'F1', confirm: true, patch: { 'auth.js': AUTH_REMOVED_AFTER },
+    // Deliberately approval-only, no completeness self-report (residual/
+    // verdict/evidence/signals) — proving fixMeta.approval alone does not
+    // accidentally trip the unrelated FR-308 honesty gate (D-0024).
+    fixMeta: { approval: { approvedBy: 'jane@example.com', reason: 'auth removal is intentional — endpoint is now public by design' } },
+  });
+  const p = payload(r);
+  assert.equal(p.applied, true, `expected the approved high-impact patch to be applied; got ${JSON.stringify(p)}`);
+  assert.equal(p.verify?.honesty, undefined, 'an approval-only fixMeta must not trigger the unrelated FR-308 honesty gate');
+  assert.deepEqual(p.materialClassification?.highImpactCategories, ['auth']);
+  assert.equal(await fsp.readFile(path.join(root, 'auth.js'), 'utf8'), AUTH_REMOVED_AFTER);
+  await cleanup();
+});
+
+test('apply_fix (#3, D-0024): a dry_run on a high-impact caller-patch previews past the gate without approval, and never writes', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'auth.js', line: 1, rule: 'demo', vuln: 'demo', description: 'demo' }],
+  });
+  await fsp.writeFile(path.join(root, 'auth.js'), AUTH_REMOVED_BEFORE);
+  const r = await call(handleRequest, 'apply_fix', { finding_id: 'F1', confirm: true, dry_run: true, patch: { 'auth.js': AUTH_REMOVED_AFTER } });
+  const p = payload(r);
+  assert.equal(p.applied, false);
+  assert.equal(p.dryRun, true);
+  assert.deepEqual(p.materialClassification?.highImpactCategories, ['auth']);
+  assert.equal(await fsp.readFile(path.join(root, 'auth.js'), 'utf8'), AUTH_REMOVED_BEFORE, 'a dry run must never write');
+  await cleanup();
+});
+
+test('D-0024: apply_fix inputSchema now declares fixMeta.approval (regression guard for the schema-vs-gate drift)', async () => {
+  const { apply_fix } = await import('../src/mcp/tools.js');
+  const { validate } = await import('../src/mcp/validate.js');
+  assert.doesNotThrow(() => validate(apply_fix.inputSchema, {
+    finding_id: 'x', confirm: true,
+    fixMeta: { approval: { approvedBy: 'jane', reason: 'ok' } },
+  }), 'a real caller supplying fixMeta.approval must not be rejected by schema validation');
+});
+
+// FR-1003: separation-of-duties, proven through the real MCP schema AND the
+// real caller-patch handler from the start — applying D-0024's own lesson
+// (a service-level test is not a reachability proof) instead of discovering
+// the gap a cycle later.
+test('D-0024/FR-1003: apply_fix inputSchema declares fixMeta.author', async () => {
+  const { apply_fix } = await import('../src/mcp/tools.js');
+  const { validate } = await import('../src/mcp/validate.js');
+  assert.doesNotThrow(() => validate(apply_fix.inputSchema, {
+    finding_id: 'x', confirm: true,
+    fixMeta: { approval: { approvedBy: 'jane', reason: 'ok' }, author: 'jane' },
+  }));
+});
+
+test('apply_fix (FR-1003): with separationOfDuties enabled, the patch author cannot also be its approver, via the real MCP handler', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'auth.js', line: 1, rule: 'demo', vuln: 'demo', description: 'demo' }],
+  });
+  await fsp.mkdir(path.join(root, '.agentic-security'), { recursive: true });
+  await fsp.writeFile(path.join(root, '.agentic-security', 'authorized-approvers.json'), JSON.stringify({
+    approvers: [{ identity: 'jane@example.com' }], separationOfDuties: { enabled: true },
+  }));
+  await fsp.writeFile(path.join(root, 'auth.js'), AUTH_REMOVED_BEFORE);
+  const r = await call(handleRequest, 'apply_fix', {
+    finding_id: 'F1', confirm: true, patch: { 'auth.js': AUTH_REMOVED_AFTER },
+    fixMeta: { approval: { approvedBy: 'jane@example.com', reason: 'self-reviewed' }, author: 'jane@example.com' },
+  });
+  const p = payload(r);
+  assert.equal(p.applied, false, `expected refusal — author and approver are the same identity; got ${JSON.stringify(p)}`);
+  assert.match(p.reason, /separation-of-duties/);
+  assert.equal(await fsp.readFile(path.join(root, 'auth.js'), 'utf8'), AUTH_REMOVED_BEFORE, 'file must be untouched when refused');
+  await cleanup();
+});
+
+test('apply_fix (FR-1003): a DIFFERENT approver succeeds via the real MCP handler', async () => {
+  const { handleRequest, root, cleanup } = await makeSession({
+    findings: [{ id: 'F1', stableId: 'a1b2c3d4e5f60718', severity: 'high', file: 'auth.js', line: 1, rule: 'demo', vuln: 'demo', description: 'demo' }],
+  });
+  await fsp.mkdir(path.join(root, '.agentic-security'), { recursive: true });
+  await fsp.writeFile(path.join(root, '.agentic-security', 'authorized-approvers.json'), JSON.stringify({
+    approvers: [{ identity: 'jane@example.com' }, { identity: 'bob@example.com' }], separationOfDuties: { enabled: true },
+  }));
+  await fsp.writeFile(path.join(root, 'auth.js'), AUTH_REMOVED_BEFORE);
+  const r = await call(handleRequest, 'apply_fix', {
+    finding_id: 'F1', confirm: true, patch: { 'auth.js': AUTH_REMOVED_AFTER },
+    fixMeta: { approval: { approvedBy: 'bob@example.com', reason: 'independent review' }, author: 'jane@example.com' },
+  });
+  const p = payload(r);
+  assert.equal(p.applied, true, `expected the write to succeed — approver differs from author; got ${JSON.stringify(p)}`);
+  assert.equal(await fsp.readFile(path.join(root, 'auth.js'), 'utf8'), AUTH_REMOVED_AFTER);
   await cleanup();
 });
 
@@ -1121,4 +1270,35 @@ test('every category the contract documents is enforced BEHAVIOURALLY, not just 
     assert.equal(await fsp.readFile(abs, 'utf8'), 'original');
     await cleanup();
   }
+});
+
+// ── FR-704 (assurance-hardening PRD): scan_diff must not mutate the tree ──
+//
+// Real, confirmed-by-execution bug found while investigating this
+// requirement: scan_diff's OWN tool description promises "runs scan in
+// memory", but its handler called runScan() directly with no opt-out from
+// state writes at all — so every pre-write self-correction scan silently
+// wrote dpia.md, ropa.md, privacy-framework.json, threat-model.json, and
+// more into the session root, on every call. Fixed by wrapping the
+// runScan() call in state-dir.js's new withStateWritesDisabled().
+
+test('scan_diff (read-only per its own tool description) writes ZERO new state artifacts, other than the audit log every tool call legitimately makes', async () => {
+  const { root, handleRequest, cleanup } = await makeSession();
+  await fsp.writeFile(path.join(root, 'app.js'), 'const x = require("child_process"); x.exec("ls " + input);\n');
+  const before = new Set(await fsp.readdir(path.join(root, '.agentic-security')));
+  const r = await call(handleRequest, 'scan_diff', { files: ['app.js'] });
+  assert.equal(r.error, undefined, 'scan_diff itself must succeed');
+  const after = await fsp.readdir(path.join(root, '.agentic-security'));
+  // mcp-audit.js is documented (mcp/CLAUDE.md's own table, and
+  // no-stray-state.test.js's DELIBERATELY_UNGUARDED set) as writing on
+  // EVERY tool call, read-only or not — "an audit log ... is not scan
+  // state". That is intentional and correct; this test's actual target is
+  // the scan-pipeline's OWN state writers (dpia.md, ropa.md,
+  // privacy-framework.json, threat-model.json, and the rest of
+  // runFullScan's write sites).
+  const newFiles = after.filter(f => !before.has(f) && f !== 'mcp-audit.log');
+  assert.deepEqual(newFiles, [],
+    `scan_diff wrote new state artifact(s) into the session root: ${newFiles.join(', ')} — ` +
+    'this tool promises "runs scan in memory" and must not mutate the tree it is asked to check.');
+  await cleanup();
 });

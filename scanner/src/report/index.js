@@ -4,6 +4,7 @@ import { _isCustomSuppressed } from '../engine.js';
 import { alertFace, approveFace } from './mascot.js';
 import { SCANNER_VERSION } from '../posture/version.js';
 import { proofBlock } from '../posture/proof-artifact.js';
+import { applyLegacyCompat, legacyFieldDeprecationNotice } from '../pipeline/legacy-compat.js';
 
 const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const SEV_TO_SARIF = { critical: 'error', high: 'error', medium: 'warning', low: 'note', info: 'none' };
@@ -426,6 +427,12 @@ export function normalizeFindings(scan){
       toxicityLabel: sc.toxicityLabel || null,
     });
   }
+  // FR-108: backfill deprecated field names from their current replacements
+  // before this shape reaches ANY consumer (JSON/SARIF/HTML/CSV/JUnit/MCP
+  // all derive from this one function) — one place, covers every output
+  // format, matches this function's own role as "the canonical shape".
+  for (const f of out) applyLegacyCompat(f);
+
   // Sort by severity tier, then within a tier by EPSS percentile (desc) so that
   // CVEs with active in-the-wild abuse float above theoretical CVEs.
   return out.sort((a, b) => {
@@ -516,6 +523,13 @@ export function toJSON(scan, meta={}, opts={}){
     // threw and were skipped. The findings still ship; downstream consumers
     // see the gap.
     annotatorErrors: Array.isArray(scan.annotatorErrors) ? scan.annotatorErrors : [],
+    // FR-201 (assurance-hardening PRD, E2): per-file SAST/logic/secrets
+    // detector errors, captured by pipeline/detector-runner.js's runDetector()
+    // isolation wrapper. Empty array means clean; entries here mean one or
+    // more detectors threw on a specific file and were skipped -- other
+    // detectors and other files still ran (that isolation is the acceptance
+    // criterion itself, not just this field's presence).
+    detectorErrors: Array.isArray(scan.detectorErrors) ? scan.detectorErrors : [],
     // R4 — run attestation: a stable, order-independent digest over this
     // finding set bound to the engine/ruleset/bundle that produced it.
     // Attached by the CLI (posture/attestation.js); null when not computed.
@@ -529,6 +543,10 @@ export function toJSON(scan, meta={}, opts={}){
     // render an empty one. An AUTHORISED suppression is reported too — the
     // signature proves who asked for it, not that the results are absent.
     suppressedRules: scan.suppressedRules || null,
+    // FR-108: null in the (eventual, intended) steady state where no finding
+    // used a deprecated field name; present only when normalizeFindings()
+    // actually backfilled a legacy alias, naming exactly which and why.
+    legacyFieldNotice: legacyFieldDeprecationNotice(findings),
     _scanMeta: scan._scanMeta || null,
     // S7: engine.js computes these on every scan with components, and their
     // own findings already flow into `findings` above — but the structured
@@ -546,6 +564,21 @@ export function toJSON(scan, meta={}, opts={}){
     rootCauseSweep: scan.rootCauseSweep || null,
     attackTaxonomy: scan.attackTaxonomy || null,
     privacyFramework: scan.privacyFramework || null,
+    // FR-405: `false` is a real, meaningful value here (privacy analysis
+    // ran but was not IR-backed) — must not collapse to null via `||`,
+    // which would make it indistinguishable from "never ran at all".
+    privacyIrBacked: scan.privacyIrBacked ?? null,
+    // FR-402: which privacy data-classification taxonomy version actually
+    // classified this scan (built-in, or built-in+custom when an operator's
+    // .agentic-security/privacy-taxonomy.json extended it) — see
+    // dataflow/privacy-taxonomy.js. Null means the annotator never ran.
+    privacyTaxonomyVersion: scan.privacyTaxonomyVersion ?? null,
+    // Assurance-hardening PRD FR-206 (Milestone 0): additive scan-health
+    // summary (pipeline/scan-health.js) — separates "no findings" from
+    // "analysis complete". Null when the engine did not compute one (e.g. a
+    // hand-built `scan` object in a test), same convention as the S7 fields
+    // above; a real scan always computes it.
+    scanHealth: scan.scanHealth || null,
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];
   return out;
@@ -1284,17 +1317,33 @@ export function toShipVerdict(scan, options = {}) {
   const confirmedCount = findings.filter(f => f.validated === true || f.confirmed === true).length;
   const cats = categoryScores(findings);
 
+  // FR-206: "a partial zero-finding scan never says clean." `scanHealth`
+  // (computeScanHealth, scan-health.js) was already computed correctly —
+  // an annotator error, a file timeout, or a skipped analyzer already
+  // demoted `status` to 'partial' — but nothing in this, the actual
+  // human-facing one-screen verdict, ever consulted it. Zero actionable
+  // findings on a scan that didn't finish cleanly is "we don't know," not
+  // "safe."
+  const scanIncomplete = scan.scanHealth && scan.scanHealth.status && scan.scanHealth.status !== 'complete';
+
   const lines = [];
   const bar = '─────────────────────────────────────────';
   // Patch the mascot reacts to the result — APPROVE if clean, ALERT if findings.
-  lines.push(actionable.length === 0 ? approveFace({ color }) : alertFace({ color }));
+  const clean = actionable.length === 0 && !scanIncomplete;
+  lines.push(clean ? approveFace({ color }) : alertFace({ color }));
   lines.push(bar);
-  if (actionable.length === 0) {
+  if (clean) {
     lines.push(c('  ✅  Safe to deploy', SEV_COLOR.low + BOLD));
+  } else if (actionable.length === 0) {
+    lines.push(c('  ⚠️  Scan incomplete — cannot confirm safe to deploy', SEV_COLOR.high + BOLD));
   } else {
     lines.push(c('  ❌  Not safe to deploy', SEV_COLOR.critical + BOLD));
   }
   lines.push(bar);
+  if (scanIncomplete) {
+    const conditions = Array.isArray(scan.scanHealth.conditions) ? scan.scanHealth.conditions : [];
+    lines.push(c(`  ${scan.scanHealth.status}: ${conditions[0] || 'analysis did not complete cleanly'}${conditions.length > 1 ? ` (+${conditions.length - 1} more)` : ''}`, SEV_COLOR.high));
+  }
   lines.push(`  • ${sev.critical} critical · ${sev.high} high · ${advisoryCount} advisory`);
   // Per-category 0..100 score bars — Secrets / Permissions / Hooks / MCP / Agents.
   // Only render when at least one category has been contributed to (skip the

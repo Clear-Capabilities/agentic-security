@@ -11,6 +11,7 @@
 // or the command runner) collects the unified diff and feeds hunks into classifyHunk.
 
 import * as cp from 'node:child_process';
+import { loadPrivacyTaxonomy } from '../dataflow/privacy-taxonomy.js';
 
 // Patterns that fire on the deletion side (auth/check removed).
 const DEL_PATTERNS = [
@@ -25,6 +26,21 @@ const DEL_PATTERNS = [
   { re: /\b(?:helmet|cors)\s*\(/i,
     kind: 'security-middleware-removed', sev: 'medium', evidence: 'Security middleware removed' },
 ];
+
+// FR-307: a new/modified PII/PHI-shaped field is one of the named
+// high-impact categories ("PII" — see HIGH_IMPACT_CATEGORY_OF_KIND below).
+// Reuses dataflow/privacy-taxonomy.js's FR-402 field-name vocabulary
+// (built-in defaults only — this is a coarse architectural-risk signal,
+// not the authoritative privacy classification egress/redact.js and
+// dataflow/privacy-taint.js already own) rather than inventing a second,
+// parallel PII field-name list that could drift from the first.
+const _PII_FIELD_NAMES = [
+  ...(loadPrivacyTaxonomy(null).taxonomy.PII?.patterns || []),
+  ...(loadPrivacyTaxonomy(null).taxonomy.PHI?.patterns || []),
+];
+const PII_FIELD_RE = _PII_FIELD_NAMES.length
+  ? new RegExp('(?:' + _PII_FIELD_NAMES.join('|') + ')\\s*[:=]', 'i')
+  : /(?!)/; // never matches — degrades safely if the taxonomy import ever returns nothing
 
 // Patterns that fire on the addition side (new attack surface introduced).
 const ADD_PATTERNS = [
@@ -56,7 +72,37 @@ const ADD_PATTERNS = [
     kind: 'pipeline-floating-tag', sev: 'medium', evidence: 'GitHub Actions step pinned to floating tag' },
   { re: /\bprivileged\s*:\s*true\b/i,
     kind: 'new-iac-privilege', sev: 'high', evidence: 'Container/pod marked privileged' },
+  // FR-307: crypto, PII, and schema — the three named high-impact
+  // categories the pre-existing kind taxonomy above did not yet cover.
+  { re: /\b(?:md5|sha1)\s*\(/i,
+    kind: 'weak-crypto-added', sev: 'high', evidence: 'Weak/deprecated hash primitive (MD5/SHA-1) referenced' },
+  { re: /createCipheriv\s*\(\s*['"`](?:des|des-ede3|rc4|bf|rc2)/i,
+    kind: 'weak-crypto-added', sev: 'critical', evidence: 'Weak/deprecated cipher algorithm referenced' },
+  { re: /\b(?:createCipheriv|createDecipheriv|generateKeyPair(?:Sync)?|crypto\.subtle|jwt\.sign|jsonwebtoken)\s*[.(]/,
+    kind: 'crypto-primitive-changed', sev: 'high', evidence: 'Cryptographic primitive or JWT signing usage added or changed' },
+  { re: PII_FIELD_RE,
+    kind: 'new-pii-field', sev: 'high', evidence: 'PII/PHI-shaped field introduced or modified' },
+  { re: /\b(?:ALTER\s+TABLE|CREATE\s+TABLE|DROP\s+(?:TABLE|COLUMN)|ADD\s+COLUMN)\b/i,
+    kind: 'schema-change', sev: 'medium', evidence: 'Database schema change (DDL)' },
 ];
+
+// FR-307: which `kind`s constitute one of the PRD's named high-impact
+// change classes ("Auth, authZ, crypto, PII, schema, infrastructure
+// privilege, and public API changes cannot auto-apply without approval
+// evidence"). A finding whose kind is NOT in this map is still scored for
+// severity as before, but does not by itself trigger the approval gate —
+// only these specific, named categories do.
+export const HIGH_IMPACT_CATEGORY_OF_KIND = {
+  'auth-removed': 'auth',
+  'priv-from-body': 'authZ',
+  'new-pii-field': 'pii',
+  'weak-crypto-added': 'crypto',
+  'crypto-primitive-changed': 'crypto',
+  'schema-change': 'schema',
+  'new-iac-privilege': 'infra-privilege',
+  'pipeline-perms-widened': 'infra-privilege',
+  'new-endpoint': 'public-api',
+};
 
 // Routine / low-risk patterns (NEVER classify higher than 'low').
 const ROUTINE_PATTERNS = [
@@ -160,4 +206,48 @@ export function classifyGitDiff(rootDir, ref) {
     return { materialRisk: 'unknown', error: 'git diff failed: ' + (e.message || e), findings: [], perKindCounts: {}, byFile: {} };
   }
   return classifyDiff(out);
+}
+
+/**
+ * FR-307: classify a candidate FIX (not a committed diff) for high-impact
+ * change classes. `files` is `{relPath: {before, after}}` — exactly the
+ * before/after content shape fix/apply-fix-service.js already has on hand
+ * for every candidate write, so no git invocation or unified-diff text is
+ * needed here. A crude but sufficient line-set diff (lines only in `after`
+ * are additions, lines only in `before` are deletions) is enough for
+ * PATTERN matching — classifyHunk operates per-line regardless of hunk
+ * boundaries, so an imprecise line-diff still detects the same risk
+ * signals a real diff would.
+ *
+ * Returns the same shape classifyDiff() does, plus `highImpactCategories`
+ * — the deduplicated, sorted list of named categories
+ * (auth/authZ/crypto/pii/schema/infra-privilege/public-api) any finding in
+ * this candidate belongs to. An empty list means nothing in the candidate
+ * matched one of the PRD's named high-impact classes — the approval gate
+ * in apply-fix-service.js is a no-op in that case, same
+ * restricts-nothing-until-triggered default this codebase's other policy
+ * gates (egress/policy.js, dataflow/privacy-sink-policy.js) already follow.
+ */
+export function classifyFixMaterialRisk(files) {
+  const findings = [];
+  for (const [file, pair] of Object.entries(files || {})) {
+    const before = String(pair?.before ?? '');
+    const after = String(pair?.after ?? '');
+    if (before === after) continue;
+    const beforeLines = before.split('\n');
+    const afterLines = after.split('\n');
+    const beforeSet = new Set(beforeLines);
+    const afterSet = new Set(afterLines);
+    const add = afterLines.filter(l => !beforeSet.has(l));
+    const del = beforeLines.filter(l => !afterSet.has(l));
+    if (!add.length && !del.length) continue;
+    findings.push(...classifyHunk({ file, add, del }));
+  }
+  const result = summarize(findings);
+  const categories = new Set();
+  for (const f of result.findings) {
+    const cat = HIGH_IMPACT_CATEGORY_OF_KIND[f.kind];
+    if (cat) categories.add(cat);
+  }
+  return { ...result, highImpactCategories: [...categories].sort() };
 }

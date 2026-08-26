@@ -99,8 +99,19 @@ case "$FLAG" in
       const findings = (scan.findings || []).filter(f => f.riskDollars);
       const sumEv = findings.reduce((s, f) => s + f.riskDollars.ev, 0);
       const ranked = [...findings].sort((a, b) => b.riskDollars.ev - a.riskDollars.ev).slice(0, top);
+      // FR-801/FR-802 (assurance-hardening PRD): every finding carries the
+      // same scenarioStatus for one scan run (posture/risk-dollars.js
+      // computes it once per annotateRiskDollars call) — surfaced here so
+      // the DEFAULT output states plainly that these are generic scenario
+      // figures, not this organization's actual likely loss, unless
+      // .agentic-security/risk-config.yml has been configured.
+      const scenarioStatus = findings[0]?.riskDollars?.scenarioStatus || 'scenario_default';
+      const scenarioMessage = scenarioStatus === 'scenario_default'
+        ? 'Uses generic industry-wide scenario defaults. No organization-specific inputs are configured (see .agentic-security/risk-config.yml) — this is NOT a likely-organizational-loss estimate.'
+        : 'Some organization-specific inputs are configured; remaining inputs are still generic scenario defaults. Still NOT a full likely-organizational-loss estimate.';
       console.log(JSON.stringify({
         total: findings.length, sumEvUsd: sumEv,
+        scenarioStatus, scenarioMessage,
         top: ranked.map(f => ({ id: f.id, vuln: f.vuln, severity: f.severity, evUsd: f.riskDollars.ev })),
       }, null, 2));
     " "$TOP" ;;

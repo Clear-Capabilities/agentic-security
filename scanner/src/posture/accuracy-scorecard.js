@@ -113,7 +113,11 @@ export function aggregateCorpus(detail) {
 
 /**
  * Build the machine-readable scorecard model. `inputs`:
- *   provenance   { engineVersion, bundleSha256, commit, nodeVersion, generatedAt }
+ *   provenance   { engineVersion, bundleSha256, commit, nodeVersion, generatedAt,
+ *                  corpusVersion?, scope? } — the last two are FR-901's
+ *                  "corpus version" and "scope" fields; optional so a
+ *                  caller with no corpus baseline to hash still gets a
+ *                  valid scorecard rather than a thrown error.
  *   corpusDetail per-entry records from a corpus run performed THIS run
  *   selfScan     { targets: {name:{total,byFile}}, polyglot: {total,byLanguage} }
  *                — measured THIS run
@@ -190,6 +194,38 @@ export function buildScorecard(inputs) {
           overall: committed.independent.overall || null,
           wide: committed.independent.wide || null,
           byLanguage: committed.independent.byLanguage || null,
+          // FR-904: "rule authors cannot optimize against the full scored
+          // population" — bench/independent/runner.mjs's T0.7 already
+          // computes a deterministic (id-hashed) held-out slice, scored
+          // separately and never tuned against, but the published scorecard
+          // used to report only the merged `overall` figures, so the one
+          // number this requirement is actually about never reached a
+          // release artifact anyone reads. Passed through unmodified —
+          // absent (null) on any committed RESULT.json predating T0.7.
+          heldOut: committed.independent.heldOut || null,
+          development: committed.independent.development || null,
+        }
+        : null,
+      // FR-905: "publish false-positive adjudication and coverage
+      // methodology." Three of the four named categories were already
+      // published (unsupported cases via population.unscored above; the
+      // qualitative FP/unlabeled-output methodology in
+      // bench/independent/README.md's "Honest limits" section) — this is
+      // the fourth: WHY a false negative is a false negative, broken down
+      // by mechanism (bench/independent/why-missed.mjs). Read from a
+      // committed file for the same reason `independent` above is — the
+      // full population's diagnostic run is measured in minutes, far too
+      // long to sit inside `npm run scorecard`. Absent (null) until
+      // why-missed.mjs has been run at least once and its summary
+      // committed.
+      whyMissed: committed.whyMissed
+        ? {
+          source: 'bench/independent/why-missed-summary.json',
+          measuredAt: committed.whyMissed.measuredAt || null,
+          scope: committed.whyMissed.scope || null,
+          total: committed.whyMissed.total ?? null,
+          skipped: committed.whyMissed.skipped ?? null,
+          byBucket: committed.whyMissed.byBucket || null,
         }
         : null,
       proofCorpus: proof
@@ -241,6 +277,12 @@ export function renderScorecardMarkdown(m) {
   }
   L.push(`| Node | ${p.nodeVersion || 'unknown'} |`);
   L.push(`| Corpus entries | ${c.totalEntries} (${c.scoredEntries} scored) |`);
+  // FR-901: "Published results identify engine version, corpus version,
+  // commit, scope, and date" — corpusVersion (a content hash, independent
+  // of the engine's own commit) and scope (what was actually measured)
+  // close the two named fields the rows above didn't already cover.
+  if (p.corpusVersion) L.push(`| Corpus version | \`${p.corpusVersion}\` |`);
+  if (p.scope) L.push(`| Scope | ${p.scope} |`);
   L.push(`| ${TIMESTAMP_MARKER} | ${p.generatedAt || 'unknown'} |`);
   L.push('');
   L.push('## What these numbers are, and what they are not');
@@ -532,6 +574,57 @@ export function renderScorecardMarkdown(m) {
     L.push('in this document**, and publishing it is the point of the exercise. The figure');
     L.push('went DOWN when the benchmark was corrected, and is published that way.');
     L.push('');
+    // FR-904 (assurance-hardening PRD): "rule authors cannot optimize
+    // against the full scored population." T0.7's held-out slice is a
+    // no-op section (silently omitted) on a RESULT.json predating it —
+    // never a fabricated 0/0 row pretending to be data.
+    if (ind.heldOut && ind.development) {
+      L.push('### Held-out slice — never tuned against');
+      L.push('');
+      L.push('`bench/independent/runner.mjs` splits the population by a deterministic hash of');
+      L.push('each entry\'s id (T0.7) — a fixed 20% held-out slice, stable across runs and');
+      L.push('population growth, that detector development never sees scored results for.');
+      L.push('This is the number that answers whether the figures above reflect genuine');
+      L.push('accuracy or tuning against the population being measured.');
+      L.push('');
+      L.push('| | Held-out (never tuned against) | Development |');
+      L.push('| --- | --- | --- |');
+      L.push(`| Entries | ${ind.heldOut.entries} | ${ind.development.entries} |`);
+      L.push(`| Precision | ${formatRate(ind.heldOut.localized?.precision?.n, ind.heldOut.localized?.precision?.d)} | ${formatRate(ind.development.localized?.precision?.n, ind.development.localized?.precision?.d)} |`);
+      L.push(`| Recall | ${formatRate(ind.heldOut.localized?.recall?.n, ind.heldOut.localized?.recall?.d)} | ${formatRate(ind.development.localized?.recall?.n, ind.development.localized?.recall?.d)} |`);
+      const heldF1 = ind.heldOut.localized?.f1;
+      const devF1 = ind.development.localized?.f1;
+      L.push(`| F1 | ${heldF1 === null || heldF1 === undefined ? 'n/a' : heldF1.toFixed(3)} | ${devF1 === null || devF1 === undefined ? 'n/a' : devF1.toFixed(3)} |`);
+      L.push('');
+    }
+    // FR-905: the 4th named category ("missed findings" methodology) —
+    // WHY a false negative is a false negative, broken down by mechanism.
+    // Omitted entirely (not a fabricated zero row) until why-missed.mjs has
+    // been run and its summary committed.
+    const wm = m.committedInputs.whyMissed;
+    if (wm) {
+      L.push('### Missed findings — why, not just how many');
+      L.push('');
+      L.push(`**Measured ${wm.measuredAt}** (*committed artifact*, \`${wm.source}\`) — ` +
+        `${wm.total} false negative(s) diagnosed${wm.skipped ? `, ${wm.skipped} skipped (not fetched)` : ''}.`);
+      L.push('');
+      L.push('Each is classified into exactly one mechanism: does something fire and get');
+      L.push('suppressed (by an ignore pragma, a sanitizer, a custom rule, or the');
+      L.push('guard-recognition window), does a finding land on the wrong file or CWE, or');
+      L.push('does nothing fire at all. This is the difference the raw recall number above');
+      L.push('cannot show by itself — "this shape does not occur in these real advisories"');
+      L.push('and "a real detection was masked downstream" look identical as one number and');
+      L.push('very different once broken down this way.');
+      L.push('');
+      if (wm.byBucket && Object.keys(wm.byBucket).length) {
+        L.push('| Mechanism | Count |');
+        L.push('| --- | --- |');
+        for (const [bucket, count] of Object.entries(wm.byBucket).sort((a, b) => b[1] - a[1])) {
+          L.push(`| ${bucket} | ${count} |`);
+        }
+        L.push('');
+      }
+    }
   }
   L.push('## Committed artifacts referenced (not re-run by this command)');
   L.push('');
@@ -565,6 +658,8 @@ export function renderScorecardMarkdown(m) {
   L.push('| Corpus drift gate | `npm run bench:cve-replay:check` |');
   L.push('| Self-scan counts | `node bench/self-scan/measure.mjs --json` |');
   L.push('| Self-scan drift gate | `npm run bench:self-scan:check` |');
+  L.push('| Independent population (read, not re-run — ~32 minutes) | `npm run bench:independent` |');
+  L.push('| Missed-findings mechanism breakdown (read, not re-run) | `npm run bench:independent:why-missed -- --all` |');
   L.push('| This whole document | `npm run scorecard` |');
   L.push('');
   L.push('Running `npm run scorecard` twice on an unchanged tree produces an');

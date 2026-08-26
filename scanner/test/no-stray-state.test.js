@@ -118,6 +118,14 @@ const DELIBERATELY_UNGUARDED = new Set([
  *  · mcp/tools.js                 — the reserved-write denylist and the
  *      scratchpad prefix are a security CONTROL over that directory; they are
  *      compared against, never joined to a root.
+ *  · src/fix/apply-fix-service.js — RESERVED_WRITE_PREFIXES is the same
+ *      reserved-write denylist copied from mcp/tools.js (assurance-hardening
+ *      PRD FR-301, so CLI and MCP share one confinement implementation
+ *      instead of two that could drift) — same shape as the mcp/tools.js
+ *      entry above: compared against, never joined to a root. The module's
+ *      OWN actual state-path construction (readVerifiedScan) already goes
+ *      through state-dir.js's stateDir(), which is why it isn't flagged
+ *      separately.
  *  · bin/agentic-security-rule.js — a confinement prefix check (`is this path
  *      inside the state dir?`), same shape as above.
  *  · posture/corpus-enroll.js     — locates state dirs in order to REMOVE them
@@ -145,6 +153,7 @@ const NOT_PATH_CONSTRUCTION = new Set([
   'src/posture/agents-memory.js', 'src/discovery/memory.js',
   'src/posture/privacy-framework.js',
   'src/posture/verifier-target.js',
+  'src/fix/apply-fix-service.js',
 ]);
 
 /** The seam itself, plus modules awaiting migration. NON-GROWING. */

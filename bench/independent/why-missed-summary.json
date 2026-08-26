@@ -1,0 +1,15 @@
+{
+  "schema": "agentic-security/why-missed-summary@1",
+  "measuredAt": "2026-08-25T15:37:53.916Z",
+  "scope": {
+    "mode": "explicit-ids",
+    "requested": 920
+  },
+  "total": 920,
+  "byBucket": {
+    "finding-present-wrong-file-or-cwe": 21,
+    "no-finding-at-all": 737,
+    "finding-present-but-suppressed": 162
+  },
+  "skipped": 0
+}

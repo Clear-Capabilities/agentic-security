@@ -13,6 +13,7 @@ import {
   annotateCalibratedConfidence,
   computeBrierOnHeldOut,
   loadCalibrationHistory,
+  calibrationFreshness,
   _internals,
 } from '../src/posture/calibration.js';
 
@@ -278,4 +279,21 @@ test('EA-01: in-progress and wont-fix contribute to neither bucket', async () =>
     assert.equal(fam ? fam.tp : 0, 0);
     assert.equal(fam ? fam.fp : 0, 0);
   } finally { await p.cleanup(); }
+});
+
+// FR-207: calibration table freshness against the REAL shipped seed file
+// (not a fixture) -- this is the honest check that the actual
+// calibration-seed.json carries a real, machine-readable _generatedAt and
+// that calibrationFreshness() computes a genuine age from it, not a
+// fabricated or hardcoded value.
+test('calibrationFreshness (FR-207): reports a real age computed from the actual shipped calibration-seed.json', () => {
+  const f = calibrationFreshness();
+  assert.ok(f.generatedAt, 'the real calibration-seed.json must carry a _generatedAt field for this to be meaningful');
+  assert.equal(typeof f.ageDays, 'number');
+  assert.ok(f.ageDays >= 0, 'age must be non-negative for a real past timestamp');
+  assert.equal(typeof f.stale, 'boolean');
+  // As of this cycle the seed is ~3 months old (well under the 180-day
+  // threshold) -- asserting it is NOT stale catches an accidental
+  // threshold or date miscomputation without hardcoding "false" blindly.
+  assert.equal(f.stale, false, `expected the current seed (generated ${f.generatedAt}) to be within the freshness window; got ageDays=${f.ageDays}`);
 });

@@ -25,6 +25,7 @@
 // `unverified-no-llm-endpoint` and the transcript records only the seed input.
 
 import * as crypto from 'node:crypto';
+import { evaluateEgress } from '../egress/policy.js';
 
 const MAX_CALLS_DEFAULT = 50;
 const MAX_WALL_MS_DEFAULT = 15 * 60 * 1000;
@@ -170,12 +171,23 @@ export async function runAgent(finding, opts = {}) {
   const transcript = startTranscript(finding, opts.target);
   const budget = { maxCalls: opts.maxCalls, maxWallMs: opts.maxWallMs };
 
-  const llmInvoke = opts.llmInvoke || (process.env.AGENTIC_SECURITY_LLM_ENDPOINT ? defaultLlmInvoke : null);
+  // FR-601: evaluated before defaultLlmInvoke is even selected, so a denial
+  // means its transcript-to-prompt construction (inside defaultLlmInvoke,
+  // called later in the loop below) never runs at all.
+  let egressDecision = null;
+  let llmInvoke = opts.llmInvoke || null;
+  if (!llmInvoke && process.env.AGENTIC_SECURITY_LLM_ENDPOINT) {
+    egressDecision = evaluateEgress({ scanRoot: opts.scanRoot, purpose: 'adversary-agent', endpoint: process.env.AGENTIC_SECURITY_LLM_ENDPOINT });
+    if (egressDecision.allowed) llmInvoke = defaultLlmInvoke;
+  }
   const executeTool = opts.executeTool || (transcript.target ? (call) => defaultExecuteTool(call, transcript) : null);
 
   if (typeof llmInvoke !== 'function' || typeof executeTool !== 'function') {
-    appendEntry(transcript, { phase: 'init', reason: 'no llmInvoke/executeTool supplied and AGENTIC_SECURITY_LLM_ENDPOINT not set' });
-    return { transcript, outcome: 'unverified-no-llm-endpoint' };
+    const reason = (egressDecision && !egressDecision.allowed)
+      ? `egress policy denied this call: ${egressDecision.reason}`
+      : 'no llmInvoke/executeTool supplied and AGENTIC_SECURITY_LLM_ENDPOINT not set';
+    appendEntry(transcript, { phase: 'init', reason, egressDecision: egressDecision || undefined });
+    return { transcript, outcome: 'unverified-no-llm-endpoint', egressDecision };
   }
 
   let outcome = null;

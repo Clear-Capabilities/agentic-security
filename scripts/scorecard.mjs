@@ -27,6 +27,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
+import * as crypto from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   buildScorecard,
@@ -60,6 +61,20 @@ function runJson(scriptRelPath, args, label) {
 // correctly report it on this file.
 function readJsonIfPresent(rel) {
   try { return JSON.parse(fs.readFileSync(path.join(REPO, rel), 'utf8')); } catch { return null; }
+}
+
+// FR-901: a content hash of the corpus, independent of the engine's own git
+// commit. The corpus and the engine are versioned together in THIS repo
+// today (same commit), but a scorecard reader should not have to assume
+// that will always be true — a distinct, reproducible identifier for "what
+// corpus was this measured against" is what the acceptance criterion names
+// ("corpus version") separately from "commit". sha256 over the raw bytes,
+// not a parse-then-restringify, so the hash changes on any byte the file
+// actually carries (whitespace/ordering included) and is trivially
+// reproducible by anyone with the file, not just this script.
+function sha256OfFileIfPresent(rel) {
+  try { return crypto.createHash('sha256').update(fs.readFileSync(path.join(REPO, rel))).digest('hex'); }
+  catch { return null; }
 }
 
 function git(args) {
@@ -161,6 +176,11 @@ function countPartiallyEvidenced(dir) {
         ':(exclude)docs/SCORECARD.md', ':(exclude)docs/scorecard.json']) === '',
       nodeVersion: process.version,
       generatedAt: new Date().toISOString(),
+      // FR-901: "Published results identify engine version, corpus version,
+      // commit, scope, and date." engineVersion/commit/generatedAt already
+      // covered the other three; these two close the acceptance criterion.
+      corpusVersion: sha256OfFileIfPresent('bench/cve-replay/corpus-baseline.json'),
+      scope: 'bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)',
     },
     corpusDetail: corpus.detail || [],
     selfScan,
@@ -178,6 +198,11 @@ function countPartiallyEvidenced(dir) {
       // publishing a recall figure (45.0%, n=40) that had already been
       // withdrawn. A number nobody regenerates is a number nobody corrects.
       independent: readJsonIfPresent('bench/independent/RESULT.json'),
+      // FR-905: same reasoning as `independent` above — the full-population
+      // diagnostic run (bench/independent/why-missed.mjs --all) is measured
+      // in minutes, so its summary is read from a committed file rather
+      // than re-run inside `npm run scorecard`.
+      whyMissed: readJsonIfPresent('bench/independent/why-missed-summary.json'),
     },
     // PRD F12.6 — publish the LIMITS beside the rates. Each of these three is a
     // caveat without which the corresponding number means something else than a

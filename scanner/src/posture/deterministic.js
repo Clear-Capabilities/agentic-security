@@ -83,8 +83,15 @@ function sortFn(a, b) {
 }
 
 export function makeDeterministic(scan, meta) {
+  // Assurance-hardening PRD FR-104: scan.findings is now frozen by
+  // engine.js after finalization (no producer may append past that point).
+  // Object.prototype.sort() mutates in place and throws a TypeError on a
+  // frozen array — replace with a new sorted array and reassign rather than
+  // sorting the existing one. `scan` itself (the object holding the
+  // reference) is not frozen, only the array was, so this reassignment is
+  // legal and produces byte-identical output to the old in-place sort.
   for (const k of ['findings', 'secrets', 'logicVulns', 'supplyChain']) {
-    if (Array.isArray(scan[k])) scan[k].sort(sortFn);
+    if (Array.isArray(scan[k])) scan[k] = [...scan[k]].sort(sortFn);
   }
   if (meta) {
     meta.scanId = 'deterministic';

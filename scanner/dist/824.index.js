@@ -12,6 +12,7 @@ export const modules = {
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7598);
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
+/* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(5712);
 // LLM-assisted vulnerable function extraction for SCA findings.
 //
 // For CVEs without OSV ecosystem_specific data or GHSA fix commits,
@@ -19,6 +20,7 @@ export const modules = {
 //
 // Gated behind AGENTIC_SECURITY_LLM_SCA=1 (opt-in).
 // Uses the same LLM endpoint config as the SAST validator.
+
 
 
 
@@ -77,6 +79,11 @@ async function extractVulnFunctionsViaLLM(supplyChain, opts = {}) {
   if (!isLlmScaEnabled()) return [];
   const config = _endpointConfig();
   if (!config) return [];
+  // FR-601: one decision for the whole batch (same endpoint for every CVE in
+  // this run) — evaluated before any of the per-candidate prompts below are
+  // built.
+  const egressDecision = (0,_egress_policy_js__WEBPACK_IMPORTED_MODULE_3__/* .evaluateEgress */ .nn)({ scanRoot: opts.scanRoot, purpose: 'sca-llm-function-extract', endpoint: config.endpoint });
+  if (!egressDecision.allowed) return [];
 
   const enriched = [];
   const candidates = (supplyChain || []).filter(sc =>

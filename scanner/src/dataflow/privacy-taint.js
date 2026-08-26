@@ -20,45 +20,26 @@
 // attempt content classification (Luhn-checking actual values would
 // only catch leaks that have already happened); we classify by NAME
 // + TYPE in declarations.
+//
+// The data-class taxonomy itself (PII/PHI/PCI/FIN/CREDENTIALS/GEOLOCATION/
+// DEVICE_ID, plus any organization-defined classes) is versioned and
+// customizable without editing this file — see ./privacy-taxonomy.js
+// (assurance-hardening PRD FR-402). This module keeps only the sink
+// taxonomy (where regulated data exits), which is not in FR-402's scope.
+//
+// Whether a class-reaches-sink flow actually PRODUCES a finding is
+// policy-gated (assurance-hardening PRD FR-404) — see
+// ./privacy-sink-policy.js. With no policy configured every match is
+// prohibited, unchanged from before FR-404.
 
-// PII / PHI / PCI / FIN classifiers — each is a regex against
-// field/variable/column names. Same idea as the existing classifyField
-// helpers in engine.js but enumerated for compliance reporting.
+import {
+  BUILTIN_TAXONOMY_VERSION, DEFAULT_TAXONOMY, compileTaxonomy,
+  loadPrivacyTaxonomy, classifyFieldAgainst, severityForClasses,
+} from './privacy-taxonomy.js';
+import { loadPrivacySinkPolicy, isSinkPermitted, permittingRules } from './privacy-sink-policy.js';
+import { GOVERNANCE_FIELDS, governanceRecordFor } from './privacy-governance.js';
 
-const PII_PATTERNS = {
-  PII: [
-    /\bfirst[_-]?name\b/i, /\blast[_-]?name\b/i, /\bfull[_-]?name\b/i,
-    /\bemail([_-]?address)?\b/i, /\bphone([_-]?number)?\b/i, /\bmobile\b/i,
-    /\baddress(?:_?(?:line|street|city|zip|postal))?\b/i,
-    /\bdob\b/i, /\bdate[_-]?of[_-]?birth\b/i, /\bbirthday\b/i, /\bbirthdate\b/i,
-    /\bage\b/i, /\bgender\b/i, /\bethnicity\b/i, /\brace\b/i, /\bnationality\b/i,
-    /\bssn\b/i, /\bsocial[_-]?security/i, /\bnational[_-]?id/i, /\bpassport\b/i,
-    /\bdriver[_-]?license\b/i, /\btax[_-]?id\b/i, /\bgovernment[_-]?id\b/i,
-    /\bip[_-]?address\b/i, /\bgeo[_-]?location\b/i, /\blatitude\b/i, /\blongitude\b/i,
-  ],
-  PHI: [
-    /\b(?:medical|patient|health)[_-]?record\b/i,
-    /\bdiagnosis\b/i, /\bcondition\b/i, /\bsymptom\b/i, /\btreatment\b/i,
-    /\bmedication\b/i, /\bprescription\b/i, /\bdosage\b/i,
-    /\bicd[_-]?(?:9|10|11)\b/i, /\bcpt[_-]?code\b/i, /\bmrn\b/i,
-    /\bmedical[_-]?record[_-]?number\b/i, /\bdoctor[_-]?name\b/i,
-    /\bphysician\b/i, /\binsurance[_-]?id\b/i, /\bhealth[_-]?plan\b/i,
-  ],
-  PCI: [
-    /\bcredit[_-]?card[_-]?(?:number|num|no)?\b/i,
-    /\bcard[_-]?(?:number|num|no)\b/i,
-    /\b(?:cvc|cvv)2?\b/i, /\bcvc[_-]?code\b/i,
-    /\bexp(?:iry|iration)?(?:_?date)?\b/i,
-    /\bcardholder[_-]?name\b/i, /\bpan\b/i,
-    /\biban\b/i, /\brouting[_-]?number\b/i,
-    /\baccount[_-]?number\b/i,
-  ],
-  FIN: [
-    /\bsalary\b/i, /\bincome\b/i, /\bbalance\b/i, /\btransaction[_-]?amount\b/i,
-    /\bbank[_-]?account\b/i,
-    /\bcredit[_-]?score\b/i, /\bnet[_-]?worth\b/i,
-  ],
-};
+const _BUILTIN_COMPILED = compileTaxonomy(DEFAULT_TAXONOMY);
 
 const SINK_PATTERNS = {
   log: /\b(?:log|logger|console|System\.out|System\.err|stdout|stderr|fmt\.Print|print)\b/i,
@@ -71,18 +52,15 @@ const SINK_PATTERNS = {
 };
 
 /**
- * Classify a field/variable name into PII / PHI / PCI / FIN buckets.
+ * Classify a field/variable name into the built-in taxonomy's buckets
+ * (PII / PHI / PCI / FIN / CREDENTIALS / GEOLOCATION / DEVICE_ID).
  * Returns an array of bucket labels (possibly empty, possibly multiple).
+ * `compiled` is an optional pre-compiled taxonomy (see
+ * privacy-taxonomy.js's compileTaxonomy / loadPrivacyTaxonomy) — omit it
+ * to classify against the built-in defaults only.
  */
-export function classifyField(name) {
-  if (!name) return [];
-  const out = [];
-  for (const [bucket, patterns] of Object.entries(PII_PATTERNS)) {
-    for (const p of patterns) {
-      if (p.test(name)) { out.push(bucket); break; }
-    }
-  }
-  return out;
+export function classifyField(name, compiled) {
+  return classifyFieldAgainst(name, compiled || _BUILTIN_COMPILED);
 }
 
 /**
@@ -101,19 +79,51 @@ export function classifySink(expr) {
  * a privacy-leak finding when a regulated class reaches a non-secure
  * sink (log, response, outbound HTTP, etc.).
  */
-export function annotatePrivacyTaint(perFileIR) {
-  if (!perFileIR) return { findings: [], piiFields: [] };
+export function annotatePrivacyTaint(perFileIR, opts = {}) {
+  // FR-402 (assurance-hardening PRD): the taxonomy used for classification
+  // is resolved once per call, not hardcoded — `opts.compiled` lets a
+  // caller (tests, or a future dry-run) hand in an already-compiled
+  // taxonomy directly; `opts.scanRoot` loads and compiles the effective
+  // (built-in + operator-config) taxonomy from disk. Neither is required:
+  // omitting both classifies against the built-in defaults, unchanged from
+  // before FR-402.
+  const { version, compiled } = opts.compiled
+    ? { version: opts.taxonomyVersion || BUILTIN_TAXONOMY_VERSION, compiled: opts.compiled }
+    : (opts.scanRoot ? loadPrivacyTaxonomy(opts.scanRoot) : { version: BUILTIN_TAXONOMY_VERSION, compiled: _BUILTIN_COMPILED });
+  // FR-404 (assurance-hardening PRD): whether a class-reaches-sink flow is
+  // PROHIBITED is policy-gated the same way — `opts.sinkPolicy` for a
+  // caller that already has one, `opts.scanRoot` to load
+  // .agentic-security/privacy-policy.json, or the empty policy (everything
+  // prohibited, the pre-FR-404 default) when neither is given.
+  const sinkPolicy = opts.sinkPolicy || (opts.scanRoot ? loadPrivacySinkPolicy(opts.scanRoot) : { allow: [] });
+  // FR-408: the current deployment environment, ONLY from an explicit
+  // caller-supplied opts.environment or AGENTIC_SECURITY_ENVIRONMENT — never
+  // NODE_ENV (see privacy-sink-policy.js's header for why). Unset means an
+  // environment-scoped allow rule never matches (fail closed), same as
+  // before this option existed.
+  const policyCtx = { environment: opts.environment || process.env.AGENTIC_SECURITY_ENVIRONMENT || null };
+  if (!perFileIR) return { findings: [], piiFields: [], taxonomyVersion: version, policyExemptions: [] };
   const findings = [];
   const piiFields = [];
+  // Suppression must be visible, not silent — same principle as the
+  // ignore-pragma suppression ledger (root CLAUDE.md): a policy-permitted
+  // flow is recorded here, never just dropped.
+  const policyExemptions = [];
   for (const [filePath, ir] of (perFileIR instanceof Map ? perFileIR : Object.entries(perFileIR))) {
     if (!ir || !ir._content) continue;
     const lines = ir._content.split('\n');
     // Step 1: collect PII-classified decls.
     const taintedVars = new Map(); // name → array of bucket labels
+    // FR-406: declaration line per source variable, so a finding/exemption
+    // emitted below can link back to where the regulated data ENTERED
+    // (evidence locations must cover both ends of a flow, not just the
+    // sink) without re-deriving it from piiFields by proximity guessing.
+    const declLineByName = new Map();
     for (const d of ir.decls || []) {
-      const classes = classifyField(d.name);
+      const classes = classifyFieldAgainst(d.name, compiled);
       if (classes.length) {
         taintedVars.set(d.name, classes);
+        declLineByName.set(d.name, d.line);
         piiFields.push({ file: filePath, line: d.line, name: d.name, classes, declaredType: d.type || null });
       }
     }
@@ -121,26 +131,45 @@ export function annotatePrivacyTaint(perFileIR) {
     // reaching a sink.
     for (const call of ir.calls || []) {
       const argText = (call.args || []).map(a => a.text || '').join(',');
-      const sinkLabel = classifySink(call.fullPath || call.callee || '');
+      // FR-408: the raw sink expression text, e.g. "stripe.track" — the
+      // destination-matching axis needs the actual call identity, not just
+      // its broader sink CATEGORY (sinkLabel), which "stripe.track" and
+      // "axios.post" would otherwise share.
+      const destText = call.fullPath || call.callee || '';
+      const sinkLabel = classifySink(destText);
       if (!sinkLabel) continue;
+      const ctx = { ...policyCtx, destination: destText };
       for (const [name, classes] of taintedVars) {
         if (!new RegExp(`\\b${name.replace(/[.+^${}()|\\]/g, '\\$&')}\\b`).test(argText)) continue;
+        const sourceLine = declLineByName.get(name) ?? null;
+        if (isSinkPermitted(classes, sinkLabel, sinkPolicy, ctx)) {
+          policyExemptions.push({
+            file: filePath, line: call.line, name, classes, sinkKind: sinkLabel,
+            sourceLine,
+            rules: permittingRules(classes, sinkLabel, sinkPolicy, ctx).map(r => ({ sink: r.sink, class: r.class || null, reason: r.reason || null, environment: r.environment || null, destination: r.destination || null })),
+          });
+          continue;
+        }
         findings.push({
           family: 'pii-exposure',
           subfamily: classes.join('+'),
           file: filePath, line: call.line,
-          severity: classes.includes('PCI') || classes.includes('PHI') ? 'high' : 'medium',
+          severity: severityForClasses(classes, compiled),
           cwe: 'CWE-359', // Exposure of Private Personal Information
           vuln: `Privacy — ${classes.join('+')} data flows to ${sinkLabel} sink`,
           snippet: (lines[call.line - 1] || '').trim().slice(0, 200),
           remediation: `${classes.join(' + ')} data must not flow to ${sinkLabel} unencrypted. Mask, redact, or hash the value before logging / responding / sending to third parties.`,
           piiClass: classes,
           sinkKind: sinkLabel,
+          // FR-406: evidence linkage back to the source declaration, not
+          // just the sink call site.
+          sourceName: name,
+          sourceLine,
         });
       }
     }
   }
-  return { findings, piiFields };
+  return { findings, piiFields, taxonomyVersion: version, policyExemptions };
 }
 
 /**
@@ -167,6 +196,12 @@ export function emitDpiaArtifact(piiFields, findings, opts = {}) {
   lines.push('');
   lines.push(`## Data classes identified`);
   lines.push('');
+  // FR-407: governance fields (purpose, lawful basis, subject, retention,
+  // residency, recipient, transfer, minimization, consent, access,
+  // deletion) — none inferable from code, so every one is either
+  // operator-supplied (opts.governanceConfig) or explicitly manual_required,
+  // never blank and never guessed.
+  const governanceConfig = opts.governanceConfig || null;
   for (const [cls, fields] of grouped) {
     lines.push(`### ${cls} (${fields.length} fields)`);
     lines.push('');
@@ -174,6 +209,14 @@ export function emitDpiaArtifact(piiFields, findings, opts = {}) {
       lines.push(`- \`${f.name}\` in \`${f.file}:${f.line}\` (type: ${f.declaredType || 'unknown'})`);
     }
     if (fields.length > 20) lines.push(`- … and ${fields.length - 20} more`);
+    lines.push('');
+    lines.push(`**Governance fields for ${cls}** (see the RoPA artifact for the full register):`);
+    lines.push('');
+    const record = governanceRecordFor(cls, governanceConfig);
+    for (const field of GOVERNANCE_FIELDS) {
+      const r = record[field];
+      lines.push(`- ${field}: \`${r.value}\`${r.source === 'operator_provided' ? ' (operator-provided)' : ''}`);
+    }
     lines.push('');
   }
   lines.push(`## Privacy-related findings`);
@@ -185,6 +228,24 @@ export function emitDpiaArtifact(piiFields, findings, opts = {}) {
   }
   if (findings.length > 50) lines.push(`| … | … | … | … and ${findings.length - 50} more |`);
   lines.push('');
+  // FR-404: a policy-permitted flow must stay visible here, not vanish —
+  // same principle as the ignore-pragma suppression ledger (root
+  // CLAUDE.md). Only rendered when the policy actually exempted something.
+  const exemptions = Array.isArray(opts.policyExemptions) ? opts.policyExemptions : [];
+  if (exemptions.length) {
+    lines.push(`## Policy-permitted flows (not flagged above)`);
+    lines.push('');
+    lines.push(`These flows matched a regulated-data class reaching a sink, but were permitted by .agentic-security/privacy-policy.json and are excluded from the findings table above.`);
+    lines.push('');
+    lines.push(`| File:Line | Class → Sink | Reason |`);
+    lines.push(`|---|---|---|`);
+    for (const e of exemptions.slice(0, 50)) {
+      const reason = (e.rules || []).map(r => r.reason).filter(Boolean).join('; ') || '(no reason given)';
+      lines.push(`| ${e.file}:${e.line} | ${(e.classes || []).join('+')} → ${e.sinkKind} | ${reason} |`);
+    }
+    if (exemptions.length > 50) lines.push(`| … | … | … and ${exemptions.length - 50} more |`);
+    lines.push('');
+  }
   lines.push(`## Regulatory framework mapping`);
   lines.push('');
   lines.push(`- **GDPR Art. 35** — DPIA required when processing is likely to result in high risk to data subjects.`);
@@ -202,4 +263,4 @@ export function emitDpiaArtifact(piiFields, findings, opts = {}) {
   return lines.join('\n');
 }
 
-export const _internals = { PII_PATTERNS, SINK_PATTERNS };
+export const _internals = { DEFAULT_TAXONOMY, SINK_PATTERNS };

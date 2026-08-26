@@ -11,10 +11,149 @@
 
 
 
-## Unreleased
+## 0.144.0 — Assurance hardening closes Epic E2, and an independent audit finds what "verified" missed
 
-Nothing in this section has been published to npm. It is recorded here rather
-than folded into 0.143.0, which is already released.
+The assurance-hardening PRD (`docs/implementation/assurance-hardening-*`)
+closes 72 of its 73 requirements this release. Epic E2 ("analyzer supervision
+and scan health" — the claim that a scan can say, honestly, whether it
+actually completed) is now fully closed, 8 of 8. The one requirement left
+open (FR-401's "types" element — real type inference over the Layer-1 IR) is
+a deliberate, documented scope decision, not an oversight: see its own
+section below.
+
+### An independent 16-agent audit found 4 real gaps in requirements this project had already marked "verified"
+
+Before continuing forward implementation, the session was asked to verify the
+PRD was truly complete. Sixteen independent agents, briefed only with each
+requirement's literal PRD text (not this project's own tracking files), each
+re-checked one previously-"verified" requirement against the real code. 12 of
+16 held up. 4 did not — all fixed and re-verified in the same pass:
+
+- **A broken scan could still say "Safe to deploy."** `scanHealth.status`
+  (added by an earlier requirement) was computed correctly but never read by
+  the actual human-facing verdict — a scan that hit an annotator exception or
+  timed out on files, with zero findings, still printed a clean bill of
+  health. `toShipVerdict` now checks `scanHealth.status` before it says
+  anything is safe.
+- **"Approvals, exceptions, and suppressions" only had identity verification
+  wired for one of the three nouns.** `posture/suppressions.js` never checked
+  a suppression's `justification_signed_by` against the approver registry a
+  sibling requirement had already built — a suppression could be filed under
+  anyone's name with no verification at all. Fixed by threading the same
+  registry through.
+- **A "privacy-preserving" feedback module persisted the exact thing it
+  promised not to.** A caller-supplied finding id — which, for a real
+  finding, embeds its file path — was stored verbatim instead of hashed.
+  Fixed by substituting the finding's stable id or a genuine SHA-256 hash.
+- **Two detectors were silently exempt from the fault-isolation work a prior
+  requirement claimed was complete for "every detector."** `scanWeb3Advanced`
+  and `scanK8sAdmission` were called directly instead of through the
+  isolating wrapper, so an exception thrown by either would silently discard
+  every OTHER detector's findings for that file. The original verification
+  had grepped for a call-site count that could not distinguish a wrapped call
+  from an unwrapped one sharing the same substring.
+
+Three of these four were the same failure class repeating: a mechanism proven
+correct in a unit test, never checked against the real, human-facing (or
+caller-facing) entry point it was supposed to protect. A fifth requirement
+(the privacy IR adapter, below) was found to be a genuine partial — 2 of its
+8 named elements were real, the rest were stubs or silently merged — and was
+honestly downgraded rather than left mismarked.
+
+### Coverage ledgers: every analyzer now has one real, computed status per file
+
+`pipeline/coverage-ledger.js` is a new, drift-guarded registry of all 121
+real per-file analyzer call sites (extracted from the engine's own cascade
+code, not hand-maintained), each tagged always-applicable,
+extension-gated, or policy-gated. Combined with the fault-isolation and
+per-file-timeout work from earlier requirements, this computes exactly one
+terminal status — completed, failed, timed out, or skipped by policy — for
+every (file, analyzer) pair a scan actually ran. `scanHealth.analyzers`,
+previously a hardcoded `null`, is now this real summary; a detector that
+throws on even one file now demotes scan status, a gap that had no signal
+before.
+
+### `--assurance advisory|standard|strict`
+
+A new `agentic-security ci` flag, running alongside the existing `--fail-on`
+and `--policy` gates rather than replacing either. `strict` fails the build
+outright when `scanHealth.status` is not `complete` — a failed, timed-out, or
+silently policy-skipped analyzer; an annotator exception; a stale
+vulnerability feed (see below); or a CI environment that silently downgraded
+deep analysis (see below) all now have one build-failing consequence, in
+addition to whatever `--fail-on`'s severity threshold already does.
+`advisory` and `standard` report the same signal but never gate — the PRD's
+own acceptance criterion only specifies strict mode's behavior in full.
+
+### CI can no longer silently downgrade deep analysis without saying so
+
+Requesting `--deep` in a CI environment without the explicit
+`AGENTIC_SECURITY_DEEP_IN_CI=1` override already fell back to pattern-only
+analysis; what was missing was that decision showing up anywhere a human or
+a build gate would see it. It's now a real `scanHealth` condition, visible in
+the human headline (never "Safe to deploy" under a silent downgrade), in
+`ci`'s own stderr, and failable under `--assurance strict`.
+
+### Stale vulnerability feeds, calibration data, and rulesets are now visible — and can fail strict policy
+
+Four independent freshness signals, each reusing an already-computed
+staleness check rather than inventing a new one, now feed `scanHealth`:
+
+- The CISA KEV catalog's existing staleness tracking is wired through for
+  the first time.
+- The engine's own EPSS enrichment path (a separate, duplicate
+  implementation from `posture/epss.js`'s — a pre-existing duplication, not
+  introduced here) gained the same kind of per-entry age tracking KEV
+  already had.
+- The seed calibration table (`calibration-seed.json`) now carries a real,
+  git-derived generation timestamp and is checked against a 180-day
+  threshold.
+- Custom rule packs (`.agentic-security/rules/*.yml`) can now opt into a
+  `review-interval-days` / `reviewed-at` freshness check — deliberately not
+  based on file mtime, since a CI checkout resets mtimes on every run,
+  which would make an mtime-based check silently blind in CI, the one place
+  a strict-mode failure matters most.
+
+Found while wiring this: this development machine's own, real, previously
+invisible EPSS disk cache had a genuine stale entry — a live demonstration
+of exactly the gap this requirement closes, not a synthetic test case.
+
+### Checkpointed scans now invalidate only what actually changed
+
+Interrupted-scan resume (`AGENTIC_SECURITY_RESUME=1`) previously discarded an
+entire checkpoint — every already-completed file's work — if a single
+scanned file changed, was added, or was removed. Run identity is now split
+into a GLOBAL component (engine version, ruleset version, running bundle,
+dependency manifests, environment switches — a change to any of these still
+discards everything, because those affect how every file would be analyzed)
+and a PER-FILE content hash on each checkpoint record. Changing one file now
+re-analyzes only that file; every other already-checkpointed file still
+resumes. A global discard now names what changed
+(`"engine version changed (0.143.0 -> 0.144.0)"`); a per-file invalidation
+names why (`"content changed since it was checkpointed"`).
+
+### The privacy IR adapter now supplies 7 of its 8 named elements — "types" is a deliberate exception, not a gap
+
+An earlier requirement claimed the privacy taint engine's IR adapter
+supplied "declarations, types, assignments, calls, parameters, returns,
+storage, and sinks." An independent check found only 2–3 of the 8 were
+real: types was a hardcoded `null`, assignments and parameters were merged
+into one undifferentiated bucket, returns and storage were absent
+entirely. That requirement was honestly downgraded rather than left
+mismarked. This release closes parameters, assignments (now distinctly
+tagged), returns, and storage — the last of these by reindexing a
+stored-taint registry the engine already computes for an unrelated
+correlation, not by adding new detection logic.
+
+"Types" remains unimplemented, on purpose. A narrow, TypeScript-only signal
+is technically possible — type-annotation AST nodes survive into this
+codebase's own Babel visitor before TypeScript's own preset strips them —
+but supplying it means modifying the shared JS/TS parser every SAST, taint,
+and privacy consumer depends on, for a benefit that would only ever cover
+one of roughly ten supported languages. That trade was judged not worth the
+risk to already-correct, heavily-relied-on infrastructure, and is recorded
+as a deliberate scope decision rather than attempted as an unproven partial
+fix.
 
 ### npm publish no longer pays for the release gate twice
 

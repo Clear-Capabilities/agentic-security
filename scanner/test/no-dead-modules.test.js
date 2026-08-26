@@ -63,7 +63,6 @@ const ALLOWLIST = new Set([
   'deterministic.js::buildLockfile',
   'deterministic.js::readLockfile',
   'epss.js::fetchEPSS',
-  'fix-history.js::readLog',
   'fix-plan.js::countPatchBounds',
   'fix-plan.js::renderFixPlan',
   'fix-plan.js::emitFixPlanFile',
@@ -80,10 +79,11 @@ const ALLOWLIST = new Set([
   // hooks for "show me the current intent" tooling. The engine consumes
   // suppressByIntent; the extractor is the lower-level helper.
   'intent-context.js::extractIntentSignals',
-  // llm-redteam.js exports both ends of an opt-in red-team pipeline that
-  // surfaces in /triage --red-team. Called from the command shell at
-  // invocation time, not via a static engine wire.
-  'llm-redteam.js::runActiveRedteam',
+  // llm-redteam.js's report renderer surfaces in /triage --red-team, called
+  // from the command shell at invocation time, not via a static engine wire.
+  // runActiveRedteam itself is no longer allowlisted here — FR-601's
+  // egress-policy-integration.test.js now calls it directly to prove a
+  // denied policy produces zero network requests, so it has a real caller.
   'llm-redteam.js::renderRedteamMarkdownReport',
   'rule-overrides.js::loadOverrides',
   'rule-overrides.js::runCustomRules',
@@ -101,10 +101,13 @@ const ALLOWLIST = new Set([
   // (4R-6 decay rule).
   'streak.js::markLaunchCheckPassed',
   'streak.js::formatAchievements',
-  'suppressions.js::loadSoftAccepted',
+  // suppressions.js::loadSoftAccepted and ::loadProSuppressions are no
+  // longer dead — FR-907's posture/production-feedback.js reads both to
+  // aggregate user-suppression events. Entries removed (4R-6 decay rule).
   'suppressions.js::saveSoftAccepted',
-  'suppressions.js::loadProSuppressions',
-  'suppressions.js::validateProSuppression',
+  // suppressions.js::validateProSuppression is no longer dead — FR-1004's
+  // test/suppression-exceptions.test.js calls it directly. Entry removed
+  // (4R-6 decay rule).
   'validator-metrics.js::getLatest',
   'validator-metrics.js::checkFloors',
   // Phase-8 — numeric-domain lattice ordering. Standard lattice API; future

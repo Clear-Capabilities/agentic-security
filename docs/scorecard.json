@@ -1,12 +1,14 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.143.0",
-    "bundleSha256": "2a984aea7cf61f1508f690678b1ff656829081cb34b3e8483cc8ae04ae3c934c",
-    "commit": "3e24c925fc939b37ef69a9ba01bb0134eab786f4",
+    "engineVersion": "0.144.0",
+    "bundleSha256": "e8cc8b582e12c4e7c6128e887af35df22e0fa2669fdbbf0e1718e070207c0acc",
+    "commit": "f57f496468e83dc5796ef6329f7e71d93128df71",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-23T23:54:26.213Z"
+    "generatedAt": "2026-08-26T20:50:09.611Z",
+    "corpusVersion": "879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5",
+    "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
   "methodology": {
     "population": "curated known-vulnerable fixtures (pre/) and their fixed counterparts (post/)",
@@ -574,7 +576,7 @@
         }
       },
       "scanner/src": {
-        "total": 428,
+        "total": 447,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -583,9 +585,17 @@
           "dataflow/incremental.js": 7,
           "dataflow/index.js": 5,
           "dataflow/polyglot.js": 1,
+          "dataflow/privacy-deep-walker.js": 2,
+          "dataflow/privacy-governance.js": 1,
+          "dataflow/privacy-sink-policy.js": 1,
+          "dataflow/privacy-taxonomy.js": 1,
           "discovery/memory.js": 1,
+          "egress/audit.js": 1,
+          "egress/policy.js": 1,
+          "fix/apply-fix-service.js": 3,
+          "fix/approver-registry.js": 1,
           "history-scan.js": 1,
-          "integrations/index.js": 10,
+          "integrations/index.js": 11,
           "integrations/tickets.js": 9,
           "ir/cpp-preprocessor.js": 1,
           "ir/ir-stats.js": 1,
@@ -606,6 +616,7 @@
           "mcp/audit.js": 8,
           "mcp/server.js": 1,
           "mcp/tools.js": 6,
+          "pipeline/cascade-worker-pool.js": 2,
           "poc-video.js": 1,
           "posture/adversarial-self-test.js": 1,
           "posture/adversary-agent.js": 5,
@@ -620,9 +631,11 @@
           "posture/business-logic.js": 1,
           "posture/cache-economics.js": 1,
           "posture/calibration-drift.js": 3,
+          "posture/calibration-feedback.js": 1,
           "posture/calibration.js": 1,
           "posture/claude-authorship.js": 1,
-          "posture/compliance-policy.js": 5,
+          "posture/compliance-evidence-signing.js": 1,
+          "posture/compliance-policy.js": 4,
           "posture/corpus-enroll.js": 2,
           "posture/coverage-strength.js": 1,
           "posture/cross-repo-memory.js": 2,
@@ -633,6 +646,7 @@
           "posture/dep-add-guard.js": 8,
           "posture/deploy-platform.js": 1,
           "posture/deterministic.js": 3,
+          "posture/encryption-provider.js": 3,
           "posture/epss.js": 3,
           "posture/evidence-bundle.js": 2,
           "posture/execution-proof.js": 1,
@@ -647,13 +661,14 @@
           "posture/fix-verify-loop.js": 2,
           "posture/fix-verify.js": 1,
           "posture/fleet.js": 1,
-          "posture/flow-narration.js": 3,
+          "posture/flow-narration.js": 1,
           "posture/grader-calibration.js": 4,
           "posture/harness-discovery.js": 1,
           "posture/holdout-eval.js": 3,
           "posture/integrity.js": 6,
           "posture/intent-context.js": 1,
           "posture/learning.js": 3,
+          "posture/legal-hold.js": 1,
           "posture/license-graph.js": 3,
           "posture/license-policy.js": 3,
           "posture/llm-redteam-prompts.js": 1,
@@ -663,12 +678,15 @@
           "posture/model-rescan.js": 1,
           "posture/network-policy-import.js": 3,
           "posture/poc-generator.js": 2,
+          "posture/policy-bundle.js": 1,
           "posture/policy-gate.js": 3,
           "posture/pr-augment.js": 1,
           "posture/pre-incident-archaeology.js": 1,
+          "posture/production-feedback.js": 1,
           "posture/profile.js": 4,
           "posture/realtime-cve-monitor.js": 5,
-          "posture/risk-dollars.js": 4,
+          "posture/retention-policy.js": 1,
+          "posture/risk-dollars.js": 3,
           "posture/root-cause-sweep.js": 1,
           "posture/router.js": 3,
           "posture/rule-overrides.js": 5,
@@ -1170,6 +1188,64 @@
           "f1": 0.6666666666666666,
           "scored": 2
         }
+      },
+      "heldOut": {
+        "meaning": "never tune against these; scored separately (T0.7)",
+        "entries": 205,
+        "localized": {
+          "tp": 6,
+          "fp": 14,
+          "fn": 199,
+          "tn": 191,
+          "precision": {
+            "n": 6,
+            "d": 20,
+            "value": 0.3
+          },
+          "recall": {
+            "n": 6,
+            "d": 205,
+            "value": 0.02926829268292683
+          },
+          "f1": 0.05333333333333334,
+          "scored": 205
+        }
+      },
+      "development": {
+        "entries": 786,
+        "localized": {
+          "tp": 22,
+          "fp": 35,
+          "fn": 764,
+          "tn": 751,
+          "precision": {
+            "n": 22,
+            "d": 57,
+            "value": 0.38596491228070173
+          },
+          "recall": {
+            "n": 22,
+            "d": 786,
+            "value": 0.027989821882951654
+          },
+          "f1": 0.05219454329774615,
+          "scored": 786
+        }
+      }
+    },
+    "whyMissed": {
+      "source": "bench/independent/why-missed-summary.json",
+      "measuredAt": "2026-08-25T15:37:53.916Z",
+      "scope": {
+        "mode": "explicit-ids",
+        "requested": 920
+      },
+      "total": 920,
+      "skipped": 0,
+      "byBucket": {
+        "finding-present-wrong-file-or-cwe": 21,
+        "no-finding-at-all": 737,
+        "finding-present-but-suppressed": 162
       }
     },
     "proofCorpus": {

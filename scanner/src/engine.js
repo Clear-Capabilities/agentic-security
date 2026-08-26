@@ -8,7 +8,24 @@ import * as os from 'node:os';
 import * as crypto from 'node:crypto';
 import * as yaml from './util/yaml.js';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 const _require = createRequire(import.meta.url);
+
+// FR-202 phase 3b (D-0050): a worker thread must import.() the real, exports-bearing
+// engine.js -- NEVER `fileURLToPath(import.meta.url)` taken naively from inside this
+// module's own code, because once bundled by ncc that resolves to
+// dist/agentic-security.mjs, the CLI ENTRYPOINT (bin/agentic-security.js), which has
+// no _runFileCascade/_initCascadeWorkerState exports at all and runs CLI dispatch as
+// a side effect of being imported. `src/` and `dist/` are always shipped as SIBLING
+// directories (see package.json's "files"), in both a dev checkout and the published
+// npm package, so this is stable in both the unbundled (this file IS src/engine.js)
+// and bundled (this file's code now lives inside dist/agentic-security.mjs) cases.
+function _resolveEngineModulePathForWorkers() {
+  const hereFile = fileURLToPath(import.meta.url);
+  const hereDir = path.dirname(hereFile);
+  if (path.basename(hereDir) === 'src') return hereFile;
+  return path.join(hereDir, '..', 'src', 'engine.js');
+}
 import { scanLLM } from './sast/llm.js';
 import { scanLLMOwasp } from './sast/llm-owasp.js';
 import { scanLlmCost } from './sast/llm-cost-advisor.js';
@@ -38,6 +55,33 @@ import { scanQuarkusHardening } from './sast/quarkus-hardening.js';
 import { scanFastapiHardening } from './sast/fastapi-hardening.js';
 import { isDeterministic } from './posture/deterministic.js';
 import { proofCoverage } from './posture/proof-coverage.js';
+import { computeScanHealth, applyFreshness } from './pipeline/scan-health.js';
+import { computeCoverageLedger, summarizeCoverageForScanHealth } from './pipeline/coverage-ledger.js';
+import { runAnnotatorAsync } from './pipeline/annotator-runner.js';
+import { runDetector } from './pipeline/detector-runner.js';
+import { registerProducer } from './pipeline/producer-registry.js';
+import { collectProducerResult } from './pipeline/producer-collector.js';
+import { completeEnrichment } from './pipeline/enrichment-completion.js';
+
+// FR-101 (assurance-hardening PRD): the "late producers" — see
+// pipeline/producer-registry.js's header for why this list and not the
+// full ~90-detector set. Registered once at module load (this file is an
+// ESM singleton; registering inside runFullScan would throw "duplicate
+// producer id" on a second scan in the same process).
+for (const def of [
+  { id: 'cross-lang-openapi', version: '1.0.0', phase: 'cross-language', languages: [] },
+  { id: 'cross-lang-grpc', version: '1.0.0', phase: 'cross-language', languages: [] },
+  { id: 'cross-lang-graphql', version: '1.0.0', phase: 'cross-language', languages: [] },
+  { id: 'cross-lang-orm', version: '1.0.0', phase: 'cross-language', languages: [] },
+  { id: 'cross-lang-queues', version: '1.0.0', phase: 'cross-language', languages: [] },
+  { id: 'iac-reachability', version: '1.0.0', phase: 'cross-language', languages: [] },
+  { id: 'iam-policy', version: '1.0.0', phase: 'cross-language', languages: [] },
+  { id: 'container-runtime', version: '1.0.0', phase: 'cross-language', languages: [] },
+  { id: 'business-logic-v2', version: '1.0.0', phase: 'business-logic', languages: [] },
+  { id: 'specification-drift', version: '1.0.0', phase: 'business-logic', languages: [] },
+  { id: 'concurrency', version: '1.0.0', phase: 'business-logic', languages: [] },
+  { id: 'privacy-taint', version: '1.0.0', phase: 'privacy', languages: [] },
+]) registerProducer(def);
 import { scanAuthZ } from './sast/authz.js';
 import { scanApiBrokenAuthz } from './sast/api-authz.js';
 import { scanCloudTemplates, isCloudFormationTemplate } from './sast/iac-cloud-templates.js';
@@ -139,7 +183,7 @@ import { annotateExecutionProofs } from './posture/prove-findings.js';
 import { mineVulnHistory, annotateHistoricalRisk } from './posture/vuln-archaeology.js';
 import { annotateVerifierVerdicts } from './posture/verifier.js';
 import { annotateRegressionTests } from './posture/regression-test-gen.js';
-import { annotateCalibratedConfidence } from './posture/calibration.js';
+import { annotateCalibratedConfidence, calibrationFreshness } from './posture/calibration.js';
 import { annotateStableIds } from './posture/stable-id.js';
 import { clusterByRootCause } from './posture/clustering.js';
 import { demoteUnreachable } from './posture/reachability-filter.js';
@@ -200,6 +244,9 @@ import { annotateRelevance } from './posture/relevance.js';
 import { sweepRootCauses } from './posture/root-cause-sweep.js';
 import { computeAnalysisTiers, countUnmodeledSinkCandidates } from './posture/coverage-report.js';
 import { annotatePrivacyTaint, emitDpiaArtifact } from './dataflow/privacy-taint.js';
+import { loadPrivacyGovernanceConfig, emitRopaArtifact } from './dataflow/privacy-governance.js';
+import { buildDataInventory, emitDataInventoryArtifact, emitDataFlowGraph } from './dataflow/privacy-inventory.js';
+import { adaptIRForPrivacyTaint } from './privacy/ir-adapter.js';
 import { buildThreatModel as buildAutoThreatModel, persistThreatModel as persistAutoThreatModel } from './posture/threat-model-auto.js';
 import { runApiContractScan } from './posture/api-contract.js';
 import { annotateProvenance } from './sca/sigstore-verify.js';
@@ -235,7 +282,7 @@ import { annotateAttackPlaybooks } from './posture/attack-playbooks.js';
 // R8: opt-in scan checkpointing/resume for the per-file loop.
 import {
   openCheckpoint, recordFileDone, completedFiles, resumeFindings, closeCheckpoint,
-  computeRunKey, bundleShaForRunKey,
+  computeGlobalKey, globalKeyMeta, invalidatedFiles, bundleShaForRunKey,
 } from './posture/scan-checkpoint.js';
 import { SCANNER_VERSION as _ENGINE_VERSION } from './posture/version.js';
 import { effectiveVersion as _effectiveRulesetVersion } from './posture/ruleset-version.js';
@@ -2311,7 +2358,8 @@ function _brokenMarkerSecurityPredicate(matchText, ctx) {
 // SAST findings here are expected by design — suppress to avoid noise.
 const _INTENTIONAL_VULN_PATH_RE = /(?:^|\/)(?:codefixes|challenge[_\-]?(?:solution|code|fix|answer)|intentional[_\-]?vuln|ctf[_\-]?solution|vulnerable[_\-]?(?:example|sample|code))(?:\/|$)/i;
 
-function scanStructuralVulns(fp, raw) {
+function scanStructuralVulns(fp, raw, _suppOut) {
+  const _supp = _suppOut || _suppressionLog;
   if (_INTENTIONAL_VULN_PATH_RE.test(fp.replace(/\\/g, '/'))) return [];
   // Structural patterns vary: some describe code shapes (eval(), child_process.)
   // and shouldn't match in strings; others ALSO scan string content (e.g.
@@ -2324,7 +2372,7 @@ function scanStructuralVulns(fp, raw) {
   const findings = [];
   const ctx = inferFileContext(fp, raw);
   for (const pat of STRUCTURAL_VULN_PATTERNS) {
-    if (!_ruleAppliesIn(pat, ctx)) { _suppressionLog.push({vuln:pat.vuln,file:fp,line:0,snippet:'',reason:'context-mismatch:'+ctx.kind}); continue; }
+    if (!_ruleAppliesIn(pat, ctx)) { _supp.push({vuln:pat.vuln,file:fp,line:0,snippet:'',reason:'context-mismatch:'+ctx.kind}); continue; }
     if (pat.langScope && !pat.langScope.test(fp)) { continue; }
     const re = new RegExp(pat.regex.source, pat.regex.flags);
     // Default: match against the string-stripped view so rule-library shapes
@@ -2341,7 +2389,7 @@ function scanStructuralVulns(fp, raw) {
       if (typeof pat.predicate === 'function') {
         const verdict = pat.predicate(m[0], { file: fp, line, snippet, lines, raw, cleanedNoise });
         if (verdict && !verdict.fire) {
-          _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'predicate-pass:'+(verdict.reason||'ok')});
+          _supp.push({vuln:pat.vuln, file:fp, line, snippet, reason:'predicate-pass:'+(verdict.reason||'ok')});
           continue;
         }
       }
@@ -2349,7 +2397,7 @@ function scanStructuralVulns(fp, raw) {
       // Used to scope rules like Django DEBUG=True to files that actually
       // import / configure Django (avoid mis-firing on Flask's app.debug).
       if (pat.contextRe && !pat.contextRe.test(raw)) {
-        _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'context-mismatch'});
+        _supp.push({vuln:pat.vuln, file:fp, line, snippet, reason:'context-mismatch'});
         continue;
       }
       // FP-4: severity classifier — return null to suppress, otherwise overrides pat.severity.
@@ -2357,7 +2405,7 @@ function scanStructuralVulns(fp, raw) {
       if (typeof pat.severityFn === 'function') {
         const s = pat.severityFn(m[0], { file: fp, line, snippet, lines });
         if (s === null) {
-          _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'severity-fn:non-security-context'});
+          _supp.push({vuln:pat.vuln, file:fp, line, snippet, reason:'severity-fn:non-security-context'});
           continue;
         }
         effectiveSeverity = s;
@@ -2366,11 +2414,11 @@ function scanStructuralVulns(fp, raw) {
       // hardened code — an SSRF host allow/deny check, or a path
       // basename/containment guard near the sink — is a false positive.
       if (/SSRF/.test(pat.vuln) && _hasSsrfHostGuard({ lines, line })) {
-        _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'ssrf-host-guard'});
+        _supp.push({vuln:pat.vuln, file:fp, line, snippet, reason:'ssrf-host-guard'});
         continue;
       }
       if (/Path Traversal/.test(pat.vuln) && _hasPathGuard({ lines, line })) {
-        _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'path-contained'});
+        _supp.push({vuln:pat.vuln, file:fp, line, snippet, reason:'path-contained'});
         continue;
       }
       const id = `struct:${fp}:${line}:${pat.vuln.replace(/\s/g, '_')}`;
@@ -3002,7 +3050,8 @@ function _logicPredicateFor(vuln){
   return null;
 }
 
-function scanLogicVulns(fp,raw){
+function scanLogicVulns(fp,raw,_suppOut){
+  const _supp = _suppOut || _suppressionLog;
   // Logic rules generally inspect the surrounding handler block including
   // string-literal route paths and key names, so the comment-stripped (but
   // string-preserving) view is the right default. Rules that explicitly only
@@ -3012,7 +3061,7 @@ function scanLogicVulns(fp,raw){
   const lines=raw.split("\n");const results=[];
   const ctx = inferFileContext(fp, raw);
   for(const pat of LOGIC_PATTERNS){
-    if (!_ruleAppliesIn(pat, ctx)) { _suppressionLog.push({vuln:pat.vuln,file:fp,line:0,snippet:'',reason:'context-mismatch:'+ctx.kind}); continue; }
+    if (!_ruleAppliesIn(pat, ctx)) { _supp.push({vuln:pat.vuln,file:fp,line:0,snippet:'',reason:'context-mismatch:'+ctx.kind}); continue; }
     if (pat.langScope && !pat.langScope.test(fp)) { continue; }
     const re=new RegExp(pat.regex.source,pat.regex.flags);
     const predicate = _logicPredicateFor(pat.vuln);
@@ -3025,7 +3074,7 @@ function scanLogicVulns(fp,raw){
       // FP-2: credential FP filter
       if(pat.vuln==='Hardcoded Secret'||pat.vuln==='Hardcoded Credential Check'){
         const fpCheck=_isFalsePositiveCredential(fp,snippet,m[0]);
-        if(fpCheck.skip){_suppressionLog.push({vuln:pat.vuln,file:fp,line,snippet,reason:fpCheck.reason});continue;}
+        if(fpCheck.skip){_supp.push({vuln:pat.vuln,file:fp,line,snippet,reason:fpCheck.reason});continue;}
         // Stage 4 correctness audit (coverage breadth, secrets): same
         // unredacted-snippet leak found in engine.js's scanEntropySecrets/
         // scanCredentials and sast/secret-concat.js — this is a THIRD,
@@ -3044,7 +3093,7 @@ function scanLogicVulns(fp,raw){
       if (predicate) {
         const verdict = predicate(m[0], {file:fp, line, snippet, lines});
         if (verdict && !verdict.fire) {
-          _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'logic-gate:'+verdict.reason});
+          _supp.push({vuln:pat.vuln, file:fp, line, snippet, reason:'logic-gate:'+verdict.reason});
           continue;
         }
       }
@@ -5834,14 +5883,15 @@ const EXTRA_STRUCTURAL_PATTERNS=[
    fix:"Delete debug routes from production builds. NODE_ENV is unreliable as a security boundary."},
 ];
 
-function scanExtraStructural(fp,raw){
+function scanExtraStructural(fp,raw,_suppOut){
+  const _supp = _suppOut || _suppressionLog;
   const cleaned=stripNoiseAndStrings(raw);
   const cleanedNoise=stripNoise(raw,fp);
   const lines=raw.split('\n');
   const findings=[];
   const ctx = inferFileContext(fp, raw);
   for(const pat of EXTRA_STRUCTURAL_PATTERNS){
-    if (!_ruleAppliesIn(pat, ctx)) { _suppressionLog.push({vuln:pat.vuln,file:fp,line:0,snippet:'',reason:'context-mismatch:'+ctx.kind}); continue; }
+    if (!_ruleAppliesIn(pat, ctx)) { _supp.push({vuln:pat.vuln,file:fp,line:0,snippet:'',reason:'context-mismatch:'+ctx.kind}); continue; }
     if (pat.langScope && !pat.langScope.test(fp)) { continue; }
     const re=new RegExp(pat.regex.source,pat.regex.flags);
     const haystack = pat.readsStringContent ? cleanedNoise : cleaned;
@@ -5851,14 +5901,14 @@ function scanExtraStructural(fp,raw){
       const snippet=lines[line-1]?.trim()||'';
       // contextRe: require a context match across the whole file.
       if (pat.contextRe && !pat.contextRe.test(raw)) {
-        _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'context-mismatch'});
+        _supp.push({vuln:pat.vuln, file:fp, line, snippet, reason:'context-mismatch'});
         continue;
       }
       // Per-pattern predicate gate (mirrors scanStructuralVulns).
       if (typeof pat.predicate === 'function') {
         const verdict = pat.predicate(m[0], { file: fp, line, snippet, lines, raw, cleanedNoise });
         if (verdict && !verdict.fire) {
-          _suppressionLog.push({vuln:pat.vuln, file:fp, line, snippet, reason:'predicate-pass:'+(verdict.reason||'ok')});
+          _supp.push({vuln:pat.vuln, file:fp, line, snippet, reason:'predicate-pass:'+(verdict.reason||'ok')});
           continue;
         }
       }
@@ -5913,7 +5963,8 @@ function _isLikelyNonSecret(v, ctxLine, surroundingLines){
   return null;
 }
 
-function scanEntropySecrets(fp,raw){
+function scanEntropySecrets(fp,raw,_suppOut){
+  const _supp = _suppOut || _suppressionLog;
   if(raw.length>400000)return[]; // skip huge blobs
   const out=[];
   const lines=raw.split("\n");
@@ -5942,7 +5993,7 @@ function scanEntropySecrets(fp,raw){
       // Same redaction concern as the main finding below applies to the
       // suppression log — it's exposed via --include-suppressed, and a
       // heuristic "probably not a real secret" call can be wrong.
-      _suppressionLog.push({vuln:"High-Entropy Credential Candidate",file:fp,line,snippet:ctx.trim().split(v).join(masked),reason:'entropy-'+nonSecretReason});
+      _supp.push({vuln:"High-Entropy Credential Candidate",file:fp,line,snippet:ctx.trim().split(v).join(masked),reason:'entropy-'+nonSecretReason});
       continue;
     }
     // Stage 4 correctness audit (coverage breadth, secrets): `snippet` used
@@ -7055,6 +7106,15 @@ function _osvCacheSet(key,val){try{sessionStorage.setItem('osv_'+key,JSON.string
 // Batched: api.first.org accepts up to ~100 CVEs per request via ?cve=A,B,C…
 // One HTTP round trip per 100 CVEs instead of one per CVE. Cache lookups
 // remain per-CVE so a partial cache-hit still benefits.
+//
+// FR-207: EPSS scores decay in relevance (same note as posture/epss.js's
+// separate implementation) -- track how old the CVE-keyed entries actually
+// USED by this scan are, mirroring _setKevMeta immediately below, so a
+// stale feed is visible on scan.scanHealth rather than silently applied.
+const _EPSS_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+let _epssLiveMeta = { source: 'not-loaded', ageDays: null, stale: null, cvesChecked: 0 };
+export function epssLiveMeta() { return { ..._epssLiveMeta }; }
+
 const _EPSS_BATCH = 100;
 async function _fetchEPSSBatch(cveIds){
   if (!cveIds || !cveIds.length) return new Map();
@@ -7069,7 +7129,7 @@ async function _fetchEPSSBatch(cveIds){
       const res = await fetch(url, { headers: { 'User-Agent': 'agentic-security/0.1' } });
       if (!res.ok) {
         // Mark every CVE in the batch as "tried and failed" so we don't refetch this scan.
-        for (const c of batch) _osvCacheSet('epss:'+c, false);
+        for (const c of batch) _osvCacheSet('epss:'+c, { miss: true, ts: Date.now() });
         continue;
       }
       const j = await res.json();
@@ -7080,7 +7140,7 @@ async function _fetchEPSSBatch(cveIds){
         const score = parseFloat(row.epss);
         const percentile = parseFloat(row.percentile);
         if (Number.isFinite(score) && Number.isFinite(percentile)) {
-          const v = { score, percentile };
+          const v = { score, percentile, ts: Date.now() };
           out.set(cve, v);
           _osvCacheSet('epss:'+cve, v);
           seen.add(cve);
@@ -7088,7 +7148,7 @@ async function _fetchEPSSBatch(cveIds){
       }
       // CVEs in the batch that EPSS does not know — cache the negative so we
       // don't retry within this scan run.
-      for (const c of batch) if (!seen.has(c.toUpperCase())) _osvCacheSet('epss:'+c, false);
+      for (const c of batch) if (!seen.has(c.toUpperCase())) _osvCacheSet('epss:'+c, { miss: true, ts: Date.now() });
     } catch { /* network error → caller continues without enrichment */ }
   }
   return out;
@@ -7103,14 +7163,43 @@ async function _enrichWithEPSS(supplyChainResults){
   // Cache lookup pass: keep CVEs we already have, defer the rest to one batched fetch.
   const epssByCve = new Map();
   const uncached = [];
+  // FR-207: age of every entry actually used this scan, cache hit or fresh
+  // fetch — a fresh fetch is age~0, a cache hit carries whatever `ts` it was
+  // written with. A pre-existing on-disk entry from before this field
+  // existed has no `ts` (`|| 0` → maximally stale), matching this
+  // codebase's established "never-dated == already stale" convention
+  // (compliance-policy.js's `_staleness`).
+  const ages = [];
   for (const c of allCves) {
     const hit = _osvCacheGet('epss:'+c);
-    if (hit === null) uncached.push(c);
-    else if (hit) epssByCve.set(c, hit);   // hit === false means "tried, no data" — leave unset
+    if (hit === null) { uncached.push(c); continue; }
+    if (hit === false || hit.miss) continue; // tried, no data — leave unset
+    epssByCve.set(c, hit);
+    ages.push(Date.now() - (hit.ts || 0));
   }
   if (uncached.length) {
     const fetched = await _fetchEPSSBatch(uncached);
-    for (const [cve, v] of fetched) epssByCve.set(cve, v);
+    for (const [cve, v] of fetched) { epssByCve.set(cve, v); ages.push(Date.now() - (v.ts || 0)); }
+  }
+  // Offline mode means "we deliberately have no network access this run" --
+  // mirroring _loadKEVCatalog's own offline handling immediately above,
+  // that is a genuine "we cannot vouch for freshness right now" state
+  // (stale: null), not license to label whatever is on disk stale OR
+  // fresh. This matters in practice: a cache entry written before this
+  // field existed has no `ts` at all, and without the offline carve-out
+  // that would report as "56 years old" (age computed against epoch)
+  // under the exact conditions (no network) where that claim is least
+  // verifiable.
+  if (process.env.AGENTIC_SECURITY_OFFLINE === '1') {
+    _epssLiveMeta = { source: 'offline-skipped', ageDays: null, stale: null, cvesChecked: ages.length };
+  } else if (ages.length) {
+    const oldestMs = Math.max(...ages);
+    _epssLiveMeta = {
+      source: 'cache/live',
+      ageDays: Math.floor(oldestMs / 86400000),
+      stale: oldestMs > _EPSS_STALE_AFTER_MS,
+      cvesChecked: ages.length,
+    };
   }
   for (const r of out) {
     const cve = (r.cveAliases || []).find(a => /^CVE-/.test(a));
@@ -8268,6 +8357,175 @@ async function queryRegistries(components){
 
 // Node port: takes { fileContents, depFileContents } maps directly instead of a JSZip object.
 // fileContents = code files keyed by relative path; depFileContents = manifest/lockfiles keyed by relative path.
+  // FR-202 phase 3b (D-0050): a worker importing this module gets a FRESH, unmutated
+  // copy of SOURCE_PATTERNS/SINK_PATTERNS/SANITIZER_PATTERNS/_projectIndex/
+  // _GLOBAL_JAVA_TAINTED_METHODS -- none of the main thread's pre-loop setup carries
+  // across the worker boundary. This reproduces that exact setup (mirroring
+  // runFullScan's own pre-loop sequence) so a long-lived worker can run it ONCE at
+  // startup, then service many _runFileCascade calls with correctly-populated state,
+  // instead of redoing whole-project work per file.
+  export async function _initCascadeWorkerState(fileContents, scanRoot) {
+    _buildProjectIndex(fileContents);
+    try { _GLOBAL_JAVA_TAINTED_METHODS = _buildGlobalJavaTaintedMethodIndex(fileContents); }
+    catch { _GLOBAL_JAVA_TAINTED_METHODS = new Set(); }
+    await _loadCustomRules(scanRoot);
+  }
+
+  // FR-202 phase 3b (D-0050): the shape a preemptively-KILLED worker task leaves
+  // behind. Unlike the existing post-hoc _perFileTimeoutMs check (which fires only
+  // after a slow-but-completed cascade already populated a real delta), a worker
+  // timeout means the file's analysis was terminated mid-execution -- there is no
+  // partial result to salvage, so every field is empty and only the timeout marker
+  // finding (added by the caller, same as the cooperative path) reflects the file.
+  function _emptyCascadeDelta(c) {
+    return {
+      content: c, pfr: { findings: [], sources: [], sinks: [], sanitizers: [] },
+      routes: [], findings: [], sources: [], sinks: [], sanitizers: [],
+      logic: [], secrets: [], ciphersRest: [], ciphersTransit: [], suppressions: [],
+    };
+  }
+
+  // FR-202 phase 3a (D-0049): the per-file detector cascade returns a self-contained
+  // delta instead of mutating the outer accumulator arrays directly, so the same
+  // function body can later run inside a worker (phase 3b) and post its result back
+  // rather than reaching into shared memory it would not have access to.
+  export function _runFileCascade(p, c, scanRoot, _detectorErrors) {
+    const _aR=[],_aF=[],_aSrc=[],_aSink=[],_aSan=[],_aLogic=[],_aSecrets=[],_aCiphersRest=[],_aCiphersTransit=[],_aSupp=[];
+    const cc=_blankCached(c,_commentLangFor(p));_aR.push(...(runDetector(_detectorErrors,p,'scanRoutes',()=>scanRoutes(p,cc))||[]));const ta=performAnalysis(p,c);_aF.push(...ta.findings);_aSrc.push(...ta.sources);_aSink.push(...ta.sinks);_aSan.push(...ta.sanitizers);_aLogic.push(...(runDetector(_detectorErrors,p,'scanLogicVulns',()=>scanLogicVulns(p,cc,_aSupp))||[]));_aSecrets.push(...(runDetector(_detectorErrors,p,'scanCredentials',()=>scanCredentials(p,c))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanStructuralVulns',()=>scanStructuralVulns(p,cc,_aSupp))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanExtraStructural',()=>scanExtraStructural(p,cc,_aSupp))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanAliasedSinks',()=>scanAliasedSinks(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanJavaSAST',()=>scanJavaSAST(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanJavaBenchExtras',()=>scanJavaBenchExtras(p,cc))||[]));_aLogic.push(...(runDetector(_detectorErrors,p,'scanMiddlewareOrdering',()=>scanMiddlewareOrdering(p,cc))||[]));_aLogic.push(...(runDetector(_detectorErrors,p,'scanReDoS',()=>scanReDoS(p,cc))||[]));if(/\.(?:java|cs|kt|py|php|phtml)$/i.test(p)){_aLogic.push(...(runDetector(_detectorErrors,p,'scanRegexReDoS',()=>scanRegexReDoS(p,cc))||[]));}_aLogic.push(...(runDetector(_detectorErrors,p,'scanTodosNearSecurity',()=>scanTodosNearSecurity(p,c))||[]));_aSecrets.push(...(runDetector(_detectorErrors,p,'scanEntropySecrets',()=>scanEntropySecrets(p,c,_aSupp))||[]));const cp=scanCiphers(p,cc);_aCiphersRest.push(...cp.atRest);_aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))_aF.push(...(runDetector(_detectorErrors,p,'scanGraphQL',()=>scanGraphQL(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanIaC',()=>scanIaC(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanTerraform',()=>scanTerraform(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanCloudTemplates',()=>scanCloudTemplates(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanLLM',()=>scanLLM(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanLLMOwasp',()=>scanLLMOwasp(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanLlmCost',()=>scanLlmCost(p,c))||[]));
+      _aLogic.push(...(runDetector(_detectorErrors,p,'scanBusinessLogic',()=>scanBusinessLogic(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPipeline',()=>scanPipeline(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanContainer',()=>scanContainer(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanInstallScripts',()=>scanInstallScripts(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanMCP',()=>scanMCP(p,c))||[]));
+      // PRD F5.2 — rug-pull: a tool whose definition changed AFTER approval.
+      // Every scanMCP rule judges the CURRENT content, so a description that is
+      // innocuous today and hostile tomorrow passes both scans. This compares
+      // against a recorded baseline, which is the only way to see a change.
+      // Wired here rather than left as a tested module: a detector with no call
+      // site is a dark detector, which is the exact class this session keeps
+      // finding.
+      if (/(?:^|[\\/])\.?mcp(?:\.[a-z]+)?\.json$|(?:^|[\\/])\.mcp\.json$/i.test(p)) {
+        try {
+          const _cfg = JSON.parse(c);
+          const _rp = _detectRugPull(scanRoot, _cfg, { file: p });
+          _aF.push(..._rp.findings);
+          // Record on first sight so the NEXT scan has something to compare
+          // against; refresh after reporting so a reviewed change is not
+          // re-reported forever.
+          _saveMcpBaseline(scanRoot, _fingerprintMcp(_cfg));
+        } catch (e) {
+          // Only a malformed config is tolerated here — scanMCP already reports
+          // what it can from one. Anything else is a programmer error and must
+          // not be swallowed: a bare `catch {}` around this block hid a
+          // ReferenceError (`root` vs `scanRoot`) that silently disabled the
+          // whole detector while every unit test still passed.
+          if (!(e instanceof SyntaxError)) throw e;
+        }
+      }
+      _aF.push(...(runDetector(_detectorErrors,p,'scanClaudeSettings',()=>scanClaudeSettings(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanClaudeMdPromptInjection',()=>scanClaudeMdPromptInjection(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanClaudeHookInjection',()=>scanClaudeHookInjection(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanDjangoHardening',()=>scanDjangoHardening(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanDefiDeep',()=>scanDefiDeep(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanSpringbootHardening',()=>scanSpringbootHardening(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanLaravelHardening',()=>scanLaravelHardening(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanSwift',()=>scanSwift(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanDartFlutter',()=>scanDartFlutter(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanWeakRandomness',()=>scanWeakRandomness(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanGraphQLModule',()=>scanGraphQLModule(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanSensitiveDataLogging',()=>scanSensitiveDataLogging(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanComparisonSafety',()=>scanComparisonSafety(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanWeakPasswordHash',()=>scanWeakPasswordHash(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanCachePoisoning',()=>scanCachePoisoning(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanNullByteInjection',()=>scanNullByteInjection(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanLlmTradingAgent',()=>scanLlmTradingAgent(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanMobileManifest',()=>scanMobileManifest(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanQuarkusHardening',()=>scanQuarkusHardening(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanFastapiHardening',()=>scanFastapiHardening(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanAuthZ',()=>scanAuthZ(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanModelLoad',()=>scanModelLoad(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPromptTemplate',()=>scanPromptTemplate(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanXXE',()=>scanXXE(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJNDI',()=>scanJNDI(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJavaDeserialization',()=>scanJavaDeserialization(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJwtExp',()=>scanJwtExp(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanZipSlip',()=>scanZipSlip(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanSiblingGuard',()=>scanSiblingGuard(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanFileUpload',()=>scanFileUpload(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanHostHeader',()=>scanHostHeader(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPythonSinks',()=>scanPythonSinks(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanCSharp',()=>scanCSharp(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanCpp',()=>scanCpp(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanSolidity',()=>scanSolidity(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanRust',()=>scanRust(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanGoExtended',()=>scanGoExtended(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanDatabaseRLS',()=>scanDatabaseRLS(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanRateLimit',()=>scanRateLimit(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanResourceExhaustion',()=>scanResourceExhaustion(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRedirectToctou',()=>scanRedirectToctou(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanCodegenSink',()=>scanCodegenSink(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanOwnershipAuthz',()=>scanOwnershipAuthz(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanAuthProvider',()=>scanAuthProvider(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanEnvHygiene',()=>scanEnvHygiene(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanWebhook',()=>scanWebhook(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanClientSide',()=>scanClientSide(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPromptFirewall',()=>scanPromptFirewall(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanLlmRedteam',()=>scanLlmRedteam(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJulietShape',()=>scanJulietShape(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanCppDataflow',()=>scanCppDataflow(p,cc))||[]));
+      // Phase 1: new detectors.
+      _aF.push(...(runDetector(_detectorErrors,p,'scanMassAssignment',()=>scanMassAssignment(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPrototypePollution',()=>scanPrototypePollution(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanCSRF',()=>scanCSRF(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanTOCTOU',()=>scanTOCTOU(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanNoSQLInjection',()=>scanNoSQLInjection(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanLDAPInjection',()=>scanLDAPInjection(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanXPathInjection',()=>scanXPathInjection(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanSSTI',()=>scanSSTI(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanOpenRedirect',()=>scanOpenRedirect(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanWrongContextSanitizer',()=>scanWrongContextSanitizer(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanSanitizerContextMismatch',()=>scanSanitizerContextMismatch(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanFrontendHygiene',()=>scanFrontendHygiene(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanCsvInjection',()=>scanCsvInjection(p,cc))||[]));
+      // R16 — specialist crypto-hygiene classes (constant-time comparison,
+      // secret zeroization). Narrow by design: keyed on the secret-ness of the
+      // identifier, and silent whenever the correct constant-time or
+      // guaranteed-wipe API is already present.
+      _aF.push(...(runDetector(_detectorErrors,p,'scanCryptoSpecialist',()=>scanCryptoSpecialist(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanStoredTaint',()=>scanStoredTaint(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJavaStructural',()=>scanJavaStructural(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanCsharpStructural',()=>scanCsharpStructural(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanJsFrameworkStructural',()=>scanJsFrameworkStructural(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPythonStructural',()=>scanPythonStructural(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanGoStructural',()=>scanGoStructural(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanSecretConcat',()=>scanSecretConcat(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanXssReflectedMultilang',()=>scanXssReflectedMultilang(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanCodeInjectionMultilang',()=>scanCodeInjectionMultilang(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanResponseSplitting',()=>scanResponseSplitting(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanStoredPromptInjection',()=>scanStoredPromptInjection(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanRAGPoisoning',()=>scanRAGPoisoning(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanAgentToolEscalation',()=>scanAgentToolEscalation(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanAgentUntrustedFlow',()=>scanAgentUntrustedFlow(p,c))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanEventEntrypoints',()=>scanEventEntrypoints(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanDbTaint',()=>scanDbTaint(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanSSRFCloudMetadata',()=>scanSSRFCloudMetadata(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanMutationXSS',()=>scanMutationXSS(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanKotlin',()=>scanKotlin(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanRuby',()=>scanRuby(p,cc))||[]));_aF.push(...(runDetector(_detectorErrors,p,'scanRubyPathJoin',()=>scanRubyPathJoin(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanPhp',()=>scanPhp(p,cc))||[]));
+      // Integration block: scaffolded SAST scanners. Gated by env var.
+      if (process.env.AGENTIC_SECURITY_NO_INTEGRATION !== '1') {
+        if (process.env.AGENTIC_SECURITY_NO_LLM_APP !== '1') _aF.push(...(runDetector(_detectorErrors,p,'scanLlmApp',()=>scanLlmApp(p,c))||[]));
+        if (process.env.AGENTIC_SECURITY_NO_MOBILE  !== '1') _aF.push(...(runDetector(_detectorErrors,p,'scanMobile',()=>scanMobile(p,cc))||[]));
+        if (process.env.AGENTIC_SECURITY_NO_PQC     !== '1') _aF.push(...(runDetector(_detectorErrors,p,'scanPqc',()=>scanPqc(p,cc))||[]));
+        if (process.env.AGENTIC_SECURITY_NO_WEB3_ADV!== '1') _aF.push(...(runDetector(_detectorErrors,p,'scanWeb3Advanced',()=>scanWeb3Advanced(p,cc))||[]));
+        if (process.env.AGENTIC_SECURITY_NO_DAPP    !== '1') _aF.push(...(runDetector(_detectorErrors,p,'scanDappFrontend',()=>scanDappFrontend(p,cc))||[]));
+        if (process.env.AGENTIC_SECURITY_NO_CLOUD_IAM!== '1') _aF.push(...(runDetector(_detectorErrors,p,'scanCloudIam',()=>scanCloudIam(p,cc))||[]));
+        if (process.env.AGENTIC_SECURITY_NO_K8S_ADM !== '1') _aF.push(...(runDetector(_detectorErrors,p,'scanK8sAdmission',()=>scanK8sAdmission(p,cc))||[]));
+        if (process.env.AGENTIC_SECURITY_NO_CRYPTO_PROTO !== '1') _aF.push(...(runDetector(_detectorErrors,p,'scanCryptoProtocol',()=>scanCryptoProtocol(p,cc))||[]));
+        if (process.env.AGENTIC_SECURITY_NO_ML_SUPPLY    !== '1') _aF.push(...(runDetector(_detectorErrors,p,'scanMlSupplyChain',()=>scanMlSupplyChain(p,cc))||[]));
+      }
+    return {content:c, pfr:ta, routes:_aR, findings:_aF, sources:_aSrc, sinks:_aSink, sanitizers:_aSan, logic:_aLogic, secrets:_aSecrets, ciphersRest:_aCiphersRest, ciphersTransit:_aCiphersTransit, suppressions:_aSupp};
+  }
+
 async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
@@ -8295,7 +8553,7 @@ function _deterministicFileTimings(timings) {
 
   const _fileTimings = [];
   let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0;
-  const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f]) || isCloudFormationTemplate(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];
+  const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f]) || isCloudFormationTemplate(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];const _detectorErrors=[];
   // ---- R8: opt-in per-file checkpointing (AGENTIC_SECURITY_RESUME=1, or
   // runScan({resume:true})). Default OFF, so existing behaviour is untouched.
   // Only this loop is checkpointed; every cross-file pass below re-runs, so
@@ -8303,17 +8561,28 @@ function _deterministicFileTimings(timings) {
   const _ckptEnabled = (resume === undefined ? process.env.AGENTIC_SECURITY_RESUME === '1' : !!resume) && !!scanRoot;
   let _ckpt = null; const _ckptPayloads = new Map(); let _ckptDone = new Set(); let _ckptResumed = 0, _ckptWrites = 0;
   const _ckptAbortAfter = parseInt(process.env.AGENTIC_SECURITY_CHECKPOINT_ABORT_AFTER || '0', 10) || 0;
+  let _ckptInvalidated = [];
   if (_ckptEnabled) {
     try {
-      const _runKey = computeRunKey({
+      const _ckptIdentity = {
         engineVersion: _ENGINE_VERSION,
         rulesetVersion: (_effectiveRulesetVersion(scanRoot) || {}).version,
         bundleSha: bundleShaForRunKey(),
-        fileContents, depFileContents,
+        depFileContents,
+      };
+      // FR-208: the global key covers everything that would affect how EVERY
+      // file is analysed (engine/ruleset/bundle/deps/env); each scanned
+      // file's OWN content is checked per-record inside openCheckpoint
+      // instead, so changing one file no longer discards every other file's
+      // already-completed work — see scan-checkpoint.js's module header.
+      _ckpt = openCheckpoint(scanRoot, {
+        globalKey: computeGlobalKey(_ckptIdentity),
+        meta: globalKeyMeta(_ckptIdentity),
+        fileContents,
       });
-      _ckpt = openCheckpoint(scanRoot, { runKey: _runKey });
       for (const r of resumeFindings(_ckpt)) { if (r && r.findings) _ckptPayloads.set(r.file, r.findings); }
       _ckptDone = completedFiles(_ckpt);
+      _ckptInvalidated = invalidatedFiles(_ckpt);
     } catch (_) { _ckpt = null; }
   }
   // Replay a checkpointed file's ENTIRE contribution, in the same array order
@@ -8360,146 +8629,45 @@ function _deterministicFileTimings(timings) {
     // is what the checkpoint format has to survive. Never set in normal use.
     if (_ckptAbortAfter > 0 && _ckptWrites >= _ckptAbortAfter) process.exit(137);
   };
-  let i=0;for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});
+  // FR-202 phase 3b (D-0050): opt-in real deadline enforcement for the per-file
+  // cascade via a reused worker pool. Off by default -- the synchronous path above
+  // this loop is completely unchanged when the flag is unset.
+  const _useWorkerCascade = process.env.AGENTIC_SECURITY_WORKER_CASCADE === '1';
+  let _cascadePool = null;
+  if (_useWorkerCascade) {
+    const { createCascadePool } = await import('./pipeline/cascade-worker-pool.js');
+    _cascadePool = createCascadePool({
+      fileContents, scanRoot,
+      modulePath: _resolveEngineModulePathForWorkers(),
+      poolSize: Number(process.env.AGENTIC_SECURITY_WORKER_POOL_SIZE) || 4,
+    });
+  }
+  let i=0;
+  try {
+  for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});
     if(_ckptDone.has(p)&&_ckptReplay(p))continue;
     const _mk={aR:aR.length,aF:aF.length,aSrc:aSrc.length,aSink:aSink.length,aSan:aSan.length,aLogic:aLogic.length,aSecrets:aSecrets.length,aCR:aCiphersRest.length,aCT:aCiphersTransit.length,sup:_suppressionLog.length};
-    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}const cc=_blankCached(c,_commentLangFor(p));fc[p]=c;aR.push(...scanRoutes(p,cc));const ta=performAnalysis(p,c);pfr[p]=ta;aF.push(...ta.findings);aSrc.push(...ta.sources);aSink.push(...ta.sinks);aSan.push(...ta.sanitizers);aLogic.push(...scanLogicVulns(p,cc));aSecrets.push(...scanCredentials(p,c));aF.push(...scanStructuralVulns(p,cc));aF.push(...scanExtraStructural(p,cc));aF.push(...scanAliasedSinks(p,cc));aF.push(...scanJavaSAST(p,cc));aF.push(...scanJavaBenchExtras(p,cc));aLogic.push(...scanMiddlewareOrdering(p,cc));aLogic.push(...scanReDoS(p,cc));if(/\.(?:java|cs|kt|py|php|phtml)$/i.test(p)){try{aLogic.push(...scanRegexReDoS(p,cc));}catch(_){}}aLogic.push(...scanTodosNearSecurity(p,c));aSecrets.push(...scanEntropySecrets(p,c));const cp=scanCiphers(p,cc);aCiphersRest.push(...cp.atRest);aCiphersTransit.push(...cp.inTransit);if(/\.(graphql|gql)$/i.test(p))aF.push(...scanGraphQL(p,cc));aF.push(...scanIaC(p,cc));aF.push(...scanTerraform(p,cc));aF.push(...scanCloudTemplates(p,c));
-      aF.push(...scanLLM(p,c));
-      aF.push(...scanLLMOwasp(p,c));
-      aF.push(...scanLlmCost(p,c));
-      aLogic.push(...scanBusinessLogic(p,cc));
-      aF.push(...scanPipeline(p,cc));
-      aF.push(...scanContainer(p,cc));
-      aF.push(...scanInstallScripts(p,cc));
-      aF.push(...scanMCP(p,c));
-      // PRD F5.2 — rug-pull: a tool whose definition changed AFTER approval.
-      // Every scanMCP rule judges the CURRENT content, so a description that is
-      // innocuous today and hostile tomorrow passes both scans. This compares
-      // against a recorded baseline, which is the only way to see a change.
-      // Wired here rather than left as a tested module: a detector with no call
-      // site is a dark detector, which is the exact class this session keeps
-      // finding.
-      if (/(?:^|[\\/])\.?mcp(?:\.[a-z]+)?\.json$|(?:^|[\\/])\.mcp\.json$/i.test(p)) {
-        try {
-          const _cfg = JSON.parse(c);
-          const _rp = _detectRugPull(scanRoot, _cfg, { file: p });
-          aF.push(..._rp.findings);
-          // Record on first sight so the NEXT scan has something to compare
-          // against; refresh after reporting so a reviewed change is not
-          // re-reported forever.
-          _saveMcpBaseline(scanRoot, _fingerprintMcp(_cfg));
-        } catch (e) {
-          // Only a malformed config is tolerated here — scanMCP already reports
-          // what it can from one. Anything else is a programmer error and must
-          // not be swallowed: a bare `catch {}` around this block hid a
-          // ReferenceError (`root` vs `scanRoot`) that silently disabled the
-          // whole detector while every unit test still passed.
-          if (!(e instanceof SyntaxError)) throw e;
-        }
+    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}
+      let _delta;
+      if (_cascadePool) {
+        const _res = await _cascadePool.runFile(p, c, scanRoot, _detectorErrors, { timeoutMs: _perFileTimeoutMs });
+        if (_res.ok) { _delta = _res.result; }
+        else if (_res.timedOut) { _delta = _emptyCascadeDelta(c); }
+        else { throw new Error(_res.error); }
+      } else {
+        _delta = _runFileCascade(p,c,scanRoot,_detectorErrors);
       }
-      aF.push(...scanClaudeSettings(p,c));
-      aF.push(...scanClaudeMdPromptInjection(p,c));
-      aF.push(...scanClaudeHookInjection(p,c));
-      aF.push(...scanDjangoHardening(p,cc));
-      aF.push(...scanDefiDeep(p,cc));
-      aF.push(...scanSpringbootHardening(p,cc));
-      aF.push(...scanLaravelHardening(p,cc));
-      aF.push(...scanSwift(p,cc));
-      aF.push(...scanDartFlutter(p,cc));
-      aF.push(...scanWeakRandomness(p,cc));
-      aF.push(...scanGraphQLModule(p,cc));
-      aF.push(...scanSensitiveDataLogging(p,cc));
-      aF.push(...scanComparisonSafety(p,cc));
-      aF.push(...scanWeakPasswordHash(p,cc));
-      aF.push(...scanCachePoisoning(p,cc));
-      aF.push(...scanNullByteInjection(p,cc));
-      aF.push(...scanLlmTradingAgent(p,c));
-      aF.push(...scanMobileManifest(p,cc));
-      aF.push(...scanQuarkusHardening(p,cc));
-      aF.push(...scanFastapiHardening(p,cc));
-      aF.push(...scanAuthZ(p,cc));
-      aF.push(...scanModelLoad(p,cc));
-      aF.push(...scanPromptTemplate(p,c));
-      aF.push(...scanXXE(p,cc));
-      aF.push(...scanJNDI(p,cc));
-      aF.push(...scanJavaDeserialization(p,cc));
-      aF.push(...scanJwtExp(p,cc));
-      aF.push(...scanZipSlip(p,cc));aF.push(...scanSiblingGuard(p,cc));
-      aF.push(...scanFileUpload(p,cc));
-      aF.push(...scanHostHeader(p,cc));
-      aF.push(...scanPythonSinks(p,cc));
-      aF.push(...scanCSharp(p,cc));
-      aF.push(...scanCpp(p,cc));
-      aF.push(...scanSolidity(p,cc));
-      aF.push(...scanRust(p,cc));
-      aF.push(...scanGoExtended(p,cc));
-      aF.push(...scanDatabaseRLS(p,cc));
-      aF.push(...scanRateLimit(p,cc));aF.push(...scanResourceExhaustion(p,cc));aF.push(...scanRedirectToctou(p,cc));aF.push(...scanCodegenSink(p,cc));aF.push(...scanOwnershipAuthz(p,cc));
-      aF.push(...scanAuthProvider(p,cc));
-      aF.push(...scanEnvHygiene(p,cc));
-      aF.push(...scanWebhook(p,cc));
-      aF.push(...scanClientSide(p,cc));
-      aF.push(...scanPromptFirewall(p,c));
-      aF.push(...scanLlmRedteam(p,c));
-      aF.push(...scanJulietShape(p,c));
-      aF.push(...scanCppDataflow(p,cc));
-      // Phase 1: new detectors.
-      aF.push(...scanMassAssignment(p,cc));
-      aF.push(...scanPrototypePollution(p,cc));
-      aF.push(...scanCSRF(p,cc));
-      aF.push(...scanTOCTOU(p,cc));
-      aF.push(...scanNoSQLInjection(p,cc));
-      aF.push(...scanLDAPInjection(p,cc));
-      aF.push(...scanXPathInjection(p,cc));
-      aF.push(...scanSSTI(p,cc));
-      aF.push(...scanOpenRedirect(p,cc));
-      aF.push(...scanWrongContextSanitizer(p,cc));
-      aF.push(...scanSanitizerContextMismatch(p,cc));
-      aF.push(...scanFrontendHygiene(p,cc));
-      aF.push(...scanCsvInjection(p,cc));
-      // R16 — specialist crypto-hygiene classes (constant-time comparison,
-      // secret zeroization). Narrow by design: keyed on the secret-ness of the
-      // identifier, and silent whenever the correct constant-time or
-      // guaranteed-wipe API is already present.
-      aF.push(...scanCryptoSpecialist(p,cc));
-      aF.push(...scanStoredTaint(p,cc));
-      aF.push(...scanJavaStructural(p,cc));
-      aF.push(...scanCsharpStructural(p,cc));
-      aF.push(...scanJsFrameworkStructural(p,cc));
-      aF.push(...scanPythonStructural(p,cc));
-      aF.push(...scanGoStructural(p,cc));
-      aF.push(...scanSecretConcat(p,cc));
-      aF.push(...scanXssReflectedMultilang(p,cc));
-      aF.push(...scanCodeInjectionMultilang(p,cc));
-      aF.push(...scanResponseSplitting(p,cc));
-      aF.push(...scanStoredPromptInjection(p,c));
-      aF.push(...scanRAGPoisoning(p,c));
-      aF.push(...scanAgentToolEscalation(p,c));
-      aF.push(...scanAgentUntrustedFlow(p,c));
-      aF.push(...scanEventEntrypoints(p,cc));
-      aF.push(...scanDbTaint(p,cc));
-      aF.push(...scanSSRFCloudMetadata(p,cc));
-      aF.push(...scanMutationXSS(p,cc));
-      aF.push(...scanKotlin(p,cc));
-      aF.push(...scanRuby(p,cc));aF.push(...scanRubyPathJoin(p,cc));
-      aF.push(...scanPhp(p,cc));
-      // Integration block: scaffolded SAST scanners. Gated by env var.
-      if (process.env.AGENTIC_SECURITY_NO_INTEGRATION !== '1') {
-        if (process.env.AGENTIC_SECURITY_NO_LLM_APP !== '1') aF.push(...scanLlmApp(p,c));
-        if (process.env.AGENTIC_SECURITY_NO_MOBILE  !== '1') aF.push(...scanMobile(p,cc));
-        if (process.env.AGENTIC_SECURITY_NO_PQC     !== '1') aF.push(...scanPqc(p,cc));
-        if (process.env.AGENTIC_SECURITY_NO_WEB3_ADV!== '1') aF.push(...scanWeb3Advanced(p,cc));
-        if (process.env.AGENTIC_SECURITY_NO_DAPP    !== '1') aF.push(...scanDappFrontend(p,cc));
-        if (process.env.AGENTIC_SECURITY_NO_CLOUD_IAM!== '1') aF.push(...scanCloudIam(p,cc));
-        if (process.env.AGENTIC_SECURITY_NO_K8S_ADM !== '1') aF.push(...scanK8sAdmission(p,cc));
-        if (process.env.AGENTIC_SECURITY_NO_CRYPTO_PROTO !== '1') aF.push(...scanCryptoProtocol(p,cc));
-        if (process.env.AGENTIC_SECURITY_NO_ML_SUPPLY    !== '1') aF.push(...scanMlSupplyChain(p,cc));
-      }
+      fc[p]=_delta.content;pfr[p]=_delta.pfr;
+      aR.push(..._delta.routes);aF.push(..._delta.findings);aSrc.push(..._delta.sources);aSink.push(..._delta.sinks);aSan.push(..._delta.sanitizers);aLogic.push(..._delta.logic);aSecrets.push(..._delta.secrets);aCiphersRest.push(..._delta.ciphersRest);aCiphersTransit.push(..._delta.ciphersTransit);_suppressionLog.push(..._delta.suppressions);
       const _ftElapsed=Date.now()-_ft0;
       if(_ftElapsed>_perFileTimeoutMs){aF.push({id:`file-timeout:${p}`,file:p,line:0,vuln:`File analysis exceeded ${_perFileTimeoutMs}ms (${_ftElapsed}ms)`,severity:'info',parser:'ENGINE',confidence:0.5,_timeout:true});_filesTimedOut++;}
       _fileTimings.push({file:p,ms:_ftElapsed});
-      _ckptRecord(p,_mk,_ftElapsed,ta);
-      }catch(_){_fileTimings.push({file:p,ms:Date.now()-_ft0,error:true});}if(i%5===0)await new Promise(r=>setTimeout(r,0));}
+      _ckptRecord(p,_mk,_ftElapsed,_delta.pfr);
+    }catch(_){_fileTimings.push({file:p,ms:Date.now()-_ft0,error:true});}
+    if(i%5===0)await new Promise(r=>setTimeout(r,0));}
+  } finally {
+    if (_cascadePool) await _cascadePool.shutdown();
+  }
   // Deserialization-gadget detector runs once with full-tree context (it needs
   // manifest contents to know which gadget libs are on the classpath).
   try {
@@ -8507,7 +8675,7 @@ function _deterministicFileTimings(timings) {
     if (_gadgets.size) {
       for (const p of files) {
         const c = fc[p]; if (!c) continue;
-        aF.push(...scanDeserializationGadgets(p, c, { gadgets: _gadgets }));
+        aF.push(...(runDetector(_detectorErrors,p,'scanDeserializationGadgets',()=>scanDeserializationGadgets(p, c, { gadgets: _gadgets }))||[]));
       }
     }
   } catch(_) {}
@@ -8650,17 +8818,17 @@ function _deterministicFileTimings(timings) {
   // R19 (PRD §5): cross-route BOLA/BFLA over the aggregated route inventory.
   // Convention deviation is PROJECT-scoped by design: the convention is a
   // property of the codebase, not of one file (see convention-deviation.js).
-  try{aF.push(...scanConventionDeviationProject(fc));}catch(_){}
-  try{aF.push(...scanApiBrokenAuthz(aR));}catch(_){}
+  aF.push(...(runDetector(_detectorErrors,'<project>','scanConventionDeviationProject',()=>scanConventionDeviationProject(fc))||[]));
+  aF.push(...(runDetector(_detectorErrors,'<project>','scanApiBrokenAuthz',()=>scanApiBrokenAuthz(aR))||[]));
   // R22 (PRD §5): cross-service edges inferred from code (client call → matched route).
-  try{aF.push(...scanCrossService(aR,fc));}catch(_){}
+  aF.push(...(runDetector(_detectorErrors,'<project>','scanCrossService',()=>scanCrossService(aR,fc))||[]));
   // R21 (PRD §5): RBAC role-tier consistency over the route inventory.
-  try{aF.push(...scanRbacConsistency(aR,fc));}catch(_){}
+  aF.push(...(runDetector(_detectorErrors,'<project>','scanRbacConsistency',()=>scanRbacConsistency(aR,fc))||[]));
   setProgress({current:i,total:files.length,file:"Reachability + guards...",phase:"Linking"});annotateReachability(aF,aR,callGraph,fc);aF.forEach(f=>detectGuardsForFinding(f,fc));
   setProgress({current:i,total:files.length,file:"Inferring sanitizers...",phase:"Linking"});const learned=inferSanitizers(fc);applyLearnedSanitizers(aF,learned,fc);
   setProgress({current:i,total:files.length,file:"Sanitizer effectiveness...",phase:"Linking"});applySanitizerEffectiveness(aF);
   setProgress({current:i,total:files.length,file:"Attack chains...",phase:"Linking"});const chains=crossFindingChain(aF);aF.push(...chains);
-  setProgress({current:i,total:files.length,file:"Config file cross-ref...",phase:"Linking"});aLogic.push(...scanConfigFiles(fc));
+  setProgress({current:i,total:files.length,file:"Config file cross-ref...",phase:"Linking"});aLogic.push(...(runDetector(_detectorErrors,'<project>','scanConfigFiles',()=>scanConfigFiles(fc))||[]));
   setProgress({current:i,total:files.length,file:"OSV vulnerability database...",phase:"SCA"});
   const allFileContents={...fc, ...depFileContents};
   // PRD F11.4 — malicious install hooks, scanned where package.json actually
@@ -8675,7 +8843,7 @@ function _deterministicFileTimings(timings) {
   // A manifest detector belongs on the manifest path.
   for (const [mp, mc] of Object.entries(depFileContents)) {
     if (!/(?:^|\/)package\.json$/i.test(mp)) continue;
-    try { aF.push(...scanInstallScripts(mp, mc)); } catch (_) { /* never fail a scan on one manifest */ }
+    aF.push(...(runDetector(_detectorErrors,mp,'scanInstallScripts',()=>scanInstallScripts(mp, mc))||[]));
   }
   const components=parseManifests(allFileContents);
   // R8 (PRD §5): OS packages from an extracted container image's package DBs
@@ -8806,8 +8974,8 @@ function _deterministicFileTimings(timings) {
     }
   }
   const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasAttackPath:attackResult.flagged.has(key),attackPaths:attackResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
-  try{aF.push(...scanDbTaintCrossFile(fc));}catch(_){}
-  try{aF.push(...scanStoredPromptInjectionCrossFile(fc));}catch(_){}
+  aF.push(...(runDetector(_detectorErrors,'<project>','scanDbTaintCrossFile',()=>scanDbTaintCrossFile(fc))||[]));
+  aF.push(...(runDetector(_detectorErrors,'<project>','scanStoredPromptInjectionCrossFile',()=>scanStoredPromptInjectionCrossFile(fc))||[]));
   // Roadmap #8 — tree-sitter sinks for long-tail languages (opt-in,
   // AGENTIC_SECURITY_TREE_SITTER=1; degrades to no-op without the optional dep).
   if(process.env.AGENTIC_SECURITY_TREE_SITTER==='1'){try{aF.push(...await scanTreeSitterSinks(fc));}catch(_){}}
@@ -8894,6 +9062,7 @@ function _deterministicFileTimings(timings) {
   const _deepInCiAllowed = deepInCi === true || process.env.AGENTIC_SECURITY_DEEP_IN_CI === '1';
   const _deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed);
   let _deepCallGraph = null;
+  let _deepFailure = null;
   if (_deepEnabled) {
     const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
     const t0 = Date.now();
@@ -8931,7 +9100,10 @@ function _deterministicFileTimings(timings) {
       aF.push(...irFindings);
     } catch (e) {
       // Deep mode is best-effort. A parser blowup in one file shouldn't kill
-      // the scan — fall back to the pattern-only result.
+      // the scan — fall back to the pattern-only result. Recorded (not just
+      // swallowed) so scanHealth (FR-206) can report the downgrade instead of
+      // looking identical to a scan where deep mode simply wasn't requested.
+      _deepFailure = String((e && e.message) || e);
     }
   } else if (_deepRequested && _inCi) {
     // Operator asked for deep but we're in CI — emit a non-blocking notice
@@ -8945,6 +9117,23 @@ function _deterministicFileTimings(timings) {
       confidence: 1.0,
     });
   }
+  // FR-205/FR-206: make the deep-analysis decision explicit in machine
+  // output, not just as an occasional info-severity finding. Covers the case
+  // the finding-based notice above does not: deep mode never explicitly
+  // requested at all (the common default-unset-in-CI case), which previously
+  // produced no signal of any kind that assurance had quietly narrowed.
+  const _deepStatus = {
+    requested: _deepRequested,
+    enabled: _deepEnabled,
+    inCi: _inCi,
+    ciOverrideAllowed: _deepInCiAllowed,
+    reason: _deepEnabled
+      ? null
+      : (_deepRequested
+          ? (_inCi ? 'requested, but running in CI without AGENTIC_SECURITY_DEEP_IN_CI=1' : 'unknown')
+          : (_inCi ? 'not requested (deep analysis defaults to off in CI)' : 'not requested')),
+    failure: _deepFailure,
+  };
   // Java SCA enrichment: use deep-mode IR call graph to improve Java function reachability
   if (_deepCallGraph) {
     try {
@@ -9090,16 +9279,18 @@ function _deterministicFileTimings(timings) {
   let _executionProofSummary = null, _vulnHistory = null;
   let _logicClaims = null;
   const _annotatorErrors = [];
-  const _runAnnotator = (phase, fn) => {
-    try { return fn(); }
-    catch (e) {
-      _annotatorErrors.push({ phase, err: String((e && e.message) || e) });
-      return undefined;
-    }
-  };
-  _runAnnotator('annotateStableIds', () => annotateStableIds(finalFindings));
-  _runAnnotator("clusterByRootCause", () => { finalFindings = clusterByRootCause(finalFindings); });
-  _runAnnotator("demoteUnreachable", () => {
+  // FR-106 (assurance-hardening PRD): Promise-aware, explicitly awaited at
+  // every one of its ~51 call sites below (previously a sync `try{return
+  // fn()}` let an async callback's rejection escape as an unhandled
+  // rejection, and every caller fired-and-forgot regardless). Logic lives in
+  // pipeline/annotator-runner.js, fault-injection tested directly there
+  // since this project's own annotators are deliberately built never to
+  // throw (posture/CLAUDE.md's "no throwing" convention) — this closure just
+  // supplies the local _annotatorErrors array.
+  const _runAnnotator = (phase, fn) => runAnnotatorAsync(_annotatorErrors, phase, fn);
+  await _runAnnotator('annotateStableIds', () => annotateStableIds(finalFindings));
+  await _runAnnotator("clusterByRootCause", () => { finalFindings = clusterByRootCause(finalFindings); });
+  await _runAnnotator("demoteUnreachable", () => {
     demoteUnreachable(finalFindings, { routes: aR });
     // `type: 'vulnerable_dep'` findings live in supplyChain, not finalFindings
     // (src/sca/CLAUDE.md) — demoteUnreachable's SCA-tier branch needs this
@@ -9108,14 +9299,14 @@ function _deterministicFileTimings(timings) {
   });
   // Premortem #8: backfill parser/family BEFORE confidence and calibration,
   // because both consume those fields and silently no-op when they're null.
-  _runAnnotator("backfillFindingDefaults", () => { backfillFindingDefaults(finalFindings); });
-  _runAnnotator("annotateConfidence", () => { annotateConfidence(finalFindings); });
+  await _runAnnotator("backfillFindingDefaults", () => { backfillFindingDefaults(finalFindings); });
+  await _runAnnotator("annotateConfidence", () => { annotateConfidence(finalFindings); });
   // Phase-1 next-gen P1.3 (FR-UX-1, FR-UX-2): Brier-calibrated probability +
   // 95% Wilson CI from per-family historical TP/FP. Falls back to null with
   // an explicit `calibration_reason` when N is below the calibration floor.
-  _runAnnotator("annotateCalibratedConfidence", () => { annotateCalibratedConfidence(finalFindings, { scanRoot }); });
+  await _runAnnotator("annotateCalibratedConfidence", () => { annotateCalibratedConfidence(finalFindings, { scanRoot }); });
   const _projectCtx = (() => { try { return detectProjectContext(fc, aR); } catch { return {}; } })();
-  _runAnnotator("annotateExploitability", () => { annotateExploitability(finalFindings, _projectCtx); });
+  await _runAnnotator("annotateExploitability", () => { annotateExploitability(finalFindings, _projectCtx); });
   // Roadmap #6 — proof-gate precision pass. Runs AFTER confidence +
   // exploitability so it can demote their tiers, and BEFORE mitigation /
   // composite-risk so the demotion flows into the canonical ranking. Default
@@ -9155,8 +9346,8 @@ function _deterministicFileTimings(timings) {
         if (f.stableId) unsanitizersOnPath[f.stableId] = undo;
       }
     }
-    _runAnnotator("applySanitizerGate", () => { applySanitizerGate(finalFindings, { sanitizersOnPath, unsanitizersOnPath }); });
-    _runAnnotator("annotateProofGate", () => { annotateProofGate(finalFindings); });
+    await _runAnnotator("applySanitizerGate", () => { applySanitizerGate(finalFindings, { sanitizersOnPath, unsanitizersOnPath }); });
+    await _runAnnotator("annotateProofGate", () => { annotateProofGate(finalFindings); });
   }
   // Addition #1 — default falsification pass. Actively tries to DISPROVE each
   // taint-style finding by locating a context-matched control on the path, and
@@ -9166,29 +9357,45 @@ function _deterministicFileTimings(timings) {
   // default; the LLM tier is only wired when an endpoint is configured. Opt out
   // with AGENTIC_SECURITY_NO_FALSIFICATION=1.
   if (process.env.AGENTIC_SECURITY_NO_FALSIFICATION !== '1') {
-    _runAnnotator("annotateFalsification", () => { annotateFalsification(finalFindings, fc); });
+    await _runAnnotator("annotateFalsification", () => { annotateFalsification(finalFindings, fc); });
   }
   // Addition #5 — capability-based model routing. Stamp each finding with the
   // model tier a cost-sensitive fixer/triager/PoC subagent should be dispatched
   // on for THIS vuln class (crypto/auth/critical → strongest; injection → mid;
   // low-sev hardening → cheapest). Advisory metadata consumed at dispatch time.
-  _runAnnotator("annotateDispatchModel", () => {
+  await _runAnnotator("annotateDispatchModel", () => {
     for (const f of finalFindings) { try { f.dispatchModel = routeModelForFinding(f).model; } catch { /* advisory only */ } }
   });
   // v3 next-gen: production-aware context ingest (Pillar 9). Must run BEFORE
   // the mitigation composite, persona prioritization, and final why-fired
   // record so those see the demotion signals.
-  _runAnnotator("annotateWafMitigation", () => { annotateWafMitigation(finalFindings, scanRoot); });
-  _runAnnotator("annotateAuthMitigation", () => { annotateAuthMitigation(finalFindings, scanRoot); });
-  _runAnnotator("annotateNetworkMitigation", () => { annotateNetworkMitigation(finalFindings, scanRoot); });
-  _runAnnotator("annotateTelemetry", () => { annotateTelemetry(finalFindings, scanRoot); });
-  _runAnnotator("annotateFeatureFlagGating", () => { annotateFeatureFlagGating(finalFindings, fc, { scanRoot }); });
+  await _runAnnotator("annotateWafMitigation", () => { annotateWafMitigation(finalFindings, scanRoot); });
+  await _runAnnotator("annotateAuthMitigation", () => { annotateAuthMitigation(finalFindings, scanRoot); });
+  await _runAnnotator("annotateNetworkMitigation", () => { annotateNetworkMitigation(finalFindings, scanRoot); });
+  await _runAnnotator("annotateTelemetry", () => { annotateTelemetry(finalFindings, scanRoot); });
+  await _runAnnotator("annotateFeatureFlagGating", () => { annotateFeatureFlagGating(finalFindings, fc, { scanRoot }); });
   // v3 next-gen: composite mitigation verdict consumes every prod signal above.
-  _runAnnotator("annotateMitigationComposite", () => { annotateMitigationComposite(finalFindings); });
+  await _runAnnotator("annotateMitigationComposite", () => { annotateMitigationComposite(finalFindings); });
   // Composite risk score (0..100 derived ordinal). Must run AFTER mitigation
   // composite + exploitability + toxicityScore so it sees the final values.
   // Used by agents and UI as the canonical sort key for "which finding first."
-  _runAnnotator("annotateCompositeRisk", () => { annotateCompositeRisk(finalFindings); });
+  await _runAnnotator("annotateCompositeRisk", () => { annotateCompositeRisk(finalFindings); });
+
+  // FR-405 (assurance-hardening PRD): null means "privacy analysis never
+  // ran at all" (AGENTIC_SECURITY_NO_PRIVACY=1, or the annotator threw
+  // before setting this) — treated the same as false by the gate below,
+  // since neither case has real IR-backed evidence to offer. Declared here,
+  // at function scope, because the annotatePrivacyTaint closure that
+  // assigns to it (inside the AGENTIC_SECURITY_NO_INTEGRATION block below)
+  // runs and exits before that block closes — a block-scoped `let` inside
+  // that if-statement would be unreachable by the later assessPrivacyFramework
+  // call and the final return, both of which are outside the block.
+  let _privacyIrBacked = null;
+  // FR-402: which taxonomy version actually classified this scan's fields —
+  // same scoping constraint as _privacyIrBacked directly above (D-0011):
+  // must be declared before the AGENTIC_SECURITY_NO_INTEGRATION block opens,
+  // not inside it.
+  let _privacyTaxonomyVersion = null;
 
   // ── World-class integration block ─────────────────────────────────────
   // Each annotator is opt-in via env var and try/catch wrapped. They run
@@ -9198,46 +9405,89 @@ function _deterministicFileTimings(timings) {
     // Cross-service taint annotation reads .agentic-security/services.yml
     // and bumps severity on cross-service-reachable findings.
     if (process.env.AGENTIC_SECURITY_NO_CROSS_SERVICE !== '1') {
-      _runAnnotator("runCrossServiceTaint", () => { runCrossServiceTaint(scanRoot, finalFindings); });
+      await _runAnnotator("runCrossServiceTaint", () => { runCrossServiceTaint(scanRoot, finalFindings); });
     }
     // Runtime correlation: demotes findings whose paths were unobserved
     // in production eBPF traces (when a trace file is present).
     if (process.env.AGENTIC_SECURITY_NO_RUNTIME_CORRELATION !== '1') {
-      _runAnnotator("annotateRuntimeCorrelation", async () => { await annotateRuntimeCorrelation(scanRoot, finalFindings); });
+      await _runAnnotator("annotateRuntimeCorrelation", async () => { await annotateRuntimeCorrelation(scanRoot, finalFindings); });
     }
     // Triage learning: applies per-(project, family, file-glob) calibration
     // from prior wont-fix / false-positive decisions.
     if (process.env.AGENTIC_SECURITY_NO_TRIAGE_LEARNING !== '1') {
-      _runAnnotator("applyLearnedCalibration", () => { applyLearnedCalibration(scanRoot, finalFindings); });
+      await _runAnnotator("applyLearnedCalibration", () => { applyLearnedCalibration(scanRoot, finalFindings); });
     }
     // Formal verification: CBMC for C/C++, MIRI for Rust. Opt-in via
     // AGENTIC_SECURITY_FORMAL=1 (off by default — requires external tools).
     if (process.env.AGENTIC_SECURITY_FORMAL === '1') {
-      _runAnnotator("annotateFormalVerification", async () => { await annotateFormalVerification(finalFindings, fc, {}); });
+      await _runAnnotator("annotateFormalVerification", async () => { await annotateFormalVerification(finalFindings, fc, {}); });
     }
     // SMT path feasibility: Z3-backed proof of reachability. Opt-in via
     // AGENTIC_SECURITY_SMT_FEASIBILITY=1.
     if (process.env.AGENTIC_SECURITY_SMT_FEASIBILITY === '1') {
-      _runAnnotator("annotatePathFeasibility", async () => { await annotatePathFeasibility(finalFindings, {}); });
+      await _runAnnotator("annotatePathFeasibility", async () => { await annotatePathFeasibility(finalFindings, {}); });
     }
     // Privacy / PII taint: emits pii-exposure findings + DPIA artifact.
+    // FR-405 (assurance-hardening PRD): _privacyIrBacked is declared at
+    // function scope above the AGENTIC_SECURITY_NO_INTEGRATION block, not
+    // here — this closure runs and exits before that block's closing brace,
+    // so a block-scoped declaration would be unreachable from the later
+    // assessPrivacyFramework call and the final return.
     if (process.env.AGENTIC_SECURITY_NO_PRIVACY !== '1') {
-      _runAnnotator("annotatePrivacyTaint", () => {
-        // Build a minimal IR map from fc; the privacy taint module needs
-        // per-file content + a coarse decls/calls list. We construct it
-        // from existing finding sources rather than re-parsing every file.
-        const minimalIR = new Map();
-        for (const [fp, content] of Object.entries(fc || {})) {
-          if (typeof content !== 'string') continue;
-          minimalIR.set(fp, { _content: content, decls: [], calls: [] });
-        }
-        const r = annotatePrivacyTaint(minimalIR);
-        if (r && Array.isArray(r.findings)) finalFindings.push(...r.findings);
+      await _runAnnotator("annotatePrivacyTaint", () => {
+        // FR-401 (assurance-hardening PRD, A-06): decls/calls used to be
+        // hardcoded empty for every file (the actual root cause, per
+        // decisions.md D-0003, was a missing adapter reconciling
+        // privacy-taint.js's flat per-file shape with the real Layer-1 IR's
+        // per-function/CFG shape — not a missing capability in the IR or
+        // taint engine themselves; see privacy/ir-adapter.js).
+        //
+        // Reuse _sharedIR when deep mode already built it (free — no
+        // second parse pass). When deep mode is OFF (the common default
+        // path), do NOT force a fresh IR build here: buildProjectIR parses
+        // every file and is exactly the cost deep mode is opt-in for
+        // (NFR: "no more than 15% ... overhead ... excluding newly enabled
+        // deep analysis"). In that case privacy analysis still runs, but
+        // honestly marked as not IR-backed (irBacked:false below) rather
+        // than silently claiming the same coverage as the deep-mode path —
+        // this is the signal FR-405's "missing capability -> not_assessed,
+        // never satisfied" contract needs to key off, not yet wired into
+        // privacy-framework.js's own bucketing in this cycle (separate,
+        // later FR-405 work).
+        const irBacked = !!(_sharedIR && _sharedIR.perFile);
+        const adaptedIR = irBacked
+          ? adaptIRForPrivacyTaint(_sharedIR.perFile, fc, storedRegistry)
+          : new Map(Object.entries(fc || {})
+              .filter(([, content]) => typeof content === 'string')
+              .map(([fp, content]) => [fp, { _content: content, decls: [], calls: [] }]));
+        // FR-402: pass scanRoot so an operator's .agentic-security/
+        // privacy-taxonomy.json (if any) is actually loaded on a real scan.
+        const r = annotatePrivacyTaint(adaptedIR, { scanRoot });
+        r.irBacked = irBacked;
+        _privacyIrBacked = irBacked;
+        _privacyTaxonomyVersion = r.taxonomyVersion || null;
+        // FR-102 (assurance-hardening PRD): route through the registered-
+        // producer collector rather than a bare push. r is already computed
+        // above (this call also drives the DPIA artifact below), so the
+        // thunk just hands back what's already there.
+        collectProducerResult(finalFindings, _annotatorErrors, 'privacy-taint', () => (r && Array.isArray(r.findings)) ? r.findings : []);
         // Persist the DPIA scaffold for compliance review.
         if (r && r.piiFields) {
           try {
-            const dpia = emitDpiaArtifact(r.piiFields, r.findings || []);
+            // FR-407: governance fields are loaded once and threaded into
+            // both the DPIA (per-class subsection) and the RoPA artifact
+            // (the full register) so an operator only maintains one config
+            // file for both.
+            const governanceConfig = loadPrivacyGovernanceConfig(scanRoot);
+            const dpia = emitDpiaArtifact(r.piiFields, r.findings || [], { policyExemptions: r.policyExemptions || [], governanceConfig });
             _safeWriteState(_statePath(scanRoot, 'dpia.md'), dpia);
+            const ropa = emitRopaArtifact(r.piiFields, governanceConfig);
+            _safeWriteState(_statePath(scanRoot, 'ropa.md'), ropa);
+            // FR-406: code-derived data inventory + flow graph, built from
+            // the SAME findings/exemptions already computed above.
+            const inventory = buildDataInventory(r.piiFields, r.findings || [], r.policyExemptions || []);
+            _safeWriteState(_statePath(scanRoot, 'data-inventory.json'), emitDataInventoryArtifact(inventory));
+            _safeWriteState(_statePath(scanRoot, 'data-flow-graph.md'), emitDataFlowGraph(inventory));
           } catch (_) {}
         }
       });
@@ -9246,80 +9496,80 @@ function _deterministicFileTimings(timings) {
     // ATLAS, D3FEND, kill-chain stage, and CAPEC IDs so downstream SIEM /
     // SOAR systems can correlate with existing detection rules.
     if (process.env.AGENTIC_SECURITY_NO_ATTACK_TAX !== '1') {
-      _runAnnotator("annotateAttackTaxonomy", () => { annotateAttackTaxonomy(finalFindings); });
+      await _runAnnotator("annotateAttackTaxonomy", () => { annotateAttackTaxonomy(finalFindings); });
     }
     // Triage memory — demote findings whose (family, dir) bucket was
     // previously marked wont-fix or false-positive in this project.
     if (process.env.AGENTIC_SECURITY_NO_TRIAGE_MEMORY !== '1') {
-      _runAnnotator("suppressByPastDecisions", () => { suppressByPastDecisions(scanRoot, finalFindings); });
+      await _runAnnotator("suppressByPastDecisions", () => { suppressByPastDecisions(scanRoot, finalFindings); });
     }
     // Intent-aware FP suppression — demote findings on files marked as
     // intentionally vulnerable (sandbox/CTF/tutorial/example/etc.).
     if (process.env.AGENTIC_SECURITY_NO_INTENT_CTX !== '1') {
-      _runAnnotator("suppressByIntent", () => { suppressByIntent(scanRoot, finalFindings); });
+      await _runAnnotator("suppressByIntent", () => { suppressByIntent(scanRoot, finalFindings); });
     }
     // Git history — stamp each finding with introducedBy / introducedIn /
     // originatingPrompt by running `git blame` on the finding's line.
     if (process.env.AGENTIC_SECURITY_NO_GIT_HISTORY !== '1') {
-      _runAnnotator("annotateGitHistory", () => { annotateGitHistory(scanRoot, finalFindings); });
+      await _runAnnotator("annotateGitHistory", () => { annotateGitHistory(scanRoot, finalFindings); });
     }
     // Threat-model grounding — bump severity on crown-jewels, demote
     // out-of-scope, tag compliance regimes, stamp attacker profile.
     if (process.env.AGENTIC_SECURITY_NO_THREAT_MODEL_GROUNDING !== '1') {
-      _runAnnotator("applyThreatModel", () => { applyThreatModel(scanRoot, finalFindings); });
+      await _runAnnotator("applyThreatModel", () => { applyThreatModel(scanRoot, finalFindings); });
     }
     // Cross-repo pattern propagation — surface sibling-repo fixes and
     // triage decisions for the same family from this developer's history.
     if (process.env.AGENTIC_SECURITY_NO_CROSS_REPO !== '1') {
-      _runAnnotator("annotateCrossRepoSignals", () => { annotateCrossRepoSignals(scanRoot, finalFindings); });
+      await _runAnnotator("annotateCrossRepoSignals", () => { annotateCrossRepoSignals(scanRoot, finalFindings); });
     }
     // Risk-in-dollars — combine EPSS + crown-jewel + reachability into an
     // expected-value-of-exploitation USD figure per finding.
     if (process.env.AGENTIC_SECURITY_NO_RISK_DOLLARS !== '1') {
-      _runAnnotator("annotateRiskDollars", () => { annotateRiskDollars(scanRoot, finalFindings); });
+      await _runAnnotator("annotateRiskDollars", () => { annotateRiskDollars(scanRoot, finalFindings); });
     }
     // Time-to-fix — estimate engineering hours per finding.
     if (process.env.AGENTIC_SECURITY_NO_TIME_TO_FIX !== '1') {
-      _runAnnotator("annotateTimeToFix", () => { annotateTimeToFix(scanRoot, finalFindings); });
+      await _runAnnotator("annotateTimeToFix", () => { annotateTimeToFix(scanRoot, finalFindings); });
     }
   }
   // v3 next-gen: crown-jewel mapping (FR-PROD-5) — score each file/finding by
   // business impact. Must run before persona prioritization (which uses it).
-  _runAnnotator("annotateCrownJewelScores", () => { annotateCrownJewelScores(finalFindings, fc); });
+  await _runAnnotator("annotateCrownJewelScores", () => { annotateCrownJewelScores(finalFindings, fc); });
   // v3 next-gen: clone clusters (FR-SEM-8) + emit clone-outlier infos.
-  _runAnnotator("annotateCloneClusters", () => { annotateCloneClusters(finalFindings); });
+  await _runAnnotator("annotateCloneClusters", () => { annotateCloneClusters(finalFindings); });
   try {
     const outliers = findCloneOutliers(finalFindings);
     if (outliers && outliers.length) finalFindings.push(...outliers);
   } catch(_) {}
   // v3 next-gen: AI-generated-code fingerprint (FR-LEARN-10). Property bag tag.
-  _runAnnotator("annotateAiProvenance", () => { annotateAiProvenance(finalFindings, fc); });
+  await _runAnnotator("annotateAiProvenance", () => { annotateAiProvenance(finalFindings, fc); });
   // v3 next-gen: whole-program type narrowing (FR-SEM-10) — heuristic
   // confidence dampener on findings rooted in functions whose callers all
   // pass narrowly-typed values.
-  _runAnnotator("annotateTypeNarrowing", () => { annotateTypeNarrowing(finalFindings, fc); });
+  await _runAnnotator("annotateTypeNarrowing", () => { annotateTypeNarrowing(finalFindings, fc); });
   // v3 next-gen: STRIDE classification (FR-LOGIC-10).
-  _runAnnotator("annotateStrideCategory", () => { annotateStrideCategory(finalFindings); });
+  await _runAnnotator("annotateStrideCategory", () => { annotateStrideCategory(finalFindings); });
   // v3 next-gen: per-attacker-persona score matrix (FR-ADV-2). Must run AFTER
   // crown-jewels + mitigation composite so it sees those signals.
-  _runAnnotator("annotatePersonaScores", () => { annotatePersonaScores(finalFindings); });
+  await _runAnnotator("annotatePersonaScores", () => { annotatePersonaScores(finalFindings); });
   // v3 next-gen: SCA reverse-blast-radius enrichment (FR-ADV-5). Annotates
   // SCA findings (package-name-keyed) — must run against supplyChain, not
   // finalFindings (SAST), which has no package-name field at all.
-  _runAnnotator("annotateScaReverseBlast", () => { annotateScaReverseBlast(supplyChain, fc); });
+  await _runAnnotator("annotateScaReverseBlast", () => { annotateScaReverseBlast(supplyChain, fc); });
   // v3 next-gen: bug-bounty payout prediction (FR-ADV-3). Composes with the
   // mitigation composite — gated/unreachable findings get the bounty scaled
   // down rather than zeroed.
-  _runAnnotator("annotateBountyPrediction", () => { annotateBountyPrediction(finalFindings); });
+  await _runAnnotator("annotateBountyPrediction", () => { annotateBountyPrediction(finalFindings); });
   // v3 next-gen: attack-playbook annotation (FR-ADV-4). Only for high+ findings.
-  _runAnnotator("annotateAttackPlaybooks", () => { annotateAttackPlaybooks(finalFindings); });
+  await _runAnnotator("annotateAttackPlaybooks", () => { annotateAttackPlaybooks(finalFindings); });
   // Phase-1 next-gen P1.1 (FR-VER-2): attach a runnable PoC to each finding
   // when a CWE template covers it. Findings without coverage get f.poc=null.
   // Premortem #12: pass fileContents so PoC param-key inference can re-read
   // the actual handler line when detector snippets are misattributed.
-  _runAnnotator("annotatePocs", () => { annotatePocs(finalFindings, { routes: aR, fileContents: fc }); });
+  await _runAnnotator("annotatePocs", () => { annotatePocs(finalFindings, { routes: aR, fileContents: fc }); });
   // FR-VER-3: regression-test generator (builds on the PoC artifact).
-  _runAnnotator("annotateRegressionTests", () => { annotateRegressionTests(finalFindings); });
+  await _runAnnotator("annotateRegressionTests", () => { annotateRegressionTests(finalFindings); });
   // R2 — execution proof. Synthesizes a SANDBOX-RUNNABLE PoC (the HTTP PoCs
   // above need a live server, so they can never be executed by the prover)
   // and lets R1's sandbox decide the tier. Opt-in via AGENTIC_SECURITY_PROVE=1
@@ -9332,7 +9582,7 @@ function _deterministicFileTimings(timings) {
   // Never a finding and never a severity change: those bugs are fixed, and a
   // historical fix is not evidence of a present defect. Opt-in because it
   // shells out to git over up to 500 commits.
-  _runAnnotator('annotateHistoricalRisk', () => {
+  await _runAnnotator('annotateHistoricalRisk', () => {
     if (process.env.AGENTIC_SECURITY_ARCHAEOLOGY !== '1' || !scanRoot) return;
     _vulnHistory = mineVulnHistory(scanRoot);
     annotateHistoricalRisk(finalFindings, _vulnHistory);
@@ -9346,65 +9596,38 @@ function _deterministicFileTimings(timings) {
   // verifier verdict — verified-exploit (live PoC ran), verified-by-llm,
   // verified-sanitizer-absence, unverified-by-design, or cannot-verify.
   // Fail-closed: any error → cannot-verify, never a silent drop.
-  _runAnnotator("annotateVerifierVerdicts", () => { annotateVerifierVerdicts(finalFindings, { fileContents: fc }); });
+  await _runAnnotator("annotateVerifierVerdicts", () => { annotateVerifierVerdicts(finalFindings, { fileContents: fc }); });
   // Cross-language taint (Sentinel-parity FR-DET-3) — five boundary types:
   // HTTP/REST via OpenAPI, gRPC via .proto, GraphQL via SDL, SQL/ORM
   // round-trip, and IaC → application-code reachability (FR-DET-4).
   const _allXlangFiles = { ...fc, ...depFileContents };
-  try {
-    const xl = scanCrossLangOpenAPI(_allXlangFiles, finalFindings);
-    if (xl && xl.length) finalFindings.push(...xl);
-  } catch(_) {}
-  try {
-    const xl = scanCrossLangGrpc(_allXlangFiles, finalFindings);
-    if (xl && xl.length) finalFindings.push(...xl);
-  } catch(_) {}
-  try {
-    const xl = scanCrossLangGraphql(_allXlangFiles, finalFindings);
-    if (xl && xl.length) finalFindings.push(...xl);
-  } catch(_) {}
-  try {
-    const xl = scanCrossLangOrm(_allXlangFiles, finalFindings);
-    if (xl && xl.length) finalFindings.push(...xl);
-  } catch(_) {}
+  // FR-101/FR-102 (assurance-hardening PRD): each of these 11 producers now
+  // goes through the registered-producer collector (pipeline/producer-
+  // collector.js) instead of a bare try/catch + push — a thrown exception
+  // becomes a diagnostic in _annotatorErrors (previously silently swallowed
+  // by `catch(_) {}` with no trace anywhere) and the collector stamps
+  // producerId provenance on each finding.
+  collectProducerResult(finalFindings, _annotatorErrors, 'cross-lang-openapi', () => scanCrossLangOpenAPI(_allXlangFiles, finalFindings));
+  collectProducerResult(finalFindings, _annotatorErrors, 'cross-lang-grpc', () => scanCrossLangGrpc(_allXlangFiles, finalFindings));
+  collectProducerResult(finalFindings, _annotatorErrors, 'cross-lang-graphql', () => scanCrossLangGraphql(_allXlangFiles, finalFindings));
+  collectProducerResult(finalFindings, _annotatorErrors, 'cross-lang-orm', () => scanCrossLangOrm(_allXlangFiles, finalFindings));
   // Phase-1 next-gen P1.5 (FR-XSAT-4): cross-language taint via Kafka, SQS,
   // RabbitMQ, Redis streams, and Google Pub/Sub topics.
-  try {
-    const xl = scanCrossLangQueues(_allXlangFiles, finalFindings);
-    if (xl && xl.length) finalFindings.push(...xl);
-  } catch(_) {}
-  try {
-    const xl = scanIacReachability(_allXlangFiles, finalFindings);
-    if (xl && xl.length) finalFindings.push(...xl);
-  } catch(_) {}
+  collectProducerResult(finalFindings, _annotatorErrors, 'cross-lang-queues', () => scanCrossLangQueues(_allXlangFiles, finalFindings));
+  collectProducerResult(finalFindings, _annotatorErrors, 'iac-reachability', () => scanIacReachability(_allXlangFiles, finalFindings));
   // Phase-2.5 next-gen: IAM policy reachability (FR-XSAT-7).
-  try {
-    const ia = scanIamPolicies(_allXlangFiles, finalFindings);
-    if (ia && ia.length) finalFindings.push(...ia);
-  } catch(_) {}
+  collectProducerResult(finalFindings, _annotatorErrors, 'iam-policy', () => scanIamPolicies(_allXlangFiles, finalFindings));
   // Phase-2.5 next-gen: container runtime config audit (FR-XSAT-8).
-  try {
-    const cr = scanContainerRuntime(_allXlangFiles);
-    if (cr && cr.length) finalFindings.push(...cr);
-  } catch(_) {}
+  collectProducerResult(finalFindings, _annotatorErrors, 'container-runtime', () => scanContainerRuntime(_allXlangFiles));
   // Phase-4 next-gen: business-logic analysis (FR-LOGIC-1, FR-LOGIC-2, FR-LOGIC-7).
-  try {
-    const bl = scanBusinessLogicV2(_allXlangFiles);
-    if (bl && bl.length) finalFindings.push(...bl);
-  } catch(_) {}
+  collectProducerResult(finalFindings, _annotatorErrors, 'business-logic-v2', () => scanBusinessLogicV2(_allXlangFiles));
   // v3 next-gen: specification-mining drift detector (FR-LOGIC-8). Emits
   // findings for function-name-vs-body mismatches. Low confidence by default;
   // active-learning loop tunes per project.
-  try {
-    const sm = scanSpecificationDrift(_allXlangFiles);
-    if (sm && sm.length) finalFindings.push(...sm);
-  } catch(_) {}
+  collectProducerResult(finalFindings, _annotatorErrors, 'specification-drift', () => scanSpecificationDrift(_allXlangFiles));
   // v3 next-gen: bounded concurrency-bug detector (FR-SEM-9). Heuristic only;
   // catches missed unlocks, fire-and-forget async, and 2-lock deadlock cycles.
-  try {
-    const cc = scanConcurrency(_allXlangFiles);
-    if (cc && cc.length) finalFindings.push(...cc);
-  } catch(_) {}
+  collectProducerResult(finalFindings, _annotatorErrors, 'concurrency', () => scanConcurrency(_allXlangFiles));
   // FR-LOGIC-6: LLM-driven flow narration (template fallback when no LLM endpoint).
   try { await annotateNarration(finalFindings); }
   catch (e) { _annotatorErrors.push({ phase: 'annotateNarration', err: String((e && e.message) || e) }); }
@@ -9672,13 +9895,13 @@ function _deterministicFileTimings(timings) {
   // v3 next-gen: capture scan-level reports (counterfactual, threat model,
   // trust-boundary diagram, calibration-drift alarms). All best-effort.
   let _v3 = {};
-  _runAnnotator("_v3.counterfactual", () => { _v3.counterfactual = runCounterfactual(finalFindings, fc); });
-  _runAnnotator("_v3.threatModel", () => { _v3.threatModel = buildThreatModel(finalFindings, fc); });
-  _runAnnotator("_v3.trustBoundaryDiagram", () => { _v3.trustBoundaryDiagram = buildTrustBoundaryDiagram(finalFindings, fc); });
-  _runAnnotator("_v3.calibrationDrift", () => { _v3.calibrationDrift = computeCalibrationDrift(scanRoot); });
+  await _runAnnotator("_v3.counterfactual", () => { _v3.counterfactual = runCounterfactual(finalFindings, fc); });
+  await _runAnnotator("_v3.threatModel", () => { _v3.threatModel = buildThreatModel(finalFindings, fc); });
+  await _runAnnotator("_v3.trustBoundaryDiagram", () => { _v3.trustBoundaryDiagram = buildTrustBoundaryDiagram(finalFindings, fc); });
+  await _runAnnotator("_v3.calibrationDrift", () => { _v3.calibrationDrift = computeCalibrationDrift(scanRoot); });
   // v3 next-gen: why-fired provenance is captured LAST so it reflects the
   // final state of each finding after every other annotator has run.
-  _runAnnotator("annotateWhyFired", () => { annotateWhyFired(finalFindings, {}); });
+  await _runAnnotator("annotateWhyFired", () => { annotateWhyFired(finalFindings, {}); });
   // SCA-SAST correlation: link SAST findings to SCA vulnerable packages
   try{for(const f of finalFindings){if(!f.chain||!f.chain.length)continue;const src=f.chain[0]?.label||'';for(const sc of supplyChain){if(sc.type!=='vulnerable_dep')continue;if(src.includes(sc.name)||f.vuln?.toLowerCase().includes(sc.name)){f.scaCorrelation={osvId:sc.osvId,package:sc.name,version:sc.version,confirmed:true};sc.sastConfirmed=true;break;}}}}catch(_){}
   // Multi-sink chain detection: group findings by source variable
@@ -9787,6 +10010,12 @@ function _deterministicFileTimings(timings) {
           // filesScanned feeds the vacuous-satisfaction guard: a clean signal
           // from a run that read no files is not evidence of compliance.
           filesScanned: files.length,
+          // FR-405: feeds the SAME guard, specifically for controls whose
+          // only mapped signal comes from privacy-taint — a non-IR-backed
+          // run (deep mode off, the common default) still emits a "no
+          // findings" pass, which is not real evidence for those controls
+          // even though the scan otherwise examined real files.
+          privacyIrBacked: _privacyIrBacked,
         });
         if (_privacyFramework) persistPrivacyFramework(scanRoot, _privacyFramework);
         if (_privacyFramework && process.env.AGENTIC_SECURITY_PRIVACY_FRAMEWORK === '1') {
@@ -9812,6 +10041,34 @@ function _deterministicFileTimings(timings) {
     }
   }
 
+  // FR-103 (assurance-hardening PRD): canonical enrichment completion pass.
+  // This is the LAST point in the function where a finding could still be
+  // missing stableId/confidence/calibration/exploitability because it was
+  // appended by a late producer (see pipeline/enrichment-completion.js's
+  // header for why this is a gap-filling pass rather than relocating ~19
+  // append sites earlier in this function). Must run after every push site
+  // above and before the freeze immediately below.
+  const _projectCtxForCompletion = typeof _projectCtx !== 'undefined' ? _projectCtx : {};
+  completeEnrichment(finalFindings, { scanRoot, projectCtx: _projectCtxForCompletion });
+
+  // FR-104 (assurance-hardening PRD): freeze the finding collection.
+  // Object.freeze on an array blocks push/pop/splice/length changes (this
+  // module and every caller downstream run under ESM strict mode, so a
+  // violation THROWS a TypeError rather than silently no-op'ing) — no
+  // producer may append after this point. This is a SHALLOW freeze: the
+  // remaining read/annotate calls below (countUnmodeledSinkCandidates,
+  // buildEntrypointInventory, annotateRelevance, sweepRootCauses,
+  // proofCoverage) either only read `finalFindings` or, for annotateRelevance,
+  // legitimately mutate FIELDS on individual finding objects — verified by
+  // reading each function's body (none push/splice/pop/shift/unshift onto
+  // the array they're handed). Field mutation is annotation, not production,
+  // and annotateRelevance running this late is an established, deliberate
+  // part of this codebase's architecture (its own header: "runs after every
+  // finding has been appended... so nothing escapes annotation"). What
+  // freezing forecloses is exactly what FR-104 asks for: no MORE findings
+  // can be added after this point.
+  Object.freeze(finalFindings);
+
   // Coverage-honesty report (#5 + #6): per-language analysis tier (IR-taint vs
   // pattern-only), dense/large/timeout skips, and unmodeled-sink candidates.
   let _analysisTier = null, _unmodeledSinks = null;
@@ -9826,7 +10083,7 @@ function _deterministicFileTimings(timings) {
   // seen when only N-of-those-candidates were actually analyzed.
   // checkpoint.total intentionally keeps files.length — that field means the
   // full candidate set for resume bookkeeping, a different, correct meaning.
-  const _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_deterministicFileTimings(_fileTimings),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length}};
+  const _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_deterministicFileTimings(_fileTimings),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length,discarded:!!(_ckpt&&_ckpt.discarded),discardReason:(_ckpt&&_ckpt.discarded)?(_ckpt.reason||null):null,invalidatedFileCount:_ckptInvalidated.length,invalidatedFiles:_ckptInvalidated.slice(0,20),invalidatedFilesTruncated:_ckptInvalidated.length>20}};
   // R8: the scan completed, so the checkpoint has been fully consumed — remove
   // it. Anything that threw before this point leaves it in place to resume from.
   try { closeCheckpoint(_ckpt, { complete: true }); } catch (_) {}
@@ -9838,7 +10095,7 @@ function _deterministicFileTimings(timings) {
   // attack surface it is scored against is the complete one. Recall-
   // preserving: never removes a finding, never touches severity, and only
   // asserts `unreachable` on positive evidence (see posture/relevance.js).
-  _runAnnotator("annotateRelevance", () => {
+  await _runAnnotator("annotateRelevance", () => {
     annotateRelevance(finalFindings, {
       fileContents: fc,
       entrypointInventory: _entrypointInventory,
@@ -9855,7 +10112,37 @@ function _deterministicFileTimings(timings) {
   // is the honest shape. Measured on the CVE corpus: 19% / 13% / 68%.
   let _proofCoverage = null;
   try { _proofCoverage = proofCoverage([...finalFindings, ...aLogic]); } catch { _proofCoverage = null; }
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary};}
+  // FR-203: per-file/per-analyzer coverage ledger, computed from exactly
+  // the signals FR-201 (_detectorErrors) and FR-202 (the _timeout:true
+  // marker finding) already produce -- files actually scanned come from
+  // fc's own keys (skipped-for-size/density files were never added to it).
+  const _timedOutFiles = finalFindings.filter(f => f && f._timeout === true).map(f => f.file);
+  const _coverageLedger = computeCoverageLedger({ files: Object.keys(fc), detectorErrors: _detectorErrors, timedOutFiles: _timedOutFiles });
+  // FR-206 (assurance-hardening PRD, Milestone 0): additive scan-health
+  // summary, computed from signals the engine already collects.
+  // `analyzers` was `null` (see pipeline/scan-health.js's prior comment)
+  // until FR-203's coverage ledger existed to compute it for real.
+  let _scanHealth = computeScanHealth({
+    scanMeta: _scanMeta,
+    annotatorErrors: _annotatorErrors,
+    engineErrors: { cppDataflowParseErrors: _cppDataflowParseErrors.value },
+    deepStatus: _deepStatus,
+    analyzerCoverage: summarizeCoverageForScanHealth(_coverageLedger),
+  });
+  // FR-207: stale vulnerability feeds, calibration data, and compliance
+  // evidence are real assurance gaps, not just findings the feed omits --
+  // surfaced the same way every other scan-health condition is, so
+  // --assurance strict (FR-204) can fail on them. Custom-rule-pack
+  // freshness is the one leg NOT computed here: that mechanism only runs
+  // in bin/agentic-security.js, after this scan object already exists (see
+  // applyFreshness's own header comment in pipeline/scan-health.js).
+  _scanHealth = applyFreshness(_scanHealth, {
+    kev: kevCatalogMeta(),
+    epss: epssLiveMeta(),
+    calibration: calibrationFreshness(),
+    compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
+  });
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

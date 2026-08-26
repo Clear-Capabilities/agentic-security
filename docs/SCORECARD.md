@@ -9,13 +9,15 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.143.0 |
-| Bundle SHA-256 | `2a984aea7cf61f1508f690678b1ff656829081cb34b3e8483cc8ae04ae3c934c` |
-| Commit | `3e24c925fc939b37ef69a9ba01bb0134eab786f4` |
+| Engine version | 0.144.0 |
+| Bundle SHA-256 | `e8cc8b582e12c4e7c6128e887af35df22e0fa2669fdbbf0e1718e070207c0acc` |
+| Commit | `f57f496468e83dc5796ef6329f7e71d93128df71` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
-| Generated (UTC) | 2026-08-23T23:54:26.213Z |
+| Corpus version | `879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5` |
+| Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
+| Generated (UTC) | 2026-08-26T20:50:09.611Z |
 
 ## What these numbers are, and what they are not
 
@@ -207,7 +209,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 428 |
+| `scanner/src` | 447 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -254,6 +256,39 @@ Against ~100% on the curated corpus above. **That gap is the most useful number
 in this document**, and publishing it is the point of the exercise. The figure
 went DOWN when the benchmark was corrected, and is published that way.
 
+### Held-out slice — never tuned against
+
+`bench/independent/runner.mjs` splits the population by a deterministic hash of
+each entry's id (T0.7) — a fixed 20% held-out slice, stable across runs and
+population growth, that detector development never sees scored results for.
+This is the number that answers whether the figures above reflect genuine
+accuracy or tuning against the population being measured.
+
+| | Held-out (never tuned against) | Development |
+| --- | --- | --- |
+| Entries | 205 | 786 |
+| Precision | 6/20 (30.0%) | 22/57 (38.6%) |
+| Recall | 6/205 (2.9%) | 22/786 (2.8%) |
+| F1 | 0.053 | 0.052 |
+
+### Missed findings — why, not just how many
+
+**Measured 2026-08-25T15:37:53.916Z** (*committed artifact*, `bench/independent/why-missed-summary.json`) — 920 false negative(s) diagnosed.
+
+Each is classified into exactly one mechanism: does something fire and get
+suppressed (by an ignore pragma, a sanitizer, a custom rule, or the
+guard-recognition window), does a finding land on the wrong file or CWE, or
+does nothing fire at all. This is the difference the raw recall number above
+cannot show by itself — "this shape does not occur in these real advisories"
+and "a real detection was masked downstream" look identical as one number and
+very different once broken down this way.
+
+| Mechanism | Count |
+| --- | --- |
+| no-finding-at-all | 737 |
+| finding-present-but-suppressed | 162 |
+| finding-present-wrong-file-or-cwe | 21 |
+
 ## Committed artifacts referenced (not re-run by this command)
 
 - **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-08-16):
@@ -286,6 +321,8 @@ went DOWN when the benchmark was corrected, and is published that way.
 | Corpus drift gate | `npm run bench:cve-replay:check` |
 | Self-scan counts | `node bench/self-scan/measure.mjs --json` |
 | Self-scan drift gate | `npm run bench:self-scan:check` |
+| Independent population (read, not re-run — ~32 minutes) | `npm run bench:independent` |
+| Missed-findings mechanism breakdown (read, not re-run) | `npm run bench:independent:why-missed -- --all` |
 | This whole document | `npm run scorecard` |
 
 Running `npm run scorecard` twice on an unchanged tree produces an

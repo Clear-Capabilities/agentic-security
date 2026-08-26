@@ -194,8 +194,12 @@ test('shipped mcp bin: apply_fix refuses a symlink that leaves the root', async 
 // server that refuses everything — which is the failure mode that gets a
 // security gate switched off rather than fixed.
 test('shipped mcp bin: apply_fix DOES apply an in-tree fix', async () => {
+  // FR-301/A-08 (assurance-hardening PRD): apply_fix's stored-replacement
+  // branch now runs a fresh verification gate before writing (previously it
+  // did not), which requires a stableId to verify against — added here,
+  // same as every other apply_fix fixture in this file already carries one.
   const s = await session([{
-    id: 'IN-TREE', severity: 'high', line: 1, vuln: 'x',
+    id: 'IN-TREE', stableId: 'b2c3d4e5f6071829', severity: 'high', line: 1, vuln: 'x',
     file: 'src/app.js', fix: { replacement: 'const safe = 1;\n' },
   }]);
   await fsp.mkdir(path.join(s.root, 'src'), { recursive: true });

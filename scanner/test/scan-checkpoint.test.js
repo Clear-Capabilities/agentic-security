@@ -5,6 +5,18 @@
 // if anything that could change the answer changed, the checkpoint is thrown
 // away and the scan starts clean.
 //
+// FR-208 (assurance-hardening PRD) split that into a GLOBAL identity (engine
+// version, ruleset version, bundle SHA, dependency manifests, env switches —
+// any of which affects EVERY file, so it still discards the WHOLE checkpoint)
+// and a PER-FILE identity (a single scanned file's own content) — changing
+// one file's content, adding a file, or removing one no longer discards every
+// OTHER already-checkpointed file's work. Tests below that predate FR-208 and
+// still assert the old "any change discards everything" behavior are testing
+// the GLOBAL-identity path specifically (ruleset version, corrupt/tampered
+// records, a foreign key) — those are unchanged. The two tests that used to
+// assert a per-file content/membership change discarded everything have been
+// rewritten to assert the new, correct, PRD-mandated granular behavior.
+//
 // The interruption in test 1 is a real one: a child process is hard-exited
 // (process.exit, no unwinding, no cleanup hooks) partway through the per-file
 // loop, which is byte-equivalent to a SIGKILL as far as the checkpoint file is
@@ -20,9 +32,18 @@ import { fileURLToPath } from 'node:url';
 
 import {
   openCheckpoint, recordFileDone, completedFiles, resumeFindings,
-  closeCheckpoint, computeRunKey, checkpointPath,
+  closeCheckpoint, computeRunKey, computeGlobalKey, globalKeyMeta,
+  invalidatedFiles, checkpointPath,
 } from '../src/posture/scan-checkpoint.js';
 import { runScan } from '../src/runScan.js';
+
+// The checkpointed file paths recorded before an interruption, in the order
+// they were written — read directly off the JSONL rather than assuming a
+// fixed processing order, so these tests aren't order-dependent.
+function checkpointedFileList(tree) {
+  const raw = fs.readFileSync(checkpointPath(tree), 'utf8');
+  return raw.split('\n').filter(Boolean).slice(1).map(l => JSON.parse(l).f);
+}
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RUN_SCAN_URL = new URL('../src/runScan.js', import.meta.url).href;
@@ -220,7 +241,7 @@ test('resumed scan produces an identical finding set to an uninterrupted scan', 
 
 // ------------------------------------------------- 2. content invalidation ---
 
-test('changing a source file after the checkpoint discards it', async () => {
+test('FR-208: changing an already-checkpointed source file invalidates ONLY that file, not the whole checkpoint', async () => {
   const treeA = makeTree('changed-base');
   const treeB = makeTree('changed');
 
@@ -228,31 +249,63 @@ test('changing a source file after the checkpoint discards it', async () => {
   assert.equal(child.status, 137, child.stderr);
   assert.ok(fs.existsSync(checkpointPath(treeB)));
 
-  // Mutate a source file — the file-set signature is content-hashed, so this
-  // invalidates the whole checkpoint, not just that one entry.
-  fs.appendFileSync(path.join(treeB, 'src/c.js'),
-    `\nfunction alsoBad(req){ return eval(req.query.x); }\nmodule.exports.alsoBad = alsoBad;\n`);
-  fs.appendFileSync(path.join(treeA, 'src/c.js'),
-    `\nfunction alsoBad(req){ return eval(req.query.x); }\nmodule.exports.alsoBad = alsoBad;\n`);
+  const before = checkpointedFileList(treeB);
+  assert.ok(before.length >= 1, 'expected at least one file to have been checkpointed before the abort');
+  const changedFile = before[0];
+
+  // Mutate the SAME already-checkpointed file in both trees (treeA is the
+  // uninterrupted baseline this test compares against).
+  const addition = `\nfunction alsoBad(req){ return eval(req.query.x); }\nmodule.exports.alsoBad = alsoBad;\n`;
+  fs.appendFileSync(path.join(treeB, changedFile), addition);
+  fs.appendFileSync(path.join(treeA, changedFile), addition);
 
   const { scan: resumed } = await withEnv({ AGENTIC_SECURITY_RESUME: '1' }, () => runScan(treeB, {}));
-  assert.equal(resumed._scanMeta.checkpoint.resumed, 0, 'a changed source file must force a clean scan');
+  const stillResumed = before.length - 1;
+  assert.equal(resumed._scanMeta.checkpoint.resumed, stillResumed,
+    `expected exactly the ${stillResumed} unaffected already-checkpointed file(s) to resume, got ${resumed._scanMeta.checkpoint.resumed}`);
+  assert.equal(resumed._scanMeta.checkpoint.discarded, false, 'the checkpoint as a whole must not be discarded for a single file change');
+  assert.ok(
+    resumed._scanMeta.checkpoint.invalidatedFiles.some(x => x.file === changedFile && x.reason === 'content changed since it was checkpointed'),
+    `expected ${changedFile} named as invalidated with a content-changed reason; got ${JSON.stringify(resumed._scanMeta.checkpoint.invalidatedFiles)}`);
 
   const { scan: baseline } = await withEnv({ AGENTIC_SECURITY_RESUME: undefined }, () => runScan(treeA, {}));
-  assert.deepEqual(canonical(resumed), canonical(baseline));
+  assert.deepEqual(canonical(resumed), canonical(baseline),
+    'the resumed scan must still produce the same finding set as an uninterrupted one — only the changed file was re-analysed, but it WAS re-analysed');
 
   fs.rmSync(treeA, { recursive: true, force: true });
   fs.rmSync(treeB, { recursive: true, force: true });
 });
 
-test('adding or removing a file discards the checkpoint', async () => {
-  const tree = makeTree('fileset');
+test('FR-208: adding a new file scans only that file — every already-checkpointed file still resumes', async () => {
+  const tree = makeTree('fileset-add');
   const child = interruptedScan(tree, 2);
   assert.equal(child.status, 137, child.stderr);
+  const before = checkpointedFileList(tree);
+  assert.ok(before.length >= 1);
 
   fs.writeFileSync(path.join(tree, 'src/g.js'), 'module.exports = 1;\n');
   const { scan } = await withEnv({ AGENTIC_SECURITY_RESUME: '1' }, () => runScan(tree, {}));
-  assert.equal(scan._scanMeta.checkpoint.resumed, 0);
+  assert.equal(scan._scanMeta.checkpoint.resumed, before.length,
+    `expected all ${before.length} already-checkpointed file(s) to resume; a newly-added file must not invalidate anything else`);
+  assert.equal(scan._scanMeta.checkpoint.discarded, false);
+  assert.deepEqual(scan._scanMeta.checkpoint.invalidatedFiles, [], 'adding a file invalidates nothing that was already checkpointed');
+
+  fs.rmSync(tree, { recursive: true, force: true });
+});
+
+test('FR-208: removing an already-checkpointed file from the scan drops only that file\'s record', async () => {
+  const tree = makeTree('fileset-remove');
+  const child = interruptedScan(tree, 2);
+  assert.equal(child.status, 137, child.stderr);
+  const before = checkpointedFileList(tree);
+  assert.ok(before.length >= 1);
+  const removedFile = before[0];
+
+  fs.rmSync(path.join(tree, removedFile));
+  const { scan } = await withEnv({ AGENTIC_SECURITY_RESUME: '1' }, () => runScan(tree, {}));
+  assert.equal(scan._scanMeta.checkpoint.resumed, before.length - 1,
+    'the removed file is simply never scanned; every OTHER checkpointed file still resumes');
+  assert.equal(scan._scanMeta.checkpoint.discarded, false);
 
   fs.rmSync(tree, { recursive: true, force: true });
 });
@@ -273,6 +326,9 @@ test('changing the ruleset version discards the checkpoint end-to-end', async ()
 
   const { scan } = await withEnv({ AGENTIC_SECURITY_RESUME: '1' }, () => runScan(tree, {}));
   assert.equal(scan._scanMeta.checkpoint.resumed, 0, 'a different ruleset version must not resume');
+  assert.equal(scan._scanMeta.checkpoint.discarded, true, 'FR-208: a global-identity change must report as a genuine whole-checkpoint discard');
+  assert.match(scan._scanMeta.checkpoint.discardReason || '', /ruleset version changed/,
+    `FR-208: the discard reason must name what actually changed; got ${JSON.stringify(scan._scanMeta.checkpoint.discardReason)}`);
 
   fs.rmSync(tree, { recursive: true, force: true });
 });
@@ -293,13 +349,97 @@ test('engine version, ruleset version and bundle sha each change the run key', (
   assert.equal(k, computeRunKey({ ...base }));
 });
 
+// FR-208: computeGlobalKey is computeRunKey with fileContents forced empty —
+// engine/ruleset/bundle/deps/env still change it, but a scanned file's own
+// content must NOT, since that's the whole point of separating the two.
+test('FR-208: computeGlobalKey changes with engine/ruleset/bundle/deps/env but NOT with a scanned file\'s content', () => {
+  const base = {
+    engineVersion: '1.0.0', rulesetVersion: '1.0.0', bundleSha: 'aa',
+    depFileContents: { 'package.json': '{}' },
+    env: { AGENTIC_SECURITY_FOO: '1' },
+  };
+  const k = computeGlobalKey(base);
+  assert.match(k, /^[0-9a-f]{64}$/);
+  assert.notEqual(k, computeGlobalKey({ ...base, engineVersion: '1.0.1' }));
+  assert.notEqual(k, computeGlobalKey({ ...base, rulesetVersion: '1.0.1' }));
+  assert.notEqual(k, computeGlobalKey({ ...base, bundleSha: 'bb' }));
+  assert.notEqual(k, computeGlobalKey({ ...base, depFileContents: { 'package.json': '{"changed":true}' } }));
+  assert.notEqual(k, computeGlobalKey({ ...base, env: { AGENTIC_SECURITY_FOO: '2' } }));
+  // The one thing that must NOT move it — a scanned file's own content isn't
+  // even an accepted parameter, but pass it anyway to prove it's ignored if
+  // a future caller mistakenly supplies it.
+  assert.equal(k, computeGlobalKey({ ...base, fileContents: { 'a.js': 'anything at all' } }));
+  assert.equal(k, computeGlobalKey({ ...base }));
+});
+
+test('FR-208: globalKeyMeta explains a mismatch by naming which specific input changed', () => {
+  const base = { engineVersion: '1.0.0', rulesetVersion: '1.0.0', bundleSha: 'aa', depFileContents: {}, env: {} };
+  const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'r8-globalmeta-'));
+
+  const h1 = openCheckpoint(tree, { globalKey: computeGlobalKey(base), meta: globalKeyMeta(base) });
+  recordFileDone(h1, 'a.js', { findings: [] });
+  closeCheckpoint(h1, { complete: false });
+
+  const engineChanged = { ...base, engineVersion: '2.0.0' };
+  const h2 = openCheckpoint(tree, { globalKey: computeGlobalKey(engineChanged), meta: globalKeyMeta(engineChanged) });
+  assert.equal(h2.discarded, true);
+  assert.match(h2.reason, /engine version changed \(1\.0\.0 -> 2\.0\.0\)/);
+  closeCheckpoint(h2, { complete: true });
+
+  const h3 = openCheckpoint(tree, { globalKey: computeGlobalKey(base), meta: globalKeyMeta(base) });
+  recordFileDone(h3, 'a.js', { findings: [] });
+  closeCheckpoint(h3, { complete: false });
+
+  const envChanged = { ...base, env: { AGENTIC_SECURITY_FOO: '1' } };
+  const h4 = openCheckpoint(tree, { globalKey: computeGlobalKey(envChanged), meta: globalKeyMeta(envChanged) });
+  assert.equal(h4.discarded, true);
+  assert.match(h4.reason, /AGENTIC_SECURITY_\* environment switch changed/);
+  closeCheckpoint(h4, { complete: true });
+
+  fs.rmSync(tree, { recursive: true, force: true });
+});
+
+test('FR-208: a per-file content mismatch is named via invalidatedFiles(), with a clean reason string', () => {
+  const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'r8-invalidated-'));
+  const gk = 'a'.repeat(64);
+
+  const h1 = openCheckpoint(tree, { globalKey: gk, fileContents: { 'a.js': 'const x = 1;' } });
+  recordFileDone(h1, 'a.js', { findings: [{ id: 'one' }] });
+  closeCheckpoint(h1, { complete: false });
+
+  // Same global key, but a.js's content differs from what it was recorded with.
+  const h2 = openCheckpoint(tree, { globalKey: gk, fileContents: { 'a.js': 'const x = 2; // changed' } });
+  assert.equal(h2.discarded, false, 'a per-file content change must not discard the whole checkpoint');
+  assert.equal(completedFiles(h2).size, 0, 'the stale record must not be resumable');
+  assert.deepEqual(invalidatedFiles(h2), [{ file: 'a.js', reason: 'content changed since it was checkpointed' }]);
+  closeCheckpoint(h2, { complete: true });
+
+  fs.rmSync(tree, { recursive: true, force: true });
+});
+
+test('FR-208: a record with no tracked content hash (opened without fileContents) is trusted as before, never marked invalidated', () => {
+  const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'r8-untracked-'));
+  const gk = 'b'.repeat(64);
+
+  const h1 = openCheckpoint(tree, { globalKey: gk });
+  recordFileDone(h1, 'a.js', { findings: [{ id: 'one' }] });
+  closeCheckpoint(h1, { complete: false });
+
+  const h2 = openCheckpoint(tree, { globalKey: gk });
+  assert.equal(completedFiles(h2).size, 1, 'a record written with no content tracking must still resume');
+  assert.deepEqual(invalidatedFiles(h2), []);
+  closeCheckpoint(h2, { complete: true });
+
+  fs.rmSync(tree, { recursive: true, force: true });
+});
+
 test('a checkpoint written under one run key is not readable under another', () => {
   const tree = makeTree('runkey');
-  const h1 = openCheckpoint(tree, { runKey: 'a'.repeat(64) });
+  const h1 = openCheckpoint(tree, { globalKey: 'a'.repeat(64) });
   recordFileDone(h1, 'src/a.js', { findings: [{ id: 'x' }] });
   closeCheckpoint(h1, { complete: false });
 
-  const h2 = openCheckpoint(tree, { runKey: 'b'.repeat(64) });
+  const h2 = openCheckpoint(tree, { globalKey: 'b'.repeat(64) });
   assert.equal(completedFiles(h2).size, 0);
   assert.deepEqual(resumeFindings(h2), []);
   closeCheckpoint(h2, { complete: true });
@@ -312,13 +452,13 @@ test('a checkpoint written under one run key is not readable under another', () 
 test('a corrupt header discards the whole checkpoint without throwing', () => {
   const tree = makeTree('corrupt-header');
   const key = 'c'.repeat(64);
-  const h1 = openCheckpoint(tree, { runKey: key });
+  const h1 = openCheckpoint(tree, { globalKey: key });
   recordFileDone(h1, 'src/a.js', { findings: [] });
   closeCheckpoint(h1, { complete: false });
 
   const file = checkpointPath(tree);
   fs.writeFileSync(file, '{not json at all\n{"f":"src/a.js"}\n');
-  const h2 = openCheckpoint(tree, { runKey: key });
+  const h2 = openCheckpoint(tree, { globalKey: key });
   assert.equal(completedFiles(h2).size, 0);
   assert.equal(h2.enabled, true, 'a discarded checkpoint should still be usable for new records');
   closeCheckpoint(h2, { complete: true });
@@ -329,7 +469,7 @@ test('a corrupt header discards the whole checkpoint without throwing', () => {
 test('a torn final record is dropped and the good prefix survives', () => {
   const tree = makeTree('torn');
   const key = 'd'.repeat(64);
-  const h1 = openCheckpoint(tree, { runKey: key });
+  const h1 = openCheckpoint(tree, { globalKey: key });
   recordFileDone(h1, 'src/a.js', { findings: [{ id: 'one' }] });
   recordFileDone(h1, 'src/b.js', { findings: [{ id: 'two' }] });
   closeCheckpoint(h1, { complete: false });
@@ -339,14 +479,14 @@ test('a torn final record is dropped and the good prefix survives', () => {
   const raw = fs.readFileSync(file);
   fs.writeFileSync(file, raw.subarray(0, raw.length - 12));
 
-  const h2 = openCheckpoint(tree, { runKey: key });
+  const h2 = openCheckpoint(tree, { globalKey: key });
   const done = completedFiles(h2);
   assert.equal(done.has('src/a.js'), true, 'the complete record must survive');
   assert.equal(done.has('src/b.js'), false, 'the torn record must be dropped');
   // Appending after recovery must still produce a readable file.
   recordFileDone(h2, 'src/b.js', { findings: [{ id: 'two' }] });
   closeCheckpoint(h2, { complete: false });
-  const h3 = openCheckpoint(tree, { runKey: key });
+  const h3 = openCheckpoint(tree, { globalKey: key });
   assert.deepEqual([...completedFiles(h3)].sort(), ['src/a.js', 'src/b.js']);
   assert.deepEqual(resumeFindings(h3).map(r => r.file), ['src/a.js', 'src/b.js']);
   closeCheckpoint(h3, { complete: true });
@@ -357,7 +497,7 @@ test('a torn final record is dropped and the good prefix survives', () => {
 test('a checksum-tampered record is dropped', () => {
   const tree = makeTree('tamper');
   const key = 'e'.repeat(64);
-  const h1 = openCheckpoint(tree, { runKey: key });
+  const h1 = openCheckpoint(tree, { globalKey: key });
   recordFileDone(h1, 'src/a.js', { findings: [{ id: 'one' }] });
   recordFileDone(h1, 'src/b.js', { findings: [{ id: 'two' }] });
   closeCheckpoint(h1, { complete: false });
@@ -369,7 +509,7 @@ test('a checksum-tampered record is dropped', () => {
   lines[1] = JSON.stringify(rec);
   fs.writeFileSync(file, lines.join('\n'));
 
-  const h2 = openCheckpoint(tree, { runKey: key });
+  const h2 = openCheckpoint(tree, { globalKey: key });
   assert.equal(completedFiles(h2).size, 0, 'a tampered record and everything after it must be dropped');
   closeCheckpoint(h2, { complete: true });
 
@@ -419,7 +559,7 @@ test('checkpoint helpers never throw on a disabled or bogus handle', () => {
 
 test('values JSON cannot round-trip are refused rather than silently mangled', () => {
   const tree = makeTree('jsonsafe');
-  const h = openCheckpoint(tree, { runKey: 'f'.repeat(64) });
+  const h = openCheckpoint(tree, { globalKey: 'f'.repeat(64) });
   assert.equal(recordFileDone(h, 'a.js', { findings: [{ when: new Date() }] }), false);
   assert.equal(recordFileDone(h, 'b.js', { findings: [{ re: /x/ }] }), false);
   assert.equal(recordFileDone(h, 'c.js', { findings: [{ fn: () => 1 }] }), false);

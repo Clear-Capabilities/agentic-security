@@ -13,6 +13,7 @@ import {
   requireCitedEvidence,
   computeFixTier,
   gateFixOutput,
+  checkMechanicalTierEvidence,
 } from '../src/posture/fix-honesty-gate.js';
 
 // ---------------------------------------------------------------------------
@@ -237,4 +238,44 @@ test('gateFixOutput: concatenates residual-honesty and tier-contradiction violat
 test('gateFixOutput: never throws on missing / empty argument', () => {
   assert.doesNotThrow(() => gateFixOutput());
   assert.doesNotThrow(() => gateFixOutput({}));
+});
+
+// ---------------------------------------------------------------------------
+// checkMechanicalTierEvidence / gateFixOutput's FR-308 mechanical cross-check
+// ---------------------------------------------------------------------------
+
+test('checkMechanicalTierEvidence: a FULL tier is refuted when the PoC leg is still-exploitable', () => {
+  const r = checkMechanicalTierEvidence('FULL', { status: 'still-exploitable', reason: 'marker file written' });
+  assert.equal(r.ok, false);
+  assert.ok(r.violations.some((v) => v.includes('refuted by mechanical evidence')));
+  assert.ok(r.violations.some((v) => v.includes('marker file written')));
+});
+
+test('checkMechanicalTierEvidence: a non-FULL tier (MITIGATION/WORKAROUND) is unaffected by a still-exploitable PoC — a mitigation is allowed to leave the underlying flaw partially reachable', () => {
+  assert.equal(checkMechanicalTierEvidence('MITIGATION', { status: 'still-exploitable' }).ok, true);
+  assert.equal(checkMechanicalTierEvidence('WORKAROUND', { status: 'still-exploitable' }).ok, true);
+});
+
+test('checkMechanicalTierEvidence: FULL is unaffected by no-longer-proven, inconclusive, not-requested, or a missing pocLeg', () => {
+  assert.equal(checkMechanicalTierEvidence('FULL', { status: 'no-longer-proven' }).ok, true);
+  assert.equal(checkMechanicalTierEvidence('FULL', { status: 'inconclusive' }).ok, true);
+  assert.equal(checkMechanicalTierEvidence('FULL', { status: 'not-requested' }).ok, true);
+  assert.equal(checkMechanicalTierEvidence('FULL', null).ok, true);
+  assert.equal(checkMechanicalTierEvidence('FULL', undefined).ok, true);
+});
+
+test('gateFixOutput: a self-reported FULL claim (clean signals, no residual) is refuted end-to-end when passed a still-exploitable pocLeg', () => {
+  const r = gateFixOutput(
+    { residual: '', signals: { ...THREE } },
+    { pocLeg: { status: 'still-exploitable', reason: 'payload still reached the sink' } },
+  );
+  assert.equal(r.tier, 'FULL', 'the self-reported signals alone still compute to FULL');
+  assert.equal(r.ok, false, 'but the mechanical cross-check must refute it');
+  assert.ok(r.violations.some((v) => v.includes('refuted by mechanical evidence')));
+});
+
+test('gateFixOutput: omitting the second (mechanical) argument entirely is backward compatible — pure self-consistency, unchanged from before FR-308', () => {
+  const r = gateFixOutput({ residual: '', signals: { ...THREE } });
+  assert.equal(r.tier, 'FULL');
+  assert.equal(r.ok, true);
 });

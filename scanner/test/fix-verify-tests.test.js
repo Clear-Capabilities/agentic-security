@@ -82,6 +82,65 @@ test('detectTestCommand + runProjectTests: no detectable suite -> skipped, verif
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// ── FR-305: `ok:true` alone must never be read as "fully verified" when a
+//    required leg was skipped — verifiedFull is the honest, explicit answer.
+
+test('FR-305: no test runner detected -> ok:true but verifiedFull:false, degradedLegs names the skipped leg', async () => {
+  const dir = mkTmpDir('no-runner-degraded');
+  const verdict = await verifyFix({
+    scanRoot: dir,
+    originalFindingStableId: 'no-such-id',
+    files: { 'app.js': 'console.log(1);\n' },
+  });
+  assert.equal(verdict.ok, true, 'unchanged pre-FR-305 behavior: no runner does not fail the build');
+  assert.equal(verdict.verifiedFull, false, 'but it must not be labeled fully verified');
+  assert.ok(verdict.degradedLegs.some(l => l.startsWith('tests:')), `expected a tests: entry in degradedLegs, got ${JSON.stringify(verdict.degradedLegs)}`);
+  assert.match(verdict.summary, /NOT fully verified/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('FR-305: a genuinely-run, genuinely-passing test suite with no linter configured (N/A, not skipped) -> verifiedFull:true', async () => {
+  const dir = mkTmpDir('full-verify');
+  writePkg(dir, 'exit 0');
+  const verdict = await verifyFix({
+    scanRoot: dir,
+    originalFindingStableId: 'no-such-id',
+    files: { 'app.js': 'console.log(1);\n' },
+  });
+  assert.equal(verdict.tests.skipped, false, 'sanity: tests must have genuinely run for this to be a meaningful positive control');
+  assert.equal(verdict.lint.runner, 'none', 'sanity: no linter configured at all — N/A, not a skip');
+  assert.equal(verdict.ok, true);
+  assert.equal(verdict.verifiedFull, true, 'nothing that was actually required was skipped');
+  assert.deepEqual(verdict.degradedLegs, []);
+  assert.doesNotMatch(verdict.summary, /NOT fully verified/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('FR-305: a configured-but-uninstalled linter degrades verifiedFull even though ok stays true', async () => {
+  const dir = mkTmpDir('lint-missing-binary');
+  writePkg(dir, 'exit 0');
+  // A real eslint config with no eslint binary reachable via bare `eslint`
+  // (this project's own toolchain does not put a global `eslint` on PATH —
+  // confirmed via `which eslint` before writing this test) triggers
+  // runLinter's binary-missing path. Asserted unconditionally, not
+  // if-guarded on the outcome: a silently-no-op test is exactly the kind of
+  // false confidence FR-305 itself exists to eliminate. If this ever fails
+  // because a global `eslint` genuinely becomes reachable in some future
+  // environment, that is a real signal this test needs a different linter
+  // name, not a reason to make the assertion conditional.
+  fs.writeFileSync(path.join(dir, '.eslintrc.json'), '{}');
+  const verdict = await verifyFix({
+    scanRoot: dir,
+    originalFindingStableId: 'no-such-id',
+    files: { 'app.js': 'console.log(1);\n' },
+  });
+  assert.equal(verdict.lint.skipped, true, `expected eslint to be unreachable in this sandbox; got lint=${JSON.stringify(verdict.lint)} — if eslint is now globally installed, this test needs a linter name guaranteed absent instead`);
+  assert.equal(verdict.ok, true);
+  assert.equal(verdict.verifiedFull, false);
+  assert.ok(verdict.degradedLegs.some(l => l.startsWith('lint:')), `expected a lint: entry, got ${JSON.stringify(verdict.degradedLegs)}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('detectTestCommand: npm placeholder script is not treated as a real test command', () => {
   const dir = mkTmpDir('placeholder');
   writePkg(dir, 'echo "Error: no test specified" && exit 1');
@@ -251,6 +310,59 @@ test('poc leg: a patch that closes the hole PASSES', async (t) => {
   }
   assert.equal(verdict.poc.status, 'no-longer-proven');
   assert.equal(verdict.ok, true);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// --- FR-308: a self-reported FULL tier is REFUTED by mechanical (PoC) evidence ---
+
+test('FR-308: a self-reported FULL fixMeta is refuted (honesty.ok:false) when the PoC still demonstrates the vulnerability against the patch', async (t) => {
+  const dir = mkTmpDir('poc-full-refuted');
+  writePkg(dir, 'exit 0');
+  const verdict = await verifyFix({
+    scanRoot: dir,
+    originalFindingStableId: 'no-such-id',
+    // "Fixed" in name only — the traversal still gets through.
+    files: { 'vuln.js': 'export const unsafe = (p) => String(p);\n' },
+    poc: MARKER_POC,
+    fixMeta: {
+      residual: '',
+      signals: { sinkSignatureChanged: true, allCallersRouted: true, testDiscriminates: true },
+    },
+  });
+  if (verdict.poc.status === 'inconclusive') {
+    t.skip(`SKIPPED, NOT PASSED: the PoC could not be executed here (${verdict.poc.reason})`);
+    fs.rmSync(dir, { recursive: true, force: true });
+    return;
+  }
+  assert.equal(verdict.poc.status, 'still-exploitable');
+  assert.equal(verdict.honesty.tier, 'FULL', 'the self-reported signals still compute to FULL — the point is the mechanical check catches it anyway');
+  assert.equal(verdict.honesty.ok, false, 'a FULL claim must be refuted by real execution evidence, not just accepted because the self-reported signals were internally consistent');
+  assert.ok(verdict.honesty.violations.some(v => /refuted by mechanical evidence/.test(v)));
+  assert.equal(verdict.ok, false, 'the overall verdict is false for two independent reasons here — poc AND honesty — both must hold');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('FR-308: the SAME self-reported FULL fixMeta is accepted (honesty.ok:true) once the PoC no longer demonstrates the vulnerability', async (t) => {
+  const dir = mkTmpDir('poc-full-accepted');
+  writePkg(dir, 'exit 0');
+  const verdict = await verifyFix({
+    scanRoot: dir,
+    originalFindingStableId: 'no-such-id',
+    files: { 'vuln.js': "export const unsafe = (p) => String(p).replace(/\\.\\./g, '');\n" },
+    poc: MARKER_POC,
+    fixMeta: {
+      residual: '',
+      signals: { sinkSignatureChanged: true, allCallersRouted: true, testDiscriminates: true },
+    },
+  });
+  if (verdict.poc.status === 'inconclusive') {
+    t.skip(`SKIPPED, NOT PASSED: the PoC could not be executed here (${verdict.poc.reason})`);
+    fs.rmSync(dir, { recursive: true, force: true });
+    return;
+  }
+  assert.equal(verdict.poc.status, 'no-longer-proven');
+  assert.equal(verdict.honesty.tier, 'FULL');
+  assert.equal(verdict.honesty.ok, true, 'mechanical evidence supports the FULL claim here — the gate must not falsely refute an honest FULL fix');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

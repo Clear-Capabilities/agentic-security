@@ -65,7 +65,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { ensureStateDir, safeWriteState, statePath } from '../posture/state-dir.js';
-import { redactSecrets } from './redact.js';
+import { redactPayload } from '../egress/redact.js';
 import { signLastScan } from '../posture/integrity.js';
 
 // Bump on every prompt change so the cache invalidates. Exported as a
@@ -74,6 +74,9 @@ import { signLastScan } from '../posture/integrity.js';
 import { createCostLedger, parseCapUsd, renderCostCeiling } from './cost-ceiling.js';
 import { localEndpointConfig } from './local-endpoint.js';
 import { resolveProvider, buildProviderRequest, providerMatrix } from './providers.js';
+import { evaluateEgress } from '../egress/policy.js';
+import { recordEgressCall, payloadMetrics } from '../egress/audit.js';
+import { MODEL_STATUS, summarizeModelStatus } from './model-status.js';
 
 // The output cap we request. Shared with the cost estimate so the ceiling
 // charges exactly what we permit the model to produce.
@@ -295,7 +298,7 @@ export function sanitizeReasoning(s) {
     .slice(0, 280);
 }
 
-function renderPrompt(finding, fileContents, challenge, nonce) {
+function renderPrompt(finding, fileContents, challenge, nonce, scanRoot) {
   const code = fileContents?.[finding.file];
   let context = '';
   if (code && finding.line) {
@@ -315,12 +318,14 @@ function renderPrompt(finding, fileContents, challenge, nonce) {
   let sterileSnippet = String(finding.snippet || '')
     .replace(/[\r\n]+/g, ' ')
     .slice(0, 400);
-  // R10 — redact likely live credentials (API keys, tokens, private keys,
-  // connection-string passwords, ...) out of BOTH excerpts before anything
-  // leaves the machine. This is the last choke point before the prompt is
-  // assembled — everything downstream sees only redacted text.
-  sterileContext = redactSecrets(sterileContext).text;
-  sterileSnippet = redactSecrets(sterileSnippet).text;
+  // R10 / FR-603 — redact secrets (API keys, tokens, private keys,
+  // connection-string passwords), PII/PHI/PCI/FIN-shaped fields, operator-
+  // configured customer-data patterns, and whole-file content from an
+  // operator-configured proprietary path out of BOTH excerpts before
+  // anything leaves the machine. This is the last choke point before the
+  // prompt is assembled — everything downstream sees only redacted text.
+  sterileContext = redactPayload({ text: sterileContext, filePath: finding.file, scanRoot }).text;
+  sterileSnippet = redactPayload({ text: sterileSnippet, filePath: finding.file, scanRoot }).text;
   return PROMPT_TEMPLATE
     .replace(/\{\{nonce\}\}/g, nonce)
     .replace(/\{\{challenge\}\}/g, challenge)
@@ -440,7 +445,34 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
   if (!cfg) {
     finding.validator_verdict = 'unvalidated';
     finding.unvalidated = true;
+    // FR-606: distinguish "the local preset refused a configured but
+    // non-loopback endpoint" (a policy decision) from "nothing was
+    // configured at all" (the tier is simply off) — endpointConfig()
+    // leaves _localPresetRefusal set only for the former.
+    finding.llmValidationStatus = _localPresetRefusal ? MODEL_STATUS.POLICY_BLOCKED : MODEL_STATUS.DISABLED;
     return { verdict: 'unvalidated' };
+  }
+  // FR-601: egress policy evaluated before anything about this finding is
+  // rendered into a prompt (renderPrompt runs later, at line ~486) and before
+  // callEndpoint's fetch. A denial short-circuits here — no prompt is ever
+  // built for a denied endpoint, and the finding gets a distinct, honest
+  // error tag rather than being silently lumped in with "no answer received".
+  // FR-602: role/model are already resolved above (resolveProvider's own
+  // 'validate' role, cfg.model) — threading them through here is what
+  // makes the model/role constraint dimensions genuinely enforceable for a
+  // real caller, not just a mechanism nothing exercises.
+  const egressDecision = evaluateEgress({ scanRoot, purpose: 'llm-validator', endpoint: cfg.endpoint, role: 'validate', model: cfg.model });
+  if (!egressDecision.allowed) {
+    finding.validator_verdict = 'unvalidated';
+    finding.unvalidated = true;
+    finding._validatorError = 'egress-policy-denied';
+    finding._egressDecision = egressDecision;
+    finding.llmValidationStatus = MODEL_STATUS.POLICY_BLOCKED;
+    // FR-604: a denied call still gets an audit entry — purpose/provider/
+    // model/policy/outcome are all known without ever building a prompt,
+    // so byte/token/hash fields are simply absent (nothing was constructed).
+    recordEgressCall({ scanRoot, decision: egressDecision, ctx: { model: cfg.model, region: null } });
+    return { verdict: 'unvalidated', error: 'egress-policy-denied', egressDecision };
   }
   // Pre-flight: refuse to validate location-less findings. Without a precise
   // file:line, the response cross-check degenerates and the validator can be
@@ -479,11 +511,20 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
     // against any future write-path regression that might cache un-sanitized text).
     finding.validator_reasoning = sanitizeReasoning(cached.reasoning);
     finding._validatorCache = 'hit';
+    // FR-606: a cache hit means the model DID answer at some point — not
+    // re-asking is an optimization, not a different outcome.
+    finding.llmValidationStatus = MODEL_STATUS.COMPLETED;
     return cached;
   }
   const challenge = crypto.randomBytes(8).toString('hex');
   const nonce     = crypto.randomBytes(8).toString('hex');
-  const prompt = renderPrompt(finding, fileContents, challenge, nonce);
+  const prompt = renderPrompt(finding, fileContents, challenge, nonce, scanRoot);
+  // FR-604: audit the allowed call now that the final (redacted) outbound
+  // payload is known — byte/token counts and a content hash, never the
+  // payload text itself. Recorded even if the call below fails or is
+  // blocked by the cost ceiling: the egress DECISION was 'allow' and a
+  // real payload was built, which is the fact this entry attests to.
+  recordEgressCall({ scanRoot, decision: egressDecision, ctx: { model: cfg.model, region: null }, metrics: payloadMetrics(prompt) });
 
   // R12 — the hard ceiling. Checked BEFORE the call, against a conservative
   // estimate: input from the prompt we are about to send, output at the full
@@ -503,6 +544,9 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
       finding.validator_verdict = 'unvalidated';
       finding.unvalidated = true;
       finding.validator_skipped_reason = afford.reason;
+      // FR-606: a cost ceiling is an operator-configured policy denying the
+      // call, the same bucket as an egress denial — not a network failure.
+      finding.llmValidationStatus = MODEL_STATUS.POLICY_BLOCKED;
       return { verdict: 'unvalidated', error: 'cost-ceiling' };
     }
   }
@@ -522,6 +566,11 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
     finding.validator_verdict = 'unvalidated';
     finding.unvalidated = true;
     finding._validatorError = resp.error;
+    // FR-606: the call was attempted and failed before any usable response
+    // arrived (non-2xx HTTP, or a fetch/network exception in callEndpoint)
+    // — the endpoint is unavailable right now, distinct from a policy
+    // refusal or a malformed reply.
+    finding.llmValidationStatus = MODEL_STATUS.UNAVAILABLE;
     return { verdict: 'unvalidated', error: resp.error };
   }
   const obj = parseLastJsonObject(resp.text);
@@ -533,6 +582,11 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
     finding._validatorError = `verify-failed:${v.reason}`;
     finding.llm_confidence = 0.5;
     finding.validator_reasoning = sanitizeReasoning(`escalate (verify-failed:${v.reason})`);
+    // FR-606: a response DID come back, but its content could not be
+    // parsed/verified into a usable answer — the model answered something,
+    // just not something usable. Distinct from UNAVAILABLE (no response at
+    // all) and from a real verdict.
+    finding.llmValidationStatus = MODEL_STATUS.MALFORMED;
     return { verdict: 'escalate', error: v.reason };
   }
   const parsed = v.parsed;
@@ -541,6 +595,7 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
   finding.llm_confidence = parsed.confidence;
   finding.validator_reasoning = parsed.reasoning;
   finding._validatorCache = 'miss';
+  finding.llmValidationStatus = MODEL_STATUS.COMPLETED;
   return parsed;
 }
 
@@ -563,12 +618,19 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
   const optOut = process.env.AGENTIC_SECURITY_LLM_VALIDATE === '0';
   const enabled = !!cfg && !optOut;
   if (!enabled) {
+    // FR-606: same distinction as validateOne's own !cfg branch — a
+    // configured-but-refused endpoint (local preset, non-loopback) is
+    // policy-blocked; nothing configured, OR an explicit operator opt-out
+    // (AGENTIC_SECURITY_LLM_VALIDATE=0), is the tier simply being off.
+    const status = _localPresetRefusal ? MODEL_STATUS.POLICY_BLOCKED : MODEL_STATUS.DISABLED;
     for (const f of findings) {
       f.validator_verdict = 'unvalidated';
       f.unvalidated = true;
       if (_localPresetRefusal) f.validator_skipped_reason = _localPresetRefusal;
+      f.llmValidationStatus = status;
     }
     if (_localPresetRefusal) findings.localPathRefusal = _localPresetRefusal;
+    findings.llmValidatorStatus = summarizeModelStatus(findings);
     return findings;
   }
   const candidates = findings.filter(f =>
@@ -593,7 +655,11 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
       f.validator_verdict = 'unvalidated';
       f.unvalidated = true;
       f.validator_skipped_reason = e.message;
+      // FR-606: a malformed operator config is a policy problem, same
+      // bucket as a valid-but-exceeded cost ceiling — not a network failure.
+      f.llmValidationStatus = MODEL_STATUS.POLICY_BLOCKED;
     }
+    findings.llmValidatorStatus = summarizeModelStatus(findings);
     return findings;
   }
 
@@ -606,6 +672,11 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
         // FAIL-CLOSED on exception too.
         candidates[idx].validator_verdict = 'escalate';
         candidates[idx]._validatorError = e.message;
+        // FR-606: an unexpected exception during validation (not a
+        // network-layer failure — those are already caught inside
+        // callEndpoint/validateOne) still means no usable answer was
+        // produced; closest of the five to what actually happened.
+        candidates[idx].llmValidationStatus = MODEL_STATUS.UNAVAILABLE;
       }
     }
   }
@@ -635,7 +706,13 @@ export async function validateMany(findings, { fileContents, scanRoot, concurren
     if (f.validator_verdict) continue;
     f.validator_verdict = 'unvalidated';
     f.unvalidated = true;
+    // FR-606 defensive fallback: every real branch above already sets this;
+    // reaching here means a candidate was filtered out (not a model-tier
+    // pass at all) — DO NOT stamp llmValidationStatus for those, the same
+    // "not applicable" convention validateOne itself uses for SCA locators
+    // and no-precise-location findings.
   }
+  findings.llmValidatorStatus = summarizeModelStatus(findings);
   return findings;
 }
 

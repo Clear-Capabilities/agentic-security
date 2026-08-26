@@ -169,7 +169,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   for (const area of areas) {
     let areaDegradedCount = 0;
     for (const lens of lenses) {
-      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {} }, { llmInvoke });
+      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {} }, { llmInvoke, scanRoot: opts.scanRoot });
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
       if (run.degraded) areaDegradedCount += 1;
@@ -231,7 +231,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       'every candidate is reported unconfirmed and severity is not evidence-derived');
   }
   const confirmed = await confirmAll(candidates, { taintProbe });
-  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke });
+  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke, scanRoot: opts.scanRoot });
   const { fresh, duplicates, suppressed } = judgeCandidates(survivors, ctx.priorScan, ctx.triageFeedback);
 
   // A spent budget is a coverage gap, stated once at the top level rather than

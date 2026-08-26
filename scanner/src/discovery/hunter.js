@@ -11,7 +11,7 @@
 // discovery pass that cannot run must leave the rest of the scan intact.
 import * as crypto from 'node:crypto';
 import { buildHunterPrompt } from './lenses.js';
-import { resolveLlmInvoke } from './llm-invoke.js';
+import { resolveLlmInvokeWithDecision } from './llm-invoke.js';
 
 function appendEntry(transcript, entry) {
   const prev = transcript.length ? transcript[transcript.length - 1].hash : null;
@@ -75,12 +75,16 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   const transcript = [];
   const lensKey = lens?.key || 'unknown';
   const base = { focusAreaId: focusArea.id, lens: lensKey, transcript };
-  const llmInvoke = resolveLlmInvoke(opts);
+  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, purpose: 'discovery-hunter' });
 
   if (typeof llmInvoke !== 'function') {
-    const reason = 'no llmInvoke supplied and AGENTIC_SECURITY_LLM_ENDPOINT not set';
-    appendEntry(transcript, { phase: 'init', reason });
-    return { ...base, candidates: [], degraded: true, reason };
+    // FR-601: distinguish "policy denied a configured endpoint" from "nothing
+    // was configured at all" — the reason must reflect which actually happened.
+    const reason = egressDecision
+      ? `egress policy denied this call: ${egressDecision.reason}`
+      : 'no llmInvoke supplied and AGENTIC_SECURITY_LLM_ENDPOINT not set';
+    appendEntry(transcript, { phase: 'init', reason, egressDecision: egressDecision || undefined });
+    return { ...base, candidates: [], degraded: true, reason, egressDecision };
   }
 
   let prompt;

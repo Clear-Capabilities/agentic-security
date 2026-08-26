@@ -308,7 +308,7 @@ test('release-gate — attestation-self-check passes on a real compute/verify ro
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all eighteen checks in order', () => {
+test('release-gate — full run plans all twenty-one checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
   // A Stage-6 correctness follow-up added attestation-self-check +
@@ -320,8 +320,19 @@ test('release-gate — full run plans all eighteen checks in order', () => {
   // added calibration-holdout — fast, and it FAILS by default: an unverified
   // confidence surface is not a calibrated one, so the absence of a held-out
   // set is a failure waivable only by a dated entry that expires.
+  // FR-902 (assurance-hardening PRD) added independent-population-gate —
+  // fast, compares the committed bench/independent/RESULT.json against a
+  // committed floor (bench/independent/gate-baseline.json), same
+  // committed-artifact-vs-baseline shape calibration-holdout already uses,
+  // waivable only by a dated entry in .independent-population-waiver.json.
+  // FR-906 added ttff-gate + memory-gate — both slow. bench/ttff/runner.mjs
+  // (PRD F11.2) already existed and was already `--check`-able against a
+  // committed baseline but had never been wired into any release gate;
+  // bench/memory/runner.mjs is new, built to the exact same shape (peak
+  // RSS in place of time-to-first-finding) since no memory-budget
+  // measurement of any kind existed anywhere in this repo before.
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 18);
+  assert.equal(ids.length, 21);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -346,28 +357,41 @@ test('release-gate — attestation-self-check and nist-catalog-freshness are reg
 test('release-gate — --fast skips only the slow gates, keeping every fast check', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
-  assert.equal(slowIds.length, 6);
+  assert.equal(slowIds.length, 8);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 12);
+  assert.equal(ids.length, 13);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
   // The four cheap correctness gates, the two new fast checks,
-  // package-contents, both provenance gates, and the doc-link gate must
-  // survive --fast: they are what make a fast run still meaningful.
+  // package-contents, both provenance gates, the doc-link gate, and the two
+  // gates over committed measurement artifacts (calibration-holdout,
+  // independent-population-gate — both compare a committed file against a
+  // committed floor, no subprocess, cheap) must survive --fast: they are
+  // what make a fast run still meaningful.
   for (const keep of [
     'working-tree-clean', 'version-consistency', 'changelog-entry',
     'bundle-integrity', 'scorecard-freshness', 'attestation-self-check',
     'nist-catalog-freshness', 'package-contents',
     'head-pushed', 'remote-ci-green', 'doc-links', 'calibration-holdout',
+    'independent-population-gate',
   ]) {
     assert.ok(ids.includes(keep), `--fast must still run ${keep}`);
   }
 });
 
-test('release-gate — the slow checks are the five command gates plus the registry gate', () => {
+test('release-gate — the slow checks are the five command gates, the two FR-906 measurement gates, and the registry gate', () => {
   assert.deepEqual(
     CHECKS.filter(c => c.slow).map(c => c.id),
-    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'layer-recall-gate', 'dependency-currency']
+    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'layer-recall-gate', 'ttff-gate', 'memory-gate', 'dependency-currency']
   );
+});
+
+test('release-gate — ttff-gate and memory-gate are registered and slow', () => {
+  const ttff = CHECKS.find(c => c.id === 'ttff-gate');
+  const memory = CHECKS.find(c => c.id === 'memory-gate');
+  assert.ok(ttff, 'ttff-gate must be a registered release check');
+  assert.equal(ttff.slow, true);
+  assert.ok(memory, 'memory-gate must be a registered release check');
+  assert.equal(memory.slow, true);
 });
 
 // The dependency-currency gate is skipped by --fast because it is four

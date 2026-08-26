@@ -187,12 +187,6 @@ export async function verifyFix({
   // and on the result so a caller cannot mistake it for a verified patch.
   const _testedPrePatch = !tests.skipped && _candidateDiffersFromDisk(scanRoot, files);
   const testsOk = tests.skipped ? true : tests.passed === true;
-  let honesty = null;
-  if (fixMeta && typeof fixMeta === 'object') {
-    try { honesty = gateFixOutput(fixMeta); } catch { honesty = null; }
-  }
-  _lap('honesty');
-
   // R5 — the PoC leg. Re-run the finding's proof-of-concept against the
   // CANDIDATE patch inside R1's sandbox. A patch that still lets the PoC
   // demonstrate the predicted effect has not fixed anything, however green the
@@ -204,6 +198,11 @@ export async function verifyFix({
   // to run, or a sandbox that could not start, is recorded as `inconclusive`
   // and left out of the verdict entirely. Treating "could not prove it" as
   // "fixed" is exactly the false confidence this leg exists to prevent.
+  //
+  // Computed BEFORE the honesty gate (FR-308): a still-exploitable PoC is
+  // MECHANICAL evidence, not a self-report, and gateFixOutput cross-checks a
+  // self-reported FULL tier against it below — the ordering matters, not
+  // just the value.
   let pocLeg = { status: 'not-requested', reason: null, tier: null };
   if (poc?.code) {
     try {
@@ -222,7 +221,54 @@ export async function verifyFix({
   _lap('poc');
   const pocOk = pocLeg.status !== 'still-exploitable';
 
+  // FR-308: "a mitigation or workaround cannot be represented as a full
+  // fix" — gateFixOutput's tier/residual check is a pure self-consistency
+  // check (fixMeta.signals is agent-self-reported; see fix-honesty-gate.js's
+  // header for why nothing there is server-computable). pocLeg IS
+  // server-computable — a real execution result, not a claim — so it is
+  // passed through as the one MECHANICAL cross-check available: a
+  // self-reported FULL tier is refuted, not just internally inconsistent,
+  // when the PoC still demonstrates the vulnerability against the patch.
+  // D-0024: `fixMeta` is a shared envelope — FR-307/FR-1002's `approval`
+  // key lives alongside FR-308's completeness self-report (`residual`/
+  // `verdict`/`evidence`/`signals`). Gating on mere object-truthiness meant
+  // a caller supplying ONLY `approval` (a real, common shape once the CLI's
+  // --approved-by flag and the MCP schema fix made that reachable) got
+  // silently gated on an UNRELATED FR-308 self-consistency check it never
+  // engaged with — computeFixTier(undefined) defaults to MITIGATION, which
+  // then demands a `residual` nobody was ever asked to supply, blocking an
+  // otherwise-genuine, approved fix for a reason that has nothing to do
+  // with completeness honesty. Scope the gate to fixMeta shapes that
+  // actually make a completeness-adjacent claim.
+  const hasHonestyClaim = fixMeta && typeof fixMeta === 'object' &&
+    (fixMeta.residual !== undefined || fixMeta.verdict !== undefined ||
+     fixMeta.evidence !== undefined || fixMeta.signals !== undefined);
+  let honesty = null;
+  if (hasHonestyClaim) {
+    try { honesty = gateFixOutput(fixMeta, { pocLeg }); } catch { honesty = null; }
+  }
+  _lap('honesty');
+
   const ok = rescan.ok && (lint.ok || lint.skipped) && testsOk && pocOk && (honesty ? honesty.ok : true);
+
+  // FR-305 (assurance-hardening PRD): `ok` alone conflates "every leg
+  // genuinely ran and passed" with "passed, but a required leg was skipped
+  // or unavailable" — `lint.ok`/`testsOk` are both true in the skipped case
+  // by design (this codebase does not fail-closed just because a repo has
+  // no linter or no detected test runner), so a caller checking only `ok`
+  // cannot tell the difference. `lint.skipped` is only ever true when a
+  // linter WAS configured but its binary could not be run (missing config
+  // entirely returns `runner: 'none'` with no `skipped` field at all — that
+  // is a genuine N/A, nothing was required, not a degradation). `verifiedFull`
+  // is the honest label: true only when nothing that WAS required was
+  // skipped. A caller must never present `ok: true, verifiedFull: false` as
+  // "fully verified" — `degradedLegs` names exactly what was skipped so a
+  // report can say so plainly instead of a bare pass.
+  const degradedLegs = [];
+  if (lint.skipped) degradedLegs.push(`lint: ${lint.runner} not installed`);
+  if (tests.skipped) degradedLegs.push(`tests: skipped (${tests.reason})`);
+  const verifiedFull = ok && degradedLegs.length === 0;
+
   const durations = { ...stages, totalMs: Date.now() - t0 };
   const summary = [
     `re-scan: ${rescan.ok ? 'PASS' : 'FAIL — ' + rescan.reason}`,
@@ -244,6 +290,8 @@ export async function verifyFix({
       : pocLeg.status === 'still-exploitable' ? `poc:     FAIL — the proof-of-concept still demonstrates the vulnerability against the patch`
       : pocLeg.status === 'no-longer-proven' ? 'poc:     PASS (ran against the patch and no longer demonstrates the vulnerability)'
       : `poc:     inconclusive — not counted either way (${pocLeg.reason || 'no detail reported'})`,
+    // FR-305: never let a degraded pass read the same as a full one.
+    ok && !verifiedFull ? `NOTE:    PASSED, but NOT fully verified — ${degradedLegs.join('; ')}` : null,
   ].filter(Boolean).join('\n');
   // Persist the attempt so the distribution can be reported from real runs.
   // `testsRan` is the load-bearing field: it is what keeps "verified with no
@@ -256,6 +304,7 @@ export async function verifyFix({
       at: new Date().toISOString(),
       stableId: originalFindingStableId || null,
       ok,
+      verifiedFull,
       testsRan: !tests.skipped,
       testsPassed: tests.skipped ? null : tests.passed === true,
       testedPrePatch: _testedPrePatch,
@@ -268,5 +317,5 @@ export async function verifyFix({
     });
   }
 
-  return { ok, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary };
+  return { ok, verifiedFull, degradedLegs, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary };
 }

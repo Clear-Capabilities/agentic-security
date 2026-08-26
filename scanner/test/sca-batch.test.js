@@ -44,7 +44,7 @@ globalThis.fetch = async (url) => {
 
 delete process.env.AGENTIC_SECURITY_OFFLINE;
 
-const { _enrichWithEPSS, _fetchEPSSBatch } = await import('../src/engine.js');
+const { _enrichWithEPSS, _fetchEPSSBatch, epssLiveMeta } = await import('../src/engine.js');
 
 // Per-run-unique CVE namespace so we never collide with a prior run's cache.
 // Format: CVE-9999-{run}{seq6}. Year 9999 never collides with a real CVE
@@ -138,6 +138,36 @@ test('_fetchEPSSBatch: empty input is a no-op', async () => {
   const out = await _fetchEPSSBatch([]);
   assert.equal(fetchCalls.length, 0);
   assert.equal(out.size, 0);
+});
+
+// FR-207: EPSS live-cache freshness. A freshly-fetched CVE must report as
+// not stale; an entry whose cache write is artificially aged past the
+// 7-day threshold must flip epssLiveMeta().stale to true on the very next
+// call that reads it — this is the signal computeScanHealth (via
+// applyFreshness) surfaces as a real scanHealth condition.
+test('epssLiveMeta (FR-207): a freshly-fetched CVE reports fresh (stale:false, ageDays:0)', async () => {
+  const cve = cveId(700001);
+  await _enrichWithEPSS([makeFinding(cve, 'pkg')]);
+  const meta = epssLiveMeta();
+  assert.equal(meta.stale, false);
+  assert.equal(meta.ageDays, 0);
+});
+
+test('epssLiveMeta (FR-207): an artificially-aged cache entry is reported stale on the next read', async () => {
+  const cve = cveId(700002);
+  await _enrichWithEPSS([makeFinding(cve, 'pkg')]); // warm the cache, ts = now
+  const fp = _cacheFilePathFor(cve);
+  const raw = JSON.parse(fs.readFileSync(fp, 'utf8'));
+  const agedTs = Date.now() - 10 * 86400000; // 10 days old, past the 7-day threshold
+  fs.writeFileSync(fp, JSON.stringify({ ...raw, ts: agedTs }));
+  // Second call for the same CVE is a cache hit — no network fetch — but must
+  // recompute freshness from the (now-aged) stored ts.
+  fetchCalls = [];
+  await _enrichWithEPSS([makeFinding(cve, 'pkg')]);
+  assert.equal(fetchCalls.length, 0, 'this must be a cache hit, not a refetch');
+  const meta = epssLiveMeta();
+  assert.equal(meta.stale, true, `expected a 10-day-old entry to read as stale; got ${JSON.stringify(meta)}`);
+  assert.ok(meta.ageDays >= 10);
 });
 
 // Cleanup — runs last (node:test runs tests in registration order within a

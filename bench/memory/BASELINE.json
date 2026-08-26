@@ -1,0 +1,10 @@
+{
+ "schema": "memory/v1",
+ "note": "Peak RSS of this process while scanning scanner/src/posture, sampled every 50ms. A drift tripwire, not a precision instrument — see this file's own header.",
+ "target": "scanner/src/posture",
+ "regressionFactor": 1.6,
+ "peakRssMb": 432,
+ "findings": 243,
+ "filesScanned": 178,
+ "recordedAt": "2026-08-25T12:06:18.034Z"
+}

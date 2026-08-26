@@ -52,6 +52,42 @@ function rulesDir(scanRoot) {
   return statePath(scanRoot, 'rules');
 }
 
+// FR-207: freshness of the operator's own custom rule packs. Reuses
+// compliance-policy.js's exact opt-in idiom (review-interval-days +
+// reviewed-at at the document's top level, sibling to `rules:`;
+// baseline-zero-if-never-reviewed) rather than the file's mtime — a git
+// checkout or CI clone resets mtimes to checkout time, which would make an
+// mtime-based check silently blind in CI, the one place a strict-mode
+// failure matters most. A rule pack that never opts in (no
+// review-interval-days) is never reported stale, matching every other
+// freshness check in this codebase — no claim, no staleness.
+export function customRulesFreshness(scanRoot, { now = Date.now() } = {}) {
+  const dir = rulesDir(scanRoot);
+  const result = { checked: 0, stale: false, staleFiles: [] };
+  if (!fs.existsSync(dir)) return result;
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter(f => /\.(ya?ml)$/i.test(f)).map(f => path.join(dir, f));
+  } catch { return result; }
+  for (const fp of files) {
+    let raw;
+    try { raw = yaml.load(fs.readFileSync(fp, 'utf8')); } catch { continue; }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue; // bare rule list can't carry document-level metadata
+    const intervalDays = typeof raw['review-interval-days'] === 'number' ? raw['review-interval-days']
+      : (typeof raw.review_interval_days === 'number' ? raw.review_interval_days : null);
+    if (!Number.isFinite(intervalDays)) continue; // no opt-in => never stale
+    result.checked++;
+    const reviewedAt = raw['reviewed-at'] || raw.reviewed_at || null;
+    const reviewedTs = reviewedAt ? Date.parse(reviewedAt) : NaN;
+    const baseline = Number.isFinite(reviewedTs) ? reviewedTs : 0;
+    if (now - baseline > intervalDays * 86400000) {
+      result.stale = true;
+      result.staleFiles.push({ file: path.basename(fp), reviewedAt, intervalDays });
+    }
+  }
+  return result;
+}
+
 export function loadCustomRules(scanRoot) {
   const dir = rulesDir(scanRoot);
   const out = [];

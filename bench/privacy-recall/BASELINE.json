@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-08-26T04:52:09.907Z",
+  "commit": "f57f496468e83dc5796ef6329f7e71d93128df71",
+  "fixtures": {
+    "clean-negative": {
+      "shallowCount": 0,
+      "deepCount": 0
+    },
+    "interprocedural": {
+      "shallowCount": 0,
+      "deepCount": 1
+    },
+    "renamed-before-sink": {
+      "shallowCount": 0,
+      "deepCount": 1
+    },
+    "same-name-direct": {
+      "shallowCount": 1,
+      "deepCount": 1
+    }
+  }
+}

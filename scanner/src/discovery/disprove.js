@@ -13,7 +13,7 @@
 // not vote, and is excluded from the denominator rather than counted as
 // agreement. If nobody votes the panel is `undecided` and the candidate
 // SURVIVES — an outage must not quietly delete findings.
-import { resolveLlmInvoke } from './llm-invoke.js';
+import { resolveLlmInvokeWithDecision } from './llm-invoke.js';
 
 const DEFAULT_ANGLES = ['reachability', 'preconditions', 'sanitization'];
 export const REFUTE_ANGLES = Object.freeze([...DEFAULT_ANGLES]);
@@ -51,7 +51,11 @@ function parseVote(raw) {
 
 export async function disproveCandidate(candidate, opts = {}) {
   const angles = Array.isArray(opts.angles) && opts.angles.length ? opts.angles : DEFAULT_ANGLES;
-  const llmInvoke = resolveLlmInvoke(opts);
+  // FR-601: an egress-policy denial resolves llmInvoke to null the same way a
+  // missing endpoint always has, so it falls straight into this module's own
+  // pre-existing rule — "silence never refutes" — with zero votes cast and no
+  // prompt ever built for a denied endpoint.
+  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, purpose: 'discovery-disprove' });
 
   const votes = [];
   if (typeof llmInvoke === 'function') {
@@ -66,7 +70,7 @@ export async function disproveCandidate(candidate, opts = {}) {
   const refuteCount = votes.filter(v => v.refuted).length;
   const undecided = voterCount === 0;
   const refuted = !undecided && refuteCount * 2 > voterCount;
-  return { ...candidate, refutation: { votes, voterCount, refuteCount, refuted, undecided } };
+  return { ...candidate, refutation: { votes, voterCount, refuteCount, refuted, undecided, egressDecision: egressDecision || undefined } };
 }
 
 export async function disprovePanel(candidates, opts = {}) {

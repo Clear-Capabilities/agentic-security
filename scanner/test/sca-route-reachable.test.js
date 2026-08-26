@@ -52,12 +52,23 @@ test('engine wiring: a manifest-only critical SCA dependency is demoted by a rea
     // dependency itself still cannot rise above manifest-only.
     'server.js': "const express = require('express');\nconst app = express();\napp.get('/health', (req, res) => res.send('ok'));\n",
   };
-  const result = await runFullScan({ fileContents, depFileContents, scanRoot: '/tmp/agentic-security-sca-wiring-test' });
-  const sc = (result.supplyChain || []).find(s => s.type === 'vulnerable_dep' && s.name === 'agentic-security-wiring-test-pkg');
-  assert.ok(sc, 'expected the synthetic vulnerable dependency to be found');
-  assert.equal(sc.reachabilityTier, 'manifest-only', 'precondition: this dependency must land in a DEMOTE_SCA_TIERS tier');
-  assert.equal(sc.severity, 'medium', 'a manifest-only critical SCA finding must be demoted, same as demoteUnreachable does in isolation');
-  assert.equal(sc.unreachable, true);
+  // scanRoot is a fake path that never exists on disk, so state-dir.js's
+  // resolveProjectRoot() falls through to the real repo (via process.cwd())
+  // instead of staying isolated — without this guard, sbom-diff.js writes a
+  // REAL sbom-history snapshot for this synthetic package into the actual
+  // repo's .agentic-security/, which then contaminates dependency-drift
+  // diffs on later, unrelated scans of the real tree (self-scan included).
+  process.env.AGENTIC_SECURITY_NO_STATE = '1';
+  try {
+    const result = await runFullScan({ fileContents, depFileContents, scanRoot: '/tmp/agentic-security-sca-wiring-test' });
+    const sc = (result.supplyChain || []).find(s => s.type === 'vulnerable_dep' && s.name === 'agentic-security-wiring-test-pkg');
+    assert.ok(sc, 'expected the synthetic vulnerable dependency to be found');
+    assert.equal(sc.reachabilityTier, 'manifest-only', 'precondition: this dependency must land in a DEMOTE_SCA_TIERS tier');
+    assert.equal(sc.severity, 'medium', 'a manifest-only critical SCA finding must be demoted, same as demoteUnreachable does in isolation');
+    assert.equal(sc.unreachable, true);
+  } finally {
+    delete process.env.AGENTIC_SECURITY_NO_STATE;
+  }
 });
 
 // ── posture/reachability-filter.js: SCA findings demote by tier ─────────────

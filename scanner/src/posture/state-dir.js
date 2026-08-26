@@ -16,7 +16,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const STATE_DIR_NAME = '.agentic-security';
+// Exported so a caller that needs the state dir NAME for display purposes
+// (e.g. a human-readable "this file lives at X/Y" string, not an actual
+// path construction) can go through the seam too, rather than hardcoding
+// the literal — see test/no-stray-state.test.js's own detector, which
+// flags a quoted '.agentic-security' literal anywhere else in the tree.
+export const STATE_DIR_NAME = '.agentic-security';
 
 const PROJECT_MARKERS = [
   '.git',
@@ -141,6 +146,36 @@ export function setStateWritesEnabled(enabled) {
 export function stateWritesEnabled() {
   if (process.env.AGENTIC_SECURITY_NO_STATE === '1') return false;
   return _stateWritesEnabled;
+}
+
+/**
+ * Run `fn` with state writes forced off, restoring the PRIOR flag value
+ * afterward — for a caller (assurance-hardening PRD FR-704) that must
+ * guarantee ITS scan does not mutate the tree, without having to remember
+ * to call setStateWritesEnabled(true) again itself. A caller that disables
+ * writes and forgets to re-enable them silently breaks every LATER write in
+ * the same process — exactly `apply_fix`'s failure mode this wrapper exists
+ * to prevent, via `finally` rather than caller discipline.
+ *
+ * KNOWN LIMITATION: `_stateWritesEnabled` is process-global, not per-call.
+ * Two overlapping calls to this function (or one overlapping a direct
+ * setStateWritesEnabled() call) can race and leave the flag in the wrong
+ * state for one of them once both finish. mcp/CLAUDE.md already documents
+ * an accepted concurrency limitation of the same shape for fix-history.js
+ * ("concurrent apply_fix calls can race... today benign... a future
+ * stateful tool needs serialization") — this is the same class of risk, not
+ * a new one, and this wrapper is still a strict improvement over the
+ * alternative it replaces (a caller that writes state UNCONDITIONALLY on
+ * every call, with no opt-out at all).
+ */
+export async function withStateWritesDisabled(fn) {
+  const prior = _stateWritesEnabled;
+  _stateWritesEnabled = false;
+  try {
+    return await fn();
+  } finally {
+    _stateWritesEnabled = prior;
+  }
 }
 
 // Safe mkdir: only creates .agentic-security/ if the parent has a project marker.

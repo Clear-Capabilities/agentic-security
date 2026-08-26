@@ -81,6 +81,71 @@ test('a code-testable control this engine cannot see is disclosed, not passed', 
   } finally { await fsp.rm(d, { recursive: true, force: true }); }
 });
 
+// ── FR-405: a non-IR-backed privacy-taint run must not read as a clean pass
+//    for controls that depend entirely on its signal. This is a REGRESSION
+//    test for a confirmed, reproduced bug: CT.DP-P4/CT.DP-P5 (both
+//    codeTestable:'yes', both mapped ONLY to module:privacy-taint) read
+//    `satisfied` from zero real evidence before this fix. ────────────────
+
+test('FR-405 regression: CT.DP-P4/CT.DP-P5 do NOT read satisfied when privacy-taint ran without a real IR, even though the scan otherwise examined real files', async () => {
+  const d = await tmpProject();
+  try {
+    const scan = { findings: [], components: [], filesScanned: 5, privacyIrBacked: false };
+    const r = assessPrivacyFramework(d, scan);
+    for (const id of ['CT.DP-P4', 'CT.DP-P5']) {
+      const c = r.controls.find(x => x.id === id);
+      assert.ok(c, `expected ${id} in the control set`);
+      assert.equal(c.bucket, 'engine-gap', `${id} must NOT read satisfied from a non-IR-backed run — got ${c.bucket}`);
+      assert.match(c.disclosure, /privacy-taint.*signal.*without a real IR|not real evidence/i);
+    }
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});
+
+test('FR-405: the SAME clean scan reads satisfied for CT.DP-P4/CT.DP-P5 when privacy-taint DID run with a real IR — the gate does not over-correct into a permanent gap', async () => {
+  const d = await tmpProject();
+  try {
+    // module:privacy-taint's own signal is dpia.md's presence (auditor-
+    // walkthrough.js) — write it, matching what a real IR-backed scan
+    // that found nothing wrong actually leaves behind.
+    await fsp.mkdir(path.join(d, '.agentic-security'), { recursive: true });
+    await fsp.writeFile(path.join(d, '.agentic-security', 'dpia.md'), '# DPIA\n\nNo PII fields detected.\n');
+    const scan = { findings: [], components: [], filesScanned: 5, privacyIrBacked: true };
+    const r = assessPrivacyFramework(d, scan);
+    for (const id of ['CT.DP-P4', 'CT.DP-P5']) {
+      const c = r.controls.find(x => x.id === id);
+      assert.equal(c.bucket, 'satisfied', `${id} must read satisfied on a genuine IR-backed clean pass — got ${c.bucket}`);
+    }
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});
+
+test('FR-405: privacyIrBacked absent entirely (e.g. a scan predating this fix, or the annotator never ran) is treated the same as false, not as true', async () => {
+  const d = await tmpProject();
+  try {
+    const scan = { findings: [], components: [], filesScanned: 5 }; // no privacyIrBacked key at all
+    const r = assessPrivacyFramework(d, scan);
+    const c = r.controls.find(x => x.id === 'CT.DP-P4');
+    assert.equal(c.bucket, 'engine-gap', 'missing privacyIrBacked must degrade safely, not default to a pass');
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});
+
+test('FR-405: a control with an ADDITIONAL, independent mapping is NOT force-gated purely by privacyIrBacked:false', async () => {
+  // CT.DP-P1 maps to ['family:pii-exposure', 'family:data-exposure'] — a
+  // mixed mapping. The gate is deliberately conservative and only applies to
+  // controls whose mapping is ENTIRELY privacy-taint-dependent, because this
+  // module cannot attribute which specific signal produced a "present"
+  // verdict for a multi-mapped control.
+  const d = await tmpProject();
+  try {
+    const clean = { findings: [], components: [], filesScanned: 5 };
+    const rBacked = assessPrivacyFramework(d, { ...clean, privacyIrBacked: true });
+    const rNotBacked = assessPrivacyFramework(d, { ...clean, privacyIrBacked: false });
+    const bBacked = rBacked.controls.find(c => c.id === 'CT.DP-P1').bucket;
+    const bNotBacked = rNotBacked.controls.find(c => c.id === 'CT.DP-P1').bucket;
+    assert.equal(bBacked, bNotBacked, 'a mixed-mapping control\'s bucket must not change based on privacyIrBacked alone');
+    assert.notEqual(bNotBacked, 'engine-gap', 'CT.DP-P1 must not be swept into engine-gap by this specific gate (it may legitimately land elsewhere for other reasons)');
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
+});
+
 test('the satisfied rate is a share of ASSESSED controls, never of all 104', async () => {
   const d = await tmpProject();
   try {

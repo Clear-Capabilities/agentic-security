@@ -27,14 +27,18 @@
 // User supplies their own control mapping in the same shape as the
 // bundled ones. The auditor-walkthrough renders evidence against it.
 //
-// Disclaimer: this module organizes scanner evidence into a narrative.
-// It does not certify compliance. A licensed assessor (CPA / auditor /
-// DPO) is responsible for the final attestation.
+// Disclaimer: this module organizes scanner evidence into a narrative. It
+// does not certify compliance. See evidence-grade-wording.js for why the
+// emitted disclaimer names all three assurance tiers explicitly (this
+// module's own is one of the ones that used to get the terminology
+// backwards — "a licensed assessor is responsible for the final
+// attestation" describes independent certification, not attestation).
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { statePath, stateWritesEnabled } from './state-dir.js';
+import { EVIDENCE_GRADE_DISCLAIMER_SHORT } from './evidence-grade-wording.js';
 import { COMPLIANCE_FAMILY_ALIAS, resolveFamilyKeys } from './family-resolve.js';
 import { strengthOfControl as _strengthOfControl } from './coverage-strength.js';
 
@@ -187,7 +191,64 @@ export const COMPLIANCE_FAMILY_GAPS = {
   // works, which is the mirror image of the bug this prevents.
 };
 
+// FR-501/FR-502 (assurance-hardening PRD, A-07): a `family:` mapping used to
+// only count 'critical'/'high' findings as "open" — a control with 50 open
+// MEDIUM findings on its mapped family rendered as
+// "✓ no open critical/high findings", identical to a genuinely clean
+// control. posture/privacy-framework.js already solved the analogous problem
+// for its own four-bucket model (its header calls this out directly: a
+// vacuous pass is "the same false assurance... arriving by a different
+// route"); this raises the floor here to match rather than leaving two
+// different standards for what counts as "open" across compliance surfaces.
+// A named, ordered rank (not a hardcoded pair of string literals) so a
+// future per-framework/per-policy threshold (FR-502's fuller scope) is a
+// one-line change here rather than another hunt through the evaluator.
+const SEVERITY_RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
+const OPEN_FINDING_MIN_SEVERITY = 'medium';
+
+// FR-502's fuller scope, delivered: "policy-specific rather than globally
+// high/critical." An operator can lower (or raise) the open-finding floor
+// per framework via .agentic-security/compliance-severity-policy.json:
+//   { "default": "medium", "byFramework": { "gdpr": "low" } }
+// `default` overrides OPEN_FINDING_MIN_SEVERITY for every framework that
+// has no more specific `byFramework` entry; a framework entry wins over
+// `default`. Never inferred — an operator decision, same as
+// dataflow/privacy-taxonomy.js's (FR-402) taxonomy customization and
+// egress/policy.js's (FR-602) config-file precedent. A missing file, a
+// malformed one, or a value that is not one of SEVERITY_RANK's five known
+// keys all degrade to the built-in 'medium' floor — falling back to a rank
+// of `undefined` would make the `>=` comparison always false, silently
+// treating EVERY finding as "not open" (the exact vacuous-pass bug this
+// threshold exists to prevent), so an invalid override must never reach
+// the comparison at all.
+const SEVERITY_POLICY_FILE = 'compliance-severity-policy.json';
+
+function _resolveOpenFindingMinSeverity(scanRoot, frameworkId) {
+  if (!scanRoot) return OPEN_FINDING_MIN_SEVERITY;
+  let raw;
+  try {
+    raw = fs.readFileSync(statePath(scanRoot, SEVERITY_POLICY_FILE), 'utf8');
+  } catch {
+    return OPEN_FINDING_MIN_SEVERITY; // ENOENT (the common case) or any other read failure
+  }
+  let doc;
+  try {
+    doc = JSON.parse(raw);
+  } catch {
+    return OPEN_FINDING_MIN_SEVERITY; // malformed config — never throws, never blocks evaluation
+  }
+  if (!doc || typeof doc !== 'object') return OPEN_FINDING_MIN_SEVERITY;
+  const byFramework = (doc.byFramework && typeof doc.byFramework === 'object') ? doc.byFramework : {};
+  const candidate = (frameworkId && typeof byFramework[frameworkId] === 'string')
+    ? byFramework[frameworkId]
+    : (typeof doc.default === 'string' ? doc.default : null);
+  return (candidate && Object.prototype.hasOwnProperty.call(SEVERITY_RANK, candidate))
+    ? candidate
+    : OPEN_FINDING_MIN_SEVERITY;
+}
+
 export function evaluateFramework(scanRoot, fw, scan) {
+  const minSeverity = _resolveOpenFindingMinSeverity(scanRoot, fw && fw.id);
   // CMP-2: last-scan.json (what this is actually handed in production) carries
   // findings across four separate channels — SAST (`findings`), secrets,
   // business-logic, and SCA (`supplyChain`) — because report/index.js's
@@ -291,12 +352,13 @@ export function evaluateFramework(scanRoot, fw, scan) {
         const candidates = resolveFamilyKeys(fam, families.keys())
           .flatMap(k => families.get(k) || []);
         const scoped = subfam ? candidates.filter(f => !f.subfamily || f.subfamily === subfam) : candidates;
-        const open = scoped.filter(f => !f.intentSuppressed && !f.pastDecision && (f.severity === 'critical' || f.severity === 'high'));
+        const minRank = SEVERITY_RANK[minSeverity];
+        const open = scoped.filter(f => !f.intentSuppressed && !f.pastDecision && (SEVERITY_RANK[f.severity] ?? 0) >= minRank);
         if (open.length) {
           allCleared = false;
-          obs.push(`${open.length} open ${fam} finding(s) at high/critical.`);
+          obs.push(`${open.length} open ${fam} finding(s) at ${minSeverity}+.`);
         } else {
-          obs.push(`✓ ${fam}: no open critical/high findings.`);
+          obs.push(`✓ ${fam}: no open ${minSeverity}+ findings.`);
           anyCleared = true;
         }
         anySignal = true;
@@ -420,7 +482,7 @@ export function renderWalkthrough(fw, evaluation, opts = {}) {
   lines.push(`> License: ${fw.license}`);
   if (fw.url) lines.push(`> Source: ${fw.url}`);
   lines.push('');
-  lines.push('> **This walkthrough organizes scanner evidence into a narrative for an external auditor.** It does NOT certify compliance. A licensed assessor is responsible for the final attestation.');
+  lines.push(`> **This walkthrough organizes scanner evidence into a narrative for an external auditor.** ${EVIDENCE_GRADE_DISCLAIMER_SHORT}`);
   lines.push('');
 
   const present  = evaluation.filter(e => e.status === 'present').length;
@@ -475,4 +537,4 @@ export function persistWalkthrough(scanRoot, fw, body) {
   return fp;
 }
 
-export const _internals = { _readJson };
+export const _internals = { _readJson, _resolveOpenFindingMinSeverity, SEVERITY_POLICY_FILE };

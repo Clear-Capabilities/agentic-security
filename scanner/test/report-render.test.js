@@ -164,6 +164,61 @@ test('toShipVerdict: a genuinely clean scan (nothing filtered) still says Safe t
   assert.doesNotMatch(out, /below.*confidence/i);
 });
 
+// ── FR-206: "a partial zero-finding scan never says clean" ─────────────────
+// computeScanHealth (scan-health.js) already correctly demotes
+// scan.scanHealth.status to 'partial' when an annotator errored, a file
+// timed out, or an analyzer was skipped -- but until this fix, nothing in
+// toShipVerdict (the actual one-screen verdict a vibecoder reads) ever
+// consulted it, so a scan with real problems and zero findings still
+// printed "Safe to deploy."
+
+test('toShipVerdict: zero findings but scanHealth.status is "partial" must NOT say Safe to deploy', () => {
+  const scan = { findings: [], scanHealth: { status: 'partial', conditions: ['1 annotator(s) threw and were skipped: why-fired'] } };
+  const out = stripAnsi2(toShipVerdict(scan, { color: false }));
+  assert.doesNotMatch(out, /Safe to deploy/, `a partial scan must never say "Safe to deploy". got:\n${out}`);
+  assert.match(out, /incomplete|cannot confirm/i);
+  assert.match(out, /why-fired/, 'the actual condition should be surfaced, not just a generic warning');
+});
+
+test('toShipVerdict: zero findings AND scanHealth.status "complete" still says Safe to deploy (no false alarm)', () => {
+  const scan = { findings: [], scanHealth: { status: 'complete', conditions: [] } };
+  const out = stripAnsi2(toShipVerdict(scan, { color: false }));
+  assert.match(out, /Safe to deploy/);
+});
+
+test('toShipVerdict: no scanHealth field at all (older/synthetic scan object) does not regress — still says Safe to deploy on zero findings', () => {
+  const out = stripAnsi2(toShipVerdict({ findings: [] }, { color: false }));
+  assert.match(out, /Safe to deploy/);
+});
+
+test('toShipVerdict: actionable findings still say "Not safe to deploy" regardless of scanHealth (a real critical is never masked by a health caveat)', () => {
+  const scan = {
+    findings: [{ severity: 'critical', vuln: 'A', confidence: 0.95, file: 'a.js', line: 1, cwe: 'CWE-89' }],
+    scanHealth: { status: 'partial', conditions: ['1 file(s) exceeded the per-file analysis timeout'] },
+  };
+  const out = stripAnsi2(toShipVerdict(scan, { color: false }));
+  assert.match(out, /Not safe to deploy/);
+});
+
+// ── FR-205: "CI cannot silently downgrade deep analysis; any downgrade
+// appears in the headline and machine output." scan.scanHealth.deepAnalysis
+// already carried this signal (engine.js's _deepStatus); FR-206's fix above
+// is what makes it actually reach toShipVerdict's headline. This test pins
+// the SPECIFIC FR-205 scenario (a CI-triggered deep-mode skip), not just
+// the general "any partial status" case FR-206's own tests cover.
+test('toShipVerdict (FR-205): a CI-triggered deep-analysis downgrade is visible in the headline, not silent', () => {
+  const scan = {
+    findings: [],
+    scanHealth: {
+      status: 'partial',
+      conditions: ['deep analysis was requested but did not run: requested, but running in CI without AGENTIC_SECURITY_DEEP_IN_CI=1'],
+    },
+  };
+  const out = stripAnsi2(toShipVerdict(scan, { color: false }));
+  assert.doesNotMatch(out, /Safe to deploy/, 'a silently-downgraded deep analysis must never read as a clean, safe scan');
+  assert.match(out, /deep analysis was requested but did not run/);
+});
+
 // ── CMP-3: normalizeFindings must carry the schema's `remediation` field ────
 //
 // Most detectors set `remediation` (the field the schema in root CLAUDE.md

@@ -102,6 +102,31 @@ function _readJsonMaybe(fp) {
 // Load history from .agentic-security/validator-metrics.json + the bundled
 // seed file. The bundled seed ships with this release; the customer file
 // overrides per-family when N is higher there.
+// FR-207: freshness of the seed calibration table itself. This is
+// maintainer-authored data (not a per-customer opt-in like
+// compliance-policy.js's `_staleness`), so the check is always-on against
+// one fixed threshold rather than an opt-in interval — there is no
+// owner/reviewer workflow for it to key off. `_generatedAt` missing (an
+// old seed file predating this field) is treated the same as this
+// codebase's other "never dated == already stale" cases, not a free pass.
+const CALIBRATION_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+let _calibrationFreshnessCache = null;
+export function calibrationFreshness() {
+  if (_calibrationFreshnessCache) return _calibrationFreshnessCache;
+  const seedPath = new URL('./calibration-seed.json', import.meta.url);
+  let generatedAt = null;
+  try { generatedAt = JSON.parse(fs.readFileSync(seedPath, 'utf8'))._generatedAt || null; } catch { /* unreadable seed -> unknown, not fabricated */ }
+  const ts = generatedAt ? Date.parse(generatedAt) : NaN;
+  const baseline = Number.isFinite(ts) ? ts : 0;
+  const ageMs = Date.now() - baseline;
+  _calibrationFreshnessCache = {
+    generatedAt,
+    ageDays: Math.floor(ageMs / 86400000),
+    stale: ageMs > CALIBRATION_MAX_AGE_MS,
+  };
+  return _calibrationFreshnessCache;
+}
+
 export function loadCalibrationHistory(scanRoot) {
   const customer = _readJsonMaybe(statePath(scanRoot, 'validator-metrics.json')) || {};
   const seedPath = new URL('./calibration-seed.json', import.meta.url);

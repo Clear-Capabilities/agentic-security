@@ -5,6 +5,8 @@
 // other does not, the bug stays buried in one direction.
 //
 
+import { evaluateEgress } from '../egress/policy.js';
+
 const DEFAULT_TIMEOUT_MS = 60000;
 
 export async function defaultLlmInvoke(prompt, opts = {}) {
@@ -88,12 +90,27 @@ export function consensusOf(responses) {
  * An llmInvoke that queries several endpoints and returns the consensus answer.
  * Returns null when no endpoint answered — the callers already treat a null or
  * a throw as degradation, so an all-providers-down run degrades honestly.
+ *
+ * FR-605 (assurance-hardening PRD): each endpoint gets its OWN egress
+ * decision before being included — `mode: local-only` / `deniedProviders`
+ * must not be smuggled past just because the SINGLE-endpoint path already
+ * checks it. A policy-denied endpoint is EXCLUDED from the vote, the exact
+ * same treatment an unreachable endpoint already gets a few lines below
+ * (never counted as dissent) — the module's own established pattern
+ * extended to a second exclusion reason. Returns `{invoke, decisions}`:
+ * `invoke` is null only when EVERY endpoint was denied (the all-down
+ * equivalent); `decisions` is the full per-endpoint array for a caller
+ * that wants it, kept alongside the single aggregate `decision` the
+ * pre-existing callers already read.
  */
-function makeConsensusInvoke(endpoints, { timeoutMs } = {}) {
+function makeConsensusInvoke(endpoints, { timeoutMs, scanRoot, purpose } = {}) {
   const list = parseEndpoints(endpoints);
-  if (list.length === 0) return null;
-  return async (prompt) => {
-    const answers = await Promise.all(list.map(async (url) => {
+  if (list.length === 0) return { invoke: null, decisions: [] };
+  const decisions = list.map(url => evaluateEgress({ scanRoot, purpose: purpose || 'discovery-consensus', endpoint: url }));
+  const allowedList = list.filter((_, i) => decisions[i].allowed);
+  if (allowedList.length === 0) return { invoke: null, decisions };
+  const invoke = async (prompt) => {
+    const answers = await Promise.all(allowedList.map(async (url) => {
       try { return await defaultLlmInvoke(prompt, { timeoutMs, endpoint: url }); }
       catch { return null; } // excluded from the vote, never counted as dissent
     }));
@@ -101,20 +118,59 @@ function makeConsensusInvoke(endpoints, { timeoutMs } = {}) {
     if (value === null) throw new Error('no LLM endpoint answered');
     return value;
   };
+  return { invoke, decisions };
+}
+
+// FR-601: egress policy is evaluated here, BEFORE returning a callable and
+// therefore before either caller (hunter.js, disprove.js) builds a prompt —
+// a denied decision makes this resolve to `invoke: null`, which both callers
+// already treat as "nothing to call" via their existing degrade path, so a
+// denial produces no network request through the exact same code path a
+// missing endpoint always has. `decision` carries the machine-readable
+// reason so callers can distinguish "not configured" from "configured but
+// policy-denied" in their own degrade message, rather than reporting a
+// generic "not set" that would be actively wrong once policy is what
+// blocked the call.
+//
+// FR-605 (assurance-hardening PRD): consensus mode (multiple endpoints) is
+// now egress-filtered per endpoint, same as the single-endpoint path below —
+// this is what closes the actual "a remote URL cannot be smuggled into
+// local-only configuration" gap the paragraph below used to describe as
+// open. Per-endpoint CONSTRAINT dimensions beyond allow/deny/local-only
+// (role/region/repository/path/data-class — one provider allowed, another
+// denied for a REASON beyond the deny-list) remain FR-602's separate scope;
+// what changed here is that the single allow/deny/local-only gate FR-601
+// already built is no longer bypassable just by using multiple endpoints
+// instead of one.
+export function resolveLlmInvokeWithDecision(opts = {}) {
+  // An injected callback is a test/consumer-controlled escape hatch — it
+  // bypasses egress the same way it already bypasses endpoint resolution,
+  // because there is no real endpoint here for a policy to evaluate.
+  if (opts.llmInvoke) return { invoke: opts.llmInvoke, decision: null };
+
+  const multi = opts.endpoints || process.env[DEFAULT_CONSENSUS_ENV];
+  if (multi) {
+    const { invoke, decisions } = makeConsensusInvoke(multi, { timeoutMs: opts.timeoutMs, scanRoot: opts.scanRoot, purpose: opts.purpose });
+    // A single aggregate `decision` for the pre-existing callers (hunter.js,
+    // disprove.js), which only ever read `.reason` when `invoke` is null —
+    // the all-denied case. The full per-endpoint detail is on `decisions`
+    // for a caller that wants it.
+    const decision = decisions.find(d => !d.allowed) || decisions[0] || null;
+    return { invoke, decision, decisions };
+  }
+
+  const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
+  if (!endpoint) return { invoke: null, decision: null };
+
+  const decision = evaluateEgress({ scanRoot: opts.scanRoot, purpose: opts.purpose || 'discovery', endpoint });
+  if (!decision.allowed) return { invoke: null, decision };
+
+  return { invoke: (prompt) => defaultLlmInvoke(prompt, { timeoutMs: opts.timeoutMs }), decision };
 }
 
 export function resolveLlmInvoke(opts = {}) {
   // Precedence, most explicit first: an injected callback beats configuration,
   // and a multi-endpoint list beats a single endpoint. A caller who supplied
   // their own function must always get exactly that function.
-  if (opts.llmInvoke) return opts.llmInvoke;
-
-  const multi = opts.endpoints || process.env[DEFAULT_CONSENSUS_ENV];
-  if (multi) {
-    const consensus = makeConsensusInvoke(multi, { timeoutMs: opts.timeoutMs });
-    if (consensus) return consensus;
-  }
-
-  if (!process.env.AGENTIC_SECURITY_LLM_ENDPOINT) return null;
-  return (prompt) => defaultLlmInvoke(prompt, { timeoutMs: opts.timeoutMs });
+  return resolveLlmInvokeWithDecision(opts).invoke;
 }

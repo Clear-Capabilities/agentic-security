@@ -77,3 +77,50 @@ test('an entry with no files never matches anything (localiseToAdvisory contract
   ];
   assert.deepEqual(classifySuppressions(suppressions, { cwe: 'CWE-89', files: [] }), []);
 });
+
+// FR-905: the aggregate summary this script always printed to stderr is now
+// ALSO persisted to a committed file, so accuracy-scorecard.js can publish
+// it — this is the real caller-facing behavior the PRD item asks for, so
+// prove it through the real script (a subprocess), not by re-testing
+// classifySuppressions again. Uses 2 real, already-fetched population
+// entries (small, fast) rather than mocking scanDirRaw — a mock could
+// silently drift from what whyMissed() actually does.
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { entryComplete } from '../../bench/independent/fetch.mjs';
+
+const HERE2 = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE2, '..', '..');
+const WHY_MISSED_SCRIPT = path.join(REPO_ROOT, 'bench', 'independent', 'why-missed.mjs');
+const SUMMARY_FILE = path.join(REPO_ROOT, 'bench', 'independent', 'why-missed-summary.json');
+const MANIFEST_FILE = path.join(REPO_ROOT, 'bench', 'independent', 'manifest.json');
+
+function firstFetchedIds(n) {
+  const manifest = JSON.parse(fs.readFileSync(MANIFEST_FILE, 'utf8'));
+  return manifest.entries.filter(entryComplete).slice(0, n).map((e) => e.id);
+}
+
+test('why-missed.mjs (real subprocess, FR-905): persists a schema-tagged summary with scope, not just stderr', { skip: !fs.existsSync(MANIFEST_FILE) }, () => {
+  const ids = firstFetchedIds(2);
+  if (ids.length < 2) { return; } // no fetched population in this environment — nothing to diagnose
+  const before = fs.existsSync(SUMMARY_FILE) ? fs.readFileSync(SUMMARY_FILE, 'utf8') : null;
+  try {
+    const r = spawnSync(process.execPath, [WHY_MISSED_SCRIPT, ...ids], { encoding: 'utf8', timeout: 60_000 });
+    assert.equal(r.status, 0, `expected why-missed.mjs to exit 0: ${r.stderr}`);
+    assert.ok(fs.existsSync(SUMMARY_FILE), 'expected why-missed-summary.json to be written');
+    const summary = JSON.parse(fs.readFileSync(SUMMARY_FILE, 'utf8'));
+    assert.equal(summary.schema, 'agentic-security/why-missed-summary@1');
+    assert.ok(summary.measuredAt);
+    assert.deepEqual(summary.scope, { mode: 'explicit-ids', requested: 2 });
+    assert.equal(summary.total + summary.skipped, 2);
+    assert.equal(typeof summary.byBucket, 'object');
+    assert.match(r.stderr, /summary persisted to/);
+  } finally {
+    // Restore whatever was there before — this test must not leave the
+    // repo's committed-shaped summary file mutated by a 2-entry smoke run.
+    if (before !== null) fs.writeFileSync(SUMMARY_FILE, before);
+    else { try { fs.unlinkSync(SUMMARY_FILE); } catch { /* never existed */ } }
+  }
+});

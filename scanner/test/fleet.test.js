@@ -225,3 +225,206 @@ test('runFleet refuses without a scanner rather than reporting an empty fleet', 
   assert.equal(r.ok, false);
   assert.match(r.reason, /no runScan/);
 });
+
+// ── FR-1005 (assurance-hardening PRD): "Central rollups do not require
+//    uploading repository source or unrestricted snippets." Structural
+//    guard — same shape as label-isolation.test.js's FR-903 guard — proving
+//    a raw source excerpt never survives into the per-repo result entry,
+//    the aggregate rollup, or the rendered HTML page, not just asserting it
+//    by reading the code once. ──
+
+const SECRET_SNIPPET = 'const apiKey = "sk-live-should-never-leave-the-repo-0123456789";';
+
+test('FR-1005: a finding carrying a raw source snippet never reaches the per-repo result entry', async () => {
+  const r = await runFleet({
+    repos: ['r1'],
+    runScan: fakeScan({ r1: { findings: [finding({ snippet: SECRET_SNIPPET })] } }),
+  });
+  const entry = r.results.find((x) => x.repo === 'r1');
+  assert.equal(JSON.stringify(entry).includes(SECRET_SNIPPET), false,
+    `the per-repo entry must never carry a raw finding snippet, got: ${JSON.stringify(entry)}`);
+  assert.ok(!('findings' in entry), 'the entry must not carry the raw findings array at all — only counts/ids/owners');
+});
+
+test('FR-1005: a finding carrying a raw source snippet never reaches the rollup or the rendered HTML page', async () => {
+  const r = await runFleet({
+    repos: ['r1'],
+    runScan: fakeScan({ r1: { findings: [finding({ snippet: SECRET_SNIPPET, file: '/etc/very/secret/path.js' })] } }),
+  });
+  assert.equal(JSON.stringify(r.rollup).includes(SECRET_SNIPPET), false);
+  const html = renderFleetHtml(r.rollup, r.results);
+  assert.equal(html.includes(SECRET_SNIPPET), false,
+    'the rendered fleet page must never contain a raw source snippet from any finding');
+});
+
+// ── FR-1006 (assurance-hardening PRD): "scan freshness" — WHEN a repo was
+//    last scanned, not just whether it was. `state.completed[repo].at` used
+//    to be a stub that was always null, never populated, never read
+//    anywhere — confirmed by direct grep before this fix — the same as the
+//    field not existing at all. ──
+
+test('FR-1006: a successful scan stamps a real, non-null scannedAt on the result entry', async () => {
+  const r = await runFleet({ repos: ['r1'], runScan: fakeScan({ r1: { findings: [] } }) });
+  const entry = r.results.find((x) => x.repo === 'r1');
+  assert.equal(typeof entry.scannedAt, 'string');
+  assert.ok(!Number.isNaN(Date.parse(entry.scannedAt)), `scannedAt must be a real, parseable timestamp, got: ${entry.scannedAt}`);
+});
+
+test('FR-1006: a FAILED scan also stamps a real scannedAt — the attempt happened even though it did not succeed', async () => {
+  const r = await runFleet({ repos: ['r1'], runScan: fakeScan({ r1: new Error('boom') }) });
+  const entry = r.results.find((x) => x.repo === 'r1');
+  assert.equal(entry.ok, false);
+  assert.equal(typeof entry.scannedAt, 'string');
+  assert.ok(!Number.isNaN(Date.parse(entry.scannedAt)));
+});
+
+test('FR-1006: the checkpoint records the SAME scannedAt the result entry carries, not a stub — this is the exact field that used to be hardcoded null', async () => {
+  const dir = tmp();
+  try {
+    const stateFile = path.join(dir, 'state.json');
+    const r = await runFleet({ repos: ['r1'], stateFile, runScan: fakeScan({ r1: { findings: [] } }) });
+    const entry = r.results.find((x) => x.repo === 'r1');
+    const state = loadFleetState(stateFile);
+    assert.equal(state.completed.r1.at, entry.scannedAt);
+    assert.notEqual(state.completed.r1.at, null, 'the checkpoint\'s "at" field must be a real timestamp, not the old always-null stub');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('FR-1006: renderFleetHtml surfaces scan freshness — the scanned-at value appears in the rendered page for both a successful and a failed repo', async () => {
+  const r = await runFleet({
+    repos: ['r1', 'r2'],
+    runScan: fakeScan({ r1: { findings: [] }, r2: new Error('boom') }),
+  });
+  const html = renderFleetHtml(r.rollup, r.results);
+  const r1 = r.results.find((x) => x.repo === 'r1');
+  const r2 = r.results.find((x) => x.repo === 'r2');
+  assert.ok(html.includes(r1.scannedAt), 'the successful repo\'s scannedAt must appear in the rendered page');
+  assert.ok(html.includes(r2.scannedAt), 'the FAILED repo\'s scannedAt must also appear — a failed attempt still happened at a real time');
+  assert.match(html, /<th>scanned at<\/th>/);
+});
+
+// --- FR-1006: assurance-health (scanHealth) + policy drift, distinct from risk ---
+
+test('FR-1006: a per-repo entry carries the scan\'s own scanHealth (FR-206), not re-derived', async () => {
+  const r = await runFleet({
+    repos: ['r1'],
+    runScan: fakeScan({ r1: { findings: [], scanHealth: { schemaVersion: 1, status: 'partial', conditions: ['2 annotator(s) threw'] } } }),
+  });
+  assert.deepEqual(r.results[0].scanHealth, { schemaVersion: 1, status: 'partial', conditions: ['2 annotator(s) threw'] });
+});
+
+test('FR-1006: a scan with no scanHealth field degrades to null, never fabricated', async () => {
+  const r = await runFleet({ repos: ['r1'], runScan: fakeScan({ r1: { findings: [] } }) });
+  assert.equal(r.results[0].scanHealth, null);
+});
+
+test('FR-1006: a repo with no policy bundles configured has policyDrift: null (no baseline to drift from)', async () => {
+  const dir = tmp();
+  try {
+    const r = await runFleet({ repos: [dir], runScan: fakeScan({ [dir]: { findings: [] } }) });
+    assert.equal(r.results[0].policyDrift, null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('FR-1006: a repository-scope override of an organization key is reported as policy drift', async () => {
+  const dir = tmp();
+  try {
+    const { signPolicyBundle, buildPolicyBundle } = await import('../src/posture/policy-bundle.js');
+    const { privateKey, publicKey } = (await import('node:crypto')).generateKeyPairSync('ed25519');
+    const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+    const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
+    const bundleDir = path.join(dir, '.agentic-security', 'policy-bundles');
+    fs.mkdirSync(bundleDir, { recursive: true });
+    fs.writeFileSync(path.join(bundleDir, 'organization.json'), JSON.stringify(signPolicyBundle(buildPolicyBundle('organization', { severityFloor: 'high' }), privateKeyPem)));
+    fs.writeFileSync(path.join(bundleDir, 'repository.json'), JSON.stringify(signPolicyBundle(buildPolicyBundle('repository', { severityFloor: 'low' }), privateKeyPem)));
+    fs.writeFileSync(path.join(dir, '.agentic-security', 'policy-bundle-public-key.pem'), publicKeyPem);
+
+    const r = await runFleet({ repos: [dir], runScan: fakeScan({ [dir]: { findings: [] } }) });
+    const drift = r.results[0].policyDrift;
+    assert.ok(drift, 'expected a policyDrift object');
+    assert.equal(drift.overrides.length, 1);
+    assert.equal(drift.overrides[0].key, 'severityFloor');
+    assert.equal(drift.overrides[0].organizationValue, 'high');
+    assert.equal(drift.overrides[0].effectiveValue, 'low');
+    assert.equal(drift.overrides[0].overriddenBy, 'repository');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('FR-1006: a rejected (tampered) policy bundle is reported as drift too — the policy that should apply is silently not enforced', async () => {
+  const dir = tmp();
+  try {
+    const { signPolicyBundle, buildPolicyBundle } = await import('../src/posture/policy-bundle.js');
+    const { privateKey, publicKey } = (await import('node:crypto')).generateKeyPairSync('ed25519');
+    const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+    const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
+    const bundleDir = path.join(dir, '.agentic-security', 'policy-bundles');
+    fs.mkdirSync(bundleDir, { recursive: true });
+    const signed = signPolicyBundle(buildPolicyBundle('organization', { severityFloor: 'high' }), privateKeyPem);
+    const tampered = { ...signed, policy: { severityFloor: 'low' } };
+    fs.writeFileSync(path.join(bundleDir, 'organization.json'), JSON.stringify(tampered));
+    fs.writeFileSync(path.join(dir, '.agentic-security', 'policy-bundle-public-key.pem'), publicKeyPem);
+
+    const r = await runFleet({ repos: [dir], runScan: fakeScan({ [dir]: { findings: [] } }) });
+    const drift = r.results[0].policyDrift;
+    assert.ok(drift, 'expected a policyDrift object');
+    assert.equal(drift.rejected.length, 1);
+    assert.equal(drift.rejected[0].scope, 'organization');
+    assert.match(drift.rejected[0].reason, /modified after signing/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('FR-1006: rollupFleet counts governance gaps SEPARATELY from risk findings', () => {
+  const results = [
+    { repo: 'clean', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [], scanHealth: { status: 'complete' }, policyDrift: null },
+    { repo: 'partial-health', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [], scanHealth: { status: 'partial', conditions: ['x'] }, policyDrift: null },
+    { repo: 'drifted', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [], scanHealth: { status: 'complete' }, policyDrift: { accepted: [], rejected: [], overrides: [{ key: 'a', organizationValue: 1, effectiveValue: 2, overriddenBy: 'repository' }] } },
+  ];
+  const rollup = rollupFleet(results);
+  assert.equal(rollup.reposWithPartialScanHealth, 1);
+  assert.equal(rollup.reposWithPolicyDrift, 1);
+  assert.equal(rollup.total, 0, 'zero risk findings even though 2 of 3 repos have a governance gap — the two must not be conflated');
+});
+
+test('FR-1006: renderFleetSummary reports governance gaps in a clause separate from the risk sentence', () => {
+  const rollup = rollupFleet([
+    { repo: 'r1', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [], scanHealth: { status: 'partial', conditions: ['x'] }, policyDrift: null },
+  ]);
+  const summary = renderFleetSummary(rollup);
+  assert.match(summary, /GOVERNANCE:/);
+  assert.match(summary, /1 repo\(s\) with a partial/);
+});
+
+test('FR-1006: renderFleetHtml puts risk findings and governance gaps in SEPARATE sections', async () => {
+  const r = await runFleet({
+    repos: ['r1'],
+    runScan: fakeScan({ r1: { findings: [finding()], scanHealth: { status: 'partial', conditions: ['1 annotator(s) threw'] } } }),
+  });
+  const html = renderFleetHtml(r.rollup, r.results);
+  assert.match(html, /<h2>Risk findings<\/h2>/);
+  assert.match(html, /<h2>Governance \/ coverage gaps<\/h2>/);
+  assert.match(html, /partial: 1 annotator\(s\) threw/);
+  // the governance table must come AFTER the risk table, not interleaved.
+  assert.ok(html.indexOf('Risk findings') < html.indexOf('Governance'));
+});
+
+test('FR-1006: renderFleetHtml reports "nothing to report" when no repo has a governance gap', async () => {
+  const r = await runFleet({ repos: ['r1'], runScan: fakeScan({ r1: { findings: [] } }) });
+  const html = renderFleetHtml(r.rollup, r.results);
+  assert.match(html, /Nothing to report/);
+});
+
+test('FR-1005 extended to FR-1006: scanHealth/policyDrift never carry a raw finding snippet — they are governance metadata, not finding data', async () => {
+  const SECRET_SNIPPET = 'const apiKey = "sk-live-should-never-leave-the-repo-0123456789";';
+  const r = await runFleet({
+    repos: ['r1'],
+    runScan: fakeScan({
+      r1: {
+        findings: [finding({ snippet: SECRET_SNIPPET })],
+        scanHealth: { schemaVersion: 1, status: 'partial', conditions: ['1 annotator(s) threw: why-fired'] },
+      },
+    }),
+  });
+  const html = renderFleetHtml(r.rollup, r.results);
+  assert.ok(!JSON.stringify(r.results[0].scanHealth).includes(SECRET_SNIPPET));
+  assert.ok(!html.includes(SECRET_SNIPPET));
+});

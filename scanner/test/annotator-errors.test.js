@@ -111,7 +111,7 @@ test('toJSON carries git-history, risk-dollars, and time-to-fix fields through w
       introducedBy: 'Ada Lovelace', introducedIn: 'abc123def456', introducedAt: '2026-01-01T00:00:00Z',
       introducedInMessage: 'add query endpoint', originatingPrompt: 'add a users lookup route',
       aiAuthored: true,
-      riskDollars: { ev: 12345, prob: 0.18, impact: 250000, discount: 0.9, confidenceFloor: 0.8 },
+      riskDollars: { ev: 12345, prob: 0.18, impact: 250000, discount: 0.9, confidenceWeight: 0.8, scenarioStatus: 'scenario_default' },
       estimatedFixHours: 0.7, estimatedFixHoursSource: 'family-base',
     }],
     routes: [], components: [], suppressions: [],

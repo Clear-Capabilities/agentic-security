@@ -13,6 +13,8 @@
 //
 // Fail-closed: any LLM error → template fallback, never a missing field.
 
+import { evaluateEgress } from '../egress/policy.js';
+
 const TEMPLATES = {
   'sql-injection': (f) =>
     `An unauthenticated attacker sends a crafted request containing UNION-style SQL syntax in the ${f.source?.variable || 'tainted'} field. The server's database driver executes the injected query verbatim, returning rows from any table the connection has read access to. Typical impact: full table dump of users (emails, password hashes), bypass of authentication via boolean-blind exfiltration. If the DB role has write privileges, the attacker can also INSERT/UPDATE arbitrary rows. Recovery cost: incident response, customer notification, password reset, regulatory reporting if PII leaked.`,
@@ -60,9 +62,12 @@ function _renderTemplate(f) {
 
 // Optional LLM call. Disabled by default; opt-in via env. Falls back to the
 // template on any error.
-async function _renderLlm(f) {
+async function _renderLlm(f, scanRoot) {
   const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
   if (!endpoint) return null;
+  // FR-601: evaluated before the prompt below is built.
+  const egressDecision = evaluateEgress({ scanRoot, purpose: 'flow-narration', endpoint });
+  if (!egressDecision.allowed) return null;
   const apiKey = process.env.AGENTIC_SECURITY_LLM_API_KEY;
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
@@ -101,7 +106,7 @@ export async function annotateNarration(findings, opts = {}) {
       f.narration = null;
       continue;
     }
-    let text = useLlm ? await _renderLlm(f) : null;
+    let text = useLlm ? await _renderLlm(f, opts.scanRoot) : null;
     if (!text) text = _renderTemplate(f);
     f.narration = text;
   }

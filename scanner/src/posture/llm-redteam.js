@@ -13,6 +13,7 @@
 // strategies (encoding/role-play/authority/etc.), severity-graded report.
 
 import { RED_TEAM_PROMPTS, ATTACK_STRATEGIES, PLUGIN_SEVERITY, categorizePrompts, pluginCoverage } from './llm-redteam-prompts.js';
+import { evaluateEgress } from '../egress/policy.js';
 
 // ─── STATIC mode ─────────────────────────────────────────────────────────
 // Scan the repo for prompt files / system-prompt strings and check whether
@@ -173,8 +174,16 @@ function judgeResponse(response, expectedRejection) {
  *  opts: { endpoint, apiKey?, categories?, strategies?, concurrency? }
  *  Returns { results: [...], summary: {...} } */
 export async function runActiveRedteam(opts = {}) {
-  const { endpoint, apiKey, categories, strategies, concurrency = 4 } = opts;
+  const { endpoint, apiKey, categories, strategies, concurrency = 4, scanRoot } = opts;
   if (!endpoint) throw new Error('endpoint URL required');
+  // FR-601: one decision for the whole batch (same endpoint for every
+  // prompt) — evaluated before any prompt in the corpus is sent, not
+  // per-prompt, since a policy verdict on an endpoint does not vary by
+  // which static red-team prompt is about to be sent to it.
+  const egressDecision = evaluateEgress({ scanRoot, purpose: 'llm-redteam', endpoint });
+  if (!egressDecision.allowed) {
+    throw new Error(`egress policy denied this call: ${egressDecision.reason}`);
+  }
 
   let prompts = RED_TEAM_PROMPTS;
   if (Array.isArray(categories) && categories.length) {

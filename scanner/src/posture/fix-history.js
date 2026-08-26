@@ -58,10 +58,6 @@ export function fixAcceptanceRate(scanRoot) {
   return acceptanceFromEntries(readLog(scanRoot));
 }
 
-function writeLog(scanRoot, log) {
-  ensure(scanRoot);
-  fs.writeFileSync(logPath(scanRoot), JSON.stringify(log, null, 2));
-}
 function sha(s) { return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16); }
 
 // Premortem 3R-12: cross-check helpers for last-scan.json. We look up
@@ -242,7 +238,16 @@ function _countPriorAttempts(log, stableId, findingId) {
   return n;
 }
 
-export async function applyFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln, stableId }) {
+// @param {boolean} [fileExisted] - did `file` exist on disk before this call?
+//   Determines what "restore" means on rollback: write `originalContent`
+//   back for a file that existed (default, for backward compatibility with
+//   callers that don't pass it — safer to assume "existed" than to risk
+//   deleting a real file), or delete the file entirely for one that did not
+//   (a fix that created a NEW file, which is `originalContent: ''`'s only
+//   real-world meaning in this codebase's callers — writing '' back would
+//   leave a phantom empty file where none existed before, not a true
+//   rollback).
+export async function applyFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln, stableId, fileExisted = true }) {
   return _withLogLock(scanRoot, async () => {
     ensure(scanRoot);
     const absFile = path.resolve(scanRoot, file);
@@ -260,8 +265,10 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
         MAX_ATTEMPTS_PER_KEY,
       );
     }
-    // Phase 1: backup + fsync.
-    await _writeAndSync(bakPath, originalContent);
+    // Phase 1: backup + fsync. Atomic for the same reason the target write
+    // is below — a corrupted backup is worse than no backup, because it
+    // silently defeats rollback.
+    await _writeAtomicAndSync(bakPath, originalContent);
     const entry = {
       id,
       findingId,
@@ -269,6 +276,7 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
       ruleId: ruleId || null,
       vuln: vuln || null,
       file,
+      fileExisted,
       backupPath: path.relative(scanRoot, bakPath),
       originalSha: sha(originalContent),
       newSha: sha(newContent),
@@ -281,10 +289,38 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
     const log = priorLog;
     log.push(entry);
     await _writeLogAndSync(scanRoot, log);
-    // Phase 3: write the new content to the target file + fsync.
+    // Phase 3: atomic write of the new content, then FR-306's post-write
+    // hash verification — read the file back and confirm it genuinely
+    // contains what was just written, not merely that the write call
+    // returned without throwing (a write can "succeed" against a
+    // corrupting filesystem, a truncated disk-full write that still exits
+    // 0, or a concurrent external modification landing between our write
+    // and the read-back proving it).
     try {
-      await _writeAndSync(absFile, newContent);
+      await _writeAtomicAndSync(absFile, newContent);
+      const writtenBack = await fsp.readFile(absFile, 'utf8');
+      if (sha(writtenBack) !== entry.newSha) {
+        throw new Error(`post-write hash verification failed for ${file}: on-disk content does not match what was written`);
+      }
     } catch (e) {
+      // FR-306: "injected write failure restores all files" — a failure at
+      // this point (the write itself, or the verification catching a
+      // corrupted write) must not leave the target in a partial or wrong
+      // state. Restore it now, synchronously with the failure, not as a
+      // later manual `recover()` step.
+      try {
+        if (fileExisted) {
+          await _writeAtomicAndSync(absFile, originalContent);
+        } else {
+          await fsp.unlink(absFile).catch(() => {}); // the failed write may not have landed at all
+        }
+        entry.rolledBack = true;
+      } catch (restoreErr) {
+        // Genuinely worse case (e.g. the filesystem itself is unwritable) —
+        // recorded honestly rather than silently claimed as rolled back.
+        entry.rolledBack = false;
+        entry.restoreError = restoreErr.message;
+      }
       entry.status = 'failed';
       entry.error = e.message;
       await _writeLogAndSync(scanRoot, log);
@@ -305,6 +341,33 @@ async function _writeAndSync(fp, content) {
     if (typeof handle.sync === 'function') await handle.sync();
   } finally {
     await handle.close();
+  }
+}
+
+// FR-306: "atomic replacement". `_writeAndSync` above opens the TARGET path
+// directly in truncate mode — a crash or thrown error between the truncate
+// and the write completing leaves the file partially written, not atomically
+// replaced. This writes to a sibling temp file first, fsyncs it, then
+// renames it over the target — `rename()` is atomic on the same filesystem,
+// so the target is either the old content or the new content in full, never
+// a partial mix. The temp file is cleaned up on any failure before the
+// rename so a crash never leaves an orphaned `.tmp-*` file behind.
+async function _writeAtomicAndSync(fp, content) {
+  const dir = path.dirname(fp);
+  await fsp.mkdir(dir, { recursive: true });
+  const tmp = path.join(dir, `.${path.basename(fp)}.tmp-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
+  try {
+    const handle = await fsp.open(tmp, 'w');
+    try {
+      await handle.writeFile(content);
+      if (typeof handle.sync === 'function') await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fsp.rename(tmp, fp);
+  } catch (e) {
+    try { await fsp.unlink(tmp); } catch { /* never existed, or already gone — fine either way */ }
+    throw e;
   }
 }
 
@@ -369,22 +432,37 @@ async function _recoverInner(scanRoot) {
   return recovered;
 }
 
+// Shared revert primitive. `fileExisted === false` means the fix created a
+// file that did not exist beforehand — reverting deletes it rather than
+// writing the empty-string sentinel back, which would leave a phantom empty
+// file where none existed (see applyFix's `fileExisted` doc comment for why
+// that distinction matters). Entries logged before FR-306 have no
+// `fileExisted` field at all; `undefined !== false` so they fall through to
+// the pre-existing "write original content back" behavior, unchanged.
+async function _revertEntryInner(scanRoot, entry) {
+  const bak = path.resolve(scanRoot, entry.backupPath);
+  const absFile = path.resolve(scanRoot, entry.file);
+  if (!fs.existsSync(bak)) return { error: `backup missing: ${bak}` };
+  const original = await fsp.readFile(bak, 'utf8');
+  if (entry.fileExisted === false) {
+    await fsp.unlink(absFile).catch(() => {}); // may already be gone; deletion is the goal either way
+  } else {
+    await _writeAtomicAndSync(absFile, original);
+  }
+  entry.reverted = true;
+  entry.revertedAt = new Date().toISOString();
+  return entry;
+}
+
 // Revert the most recent un-reverted fix. Returns the entry or null.
 export async function undoLast(scanRoot) {
   return _withLogLock(scanRoot, async () => {
     const log = readLog(scanRoot);
     for (let i = log.length - 1; i >= 0; i--) {
       if (!log[i].reverted) {
-        const entry = log[i];
-        const bak = path.resolve(scanRoot, entry.backupPath);
-        const absFile = path.resolve(scanRoot, entry.file);
-        if (!fs.existsSync(bak)) return { error: `backup missing: ${bak}` };
-        const original = await fsp.readFile(bak, 'utf8');
-        await fsp.writeFile(absFile, original);
-        entry.reverted = true;
-        entry.revertedAt = new Date().toISOString();
-        writeLog(scanRoot, log);
-        return entry;
+        const result = await _revertEntryInner(scanRoot, log[i]);
+        if (!result.error) await _writeLogAndSync(scanRoot, log);
+        return result;
       }
     }
     return null;
@@ -397,6 +475,22 @@ export async function undoAll(scanRoot) {
   let r;
   while ((r = await undoLast(scanRoot)) && !r.error) reverted.push(r);
   return reverted;
+}
+
+// FR-306: revert ONE specific entry by id, regardless of its position in the
+// log. The building block for same-batch rollback — a multi-file apply that
+// fails partway through must undo only the files THIS batch itself wrote,
+// not every unrelated pending entry `undoAll` would touch.
+export async function revertEntryById(scanRoot, entryId) {
+  return _withLogLock(scanRoot, async () => {
+    const log = readLog(scanRoot);
+    const entry = log.find(e => e.id === entryId);
+    if (!entry) return { error: `no such history entry: ${entryId}` };
+    if (entry.reverted) return entry;
+    const result = await _revertEntryInner(scanRoot, entry);
+    if (!result.error) await _writeLogAndSync(scanRoot, log);
+    return result;
+  });
 }
 
 export function listHistory(scanRoot) { return readLog(scanRoot); }

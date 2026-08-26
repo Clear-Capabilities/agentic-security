@@ -4,11 +4,41 @@
 //                  reviewer + expiry + rule-version pin)
 // One function `applySuppressions(findings, scanRoot, profile)` filters in
 // place. Loaders accept malformed input gracefully (skip bad entries, log).
+//
+// FR-1004 (assurance-hardening PRD): "exception owner, reason, scope,
+// compensating control, and expiry." The pro schema already had reason
+// (`reason`) and expiry (`expires_at`); `owner`, `scope`, and
+// `compensating_control` are added here as required fields on the SAME
+// entry, validated by the SAME `validateProSuppression` gate that already
+// enforces the two-person rule. This is a deliberate tightening: an
+// existing suppressions.yml entry written before this field set was
+// required will now fail validation and REOPEN its finding, same as any
+// other invalid pro suppression already does — an operator must add the
+// three new fields to keep the exception honored. `owner` is who is
+// accountable for eventually resolving or renewing the exception (may or
+// may not be the same person as `reviewer`); `scope` is a short,
+// human-readable statement of what the exception covers (this module's
+// matching remains per-finding — `scope` documents intent, it does not
+// widen what gets suppressed); `compensating_control` is the specific
+// alternative mitigation that justifies leaving the underlying finding
+// unfixed (a required field, not inferred from `reason` — "we'll fix it
+// later" is a reason, not a compensating control, and conflating the two
+// was the actual gap this PRD item exists to close).
+//
+// "Expired exceptions automatically reopen findings or fail the gate":
+// `applySuppressions` already returns an expired suppression's finding to
+// the KEPT (open) set rather than the suppressed set (see the `exp < now`
+// branch below) — an expired exception was always self-reopening by
+// construction, this was just never covered by a test until FR-1004.
+// Reopening feeds the existing severity-based CI gate (`--fail-on`)
+// exactly like any other open finding; no second, parallel expiry-gate
+// mechanism is needed or built here.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 import { statePath, safeWriteState } from './state-dir.js';
+import { loadApproverRegistry, verifyApprover, requiredRolesFor } from '../fix/approver-registry.js';
 
 const MS_PER_DAY = 86400000;
 const SOFT_TTL_DAYS = 30;
@@ -59,13 +89,30 @@ export function loadProSuppressions(scanRoot) {
 }
 
 // Validate one entry. Returns { ok, errors }.
-export function validateProSuppression(entry) {
+//
+// FR-1002: "bind approvals, EXCEPTIONS, AND SUPPRESSIONS to verified
+// identities and roles... anonymous or unauthorized high-risk exceptions
+// fail policy." A pro suppression's `justification_signed_by` is exactly
+// such an exception-approval identity, but until this fix it was pure
+// self-reported free text -- FR-307/FR-1002's registry existed and was
+// wired into apply_fix, but never consulted here. `opts.registry` is
+// optional and NO-OP when absent (loadApproverRegistry(scanRoot) returns
+// null until an operator opts in, matching every other gate in this
+// registry), so an existing project with no registry file sees zero
+// behavior change. `opts.requiredRoles` lets the caller scope role
+// requirements to the SUPPRESSED FINDING's own family/category, the same
+// way FR-307 scopes them to a change's material-change category.
+export function validateProSuppression(entry, opts = {}) {
   const errors = [];
-  for (const k of ['finding_id', 'file', 'reason', 'justification_signed_by', 'reviewer', 'expires_at']) {
+  for (const k of ['finding_id', 'file', 'reason', 'justification_signed_by', 'reviewer', 'expires_at', 'owner', 'scope', 'compensating_control']) {
     if (!entry[k] || (typeof entry[k] === 'string' && !entry[k].trim())) errors.push(`missing: ${k}`);
   }
   if (entry.justification_signed_by && entry.reviewer && entry.justification_signed_by === entry.reviewer) {
     errors.push('justification_signed_by must differ from reviewer (two-person rule)');
+  }
+  if (entry.justification_signed_by && opts.registry !== undefined) {
+    const v = verifyApprover(opts.registry, entry.justification_signed_by, opts.requiredRoles || []);
+    if (!v.verified) errors.push(`justification_signed_by not authorized: ${v.reason}`);
   }
   if (entry.expires_at) {
     const t = _dateOnly(entry.expires_at);
@@ -83,6 +130,11 @@ export function applySuppressions(findings, scanRoot, profile) {
   const isPro = (profile?.profile) === 'pro';
   const items = isPro ? loadProSuppressions(scanRoot) : loadSoftAccepted(scanRoot);
   if (!items.length) return findings;
+
+  // FR-1002: loaded once per call, not per entry — a missing registry file
+  // (the common, not-opted-in case) makes verifyApprover() a no-op below,
+  // exactly like every other gate built on this registry.
+  const approverRegistry = isPro ? loadApproverRegistry(scanRoot) : null;
 
   const now = _now();
   const kept = [];
@@ -106,7 +158,11 @@ export function applySuppressions(findings, scanRoot, profile) {
       }
       // Pro: validate the entry still passes
       if (isPro) {
-        const v = validateProSuppression({ ...matched, severity: f.severity });
+        // Same registry/category shape FR-307 already uses for high-impact
+        // fixes: an operator opts a finding family into role-gating via
+        // requiredRolesByCategory, keyed by that family's name.
+        const requiredRoles = requiredRolesFor(approverRegistry, [f.family].filter(Boolean));
+        const v = validateProSuppression({ ...matched, severity: f.severity }, { registry: approverRegistry, requiredRoles });
         if (!v.ok) { kept.push({ ...f, _suppressionInvalid: v.errors }); continue; }
       }
       suppressed.push({ ...f, _suppressed: matched });

@@ -117,6 +117,11 @@ test('S7: labs.md --risk-dollars ranks real findings by expected-value USD', asy
     for (let i = 1; i < parsed.top.length; i++) {
       assert.ok(parsed.top[i - 1].evUsd >= parsed.top[i].evUsd, 'top must be sorted descending by evUsd');
     }
+    // FR-801/FR-802 (assurance-hardening PRD): the default output (no
+    // risk-config.yml present in this fixture) must plainly state these are
+    // generic scenario figures, not this organization's actual likely loss.
+    assert.equal(parsed.scenarioStatus, 'scenario_default');
+    assert.match(parsed.scenarioMessage, /NOT a likely-organizational-loss estimate/);
   } finally { await p.cleanup(); }
 });
 

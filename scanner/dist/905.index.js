@@ -111,6 +111,8 @@ function partitionCallGraph(callGraph, opts = {}) {
 
 // EXTERNAL MODULE: ./src/discovery/lenses.js
 var discovery_lenses = __webpack_require__(3499);
+// EXTERNAL MODULE: ./src/egress/policy.js
+var policy = __webpack_require__(5712);
 ;// CONCATENATED MODULE: ./src/discovery/llm-invoke.js
 //
 // Shared LLM endpoint caller. Both the hunter and the refutation panel need
@@ -118,6 +120,8 @@ var discovery_lenses = __webpack_require__(3499);
 // of a network call is one copy too many — if one path gets fixed and the
 // other does not, the bug stays buried in one direction.
 //
+
+
 
 const DEFAULT_TIMEOUT_MS = 60000;
 
@@ -202,12 +206,27 @@ function consensusOf(responses) {
  * An llmInvoke that queries several endpoints and returns the consensus answer.
  * Returns null when no endpoint answered — the callers already treat a null or
  * a throw as degradation, so an all-providers-down run degrades honestly.
+ *
+ * FR-605 (assurance-hardening PRD): each endpoint gets its OWN egress
+ * decision before being included — `mode: local-only` / `deniedProviders`
+ * must not be smuggled past just because the SINGLE-endpoint path already
+ * checks it. A policy-denied endpoint is EXCLUDED from the vote, the exact
+ * same treatment an unreachable endpoint already gets a few lines below
+ * (never counted as dissent) — the module's own established pattern
+ * extended to a second exclusion reason. Returns `{invoke, decisions}`:
+ * `invoke` is null only when EVERY endpoint was denied (the all-down
+ * equivalent); `decisions` is the full per-endpoint array for a caller
+ * that wants it, kept alongside the single aggregate `decision` the
+ * pre-existing callers already read.
  */
-function makeConsensusInvoke(endpoints, { timeoutMs } = {}) {
+function makeConsensusInvoke(endpoints, { timeoutMs, scanRoot, purpose } = {}) {
   const list = parseEndpoints(endpoints);
-  if (list.length === 0) return null;
-  return async (prompt) => {
-    const answers = await Promise.all(list.map(async (url) => {
+  if (list.length === 0) return { invoke: null, decisions: [] };
+  const decisions = list.map(url => (0,policy/* evaluateEgress */.nn)({ scanRoot, purpose: purpose || 'discovery-consensus', endpoint: url }));
+  const allowedList = list.filter((_, i) => decisions[i].allowed);
+  if (allowedList.length === 0) return { invoke: null, decisions };
+  const invoke = async (prompt) => {
+    const answers = await Promise.all(allowedList.map(async (url) => {
       try { return await defaultLlmInvoke(prompt, { timeoutMs, endpoint: url }); }
       catch { return null; } // excluded from the vote, never counted as dissent
     }));
@@ -215,22 +234,61 @@ function makeConsensusInvoke(endpoints, { timeoutMs } = {}) {
     if (value === null) throw new Error('no LLM endpoint answered');
     return value;
   };
+  return { invoke, decisions };
+}
+
+// FR-601: egress policy is evaluated here, BEFORE returning a callable and
+// therefore before either caller (hunter.js, disprove.js) builds a prompt —
+// a denied decision makes this resolve to `invoke: null`, which both callers
+// already treat as "nothing to call" via their existing degrade path, so a
+// denial produces no network request through the exact same code path a
+// missing endpoint always has. `decision` carries the machine-readable
+// reason so callers can distinguish "not configured" from "configured but
+// policy-denied" in their own degrade message, rather than reporting a
+// generic "not set" that would be actively wrong once policy is what
+// blocked the call.
+//
+// FR-605 (assurance-hardening PRD): consensus mode (multiple endpoints) is
+// now egress-filtered per endpoint, same as the single-endpoint path below —
+// this is what closes the actual "a remote URL cannot be smuggled into
+// local-only configuration" gap the paragraph below used to describe as
+// open. Per-endpoint CONSTRAINT dimensions beyond allow/deny/local-only
+// (role/region/repository/path/data-class — one provider allowed, another
+// denied for a REASON beyond the deny-list) remain FR-602's separate scope;
+// what changed here is that the single allow/deny/local-only gate FR-601
+// already built is no longer bypassable just by using multiple endpoints
+// instead of one.
+function resolveLlmInvokeWithDecision(opts = {}) {
+  // An injected callback is a test/consumer-controlled escape hatch — it
+  // bypasses egress the same way it already bypasses endpoint resolution,
+  // because there is no real endpoint here for a policy to evaluate.
+  if (opts.llmInvoke) return { invoke: opts.llmInvoke, decision: null };
+
+  const multi = opts.endpoints || process.env[DEFAULT_CONSENSUS_ENV];
+  if (multi) {
+    const { invoke, decisions } = makeConsensusInvoke(multi, { timeoutMs: opts.timeoutMs, scanRoot: opts.scanRoot, purpose: opts.purpose });
+    // A single aggregate `decision` for the pre-existing callers (hunter.js,
+    // disprove.js), which only ever read `.reason` when `invoke` is null —
+    // the all-denied case. The full per-endpoint detail is on `decisions`
+    // for a caller that wants it.
+    const decision = decisions.find(d => !d.allowed) || decisions[0] || null;
+    return { invoke, decision, decisions };
+  }
+
+  const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;
+  if (!endpoint) return { invoke: null, decision: null };
+
+  const decision = (0,policy/* evaluateEgress */.nn)({ scanRoot: opts.scanRoot, purpose: opts.purpose || 'discovery', endpoint });
+  if (!decision.allowed) return { invoke: null, decision };
+
+  return { invoke: (prompt) => defaultLlmInvoke(prompt, { timeoutMs: opts.timeoutMs }), decision };
 }
 
 function resolveLlmInvoke(opts = {}) {
   // Precedence, most explicit first: an injected callback beats configuration,
   // and a multi-endpoint list beats a single endpoint. A caller who supplied
   // their own function must always get exactly that function.
-  if (opts.llmInvoke) return opts.llmInvoke;
-
-  const multi = opts.endpoints || process.env[DEFAULT_CONSENSUS_ENV];
-  if (multi) {
-    const consensus = makeConsensusInvoke(multi, { timeoutMs: opts.timeoutMs });
-    if (consensus) return consensus;
-  }
-
-  if (!process.env.AGENTIC_SECURITY_LLM_ENDPOINT) return null;
-  return (prompt) => defaultLlmInvoke(prompt, { timeoutMs: opts.timeoutMs });
+  return resolveLlmInvokeWithDecision(opts).invoke;
 }
 
 ;// CONCATENATED MODULE: ./src/discovery/hunter.js
@@ -311,12 +369,16 @@ async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   const transcript = [];
   const lensKey = lens?.key || 'unknown';
   const base = { focusAreaId: focusArea.id, lens: lensKey, transcript };
-  const llmInvoke = resolveLlmInvoke(opts);
+  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, purpose: 'discovery-hunter' });
 
   if (typeof llmInvoke !== 'function') {
-    const reason = 'no llmInvoke supplied and AGENTIC_SECURITY_LLM_ENDPOINT not set';
-    appendEntry(transcript, { phase: 'init', reason });
-    return { ...base, candidates: [], degraded: true, reason };
+    // FR-601: distinguish "policy denied a configured endpoint" from "nothing
+    // was configured at all" — the reason must reflect which actually happened.
+    const reason = egressDecision
+      ? `egress policy denied this call: ${egressDecision.reason}`
+      : 'no llmInvoke supplied and AGENTIC_SECURITY_LLM_ENDPOINT not set';
+    appendEntry(transcript, { phase: 'init', reason, egressDecision: egressDecision || undefined });
+    return { ...base, candidates: [], degraded: true, reason, egressDecision };
   }
 
   let prompt;
@@ -454,7 +516,11 @@ function parseVote(raw) {
 
 async function disproveCandidate(candidate, opts = {}) {
   const angles = Array.isArray(opts.angles) && opts.angles.length ? opts.angles : DEFAULT_ANGLES;
-  const llmInvoke = resolveLlmInvoke(opts);
+  // FR-601: an egress-policy denial resolves llmInvoke to null the same way a
+  // missing endpoint always has, so it falls straight into this module's own
+  // pre-existing rule — "silence never refutes" — with zero votes cast and no
+  // prompt ever built for a denied endpoint.
+  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, purpose: 'discovery-disprove' });
 
   const votes = [];
   if (typeof llmInvoke === 'function') {
@@ -469,7 +535,7 @@ async function disproveCandidate(candidate, opts = {}) {
   const refuteCount = votes.filter(v => v.refuted).length;
   const undecided = voterCount === 0;
   const refuted = !undecided && refuteCount * 2 > voterCount;
-  return { ...candidate, refutation: { votes, voterCount, refuteCount, refuted, undecided } };
+  return { ...candidate, refutation: { votes, voterCount, refuteCount, refuted, undecided, egressDecision: egressDecision || undefined } };
 }
 
 async function disprovePanel(candidates, opts = {}) {
@@ -800,7 +866,7 @@ function makeTaintProbe(perFileIR, callGraph) {
 
 async function runDeepAnalysisSafe(perFileIR, callGraph) {
   try {
-    const { runDeepAnalysis } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 6732));
+    const { runDeepAnalysis } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 7165));
     return runDeepAnalysis(perFileIR, callGraph, {});
   } catch {
     return null;
@@ -925,7 +991,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
   for (const area of areas) {
     let areaDegradedCount = 0;
     for (const lens of lenses) {
-      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {} }, { llmInvoke });
+      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {} }, { llmInvoke, scanRoot: opts.scanRoot });
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
       if (run.degraded) areaDegradedCount += 1;
@@ -987,7 +1053,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
       'every candidate is reported unconfirmed and severity is not evidence-derived');
   }
   const confirmed = await confirmAll(candidates, { taintProbe });
-  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke });
+  const { survivors, refuted } = await disprovePanel(confirmed, { llmInvoke, scanRoot: opts.scanRoot });
   const { fresh, duplicates, suppressed } = judgeCandidates(survivors, ctx.priorScan, ctx.triageFeedback);
 
   // A spent budget is a coverage gap, stated once at the top level rather than
