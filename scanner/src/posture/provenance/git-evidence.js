@@ -1,6 +1,10 @@
 import * as cp from 'node:child_process';
 import * as path from 'node:path';
 
+// 2s keeps a single call bounded for the common case; `-L`/`--follow` walks on a
+// very large history can be slower, at which point they just return an empty/
+// null result rather than blocking the caller — degrading gracefully was judged
+// preferable to a longer timeout that lets one pathological repo stall a scan.
 const GIT_TIMEOUT_MS = 2000;
 
 function _run(scanRoot, args) {
@@ -16,8 +20,25 @@ function _run(scanRoot, args) {
 }
 
 function _relPath(scanRoot, file) {
-  const rel = path.isAbsolute(file) ? path.relative(scanRoot, file) : file;
-  return rel.startsWith('..') ? null : rel.split(path.sep).join('/');
+  const abs = path.resolve(scanRoot, file);
+  const rel = path.relative(scanRoot, abs);
+  return (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) ? null : rel.split(path.sep).join('/');
+}
+
+// Git SHAs (full or abbreviated) are always lowercase/uppercase hex, 4-40 chars.
+// Rejecting anything else closes off flag injection (e.g. a "sha" of
+// "--output=/tmp/pwned" reaching `git show`/`git log` as a bare argv token).
+const SHA_RE = /^[0-9a-f]{4,40}$/i;
+function _isSha(sha) {
+  return typeof sha === 'string' && SHA_RE.test(sha);
+}
+
+// `since` is only ever used as the left side of a `<since>..HEAD` revision
+// range, so it must look like a ref/tag/sha — never start with `-` (which
+// git would parse as an option) and contain only characters refs can hold.
+const SINCE_RE = /^[A-Za-z0-9._/-]+$/;
+function _isSafeRevision(since) {
+  return typeof since === 'string' && since.length > 0 && !since.startsWith('-') && SINCE_RE.test(since);
 }
 
 export function isGitRepo(scanRoot) {
@@ -39,6 +60,7 @@ export function getRepoState(scanRoot) {
 }
 
 export function commitMeta(scanRoot, sha) {
+  if (!_isSha(sha)) return null;
   const r = _run(scanRoot, ['show', '-s', '--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%cI%x1f%s', sha]);
   if (!r.ok) return null;
   const [full, authorName, authorEmail, authorDate, committerDate, summary] = r.stdout.trim().split('\x1f');
@@ -47,11 +69,13 @@ export function commitMeta(scanRoot, sha) {
 }
 
 export function getFirstParent(scanRoot, sha) {
+  if (!_isSha(sha)) return null;
   const r = _run(scanRoot, ['rev-parse', `${sha}^1`]);
   return r.ok ? r.stdout.trim() : null;
 }
 
 export function getBlobAtCommit(scanRoot, sha, file) {
+  if (!_isSha(sha)) return null;
   const rel = _relPath(scanRoot, file);
   if (!rel) return null;
   const r = _run(scanRoot, ['show', `${sha}:${rel}`]);
@@ -61,6 +85,7 @@ export function getBlobAtCommit(scanRoot, sha, file) {
 export function candidateCommitsForLine(scanRoot, file, line, { since } = {}) {
   const rel = _relPath(scanRoot, file);
   if (!rel) return [];
+  if (since && !_isSafeRevision(since)) return [];
   const args = ['log', '--format=commit %H', '--reverse'];
   if (since) args.push(`${since}..HEAD`);
   args.push('-L', `${line},${line}:${rel}`);
@@ -77,6 +102,7 @@ export function candidateCommitsForLine(scanRoot, file, line, { since } = {}) {
 export function candidateCommitsForFile(scanRoot, file, { since } = {}) {
   const rel = _relPath(scanRoot, file);
   if (!rel) return [];
+  if (since && !_isSafeRevision(since)) return [];
   const args = ['log', '--format=%H', '--follow', '--reverse'];
   if (since) args.push(`${since}..HEAD`);
   args.push('--', rel);

@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import {
   isGitRepo, getRepoState, commitMeta, getFirstParent, getBlobAtCommit,
@@ -45,6 +48,42 @@ test('git-evidence: repo state, blob fetch, candidates, blame', () => {
     assert.equal(uncommittedBlame.uncommitted, true);
     assert.equal(getRepoState(fx.root).dirty, true);
   } finally {
+    fx.cleanup();
+  }
+});
+
+test('git-evidence: rejects path traversal, sha flag-injection, and unsafe since values', () => {
+  const fx = createGitFixture();
+  const canaryPath = path.join(os.tmpdir(), `as-git-evidence-pwn-test-${process.pid}-${Date.now()}.txt`);
+  try {
+    fx.writeFile('a.js', 'const x = 1;\n');
+    const sha1 = fx.commit('add a.js', { date: '2026-01-01T00:00:00Z', authorName: 'Alice' });
+
+    // Embedded (not leading) ".." must not resolve outside scanRoot.
+    assert.equal(getBlobAtCommit(fx.root, sha1, 'sub/../../outside.js'), null);
+    assert.equal(getBlobAtCommit(fx.root, sha1, '../outside.js'), null);
+    assert.equal(candidateCommitsForLine(fx.root, 'sub/../../outside.js', 1).length, 0);
+    assert.equal(candidateCommitsForFile(fx.root, 'sub/../../outside.js').length, 0);
+    assert.equal(blameLine(fx.root, 'sub/../../outside.js', 1), null);
+
+    // A "sha" shaped like a git flag must never reach argv as a bare token —
+    // if it did, `git show --output=<canaryPath>` would actually write the file.
+    const flagLikeSha = `--output=${canaryPath}`;
+    assert.equal(commitMeta(fx.root, flagLikeSha), null);
+    assert.equal(getFirstParent(fx.root, flagLikeSha), null);
+    assert.equal(getBlobAtCommit(fx.root, flagLikeSha, 'a.js'), null);
+    assert.equal(fs.existsSync(canaryPath), false);
+
+    // A malformed / non-hex sha is rejected the same way.
+    assert.equal(commitMeta(fx.root, 'not-a-sha'), null);
+    assert.equal(getFirstParent(fx.root, 'not-a-sha'), null);
+
+    // A "since" shaped like a flag must not be forwarded to git either.
+    assert.deepEqual(candidateCommitsForLine(fx.root, 'a.js', 1, { since: `--output=${canaryPath}` }), []);
+    assert.deepEqual(candidateCommitsForFile(fx.root, 'a.js', { since: `--output=${canaryPath}` }), []);
+    assert.equal(fs.existsSync(canaryPath), false);
+  } finally {
+    if (fs.existsSync(canaryPath)) fs.unlinkSync(canaryPath);
     fx.cleanup();
   }
 });
