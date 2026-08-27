@@ -25,10 +25,11 @@ export const EVIDENCE_ROLE = Object.freeze({
   MANIFEST: 'manifest', LOCKFILE: 'lockfile', OTHER: 'other',
 });
 
-export const AGE_BASIS = Object.freeze({
-  FINDING_ORIGIN: 'finding_origin', EARLIEST_OBSERVABLE: 'earliest_observable',
-  FIRST_OBSERVED: 'first_observed', UNCOMMITTED: 'uncommitted',
-});
+// NOTE: an AGE_BASIS enum (finding_origin | earliest_observable |
+// first_observed | uncommitted) was specified here and is deliberately NOT
+// exported yet — nothing in M0+M1 computes an age, so it was dead the moment
+// it shipped and `no-dead-modules.test.js` said so. Re-add it in the phase that
+// wires age/SLA basis into mttr.js, together with its consumer.
 
 export function emptyProvenance(status, extra = {}) {
   return {

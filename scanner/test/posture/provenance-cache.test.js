@@ -18,6 +18,40 @@ test('cache: content-addressed round trip, no TTL, repo-local', () => {
   }
 });
 
+test('cache: a read-only scan (--no-state) writes NOTHING into the scanned tree', () => {
+  // The static guard in no-stray-state.test.js proves this module CONSULTS the
+  // seam; only running it proves the seam actually stops the write. Asserting
+  // the full path listing (not just the file) because directory creation is
+  // mutation too — `.agentic-security/provenance/cache/` appearing in someone
+  // else's repository is litter even when it is empty.
+  const fx = createGitFixture();
+  const prior = process.env.AGENTIC_SECURITY_NO_STATE;
+  const listing = (dir) => {
+    const out = [];
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+        if (e.name === '.git') continue;
+        out.push(e.name);
+        if (e.isDirectory()) walk(`${d}/${e.name}`);
+      }
+    };
+    walk(dir);
+    return out;
+  };
+  try {
+    const before = listing(fx.root);
+    process.env.AGENTIC_SECURITY_NO_STATE = '1';
+    const key = makeCacheKey({ repoHead: 'abc123', stableId: 'sid1', detectorVersion: 'v1', historyBoundary: '', mode: 'standard' });
+    cacheSet(fx.root, key, { status: 'complete' });
+    assert.deepEqual(listing(fx.root), before, 'a read-only scan must not add any path');
+    assert.equal(cacheGet(fx.root, key), null, 'a refused write reads back as a miss, not as stale data');
+  } finally {
+    if (prior === undefined) delete process.env.AGENTIC_SECURITY_NO_STATE;
+    else process.env.AGENTIC_SECURITY_NO_STATE = prior;
+    fx.cleanup();
+  }
+});
+
 test('cache: different repoHead produces a different key/miss', () => {
   const fx = createGitFixture();
   try {

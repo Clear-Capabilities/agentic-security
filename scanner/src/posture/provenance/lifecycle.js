@@ -1,9 +1,13 @@
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
+import { statePath, stateWritesEnabled } from '../state-dir.js';
 
-function storePath(scanRoot) { return path.join(scanRoot, '.agentic-security', 'provenance', 'lifecycle.json'); }
-function lockPath(scanRoot) { return path.join(scanRoot, '.agentic-security', 'provenance', 'lifecycle.lock'); }
+// Both paths go through the state-dir seam rather than joining the state
+// directory name by hand, so the project-root check applies here too — see
+// test/no-stray-state.test.js.
+function storePath(scanRoot) { return statePath(scanRoot, 'provenance', 'lifecycle.json'); }
+function lockPath(scanRoot) { return statePath(scanRoot, 'provenance', 'lifecycle.lock'); }
 
 export function readLifecycle(scanRoot) {
   try {
@@ -79,27 +83,54 @@ function isOpenEvent(events) {
   return !!last && (last.type === 'introduced' || last.type === 'reintroduced');
 }
 
+/**
+ * Fold this scan's findings into `store`, in memory. Pure with respect to the
+ * filesystem — extracted so the read-only path below can produce the SAME view
+ * the persisting path would, without writing anything.
+ */
+function applyScan(store, currentFindings, { scanId, observedAt }) {
+  const currentIds = new Set(currentFindings.map((f) => f.stableId).filter(Boolean));
+
+  for (const f of currentFindings) {
+    if (!f.stableId) continue;
+    const events = store[f.stableId] || (store[f.stableId] = []);
+    if (isOpenEvent(events)) continue;
+    const fp = f.findingProvenance;
+    const commit = fp?.findingOrigin?.commit || null;
+    const authorDate = fp?.status === 'complete' ? (fp.findingOrigin?.authorDate || observedAt) : observedAt;
+    events.push({ type: events.length === 0 ? 'introduced' : 'reintroduced', commit, authorDate, scanId, observedAt });
+  }
+
+  for (const [stableId, events] of Object.entries(store)) {
+    if (isOpenEvent(events) && !currentIds.has(stableId)) {
+      events.push({ type: 'remediated', commit: null, authorDate: null, scanId, observedAt });
+    }
+  }
+
+  return store;
+}
+
 export async function updateLifecycle(scanRoot, currentFindings, { scanId, observedAt }) {
+  // Read-only scan (`--no-state` / AGENTIC_SECURITY_NO_STATE): return the view
+  // this scan WOULD have produced, computed in memory, and persist nothing.
+  //
+  // Returning the on-disk store unchanged would have been one line shorter and
+  // wrong in a quiet way — a caller asking "when was this finding introduced"
+  // would get "never" for every finding first seen in this scan, which is a
+  // false answer rather than a missing one. The lock is skipped too: a lockfile
+  // is itself a write into the scanned tree, and there is nothing to serialise
+  // when nothing is written.
+  if (!stateWritesEnabled()) {
+    return applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt });
+  }
+
   return withLock(scanRoot, async () => {
-    const store = readLifecycle(scanRoot);
-    const currentIds = new Set(currentFindings.map((f) => f.stableId).filter(Boolean));
-
-    for (const f of currentFindings) {
-      if (!f.stableId) continue;
-      const events = store[f.stableId] || (store[f.stableId] = []);
-      if (isOpenEvent(events)) continue;
-      const fp = f.findingProvenance;
-      const commit = fp?.findingOrigin?.commit || null;
-      const authorDate = fp?.status === 'complete' ? (fp.findingOrigin?.authorDate || observedAt) : observedAt;
-      events.push({ type: events.length === 0 ? 'introduced' : 'reintroduced', commit, authorDate, scanId, observedAt });
-    }
-
-    for (const [stableId, events] of Object.entries(store)) {
-      if (isOpenEvent(events) && !currentIds.has(stableId)) {
-        events.push({ type: 'remediated', commit: null, authorDate: null, scanId, observedAt });
-      }
-    }
-
+    const store = applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt });
+    // Deliberately a direct write, not safeWriteState(): this write is inside a
+    // locked critical section and its failure MUST propagate so the lock is
+    // released and the caller learns the store was not persisted.
+    // safeWriteState swallows errors and returns false, which would turn a
+    // failed write into a silent no-op that still looks like success.
     fs.mkdirSync(path.dirname(storePath(scanRoot)), { recursive: true });
     fs.writeFileSync(storePath(scanRoot), JSON.stringify(store, null, 2));
     return store;

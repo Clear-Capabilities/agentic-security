@@ -47,6 +47,30 @@ test('a finding present across two consecutive scans does not double-introduce',
   }
 });
 
+test('a read-only scan (--no-state) persists nothing but still returns this scan\'s view', async () => {
+  // Two halves, and the second is the one that is easy to get wrong: a
+  // read-only scan must not write, AND must not lie. Returning the on-disk
+  // store unchanged would report a finding first seen in this scan as having
+  // no introduction event at all — a false answer, not a missing one.
+  const fx = createGitFixture();
+  const prior = process.env.AGENTIC_SECURITY_NO_STATE;
+  try {
+    process.env.AGENTIC_SECURITY_NO_STATE = '1';
+    const finding = { stableId: 'sid-ro', findingProvenance: { status: 'not_available' } };
+    const view = await updateLifecycle(fx.root, [finding], { scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+
+    assert.equal(view['sid-ro'].length, 1);
+    assert.equal(view['sid-ro'][0].type, 'introduced');
+    assert.ok(!fs.existsSync(path.join(fx.root, '.agentic-security')),
+      'a read-only scan must not create the state directory');
+    assert.deepEqual(readLifecycle(fx.root), {}, 'and must persist nothing');
+  } finally {
+    if (prior === undefined) delete process.env.AGENTIC_SECURITY_NO_STATE;
+    else process.env.AGENTIC_SECURITY_NO_STATE = prior;
+    fx.cleanup();
+  }
+});
+
 test('lock is released even if the update callback throws', async () => {
   const fx = createGitFixture();
   try {
