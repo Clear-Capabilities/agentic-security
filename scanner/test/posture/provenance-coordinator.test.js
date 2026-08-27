@@ -353,6 +353,16 @@ test('annotateGitProvenance: two findings sharing a stableId resolve via one und
     await annotateGitProvenance(findings, { scanRoot: fx.root, scanId: 's1', observedAt: new Date().toISOString() });
     assert.ok(findings[0].findingProvenance);
     assert.ok(findings[1].findingProvenance);
+    // Digest equality alone is NOT proof of memoization: computeDigest is a
+    // pure function of the resolved data, so two fully independent
+    // resolutions over the same fixture would very likely produce the same
+    // digest even if the memo were completely broken. Object IDENTITY is the
+    // discriminating check — each independent resolution constructs a fresh
+    // object via emptyProvenance(), and f.findingProvenance = prov assigns
+    // the resolved value directly with no cloning, so strictEqual can only
+    // hold if both findings' `.then()` callbacks received the SAME resolved
+    // value from the SAME shared promise.
+    assert.strictEqual(findings[0].findingProvenance, findings[1].findingProvenance);
     assert.equal(findings[0].findingProvenance.evidenceDigest, findings[1].findingProvenance.evidenceDigest);
   } finally {
     fx.cleanup();
