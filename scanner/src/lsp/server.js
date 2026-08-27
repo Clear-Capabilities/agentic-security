@@ -321,7 +321,26 @@ export function startLspServer() {
 }
 
 // Allow direct invocation as a bin entry: `node lsp/server.js`.
-if (import.meta.url === `file://${process.argv[1]}`) {
+//
+// `import.meta.url === file://${process.argv[1]}` looks equivalent but is
+// NOT: when this script is invoked through a symlink (exactly what
+// `npm install -g`, `npx`, and `node_modules/.bin/<name>` all do for a
+// package's `bin` entries — and `agentic-security-lsp` IS one of this
+// package's bin entries), Node resolves `import.meta.url` to the symlink's
+// realpath while `process.argv[1]` stays the symlink path as invoked, so the
+// two never match, the guard is always false, and the server silently exits
+// with no output — an editor would see the language server start and
+// immediately die with nothing on stderr to explain it. `import.meta.main` is
+// resolved correctly through a symlink. It was added in Node v24.2.0
+// (backported to v22.18.0) and is currently Stability 1.0 (early development)
+// per Node's own docs — NOT stable, and NOT available on v20.11. Concretely:
+// it is `undefined` on Node 24.0.0/24.1.x, which satisfy this repo's declared
+// `engines.node: ">=24.0.0"` floor, so `import.meta.main` alone would
+// reproduce this exact bug on a plain non-symlinked invocation under those two
+// point releases. The `??` fallback covers that gap without bumping the
+// engines floor. Identical to bin/agentic-security.js's guard, deliberately —
+// see the long-form note there.
+if (import.meta.main ?? (import.meta.url === `file://${process.argv[1]}`)) {
   startLspServer();
 }
 

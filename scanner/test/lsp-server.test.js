@@ -124,3 +124,34 @@ app.get('/run', (req, res) => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Final whole-branch review — I8. Same Critical defect Task 17 fixed in
+// bin/agentic-security.js, still present here: `import.meta.url ===
+// file://${process.argv[1]}` is FALSE when the script is invoked through a
+// symlink, because Node resolves import.meta.url to the realpath while
+// process.argv[1] stays the symlink path as invoked. `agentic-security-lsp` is
+// one of this package's published `bin` entries, and npm/npx install every bin
+// entry as a symlink, so an editor launching the server through
+// `node_modules/.bin/agentic-security-lsp` would have got a process that exits
+// immediately with nothing on stdout or stderr.
+//
+// Tested through a GENUINE symlink (not a renamed copy — a copy has its own
+// realpath and would pass under the broken guard too), driven by a real LSP
+// `initialize` request over the stdio framing the server actually speaks.
+test('LSP entry point starts the server when invoked through a symlink', () => {
+  const realScript = fileURLToPath(new URL('../src/lsp/server.js', import.meta.url));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-lsp-symlink-'));
+  const linkPath = path.join(dir, 'agentic-security-lsp-link.js');
+  try {
+    fs.symlinkSync(realScript, linkPath);
+    const req = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { rootUri: null } });
+    const frame = `Content-Length: ${Buffer.byteLength(req, 'utf8')}\r\n\r\n${req}`;
+    const r = spawnSync(process.execPath, [linkPath], { input: frame, encoding: 'utf8', timeout: 60000 });
+    assert.match(r.stdout, /Content-Length: \d+/,
+      `symlinked LSP invocation produced no protocol output (status=${r.status}, stderr=${r.stderr})`);
+    assert.match(r.stdout, /capabilities/,
+      `symlinked LSP invocation did not answer initialize; stdout=${JSON.stringify(r.stdout)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
