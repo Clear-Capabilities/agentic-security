@@ -53,6 +53,25 @@ function stampFindingTimestamps(findings, baselineMap = new Map(), now = Date.no
     f.lastSeenAt = nowIso;
     const firstMs = Date.parse(f.firstSeenAt);
     f.ageDays = Math.max(0, Math.floor((now - firstMs) / 86400000));
+    // FR-PROV-019: age/SLA basis. ageDays above stays pure wall-clock —
+    // every existing SLA/computeMTTR consumer keeps its current meaning.
+    // ageBasis + provenAgeDays are ADDITIVE: a report can show both and
+    // explain the discrepancy, never silently swap which number "age" means.
+    const status = f.findingProvenance?.status;
+    const origin = f.findingProvenance?.findingOrigin;
+    if (status === 'complete' && origin?.authorDate) {
+      f.ageBasis = 'finding_origin';
+      f.provenAgeDays = Math.max(0, Math.floor((now - Date.parse(origin.authorDate)) / 86400000));
+    } else if (status === 'partial' && origin?.authorDate) {
+      f.ageBasis = 'earliest_observable';
+      f.provenAgeDays = Math.max(0, Math.floor((now - Date.parse(origin.authorDate)) / 86400000));
+    } else if (status === 'uncommitted') {
+      f.ageBasis = 'uncommitted';
+      f.provenAgeDays = f.ageDays;
+    } else {
+      f.ageBasis = 'first_observed';
+      f.provenAgeDays = f.ageDays;
+    }
   }
   return findings;
 }

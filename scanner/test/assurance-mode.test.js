@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluateAssuranceMode, ASSURANCE_MODES, DEFAULT_ASSURANCE_MODE } from '../src/pipeline/assurance-mode.js';
 import { computeScanHealth, applyFreshness } from '../src/pipeline/scan-health.js';
+import { emptyProvenance, PROVENANCE_STATUS } from '../src/posture/provenance/schema.js';
 
 const CLEAN = { status: 'complete', conditions: [], analyzers: { expected: 10, completed: 10, failed: 0, timedOut: 0, skippedByPolicy: 0 } };
 const FAILED = { status: 'partial', conditions: ['1 analyzer(s) threw on at least one file'], analyzers: { expected: 10, completed: 9, failed: 1, timedOut: 0, skippedByPolicy: 0 } };
@@ -98,4 +99,39 @@ test('advisory/standard modes: the same stale-feed scan never gates, matching ev
   const withStaleFeed = applyFreshness(clean, { calibration: { stale: true, ageDays: 400 } });
   assert.equal(evaluateAssuranceMode('advisory', withStaleFeed).ok, true);
   assert.equal(evaluateAssuranceMode('standard', withStaleFeed).ok, true);
+});
+
+test('strict mode: a finding with findingProvenance.status "complete" passes the provenance check', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, { findingOrigin: { commit: 'a', authorDate: '2026-01-01T00:00:00Z' } });
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1', findingProvenance: fp }]);
+  assert.equal(v.ok, true);
+});
+
+test('strict mode: a finding with findingProvenance.status "uncommitted" passes the provenance check', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.UNCOMMITTED);
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1', findingProvenance: fp }]);
+  assert.equal(v.ok, true);
+});
+
+test('strict mode: a finding with findingProvenance.status "not_available" fails the gate, naming the count', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE);
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1', findingProvenance: fp }]);
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /1 finding\(s\) have status outside \[complete, uncommitted\]/);
+});
+
+test('strict mode: a finding with NO findingProvenance at all also fails the gate', () => {
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1' }]);
+  assert.equal(v.ok, false);
+});
+
+test('strict mode: an empty/missing findings array never fails the gate on its own (backward compatible)', () => {
+  assert.equal(evaluateAssuranceMode('strict', CLEAN).ok, true);
+  assert.equal(evaluateAssuranceMode('strict', CLEAN, []).ok, true);
+});
+
+test('advisory/standard modes: bad provenance never gates, matching every other FR-204 condition', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE);
+  assert.equal(evaluateAssuranceMode('advisory', CLEAN, [{ id: 'f1', findingProvenance: fp }]).ok, true);
+  assert.equal(evaluateAssuranceMode('standard', CLEAN, [{ id: 'f1', findingProvenance: fp }]).ok, true);
 });

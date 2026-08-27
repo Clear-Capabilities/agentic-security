@@ -1223,7 +1223,7 @@ async function cmdCi(args) {
     console.error(`[ci] --assurance must be one of: ${ASSURANCE_MODES.join('|')} (got '${assuranceMode}')`);
     return 1;
   }
-  const assuranceVerdict = evaluateAssuranceMode(assuranceMode, scan.scanHealth);
+  const assuranceVerdict = evaluateAssuranceMode(assuranceMode, scan.scanHealth, findings);
   if (!assuranceVerdict.ok) {
     console.error(`[ci] assurance gate FAILED (mode=${assuranceMode}): ${assuranceVerdict.reason}`);
     return 1;

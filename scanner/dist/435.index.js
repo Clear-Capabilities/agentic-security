@@ -1268,6 +1268,7 @@ const apply_fix = {
           const entry = await (0,fix_history/* applyFix */.oM)({
             scanRoot: ctx.sessionRoot, file: rel, originalContent, newContent: v.content, fileExisted,
             findingId: f.id, stableId: f.stableId, ruleId: f.ruleId || f.cwe || f.family || null, vuln: f.vuln || f.title || null,
+            findingProvenance: f.findingProvenance || null,
           });
           written.push({ file: rel, historyId: entry.id, backupPath: entry.backupPath });
         }

@@ -56,7 +56,7 @@ function _isValidMode(mode) {
  *   ok:false only ever happens in strict mode; advisory/standard always ok:true
  *   (they report, they do not gate).
  */
-export function evaluateAssuranceMode(mode, scanHealth) {
+export function evaluateAssuranceMode(mode, scanHealth, findings = []) {
   const effectiveMode = _isValidMode(mode) ? mode : DEFAULT_ASSURANCE_MODE;
   const conditions = Array.isArray(scanHealth?.conditions) ? scanHealth.conditions : [];
 
@@ -85,6 +85,36 @@ export function evaluateAssuranceMode(mode, scanHealth) {
       conditions,
     };
   }
+
+  // M2 §2.5: strict cares about overall scan completeness, which now
+  // explicitly includes PROVENANCE completeness, not just detector/analyzer
+  // completeness. A finding whose findingProvenance status is outside
+  // ['complete','uncommitted'] — including a finding with NO
+  // findingProvenance at all, e.g. --no-provenance was used — means strict
+  // cannot vouch for this scan's provenance the same way it already refuses
+  // to vouch for a scan with a failed analyzer.
+  //
+  // KNOWN INTERACTION: scan.secrets/scan.logicVulns are unconditionally
+  // stamped not_available today (M0+M1 deliberately deferred real origin
+  // resolution for those two channels — see the M2/M3/M4 design spec's
+  // §2.6). Any real secret or logic finding therefore fails strict mode
+  // until that resolution work lands. This is the literal, intended
+  // consequence of "never false certainty" applied to strict's own
+  // definition, not an oversight — a strict-mode operator with secrets
+  // findings should expect this until M3+ closes that gap.
+  const badProvenance = (Array.isArray(findings) ? findings : []).filter((f) => {
+    const s = f?.findingProvenance?.status;
+    return !['complete', 'uncommitted'].includes(s);
+  });
+  if (badProvenance.length > 0) {
+    return {
+      ok: false,
+      mode: 'strict',
+      reason: `strict mode requires complete finding provenance; ${badProvenance.length} finding(s) have status outside [complete, uncommitted]`,
+      conditions,
+    };
+  }
+
   return { ok: true, mode: 'strict', reason: null, conditions };
 }
 
