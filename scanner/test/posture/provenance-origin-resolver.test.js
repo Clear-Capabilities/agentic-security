@@ -179,6 +179,40 @@ test('resolveOrigin: a 3-commit linear chain (each touching the same line) still
   }
 });
 
+test('resolveOrigin: memoizes replayAt within the 3-commit chain — real replayAt is invoked exactly twice, not three times', async () => {
+  // The previous test proves BEHAVIOR is unchanged by the memo, but nothing
+  // in it would fail if replayCache/replay() were deleted and the two call
+  // sites reverted to raw replayAt(...) calls: commitsConsidered counts
+  // loop iterations, not replayAt calls, and a correct result can be
+  // produced either way. This test measures the actual call count.
+  //
+  // node:test's own `t.mock.method` cannot intercept a named ES-module
+  // export (verified: throws "Cannot redefine property" against this
+  // repo's own modules — ESM export bindings are non-configurable by
+  // spec). `mock.module` can, but needs the
+  // --experimental-test-module-mocks CLI flag at process start, which
+  // Node refuses via NODE_OPTIONS and which this file is not run with
+  // (`node --test test/posture/provenance-origin-resolver.test.js`, no
+  // flag). So the actual spy assertion runs in a separate child process
+  // launched WITH that flag — see provenance-replay-memo-childproc.mjs's
+  // header for the full reasoning and the before/after call-count proof
+  // (2 calls with the memo, 3 without it, confirmed by temporarily
+  // reverting the memo and re-running).
+  const { execFileSync } = await import('node:child_process');
+  const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const childScript = path.join(here, 'provenance-replay-memo-childproc.mjs');
+  try {
+    execFileSync(process.execPath, ['--experimental-test-module-mocks', childScript], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+  } catch (e) {
+    throw new Error(`replay-memo child process failed (exit ${e.status}):\nSTDOUT: ${e.stdout}\nSTDERR: ${e.stderr}`);
+  }
+});
+
 test('resolveOrigin: budget_exhausted when deadlineAt is already in the past', async () => {
   const fx = createGitFixture();
   try {
