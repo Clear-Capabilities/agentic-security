@@ -3008,6 +3008,19 @@ async function main() {
 // for a unit test). Without this, any import of this module — for a single
 // named export — re-runs the entire CLI dispatch and calls process.exit(),
 // killing whatever process did the importing.
-if (import.meta.url === `file://${process.argv[1]}`) {
+//
+// `import.meta.url === file://${process.argv[1]}` looks equivalent but is
+// NOT: when this script is invoked through a symlink (exactly what
+// `npm install -g`, `npx`, and `node_modules/.bin/<name>` all do for a
+// package's `bin` entries — which is the documented `npx
+// @clear-capabilities/agentic-security-scanner` install path), Node
+// resolves `import.meta.url` to the symlink's realpath while
+// `process.argv[1]` stays the symlink path as invoked, so the two never
+// match, the guard is always false, and the CLI silently exits with no
+// output. `import.meta.main` (Node >= 20.11 / stable on this repo's
+// Node >= 24 floor per package.json `engines`) is resolved correctly
+// through a symlink — verified live through an actual symlink, not just
+// read about — see the Task 17 fix report.
+if (import.meta.main) {
   main();
 }
