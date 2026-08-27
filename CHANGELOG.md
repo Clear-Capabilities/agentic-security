@@ -11,6 +11,75 @@
 
 
 
+## Unreleased — Finding Provenance: which commit introduced each finding
+
+Every finding now carries a `findingProvenance` record answering "when did this
+enter the codebase, and how sure are we?" — resolved from Git history, not
+guessed. It is on by default in any scan of a Git repository and costs nothing
+outside one.
+
+**What it resolves.** For a SAST finding: the commit that introduced it, found
+by replaying the finding's own predicate against historical blobs (`git blame`
+answers "who last touched this line", which is a different and usually wrong
+question) and then confirming the predicate was FALSE in that commit's parent.
+For a direct dependency: the commit that moved the declared version in
+`package.json`/`requirements.txt` into an advisory's vulnerable range. Alongside
+the origin commit: the branch/PR the change entered through, the evidence nodes
+(source/sink/manifest, each as a path:line:commit triple), a confidence level
+with its reasons, and a lifecycle ledger of introduce/remediate/reintroduce
+events at `.agentic-security/provenance/lifecycle.json`.
+
+**Only a complete scan can close a finding.** The ledger's remediation pass turns
+a finding's *absence* into the claim "this was fixed," which is sound only when
+the scan actually looked everywhere it could have found it. A `--changed-since` /
+`--pr` scan, or any caller-supplied file list (the MCP `scan_diff` tool, the LSP's
+on-save scan), therefore records new and reintroduced findings normally but closes
+nothing — the entries it did not look at stay open until a full scan says
+otherwise. For the same reason the ledger is written only when the scan target is
+a real directory: a scan of a path that does not exist resolves its state
+directory by walking up from the current working directory, and would otherwise
+write a verdict about a project it never read.
+
+**It refuses to guess.** Every record carries a terminal `status`, and there is
+no path that leaves the field absent: `complete`, `partial` (history could not
+confirm a parent boundary — a shallow clone, or an advisory with no `introduced`
+bound), `uncommitted` (the finding exists only in the working tree),
+`not_available`, `budget_exhausted`, or `error`. A shallow clone can never reach
+`complete`. Author emails are redacted from every output format unless
+`--include-author-email` is passed.
+
+**New flags** (`agentic-security scan --help` documents all six):
+`--provenance <standard|deep>`, `--no-provenance`, `--provenance-since <ref>`,
+`--provenance-timeout <ms>`, `--include-author-email`, `--require-provenance`.
+`deep` mode is accepted and warns that it runs `standard` in this release.
+`--require-provenance` reports unresolved provenance as a scan-health condition
+and downgrades `scanHealth.status` to `partial`; it never changes the exit code.
+`--verbose --firehose` prints the provenance block per finding in text output.
+
+### Breaking: SCA finding ids change for manifest-declared dependencies
+
+Direct dependencies declared in `package.json` / `requirements.txt` now carry the
+manifest **line number** where they are declared, and `report/index.js`'s
+`fingerprint()` folds that line into the finding id. This was necessary for
+provenance — an SCA finding had no line, so every `vulnerable_dep` from one
+manifest previously hashed to the SAME id and could not be told apart — but it
+means those ids are **not stable across this upgrade**.
+
+Concretely: any triage verdict, baseline entry, or suppression keyed on the OLD
+id of a `package.json`- or `requirements.txt`-declared dependency finding will no
+longer match and is effectively orphaned. Affected state:
+`.agentic-security/baseline.json`, triage memory, and `disable:`/suppression
+entries naming an SCA finding id. Transitive dependencies (resolved from a
+lockfile, not declared in a manifest) are unaffected, as are all SAST, secrets,
+and business-logic findings.
+
+**There is no automatic migration**, and that is deliberate rather than an
+oversight — id aliasing would have to be carried indefinitely to be safe, and
+the orphaned entries fail open (a finding reappears) rather than closed (a real
+finding stays hidden). Re-triage or re-baseline the affected SCA findings after
+upgrading; `agentic-security scan --set-baseline` regenerates the baseline in one
+step.
+
 ## 0.144.0 — Assurance hardening closes Epic E2, and an independent audit finds what "verified" missed
 
 The assurance-hardening PRD (`docs/implementation/assurance-hardening-*`)
