@@ -41,6 +41,60 @@ test('resolveDirectSCAOrigin: dependency vulnerable since the repo root, never b
   }
 });
 
+test('resolveDirectSCAOrigin: CRITICAL regression — a routine patch bump WITHIN an already-vulnerable range must never be reported as the origin', async () => {
+  const fx = createGitFixture();
+  try {
+    // Root commit already declares a version inside the vulnerable range —
+    // the dependency has been vulnerable since the very first commit.
+    fx.writeFile('package.json', JSON.stringify({ name: 'x', dependencies: { 'left-pad': '1.0.0' } }, null, 2) + '\n');
+    const shaRoot = fx.commit('initial commit, already on a vulnerable version', { date: '2026-01-01T00:00:00Z', authorName: 'Alice' });
+    // A later, routine dependency bump (e.g. a dependabot/renovate PR) moves
+    // the version WITHIN the same still-vulnerable range — it does not clear
+    // the vulnerability and must not be mistaken for the origin.
+    fx.writeFile('package.json', JSON.stringify({ name: 'x', dependencies: { 'left-pad': '1.0.5' } }, null, 2) + '\n');
+    const shaBump = fx.commit('routine patch bump, still vulnerable', { date: '2026-01-02T00:00:00Z', authorName: 'Bob' });
+
+    const entry = { name: 'left-pad', ecosystem: 'npm', filePath: 'package.json', fixedVersions: ['1.1.0'] };
+    const result = await resolveDirectSCAOrigin(fx.root, entry);
+
+    // The critical assertion: never claim the later patch-bump commit as a
+    // high-confidence ("parentBoundaryVerified: true") origin — that would be
+    // reporting the wrong commit with the strongest confidence signal, which
+    // directly corrupts age/SLA/compliance calculations downstream.
+    if (result.status === 'complete') {
+      assert.notEqual(result.findingOrigin.commit, shaBump);
+      assert.equal(result.findingOrigin.commit, shaRoot);
+      assert.equal(result.parentBoundaryVerified, false);
+    } else {
+      // The honest alternative: admit the ambiguity rather than guess.
+      assert.equal(result.status, 'partial');
+      assert.equal(result.reason, 'ambiguous-range-no-introduced-bound');
+    }
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('resolveDirectSCAOrigin: a confirmed transition (parent genuinely out of range) still resolves complete with parentBoundaryVerified:true', async () => {
+  const fx = createGitFixture();
+  try {
+    // Parent commit's version is unambiguously OUT of range (>= fixed) —
+    // this is real evidence of a transition, not the ambiguous case above.
+    fx.writeFile('package.json', JSON.stringify({ name: 'x', dependencies: { 'left-pad': '1.1.0' } }, null, 2) + '\n');
+    fx.commit('starts on the fixed version', { date: '2026-01-01T00:00:00Z', authorName: 'Alice' });
+    fx.writeFile('package.json', JSON.stringify({ name: 'x', dependencies: { 'left-pad': '1.0.0' } }, null, 2) + '\n');
+    const shaDowngrade = fx.commit('downgrade back into the vulnerable range', { date: '2026-01-02T00:00:00Z', authorName: 'Bob' });
+
+    const entry = { name: 'left-pad', ecosystem: 'npm', filePath: 'package.json', fixedVersions: ['1.1.0'] };
+    const result = await resolveDirectSCAOrigin(fx.root, entry);
+    assert.equal(result.status, 'complete');
+    assert.equal(result.findingOrigin.commit, shaDowngrade);
+    assert.equal(result.parentBoundaryVerified, true);
+  } finally {
+    fx.cleanup();
+  }
+});
+
 test('resolveDirectSCAOrigin: unrecognized manifest / malformed package.json never throws, resolves not_available or partial', async () => {
   const fx = createGitFixture();
   try {

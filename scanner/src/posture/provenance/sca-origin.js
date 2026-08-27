@@ -72,15 +72,25 @@ export async function resolveDirectSCAOrigin(scanRoot, scaEntry, { since, deadli
   const range = { introduced: null, fixed: (scaEntry.fixedVersions || [])[0] || null };
   let commitsConsidered = 0;
   // With no `introduced` lower bound, `versionInRange` treats any version below
-  // `fixed` as "in range" (by design — see the versionInRange unit test). That
-  // means a repo-root commit can be trivially "in range" even when it holds a
-  // genuinely older/safer version than a later bump — the comparator has no
-  // way to tell the difference without a lower bound. A parent-less root is
-  // therefore not proof of introduction the way it is for a boolean predicate
-  // (origin-resolver.js): we defer it as a low-confidence fallback and keep
-  // walking for a commit where the declared version actually CHANGED into the
-  // in-range value — that's the real origin of the currently-observed state.
+  // `fixed` as "in range" (by design — see the versionInRange unit test: a
+  // fixed-only range means "vulnerable since inception"). That makes two
+  // distinct real-world situations indistinguishable by pure range membership:
+  // (1) a genuinely safer earlier version that nonetheless also falls below
+  // `fixed`, later bumped into the actually-vulnerable value, vs. (2) a
+  // routine patch-level bump (e.g. a dependabot PR) that moves the declared
+  // version WITHIN an already-vulnerable window. Both look identical as
+  // "parent in range, child in range, version string differs" — there is no
+  // way to tell them apart without an introduced bound. So a parent whose
+  // version is ALSO in-range is never treated as a confirmed transition (that
+  // would misattribute case 2 to the bump commit — a Critical bug caught in
+  // review: reporting `parentBoundaryVerified:true` at a routine patch bump
+  // when the dependency was vulnerable from the very first commit). Instead
+  // it's an unresolved ambiguity, and it downgrades even a root-commit
+  // fallback claim to `partial` rather than asserting a possibly-wrong commit
+  // with high confidence — the two situations render identically because they
+  // ARE identical given only a `fixed` version and no lower bound.
   let rootFallback = null;
+  let ambiguousBump = false;
 
   for (const sha of candidates) {
     if (deadlineAt && Date.now() > deadlineAt) return { status: 'budget_exhausted', commitsConsidered };
@@ -101,16 +111,29 @@ export async function resolveDirectSCAOrigin(scanRoot, scaEntry, { since, deadli
 
     const parentBlob = getBlobAtCommit(scanRoot, parent, file);
     const parentVersion = parentBlob ? extractDeclaredVersion(parentBlob, scaEntry.name, file) : null;
-    if (parentVersion === declaredVersion) continue; // unrelated edit — the dep's declared value didn't change here
+    const parentOutOfRange = !parentVersion || !versionInRange(parentVersion, range);
+    if (!parentOutOfRange) {
+      // Parent was already in the vulnerable range too. If the declared value
+      // actually changed here, this is the ambiguous "still-vulnerable bump"
+      // case described above — never attribute origin to it, and don't trust
+      // an earlier root fallback either, since it proves the history isn't as
+      // clean as a single unchanging value since repo creation.
+      if (parentVersion !== declaredVersion) ambiguousBump = true;
+      continue;
+    }
 
     const meta = commitMeta(scanRoot, sha);
     if (!meta) continue;
     return originResult({ meta, commitsConsidered, absentInParents: [parent], parentBoundaryVerified: true });
   }
 
-  if (rootFallback) {
+  if (rootFallback && !ambiguousBump) {
     return originResult({ meta: rootFallback, commitsConsidered, absentInParents: [], parentBoundaryVerified: false });
   }
 
-  return { status: 'partial', reason: 'version-never-confirmed-in-candidates', commitsConsidered };
+  return {
+    status: 'partial',
+    reason: ambiguousBump ? 'ambiguous-range-no-introduced-bound' : 'version-never-confirmed-in-candidates',
+    commitsConsidered,
+  };
 }
