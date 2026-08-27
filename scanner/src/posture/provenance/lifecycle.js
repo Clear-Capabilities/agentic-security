@@ -15,14 +15,21 @@ export function readLifecycle(scanRoot) {
   }
 }
 
+// Mirrors posture/fix-history.js's _withLogLock: an exclusive (wx) lockfile,
+// released in finally{}. On contention (EEXIST), a stale lock — one whose
+// holding PID is no longer alive, or one older than 30s — is reaped before
+// falling through to the timeout-based retry loop, so a crashed/killed
+// process (not just a throwing one) cannot wedge provenance updates forever.
 async function withLock(scanRoot, fn) {
   const lp = lockPath(scanRoot);
   fs.mkdirSync(path.dirname(lp), { recursive: true });
   const start = Date.now();
+  const TIMEOUT_MS = 5000;
   while (true) {
     try {
       const handle = await fsp.open(lp, 'wx');
-      await handle.close();
+      await handle.writeFile(String(process.pid));
+      try { await handle.close(); } catch {}
       try {
         return await fn();
       } finally {
@@ -30,13 +37,41 @@ async function withLock(scanRoot, fn) {
       }
     } catch (e) {
       if (e && e.code === 'EEXIST') {
-        if (Date.now() - start > 5000) throw new Error('provenance/lifecycle: lock timed out');
+        try {
+          const [st, pidStr] = await Promise.all([
+            fsp.stat(lp),
+            fsp.readFile(lp, 'utf8').catch(() => ''),
+          ]);
+          const pid = parseInt(pidStr.trim(), 10);
+          const pidAlive = Number.isFinite(pid) && isProcessAlive(pid);
+          const old = Date.now() - st.mtimeMs > 30000;
+          if (!pidAlive || old) {
+            try {
+              // Only unlink if the lockfile still holds the PID we just
+              // read, so we don't race the unlink against a fresh lock
+              // taken by another process in the meantime.
+              const recheck = (await fsp.readFile(lp, 'utf8').catch(() => '')).trim();
+              if (recheck === pidStr.trim()) {
+                await fsp.unlink(lp);
+              }
+            } catch {}
+            continue;
+          }
+        } catch {}
+        if (Date.now() - start > TIMEOUT_MS) throw new Error('provenance/lifecycle: lock timed out');
         await new Promise((r) => setTimeout(r, 25));
         continue;
       }
       throw e;
     }
   }
+}
+
+function isProcessAlive(pid) {
+  // POSIX: process.kill(pid, 0) probes existence without sending a signal.
+  // EPERM also means the process exists; only ESRCH means dead.
+  try { process.kill(pid, 0); return true; }
+  catch (e) { return e && e.code === 'EPERM'; }
 }
 
 function isOpenEvent(events) {

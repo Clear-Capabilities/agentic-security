@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import { readLifecycle, updateLifecycle, latestOpenIntroduction } from '../../src/posture/provenance/lifecycle.js';
 
@@ -39,6 +42,77 @@ test('a finding present across two consecutive scans does not double-introduce',
     await updateLifecycle(fx.root, [finding], { scanId: 's2', observedAt: '2026-01-02T00:00:00Z' });
     const store = readLifecycle(fx.root);
     assert.equal(store['sid-stable'].length, 1);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('lock is released even if the update callback throws', async () => {
+  const fx = createGitFixture();
+  try {
+    // Force the write inside updateLifecycle's locked critical section to
+    // fail deterministically: put a directory where lifecycle.json needs
+    // to be written, so fs.writeFileSync throws EISDIR. (A monkeypatch of
+    // fs.writeFileSync doesn't work here — `import * as fs from 'node:fs'`
+    // in real strict-mode ESM yields a frozen namespace object, so
+    // reassigning a property throws "Cannot assign to read only
+    // property" instead of installing the patch.)
+    const provenanceDir = path.join(fx.root, '.agentic-security', 'provenance');
+    const storeFile = path.join(provenanceDir, 'lifecycle.json');
+    fs.mkdirSync(provenanceDir, { recursive: true });
+    fs.mkdirSync(storeFile);
+
+    await assert.rejects(
+      updateLifecycle(fx.root, [{ stableId: 'x' }], { scanId: 's1', observedAt: '2026-01-01T00:00:00Z' })
+    );
+
+    // Clear the obstruction so the next call's assertion is about the
+    // LOCK being released, not about the write failing again.
+    fs.rmdirSync(storeFile);
+
+    // The real proof: if the lock file from the failed call above were
+    // still on disk, this next call would spin for the internal 5s
+    // timeout and reject. Racing it against a much shorter deadline turns
+    // "lock leaked" into an observable failure instead of a slow hang.
+    const result = await Promise.race([
+      updateLifecycle(fx.root, [{ stableId: 'x' }], { scanId: 's2', observedAt: '2026-01-02T00:00:00Z' }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT: lock was not released after the callback threw')), 2000)),
+    ]);
+    assert.ok(result);
+    const store = readLifecycle(fx.root);
+    assert.equal(store['x'].length, 1);
+    assert.equal(store['x'][0].type, 'introduced');
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('a stale lock (dead PID, old mtime) is reaped instead of wedging updates', async () => {
+  const fx = createGitFixture();
+  try {
+    const provenanceDir = path.join(fx.root, '.agentic-security', 'provenance');
+    fs.mkdirSync(provenanceDir, { recursive: true });
+    const lockFile = path.join(provenanceDir, 'lifecycle.lock');
+
+    // spawnSync only returns after the child has already exited, so its
+    // pid is guaranteed dead by the time we write it into the lock file.
+    const dead = spawnSync(process.execPath, ['-e', '0']);
+    assert.ok(Number.isFinite(dead.pid), 'expected a real pid from the dead child process');
+
+    fs.writeFileSync(lockFile, String(dead.pid));
+    // Also backdate well past the 30s staleness window, so the test does
+    // not rely solely on PID-liveness detection working on this platform.
+    const old = new Date(Date.now() - 60000);
+    fs.utimesSync(lockFile, old, old);
+
+    const result = await Promise.race([
+      updateLifecycle(fx.root, [{ stableId: 'y' }], { scanId: 's1', observedAt: '2026-01-01T00:00:00Z' }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT: stale lock was not reaped')), 4000)),
+    ]);
+    assert.ok(result);
+    const store = readLifecycle(fx.root);
+    assert.equal(store['y'].length, 1);
+    assert.equal(store['y'][0].type, 'introduced');
   } finally {
     fx.cleanup();
   }
