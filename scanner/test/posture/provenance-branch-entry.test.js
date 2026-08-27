@@ -60,6 +60,22 @@ test('validation: flag-shaped targetRef is rejected, not passed to git', () => {
   }
 });
 
+test('unreachable origin commit (never merged into target) returns null', () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'x\n');
+    fx.commit('base', { date: '2026-01-01T00:00:00Z' });
+    fx.checkoutBranch('sibling');
+    fx.writeFile('a.js', 'y\n');
+    const siblingSha = fx.commit('never merged', { date: '2026-01-02T00:00:00Z' });
+    fx.checkout('master'); // back to the target branch, sibling never merged in
+    const entry = resolveBranchEntry(fx.root, siblingSha, 'HEAD');
+    assert.equal(entry, null);
+  } finally {
+    fx.cleanup();
+  }
+});
+
 test('validation: non-string / empty originCommit is rejected', () => {
   const fx = createGitFixture();
   try {
