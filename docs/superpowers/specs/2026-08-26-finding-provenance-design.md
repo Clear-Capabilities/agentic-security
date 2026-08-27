@@ -62,7 +62,7 @@ runFullScan() [engine.js]
   └─ return scan
 
 [bin/agentic-security.js, post toJSON(scan)]
-  ├─ stampFindingTimestamps()    (existing mttr.js — now also reads finding.provenance for ageBasis)
+  ├─ stampFindingTimestamps()    (existing mttr.js — now also reads finding.findingProvenance for ageBasis)
   └─ [posture/compliance evaluators, invoked separately over the scanned findings]
        └─ gap rows gain controlRefs + derived provenance summary (§7.3)
 ```
@@ -77,9 +77,9 @@ New module family under `scanner/src/posture/provenance/`, matching the existing
 
 | Module | Responsibility |
 |---|---|
-| `coordinator.js` | `annotateProvenance(findings, ctx)` entry point. Schedules per-finding enrichment under budget (§8.4), guarantees a terminal `provenance` object on every finding even on error/timeout/non-Git (never appends findings, never drops them). |
+| `coordinator.js` | `annotateProvenance(findings, ctx)` entry point. Schedules per-finding enrichment under budget (§8.4), guarantees a terminal `findingProvenance` object on every finding even on error/timeout/non-Git (never appends findings, never drops them). |
 | `git-evidence.js` | Read-only Git plumbing: repo identity, HEAD, dirty/staged state, shallow/grafted detection, `log -L`, blame porcelain, `show <ref>:<path>`, rename tracking (`--follow`/`-M`). Extends `posture/git-history.js` (existing blame becomes the candidate-seed step) rather than duplicating it. |
-| `predicate-replay.js` | "Does this finding's condition hold in this historical blob" — single-file replay via `git show <ref>:<path>` → IR parse → the one compatible detector, reusing the pattern `history-scan.js` already established for full-repo historical scans, but scoped to one file/one detector for cost control. |
+| `predicate-replay.js` | "Does this finding's condition hold in this historical blob" — refined during implementation planning from "run the one compatible detector" to: re-run `runFullScan({fileContents, scanRoot})` (the same call shape `history-scan.js`'s private `_scanAtRef` already uses) scoped to just the finding's file(s) — 1 file for single-file findings, the small flow-touched set for cross-file — then check whether the **same `stableId`** (`posture/stable-id.js#computeStableId`, already rule+normalized-snippet+path-shape based) reappears in the replay's output. This avoids hand-mapping findings to one of 60+ individual SAST detector modules, reuses proven full-detector-suite machinery, and gets "compatible detector" for free: if the current ruleset's detector suite doesn't reproduce the same stableId against the historical blob, that itself *is* the incompatibility signal (falls back to `line-attribution`, confidence capped `medium`). Cost stays bounded because the file set replayed is tiny (1–3 files), not the whole repo. |
 | `origin-resolver.js` | Implements §4.3: seeds candidates from `git-evidence.js`, walks oldest→newest, calls `predicate-replay.js` at each candidate and its first parent, returns `findingOrigin` + `historyCoverage`. |
 | `branch-entry.js` | FR-PROV-004: resolves the commit that introduced the condition to the *selected target branch* (often a merge/squash), separately from the graph-origin commit. |
 | `evidence-attribution.js` | FR-PROV-005: per-evidence-node blame (source/sink/guard/removed_guard/config/secret/manifest/lockfile) — never collapses multiple evidence nodes into one author. |
@@ -125,13 +125,13 @@ Current age always uses the **latest open** introduction (last `introduced`/`rei
 
 ### 5.2 Age/SLA basis wiring (FR-PROV-019)
 
-`mttr.js` gains logic reading `finding.provenance` to pick `ageBasis`:
+`mttr.js` gains logic reading `finding.findingProvenance` to pick `ageBasis`:
 - `finding_origin` — status `complete`, age = now − `findingOrigin.authorDate`.
 - `earliest_observable` — status `partial`, same computation, flagged.
 - `first_observed` — status `not_available`/`error`, age = now − `firstObserved.observedAt` (today's existing behavior).
 - `uncommitted` — age = now − `firstObserved.observedAt`, tagged distinctly (no commit to anchor to).
 
-Runs where `mttr.js` already runs (post `toJSON(scan)` in `bin/agentic-security.js`), since `provenance` is attached to findings inside `engine.js` before that point — no ordering change needed.
+Runs where `mttr.js` already runs (post `toJSON(scan)` in `bin/agentic-security.js`), since `findingProvenance` is attached to findings inside `engine.js` before that point — no ordering change needed.
 
 ### 5.3 Provenance cache (FR-PROV-028)
 
@@ -141,15 +141,19 @@ Separate from the lifecycle store — caches the expensive *origin-resolution co
 
 ## 6. Data model and schema enforcement
 
+### 6.0 Field name: `findingProvenance`, not `provenance` — a naming collision found during planning
+
+`finding.provenance` and `supplyChainEntry.provenance` **already exist and mean something else**: `posture/ai-code-fingerprint.js` sets `f.provenance`/`f.provenanceScore` to an AI-authorship fingerprint verdict, and `sca/sigstore-verify.js` sets `sc.provenance` to a Sigstore/SLSA build-attestation result. `normalizeFindings()` already passes both through today. Reusing `provenance` for this feature's schema would silently overwrite both. The PRD's own schema field names are therefore **not literal** for this codebase — every place below that would read `provenance` per the PRD's Data Contract instead uses **`findingProvenance`** as the actual property key on a finding object. This is a naming substitution only; the object's internal shape is unchanged from §6.1's description of the PRD contract.
+
 ### 6.1 Schema
 
-The `provenance` object follows the PRD's Data Contract (§6 of the PRD) exactly: `schemaVersion`, `status`, `findingOrigin`, `branchIntroduction`, `firstObserved`, `evidenceAttribution[]`, `method`, `confidence`, `historyCoverage`, `analysisBasis`, `limitations[]`. One addition not shown in the PRD's example JSON: **`evidenceDigest`** — a sha256 hex digest binding stable finding ID + repo identity + HEAD + origin/branch-entry commits + evidence-node locations/blob IDs + detector/ruleset version + history boundary + method + confidence reasons + limitations, per the PRD's "Evidence integrity" section. This is the *unsigned* digest only — Ed25519 signing (FR-PROV-023) is P2 and not built here; the digest exists now so a future signer has something stable to attach to without a schema break.
+The `findingProvenance` object follows the PRD's Data Contract (§6 of the PRD) exactly: `schemaVersion`, `status`, `findingOrigin`, `branchIntroduction`, `firstObserved`, `evidenceAttribution[]`, `method`, `confidence`, `historyCoverage`, `analysisBasis`, `limitations[]`. One addition not shown in the PRD's example JSON: **`evidenceDigest`** — a sha256 hex digest binding stable finding ID + repo identity + HEAD + origin/branch-entry commits + evidence-node locations/blob IDs + detector/ruleset version + history boundary + method + confidence reasons + limitations, per the PRD's "Evidence integrity" section. This is the *unsigned* digest only — Ed25519 signing (FR-PROV-023) is P2 and not built here; the digest exists now so a future signer has something stable to attach to without a schema break.
 
 Enumerations (verbatim from the PRD): `status`: `complete | partial | not_available | uncommitted | budget_exhausted | error`. `method`: `semantic-history-replay | dependency-graph-diff | line-attribution | scan-history | none`. `confidence.level`: `high | medium | low | unknown`. `evidenceAttribution.role`: `source | sink | guard | removed_guard | transformation | config | secret | manifest | lockfile | other`. `ageBasis`: `finding_origin | earliest_observable | first_observed | uncommitted`.
 
 ### 6.2 Enforcement, not just observability
 
-`pipeline/finding-schema.js`'s `FINDING_FIELD_GROUPS` gets `provenance` added as **required**. `describeFindingCompleteness()` is promoted from observability-only to an actual gate via the new `validate.js`, used in tests/CI (FR-PROV-001's "schema validation rejects a finding with a missing provenance object"). At runtime the actual guarantee comes from `coordinator.js` itself — same pattern as `finding-defaults.js` backfilling `parser`/`family` — it always attaches a terminal `provenance` object (worst case `{status:"error", ...}`), so the reject-path in `validate.js` is a correctness backstop that a normal scan should never hit, not a runtime throw wired into the hot path.
+`pipeline/finding-schema.js`'s `FINDING_FIELD_GROUPS` gets `findingProvenance` added as **required**. `describeFindingCompleteness()` is promoted from observability-only to an actual gate via the new `validate.js`, used in tests/CI (FR-PROV-001's "schema validation rejects a finding with a missing provenance object"). At runtime the actual guarantee comes from `coordinator.js` itself — same pattern as `finding-defaults.js` backfilling `parser`/`family` — it always attaches a terminal `findingProvenance` object (worst case `{status:"error", ...}`), so the reject-path in `validate.js` is a correctness backstop that a normal scan should never hit, not a runtime throw wired into the hot path.
 
 ### 6.3 Terminal-status decision tree
 
@@ -161,9 +165,9 @@ Git unavailable/error → `error`. Finding only in working tree/index → `uncom
 
 ### 7.1 Output parity (FR-PROV-018)
 
-Every format (`toJSON`, `toCSV`, `toMarkdown`, `toJUnit`, `toSARIF`, `toHTML`, `toSTIX`, `toVex`, `toCLI`, `toProTable`) already consumes `normalizeFindings(scan)`'s flat array — `provenance` is carried through there, one change gives parity everywhere. Author-email redaction (FR-PROV-021) happens at the same choke point: **hidden by default in every format, including JSON** (not just the "export" formats the PRD's acceptance criterion names — raw JSON gets handed to dashboards/CI just as often), `--include-author-email` unlocks it uniformly. Untrusted-metadata sanitization (FR-PROV-026 — author name, commit message) reuses whatever HTML-escaping `report/index.js` already applies to finding descriptions, plus a terminal control-sequence strip for the CLI block.
+Every format (`toJSON`, `toCSV`, `toMarkdown`, `toJUnit`, `toSARIF`, `toHTML`, `toSTIX`, `toVex`, `toCLI`, `toProTable`) already consumes `normalizeFindings(scan)`'s flat array — `findingProvenance` is carried through there, one change gives parity everywhere. Author-email redaction (FR-PROV-021) happens at the same choke point: **hidden by default in every format, including JSON** (not just the "export" formats the PRD's acceptance criterion names — raw JSON gets handed to dashboards/CI just as often), `--include-author-email` unlocks it uniformly. Untrusted-metadata sanitization (FR-PROV-026 — author name, commit message) reuses whatever HTML-escaping `report/index.js` already applies to finding descriptions, plus a terminal control-sequence strip for the CLI block.
 
-SARIF specifically: result-level `properties` gets `...(f.provenance ? {provenance: redacted} : {})`, following the exact spread convention already used for the proof/confidence blocks there; run-level `invocations[0].properties` gets a scan-wide summary (history coverage, analysis mode) alongside the existing `rulesetVersion` fields.
+SARIF specifically: result-level `properties` gets `...(f.findingProvenance ? {findingProvenance: redacted} : {})`, following the exact spread convention already used for the proof/confidence blocks there; run-level `invocations[0].properties` gets a scan-wide summary (history coverage, analysis mode) alongside the existing `rulesetVersion` fields.
 
 ### 7.2 CLI detail view
 
@@ -171,7 +175,7 @@ SARIF specifically: result-level `properties` gets `...(f.provenance ? {provenan
 
 ### 7.3 Compliance `controlRefs` (FR-PROV-016)
 
-The gap row shape in `privacy-framework.js`/`auditor-walkthrough.js` gains `controlRefs: [findingId, ...]` plus a *derived* provenance summary (not a copy of any one finding's object): `{derivedFrom: [findingId...], earliestOrigin: {commit, authorDate, authorName}, confidence, limitations}`. "Earliest proven origin among contributing open findings": among currently-open contributors, prefer `status:"complete"` entries and take the minimum `authorDate`; if none are complete, fall back through the same status hierarchy `ageBasis` uses. Compliance evaluation already runs against findings that carry `provenance` by the time the evaluator sees them, so this needs no new pipeline ordering — only reading the field. This is a genuine capability addition (compliance mapping is scan-level today, per `pipeline/finding-schema.js:55`'s existing comment), not a bolt-on.
+The gap row shape in `privacy-framework.js`/`auditor-walkthrough.js` gains `controlRefs: [findingId, ...]` plus a *derived* provenance summary (not a copy of any one finding's object): `{derivedFrom: [findingId...], earliestOrigin: {commit, authorDate, authorName}, confidence, limitations}`. "Earliest proven origin among contributing open findings": among currently-open contributors, prefer `status:"complete"` entries and take the minimum `authorDate`; if none are complete, fall back through the same status hierarchy `ageBasis` uses. Compliance evaluation already runs against findings that carry `findingProvenance` by the time the evaluator sees them, so this needs no new pipeline ordering — only reading the field. This is a genuine capability addition (compliance mapping is scan-level today, per `pipeline/finding-schema.js:55`'s existing comment), not a bolt-on.
 
 ### 7.4 Fix records
 
@@ -245,4 +249,4 @@ These are named so the implementation plan doesn't accidentally scope-creep into
 
 ## 11. Definition of done for this design's scope
 
-All in-scope FRs (§1) have passing automated tests. `provenance` is a required, enforced field on every emitted finding (`validate.js` + `coordinator.js` guarantee). All acceptance scenarios in §9 pass. No historical analysis mutates the repository, runs repository code, or leaks a canary secret. Standard-mode performance/memory SLOs pass on `bench/provenance/`. Compliance gap rows carry `controlRefs` and inherited provenance. Documentation (this file, plus user-facing docs written during implementation) explains semantics, limitations, privacy defaults, and commands. Independent review confirms "first introduced" is never emitted from line blame alone (FR-PROV-006's cross-cutting acceptance bar).
+All in-scope FRs (§1) have passing automated tests. `findingProvenance` is a required, enforced field on every emitted finding (`validate.js` + `coordinator.js` guarantee). All acceptance scenarios in §9 pass. No historical analysis mutates the repository, runs repository code, or leaks a canary secret. Standard-mode performance/memory SLOs pass on `bench/provenance/`. Compliance gap rows carry `controlRefs` and inherited provenance. Documentation (this file, plus user-facing docs written during implementation) explains semantics, limitations, privacy defaults, and commands. Independent review confirms "first introduced" is never emitted from line blame alone (FR-PROV-006's cross-cutting acceptance bar).
