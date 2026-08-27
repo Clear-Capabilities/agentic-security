@@ -366,6 +366,7 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
         stableId: finding.stableId || null,
         ruleId: finding.ruleId || finding.cwe || finding.family || null,
         vuln: finding.vuln || finding.title || null,
+        findingProvenance: finding.findingProvenance || null,
       });
       written.push({ file: rel, historyId: entry.id, backupPath: entry.backupPath, attemptOrdinal: entry.attemptOrdinal });
     }

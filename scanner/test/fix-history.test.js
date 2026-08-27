@@ -216,3 +216,53 @@ test('revertEntryById: reverting an already-reverted entry is a safe no-op, not 
     assert.equal(fs.readFileSync(path.join(root, 'a.js'), 'utf8'), 'A0');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test('applyFix: provenanceAtFix is null when no findingProvenance is supplied', async () => {
+  // Uses mkProject(), not a bare mkdtempSync(), because applyFix's ensure()
+  // gates on isSafeStateDir(), which requires a project marker (package.json)
+  // in scanRoot's parent — the same reason every other test in this file
+  // goes through mkProject() rather than a raw tmpdir.
+  const dir = mkProject();
+  try {
+    const entry = await applyFix({
+      scanRoot: dir, file: 'a.js', originalContent: 'old', newContent: 'new',
+      findingId: 'f1', ruleId: 'r1', vuln: 'v1', fileExisted: true,
+    });
+    assert.equal(entry.provenanceAtFix, null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('applyFix: provenanceAtFix snapshots a complete-status origin as finding_origin basis', async () => {
+  const { emptyProvenance, PROVENANCE_STATUS } = await import('../src/posture/provenance/schema.js');
+  const dir = mkProject();
+  try {
+    const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
+      findingOrigin: { commit: 'cafef00d123', authorDate: '2026-01-01T00:00:00Z' },
+    });
+    const entry = await applyFix({
+      scanRoot: dir, file: 'a.js', originalContent: 'old', newContent: 'new',
+      findingId: 'f1', ruleId: 'r1', vuln: 'v1', fileExisted: true, findingProvenance: fp,
+    });
+    assert.ok(entry.provenanceAtFix);
+    assert.equal(entry.provenanceAtFix.ageBasis, 'finding_origin');
+    assert.equal(entry.provenanceAtFix.commit, 'cafef00d123');
+    assert.equal(typeof entry.provenanceAtFix.ageDays, 'number');
+    assert.ok(entry.provenanceAtFix.ageDays >= 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('applyFix: provenanceAtFix falls back to first_observed basis for a not_available status', async () => {
+  const { emptyProvenance, PROVENANCE_STATUS } = await import('../src/posture/provenance/schema.js');
+  const dir = mkProject();
+  try {
+    const fp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+      firstObserved: { scanId: 's1', observedAt: '2026-01-01T00:00:00Z' },
+    });
+    const entry = await applyFix({
+      scanRoot: dir, file: 'a.js', originalContent: 'old', newContent: 'new',
+      findingId: 'f1', ruleId: 'r1', vuln: 'v1', fileExisted: true, findingProvenance: fp,
+    });
+    assert.equal(entry.provenanceAtFix.ageBasis, 'first_observed');
+    assert.equal(entry.provenanceAtFix.commit, null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

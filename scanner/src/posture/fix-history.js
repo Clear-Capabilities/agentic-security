@@ -238,6 +238,26 @@ function _countPriorAttempts(log, stableId, findingId) {
   return n;
 }
 
+// FR-PROV §7.4 / M2 §2.2: how old was this finding, by which basis, at the
+// moment it was fixed. Computed ONCE, at fix time, and never re-derived
+// later — a finding's origin doesn't change, but re-computing "age at fix"
+// from a LATER read of findingProvenance would silently answer "how old is
+// it now", not "how old was it when fixed". Mirrors mttr.js's ageBasis
+// tiering (Task 6) so the two surfaces agree on vocabulary.
+function _snapshotProvenanceAtFix(findingProvenance, appliedAt) {
+  if (!findingProvenance) return null;
+  const status = findingProvenance.status;
+  const origin = findingProvenance.findingOrigin;
+  const observedAt = findingProvenance.firstObserved?.observedAt || null;
+  let ageBasis, basisDate;
+  if (status === 'complete' && origin?.authorDate) { ageBasis = 'finding_origin'; basisDate = origin.authorDate; }
+  else if (status === 'partial' && origin?.authorDate) { ageBasis = 'earliest_observable'; basisDate = origin.authorDate; }
+  else if (status === 'uncommitted') { ageBasis = 'uncommitted'; basisDate = observedAt; }
+  else { ageBasis = 'first_observed'; basisDate = observedAt; }
+  const ageDays = basisDate ? Math.max(0, Math.floor((Date.parse(appliedAt) - Date.parse(basisDate)) / 86400000)) : null;
+  return { commit: origin?.commit || null, authorDate: basisDate, ageBasis, ageDays };
+}
+
 // @param {boolean} [fileExisted] - did `file` exist on disk before this call?
 //   Determines what "restore" means on rollback: write `originalContent`
 //   back for a file that existed (default, for backward compatibility with
@@ -247,7 +267,7 @@ function _countPriorAttempts(log, stableId, findingId) {
 //   real-world meaning in this codebase's callers — writing '' back would
 //   leave a phantom empty file where none existed before, not a true
 //   rollback).
-export async function applyFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln, stableId, fileExisted = true }) {
+export async function applyFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln, stableId, fileExisted = true, findingProvenance = null }) {
   return _withLogLock(scanRoot, async () => {
     ensure(scanRoot);
     const absFile = path.resolve(scanRoot, file);
@@ -269,6 +289,7 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
     // is below — a corrupted backup is worse than no backup, because it
     // silently defeats rollback.
     await _writeAtomicAndSync(bakPath, originalContent);
+    const appliedAt = new Date().toISOString();
     const entry = {
       id,
       findingId,
@@ -280,10 +301,11 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
       backupPath: path.relative(scanRoot, bakPath),
       originalSha: sha(originalContent),
       newSha: sha(newContent),
-      appliedAt: new Date().toISOString(),
+      appliedAt,
       status: 'pending',
       reverted: false,
       attemptOrdinal: priorAttempts + 1,
+      provenanceAtFix: _snapshotProvenanceAtFix(findingProvenance, appliedAt),
     };
     // Phase 2: log entry marked pending + fsync.
     const log = priorLog;
