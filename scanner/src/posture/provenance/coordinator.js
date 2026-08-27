@@ -1,7 +1,18 @@
 // Finding-provenance coordinator — the integration point where every other
 // provenance module meets a real finding list.
 //
-// Its single hard guarantee: after `annotateProvenance(findings, ctx)`
+// NAMING: `annotateGitProvenance`, not `annotateProvenance` or
+// `annotateFindingProvenance` — both of those are already taken by unrelated
+// features that `engine.js` imports today: `sca/sigstore-verify.js`'s
+// `annotateProvenance` (build attestations) and `posture/provenance.js`'s
+// `annotateFindingProvenance` (parser-corroboration signals). Either name here
+// would be a duplicate binding — a SyntaxError — the moment engine.js imports
+// this module, and the second is worse still because it takes a findings array
+// as its first argument exactly like this one, so a wrong import would run
+// rather than fail. The name states the mechanism that distinguishes this one:
+// provenance derived from GIT HISTORY.
+//
+// Its single hard guarantee: after `annotateGitProvenance(findings, ctx)`
 // returns, EVERY finding in the array carries a terminal `findingProvenance`
 // object. There is no path — not a missing git binary, not a malformed
 // finding, not a downstream module throwing — that leaves a finding with
@@ -135,7 +146,7 @@ async function resolveOne(finding, ctx) {
   return provenance;
 }
 
-export async function annotateProvenance(findings, ctx) {
+export async function annotateGitProvenance(findings, ctx) {
   if (!Array.isArray(findings) || findings.length === 0) return;
   const options = ctx || {};
   const scanRoot = options.scanRoot;

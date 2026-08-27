@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
-import { annotateProvenance } from '../../src/posture/provenance/coordinator.js';
+import { annotateGitProvenance } from '../../src/posture/provenance/coordinator.js';
 import { computeStableId } from '../../src/posture/stable-id.js';
 import { validateFindingsProvenance } from '../../src/posture/provenance/validate.js';
 
@@ -17,7 +17,7 @@ test('Scenario G: uncommitted finding gets status uncommitted, author unknown, n
     const finding = { file: 'a.js', line: 1, ruleId: 'eval-use' };
     finding.stableId = computeStableId(finding);
 
-    await annotateProvenance([finding], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', mode: 'standard' });
+    await annotateGitProvenance([finding], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', mode: 'standard' });
 
     assert.equal(finding.findingProvenance.status, 'uncommitted');
     assert.equal(finding.findingProvenance.findingOrigin, null);
@@ -31,7 +31,7 @@ test('Scenario G: uncommitted finding gets status uncommitted, author unknown, n
 test('Scenario K: not a git repo still emits a finding, status not_available, never throws', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'as-nogit-'));
   const finding = { file: 'a.js', line: 1, ruleId: 'x', stableId: 'sid1' };
-  await annotateProvenance([finding], { scanRoot: tmp, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+  await annotateGitProvenance([finding], { scanRoot: tmp, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
   assert.equal(finding.findingProvenance.status, 'not_available');
   fs.rmSync(tmp, { recursive: true, force: true });
 });
@@ -44,7 +44,7 @@ test('every finding always gets a terminal findingProvenance, even on internal e
     // Deliberately malformed finding (no ruleId/sink/stableId at all) to force
     // the not_available path rather than throwing.
     const finding = { file: 'a.js', line: 1 };
-    await annotateProvenance([finding], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+    await annotateGitProvenance([finding], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
     assert.ok(finding.findingProvenance);
     assert.ok(['not_available', 'error', 'partial', 'complete'].includes(finding.findingProvenance.status));
   } finally {
@@ -64,7 +64,7 @@ test('a throw inside per-finding resolution degrades to status error, never prop
     Object.defineProperty(boom, 'stableId', { get() { throw new Error('simulated downstream failure'); } });
     const ok = { file: 'a.js', line: 1, stableId: 'sid-ok' };
 
-    await annotateProvenance([boom, ok], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+    await annotateGitProvenance([boom, ok], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
 
     assert.equal(boom.findingProvenance.status, 'error');
     assert.match(boom.findingProvenance.limitations[0], /simulated downstream failure/);
@@ -85,7 +85,7 @@ test('the bounded-concurrency scheduler drains a list longer than MAX_CONCURRENC
     // 9 > MAX_CONCURRENCY (4): the refill path in the scheduler has to run
     // twice and still settle. A hang or an early resolve both fail here.
     const findings = Array.from({ length: 9 }, (_, i) => ({ file: 'a.js', line: 1, stableId: `sid-${i}` }));
-    await annotateProvenance(findings, { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+    await annotateGitProvenance(findings, { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
     for (const f of findings) assert.ok(f.findingProvenance, 'every finding annotated');
     assert.equal(validateFindingsProvenance(findings).valid, true);
   } finally {
@@ -98,7 +98,7 @@ test('--no-provenance (ctx.disabled) short-circuits to not_available for every f
   try {
     fx.writeFile('a.js', 'x\n'); fx.commit('c1');
     const findings = [{ file: 'a.js', line: 1, stableId: 's1' }, { file: 'a.js', line: 1, stableId: 's2' }];
-    await annotateProvenance(findings, { scanRoot: fx.root, disabled: true });
+    await annotateGitProvenance(findings, { scanRoot: fx.root, disabled: true });
     for (const f of findings) {
       assert.equal(f.findingProvenance.status, 'not_available');
       assert.match(f.findingProvenance.limitations[0], /disabled/);
