@@ -46,7 +46,14 @@ export const FINDING_SCHEMA_VERSION = 1;
 // sets to a real (non-null) value today; `optional` fields are legitimately
 // null on many findings (e.g. a finding no annotator has enriched yet).
 export const FINDING_FIELD_GROUPS = {
-  identity: { required: ['id', 'kind', 'vuln'], optional: ['stableId'] },
+  // `findingProvenance` is REQUIRED, not optional, and that is deliberate:
+  // posture/provenance/coordinator.js guarantees every finding it sees leaves
+  // with a TERMINAL provenance object, expressing every failure mode as a
+  // status ('not_available', 'uncommitted', 'budget_exhausted', 'error')
+  // rather than as an absent field. So a missing findingProvenance never means
+  // "provenance didn't apply here" — it means the finding escaped annotation
+  // entirely, which is exactly the condition this group exists to surface.
+  identity: { required: ['id', 'kind', 'vuln', 'findingProvenance'], optional: ['stableId'] },
   location: { required: ['file', 'line'], optional: ['snippet'] },
   classification: { required: ['severity'], optional: ['cwe', 'owaspLlm', 'family', 'parser', 'tags', 'description'] },
   confidence: { required: [], optional: ['confidence', 'confidenceTier', 'calibrated_confidence', 'calibration_reason'] },

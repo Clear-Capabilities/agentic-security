@@ -8,7 +8,15 @@ import { runScan } from '../src/runScan.js';
 import * as path from 'node:path';
 
 test('describeFindingCompleteness: a well-formed finding has no missing required fields', () => {
-  const f = { id: 'a1', kind: 'sast', vuln: 'SQL Injection', file: 'app.js', line: 10, severity: 'high' };
+  // `findingProvenance` joined the identity group's required fields (Task 14).
+  // It is never legitimately absent — the provenance coordinator's terminal-
+  // status guarantee means "no provenance object" is only ever reachable by a
+  // finding that escaped annotation, so a well-formed fixture carries one, with
+  // `not_available` standing in for the fixture having no repository behind it.
+  const f = {
+    id: 'a1', kind: 'sast', vuln: 'SQL Injection', file: 'app.js', line: 10, severity: 'high',
+    findingProvenance: { status: 'not_available' },
+  };
   const d = describeFindingCompleteness(f);
   assert.equal(d.schemaVersion, FINDING_SCHEMA_VERSION);
   assert.deepEqual(d.missingRequiredFields, []);

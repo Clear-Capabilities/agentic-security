@@ -37,15 +37,33 @@
 //     default would let a shallow repo reach `status:'complete'`, which is
 //     exactly the false certainty the PRD forbids. Resolve it once (it is
 //     four `git` calls) and pass it down; never reconstruct it per finding.
+//
+//  3. **`ctx.findingType === 'sca'` selects a whole different strategy, not a
+//     flag on one.** A direct-dependency entry is a different SHAPE
+//     (`filePath`/`name`/`ecosystem`, no `ruleId`) answering a different
+//     QUESTION (which commit moved the declared version into the advisory's
+//     vulnerable range) than a SAST finding. Four things change with it, and
+//     each is commented at its site: the uncommitted blame short-circuit is
+//     skipped, `stableId` is backfilled from `scaStableId`, `resolveOrigin` is
+//     replaced by `resolveDirectSCAOrigin`, and `attributeEvidence` is replaced
+//     by a single `manifest` node. Everything else — the budget check, the
+//     cache, the terminal-status guarantee, the digest — is shared verbatim,
+//     because those are properties of the coordinator, not of the finding type.
 
 import * as crypto from 'node:crypto';
 import { getRepoState, isGitRepo, blameLine } from './git-evidence.js';
 import { resolveOrigin } from './origin-resolver.js';
+import { resolveDirectSCAOrigin, scaStableId } from './sca-origin.js';
 import { resolveBranchEntry } from './branch-entry.js';
 import { attributeEvidence } from './evidence-attribution.js';
 import { assessConfidence } from './confidence.js';
 import { cacheGet, cacheSet, makeCacheKey } from './cache.js';
-import { emptyProvenance, PROVENANCE_STATUS, PROVENANCE_METHOD } from './schema.js';
+import { emptyProvenance, PROVENANCE_STATUS, PROVENANCE_METHOD, EVIDENCE_ROLE, CONFIDENCE_LEVEL } from './schema.js';
+
+// Detector label recorded in `analysisBasis.detector` for SCA entries. A
+// dependency finding has no `parser` (no file was parsed by a SAST detector),
+// so the honest answer to "what produced this" is the manifest-diff walk.
+const SCA_DETECTOR = 'sca-manifest-diff';
 
 const DEFAULT_TIMEOUT_MS = 60000;
 const MAX_CONCURRENCY = 4;
@@ -63,8 +81,41 @@ function computeDigest(finding, provenance) {
   return crypto.createHash('sha256').update(material).digest('hex');
 }
 
+// The two `partial` producers answer two different questions, so they must not
+// share one sentence. origin-resolver's partial means "we could not see far
+// enough back to verify the parent boundary of a code change"; sca-origin's
+// means "the manifest history never let us pin which commit made this
+// dependency vulnerable" — most often because the advisory carries a `fixed`
+// bound and no `introduced` bound, which makes a still-vulnerable patch bump
+// literally indistinguishable from a bump INTO the vulnerable window. Reusing
+// the SAST wording for the SCA case would describe a boundary nobody was
+// looking for, and reusing `shallow_or_unverified_boundary` as the confidence
+// reason would blame the clone depth for an ambiguity in the advisory data.
+function describePartial(isSca, reason) {
+  if (!isSca) {
+    return {
+      limitation: reason
+        ? `earliest observable — history could not confirm a verified parent boundary (${reason})`
+        : 'earliest observable — history could not confirm a verified parent boundary',
+      reasons: ['shallow_or_unverified_boundary'],
+    };
+  }
+  const base = 'manifest history could not confirm which commit introduced the vulnerable version';
+  return {
+    limitation: reason ? `${base} (${reason})` : base,
+    reasons: [reason === 'ambiguous-range-no-introduced-bound'
+      ? 'ambiguous_version_range'
+      : 'version_never_confirmed_in_manifest_history'],
+  };
+}
+
 async function resolveOne(finding, ctx) {
   const { scanRoot, repoState, deadlineAt } = ctx;
+  // Direct-dependency (SCA) entries are a different shape AND a different
+  // question from a SAST finding: they carry `filePath`/`name`/`ecosystem`
+  // rather than `file`/`line`/`ruleId`, and their origin is a version
+  // transition in a committed manifest blob rather than a line of code.
+  const isSca = ctx.findingType === 'sca';
 
   // THE BUDGET CHECK COMES FIRST — before the blame call, not after it.
   //
@@ -88,13 +139,30 @@ async function resolveOne(finding, ctx) {
 
   // Cheap, correct short-circuit (PRD Scenario G). One blame call, before any
   // history walk: a working-tree-only line has no origin commit to find.
-  if (finding.file && finding.line) {
+  //
+  // Deliberately SAST-only. For a dependency the blame-able line is the
+  // manifest line that declares it, and "is that line uncommitted" is not the
+  // same question as "is this dependency uncommitted": reformatting or
+  // re-sorting package.json dirties every declaration line without changing a
+  // single declared version, which would turn every dependency in the project
+  // into a false `uncommitted`. resolveDirectSCAOrigin reads committed blobs
+  // and answers the real question directly, reporting `partial` when it cannot.
+  if (!isSca && finding.file && finding.line) {
     const blame = blameLine(scanRoot, finding.file, finding.line);
     if (blame && blame.uncommitted) {
       return emptyProvenance(PROVENANCE_STATUS.UNCOMMITTED, {
         limitations: ['finding exists only in working tree/index'],
       });
     }
+  }
+
+  // SCA entries reach this coordinator straight off the dependency parsers,
+  // which never run through `stable-id.js` (it keys on file+line+ruleId, none
+  // of which a dependency finding has). Backfill the SCA-shaped id here so the
+  // cache key — and every consumer downstream of it — has something stable to
+  // hold. An id the caller already set always wins.
+  if (isSca && !finding.stableId) {
+    finding.stableId = scaStableId(finding);
   }
 
   if (!finding.stableId) {
@@ -108,13 +176,32 @@ async function resolveOne(finding, ctx) {
   const cached = cacheGet(scanRoot, cacheKey);
   if (cached) return cached;
 
-  const originResult = await resolveOrigin(scanRoot, finding, { since: ctx.since, deadlineAt, repoState });
+  const originResult = isSca
+    ? await resolveDirectSCAOrigin(scanRoot, finding, { since: ctx.since, deadlineAt })
+    : await resolveOrigin(scanRoot, finding, { since: ctx.since, deadlineAt, repoState });
+
+  const detector = isSca ? SCA_DETECTOR : (finding.parser || null);
 
   let provenance;
   let cacheable = true;
   if (originResult.status === 'complete') {
     const branchIntroduction = resolveBranchEntry(scanRoot, originResult.findingOrigin.commit, repoState.branch || 'HEAD');
-    const evidenceAttribution = attributeEvidence(scanRoot, finding);
+    // attributeEvidence walks `source`/`sink`/`pathSteps` — a taint-flow shape
+    // an SCA entry simply does not have, so calling it here would return an
+    // empty list at best and mis-attribute `finding.file`/`finding.line` at
+    // worst. A dependency's evidence is one node: the manifest that declares it,
+    // as of the commit that introduced the vulnerable version. `line` comes from
+    // the dependency parsers (Task 12 added it to package.json/requirements.txt
+    // components) and stays `null` rather than 0 when a parser did not supply
+    // one — 0 would read as a real line number.
+    const evidenceAttribution = isSca
+      ? [{
+          role: EVIDENCE_ROLE.MANIFEST,
+          path: finding.filePath || null,
+          line: Number.isInteger(finding.line) ? finding.line : null,
+          commit: originResult.findingOrigin.commit,
+        }]
+      : attributeEvidence(scanRoot, finding);
     const confidence = assessConfidence({
       parentBoundaryVerified: originResult.parentBoundaryVerified,
       historyComplete: !repoState.shallow,
@@ -130,9 +217,10 @@ async function resolveOne(finding, ctx) {
       method: originResult.method,
       confidence,
       historyCoverage: { complete: !repoState.shallow, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered },
-      analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector: finding.parser || null, dirty: repoState.dirty },
+      analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector, dirty: repoState.dirty },
     });
   } else if (originResult.status === 'partial') {
+    const partial = describePartial(isSca, originResult.reason);
     provenance = emptyProvenance(PROVENANCE_STATUS.PARTIAL, {
       findingOrigin: originResult.findingOrigin || null,
       firstObserved: { scanId: ctx.scanId, observedAt: ctx.observedAt },
@@ -143,19 +231,17 @@ async function resolveOne(finding, ctx) {
       // commit, found by no method" — which also fed computeDigest.
       method: originResult.method || PROVENANCE_METHOD.NONE,
       historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered || 0 },
-      analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector: finding.parser || null, dirty: repoState.dirty },
-      // The two partial reasons ('shallow-boundary-reached' vs
-      // 'predicate-never-confirmed-in-candidates') mean materially different
-      // things — one is "we could not see far enough", the other "we looked and
-      // never saw it hold". Collapsing both into one hardcoded string made them
-      // indistinguishable downstream, while the not_available branch below has
-      // always propagated its reason.
-      limitations: [
-        originResult.reason
-          ? `earliest observable — history could not confirm a verified parent boundary (${originResult.reason})`
-          : 'earliest observable — history could not confirm a verified parent boundary',
-      ],
-      confidence: { level: 'low', score: 0.2, reasons: ['shallow_or_unverified_boundary'] },
+      analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector, dirty: repoState.dirty },
+      // The partial reasons mean materially different things — for SAST,
+      // 'shallow-boundary-reached' ("we could not see far enough") vs
+      // 'predicate-never-confirmed-in-candidates' ("we looked and never saw it
+      // hold"); for SCA, 'ambiguous-range-no-introduced-bound' vs
+      // 'version-never-confirmed-in-candidates'. Collapsing any of them into one
+      // hardcoded string made them indistinguishable downstream, while the
+      // not_available branch below has always propagated its reason. See
+      // describePartial for why the SAST and SCA wordings are not shared.
+      limitations: [partial.limitation],
+      confidence: { level: CONFIDENCE_LEVEL.LOW, score: 0.2, reasons: partial.reasons },
     });
   } else if (originResult.status === 'budget_exhausted') {
     provenance = emptyProvenance(PROVENANCE_STATUS.BUDGET_EXHAUSTED, {
