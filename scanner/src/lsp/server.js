@@ -18,6 +18,7 @@ import * as path from 'node:path';
 import * as readline from 'node:readline';
 import { runScan } from '../runScan.js';
 import { resetCustomRulesBudget } from '../posture/custom-rules.js';
+import { withStateWritesDisabled } from '../posture/state-dir.js';
 import { redactFinding } from '../mcp/redact.js';
 import { _remediationOf } from '../report/index.js';
 
@@ -156,7 +157,29 @@ async function scanFile(uri) {
     // whose source and sink are connected only through a call. Scoped to
     // exactly the saved file (fileContents has one entry), so this does not
     // turn every keystroke's save into a full-project deep scan.
-    const { scan } = await runScan(_rootDir, { fileContents, depFileContents, deep: true, deepInCi: true });
+    // withStateWritesDisabled, for the same reason mcp/tools.js's scan_diff
+    // wraps its own partial-set scan (FR-704). This is a DIAGNOSTIC surface: it
+    // runs on every file save, against the user's real project root, with a
+    // fileContents map holding exactly one file. Without the wrapper,
+    // runFullScan's state writers fire on every keystroke-save — dpia.md,
+    // ropa.md, privacy-framework.json, threat-model.json and the rest, written
+    // into the user's tree by an editor plugin they never asked to mutate
+    // anything.
+    //
+    // The provenance lifecycle store makes that actively destructive rather
+    // than merely noisy: updateLifecycle marks every open stableId ABSENT from
+    // the finding set it is handed as `remediated`, and this set is one file's
+    // worth of findings. Every save would remediate the whole project, and the
+    // next real scan would reintroduce it.
+    //
+    // Chosen over forwarding `provenance:false` through runScan because that
+    // would fix only the lifecycle half and leave the other state writers
+    // firing. The flag is process-global (see its KNOWN LIMITATION), which is
+    // harmless here: this server is a read-only surface whose every scan wants
+    // writes off, so overlapping saves can only ever agree, and the `finally`
+    // restores the prior value either way.
+    const { scan } = await withStateWritesDisabled(() =>
+      runScan(_rootDir, { fileContents, depFileContents, deep: true, deepInCi: true }));
     // Stage 6 correctness audit: this only ever read scan.findings (the SAST
     // channel). scan.secrets and scan.logicVulns are separate arrays on the
     // raw runScan() result — normalizeFindings is what merges all four

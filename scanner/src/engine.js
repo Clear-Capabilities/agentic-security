@@ -10191,6 +10191,31 @@ function _deterministicFileTimings(timings) {
     // it every direct dependency resolves to `not_available: no-manifest-path`.
     for (const s of directDeps) { if (!s.filePath && s.file) s.filePath = s.file; }
     await annotateGitProvenance(directDeps, { ...provenanceCtx, findingType: 'sca' });
+    // Everything else in supplyChain still needs a TERMINAL status, because
+    // report/index.js normalizes EVERY supplyChain entry into an SCA finding —
+    // not just the direct vulnerable_dep ones the resolver can speak to — and
+    // pipeline/finding-schema.js requires findingProvenance on every channel,
+    // where an absent field means "this finding escaped annotation entirely".
+    // Two distinct populations land here and they are not the same statement,
+    // so they do not share a limitation string:
+    //
+    //  - transitive vulnerable_deps: the resolver is deliberately not run (the
+    //    vulnerable version was never declared in this repo's manifests, so
+    //    there is no local commit that introduced it). Deferred capability.
+    //  - unpinned_dep / no_lockfile and friends: these describe the ABSENCE of
+    //    a declaration, so "which commit introduced this version" is not a
+    //    question that has an answer at all.
+    //
+    // Both are honest `not_available`, which is exactly what that status is
+    // for; neither is an error, and neither may be left undefined.
+    for (const sc of (supplyChain || [])) {
+      if (!sc || typeof sc !== 'object' || sc.findingProvenance) continue;
+      sc.findingProvenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+        limitations: [sc.type === 'vulnerable_dep'
+          ? 'transitive dependency origin resolution is not implemented in this release (deferred to a later phase)'
+          : `origin resolution does not apply to a ${sc.type || 'non-vulnerability'} supply-chain entry`],
+      });
+    }
     // FR-PROV-013 — introduce/remediate/reintroduce events. Best-effort by
     // design: the lifecycle store is a convenience ledger, and a failed write
     // (read-only tree, lock contention) must never fail a scan, matching how
