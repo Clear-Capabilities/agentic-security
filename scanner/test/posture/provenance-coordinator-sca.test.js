@@ -138,6 +138,34 @@ test('SCA partial threads the ambiguous-range reason through instead of dropping
   }
 });
 
+test('SCA partial distinguishes never-confirmed from ambiguous-range', async () => {
+  const fx = createGitFixture();
+  try {
+    // The declared version sits ABOVE the advisory's `fixed` bound in every
+    // commit, so no candidate is ever in range: the resolver never confirms a
+    // version, which is a different partial reason from the ambiguous bump and
+    // must not be reported with the ambiguous-range confidence reason.
+    fx.writeFile('package.json', pkg({ 'left-pad': '2.0.0' }));
+    fx.commit('initial', { date: '2026-01-01T00:00:00Z' });
+
+    const entry = {
+      type: 'vulnerable_dep', name: 'left-pad', ecosystem: 'npm',
+      filePath: 'package.json', osvId: 'GHSA-xyz', fixedVersions: ['1.1.0'],
+    };
+    await annotateGitProvenance([entry], {
+      scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z',
+      mode: 'standard', findingType: 'sca',
+    });
+
+    const fp = entry.findingProvenance;
+    assert.equal(fp.status, 'partial');
+    assert.match(fp.limitations[0], /version-never-confirmed-in-candidates/);
+    assert.deepEqual(fp.confidence.reasons, ['version_never_confirmed_in_manifest_history']);
+  } finally {
+    fx.cleanup();
+  }
+});
+
 test('SCA stableId backfill matches scaStableId and an existing stableId is left alone', async () => {
   const fx = createGitFixture();
   try {
