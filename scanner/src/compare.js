@@ -188,7 +188,12 @@ export function renderComparison(comparison, { ourName = 'agentic-security', oth
  * compare + render.
  */
 export async function runComparison({ scanRoot, fileContents, otherArgv, otherFieldMap, otherRootArrayPath, ourName, otherName }) {
-  const ourScan = await runFullScan({ fileContents, scanRoot }, () => {});
+  // `provenance:false` — a comparison snapshot run against a caller-supplied
+  // file set, used only to line up findings against another tool's output. It
+  // must not resolve git provenance (nothing here asks for it) and must not
+  // reach updateLifecycle, which would read this partial set as the project's
+  // current open findings and remediate everything absent from it.
+  const ourScan = await runFullScan({ fileContents, scanRoot, provenance: false }, () => {});
   const ours = (ourScan.findings || []).map(f => ({
     file: f.file, line: f.line || 0,
     severity: _normalizeSeverity(f.severity),

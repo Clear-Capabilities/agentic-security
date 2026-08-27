@@ -38,7 +38,15 @@ export async function verifyPatch({
   const fileContents = { ...files };
   let scan;
   try {
-    scan = await runFullScan({ fileContents, depFileContents, scanRoot }, () => {});
+    // `provenance:false` is REQUIRED here, not an optimisation. This scan is
+    // deliberately scoped to just the patched file(s), so its finding set is a
+    // tiny subset of the project's. updateLifecycle marks every open stableId
+    // NOT in the set it is handed as `remediated` — so a single fix
+    // verification (every /fix, apply_fix, and autopilot iteration runs one)
+    // would mass-mark the rest of the project as remediated, then
+    // `reintroduced` on the next real scan. The patched content is also not
+    // committed, so there is no history to resolve provenance against anyway.
+    scan = await runFullScan({ fileContents, depFileContents, scanRoot, provenance: false }, () => {});
   } catch (e) {
     return { ok: false, reason: 'rescan-failed', error: e.message };
   }

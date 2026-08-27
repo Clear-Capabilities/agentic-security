@@ -270,6 +270,7 @@ import { annotateGitHistory } from './posture/git-history.js';
 // provenance derived from GIT HISTORY. See provenance/coordinator.js's header.
 import { annotateGitProvenance } from './posture/provenance/coordinator.js';
 import { updateLifecycle } from './posture/provenance/lifecycle.js';
+import { emptyProvenance, PROVENANCE_STATUS } from './posture/provenance/schema.js';
 import { applyThreatModel } from './posture/threat-model-grounding.js';
 import { annotateCrossRepoSignals } from './posture/pattern-propagation.js';
 import { annotateRiskDollars } from './posture/risk-dollars.js';
@@ -8217,6 +8218,15 @@ async function queryOSV(components,allFileContents){
         fixedVersions: vuln.fixedVersions, severity: vuln.severity, cvssVector: vuln.cvssVector,
         hasKnownAttackRef: vuln.hasKnownAttackRef, osvVulnFunctions: vuln.osvVulnFunctions || [], reachable: comp.reachable, scope: comp.scope,
         file: comp.filePath,
+        // `isDirect` is backfilled onto every component just above the queryOSV
+        // call, but was never carried onto the entry materialized from it — so
+        // every consumer asking "is this a direct dependency" got `undefined`.
+        // The transitive-dedup block's `group.find(s => s.isDirect)` has
+        // therefore always fallen through to `group[0]`, picking an arbitrary
+        // member as the primary instead of the direct one, and the provenance
+        // pass's direct-only filter had nothing to filter on. `line` is Task
+        // 12's declaration line, which the SCA provenance evidence node reads.
+        isDirect: comp.isDirect, line: comp.line,
         // kept for generateRecs() compat
         advisory: `${vid}${cveStr}, ${vuln.description}`,
         range: fixStr ? `< ${fixStr}` : 'see advisory' });
@@ -10167,7 +10177,13 @@ function _deterministicFileTimings(timings) {
     // Direct dependencies only: a transitive dep's vulnerable version was never
     // declared in this repository's manifests, so there is no commit here that
     // introduced it and `resolveDirectSCAOrigin` would have nothing to walk.
-    const directDeps = (supplyChain || []).filter((s) => s && s.type === 'vulnerable_dep' && !s.isTransitive);
+    //
+    // Keyed on `isDirect`, the same field the transitive-dedup block above
+    // uses. The plan's `!s.isTransitive` was a silent no-op: `isTransitive`
+    // exists on dependency COMPONENTS but was never carried onto the
+    // vulnerable_dep entries, so the negation was true for every entry and the
+    // filter excluded nothing. `isDirect` is now propagated at materialization.
+    const directDeps = (supplyChain || []).filter((s) => s && s.type === 'vulnerable_dep' && s.isDirect);
     // `resolveDirectSCAOrigin`/`scaStableId` key on `filePath`; the vulnerable_dep
     // entries built above carry the manifest path as `file` (report/index.js
     // already reads `sc.filePath || sc.file` for the same reason). Backfill the
@@ -10179,12 +10195,37 @@ function _deterministicFileTimings(timings) {
     // design: the lifecycle store is a convenience ledger, and a failed write
     // (read-only tree, lock contention) must never fail a scan, matching how
     // every other provenance component degrades.
-    try {
-      await updateLifecycle(scanRoot, finalFindings, {
-        scanId: provenanceCtx.scanId, observedAt: provenanceCtx.observedAt,
-      });
-    } catch (_) { /* best-effort */ }
+    //
+    // Gated on `disabled` as well as on the `provenance` parameter, because
+    // those are two different opt-outs and only one of them was being honoured.
+    // updateLifecycle WRITES to disk; an operator who set
+    // AGENTIC_SECURITY_NO_PROVENANCE=1 has said the feature does nothing, and a
+    // disabled feature that still litters `.agentic-security/provenance/` is
+    // not disabled. (annotateGitProvenance handles `disabled` internally by
+    // stamping not_available, which is why it is still called above — every
+    // finding must keep a terminal status even with the feature off.)
+    if (!provenanceCtx.disabled) {
+      try {
+        await updateLifecycle(scanRoot, finalFindings, {
+          scanId: provenanceCtx.scanId, observedAt: provenanceCtx.observedAt,
+        });
+      } catch (_) { /* best-effort */ }
+    }
    });
+   // Structural backstop for the terminal-status guarantee. annotateGitProvenance
+   // never leaves a hole on its own, but it can only guarantee that for findings
+   // it reached: if it threw BEFORE its per-finding loop began (getRepoState
+   // blowing up on a corrupt repo, say), _runAnnotator would swallow the error
+   // and every finding would silently carry no findingProvenance at all. That is
+   // exactly the absent-field state the status enum exists to make unreachable,
+   // so enforce it here rather than trusting the convention to hold.
+   for (const f of finalFindings) {
+     if (f && typeof f === 'object' && !f.findingProvenance) {
+       f.findingProvenance = emptyProvenance(PROVENANCE_STATUS.ERROR, {
+         limitations: ['provenance annotator did not reach this finding'],
+       });
+     }
+   }
   }
   // Addition #2 — attack-surface completeness inventory (entry points → dispositions).
   let _entrypointInventory = {}; try { _entrypointInventory = buildEntrypointInventory(fc, { routes: aR, findings: finalFindings }); } catch { _entrypointInventory = {}; }

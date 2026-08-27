@@ -57,9 +57,15 @@ test('runScan on a non-git directory still returns findings with status not_avai
   }
 });
 
-test('AGENTIC_SECURITY_NO_PROVENANCE=1 still yields a terminal status on every finding', async () => {
-  // The opt-out must not become an "absent field" path — a consumer reading
-  // `.findingProvenance.status` must keep working when provenance is disabled.
+test('AGENTIC_SECURITY_NO_PROVENANCE=1 yields a terminal status and writes NOTHING to disk', async () => {
+  // Two claims in one, because the opt-out has two halves and only one of them
+  // is obvious. (1) The opt-out must not become an "absent field" path — a
+  // consumer reading `.findingProvenance.status` keeps working with the feature
+  // off. (2) "Disabled" must mean the feature writes nothing: the lifecycle
+  // store is a real write into the scanned tree, and a disabled feature that
+  // still creates `.agentic-security/provenance/` is not disabled. The first
+  // wiring gated only the annotator calls on `disabled`, so updateLifecycle ran
+  // regardless.
   const fx = createGitFixture();
   const prev = process.env.AGENTIC_SECURITY_NO_PROVENANCE;
   process.env.AGENTIC_SECURITY_NO_PROVENANCE = '1';
@@ -72,9 +78,49 @@ test('AGENTIC_SECURITY_NO_PROVENANCE=1 still yields a terminal status on every f
       assert.ok(f.findingProvenance, `finding ${f.id} missing findingProvenance`);
       assert.equal(f.findingProvenance.status, 'not_available');
     }
+    assert.equal(
+      fs.existsSync(path.join(fx.root, '.agentic-security', 'provenance', 'lifecycle.json')),
+      false,
+      'lifecycle store was written despite AGENTIC_SECURITY_NO_PROVENANCE=1',
+    );
   } finally {
     if (prev === undefined) delete process.env.AGENTIC_SECURITY_NO_PROVENANCE;
     else process.env.AGENTIC_SECURITY_NO_PROVENANCE = prev;
+    fx.cleanup();
+  }
+});
+
+test('verifyPatch does not touch the lifecycle store', async () => {
+  // The sharpest form of the "internal runFullScan callers must opt out" rule.
+  // updateLifecycle marks every open stableId ABSENT from the finding set it is
+  // handed as `remediated`. verifyPatch deliberately re-scans only the patched
+  // file(s), so if it reached updateLifecycle it would mass-mark the rest of the
+  // project remediated — and every /fix, apply_fix, and autopilot iteration runs
+  // one. Asserting on the store rather than on a call count keeps this honest
+  // whichever way a future change routes the opt-out.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = " + input);\n');
+    fx.writeFile('b.js', 'const p = req.query.p;\neval(p);\n');
+    fx.commit('two vulns');
+
+    // A real scan first: this one legitimately populates the lifecycle store.
+    await runScan(fx.root, { network: false });
+    const store = path.join(fx.root, '.agentic-security', 'provenance', 'lifecycle.json');
+    assert.ok(fs.existsSync(store), 'a real scan should have written the lifecycle store');
+    const before = fs.readFileSync(store, 'utf8');
+
+    // Now verify a patch to a.js only. b.js's finding must not be remediated.
+    const { verifyPatch } = await import('../../src/posture/fix-verify.js');
+    await verifyPatch({
+      scanRoot: fx.root,
+      originalFindingStableId: 'does-not-matter',
+      files: { 'a.js': 'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = ?", [input]);\n' },
+    });
+
+    assert.equal(fs.readFileSync(store, 'utf8'), before,
+      'verifyPatch mutated the lifecycle store from a partial file set');
+  } finally {
     fx.cleanup();
   }
 });

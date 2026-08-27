@@ -56,7 +56,12 @@ async function _scanAtRef(root, ref) {
     const c = _readFileAtRef(root, ref, f);
     if (c != null) fileContents[f] = c;
   }
-  return runFullScan({ fileContents, scanRoot: root }, () => {});
+  // `provenance:false` — a base-ref snapshot, not the current working state.
+  // Beyond the wasted git walks, updateLifecycle marks every open stableId
+  // absent from the finding set it is handed as `remediated`; running the PR
+  // delta gate would silently rewrite the project's lifecycle store from the
+  // base ref's findings.
+  return runFullScan({ fileContents, scanRoot: root, provenance: false }, () => {});
 }
 
 function _summary(findings) {
