@@ -7344,17 +7344,23 @@ function _findManifestLine(text, sectionKey, depName) {
   const lines = text.split('\n');
   let inSection = false;
   let depth = 0;
+  const escaped = depName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nameRe = new RegExp(`"${escaped}"\\s*:`);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!inSection) {
-      if (new RegExp(`"${sectionKey}"\\s*:\\s*\\{`).test(line)) { inSection = true; depth = 1; }
+      if (new RegExp(`"${sectionKey}"\\s*:\\s*\\{`).test(line)) {
+        inSection = true;
+        depth = 1 + (line.match(/\{/g) || []).length - 1 - (line.match(/\}/g) || []).length;
+        if (nameRe.test(line)) return i + 1;
+        if (depth <= 0) inSection = false;
+      }
       continue;
     }
     depth += (line.match(/\{/g) || []).length;
     depth -= (line.match(/\}/g) || []).length;
     if (depth <= 0) { inSection = false; continue; }
-    const escaped = depName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`"${escaped}"\\s*:`).test(line)) return i + 1;
+    if (nameRe.test(line)) return i + 1;
   }
   return null;
 }
