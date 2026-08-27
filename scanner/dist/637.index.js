@@ -11,7 +11,7 @@ export const modules = {
 /* harmony export */   renderPrDeltaText: () => (/* binding */ renderPrDeltaText)
 /* harmony export */ });
 /* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1421);
-/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(7087);
+/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(271);
 // Shadowscan / security-DELTA on PR (v0.72).
 //
 // Most SAST PR-comment integrations show absolute counts — "12 findings
@@ -70,7 +70,12 @@ async function _scanAtRef(root, ref) {
     const c = _readFileAtRef(root, ref, f);
     if (c != null) fileContents[f] = c;
   }
-  return (0,_engine_js__WEBPACK_IMPORTED_MODULE_1__/* .runFullScan */ .wW)({ fileContents, scanRoot: root }, () => {});
+  // `provenance:false` — a base-ref snapshot, not the current working state.
+  // Beyond the wasted git walks, updateLifecycle marks every open stableId
+  // absent from the finding set it is handed as `remediated`; running the PR
+  // delta gate would silently rewrite the project's lifecycle store from the
+  // base ref's findings.
+  return (0,_engine_js__WEBPACK_IMPORTED_MODULE_1__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
 }
 
 function _summary(findings) {

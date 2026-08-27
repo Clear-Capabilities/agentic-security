@@ -393,6 +393,36 @@ function parseArgs(argv) {
   return args;
 }
 
+// Finding Provenance (M0/M1) — CLI flags that set the env vars engine.js
+// (Task 15) and report/index.js (Task 16) already read:
+// AGENTIC_SECURITY_NO_PROVENANCE, AGENTIC_SECURITY_PROVENANCE_MODE,
+// AGENTIC_SECURITY_PROVENANCE_SINCE, AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS,
+// AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL. `requireProvenance` is consumed
+// directly by cmdScan (post-scan scanHealth augmentation), not via an env var.
+// Kept as a pure function (argv in, plain object out) so it's unit-testable
+// without invoking the CLI dispatch or touching process.env.
+export function parseProvenanceFlags(argv) {
+  const result = { mode: 'standard', since: null, timeoutMs: undefined, includeEmail: false, requireProvenance: false, disabled: false, warning: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--no-provenance') result.disabled = true;
+    else if (a === '--provenance') {
+      const v = argv[i + 1];
+      if (v === 'deep') {
+        result.mode = 'standard';
+        result.warning = 'deep mode ships in a later release, running standard';
+      } else if (v === 'standard') {
+        result.mode = 'standard';
+      }
+      i++;
+    } else if (a === '--provenance-since') { result.since = argv[++i] || null; }
+    else if (a === '--provenance-timeout') { result.timeoutMs = parseInt(argv[++i], 10); }
+    else if (a === '--include-author-email') { result.includeEmail = true; }
+    else if (a === '--require-provenance') { result.requireProvenance = true; }
+  }
+  return result;
+}
+
 async function cmdScan(args) {
   // NON_MUTATING_SCAN_PRD S1 — a scan is an observation; --no-state makes it one.
   if (args.flags['no-state']) {
@@ -488,12 +518,38 @@ async function cmdScan(args) {
     process.stderr.write(`[pr-mode] scanning files changed since: ${changedSince}\n`);
   }
 
+  // Finding Provenance (M0/M1) — translate --provenance/--no-provenance/etc.
+  // into the env vars engine.js already reads. Must run before runScan()
+  // below, same as the --deep/--no-deep wiring above.
+  const _provFlags = parseProvenanceFlags(process.argv.slice(2));
+  if (_provFlags.warning) console.error(`Warning: ${_provFlags.warning}`);
+  if (_provFlags.disabled) process.env.AGENTIC_SECURITY_NO_PROVENANCE = '1';
+  process.env.AGENTIC_SECURITY_PROVENANCE_MODE = _provFlags.mode;
+  if (_provFlags.since) process.env.AGENTIC_SECURITY_PROVENANCE_SINCE = _provFlags.since;
+  if (_provFlags.timeoutMs) process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS = String(_provFlags.timeoutMs);
+  if (_provFlags.includeEmail) process.env.AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL = '1';
+
   const { scan, meta } = await runScan(target, {
     changedSince,
     onProgress: (p) => {
       if (process.stderr.isTTY) process.stderr.write(`\r[${p.phase}] ${p.current}/${p.total} ${p.file}     `);
     },
   });
+  // --require-provenance: flag (never fail) any finding whose provenance
+  // isn't resolved, via scanHealth — deliberately independent of the
+  // severity-based exit code computed by exitCodeFor() at the end of this
+  // function. 'uncommitted' is a legitimate terminal status (the finding is
+  // in a file with no git history yet), not an incomplete one.
+  if (_provFlags.requireProvenance) {
+    const incomplete = (scan.findings || [])
+      .filter((f) => !['complete', 'uncommitted'].includes(f.findingProvenance?.status))
+      .map((f) => f.id);
+    if (incomplete.length > 0) {
+      scan.scanHealth = scan.scanHealth || {};
+      scan.scanHealth.provenanceIncomplete = incomplete;
+    }
+  }
+
   // The BOM/attestation emitters stamp the producing engine's version into
   // their metadata; carry the real package version so it can never drift.
   if (meta && meta.engineVersion == null) meta.engineVersion = PKG_VERSION;
@@ -2947,4 +3003,11 @@ async function main() {
   }
 }
 
-main();
+// Guard against running as the CLI entry point vs. being `import`ed (e.g. by
+// scanner/test/cli/provenance-flags.test.js, which imports parseProvenanceFlags
+// for a unit test). Without this, any import of this module — for a single
+// named export — re-runs the entire CLI dispatch and calls process.exit(),
+// killing whatever process did the importing.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

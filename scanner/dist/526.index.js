@@ -311,8 +311,8 @@ var external_node_child_process_ = __webpack_require__(1421);
 var external_node_fs_ = __webpack_require__(3024);
 // EXTERNAL MODULE: external "node:path"
 var external_node_path_ = __webpack_require__(6760);
-// EXTERNAL MODULE: ./src/engine.js + 211 modules
-var engine = __webpack_require__(7087);
+// EXTERNAL MODULE: ./src/engine.js + 221 modules
+var engine = __webpack_require__(271);
 ;// CONCATENATED MODULE: ./src/posture/fix-honesty-gate.js
 // Deterministic honesty gates on fix / finding output (#7).
 //
@@ -723,7 +723,15 @@ async function verifyPatch({
   const fileContents = { ...files };
   let scan;
   try {
-    scan = await (0,engine/* runFullScan */.wW)({ fileContents, depFileContents, scanRoot }, () => {});
+    // `provenance:false` is REQUIRED here, not an optimisation. This scan is
+    // deliberately scoped to just the patched file(s), so its finding set is a
+    // tiny subset of the project's. updateLifecycle marks every open stableId
+    // NOT in the set it is handed as `remediated` — so a single fix
+    // verification (every /fix, apply_fix, and autopilot iteration runs one)
+    // would mass-mark the rest of the project as remediated, then
+    // `reintroduced` on the next real scan. The patched content is also not
+    // committed, so there is no history to resolve provenance against anyway.
+    scan = await (0,engine/* runFullScan */.wW)({ fileContents, depFileContents, scanRoot, provenance: false }, () => {});
   } catch (e) {
     return { ok: false, reason: 'rescan-failed', error: e.message };
   }

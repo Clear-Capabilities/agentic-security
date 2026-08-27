@@ -13,7 +13,7 @@ export const modules = {
 /* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1421);
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
-/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(7087);
+/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(271);
 // Time-travel + counterfactual scanning (v0.68).
 //
 // Two new modes that exploit the pure-input shape of runFullScan:
@@ -111,7 +111,13 @@ async function _scanAtRef(root, ref) {
     const c = _readFileAtRef(root, ref, f);
     if (c != null) fileContents[f] = c;
   }
-  const scan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_3__/* .runFullScan */ .wW)({ fileContents, scanRoot: root }, () => {});
+  // `provenance:false` — this is a HISTORICAL ref, not "the state of this repo
+  // right now". Two things must not happen here: resolving git provenance for
+  // findings that already are a point in history (pure waste), and letting
+  // updateLifecycle see this partial, historical finding set as the current
+  // one — it marks every open stableId NOT in the set as `remediated`, so one
+  // per-ref scan would mass-remediate the whole project's real open findings.
+  const scan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_3__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
   return {
     ref,
     fileCount: Object.keys(fileContents).length,
@@ -193,8 +199,12 @@ async function runWhatIf(root, { overlays = [], remove = [] } = {}) {
     }
   }
   // Baseline (without overlays) for delta computation.
-  const baseScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_3__/* .runFullScan */ .wW)({ fileContents: _baselineFor(fileContents, overlays, remove, root), scanRoot: root }, () => {});
-  const whatIfScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_3__/* .runFullScan */ .wW)({ fileContents, scanRoot: root }, () => {});
+  // Both legs are hypothetical snapshots being differenced against each other,
+  // never the repo's current state — `provenance:false` for the same reason as
+  // _scanAtRef above (no provenance to resolve, and updateLifecycle must not
+  // treat either snapshot as "what is open right now").
+  const baseScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_3__/* .runFullScan */ .wW)({ fileContents: _baselineFor(fileContents, overlays, remove, root), scanRoot: root, provenance: false }, () => {});
+  const whatIfScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_3__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
   const baseIds = new Set((baseScan.findings || []).map(f => f.stableId || f.id));
   const wIds = new Set((whatIfScan.findings || []).map(f => f.stableId || f.id));
   const introduced = (whatIfScan.findings || []).filter(f => !baseIds.has(f.stableId || f.id)).map(_compact);

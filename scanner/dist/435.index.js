@@ -207,6 +207,8 @@ function redactArgsBlob(s) {
 
 // EXTERNAL MODULE: ./src/report/index.js + 3 modules
 var report = __webpack_require__(457);
+// EXTERNAL MODULE: ./src/posture/provenance/schema.js
+var schema = __webpack_require__(4594);
 ;// CONCATENATED MODULE: ./src/posture/agents-memory.js
 // AGENTS.md — writable continual-learning memory (harness-anatomy #2).
 //
@@ -507,6 +509,10 @@ const cve_lookup_internals = { CACHE_DIR, CVE_RE, _stalenessTier };
 
 
 
+
+// Git-origin provenance (Finding Provenance M0/M1). Distinct from
+// `finding.provenance` (AI-authorship) and from an SCA entry's `provenance`
+// (Sigstore/SLSA attestation) — see report/index.js's import comment.
 
 
 // Lazy-loaded: these transitively pull in npm packages (@babel/core and
@@ -1053,6 +1059,11 @@ const explain_finding = {
       epssScore: typeof f.epssScore === 'number' ? f.epssScore : null,
       epssPercentile: typeof f.epssPercentile === 'number' ? f.epssPercentile : null,
       exploitedNow: !!f.exploitedNow,
+      // Which commit introduced this finding. Redacted with the DEFAULT
+      // options (includeEmail:false) unconditionally — unlike the JSON report
+      // there is no operator-set env escape here, because the consumer is an
+      // agent that has no business receiving a committer's email address.
+      findingProvenance: f.findingProvenance ? (0,schema/* redactFindingProvenance */.As)(f.findingProvenance) : null,
     };
   },
 };
