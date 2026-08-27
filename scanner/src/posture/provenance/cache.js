@@ -54,7 +54,10 @@ export function cacheSet(scanRoot, key, value) {
     // safeWriteState creates the directory, applies the project-root check and
     // returns false (never throws) when the read-only switch is on. A refused
     // write is a cache miss next time, which is correct behaviour, not an error.
-    safeWriteState(keyPath(scanRoot, key), JSON.stringify(value));
+    // category:'provenance-cache' lets lsp/server.js keep THIS write alive
+    // while every other state write stays suppressed on every save — see
+    // state-dir.js's withStateWritesDisabled.
+    safeWriteState(keyPath(scanRoot, key), JSON.stringify(value), { category: 'provenance-cache' });
   } catch {
     // best-effort — cache failures must never fail a scan
   }

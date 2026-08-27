@@ -130,6 +130,14 @@ export function isSafeStateDir(dir) {
 // per-caller discipline already failed once: its header records a user who
 // uninstalled the plugin after stray state directories broke their build.
 let _stateWritesEnabled = true;
+// Category-scoped override (M2 §2.4 performance fix): when the blanket
+// switch above is OFF, a category listed here still writes. Exists for
+// lsp/server.js, which needs the provenance disk cache live on every
+// keystroke-save while every OTHER state write (dpia.md, lifecycle.json,
+// ...) stays suppressed — see the withStateWritesDisabled call site in
+// lsp/server.js for why the blanket switch alone made every LSP scan pay
+// the FULL uncached provenance-resolution cost on every single save.
+let _enabledCategories = new Set();
 
 /** Turn all state writing off (or back on) for this process. */
 export function setStateWritesEnabled(enabled) {
@@ -148,6 +156,15 @@ export function stateWritesEnabled() {
   return _stateWritesEnabled;
 }
 
+// Category-aware check used by ensureStateDir/safeWriteState below. A
+// caller that never passes `category` behaves EXACTLY as before: it only
+// ever consults the blanket switch.
+function _categoryEnabled(category) {
+  if (process.env.AGENTIC_SECURITY_NO_STATE === '1') return false;
+  if (_stateWritesEnabled) return true;
+  return !!category && _enabledCategories.has(category);
+}
+
 /**
  * Run `fn` with state writes forced off, restoring the PRIOR flag value
  * afterward — for a caller (assurance-hardening PRD FR-704) that must
@@ -157,31 +174,38 @@ export function stateWritesEnabled() {
  * the same process — exactly `apply_fix`'s failure mode this wrapper exists
  * to prevent, via `finally` rather than caller discipline.
  *
- * KNOWN LIMITATION: `_stateWritesEnabled` is process-global, not per-call.
- * Two overlapping calls to this function (or one overlapping a direct
- * setStateWritesEnabled() call) can race and leave the flag in the wrong
- * state for one of them once both finish. mcp/CLAUDE.md already documents
- * an accepted concurrency limitation of the same shape for fix-history.js
- * ("concurrent apply_fix calls can race... today benign... a future
- * stateful tool needs serialization") — this is the same class of risk, not
- * a new one, and this wrapper is still a strict improvement over the
- * alternative it replaces (a caller that writes state UNCONDITIONALLY on
+ * `exceptCategories` lets a caller keep ONE narrow category of write alive
+ * while everything else stays suppressed — see lsp/server.js. Restored via
+ * the same `finally` as the blanket flag, for the same reason.
+ *
+ * KNOWN LIMITATION: `_stateWritesEnabled` and `_enabledCategories` are both
+ * process-global, not per-call. Two overlapping calls to this function (or
+ * one overlapping a direct setStateWritesEnabled() call) can race and leave
+ * the flags in the wrong state for one of them once both finish. mcp/CLAUDE.md
+ * already documents an accepted concurrency limitation of the same shape for
+ * fix-history.js ("concurrent apply_fix calls can race... today benign... a
+ * future stateful tool needs serialization") — this is the same class of
+ * risk, not a new one, and this wrapper is still a strict improvement over
+ * the alternative it replaces (a caller that writes state UNCONDITIONALLY on
  * every call, with no opt-out at all).
  */
-export async function withStateWritesDisabled(fn) {
+export async function withStateWritesDisabled(fn, { exceptCategories = [] } = {}) {
   const prior = _stateWritesEnabled;
+  const priorCategories = new Set(_enabledCategories);
   _stateWritesEnabled = false;
+  for (const c of exceptCategories) _enabledCategories.add(c);
   try {
     return await fn();
   } finally {
     _stateWritesEnabled = prior;
+    _enabledCategories = priorCategories;
   }
 }
 
 // Safe mkdir: only creates .agentic-security/ if the parent has a project marker.
 // Returns the dir on success, null if refused. Logs a warning when refused.
-export function ensureStateDir(scanRoot) {
-  if (!stateWritesEnabled()) return null;
+export function ensureStateDir(scanRoot, { category } = {}) {
+  if (!_categoryEnabled(category)) return null;
   const dir = stateDir(scanRoot);
   if (!isSafeStateDir(dir)) {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') {
@@ -199,8 +223,8 @@ export function ensureStateDir(scanRoot) {
 
 // Safe write: only writes if isSafeStateDir(parent) returns true.
 // Returns true on success, false if refused or errored.
-export function safeWriteState(filePath, content) {
-  if (!stateWritesEnabled()) return false;
+export function safeWriteState(filePath, content, { category } = {}) {
+  if (!_categoryEnabled(category)) return false;
   const dir = path.dirname(filePath);
   if (!isSafeStateDir(dir)) {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') {

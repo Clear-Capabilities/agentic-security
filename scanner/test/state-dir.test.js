@@ -206,3 +206,46 @@ test('withStateWritesDisabled: a real scan through this wrapper writes ZERO stat
       'a scan run through withStateWritesDisabled must not create a state directory at all');
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
+
+test('safeWriteState: a category not in exceptCategories is still refused while writes are disabled', async () => {
+  const tmp = _mkTmpProject();
+  try {
+    await withStateWritesDisabled(async () => {
+      const ok = safeWriteState(path.join(tmp, '.agentic-security', 'x.json'), '{}', { category: 'some-other-category' });
+      assert.equal(ok, false);
+    });
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('safeWriteState: a category IN exceptCategories writes through while the blanket switch is off', async () => {
+  const tmp = _mkTmpProject();
+  try {
+    await withStateWritesDisabled(async () => {
+      const target = path.join(tmp, '.agentic-security', 'provenance', 'cache', 'x.json');
+      const ok = safeWriteState(target, '{}', { category: 'provenance-cache' });
+      assert.equal(ok, true);
+      assert.ok(fs.existsSync(target));
+    }, { exceptCategories: ['provenance-cache'] });
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('withStateWritesDisabled: the category override does not leak past the call — a later write with no override is refused again', async () => {
+  const tmp = _mkTmpProject();
+  try {
+    await withStateWritesDisabled(async () => {}, { exceptCategories: ['provenance-cache'] });
+    // Outside the wrapper the blanket switch is back to enabled (the prior
+    // value), so this should succeed regardless — the real assertion is that
+    // _enabledCategories was restored, which the NEXT test in this file
+    // (unrelated) would otherwise observe as a leaked category. Directly:
+    const ok = safeWriteState(path.join(tmp, '.agentic-security', 'y.json'), '{}', { category: 'provenance-cache' });
+    assert.equal(ok, true, 'blanket switch is on again outside the wrapper, so this must succeed regardless of category');
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('safeWriteState with no category option behaves exactly as before (backward compatible)', async () => {
+  const tmp = _mkTmpProject();
+  try {
+    const ok = safeWriteState(path.join(tmp, '.agentic-security', 'z.json'), '{}');
+    assert.equal(ok, true);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});

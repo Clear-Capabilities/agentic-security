@@ -177,9 +177,14 @@ async function scanFile(uri) {
     // firing. The flag is process-global (see its KNOWN LIMITATION), which is
     // harmless here: this server is a read-only surface whose every scan wants
     // writes off, so overlapping saves can only ever agree, and the `finally`
-    // restores the prior value either way.
+    // restores the prior value either way. exceptCategories:['provenance-cache']
+    // (M2 §2.4) is the one deliberate exception — every OTHER write this scan
+    // would make stays suppressed, but the provenance disk cache stays live so
+    // repeated saves of the same file are not each paying the full uncached
+    // resolution cost.
     const { scan } = await withStateWritesDisabled(() =>
-      runScan(_rootDir, { fileContents, depFileContents, deep: true, deepInCi: true }));
+      runScan(_rootDir, { fileContents, depFileContents, deep: true, deepInCi: true }),
+      { exceptCategories: ['provenance-cache'] });
     // Stage 6 correctness audit: this only ever read scan.findings (the SAST
     // channel). scan.secrets and scan.logicVulns are separate arrays on the
     // raw runScan() result — normalizeFindings is what merges all four
