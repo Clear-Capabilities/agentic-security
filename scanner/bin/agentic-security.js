@@ -3017,10 +3017,17 @@ async function main() {
 // resolves `import.meta.url` to the symlink's realpath while
 // `process.argv[1]` stays the symlink path as invoked, so the two never
 // match, the guard is always false, and the CLI silently exits with no
-// output. `import.meta.main` (Node >= 20.11 / stable on this repo's
-// Node >= 24 floor per package.json `engines`) is resolved correctly
-// through a symlink — verified live through an actual symlink, not just
-// read about — see the Task 17 fix report.
-if (import.meta.main) {
+// output. `import.meta.main` is resolved correctly through a symlink —
+// verified live through an actual symlink, not just read about — see the
+// Task 17 fix report. It was added in Node v24.2.0 (backported to
+// v22.18.0) and is currently Stability 1.0 (early development) per Node's
+// own docs — NOT stable, and NOT available on v20.11 as an earlier
+// version of this comment incorrectly claimed. Concretely: it is
+// `undefined` on Node 24.0.0/24.1.x, which satisfy this repo's declared
+// `engines.node: ">=24.0.0"` floor, so `import.meta.main` alone would
+// reproduce this exact bug (main() silently never runs) on a plain
+// non-symlinked invocation under those two point releases. The `??`
+// fallback below covers that gap without bumping the engines floor.
+if (import.meta.main ?? (import.meta.url === `file://${process.argv[1]}`)) {
   main();
 }
