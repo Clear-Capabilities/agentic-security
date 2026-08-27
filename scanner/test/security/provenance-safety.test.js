@@ -46,14 +46,23 @@ function walkFiles(dir) {
 // just the provenance cache subdirectory, so a leak into a sibling artifact
 // (lifecycle.json, a lockfile, anything else statePath() might touch) is
 // caught too, not just the one location the brief named.
+//
+// Returns the count of files ACTUALLY read and checked, not just the count
+// found on disk — a file that throws on readFileSync (binary content, a
+// permissions error) is skipped as "not a text-leak channel" and never has
+// its bytes compared against the canary. Callers must assert against THIS
+// count for their "not vacuous" sanity check: asserting against the raw
+// walkFiles() length would stay green even if every single file failed to
+// read, at which point the loop below checks nothing.
 function assertNoCanaryOnDisk(dir) {
-  const files = walkFiles(dir);
-  for (const f of files) {
+  let checked = 0;
+  for (const f of walkFiles(dir)) {
     let content;
     try { content = fs.readFileSync(f, 'utf8'); } catch { continue; } // not text: not a text-leak channel
+    checked++;
     assertNoCanary(content, `on-disk file ${path.relative(dir, f)}`);
   }
-  return files;
+  return checked;
 }
 
 // Monkey-patches stdout/stderr/console during `fn` and returns everything
@@ -139,8 +148,10 @@ test('Scenario J: a historical secret never appears in provenance output, cache,
     const cacheDir = path.join(stateDir, 'provenance', 'cache');
     assert.ok(fs.existsSync(cacheDir) && fs.readdirSync(cacheDir).length > 0,
       'sanity: the provenance cache must actually contain entries, or the disk check below is vacuous');
-    const scannedFiles = assertNoCanaryOnDisk(stateDir);
-    assert.ok(scannedFiles.length > 0, 'sanity: expected at least one file under .agentic-security/ to have been checked');
+    const checkedCount = assertNoCanaryOnDisk(stateDir);
+    assert.ok(checkedCount > 0,
+      'sanity: expected at least one file under .agentic-security/ to have been actually READ and checked for the canary '
+      + '(not just found on disk) — otherwise the disk check above never ran against real content');
   } finally {
     fx.cleanup();
   }
