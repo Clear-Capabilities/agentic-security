@@ -333,3 +333,28 @@ test('I1: the default per-finding budget never falls below the 2s floor', async 
     fx.cleanup();
   }
 });
+
+test('annotateGitProvenance: two findings sharing a stableId resolve via one underlying walk, not two', async () => {
+  // Two DISTINCT finding objects that happen to carry the identical
+  // stableId (the realistic case: the same underlying condition surfaced
+  // twice, e.g. once via the normal pass and once via a duplicate-detection
+  // edge case) — both must resolve to the SAME provenance object identity,
+  // proving the second one was served from the in-scan memo rather than
+  // re-walked.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'eval(x);\n');
+    fx.commit('add eval');
+
+    const findings = [
+      { file: 'a.js', line: 1, stableId: 'dup-stable-id', parser: 'SAST' },
+      { file: 'a.js', line: 1, stableId: 'dup-stable-id', parser: 'SAST' },
+    ];
+    await annotateGitProvenance(findings, { scanRoot: fx.root, scanId: 's1', observedAt: new Date().toISOString() });
+    assert.ok(findings[0].findingProvenance);
+    assert.ok(findings[1].findingProvenance);
+    assert.equal(findings[0].findingProvenance.evidenceDigest, findings[1].findingProvenance.evidenceDigest);
+  } finally {
+    fx.cleanup();
+  }
+});

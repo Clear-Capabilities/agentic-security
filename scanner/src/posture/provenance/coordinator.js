@@ -185,6 +185,24 @@ async function resolveOne(finding, ctx) {
     repoHead: repoState.head, stableId: finding.stableId,
     detectorVersion: ctx.rulesetVersion, historyBoundary: ctx.since || '', mode: ctx.mode,
   });
+
+  // IN-SCAN MEMOIZATION (M2 §2.4 performance fix): the disk cache alone
+  // still pays a fresh cacheGet() read (and, on a miss, a fresh resolution
+  // walk) for every finding sharing this cacheKey WITHIN one scan. Two
+  // findings with the same stableId and history boundary are uncommon but
+  // real (duplicate array entries, the same finding reappearing across a
+  // dedupe boundary) — memoizing the PROMISE (not just the eventual value)
+  // means a second caller that arrives while the first is still resolving
+  // awaits the same in-flight work instead of starting its own.
+  if (ctx.memo && ctx.memo.has(cacheKey)) return ctx.memo.get(cacheKey);
+
+  const promise = resolveAndCache(finding, ctx, cacheKey, isSca);
+  if (ctx.memo) ctx.memo.set(cacheKey, promise);
+  return promise;
+}
+
+async function resolveAndCache(finding, ctx, cacheKey, isSca) {
+  const { scanRoot, repoState, deadlineAt } = ctx;
   const cached = cacheGet(scanRoot, cacheKey);
   if (cached) return cached;
 
@@ -350,7 +368,12 @@ export async function annotateGitProvenance(findings, ctx) {
     MIN_PER_FINDING_BUDGET_MS,
     Math.floor(remainingMs / Math.max(1, findings.length)),
   );
-  const fullCtx = { ...options, repoState, deadlineAt, perFindingBudgetMs, scanRoot };
+  // M2 §2.4: one memo per annotateGitProvenance call, not a module-level
+  // cache — scoped to THIS scan's findings so a memo entry never survives
+  // past the run that created it (the disk cache, keyed on repoHead already,
+  // is what persists ACROSS scans).
+  const memo = new Map();
+  const fullCtx = { ...options, repoState, deadlineAt, perFindingBudgetMs, scanRoot, memo };
 
   let active = 0;
   let idx = 0;
