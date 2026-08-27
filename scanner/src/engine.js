@@ -7340,6 +7340,25 @@ function _makePurl(ecosystem,name,version,group){
   return`pkg:${t}/${ns}${encodeURIComponent(name)}${version?'@'+encodeURIComponent(version):''}`;
 }
 
+function _findManifestLine(text, sectionKey, depName) {
+  const lines = text.split('\n');
+  let inSection = false;
+  let depth = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!inSection) {
+      if (new RegExp(`"${sectionKey}"\\s*:\\s*\\{`).test(line)) { inSection = true; depth = 1; }
+      continue;
+    }
+    depth += (line.match(/\{/g) || []).length;
+    depth -= (line.match(/\}/g) || []).length;
+    if (depth <= 0) { inSection = false; continue; }
+    const escaped = depName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`"${escaped}"\\s*:`).test(line)) return i + 1;
+  }
+  return null;
+}
+
 function _parsePackageJson(text,filePath){
   const out=[];try{const d=JSON.parse(text);
     for(const[depKey,scope]of[['dependencies','required'],['devDependencies','optional']]){
@@ -7350,7 +7369,8 @@ function _parsePackageJson(text,filePath){
         const group=scoped?`@${parts[0]}`:'';
         const pkgName=scoped?parts[1]:name;
         out.push({name,version:ver,group,scope,purl:_makePurl('npm',pkgName,ver,group),ecosystem:'npm',filePath,
-          isUnpinned:verRange==='*'||verRange==='latest'||verRange===''||verRange==='>=0.0.0'});
+          isUnpinned:verRange==='*'||verRange==='latest'||verRange===''||verRange==='>=0.0.0',
+          line:_findManifestLine(text,depKey,name)});
       }
     }
   }catch(_){}return out;
@@ -7379,12 +7399,13 @@ function _parsePackageLockJson(text,filePath){
 
 function _parseRequirementsTxt(text,filePath){
   const out=[];
-  for(const line of text.split('\n')){
-    const t=line.trim();
+  const lines=text.split('\n');
+  for(let i=0;i<lines.length;i++){
+    const t=lines[i].trim();
     if(!t||t.startsWith('#')||t.startsWith('-'))continue;
     const m=t.match(/^([A-Za-z0-9_.-]+)\s*[=~<>!]+\s*([^\s;#,]*)/);
     if(m)out.push({name:m[1],version:m[2],group:'',scope:'required',
-      purl:_makePurl('pypi',m[1].toLowerCase(),m[2],''),ecosystem:'pypi',filePath,isUnpinned:false});
+      purl:_makePurl('pypi',m[1].toLowerCase(),m[2],''),ecosystem:'pypi',filePath,isUnpinned:false,line:i+1});
   }return out;
 }
 
