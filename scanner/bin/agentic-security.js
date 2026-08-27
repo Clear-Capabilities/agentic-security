@@ -185,8 +185,18 @@ Options:
   --no-epss                    Skip EPSS exploit-prediction enrichment (default: enabled)
   --no-blast-radius            Skip blast-radius / cost framing (default: enabled)
   --verbose                    Include fix bodies + taxonomy in CLI output
+                               (with --firehose, also prints each finding's git-origin provenance)
   --output <file>              Write report to file instead of stdout
   --machine-output             Always write .agentic-security/findings.{sarif,json,csv}
+
+Finding provenance (which commit introduced each finding):
+  --provenance <standard|deep> Resolution depth (default: standard; deep ships in a later release)
+  --no-provenance              Skip git-history provenance entirely (findings report not_available)
+  --provenance-since <ref>     Do not walk history earlier than this git ref/commit
+  --provenance-timeout <ms>    Whole-scan provenance budget in MILLISECONDS (default 60000)
+  --include-author-email       Keep commit author emails in output (redacted by default)
+  --require-provenance         Report unresolved provenance as a scan-health condition
+                               (downgrades scanHealth.status to 'partial'; never changes the exit code)
 
 Exit codes:
   0 = clean   1 = low/medium   2 = high   3 = critical   4 = error`;
@@ -393,6 +403,11 @@ function parseArgs(argv) {
   return args;
 }
 
+// The only values `--provenance` accepts. Used both to validate an inline
+// `--provenance=<mode>` and to decide whether a following bare token is this
+// flag's value at all — see the comment inside the parser.
+const PROVENANCE_MODES = new Set(['standard', 'deep']);
+
 // Finding Provenance (M0/M1) — CLI flags that set the env vars engine.js
 // (Task 15) and report/index.js (Task 16) already read:
 // AGENTIC_SECURITY_NO_PROVENANCE, AGENTIC_SECURITY_PROVENANCE_MODE,
@@ -403,23 +418,80 @@ function parseArgs(argv) {
 // without invoking the CLI dispatch or touching process.env.
 export function parseProvenanceFlags(argv) {
   const result = { mode: 'standard', since: null, timeoutMs: undefined, includeEmail: false, requireProvenance: false, disabled: false, warning: null };
+  const warnings = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--no-provenance') result.disabled = true;
-    else if (a === '--provenance') {
-      const v = argv[i + 1];
+    if (typeof a !== 'string' || !a.startsWith('--')) continue;
+    // BOTH `--flag value` and `--flag=value`, because parseArgs() above accepts
+    // both for every other flag in this CLI and an operator has no way to know
+    // this one parser is different. Exact-string matching silently ignored
+    // `--provenance=deep` / `--provenance-since=v1.0.0` /
+    // `--provenance-timeout=30000` — no warning, defaults quietly used.
+    //
+    // Split on the FIRST `=` and keep the whole remainder, rather than
+    // parseArgs's `split('=', 2)` which drops everything after a second `=`.
+    // A git ref (`--provenance-since=refs/tags/v1=rc1`) is a legal value and
+    // truncating it would be a worse failure than the one being fixed.
+    const eq = a.indexOf('=');
+    const key = eq === -1 ? a : a.slice(0, eq);
+    const inline = eq === -1 ? undefined : a.slice(eq + 1);
+    // `--flag value` consumes the NEXT argv entry only when there is no inline
+    // value; a value that itself starts with `--` is another flag, not this
+    // one's argument.
+    const takeValue = () => {
+      if (inline !== undefined) return inline;
+      const next = argv[i + 1];
+      if (next !== undefined && !String(next).startsWith('--')) { i++; return next; }
+      return undefined;
+    };
+
+    if (key === '--no-provenance') result.disabled = true;
+    else if (key === '--provenance') {
+      // The SPACE form only claims the next token when it actually names a
+      // mode. `--provenance` is legal on its own (provenance is on by default;
+      // the flag is how you say "standard, explicitly"), and this CLI's target
+      // is nearly always a positional — `scan --provenance ./src` must scan
+      // `./src`, not report `unrecognised mode './src'`. parseArgs() does its
+      // own positional collection over the same argv, so consuming here never
+      // steals the path from it, but the warning would still be a lie.
+      //
+      // The INLINE form has no such ambiguity: `--provenance=x` can only ever
+      // be a mode, so an unknown one is a typo worth naming.
+      const v = inline !== undefined
+        ? inline
+        : (PROVENANCE_MODES.has(String(argv[i + 1])) ? argv[++i] : undefined);
       if (v === 'deep') {
         result.mode = 'standard';
-        result.warning = 'deep mode ships in a later release, running standard';
-      } else if (v === 'standard') {
+        warnings.push('deep mode ships in a later release, running standard');
+      } else if (v === 'standard' || v === undefined) {
         result.mode = 'standard';
+      } else {
+        warnings.push(`unrecognised --provenance mode '${v}' (expected standard|deep), running standard`);
       }
-      i++;
-    } else if (a === '--provenance-since') { result.since = argv[++i] || null; }
-    else if (a === '--provenance-timeout') { result.timeoutMs = parseInt(argv[++i], 10); }
-    else if (a === '--include-author-email') { result.includeEmail = true; }
-    else if (a === '--require-provenance') { result.requireProvenance = true; }
+    } else if (key === '--provenance-since') { result.since = takeValue() ?? null; }
+    else if (key === '--provenance-timeout') {
+      // MILLISECONDS, and validated as such. `parseInt` alone turned
+      // `--provenance-timeout 30s` into 30 — a 30-MILLISECOND budget that
+      // expires before the first `git blame` returns, so every finding came
+      // back `budget_exhausted` and nothing said why. A missing value produced
+      // NaN, which `if (_provFlags.timeoutMs)` then discarded silently. Both
+      // now warn and fall back to the engine default rather than inventing a
+      // budget the operator did not ask for. The unit is fixed by the env var
+      // this flag feeds, AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS.
+      const raw = takeValue();
+      if (raw === undefined) {
+        warnings.push('--provenance-timeout requires a value in milliseconds; using the default budget');
+      } else if (!/^\d+$/.test(String(raw).trim()) || parseInt(raw, 10) <= 0) {
+        warnings.push(`--provenance-timeout expects a positive integer number of MILLISECONDS, got '${raw}'; using the default budget`);
+      } else {
+        result.timeoutMs = parseInt(raw, 10);
+      }
+    }
+    else if (key === '--include-author-email') { result.includeEmail = true; }
+    else if (key === '--require-provenance') { result.requireProvenance = true; }
   }
+  // One field, so a caller that prints `warning` cannot drop the second one.
+  result.warning = warnings.length ? warnings.join('; ') : null;
   return result;
 }
 
@@ -541,12 +613,40 @@ async function cmdScan(args) {
   // function. 'uncommitted' is a legitimate terminal status (the finding is
   // in a file with no git history yet), not an incomplete one.
   if (_provFlags.requireProvenance) {
-    const incomplete = (scan.findings || [])
-      .filter((f) => !['complete', 'uncommitted'].includes(f.findingProvenance?.status))
-      .map((f) => f.id);
+    // ALL FOUR channels (scanner/CLAUDE.md: findings / secrets / supplyChain /
+    // logicVulns). Checking only `scan.findings` made the flag report a clean
+    // bill of provenance health for a scan whose SCA and secrets findings had
+    // none — and report/index.js's normalizeFindings ships all four to the
+    // user as findings, so "every finding" has to mean all four here too.
+    const incomplete = [];
+    for (const [channel, bucket] of [
+      ['findings', scan.findings], ['secrets', scan.secrets],
+      ['supplyChain', scan.supplyChain], ['logicVulns', scan.logicVulns],
+    ]) {
+      for (const f of (bucket || [])) {
+        if (!f || typeof f !== 'object') continue;
+        if (['complete', 'uncommitted'].includes(f.findingProvenance?.status)) continue;
+        incomplete.push(f.id || f.stableId || `${channel}:${f.name || f.file || f.type || 'entry'}`);
+      }
+    }
     if (incomplete.length > 0) {
-      scan.scanHealth = scan.scanHealth || {};
-      scan.scanHealth.provenanceIncomplete = incomplete;
+      // Written the way EVERY other scan-health signal is written — a sentence
+      // in `conditions[]` plus a `complete` -> `partial` status demotion (see
+      // pipeline/scan-health.js's applyFreshness, the same "patch it on from
+      // bin/ after the engine already built scanHealth" pattern). The previous
+      // version set a bespoke `scanHealth.provenanceIncomplete` key that NO
+      // consumer reads: pipeline/assurance-mode.js and
+      // posture/compliance-policy.js both read `status`/`conditions[]` only, so
+      // --require-provenance changed no behaviour anywhere. The array is still
+      // carried, for a consumer that wants the ids, but it is no longer the
+      // only trace.
+      const condition = `--require-provenance: ${incomplete.length} finding(s) have unresolved provenance`;
+      scan.scanHealth = {
+        ...(scan.scanHealth || {}),
+        conditions: [...(Array.isArray(scan.scanHealth?.conditions) ? scan.scanHealth.conditions : []), condition],
+        status: (scan.scanHealth?.status ?? 'complete') === 'complete' ? 'partial' : scan.scanHealth.status,
+        provenanceIncomplete: incomplete,
+      };
     }
   }
 
@@ -801,7 +901,20 @@ async function cmdScan(args) {
   // per-finding list (with inline why-it-matters / how-it-fires / fix depth) so
   // "Show ALL findings" actually shows them. Add --verbose for full narration + code.
   if (args.flags.firehose && (!format || format === 'ship' || format === 'summary')) {
-    body += '\n\n' + toCLI(scan, { verbose });
+    // `provenance` reuses --verbose rather than adding a seventh provenance
+    // flag: --verbose already means "print the extra per-finding narration"
+    // (explainParts's why/how/fix bodies), and the provenance block is exactly
+    // that kind of detail. Before this, explainProvenance()/toCLI's
+    // `{provenance}` option had NO production caller at all — it was reachable
+    // only from its own unit test, so a feature that was built, reviewed and
+    // shipped could never be seen by a user.
+    //
+    // Gated on provenance actually having run, too: with --no-provenance (or
+    // AGENTIC_SECURITY_NO_PROVENANCE=1) every finding carries a `not_available`
+    // record, and printing five lines of "we did not look" per finding is noise
+    // the operator explicitly opted out of.
+    const provenanceOn = !_provFlags.disabled && process.env.AGENTIC_SECURITY_NO_PROVENANCE !== '1';
+    body += '\n\n' + toCLI(scan, { verbose, provenance: verbose && provenanceOn });
   }
 
   // v3 next-gen — supplementary blocks for human-readable formats. These
