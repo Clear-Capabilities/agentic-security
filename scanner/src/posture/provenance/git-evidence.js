@@ -1,0 +1,106 @@
+import * as cp from 'node:child_process';
+import * as path from 'node:path';
+
+const GIT_TIMEOUT_MS = 2000;
+
+function _run(scanRoot, args) {
+  try {
+    const stdout = cp.execFileSync('git', args, {
+      cwd: scanRoot, encoding: 'utf8', timeout: GIT_TIMEOUT_MS,
+      stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+    });
+    return { ok: true, stdout };
+  } catch (e) {
+    return { ok: false, stdout: '', error: e };
+  }
+}
+
+function _relPath(scanRoot, file) {
+  const rel = path.isAbsolute(file) ? path.relative(scanRoot, file) : file;
+  return rel.startsWith('..') ? null : rel.split(path.sep).join('/');
+}
+
+export function isGitRepo(scanRoot) {
+  return _run(scanRoot, ['rev-parse', '--git-dir']).ok;
+}
+
+export function getRepoState(scanRoot) {
+  if (!isGitRepo(scanRoot)) return null;
+  const head = _run(scanRoot, ['rev-parse', 'HEAD']);
+  const branch = _run(scanRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const dirty = _run(scanRoot, ['status', '--porcelain']);
+  const shallow = _run(scanRoot, ['rev-parse', '--is-shallow-repository']);
+  return {
+    head: head.ok ? head.stdout.trim() : null,
+    branch: branch.ok ? branch.stdout.trim() : null,
+    dirty: dirty.ok ? dirty.stdout.trim().length > 0 : false,
+    shallow: shallow.ok ? shallow.stdout.trim() === 'true' : false,
+  };
+}
+
+export function commitMeta(scanRoot, sha) {
+  const r = _run(scanRoot, ['show', '-s', '--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%cI%x1f%s', sha]);
+  if (!r.ok) return null;
+  const [full, authorName, authorEmail, authorDate, committerDate, summary] = r.stdout.trim().split('\x1f');
+  if (!full) return null;
+  return { commit: full, authorName, authorEmail, authorDate, committerDate, summary };
+}
+
+export function getFirstParent(scanRoot, sha) {
+  const r = _run(scanRoot, ['rev-parse', `${sha}^1`]);
+  return r.ok ? r.stdout.trim() : null;
+}
+
+export function getBlobAtCommit(scanRoot, sha, file) {
+  const rel = _relPath(scanRoot, file);
+  if (!rel) return null;
+  const r = _run(scanRoot, ['show', `${sha}:${rel}`]);
+  return r.ok ? r.stdout : null;
+}
+
+export function candidateCommitsForLine(scanRoot, file, line, { since } = {}) {
+  const rel = _relPath(scanRoot, file);
+  if (!rel) return [];
+  const args = ['log', '--format=commit %H', '--reverse'];
+  if (since) args.push(`${since}..HEAD`);
+  args.push('-L', `${line},${line}:${rel}`);
+  const r = _run(scanRoot, args);
+  if (!r.ok) return [];
+  const shas = [];
+  for (const ln of r.stdout.split('\n')) {
+    const m = ln.match(/^commit ([0-9a-f]{40})/);
+    if (m) shas.push(m[1]);
+  }
+  return [...new Set(shas)];
+}
+
+export function candidateCommitsForFile(scanRoot, file, { since } = {}) {
+  const rel = _relPath(scanRoot, file);
+  if (!rel) return [];
+  const args = ['log', '--format=%H', '--follow', '--reverse'];
+  if (since) args.push(`${since}..HEAD`);
+  args.push('--', rel);
+  const r = _run(scanRoot, args);
+  if (!r.ok) return [];
+  return r.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+export function blameLine(scanRoot, file, line) {
+  const rel = _relPath(scanRoot, file);
+  if (!rel || !line || line < 1) return null;
+  const r = _run(scanRoot, ['blame', '-L', `${line},${line}`, '--porcelain', '--', rel]);
+  if (!r.ok || !r.stdout) return null;
+  const lines = r.stdout.split('\n');
+  const head = lines[0].split(' ');
+  const sha = head[0];
+  if (!sha) return null;
+  if (/^0+$/.test(sha)) return { commit: null, uncommitted: true };
+  const meta = { commit: sha };
+  for (const ln of lines) {
+    if (ln.startsWith('author ')) meta.authorName = ln.slice(7);
+    else if (ln.startsWith('author-mail ')) meta.authorEmail = ln.slice(12).replace(/[<>]/g, '');
+    else if (ln.startsWith('author-time ')) meta.authorDate = new Date(parseInt(ln.slice(12), 10) * 1000).toISOString();
+    else if (ln.startsWith('summary ')) meta.summary = ln.slice(8);
+  }
+  return meta;
+}
