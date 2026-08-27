@@ -24,7 +24,11 @@ export async function replayAt(scanRoot, sha, files, targetStableId) {
   }
   let scan;
   try {
-    scan = await runFullScan({ fileContents, scanRoot }, () => {});
+    // `provenance:false` is mandatory, not an optimisation: runFullScan now
+    // runs the provenance pass, which lands back here — an unbounded
+    // scan→provenance→replay→scan recursion that never returns. See the
+    // comment on runFullScan's signature.
+    scan = await runFullScan({ fileContents, scanRoot, provenance: false }, () => {});
   } catch (e) {
     return { present: false, reason: 'replay-error' };
   }

@@ -260,6 +260,16 @@ import { annotateAttackTaxonomy, summarizeTaxonomy } from './posture/attack-taxo
 import { suppressByPastDecisions } from './posture/triage-memory.js';
 import { suppressByIntent } from './posture/intent-context.js';
 import { annotateGitHistory } from './posture/git-history.js';
+// NOT `annotateProvenance` (sca/sigstore-verify.js's build-attestation
+// annotator) and NOT `annotateFindingProvenance` (posture/provenance.js's
+// AI-code fingerprint annotator). Both are already imported above in this
+// file, so either name here is a duplicate binding — a SyntaxError — and the
+// second is worse still because it also takes a findings array as its first
+// argument, so a wrong import would RUN rather than fail. This one is named
+// for the mechanism that distinguishes it —
+// provenance derived from GIT HISTORY. See provenance/coordinator.js's header.
+import { annotateGitProvenance } from './posture/provenance/coordinator.js';
+import { updateLifecycle } from './posture/provenance/lifecycle.js';
 import { applyThreatModel } from './posture/threat-model-grounding.js';
 import { annotateCrossRepoSignals } from './posture/pattern-propagation.js';
 import { annotateRiskDollars } from './posture/risk-dollars.js';
@@ -8553,7 +8563,18 @@ async function queryRegistries(components){
     return {content:c, pfr:ta, routes:_aR, findings:_aF, sources:_aSrc, sinks:_aSink, sanitizers:_aSan, logic:_aLogic, secrets:_aSecrets, ciphersRest:_aCiphersRest, ciphersTransit:_aCiphersTransit, suppressions:_aSupp};
   }
 
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
+// `provenance:false` is the RE-ENTRANCY BRAKE, not a feature flag.
+// posture/provenance/predicate-replay.js answers "did this finding's condition
+// hold at commit X" by calling runFullScan back on that commit's blobs. Once
+// runFullScan itself runs the provenance pass, that is an unbounded recursion —
+// scan → provenance → replay → scan → … — which manifests as a scan that never
+// returns and spawns `git` forever, because every level of it is synchronous
+// execFileSync work. The replay's findings are discarded, so it wants no
+// provenance anyway; and it must NOT touch the lifecycle store, whose events
+// would otherwise be written from historical blobs as if they were this scan.
+// Passed explicitly per invocation rather than held in a module-level guard so
+// concurrent scans in one process cannot disable each other's provenance.
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
   // defined in OTHER files (Juliet's DataflowThruInnerClass / Vector / Stream
@@ -10114,6 +10135,57 @@ function _deterministicFileTimings(timings) {
   // R8: the scan completed, so the checkpoint has been fully consumed — remove
   // it. Anything that threw before this point leaves it in place to resume from.
   try { closeCheckpoint(_ckpt, { complete: true }); } catch (_) {}
+  // Finding Provenance (M0/M1) — attaches `finding.findingProvenance`.
+  //
+  // Placed HERE, not immediately after the SCA/multi-sink correlation blocks
+  // where the plan first put it, for the same reason `annotateRelevance` below
+  // runs this late: several post-scan artifact emitters between those blocks
+  // and this point still PUSH findings (`runApiContractScan`, `runSbomDiff`,
+  // the cross-language chain passes). Annotating before them would have left
+  // every finding they produce with no `findingProvenance` at all, which is
+  // precisely the "absent field" state the coordinator's terminal-status
+  // guarantee exists to make unreachable. Running after `Object.freeze` above
+  // is safe and is in fact the point: the finding SET can no longer change, and
+  // a shallow freeze still permits annotating FIELDS on the individual finding
+  // objects. This annotator never appends or drops a finding.
+  if (provenance !== false) {
+   await _runAnnotator("annotateGitProvenance", async () => {
+    const provenanceCtx = {
+      scanRoot,
+      // CLI flags that set these land in Task 17; reading the env directly here
+      // mirrors AGENTIC_SECURITY_NO_GIT_HISTORY's existing pattern in this file.
+      disabled: process.env.AGENTIC_SECURITY_NO_PROVENANCE === '1',
+      scanId: process.env.AGENTIC_SECURITY_SCAN_ID || null,
+      observedAt: new Date().toISOString(),
+      rulesetVersion: process.env.AGENTIC_SECURITY_RULESET_VERSION || null,
+      since: process.env.AGENTIC_SECURITY_PROVENANCE_SINCE || null,
+      timeoutMs: process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS
+        ? parseInt(process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS, 10) : undefined,
+      mode: process.env.AGENTIC_SECURITY_PROVENANCE_MODE || 'standard',
+    };
+    await annotateGitProvenance(finalFindings, provenanceCtx);
+    // Direct dependencies only: a transitive dep's vulnerable version was never
+    // declared in this repository's manifests, so there is no commit here that
+    // introduced it and `resolveDirectSCAOrigin` would have nothing to walk.
+    const directDeps = (supplyChain || []).filter((s) => s && s.type === 'vulnerable_dep' && !s.isTransitive);
+    // `resolveDirectSCAOrigin`/`scaStableId` key on `filePath`; the vulnerable_dep
+    // entries built above carry the manifest path as `file` (report/index.js
+    // already reads `sc.filePath || sc.file` for the same reason). Backfill the
+    // alias rather than teaching the SCA resolver a second field name — without
+    // it every direct dependency resolves to `not_available: no-manifest-path`.
+    for (const s of directDeps) { if (!s.filePath && s.file) s.filePath = s.file; }
+    await annotateGitProvenance(directDeps, { ...provenanceCtx, findingType: 'sca' });
+    // FR-PROV-013 — introduce/remediate/reintroduce events. Best-effort by
+    // design: the lifecycle store is a convenience ledger, and a failed write
+    // (read-only tree, lock contention) must never fail a scan, matching how
+    // every other provenance component degrades.
+    try {
+      await updateLifecycle(scanRoot, finalFindings, {
+        scanId: provenanceCtx.scanId, observedAt: provenanceCtx.observedAt,
+      });
+    } catch (_) { /* best-effort */ }
+   });
+  }
   // Addition #2 — attack-surface completeness inventory (entry points → dispositions).
   let _entrypointInventory = {}; try { _entrypointInventory = buildEntrypointInventory(fc, { routes: aR, findings: finalFindings }); } catch { _entrypointInventory = {}; }
   // R9 + R6 — relevance scoping. Runs HERE, after every finding has been
