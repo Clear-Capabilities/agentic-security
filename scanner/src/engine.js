@@ -10253,6 +10253,33 @@ function _deterministicFileTimings(timings) {
          : `origin resolution does not apply to a ${sc.type || 'non-vulnerability'} supply-chain entry`],
      });
    }
+   // The OTHER two channels report/index.js normalizes into findings —
+   // `scan.secrets` and `scan.logicVulns`. The same argument that produced the
+   // supplyChain loop above applies verbatim: pipeline/finding-schema.js makes
+   // `findingProvenance` REQUIRED on every channel, and normalizeFindings emits
+   // a finding for each of these, so leaving them unstamped ships a
+   // schema-incomplete finding whose absent field is indistinguishable from
+   // "escaped annotation" — the exact condition the status enum exists to
+   // remove.
+   //
+   // Stamped `not_available` with a deferral limitation rather than run through
+   // annotateGitProvenance, and that is a deliberate, disclosed choice: neither
+   // channel goes through posture/stable-id.js (it keys on file+line+ruleId,
+   // and these findings have no ruleId), so the coordinator's real resolver
+   // would reach `not_available: finding has no stableId` for every committed
+   // one anyway — after paying a `git blame` per finding for the uncommitted
+   // short-circuit. Wiring stable ids for these channels, and then real origin
+   // resolution on top, is a follow-on with its own tests; claiming it here by
+   // spending the blames for a near-universal not_available would be cost
+   // without a capability.
+   for (const bucket of [aSecrets, aLogic]) {
+     for (const x of (bucket || [])) {
+       if (!x || typeof x !== 'object' || x.findingProvenance) continue;
+       x.findingProvenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+         limitations: ['origin resolution is not wired for this finding channel in this release (deferred to a later phase)'],
+       });
+     }
+   }
   }
   // Addition #2 — attack-surface completeness inventory (entry points → dispositions).
   let _entrypointInventory = {}; try { _entrypointInventory = buildEntrypointInventory(fc, { routes: aR, findings: finalFindings }); } catch { _entrypointInventory = {}; }

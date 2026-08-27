@@ -125,6 +125,17 @@ export const ARTIFACT_REGISTRY = [
   { name: 'sca-upgrade-history', kind: 'dir', classification: 'generated', retentionClass: 'scan' },
   { name: 'scan-baselines', kind: 'dir', classification: 'generated', retentionClass: 'scan', source: 'posture/pr-augment.js' },
   { name: 'agent-scratchpad', kind: 'dir', classification: 'generated', retentionClass: 'cache', source: 'mcp/tools.js (append_scratchpad)' },
+  // Finding Provenance (M0/M1). One directory, two writers:
+  // posture/provenance/cache.js (provenance/cache/<hash>.json — a pure
+  // HEAD-keyed memo of resolved origins) and posture/provenance/lifecycle.js
+  // (provenance/lifecycle.json + .lock — the introduce/remediate/reintroduce
+  // ledger). Both are scanner-written, so 'generated'. Deliberately NO
+  // retentionClass: 'cache' would be right for the memo half but would expire
+  // the lifecycle ledger with it, and that ledger is the only record of WHEN a
+  // finding was first observed — a fact no re-scan can reconstruct once the
+  // observation window has passed. No auto-expiry until the two halves are
+  // separable; `reset` still clears the whole directory, which is explicit.
+  { name: 'provenance', kind: 'dir', classification: 'generated', source: 'posture/provenance/{cache,lifecycle}.js' },
   { name: 'AGENTS.md', kind: 'file', classification: 'generated', source: 'posture/agents-memory.js' },
   { name: 'AGENTS.md.archive', kind: 'file', classification: 'generated', source: 'posture/agents-memory.js' },
   { name: 'baseline.json', kind: 'file', classification: 'generated', source: 'bin/agentic-security.js (--set-baseline)', note: 'operator-set intent, functionally closer to operator-config than scan output — no auto-expiry' },

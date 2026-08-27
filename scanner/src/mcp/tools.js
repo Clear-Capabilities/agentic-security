@@ -26,6 +26,10 @@ import { withStateWritesDisabled } from '../posture/state-dir.js';
 import { analyzeTranscript, formatCacheReport, renderCacheStatusLine } from '../posture/cache-economics.js';
 import { redactString, redactFinding } from './redact.js';
 import { _remediationOf, normalizeFindings } from '../report/index.js';
+// Git-origin provenance (Finding Provenance M0/M1). Distinct from
+// `finding.provenance` (AI-authorship) and from an SCA entry's `provenance`
+// (Sigstore/SLSA attestation) — see report/index.js's import comment.
+import { redactFindingProvenance } from '../posture/provenance/schema.js';
 
 // Lazy-loaded: these transitively pull in npm packages (@babel/core and
 // friends) that aren't available in the plugin-cache install path
@@ -571,6 +575,11 @@ export const explain_finding = {
       epssScore: typeof f.epssScore === 'number' ? f.epssScore : null,
       epssPercentile: typeof f.epssPercentile === 'number' ? f.epssPercentile : null,
       exploitedNow: !!f.exploitedNow,
+      // Which commit introduced this finding. Redacted with the DEFAULT
+      // options (includeEmail:false) unconditionally — unlike the JSON report
+      // there is no operator-set env escape here, because the consumer is an
+      // agent that has no business receiving a committer's email address.
+      findingProvenance: f.findingProvenance ? redactFindingProvenance(f.findingProvenance) : null,
     };
   },
 };

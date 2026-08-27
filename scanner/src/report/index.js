@@ -5,6 +5,13 @@ import { alertFace, approveFace } from './mascot.js';
 import { SCANNER_VERSION } from '../posture/version.js';
 import { proofBlock } from '../posture/proof-artifact.js';
 import { applyLegacyCompat, legacyFieldDeprecationNotice } from '../pipeline/legacy-compat.js';
+// Finding Provenance (M0/M1). NOTE the name: `findingProvenance` is the
+// git-origin record from posture/provenance/. It is NOT `finding.provenance`
+// (posture/ai-code-fingerprint.js's AI-authorship signal, normalized a few
+// hundred lines below) and NOT `supplyChainEntry.provenance`
+// (sca/sigstore-verify.js's SLSA/Sigstore build attestation). Three unrelated
+// things, three distinct keys — do not collapse them.
+import { redactFindingProvenance } from '../posture/provenance/schema.js';
 
 const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const SEV_TO_SARIF = { critical: 'error', high: 'error', medium: 'warning', low: 'note', info: 'none' };
@@ -84,6 +91,59 @@ function explainParts(f, { verbose = false } = {}) {
   return { why, how, fix: fix.replace(/\s+/g, ' ').trim(), fixCode };
 }
 
+// Human-readable rendering of a finding's git-origin provenance (FR-PROV
+// output surface). Returns null when the finding carries none — a caller
+// prints the block or omits it, and never has to know the schema.
+//
+// Every one of the six TERMINAL statuses gets a line of its own, and the
+// non-`complete` ones say WHY in the status word itself rather than rendering
+// an empty origin: that is the whole reason the status enum exists (see
+// posture/provenance/coordinator.js's header). `Method` and `Confidence` are
+// unconditional — a block that omitted them for a degraded status would read
+// as "origin unknown" when the honest statement is "resolved by <method> to
+// <confidence>". Nothing here throws on a partially-populated object; every
+// field access is optional-chained or defaulted, because a provenance record
+// that survived a failure path is exactly the input this has to render.
+export function explainProvenance(f) {
+  const fp = f && f.findingProvenance;
+  if (!fp) return null;
+  const short = (v) => String(v || '').slice(0, 7);
+  const day = (v) => String(v || '').slice(0, 10);
+  const lines = [];
+  const o = fp.findingOrigin;
+  if (fp.status === 'complete' && o) {
+    lines.push(`Introduced:      ${short(o.commit)}  •  ${day(o.authorDate)}  •  ${o.authorName || 'unknown'}`);
+    const bi = fp.branchIntroduction;
+    if (bi && bi.commit !== o.commit) {
+      lines.push(`Branch entry:    ${short(bi.commit)}  •  ${bi.relationship || 'unknown relationship'}`);
+    }
+  } else if (fp.status === 'partial') {
+    lines.push(`Origin:          EARLIEST OBSERVABLE${o ? '  ' + short(o.commit) : ''}`);
+  } else if (fp.status === 'uncommitted') {
+    lines.push('Origin:          UNCOMMITTED (working tree only)');
+  } else if (fp.status === 'not_available') {
+    lines.push('Origin:          NOT AVAILABLE');
+  } else if (fp.status === 'error') {
+    lines.push('Origin:          ERROR resolving provenance');
+  } else if (fp.status === 'budget_exhausted') {
+    lines.push('Origin:          BUDGET EXHAUSTED before resolution completed');
+  } else {
+    // An unrecognised status is reported as itself, not silently dropped — a
+    // future status added to the enum must be visible here on the day it
+    // ships, even before this renderer learns a nicer wording for it.
+    lines.push(`Origin:          ${String(fp.status || 'unknown').toUpperCase()}`);
+  }
+  if (fp.firstObserved) {
+    lines.push(`First observed:  ${fp.firstObserved.scanId || 'unknown scan'}  •  ${day(fp.firstObserved.observedAt)}`);
+  }
+  lines.push(`Method:          ${fp.method || 'none'}`);
+  lines.push(`Confidence:      ${String(fp.confidence?.level || 'unknown').toUpperCase()}`);
+  if (Array.isArray(fp.limitations) && fp.limitations.length) {
+    lines.push(`Limitations:     ${fp.limitations.join('; ')}`);
+  }
+  return lines.join('\n');
+}
+
 function fingerprint(f){
   const s = `${f.file}:${f.line||f.source?.line||0}:${f.vuln||f.type||''}`;
   return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
@@ -106,6 +166,21 @@ export function _remediationOf(f) {
   if (f && typeof f.fix === 'string') return f.fix;
   if (typeof f?.remediation === 'string') return f.remediation;
   return null;
+}
+
+// Redacted passthrough for the git-origin provenance record (FR-PROV output
+// surface). Author EMAIL is PII and is withheld by default EVERYWHERE — raw
+// JSON included, since `toJSON` derives from this same function and an email
+// in a committed report artifact is a leak nobody opted into. Set
+// AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL=1 to include it (read per call, not
+// cached at module load, so a test or a wrapper can set it per invocation).
+// `authorName` is deliberately NOT redacted: it is already the value the
+// existing `introducedBy` field has carried for releases.
+function _normalizedProvenance(f) {
+  if (!f || !f.findingProvenance) return null;
+  return redactFindingProvenance(f.findingProvenance, {
+    includeEmail: process.env.AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL === '1',
+  });
 }
 
 export function normalizeFindings(scan){
@@ -250,6 +325,10 @@ export function normalizeFindings(scan){
       cloneClusterSize: typeof f.cloneClusterSize === 'number' ? f.cloneClusterSize : null,
       provenance: f.provenance || null,
       provenanceScore: typeof f.provenanceScore === 'number' ? f.provenanceScore : null,
+      // posture/provenance/coordinator.js#annotateGitProvenance — WHICH COMMIT
+      // introduced this finding. A different question, and a different field,
+      // from the two lines above it (see the import comment at the top).
+      findingProvenance: _normalizedProvenance(f),
       typeNarrowed: f.typeNarrowed || null,
       strideCategory: f.strideCategory || null,
       personaScores: f.personaScores || null,
@@ -349,6 +428,7 @@ export function normalizeFindings(scan){
       commit: s.commit || null,
       historical: s._historical === true,
       description: s.description || null,
+      findingProvenance: _normalizedProvenance(s),
     });
   }
   for (const lv of (scan.logicVulns||[])) {
@@ -376,6 +456,7 @@ export function normalizeFindings(scan){
       ecosystem: lv.ecosystem || null,
       license: lv.license || null,
       description: lv.description || null,
+      findingProvenance: _normalizedProvenance(lv),
     });
   }
   for (const sc of (scan.supplyChain||[])) {
@@ -425,6 +506,12 @@ export function normalizeFindings(scan){
       toxicity: sc.toxicityScore ?? null,
       toxicityFactors: sc.toxicityFactors || null,
       toxicityLabel: sc.toxicityLabel || null,
+      // Git-origin provenance for the dependency declaration (which commit
+      // moved the declared version into the advisory's vulnerable range).
+      // Distinct from `sc.provenance`, which sca/sigstore-verify.js uses for
+      // the package's Sigstore/SLSA build attestation — that one is NOT
+      // carried here today and must not be conflated with this field.
+      findingProvenance: _normalizedProvenance(sc),
     });
   }
   // FR-108: backfill deprecated field names from their current replacements
@@ -1178,7 +1265,10 @@ const RESET = '\x1b[0m';
 const DIM = '\x1b[2m';
 const BOLD = '\x1b[1m';
 
-export function toCLI(scan, { verbose=false, color=true }={}){
+// `provenance` defaults to FALSE on purpose: the block is five-plus extra
+// lines per finding, and the default CLI listing is already dense. It prints
+// only when the operator asks for it.
+export function toCLI(scan, { verbose=false, color=true, provenance=false }={}){
   const findings = normalizeFindings(scan);
   const lines = [];
   const c = (s, code) => color ? `${code}${s}${RESET}` : s;
@@ -1204,6 +1294,13 @@ export function toCLI(scan, { verbose=false, color=true }={}){
     if (ex.how) lines.push(`        ${c('how:', DIM)} ${ex.how}`);
     if (ex.fix) lines.push(`        ${c('fix:', DIM)} ${ex.fix}`);
     if (ex.fixCode) for (const ln of ex.fixCode.split('\n').slice(0, 6)) lines.push(`           ${c(ln, DIM)}`);
+    if (provenance) {
+      // `f` here is already normalized, so its findingProvenance has been
+      // through redactFindingProvenance — the email is gone before it can
+      // reach a terminal.
+      const prov = explainProvenance(f);
+      if (prov) for (const ln of prov.split('\n')) lines.push(`        ${c(ln, DIM)}`);
+    }
   }
   lines.push('');
   const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
