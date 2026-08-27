@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { stampFindingTimestamps, buildBaselineMap, findingsExceedingSLA, computeMTTR, renderSlaSummary, fingerprintFinding } from '../src/posture/mttr.js';
+import { emptyProvenance, PROVENANCE_STATUS } from '../src/posture/provenance/schema.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.resolve(here, '..', 'dist', 'agentic-security.mjs');
@@ -102,4 +103,40 @@ test('MTTR wiring: a real CLI scan reports mttr.count=0 with no baseline, then a
     assert.ok(scan2.mttr.count >= 1, `expected at least one fixed finding measured, got: ${JSON.stringify(scan2.mttr)}`);
     assert.equal(typeof scan2.mttr.medianDays, 'number');
   } finally { await fsp.rm(dir, { recursive: true, force: true }); }
+});
+
+test('ageBasis: finding_origin when findingProvenance resolved complete with an authorDate', async () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, { findingOrigin: { commit: 'aaa1111', authorDate: '2026-01-01T00:00:00Z' } });
+  const findings = [{ kind: 'sast', vuln: 'XSS', file: 'a.js', line: 10, findingProvenance: fp }];
+  const now = Date.parse('2026-02-01T00:00:00Z'); // 31 days after authorDate
+  stampFindingTimestamps(findings, new Map(), now);
+  assert.equal(findings[0].ageBasis, 'finding_origin');
+  assert.equal(findings[0].provenAgeDays, 31);
+});
+
+test('ageBasis: earliest_observable when findingProvenance resolved partial with an authorDate', async () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.PARTIAL, { findingOrigin: { commit: 'bbb2222', authorDate: '2026-01-01T00:00:00Z' } });
+  const findings = [{ kind: 'sast', vuln: 'XSS', file: 'a.js', line: 10, findingProvenance: fp }];
+  const now = Date.parse('2026-01-11T00:00:00Z');
+  stampFindingTimestamps(findings, new Map(), now);
+  assert.equal(findings[0].ageBasis, 'earliest_observable');
+  assert.equal(findings[0].provenAgeDays, 10);
+});
+
+test('ageBasis: uncommitted status falls back to wall-clock provenAgeDays', async () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.UNCOMMITTED);
+  const findings = [{ kind: 'sast', vuln: 'XSS', file: 'a.js', line: 10, findingProvenance: fp }];
+  const now = Date.parse('2026-01-01T00:00:00Z');
+  stampFindingTimestamps(findings, new Map(), now);
+  assert.equal(findings[0].ageBasis, 'uncommitted');
+  assert.equal(findings[0].provenAgeDays, findings[0].ageDays);
+});
+
+test('ageBasis: no findingProvenance at all degrades to first_observed, wall-clock unchanged', () => {
+  const findings = [{ kind: 'sast', vuln: 'XSS', file: 'a.js', line: 10 }];
+  const now = Date.parse('2026-01-01T00:00:00Z');
+  stampFindingTimestamps(findings, new Map(), now);
+  assert.equal(findings[0].ageBasis, 'first_observed');
+  assert.equal(findings[0].provenAgeDays, findings[0].ageDays);
+  assert.equal(findings[0].ageDays, 0);
 });
