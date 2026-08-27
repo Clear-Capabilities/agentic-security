@@ -95,8 +95,26 @@ function isOpenEvent(events) {
  * Fold this scan's findings into `store`, in memory. Pure with respect to the
  * filesystem — extracted so the read-only path below can produce the SAME view
  * the persisting path would, without writing anything.
+ *
+ * `completeScan` is the one structural guard in this module, and it exists
+ * because the two passes below make asymmetric claims:
+ *
+ *  - The `introduced`/`reintroduced` pass reasons about findings that ARE
+ *    present. Present is present regardless of how much of the tree was read,
+ *    so it is sound on any scan and always runs.
+ *  - The remediation pass reasons about findings that are ABSENT, turning
+ *    absence into the positive claim "this was fixed." That is only sound if
+ *    the scan actually looked everywhere it could have found them. On a subset
+ *    scan (`--changed-since`, `--pr`, an MCP/LSP caller-supplied file list) the
+ *    entire rest of the project is absent by construction, so running it marks
+ *    every open finding outside the changed set remediated.
+ *
+ * Skipping the pass leaves those entries OPEN, which is the honest state: the
+ * scan has no evidence either way. A later complete scan closes whatever was
+ * genuinely fixed. Defaults true so an explicit `completeScan:false` is what
+ * suppresses it, never a caller forgetting to pass the flag.
  */
-function applyScan(store, currentFindings, { scanId, observedAt }) {
+function applyScan(store, currentFindings, { scanId, observedAt, completeScan = true }) {
   const currentIds = new Set(currentFindings.map((f) => f.stableId).filter(Boolean));
 
   for (const f of currentFindings) {
@@ -109,16 +127,18 @@ function applyScan(store, currentFindings, { scanId, observedAt }) {
     events.push({ type: events.length === 0 ? 'introduced' : 'reintroduced', commit, authorDate, scanId, observedAt });
   }
 
-  for (const [stableId, events] of Object.entries(store)) {
-    if (isOpenEvent(events) && !currentIds.has(stableId)) {
-      events.push({ type: 'remediated', commit: null, authorDate: null, scanId, observedAt });
+  if (completeScan !== false) {
+    for (const [stableId, events] of Object.entries(store)) {
+      if (isOpenEvent(events) && !currentIds.has(stableId)) {
+        events.push({ type: 'remediated', commit: null, authorDate: null, scanId, observedAt });
+      }
     }
   }
 
   return store;
 }
 
-export async function updateLifecycle(scanRoot, currentFindings, { scanId, observedAt }) {
+export async function updateLifecycle(scanRoot, currentFindings, { scanId, observedAt, completeScan = true }) {
   // Read-only scan (`--no-state` / AGENTIC_SECURITY_NO_STATE): return the view
   // this scan WOULD have produced, computed in memory, and persist nothing.
   //
@@ -129,7 +149,7 @@ export async function updateLifecycle(scanRoot, currentFindings, { scanId, obser
   // is itself a write into the scanned tree, and there is nothing to serialise
   // when nothing is written.
   if (!stateWritesEnabled()) {
-    return applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt });
+    return applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt, completeScan });
   }
 
   // The project-marker check safeWriteState() would have applied, applied here
@@ -143,11 +163,11 @@ export async function updateLifecycle(scanRoot, currentFindings, { scanId, obser
   // the read-only path returns, for the same reason: a missing answer, not a
   // false one.
   if (!isSafeStateDir(path.dirname(storePath(scanRoot)))) {
-    return applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt });
+    return applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt, completeScan });
   }
 
   return withLock(scanRoot, async () => {
-    const store = applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt });
+    const store = applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt, completeScan });
     // Deliberately a direct write, not safeWriteState(): this write is inside a
     // locked critical section and its failure MUST propagate so the lock is
     // released and the caller learns the store was not persisted.

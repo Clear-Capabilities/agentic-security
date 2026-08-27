@@ -268,7 +268,7 @@ import { annotateGitHistory } from './posture/git-history.js';
 // argument, so a wrong import would RUN rather than fail. This one is named
 // for the mechanism that distinguishes it —
 // provenance derived from GIT HISTORY. See provenance/coordinator.js's header.
-import { annotateGitProvenance } from './posture/provenance/coordinator.js';
+import { annotateGitProvenance, PROVENANCE_DEFAULT_TIMEOUT_MS } from './posture/provenance/coordinator.js';
 import { updateLifecycle } from './posture/provenance/lifecycle.js';
 import { emptyProvenance, PROVENANCE_STATUS } from './posture/provenance/schema.js';
 import { applyThreatModel } from './posture/threat-model-grounding.js';
@@ -8584,7 +8584,17 @@ async function queryRegistries(components){
 // would otherwise be written from historical blobs as if they were this scan.
 // Passed explicitly per invocation rather than held in a module-level guard so
 // concurrent scans in one process cannot disable each other's provenance.
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
+//
+// `completeScan` is a SEPARATE question from `provenance`, and conflating them
+// is what let the fourth instance of this bug through. `provenance:false` says
+// "do not run the pass at all"; `completeScan:false` says "the pass may run,
+// but this file set is a SUBSET of scanRoot, so absence of a finding proves
+// nothing." Only the lifecycle ledger's remediation pass reads it — that is the
+// one place a finding's absence is turned into a positive claim. Defaults true
+// because a direct runFullScan caller supplying no file-subsetting options is
+// scanning everything it was given; runScan.js narrows it for --changed-since
+// and for caller-supplied fileContents.
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
   // defined in OTHER files (Juliet's DataflowThruInnerClass / Vector / Stream
@@ -10160,8 +10170,22 @@ function _deterministicFileTimings(timings) {
   // objects. This annotator never appends or drops a finding.
   if (provenance !== false) {
    await _runAnnotator("annotateGitProvenance", async () => {
+    // ONE deadline for the whole scan's provenance work, computed here and
+    // threaded into BOTH annotateGitProvenance calls below. Computed per call
+    // inside the coordinator, the effective scan-level budget was 2× the
+    // configured --provenance-timeout: the SAST pass got a fresh window and
+    // then the SCA pass got another one, so an operator asking for a 30s cap
+    // could wait 60s. The spec describes a single global deadline; this is
+    // where "global" has to be established, because this is the only scope
+    // that sees both passes.
+    const provenanceTimeoutMs = process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS
+      ? parseInt(process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS, 10) : undefined;
+    const provenanceDeadlineAt = Date.now()
+      + (Number.isFinite(provenanceTimeoutMs) && provenanceTimeoutMs > 0
+        ? provenanceTimeoutMs : PROVENANCE_DEFAULT_TIMEOUT_MS);
     const provenanceCtx = {
       scanRoot,
+      deadlineAt: provenanceDeadlineAt,
       // CLI flags that set these land in Task 17; reading the env directly here
       // mirrors AGENTIC_SECURITY_NO_GIT_HISTORY's existing pattern in this file.
       disabled: process.env.AGENTIC_SECURITY_NO_PROVENANCE === '1',
@@ -10169,8 +10193,7 @@ function _deterministicFileTimings(timings) {
       observedAt: new Date().toISOString(),
       rulesetVersion: process.env.AGENTIC_SECURITY_RULESET_VERSION || null,
       since: process.env.AGENTIC_SECURITY_PROVENANCE_SINCE || null,
-      timeoutMs: process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS
-        ? parseInt(process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS, 10) : undefined,
+      timeoutMs: provenanceTimeoutMs,
       mode: process.env.AGENTIC_SECURITY_PROVENANCE_MODE || 'standard',
     };
     await annotateGitProvenance(finalFindings, provenanceCtx);
@@ -10204,10 +10227,47 @@ function _deterministicFileTimings(timings) {
     // not disabled. (annotateGitProvenance handles `disabled` internally by
     // stamping not_available, which is why it is still called above — every
     // finding must keep a terminal status even with the feature off.)
-    if (!provenanceCtx.disabled) {
+    //
+    // Gated on `scanRoot` too. Every path into updateLifecycle resolves the
+    // store through statePath(scanRoot, …), and statePath falls back to the
+    // PROCESS CWD when scanRoot is null — so a runFullScan called with no
+    // scanRoot (the in-process test/bench harnesses, predicate replay before
+    // its provenance:false brake, any embedder) wrote a lifecycle ledger into
+    // whatever directory the process happened to be in, keyed on that
+    // unrelated run's findings. That is how this repo's own
+    // scanner/.agentic-security/provenance/lifecycle.json accumulated 374
+    // stableIds and 3000+ spurious remediated/reintroduced events. No
+    // scanRoot means no project to keep a ledger for.
+    //
+    // `completeScan` is the other half, and it is a correctness gate rather
+    // than a hygiene one — see runFullScan's parameter comment and
+    // lifecycle.js's applyScan.
+    //
+    // TRUTHY IS NOT ENOUGH — it has to be a real directory. `resolveProjectRoot`
+    // honours a caller-supplied scanRoot only when it exists on disk AND is a
+    // directory; for anything else (a typo'd path, a `/tmp/...` a test never
+    // created, a file rather than a directory) it silently falls back to walking
+    // UP FROM THE PROCESS CWD for a project marker. So `agentic-security scan
+    // ./typo` run from inside a project writes THAT project's lifecycle ledger
+    // from a scan that never looked at it — and since such a scan finds nothing
+    // while still claiming `completeScan`, the remediation pass closes every
+    // open finding the real project had. Same corruption as the null-scanRoot
+    // case above, reached through a different door: found by tracing the writes
+    // that kept reappearing in this repo's own scanner/.agentic-security AFTER
+    // the null guard was added. All three remaining writers were
+    // truthy-but-nonexistent scanRoots.
+    //
+    // Narrow on purpose. Every other state write in such a scan lands in the
+    // same wrong place, which is a wider `state-dir.js` question; the lifecycle
+    // ledger is singled out here because it is the only one that turns the
+    // mistake into a destructive claim about findings it never saw.
+    let scanRootIsRealDir = false;
+    try { scanRootIsRealDir = !!scanRoot && fs.statSync(scanRoot).isDirectory(); } catch { scanRootIsRealDir = false; }
+    if (scanRootIsRealDir && !provenanceCtx.disabled) {
       try {
         await updateLifecycle(scanRoot, finalFindings, {
           scanId: provenanceCtx.scanId, observedAt: provenanceCtx.observedAt,
+          completeScan,
         });
       } catch (_) { /* best-effort */ }
     }

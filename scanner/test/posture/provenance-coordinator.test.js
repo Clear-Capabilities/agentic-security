@@ -232,3 +232,104 @@ test('--no-provenance (ctx.disabled) short-circuits to not_available for every f
     fx.cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Final whole-branch review — I1: the budget is ONE budget for the whole scan.
+// ---------------------------------------------------------------------------
+
+test('I1: a caller-supplied deadlineAt wins over a freshly-computed one', async () => {
+  // engine.js calls annotateGitProvenance TWICE per scan (SAST findings, then
+  // direct SCA deps). With the deadline computed fresh inside each call, the
+  // effective scan-level budget was 2x the operator's --provenance-timeout: an
+  // operator asking for a 30s cap could wait 60s. The fix is a shared deadline
+  // established once by the caller, which only works if the caller's value is
+  // honoured over the local computation — asserted here by handing over an
+  // ALREADY-EXPIRED deadline together with a generous timeoutMs. If timeoutMs
+  // won, the finding would resolve normally.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'const q = req.query.id;\ndb.query("SELECT " + q);\n');
+    fx.commit('vuln', { date: '2026-01-01T00:00:00Z' });
+    const finding = { file: 'a.js', line: 2, ruleId: 'js-sql-query' };
+    finding.stableId = computeStableId(finding);
+
+    await annotateGitProvenance([finding], {
+      scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z',
+      timeoutMs: 600000,           // generous — must NOT be what is used
+      deadlineAt: Date.now() - 1,  // already expired — must win
+    });
+
+    assert.equal(finding.findingProvenance.status, 'budget_exhausted',
+      'the caller-supplied global deadline was ignored, so the second annotator pass gets a fresh budget');
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('I1: one finding cannot consume the whole budget — the per-finding sub-budget bounds it', async () => {
+  // The spec's `max(2s, global/estimatedFindingCount)` sub-budget was never
+  // implemented, so a single finding with a long candidate-commit list could
+  // walk history until the GLOBAL deadline expired, leaving every finding
+  // queued behind it `budget_exhausted` without a single git call spent on it.
+  //
+  // Observable form of the guarantee: with a global budget far larger than the
+  // per-finding floor, a finding whose own share has expired reports the
+  // PER-FINDING limitation, not the global one — proving the sub-budget is a
+  // real second bound and not a relabelling of the global check. Here the
+  // global deadline is still in the future when the result is built, which is
+  // the branch that distinguishes them.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'safe();\n');
+    fx.commit('base', { date: '2026-01-01T00:00:00Z' });
+    fx.writeFile('a.js', 'const q = req.query.id;\ndb.query("SELECT " + q);\n');
+    fx.commit('vuln', { date: '2026-01-02T00:00:00Z' });
+    const finding = { file: 'a.js', line: 2, ruleId: 'js-sql-query' };
+    finding.stableId = computeStableId(finding);
+
+    // Both bounds are exercised by the SAME call: the global deadline is 10
+    // minutes out (so the top-of-loop global check passes and the blame runs),
+    // while the per-finding share is one millisecond.
+    await annotateGitProvenance([finding], {
+      scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z',
+      deadlineAt: Date.now() + 600000,
+      perFindingBudgetMs: 1,
+    });
+
+    const prov = finding.findingProvenance;
+    assert.equal(prov.status, 'budget_exhausted',
+      `expected the per-finding sub-budget to stop the history walk; got ${prov.status}`);
+    assert.match(prov.limitations[0], /per-finding share/,
+      `a per-finding overrun must be reported as such, not as the global budget: ${JSON.stringify(prov.limitations)}`);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('I1: the default per-finding budget never falls below the 2s floor', async () => {
+  // `global/estimatedFindingCount` alone divides a 60s budget across 200
+  // findings into 300ms — less than a single `git blame`'s own 2s timeout — so
+  // the quotient would starve every finding equally instead of bounding the
+  // expensive few. The floor is what makes the sub-budget a bound rather than a
+  // second, tighter global failure. Asserted through observable behaviour: a
+  // large finding list under the DEFAULT budget still resolves normally.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'const q = req.query.id;\ndb.query("SELECT " + q);\n');
+    fx.commit('vuln', { date: '2026-01-01T00:00:00Z' });
+    const findings = [];
+    for (let i = 0; i < 40; i++) {
+      const f = { file: 'a.js', line: 2, ruleId: `rule-${i}` };
+      f.stableId = computeStableId(f);
+      findings.push(f);
+    }
+    await annotateGitProvenance(findings, {
+      scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z',
+    });
+    const exhausted = findings.filter((f) => f.findingProvenance.status === 'budget_exhausted');
+    assert.equal(exhausted.length, 0,
+      `${exhausted.length}/40 findings were starved by the sub-budget under the default global budget`);
+  } finally {
+    fx.cleanup();
+  }
+});

@@ -65,8 +65,20 @@ import { emptyProvenance, PROVENANCE_STATUS, PROVENANCE_METHOD, EVIDENCE_ROLE, C
 // so the honest answer to "what produced this" is the manifest-diff walk.
 const SCA_DETECTOR = 'sca-manifest-diff';
 
-const DEFAULT_TIMEOUT_MS = 60000;
+// Exported so `engine.js` can establish ONE deadline across both of the calls
+// it makes (SAST findings, then direct SCA deps) using the same default this
+// module would have used. Without a shared deadline the scan-level budget was
+// silently 2× the operator's --provenance-timeout.
+export const PROVENANCE_DEFAULT_TIMEOUT_MS = 60000;
+const DEFAULT_TIMEOUT_MS = PROVENANCE_DEFAULT_TIMEOUT_MS;
 const MAX_CONCURRENCY = 4;
+
+// Per-finding floor from the spec's sub-budget formula
+// (`max(2s, global/estimatedFindingCount)`). The floor matters more than the
+// quotient: a 200-finding scan under a 60s global budget divides to 300ms,
+// which is less than a single `git blame`'s own 2s timeout and would starve
+// every finding equally instead of a few. 2s is one blame's worth of work.
+const MIN_PER_FINDING_BUDGET_MS = 2000;
 
 function computeDigest(finding, provenance) {
   const material = JSON.stringify({
@@ -176,9 +188,23 @@ async function resolveOne(finding, ctx) {
   const cached = cacheGet(scanRoot, cacheKey);
   if (cached) return cached;
 
+  // PER-FINDING SUB-BUDGET (spec: `max(2s, global/estimatedFindingCount)`).
+  //
+  // The global deadline alone bounds the PASS but not the DISTRIBUTION inside
+  // it: one finding whose candidate-commit list is long — a hot file touched by
+  // a thousand commits — can walk it until the global deadline expires, and
+  // every finding queued behind it then reports `budget_exhausted` without a
+  // single git call spent on it. The sub-budget caps what any one finding may
+  // consume, so the walk is truncated for the expensive finding instead of for
+  // everyone after it. It never EXTENDS anything: the effective deadline is the
+  // earlier of the two, so the global deadline still hard-bounds the pass.
+  const perFindingDeadlineAt = ctx.perFindingBudgetMs
+    ? Math.min(deadlineAt || Infinity, Date.now() + ctx.perFindingBudgetMs)
+    : deadlineAt;
+
   const originResult = isSca
-    ? await resolveDirectSCAOrigin(scanRoot, finding, { since: ctx.since, deadlineAt })
-    : await resolveOrigin(scanRoot, finding, { since: ctx.since, deadlineAt, repoState });
+    ? await resolveDirectSCAOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt })
+    : await resolveOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt, repoState });
 
   const detector = isSca ? SCA_DETECTOR : (finding.parser || null);
 
@@ -244,9 +270,16 @@ async function resolveOne(finding, ctx) {
       confidence: { level: CONFIDENCE_LEVEL.LOW, score: 0.2, reasons: partial.reasons },
     });
   } else if (originResult.status === 'budget_exhausted') {
+    // Which budget ran out is a materially different fact for the operator:
+    // the global one means "raise --provenance-timeout"; the per-finding one
+    // means "this ONE finding's history is unusually deep" and raising the
+    // global timeout will not help it unless the finding count drops too.
+    const globalExpired = !!deadlineAt && Date.now() > deadlineAt;
     provenance = emptyProvenance(PROVENANCE_STATUS.BUDGET_EXHAUSTED, {
       historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered || 0 },
-      limitations: ['analysis budget expired before origin could be resolved'],
+      limitations: [globalExpired
+        ? 'analysis budget expired before origin could be resolved'
+        : "this finding's per-finding share of the analysis budget expired before origin could be resolved"],
     });
     // NOT CACHED — see the cacheSet guard below.
     cacheable = false;
@@ -299,8 +332,25 @@ export async function annotateGitProvenance(findings, ctx) {
     return;
   }
 
-  const deadlineAt = Date.now() + (options.timeoutMs || DEFAULT_TIMEOUT_MS);
-  const fullCtx = { ...options, repoState, deadlineAt, scanRoot };
+  // A caller-supplied `deadlineAt` WINS over the locally-computed one. That is
+  // what makes a scan-level global budget possible at all: engine.js runs this
+  // annotator twice (SAST findings, then direct SCA deps) and each call
+  // computing its own fresh window made the effective budget 2× the configured
+  // timeout. Falling back to a computed one keeps every standalone caller (and
+  // every test) working unchanged.
+  const deadlineAt = options.deadlineAt || (Date.now() + (options.timeoutMs || DEFAULT_TIMEOUT_MS));
+  // Sub-budget, from the REMAINING global budget rather than the configured
+  // timeout: on the second of engine.js's two calls, most of the window may
+  // already be spent, and dividing the original figure would hand each SCA
+  // entry a share of time that no longer exists.
+  // A caller-supplied value wins, on the same principle as `deadlineAt` above:
+  // the caller is the only party that can see across multiple annotator passes.
+  const remainingMs = Math.max(0, deadlineAt - Date.now());
+  const perFindingBudgetMs = options.perFindingBudgetMs || Math.max(
+    MIN_PER_FINDING_BUDGET_MS,
+    Math.floor(remainingMs / Math.max(1, findings.length)),
+  );
+  const fullCtx = { ...options, repoState, deadlineAt, perFindingBudgetMs, scanRoot };
 
   let active = 0;
   let idx = 0;

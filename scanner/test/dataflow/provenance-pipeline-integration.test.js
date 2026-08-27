@@ -259,3 +259,138 @@ test('every supplyChain entry carries a terminal findingProvenance, transitive d
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Final whole-branch review — C1 and C2.
+//
+// Both are the same defect class as `verifyPatch`/LSP above (a partial or
+// rootless scan reaching the lifecycle ledger), found only by reading the whole
+// diff at once. The per-caller fixes above are still correct; these two pin the
+// STRUCTURAL guards that make a fifth instance impossible rather than merely
+// unfound.
+// ---------------------------------------------------------------------------
+
+const NO_SCANROOT_HELPER = fileURLToPath(new URL('../helpers/provenance-no-scanroot-scan.mjs', import.meta.url));
+
+test('C1: runFullScan with no scanRoot writes no lifecycle store into the process cwd', () => {
+  // statePath(null, …) falls back to walking UP FROM THE CWD for a project
+  // marker, so a runFullScan with no scanRoot wrote a lifecycle ledger into
+  // whatever directory the process happened to be in — keyed on an unrelated
+  // run's findings. This is not hypothetical: it filled this repo's own
+  // scanner/.agentic-security/provenance/lifecycle.json with 374 stableIds and
+  // 3000+ spurious remediated/reintroduced events before it was found.
+  //
+  // The fixture directory carries a package.json specifically so it IS a valid
+  // state root — isSafeStateDir would say yes. The guard has to be the missing
+  // scanRoot, not the marker check accidentally covering for it.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'as-noroot-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'package.json'), '{"name":"marker","version":"1.0.0"}\n');
+    const r = spawnSync(process.execPath, [NO_SCANROOT_HELPER, tmp], { encoding: 'utf8', timeout: 300000 });
+    assert.equal(r.status, 0, `no-scanRoot helper failed: ${r.stderr}`);
+    assert.equal(
+      fs.existsSync(path.join(tmp, '.agentic-security', 'provenance', 'lifecycle.json')),
+      false,
+      'a scanRoot-less runFullScan wrote a lifecycle store into the process cwd',
+    );
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('C1(b): a scanRoot that does not exist writes no lifecycle store into the process cwd either', () => {
+  // The same fallback reached through a different door, and the one that is
+  // actually reachable from the shipped CLI: `resolveProjectRoot` honours a
+  // caller-supplied scanRoot ONLY if it exists on disk and is a directory. A
+  // typo'd path is truthy but unresolvable, so resolution falls through to
+  // walking up from the PROCESS CWD — `agentic-security scan ./typo` run from
+  // inside a project writes that project's lifecycle ledger from a scan that
+  // never looked at it, and because the scan finds nothing while still
+  // claiming completeScan, its remediation pass closes every open finding the
+  // real project had.
+  //
+  // Found by tracing every write into this repo's own
+  // scanner/.agentic-security/provenance/ AFTER the null-scanRoot guard landed:
+  // all three remaining writers were truthy-but-nonexistent scanRoots, one of
+  // them a real `bin/agentic-security.js scan /nonexistent-path` invocation.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'as-badroot-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'package.json'), '{"name":"marker","version":"1.0.0"}\n');
+    const missing = path.join(tmp, 'does-not-exist-anywhere');
+    const r = spawnSync(process.execPath, [NO_SCANROOT_HELPER, tmp, missing], { encoding: 'utf8', timeout: 300000 });
+    assert.equal(r.status, 0, `bad-scanRoot helper failed: ${r.stderr}`);
+    assert.equal(
+      fs.existsSync(path.join(tmp, '.agentic-security', 'provenance', 'lifecycle.json')),
+      false,
+      'a runFullScan with a nonexistent scanRoot wrote a lifecycle store into the process cwd',
+    );
+    // …and it did not write one under the phantom path either.
+    assert.equal(fs.existsSync(missing), false, 'the nonexistent scanRoot was created rather than refused');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('C2: a --changed-since scan remediates nothing; a complete re-scan still does', async () => {
+  // The fourth instance of the partial-scan corruption, and the reason the fix
+  // is structural rather than another per-caller opt-out. `--changed-since` /
+  // `--pr` filter `fileContents` to a changed subset while `scanRoot` stays the
+  // whole project and provenance stays enabled — so applyScan's remediation
+  // pass, which closes every open stableId ABSENT from the current finding set,
+  // marked the entire rest of the project remediated on every PR scan.
+  //
+  // Both directions are asserted, because a guard that simply never remediates
+  // would also pass the first half.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = " + input);\n');
+    fx.writeFile('b.js', 'const p = req.query.p;\neval(p);\n');
+    fx.commit('two vulns');
+
+    const store = path.join(fx.root, '.agentic-security', 'provenance', 'lifecycle.json');
+    const first = await runScan(fx.root, { network: false });
+    assert.ok(fs.existsSync(store), 'a complete scan should have written the lifecycle store');
+
+    // stableIds are opaque digests, so the only way to say "b.js's finding" is
+    // to record which ids the first scan gave b.js.
+    const bIds = new Set(first.scan.findings.filter((f) => f.file === 'b.js' && f.stableId).map((f) => f.stableId));
+    assert.ok(bIds.size > 0, 'fixture must produce at least one finding in b.js');
+
+    const openAfterFull = Object.entries(JSON.parse(fs.readFileSync(store, 'utf8')))
+      .filter(([, evs]) => evs.length && (evs[evs.length - 1].type === 'introduced' || evs[evs.length - 1].type === 'reintroduced'))
+      .map(([id]) => id);
+    assert.ok(openAfterFull.length >= 2,
+      `fixture must leave at least two open findings for this test to mean anything; got ${openAfterFull.length}`);
+
+    // Touch a.js only (appending below the vulnerable lines keeps a.js's own
+    // stableIds stable), commit, then scan --changed-since the previous commit.
+    // The changed set is {a.js}; b.js is absent purely because it was not read.
+    fx.writeFile('a.js', 'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = " + input);\n// touched\n');
+    fx.commit('touch a.js');
+    await runScan(fx.root, { network: false, changedSince: 'HEAD~1' });
+
+    const afterPartial = JSON.parse(fs.readFileSync(store, 'utf8'));
+    const remediated = Object.entries(afterPartial)
+      .filter(([, evs]) => evs.some((e) => e.type === 'remediated'))
+      .map(([id]) => id);
+    assert.deepEqual(remediated, [],
+      `a --changed-since scan remediated findings it never looked at: ${JSON.stringify(remediated)}`);
+
+    // Now the other direction: genuinely remove b.js's vulnerability and run a
+    // COMPLETE scan. Absence now means something, and the ledger must say so.
+    fx.writeFile('b.js', 'const p = req.query.p;\nconsole.log(p);\n');
+    fx.commit('fix b.js');
+    await runScan(fx.root, { network: false });
+
+    const afterFix = JSON.parse(fs.readFileSync(store, 'utf8'));
+    const nowRemediated = Object.entries(afterFix)
+      .filter(([, evs]) => evs.some((e) => e.type === 'remediated'))
+      .map(([id]) => id);
+    assert.ok(nowRemediated.length > 0,
+      'a complete re-scan with a finding genuinely removed recorded no remediation at all — the guard is too wide');
+    assert.ok(nowRemediated.some((id) => bIds.has(id)),
+      `expected b.js's finding to be remediated by the complete re-scan; remediated=${JSON.stringify(nowRemediated)}, b.js ids=${JSON.stringify([...bIds])}`);
+  } finally {
+    fx.cleanup();
+  }
+});

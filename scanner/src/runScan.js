@@ -151,9 +151,22 @@ export async function runScan(rootDir, opts = {}) {
   // Caller may pre-build fileContents (used by the MCP server's scan_diff to
   // scope a scan to a specific file list without walking the whole tree).
   let fileContents, depFileContents;
+  // `completeScan` answers ONE question for the whole pipeline: does the file
+  // set below cover all of `root`, or only a subset of it? Anything downstream
+  // that reasons about the ABSENCE of a finding — most importantly the
+  // provenance lifecycle ledger, whose remediation pass closes every open
+  // stableId missing from this scan — is only sound on a complete scan. A
+  // subset scan that claims completeness marks the entire rest of the project
+  // remediated. It starts true and is only ever narrowed, so a new subsetting
+  // path added later must opt OUT explicitly rather than silently inherit a
+  // false claim of coverage.
+  let completeScan = true;
   if (opts.fileContents) {
+    // Caller-supplied file list (MCP `scan_diff`, the LSP's on-save scan): by
+    // construction a subset of the tree, not a scan of it.
     fileContents = opts.fileContents;
     depFileContents = opts.depFileContents || {};
+    completeScan = false;
   } else {
     ({ fileContents, depFileContents } = await readTree(root, opts));
   }
@@ -167,6 +180,10 @@ export async function runScan(rootDir, opts = {}) {
         if (changed.has(f)) filtered[f] = fileContents[f];
       }
       fileContents = filtered;
+      // Only when the filter actually applied. A `changedSince` that resolved
+      // to null (not a git repo / bad ref) is warned about below and scans the
+      // whole tree, which IS complete.
+      completeScan = false;
     } else if (opts.onProgress) {
       opts.onProgress({ phase: 'warning', file: 'changedSince ignored: not a git repo or invalid ref', current: 0, total: 0 });
     }
@@ -174,7 +191,7 @@ export async function runScan(rootDir, opts = {}) {
 
   // R8: `resume` is opt-in. Left undefined here, runFullScan falls back to the
   // AGENTIC_SECURITY_RESUME=1 env var, which is off by default.
-  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi }, opts.onProgress || (()=>{}));
+  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi, completeScan }, opts.onProgress || (()=>{}));
   // Premortem 2R4.2: stamp ruleset version + source on the scan result, and
   // notify if the operator pinned a different version than what's installed.
   try { stampScan(root, scan); } catch {}
