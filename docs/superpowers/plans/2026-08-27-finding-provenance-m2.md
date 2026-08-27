@@ -2120,7 +2120,8 @@ Run: `cd /Users/ross/code/agentic-security && git check-ignore -q bench/ttff/his
 // -----------------
 // Wall-clock and peak memory for a scan WITH provenance annotation enabled
 // vs. the SAME scan with provenance disabled (--no-provenance equivalent,
-// via runScan's `provenance:false` option), on a synthetic git history built
+// via the AGENTIC_SECURITY_NO_PROVENANCE env var — the same lever the CLI's
+// own --no-provenance flag uses), on a synthetic git history built
 // fresh each run so the disk cache starts empty (cold — the worst case a
 // first-time scan on a real repo actually pays).
 //
@@ -2171,12 +2172,26 @@ async function buildFixture() {
 }
 
 async function measureOnce({ provenance }) {
+  // runScan() does NOT forward a `provenance` option to runFullScan — verified
+  // by reading runScan.js: its runFullScan() call passes only
+  // {fileContents, depFileContents, scanRoot, resume, deep, deepInCi,
+  // completeScan}. The real on/off lever the CLI itself uses is the
+  // AGENTIC_SECURITY_NO_PROVENANCE env var (engine.js reads it directly to
+  // set provenanceCtx.disabled, which short-circuits annotateGitProvenance
+  // to a fast stampAll(NOT_AVAILABLE) — the detector pipeline still runs
+  // identically either way, isolating exactly the annotator's git-walking
+  // cost as "overhead", which is the FR-PROV-029 question). Using this env
+  // var (not a fabricated runScan option) means the benchmark measures the
+  // real CLI code path, not a synthetic one.
+  const prior = process.env.AGENTIC_SECURITY_NO_PROVENANCE;
+  if (provenance) delete process.env.AGENTIC_SECURITY_NO_PROVENANCE;
+  else process.env.AGENTIC_SECURITY_NO_PROVENANCE = '1';
   const { runScan } = await import(path.join(REPO, 'scanner', 'src', 'runScan.js'));
   const fx = await buildFixture();
   try {
     const t0 = process.hrtime.bigint();
     const memBefore = process.memoryUsage().heapUsed;
-    const { scan } = await runScan(fx.root, { provenance });
+    const { scan } = await runScan(fx.root, {});
     const memAfter = process.memoryUsage().heapUsed;
     const t1 = process.hrtime.bigint();
     return {
@@ -2186,6 +2201,8 @@ async function measureOnce({ provenance }) {
     };
   } finally {
     fx.cleanup();
+    if (prior === undefined) delete process.env.AGENTIC_SECURITY_NO_PROVENANCE;
+    else process.env.AGENTIC_SECURITY_NO_PROVENANCE = prior;
   }
 }
 
