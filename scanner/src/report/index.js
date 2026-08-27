@@ -1094,7 +1094,7 @@ export function toHTML(scan, meta = {}) {
   // server-side) so the browser render shows them without a second command.
   const findings = normalizeFindings(scan).map(f => {
     const ex = explainParts(f, { verbose: true });
-    return { ...f, _riskNote: riskNote(f), _explainWhy: ex.why, _explainHow: ex.how };
+    return { ...f, _riskNote: riskNote(f), _explainWhy: ex.why, _explainHow: ex.how, _explainProvenance: explainProvenance(f) };
   });
   const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
@@ -1172,6 +1172,8 @@ export function toHTML(scan, meta = {}) {
   .f-how{margin-top:6px;color:#94a3b8;font-size:13px}
   .f-how code{font-family:ui-monospace,monospace;color:#e2e8f4}
   .f-fix{background:#0d1f3d;border-left:3px solid #38bdf8;padding:8px 12px;margin-top:8px;border-radius:0 4px 4px 0}
+  .f-provenance{background:#0f1f14;border-left:3px solid #34d058;padding:8px 12px;margin-top:8px;border-radius:0 4px 4px 0}
+  .f-provenance pre{background:transparent;padding:0;margin:4px 0 0 0}
   .hidden{display:none!important}
 </style></head>
 <body>
@@ -1227,6 +1229,7 @@ function makeCard(f) {
       (f.snippet ? '<pre>' + esc(f.snippet) + '</pre>' : '') +
       (f.masked ? '<pre style="color:#f97316">' + esc(f.masked) + ' (masked)</pre>' : '') +
       (f.fix && f.fix.description ? '<div class="f-fix"><b>Fix:</b> ' + esc(f.fix.description) + (f.fix.code ? '<pre>' + esc(f.fix.code) + '</pre>' : '') + '</div>' : '') +
+      (f._explainProvenance ? '<div class="f-provenance"><b>Provenance:</b><pre>' + esc(f._explainProvenance) + '</pre></div>' : '') +
     '</div>';
   div.addEventListener('click', () => div.classList.toggle('expanded'));
   return div;

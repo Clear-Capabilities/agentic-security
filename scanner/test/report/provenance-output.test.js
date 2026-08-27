@@ -13,7 +13,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeFindings, toCLI, explainProvenance, toSARIF, toCSV, toMarkdown } from '../../src/report/index.js';
+import { normalizeFindings, toCLI, explainProvenance, toSARIF, toCSV, toMarkdown, toHTML } from '../../src/report/index.js';
 import { emptyProvenance, PROVENANCE_STATUS } from '../../src/posture/provenance/schema.js';
 
 function makeScan(findingProvenance) {
@@ -200,4 +200,20 @@ test('toMarkdown: a provenance block renders under the finding\'s severity secti
 test('toMarkdown: no provenance section when no finding carries findingProvenance', () => {
   const md = toMarkdown(makeScan(undefined));
   assert.doesNotMatch(md, /<summary>Provenance<\/summary>/);
+});
+
+test('toHTML: the embedded FINDINGS blob carries a precomputed _explainProvenance, redacted', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
+    findingOrigin: { commit: 'abc1234567', authorName: 'Jamie Chen', authorEmail: 'jamie@example.com', authorDate: '2026-03-14T00:00:00Z' },
+  });
+  const html = toHTML(makeScan(fp));
+  assert.match(html, /_explainProvenance/);
+  assert.match(html, /Jamie Chen/);
+  assert.doesNotMatch(html, /jamie@example\.com/);
+  assert.match(html, /f-provenance/, 'CSS class for the panel must be present');
+});
+
+test('toHTML: _explainProvenance is null (not omitted) when the finding has no findingProvenance', () => {
+  const html = toHTML(makeScan(undefined));
+  assert.match(html, /"_explainProvenance":null/);
 });
