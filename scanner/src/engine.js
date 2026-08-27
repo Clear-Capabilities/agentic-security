@@ -10191,31 +10191,6 @@ function _deterministicFileTimings(timings) {
     // it every direct dependency resolves to `not_available: no-manifest-path`.
     for (const s of directDeps) { if (!s.filePath && s.file) s.filePath = s.file; }
     await annotateGitProvenance(directDeps, { ...provenanceCtx, findingType: 'sca' });
-    // Everything else in supplyChain still needs a TERMINAL status, because
-    // report/index.js normalizes EVERY supplyChain entry into an SCA finding —
-    // not just the direct vulnerable_dep ones the resolver can speak to — and
-    // pipeline/finding-schema.js requires findingProvenance on every channel,
-    // where an absent field means "this finding escaped annotation entirely".
-    // Two distinct populations land here and they are not the same statement,
-    // so they do not share a limitation string:
-    //
-    //  - transitive vulnerable_deps: the resolver is deliberately not run (the
-    //    vulnerable version was never declared in this repo's manifests, so
-    //    there is no local commit that introduced it). Deferred capability.
-    //  - unpinned_dep / no_lockfile and friends: these describe the ABSENCE of
-    //    a declaration, so "which commit introduced this version" is not a
-    //    question that has an answer at all.
-    //
-    // Both are honest `not_available`, which is exactly what that status is
-    // for; neither is an error, and neither may be left undefined.
-    for (const sc of (supplyChain || [])) {
-      if (!sc || typeof sc !== 'object' || sc.findingProvenance) continue;
-      sc.findingProvenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
-        limitations: [sc.type === 'vulnerable_dep'
-          ? 'transitive dependency origin resolution is not implemented in this release (deferred to a later phase)'
-          : `origin resolution does not apply to a ${sc.type || 'non-vulnerability'} supply-chain entry`],
-      });
-    }
     // FR-PROV-013 — introduce/remediate/reintroduce events. Best-effort by
     // design: the lifecycle store is a convenience ledger, and a failed write
     // (read-only tree, lock contention) must never fail a scan, matching how
@@ -10237,19 +10212,46 @@ function _deterministicFileTimings(timings) {
       } catch (_) { /* best-effort */ }
     }
    });
-   // Structural backstop for the terminal-status guarantee. annotateGitProvenance
-   // never leaves a hole on its own, but it can only guarantee that for findings
-   // it reached: if it threw BEFORE its per-finding loop began (getRepoState
-   // blowing up on a corrupt repo, say), _runAnnotator would swallow the error
-   // and every finding would silently carry no findingProvenance at all. That is
-   // exactly the absent-field state the status enum exists to make unreachable,
-   // so enforce it here rather than trusting the convention to hold.
+   // Structural backstop for the terminal-status guarantee, for BOTH channels.
+   // Deliberately OUTSIDE the _runAnnotator callback above: _runAnnotator
+   // swallows whatever the callback throws, so anything that depends on the
+   // callback reaching its last line is a convention, not a guarantee. If
+   // annotateGitProvenance threw before its per-finding loop began
+   // (getRepoState blowing up on a corrupt repo, say), everything below the
+   // throw is skipped and every finding and supplyChain entry silently carries
+   // no findingProvenance at all — exactly the absent-field state the status
+   // enum exists to make unreachable. Enforced here so it holds structurally.
    for (const f of finalFindings) {
      if (f && typeof f === 'object' && !f.findingProvenance) {
        f.findingProvenance = emptyProvenance(PROVENANCE_STATUS.ERROR, {
          limitations: ['provenance annotator did not reach this finding'],
        });
      }
+   }
+   // The supply-chain half. report/index.js normalizes EVERY supplyChain entry
+   // into an SCA finding — not just the direct vulnerable_dep ones the resolver
+   // can speak to — and pipeline/finding-schema.js requires findingProvenance on
+   // every channel. Three distinct populations reach this loop and they are not
+   // the same statement, so they do not share a limitation string:
+   //
+   //  - transitive vulnerable_deps: the resolver is deliberately not run (the
+   //    vulnerable version was never declared in this repo's manifests, so there
+   //    is no local commit that introduced it). A deferred capability.
+   //  - unpinned_dep / no_lockfile and friends: these describe the ABSENCE of a
+   //    declaration, so "which commit introduced this version" is not a question
+   //    that has an answer to defer.
+   //  - anything the annotator failed to reach, as above.
+   //
+   // The first two are honest `not_available` — that is exactly what the status
+   // is for. Only a genuine annotator failure is an `error`, which is why this
+   // loop distinguishes them rather than stamping one status for all three.
+   for (const sc of (supplyChain || [])) {
+     if (!sc || typeof sc !== 'object' || sc.findingProvenance) continue;
+     sc.findingProvenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+       limitations: [sc.type === 'vulnerable_dep'
+         ? 'transitive dependency origin resolution is not implemented in this release (deferred to a later phase)'
+         : `origin resolution does not apply to a ${sc.type || 'non-vulnerability'} supply-chain entry`],
+     });
    }
   }
   // Addition #2 — attack-surface completeness inventory (entry points → dispositions).

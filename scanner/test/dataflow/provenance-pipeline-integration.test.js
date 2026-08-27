@@ -20,8 +20,10 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import { runScan } from '../../src/runScan.js';
+import { seedAdvisory } from '../helpers/seed-osv-cache.js';
 
 const LSP_HELPER = fileURLToPath(new URL('../helpers/lsp-scan-file.mjs', import.meta.url));
+const SCA_HELPER = fileURLToPath(new URL('../helpers/sca-provenance-scan.mjs', import.meta.url));
 
 const TERMINAL_STATUSES = ['complete', 'partial', 'not_available', 'uncommitted', 'budget_exhausted', 'error'];
 
@@ -171,44 +173,89 @@ test('an LSP on-save scan does not touch the lifecycle store', async () => {
   }
 });
 
-test('every supplyChain entry carries a terminal findingProvenance, transitive deps included', async () => {
+test('every supplyChain entry carries a terminal findingProvenance, transitive deps included', () => {
   // The gap the isDirect fix exposed. Once the direct-SCA filter correctly
   // excludes transitive entries, nothing annotates them — and report/index.js
   // normalizes EVERY supplyChain entry into an SCA finding, while
   // pipeline/finding-schema.js requires findingProvenance on every channel and
   // reads an absent field as "this finding escaped annotation entirely".
   //
-  // The fixture's package-lock.json nests lodash under express, so _parsePackageLockJson
-  // gives it a 2-segment depChain -> isDirect:false, producing real transitive
-  // AND direct vulnerable_dep entries from the disk-cached advisory data.
+  // HERMETIC BY CONSTRUCTION. `supplyChain` is populated by queryOSV, which hits
+  // api.osv.dev and falls back to a disk cache under the user's home directory.
+  // Asserting on vulnerable_dep entries without controlling that would make this
+  // test pass on a machine with a warm cache and fail offline or on a cold
+  // runner — unacceptable in a gated suite whose own CLAUDE.md requires that an
+  // offline developer can still push. So: run in a child process with HOME
+  // redirected at a throwaway dir (engine.js resolves the cache from
+  // os.homedir() at import time, which is why this cannot be done in-process),
+  // seed exactly the keys the scan will look up, and set
+  // AGENTIC_SECURITY_OFFLINE=1 so the EPSS and KEV enrichers short-circuit too.
+  // With every comp: key pre-seeded, queryOSV builds an empty query list and
+  // never calls fetch at all.
+  //
+  // The fixture's package-lock.json nests lodash under express, so
+  // _parsePackageLockJson gives lodash a 2-segment depChain -> isDirect:false,
+  // yielding a real TRANSITIVE entry alongside express's direct one.
   const root = path.resolve(process.cwd(), 'test/fixtures/sca-transitive-provenance');
-  const prev = process.env.AGENTIC_SECURITY_NO_STATE;
-  process.env.AGENTIC_SECURITY_NO_STATE = '1';   // keep the committed fixture clean
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'as-osv-home-'));
   try {
-    const { scan } = await runScan(root);
-    const sc = scan.supplyChain || [];
-    assert.ok(sc.length > 0, 'fixture should produce supply-chain entries');
+    seedAdvisory(home, {
+      ecosystem: 'npm', name: 'express', version: '4.18.2',
+      id: 'FIXTURE-DIRECT-0001', description: 'Fixture advisory for a DIRECT dependency.',
+      fixedVersions: ['4.19.0'], severity: 'high',
+    });
+    seedAdvisory(home, {
+      ecosystem: 'npm', name: 'lodash', version: '4.17.20',
+      id: 'FIXTURE-TRANSITIVE-0001', description: 'Fixture advisory for a TRANSITIVE dependency.',
+      fixedVersions: ['4.17.21'], severity: 'high',
+    });
+
+    const r = spawnSync(process.execPath, [SCA_HELPER, root], {
+      encoding: 'utf8', timeout: 300000,
+      env: {
+        ...process.env,
+        HOME: home,
+        AGENTIC_SECURITY_OFFLINE: '1',
+        AGENTIC_SECURITY_NO_STATE: '1',   // keep the committed fixture clean
+      },
+    });
+    assert.equal(r.status, 0, `sca provenance helper failed: ${r.stderr}`);
+    const sc = JSON.parse(r.stdout);
+
+    // Not a vacuous pass: the seeded advisories must actually have materialized.
+    assert.ok(sc.length > 0, `expected supply-chain entries; helper stderr: ${r.stderr}`);
+    // And PROOF the data came from the seed rather than from a warm real cache
+    // or the live API: these advisory ids are fabricated. api.osv.dev would
+    // return GHSA-/CVE- ids for express and lodash, never `FIXTURE-*`. If this
+    // assertion ever fails while the rest passes, the test has quietly gone back
+    // to depending on the network and must be fixed, not re-baselined.
+    const ids = sc.map(e => e.osvId).filter(Boolean).sort();
+    assert.deepEqual(ids, ['FIXTURE-DIRECT-0001', 'FIXTURE-TRANSITIVE-0001'],
+      `supply-chain advisories did not come from the seeded cache: ${JSON.stringify(sc)}`);
 
     for (const e of sc) {
-      assert.ok(e.findingProvenance, `supplyChain entry ${e.type}:${e.name} has no findingProvenance`);
-      assert.ok(TERMINAL_STATUSES.includes(e.findingProvenance.status),
-        `supplyChain entry ${e.type}:${e.name} has non-terminal status ${e.findingProvenance.status}`);
+      assert.ok(e.provenance, `supplyChain entry ${e.type}:${e.name} has no findingProvenance`);
+      assert.ok(TERMINAL_STATUSES.includes(e.provenance.status),
+        `supplyChain entry ${e.type}:${e.name} has non-terminal status ${e.provenance.status}`);
     }
 
     const transitive = sc.filter(e => e.type === 'vulnerable_dep' && !e.isDirect);
-    assert.ok(transitive.length > 0, 'fixture should produce at least one TRANSITIVE vulnerable_dep');
+    assert.ok(transitive.length > 0, `expected a TRANSITIVE vulnerable_dep; got ${JSON.stringify(sc)}`);
     for (const e of transitive) {
-      assert.equal(e.findingProvenance.status, 'not_available');
-      assert.match(e.findingProvenance.limitations.join(' '), /transitive dependency origin resolution/,
+      assert.equal(e.provenance.status, 'not_available');
+      assert.match(e.provenance.limitations.join(' '), /transitive dependency origin resolution/,
         'a transitive dep must say WHY its origin is unavailable, not just that it is');
     }
-    // And the direct half must still be routed to the resolver, not swept up by
-    // the same blanket stamp — otherwise this test would pass on a wiring that
-    // annotated nothing at all.
-    assert.ok(sc.some(e => e.type === 'vulnerable_dep' && e.isDirect),
-      'fixture should also produce a DIRECT vulnerable_dep');
+    // And the direct half must still be routed to the resolver rather than swept
+    // up by the same blanket stamp — otherwise this test would pass on a wiring
+    // that annotated nothing at all.
+    const direct = sc.filter(e => e.type === 'vulnerable_dep' && e.isDirect);
+    assert.ok(direct.length > 0, `expected a DIRECT vulnerable_dep; got ${JSON.stringify(sc)}`);
+    for (const e of direct) {
+      assert.ok(!/transitive dependency origin resolution/.test(e.provenance.limitations.join(' ')),
+        'a DIRECT dep was stamped with the transitive limitation — it never reached the resolver');
+    }
   } finally {
-    if (prev === undefined) delete process.env.AGENTIC_SECURITY_NO_STATE;
-    else process.env.AGENTIC_SECURITY_NO_STATE = prev;
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });
