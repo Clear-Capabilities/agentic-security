@@ -23,6 +23,18 @@
 // Fails only on a LARGE regression (a wide multiplicative factor), because
 // wall-clock on a shared machine is noisy. Records the raw ratio every run so
 // a slow drift is visible in history even when it never trips the gate.
+//
+// WHY A RATIO, NOT A PERCENTAGE
+// -------------------------------
+// This runner reports overheadRatio (withProvenanceMs / withoutProvenanceMs),
+// not a percentage. On this tiny synthetic fixture the without-provenance arm
+// is dominated by near-floor fixed costs (tens of milliseconds), so a modest,
+// roughly constant amount of git-walking work can balloon into a large-looking
+// ratio purely because the denominator is small — that is a property of THIS
+// fixture's size, not evidence about real-world overhead at FR-PROV-029's
+// intended scale (a realistic repo where the baseline scan itself runs
+// seconds to minutes). Read this number as a REGRESSION signal against ITS
+// OWN prior baseline, never as a literal FR-PROV-029 percentage claim.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
