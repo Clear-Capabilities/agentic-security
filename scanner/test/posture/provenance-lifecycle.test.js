@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import { readLifecycle, updateLifecycle, latestOpenIntroduction } from '../../src/posture/provenance/lifecycle.js';
@@ -68,6 +69,34 @@ test('a read-only scan (--no-state) persists nothing but still returns this scan
     if (prior === undefined) delete process.env.AGENTIC_SECURITY_NO_STATE;
     else process.env.AGENTIC_SECURITY_NO_STATE = prior;
     fx.cleanup();
+  }
+});
+
+test('refuses to create state in a directory that is not a recognised project root', async () => {
+  // statePath() decides WHERE state belongs; it applies no safety check of its
+  // own. That check (isSafeStateDir) lives inside safeWriteState()/
+  // ensureStateDir(), which this module deliberately bypasses so a failed write
+  // can throw inside the locked section. So it must apply the check itself —
+  // otherwise it litters `.agentic-security/` into any directory it is pointed
+  // at, which is precisely the defect state-dir.js exists to prevent (its
+  // header records a user who uninstalled the plugin over it).
+  //
+  // A bare tmp dir with no .git/package.json/etc. is not a project root.
+  const orphan = fs.mkdtempSync(path.join(os.tmpdir(), 'as-noproject-'));
+  try {
+    const view = await updateLifecycle(orphan, [{ stableId: 'sid-orphan' }], { scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+
+    assert.ok(!fs.existsSync(path.join(orphan, '.agentic-security')),
+      'must not create a state directory outside a project root');
+    // The check runs BEFORE the lock is taken — withLock's first act is an
+    // mkdir of the same directory, so guarding only the store write would have
+    // created the litter and then declined to fill it.
+    assert.deepEqual(fs.readdirSync(orphan), [], 'the directory must be left byte-identical');
+    // Still a view, not a lie: the caller gets what this scan would have
+    // recorded, same contract as the read-only path.
+    assert.equal(view['sid-orphan'][0].type, 'introduced');
+  } finally {
+    fs.rmSync(orphan, { recursive: true, force: true });
   }
 });
 

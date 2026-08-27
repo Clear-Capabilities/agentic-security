@@ -45,7 +45,7 @@ import { resolveBranchEntry } from './branch-entry.js';
 import { attributeEvidence } from './evidence-attribution.js';
 import { assessConfidence } from './confidence.js';
 import { cacheGet, cacheSet, makeCacheKey } from './cache.js';
-import { emptyProvenance, PROVENANCE_STATUS } from './schema.js';
+import { emptyProvenance, PROVENANCE_STATUS, PROVENANCE_METHOD } from './schema.js';
 
 const DEFAULT_TIMEOUT_MS = 60000;
 const MAX_CONCURRENCY = 4;
@@ -66,6 +66,26 @@ function computeDigest(finding, provenance) {
 async function resolveOne(finding, ctx) {
   const { scanRoot, repoState, deadlineAt } = ctx;
 
+  // THE BUDGET CHECK COMES FIRST — before the blame call, not after it.
+  //
+  // `blameLine` is a synchronous execFileSync with a 2s timeout, and the
+  // scheduler runs these four at a time. Checking the deadline below the blame
+  // call meant every finding still queued when the budget expired paid for its
+  // blame before being told the budget was gone: N post-deadline findings could
+  // serialise into ~2N seconds PAST the configured timeout, which is precisely
+  // what this check exists to prevent. A deadline that is only consulted after
+  // the expensive call does not bound anything.
+  //
+  // A post-deadline finding therefore reports `budget_exhausted` rather than
+  // `uncommitted`. Both are terminal and honest; the budget is simply the
+  // question we can answer without spending anything.
+  if (deadlineAt && Date.now() > deadlineAt) {
+    return emptyProvenance(PROVENANCE_STATUS.BUDGET_EXHAUSTED, {
+      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: 0 },
+      limitations: ['analysis budget expired before this finding was reached'],
+    });
+  }
+
   // Cheap, correct short-circuit (PRD Scenario G). One blame call, before any
   // history walk: a working-tree-only line has no origin commit to find.
   if (finding.file && finding.line) {
@@ -81,16 +101,6 @@ async function resolveOne(finding, ctx) {
     return emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['finding has no stableId'] });
   }
 
-  // The scan-wide budget. `resolveOrigin` honours `deadlineAt` internally, but
-  // a finding whose turn comes up after the deadline has already passed should
-  // not pay for a candidate walk at all.
-  if (deadlineAt && Date.now() > deadlineAt) {
-    return emptyProvenance(PROVENANCE_STATUS.BUDGET_EXHAUSTED, {
-      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: 0 },
-      limitations: ['analysis budget expired before this finding was reached'],
-    });
-  }
-
   const cacheKey = makeCacheKey({
     repoHead: repoState.head, stableId: finding.stableId,
     detectorVersion: ctx.rulesetVersion, historyBoundary: ctx.since || '', mode: ctx.mode,
@@ -101,6 +111,7 @@ async function resolveOne(finding, ctx) {
   const originResult = await resolveOrigin(scanRoot, finding, { since: ctx.since, deadlineAt, repoState });
 
   let provenance;
+  let cacheable = true;
   if (originResult.status === 'complete') {
     const branchIntroduction = resolveBranchEntry(scanRoot, originResult.findingOrigin.commit, repoState.branch || 'HEAD');
     const evidenceAttribution = attributeEvidence(scanRoot, finding);
@@ -125,9 +136,25 @@ async function resolveOne(finding, ctx) {
     provenance = emptyProvenance(PROVENANCE_STATUS.PARTIAL, {
       findingOrigin: originResult.findingOrigin || null,
       firstObserved: { scanId: ctx.scanId, observedAt: ctx.observedAt },
+      // `method` must be carried through. origin-resolver's shallow-boundary
+      // case returns status:'partial' WITH a populated findingOrigin AND
+      // method:'semantic-history-replay'. Letting emptyProvenance's 'none'
+      // default stand emitted a self-contradictory record — "here is the origin
+      // commit, found by no method" — which also fed computeDigest.
+      method: originResult.method || PROVENANCE_METHOD.NONE,
       historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered || 0 },
       analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector: finding.parser || null, dirty: repoState.dirty },
-      limitations: ['earliest observable — history could not confirm a verified parent boundary'],
+      // The two partial reasons ('shallow-boundary-reached' vs
+      // 'predicate-never-confirmed-in-candidates') mean materially different
+      // things — one is "we could not see far enough", the other "we looked and
+      // never saw it hold". Collapsing both into one hardcoded string made them
+      // indistinguishable downstream, while the not_available branch below has
+      // always propagated its reason.
+      limitations: [
+        originResult.reason
+          ? `earliest observable — history could not confirm a verified parent boundary (${originResult.reason})`
+          : 'earliest observable — history could not confirm a verified parent boundary',
+      ],
       confidence: { level: 'low', score: 0.2, reasons: ['shallow_or_unverified_boundary'] },
     });
   } else if (originResult.status === 'budget_exhausted') {
@@ -135,6 +162,8 @@ async function resolveOne(finding, ctx) {
       historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered || 0 },
       limitations: ['analysis budget expired before origin could be resolved'],
     });
+    // NOT CACHED — see the cacheSet guard below.
+    cacheable = false;
   } else {
     provenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
       limitations: [originResult.reason || 'no candidate history available'],
@@ -142,7 +171,15 @@ async function resolveOne(finding, ctx) {
   }
 
   provenance.evidenceDigest = computeDigest(finding, provenance);
-  cacheSet(scanRoot, cacheKey, provenance);
+  // A budget_exhausted result is the ONE outcome that is not a property of the
+  // repository. complete/partial/not_available are all deterministic given
+  // (HEAD, stableId, ruleset, boundary, mode) — the cache key — so caching them
+  // is sound. "We ran out of time" is a property of the RUN: it depends on the
+  // machine, the load, and the operator's --timeout. The key has no time
+  // component and the cache has no TTL (both deliberate), so caching it would
+  // pin the timeout in place until HEAD moved — including across a re-run with
+  // a larger --timeout, silently defeating the operator's only remedy.
+  if (cacheable) cacheSet(scanRoot, cacheKey, provenance);
   return provenance;
 }
 

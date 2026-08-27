@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
+import { runFullScan } from '../../src/engine.js';
 import { annotateGitProvenance } from '../../src/posture/provenance/coordinator.js';
 import { computeStableId } from '../../src/posture/stable-id.js';
 import { validateFindingsProvenance } from '../../src/posture/provenance/validate.js';
@@ -90,6 +92,129 @@ test('the bounded-concurrency scheduler drains a list longer than MAX_CONCURRENC
     assert.equal(validateFindingsProvenance(findings).valid, true);
   } finally {
     fx.cleanup();
+  }
+});
+
+// ── Fix round: the five review findings, each pinned in the failing direction ──
+
+test('the budget is checked BEFORE the blame call, not after it', async () => {
+  // Ordering, not just presence. blameLine is a synchronous execFileSync with a
+  // 2s timeout, so a deadline consulted below it lets every post-deadline
+  // finding pay for its blame anyway — N findings overrunning by up to 2N
+  // seconds. The observable consequence of getting the order right: an
+  // uncommitted finding, given an already-expired budget, reports
+  // budget_exhausted rather than uncommitted. Both terminal; the budget is the
+  // one we can answer for free.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'safe();\n');
+    fx.commit('base', { date: '2026-01-01T00:00:00Z' });
+    fx.writeFile('a.js', 'eval(x); // uncommitted\n');
+    const finding = { file: 'a.js', line: 1, ruleId: 'eval-use' };
+    finding.stableId = computeStableId(finding);
+
+    await annotateGitProvenance([finding], {
+      scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', timeoutMs: -1,
+    });
+
+    assert.equal(finding.findingProvenance.status, 'budget_exhausted');
+    assert.match(finding.findingProvenance.limitations[0], /budget expired/);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('a budget_exhausted result is NEVER cached, so a larger --timeout still works', async () => {
+  // The cache key has no time component and the cache has no TTL, both by
+  // design. Caching "we ran out of time" — a property of the RUN, not of the
+  // repository — would therefore pin that timeout in place until HEAD moved,
+  // including across a re-run with a bigger budget, silently defeating the
+  // operator's only remedy.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'db.query("SELECT * FROM t WHERE id = " + id);\n');
+    fx.commit('c1', { date: '2026-01-01T00:00:00Z' });
+    const cacheDir = path.join(fx.root, '.agentic-security', 'provenance', 'cache');
+    const stableId = 'sid-budget';
+
+    // A 5ms budget deliberately lands INSIDE resolveOrigin rather than in the
+    // pre-flight check: the pre-flight runs microseconds after the deadline is
+    // computed, then one git-subprocess blame call (tens of ms) burns the
+    // budget, so resolveOrigin's own loop is what reports it. That is the path
+    // that used to reach cacheSet — the pre-flight one returns before the cache
+    // is ever touched, and would pass this test either way. The limitation
+    // string is asserted precisely so that a mis-timed run fails LOUDLY instead
+    // of silently degrading into the non-discriminating path.
+    const starved = { file: 'a.js', line: 1, ruleId: 'r', stableId };
+    await annotateGitProvenance([starved], {
+      scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', timeoutMs: 5,
+    });
+    assert.equal(starved.findingProvenance.status, 'budget_exhausted');
+    assert.match(starved.findingProvenance.limitations[0], /origin could be resolved/,
+      'this test is only meaningful on the resolveOrigin budget path');
+
+    // Nothing was written — asserted directly, so this holds for BOTH
+    // budget_exhausted paths (the pre-flight check and resolveOrigin's own).
+    const cached = fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir) : [];
+    assert.deepEqual(cached, [], 'a budget_exhausted verdict must not be cached');
+
+    // The remedy: same finding, same HEAD, generous budget — must be resolved
+    // afresh rather than served the old timeout back.
+    const retried = { file: 'a.js', line: 1, ruleId: 'r', stableId };
+    await annotateGitProvenance([retried], {
+      scanRoot: fx.root, scanId: 's2', observedAt: '2026-01-01T00:00:00Z',
+    });
+    assert.notEqual(retried.findingProvenance.status, 'budget_exhausted',
+      'a re-run with a larger budget must not be served a cached timeout');
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('a partial result carries its method and its reason, not "none" and a generic string', async () => {
+  // origin-resolver's shallow-boundary case returns partial WITH a populated
+  // findingOrigin AND method:'semantic-history-replay'. Dropping the method let
+  // emptyProvenance's 'none' default stand, emitting "here is the origin commit,
+  // found by no method" — self-contradictory, and it fed computeDigest. The two
+  // partial reasons also mean different things and must stay distinguishable.
+  //
+  // A REAL shallow clone, not a {shallow:true} stub: the coordinator calls the
+  // real getRepoState(), which is the whole point of threading it through.
+  const origin = createGitFixture();
+  const clonePath = fs.mkdtempSync(path.join(os.tmpdir(), 'as-shallow-'));
+  try {
+    origin.writeFile('server.js', 'function h(id) {\n  return 1;\n}\n');
+    origin.commit('c1', { date: '2026-01-01T00:00:00Z' });
+    origin.writeFile('server.js', 'function h(id) {\n  db.query("SELECT * FROM t WHERE id = " + id);\n}\n');
+    origin.commit('c2', { date: '2026-01-02T00:00:00Z' });
+
+    fs.rmSync(clonePath, { recursive: true, force: true });
+    execFileSync('git', ['clone', '-q', '--depth=1', `file://${origin.root}`, clonePath], { stdio: 'ignore' });
+    assert.equal(
+      execFileSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: clonePath, encoding: 'utf8' }).trim(),
+      'true', 'fixture must actually be a shallow clone or this proves nothing');
+
+    // Derive the finding from a real scan so its stableId is one replayAt can
+    // reproduce from the historical blob (same reasoning as the Task 6 tests).
+    const src = fs.readFileSync(path.join(clonePath, 'server.js'), 'utf8');
+    const scan = await runFullScan({ fileContents: { 'server.js': src }, scanRoot: clonePath }, () => {});
+    const finding = (scan.findings || []).find((f) => f.file === 'server.js' && f.family === 'sql-injection');
+    assert.ok(finding && finding.stableId, 'expected a real sql-injection finding with a stableId');
+
+    await annotateGitProvenance([finding], {
+      scanRoot: clonePath, scanId: 's1', observedAt: '2026-01-01T00:00:00Z',
+    });
+
+    const fp = finding.findingProvenance;
+    assert.equal(fp.status, 'partial');
+    assert.equal(fp.method, 'semantic-history-replay',
+      'a partial that found an origin must say HOW — "none" contradicts its own findingOrigin');
+    assert.ok(fp.findingOrigin, 'the shallow-boundary case does report an origin commit');
+    assert.match(fp.limitations[0], /shallow-boundary-reached/,
+      'the specific reason must survive, not collapse into a generic string');
+  } finally {
+    origin.cleanup();
+    fs.rmSync(clonePath, { recursive: true, force: true });
   }
 });
 

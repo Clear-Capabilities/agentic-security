@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import { makeCacheKey, cacheGet, cacheSet } from '../../src/posture/provenance/cache.js';
+import { FINDING_PROVENANCE_SCHEMA_VERSION } from '../../src/posture/provenance/schema.js';
 
 test('cache: content-addressed round trip, no TTL, repo-local', () => {
   const fx = createGitFixture();
@@ -50,6 +51,20 @@ test('cache: a read-only scan (--no-state) writes NOTHING into the scanned tree'
     else process.env.AGENTIC_SECURITY_NO_STATE = prior;
     fx.cleanup();
   }
+});
+
+test('cache: the key is scoped by schema version, so a bump invalidates every old entry', () => {
+  // validate.js rejects a provenance object stamped with an unknown schema
+  // version — but a cache HIT never reaches that check, because cacheGet
+  // returns the parsed object as-is. With the version outside the key, entries
+  // written under an older schema stayed live key hits after a bump and flowed
+  // straight through, defeating the exact scenario the version field guards.
+  // Leading position matters: every key changes when the constant changes.
+  const key = makeCacheKey({ repoHead: 'h', stableId: 's', detectorVersion: 'v', historyBoundary: '', mode: 'standard' });
+  assert.ok(
+    key.startsWith(`${FINDING_PROVENANCE_SCHEMA_VERSION}|`),
+    `cache key must be scoped by schema version, got: ${key}`,
+  );
 });
 
 test('cache: different repoHead produces a different key/miss', () => {

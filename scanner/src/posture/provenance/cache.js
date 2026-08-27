@@ -12,14 +12,30 @@
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
 import { statePath, safeWriteState } from '../state-dir.js';
+import { FINDING_PROVENANCE_SCHEMA_VERSION } from './schema.js';
 
 function keyPath(scanRoot, key) {
   const hash = crypto.createHash('sha256').update(key).digest('hex');
   return statePath(scanRoot, 'provenance', 'cache', hash + '.json');
 }
 
+/**
+ * The schema version is part of the key, and is added HERE rather than by the
+ * caller so that no caller can forget it.
+ *
+ * `validate.js` rejects a provenance object stamped with a version this build
+ * does not understand — but a cache hit never reached that check: `cacheGet`
+ * returns the parsed object as-is. With the version outside the key, entries
+ * written by an older schema stayed live key hits after a version bump and
+ * flowed straight through, defeating the exact scenario the version field was
+ * added to guard. Including it means a bump silently misses every stale entry
+ * instead, which is the correct outcome: they are recomputed, not trusted.
+ */
 export function makeCacheKey({ repoHead, stableId, detectorVersion, historyBoundary, mode }) {
-  return [repoHead || '', stableId || '', detectorVersion || '', historyBoundary || '', mode || ''].join('|');
+  return [
+    FINDING_PROVENANCE_SCHEMA_VERSION,
+    repoHead || '', stableId || '', detectorVersion || '', historyBoundary || '', mode || '',
+  ].join('|');
 }
 
 export function cacheGet(scanRoot, key) {

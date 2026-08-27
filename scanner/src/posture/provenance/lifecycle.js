@@ -1,11 +1,19 @@
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
-import { statePath, stateWritesEnabled } from '../state-dir.js';
+import { statePath, stateWritesEnabled, isSafeStateDir } from '../state-dir.js';
 
 // Both paths go through the state-dir seam rather than joining the state
-// directory name by hand, so the project-root check applies here too — see
-// test/no-stray-state.test.js.
+// directory name by hand — see test/no-stray-state.test.js.
+//
+// What that does and does NOT buy: statePath() resolves WHERE state belongs
+// (resolveProjectRoot walks up for a project marker), but it performs no
+// safety check of its own. The marker check is `isSafeStateDir`, and it lives
+// inside safeWriteState()/ensureStateDir() — which updateLifecycle
+// deliberately bypasses (see its comment). So this module calls isSafeStateDir
+// explicitly before writing; without that it would happily create
+// `.agentic-security/` in a directory that is not a recognised project root,
+// which is the litter state-dir.js exists to prevent.
 function storePath(scanRoot) { return statePath(scanRoot, 'provenance', 'lifecycle.json'); }
 function lockPath(scanRoot) { return statePath(scanRoot, 'provenance', 'lifecycle.lock'); }
 
@@ -121,6 +129,20 @@ export async function updateLifecycle(scanRoot, currentFindings, { scanId, obser
   // is itself a write into the scanned tree, and there is nothing to serialise
   // when nothing is written.
   if (!stateWritesEnabled()) {
+    return applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt });
+  }
+
+  // The project-marker check safeWriteState() would have applied, applied here
+  // because the write below deliberately does not go through it.
+  //
+  // Checked BEFORE withLock, not inside it: withLock's first act is
+  // `fs.mkdirSync(path.dirname(lockPath))`, so guarding only the store write
+  // would still have created `.agentic-security/provenance/` in an
+  // unrecognised directory before refusing — the directory IS the litter, so
+  // refusing after creating it refuses nothing. Returns the same in-memory view
+  // the read-only path returns, for the same reason: a missing answer, not a
+  // false one.
+  if (!isSafeStateDir(path.dirname(storePath(scanRoot)))) {
     return applyScan(readLifecycle(scanRoot), currentFindings, { scanId, observedAt });
   }
 
