@@ -13,7 +13,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeFindings, toCLI, explainProvenance } from '../../src/report/index.js';
+import { normalizeFindings, toCLI, explainProvenance, toSARIF, toCSV, toMarkdown } from '../../src/report/index.js';
 import { emptyProvenance, PROVENANCE_STATUS } from '../../src/posture/provenance/schema.js';
 
 function makeScan(findingProvenance) {
@@ -155,4 +155,49 @@ test('explain_finding (MCP) returns a redacted findingProvenance', async (t) => 
   assert.equal(res.findingProvenance.findingOrigin.authorName, 'Jamie Chen');
   assert.equal(res.findingProvenance.findingOrigin.authorEmail, null);
   assert.doesNotMatch(JSON.stringify(res), /jamie@example\.com/);
+});
+
+test('toSARIF: a result carries findingProvenance in properties, redacted', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
+    findingOrigin: { commit: 'abc1234567', authorName: 'Jamie Chen', authorEmail: 'jamie@example.com', authorDate: '2026-03-14T00:00:00Z' },
+  });
+  const sarif = toSARIF(makeScan(fp));
+  const result = sarif.runs[0].results[0];
+  assert.ok(result.properties.findingProvenance, 'SARIF result missing findingProvenance');
+  assert.equal(result.properties.findingProvenance.findingOrigin.commit, 'abc1234567');
+  assert.equal(result.properties.findingProvenance.findingOrigin.authorEmail, null);
+  assert.doesNotMatch(JSON.stringify(sarif), /jamie@example\.com/);
+});
+
+test('toSARIF: run-level properties carry a provenanceCoverage summary', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, { findingOrigin: { commit: 'abc1234567', authorDate: '2026-03-14T00:00:00Z' } });
+  const sarif = toSARIF(makeScan(fp));
+  assert.deepEqual(sarif.runs[0].invocations[0].properties.provenanceCoverage, { complete: 1 });
+});
+
+test('toCSV: provenance columns are present and populated, no email leak', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
+    findingOrigin: { commit: 'abc1234567', authorName: 'Jamie Chen', authorEmail: 'jamie@example.com', authorDate: '2026-03-14T00:00:00Z' },
+  });
+  const csv = toCSV(makeScan(fp));
+  const [header, row] = csv.split('\n');
+  assert.match(header, /provenanceStatus,provenanceCommit,provenanceAuthorDate,provenanceConfidence/);
+  assert.match(row, /complete/);
+  assert.match(row, /abc1234567/);
+  assert.doesNotMatch(csv, /jamie@example\.com/);
+});
+
+test('toMarkdown: a provenance block renders under the finding\'s severity section, no email leak', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
+    findingOrigin: { commit: 'abc1234567', authorName: 'Jamie Chen', authorEmail: 'jamie@example.com', authorDate: '2026-03-14T00:00:00Z' },
+  });
+  const md = toMarkdown(makeScan(fp));
+  assert.match(md, /Provenance/);
+  assert.match(md, /Jamie Chen/);
+  assert.doesNotMatch(md, /jamie@example\.com/);
+});
+
+test('toMarkdown: no provenance section when no finding carries findingProvenance', () => {
+  const md = toMarkdown(makeScan(undefined));
+  assert.doesNotMatch(md, /<summary>Provenance<\/summary>/);
 });

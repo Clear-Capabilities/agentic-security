@@ -763,15 +763,22 @@ export function toCSV(scan){
     const s = String(v);
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
-  const header = ['id', 'severity', 'vuln', 'cwe', 'cvss', 'owasp', 'file', 'line', 'confidence', 'reachable', 'kind', 'snippet'];
+  // FR-PROV-018: a nested findingProvenance object has no natural CSV
+  // representation, so this is a deliberate flattening (status/commit/
+  // authorDate/confidence), not full fidelity. Appended after the existing
+  // columns so a spreadsheet already keyed on column position is unaffected.
+  const header = ['id', 'severity', 'vuln', 'cwe', 'cvss', 'owasp', 'file', 'line', 'confidence', 'reachable', 'kind', 'snippet', 'provenanceStatus', 'provenanceCommit', 'provenanceAuthorDate', 'provenanceConfidence'];
   const rows = [header.join(',')];
   for (const f of findings) {
+    const fp = f.findingProvenance;
     rows.push([
       esc(f.id), esc(f.severity), esc(f.vuln), esc(f.cwe), esc(f.cvss || ''),
       esc(f.owasp || ''), esc(f.file), esc(f.line),
       esc(f.confidence == null ? '' : f.confidence.toFixed(3)),
       esc(f.reachable == null ? '' : f.reachable),
       esc(f.kind), esc((f.snippet || '').slice(0, 200)),
+      esc(fp?.status || ''), esc(fp?.findingOrigin?.commit || ''),
+      esc(fp?.findingOrigin?.authorDate || ''), esc(fp?.confidence?.level || ''),
     ].join(','));
   }
   return rows.join('\n');
@@ -851,6 +858,24 @@ export function toMarkdown(scan, meta={}){
         lines.push(`| \`${f.file}:${f.line}\` | ${f.vuln} | ${f.cwe||'—'} | ${epss} | ${fix.replace(/\|/g,'\\|').slice(0,140)} |`);
       }
     }
+    // FR-PROV-018: one provenance block per finding that has one, reusing
+    // explainProvenance's content — never a second, divergent renderer.
+    const withProvenance = bySev[sev].filter(f => f.findingProvenance);
+    if (withProvenance.length) {
+      lines.push('');
+      lines.push('<details><summary>Provenance</summary>');
+      lines.push('');
+      for (const f of withProvenance) {
+        const block = explainProvenance(f);
+        if (!block) continue;
+        lines.push(`**\`${f.file}:${f.line}\`** — ${f.vuln}`);
+        lines.push('```');
+        lines.push(block);
+        lines.push('```');
+        lines.push('');
+      }
+      lines.push('</details>');
+    }
     lines.push('');
   }
   return lines.join('\n');
@@ -928,6 +953,16 @@ export function toSARIF(scan, meta={}){
           ...(scan && scan._rulesetVersion ? { rulesetVersion: scan._rulesetVersion } : {}),
           ...(scan && scan._rulesetVersionSource ? { rulesetVersionSource: scan._rulesetVersionSource } : {}),
           ...(scan && scan._rulesetVersionMismatch ? { rulesetVersionMismatch: scan._rulesetVersionMismatch } : {}),
+          // FR-PROV-018: run-level provenance summary — how many results
+          // resolved which terminal status, so a SARIF consumer can judge
+          // history coverage without walking every result's properties.
+          ...(findings.some(f => f.findingProvenance) ? {
+            provenanceCoverage: findings.reduce((acc, f) => {
+              const s = f.findingProvenance?.status || 'none';
+              acc[s] = (acc[s] || 0) + 1;
+              return acc;
+            }, {}),
+          } : {}),
         },
       }],
       results: findings.map(f => {
@@ -992,6 +1027,12 @@ export function toSARIF(scan, meta={}){
           signatureStatus: f.signatureStatus || (f._passThroughSigning ? 'pass-through' : (f._unsigned ? 'unsigned' : 'verified')),
           ...(f._unsigned ? { unsigned: true } : {}),
           ...(f._passThroughSigning ? { passThroughSigning: true } : {}),
+          // FR-PROV-018: `f` is already normalized (findingProvenance already
+          // passed through _normalizedProvenance/redactFindingProvenance by
+          // normalizeFindings), so this is a redacted passthrough, never a
+          // second redaction pass and never a read of a raw pre-normalization
+          // finding.
+          ...(f.findingProvenance ? { findingProvenance: f.findingProvenance } : {}),
         },
       };}),
     }],
