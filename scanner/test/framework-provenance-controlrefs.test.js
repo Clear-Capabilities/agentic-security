@@ -32,6 +32,21 @@ test('deriveComplianceProvenance: prefers the OLDEST complete-status origin amon
   assert.equal(d.confidence, 'high');
 });
 
+test('deriveComplianceProvenance: compares authorDate as an instant, not a lexical string (timezone-safe)', () => {
+  // A: 2026-06-01T23:30:00-08:00 = 2026-06-02T07:30:00Z (chronologically LATER)
+  // B: 2026-06-02T01:00:00+00:00 = 2026-06-02T01:00:00Z (chronologically EARLIER — the true earliest)
+  // Raw ISO strings sort 'A' < 'B' lexically (the wrong direction: a naive
+  // string comparison would pick A as "earliest") because authorDate
+  // preserves the author's local UTC offset rather than being normalized
+  // to Z — see git-evidence.js's commitMeta.
+  const A = { id: 'f-a', findingProvenance: emptyProvenance(PROVENANCE_STATUS.COMPLETE, { findingOrigin: { commit: 'aaa0000', authorDate: '2026-06-01T23:30:00-08:00', authorName: 'A' } }) };
+  const B = { id: 'f-b', findingProvenance: emptyProvenance(PROVENANCE_STATUS.COMPLETE, { findingOrigin: { commit: 'bbb0000', authorDate: '2026-06-02T01:00:00+00:00', authorName: 'B' } }) };
+  assert.ok('2026-06-01T23:30:00-08:00' < '2026-06-02T01:00:00+00:00', 'precondition: raw strings sort in the wrong chronological direction');
+  assert.ok(Date.parse('2026-06-01T23:30:00-08:00') > Date.parse('2026-06-02T01:00:00+00:00'), 'precondition: A is chronologically later than B');
+  const d = deriveComplianceProvenance([A, B]);
+  assert.equal(d.earliestOrigin.commit, 'bbb0000');
+});
+
 test('deriveComplianceProvenance: falls back to partial-status origin when nothing resolved complete', () => {
   const p = { id: 'f-p', findingProvenance: emptyProvenance(PROVENANCE_STATUS.PARTIAL, { findingOrigin: { commit: 'ccc3333', authorDate: '2026-02-01T00:00:00Z', authorName: 'C' } }) };
   const na = { id: 'f-na', findingProvenance: emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE) };

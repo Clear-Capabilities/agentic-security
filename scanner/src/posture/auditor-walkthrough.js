@@ -58,13 +58,24 @@ export function deriveComplianceProvenance(findings) {
     .filter((x) => x.fp && x.fp.findingOrigin && x.fp.findingOrigin.authorDate);
   const complete = withOrigin.filter((x) => x.fp.status === 'complete');
   const partial = withOrigin.filter((x) => x.fp.status === 'partial');
+  // authorDate is git's `%aI` (strict ISO-8601, author's LOCAL UTC offset —
+  // see git-evidence.js's commitMeta), never normalized to Z. Two commits
+  // authored in different timezones near a day boundary can lexically sort
+  // in the wrong chronological order, so compare actual instants via
+  // Date.parse, never the raw strings.
   const pickEarliest = (arr) => arr.reduce(
-    (min, x) => (!min || x.fp.findingOrigin.authorDate < min.fp.findingOrigin.authorDate) ? x : min,
+    (min, x) => (!min || Date.parse(x.fp.findingOrigin.authorDate) < Date.parse(min.fp.findingOrigin.authorDate)) ? x : min,
     null,
   );
   const best = complete.length ? pickEarliest(complete) : (partial.length ? pickEarliest(partial) : null);
   return {
     derivedFrom: list.map((f) => f && f.id).filter(Boolean),
+    // Only commit/authorDate/authorName are ever read from findingOrigin
+    // here — this object is a SIBLING field to findingProvenance (not
+    // nested inside it), so it bypasses the redactFindingProvenance sweep
+    // that runs at report/mcp output boundaries. authorEmail must never be
+    // added to this shape without first routing it through
+    // redactFindingProvenance.
     earliestOrigin: best ? {
       commit: best.fp.findingOrigin.commit || null,
       authorDate: best.fp.findingOrigin.authorDate,
@@ -566,6 +577,11 @@ export function renderWalkthrough(fw, evaluation, opts = {}) {
         if (dp && dp.earliestOrigin) {
           const short = String(dp.earliestOrigin.commit || '').slice(0, 7) || 'unknown';
           const day = String(dp.earliestOrigin.authorDate || '').slice(0, 10);
+          // Only commit/authorDate/authorName are ever read here — same
+          // caveat as deriveComplianceProvenance's earliestOrigin: this
+          // object bypasses redactFindingProvenance, so authorEmail must
+          // never be surfaced from it without routing through that function
+          // first.
           lines.push(`**Earliest proven origin:** ${short} — ${day} — ${dp.earliestOrigin.authorName || 'unknown'} (confidence: ${dp.confidence})`);
         } else if (dp) {
           lines.push(`**Earliest proven origin:** unresolved (confidence: ${dp.confidence})`);
