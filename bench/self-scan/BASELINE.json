@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-26T14:04:29.923Z",
-  "commit": "f57f496468e83dc5796ef6329f7e71d93128df71",
+  "generatedAt": "2026-08-27T15:24:54.765Z",
+  "commit": "82f942d6ed96378c31f894e204dceb067edcd011",
   "targets": {
     "hooks": {
       "total": 21,
@@ -36,7 +36,7 @@
       }
     },
     "scanner/src": {
-      "total": 447,
+      "total": 450,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -144,6 +144,8 @@
         "posture/pre-incident-archaeology.js": 1,
         "posture/production-feedback.js": 1,
         "posture/profile.js": 4,
+        "posture/provenance/cache.js": 1,
+        "posture/provenance/lifecycle.js": 1,
         "posture/realtime-cve-monitor.js": 5,
         "posture/retention-policy.js": 1,
         "posture/risk-dollars.js": 3,
@@ -181,7 +183,7 @@
         "posture/waf-ingest.js": 5,
         "posture/workflow-installer.js": 2,
         "pr-comment.js": 1,
-        "report/index.js": 3,
+        "report/index.js": 4,
         "runScan.js": 1,
         "sandbox/backend-namespace.js": 1,
         "sast/agent-untrusted-flow.js": 2,

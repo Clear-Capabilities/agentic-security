@@ -18,10 +18,11 @@ function storePath(scanRoot) { return statePath(scanRoot, 'provenance', 'lifecyc
 function lockPath(scanRoot) { return statePath(scanRoot, 'provenance', 'lifecycle.lock'); }
 
 export function readLifecycle(scanRoot) {
+  // Read directly and let the catch handle "missing" — an explicit
+  // existsSync() check first is a check-then-use race for no benefit, since
+  // the catch already covers every failure mode a stale check would too.
   try {
-    const p = storePath(scanRoot);
-    if (!fs.existsSync(p)) return {};
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
+    return JSON.parse(fs.readFileSync(storePath(scanRoot), 'utf8'));
   } catch {
     return {};
   }

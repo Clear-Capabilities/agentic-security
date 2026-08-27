@@ -39,10 +39,11 @@ export function makeCacheKey({ repoHead, stableId, detectorVersion, historyBound
 }
 
 export function cacheGet(scanRoot, key) {
+  // Read directly and let the catch handle "missing" — an explicit
+  // existsSync() check first is a check-then-use race for no benefit, since
+  // the catch already covers every failure mode a stale check would too.
   try {
-    const p = keyPath(scanRoot, key);
-    if (!fs.existsSync(p)) return null;
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
+    return JSON.parse(fs.readFileSync(keyPath(scanRoot, key), 'utf8'));
   } catch {
     return null;
   }
