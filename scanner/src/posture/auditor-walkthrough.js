@@ -44,6 +44,37 @@ import { strengthOfControl as _strengthOfControl } from './coverage-strength.js'
 
 // Re-exported so existing callers/tests keep importing these from here.
 export { COMPLIANCE_FAMILY_ALIAS, resolveFamilyKeys };
+
+// FR-PROV-016 (M2): "earliest proven open condition" among a control's
+// contributing findings. Prefers a finding whose findingProvenance resolved
+// findingOrigin.status:'complete' (the OLDEST such authorDate wins); falls
+// back to 'partial' entries with a resolved findingOrigin.authorDate when no
+// complete one exists. Never fabricates an origin — zero usable entries is
+// reported as null/'unknown', not the repo's first commit or "now".
+export function deriveComplianceProvenance(findings) {
+  const list = Array.isArray(findings) ? findings.filter(Boolean) : [];
+  const withOrigin = list
+    .map((f) => ({ f, fp: f && f.findingProvenance }))
+    .filter((x) => x.fp && x.fp.findingOrigin && x.fp.findingOrigin.authorDate);
+  const complete = withOrigin.filter((x) => x.fp.status === 'complete');
+  const partial = withOrigin.filter((x) => x.fp.status === 'partial');
+  const pickEarliest = (arr) => arr.reduce(
+    (min, x) => (!min || x.fp.findingOrigin.authorDate < min.fp.findingOrigin.authorDate) ? x : min,
+    null,
+  );
+  const best = complete.length ? pickEarliest(complete) : (partial.length ? pickEarliest(partial) : null);
+  return {
+    derivedFrom: list.map((f) => f && f.id).filter(Boolean),
+    earliestOrigin: best ? {
+      commit: best.fp.findingOrigin.commit || null,
+      authorDate: best.fp.findingOrigin.authorDate,
+      authorName: best.fp.findingOrigin.authorName || null,
+    } : null,
+    confidence: complete.length ? 'high' : (partial.length ? 'low' : 'unknown'),
+    limitations: best ? [] : ['no contributing finding resolved a verified origin'],
+  };
+}
+
 const BUNDLED_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), 'compliance-frameworks');
 function _readJson(fp) {
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return null; }
@@ -275,24 +306,30 @@ export function evaluateFramework(scanRoot, fw, scan) {
   const results = [];
   for (const c of fw.controls || []) {
     const obs = [];
+    // FR-PROV-016: findings that contributed an OPEN condition to this
+    // control's `family:` mapping(s) — the exact objects `open` below
+    // filters to, not just their ids, so deriveComplianceProvenance can read
+    // .findingProvenance off them. Naturally empty for a control that ends
+    // up 'present' (present requires zero open findings across every
+    // mapping) or 'manual' (no family: mapping ever populates it) — so a
+    // consumer can treat a non-empty controlRefs as "this control has an
+    // attributable gap" without re-deriving the bucket classification.
+    const contributingFindings = [];
     let status = 'manual';
     const maps = Array.isArray(c.mapsTo) ? c.mapsTo : [];
 
     if (maps.length === 0) {
       obs.push('No automated mapping — requires manual evidence collection.');
-      // PRD F10.2: carry the MEASURED strength of the backing detector, so a
-    // control mapped to a detector that finds 3 of 18 independent advisories
-    // cannot read the same as one backed by a detector that finds nearly
-    // everything. Import is lazy so the evaluator keeps working if the bench
-    // artifacts are absent (they degrade to `unmeasured`, never to a default).
-    let evidence = null;
-    try { evidence = _strengthOfControl(c); } catch { /* strength is additive; never block evaluation */ }
-    results.push({
-      control: c,
-      status,
-      observations: obs,
-      ...(evidence ? { evidence, partiallyEvidenced: evidence.tier === 'weak' || evidence.tier === 'unmeasured' } : {}),
-    });
+      let evidence = null;
+      try { evidence = _strengthOfControl(c); } catch { /* strength is additive; never block evaluation */ }
+      results.push({
+        control: c,
+        status,
+        observations: obs,
+        controlRefs: [],
+        derivedProvenance: deriveComplianceProvenance([]),
+        ...(evidence ? { evidence, partiallyEvidenced: evidence.tier === 'weak' || evidence.tier === 'unmeasured' } : {}),
+      });
       continue;
     }
 
@@ -356,6 +393,7 @@ export function evaluateFramework(scanRoot, fw, scan) {
         const open = scoped.filter(f => !f.intentSuppressed && !f.pastDecision && (SEVERITY_RANK[f.severity] ?? 0) >= minRank);
         if (open.length) {
           allCleared = false;
+          contributingFindings.push(...open);
           obs.push(`${open.length} open ${fam} finding(s) at ${minSeverity}+.`);
         } else {
           obs.push(`✓ ${fam}: no open ${minSeverity}+ findings.`);
@@ -461,10 +499,13 @@ export function evaluateFramework(scanRoot, fw, scan) {
     // artifacts are absent (they degrade to `unmeasured`, never to a default).
     let evidence = null;
     try { evidence = _strengthOfControl(c); } catch { /* strength is additive; never block evaluation */ }
+    const dedupedRefs = [...new Set(contributingFindings.map((f) => f.id).filter(Boolean))];
     results.push({
       control: c,
       status,
       observations: obs,
+      controlRefs: dedupedRefs,
+      derivedProvenance: deriveComplianceProvenance(contributingFindings),
       ...(evidence ? { evidence, partiallyEvidenced: evidence.tier === 'weak' || evidence.tier === 'unmeasured' } : {}),
     });
   }
@@ -519,6 +560,18 @@ export function renderWalkthrough(fw, evaluation, opts = {}) {
     if (ev.status === 'absent' || ev.status === 'partial') {
       lines.push(`**Remediation:** address the bullet(s) above, then re-run \`/compliance --walkthrough ${fw.id}\` to update this report.`);
       lines.push('');
+      if (Array.isArray(ev.controlRefs) && ev.controlRefs.length) {
+        lines.push(`**Contributing findings:** ${ev.controlRefs.join(', ')}`);
+        const dp = ev.derivedProvenance;
+        if (dp && dp.earliestOrigin) {
+          const short = String(dp.earliestOrigin.commit || '').slice(0, 7) || 'unknown';
+          const day = String(dp.earliestOrigin.authorDate || '').slice(0, 10);
+          lines.push(`**Earliest proven origin:** ${short} — ${day} — ${dp.earliestOrigin.authorName || 'unknown'} (confidence: ${dp.confidence})`);
+        } else if (dp) {
+          lines.push(`**Earliest proven origin:** unresolved (confidence: ${dp.confidence})`);
+        }
+        lines.push('');
+      }
     }
   }
 

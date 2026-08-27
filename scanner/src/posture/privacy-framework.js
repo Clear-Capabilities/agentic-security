@@ -209,6 +209,8 @@ export function assessPrivacyFramework(scanRoot, scan, opts = {}) {
       parser: 'COMPLIANCE',
       family: 'privacy-compliance',
       complianceControl: { framework: PRIVACY_FRAMEWORK_ID, id: c.id, codeTestable: c.codeTestable || 'no' },
+      controlRefs: r.controlRefs || [],
+      derivedProvenance: r.derivedProvenance || null,
     });
   }
 
