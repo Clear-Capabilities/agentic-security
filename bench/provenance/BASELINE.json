@@ -1,0 +1,11 @@
+{
+ "schema": "provenance/v1",
+ "note": "Wall-clock overhead of provenance annotation vs. a provenance-disabled scan, on a synthetic 15-file/3-commit-each git fixture, cold cache. See runner.mjs header for why the number is a RATIO, not an absolute FR-PROV-029 percentage claim.",
+ "regressionFactor": 1.6,
+ "withProvenanceMs": 1804,
+ "withoutProvenanceMs": 59,
+ "overheadRatio": 30.71,
+ "withProvenanceHeapDeltaBytes": 87234264,
+ "findings": 15,
+ "recordedAt": "2026-08-27T23:41:02.669Z"
+}
