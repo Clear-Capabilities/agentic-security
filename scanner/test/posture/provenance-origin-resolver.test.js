@@ -149,6 +149,36 @@ test('resolveOrigin: no candidate commits (file never touched at that line) is n
   }
 });
 
+test('resolveOrigin: a 3-commit linear chain (each touching the same line) still resolves the correct introducing commit', async () => {
+  // M2 §2.4 performance fix regression test: three commits touching the
+  // same line means the walk visits candidate 2's presentHere check and
+  // candidate 2's presentInParent check (parent === candidate 1) — the
+  // exact redundant-replay shape the memo collapses. This test is a
+  // behavior proof (the memo is observationally transparent — same result
+  // whether cached or not); it follows this file's own convention of
+  // deriving the finding from a real detector run rather than hand-
+  // constructing a stableId, per the header comment above.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('server.js', SAFE_SRC);
+    fx.commit('safe baseline', { date: '2026-01-01T00:00:00Z', authorName: 'Alice' });
+    fx.writeFile('server.js', VULN_SRC);
+    const shaVuln = fx.commit('introduce sqli', { date: '2026-01-02T00:00:00Z', authorName: 'Bob' });
+    const VULN_SRC_COMMENTED = VULN_SRC.replace('+ id);', '+ id); // reviewed');
+    fx.writeFile('server.js', VULN_SRC_COMMENTED);
+    fx.commit('add a comment, predicate still present', { date: '2026-01-03T00:00:00Z', authorName: 'Carol' });
+
+    const finding = await realSqlInjectionFinding(VULN_SRC_COMMENTED, 'server.js', fx.root);
+    const result = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } });
+    assert.equal(result.status, 'complete', `expected complete, got ${result.status} (${result.reason || ''})`);
+    assert.equal(result.findingOrigin.commit, shaVuln);
+    assert.equal(result.findingOrigin.authorName, 'Bob');
+    assert.ok(result.commitsConsidered >= 2);
+  } finally {
+    fx.cleanup();
+  }
+});
+
 test('resolveOrigin: budget_exhausted when deadlineAt is already in the past', async () => {
   const fx = createGitFixture();
   try {

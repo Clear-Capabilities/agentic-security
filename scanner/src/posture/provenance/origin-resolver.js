@@ -62,12 +62,29 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
   const files = relevantFiles(finding);
   let commitsConsidered = 0;
 
+  // M2 §2.4 performance fix: within ONE resolveOrigin call, replayAt(sha) is
+  // pure given (scanRoot, sha, files, stableId) — all fixed for this call.
+  // The SAME sha is asked about twice whenever one candidate's first parent
+  // equals the previous candidate: candidate i's "presentHere" check IS
+  // candidate i+1's "presentInParent" check when parent(candidate i+1) ===
+  // candidate i, which is the common case for a file with no gaps in its
+  // edit history. Memoized here (not in predicate-replay.js itself) so the
+  // cache stays scoped to one finding's walk — a cross-finding cache is
+  // coordinator.js's job (Task 7), not this module's.
+  const replayCache = new Map();
+  const replay = (sha) => {
+    if (replayCache.has(sha)) return replayCache.get(sha);
+    const p = replayAt(scanRoot, sha, files, stableId);
+    replayCache.set(sha, p);
+    return p;
+  };
+
   for (const sha of candidates) {
     if (deadlineAt && Date.now() > deadlineAt) {
       return { status: 'budget_exhausted', commitsConsidered };
     }
     commitsConsidered++;
-    const presentHere = await replayAt(scanRoot, sha, files, stableId);
+    const presentHere = await replay(sha);
     if (!presentHere.present) continue;
 
     const parent = getFirstParent(scanRoot, sha);
@@ -94,7 +111,7 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
       };
     }
 
-    const presentInParent = await replayAt(scanRoot, parent, files, stableId);
+    const presentInParent = await replay(parent);
     const absentInParent = !presentInParent.present;
     if (!absentInParent) continue; // predicate already true in parent — keep walking older candidates
 
