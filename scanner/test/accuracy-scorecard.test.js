@@ -17,6 +17,7 @@ import {
   formatRate,
   buildScorecard,
   renderScorecardMarkdown,
+  computeProvenanceCoverage,
   TIMESTAMP_MARKER,
 } from '../src/posture/accuracy-scorecard.js';
 
@@ -568,4 +569,83 @@ test('renderScorecardMarkdown: Corpus version and Scope rows are omitted (not re
   assert.doesNotMatch(md, /\| Corpus version \|/);
   assert.doesNotMatch(md, /\| Scope \|/);
   assert.doesNotMatch(md, /undefined/);
+});
+
+// ── Provenance coverage — PRD Success Metrics: ">=95% complete or uncommitted
+//    for P0-supported findings in full Git clones." P0-scoped = SAST + secrets
+//    + DIRECT SCA dependency findings (transitive is explicitly P1). ──
+
+test('computeProvenanceCoverage: counts complete+uncommitted against P0-scoped findings only', () => {
+  const scan = {
+    findings: [
+      { findingProvenance: { status: 'complete' } },
+      { findingProvenance: { status: 'partial' } },
+    ],
+    secrets: [
+      { findingProvenance: { status: 'not_available' } }, // expected LOW until Task 11 ships
+    ],
+    supplyChain: [
+      { type: 'vulnerable_dep', isDirect: true, findingProvenance: { status: 'uncommitted' } },
+      { type: 'vulnerable_dep', isDirect: false, findingProvenance: { status: 'complete' } }, // transitive, must NOT count
+    ],
+  };
+  const { n, d } = computeProvenanceCoverage(scan);
+  assert.equal(d, 4, 'transitive SCA entry must be excluded from the P0-scoped denominator');
+  assert.equal(n, 2, 'complete (findings) + uncommitted (direct SCA) count; partial and not_available do not');
+});
+
+test('computeProvenanceCoverage: a non-vulnerable_dep supplyChain entry (e.g. a license finding) is excluded from the denominator', () => {
+  const scan = {
+    findings: [],
+    secrets: [],
+    supplyChain: [
+      { type: 'license', isDirect: true, findingProvenance: { status: 'complete' } },
+    ],
+  };
+  const { n, d } = computeProvenanceCoverage(scan);
+  assert.equal(d, 0);
+  assert.equal(n, 0);
+});
+
+test('computeProvenanceCoverage: a finding with no findingProvenance at all counts against the denominator but not the numerator', () => {
+  const scan = { findings: [{ id: 'f1' }], secrets: [], supplyChain: [] };
+  const { n, d } = computeProvenanceCoverage(scan);
+  assert.equal(d, 1);
+  assert.equal(n, 0);
+});
+
+test('buildScorecard: missing scan input degrades to provenanceCoverage.measuredThisRun=false, not a fabricated 0/0', () => {
+  const model = buildScorecard(fixtureInputs());
+  assert.equal(model.provenanceCoverage.measuredThisRun, false);
+});
+
+test('buildScorecard: a supplied scan input produces a measured {n,d} provenanceCoverage', () => {
+  const scan = {
+    findings: [{ findingProvenance: { status: 'complete' } }],
+    secrets: [],
+    supplyChain: [
+      { type: 'vulnerable_dep', isDirect: true, findingProvenance: { status: 'partial' } },
+    ],
+  };
+  const model = buildScorecard({ ...fixtureInputs(), scan });
+  assert.equal(model.provenanceCoverage.measuredThisRun, true);
+  assert.deepEqual(model.provenanceCoverage, { measuredThisRun: true, n: 1, d: 2 });
+});
+
+test('renderScorecardMarkdown: Provenance coverage section renders through formatRate when measured', () => {
+  const scan = {
+    findings: [{ findingProvenance: { status: 'complete' } }, { findingProvenance: { status: 'complete' } }],
+    secrets: [],
+    supplyChain: [],
+  };
+  const model = buildScorecard({ ...fixtureInputs(), scan });
+  const md = renderScorecardMarkdown(model);
+  assert.match(md, /## Provenance coverage/);
+  assert.match(md, /2\/2 \(100\.0%\)/);
+});
+
+test('renderScorecardMarkdown: Provenance coverage section is cleanly OMITTED (not a fabricated 0/0) when no scan input was supplied', () => {
+  const model = buildScorecard(fixtureInputs());
+  const md = renderScorecardMarkdown(model);
+  assert.doesNotMatch(md, /## Provenance coverage/);
 });

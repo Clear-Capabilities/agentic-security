@@ -123,6 +123,14 @@ export function aggregateCorpus(detail) {
  *                — measured THIS run
  *   committed    { corpusBaseline, proofCorpus } — read from committed files,
  *                labelled as such in the output, never used to derive a rate
+ *   scan         optional — a full scan object (`{findings, secrets,
+ *                supplyChain, ...}`) from a run over a full (non-shallow) Git
+ *                clone, used ONLY to compute provenanceCoverage below. Absent
+ *                by default: `scripts/scorecard.mjs`'s existing runs (the
+ *                CVE corpus, the self-scan harness) do not currently surface
+ *                a scan object with `findingProvenance` attached, so the
+ *                section renders as "not measured this run" rather than a
+ *                fabricated rate. See PRD Success Metrics.
  */
 export function buildScorecard(inputs) {
   const corpus = aggregateCorpus(inputs.corpusDetail);
@@ -163,6 +171,14 @@ export function buildScorecard(inputs) {
       byTier: corpus.byTier,
     },
     selfScan: { measuredThisRun: true, targets, polyglot: selfScan.polyglot || { total: 0, byLanguage: {} } },
+    // PRD Success Metrics: "Provenance coverage >=95% complete or uncommitted
+    // for P0-supported findings in full Git clones." `inputs.scan` is
+    // optional (see the JSDoc above) — absent when no caller yet supplies a
+    // real scan, in which case this reports "not measured" rather than a
+    // fabricated 0/0.
+    provenanceCoverage: inputs.scan
+      ? { measuredThisRun: true, ...computeProvenanceCoverage(inputs.scan) }
+      : { measuredThisRun: false },
     taintRecall: (() => {
       const lr = inputs.layerRecall;
       if (!lr) {
@@ -247,6 +263,26 @@ export function buildScorecard(inputs) {
         : null,
     },
   };
+}
+
+// PRD Success Metrics: "Provenance coverage >=95% complete or uncommitted
+// for P0-supported findings in full Git clones." P0-supported scope per
+// the PRD's own Release Scope table: code (SAST), secrets, IaC/config,
+// direct dependency findings. This metric will legitimately read LOW for
+// secrets until [Task 11 commit] ships real secrets provenance -- that is
+// CORRECT behavior for an honest metric, not a bug in this function.
+export function computeProvenanceCoverage(scan) {
+  const p0Findings = [
+    ...(scan.findings || []),
+    ...(scan.secrets || []),
+    ...(scan.supplyChain || []).filter((s) => s.type === 'vulnerable_dep' && s.isDirect),
+  ];
+  const d = p0Findings.length;
+  const n = p0Findings.filter((f) => {
+    const status = f.findingProvenance?.status;
+    return status === 'complete' || status === 'uncommitted';
+  }).length;
+  return { n, d };
 }
 
 function rateRow(r) {
@@ -470,6 +506,23 @@ export function renderScorecardMarkdown(m) {
   }
   L.push('Per-file counts are in `docs/scorecard.json`.');
   L.push('');
+  if (m.provenanceCoverage && m.provenanceCoverage.measuredThisRun) {
+    L.push('## Provenance coverage');
+    L.push('');
+    L.push('PRD Success Metric: **>=95% of P0-scoped findings (SAST + secrets + direct**');
+    L.push('**dependency findings) resolve to `complete` or `uncommitted` git provenance**');
+    L.push('in a full (non-shallow) clone. Transitive dependency findings are excluded —');
+    L.push('the PRD\'s Release Scope table names direct dependency findings only.');
+    L.push('');
+    L.push('| P0-scoped findings — complete/uncommitted provenance |');
+    L.push('| --- |');
+    L.push(`| ${formatRate(m.provenanceCoverage.n, m.provenanceCoverage.d)} |`);
+    L.push('');
+    L.push('This will legitimately read LOW for the secrets share of the denominator');
+    L.push('until real secrets provenance ships — that is an honest gap in current');
+    L.push('scope, not a defect in this measurement.');
+    L.push('');
+  }
   // PRD F12.6 — the honest scorecard publishes the LIMITS too, not only the
   // rates. Three claims this project makes are only meaningful with their
   // caveat attached, and each caveat was invisible before this section:
