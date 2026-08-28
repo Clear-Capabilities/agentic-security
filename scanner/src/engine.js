@@ -10339,7 +10339,7 @@ function _deterministicFileTimings(timings) {
      if (!sc || typeof sc !== 'object' || sc.findingProvenance) continue;
      sc.findingProvenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
        limitations: [sc.type === 'vulnerable_dep'
-         ? 'transitive dependency origin resolution is not implemented in this release (deferred to a later phase)'
+         ? 'transitive dependency origin resolution failed for this entry (annotator error)'
          : `origin resolution does not apply to a ${sc.type || 'non-vulnerability'} supply-chain entry`],
      });
    }
