@@ -105,8 +105,8 @@ function computeDigest(finding, provenance) {
 // the SAST wording for the SCA case would describe a boundary nobody was
 // looking for, and reusing `shallow_or_unverified_boundary` as the confidence
 // reason would blame the clone depth for an ambiguity in the advisory data.
-function describePartial(isSca, reason) {
-  if (!isSca) {
+function describePartial(isScaLike, reason) {
+  if (!isScaLike) {
     return {
       limitation: reason
         ? `earliest observable — history could not confirm a verified parent boundary (${reason})`
@@ -377,15 +377,16 @@ export async function annotateGitProvenance(findings, ctx) {
 
   // A caller-supplied `deadlineAt` WINS over the locally-computed one. That is
   // what makes a scan-level global budget possible at all: engine.js runs this
-  // annotator twice (SAST findings, then direct SCA deps) and each call
-  // computing its own fresh window made the effective budget 2× the configured
-  // timeout. Falling back to a computed one keeps every standalone caller (and
-  // every test) working unchanged.
+  // annotator three times (SAST findings, direct SCA deps, transitive SCA
+  // deps per Task 7) and each call computing its own fresh window made the
+  // effective budget a multiple of the configured timeout. Falling back to a
+  // computed one keeps every standalone caller (and every test) working
+  // unchanged.
   const deadlineAt = options.deadlineAt || (Date.now() + (options.timeoutMs || DEFAULT_TIMEOUT_MS));
   // Sub-budget, from the REMAINING global budget rather than the configured
-  // timeout: on the second of engine.js's two calls, most of the window may
-  // already be spent, and dividing the original figure would hand each SCA
-  // entry a share of time that no longer exists.
+  // timeout: on the second or third of engine.js's three calls, most of the
+  // window may already be spent, and dividing the original figure would hand
+  // each SCA entry a share of time that no longer exists.
   // A caller-supplied value wins, on the same principle as `deadlineAt` above:
   // the caller is the only party that can see across multiple annotator passes.
   const remainingMs = Math.max(0, deadlineAt - Date.now());

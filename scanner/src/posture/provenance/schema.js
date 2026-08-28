@@ -37,11 +37,14 @@ export const AGE_BASIS = Object.freeze({
 });
 
 // The `['complete', 'uncommitted']` "provenance is healthy enough to trust"
-// check independently exists in THREE places today (bin/agentic-security.js's
-// --require-provenance block, pipeline/assurance-mode.js's strict check, and
-// mttr.js's/fix-history.js's own ageBasis tiering all re-derive the same
-// status set locally). One shared predicate, so a future change to what
-// counts as "healthy" is a one-line edit, not a grep-and-fix-N-places.
+// check independently existed in TWO places (bin/agentic-security.js's
+// --require-provenance block and pipeline/assurance-mode.js's strict check),
+// both re-deriving the same status set locally; unified into this one shared
+// predicate, so a future change to what counts as "healthy" is a one-line
+// edit, not a grep-and-fix-N-places. mttr.js's/fix-history.js's ageBasis
+// tiering is a DIFFERENT thing — it buckets a finding's age basis for
+// reporting, not a healthy/unhealthy gate — and was never converted to use
+// this predicate; do not conflate the two.
 export function isProvenanceHealthy(findingProvenance) {
   return ['complete', 'uncommitted'].includes(findingProvenance?.status);
 }
