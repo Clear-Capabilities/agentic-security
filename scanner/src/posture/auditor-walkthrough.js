@@ -41,6 +41,13 @@ import { statePath, stateWritesEnabled } from './state-dir.js';
 import { EVIDENCE_GRADE_DISCLAIMER_SHORT } from './evidence-grade-wording.js';
 import { COMPLIANCE_FAMILY_ALIAS, resolveFamilyKeys } from './family-resolve.js';
 import { strengthOfControl as _strengthOfControl } from './coverage-strength.js';
+// FR-PROV-026: earliestOrigin.authorName below is untrusted git commit
+// metadata. This module's renderWalkthrough() output is BOTH console.log'd
+// verbatim (bin/agentic-security.js's `compliance --walkthrough`) and
+// persisted as a .md file (see persistWalkthrough below) — sanitizeForMarkdown
+// covers both (it applies sanitizeForTerminal's control-char/newline
+// stripping first, then backslash-escapes Markdown-significant punctuation).
+import { sanitizeForMarkdown } from './provenance/schema.js';
 
 // Re-exported so existing callers/tests keep importing these from here.
 export { COMPLIANCE_FAMILY_ALIAS, resolveFamilyKeys };
@@ -582,7 +589,7 @@ export function renderWalkthrough(fw, evaluation, opts = {}) {
           // object bypasses redactFindingProvenance, so authorEmail must
           // never be surfaced from it without routing through that function
           // first.
-          lines.push(`**Earliest proven origin:** ${short} — ${day} — ${dp.earliestOrigin.authorName || 'unknown'} (confidence: ${dp.confidence})`);
+          lines.push(`**Earliest proven origin:** ${short} — ${day} — ${sanitizeForMarkdown(dp.earliestOrigin.authorName) || 'unknown'} (confidence: ${dp.confidence})`);
         } else if (dp) {
           lines.push(`**Earliest proven origin:** unresolved (confidence: ${dp.confidence})`);
         }

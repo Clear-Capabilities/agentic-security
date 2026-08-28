@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 const __require = createRequire(import.meta.url);
 const PKG_VERSION = __require('../package.json').version;
 import { signLastScan as _signLastScan, verifyLastScan as _verifyLastScanShared } from '../src/posture/integrity.js';
-import { isProvenanceHealthy } from '../src/posture/provenance/schema.js';
+import { isProvenanceHealthy, sanitizeForTerminal } from '../src/posture/provenance/schema.js';
 import { runScan } from '../src/runScan.js';
 
 // Every command is dispatched as `process.exit(await cmdX(args))`, and
@@ -2533,7 +2533,12 @@ async function cmdVerifyAttestation(args) {
     console.log('');
     console.log(`  finding: ${bundle.finding?.stableId || bundle.finding?.id || '?'}`);
     console.log(`  status: ${p.status || 'n/a'}   method: ${p.method || 'n/a'}`);
-    if (p.findingOrigin) console.log(`  origin: ${p.findingOrigin.commit || '?'} by ${p.findingOrigin.authorName || '?'} on ${p.findingOrigin.authorDate || '?'}`);
+    // FR-PROV-026: findingOrigin.authorName is untrusted git commit metadata
+    // (this bundle's signature only proves the BUNDLE wasn't tampered with —
+    // it says nothing about what the original commit author put in their
+    // name — see the "Signed, portable evidence" section of the root
+    // CLAUDE.md), printed straight to the terminal by `verify-attestation`.
+    if (p.findingOrigin) console.log(`  origin: ${p.findingOrigin.commit || '?'} by ${sanitizeForTerminal(p.findingOrigin.authorName) || '?'} on ${p.findingOrigin.authorDate || '?'}`);
     console.log(`  confidence: ${p.confidence?.level || 'n/a'} (${p.confidence?.score ?? 'n/a'})`);
     if ((p.limitations || []).length) console.log(`  limitations: ${p.limitations.join('; ')}`);
     console.log('');

@@ -11,7 +11,13 @@ import { applyLegacyCompat, legacyFieldDeprecationNotice } from '../pipeline/leg
 // hundred lines below) and NOT `supplyChainEntry.provenance`
 // (sca/sigstore-verify.js's SLSA/Sigstore build attestation). Three unrelated
 // things, three distinct keys — do not collapse them.
-import { redactFindingProvenance } from '../posture/provenance/schema.js';
+import { redactFindingProvenance, sanitizeForTerminal, sanitizeForMarkdown } from '../posture/provenance/schema.js';
+// Re-exported: FR-PROV-026. The sanitizers live in provenance/schema.js
+// (shared with posture/auditor-walkthrough.js, a second CLI/Markdown
+// renderer of the same untrusted fields — see that module's header for why
+// it lives there rather than here); re-exported so `explainProvenance`'s
+// own module keeps being the discoverable home for provenance-text callers.
+export { sanitizeForTerminal, sanitizeForMarkdown };
 
 const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const SEV_TO_SARIF = { critical: 'error', high: 'error', medium: 'warning', low: 'note', info: 'none' };
@@ -112,10 +118,13 @@ export function explainProvenance(f) {
   const lines = [];
   const o = fp.findingOrigin;
   if (fp.status === 'complete' && o) {
-    lines.push(`Introduced:      ${short(o.commit)}  •  ${day(o.authorDate)}  •  ${o.authorName || 'unknown'}`);
+    lines.push(`Introduced:      ${short(o.commit)}  •  ${day(o.authorDate)}  •  ${sanitizeForTerminal(o.authorName) || 'unknown'}`);
     const bi = fp.branchIntroduction;
     if (bi && bi.commit !== o.commit) {
-      lines.push(`Branch entry:    ${short(bi.commit)}  •  ${bi.relationship || 'unknown relationship'}`);
+      // relationship is an internal enum ('merge'/'direct', see
+      // branch-entry.js) never sourced from untrusted git text — wrapped
+      // anyway for defense in depth and consistency with authorName above.
+      lines.push(`Branch entry:    ${short(bi.commit)}  •  ${sanitizeForTerminal(bi.relationship) || 'unknown relationship'}`);
     }
   } else if (fp.status === 'partial') {
     lines.push(`Origin:          EARLIEST OBSERVABLE${o ? '  ' + short(o.commit) : ''}`);
@@ -826,6 +835,15 @@ export function toJUnit(scan, meta={}){
   return lines.join('\n');
 }
 
+// FR-PROV-026: length of the Markdown code fence needed to safely wrap
+// `text` without it being able to break out via an embedded backtick run
+// (e.g. from an unsanitized-for-backticks authorName). Minimum 3, per
+// CommonMark; longer only when `text` itself contains a run that long.
+function _mdFenceLen(text) {
+  const runs = String(text == null ? '' : text).match(/`+/g) || [];
+  return Math.max(3, ...runs.map(r => r.length + 1));
+}
+
 export function toMarkdown(scan, meta={}){
   const findings = normalizeFindings(scan);
   const lines = ['# Agentic Security — Scan Report', ''];
@@ -869,9 +887,17 @@ export function toMarkdown(scan, meta={}){
         const block = explainProvenance(f);
         if (!block) continue;
         lines.push(`**\`${f.file}:${f.line}\`** — ${f.vuln}`);
-        lines.push('```');
+        // FR-PROV-026: sanitizeForTerminal (applied inside explainProvenance)
+        // strips control chars but NOT backticks, which are ordinary text —
+        // a malicious authorName containing ``` could otherwise break out of
+        // a fixed 3-backtick fence and inject raw Markdown/HTML into the
+        // report. Use a fence one backtick longer than any run already in
+        // the block (CommonMark's own escaping mechanism for fenced code),
+        // so normal content (never containing backticks) is unaffected.
+        const fence = '`'.repeat(_mdFenceLen(block));
+        lines.push(fence);
         lines.push(block);
-        lines.push('```');
+        lines.push(fence);
         lines.push('');
       }
       lines.push('</details>');
