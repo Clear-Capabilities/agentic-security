@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { resolveMissingControl } from '../../src/posture/provenance/missing-control-resolver.js';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 
@@ -64,6 +67,42 @@ test('resolveMissingControl: a predicate that throws is treated as "absent", nev
   const throwingPredicate = async () => { throw new Error('detector crashed'); };
   const result = await resolveMissingControl(fx.root, { file: 'routes.js', predicate: throwingPredicate });
   assert.equal(result.status, 'unknown');
+});
+
+test('resolveMissingControl: an unsafe `since` (shaped like a git flag) never reaches git argv', async (t) => {
+  // Final whole-branch review item #4: this module reimplements its own git
+  // invocation rather than routing through git-evidence.js's hardened
+  // primitives, so `since` and `file` need their own validation — mirrored
+  // from git-evidence.js's own test ("rejects path traversal, sha
+  // flag-injection, and unsafe since values"), same canary-file technique:
+  // if `since` reached `git log`'s argv as a bare token, a flag like
+  // `--output=<canaryPath>` would make git actually write the file.
+  const fx = createGitFixture();
+  const canaryPath = path.join(os.tmpdir(), `as-missing-control-pwn-test-${process.pid}-${Date.now()}.txt`);
+  t.after(() => { if (fs.existsSync(canaryPath)) fs.unlinkSync(canaryPath); fx.cleanup(); });
+
+  fx.writeFile('routes.js', 'app.post("/x", rateLimit(), handler);\n');
+  fx.commit('add rate limiting');
+  fx.writeFile('routes.js', 'app.post("/x", handler);\n');
+  fx.commit('remove rate limiting (regression)');
+
+  const result = await resolveMissingControl(fx.root, {
+    file: 'routes.js', predicate: containsRateLimit, since: `--output=${canaryPath}`,
+  });
+  assert.equal(result.status, 'unknown', 'an unsafe since must degrade to no candidates, never a partial result computed against a corrupted revision range');
+  assert.equal(result.commitsConsidered, 0);
+  assert.equal(fs.existsSync(canaryPath), false, 'the unsafe since value reached git argv and git wrote the canary file');
+});
+
+test('resolveMissingControl: a path escaping scanRoot never reaches git argv', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('routes.js', 'app.post("/x", rateLimit(), handler);\n');
+  fx.commit('add rate limiting');
+
+  const result = await resolveMissingControl(fx.root, { file: '../outside.js', predicate: containsRateLimit });
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.commitsConsidered, 0);
 });
 
 test('resolveMissingControl: respects deadlineAt, reporting budget_exhausted rather than hanging', async (t) => {

@@ -19,7 +19,11 @@ function _run(scanRoot, args) {
   }
 }
 
-function _relPath(scanRoot, file) {
+// Exported so other resolvers in this directory that build their own git
+// invocations (rather than adding a new wrapper function here) still route
+// path/revision arguments through the same validation, instead of
+// reimplementing it and risking drift — see missing-control-resolver.js.
+export function _relPath(scanRoot, file) {
   const abs = path.resolve(scanRoot, file);
   const rel = path.relative(scanRoot, abs);
   return (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) ? null : rel.split(path.sep).join('/');
@@ -37,7 +41,7 @@ function _isSha(sha) {
 // range, so it must look like a ref/tag/sha — never start with `-` (which
 // git would parse as an option) and contain only characters refs can hold.
 const SINCE_RE = /^[A-Za-z0-9._/-]+$/;
-function _isSafeRevision(since) {
+export function _isSafeRevision(since) {
   return typeof since === 'string' && since.length > 0 && !since.startsWith('-') && SINCE_RE.test(since);
 }
 

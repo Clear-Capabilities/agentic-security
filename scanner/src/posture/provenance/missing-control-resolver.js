@@ -18,7 +18,7 @@
 // different, weaker claim than "introduced at the beginning." Collapsing
 // them would be exactly the false certainty the whole feature forbids.
 
-import { getFirstParent, commitMeta } from './git-evidence.js';
+import { getFirstParent, commitMeta, _relPath, _isSafeRevision } from './git-evidence.js';
 import * as cp from 'node:child_process';
 
 const GIT_TIMEOUT_MS = 2000;
@@ -38,10 +38,25 @@ function _run(scanRoot, args) {
 // NEWEST-FIRST (the reverse of git-evidence.js's candidateCommitsForFile,
 // which is oldest-first — this resolver needs to walk backward from the
 // present).
+//
+// This module reimplements its own git-invocation helper (`_run` above)
+// rather than adding a new wrapper to git-evidence.js, but that must not
+// mean skipping the argument-injection guards every OTHER resolver in this
+// directory gets for free by routing through git-evidence.js. `since` feeds
+// straight into a `<since>..HEAD` revision range and `file` becomes a bare
+// argv token after `--` — both reuse git-evidence.js's own exported guards
+// (`_isSafeRevision`, `_relPath`) rather than re-deriving the validation
+// logic here, so a caller-supplied `since` shaped like a git flag (e.g.
+// `--upload-pack=evil`) or a `file` that escapes scanRoot can never reach
+// git's argv as an unvalidated token — same contract candidateCommitsForFile
+// enforces for the forward-walking resolvers.
 function candidateCommitsNewestFirst(scanRoot, file, since) {
+  const rel = _relPath(scanRoot, file);
+  if (!rel) return [];
+  if (since && !_isSafeRevision(since)) return [];
   const args = ['log', '--format=%H', '--follow'];
   if (since) args.push(`${since}..HEAD`);
-  args.push('--', file);
+  args.push('--', rel);
   const r = _run(scanRoot, args);
   if (!r.ok) return [];
   return r.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
