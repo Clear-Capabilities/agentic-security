@@ -10190,7 +10190,13 @@ function _deterministicFileTimings(timings) {
       // mirrors AGENTIC_SECURITY_NO_GIT_HISTORY's existing pattern in this file.
       disabled: process.env.AGENTIC_SECURITY_NO_PROVENANCE === '1',
       scanId: process.env.AGENTIC_SECURITY_SCAN_ID || null,
-      observedAt: new Date().toISOString(),
+      // Frozen under --deterministic so SARIF (which now carries
+      // findingProvenance.firstObserved.observedAt — see report/index.js's
+      // toSARIF) stays byte-identical run-to-run, matching the exact
+      // convention posture/deterministic.js's makeDeterministic() already
+      // uses for meta.startedAt. This value predates that guarantee; it was
+      // invisible before findingProvenance reached any output format.
+      observedAt: isDeterministic() ? '1970-01-01T00:00:00.000Z' : new Date().toISOString(),
       rulesetVersion: process.env.AGENTIC_SECURITY_RULESET_VERSION || null,
       since: process.env.AGENTIC_SECURITY_PROVENANCE_SINCE || null,
       timeoutMs: provenanceTimeoutMs,

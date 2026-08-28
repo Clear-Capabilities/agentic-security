@@ -1,7 +1,7 @@
 // `agentic-security ci` subcommand tests — verify artifacts + exit policy.
 import { test } from 'node:test';
 import * as assert from 'node:assert';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as os from 'node:os';
@@ -18,6 +18,67 @@ async function copyFixture() {
   for (const entry of await fsp.readdir(fixture, { withFileTypes: true })) {
     if (entry.isFile()) await fsp.copyFile(path.join(fixture, entry.name), path.join(dst, entry.name));
   }
+  return dst;
+}
+
+// Framework-free, single-file vulnerable target + a committed git history.
+//
+// This is deliberately NOT copyFixture()'s vulnerable-js: that fixture's
+// app.js uses Express route handlers (`app.get`/`app.post`), which trips
+// `posture/business-logic.js`'s "Sensitive Route Without Auth" /
+// "Sensitive Mutation Without Audit Log" detectors, AND declares `express`
+// as a dependency, which makes `posture/stack-playbook.js` emit EXPRESS
+// hardening recommendations — both land in the logicVulns channel
+// (`aLogic` in engine.js), and that channel is UNCONDITIONALLY stamped
+// `not_available` regardless of git history (see engine.js's comment
+// above the `for (const bucket of [aSecrets, aLogic])` loop, and
+// pipeline/assurance-mode.js's "KNOWN INTERACTION" comment). So no amount
+// of git history makes vulnerable-js pass `--assurance strict` today — it
+// isn't a git-history gap, it's a real, disclosed M2 deferral. Confirmed
+// by direct inspection: committing vulnerable-js and scanning it left 10
+// findings stuck at `not_available` — 4 logicVulns findings and 6
+// stack-playbook:EXPRESS:* recommendation entries (which also have no
+// file/line to blame, so they could never resolve regardless of channel).
+//
+// This fixture instead exercises plain (non-route, non-framework) SAST
+// findings only — command injection, path traversal, weak crypto, code
+// injection — none of which touch the logicVulns channel, so once
+// committed every finding's provenance genuinely can reach
+// `complete`/`uncommitted`, which is what "genuinely clean/complete" is
+// supposed to mean for this test.
+async function makeLogicFreeGitFixture() {
+  const dst = await fsp.mkdtemp(path.join(os.tmpdir(), 'agsec-ci-logicfree-'));
+  await fsp.writeFile(path.join(dst, 'app.js'), `// Plain, framework-free vulnerable snippets — no HTTP route handlers, so
+// the business-logic detector and the Express stack-playbook
+// recommendations (both of which land in the logicVulns channel, which is
+// unconditionally not_available under M2) never fire.
+const { exec } = require('child_process');
+const fs = require('fs');
+const crypto = require('crypto');
+
+function pingHost(userInput) {
+  exec('ping ' + userInput, (err, out) => console.log(out));
+}
+
+function readUserFile(name) {
+  return fs.readFileSync(name, 'utf8');
+}
+
+function hashPassword(pw) {
+  return crypto.createHash('md5').update(pw).digest('hex');
+}
+
+function calc(expr) {
+  return eval(expr);
+}
+
+module.exports = { pingHost, readUserFile, hashPassword, calc };
+`);
+  execFileSync('git', ['init', '-q'], { cwd: dst });
+  execFileSync('git', ['config', 'user.email', 't@t.com'], { cwd: dst });
+  execFileSync('git', ['config', 'user.name', 'T'], { cwd: dst });
+  execFileSync('git', ['add', '-A'], { cwd: dst });
+  execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: dst });
   return dst;
 }
 
@@ -135,7 +196,6 @@ test('ci --assurance bogus is rejected immediately with a clear error, exit 1', 
 
 test('ci --assurance strict on a genuinely clean/complete scan still exits 0 (per --fail-on none)', async () => {
   if (!fs.existsSync(cli)) { console.warn('dist/ not built; skipping ci test'); return; }
-  const dir = await copyFixture();
   // FR-207: this assertion is about the SAST/detector dimension of
   // "genuinely complete," not the (now real) feed-freshness dimension --
   // a developer machine or CI runner with a genuinely aged local
@@ -143,6 +203,21 @@ test('ci --assurance strict on a genuinely clean/complete scan still exits 0 (pe
   // on real, ambient host state instead of this codebase. See the
   // identical rationale in test/scan-health.test.js's "reports complete"
   // test.
+  //
+  // M2 §2.5: strict mode now ALSO requires provenance completeness (not
+  // just scanHealth completeness) — a scan with no git history can never
+  // resolve findingProvenance beyond 'not_available', so a genuinely
+  // complete scan needs committed history. That alone is NOT enough with
+  // copyFixture()'s vulnerable-js fixture, though: its Express route
+  // handlers and declared `express` dependency both feed the logicVulns
+  // channel (business-logic findings + stack-playbook recommendations),
+  // which is unconditionally `not_available` regardless of git history
+  // (a disclosed M2 deferral — see makeLogicFreeGitFixture()'s comment
+  // above for the full trace). So this test uses a dedicated,
+  // framework-free, committed fixture instead, which is what actually
+  // makes "genuinely complete" achievable under strict mode's real,
+  // current definition.
+  const dir = await makeLogicFreeGitFixture();
   const r = spawnSync('node', [cli, 'ci', dir, '--fail-on', 'none', '--assurance', 'strict'], {
     encoding: 'utf8',
     env: { ...process.env, AGENTIC_SECURITY_NO_STATE: '1', AGENTIC_SECURITY_OFFLINE: '1' },
