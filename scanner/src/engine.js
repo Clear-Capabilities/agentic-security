@@ -10308,7 +10308,7 @@ function _deterministicFileTimings(timings) {
    annotateStableIds(blameableLogic);
    await _runAnnotator("annotateGitProvenance", async () => {
     // ONE deadline for the whole scan's provenance work, computed here and
-    // threaded into BOTH annotateGitProvenance calls below. Computed per call
+    // threaded into all five annotateGitProvenance calls below. Computed per call
     // inside the coordinator, the effective scan-level budget was 2× the
     // configured --provenance-timeout: the SAST pass got a fresh window and
     // then the SCA pass got another one, so an operator asking for a 30s cap
