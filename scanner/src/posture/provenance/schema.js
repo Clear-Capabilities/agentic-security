@@ -59,7 +59,7 @@ export function emptyProvenance(status, extra = {}) {
     evidenceAttribution: [],
     method: PROVENANCE_METHOD.NONE,
     confidence: { level: CONFIDENCE_LEVEL.UNKNOWN, score: 0, reasons: [] },
-    historyCoverage: { complete: false, shallow: false, boundaryCommit: null, commitsConsidered: 0 },
+    historyCoverage: { complete: false, shallow: false, boundaryCommit: null, commitsConsidered: 0, crossRepoLineage: false },
     analysisBasis: { head: null, ruleset: null, detector: null, dirty: false },
     limitations: [],
     evidenceDigest: null,

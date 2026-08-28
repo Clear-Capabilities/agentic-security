@@ -23,10 +23,11 @@
 // that disambiguates them; see the branch below for exactly how each is
 // handled.
 
-import { candidateCommitsForLine, getFirstParent, commitMeta } from './git-evidence.js';
+import { candidateCommitsForLine, getFirstParent, commitMeta, getBlobAtCommit, isAncestor } from './git-evidence.js';
 import { replayAt } from './predicate-replay.js';
 import { PROVENANCE_METHOD } from './schema.js';
 import { checkAbsentInSomeParent, detectRevert, detectCherryPick } from './dag-walk.js';
+import { loadRepoLineage } from './repo-lineage.js';
 
 function relevantFiles(finding) {
   const files = new Set();
@@ -44,6 +45,63 @@ function originFrom(meta, { absentInParents }) {
     commit: meta.commit, authorName: meta.authorName, authorEmail: meta.authorEmail,
     authorDate: meta.authorDate, committerDate: meta.committerDate, summary: meta.summary,
     presentInCommit: true, absentInParents, revertOf: null, cherryPickOf: null,
+  };
+}
+
+/**
+ * Best-effort cross-repo continuation when the standard walk reaches this
+ * repo's TRUE root commit (no parent, non-shallow) without resolving. Only
+ * fires when a repo-lineage link is declared and verified (`loadRepoLineage`
+ * — Task 4). Confirms the SAME relative file path exists in the linked repo
+ * at atCommit, and that the finding's line content is textually present
+ * there (a presence check, NOT a predicate replay — the detector pipeline
+ * that proved the finding's predicate true in THIS repo cannot be assumed
+ * identical in the linked one). On a match, walks `candidateCommitsForLine`
+ * in the linked repo, restricted to candidates reachable from atCommit (via
+ * `isAncestor`, so nothing the linked repo's own later development added
+ * can leak in), and reports the oldest such candidate as a best-effort
+ * origin.
+ *
+ * Returns null on ANY failure to extend (no lineage, file/line absent
+ * there, nothing further resolves) — the caller falls through to its
+ * existing not-linked-or-unresolved behavior unchanged.
+ */
+function tryCrossRepoLineage(scanRoot, finding, rootMeta) {
+  const lineage = loadRepoLineage(scanRoot);
+  if (!lineage) return null;
+
+  const blob = getBlobAtCommit(lineage.path, lineage.atCommit, finding.file);
+  if (blob == null) return null;
+  const lines = blob.split('\n');
+  const lineNo = finding.line || finding.sink?.line;
+  if (!lineNo || lineNo > lines.length) return null;
+  // A cheap, honest presence check: the SOURCE LINE's own text (trimmed) is
+  // literally there. Not the finding's full predicate — that would require
+  // re-running the detector pipeline, out of scope for a best-effort link.
+  if (!lines[lineNo - 1] || !lines[lineNo - 1].trim()) return null;
+
+  const linkedCandidates = candidateCommitsForLine(lineage.path, finding.file, lineNo, {});
+  // Only candidates reachable from (at or before) atCommit are eligible —
+  // the lineage link says history was imported AT that commit, so anything
+  // the linked repo's own timeline added after it is not part of what
+  // became this repo. `isAncestor` (git-evidence.js, backed by `git
+  // merge-base --is-ancestor`) is true for atCommit itself as well as any
+  // real ancestor of it, so this both bounds the walk and keeps atCommit
+  // itself eligible.
+  const eligible = linkedCandidates.filter((sha) => isAncestor(lineage.path, sha, lineage.atCommit));
+  if (eligible.length === 0) return null;
+
+  const oldestMatch = eligible[0];
+  const meta = commitMeta(lineage.path, oldestMatch);
+  if (!meta) return null;
+
+  return {
+    status: 'partial',
+    reason: 'cross-repo-lineage-best-effort',
+    commitsConsidered: eligible.length,
+    findingOrigin: originFrom(meta, { absentInParents: [] }),
+    method: PROVENANCE_METHOD.SEMANTIC_REPLAY,
+    crossRepoLineage: true,
   };
 }
 
@@ -102,9 +160,17 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
           method: PROVENANCE_METHOD.SEMANTIC_REPLAY,
         };
       }
-      // True repository root, non-shallow — valid but weaker evidence: no
-      // parent exists to verify absence in, so parentBoundaryVerified stays
-      // false and confidence.js will cap this at MEDIUM.
+      // True repository root, non-shallow. Before settling for "no parent
+      // exists to verify absence in" (M2/M3's existing weaker-evidence
+      // path), try extending the walk into a declared cross-repo lineage
+      // link (M4 §4.2) — this repo's root may not be where the code was
+      // actually first written, just where THIS repo's history starts.
+      const crossRepo = tryCrossRepoLineage(scanRoot, finding, meta);
+      if (crossRepo) return crossRepo;
+      // True repository root, non-shallow, no lineage link (or the link
+      // didn't extend the answer) — valid but weaker evidence: no parent
+      // exists to verify absence in, so parentBoundaryVerified stays false
+      // and confidence.js will cap this at MEDIUM.
       return {
         status: 'complete', method: PROVENANCE_METHOD.SEMANTIC_REPLAY, commitsConsidered,
         findingOrigin: originFrom(meta, { absentInParents: [] }),

@@ -533,6 +533,135 @@ test('resolveOrigin: a file renamed after introduction is handled honestly — e
   assert.ok(['partial', 'not_available'].includes(result.status));
 });
 
+// M4 §4.2: cross-repo lineage continuation. `loadRepoLineage` (Task 4) reads
+// an OPERATOR-DECLARED link at `.agentic-security/repo-lineage.json` — there
+// is no real git relationship between the two fixture repos below (no
+// shared object database, no `git clone`/remote), which is the whole point:
+// the feature has to work across two genuinely independent repositories,
+// connected only by a hand-authored JSON file, exactly as a real user would
+// set it up after importing code from an old repo into a new one.
+async function writeLineageLink(fx, linkedRoot, atCommit) {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  fs.mkdirSync(path.join(fx.root, '.agentic-security'), { recursive: true });
+  fs.writeFileSync(
+    path.join(fx.root, '.agentic-security', 'repo-lineage.json'),
+    JSON.stringify({ linkedFrom: { path: linkedRoot, atCommit } }),
+  );
+}
+
+test('resolveOrigin: a true root commit with a verified cross-repo lineage link resolves partial with crossRepoLineage:true, not the same-repo root fallback', async (t) => {
+  const linked = createGitFixture();
+  const fx = createGitFixture();
+  t.after(() => { fx.cleanup(); linked.cleanup(); });
+
+  linked.writeFile('shared.js', 'safe();\neval(x);\n');
+  const linkedSha = linked.commit('the real original introduction, in the OLD repo');
+
+  fx.writeFile('shared.js', 'safe();\neval(x);\n');
+  fx.commit("imported wholesale as this repo's first commit");
+  await writeLineageLink(fx, linked.root, linkedSha);
+
+  // The finding must be REAL and re-derivable by replayAt against fx's own
+  // history (see this file's header — a hand-built ruleId never reproduces
+  // via the actual detector suite), so the primary loop's presentHere check
+  // actually succeeds and the walk reaches fx's true-root-commit branch,
+  // where tryCrossRepoLineage is tried.
+  const finding = await realEvalFinding('safe();\neval(x);\n', 'shared.js', fx.root);
+
+  const result = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } });
+  assert.equal(result.status, 'partial');
+  assert.equal(result.crossRepoLineage, true);
+  assert.equal(result.findingOrigin.commit, linkedSha);
+});
+
+test('resolveOrigin: a true root commit with NO lineage link resolves exactly as before M4 (regression guard)', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+
+  fx.writeFile('shared.js', 'safe();\neval(x);\n');
+  const sha = fx.commit('first commit, no lineage declared');
+
+  const finding = await realEvalFinding('safe();\neval(x);\n', 'shared.js', fx.root);
+
+  const result = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } });
+  assert.equal(result.status, 'complete');
+  assert.equal(result.parentBoundaryVerified, false);
+  assert.equal(result.findingOrigin.commit, sha);
+  assert.equal(result.crossRepoLineage, undefined);
+});
+
+test('resolveOrigin: a lineage link exists but the file/line is not present in the linked repo at atCommit — falls back honestly, never fabricates', async (t) => {
+  const linked = createGitFixture();
+  const fx = createGitFixture();
+  t.after(() => { fx.cleanup(); linked.cleanup(); });
+
+  linked.writeFile('unrelated.js', '1\n');
+  const linkedSha = linked.commit('nothing relevant here');
+
+  fx.writeFile('shared.js', 'safe();\neval(x);\n');
+  const sha = fx.commit('genuinely new code, no real lineage despite the declared link');
+  await writeLineageLink(fx, linked.root, linkedSha);
+
+  const finding = await realEvalFinding('safe();\neval(x);\n', 'shared.js', fx.root);
+
+  const result = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } });
+  assert.equal(result.status, 'complete'); // falls back to the ordinary same-repo root resolution
+  assert.equal(result.findingOrigin.commit, sha);
+  assert.equal(result.crossRepoLineage, undefined);
+});
+
+// Boundary-filtering regression (Step 1's second deliberate bug, fixed).
+//
+// Empirically established while building this fixture: because
+// `candidateCommitsForLine` always returns its results OLDEST-FIRST, a
+// same-branch "linked repo kept being developed after the fork point"
+// scenario does NOT actually expose the bug — the true introducing commit
+// is always chronologically first in that walk regardless of whether the
+// (missing) filter is applied, so `eligible[0]` lands on the right answer
+// either way. The bug only bites when the candidate list HEAD's own history
+// produces is not an ancestor of atCommit at all — e.g. the linked repo's
+// default branch was later reset/diverged onto a disconnected history that
+// happens to touch the same file/line. That is exactly what this fixture
+// builds: an orphan branch with NO common ancestor with atCommit. Without
+// the fix, `eligible = linkedCandidates` (unfiltered) would still contain
+// that orphan commit — it is the ONLY candidate HEAD's own history has for
+// this line — and the buggy code would hand it back as the origin, even
+// though the declared lineage link never vouches for it at all.
+test('resolveOrigin: cross-repo lineage never resolves to a linked-repo commit unreachable from the declared atCommit boundary', async (t) => {
+  const linked = createGitFixture();
+  const fx = createGitFixture();
+  t.after(() => { fx.cleanup(); linked.cleanup(); });
+
+  linked.writeFile('shared.js', 'safe();\neval(x);\n');
+  const linkedSha = linked.commit('the real original introduction, in the OLD repo'); // this is atCommit
+
+  const { execFileSync } = await import('node:child_process');
+  execFileSync('git', ['checkout', '-q', '--orphan', 'diverged'], { cwd: linked.root });
+  linked.writeFile('shared.js', 'safe();\neval(totally_unrelated_code);\n');
+  const divergedSha = linked.commit('an unrelated history the lineage link never vouched for');
+
+  fx.writeFile('shared.js', 'safe();\neval(x);\n');
+  fx.commit("imported wholesale as this repo's first commit");
+  await writeLineageLink(fx, linked.root, linkedSha);
+
+  const finding = await realEvalFinding('safe();\neval(x);\n', 'shared.js', fx.root);
+
+  const result = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } });
+  // The unfixed bug resolves `partial`/`crossRepoLineage:true` pointing at
+  // `divergedSha` — content the declared lineage link never actually
+  // vouches for. The fix must never do that: either it falls back honestly
+  // (no candidate reachable from atCommit at all — the case here, since
+  // `diverged` shares no ancestry with atCommit) or, if something IS
+  // reachable, it must resolve to atCommit or an ancestor of it.
+  assert.notEqual(result.findingOrigin?.commit, divergedSha);
+  if (result.crossRepoLineage) {
+    assert.equal(result.findingOrigin.commit, linkedSha);
+  } else {
+    assert.equal(result.status, 'complete');
+  }
+});
+
 test('resolveOrigin: mode defaults to standard behavior when omitted (backward compatible)', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());

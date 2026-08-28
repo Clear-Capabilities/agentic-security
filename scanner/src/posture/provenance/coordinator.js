@@ -299,7 +299,15 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca) {
       // default stand emitted a self-contradictory record — "here is the origin
       // commit, found by no method" — which also fed computeDigest.
       method: originResult.method || PROVENANCE_METHOD.NONE,
-      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered || 0 },
+      historyCoverage: {
+        complete: false, shallow: repoState.shallow, boundaryCommit: null,
+        commitsConsidered: originResult.commitsConsidered || 0,
+        // M4 §4.2: origin-resolver's cross-repo lineage continuation is the
+        // only producer of this flag — every other 'partial' path (shallow
+        // boundary, predicate-never-confirmed, SCA's ambiguous-range /
+        // never-confirmed) leaves it at the schema default (false).
+        crossRepoLineage: !!originResult.crossRepoLineage,
+      },
       analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector, dirty: repoState.dirty },
       // The partial reasons mean materially different things — for SAST,
       // 'shallow-boundary-reached' ("we could not see far enough") vs

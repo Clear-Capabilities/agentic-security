@@ -103,6 +103,19 @@ export function commitDiff(scanRoot, sha) {
   return r.ok ? r.stdout : null;
 }
 
+// M4 §4.2: does `ancestor` reach `descendant` by following parent links —
+// true for `ancestor === descendant` too, matching `git merge-base
+// --is-ancestor`'s own semantics. Used by cross-repo lineage continuation
+// (origin-resolver.js's `tryCrossRepoLineage`) to keep a candidate drawn from
+// the LINKED repo's own (possibly still-developing) history from resolving
+// to something that postdates the declared `atCommit` boundary — the
+// DECLARED lineage link only vouches for history up to and including
+// atCommit, never past it.
+export function isAncestor(scanRoot, ancestor, descendant) {
+  if (!_isSha(ancestor) || !_isSha(descendant)) return false;
+  return _run(scanRoot, ['merge-base', '--is-ancestor', ancestor, descendant]).ok;
+}
+
 export function getBlobAtCommit(scanRoot, sha, file) {
   if (!_isSha(sha)) return null;
   const rel = _relPath(scanRoot, file);
