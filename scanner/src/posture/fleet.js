@@ -310,15 +310,41 @@ export function rollupFleet(results, previous = null) {
   // `scan.remediatedFindings` array anywhere in this codebase to derive one
   // from — see `runFleet`'s worker comment. Reporting a fabricated breakdown
   // would be worse than reporting none.
-  let mttrCount = 0, mttrWeightedDays = 0;
+  //
+  // FINAL-REVIEW FIX (M4, item 4): `mttr` used to default to `{n:0, ...}`
+  // whenever no scanned repo's `.mttr` counted a remediation — which is
+  // exactly what happens on EVERY real production fleet run, since
+  // `scripts/fleet.mjs` drives `runFleet` with `runScan` straight from
+  // `src/runScan.js`, and that function never sets `.mttr` at all (the only
+  // real setter is the CLI's OWN single-repo persistence step in
+  // `bin/agentic-security.js`, which fleet mode does not go through — see
+  // that file's comment for the full investigation). `{n:0,...}` and "no
+  // repo ever attempted to compute this" are materially different facts:
+  // the first is a real, honest zero; the second is a missing capability.
+  // Collapsing them made every real fleet run silently render a fabricated-
+  // looking "no remediated findings recorded yet" line that reads as a
+  // measurement rather than an absence.
+  //
+  // `anyMttrSupplied` distinguishes them: it is true only when at least one
+  // SCANNED repo's entry carried a non-null `.mttr` object at all — which
+  // only happens when something upstream (the CLI's own persistence path,
+  // or a caller-supplied `runScan` that wires the same pipeline itself)
+  // actually ran `computeMTTR`. `mttr` stays `null` — not a zeroed object —
+  // when nothing did, so a consumer can tell "tracked, zero fixes so far"
+  // from "not tracked at all" without inspecting `n`.
+  let mttrCount = 0, mttrWeightedDays = 0, anyMttrSupplied = false;
   for (const r of scanned) {
     const m = r.mttr;
-    if (m && typeof m.count === 'number' && m.count > 0 && typeof m.meanDays === 'number') {
+    if (m == null) continue;
+    anyMttrSupplied = true;
+    if (typeof m.count === 'number' && m.count > 0 && typeof m.meanDays === 'number') {
       mttrCount += m.count;
       mttrWeightedDays += m.meanDays * m.count;
     }
   }
-  const mttr = { n: mttrCount, meanDays: mttrCount ? mttrWeightedDays / mttrCount : null, byAgeBasis: {} };
+  const mttr = anyMttrSupplied
+    ? { n: mttrCount, meanDays: mttrCount ? mttrWeightedDays / mttrCount : null, byAgeBasis: {} }
+    : null;
 
   return {
     repos: results.length,
@@ -444,7 +470,16 @@ ${provRows}
 ${mttrByBasisRows}
 </table>`
       : '';
-    const mttrLine = prov.mttr && prov.mttr.n > 0
+    // Three distinct states, not two (final-review fix, item 4): `prov.mttr
+    // === null` means no scanned repo ever supplied a real mttr.js aggregate
+    // at all — the honest disclosure is "not available", never "no
+    // remediated findings recorded yet", which reads as a real zero
+    // measurement rather than an absent capability. A non-null `mttr` with
+    // `n === 0` is the legitimate zero: something DID track remediation and
+    // genuinely found none yet.
+    const mttrLine = !prov.mttr
+      ? `<p>Fleet MTTR: not available — fleet mode does not yet track finding remediation history across runs.</p>`
+      : prov.mttr.n > 0
       ? `<p>Fleet MTTR: ${prov.mttr.n} remediated finding(s)${prov.mttr.meanDays != null ? `, mean ${Math.round(prov.mttr.meanDays)}d to remediate` : ''}.</p>${mttrByBasisTable}`
       : `<p>Fleet MTTR: no remediated findings recorded yet.</p>`;
     provSection = `<h2>Provenance-Proven Debt</h2>

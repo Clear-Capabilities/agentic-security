@@ -592,9 +592,54 @@ test('M4 §4.4: renderFleetHtml adds a separate "Provenance-Proven Debt" section
   assert.ok(html.indexOf('Governance') < html.indexOf('Provenance-Proven Debt'));
 });
 
-test('M4 §4.4: renderFleetHtml reports the no-remediation-yet case honestly rather than a fabricated MTTR', async () => {
+// FINAL-REVIEW FIX (item 4): this fixture — a `fakeScan` result with NO
+// `.mttr` field at all — is the PRODUCTION-REALISTIC shape: the real
+// `runScan` (src/runScan.js) driving the real `scripts/fleet.mjs` never sets
+// `.mttr` either (confirmed by inspection — the only real setter is
+// `bin/agentic-security.js`'s own single-repo persistence step, which fleet
+// mode never goes through). Before this fix, `rollupFleet` could not tell
+// "nothing ever tracked this" from "tracked, zero fixes so far" and rendered
+// the latter's wording ("no remediated findings recorded yet") for BOTH —
+// reading as a real negative measurement on every actual fleet run, which is
+// exactly what this test used to (mis)assert. It now asserts the HONEST
+// "not available" disclosure instead.
+test('M4 §4.4: with NO repo ever supplying a real mttr aggregate (the real production shape), renderFleetHtml discloses MTTR as not available, never as a fabricated zero', async () => {
   const r = await runFleet({ repos: ['r1'], runScan: fakeScan({ r1: { findings: [] } }) });
+  const entry = r.results.find((x) => x.repo === 'r1');
+  assert.equal(entry.mttr, null);
+  assert.equal(r.rollup.provenance.mttr, null);
   const html = renderFleetHtml(r.rollup, r.results);
   assert.match(html, /No complete-status \(proven-origin\) findings across the fleet/);
+  assert.match(html, /Fleet MTTR: not available — fleet mode does not yet track finding remediation history across runs/);
+  assert.ok(!/no remediated findings recorded yet/.test(html), 'must not use the "recorded yet" wording when nothing was ever tracked at all');
+});
+
+// The DIFFERENT, legitimate case: something genuinely computed MTTR (a
+// caller-supplied `runScan` that wires the same pipeline `bin/
+// agentic-security.js` does) and found zero remediations so far — a real
+// `computeMTTR([])`-shaped aggregate, not an absent one. This must keep the
+// original "no remediated findings recorded yet" wording, distinct from the
+// "not available" disclosure above.
+test('M4 §4.4: rollupFleet.provenance.mttr is a real (non-null) zero, not "not available", when at least one repo genuinely tracked remediation and found none', () => {
+  const results = [
+    {
+      repo: 'a', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [],
+      provenanceDebt: { oldest: null, completeCount: 0 }, mttr: { count: 0, meanDays: null, medianDays: null, perSeverity: {} },
+    },
+  ];
+  const rollup = rollupFleet(results);
+  assert.notEqual(rollup.provenance.mttr, null);
+  assert.equal(rollup.provenance.mttr.n, 0);
+  const html = renderFleetHtml(rollup, results);
   assert.match(html, /Fleet MTTR: no remediated findings recorded yet/);
+  assert.ok(!/not available/.test(html));
+});
+
+test('M4 §4.4: rollupFleet.provenance.mttr stays null when every scanned entry\'s mttr is null, even mixed with a failed repo', () => {
+  const results = [
+    { repo: 'a', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [], provenanceDebt: { oldest: null, completeCount: 0 }, mttr: null },
+    { repo: 'boom', ok: false, error: 'x', total: null, bySeverity: null, ids: [], provenanceDebt: null, mttr: null },
+  ];
+  const rollup = rollupFleet(results);
+  assert.equal(rollup.provenance.mttr, null);
 });
