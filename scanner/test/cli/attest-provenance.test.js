@@ -44,3 +44,43 @@ test('attest --provenance: with no findingProvenance-bearing findings, exits 2 h
   const r = spawnSync(process.execPath, [CLI, 'attest', '--provenance'], { cwd: tmp, encoding: 'utf8', timeout: 15000 });
   assert.equal(r.status, 2);
 });
+
+test('verify-attestation: round-trips a real provenance bundle end-to-end', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', 'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = " + input);\n');
+  fx.commit('introduce sqli');
+
+  spawnSync(process.execPath, [CLI, 'scan', '.'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
+  spawnSync(process.execPath, [CLI, 'attest', '--provenance'], { cwd: fx.root, encoding: 'utf8', timeout: 30000 });
+
+  const outDir = path.join(fx.root, '.agentic-security', 'attestations');
+  const file = fs.readdirSync(outDir).find((f) => f.startsWith('provenance-'));
+  const r = spawnSync(process.execPath, [CLI, 'verify-attestation', path.join(outDir, file)], {
+    cwd: fx.root, encoding: 'utf8', timeout: 15000,
+  });
+  assert.equal(r.status, 0, `verify-attestation failed: ${r.stderr}\n${r.stdout}`);
+  assert.match(r.stdout, /VALID/);
+  assert.match(r.stdout, /origin:/);
+});
+
+test('verify-attestation: a tampered provenance bundle is rejected with exit 1', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', 'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = " + input);\n');
+  fx.commit('introduce sqli');
+  spawnSync(process.execPath, [CLI, 'scan', '.'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
+  spawnSync(process.execPath, [CLI, 'attest', '--provenance'], { cwd: fx.root, encoding: 'utf8', timeout: 30000 });
+
+  const outDir = path.join(fx.root, '.agentic-security', 'attestations');
+  const file = fs.readdirSync(outDir).find((f) => f.startsWith('provenance-'));
+  const p = path.join(outDir, file);
+  const bundle = JSON.parse(fs.readFileSync(p, 'utf8'));
+  bundle.provenance.confidence.level = 'high';
+  bundle.provenance.findingOrigin.commit = 'tampered000000';
+  fs.writeFileSync(p, JSON.stringify(bundle, null, 2));
+
+  const r = spawnSync(process.execPath, [CLI, 'verify-attestation', p], { cwd: fx.root, encoding: 'utf8', timeout: 15000 });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /INVALID/);
+});

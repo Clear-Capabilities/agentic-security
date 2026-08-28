@@ -2516,6 +2516,32 @@ async function cmdVerifyAttestation(args) {
     return 0;
   }
 
+  // Finding Provenance PRD M4 §4.1: a provenance evidence bundle
+  // (schema: agentic-security/provenance-evidence@1) is a fourth distinct
+  // shape this same command can be handed — same auto-detection chain as
+  // the ComplianceEvidence branch above, dispatched by schema marker
+  // rather than a new CLI verb. Must be checked BEFORE the fallback
+  // verifyEvidenceBundle() call below, which assumes evidence-bundle.js's
+  // own shape (`.evidence`, `.finding` with severity/vuln/file/line) and
+  // would misinterpret a provenance bundle.
+  const { verifyProvenanceEvidenceBundle, PROVENANCE_BUNDLE_SCHEMA } = await import('../src/posture/provenance-evidence-bundle.js');
+  if (bundle.schema === PROVENANCE_BUNDLE_SCHEMA) {
+    const pr = verifyProvenanceEvidenceBundle(bundle, publicKeyPem);
+    if (!pr.ok) { console.error(`✗ INVALID — ${pr.reason}`); return 1; }
+    const p = bundle.provenance || {};
+    console.log('✓ VALID — the provenance record is exactly what the signer attested.');
+    console.log('');
+    console.log(`  finding: ${bundle.finding?.stableId || bundle.finding?.id || '?'}`);
+    console.log(`  status: ${p.status || 'n/a'}   method: ${p.method || 'n/a'}`);
+    if (p.findingOrigin) console.log(`  origin: ${p.findingOrigin.commit || '?'} by ${p.findingOrigin.authorName || '?'} on ${p.findingOrigin.authorDate || '?'}`);
+    console.log(`  confidence: ${p.confidence?.level || 'n/a'} (${p.confidence?.score ?? 'n/a'})`);
+    if ((p.limitations || []).length) console.log(`  limitations: ${p.limitations.join('; ')}`);
+    console.log('');
+    console.log(`  proves:        ${bundle.proves}`);
+    console.log(`  does NOT prove: ${bundle.doesNotProve}`);
+    return 0;
+  }
+
   const r = verifyEvidenceBundle(bundle, publicKeyPem);
   if (!r.ok) {
     console.error(`✗ INVALID — ${r.reason}`);

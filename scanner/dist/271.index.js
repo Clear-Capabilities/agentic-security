@@ -6,11 +6,12 @@ export const modules = {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   PROVENANCE_BUNDLE_SCHEMA: () => (/* binding */ PROVENANCE_BUNDLE_SCHEMA),
 /* harmony export */   buildProvenanceEvidenceBundle: () => (/* binding */ buildProvenanceEvidenceBundle),
 /* harmony export */   ensureKeyPair: () => (/* reexport safe */ _evidence_bundle_js__WEBPACK_IMPORTED_MODULE_1__.ensureKeyPair),
-/* harmony export */   signProvenanceEvidenceBundle: () => (/* binding */ signProvenanceEvidenceBundle)
+/* harmony export */   signProvenanceEvidenceBundle: () => (/* binding */ signProvenanceEvidenceBundle),
+/* harmony export */   verifyProvenanceEvidenceBundle: () => (/* binding */ verifyProvenanceEvidenceBundle)
 /* harmony export */ });
-/* unused harmony exports PROVENANCE_BUNDLE_SCHEMA, verifyProvenanceEvidenceBundle */
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7598);
 /* harmony import */ var _evidence_bundle_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(8317);
 // Signed provenance evidence bundles (Finding Provenance PRD, M4 §4.1).
@@ -137,7 +138,7 @@ function verifyProvenanceEvidenceBundle(bundle, publicKeyPem) {
   const { signature, ...unsigned } = bundle;
   let ok = false;
   try {
-    ok = crypto.verify(null, Buffer.from(canonicalJson(unsigned), 'utf8'), publicKeyPem, Buffer.from(sig.value, 'base64'));
+    ok = node_crypto__WEBPACK_IMPORTED_MODULE_0__.verify(null, Buffer.from((0,_evidence_bundle_js__WEBPACK_IMPORTED_MODULE_1__/* .canonicalJson */ .dj)(unsigned), 'utf8'), publicKeyPem, Buffer.from(sig.value, 'base64'));
   } catch (e) {
     return { ok: false, reason: `verification error: ${e.message}` };
   }
