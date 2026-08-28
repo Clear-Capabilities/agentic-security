@@ -93,6 +93,54 @@ test('resolveTransitiveSCAOrigin: the root-commit fallback never fabricates a ve
   assert.notEqual(fp.confidence.score, 0.95);
 });
 
+test('resolveTransitiveSCAOrigin: with two nested copies of the same package, the finding\'s own depChain picks the RIGHT one, not the shortest-path guess', async (t) => {
+  // Final whole-branch review item #7. extractTransitiveVersion's
+  // shortest-path heuristic picks the copy closest to a direct dependency
+  // when a lockfile has multiple nested copies of the same package name at
+  // different depths — fine when the finding IS about that shallow copy,
+  // wrong when it isn't. Here the vulnerable transition happens in the
+  // DEEPER copy (body-parser/deep/qs) while the shallower copy
+  // (express/qs) sits unchanged, exactly AT the fixed version (so it is
+  // never itself "in range"). Without depChain guidance the shortest-path
+  // heuristic always resolves to express/qs, sees it out of range at every
+  // candidate commit, and never even looks at the copy the finding is
+  // actually about — silently missing a real, resolvable transition.
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('package-lock.json', lockfile({
+    'express/node_modules/qs': '6.5.4',
+    'body-parser/node_modules/deep/node_modules/qs': '6.5.4',
+  }));
+  const parentSha = fx.commit('both copies safe');
+  fx.writeFile('package-lock.json', lockfile({
+    'express/node_modules/qs': '6.5.4', // unchanged, still out of range
+    'body-parser/node_modules/deep/node_modules/qs': '6.5.3', // re-pinned into the vulnerable range
+  }));
+  const introducedSha = fx.commit('deep copy of qs re-pinned to the vulnerable version');
+
+  const scaEntry = {
+    name: 'qs', filePath: 'package-lock.json', fixedVersions: ['6.5.4'],
+    depChain: ['body-parser', 'deep', 'qs'],
+  };
+  const result = await resolveTransitiveSCAOrigin(fx.root, scaEntry, {});
+  assert.equal(result.status, 'complete',
+    `expected the deep copy's transition to resolve; got ${JSON.stringify(result)}`);
+  assert.equal(result.findingOrigin.commit, introducedSha);
+  assert.deepEqual(result.depChain, ['body-parser', 'deep', 'qs']);
+  assert.equal(result.parentBoundaryVerified, true);
+
+  // And the negative control: withOUT depChain guidance, the pre-existing
+  // shortest-path heuristic genuinely cannot find this transition — proving
+  // the fix is load-bearing, not vacuous (same discipline as item #2's
+  // pre-fix-must-fail check, applied here as a same-run control instead of a
+  // git-stash revert since the fallback path is still reachable by omitting
+  // depChain rather than needing the old code back).
+  const scaEntryNoChain = { name: 'qs', filePath: 'package-lock.json', fixedVersions: ['6.5.4'] };
+  const fallbackResult = await resolveTransitiveSCAOrigin(fx.root, scaEntryNoChain, {});
+  assert.notEqual(fallbackResult.status, 'complete',
+    'the shortest-path heuristic alone (no depChain) should NOT be able to resolve this transition — if it now can, the negative control no longer demonstrates the fix is load-bearing');
+});
+
 test('resolveTransitiveSCAOrigin: no candidate history resolves not_available, never fabricates', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());
