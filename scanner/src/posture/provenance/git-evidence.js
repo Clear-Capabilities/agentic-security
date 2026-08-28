@@ -86,6 +86,19 @@ export function getAllParents(scanRoot, sha) {
   return r.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
+// M3 §3.1: the diff a commit introduces, as a normalized patch string — used
+// by dag-walk.js to confirm a claimed revert is a REAL structural inverse of
+// an earlier commit's diff, not just a commit whose MESSAGE says "Revert" (a
+// spoofable, unreliable signal on its own per the spec). `--no-color` and a
+// fixed context of 0 lines keep the two diffs comparable independent of
+// terminal/config state; `-U0` removes context lines so unrelated nearby
+// edits between the two commits don't defeat the comparison.
+export function commitDiff(scanRoot, sha) {
+  if (!_isSha(sha)) return null;
+  const r = _run(scanRoot, ['show', '--no-color', '-U0', '--format=', sha]);
+  return r.ok ? r.stdout : null;
+}
+
 export function getBlobAtCommit(scanRoot, sha, file) {
   if (!_isSha(sha)) return null;
   const rel = _relPath(scanRoot, file);
