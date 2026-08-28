@@ -8226,7 +8226,7 @@ async function queryOSV(components,allFileContents){
         // member as the primary instead of the direct one, and the provenance
         // pass's direct-only filter had nothing to filter on. `line` is Task
         // 12's declaration line, which the SCA provenance evidence node reads.
-        isDirect: comp.isDirect, line: comp.line,
+        isDirect: comp.isDirect, line: comp.line, depChain: Array.isArray(comp.depChain) ? comp.depChain.map((s) => s.replace(/\/$/, '')) : [],
         // kept for generateRecs() compat
         advisory: `${vid}${cveStr}, ${vuln.description}`,
         range: fixStr ? `< ${fixStr}` : 'see advisory' });

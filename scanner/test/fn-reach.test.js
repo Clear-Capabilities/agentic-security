@@ -57,3 +57,24 @@ test('R7 — aliased import: lodash merge via {merge as deepMerge} is reachable 
   assert.ok(aliasSite && /app\.js$/.test(aliasSite.file),
     `expected an alias-resolved merge call site in app.js; got ${JSON.stringify(sc.flatMap(s => s.vulnerableFunctionCallSites || []))}`);
 });
+
+test('Provenance: depChain field is present on vulnerable_dep findings (M3 §3.2)', async () => {
+  // M3 §3.2 propagates depChain (dependency ancestry) onto every vulnerable_dep
+  // finding. This is additive and purely informational — direct deps have empty
+  // or single-element chains, transitive deps have multi-element chains.
+  const { scan } = await runScan(FIX('reachable'));
+  const sc = lodashSc(scan);
+  assert.ok(sc.length >= 1, `expected ≥1 lodash CVE finding, got ${sc.length}`);
+  // Every vulnerable_dep must have a depChain field (array).
+  for (const finding of sc) {
+    assert.ok(Array.isArray(finding.depChain), `expected depChain to be an array on ${finding.name}@${finding.version}; got ${typeof finding.depChain}`);
+    // Direct deps should have a short chain (0-1 elements).
+    if (finding.isDirect) {
+      assert.ok(finding.depChain.length <= 1, `expected direct dep ${finding.name} to have chain length ≤1; got ${finding.depChain.length}`);
+    }
+    // No trailing slashes (cosmetic artifact from path parsing).
+    for (const segment of finding.depChain) {
+      assert.ok(!segment.endsWith('/'), `expected no trailing slash in depChain segment; got "${segment}"`);
+    }
+  }
+});
