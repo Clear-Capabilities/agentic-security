@@ -92,8 +92,17 @@ function trimmedLineAt(blob, lineNo) {
  * Returns null on ANY failure to extend (no lineage, file/line absent or
  * non-matching there, nothing further resolves) — the caller falls through
  * to its existing not-linked-or-unresolved behavior unchanged.
+ *
+ * `deadlineAt` is the SAME budget `resolveOrigin` checks in its own loops
+ * ("one budget for the whole scan" — see posture/CLAUDE.md). This function
+ * spawns two git subprocesses per candidate against a SEPARATE repository
+ * whose history size this scan does not control, so it must honor the same
+ * deadline rather than running unbounded. A `null` return here just means
+ * "cross-repo lineage did not extend the answer" — the caller already falls
+ * through to the honest same-repo result, so an early bail-out degrades
+ * safely by construction.
  */
-function tryCrossRepoLineage(scanRoot, finding, rootMeta) {
+export function tryCrossRepoLineage(scanRoot, finding, rootMeta, deadlineAt) {
   const lineage = loadRepoLineage(scanRoot);
   if (!lineage) return null;
 
@@ -108,6 +117,8 @@ function tryCrossRepoLineage(scanRoot, finding, rootMeta) {
 
   const linkedTrimmedAtBoundary = trimmedLineAt(getBlobAtCommit(lineage.path, lineage.atCommit, finding.file), lineNo);
   if (linkedTrimmedAtBoundary !== ownTrimmed) return null;
+
+  if (deadlineAt && Date.now() > deadlineAt) return null;
 
   const linkedCandidates = candidateCommitsForLine(lineage.path, finding.file, lineNo, {});
   // Only candidates reachable from (at or before) atCommit are eligible —
@@ -126,6 +137,7 @@ function tryCrossRepoLineage(scanRoot, finding, rootMeta) {
   // anything and must be skipped, not accepted for being oldest.
   let meta = null;
   for (const sha of eligible) {
+    if (deadlineAt && Date.now() > deadlineAt) return null;
     const candidateTrimmed = trimmedLineAt(getBlobAtCommit(lineage.path, sha, finding.file), lineNo);
     if (candidateTrimmed !== ownTrimmed) continue;
     meta = commitMeta(lineage.path, sha);
@@ -203,7 +215,7 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
       // path), try extending the walk into a declared cross-repo lineage
       // link (M4 §4.2) — this repo's root may not be where the code was
       // actually first written, just where THIS repo's history starts.
-      const crossRepo = tryCrossRepoLineage(scanRoot, finding, meta);
+      const crossRepo = tryCrossRepoLineage(scanRoot, finding, meta, deadlineAt);
       if (crossRepo) return crossRepo;
       // True repository root, non-shallow, no lineage link (or the link
       // didn't extend the answer) — valid but weaker evidence: no parent

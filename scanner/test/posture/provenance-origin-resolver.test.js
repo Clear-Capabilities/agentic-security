@@ -21,7 +21,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
-import { resolveOrigin } from '../../src/posture/provenance/origin-resolver.js';
+import { resolveOrigin, tryCrossRepoLineage } from '../../src/posture/provenance/origin-resolver.js';
 import { runFullScan } from '../../src/engine.js';
 
 const SAFE_SRC = 'function h(id) {\n  return 1;\n}\n';
@@ -756,6 +756,79 @@ test('resolveOrigin: cross-repo lineage skips an eligible-but-content-mismatched
   // content-mismatched commit that a purely oldest-first pick would return.
   assert.equal(result.findingOrigin.commit, linkedSha);
   assert.notEqual(result.findingOrigin.commit, oldUnrelatedSha);
+});
+
+// Item 1 fix (M4 final-review): tryCrossRepoLineage previously had no
+// deadline threaded through at all, so a large linked-repo history could
+// burn time past the caller's own configured budget ("one budget for the
+// whole scan" — posture/CLAUDE.md), since it spawns two git subprocesses per
+// candidate against a SEPARATE repository this scan does not control the
+// size of. An already-expired `deadlineAt` must make it bail out promptly
+// (null, no candidate walk performed) rather than doing any work.
+//
+// Exercised directly against `tryCrossRepoLineage` (now exported) rather
+// than through `resolveOrigin`'s own top-level call: `resolveOrigin`'s
+// PRIMARY loop already checks the same expired `deadlineAt` at the top of
+// its very first iteration (existing test above, "budget_exhausted when
+// deadlineAt is already in the past") and would short-circuit to
+// `budget_exhausted` before ever reaching the true-root-commit branch that
+// calls into cross-repo lineage at all — so a deadline expired from the
+// very start of the whole resolveOrigin call can never actually reach this
+// function in practice. Testing the unit directly is what actually proves
+// this fix.
+test('tryCrossRepoLineage: honors an already-expired deadlineAt — returns null promptly without walking any candidates', async (t) => {
+  const linked = createGitFixture();
+  const fx = createGitFixture();
+  t.after(() => { fx.cleanup(); linked.cleanup(); });
+
+  linked.writeFile('shared.js', 'eval(x);\n');
+  const linkedSha = linked.commit('the real original introduction, in the OLD repo');
+
+  fx.writeFile('shared.js', 'eval(x);\n');
+  const ownSha = fx.commit("imported wholesale as this repo's first commit");
+  await writeLineageLink(fx, linked.root, linkedSha);
+
+  const { commitMeta } = await import('../../src/posture/provenance/git-evidence.js');
+  const rootMeta = commitMeta(fx.root, ownSha);
+
+  const start = Date.now();
+  const result = tryCrossRepoLineage(fx.root, { file: 'shared.js', line: 1 }, rootMeta, Date.now() - 1000);
+  const elapsed = Date.now() - start;
+
+  assert.equal(result, null);
+  assert.ok(elapsed < 2000, `expected a prompt bail-out, took ${elapsed}ms`);
+});
+
+// End-to-end companion: an already-expired deadline passed into
+// `resolveOrigin` as a whole must never hang or throw, and must never report
+// a fabricated cross-repo attribution — it degrades to the same
+// `budget_exhausted` result the primary loop's own (pre-existing) deadline
+// check produces, which is the honest, safe outcome (see the DEVIATION note
+// above about why this can't reach `tryCrossRepoLineage`'s own check).
+test('resolveOrigin: an already-expired deadlineAt never hangs, never throws, and never fabricates a cross-repo attribution even with a verified lineage link declared', async (t) => {
+  const linked = createGitFixture();
+  const fx = createGitFixture();
+  t.after(() => { fx.cleanup(); linked.cleanup(); });
+
+  linked.writeFile('shared.js', 'eval(x);\n');
+  const linkedSha = linked.commit('the real original introduction, in the OLD repo');
+
+  fx.writeFile('shared.js', 'eval(x);\n');
+  fx.commit("imported wholesale as this repo's first commit");
+  await writeLineageLink(fx, linked.root, linkedSha);
+
+  const finding = await realEvalFinding('eval(x);\n', 'shared.js', fx.root);
+
+  const start = Date.now();
+  const result = await resolveOrigin(fx.root, finding, {
+    repoState: { shallow: false },
+    deadlineAt: Date.now() - 1000,
+  });
+  const elapsed = Date.now() - start;
+
+  assert.equal(result.status, 'budget_exhausted');
+  assert.equal(result.crossRepoLineage, undefined);
+  assert.ok(elapsed < 2000, `expected a prompt bail-out, took ${elapsed}ms`);
 });
 
 test('resolveOrigin: mode defaults to standard behavior when omitted (backward compatible)', async (t) => {
