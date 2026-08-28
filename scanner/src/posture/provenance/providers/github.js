@@ -21,6 +21,7 @@ export async function fetchPRMetadata(scanRoot, commitSha, remoteUrl, config) {
   try {
     const r = await fetch(`${base}/repos/${or.owner}/${or.repo}/commits/${commitSha}/pulls`, {
       headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(8000),
     });
     if (!r.ok) return null;
     const prs = await r.json();
@@ -46,6 +47,7 @@ export async function fetchCodeowners(scanRoot, remoteUrl, config) {
     try {
       const r = await fetch(`${base}/repos/${or.owner}/${or.repo}/contents/${path}`, {
         headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/vnd.github+json' },
+        signal: AbortSignal.timeout(8000),
       });
       if (!r.ok) continue;
       const body = await r.json();

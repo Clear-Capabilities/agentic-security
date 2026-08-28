@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-27T15:24:54.765Z",
-  "commit": "82f942d6ed96378c31f894e204dceb067edcd011",
+  "generatedAt": "2026-08-28T06:20:43.534Z",
+  "commit": "b8c5a5e0c5ad90b5202188fdce1d3916aa982f50",
   "targets": {
     "hooks": {
       "total": 21,
@@ -36,7 +36,7 @@
       }
     },
     "scanner/src": {
-      "total": 450,
+      "total": 451,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -146,6 +146,7 @@
         "posture/profile.js": 4,
         "posture/provenance/cache.js": 1,
         "posture/provenance/lifecycle.js": 1,
+        "posture/provenance/providers/config.js": 1,
         "posture/realtime-cve-monitor.js": 5,
         "posture/retention-policy.js": 1,
         "posture/risk-dollars.js": 3,

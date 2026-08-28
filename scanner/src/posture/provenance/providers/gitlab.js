@@ -19,6 +19,7 @@ export async function fetchPRMetadata(scanRoot, commitSha, remoteUrl, config) {
   try {
     const r = await fetch(`${base}/projects/${encodedProject}/repository/commits/${commitSha}/merge_requests`, {
       headers: { 'PRIVATE-TOKEN': config.token },
+      signal: AbortSignal.timeout(8000),
     });
     if (!r.ok) return null;
     const mrs = await r.json();
@@ -44,6 +45,7 @@ export async function fetchCodeowners(scanRoot, remoteUrl, config) {
   try {
     const r = await fetch(`${base}/projects/${encodedProject}/repository/files/CODEOWNERS/raw?ref=HEAD`, {
       headers: { 'PRIVATE-TOKEN': config.token },
+      signal: AbortSignal.timeout(8000),
     });
     if (!r.ok) return null;
     const text = await r.text();
