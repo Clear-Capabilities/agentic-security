@@ -12,6 +12,7 @@ test('parseProvenanceFlags: defaults to standard mode, nothing disabled', () => 
   assert.equal(f.mode, 'standard');
   assert.equal(f.disabled, false);
   assert.equal(f.includeEmail, false);
+  assert.equal(f.pseudonymize, false);
   assert.equal(f.requireProvenance, false);
 });
 
@@ -32,6 +33,11 @@ test('parseProvenanceFlags: --provenance-since, --provenance-timeout, --include-
   assert.equal(f.timeoutMs, 30000);
   assert.equal(f.includeEmail, true);
   assert.equal(f.requireProvenance, true);
+});
+
+test('parseProvenanceFlags: --pseudonymize-authors', () => {
+  const f = parseProvenanceFlags(['--pseudonymize-authors']);
+  assert.equal(f.pseudonymize, true);
 });
 
 // Regression for a Critical bug found in review: `bin/agentic-security.js`
@@ -204,6 +210,53 @@ test('I3: --require-provenance records a scanHealth condition and demotes the st
     const without = JSON.parse(run([]).stdout);
     assert.equal(without.scanHealth.status, 'complete');
     assert.ok(!without.scanHealth.conditions.some((c) => /require-provenance/.test(c)));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Task 4 (PRD Section 8): --pseudonymize-authors must genuinely change real
+// scan output, not merely flip a flag the report layer ignores. Spawns the
+// real CLI against a real git fixture with a distinctive author name/email
+// and confirms findingOrigin.authorName becomes a Contributor-XXXXXXXX
+// pseudonym instead of the real name, while the same scan without the flag
+// still reports the real name (backward-compatible default).
+test('--pseudonymize-authors replaces the real author name with a stable Contributor-XXXXXXXX id in real scan output', () => {
+  const CLI = fileURLToPath(new URL('../../bin/agentic-security.js', import.meta.url));
+  const dir = mkdtempSync(path.join(tmpdir(), 'as-cli-pseudo-'));
+  const git = (...a) => spawnSync('git', a, { cwd: dir, encoding: 'utf8' });
+  try {
+    git('init', '-q');
+    git('config', 'user.email', 'jamie@example.com');
+    git('config', 'user.name', 'Jamie Chen');
+    writeFileSync(path.join(dir, 'server.js'),
+      'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = " + input);\n');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'introduce sqli');
+
+    const run = (extra) => spawnSync(process.execPath,
+      [CLI, 'scan', dir, '--format', 'json', '--no-network', ...extra],
+      { encoding: 'utf8', timeout: 300000 });
+
+    const withFlag = JSON.parse(run(['--pseudonymize-authors']).stdout);
+    const originsWithFlag = (withFlag.findings || [])
+      .map((f) => f.findingProvenance?.findingOrigin)
+      .filter(Boolean);
+    assert.ok(originsWithFlag.length > 0, 'no findingOrigin present to assert against');
+    for (const origin of originsWithFlag) {
+      assert.match(origin.authorName, /^Contributor-[0-9a-f]{8}$/,
+        `--pseudonymize-authors did not pseudonymize authorName: ${JSON.stringify(origin)}`);
+      assert.ok(!origin.authorName.includes('Jamie'), 'real author name leaked through pseudonymization');
+    }
+
+    // Without the flag, the real name still ships (backward-compatible default).
+    const without = JSON.parse(run([]).stdout);
+    const originsWithout = (without.findings || [])
+      .map((f) => f.findingProvenance?.findingOrigin)
+      .filter(Boolean);
+    assert.ok(originsWithout.length > 0, 'no findingOrigin present to assert against');
+    assert.ok(originsWithout.some((o) => o.authorName === 'Jamie Chen'),
+      'real author name missing from output when --pseudonymize-authors was not passed');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

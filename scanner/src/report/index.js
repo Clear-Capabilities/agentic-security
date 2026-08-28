@@ -183,12 +183,15 @@ export function _remediationOf(f) {
 // in a committed report artifact is a leak nobody opted into. Set
 // AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL=1 to include it (read per call, not
 // cached at module load, so a test or a wrapper can set it per invocation).
-// `authorName` is deliberately NOT redacted: it is already the value the
-// existing `introducedBy` field has carried for releases.
+// `authorName` is deliberately NOT redacted by default: it is already the
+// value the existing `introducedBy` field has carried for releases. Set
+// AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS=1 (--pseudonymize-authors) to replace
+// it with a stable Contributor-XXXXXXXX id instead — PRD Section 8.
 function _normalizedProvenance(f) {
   if (!f || !f.findingProvenance) return null;
   return redactFindingProvenance(f.findingProvenance, {
     includeEmail: process.env.AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL === '1',
+    pseudonymize: process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS === '1',
   });
 }
 

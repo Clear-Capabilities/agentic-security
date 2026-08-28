@@ -1,3 +1,5 @@
+import * as crypto from 'node:crypto';
+
 export const FINDING_PROVENANCE_SCHEMA_VERSION = '1.0';
 
 export const PROVENANCE_STATUS = Object.freeze({
@@ -67,9 +69,34 @@ export function emptyProvenance(status, extra = {}) {
   };
 }
 
-export function redactFindingProvenance(fp, { includeEmail = false } = {}) {
+/**
+ * A stable, one-way pseudonym for an author -- PRD Section 8: "support
+ * organization policy to pseudonymize names while retaining an internal
+ * stable identity reference." Keyed on email when available (more stable
+ * across commits than a display name, which can vary in capitalization or
+ * formatting across different commits by the same person) with a fallback
+ * to name alone. Deterministic: the SAME author always gets the SAME
+ * pseudonym within one run (and across runs, since it's a pure function of
+ * the input, not randomized) -- this is what "stable identity reference"
+ * means: a reader can tell "these five findings share an author" without
+ * learning who that author is.
+ */
+export function pseudonymizeAuthor(authorName, authorEmail) {
+  const key = authorEmail || authorName || '';
+  if (!key) return 'Contributor-unknown';
+  const hash = crypto.createHash('sha256').update(key).digest('hex').slice(0, 8);
+  return `Contributor-${hash}`;
+}
+
+export function redactFindingProvenance(fp, { includeEmail = false, pseudonymize = false } = {}) {
   if (!fp) return null;
-  const redactOrigin = (origin) => origin ? { ...origin, authorEmail: includeEmail ? origin.authorEmail : null } : null;
+  const redactOrigin = (origin) => origin
+    ? {
+        ...origin,
+        authorEmail: includeEmail ? origin.authorEmail : null,
+        authorName: pseudonymize ? pseudonymizeAuthor(origin.authorName, origin.authorEmail) : origin.authorName,
+      }
+    : null;
   return {
     ...fp,
     findingOrigin: redactOrigin(fp.findingOrigin),

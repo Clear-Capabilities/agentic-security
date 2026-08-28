@@ -196,6 +196,7 @@ Finding provenance (which commit introduced each finding):
   --provenance-since <ref>     Do not walk history earlier than this git ref/commit
   --provenance-timeout <ms>    Whole-scan provenance budget in MILLISECONDS (default 60000)
   --include-author-email       Keep commit author emails in output (redacted by default)
+  --pseudonymize-authors       Replace commit author names with a stable Contributor-XXXXXXXX id
   --require-provenance         Report unresolved provenance as a scan-health condition
                                (downgrades scanHealth.status to 'partial'; never changes the exit code)
 
@@ -413,12 +414,13 @@ const PROVENANCE_MODES = new Set(['standard', 'deep']);
 // (Task 15) and report/index.js (Task 16) already read:
 // AGENTIC_SECURITY_NO_PROVENANCE, AGENTIC_SECURITY_PROVENANCE_MODE,
 // AGENTIC_SECURITY_PROVENANCE_SINCE, AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS,
-// AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL. `requireProvenance` is consumed
+// AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL,
+// AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS. `requireProvenance` is consumed
 // directly by cmdScan (post-scan scanHealth augmentation), not via an env var.
 // Kept as a pure function (argv in, plain object out) so it's unit-testable
 // without invoking the CLI dispatch or touching process.env.
 export function parseProvenanceFlags(argv) {
-  const result = { mode: 'standard', since: null, timeoutMs: undefined, includeEmail: false, requireProvenance: false, disabled: false, warning: null };
+  const result = { mode: 'standard', since: null, timeoutMs: undefined, includeEmail: false, pseudonymize: false, requireProvenance: false, disabled: false, warning: null };
   const warnings = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -486,6 +488,7 @@ export function parseProvenanceFlags(argv) {
       }
     }
     else if (key === '--include-author-email') { result.includeEmail = true; }
+    else if (key === '--pseudonymize-authors') { result.pseudonymize = true; }
     else if (key === '--require-provenance') { result.requireProvenance = true; }
   }
   // One field, so a caller that prints `warning` cannot drop the second one.
@@ -598,6 +601,7 @@ async function cmdScan(args) {
   if (_provFlags.since) process.env.AGENTIC_SECURITY_PROVENANCE_SINCE = _provFlags.since;
   if (_provFlags.timeoutMs) process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS = String(_provFlags.timeoutMs);
   if (_provFlags.includeEmail) process.env.AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL = '1';
+  if (_provFlags.pseudonymize) process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS = '1';
 
   const { scan, meta } = await runScan(target, {
     changedSince,
