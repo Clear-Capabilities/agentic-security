@@ -69,7 +69,7 @@ export function deriveComplianceProvenance(findings) {
   );
   const best = complete.length ? pickEarliest(complete) : (partial.length ? pickEarliest(partial) : null);
   return {
-    derivedFrom: list.map((f) => f && f.id).filter(Boolean),
+    derivedFrom: [...new Set(list.map((f) => f && f.id).filter(Boolean))],
     // Only commit/authorDate/authorName are ever read from findingOrigin
     // here — this object is a SIBLING field to findingProvenance (not
     // nested inside it), so it bypasses the redactFindingProvenance sweep

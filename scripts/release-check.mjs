@@ -219,6 +219,21 @@ export const CHECKS = [
       'and say why in the commit.',
   },
   {
+    // Finding Provenance M2: bench/provenance/runner.mjs measures the real,
+    // observed overhead the provenance pipeline adds to a scan, built to the
+    // same baseline/regression-factor/--check shape as ttff-gate/memory-gate
+    // above. It existed and was already gateable but was never wired into a
+    // release gate — per this repo's own standard ("an unrunnable check is a
+    // FAILURE, never a skip"), an unwired gate isn't a gate. Wired here
+    // rather than rebuilt.
+    id: 'provenance-gate',
+    title: 'Finding provenance overhead baseline holds',
+    slow: true,
+    remedy: 'Run `npm run bench:provenance:check` in scanner/ — if the regression is a real, ' +
+      'accepted cost, re-baseline deliberately with `npm run bench:provenance:update-baseline` ' +
+      'and say why in the commit.',
+  },
+  {
     id: 'calibration-holdout',
     title: 'Confidence surface verified on held-out data',
     slow: false,
@@ -808,6 +823,7 @@ function main(argv) {
   evaluate('layer-recall-gate', () => runNpmGate('bench:layer-recall:check'));
   evaluate('ttff-gate', () => runNpmGate('bench:ttff:check'));
   evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
+  evaluate('provenance-gate', () => runNpmGate('bench:provenance:check'));
 
   evaluate('calibration-holdout', () => {
     const r = runCalibrationHoldoutCheck(REPO);

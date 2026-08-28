@@ -102,6 +102,40 @@ export function evaluateAssuranceMode(mode, scanHealth, findings = []) {
   // consequence of "never false certainty" applied to strict's own
   // definition, not an oversight — a strict-mode operator with secrets
   // findings should expect this until M3+ closes that gap.
+  //
+  // This list is INCOMPLETE without scan.supplyChain, and the omission
+  // matters more than the secrets/logic one above because it hits nearly
+  // every real project. engine.js stamps every supplyChain entry
+  // not_available too (see the loop over `supplyChain` right after the
+  // `annotateGitProvenance` calls), and that bucket covers three distinct
+  // populations, not one:
+  //
+  //  - transitive `vulnerable_dep` findings: a genuine, if currently
+  //    unresolved, DEFERRAL — same shape as secrets/logicVulns above. The
+  //    vulnerable version was never declared in this repo's own manifests,
+  //    so there is no local commit to walk yet, but one could exist to
+  //    resolve in a later phase.
+  //  - `unpinned_dep` / `no_lockfile` findings: a CATEGORY ERROR, not a
+  //    deferral. These describe an ABSENT state (a version range with no
+  //    pin, a manifest with no lockfile) — there is no "commit that
+  //    introduced a missing lockfile" for any future resolver to find,
+  //    because the finding is about the absence of an event, not an event
+  //    itself. No amount of future engineering work makes these resolvable.
+  //
+  // Direct `vulnerable_dep` findings DO go through real origin resolution
+  // (`resolveDirectSCAOrigin`, gated on `isDirect`) and are not part of this
+  // limitation.
+  //
+  // Net effect: because `unpinned_dep`/`no_lockfile` findings are a category
+  // error rather than a deferral, `--assurance strict` will fail on nearly
+  // any real project that has a `package.json` (or equivalent manifest)
+  // today — an unpinned or unlocked dependency is common, and this check has
+  // no way to ever resolve one. This is a known, disclosed limitation of the
+  // current implementation, not a bug, and it is not something this check
+  // should route around: exempting these finding types from the strict-mode
+  // gate was considered and deliberately deferred to a future milestone
+  // rather than done here, so strict mode keeps refusing to vouch for
+  // provenance it cannot actually speak to.
   const badProvenance = (Array.isArray(findings) ? findings : []).filter((f) => {
     const s = f?.findingProvenance?.status;
     return !['complete', 'uncommitted'].includes(s);

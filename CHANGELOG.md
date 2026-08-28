@@ -53,8 +53,45 @@ bound), `uncommitted` (the finding exists only in the working tree),
 `--provenance-timeout <ms>`, `--include-author-email`, `--require-provenance`.
 `deep` mode is accepted and warns that it runs `standard` in this release.
 `--require-provenance` reports unresolved provenance as a scan-health condition
-and downgrades `scanHealth.status` to `partial`; it never changes the exit code.
+and downgrades `scanHealth.status` to `partial`; it never changes the exit code
+by itself — see the M2 subsection below for the mechanism that does.
 `--verbose --firehose` prints the provenance block per finding in text output.
+
+### M2: format parity, compliance/MTTR/fix-lifecycle surfacing, and `--assurance strict` can now fail the build
+
+M0+M1 landed provenance resolution and the JSON/text surfaces above. M2 threads
+that data through every other output and, for the first time, gives provenance
+completeness the power to fail a CI build.
+
+- **Format parity.** SARIF, CSV, Markdown, and HTML output now all carry each
+  finding's `findingProvenance`, matching what JSON already had — a consumer no
+  longer has to switch formats to see it.
+- **Compliance evidence.** Auditor-walkthrough and NIST Privacy Framework gap
+  findings now carry `controlRefs` (the finding ids backing a control's gap
+  determination) and `derivedProvenance` (the earliest proven open condition
+  among those findings, with a `confidence` level and stated `limitations`).
+- **MTTR.** `mttr.js` reports `ageBasis` (`finding_origin` | `earliest_observable`
+  | `uncommitted` | `first_observed`) and `provenAgeDays` alongside the existing
+  wall-clock `ageDays`, so age-to-remediate can be read against the commit that
+  actually introduced the finding, not just when the scanner first saw it.
+- **Fix records.** Every fix-history entry now carries a `provenanceAtFix`
+  snapshot — the finding's `findingProvenance` as it stood at the moment the fix
+  was applied — so a later audit can see what was known at fix time, not just
+  what is knowable now.
+- **`--assurance strict` can now fail the build over incomplete provenance.**
+  This is the behavior change that matters most, and it is a genuinely new
+  failure mode, not a rewording of `--require-provenance` above: strict mode
+  (`--assurance strict`) now treats any finding whose `findingProvenance.status`
+  is outside `[complete, uncommitted]` as making the scan incomplete, and fails
+  the same way it already fails on a failed or skipped analyzer. `--require-provenance`
+  is unchanged by this — it still only flags and never fails the exit code.
+  `--assurance strict` is the new, separate mechanism that does fail it. See the
+  `KNOWN INTERACTION` comment in `scanner/src/pipeline/assurance-mode.js` for a
+  known, disclosed consequence: transitive `vulnerable_dep`, `unpinned_dep`, and
+  `no_lockfile` supply-chain findings are stamped `not_available` today (the
+  latter two are a category error — there is no commit that introduced a
+  *missing* lockfile — not merely a deferral), so `--assurance strict` will fail
+  on nearly any real project with a dependency manifest until that gap closes.
 
 ### Breaking: SCA finding ids change for manifest-declared dependencies
 

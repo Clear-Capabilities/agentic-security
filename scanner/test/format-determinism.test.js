@@ -83,6 +83,79 @@ for (const format of FORMATS) {
   });
 }
 
+// The fixture above is copied into a plain tmpdir with NO `git init` — so
+// `annotateGitProvenance` (engine.js) short-circuits every finding straight
+// to `stampAll(NOT_AVAILABLE)`, `firstObserved` never gets set, and the
+// `observedAt` freeze (engine.js, search `isDeterministic() ?
+// '1970-01-01T00:00:00.000Z'`) is never actually exercised by any test
+// above — they would pass identically with or without that freeze. This
+// block git-inits a second fixture so real origin resolution runs and
+// `findingProvenance.firstObserved.observedAt` is genuinely populated and
+// compared across two runs.
+let GIT_TARGET;
+
+before(() => {
+  GIT_TARGET = fs.mkdtempSync(path.join(os.tmpdir(), 'fmt-determinism-git-'));
+  fs.cpSync(path.join(HERE, 'fixtures', 'vulnerable-js'), GIT_TARGET, { recursive: true });
+  const git = (gitArgs) => {
+    const r = spawnSync('git', gitArgs, { cwd: GIT_TARGET, encoding: 'utf8' });
+    assert.equal(r.status, 0, `git ${gitArgs.join(' ')} failed: ${r.stderr}`);
+    return r;
+  };
+  git(['init']);
+  git(['config', 'user.email', 'determinism-test@example.com']);
+  git(['config', 'user.name', 'Determinism Test']);
+  git(['add', '-A']);
+  git(['commit', '-m', 'initial commit']);
+  const lock = spawnSync(process.execPath, [CLI, 'rules', 'lock'], { cwd: GIT_TARGET, encoding: 'utf8' });
+  assert.equal(lock.status, 0, `could not write a lockfile: ${lock.stderr}`);
+});
+
+after(() => { try { fs.rmSync(GIT_TARGET, { recursive: true, force: true }); } catch { /* best effort */ } });
+
+function emitGit(format) {
+  const r = spawnSync(process.execPath, [CLI, 'scan', '.', '--format', format, '--deterministic'], {
+    cwd: GIT_TARGET, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+  });
+  return r.stdout || '';
+}
+
+// Same warm-up reasoning as above: the first scan of a fresh directory
+// legitimately differs from every scan after it because it creates
+// last-scan.json/.sig, which is itself part of the input to the next scan.
+before(() => { emitGit('json'); });
+
+test('--deterministic makes SARIF byte-identical across runs against a real git history (findingProvenance exercised)', () => {
+  const first = emitGit('sarif');
+  assert.ok(first.length > 0, 'sarif produced no output — the check would be vacuous');
+
+  // Guard against a vacuous pass: if provenance resolution never actually ran
+  // (e.g. the CLI silently ignored the git history), every finding would be
+  // stamped not_available/firstObserved:null just like the ungited fixture
+  // above, and this test would pass identically with or without the
+  // observedAt freeze — the exact gap this block exists to close.
+  const parsed = JSON.parse(first);
+  const results = parsed?.runs?.[0]?.results || [];
+  assert.ok(results.length > 0, 'sarif produced no results — the check would be vacuous');
+  const withResolvedOrigin = results.filter((r) => {
+    const fp = r?.properties?.findingProvenance;
+    return fp && fp.status !== 'not_available' && fp.firstObserved && fp.firstObserved.observedAt;
+  });
+  assert.ok(
+    withResolvedOrigin.length > 0,
+    'no SARIF result resolved a real findingProvenance.firstObserved.observedAt against the git history — ' +
+    'this test would not actually exercise the observedAt freeze',
+  );
+
+  const second = emitGit('sarif');
+  assert.equal(
+    sha(second),
+    sha(first),
+    `sarif differs between two identical runs against a real git history (${first.length} vs ${second.length} bytes) — ` +
+    'findingProvenance.firstObserved.observedAt (or something else provenance-derived) leaked non-determinism into the artifact',
+  );
+});
+
 test('the format list still matches what the CLI accepts', () => {
   // Anti-rot: this file is only as good as its list. If a new output format
   // ships, it must be added here rather than silently going unchecked.

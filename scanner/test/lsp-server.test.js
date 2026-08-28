@@ -125,6 +125,71 @@ app.get('/run', (req, res) => {
   }
 });
 
+// Final whole-branch review — I4. The four state-dir.test.js tests exercise
+// safeWriteState's underlying `category` primitive directly, but nothing
+// drove a real on-save scan through THIS server and inspected what it wrote.
+// server.js now creates `.agentic-security/provenance/cache/*.json` on every
+// save (M2 §2.4's deliberate exceptCategories:['provenance-cache'] carve-out
+// in the withStateWritesDisabled wrapper above) — a disclosed change from
+// before, when the LSP wrote zero state files. This asserts the carve-out
+// stays exactly as narrow as documented: real provenance cache writes land,
+// and nothing else (dpia.md, ropa.md, lifecycle.json, …) leaks through.
+function listFilesRecursive(dir) {
+  const out = [];
+  if (!fs.existsSync(dir)) return out;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...listFilesRecursive(full));
+    else out.push(full);
+  }
+  return out;
+}
+
+test('a real on-save scan writes ONLY .agentic-security/provenance/cache/ — no dpia.md, ropa.md, lifecycle.json, or other state', () => {
+  const dir = mkTmp('write-scope', {
+    'app.js': `
+const db = require('./db');
+function run(id) { db.query('SELECT * FROM t WHERE id=' + id); }
+`,
+  });
+  try {
+    const git = (gitArgs) => {
+      const r = spawnSync('git', gitArgs, { cwd: dir, encoding: 'utf8' });
+      assert.equal(r.status, 0, `git ${gitArgs.join(' ')} failed: ${r.stderr}`);
+    };
+    git(['init']);
+    git(['config', 'user.email', 'lsp-write-scope@example.com']);
+    git(['config', 'user.name', 'LSP Write Scope Test']);
+    git(['add', '-A']);
+    git(['commit', '-m', 'initial commit']);
+
+    scanFileInChild(dir, path.join(dir, 'app.js'));
+
+    const stateDir = path.join(dir, '.agentic-security');
+    const written = listFilesRecursive(stateDir).map((f) => path.relative(stateDir, f));
+
+    // Non-vacuous guard: if nothing were written at all (e.g. the
+    // provenance-cache carve-out silently stopped firing), the loop below
+    // would pass over an empty list and this test would prove nothing.
+    assert.ok(written.length > 0, 'on-save scan wrote nothing under .agentic-security/ — the write-scope check would be vacuous');
+
+    for (const f of written) {
+      assert.ok(
+        f.startsWith(`provenance${path.sep}cache${path.sep}`),
+        `on-save scan wrote outside provenance/cache/: ${f}`,
+      );
+    }
+
+    // Known-dangerous specific paths must not exist, even if the prefix
+    // check above were ever loosened.
+    for (const dangerous of ['dpia.md', 'ropa.md', path.join('provenance', 'lifecycle.json'), 'privacy-framework.json', 'threat-model.json']) {
+      assert.ok(!fs.existsSync(path.join(stateDir, dangerous)), `on-save scan wrote ${dangerous}`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // Final whole-branch review — I8. Same Critical defect Task 17 fixed in
 // bin/agentic-security.js, still present here: `import.meta.url ===
 // file://${process.argv[1]}` is FALSE when the script is invoked through a
