@@ -86,29 +86,28 @@ export function redactFindingProvenance(fp, { includeEmail = false } = {}) {
 // helper is specifically for the CLI/terminal text path, which had none.
 //
 // Lives here (rather than in report/index.js, which re-exports it) because
-// it has two consumers on opposite sides of the report/posture boundary:
+// it has consumers on opposite sides of the report/posture boundary:
 // report/index.js's explainProvenance/toMarkdown, and
 // posture/auditor-walkthrough.js's renderWalkthrough — both of which are
-// also console.log'd verbatim (bin/agentic-security.js), so both need the
+// console.log'd verbatim (bin/agentic-security.js), so both need the
 // terminal-safety guarantee. Putting it in report/ would make posture/
 // depend on report/, backwards from every other dependency in this tree.
+//
+// A Markdown-specific sibling (backslash-escaping CommonMark punctuation)
+// was added and then removed here: it was applied to renderWalkthrough's
+// output, but that text's only LIVE consumer is bin/agentic-security.js's
+// raw `console.log`, and its file-writing sibling (persistWalkthrough) has
+// zero callers anywhere in the CLI/command surface — nothing in this repo
+// ever runs this text through an actual Markdown renderer. Backslash-
+// escaping is only inert once a real renderer processes it; printed raw or
+// read as a plain-text file, `Jean-Luc Picard` becoming `Jean\-Luc Picard`
+// and `dependabot[bot]` becoming `dependabot\[bot\]` is a visible
+// regression on ordinary, common real-world names, not a security fix. If
+// a genuine Markdown-rendering consumer of this text is added later, revisit
+// this decision informed by that consumer's actual escaping requirements —
+// don't reintroduce blind punctuation-escaping speculatively.
 export function sanitizeForTerminal(str) {
   if (typeof str !== 'string') return str;
   // eslint-disable-next-line no-control-regex
   return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').replace(/[\r\n]+/g, ' ').trim();
-}
-
-// Markdown-specific sibling of sanitizeForTerminal — a DIFFERENT injection
-// class (FR-PROV-026 names "commit messages" explicitly, and Markdown
-// injection via `[text](javascript:...)`, `![x](url)`, raw `<img onerror=…>`,
-// or a code-fence breakout is not something ANSI-stripping defends against).
-// Terminal control characters are stripped first (this text can ALSO reach a
-// terminal — e.g. renderWalkthrough() is both written to a .md file AND
-// console.log'd by `agentic-security compliance --walkthrough`), then every
-// CommonMark punctuation character that could turn plain author text into a
-// live link/image/raw-HTML/code-span/emphasis run is backslash-escaped, so
-// it renders as inert literal text instead of being interpreted as Markdown.
-export function sanitizeForMarkdown(str) {
-  if (typeof str !== 'string') return str;
-  return sanitizeForTerminal(str).replace(/[\\`*_{}[\]()#+\-.!<>|]/g, (c) => '\\' + c);
 }

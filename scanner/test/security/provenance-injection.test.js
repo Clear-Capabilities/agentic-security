@@ -1,20 +1,36 @@
 // FR-PROV-026: untrusted commit metadata (author name, commit summary) must
-// never reach a terminal or a Markdown/HTML renderer un-sanitized. A
-// malicious commit author name containing ANSI/control escape sequences
-// could manipulate terminal state (clear the screen, move the cursor,
-// forge fake output lines); one containing Markdown-significant punctuation
-// could turn plain text into a live link/image/raw-HTML/code-fence-breakout
-// in a rendered report.
+// never reach a terminal un-sanitized. A malicious commit author name
+// containing ANSI/control escape sequences could manipulate terminal state
+// (clear the screen, move the cursor, forge fake output lines).
 //
-// sanitizeForTerminal/sanitizeForMarkdown live in posture/provenance/schema.js
-// (shared by report/index.js's explainProvenance/toMarkdown AND
-// posture/auditor-walkthrough.js's renderWalkthrough — two independent
-// CLI/Markdown renderers of the same untrusted findingOrigin fields) and are
-// re-exported from report/index.js for discoverability.
+// sanitizeForTerminal lives in posture/provenance/schema.js (shared by
+// report/index.js's explainProvenance AND posture/auditor-walkthrough.js's
+// renderWalkthrough — two independent CLI renderers of the same untrusted
+// findingOrigin fields) and is re-exported from report/index.js for
+// discoverability.
+//
+// A Markdown-specific sibling (sanitizeForMarkdown, backslash-escaping
+// CommonMark punctuation) was added here and then REMOVED after code
+// review: it was applied to renderWalkthrough's output, but that text's
+// only live consumer is bin/agentic-security.js's raw `console.log`
+// (`compliance --walkthrough`) — persistWalkthrough, the function that
+// would write a real `.md` file, has zero callers anywhere in the
+// CLI/command surface, so nothing in this repo ever runs this text through
+// an actual Markdown renderer. Backslash-escaping is only inert once a real
+// renderer processes it; printed raw to a terminal or read as plain text,
+// the escapes are VISIBLE LITERAL BACKSLASHES — a real, reproducible
+// regression on extremely common real-world author names (`dependabot[bot]`
+// -> `dependabot\[bot\]`, `Jean-Luc Picard` -> `Jean\-Luc Picard`). See the
+// regression tests below and schema.js's header comment for the full
+// reasoning. `toMarkdown`'s provenance code-fence-breakout defense (a
+// SEPARATE, genuinely-needed Markdown fix, since that block IS embedded in
+// a real Markdown document written to a report file) does not use
+// character escaping at all — it uses a dynamically-sized fence instead,
+// which has no "visible backslash" failure mode.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { explainProvenance, sanitizeForTerminal, sanitizeForMarkdown, toMarkdown } from '../../src/report/index.js';
+import { explainProvenance, sanitizeForTerminal, toMarkdown } from '../../src/report/index.js';
 import { emptyProvenance, PROVENANCE_STATUS } from '../../src/posture/provenance/schema.js';
 import { deriveComplianceProvenance, renderWalkthrough } from '../../src/posture/auditor-walkthrough.js';
 
@@ -43,9 +59,19 @@ test('sanitizeForTerminal: collapses embedded newlines to a single line', () => 
   assert.match(clean, /Real Name\s+FAKE:/);
 });
 
-test('sanitizeForTerminal: leaves ordinary names untouched', () => {
+test('sanitizeForTerminal: leaves ordinary names untouched, including common punctuated real-world names', () => {
   assert.equal(sanitizeForTerminal('Jamie Chen'), 'Jamie Chen');
   assert.equal(sanitizeForTerminal("O'Brien-Smith"), "O'Brien-Smith");
+  // Regression fixtures for the code-review finding: these are extremely
+  // common real git author names, and a backslash-escaping sanitizer
+  // visibly corrupted every one of them (dependabot\[bot\], Jean\-Luc
+  // Picard, O'Brien\-Smith, Dr\. Jones) since nothing in this repo ever
+  // renders this text through a real Markdown engine that would interpret
+  // (and thus need) the escapes.
+  assert.equal(sanitizeForTerminal('dependabot[bot]'), 'dependabot[bot]');
+  assert.equal(sanitizeForTerminal('renovate[bot]'), 'renovate[bot]');
+  assert.equal(sanitizeForTerminal('Jean-Luc Picard'), 'Jean-Luc Picard');
+  assert.equal(sanitizeForTerminal('Dr. Jones'), 'Dr. Jones');
 });
 
 test('sanitizeForTerminal: non-string input passes through unchanged', () => {
@@ -77,6 +103,20 @@ test('explainProvenance: a malicious authorName in a real finding never reaches 
   assert.match(rendered, /Pwned/, 'the sanitized name must still be visible, not silently dropped');
 });
 
+test('explainProvenance: an ordinary punctuated authorName renders with no visible backslashes', () => {
+  const f = {
+    findingProvenance: {
+      status: 'complete',
+      findingOrigin: { commit: 'abc1234567890', authorDate: '2026-01-01T00:00:00Z', authorName: 'dependabot[bot]' },
+      method: 'semantic-history-replay',
+      confidence: { level: 'high', score: 0.9, reasons: [] },
+    },
+  };
+  const rendered = explainProvenance(f);
+  assert.match(rendered, /dependabot\[bot\]/);
+  assert.ok(!rendered.includes('\\'), `no backslash should appear in output for an ordinary name: ${JSON.stringify(rendered)}`);
+});
+
 test('explainProvenance: a malicious branchIntroduction.relationship never reaches raw output with control characters', () => {
   const f = {
     findingProvenance: {
@@ -89,44 +129,6 @@ test('explainProvenance: a malicious branchIntroduction.relationship never reach
   };
   const rendered = explainProvenance(f);
   assert.ok(!/\x1b/.test(rendered));
-});
-
-test('sanitizeForMarkdown: strips control characters and collapses newlines (terminal-safety is a subset)', () => {
-  const malicious = 'Evil\x1b[2J\x1b[HName\nSecond line';
-  const clean = sanitizeForMarkdown(malicious);
-  assert.ok(!/\x1b/.test(clean));
-  assert.ok(!clean.includes('\n'));
-});
-
-test('sanitizeForMarkdown: neutralizes a Markdown link/image injection', () => {
-  const malicious = '[click me](javascript:alert(1))';
-  const clean = sanitizeForMarkdown(malicious);
-  // The literal author text must survive (visible, not dropped) but no
-  // longer parse as a Markdown link: '[' and '(' must be escaped.
-  assert.match(clean, /click me/);
-  assert.ok(!/(?<!\\)\[click me\]\(javascript:alert\(1\)\)/.test(clean), 'must not remain live link syntax');
-  assert.doesNotMatch(clean, /^\[.*\]\(.*\)$/);
-});
-
-test('sanitizeForMarkdown: neutralizes a raw-HTML injection', () => {
-  const malicious = '<img src=x onerror=alert(1)>';
-  const clean = sanitizeForMarkdown(malicious);
-  // CommonMark backslash-escaping, not deletion: '<' survives as a literal
-  // character (the text stays honest about what was in the data) but is
-  // prefixed with '\' so a renderer treats it as inert punctuation rather
-  // than the start of an HTML tag.
-  assert.ok(!/(?<!\\)</.test(clean), 'every "<" must be backslash-escaped, none may open a raw HTML tag');
-  assert.match(clean, /\\</);
-});
-
-test('sanitizeForMarkdown: neutralizes a code-fence breakout attempt', () => {
-  const malicious = 'Name\n```\nFAKE SECTION\n```';
-  const clean = sanitizeForMarkdown(malicious);
-  assert.ok(!clean.includes('```'), 'a literal triple-backtick run must not survive unescaped');
-});
-
-test('sanitizeForMarkdown: leaves ordinary names readable', () => {
-  assert.match(sanitizeForMarkdown('Jamie Chen'), /Jamie Chen/);
 });
 
 test('toMarkdown: an authorName containing a backtick run cannot break out of the provenance code fence', () => {
@@ -156,15 +158,27 @@ test('toMarkdown: an authorName containing a backtick run cannot break out of th
   assert.ok(open.length > 4, 'fence must be longer than the embedded 4-backtick run');
 });
 
-test('deriveComplianceProvenance + renderWalkthrough: a malicious authorName never reaches raw Markdown output', () => {
+test('toMarkdown: an ordinary punctuated authorName (dependabot[bot]) renders with no visible backslashes', () => {
+  const scan = {
+    findings: [{
+      id: 'f1', file: 'a.js', line: 1, severity: 'high', vuln: 'SQL Injection', cwe: 'CWE-89',
+      findingProvenance: emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
+        findingOrigin: { commit: 'abc1234567', authorDate: '2026-03-14T00:00:00Z', authorName: 'dependabot[bot]' },
+      }),
+    }],
+    filesScanned: 1,
+  };
+  const md = toMarkdown(scan);
+  assert.match(md, /dependabot\[bot\]/);
+  assert.ok(!md.includes('\\'), 'no backslash-escaping should appear for an ordinary name');
+});
+
+function makeWalkthroughFixture(authorName) {
   const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
-    findingOrigin: { commit: 'abc1234567', authorDate: '2026-01-01T00:00:00Z', authorName: 'Evil\x1b[2J[click](javascript:alert(1))' },
+    findingOrigin: { commit: 'abc1234567', authorDate: '2026-01-01T00:00:00Z', authorName },
   });
   const finding = { id: 'f1', findingProvenance: fp };
   const dp = deriveComplianceProvenance([finding]);
-  assert.ok(dp.earliestOrigin);
-  assert.equal(dp.earliestOrigin.authorName, 'Evil\x1b[2J[click](javascript:alert(1))', 'raw value is preserved on the data object — sanitization happens at render time, not capture time');
-
   const fw = { id: 'test-fw', controls: [] };
   const evaluation = [{
     control: { id: 'C-1', function: 'Detect', summary: 'Example control', evidence: [] },
@@ -173,7 +187,38 @@ test('deriveComplianceProvenance + renderWalkthrough: a malicious authorName nev
     controlRefs: ['f1'],
     derivedProvenance: dp,
   }];
-  const rendered = renderWalkthrough(fw, evaluation, {});
-  assert.ok(!/\x1b/.test(rendered), 'ESC byte must not reach the walkthrough Markdown/console output');
-  assert.ok(!/\[click\]\(javascript:alert\(1\)\)/.test(rendered), 'must not remain live Markdown link syntax');
+  return { dp, rendered: renderWalkthrough(fw, evaluation, {}) };
+}
+
+test('deriveComplianceProvenance + renderWalkthrough: a malicious authorName never reaches raw output with control characters', () => {
+  const { dp, rendered } = makeWalkthroughFixture('Evil\x1b[2J[click](javascript:alert(1))');
+  assert.ok(dp.earliestOrigin);
+  assert.equal(dp.earliestOrigin.authorName, 'Evil\x1b[2J[click](javascript:alert(1))', 'raw value is preserved on the data object — sanitization happens at render time, not capture time');
+  assert.ok(!/\x1b/.test(rendered), 'ESC byte must not reach the walkthrough console output');
+});
+
+// Regression test for the code-review finding: renderWalkthrough's ONLY
+// live consumer (bin/agentic-security.js's raw `console.log`) never passes
+// this text through a real Markdown renderer, so it must render exactly as
+// typed for ordinary names — no backslash-escaping artifacts. Uses real,
+// extremely common punctuated author names (a bot account and a hyphenated
+// human name), not the bare single-letter names ('A'/'B'/'C'/'D') the
+// pre-existing framework-provenance-controlrefs.test.js fixtures use, which
+// is exactly why a backslash-escaping regression slipped through review the
+// first time — single-letter names have no punctuation to corrupt.
+test('renderWalkthrough: dependabot[bot] renders with no visible backslashes', () => {
+  const { rendered } = makeWalkthroughFixture('dependabot[bot]');
+  assert.match(rendered, /Earliest proven origin.*dependabot\[bot\]/);
+  assert.ok(!rendered.includes('\\'), `no backslash should appear for an ordinary bot name: ${JSON.stringify(rendered)}`);
+});
+
+test('renderWalkthrough: Jean-Luc Picard renders with no visible backslashes', () => {
+  const { rendered } = makeWalkthroughFixture('Jean-Luc Picard');
+  assert.match(rendered, /Earliest proven origin.*Jean-Luc Picard/);
+  assert.ok(!rendered.includes('\\'), `no backslash should appear for an ordinary hyphenated name: ${JSON.stringify(rendered)}`);
+});
+
+test("renderWalkthrough: O'Brien-Smith and Dr. Jones render with no visible backslashes", () => {
+  assert.ok(!makeWalkthroughFixture("O'Brien-Smith").rendered.includes('\\'));
+  assert.ok(!makeWalkthroughFixture('Dr. Jones').rendered.includes('\\'));
 });

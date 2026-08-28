@@ -11,13 +11,13 @@ import { applyLegacyCompat, legacyFieldDeprecationNotice } from '../pipeline/leg
 // hundred lines below) and NOT `supplyChainEntry.provenance`
 // (sca/sigstore-verify.js's SLSA/Sigstore build attestation). Three unrelated
 // things, three distinct keys — do not collapse them.
-import { redactFindingProvenance, sanitizeForTerminal, sanitizeForMarkdown } from '../posture/provenance/schema.js';
-// Re-exported: FR-PROV-026. The sanitizers live in provenance/schema.js
-// (shared with posture/auditor-walkthrough.js, a second CLI/Markdown
-// renderer of the same untrusted fields — see that module's header for why
-// it lives there rather than here); re-exported so `explainProvenance`'s
-// own module keeps being the discoverable home for provenance-text callers.
-export { sanitizeForTerminal, sanitizeForMarkdown };
+import { redactFindingProvenance, sanitizeForTerminal } from '../posture/provenance/schema.js';
+// Re-exported: FR-PROV-026. Lives in provenance/schema.js (shared with
+// posture/auditor-walkthrough.js, a second CLI renderer of the same
+// untrusted fields — see that module's header for why it lives there
+// rather than here); re-exported so `explainProvenance`'s own module keeps
+// being the discoverable home for provenance-text callers.
+export { sanitizeForTerminal };
 
 const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const SEV_TO_SARIF = { critical: 'error', high: 'error', medium: 'warning', low: 'note', info: 'none' };
