@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { checkAbsentInAllParents, detectRevert, detectCherryPick } from '../../src/posture/provenance/dag-walk.js';
+import { checkAbsentInAllParents, checkAbsentInSomeParent, detectRevert, detectCherryPick } from '../../src/posture/provenance/dag-walk.js';
 import { getAllParents } from '../../src/posture/provenance/git-evidence.js';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 
@@ -46,6 +46,57 @@ test('checkAbsentInAllParents: a merge commit is absentInAll only when EVERY par
   const replayAbsent = async () => ({ present: false });
   const isAbsent = await checkAbsentInAllParents(fx.root, merge, replayAbsent);
   assert.equal(isAbsent.absentInAll, true);
+});
+
+test('checkAbsentInSomeParent: a merge commit is absentInSome when AT LEAST ONE parent lacks the predicate, unlike checkAbsentInAllParents', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('a.txt', 'x');
+  fx.commit('root');
+  const mainBranch = fx.currentBranch();
+  fx.checkoutBranch('feature');
+  fx.writeFile('b.txt', 'y');
+  const featureTip = fx.commit('feature');
+  fx.checkout(mainBranch);
+  fx.writeFile('a.txt', 'z');
+  fx.commit('mainline');
+  const merge = fx.merge('feature', 'merge');
+  const parents = getAllParents(fx.root, merge);
+  assert.equal(parents.length, 2);
+  // Predicate present only in the feature-branch parent — absent in the OTHER one.
+  const replayPresentInFeature = async (sha) => ({ present: sha === featureTip });
+  const some = await checkAbsentInSomeParent(fx.root, merge, replayPresentInFeature);
+  assert.equal(some.absentInSome, true, 'the mainline parent lacks it, so "some" is true');
+  const all = await checkAbsentInAllParents(fx.root, merge, replayPresentInFeature);
+  assert.equal(all.absentInAll, false, 'the feature parent HAS it, so "all" is false — this is the exact contrast the fix is about');
+});
+
+test('checkAbsentInSomeParent: root commit reports rootCommit:true, absentInSome:true', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('a.txt', 'x');
+  const root = fx.commit('root');
+  const result = await checkAbsentInSomeParent(fx.root, root, async () => ({ present: false }));
+  assert.equal(result.rootCommit, true);
+  assert.equal(result.absentInSome, true);
+});
+
+test('checkAbsentInSomeParent: absent in NEITHER parent (present in both) is absentInSome:false', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('a.txt', 'x');
+  fx.commit('root');
+  const mainBranch = fx.currentBranch();
+  fx.checkoutBranch('feature');
+  fx.writeFile('b.txt', 'y');
+  fx.commit('feature');
+  fx.checkout(mainBranch);
+  fx.writeFile('a.txt', 'z');
+  fx.commit('mainline');
+  const merge = fx.merge('feature', 'merge');
+  const result = await checkAbsentInSomeParent(fx.root, merge, async () => ({ present: true }));
+  assert.equal(result.absentInSome, false);
+  assert.deepEqual(result.absentParents, []);
 });
 
 test('detectRevert: a real git-revert of the immediately preceding commit is detected', async (t) => {

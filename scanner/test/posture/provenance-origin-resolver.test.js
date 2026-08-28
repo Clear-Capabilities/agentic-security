@@ -284,10 +284,21 @@ test('resolveOrigin: budget_exhausted when deadlineAt is already in the past', a
 // parent lacks the predicate") — the function is a SAFETY check (never
 // certify a merge as introducing something one of its parents already had),
 // not a resolving-power check. So "deep resolves what standard could not"
-// is not an available property of this design; what deep genuinely adds is
+// is not an available property of THIS PRIMITIVE; what it genuinely adds is
 // (a) never regressing a case standard already gets right (this test) and
 // (b) revertOf/cherryPickOf tagging, which only the retry path computes
 // (next test).
+//
+// FOLLOW-UP (post-review fix): the coordinator agreed this was a real design
+// flaw in the ORIGINAL brief, not a bug in applying it, and specified the
+// fix — `dag-walk.js` gained a SIBLING primitive, `checkAbsentInSomeParent`
+// (absence in AT LEAST ONE parent, a strict SUPERSET of the first-parent
+// check rather than a subset), and `origin-resolver.js`'s retry now calls
+// that instead. `checkAbsentInAllParents` itself is untouched — it remains
+// correct and used nowhere else. With the corrected primitive, a genuine
+// gap-closing scenario IS constructible; see the dedicated test below
+// ("deep mode resolves complete at a merge whose first parent already had
+// the predicate but whose OTHER parent did not").
 test('resolveOrigin: deep mode does not regress a clean merge that standard mode (via git\'s own line-history tracing) already resolves correctly', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());
@@ -314,23 +325,26 @@ test('resolveOrigin: deep mode does not regress a clean merge that standard mode
   assert.match(deepResult.findingOrigin.summary, /introduce eval on feature branch/);
 });
 
-// The genuinely observable, verified difference: when standard mode's
-// primary loop exhausts every candidate without finding one whose FIRST
-// parent lacks the predicate, deep mode's retry loop is reached and
-// re-walks the SAME candidates through `checkAbsentInAllParents` — this is
-// real, additional work (visible via `commitsConsidered`), even though (per
-// the subset relationship above) it can never flip the final status to
-// `complete`. Constructed via `since`-truncation: `since` excludes the
-// TRUE introducing commit from the candidate list while a later same-
-// stableId rewrite (same SQLi predicate, only the table name changed — the
-// stableId's snippet component collapses string literals, so it reproduces
-// identically) remains a candidate. That rewrite's real first parent (the
-// excluded true-introduction commit, still reachable via a direct git call
-// regardless of `since`) still legitimately carries the predicate, so
-// BOTH modes correctly decline to claim `complete` — the honest, never-
-// false-certainty outcome — while deep mode's `commitsConsidered` is
-// visibly higher, proving the retry loop actually ran.
-test('resolveOrigin: deep mode\'s retry loop is reached and re-walks candidates via checkAbsentInAllParents when standard mode\'s walk exhausts — both stay partial, never false certainty', async (t) => {
+// A single-parent (non-merge) exhaustion case: when standard mode's primary
+// loop finds every present candidate's FIRST (and only) parent also
+// present, deep mode's retry loop is reached and re-walks the SAME
+// candidates through `checkAbsentInSomeParent` — this is real, additional
+// work (visible via `commitsConsidered`). For a SINGLE-parent commit,
+// "absent in some parent" and "absent in the first parent" are the same
+// fact (there is only one parent), so this case still can't flip the final
+// status — both correctly stay `partial`. Constructed via `since`-
+// truncation: `since` excludes the TRUE introducing commit from the
+// candidate list while a later same-stableId rewrite (same SQLi predicate,
+// only the table name changed — the stableId's snippet component collapses
+// string literals, so it reproduces identically) remains a candidate. That
+// rewrite's real first parent (the excluded true-introduction commit, still
+// reachable via a direct git call regardless of `since`) still legitimately
+// carries the predicate, so BOTH modes correctly decline to claim
+// `complete` — the honest, never-false-certainty outcome — while deep
+// mode's `commitsConsidered` is visibly higher, proving the retry loop
+// actually ran. The genuine multi-parent case where `checkAbsentInSomeParent`
+// DOES resolve something standard mode cannot is the next-but-one test below.
+test('resolveOrigin: deep mode\'s retry loop is reached and re-walks candidates via checkAbsentInSomeParent when standard mode\'s walk exhausts on a single-parent chain — both stay partial, never false certainty', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());
   fx.writeFile('server.js', SAFE_SRC);
@@ -354,6 +368,80 @@ test('resolveOrigin: deep mode\'s retry loop is reached and re-walks candidates 
   });
   assert.equal(deepResult.status, 'partial', 'deep mode must not manufacture false certainty here either — the excluded parent genuinely already carried the predicate');
   assert.equal(deepResult.commitsConsidered, 2, 'the retry loop re-examined the one present candidate a second time, proving it actually ran');
+});
+
+// FOLLOW-UP TO THE ABOVE DEVIATION, after the coordinator's fix: `dag-walk.js`
+// gained `checkAbsentInSomeParent` (absence in AT LEAST ONE parent — a strict
+// SUPERSET of the first-parent-only check, unlike `checkAbsentInAllParents`'s
+// strict SUBSET) and `origin-resolver.js`'s retry now uses it. This makes a
+// genuine gap-closing scenario constructible: a merge candidate whose FIRST
+// parent already carries the predicate (so standard's first-parent-only check
+// skips it) but whose OTHER parent does not.
+//
+// Constructed via `since`-truncation (excluding the TRUE original
+// introduction, `A`, from the candidate list — mirroring the previous test)
+// plus a genuine merge conflict: mainline rewrites the table name after `A`
+// (still the same stableId — the snippet's string literal is collapsed by
+// `stable-id.js`'s normalization, so a changed table name doesn't change
+// identity), while a sibling `feature` branch (also forked from `A`) FIXES
+// the same line entirely. Merging produces a real conflict, resolved by
+// reintroducing the vulnerability under yet another table name (again the
+// same stableId, and genuinely new text — the merge is a real change point
+// for -L, unlike a resolution that happens to match one parent verbatim).
+// The merge's FIRST parent (mainline's rewrite) still has the predicate
+// present, so standard mode's first-parent-only check skips the merge and
+// exhausts every other candidate too — `partial`. The merge's SECOND parent
+// (feature's fix) genuinely lacks it, so `checkAbsentInSomeParent` correctly
+// identifies the merge as where the predicate became reachable again via
+// this path, and deep mode resolves `complete` there — the real,
+// non-regressive capability this fix adds.
+test('resolveOrigin: deep mode resolves complete at a merge whose first parent already had the predicate but whose OTHER parent did not — the gap standard mode cannot close', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  const V_BAR = VULN_SRC.replace('FROM t WHERE', 'FROM bar WHERE');
+  const V_QUX = VULN_SRC.replace('FROM t WHERE', 'FROM qux WHERE');
+
+  fx.writeFile('server.js', SAFE_SRC);
+  fx.commit('root, safe');
+  fx.writeFile('server.js', VULN_SRC);
+  const introduceSha = fx.commit('introduce sqli, table t');
+  const mainBranch = fx.currentBranch();
+
+  fx.writeFile('server.js', V_BAR);
+  fx.commit('mainline: rewrite table to bar');
+
+  const { execFileSync } = await import('node:child_process');
+  execFileSync('git', ['checkout', '-q', '-b', 'feature', introduceSha], { cwd: fx.root });
+  fx.writeFile('server.js', SAFE_SRC);
+  fx.commit('feature: fix the sqli');
+  execFileSync('git', ['checkout', '-q', mainBranch], { cwd: fx.root });
+  let mergeSha;
+  try {
+    execFileSync('git', ['merge', '--no-ff', '-q', '-m', 'merge feature (conflict)', 'feature'], { cwd: fx.root });
+    mergeSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: fx.root, encoding: 'utf8' }).trim();
+  } catch {
+    // Real conflict (mainline's table-name rewrite vs. feature's fix both
+    // touch the same line) — resolve by reintroducing the vulnerability
+    // under a third, novel table name.
+    fx.writeFile('server.js', V_QUX);
+    execFileSync('git', ['add', '-A'], { cwd: fx.root });
+    execFileSync('git', ['commit', '-q', '--no-edit'], { cwd: fx.root });
+    mergeSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: fx.root, encoding: 'utf8' }).trim();
+  }
+
+  const finding = await realSqlInjectionFinding(V_QUX, 'server.js', fx.root);
+
+  const standardResult = await resolveOrigin(fx.root, finding, {
+    mode: 'standard', since: introduceSha, repoState: { shallow: false },
+  });
+  assert.equal(standardResult.status, 'partial', 'standard mode only checks the first (already-present) parent and never notices the fix on the other side');
+
+  const deepResult = await resolveOrigin(fx.root, finding, {
+    mode: 'deep', since: introduceSha, repoState: { shallow: false },
+  });
+  assert.equal(deepResult.status, 'complete');
+  assert.equal(deepResult.findingOrigin.commit, mergeSha);
+  assert.match(deepResult.findingOrigin.summary, /merge feature/);
 });
 
 // DEVIATION FROM THE M3 BRIEF (same root cause as above): the brief's

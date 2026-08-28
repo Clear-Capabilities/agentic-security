@@ -26,7 +26,7 @@
 import { candidateCommitsForLine, getFirstParent, commitMeta } from './git-evidence.js';
 import { replayAt } from './predicate-replay.js';
 import { PROVENANCE_METHOD } from './schema.js';
-import { checkAbsentInAllParents, detectRevert, detectCherryPick } from './dag-walk.js';
+import { checkAbsentInSomeParent, detectRevert, detectCherryPick } from './dag-walk.js';
 
 function relevantFiles(finding) {
   const files = new Set();
@@ -125,15 +125,18 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
 
   // M3 §3.1: `--provenance deep`. The standard walk above only ever checks a
   // candidate's FIRST parent for absence — correct for linear history, but a
-  // vulnerability introduced via a merged feature branch never shows up
-  // absent-in-first-parent at the merge commit (the first parent is
-  // mainline, which the merge commit inherited from BEFORE the merge, so the
-  // predicate legitimately wasn't there — but it also isn't the commit that
-  // introduced it on the feature branch, which the first-parent-only walk
-  // never visited). Deep mode re-checks the SAME candidates the standard
-  // walk already found, this time requiring absence in EVERY parent, not
-  // just the first — the generalization the spec calls "explores every
-  // parent of a merge commit."
+  // vulnerability introduced via a merged feature branch can be absent from
+  // a NON-first parent while the first parent (inherited from mainline
+  // before the merge) already carries it — the standard check never looks
+  // past parents[0], so it never sees that other, absent parent. Deep mode
+  // re-checks the SAME candidates the standard walk already found, this
+  // time via `checkAbsentInSomeParent` — absence in AT LEAST ONE parent, not
+  // necessarily the first. See that function's own doc comment in
+  // dag-walk.js for why "any parent absent" (a strict superset of the
+  // first-parent-only check) is the correct generalization here, and why
+  // `checkAbsentInAllParents` (a strict SUBSET, used only for lifecycle
+  // safety checks elsewhere) can never resolve anything this retry couldn't
+  // already resolve via the primary loop above.
   if (mode === 'deep') {
     for (const sha of candidates) {
       if (deadlineAt && Date.now() > deadlineAt) {
@@ -142,8 +145,8 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
       const presentHere = await replay(sha);
       if (!presentHere.present) continue;
       commitsConsidered++;
-      const { absentInAll, parents, rootCommit } = await checkAbsentInAllParents(scanRoot, sha, replay);
-      if (!absentInAll) continue;
+      const { absentInSome, absentParents, rootCommit } = await checkAbsentInSomeParent(scanRoot, sha, replay);
+      if (!absentInSome) continue;
       const meta = commitMeta(scanRoot, sha);
       if (!meta) continue;
       if (rootCommit && repoState && repoState.shallow) {
@@ -155,7 +158,7 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
       }
       const { isRevert, revertsCommit } = detectRevert(scanRoot, sha, candidates);
       const { isCherryPick, originalCommit } = detectCherryPick(scanRoot, sha);
-      const origin = originFrom(meta, { absentInParents: parents });
+      const origin = originFrom(meta, { absentInParents: absentParents });
       origin.revertOf = isRevert ? revertsCommit : null;
       origin.cherryPickOf = isCherryPick ? originalCommit : null;
       return {

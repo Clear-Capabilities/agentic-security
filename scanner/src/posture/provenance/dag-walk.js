@@ -46,6 +46,31 @@ export async function checkAbsentInAllParents(scanRoot, sha, replay) {
   return { absentInAll, parents, rootCommit: false };
 }
 
+/**
+ * Check whether a predicate is absent in AT LEAST ONE parent of `sha` (not
+ * necessarily all of them). This is the mathematically correct
+ * generalization of origin-resolver.js's first-parent-only check: "absent in
+ * the first parent" is the special case where that one parent happens to be
+ * absent, so "absent in ANY parent" is a strict SUPERSET of what the
+ * first-parent check alone can find — it additionally catches a merge
+ * candidate whose FIRST parent has the predicate (inherited from that
+ * line's own earlier history) but a DIFFERENT parent's line did not, which
+ * means that other line's merge into this one is genuinely where the
+ * predicate became reachable via THIS path. `checkAbsentInAllParents`
+ * (above) answers a different question — "did every contributing line lack
+ * it" — and is a strict SUBSET of the first-parent check instead, which is
+ * why it can never resolve anything the first-parent check couldn't already
+ * resolve on its own; it exists as a safety/non-regression check, not a
+ * resolving-power check. Do not conflate the two.
+ */
+export async function checkAbsentInSomeParent(scanRoot, sha, replay) {
+  const parents = getAllParents(scanRoot, sha);
+  if (parents.length === 0) return { absentInSome: true, absentParents: [], parents: [], rootCommit: true };
+  const results = await Promise.all(parents.map((p) => replay(p)));
+  const absentParents = parents.filter((_, i) => !results[i].present);
+  return { absentInSome: absentParents.length > 0, absentParents, parents, rootCommit: false };
+}
+
 // git's own convention when using `git revert` (no -n/--no-edit override):
 // "Revert \"<original subject>\"". Message alone is spoofable, so this is
 // only the FIRST half of detection — see detectRevert.
