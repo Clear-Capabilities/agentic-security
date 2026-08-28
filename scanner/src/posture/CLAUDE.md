@@ -388,7 +388,7 @@ are both pre-existing unrelated fields.
 | `schema.js` | the status/method/role/confidence enums, `emptyProvenance`, `redactFindingProvenance`, `isProvenanceHealthy` |
 | `validate.js` | shape assertion for tests |
 | `missing-control-resolver.js` | (M3 §3.3) when a previously-observed safeguard disappeared — **standalone library, NOT wired into the live pipeline** |
-| `providers/config.js`, `providers/github.js`, `providers/gitlab.js` | (M3 §3.4) GitHub/GitLab PR-metadata + CODEOWNERS fetch, config resolved from `provenance-providers.yml` / token env vars — **standalone library, NOT wired into the live pipeline; no current caller invokes `fetchPRMetadata`/`fetchCodeowners`/`resolveProviderConfig`** |
+| `providers/config.js`, `providers/github.js`, `providers/gitlab.js` | (M3 §3.4) GitHub/GitLab PR-metadata + CODEOWNERS fetch, config resolved from `.agentic-security/provenance-providers.yml` / token env vars — **standalone library, NOT wired into the live pipeline; no current caller invokes `fetchPRMetadata`/`fetchCodeowners`/`resolveProviderConfig`** |
 
 **Four invariants, each with a test that fails if you relax it:**
 
