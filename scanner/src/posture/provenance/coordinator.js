@@ -54,6 +54,7 @@ import * as crypto from 'node:crypto';
 import { getRepoState, isGitRepo, blameLine } from './git-evidence.js';
 import { resolveOrigin } from './origin-resolver.js';
 import { resolveDirectSCAOrigin, scaStableId } from './sca-origin.js';
+import { resolveTransitiveSCAOrigin } from './transitive-sca.js';
 import { resolveBranchEntry } from './branch-entry.js';
 import { attributeEvidence } from './evidence-attribution.js';
 import { assessConfidence } from './confidence.js';
@@ -64,6 +65,7 @@ import { emptyProvenance, PROVENANCE_STATUS, PROVENANCE_METHOD, EVIDENCE_ROLE, C
 // dependency finding has no `parser` (no file was parsed by a SAST detector),
 // so the honest answer to "what produced this" is the manifest-diff walk.
 const SCA_DETECTOR = 'sca-manifest-diff';
+const TRANSITIVE_SCA_DETECTOR = 'sca-lockfile-history-diff';
 
 // Exported so `engine.js` can establish ONE deadline across both of the calls
 // it makes (SAST findings, then direct SCA deps) using the same default this
@@ -128,6 +130,12 @@ async function resolveOne(finding, ctx) {
   // rather than `file`/`line`/`ruleId`, and their origin is a version
   // transition in a committed manifest blob rather than a line of code.
   const isSca = ctx.findingType === 'sca';
+  const isTransitiveSca = ctx.findingType === 'sca-transitive';
+  // Both direct and transitive SCA entries share the same non-SAST shape —
+  // no file+line to blame, stableId backfilled the same way. Only WHICH
+  // resolver runs (Task 6 vs sca-origin.js) and what evidence/detector
+  // label gets attached differ between them.
+  const isScaLike = isSca || isTransitiveSca;
 
   // THE BUDGET CHECK COMES FIRST — before the blame call, not after it.
   //
@@ -159,7 +167,7 @@ async function resolveOne(finding, ctx) {
   // single declared version, which would turn every dependency in the project
   // into a false `uncommitted`. resolveDirectSCAOrigin reads committed blobs
   // and answers the real question directly, reporting `partial` when it cannot.
-  if (!isSca && finding.file && finding.line) {
+  if (!isScaLike && finding.file && finding.line) {
     const blame = blameLine(scanRoot, finding.file, finding.line);
     if (blame && blame.uncommitted) {
       return emptyProvenance(PROVENANCE_STATUS.UNCOMMITTED, {
@@ -173,7 +181,7 @@ async function resolveOne(finding, ctx) {
   // of which a dependency finding has). Backfill the SCA-shaped id here so the
   // cache key — and every consumer downstream of it — has something stable to
   // hold. An id the caller already set always wins.
-  if (isSca && !finding.stableId) {
+  if (isScaLike && !finding.stableId) {
     finding.stableId = scaStableId(finding);
   }
 
@@ -196,15 +204,18 @@ async function resolveOne(finding, ctx) {
   // awaits the same in-flight work instead of starting its own.
   if (ctx.memo && ctx.memo.has(cacheKey)) return ctx.memo.get(cacheKey);
 
-  const promise = resolveAndCache(finding, ctx, cacheKey, isSca);
+  const promise = resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca);
   if (ctx.memo) ctx.memo.set(cacheKey, promise);
   return promise;
 }
 
-async function resolveAndCache(finding, ctx, cacheKey, isSca) {
+async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca) {
   const { scanRoot, repoState, deadlineAt } = ctx;
   const cached = cacheGet(scanRoot, cacheKey);
   if (cached) return cached;
+  // resolveOne computes isScaLike in its own scope; resolveAndCache does not
+  // share it, so it is recomputed here from the two flags passed through.
+  const isScaLike = isSca || isTransitiveSca;
 
   // PER-FINDING SUB-BUDGET (spec: `max(2s, global/estimatedFindingCount)`).
   //
@@ -222,13 +233,15 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca) {
 
   const originResult = isSca
     ? await resolveDirectSCAOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt })
+    : isTransitiveSca
+    ? await resolveTransitiveSCAOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt })
     // M3 §3.1: `ctx.mode` was already threaded into the CACHE KEY
     // (makeCacheKey's `mode` field, present since M0+M1) but never actually
     // reached resolveOrigin itself — `--provenance deep` was accepted and
     // cached distinctly from `standard`, but both modes ran identical code.
     : await resolveOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt, repoState, mode: ctx.mode });
 
-  const detector = isSca ? SCA_DETECTOR : (finding.parser || null);
+  const detector = isSca ? SCA_DETECTOR : isTransitiveSca ? TRANSITIVE_SCA_DETECTOR : (finding.parser || null);
 
   let provenance;
   let cacheable = true;
@@ -242,12 +255,13 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca) {
     // the dependency parsers (Task 12 added it to package.json/requirements.txt
     // components) and stays `null` rather than 0 when a parser did not supply
     // one — 0 would read as a real line number.
-    const evidenceAttribution = isSca
+    const evidenceAttribution = isScaLike
       ? [{
           role: EVIDENCE_ROLE.MANIFEST,
           path: finding.filePath || null,
           line: Number.isInteger(finding.line) ? finding.line : null,
           commit: originResult.findingOrigin.commit,
+          depChain: isTransitiveSca && Array.isArray(originResult.depChain) ? originResult.depChain : null,
         }]
       : attributeEvidence(scanRoot, finding);
     const confidence = assessConfidence({
@@ -268,7 +282,14 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca) {
       analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector, dirty: repoState.dirty },
     });
   } else if (originResult.status === 'partial') {
-    const partial = describePartial(isSca, originResult.reason);
+    // isScaLike, not isSca: transitive-sca.js reuses sca-origin.js's exact
+    // reason strings ('ambiguous-range-no-introduced-bound' /
+    // 'version-never-confirmed-in-candidates'), so a transitive partial must
+    // get the same "manifest history" wording a direct one does — the bare
+    // isSca check here would silently route it to the SAST branch instead
+    // ("verified parent boundary"), which describes a question the lockfile
+    // walk never asked.
+    const partial = describePartial(isScaLike, originResult.reason);
     provenance = emptyProvenance(PROVENANCE_STATUS.PARTIAL, {
       findingOrigin: originResult.findingOrigin || null,
       firstObserved: { scanId: ctx.scanId, observedAt: ctx.observedAt },

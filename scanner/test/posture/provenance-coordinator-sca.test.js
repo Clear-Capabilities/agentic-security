@@ -70,7 +70,7 @@ test('SCA complete emits a single manifest evidence node, not SAST source/sink n
 
     const nodes = entry.findingProvenance.evidenceAttribution;
     assert.equal(nodes.length, 1);
-    assert.deepEqual(nodes[0], { role: 'manifest', path: 'package.json', line: 5, commit: sha });
+    assert.deepEqual(nodes[0], { role: 'manifest', path: 'package.json', line: 5, commit: sha, depChain: null });
     assert.ok(entry.findingProvenance.evidenceDigest, 'digest is computed over the manifest node');
   } finally {
     fx.cleanup();
@@ -226,4 +226,20 @@ test('an SCA-shaped entry WITHOUT findingType:sca keeps the SAST behaviour (no b
   } finally {
     fx.cleanup();
   }
+});
+
+test('annotateGitProvenance: findingType "sca-transitive" resolves via resolveTransitiveSCAOrigin, not resolveDirectSCAOrigin', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  const lockfile = (v) => JSON.stringify({ name: 'root', lockfileVersion: 3, packages: { '': {}, [`node_modules/express/node_modules/qs`]: { version: v } } });
+  fx.writeFile('package-lock.json', lockfile('6.5.0'));
+  fx.commit('safe');
+  fx.writeFile('package-lock.json', lockfile('6.5.3'));
+  fx.commit('vulnerable bump');
+
+  const entry = { name: 'qs', filePath: 'package-lock.json', fixedVersions: ['6.5.3'], isDirect: false };
+  const findings = [entry];
+  await annotateGitProvenance(findings, { scanRoot: fx.root, scanId: 's1', observedAt: new Date().toISOString(), findingType: 'sca-transitive' });
+  assert.equal(entry.findingProvenance.status, 'complete');
+  assert.equal(entry.findingProvenance.analysisBasis.detector, 'sca-lockfile-history-diff');
 });

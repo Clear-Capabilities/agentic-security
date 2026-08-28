@@ -10237,6 +10237,13 @@ function _deterministicFileTimings(timings) {
     // it every direct dependency resolves to `not_available: no-manifest-path`.
     for (const s of directDeps) { if (!s.filePath && s.file) s.filePath = s.file; }
     await annotateGitProvenance(directDeps, { ...provenanceCtx, findingType: 'sca' });
+    // M3 §3.2: transitive dependencies now get real origin resolution too,
+    // narrowing what was previously an unconditional not_available backstop
+    // to genuinely unresolvable cases (non-npm lockfiles, no candidate
+    // history) — see transitive-sca.js's own scope note.
+    const transitiveDeps = (supplyChain || []).filter((s) => s && s.type === 'vulnerable_dep' && !s.isDirect);
+    for (const s of transitiveDeps) { if (!s.filePath && s.file) s.filePath = s.file; }
+    await annotateGitProvenance(transitiveDeps, { ...provenanceCtx, findingType: 'sca-transitive' });
     // FR-PROV-013 — introduce/remediate/reintroduce events. Best-effort by
     // design: the lifecycle store is a convenience ledger, and a failed write
     // (read-only tree, lock contention) must never fail a scan, matching how
@@ -10317,9 +10324,9 @@ function _deterministicFileTimings(timings) {
    // every channel. Three distinct populations reach this loop and they are not
    // the same statement, so they do not share a limitation string:
    //
-   //  - transitive vulnerable_deps: the resolver is deliberately not run (the
-   //    vulnerable version was never declared in this repo's manifests, so there
-   //    is no local commit that introduced it). A deferred capability.
+   //  - transitive vulnerable_deps: resolved by resolveTransitiveSCAOrigin
+   //    above (M3 §3.2) — this branch is now reached only if that annotation
+   //    pass itself failed to stamp the entry.
    //  - unpinned_dep / no_lockfile and friends: these describe the ABSENCE of a
    //    declaration, so "which commit introduced this version" is not a question
    //    that has an answer to defer.
