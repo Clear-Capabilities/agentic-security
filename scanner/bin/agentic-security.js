@@ -461,11 +461,8 @@ export function parseProvenanceFlags(argv) {
       const v = inline !== undefined
         ? inline
         : (PROVENANCE_MODES.has(String(argv[i + 1])) ? argv[++i] : undefined);
-      if (v === 'deep') {
-        result.mode = 'standard';
-        warnings.push('deep mode ships in a later release, running standard');
-      } else if (v === 'standard' || v === undefined) {
-        result.mode = 'standard';
+      if (v === 'deep' || v === 'standard' || v === undefined) {
+        result.mode = v || 'standard';
       } else {
         warnings.push(`unrecognised --provenance mode '${v}' (expected standard|deep), running standard`);
       }

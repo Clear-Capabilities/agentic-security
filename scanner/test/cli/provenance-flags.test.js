@@ -20,10 +20,10 @@ test('parseProvenanceFlags: --no-provenance disables', () => {
   assert.equal(f.disabled, true);
 });
 
-test('parseProvenanceFlags: --provenance deep is accepted but warns and stays standard', () => {
+test('parseProvenanceFlags: --provenance deep genuinely sets deep mode, no warning', () => {
   const f = parseProvenanceFlags(['--provenance', 'deep']);
-  assert.equal(f.mode, 'standard');
-  assert.match(f.warning, /deep mode ships in a later release/);
+  assert.equal(f.mode, 'deep');
+  assert.equal(f.warning, null);
 });
 
 test('parseProvenanceFlags: --provenance-since, --provenance-timeout, --include-author-email, --require-provenance', () => {
@@ -70,8 +70,8 @@ test('parseProvenanceFlags: --flag=value form is accepted for every value-taking
   const f = parseProvenanceFlags([
     '--provenance=deep', '--provenance-since=v1.0.0', '--provenance-timeout=30000',
   ]);
-  assert.equal(f.mode, 'standard');
-  assert.match(f.warning, /deep mode ships in a later release/);
+  assert.equal(f.mode, 'deep');
+  assert.equal(f.warning, null);
   assert.equal(f.since, 'v1.0.0');
   assert.equal(f.timeoutMs, 30000);
 });
