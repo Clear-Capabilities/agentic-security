@@ -486,6 +486,53 @@ test('resolveOrigin: deep mode tags a genuine revert with revertOf', async (t) =
   assert.equal(result.findingOrigin.revertOf, null);
 });
 
+// Rename-boundary honesty (M3 §3.5 / FR-PROV-007). INVESTIGATED, not
+// guessed: run with a temporary console.log(JSON.stringify(result, null, 2))
+// first — see the task report for the transcript. The scope-correction note
+// above this task's brief was right that `candidateCommitsForLine` (unlike
+// `candidateCommitsForFile`) is never called with `--follow`, but that
+// turned out not to be why this resolves honestly. `git log -L` has its own
+// built-in, always-on rename tracing (independent of `--follow`, which only
+// governs plain `git log <path>`) — it DID walk back through the rename and
+// returned the two pre-rename commits ("safe baseline" and "introduce eval
+// in old-name.js") as candidates, with no candidate for the rename commit
+// itself (its diff at this line is empty — content unchanged by a pure
+// rename). The actual honesty mechanism is one layer down:
+// `predicate-replay.js`'s `replayAt` looks up each candidate's blob via
+// `getBlobAtCommit(scanRoot, sha, f)` using `relevantFiles(finding)`, which
+// is the finding's CURRENT path ('new-name.js') — a path that does not
+// exist at either pre-rename commit (only 'old-name.js' does there). Both
+// lookups return null, `replayAt` reports `no-files-at-commit`/absent, and
+// the walk falls through to `partial` / `predicate-never-confirmed-in-candidates`
+// — never `complete`, never misattributed to the rename commit. This is
+// OUTCOME A (honest-partial): a different mechanism than the brief
+// hypothesized (a path mismatch during blob lookup, not an empty candidate
+// list), but the same acceptable, non-misattributing result the brief
+// required — so no production fix to origin-resolver.js was needed.
+test('resolveOrigin: a file renamed after introduction is handled honestly — either the pre-rename origin is found, or an explicit reason is reported, never silently lost', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('old-name.js', 'safe();\n');
+  fx.commit('safe baseline');
+  fx.writeFile('old-name.js', 'eval(x);\n');
+  fx.commit('introduce eval in old-name.js');
+  const { execFileSync } = await import('node:child_process');
+  execFileSync('git', ['mv', 'old-name.js', 'new-name.js'], { cwd: fx.root });
+  execFileSync('git', ['commit', '-m', 'rename old-name.js to new-name.js'], { cwd: fx.root });
+
+  const { computeStableId } = await import('../../src/posture/stable-id.js');
+  const finding = { file: 'new-name.js', line: 1, ruleId: 'no-eval', vuln: 'eval() Injection' };
+  finding.stableId = computeStableId(finding);
+
+  const result = await resolveOrigin(fx.root, finding, {});
+  // OUTCOME A, confirmed by direct observation (see comment above): the walk
+  // never crosses the rename boundary far enough to claim it PROVED the
+  // pre-rename origin, and it never misattributes the origin to the rename
+  // commit itself.
+  assert.notEqual(result.status, 'complete', 'must not misattribute the origin to the rename commit');
+  assert.ok(['partial', 'not_available'].includes(result.status));
+});
+
 test('resolveOrigin: mode defaults to standard behavior when omitted (backward compatible)', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());
