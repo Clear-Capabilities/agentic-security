@@ -83,12 +83,39 @@ const MAX_CONCURRENCY = 4;
 // every finding equally instead of a few. 2s is one blame's worth of work.
 const MIN_PER_FINDING_BUDGET_MS = 2000;
 
-function computeDigest(finding, provenance) {
+// PRD Data Contract, "Evidence integrity": the digest must bind the stable
+// finding ID, repository identity, analysis HEAD, origin commit,
+// branch-introduction commit, evidence-node locations and blob IDs,
+// detector/ruleset version, history boundary, method, confidence reasons,
+// and limitations. This binds ten of those eleven.
+//
+// `repoIdentity` is deliberately just `scanRoot` (the absolute path) for now,
+// not a remote-URL-derived identity — no helper computes one yet. A future
+// `getRemoteUrl`-style signal is a stronger repository-identity value once it
+// exists; `scanRoot` is today's honest best effort, and swapping it in later
+// is itself a value-breaking digest change like this one.
+//
+// Evidence-node BLOB IDs (the PRD's eleventh input) are deliberately NOT
+// bound here. No primitive anywhere upstream computes a `git hash-object`
+// -style content hash per evidence node today — `getBlobAtCommit` returns raw
+// text, never an OID — and adding one would mean a new git-evidence.js
+// primitive plus touching every evidence-node construction site
+// (origin-resolver.js, sca-origin.js, transitive-sca.js,
+// evidence-attribution.js). That is real, separate follow-up work, not an
+// oversight: path:line:commit locations are bound below and already make two
+// evidence sets with different content at the same location produce
+// different digests only insofar as `commit` differs.
+function computeDigest(finding, provenance, repoIdentity) {
   const material = JSON.stringify({
     stableId: finding.stableId,
+    repoIdentity: repoIdentity || null,
+    analysisHead: provenance.analysisBasis?.head || null,
     origin: provenance.findingOrigin?.commit || null,
     branchEntry: provenance.branchIntroduction?.commit || null,
     evidence: (provenance.evidenceAttribution || []).map((n) => `${n.role}:${n.path}:${n.line}:${n.commit}`),
+    detectorVersion: provenance.analysisBasis?.detector || null,
+    rulesetVersion: provenance.analysisBasis?.ruleset || null,
+    historyBoundary: provenance.historyCoverage?.boundaryCommit || null,
     method: provenance.method,
     reasons: provenance.confidence?.reasons || [],
     limitations: provenance.limitations,
@@ -357,7 +384,7 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca) {
     });
   }
 
-  provenance.evidenceDigest = computeDigest(finding, provenance);
+  provenance.evidenceDigest = computeDigest(finding, provenance, scanRoot);
   // A budget_exhausted result is the ONE outcome that is not a property of the
   // repository. complete/partial/not_available are all deterministic given
   // (HEAD, stableId, ruleset, boundary, mode) — the cache key — so caching them

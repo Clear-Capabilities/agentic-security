@@ -424,3 +424,145 @@ test('annotateGitProvenance: declaring a repo-lineage link after an earlier scan
   assert.equal(findingAfterLineage.findingProvenance.historyCoverage.crossRepoLineage, true);
   assert.equal(findingAfterLineage.findingProvenance.findingOrigin.commit, linkedSha);
 });
+
+// ---------------------------------------------------------------------------
+// PRD "Evidence integrity" audit — computeDigest previously omitted 4 of the
+// 11 named inputs (repository identity, analysis HEAD, detector/ruleset
+// version, history boundary), which theoretically permitted a digest
+// collision across two different repos/HEADs/ruleset-versions sharing the
+// same stableId/origin/branch/evidence tuple. These two tests pin the
+// security property directly: identical inputs in every OTHER digest-bound
+// field must still produce different digests when repo identity, HEAD,
+// detector, or ruleset differ.
+// ---------------------------------------------------------------------------
+
+test('computeDigest: repository identity and analysis HEAD are now bound (PRD Evidence integrity)', async () => {
+  // --- Repository identity ---------------------------------------------
+  // A full (non-shallow) clone of the SAME repo, at a different absolute
+  // path, shares every commit SHA with the original — same HEAD, same
+  // origin/branch resolution, same evidence. Only `scanRoot` (this task's
+  // best-effort repository-identity value, per the brief) differs. Before
+  // this fix, `computeDigest` never looked at `scanRoot` at all, so these
+  // two would have collided.
+  const fx = createGitFixture();
+  const clonePath = fs.mkdtempSync(path.join(os.tmpdir(), 'as-repoid-clone-'));
+  try {
+    fx.writeFile('a.js', 'eval(x);\n');
+    fx.commit('add eval');
+
+    fs.rmSync(clonePath, { recursive: true, force: true });
+    execFileSync('git', ['clone', '-q', `file://${fx.root}`, clonePath], { stdio: 'ignore' });
+    assert.equal(
+      execFileSync('git', ['rev-parse', 'HEAD'], { cwd: clonePath, encoding: 'utf8' }).trim(),
+      execFileSync('git', ['rev-parse', 'HEAD'], { cwd: fx.root, encoding: 'utf8' }).trim(),
+      'clone must share the original HEAD or this proves nothing',
+    );
+
+    const findingOrig = { file: 'a.js', line: 1, stableId: 'repoid-shared-stable-id', parser: 'SAST' };
+    const findingClone = { file: 'a.js', line: 1, stableId: 'repoid-shared-stable-id', parser: 'SAST' };
+    await annotateGitProvenance([findingOrig], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+    await annotateGitProvenance([findingClone], { scanRoot: clonePath, scanId: 's2', observedAt: '2026-01-01T00:00:00Z' });
+
+    // Sanity: everything else the digest binds really did resolve identically.
+    assert.equal(findingOrig.findingProvenance.status, findingClone.findingProvenance.status);
+    assert.deepEqual(findingOrig.findingProvenance.findingOrigin, findingClone.findingProvenance.findingOrigin);
+    assert.equal(findingOrig.findingProvenance.analysisBasis.head, findingClone.findingProvenance.analysisBasis.head);
+    assert.deepEqual(findingOrig.findingProvenance.evidenceAttribution, findingClone.findingProvenance.evidenceAttribution);
+
+    assert.notEqual(
+      findingOrig.findingProvenance.evidenceDigest, findingClone.findingProvenance.evidenceDigest,
+      'two different repositories at the same HEAD must not collide on the same evidence digest',
+    );
+  } finally {
+    fx.cleanup();
+    fs.rmSync(clonePath, { recursive: true, force: true });
+  }
+
+  // --- Analysis HEAD -----------------------------------------------------
+  // The SAME repo, resolved twice: once at the commit that introduced the
+  // finding, once after an unrelated second commit that does not touch the
+  // finding's file/origin/branch/evidence. HEAD is the only digest-bound
+  // field that moves between the two resolutions.
+  const fx2 = createGitFixture();
+  try {
+    fx2.writeFile('a.js', 'eval(x);\n');
+    fx2.commit('add eval');
+
+    const findingAtHead1 = { file: 'a.js', line: 1, stableId: 'head-shared-stable-id', parser: 'SAST' };
+    await annotateGitProvenance([findingAtHead1], { scanRoot: fx2.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+
+    fx2.writeFile('unrelated.js', 'safe();\n');
+    fx2.commit('unrelated change');
+
+    const findingAtHead2 = { file: 'a.js', line: 1, stableId: 'head-shared-stable-id', parser: 'SAST' };
+    await annotateGitProvenance([findingAtHead2], { scanRoot: fx2.root, scanId: 's2', observedAt: '2026-01-01T00:00:01Z' });
+
+    // Sanity: the unrelated commit did not change anything else the digest binds.
+    assert.equal(findingAtHead1.findingProvenance.status, findingAtHead2.findingProvenance.status);
+    assert.deepEqual(findingAtHead1.findingProvenance.findingOrigin, findingAtHead2.findingProvenance.findingOrigin);
+    assert.deepEqual(findingAtHead1.findingProvenance.evidenceAttribution, findingAtHead2.findingProvenance.evidenceAttribution);
+    assert.notEqual(
+      findingAtHead1.findingProvenance.analysisBasis.head, findingAtHead2.findingProvenance.analysisBasis.head,
+      'sanity: HEAD really did move between the two resolutions',
+    );
+
+    assert.notEqual(
+      findingAtHead1.findingProvenance.evidenceDigest, findingAtHead2.findingProvenance.evidenceDigest,
+      'two different analysis HEADs for the same finding must not collide on the same evidence digest',
+    );
+  } finally {
+    fx2.cleanup();
+  }
+});
+
+test('computeDigest: detector/ruleset version changes the digest', async () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'eval(x);\n');
+    fx.commit('add eval');
+
+    // --- Ruleset version --------------------------------------------------
+    // Same finding (same stableId), resolved under two different
+    // `ctx.rulesetVersion` values. The coordinator's cache key already
+    // includes `ctx.rulesetVersion` (as `detectorVersion`), so this is a
+    // clean, single-variable comparison.
+    const findingRulesetV1 = { file: 'a.js', line: 1, stableId: 'ruleset-shared-stable-id', parser: 'SAST' };
+    const findingRulesetV2 = { file: 'a.js', line: 1, stableId: 'ruleset-shared-stable-id', parser: 'SAST' };
+    await annotateGitProvenance([findingRulesetV1], {
+      scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', rulesetVersion: 'ruleset-v1',
+    });
+    await annotateGitProvenance([findingRulesetV2], {
+      scanRoot: fx.root, scanId: 's2', observedAt: '2026-01-01T00:00:00Z', rulesetVersion: 'ruleset-v2',
+    });
+
+    assert.equal(findingRulesetV1.findingProvenance.analysisBasis.ruleset, 'ruleset-v1');
+    assert.equal(findingRulesetV2.findingProvenance.analysisBasis.ruleset, 'ruleset-v2');
+    assert.notEqual(
+      findingRulesetV1.findingProvenance.evidenceDigest, findingRulesetV2.findingProvenance.evidenceDigest,
+      'two different ruleset versions for the same finding must not collide on the same evidence digest',
+    );
+
+    // --- Detector ------------------------------------------------------
+    // Two distinct findings whose only functional difference is which
+    // detector produced them (`finding.parser`, carried into
+    // `analysisBasis.detector`). Distinct stableIds are used deliberately:
+    // the coordinator's cache key does not include `finding.parser`, so two
+    // findings sharing one stableId would be served the SAME cached
+    // resolution regardless of parser — which is also the realistic shape
+    // of this scenario, since a different detector naturally produces a
+    // different stableId in practice.
+    const findingDetectorSast = { file: 'a.js', line: 1, stableId: 'detector-sast-stable-id', parser: 'SAST' };
+    const findingDetectorIrTaint = { file: 'a.js', line: 1, stableId: 'detector-ir-taint-stable-id', parser: 'IR-TAINT' };
+    await annotateGitProvenance([findingDetectorSast], { scanRoot: fx.root, scanId: 's3', observedAt: '2026-01-01T00:00:00Z' });
+    await annotateGitProvenance([findingDetectorIrTaint], { scanRoot: fx.root, scanId: 's4', observedAt: '2026-01-01T00:00:00Z' });
+
+    assert.equal(findingDetectorSast.findingProvenance.analysisBasis.detector, 'SAST');
+    assert.equal(findingDetectorIrTaint.findingProvenance.analysisBasis.detector, 'IR-TAINT');
+    assert.notEqual(
+      findingDetectorSast.findingProvenance.evidenceDigest, findingDetectorIrTaint.findingProvenance.evidenceDigest,
+      'two different detectors must not collide on the same evidence digest',
+    );
+  } finally {
+    fx.cleanup();
+  }
+});
