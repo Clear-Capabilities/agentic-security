@@ -2329,6 +2329,53 @@ async function cmdCompliance(args) {
 
 async function cmdAttest(args) {
   const scanRoot = path.resolve(args.flags.root || '.');
+
+  if (args.flags.provenance) {
+    const {
+      buildProvenanceEvidenceBundle, signProvenanceEvidenceBundle, ensureKeyPair,
+    } = await import('../src/posture/provenance-evidence-bundle.js');
+
+    let scan;
+    try { scan = JSON.parse(fs.readFileSync(statePath(scanRoot, 'last-scan.json'), 'utf8')); }
+    catch { console.error('No .agentic-security/last-scan.json — run a scan first.'); return 2; }
+
+    const findings = scan.findings || [];
+    const wanted = args.flags.provenance === true ? undefined : args.flags.provenance;
+    // `--provenance` alone (boolean flag) attests every finding WITH
+    // findingProvenance present; `--provenance <id>` scopes to one.
+    const subset = (wanted ? findings.filter((f) => f.id === wanted || f.stableId === wanted) : findings)
+      .filter((f) => f.findingProvenance);
+    if (!subset.length) {
+      console.error(wanted ? `No finding matching "${wanted}" with findingProvenance.` : 'No findings with findingProvenance to attest.');
+      return 2;
+    }
+
+    const kp = ensureKeyPair();
+    if (kp.created) console.error(`Generated a new signing key at ${kp.privateKey} (public: ${kp.publicKey}).`);
+
+    const outDir = statePath(scanRoot, 'attestations');
+    fs.mkdirSync(outDir, { recursive: true });
+    // repoIdentity: best-effort, from the same `git remote` lookup other
+    // provenance modules avoid (no such lookup exists yet) — keep it simple,
+    // pass null when unavailable rather than inventing a git-remote reader
+    // here. A future task can enrich this; the field degrades honestly.
+    const meta = { engineVersion: scan.engineVersion || null, repoIdentity: null, head: scan.commit || null };
+
+    let n = 0;
+    for (const f of subset) {
+      const bundle = signProvenanceEvidenceBundle(buildProvenanceEvidenceBundle(f, meta), kp.privateKeyPem);
+      const name = `provenance-${(f.stableId || f.id || `finding-${n}`)}.json`.replace(/[^\w.-]/g, '_');
+      fs.writeFileSync(path.join(outDir, name), JSON.stringify(bundle, null, 2) + '\n');
+      n++;
+    }
+    console.log(`Signed ${n} provenance evidence bundle(s) → ${path.relative(scanRoot, outDir)}/`);
+    console.log(`Public key (share this with whoever verifies): ${kp.publicKey}`);
+    console.log('');
+    console.log('A bundle proves its contents are unmodified since signing. It does NOT');
+    console.log('prove the origin commit is correctly identified — read confidence.level.');
+    return 0;
+  }
+
   const {
     ensureKeyPair, buildEvidenceBundle, signEvidenceBundle,
   } = await import('../src/posture/evidence-bundle.js');
