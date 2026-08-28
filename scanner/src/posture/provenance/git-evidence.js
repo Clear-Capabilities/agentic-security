@@ -32,23 +32,27 @@ export function _relPath(scanRoot, file) {
   // TARGET resolves outside scanRoot even though its own path lexically
   // sits inside it. realpathSync follows every symlink in the chain; if the
   // real (post-symlink) path escapes scanRoot, treat it the same as any
-  // other traversal attempt. A file that genuinely doesn't exist at this
-  // path/commit isn't this function's problem to diagnose -- realpathSync
-  // throwing ENOENT here just means "can't verify, so don't trust it,"
-  // matching every other fail-closed check in this module.
+  // other traversal attempt.
+  //
+  // realpathSync can throw for reasons other than "doesn't exist": ELOOP
+  // (a symlink cycle), EACCES (permission denied partway through
+  // resolution), ENOTDIR (a path component that should be a directory
+  // isn't). None of those have the "historical commit, file plausibly
+  // doesn't exist right now" excuse -- they mean something genuinely
+  // couldn't be verified, so they fail CLOSED (return null), matching
+  // every other fail-closed check in this module. ENOENT is the one
+  // exception and fails OPEN: most callers are asking about a file's state
+  // at some HISTORICAL commit, which git-evidence.js reads from git
+  // objects, not the working tree, so the working tree may not have this
+  // file at all, or may have it under a different name after a rename --
+  // that is routine and must not be treated as a proven escape.
   try {
     const real = fs.realpathSync(abs);
     const realRoot = fs.realpathSync(scanRoot);
     const realRel = path.relative(realRoot, real);
     if (realRel === '' || realRel.startsWith('..') || path.isAbsolute(realRel)) return null;
-  } catch {
-    // Path doesn't exist on disk right now (common and expected -- most
-    // callers are asking about a file's state at some HISTORICAL commit,
-    // which git-evidence.js reads from git objects, not the working tree;
-    // the working tree may not even have this file, or may have it under a
-    // different name after a rename). Only reject on a REAL, PROVEN escape,
-    // never on "couldn't check" -- that would make every historical query
-    // fail closed for the wrong reason.
+  } catch (e) {
+    if (e.code !== 'ENOENT') return null;
   }
   return rel.split(path.sep).join('/');
 }

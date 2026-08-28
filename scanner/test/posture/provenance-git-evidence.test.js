@@ -187,3 +187,24 @@ test('_relPath: a nonexistent path (historical file, no working-tree copy) still
     fx.cleanup();
   }
 });
+
+test('_relPath: a symlink loop (ELOOP, not ENOENT) fails CLOSED, not silently open', () => {
+  const fx = createGitFixture();
+  try {
+    // Two symlinks pointing at each other form a cycle. realpathSync on
+    // either throws ELOOP, never ENOENT -- this is the exact non-ENOENT
+    // error class the fail-open branch must NOT swallow: a symlink cycle
+    // isn't "file doesn't exist in a historical query," it's "couldn't be
+    // verified at all," which this module fails closed on everywhere else.
+    const linkA = path.join(fx.root, 'loop-a.js');
+    const linkB = path.join(fx.root, 'loop-b.js');
+    fs.symlinkSync(linkB, linkA);
+    fs.symlinkSync(linkA, linkB);
+    fx.commit('add a symlink loop');
+
+    const result = _relPath(fx.root, 'loop-a.js');
+    assert.equal(result, null, 'a symlink loop must fail closed, not fall through to the lexical path');
+  } finally {
+    fx.cleanup();
+  }
+});
