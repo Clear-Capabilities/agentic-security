@@ -103,12 +103,44 @@ export function detectRevert(scanRoot, sha, candidateShas) {
 // and it swaps the index-line hash pair and the hunk-header range pair.
 // Confirmed against both a single-line change and a two-hunk multi-line
 // change, string-compared to `git diff <new> <old>`'s real output.
+//
+// POST-REVIEW FIX (M3 §3.1 review, finding #1): a whole-file add or delete
+// was still mishandled. `git show -U0` on a commit that ADDS a file emits
+// `new file mode <mode>` and a `---`/`+++` pair of `--- /dev/null` /
+// `+++ b/<path>`; a commit that DELETES a file emits `deleted file mode
+// <mode>` and the mirror pair, `--- a/<path>` / `+++ /dev/null`. Neither
+// was touched before, so inverting an add-diff still read as an add (still
+// `new file mode`, still `--- /dev/null`), which never matches a real
+// delete diff and made `detectRevert` miss a revert-of-an-add or
+// revert-of-a-delete entirely (fails safe — under-detection, not
+// misattribution, but still a real gap `detectRevert` should not have).
+// Fixed by: swapping `new file mode` <-> `deleted file mode` line-for-line,
+// and — since the two file-mode header lines are independent per-line but
+// the `---`/`+++` pair must be read TOGETHER to know which side is
+// /dev/null — handling `---`/`+++` as a pair: an add's `--- /dev/null` +
+// `+++ b/<path>` becomes a delete's `--- a/<path>` + `+++ /dev/null`, and
+// vice versa; an ordinary modify's `--- a/<path>` + `+++ b/<path>` (neither
+// side /dev/null) is left as-is, matching the existing a/ b/ convention
+// that already made the plain-modify case direction-invariant. Confirmed
+// against real git output for both a file addition reverted (delete) and a
+// file deletion reverted (re-add), plus a regression check that the
+// existing plain-modify case is unaffected.
 function _invertUnifiedDiff(diffText) {
   const lines = diffText.split('\n');
   const out = [];
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
+    if (line.startsWith('new file mode ')) {
+      out.push('deleted file mode ' + line.slice('new file mode '.length));
+      i++;
+      continue;
+    }
+    if (line.startsWith('deleted file mode ')) {
+      out.push('new file mode ' + line.slice('deleted file mode '.length));
+      i++;
+      continue;
+    }
     if (line.startsWith('index ')) {
       const m = line.match(/^index ([0-9a-f]+)\.\.([0-9a-f]+)(.*)$/);
       out.push(m ? `index ${m[2]}..${m[1]}${m[3]}` : line);
@@ -121,7 +153,32 @@ function _invertUnifiedDiff(diffText) {
       i++;
       continue;
     }
-    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff ')) {
+    if (line.startsWith('--- ')) {
+      const next = lines[i + 1];
+      if (typeof next === 'string' && next.startsWith('+++ ')) {
+        const oldSide = line.slice(4);
+        const newSide = next.slice(4);
+        if (oldSide === '/dev/null' && newSide.startsWith('b/')) {
+          // Add -> inverted to a delete.
+          out.push('--- a/' + newSide.slice(2));
+          out.push('+++ /dev/null');
+        } else if (newSide === '/dev/null' && oldSide.startsWith('a/')) {
+          // Delete -> inverted to an add.
+          out.push('--- /dev/null');
+          out.push('+++ b/' + oldSide.slice(2));
+        } else {
+          // Ordinary modify: a/ and b/ labels are direction-invariant.
+          out.push(line);
+          out.push(next);
+        }
+        i += 2;
+        continue;
+      }
+      out.push(line);
+      i++;
+      continue;
+    }
+    if (line.startsWith('+++') || line.startsWith('diff ')) {
       out.push(line);
       i++;
       continue;
