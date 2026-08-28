@@ -8594,7 +8594,7 @@ async function queryRegistries(components){
 // because a direct runFullScan caller supplying no file-subsetting options is
 // scanning everything it was given; runScan.js narrows it for --changed-since
 // and for caller-supplied fileContents.
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
   // defined in OTHER files (Juliet's DataflowThruInnerClass / Vector / Stream
@@ -9344,9 +9344,39 @@ function _deterministicFileTimings(timings) {
   // Every catch in this block writes into _annotatorErrors so the operator
   // can tell "didn't run" from "ran cleanly." The array is surfaced as
   // scan.annotatorErrors in the report; an empty array means clean.
+  //
+  // FR-PROV-029 (Finding Provenance PRD): `skipAnnotators` lets a caller skip
+  // this entire ~54-annotator pipeline below. predicate-replay.js's
+  // `replayAt()` is the only caller that sets it — it re-runs runFullScan
+  // scoped to a historical commit's blob content purely to recompute
+  // `computeStableId()` over the raw detector output (`scan.findings`/
+  // `scan.secrets`); it never reads anything an annotator sets (verified
+  // empirically — see the commit message). Every binding the pipeline below
+  // populates that the final `return` still references is declared here,
+  // OUTSIDE the guarded block, defaulted to exactly what it was before any
+  // annotator ran. A skipped run returns those fields at their
+  // pre-annotation default instead of throwing a ReferenceError; a normal
+  // (non-skipping) run is byte-for-byte unaffected, since the guarded block
+  // below still assigns the same values to these same bindings — it just no
+  // longer *declares* them, so nothing here changes what a value ends up
+  // being, only where the variable comes into scope.
   let _executionProofSummary = null, _vulnHistory = null;
   let _logicClaims = null;
-  const _annotatorErrors = [];
+  let _annotatorErrors = [];
+  let _v3 = {};
+  let _privacyIrBacked = null;
+  let _privacyTaxonomyVersion = null;
+  let _privacyFramework = null;
+  let _threatModel = null, _apiContractFindings = [], _sbomDiff = null,
+      _complianceReport = null, _exploitBundles = null, _pqcPlan = null,
+      _licenseGraph = null, _attributions = null, _taxonomySummary = null;
+  let _scanMeta = null;
+  let _entrypointInventory = {};
+  let _rootCauseSweep = null;
+  let _proofCoverage = null;
+  let _coverageLedger = null;
+  let _scanHealth = null;
+  if (!skipAnnotators) {
   // FR-106 (assurance-hardening PRD): Promise-aware, explicitly awaited at
   // every one of its ~51 call sites below (previously a sync `try{return
   // fn()}` let an async callback's rejection escape as an unhandled
@@ -9452,18 +9482,18 @@ function _deterministicFileTimings(timings) {
   // FR-405 (assurance-hardening PRD): null means "privacy analysis never
   // ran at all" (AGENTIC_SECURITY_NO_PRIVACY=1, or the annotator threw
   // before setting this) — treated the same as false by the gate below,
-  // since neither case has real IR-backed evidence to offer. Declared here,
-  // at function scope, because the annotatePrivacyTaint closure that
-  // assigns to it (inside the AGENTIC_SECURITY_NO_INTEGRATION block below)
-  // runs and exits before that block closes — a block-scoped `let` inside
-  // that if-statement would be unreachable by the later assessPrivacyFramework
-  // call and the final return, both of which are outside the block.
-  let _privacyIrBacked = null;
-  // FR-402: which taxonomy version actually classified this scan's fields —
-  // same scoping constraint as _privacyIrBacked directly above (D-0011):
-  // must be declared before the AGENTIC_SECURITY_NO_INTEGRATION block opens,
-  // not inside it.
-  let _privacyTaxonomyVersion = null;
+  // since neither case has real IR-backed evidence to offer. Declared at
+  // function scope (now hoisted above the `skipAnnotators` guard, near
+  // _executionProofSummary et al. — same reasoning: FR-PROV-029), because
+  // the annotatePrivacyTaint closure that assigns to it (inside the
+  // AGENTIC_SECURITY_NO_INTEGRATION block below) runs and exits before that
+  // block closes — a block-scoped `let` inside that if-statement would be
+  // unreachable by the later assessPrivacyFramework call and the final
+  // return, both of which are outside the block.
+  //
+  // FR-402: _privacyTaxonomyVersion (which taxonomy version actually
+  // classified this scan's fields) has the same scoping constraint as
+  // _privacyIrBacked directly above (D-0011) and is hoisted alongside it.
 
   // ── World-class integration block ─────────────────────────────────────
   // Each annotator is opt-in via env var and try/catch wrapped. They run
@@ -9962,7 +9992,7 @@ function _deterministicFileTimings(timings) {
   classifyOrphans(aSrc,aSink,finalFindings,fc);
   // v3 next-gen: capture scan-level reports (counterfactual, threat model,
   // trust-boundary diagram, calibration-drift alarms). All best-effort.
-  let _v3 = {};
+  // (_v3 is hoisted above the `skipAnnotators` guard — FR-PROV-029.)
   await _runAnnotator("_v3.counterfactual", () => { _v3.counterfactual = runCounterfactual(finalFindings, fc); });
   await _runAnnotator("_v3.threatModel", () => { _v3.threatModel = buildThreatModel(finalFindings, fc); });
   await _runAnnotator("_v3.trustBoundaryDiagram", () => { _v3.trustBoundaryDiagram = buildTrustBoundaryDiagram(finalFindings, fc); });
@@ -9980,10 +10010,9 @@ function _deterministicFileTimings(timings) {
   // Each is opt-in via env var. They produce machine-readable artifacts
   // (threat-model.json/.md, dpia.md, compliance-evidence.json/.md,
   // sbom-history/<sha>.json, exploit-bundles/) under .agentic-security/.
-  let _privacyFramework = null;
-  let _threatModel = null, _apiContractFindings = [], _sbomDiff = null,
-      _complianceReport = null, _exploitBundles = null, _pqcPlan = null,
-      _licenseGraph = null, _attributions = null, _taxonomySummary = null;
+  // (_privacyFramework/_threatModel/_apiContractFindings/_sbomDiff/
+  // _complianceReport/_exploitBundles/_pqcPlan/_licenseGraph/_attributions/
+  // _taxonomySummary are hoisted above the `skipAnnotators` guard — FR-PROV-029.)
   if (process.env.AGENTIC_SECURITY_NO_INTEGRATION !== '1') {
     // Threat model — STRIDE + entities + attack trees rooted in findings.
     if (process.env.AGENTIC_SECURITY_NO_THREAT_MODEL !== '1') {
@@ -10151,7 +10180,7 @@ function _deterministicFileTimings(timings) {
   // seen when only N-of-those-candidates were actually analyzed.
   // checkpoint.total intentionally keeps files.length — that field means the
   // full candidate set for resume bookkeeping, a different, correct meaning.
-  const _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_deterministicFileTimings(_fileTimings),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length,discarded:!!(_ckpt&&_ckpt.discarded),discardReason:(_ckpt&&_ckpt.discarded)?(_ckpt.reason||null):null,invalidatedFileCount:_ckptInvalidated.length,invalidatedFiles:_ckptInvalidated.slice(0,20),invalidatedFilesTruncated:_ckptInvalidated.length>20}};
+  _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_deterministicFileTimings(_fileTimings),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length,discarded:!!(_ckpt&&_ckpt.discarded),discardReason:(_ckpt&&_ckpt.discarded)?(_ckpt.reason||null):null,invalidatedFileCount:_ckptInvalidated.length,invalidatedFiles:_ckptInvalidated.slice(0,20),invalidatedFilesTruncated:_ckptInvalidated.length>20}};
   // R8: the scan completed, so the checkpoint has been fully consumed — remove
   // it. Anything that threw before this point leaves it in place to resume from.
   try { closeCheckpoint(_ckpt, { complete: true }); } catch (_) {}
@@ -10372,7 +10401,8 @@ function _deterministicFileTimings(timings) {
    }
   }
   // Addition #2 — attack-surface completeness inventory (entry points → dispositions).
-  let _entrypointInventory = {}; try { _entrypointInventory = buildEntrypointInventory(fc, { routes: aR, findings: finalFindings }); } catch { _entrypointInventory = {}; }
+  // (_entrypointInventory is hoisted above the `skipAnnotators` guard — FR-PROV-029.)
+  try { _entrypointInventory = buildEntrypointInventory(fc, { routes: aR, findings: finalFindings }); } catch { _entrypointInventory = {}; }
   // R9 + R6 — relevance scoping. Runs HERE, after every finding has been
   // appended (multi-sink chains, cross-language chains) and after the
   // entry-point inventory exists, so no finding escapes annotation and the
@@ -10389,24 +10419,25 @@ function _deterministicFileTimings(timings) {
   });
   // Addition #3 — root-cause sweep: from confirmed findings, find sibling instances
   // detectors missed, with total-count accounting. Confirmed-only (cheap by default).
-  let _rootCauseSweep = null; try { _rootCauseSweep = sweepRootCauses(finalFindings, fc); } catch { _rootCauseSweep = null; }
+  // (_rootCauseSweep/_proofCoverage/_coverageLedger/_scanHealth are hoisted
+  // above the `skipAnnotators` guard — FR-PROV-029.)
+  try { _rootCauseSweep = sweepRootCauses(finalFindings, fc); } catch { _rootCauseSweep = null; }
   // PRD F7.2: publish what CANNOT be proven alongside what can. A proof RATE
   // computed over the provable subset makes a narrow subset look like strength;
   // the three-bucket split (provable / declined-on-purpose / not-yet-classified)
   // is the honest shape. Measured on the CVE corpus: 19% / 13% / 68%.
-  let _proofCoverage = null;
   try { _proofCoverage = proofCoverage([...finalFindings, ...aLogic]); } catch { _proofCoverage = null; }
   // FR-203: per-file/per-analyzer coverage ledger, computed from exactly
   // the signals FR-201 (_detectorErrors) and FR-202 (the _timeout:true
   // marker finding) already produce -- files actually scanned come from
   // fc's own keys (skipped-for-size/density files were never added to it).
   const _timedOutFiles = finalFindings.filter(f => f && f._timeout === true).map(f => f.file);
-  const _coverageLedger = computeCoverageLedger({ files: Object.keys(fc), detectorErrors: _detectorErrors, timedOutFiles: _timedOutFiles });
+  _coverageLedger = computeCoverageLedger({ files: Object.keys(fc), detectorErrors: _detectorErrors, timedOutFiles: _timedOutFiles });
   // FR-206 (assurance-hardening PRD, Milestone 0): additive scan-health
   // summary, computed from signals the engine already collects.
   // `analyzers` was `null` (see pipeline/scan-health.js's prior comment)
   // until FR-203's coverage ledger existed to compute it for real.
-  let _scanHealth = computeScanHealth({
+  _scanHealth = computeScanHealth({
     scanMeta: _scanMeta,
     annotatorErrors: _annotatorErrors,
     engineErrors: { cppDataflowParseErrors: _cppDataflowParseErrors.value },
@@ -10426,6 +10457,7 @@ function _deterministicFileTimings(timings) {
     calibration: calibrationFreshness(),
     compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
   });
+  } // end if (!skipAnnotators) — FR-PROV-029
   return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".

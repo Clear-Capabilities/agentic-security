@@ -28,7 +28,17 @@ export async function replayAt(scanRoot, sha, files, targetStableId) {
     // runs the provenance pass, which lands back here — an unbounded
     // scan→provenance→replay→scan recursion that never returns. See the
     // comment on runFullScan's signature.
-    scan = await runFullScan({ fileContents, scanRoot, provenance: false }, () => {});
+    //
+    // `skipAnnotators:true` (FR-PROV-029): this function only ever reads
+    // `scan.findings`/`scan.secrets` to recompute `computeStableId()` below —
+    // it never reads anything any of runFullScan's ~54 post-detection
+    // annotators set. Skipping the whole annotator pipeline avoids paying
+    // its cost (measured ~39ms fixed overhead per call) on every one of the
+    // ~2 replay calls per finding the resolution walk already makes.
+    // Verified empirically (byte-identical computeStableId output with and
+    // without annotators, over a real scan) before this was wired in — see
+    // the FR-PROV-029 commit message for methodology.
+    scan = await runFullScan({ fileContents, scanRoot, provenance: false, skipAnnotators: true }, () => {});
   } catch (e) {
     return { present: false, reason: 'replay-error' };
   }
