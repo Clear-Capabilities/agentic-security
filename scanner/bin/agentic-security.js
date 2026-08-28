@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 const __require = createRequire(import.meta.url);
 const PKG_VERSION = __require('../package.json').version;
 import { signLastScan as _signLastScan, verifyLastScan as _verifyLastScanShared } from '../src/posture/integrity.js';
+import { isProvenanceHealthy } from '../src/posture/provenance/schema.js';
 import { runScan } from '../src/runScan.js';
 
 // Every command is dispatched as `process.exit(await cmdX(args))`, and
@@ -625,7 +626,7 @@ async function cmdScan(args) {
     ]) {
       for (const f of (bucket || [])) {
         if (!f || typeof f !== 'object') continue;
-        if (['complete', 'uncommitted'].includes(f.findingProvenance?.status)) continue;
+        if (isProvenanceHealthy(f.findingProvenance)) continue;
         incomplete.push(f.id || f.stableId || `${channel}:${f.name || f.file || f.type || 'entry'}`);
       }
     }

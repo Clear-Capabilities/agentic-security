@@ -13,6 +13,7 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { isSafeStateDir, statePath, stateWritesEnabled } from './state-dir.js';
+import { AGE_BASIS } from './provenance/schema.js';
 
 function historyDir(scanRoot) {
   return statePath(scanRoot, 'fix-history');
@@ -250,10 +251,10 @@ function _snapshotProvenanceAtFix(findingProvenance, appliedAt) {
   const origin = findingProvenance.findingOrigin;
   const observedAt = findingProvenance.firstObserved?.observedAt || null;
   let ageBasis, basisDate;
-  if (status === 'complete' && origin?.authorDate) { ageBasis = 'finding_origin'; basisDate = origin.authorDate; }
-  else if (status === 'partial' && origin?.authorDate) { ageBasis = 'earliest_observable'; basisDate = origin.authorDate; }
-  else if (status === 'uncommitted') { ageBasis = 'uncommitted'; basisDate = observedAt; }
-  else { ageBasis = 'first_observed'; basisDate = observedAt; }
+  if (status === 'complete' && origin?.authorDate) { ageBasis = AGE_BASIS.FINDING_ORIGIN; basisDate = origin.authorDate; }
+  else if (status === 'partial' && origin?.authorDate) { ageBasis = AGE_BASIS.EARLIEST_OBSERVABLE; basisDate = origin.authorDate; }
+  else if (status === 'uncommitted') { ageBasis = AGE_BASIS.UNCOMMITTED; basisDate = observedAt; }
+  else { ageBasis = AGE_BASIS.FIRST_OBSERVED; basisDate = observedAt; }
   const ageDays = basisDate ? Math.max(0, Math.floor((Date.parse(appliedAt) - Date.parse(basisDate)) / 86400000)) : null;
   return { commit: origin?.commit || null, authorDate: basisDate, ageBasis, ageDays };
 }

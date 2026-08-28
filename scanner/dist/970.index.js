@@ -11,6 +11,7 @@ export const modules = {
 /* harmony export */   evaluateAssuranceMode: () => (/* binding */ evaluateAssuranceMode)
 /* harmony export */ });
 /* unused harmony export _internals */
+/* harmony import */ var _posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4594);
 // Assurance modes (assurance-hardening PRD FR-204).
 //
 // "Add assurance modes: advisory, standard, and strict | Strict mode fails
@@ -54,6 +55,8 @@ export const modules = {
 // own conventions warn against. If a future requirement needs standard
 // mode to behave differently from advisory, that is a deliberate, separate
 // decision -- not something to guess at here.
+
+
 
 const ASSURANCE_MODES = Object.freeze(['advisory', 'standard', 'strict']);
 const DEFAULT_ASSURANCE_MODE = 'standard';
@@ -149,10 +152,7 @@ function evaluateAssuranceMode(mode, scanHealth, findings = []) {
   // gate was considered and deliberately deferred to a future milestone
   // rather than done here, so strict mode keeps refusing to vouch for
   // provenance it cannot actually speak to.
-  const badProvenance = (Array.isArray(findings) ? findings : []).filter((f) => {
-    const s = f?.findingProvenance?.status;
-    return !['complete', 'uncommitted'].includes(s);
-  });
+  const badProvenance = (Array.isArray(findings) ? findings : []).filter((f) => !(0,_posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_0__/* .isProvenanceHealthy */ .lL)(f?.findingProvenance));
   if (badProvenance.length > 0) {
     return {
       ok: false,

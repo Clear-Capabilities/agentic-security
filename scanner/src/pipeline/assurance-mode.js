@@ -42,6 +42,8 @@
 // mode to behave differently from advisory, that is a deliberate, separate
 // decision -- not something to guess at here.
 
+import { isProvenanceHealthy } from '../posture/provenance/schema.js';
+
 export const ASSURANCE_MODES = Object.freeze(['advisory', 'standard', 'strict']);
 export const DEFAULT_ASSURANCE_MODE = 'standard';
 
@@ -136,10 +138,7 @@ export function evaluateAssuranceMode(mode, scanHealth, findings = []) {
   // gate was considered and deliberately deferred to a future milestone
   // rather than done here, so strict mode keeps refusing to vouch for
   // provenance it cannot actually speak to.
-  const badProvenance = (Array.isArray(findings) ? findings : []).filter((f) => {
-    const s = f?.findingProvenance?.status;
-    return !['complete', 'uncommitted'].includes(s);
-  });
+  const badProvenance = (Array.isArray(findings) ? findings : []).filter((f) => !isProvenanceHealthy(f?.findingProvenance));
   if (badProvenance.length > 0) {
     return {
       ok: false,

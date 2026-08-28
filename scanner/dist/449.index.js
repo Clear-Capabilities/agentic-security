@@ -14,6 +14,7 @@ export const modules = {
 /* harmony export */ });
 /* unused harmony export findingsExceedingSLA */
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7598);
+/* harmony import */ var _provenance_schema_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4594);
 // 0.8.0 Feat-11: MTTR / finding-age tracking — per-finding firstSeenAt/lastSeenAt with SLA breach detection.
 //
 // Stamps every finding with `firstSeenAt` (preserved from the baseline if the
@@ -22,6 +23,7 @@ export const modules = {
 //
 // Pure function — does not write to disk. The caller (CLI / fix workflow) decides
 // when to persist firstSeenAt back into the baseline.
+
 
 
 
@@ -60,16 +62,16 @@ function stampFindingTimestamps(findings, baselineMap = new Map(), now = Date.no
     const status = f.findingProvenance?.status;
     const origin = f.findingProvenance?.findingOrigin;
     if (status === 'complete' && origin?.authorDate) {
-      f.ageBasis = 'finding_origin';
+      f.ageBasis = _provenance_schema_js__WEBPACK_IMPORTED_MODULE_1__/* .AGE_BASIS */ .pI.FINDING_ORIGIN;
       f.provenAgeDays = Math.max(0, Math.floor((now - Date.parse(origin.authorDate)) / 86400000));
     } else if (status === 'partial' && origin?.authorDate) {
-      f.ageBasis = 'earliest_observable';
+      f.ageBasis = _provenance_schema_js__WEBPACK_IMPORTED_MODULE_1__/* .AGE_BASIS */ .pI.EARLIEST_OBSERVABLE;
       f.provenAgeDays = Math.max(0, Math.floor((now - Date.parse(origin.authorDate)) / 86400000));
     } else if (status === 'uncommitted') {
-      f.ageBasis = 'uncommitted';
+      f.ageBasis = _provenance_schema_js__WEBPACK_IMPORTED_MODULE_1__/* .AGE_BASIS */ .pI.UNCOMMITTED;
       f.provenAgeDays = f.ageDays;
     } else {
-      f.ageBasis = 'first_observed';
+      f.ageBasis = _provenance_schema_js__WEBPACK_IMPORTED_MODULE_1__/* .AGE_BASIS */ .pI.FIRST_OBSERVED;
       f.provenAgeDays = f.ageDays;
     }
   }

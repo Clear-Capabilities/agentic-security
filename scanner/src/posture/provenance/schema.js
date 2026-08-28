@@ -25,11 +25,26 @@ export const EVIDENCE_ROLE = Object.freeze({
   MANIFEST: 'manifest', LOCKFILE: 'lockfile', OTHER: 'other',
 });
 
-// NOTE: an AGE_BASIS enum (finding_origin | earliest_observable |
-// first_observed | uncommitted) was specified here and is deliberately NOT
-// exported yet — nothing in M0+M1 computes an age, so it was dead the moment
-// it shipped and `no-dead-modules.test.js` said so. Re-add it in the phase that
-// wires age/SLA basis into mttr.js, together with its consumer.
+// M3: the AGE_BASIS enum, re-added now that M2 shipped its two consumers
+// (mttr.js's ageBasis field, fix-history.js's provenanceAtFix.ageBasis) —
+// both previously used bare string literals matching this vocabulary
+// without importing a shared source of truth for it.
+export const AGE_BASIS = Object.freeze({
+  FINDING_ORIGIN: 'finding_origin',
+  EARLIEST_OBSERVABLE: 'earliest_observable',
+  FIRST_OBSERVED: 'first_observed',
+  UNCOMMITTED: 'uncommitted',
+});
+
+// The `['complete', 'uncommitted']` "provenance is healthy enough to trust"
+// check independently exists in THREE places today (bin/agentic-security.js's
+// --require-provenance block, pipeline/assurance-mode.js's strict check, and
+// mttr.js's/fix-history.js's own ageBasis tiering all re-derive the same
+// status set locally). One shared predicate, so a future change to what
+// counts as "healthy" is a one-line edit, not a grep-and-fix-N-places.
+export function isProvenanceHealthy(findingProvenance) {
+  return ['complete', 'uncommitted'].includes(findingProvenance?.status);
+}
 
 export function emptyProvenance(status, extra = {}) {
   return {

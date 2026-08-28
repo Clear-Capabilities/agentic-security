@@ -8,6 +8,7 @@
 // when to persist firstSeenAt back into the baseline.
 
 import * as crypto from 'node:crypto';
+import { AGE_BASIS } from './provenance/schema.js';
 
 // Stable fingerprint for cross-scan finding identity. Mirrors the dedupe key.
 // Exported so a caller can compute the "removed since baseline" (i.e. fixed)
@@ -44,16 +45,16 @@ export function stampFindingTimestamps(findings, baselineMap = new Map(), now = 
     const status = f.findingProvenance?.status;
     const origin = f.findingProvenance?.findingOrigin;
     if (status === 'complete' && origin?.authorDate) {
-      f.ageBasis = 'finding_origin';
+      f.ageBasis = AGE_BASIS.FINDING_ORIGIN;
       f.provenAgeDays = Math.max(0, Math.floor((now - Date.parse(origin.authorDate)) / 86400000));
     } else if (status === 'partial' && origin?.authorDate) {
-      f.ageBasis = 'earliest_observable';
+      f.ageBasis = AGE_BASIS.EARLIEST_OBSERVABLE;
       f.provenAgeDays = Math.max(0, Math.floor((now - Date.parse(origin.authorDate)) / 86400000));
     } else if (status === 'uncommitted') {
-      f.ageBasis = 'uncommitted';
+      f.ageBasis = AGE_BASIS.UNCOMMITTED;
       f.provenAgeDays = f.ageDays;
     } else {
-      f.ageBasis = 'first_observed';
+      f.ageBasis = AGE_BASIS.FIRST_OBSERVED;
       f.provenAgeDays = f.ageDays;
     }
   }
