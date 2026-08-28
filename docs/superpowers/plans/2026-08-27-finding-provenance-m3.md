@@ -308,10 +308,16 @@ test('checkAbsentInAllParents: a merge commit is absentInAll only when EVERY par
   t.after(() => fx.cleanup());
   fx.writeFile('a.txt', 'x');
   fx.commit('root');
+  // M3 Task 1's own review discovered this environment's `git init` default
+  // branch is 'master', not 'main' (no init.defaultBranch config set) —
+  // capture the real starting branch name rather than hardcoding 'main',
+  // matching the fix Task 1's implementer already had to make for the same
+  // reason (see build-git-fixture.js's currentBranch(), added in Task 1).
+  const mainBranch = fx.currentBranch();
   fx.checkoutBranch('feature');
   fx.writeFile('b.txt', 'y');
   const featureTip = fx.commit('feature');
-  fx.checkout('main');
+  fx.checkout(mainBranch);
   fx.writeFile('a.txt', 'z');
   const mainTip = fx.commit('mainline');
   const merge = fx.merge('feature', 'merge');
@@ -363,10 +369,11 @@ test('detectCherryPick: a real cherry-pick -x trailer is parsed', async (t) => {
   t.after(() => fx.cleanup());
   fx.writeFile('a.txt', 'v1\n');
   const original = fx.commit('original commit');
+  const mainBranch = fx.currentBranch(); // see Task 1's build-git-fixture.js addition — this environment's git init default is 'master', not 'main'
   fx.checkoutBranch('other');
   fx.writeFile('a.txt', 'v2\n');
   fx.commit('unrelated');
-  fx.checkout('main');
+  fx.checkout(mainBranch);
   const { execFileSync } = await import('node:child_process');
   fx.writeFile('b.txt', 'x\n');
   const target = fx.commit('target for cherry-pick message construction');
@@ -557,10 +564,11 @@ test('resolveOrigin: standard mode fails to resolve a vulnerability introduced v
   t.after(() => fx.cleanup());
   fx.writeFile('a.js', 'safe();\n');
   fx.commit('mainline baseline');
+  const mainBranch = fx.currentBranch(); // see Task 1's build-git-fixture.js addition — this environment's git init default is 'master', not 'main'
   fx.checkoutBranch('feature');
   fx.writeFile('a.js', 'eval(x);\n');
   fx.commit('introduce eval on feature branch');
-  fx.checkout('main');
+  fx.checkout(mainBranch);
   fx.writeFile('b.js', 'unrelated();\n');
   fx.commit('unrelated mainline work');
   fx.merge('feature', 'merge feature into main');
