@@ -28,6 +28,7 @@ import { replayAt } from './predicate-replay.js';
 import { PROVENANCE_METHOD } from './schema.js';
 import { checkAbsentInSomeParent, detectRevert, detectCherryPick } from './dag-walk.js';
 import { loadRepoLineage } from './repo-lineage.js';
+import { resolveAIAuthorship } from './ai-authorship.js';
 
 function relevantFiles(finding) {
   const files = new Set();
@@ -45,6 +46,7 @@ function originFrom(meta, { absentInParents }) {
     commit: meta.commit, authorName: meta.authorName, authorEmail: meta.authorEmail,
     authorDate: meta.authorDate, committerDate: meta.committerDate, summary: meta.summary,
     presentInCommit: true, absentInParents, revertOf: null, cherryPickOf: null,
+    aiAuthorship: resolveAIAuthorship(meta),
   };
 }
 
