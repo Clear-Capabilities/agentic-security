@@ -2637,6 +2637,33 @@ function _resetSuppressions(){ _suppressionLog.length = 0; }
 // so pfr[p] and the aggregates share object identity, exactly as in a normal run.
 function _pfrMetaOnly(ta){ if(!ta||typeof ta!=='object')return {}; const o={}; for(const k of Object.keys(ta)){ if(k==='findings'||k==='sources'||k==='sinks'||k==='sanitizers')continue; o[k]=ta[k]; } return o; }
 function _getSuppressions(){ return [..._suppressionLog]; }
+// Task 11 reentrancy fix: `_suppressionLog` is module-level and unconditionally
+// cleared by `_resetSuppressions()` at the top of every `runFullScan` call.
+// `predicate-replay.js`'s `replayAt` calls `runFullScan` recursively FROM
+// WITHIN an outer, still-running scan's provenance resolution (to replay a
+// finding's predicate at a historical commit) -- before Task 11 wired
+// scan.secrets/scan.logicVulns into real provenance resolution, that recursive
+// call was only ever reachable from scan.findings/SCA origin walks, which this
+// exact fixture (test/fixtures/entropy-fp) never triggered. Wiring secrets in
+// exposed it for the first time: the nested call's `_resetSuppressions()`
+// silently wiped the OUTER scan's suppression log before its own return
+// statement read it via `_getSuppressions()`, so `scan.suppressions` came back
+// empty for anything that happened to walk deep git history.
+//
+// A plain snapshot/restore around ONE `replayAt` call is not sufficient on its
+// own: `coordinator.js` resolves several findings' origins CONCURRENTLY (its
+// own comment: "the scheduler runs these four at a time"), and each finding's
+// resolveOrigin walk can call `replayAt` multiple times sequentially -- so two
+// DIFFERENT findings' replay calls can be in flight at once, interleaved at
+// `runFullScan`'s own internal await points. Two overlapping snapshot/restore
+// pairs racing on the same global array means whichever restores last wins,
+// discarding whatever the other legitimately wrote in between. Exported so
+// predicate-replay.js can snapshot/restore its own call boundary AND serialize
+// that boundary process-wide (see its own comment on the exclusivity queue) --
+// the nested scan's own suppression output is never read by replayAt, so
+// nothing is lost by discarding it.
+function _snapshotSuppressionLog(){ return _suppressionLog.slice(); }
+function _restoreSuppressionLog(saved){ _suppressionLog.length = 0; if (Array.isArray(saved)) _suppressionLog.push(...saved); }
 
 // ── inline suppression pragma ───────────────────────────────────────────────
 //
@@ -9382,6 +9409,37 @@ function _deterministicFileTimings(timings) {
   let _proofCoverage = null;
   let _coverageLedger = null;
   let _scanHealth = null;
+  // Task 11 (PRD P0 scope): ruleId backfill for scan.secrets / blameable
+  // scan.logicVulns findings MUST run unconditionally, HERE, outside the
+  // `skipAnnotators` guard below -- not just because the live scan needs it,
+  // but because predicate-replay.js's replayAt() recurses into THIS function
+  // with skipAnnotators:true and recomputes computeStableId() directly on
+  // whatever it finds in the nested scan's own scan.secrets/scan.logicVulns.
+  // If the backfill only ran on the live (skipAnnotators:false) call, the
+  // nested replay scan would compute a DIFFERENT stableId (falling back to
+  // the shared f.cwe -- e.g. every secret type collapsing onto "CWE-798")
+  // than the live scan's already-backfilled finding, so replayAt's
+  // `sid === targetStableId` check would NEVER match -- permanently landing
+  // every secrets/logicVulns finding on status:'partial',
+  // reason:'predicate-never-confirmed-in-candidates'. Caught empirically:
+  // test/fixtures/entropy-fp's AWS-key fixture resolved 'partial' instead of
+  // 'complete' until this moved here from inside the (skipAnnotators-gated)
+  // provenance block further down.
+  //
+  // At this point in the function, aSecrets/aLogic hold every BLAMEABLE
+  // producer's output (scanCredentials/scanEntropySecrets;
+  // scanLogicVulns/scanBusinessLogic/scanMiddlewareOrdering/scanReDoS/
+  // scanRegexReDoS/scanTodosNearSecurity/scanConfigFiles) -- the 3 synthetic
+  // producers (license-policy:/deploy-platform:/stack-playbook:) and
+  // logic-claims.js's ingested claims are pushed LATER, inside the
+  // `skipAnnotators` guard below, so they are never present in a nested
+  // replay scan's aLogic and never need this backfill for replay-matching
+  // purposes. The provenance block further down re-applies this same
+  // idempotent backfill to the full, final `blameableLogic` (which by then
+  // includes logic-claims too) before calling annotateGitProvenance on it.
+  const _slugify = (s) => String(s || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
+  for (const f of aSecrets) { if (!f.ruleId) f.ruleId = `secret:${_slugify(f.vuln)}`; }
+  for (const f of aLogic) { if (!f.ruleId) f.ruleId = `logic:${_slugify(f.vuln)}`; }
   if (!skipAnnotators) {
   // FR-106 (assurance-hardening PRD): Promise-aware, explicitly awaited at
   // every one of its ~51 call sites below (previously a sync `try{return
@@ -10204,6 +10262,50 @@ function _deterministicFileTimings(timings) {
   // a shallow freeze still permits annotating FIELDS on the individual finding
   // objects. This annotator never appends or drops a finding.
   if (provenance !== false) {
+   // Task 11 (PRD P0 scope): real origin resolution for scan.secrets and
+   // blameable scan.logicVulns findings. Both channels were previously
+   // stamped an unconditional not_available (see the backstop loop below) —
+   // not because computeStableId can't handle them (its ruleId() fallback
+   // chain already tolerates a missing f.ruleId), but because nobody
+   // backfilled a real per-pattern ruleId and nobody called
+   // annotateGitProvenance on these channels at all. scan.secrets findings
+   // set neither ruleId nor family nor parser, and every secret type shares
+   // the same fixed f.cwe ("CWE-798"), so without a per-pattern backfill
+   // every secret in a scan would collide onto ONE stableId.
+   //
+   // scan.logicVulns is not one detector's output — three of its ~9
+   // producers (license-policy:, deploy-platform:, stack-playbook:) use a
+   // FIXED PLACEHOLDER `line` (0 or 1), not a real diffable source location
+   // — they read scanRoot-level files (package.json, vercel.json, ...)
+   // directly rather than from the scanned fileContents. Routing those
+   // through git-blame-style resolution would fabricate a plausible-looking
+   // but meaningless commit attribution (e.g. "package.json line 1" blamed
+   // on whatever commit last touched that line, unrelated to the actual
+   // license/platform/stack finding). They are excluded by id prefix here
+   // and stay on the honest, PERMANENT not_available path in the backstop
+   // loop below — never routed through resolveOrigin. Declared here, OUTSIDE
+   // the _runAnnotator callback below, because the backstop loop (also
+   // outside that callback — see its own comment on why) needs
+   // `blameableLogic`/`syntheticLogic` too.
+   //
+   // `aSecrets`/`aLogic`'s ruleId backfill for the producers that exist by
+   // this point in the function already happened much earlier (right before
+   // the `skipAnnotators` guard opens — see that comment for why it CANNOT
+   // live here alone). `_slugify` is declared there and is in scope here too.
+   // What's re-applied below is only the SAME idempotent backfill
+   // (`if (!f.ruleId)`), now over the full, final `blameableLogic` — which by
+   // this point additionally includes logic-claims.js's late-pushed ingested
+   // claims, the one blameable producer the early pass could not see.
+   const SYNTHETIC_LOGIC_PREFIXES = ['license-policy:', 'deploy-platform:', 'stack-playbook:'];
+   const isSyntheticLogicFinding = (f) => typeof f?.id === 'string'
+     && SYNTHETIC_LOGIC_PREFIXES.some((p) => f.id.startsWith(p));
+   const blameableLogic = aLogic.filter((f) => !isSyntheticLogicFinding(f));
+   const syntheticLogic = aLogic.filter(isSyntheticLogicFinding);
+   for (const f of blameableLogic) {
+     if (!f.ruleId) f.ruleId = `logic:${_slugify(f.vuln)}`;
+   }
+   annotateStableIds(aSecrets);
+   annotateStableIds(blameableLogic);
    await _runAnnotator("annotateGitProvenance", async () => {
     // ONE deadline for the whole scan's provenance work, computed here and
     // threaded into BOTH annotateGitProvenance calls below. Computed per call
@@ -10279,6 +10381,15 @@ function _deterministicFileTimings(timings) {
     const transitiveDeps = (supplyChain || []).filter((s) => s && s.type === 'vulnerable_dep' && !s.isDirect);
     for (const s of transitiveDeps) { if (!s.filePath && s.file) s.filePath = s.file; }
     await annotateGitProvenance(transitiveDeps, { ...provenanceCtx, findingType: 'sca-transitive' });
+    // Task 11 (PRD P0 scope): `aSecrets`/`blameableLogic` already have real
+    // stableIds backfilled above (outside this callback — see that comment).
+    // findingType 'secret'/'logic' is not consumed by any branch in
+    // coordinator.js's resolveOne (only 'sca'/'sca-transitive' select a
+    // different resolution strategy) — both fall through to the plain SAST
+    // path (file+line blame short-circuit, then origin-resolver.js). Passed
+    // anyway for clarity and future debugging; harmless today.
+    await annotateGitProvenance(aSecrets, { ...provenanceCtx, findingType: 'secret' });
+    await annotateGitProvenance(blameableLogic, { ...provenanceCtx, findingType: 'logic' });
     // FR-PROV-013 — introduce/remediate/reintroduce events. Best-effort by
     // design: the lifecycle store is a convenience ledger, and a failed write
     // (read-only tree, lock contention) must never fail a scan, matching how
@@ -10387,21 +10498,25 @@ function _deterministicFileTimings(timings) {
    // "escaped annotation" — the exact condition the status enum exists to
    // remove.
    //
-   // Stamped `not_available` with a deferral limitation rather than run through
-   // annotateGitProvenance, and that is a deliberate, disclosed choice: neither
-   // channel goes through posture/stable-id.js (it keys on file+line+ruleId,
-   // and these findings have no ruleId), so the coordinator's real resolver
-   // would reach `not_available: finding has no stableId` for every committed
-   // one anyway — after paying a `git blame` per finding for the uncommitted
-   // short-circuit. Wiring stable ids for these channels, and then real origin
-   // resolution on top, is a follow-on with its own tests; claiming it here by
-   // spending the blames for a near-universal not_available would be cost
-   // without a capability.
-   for (const bucket of [aSecrets, aLogic]) {
+   // Task 11 (PRD P0 scope): `aSecrets` and `blameableLogic` now go through
+   // REAL resolution above (real stableIds backfilled, real
+   // annotateGitProvenance calls made), so this loop no longer covers them
+   // wholesale — it is now a defensive catch-all for any entry the real call
+   // somehow didn't reach (same precedent as the supplyChain loop above), plus
+   // `syntheticLogic`, which can NEVER get real resolution by design (see the
+   // classification comment above `SYNTHETIC_LOGIC_PREFIXES`) and stays here
+   // permanently and honestly, not as a deferral.
+   for (const x of (syntheticLogic || [])) {
+     if (!x || typeof x !== 'object' || x.findingProvenance) continue;
+     x.findingProvenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+       limitations: ['this finding describes dependency/config/policy state, not a single source line a commit introduced -- origin resolution does not apply'],
+     });
+   }
+   for (const bucket of [aSecrets, blameableLogic]) {
      for (const x of (bucket || [])) {
        if (!x || typeof x !== 'object' || x.findingProvenance) continue;
        x.findingProvenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
-         limitations: ['origin resolution is not wired for this finding channel in this release (deferred to a later phase)'],
+         limitations: ['origin resolution annotator did not reach this finding'],
        });
      }
    }
@@ -10931,6 +11046,7 @@ export {
   classifyOrphans, classifyField, classifyEndpoint, shouldScan,
   _isFalsePositiveCredential, _detectSafeSinkShape,
   _loadCustomRules, _isCustomSuppressed, _isPathIgnored,
+  _snapshotSuppressionLog, _restoreSuppressionLog,
   scanIaC, IAC_PATTERNS, _isIaCFile, isCloudFormationTemplate,
   payloadsForFinding, buildProofObligation,
   DATA_CLASSES, SOURCE_PATTERNS, SINK_PATTERNS, SANITIZER_PATTERNS,
