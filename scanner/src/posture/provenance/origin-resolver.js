@@ -128,7 +128,17 @@ export function tryCrossRepoLineage(scanRoot, finding, rootMeta, deadlineAt) {
   // merge-base --is-ancestor`) is true for atCommit itself as well as any
   // real ancestor of it, so this both bounds the walk and keeps atCommit
   // itself eligible.
-  const eligible = linkedCandidates.filter((sha) => isAncestor(lineage.path, sha, lineage.atCommit));
+  //
+  // A plain `.filter()` can't early-exit, so a large linked-repo candidate
+  // list means one `git merge-base` per candidate with no aggregate cap —
+  // the same "one budget for the whole scan" gap the entry check above
+  // guards against, just one loop later. An explicit loop with the same
+  // deadline check closes it.
+  const eligible = [];
+  for (const sha of linkedCandidates) {
+    if (deadlineAt && Date.now() > deadlineAt) return null;
+    if (isAncestor(lineage.path, sha, lineage.atCommit)) eligible.push(sha);
+  }
   if (eligible.length === 0) return null;
 
   // Oldest-first: the first candidate whose OWN content at this line also
