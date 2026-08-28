@@ -1,4 +1,5 @@
 import * as cp from 'node:child_process';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // 2s keeps a single call bounded for the common case; `-L`/`--follow` walks on a
@@ -26,7 +27,30 @@ function _run(scanRoot, args) {
 export function _relPath(scanRoot, file) {
   const abs = path.resolve(scanRoot, file);
   const rel = path.relative(scanRoot, abs);
-  return (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) ? null : rel.split(path.sep).join('/');
+  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  // Lexical containment alone isn't enough: `file` could be a symlink whose
+  // TARGET resolves outside scanRoot even though its own path lexically
+  // sits inside it. realpathSync follows every symlink in the chain; if the
+  // real (post-symlink) path escapes scanRoot, treat it the same as any
+  // other traversal attempt. A file that genuinely doesn't exist at this
+  // path/commit isn't this function's problem to diagnose -- realpathSync
+  // throwing ENOENT here just means "can't verify, so don't trust it,"
+  // matching every other fail-closed check in this module.
+  try {
+    const real = fs.realpathSync(abs);
+    const realRoot = fs.realpathSync(scanRoot);
+    const realRel = path.relative(realRoot, real);
+    if (realRel === '' || realRel.startsWith('..') || path.isAbsolute(realRel)) return null;
+  } catch {
+    // Path doesn't exist on disk right now (common and expected -- most
+    // callers are asking about a file's state at some HISTORICAL commit,
+    // which git-evidence.js reads from git objects, not the working tree;
+    // the working tree may not even have this file, or may have it under a
+    // different name after a rename). Only reject on a REAL, PROVEN escape,
+    // never on "couldn't check" -- that would make every historical query
+    // fail closed for the wrong reason.
+  }
+  return rel.split(path.sep).join('/');
 }
 
 // Git SHAs (full or abbreviated) are always lowercase/uppercase hex, 4-40 chars.

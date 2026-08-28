@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import {
   isGitRepo, getRepoState, commitMeta, getFirstParent, getAllParents, getBlobAtCommit,
-  candidateCommitsForLine, candidateCommitsForFile, blameLine,
+  candidateCommitsForLine, candidateCommitsForFile, blameLine, _relPath,
 } from '../../src/posture/provenance/git-evidence.js';
 
 test('git-evidence: repo state, blob fetch, candidates, blame', () => {
@@ -129,4 +129,61 @@ test('getAllParents: a merge commit reports every parent, not just the first', a
 
 test('getAllParents: an invalid sha returns empty array, never throws', () => {
   assert.deepEqual(getAllParents('/tmp/does-not-matter', 'not-a-sha'), []);
+});
+
+test('_relPath: a symlink inside scanRoot pointing outside it is rejected, not silently followed', () => {
+  const fx = createGitFixture();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'as-symlink-target-'));
+  try {
+    fs.writeFileSync(path.join(outside, 'secret.txt'), 'outside content');
+    const linkPath = path.join(fx.root, 'innocent-looking.js');
+    fs.symlinkSync(path.join(outside, 'secret.txt'), linkPath);
+    fx.commit('add a symlink'); // git tracks the symlink itself, not its target's content
+
+    const result = _relPath(fx.root, 'innocent-looking.js');
+    assert.equal(result, null, 'a symlink escaping scanRoot must be rejected');
+  } finally {
+    fx.cleanup();
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('_relPath: an ordinary file (no symlink) still resolves normally', () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('normal.js', 'x');
+    fx.commit('c1');
+    const result = _relPath(fx.root, 'normal.js');
+    assert.equal(result, 'normal.js');
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('_relPath: a symlink whose target resolves back inside scanRoot is still accepted', () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('real.js', 'x');
+    fx.commit('c1');
+    fs.symlinkSync(path.join(fx.root, 'real.js'), path.join(fx.root, 'alias.js'));
+    const result = _relPath(fx.root, 'alias.js');
+    assert.equal(result, 'alias.js', 'a symlink that stays inside scanRoot is not an escape');
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('_relPath: a nonexistent path (historical file, no working-tree copy) still resolves lexically', () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('placeholder.js', 'x');
+    fx.commit('c1');
+    // 'gone-in-history.js' was never created on disk in this fixture at all --
+    // mirrors a query about a file's state at a historical commit where the
+    // current working tree doesn't have it (deleted, or renamed since).
+    const result = _relPath(fx.root, 'gone-in-history.js');
+    assert.equal(result, 'gone-in-history.js', 'ENOENT must fail OPEN, not fail closed');
+  } finally {
+    fx.cleanup();
+  }
 });
