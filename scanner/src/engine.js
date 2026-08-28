@@ -9346,12 +9346,18 @@ function _deterministicFileTimings(timings) {
   // scan.annotatorErrors in the report; an empty array means clean.
   //
   // FR-PROV-029 (Finding Provenance PRD): `skipAnnotators` lets a caller skip
-  // this entire ~54-annotator pipeline below. predicate-replay.js's
-  // `replayAt()` is the only caller that sets it — it re-runs runFullScan
-  // scoped to a historical commit's blob content purely to recompute
-  // `computeStableId()` over the raw detector output (`scan.findings`/
-  // `scan.secrets`); it never reads anything an annotator sets (verified
-  // empirically — see the commit message). Every binding the pipeline below
+  // this entire ~54-annotator pipeline below. The guard also covers
+  // non-annotator finalization that lives in the same block — entropy-vs-
+  // named secret dedup, orphan classification, supply-chain in-place
+  // filtering, `Object.freeze(finalFindings)`, and closing the resume
+  // checkpoint — so a skipped run leaves all of that undone too; name the
+  // option accordingly if a future caller needs annotators skipped WITHOUT
+  // skipping those steps. predicate-replay.js's `replayAt()` is the only
+  // caller that sets it — it re-runs runFullScan scoped to a historical
+  // commit's blob content purely to recompute `computeStableId()` over the
+  // raw detector output (`scan.findings`/`scan.secrets`); it never reads
+  // anything an annotator sets (verified empirically — see the commit
+  // message). Every binding the pipeline below
   // populates that the final `return` still references is declared here,
   // OUTSIDE the guarded block, defaulted to exactly what it was before any
   // annotator ran. A skipped run returns those fields at their

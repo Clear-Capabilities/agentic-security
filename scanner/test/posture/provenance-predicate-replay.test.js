@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import { replayAt } from '../../src/posture/provenance/predicate-replay.js';
 import { computeStableId } from '../../src/posture/stable-id.js';
@@ -88,29 +91,41 @@ test('replayAt: skipAnnotators fast path still correctly resolves presence/absen
 // pathSteps), this test is the one that catches it, since the origin-
 // resolver tests above only catch it indirectly (via a changed `status`).
 test('runFullScan: skipAnnotators does not change computeStableId for any matched finding', async () => {
-  const fileContents = {
-    'server.js': 'function vuln(id) {\n  db.query("SELECT * FROM t WHERE id = " + id);\n}\n',
-    'app.py': 'import os\ndef run(cmd):\n    os.system("ls " + cmd)\n',
-  };
-  const withAnnotators = await runFullScan({ fileContents, scanRoot: null, skipAnnotators: false }, () => {});
-  const withoutAnnotators = await runFullScan({ fileContents, scanRoot: null, skipAnnotators: true }, () => {});
+  // Isolated scanRoot: scanRoot:null falls back to process CWD, which under
+  // this suite is scanner/ itself — runSbomDiff then reads THIS repo's real
+  // sbom history and injects ~76 unrelated dependency-removed findings,
+  // making `checked` a near-meaningless count and writing live scan state
+  // into scanner/.agentic-security/ as a side effect of running the test.
+  const scanRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'as-skip-annotators-'));
+  try {
+    const fileContents = {
+      'server.js': 'function vuln(id) {\n  db.query("SELECT * FROM t WHERE id = " + id);\n}\n',
+      'app.py': 'import os\ndef run(cmd):\n    os.system("ls " + cmd)\n',
+      'files.js': 'const fs = require("fs");\nfunction read(name) {\n  return fs.readFileSync("/data/" + name);\n}\n',
+      'config.js': 'const AWS_KEY = "AKIAIOSFODNN7EXAMPLE";\n',
+    };
+    const withAnnotators = await runFullScan({ fileContents, scanRoot, skipAnnotators: false }, () => {});
+    const withoutAnnotators = await runFullScan({ fileContents, scanRoot, skipAnnotators: true }, () => {});
 
-  const withCandidates = [...(withAnnotators.findings || []), ...(withAnnotators.secrets || [])];
-  const withoutById = new Map();
-  for (const f of [...(withoutAnnotators.findings || []), ...(withoutAnnotators.secrets || [])]) {
-    if (f && f.id) withoutById.set(f.id, f);
-  }
+    const withCandidates = [...(withAnnotators.findings || []), ...(withAnnotators.secrets || [])];
+    const withoutById = new Map();
+    for (const f of [...(withoutAnnotators.findings || []), ...(withoutAnnotators.secrets || [])]) {
+      if (f && f.id) withoutById.set(f.id, f);
+    }
 
-  let checked = 0;
-  for (const f of withCandidates) {
-    if (!f || !f.id) continue;
-    const partner = withoutById.get(f.id);
-    if (!partner) continue; // annotator-only finding (e.g. a chain/contract finding) — not a safety concern
-    checked++;
-    assert.equal(
-      computeStableId(f), computeStableId(partner),
-      `computeStableId mismatch for id=${f.id} (vuln=${f.vuln}): annotators must never change a field computeStableId reads`,
-    );
+    let checked = 0;
+    for (const f of withCandidates) {
+      if (!f || !f.id) continue;
+      const partner = withoutById.get(f.id);
+      if (!partner) continue; // annotator-only finding (e.g. a chain/contract finding) — not a safety concern
+      checked++;
+      assert.equal(
+        computeStableId(f), computeStableId(partner),
+        `computeStableId mismatch for id=${f.id} (vuln=${f.vuln}): annotators must never change a field computeStableId reads`,
+      );
+    }
+    assert.ok(checked >= 3, `expected at least 3 matched findings across families to exercise the comparison, got ${checked}`);
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
   }
-  assert.ok(checked > 0, 'expected at least one matched finding between the two runs to actually exercise the comparison');
 });

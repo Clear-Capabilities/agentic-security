@@ -32,7 +32,9 @@ export async function replayAt(scanRoot, sha, files, targetStableId) {
     // `skipAnnotators:true` (FR-PROV-029): this function only ever reads
     // `scan.findings`/`scan.secrets` to recompute `computeStableId()` below —
     // it never reads anything any of runFullScan's ~54 post-detection
-    // annotators set. Skipping the whole annotator pipeline avoids paying
+    // annotators set, nor the other finalization steps the same option also
+    // skips (secret dedup, orphan classification, freeze, checkpoint-close —
+    // see the guard comment in engine.js). Skipping all of it avoids paying
     // its cost (measured ~39ms fixed overhead per call) on every one of the
     // ~2 replay calls per finding the resolution walk already makes.
     // Verified empirically (byte-identical computeStableId output with and
