@@ -243,20 +243,40 @@ test('every supplyChain entry carries a terminal findingProvenance, transitive d
     assert.ok(transitive.length > 0, `expected a TRANSITIVE vulnerable_dep; got ${JSON.stringify(sc)}`);
     for (const e of transitive) {
       // M3 §3.2 wired transitive-sca.js's real resolver in (coordinator.js's
-      // isScaLike branch); this fixture's advisory has a `fixed`-only range
-      // with no `introduced` lower bound, the same reused-from-sca-origin.js
-      // ambiguity documented at coordinator.js's PARTIAL branch — a
-      // version-increasing bump can never be disambiguated under that
-      // semantics, so this resolves 'partial', not the pre-M3 placeholder
-      // 'not_available'. The reason string is the SCA manifest-ambiguity
-      // wording transitive-sca.js shares verbatim with sca-origin.js
-      // (coordinator.js's own comment: "a transitive partial must get the
-      // same 'manifest history' wording a direct one does") — NOT the old
-      // "transitive dependency origin resolution [unsupported]" placeholder,
-      // which no longer describes reality now that the resolver actually runs.
-      assert.equal(e.provenance.status, 'partial');
-      assert.match(e.provenance.limitations.join(' '), /manifest history could not confirm/,
-        'a transitive dep must go through the real resolver and report the SCA ambiguity reason, not a generic message');
+      // isScaLike branch). Final whole-branch review item #3 found that this
+      // fixture (a subdirectory of THIS repo, not its own git repo) was
+      // exercising a real bug in `getBlobAtCommit`: git resolves a bare
+      // relative path passed to `git show <sha>:<path>` against the REPO
+      // ROOT, not against `cwd` — so every blob lookup for this fixture
+      // silently returned null. That was previously (mis)diagnosed as the
+      // reused-from-sca-origin.js fixed-only-range ambiguity (commit
+      // b8c5a5e0) and pinned here as `status:'partial'` with the manifest-
+      // ambiguity wording. It never actually reached that code path: every
+      // blob lookup failed before ambiguity could even be evaluated, and the
+      // walk fell through to the generic "version-never-confirmed" reason
+      // for the same wrong cause.
+      //
+      // With `getBlobAtCommit` fixed (`./`-prefixing the path so git
+      // resolves it relative to scanRoot), blob lookups for this fixture
+      // succeed for the first time. The fixture's lockfile was added in a
+      // single commit whose immediate parent (in the FULL repo's history,
+      // not the file's own history — `getFirstParent` is not restricted to
+      // commits that touched the file) genuinely does not contain the
+      // lockfile at all, so `lodash` is genuinely absent from that parent.
+      // That is a REAL, honestly-verified transition, not the root-commit
+      // fallback this fixture was expected (pre-verification) to hit — a
+      // repo-root fallback needs a commit with NO parent at all, and this
+      // fixture's single commit has one. The resolver therefore reaches
+      // `status:'complete'` with `parentBoundaryVerified:true` and
+      // `confidence.level:'high'` / `score:0.95`, and those are earned: the
+      // absence really was checked against the real parent blob, unlike the
+      // fabricated-certainty bug fixed in item #2 of this same review round.
+      assert.equal(e.provenance.status, 'complete');
+      assert.equal(e.provenance.method, 'dependency-graph-diff');
+      assert.equal(e.provenance.confidence.level, 'high');
+      assert.equal(e.provenance.confidence.score, 0.95);
+      assert.ok(Array.isArray(e.provenance.findingOrigin?.absentInParents) && e.provenance.findingOrigin.absentInParents.length > 0,
+        'a genuinely verified transition must record the parent commit(s) the dependency was confirmed absent from');
       assert.doesNotMatch(e.provenance.limitations.join(' '), /transitive dependency origin resolution/,
         'the pre-M3 "unsupported" placeholder wording must not survive now that the resolver is wired');
       // M3 §3.2: transitive dependencies have multi-segment depChain (ancestry)

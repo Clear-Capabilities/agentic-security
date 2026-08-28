@@ -41,7 +41,13 @@ const out = (scan.supplyChain || []).map((sc) => ({
   isDirect: sc.isDirect === true,
   depChain: sc.depChain || [],
   provenance: sc.findingProvenance
-    ? { status: sc.findingProvenance.status, limitations: sc.findingProvenance.limitations || [] }
+    ? {
+        status: sc.findingProvenance.status,
+        limitations: sc.findingProvenance.limitations || [],
+        method: sc.findingProvenance.method,
+        confidence: sc.findingProvenance.confidence || null,
+        findingOrigin: sc.findingProvenance.findingOrigin || null,
+      }
     : null,
 }));
 process.stdout.write(JSON.stringify(out));

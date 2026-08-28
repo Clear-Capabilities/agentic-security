@@ -103,7 +103,12 @@ export function getBlobAtCommit(scanRoot, sha, file) {
   if (!_isSha(sha)) return null;
   const rel = _relPath(scanRoot, file);
   if (!rel) return null;
-  const r = _run(scanRoot, ['show', `${sha}:${rel}`]);
+  // `./` makes git resolve `rel` relative to cwd (scanRoot) rather than the
+  // repo root — load-bearing when scanRoot is a SUBDIRECTORY of the actual
+  // git repository (e.g. one package of a monorepo). Without it, `git show
+  // <sha>:<bare-relative-path>` resolves the bare path against the repo
+  // root and silently fails for every caller whose scanRoot != repo root.
+  const r = _run(scanRoot, ['show', `${sha}:./${rel}`]);
   return r.ok ? r.stdout : null;
 }
 
