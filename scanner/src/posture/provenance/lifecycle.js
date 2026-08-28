@@ -133,9 +133,16 @@ function applyScan(store, currentFindings, { scanId, observedAt, completeScan = 
     // every standard-mode scan, which is the honest state: standard mode
     // has no opinion on the distinction.
     let type = events.length === 0 ? 'introduced' : 'reintroduced';
-    if (fp?.findingOrigin?.revertOf) type = 'reverted';
-    else if (fp?.findingOrigin?.cherryPickOf) type = 'cherry-picked';
-    events.push({ type, commit, authorDate, scanId, observedAt });
+    // `relatedCommit` carries the revert-target / cherry-pick-source SHA that
+    // was already read to CLASSIFY `type` above — without this, that SHA was
+    // discarded once the classification was made, so a 'reverted'/
+    // 'cherry-picked' event recorded THAT something was reverted/cherry-picked
+    // but not WHAT commit it was reverted/cherry-picked from, which is the
+    // fact a consumer actually needs to follow the link back.
+    let relatedCommit = null;
+    if (fp?.findingOrigin?.revertOf) { type = 'reverted'; relatedCommit = fp.findingOrigin.revertOf; }
+    else if (fp?.findingOrigin?.cherryPickOf) { type = 'cherry-picked'; relatedCommit = fp.findingOrigin.cherryPickOf; }
+    events.push({ type, commit, authorDate, scanId, observedAt, relatedCommit });
   }
 
   if (completeScan !== false) {

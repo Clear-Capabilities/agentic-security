@@ -195,6 +195,11 @@ test('applyScan: a finding whose findingOrigin.revertOf is set is classified "re
     const store = readLifecycle(fx.root);
     assert.equal(store['sid-revert'].length, 3);
     assert.equal(store['sid-revert'][2].type, 'reverted');
+    // Final whole-branch review item #5: the event used to name the type
+    // ('reverted') but discard the actual revert-target commit SHA that
+    // justified it. It must be carried on the event, not just used to
+    // classify `type` and then thrown away.
+    assert.equal(store['sid-revert'][2].relatedCommit, 'c-fix');
   } finally { fx.cleanup(); }
 });
 
@@ -211,6 +216,8 @@ test('applyScan: a finding whose findingOrigin.cherryPickOf is set is classified
     await updateLifecycle(fx.root, [finding], { scanId: 'scan1', observedAt: '2026-01-01T00:00:00Z' });
     const store = readLifecycle(fx.root);
     assert.equal(store['sid-cherry'][0].type, 'cherry-picked');
+    assert.equal(store['sid-cherry'][0].relatedCommit, 'c-orig',
+      'a "cherry-picked" event must carry the cherry-pick-source commit SHA, not just the type string');
   } finally { fx.cleanup(); }
 });
 
@@ -221,6 +228,8 @@ test('applyScan: neither revertOf nor cherryPickOf set — unchanged introduced/
     await updateLifecycle(fx.root, [finding], { scanId: 'scan1', observedAt: '2026-01-01T00:00:00Z' });
     const store = readLifecycle(fx.root);
     assert.equal(store['sid-plain'][0].type, 'introduced');
+    assert.equal(store['sid-plain'][0].relatedCommit, null,
+      'an ordinary introduction must not fabricate a relatedCommit');
   } finally { fx.cleanup(); }
 });
 
