@@ -89,7 +89,7 @@ function isProcessAlive(pid) {
 
 function isOpenEvent(events) {
   const last = events[events.length - 1];
-  return !!last && (last.type === 'introduced' || last.type === 'reintroduced');
+  return !!last && ['introduced', 'reintroduced', 'reverted', 'cherry-picked'].includes(last.type);
 }
 
 /**
@@ -125,7 +125,17 @@ function applyScan(store, currentFindings, { scanId, observedAt, completeScan = 
     const fp = f.findingProvenance;
     const commit = fp?.findingOrigin?.commit || null;
     const authorDate = fp?.status === 'complete' ? (fp.findingOrigin?.authorDate || observedAt) : observedAt;
-    events.push({ type: events.length === 0 ? 'introduced' : 'reintroduced', commit, authorDate, scanId, observedAt });
+    // M3 §3.1: a reintroduction whose resolved findingOrigin is a genuine
+    // revert-of-a-fix or a cherry-picked propagation of an earlier
+    // introduction is a DIFFERENT lifecycle story than an unrelated
+    // reintroduction — both fields are only ever populated by deep-mode
+    // resolution (Task 3), so this vocabulary is silent (both null) for
+    // every standard-mode scan, which is the honest state: standard mode
+    // has no opinion on the distinction.
+    let type = events.length === 0 ? 'introduced' : 'reintroduced';
+    if (fp?.findingOrigin?.revertOf) type = 'reverted';
+    else if (fp?.findingOrigin?.cherryPickOf) type = 'cherry-picked';
+    events.push({ type, commit, authorDate, scanId, observedAt });
   }
 
   if (completeScan !== false) {
@@ -184,5 +194,8 @@ export function latestOpenIntroduction(store, stableId) {
   const events = store[stableId];
   if (!events || events.length === 0) return null;
   const last = events[events.length - 1];
-  return (last.type === 'introduced' || last.type === 'reintroduced') ? last : null;
+  // Same open-type vocabulary as isOpenEvent: 'reverted'/'cherry-picked' are
+  // still open findings (M3 §3.1) — the classification is about HOW the
+  // finding became open, not whether it currently is.
+  return ['introduced', 'reintroduced', 'reverted', 'cherry-picked'].includes(last.type) ? last : null;
 }

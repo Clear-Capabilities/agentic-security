@@ -170,3 +170,74 @@ test('a stale lock (dead PID, old mtime) is reaped instead of wedging updates', 
     fx.cleanup();
   }
 });
+
+test('applyScan: a finding whose findingOrigin.revertOf is set is classified "reverted", not "reintroduced"', async () => {
+  const fx = createGitFixture();
+  try {
+    const finding = {
+      stableId: 'sid-revert',
+      findingProvenance: {
+        status: 'complete',
+        findingOrigin: { commit: 'c1', authorDate: '2026-01-01T00:00:00Z', revertOf: null, cherryPickOf: null },
+      },
+    };
+    await updateLifecycle(fx.root, [finding], { scanId: 'scan1', observedAt: '2026-01-01T00:00:00Z' });
+    await updateLifecycle(fx.root, [], { scanId: 'scan2', observedAt: '2026-02-01T00:00:00Z' });
+
+    const reintroduced = {
+      stableId: 'sid-revert',
+      findingProvenance: {
+        status: 'complete',
+        findingOrigin: { commit: 'c2', authorDate: '2026-03-01T00:00:00Z', revertOf: 'c-fix', cherryPickOf: null },
+      },
+    };
+    await updateLifecycle(fx.root, [reintroduced], { scanId: 'scan3', observedAt: '2026-03-01T00:00:00Z' });
+    const store = readLifecycle(fx.root);
+    assert.equal(store['sid-revert'].length, 3);
+    assert.equal(store['sid-revert'][2].type, 'reverted');
+  } finally { fx.cleanup(); }
+});
+
+test('applyScan: a finding whose findingOrigin.cherryPickOf is set is classified "cherry-picked"', async () => {
+  const fx = createGitFixture();
+  try {
+    const finding = {
+      stableId: 'sid-cherry',
+      findingProvenance: {
+        status: 'complete',
+        findingOrigin: { commit: 'c1', authorDate: '2026-01-01T00:00:00Z', revertOf: null, cherryPickOf: 'c-orig' },
+      },
+    };
+    await updateLifecycle(fx.root, [finding], { scanId: 'scan1', observedAt: '2026-01-01T00:00:00Z' });
+    const store = readLifecycle(fx.root);
+    assert.equal(store['sid-cherry'][0].type, 'cherry-picked');
+  } finally { fx.cleanup(); }
+});
+
+test('applyScan: neither revertOf nor cherryPickOf set — unchanged introduced/reintroduced behavior', async () => {
+  const fx = createGitFixture();
+  try {
+    const finding = { stableId: 'sid-plain', findingProvenance: { status: 'complete', findingOrigin: { commit: 'c1', authorDate: '2026-01-01T00:00:00Z' } } };
+    await updateLifecycle(fx.root, [finding], { scanId: 'scan1', observedAt: '2026-01-01T00:00:00Z' });
+    const store = readLifecycle(fx.root);
+    assert.equal(store['sid-plain'][0].type, 'introduced');
+  } finally { fx.cleanup(); }
+});
+
+test('isOpenEvent: a "reverted" or "cherry-picked" last event is still open — remediation can close it', async () => {
+  const fx = createGitFixture();
+  try {
+    const finding = {
+      stableId: 'sid-open',
+      findingProvenance: { status: 'complete', findingOrigin: { commit: 'c1', authorDate: '2026-01-01T00:00:00Z', revertOf: 'c-fix', cherryPickOf: null } },
+    };
+    await updateLifecycle(fx.root, [finding], { scanId: 'scan1', observedAt: '2026-01-01T00:00:00Z' });
+    let store = readLifecycle(fx.root);
+    assert.equal(store['sid-open'][0].type, 'reverted');
+    assert.ok(latestOpenIntroduction(store, 'sid-open'), 'a "reverted" event must count as open');
+
+    await updateLifecycle(fx.root, [], { scanId: 'scan2', observedAt: '2026-02-01T00:00:00Z' });
+    store = readLifecycle(fx.root);
+    assert.equal(store['sid-open'][1].type, 'remediated', 'a reverted-open finding must still be remediable when it disappears');
+  } finally { fx.cleanup(); }
+});
