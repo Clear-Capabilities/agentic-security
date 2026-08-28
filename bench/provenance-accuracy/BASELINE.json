@@ -1,0 +1,22 @@
+{
+  "schema": "provenance-accuracy/v1",
+  "generatedAt": "2026-08-28",
+  "matched": 12,
+  "scoreable": 13,
+  "totalFixtures": 13,
+  "entries": {
+    "code-injection-eval-direct": "pass",
+    "command-injection-direct": "pass",
+    "direct-introduction": "pass",
+    "direct-sca-version-bump": "pass",
+    "guard-removal": "pass",
+    "merge": "pass",
+    "multi-touch-same-line": "pass",
+    "path-traversal-direct": "pass",
+    "reintroduction": "pass",
+    "rename": "fail",
+    "root-commit-no-parent": "pass",
+    "shallow-clone-partial": "pass",
+    "uncommitted-change": "pass"
+  }
+}
