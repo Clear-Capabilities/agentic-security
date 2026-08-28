@@ -145,7 +145,7 @@ test('Scenario J: a historical secret never appears in provenance output, cache,
     // 3. Every file on disk under .agentic-security/ — not just the
     //    provenance cache subdirectory.
     const stateDir = path.join(fx.root, '.agentic-security');
-    const cacheDir = path.join(stateDir, 'provenance', 'cache');
+    const cacheDir = path.join(stateDir, 'provenance-cache');
     assert.ok(fs.existsSync(cacheDir) && fs.readdirSync(cacheDir).length > 0,
       'sanity: the provenance cache must actually contain entries, or the disk check below is vacuous');
     const checkedCount = assertNoCanaryOnDisk(stateDir);
@@ -199,7 +199,7 @@ test('Scenario L: two scans of the same HEAD produce byte-stable provenance (vol
     // and would prove nothing about the RESOLVER's own determinism (git log
     // output ordering, the coordinator's concurrent scheduler, iteration
     // order over any Set/Map along the way).
-    fs.rmSync(path.join(fx.root, '.agentic-security', 'provenance', 'cache'), { recursive: true, force: true });
+    fs.rmSync(path.join(fx.root, '.agentic-security', 'provenance-cache'), { recursive: true, force: true });
 
     const scan2 = await runFullScan({ fileContents: { 'server.js': src }, scanRoot: fx.root }, () => {});
 

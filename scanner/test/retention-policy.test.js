@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   RETENTION_DEFAULTS, loadRetentionPolicy, effectiveTtlDays, findExpiredArtifacts,
 } from '../src/posture/retention-policy.js';
-import { listArtifactsWithRetentionClass, retentionClassOf } from '../src/posture/artifact-registry.js';
+import { listArtifactsWithRetentionClass, retentionClassOf, isRegisteredArtifact } from '../src/posture/artifact-registry.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..');
@@ -53,6 +53,13 @@ test('artifact-registry: at least one real artifact is classed per named categor
   for (const cls of ['cache', 'scan', 'evidence', 'ticket', 'backup']) {
     assert.ok(byClass[cls] > 0, `expected at least one artifact classed '${cls}'`);
   }
+});
+
+test('artifact-registry: provenance-cache and provenance are two separate top-level entries with different retention treatment', () => {
+  assert.ok(isRegisteredArtifact('provenance-cache'), 'provenance-cache must be a registered top-level artifact');
+  assert.ok(isRegisteredArtifact('provenance'), 'provenance must be a registered top-level artifact');
+  assert.equal(retentionClassOf('provenance-cache'), 'cache', 'the cache half must carry the cache retention class');
+  assert.ok(!retentionClassOf('provenance'), 'the lifecycle ledger must carry NO retention class');
 });
 
 test('artifact-registry: an artifact whose deletion would be a real loss (not cleanup) carries NO retention class', () => {
@@ -154,6 +161,26 @@ test('findExpiredArtifacts: an operator-configured shorter TTL expires an artifa
     await fsp.writeFile(path.join(sess.dir, '.agentic-security', 'retention-policy.yml'), 'scan:\n  defaultDays: 1\n');
     const expired = findExpiredArtifacts(sess.dir);
     assert.ok(expired.map(e => e.name).includes('last-scan.json'), 'a shorter operator-configured TTL must be honored');
+  } finally { await sess.cleanup(); }
+});
+
+test('findExpiredArtifacts: an old provenance-cache entry past its TTL is eligible for expiry; the lifecycle ledger never is', async () => {
+  const sess = await mkSession();
+  try {
+    const cacheDir = path.join(sess.dir, '.agentic-security', 'provenance-cache');
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(path.join(cacheDir, 'abc123.json'), '{}');
+    setAge(cacheDir, RETENTION_DEFAULTS.cache.defaultDays + 5);
+
+    const lifecycleDir = path.join(sess.dir, '.agentic-security', 'provenance');
+    fs.mkdirSync(lifecycleDir, { recursive: true });
+    fs.writeFileSync(path.join(lifecycleDir, 'lifecycle.json'), '{}');
+    setAge(lifecycleDir, RETENTION_DEFAULTS.cache.defaultDays + 5); // aged the same amount — only the class differs
+
+    const expired = findExpiredArtifacts(sess.dir);
+    const names = expired.map(e => e.name);
+    assert.ok(names.includes('provenance-cache'), 'the aged provenance-cache dir must be flagged expired');
+    assert.ok(!names.includes('provenance'), 'the lifecycle ledger must never be flagged expired, no matter how old');
   } finally { await sess.cleanup(); }
 });
 

@@ -14,9 +14,17 @@ import * as crypto from 'node:crypto';
 import { statePath, safeWriteState } from '../state-dir.js';
 import { FINDING_PROVENANCE_SCHEMA_VERSION } from './schema.js';
 
+// Its own top-level `.agentic-security/provenance-cache/` directory, NOT
+// nested under `provenance/` (where it lived through M0-M4) — the artifact
+// registry (posture/artifact-registry.js) can only apply retention per
+// TOP-LEVEL directory name, and this cache (pure HEAD-keyed memo, safely
+// regenerable) needs a TTL that the provenance/ lifecycle ledger (permanent
+// history) must never get. See PRD Section 8 / artifact-registry.js's
+// 'provenance-cache' entry. Single helper so the read and write paths can
+// never drift apart.
 function keyPath(scanRoot, key) {
   const hash = crypto.createHash('sha256').update(key).digest('hex');
-  return statePath(scanRoot, 'provenance', 'cache', hash + '.json');
+  return statePath(scanRoot, 'provenance-cache', hash + '.json');
 }
 
 /**

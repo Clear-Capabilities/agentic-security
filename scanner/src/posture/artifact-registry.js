@@ -125,17 +125,28 @@ export const ARTIFACT_REGISTRY = [
   { name: 'sca-upgrade-history', kind: 'dir', classification: 'generated', retentionClass: 'scan' },
   { name: 'scan-baselines', kind: 'dir', classification: 'generated', retentionClass: 'scan', source: 'posture/pr-augment.js' },
   { name: 'agent-scratchpad', kind: 'dir', classification: 'generated', retentionClass: 'cache', source: 'mcp/tools.js (append_scratchpad)' },
-  // Finding Provenance (M0/M1). One directory, two writers:
-  // posture/provenance/cache.js (provenance/cache/<hash>.json — a pure
-  // HEAD-keyed memo of resolved origins) and posture/provenance/lifecycle.js
-  // (provenance/lifecycle.json + .lock — the introduce/remediate/reintroduce
-  // ledger). Both are scanner-written, so 'generated'. Deliberately NO
-  // retentionClass: 'cache' would be right for the memo half but would expire
-  // the lifecycle ledger with it, and that ledger is the only record of WHEN a
-  // finding was first observed — a fact no re-scan can reconstruct once the
-  // observation window has passed. No auto-expiry until the two halves are
-  // separable; `reset` still clears the whole directory, which is explicit.
-  { name: 'provenance', kind: 'dir', classification: 'generated', source: 'posture/provenance/{cache,lifecycle}.js' },
+  // Finding Provenance (M0/M1, split per PRD Section 8 retention task). Used
+  // to be one directory with two writers sharing it, which meant they could
+  // not get different retention treatment — `cmdReset`/`findExpiredArtifacts`
+  // only ever operate on exact TOP-LEVEL `.agentic-security/` directory
+  // names, never on a `/`-qualified sub-path. Now physically split:
+  //   - posture/provenance/cache.js writes provenance-cache/<hash>.json — a
+  //     pure HEAD-keyed memo of resolved origins, safely regenerable, no
+  //     correctness dependency on being preserved. Gets retentionClass:
+  //     'cache' (7-day default / 30-day max TTL, RETENTION_DEFAULTS.cache).
+  //   - posture/provenance/lifecycle.js writes provenance/lifecycle.json +
+  //     .lock — the introduce/remediate/reintroduce ledger. Deliberately NO
+  //     retentionClass: this is permanent history, not a cache; auto-expiring
+  //     it would silently lose lifecycle events a report may already have
+  //     cited. `reset` (without `--expired`) still clears it, which is
+  //     explicit operator action, unlike TTL-driven auto-expiry.
+  // Old-location cache files (`provenance/cache/*.json`, written before this
+  // split) are DELIBERATELY NOT migrated — see cache.js's own comment and the
+  // commit that introduced this split. They are simply orphaned: invisible to
+  // this registry, un-swept by reset/retention, silently ignored by the new
+  // code, and harmless to leave until a human deletes them by hand.
+  { name: 'provenance-cache', kind: 'dir', classification: 'generated', retentionClass: 'cache', source: 'posture/provenance/cache.js -- pure HEAD-keyed memo, safely regenerable, no correctness dependency on being preserved' },
+  { name: 'provenance', kind: 'dir', classification: 'generated', source: 'posture/provenance/lifecycle.js -- the introduce/remediate/reintroduce ledger. Deliberately NO retentionClass: this is permanent history, not a cache; auto-expiring it would silently lose lifecycle events a report may already have cited.' },
   { name: 'AGENTS.md', kind: 'file', classification: 'generated', source: 'posture/agents-memory.js' },
   { name: 'AGENTS.md.archive', kind: 'file', classification: 'generated', source: 'posture/agents-memory.js' },
   { name: 'baseline.json', kind: 'file', classification: 'generated', source: 'bin/agentic-security.js (--set-baseline)', note: 'operator-set intent, functionally closer to operator-config than scan output — no auto-expiry' },

@@ -384,7 +384,7 @@ are both pre-existing unrelated fields.
 | `evidence-attribution.js` | the path:line:commit triples for source / sink / manifest |
 | `confidence.js` | HIGH / MEDIUM / LOW plus the reasons behind it |
 | `lifecycle.js` | the introduce / remediate / reintroduce ledger |
-| `cache.js` | per-(HEAD, stableId, ruleset, boundary, mode) memo under `.agentic-security/provenance/cache/` |
+| `cache.js` | per-(HEAD, stableId, ruleset, boundary, mode) memo under its own top-level `.agentic-security/provenance-cache/` (split out from `provenance/` so it can carry a `'cache'` retentionClass the permanent lifecycle ledger must not get — see artifact-registry.js) |
 | `schema.js` | the status/method/role/confidence enums, `emptyProvenance`, `redactFindingProvenance`, `isProvenanceHealthy` |
 | `validate.js` | shape assertion for tests |
 | `missing-control-resolver.js` | (M3 §3.3) when a previously-observed safeguard disappeared — **standalone library, NOT wired into the live pipeline** |

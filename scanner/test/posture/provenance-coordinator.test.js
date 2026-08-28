@@ -134,7 +134,7 @@ test('a budget_exhausted result is NEVER cached, so a larger --timeout still wor
   try {
     fx.writeFile('a.js', 'db.query("SELECT * FROM t WHERE id = " + id);\n');
     fx.commit('c1', { date: '2026-01-01T00:00:00Z' });
-    const cacheDir = path.join(fx.root, '.agentic-security', 'provenance', 'cache');
+    const cacheDir = path.join(fx.root, '.agentic-security', 'provenance-cache');
     const stableId = 'sid-budget';
 
     // A 5ms budget deliberately lands INSIDE resolveOrigin rather than in the

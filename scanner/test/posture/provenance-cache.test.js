@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import { makeCacheKey, cacheGet, cacheSet } from '../../src/posture/provenance/cache.js';
 import { FINDING_PROVENANCE_SCHEMA_VERSION } from '../../src/posture/provenance/schema.js';
@@ -13,7 +15,24 @@ test('cache: content-addressed round trip, no TTL, repo-local', () => {
     cacheSet(fx.root, key, { status: 'complete', findingOrigin: { commit: 'abc123' } });
     const got = cacheGet(fx.root, key);
     assert.deepEqual(got, { status: 'complete', findingOrigin: { commit: 'abc123' } });
-    assert.ok(fs.existsSync(`${fx.root}/.agentic-security/provenance/cache`));
+    assert.ok(fs.existsSync(`${fx.root}/.agentic-security/provenance-cache`));
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('cache.js: writes to the new top-level provenance-cache/ directory, not nested under provenance/', () => {
+  const fx = createGitFixture();
+  try {
+    const key = makeCacheKey({ repoHead: 'abc123', stableId: 'sid1', detectorVersion: '2026.09', historyBoundary: '', mode: 'standard' });
+    cacheSet(fx.root, key, { status: 'complete', findingOrigin: { commit: 'abc123' } });
+
+    const hash = crypto.createHash('sha256').update(key).digest('hex');
+    const newPath = path.join(fx.root, '.agentic-security', 'provenance-cache', `${hash}.json`);
+    const oldPath = path.join(fx.root, '.agentic-security', 'provenance', 'cache', `${hash}.json`);
+
+    assert.ok(fs.existsSync(newPath), `expected the cache file at the new top-level location: ${newPath}`);
+    assert.ok(!fs.existsSync(oldPath), `cache file must NOT be written to the old nested location: ${oldPath}`);
   } finally {
     fx.cleanup();
   }
@@ -23,7 +42,7 @@ test('cache: a read-only scan (--no-state) writes NOTHING into the scanned tree'
   // The static guard in no-stray-state.test.js proves this module CONSULTS the
   // seam; only running it proves the seam actually stops the write. Asserting
   // the full path listing (not just the file) because directory creation is
-  // mutation too — `.agentic-security/provenance/cache/` appearing in someone
+  // mutation too — `.agentic-security/provenance-cache/` appearing in someone
   // else's repository is litter even when it is empty.
   const fx = createGitFixture();
   const prior = process.env.AGENTIC_SECURITY_NO_STATE;

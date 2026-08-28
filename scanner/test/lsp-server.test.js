@@ -128,12 +128,14 @@ app.get('/run', (req, res) => {
 // Final whole-branch review — I4. The four state-dir.test.js tests exercise
 // safeWriteState's underlying `category` primitive directly, but nothing
 // drove a real on-save scan through THIS server and inspected what it wrote.
-// server.js now creates `.agentic-security/provenance/cache/*.json` on every
+// server.js now creates `.agentic-security/provenance-cache/*.json` on every
 // save (M2 §2.4's deliberate exceptCategories:['provenance-cache'] carve-out
 // in the withStateWritesDisabled wrapper above) — a disclosed change from
 // before, when the LSP wrote zero state files. This asserts the carve-out
 // stays exactly as narrow as documented: real provenance cache writes land,
 // and nothing else (dpia.md, ropa.md, lifecycle.json, …) leaks through.
+// (The cache moved out from under `provenance/` to its own top-level
+// `provenance-cache/` directory — see artifact-registry.js's split entry.)
 function listFilesRecursive(dir) {
   const out = [];
   if (!fs.existsSync(dir)) return out;
@@ -145,7 +147,7 @@ function listFilesRecursive(dir) {
   return out;
 }
 
-test('a real on-save scan writes ONLY .agentic-security/provenance/cache/ — no dpia.md, ropa.md, lifecycle.json, or other state', () => {
+test('a real on-save scan writes ONLY .agentic-security/provenance-cache/ — no dpia.md, ropa.md, lifecycle.json, or other state', () => {
   const dir = mkTmp('write-scope', {
     'app.js': `
 const db = require('./db');
@@ -175,8 +177,8 @@ function run(id) { db.query('SELECT * FROM t WHERE id=' + id); }
 
     for (const f of written) {
       assert.ok(
-        f.startsWith(`provenance${path.sep}cache${path.sep}`),
-        `on-save scan wrote outside provenance/cache/: ${f}`,
+        f.startsWith(`provenance-cache${path.sep}`),
+        `on-save scan wrote outside provenance-cache/: ${f}`,
       );
     }
 
