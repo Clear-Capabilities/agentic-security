@@ -245,6 +245,14 @@ test('every supplyChain entry carries a terminal findingProvenance, transitive d
       assert.equal(e.provenance.status, 'not_available');
       assert.match(e.provenance.limitations.join(' '), /transitive dependency origin resolution/,
         'a transitive dep must say WHY its origin is unavailable, not just that it is');
+      // M3 §3.2: transitive dependencies have multi-segment depChain (ancestry)
+      assert.ok(Array.isArray(e.depChain), `expected depChain to be an array on transitive ${e.name}; got ${typeof e.depChain}`);
+      assert.ok(e.depChain.length > 0, `expected non-empty depChain on transitive ${e.name}; got ${JSON.stringify(e.depChain)}`);
+      assert.equal(e.depChain[e.depChain.length - 1], e.name, `expected depChain to end in ${e.name}; got ${JSON.stringify(e.depChain)}`);
+      // Verify no trailing slashes from path parsing
+      for (const segment of e.depChain) {
+        assert.ok(!segment.endsWith('/'), `expected no trailing slash in depChain segment; got "${segment}"`);
+      }
     }
     // And the direct half must still be routed to the resolver rather than swept
     // up by the same blanket stamp — otherwise this test would pass on a wiring
@@ -254,6 +262,13 @@ test('every supplyChain entry carries a terminal findingProvenance, transitive d
     for (const e of direct) {
       assert.ok(!/transitive dependency origin resolution/.test(e.provenance.limitations.join(' ')),
         'a DIRECT dep was stamped with the transitive limitation — it never reached the resolver');
+      // M3 §3.2: direct dependencies have short depChain (0-1 elements)
+      assert.ok(Array.isArray(e.depChain), `expected depChain to be an array on direct ${e.name}; got ${typeof e.depChain}`);
+      assert.ok(e.depChain.length <= 1, `expected direct ${e.name} to have chain length ≤1; got ${JSON.stringify(e.depChain)}`);
+      // Verify no trailing slashes from path parsing
+      for (const segment of e.depChain) {
+        assert.ok(!segment.endsWith('/'), `expected no trailing slash in depChain segment; got "${segment}"`);
+      }
     }
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

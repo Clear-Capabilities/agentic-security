@@ -39,6 +39,7 @@ const out = (scan.supplyChain || []).map((sc) => ({
   name: sc.name || null,
   osvId: sc.osvId || null,
   isDirect: sc.isDirect === true,
+  depChain: sc.depChain || [],
   provenance: sc.findingProvenance
     ? { status: sc.findingProvenance.status, limitations: sc.findingProvenance.limitations || [] }
     : null,
