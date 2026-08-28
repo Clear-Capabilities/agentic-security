@@ -30,11 +30,22 @@ function keyPath(scanRoot, key) {
  * flowed straight through, defeating the exact scenario the version field was
  * added to guard. Including it means a bump silently misses every stale entry
  * instead, which is the correct outcome: they are recomputed, not trusted.
+ *
+ * `lineageKey` (M4 §4.2 final-review fix) covers the resolved
+ * `.agentic-security/repo-lineage.json` cross-repo link the same way
+ * `historyBoundary` already covers `--provenance-since`: a cross-repo
+ * `partial` result IS cacheable, so without this the cache key had no field
+ * reflecting which (if any) lineage link produced it. Adding, removing, or
+ * repointing the declaration at the same HEAD would then keep serving a
+ * stale pre-lineage or a stale cross-repo answer. Callers pass the resolved
+ * link's own `${path}@${atCommit}`, or the literal `'none'` when
+ * `loadRepoLineage` returns nothing — never omit it in a way that collapses
+ * both cases to the same empty string the other fields default to.
  */
-export function makeCacheKey({ repoHead, stableId, detectorVersion, historyBoundary, mode }) {
+export function makeCacheKey({ repoHead, stableId, detectorVersion, historyBoundary, mode, lineageKey }) {
   return [
     FINDING_PROVENANCE_SCHEMA_VERSION,
-    repoHead || '', stableId || '', detectorVersion || '', historyBoundary || '', mode || '',
+    repoHead || '', stableId || '', detectorVersion || '', historyBoundary || '', mode || '', lineageKey || 'none',
   ].join('|');
 }
 

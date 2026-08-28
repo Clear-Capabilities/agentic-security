@@ -59,6 +59,7 @@ import { resolveBranchEntry } from './branch-entry.js';
 import { attributeEvidence } from './evidence-attribution.js';
 import { assessConfidence } from './confidence.js';
 import { cacheGet, cacheSet, makeCacheKey } from './cache.js';
+import { loadRepoLineage } from './repo-lineage.js';
 import { emptyProvenance, PROVENANCE_STATUS, PROVENANCE_METHOD, EVIDENCE_ROLE, CONFIDENCE_LEVEL } from './schema.js';
 
 // Detector label recorded in `analysisBasis.detector` for SCA entries. A
@@ -207,6 +208,7 @@ async function resolveOne(finding, ctx) {
   const cacheKey = makeCacheKey({
     repoHead: repoState.head, stableId: finding.stableId,
     detectorVersion: ctx.rulesetVersion, historyBoundary: ctx.since || '', mode: ctx.mode,
+    lineageKey: ctx.lineageKey,
   });
 
   // IN-SCAN MEMOIZATION (M2 §2.4 performance fix): the disk cache alone
@@ -422,7 +424,18 @@ export async function annotateGitProvenance(findings, ctx) {
   // past the run that created it (the disk cache, keyed on repoHead already,
   // is what persists ACROSS scans).
   const memo = new Map();
-  const fullCtx = { ...options, repoState, deadlineAt, perFindingBudgetMs, scanRoot, memo };
+  // Resolved ONCE per scan, not per finding: `loadRepoLineage` is a fast
+  // local file read plus two git calls against the (small, local) lineage
+  // config — cheap to redo per finding (`origin-resolver.js`'s
+  // `tryCrossRepoLineage` already does, scoped to its own concern), but
+  // there is no reason to pay it again here when every finding in this scan
+  // shares the same answer. Feeds the cache key (see cache.js's
+  // `makeCacheKey` doc) so adding, removing, or repointing the declared link
+  // at the same HEAD invalidates stale cached results instead of serving
+  // them past the change.
+  const lineage = loadRepoLineage(scanRoot);
+  const lineageKey = lineage ? `${lineage.path}@${lineage.atCommit}` : 'none';
+  const fullCtx = { ...options, repoState, deadlineAt, perFindingBudgetMs, scanRoot, memo, lineageKey };
 
   let active = 0;
   let idx = 0;

@@ -368,3 +368,59 @@ test('annotateGitProvenance: two findings sharing a stableId resolve via one und
     fx.cleanup();
   }
 });
+
+// Item 2 fix (M4 final-review): the cache key had no field reflecting a
+// resolved cross-repo lineage link (`.agentic-security/repo-lineage.json`,
+// M4 §4.2). Since a cross-repo `partial` result IS cacheable, an operator
+// who scans once (no lineage declared, caches the honest same-repo
+// `complete` root answer), then DECLARES a lineage link and re-scans at the
+// SAME HEAD, must get the cross-repo answer — not the stale pre-lineage
+// cached one. End-to-end through `annotateGitProvenance` (not just
+// `makeCacheKey` directly), because this is exactly the coordinator-level
+// bug the review found: the cache key it builds never changed even though
+// the declaration on disk did.
+test('annotateGitProvenance: declaring a repo-lineage link after an earlier scan at the same HEAD invalidates the stale cached pre-lineage result', async (t) => {
+  const linked = createGitFixture();
+  const fx = createGitFixture();
+  t.after(() => { fx.cleanup(); linked.cleanup(); });
+
+  linked.writeFile('shared.js', 'eval(x);\n');
+  const linkedSha = linked.commit('the real original introduction, in the OLD repo');
+
+  fx.writeFile('shared.js', 'eval(x);\n');
+  const ownSha = fx.commit("imported wholesale as this repo's first commit");
+
+  const scan = await runFullScan({ fileContents: { 'shared.js': 'eval(x);\n' }, scanRoot: fx.root }, () => {});
+  const findingBeforeLineage = (scan.findings || []).find((f) => f.file === 'shared.js' && f.family === 'code-injection');
+  assert.ok(findingBeforeLineage, 'expected the code-injection detector to fire on shared.js');
+  assert.ok(findingBeforeLineage.stableId);
+
+  // First scan: no lineage declared yet. Resolves via the ordinary same-repo
+  // true-root path and gets CACHED (status:'complete' is cacheable).
+  await annotateGitProvenance([findingBeforeLineage], {
+    scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', mode: 'standard',
+  });
+  assert.equal(findingBeforeLineage.findingProvenance.status, 'complete');
+  assert.equal(findingBeforeLineage.findingProvenance.findingOrigin.commit, ownSha);
+
+  // Now the operator declares the lineage link, at the SAME HEAD.
+  fs.mkdirSync(path.join(fx.root, '.agentic-security'), { recursive: true });
+  fs.writeFileSync(
+    path.join(fx.root, '.agentic-security', 'repo-lineage.json'),
+    JSON.stringify({ linkedFrom: { path: linked.root, atCommit: linkedSha } }),
+  );
+
+  // A second, independent finding object carrying the SAME stableId/file/
+  // line/HEAD as the first — everything the pre-fix cache key was built
+  // from is unchanged. Only the on-disk lineage declaration differs.
+  const findingAfterLineage = { ...findingBeforeLineage, findingProvenance: undefined };
+  await annotateGitProvenance([findingAfterLineage], {
+    scanRoot: fx.root, scanId: 's2', observedAt: '2026-01-01T00:00:01Z', mode: 'standard',
+  });
+
+  // Must NOT be the stale cached pre-lineage 'complete' answer pointing at
+  // ownSha — it must resolve the cross-repo lineage link.
+  assert.equal(findingAfterLineage.findingProvenance.status, 'partial');
+  assert.equal(findingAfterLineage.findingProvenance.historyCoverage.crossRepoLineage, true);
+  assert.equal(findingAfterLineage.findingProvenance.findingOrigin.commit, linkedSha);
+});

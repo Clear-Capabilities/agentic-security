@@ -78,3 +78,54 @@ test('cache: different repoHead produces a different key/miss', () => {
     fx.cleanup();
   }
 });
+
+// Item 2 fix (M4 final-review): `repo-lineage.json`'s content was not part
+// of the cache key, so an operator adding, removing, or repointing a
+// declared cross-repo lineage link at the same HEAD kept being served a
+// stale answer computed before/without the change. `lineageKey` closes that
+// gap the same way `historyBoundary` already covers `--provenance-since`.
+test('cache: a declared lineage link produces a different key than no link declared, at the same HEAD/stableId', () => {
+  const fx = createGitFixture();
+  try {
+    const withLineage = makeCacheKey({
+      repoHead: 'head1', stableId: 'sid1', detectorVersion: 'v1', historyBoundary: '', mode: 'standard',
+      lineageKey: '/some/old-repo@abc123',
+    });
+    const withoutLineage = makeCacheKey({
+      repoHead: 'head1', stableId: 'sid1', detectorVersion: 'v1', historyBoundary: '', mode: 'standard',
+      lineageKey: 'none',
+    });
+    assert.notEqual(withLineage, withoutLineage);
+    cacheSet(fx.root, withLineage, { status: 'partial', crossRepoLineage: true });
+    // The pre-lineage answer must not be visible under the with-lineage key —
+    // this is exactly the "operator adds the declaration and re-scans at the
+    // same HEAD" bug: a stale cached pre-lineage result must not leak through.
+    assert.equal(cacheGet(fx.root, withoutLineage), null);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('cache: a lineage link repointed to a different atCommit produces a different key/miss (edit/remove case)', () => {
+  const fx = createGitFixture();
+  try {
+    const original = makeCacheKey({
+      repoHead: 'head1', stableId: 'sid1', detectorVersion: 'v1', historyBoundary: '', mode: 'standard',
+      lineageKey: '/some/old-repo@abc123',
+    });
+    const repointed = makeCacheKey({
+      repoHead: 'head1', stableId: 'sid1', detectorVersion: 'v1', historyBoundary: '', mode: 'standard',
+      lineageKey: '/some/old-repo@def456',
+    });
+    cacheSet(fx.root, original, { status: 'partial', findingOrigin: { commit: 'abc123' } });
+    assert.equal(cacheGet(fx.root, repointed), null, 'a repointed atCommit must not serve the stale cached attribution');
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('cache: omitting lineageKey defaults to the same key as an explicit "none" (backward-compatible default)', () => {
+  const withDefault = makeCacheKey({ repoHead: 'h', stableId: 's', detectorVersion: 'v', historyBoundary: '', mode: 'standard' });
+  const withExplicitNone = makeCacheKey({ repoHead: 'h', stableId: 's', detectorVersion: 'v', historyBoundary: '', mode: 'standard', lineageKey: 'none' });
+  assert.equal(withDefault, withExplicitNone);
+});
