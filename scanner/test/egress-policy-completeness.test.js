@@ -45,6 +45,8 @@ const EXCLUDED_FILES = new Map([
   ['src/mcp/audit.js', 'telemetry sink, not LLM egress'],
   ['src/integrations/tickets.js', 'Linear/Jira ticket-creation integrations, not LLM egress'],
   ['src/integrations/index.js', 'webhook/ServiceNow/PagerDuty/Teams notification integrations, not LLM egress'],
+  ['src/posture/provenance/providers/github.js', 'GitHub REST API calls for PR metadata / CODEOWNERS enrichment (Finding Provenance M3 §3.4), strictly opt-in via resolveProviderConfig — not LLM egress'],
+  ['src/posture/provenance/providers/gitlab.js', 'GitLab REST API calls for MR metadata / CODEOWNERS enrichment (Finding Provenance M3 §3.4), strictly opt-in via resolveProviderConfig — not LLM egress'],
 ]);
 
 function walk(dir, out = []) {
