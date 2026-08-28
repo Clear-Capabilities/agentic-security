@@ -243,3 +243,43 @@ test('annotateGitProvenance: findingType "sca-transitive" resolves via resolveTr
   assert.equal(entry.findingProvenance.status, 'complete');
   assert.equal(entry.findingProvenance.analysisBasis.detector, 'sca-lockfile-history-diff');
 });
+
+test('SCA-transitive partial gets the manifest-history wording, not the SAST "verified parent boundary" wording', async (t) => {
+  // Mirrors 'SCA partial threads the ambiguous-range reason through instead of
+  // dropping it' above, but for findingType:'sca-transitive'. Regression test
+  // for the describePartial(isScaLike, ...) fix in coordinator.js: both
+  // versions sit below the advisory's `fixed` bound with no `introduced`
+  // bound, so resolveTransitiveSCAOrigin can't tell "vulnerable since
+  // inception" from "bump into the vulnerable window" and returns
+  // partial/ambiguous-range-no-introduced-bound. Before the fix, this call
+  // site was still gated on the bare isSca (false for a transitive finding),
+  // so it fell through to the SAST branch's "verified parent boundary"
+  // wording and the SAST confidence reason — a self-contradictory record for
+  // a dependency finding. If a future edit reverts isScaLike back to isSca at
+  // that call site, this test must fail.
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  const lockfile = (v) => JSON.stringify({
+    name: 'root', lockfileVersion: 3,
+    packages: { '': {}, 'node_modules/express/node_modules/qs': { version: v } },
+  });
+  fx.writeFile('package-lock.json', lockfile('0.9.0'));
+  fx.commit('safe version', { date: '2026-01-01T00:00:00Z' });
+  fx.writeFile('package-lock.json', lockfile('1.0.0'));
+  fx.commit('bump, still below fixed', { date: '2026-01-02T00:00:00Z' });
+
+  const entry = { name: 'qs', filePath: 'package-lock.json', fixedVersions: ['1.1.0'], isDirect: false };
+  await annotateGitProvenance([entry], {
+    scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-02T00:00:00Z', findingType: 'sca-transitive',
+  });
+
+  const fp = entry.findingProvenance;
+  assert.equal(fp.status, 'partial');
+  assert.match(fp.limitations[0], /ambiguous-range-no-introduced-bound/);
+  assert.match(fp.limitations[0], /manifest history/,
+    'SCA-transitive partial must not borrow the SAST "verified parent boundary" wording');
+  assert.doesNotMatch(fp.limitations[0], /verified parent boundary/);
+  assert.equal(fp.confidence.level, 'low');
+  assert.deepEqual(fp.confidence.reasons, ['ambiguous_version_range']);
+  assert.equal(fp.analysisBasis.detector, 'sca-lockfile-history-diff');
+});
