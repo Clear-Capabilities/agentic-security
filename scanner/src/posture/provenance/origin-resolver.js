@@ -48,37 +48,64 @@ function originFrom(meta, { absentInParents }) {
   };
 }
 
+// Extracts line `lineNo` (1-based) from a blob, trimmed, or null if the blob
+// doesn't have that many lines or the line is blank. Shared by the initial
+// gate and the per-candidate walk in `tryCrossRepoLineage` below, so both
+// apply the exact same normalization.
+function trimmedLineAt(blob, lineNo) {
+  if (blob == null) return null;
+  const lines = blob.split('\n');
+  if (lineNo > lines.length) return null;
+  const text = lines[lineNo - 1];
+  if (!text || !text.trim()) return null;
+  return text.trim();
+}
+
 /**
  * Best-effort cross-repo continuation when the standard walk reaches this
  * repo's TRUE root commit (no parent, non-shallow) without resolving. Only
  * fires when a repo-lineage link is declared and verified (`loadRepoLineage`
- * — Task 4). Confirms the SAME relative file path exists in the linked repo
- * at atCommit, and that the finding's line content is textually present
- * there (a presence check, NOT a predicate replay — the detector pipeline
- * that proved the finding's predicate true in THIS repo cannot be assumed
- * identical in the linked one). On a match, walks `candidateCommitsForLine`
- * in the linked repo, restricted to candidates reachable from atCommit (via
- * `isAncestor`, so nothing the linked repo's own later development added
- * can leak in), and reports the oldest such candidate as a best-effort
- * origin.
+ * — Task 4).
  *
- * Returns null on ANY failure to extend (no lineage, file/line absent
- * there, nothing further resolves) — the caller falls through to its
- * existing not-linked-or-unresolved behavior unchanged.
+ * A REAL content-presence check, not merely a non-blank-line check: the
+ * finding's OWN line text is read fresh from THIS repo at `rootMeta.commit`
+ * (the commit the standard walk actually resolved to) and compared, trimmed,
+ * against the linked repo's line at `atCommit`. Only an exact match is any
+ * evidence at all that "this same line of code" exists in the linked repo —
+ * an earlier version of this check merely asked "is *something* non-blank at
+ * this line index", which could fabricate an attribution for code that never
+ * existed in the linked repo at all (caught by review; see the M4 §4.2 fix
+ * commit). This is still a textual match, NOT a predicate replay — the
+ * detector pipeline that proved the finding's predicate true in THIS repo
+ * cannot be assumed identical in the linked one.
+ *
+ * The same comparison is applied PER CANDIDATE when walking
+ * `candidateCommitsForLine` in the linked repo (restricted to candidates
+ * reachable from atCommit, via `isAncestor`): `-L` tracks a LINE NUMBER's
+ * history, which can include commits where a completely unrelated statement
+ * occupied that same line number before/after the finding's actual code, so
+ * "oldest eligible candidate" alone is not evidence either — it must also be
+ * the oldest eligible candidate whose content at that line actually matches.
+ *
+ * Returns null on ANY failure to extend (no lineage, file/line absent or
+ * non-matching there, nothing further resolves) — the caller falls through
+ * to its existing not-linked-or-unresolved behavior unchanged.
  */
 function tryCrossRepoLineage(scanRoot, finding, rootMeta) {
   const lineage = loadRepoLineage(scanRoot);
   if (!lineage) return null;
 
-  const blob = getBlobAtCommit(lineage.path, lineage.atCommit, finding.file);
-  if (blob == null) return null;
-  const lines = blob.split('\n');
   const lineNo = finding.line || finding.sink?.line;
-  if (!lineNo || lineNo > lines.length) return null;
-  // A cheap, honest presence check: the SOURCE LINE's own text (trimmed) is
-  // literally there. Not the finding's full predicate — that would require
-  // re-running the detector pipeline, out of scope for a best-effort link.
-  if (!lines[lineNo - 1] || !lines[lineNo - 1].trim()) return null;
+  if (!lineNo) return null;
+
+  // The real basis for comparison: THIS repo's own committed line text at
+  // the commit the standard walk resolved to — not a detector-supplied
+  // snippet, which could be stale, normalized, or absent.
+  const ownTrimmed = trimmedLineAt(getBlobAtCommit(scanRoot, rootMeta.commit, finding.file), lineNo);
+  if (!ownTrimmed) return null;
+
+  const linkedTrimmedAtBoundary = trimmedLineAt(getBlobAtCommit(lineage.path, lineage.atCommit, finding.file), lineNo);
+  if (linkedTrimmedAtBoundary !== ownTrimmed) return null;
 
   const linkedCandidates = candidateCommitsForLine(lineage.path, finding.file, lineNo, {});
   // Only candidates reachable from (at or before) atCommit are eligible —
@@ -91,8 +118,17 @@ function tryCrossRepoLineage(scanRoot, finding, rootMeta) {
   const eligible = linkedCandidates.filter((sha) => isAncestor(lineage.path, sha, lineage.atCommit));
   if (eligible.length === 0) return null;
 
-  const oldestMatch = eligible[0];
-  const meta = commitMeta(lineage.path, oldestMatch);
+  // Oldest-first: the first candidate whose OWN content at this line also
+  // matches is the real answer. A candidate that is merely eligible (reaches
+  // atCommit) but whose content at this line differs is not evidence of
+  // anything and must be skipped, not accepted for being oldest.
+  let meta = null;
+  for (const sha of eligible) {
+    const candidateTrimmed = trimmedLineAt(getBlobAtCommit(lineage.path, sha, finding.file), lineNo);
+    if (candidateTrimmed !== ownTrimmed) continue;
+    meta = commitMeta(lineage.path, sha);
+    if (meta) break;
+  }
   if (!meta) return null;
 
   return {

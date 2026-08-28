@@ -662,6 +662,102 @@ test('resolveOrigin: cross-repo lineage never resolves to a linked-repo commit u
   }
 });
 
+// CRITICAL FIX (post-review): the presence gate at atCommit previously only
+// checked "is *something* non-blank at this line index" — never that the
+// content actually matches the finding's own line. A reviewer built exactly
+// this fixture (linked repo's line 2 is unrelated code) and got back a fully
+// formed `status:'partial'` result with a real commit/author/
+// `presentInCommit:true` — a fabricated attribution for code that never
+// existed in the linked repo. The fix reads THIS repo's own line text at
+// `rootMeta.commit` and requires an exact trimmed match against the linked
+// repo's line at atCommit before proceeding at all.
+//
+// NOTE on fixture content: earlier cross-repo tests in this file used a
+// two-line `'safe();\neval(x);\n'` fixture. Investigated directly (a debug
+// run of the real detector suite against that exact string) and confirmed
+// the `code-injection-ml` detector reports `line:1, snippet:'safe();'` for
+// that shape — an unrelated, pre-existing quirk of that detector's own
+// line/snippet attribution for this specific two-statement input, nothing to
+// do with this task. It didn't affect the earlier tests (both repos carried
+// identical text on line 1 either way), but it silently defeats a test that
+// deliberately varies content on what a human reads as "line 2" — the real
+// comparison happens at whatever `finding.line` the detector actually
+// reports. These two tests use single-line content instead (confirmed via
+// the same debug run to report `line:1, snippet:'eval(x);'` correctly),
+// matching this file's own pre-existing single-line-eval convention used by
+// the merge/revert tests above.
+test('resolveOrigin: cross-repo lineage NEVER fabricates an origin when the linked repo\'s line at atCommit is unrelated content (Critical fix, empirically reproduced)', async (t) => {
+  const linked = createGitFixture();
+  const fx = createGitFixture();
+  t.after(() => { fx.cleanup(); linked.cleanup(); });
+
+  // The linked repo is real, verified, and has a commit at the exact file —
+  // just with UNRELATED content on the finding's line. This is the
+  // reviewer's own repro shape: a real ancestor-verified commit whose line
+  // has nothing to do with the actual vulnerable code.
+  linked.writeFile('shared.js', 'omega();\n');
+  const linkedSha = linked.commit('unrelated code that happens to live at the same file/line');
+
+  fx.writeFile('shared.js', 'eval(x);\n');
+  const ownSha = fx.commit("imported wholesale as this repo's first commit");
+  await writeLineageLink(fx, linked.root, linkedSha);
+
+  const finding = await realEvalFinding('eval(x);\n', 'shared.js', fx.root);
+  assert.equal(finding.line, 1);
+
+  const result = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } });
+  // Must fall back to fx's own honest same-repo root resolution — NEVER a
+  // fabricated cross-repo attribution to `linkedSha`, whose line is provably
+  // unrelated content.
+  assert.equal(result.status, 'complete');
+  assert.equal(result.crossRepoLineage, undefined);
+  assert.equal(result.findingOrigin.commit, ownSha);
+  assert.notEqual(result.findingOrigin.commit, linkedSha);
+});
+
+// IMPORTANT #1 FIX (post-review): the same missing-content-comparison
+// problem also affected CANDIDATE SELECTION, not just the initial gate.
+// `candidateCommitsForLine` tracks a LINE NUMBER's history, which can
+// include an earlier, wholly unrelated statement that happened to occupy
+// the same line number before the finding's real code landed there. The
+// gate at atCommit can pass (atCommit's own content genuinely matches) while
+// the OLDEST eligible candidate in the walk is that earlier, unrelated
+// commit — which the old code accepted purely for being oldest-eligible,
+// stamping `presentInCommit:true` on content that was never the finding's
+// code. The fix re-applies the same content match PER CANDIDATE and skips
+// any that don't match, so the real answer (the oldest eligible candidate
+// whose content ALSO matches) is what gets returned.
+test('resolveOrigin: cross-repo lineage skips an eligible-but-content-mismatched OLDER candidate and resolves to the real match (Important #1 fix, empirically reproduced)', async (t) => {
+  const linked = createGitFixture();
+  const fx = createGitFixture();
+  t.after(() => { fx.cleanup(); linked.cleanup(); });
+
+  // Linear history in the linked repo: an OLDER, unrelated commit sits at
+  // this line first, then a later commit (the declared atCommit) rewrites
+  // the line to the finding's actual content. Both are real, ancestor-
+  // verified candidates for this line's history — only the second one's
+  // content matches.
+  linked.writeFile('shared.js', 'OLD_ONE();\n');
+  const oldUnrelatedSha = linked.commit('an older, unrelated statement at the same line number');
+  linked.writeFile('shared.js', 'eval(x);\n');
+  const linkedSha = linked.commit('the real original introduction, in the OLD repo'); // this is atCommit
+
+  fx.writeFile('shared.js', 'eval(x);\n');
+  fx.commit("imported wholesale as this repo's first commit");
+  await writeLineageLink(fx, linked.root, linkedSha);
+
+  const finding = await realEvalFinding('eval(x);\n', 'shared.js', fx.root);
+  assert.equal(finding.line, 1);
+
+  const result = await resolveOrigin(fx.root, finding, { repoState: { shallow: false } });
+  assert.equal(result.status, 'partial');
+  assert.equal(result.crossRepoLineage, true);
+  // Must resolve to the REAL match (linkedSha), never the older, eligible,
+  // content-mismatched commit that a purely oldest-first pick would return.
+  assert.equal(result.findingOrigin.commit, linkedSha);
+  assert.notEqual(result.findingOrigin.commit, oldUnrelatedSha);
+});
+
 test('resolveOrigin: mode defaults to standard behavior when omitted (backward compatible)', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());

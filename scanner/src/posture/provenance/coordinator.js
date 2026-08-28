@@ -107,6 +107,21 @@ function computeDigest(finding, provenance) {
 // reason would blame the clone depth for an ambiguity in the advisory data.
 function describePartial(isScaLike, reason) {
   if (!isScaLike) {
+    // M4 §4.2: a cross-repo lineage result is a materially different kind of
+    // "partial" from the shallow/unverified-boundary case above — the origin
+    // was found, just in a DIFFERENT repository the operator declared a link
+    // to, verified only by content presence rather than this repo's own
+    // predicate-replay machinery. Reusing the generic "could not confirm a
+    // verified parent boundary" wording here would bury that fact behind the
+    // machine-readable `crossRepoLineage` flag, leaving an operator reading
+    // only the limitations text with no way to know the answer crossed a
+    // repository boundary at all.
+    if (reason === 'cross-repo-lineage-best-effort') {
+      return {
+        limitation: 'origin resolved via a DIFFERENT, operator-linked repository (.agentic-security/repo-lineage.json) — a cross-repo content-presence match, not this repository\'s own verified history',
+        reasons: ['cross_repo_lineage_best_effort'],
+      };
+    }
     return {
       limitation: reason
         ? `earliest observable — history could not confirm a verified parent boundary (${reason})`
@@ -152,7 +167,7 @@ async function resolveOne(finding, ctx) {
   // question we can answer without spending anything.
   if (deadlineAt && Date.now() > deadlineAt) {
     return emptyProvenance(PROVENANCE_STATUS.BUDGET_EXHAUSTED, {
-      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: 0 },
+      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: 0, crossRepoLineage: false },
       limitations: ['analysis budget expired before this finding was reached'],
     });
   }
@@ -278,7 +293,7 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca) {
       evidenceAttribution,
       method: originResult.method,
       confidence,
-      historyCoverage: { complete: !repoState.shallow, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered },
+      historyCoverage: { complete: !repoState.shallow, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered, crossRepoLineage: false },
       analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector, dirty: repoState.dirty },
     });
   } else if (originResult.status === 'partial') {
@@ -327,7 +342,7 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca) {
     // global timeout will not help it unless the finding count drops too.
     const globalExpired = !!deadlineAt && Date.now() > deadlineAt;
     provenance = emptyProvenance(PROVENANCE_STATUS.BUDGET_EXHAUSTED, {
-      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered || 0 },
+      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered || 0, crossRepoLineage: false },
       limitations: [globalExpired
         ? 'analysis budget expired before origin could be resolved'
         : "this finding's per-finding share of the analysis budget expired before origin could be resolved"],
