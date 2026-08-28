@@ -35,6 +35,7 @@ export function createGitFixture() {
       run(root, ['merge', '--no-ff', '-q', '-m', message, ref]);
       return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
     },
+    currentBranch() { return execFileSync('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(); },
     cleanup() { fs.rmSync(root, { recursive: true, force: true }); },
   };
 }

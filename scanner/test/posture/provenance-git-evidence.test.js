@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import {
-  isGitRepo, getRepoState, commitMeta, getFirstParent, getBlobAtCommit,
+  isGitRepo, getRepoState, commitMeta, getFirstParent, getAllParents, getBlobAtCommit,
   candidateCommitsForLine, candidateCommitsForFile, blameLine,
 } from '../../src/posture/provenance/git-evidence.js';
 
@@ -86,4 +86,47 @@ test('git-evidence: rejects path traversal, sha flag-injection, and unsafe since
     if (fs.existsSync(canaryPath)) fs.unlinkSync(canaryPath);
     fx.cleanup();
   }
+});
+
+test('getAllParents: a root commit has zero parents', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('a.txt', 'x');
+  const root = fx.commit('root');
+  const parents = getAllParents(fx.root, root);
+  assert.deepEqual(parents, []);
+});
+
+test('getAllParents: a normal commit has exactly one parent, matching getFirstParent', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('a.txt', 'x');
+  fx.commit('root');
+  fx.writeFile('a.txt', 'y');
+  const second = fx.commit('second');
+  const parents = getAllParents(fx.root, second);
+  assert.equal(parents.length, 1);
+  assert.equal(parents[0], getFirstParent(fx.root, second));
+});
+
+test('getAllParents: a merge commit reports every parent, not just the first', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('a.txt', 'x');
+  const root = fx.commit('root');
+  const mainBranch = fx.currentBranch();
+  fx.checkoutBranch('feature');
+  fx.writeFile('b.txt', 'feature-content');
+  const featureTip = fx.commit('feature work');
+  fx.checkout(mainBranch);
+  fx.writeFile('a.txt', 'y');
+  fx.commit('mainline work');
+  const merge = fx.merge('feature', 'merge feature');
+  const parents = getAllParents(fx.root, merge);
+  assert.equal(parents.length, 2);
+  assert.equal(parents[1], featureTip);
+});
+
+test('getAllParents: an invalid sha returns empty array, never throws', () => {
+  assert.deepEqual(getAllParents('/tmp/does-not-matter', 'not-a-sha'), []);
 });

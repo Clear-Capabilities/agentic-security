@@ -74,6 +74,18 @@ export function getFirstParent(scanRoot, sha) {
   return r.ok ? r.stdout.trim() : null;
 }
 
+// M3 §3.1: the full parent list, not just the first. `git rev-parse
+// <sha>^@` expands to every parent SHA, one per line — the same mechanism
+// `<sha>^1` (getFirstParent) uses for a single parent, generalized. A
+// commit with no parents (the repo root) returns empty stdout, which
+// `.filter(Boolean)` turns into `[]` rather than `['']`.
+export function getAllParents(scanRoot, sha) {
+  if (!_isSha(sha)) return [];
+  const r = _run(scanRoot, ['rev-parse', `${sha}^@`]);
+  if (!r.ok) return [];
+  return r.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
 export function getBlobAtCommit(scanRoot, sha, file) {
   if (!_isSha(sha)) return null;
   const rel = _relPath(scanRoot, file);
