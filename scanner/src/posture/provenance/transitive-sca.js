@@ -47,15 +47,15 @@ function extractTransitiveVersion(blobText, depName) {
   return best;
 }
 
-function originResult({ meta, commitsConsidered, depChain }) {
+function originResult({ meta, commitsConsidered, depChain, absentInParents, parentBoundaryVerified }) {
   return {
     status: 'complete', method: PROVENANCE_METHOD.DEPENDENCY_GRAPH_DIFF, commitsConsidered,
     findingOrigin: {
       commit: meta.commit, authorName: meta.authorName, authorEmail: meta.authorEmail,
       authorDate: meta.authorDate, committerDate: meta.committerDate, summary: meta.summary,
-      presentInCommit: true, absentInParents: [], revertOf: null, cherryPickOf: null,
+      presentInCommit: true, absentInParents, revertOf: null, cherryPickOf: null,
     },
-    parentBoundaryVerified: true,
+    parentBoundaryVerified,
     depChain,
   };
 }
@@ -107,11 +107,11 @@ export async function resolveTransitiveSCAOrigin(scanRoot, scaEntry, { since, de
 
     const meta = commitMeta(scanRoot, sha);
     if (!meta) continue;
-    return originResult({ meta, commitsConsidered, depChain: declared.depChain });
+    return originResult({ meta, commitsConsidered, depChain: declared.depChain, absentInParents: [parent], parentBoundaryVerified: true });
   }
 
   if (rootFallback && !ambiguousBump) {
-    return originResult({ meta: rootFallback, commitsConsidered, depChain: rootFallbackChain });
+    return originResult({ meta: rootFallback, commitsConsidered, depChain: rootFallbackChain, absentInParents: [], parentBoundaryVerified: false });
   }
 
   return {

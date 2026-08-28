@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveTransitiveSCAOrigin } from '../../src/posture/provenance/transitive-sca.js';
+import { annotateGitProvenance } from '../../src/posture/provenance/coordinator.js';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 
 function lockfile(depsWithVersions) {
@@ -54,6 +55,42 @@ test('resolveTransitiveSCAOrigin: an unsupported lockfile format resolves not_av
   const result = await resolveTransitiveSCAOrigin(fx.root, scaEntry, {});
   assert.equal(result.status, 'not_available');
   assert.equal(result.reason, 'unsupported-lockfile-format');
+});
+
+test('resolveTransitiveSCAOrigin: the root-commit fallback never fabricates a verified parent boundary', async (t) => {
+  // Final whole-branch review item #2: originResult() used to hardcode
+  // parentBoundaryVerified:true / absentInParents:[] for EVERY caller,
+  // including the root-commit fallback below, where there is no parent to
+  // have verified anything about. That produced status:'complete' with
+  // confidence HIGH/0.95 for an origin that verified nothing — exactly the
+  // false certainty this whole feature exists to prevent. This fixture has a
+  // single commit: the vulnerable transitive version is present from the
+  // repository's FIRST commit, so getFirstParent(scanRoot, sha) returns null
+  // and the root-fallback branch is the only branch that can fire.
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('package-lock.json', lockfile({ 'express/node_modules/qs': '6.5.3' }));
+  const rootSha = fx.commit('initial commit already carries the vulnerable transitive version');
+
+  const scaEntry = { name: 'qs', filePath: 'package-lock.json', fixedVersions: ['6.5.4'] };
+  const result = await resolveTransitiveSCAOrigin(fx.root, scaEntry, {});
+  assert.equal(result.status, 'complete');
+  assert.equal(result.findingOrigin.commit, rootSha);
+  // The load-bearing facts: no parent existed to verify absence against.
+  assert.equal(result.parentBoundaryVerified, false);
+  assert.deepEqual(result.findingOrigin.absentInParents, []);
+
+  // And the confidence this feeds downstream (via the coordinator, exactly
+  // as a real scan would compute it) must NOT read as HIGH/0.95 off a
+  // fabricated verified boundary.
+  const entry = { name: 'qs', filePath: 'package-lock.json', fixedVersions: ['6.5.4'], isDirect: false };
+  await annotateGitProvenance([entry], {
+    scanRoot: fx.root, scanId: 's1', observedAt: new Date().toISOString(), findingType: 'sca-transitive',
+  });
+  const fp = entry.findingProvenance;
+  assert.equal(fp.status, 'complete');
+  assert.notEqual(fp.confidence.level, 'high');
+  assert.notEqual(fp.confidence.score, 0.95);
 });
 
 test('resolveTransitiveSCAOrigin: no candidate history resolves not_available, never fabricates', async (t) => {
