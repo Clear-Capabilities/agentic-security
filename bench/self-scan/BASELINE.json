@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-28T13:54:24.923Z",
-  "commit": "8a9fc665ea23725cc7dd046a0ea6b26475fecb45",
+  "generatedAt": "2026-08-28T19:39:11.304Z",
+  "commit": "03120e3db6576671a9431b583c978265bfbc3b6e",
   "targets": {
     "hooks": {
       "total": 21,
@@ -36,7 +36,7 @@
       }
     },
     "scanner/src": {
-      "total": 452,
+      "total": 453,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -185,7 +185,7 @@
         "posture/waf-ingest.js": 5,
         "posture/workflow-installer.js": 2,
         "pr-comment.js": 1,
-        "report/index.js": 4,
+        "report/index.js": 5,
         "runScan.js": 1,
         "sandbox/backend-namespace.js": 1,
         "sast/agent-untrusted-flow.js": 2,
