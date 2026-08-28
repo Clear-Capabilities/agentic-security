@@ -191,7 +191,7 @@ Options:
   --machine-output             Always write .agentic-security/findings.{sarif,json,csv}
 
 Finding provenance (which commit introduced each finding):
-  --provenance <standard|deep> Resolution depth (default: standard; deep ships in a later release)
+  --provenance <standard|deep> Resolution depth (default: standard; deep explores non-linear ancestry — merges, reverts, cherry-picks)
   --no-provenance              Skip git-history provenance entirely (findings report not_available)
   --provenance-since <ref>     Do not walk history earlier than this git ref/commit
   --provenance-timeout <ms>    Whole-scan provenance budget in MILLISECONDS (default 60000)
