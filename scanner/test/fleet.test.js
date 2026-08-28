@@ -428,3 +428,173 @@ test('FR-1005 extended to FR-1006: scanHealth/policyDrift never carry a raw find
   assert.ok(!JSON.stringify(r.results[0].scanHealth).includes(SECRET_SNIPPET));
   assert.ok(!html.includes(SECRET_SNIPPET));
 });
+
+// ── M4 §4.4: provenance-aware fleet debt / MTTR rollups ────────────────────
+//
+// The real per-repo entry that `runFleet` produces does NOT carry a `scan`
+// key or a raw findings array at all (FR-1005, asserted above — `!('findings'
+// in entry)`); `provenanceDebt`/`mttr` are DERIVED summaries the worker
+// computes from the untrimmed findings before trimming the entry down, same
+// pattern as `owners`/`scanHealth`/`policyDrift`. Tests below build entries
+// in that real shape (`{ repo, ok, total, bySeverity, proven, ids,
+// provenanceDebt, mttr }`), matching the existing FR-1006 tests above, plus
+// end-to-end tests through `runFleet` with a `fakeScan` that returns raw
+// `findingProvenance`-bearing findings and a `scan.mttr` aggregate.
+
+const completeFinding = (over = {}) => finding({
+  findingProvenance: { status: 'complete', findingOrigin: { authorDate: '2020-01-01T00:00:00Z' } },
+  ...over,
+});
+
+test('M4 §4.4: rollupFleet computes oldestProvenDebt from complete-status findingProvenance only', () => {
+  const results = [
+    {
+      repo: 'repo-a', ok: true, total: 1, bySeverity: { critical: 1, high: 0, medium: 0, low: 0, info: 0 }, proven: 0, ids: ['f1'],
+      provenanceDebt: { oldest: { findingId: 'f1', authorDate: '2020-01-01T00:00:00Z', ageDays: 2000 }, completeCount: 1 },
+      mttr: null,
+    },
+    {
+      // Older by authorDate, but its status is 'partial' — must NOT win. Since
+      // `provenanceDebt` is computed from complete-status findings only, a repo
+      // whose only findingProvenance is 'partial' surfaces no `oldest` at all.
+      repo: 'repo-b', ok: true, total: 1, bySeverity: { critical: 0, high: 1, medium: 0, low: 0, info: 0 }, proven: 0, ids: ['f2'],
+      provenanceDebt: { oldest: null, completeCount: 0 },
+      mttr: null,
+    },
+  ];
+  const rollup = rollupFleet(results);
+  assert.equal(rollup.provenance.oldestProvenDebt.repo, 'repo-a');
+  assert.equal(rollup.provenance.oldestProvenDebt.ageDays, 2000);
+  assert.deepEqual(rollup.provenance.reposWithNoProvenDebt, ['repo-b']);
+});
+
+test('M4 §4.4: a repo with zero complete-status findings is disclosed in reposWithNoProvenDebt, not silently omitted', () => {
+  const results = [
+    {
+      repo: 'repo-c', ok: true, total: 1, bySeverity: { critical: 0, high: 0, medium: 1, low: 0, info: 0 }, proven: 0, ids: ['f3'],
+      provenanceDebt: { oldest: null, completeCount: 0 },
+      mttr: null,
+    },
+  ];
+  const rollup = rollupFleet(results);
+  assert.equal(rollup.provenance.oldestProvenDebt, null);
+  assert.ok(rollup.provenance.reposWithNoProvenDebt.includes('repo-c'));
+});
+
+test('M4 §4.4: a results entry with no provenanceDebt at all (older checkpoint / hand-built fixture) degrades to "no proven debt", not a crash', () => {
+  const results = [
+    { repo: 'legacy', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [] },
+  ];
+  const rollup = rollupFleet(results);
+  assert.equal(rollup.provenance.oldestProvenDebt, null);
+  assert.deepEqual(rollup.provenance.reposWithNoProvenDebt, ['legacy']);
+});
+
+test('M4 §4.4: rollupFleet computes a count-weighted fleet MTTR from each repo\'s own scan.mttr aggregate', () => {
+  const results = [
+    {
+      repo: 'a', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [],
+      provenanceDebt: { oldest: null, completeCount: 0 }, mttr: { count: 2, meanDays: 10, medianDays: 10, perSeverity: {} },
+    },
+    {
+      repo: 'b', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [],
+      provenanceDebt: { oldest: null, completeCount: 0 }, mttr: { count: 1, meanDays: 40, medianDays: 40, perSeverity: {} },
+    },
+  ];
+  const rollup = rollupFleet(results);
+  assert.equal(rollup.provenance.mttr.n, 3);
+  // weighted mean: (2*10 + 1*40) / 3 = 20
+  assert.equal(rollup.provenance.mttr.meanDays, 20);
+  assert.deepEqual(rollup.provenance.mttr.byAgeBasis, {}, 'no scan.remediatedFindings array exists anywhere to derive a real ageBasis breakdown from — an empty object is honest, a fabricated one would not be');
+});
+
+test('M4 §4.4: renderFleetSummary mentions provenance debt honestly (repo+age, or an explicit "none" line)', () => {
+  const withDebt = rollupFleet([
+    {
+      repo: 'repo-a', ok: true, total: 1, bySeverity: { critical: 1, high: 0, medium: 0, low: 0, info: 0 }, proven: 0, ids: ['f1'],
+      provenanceDebt: { oldest: { findingId: 'f1', authorDate: '2020-01-01T00:00:00Z', ageDays: 2000 }, completeCount: 1 },
+      mttr: null,
+    },
+  ]);
+  const summaryWithDebt = renderFleetSummary(withDebt);
+  assert.match(summaryWithDebt, /proven|provenance/i);
+  assert.match(summaryWithDebt, /repo-a/);
+  assert.match(summaryWithDebt, /2000d/);
+
+  const withNone = rollupFleet([
+    { repo: 'repo-c', ok: true, total: 0, bySeverity: {}, proven: 0, ids: [], provenanceDebt: { oldest: null, completeCount: 0 }, mttr: null },
+  ]);
+  const summaryWithNone = renderFleetSummary(withNone);
+  assert.match(summaryWithNone, /no proven-origin findings/i);
+});
+
+test('M4 §4.4: runFleet threads a per-repo provenanceDebt derived from findingProvenance onto the result entry, end to end', async () => {
+  const r = await runFleet({
+    repos: ['r1', 'r2'],
+    runScan: fakeScan({
+      r1: { findings: [completeFinding({ stableId: 'old-one', findingProvenance: { status: 'complete', findingOrigin: { authorDate: '2015-06-01T00:00:00Z' } } })] },
+      r2: { findings: [finding({ findingProvenance: { status: 'partial', findingOrigin: { authorDate: '2001-01-01T00:00:00Z' } } })] },
+    }),
+  });
+  const e1 = r.results.find((x) => x.repo === 'r1');
+  const e2 = r.results.find((x) => x.repo === 'r2');
+  assert.ok(e1.provenanceDebt.oldest, 'complete-status finding should produce an oldest debt entry');
+  assert.equal(e1.provenanceDebt.oldest.findingId, 'old-one');
+  assert.equal(e2.provenanceDebt.oldest, null, 'partial-status-only repo must not surface an oldest debt entry, despite an older authorDate');
+  assert.equal(r.rollup.provenance.oldestProvenDebt.repo, 'r1');
+  assert.ok(r.rollup.provenance.reposWithNoProvenDebt.includes('r2'));
+});
+
+test('M4 §4.4: provenanceDebt on the per-repo entry never carries a raw finding snippet, file, or line — id/date/age only (FR-1005 extended)', async () => {
+  const SECRET_SNIPPET = 'const apiKey = "sk-live-should-never-leave-the-repo-0123456789";';
+  const r = await runFleet({
+    repos: ['r1'],
+    runScan: fakeScan({
+      r1: { findings: [completeFinding({ snippet: SECRET_SNIPPET, file: '/etc/very/secret/path.js' })] },
+    }),
+  });
+  const entry = r.results.find((x) => x.repo === 'r1');
+  assert.ok(!JSON.stringify(entry.provenanceDebt).includes(SECRET_SNIPPET));
+  assert.ok(!JSON.stringify(entry.provenanceDebt).includes('/etc/very/secret/path.js'));
+  const html = renderFleetHtml(r.rollup, r.results);
+  assert.ok(!html.includes(SECRET_SNIPPET));
+});
+
+test('M4 §4.4: runFleet threads scan.mttr through onto the result entry when the injected scanner provides it', async () => {
+  const r = await runFleet({
+    repos: ['r1'],
+    runScan: fakeScan({ r1: { findings: [], mttr: { count: 3, meanDays: 5, medianDays: 5, perSeverity: {} } } }),
+  });
+  const entry = r.results.find((x) => x.repo === 'r1');
+  assert.deepEqual(entry.mttr, { count: 3, meanDays: 5, medianDays: 5, perSeverity: {} });
+  assert.equal(r.rollup.provenance.mttr.n, 3);
+});
+
+test('M4 §4.4: a FAILED repo carries provenanceDebt:null and mttr:null, not a fabricated zero', async () => {
+  const r = await runFleet({ repos: ['boom'], runScan: fakeScan({ boom: new Error('parser exploded') }) });
+  const entry = r.results.find((x) => x.repo === 'boom');
+  assert.equal(entry.provenanceDebt, null);
+  assert.equal(entry.mttr, null);
+});
+
+test('M4 §4.4: renderFleetHtml adds a separate "Provenance-Proven Debt" section listing the oldest finding per repo and an MTTR line', async () => {
+  const r = await runFleet({
+    repos: ['r1'],
+    runScan: fakeScan({
+      r1: { findings: [completeFinding({ stableId: 'x1' })], mttr: { count: 1, meanDays: 12, medianDays: 12, perSeverity: {} } },
+    }),
+  });
+  const html = renderFleetHtml(r.rollup, r.results);
+  assert.match(html, /<h2>Provenance-Proven Debt<\/h2>/);
+  assert.match(html, /r1/);
+  assert.match(html, /Fleet MTTR: 1 remediated finding/);
+  // the provenance section must come after both the risk and governance sections.
+  assert.ok(html.indexOf('Governance') < html.indexOf('Provenance-Proven Debt'));
+});
+
+test('M4 §4.4: renderFleetHtml reports the no-remediation-yet case honestly rather than a fabricated MTTR', async () => {
+  const r = await runFleet({ repos: ['r1'], runScan: fakeScan({ r1: { findings: [] } }) });
+  const html = renderFleetHtml(r.rollup, r.results);
+  assert.match(html, /No complete-status \(proven-origin\) findings across the fleet/);
+  assert.match(html, /Fleet MTTR: no remediated findings recorded yet/);
+});
