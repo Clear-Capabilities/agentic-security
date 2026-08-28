@@ -20,18 +20,36 @@ import { getBlobAtCommit } from './git-evidence.js';
 // in flight at the same time, interleaved at `runFullScan`'s own internal
 // await points. `runFullScan` clears+writes a module-level suppression log
 // (engine.js's `_suppressionLog`) unconditionally on every call; a plain
-// snapshot/restore around one call is not safe under that interleaving --
-// whichever restore runs last wins, silently discarding whatever the other
-// call legitimately wrote to the OUTER scan's log in between. This queue
-// serializes every `replayAt` call process-wide so the
+// snapshot/restore around one call is not safe under that interleaving.
+//
+// The actual failure shape (traced through, not guessed): call A snapshots
+// the outer log, then awaits its nested `runFullScan`, which resets the log
+// to empty and starts writing its OWN (nested-scan) entries. Before A's
+// nested call finishes, call B starts: B's snapshot now captures A's
+// in-progress nested state, not the outer scan's real log. When A finishes
+// and restores ITS (correct) snapshot, that's fine -- but B's `finally` then
+// restores what B snapshotted (A's nested state), overwriting A's correct
+// restore with garbage that belongs to neither scan. It is not simply "the
+// last restore wins" as a symmetric race between two correct values; the
+// corrupting snapshot (B's) was already wrong the moment it was taken,
+// because it read the log mid-mutation by a DIFFERENT nested scan.
+//
+// This queue serializes every `replayAt` call process-wide so the
 // snapshot -> runFullScan -> restore critical section below is never entered
-// by two calls at once. Correctness over throughput: `replayAt` is already
-// the expensive path (a full nested scan per call, ~39ms fixed overhead) and
-// this queue only serializes that nested scan itself, not the rest of each
-// finding's concurrent resolution walk (blame calls, cache reads, etc. all
-// still run unserialized).
+// by two calls at once -- call B cannot snapshot until call A has fully
+// restored, so B always sees a clean outer-scan log. Correctness over
+// throughput: `replayAt` is already the expensive path (a full nested scan
+// per call, ~39ms fixed overhead) and this queue only serializes that nested
+// scan itself, not the rest of each finding's concurrent resolution walk
+// (blame calls, cache reads, etc. all still run unserialized).
+//
+// Exported (test-only) so a dedicated regression test can drive this queue
+// directly and prove it serializes -- see
+// test/posture/provenance-secrets-logic.test.js's "_runExclusive serializes
+// concurrent critical sections" test, which fails if this queue is ever
+// removed or replaced with a no-op passthrough.
 let _replayQueue = Promise.resolve();
-function _runExclusive(fn) {
+export function _runExclusive(fn) {
   const run = _replayQueue.then(fn, fn);
   // Never let one rejected replay poison the queue for subsequent callers --
   // `run`'s own rejection still propagates to ITS caller below.

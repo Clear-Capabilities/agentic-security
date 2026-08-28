@@ -569,16 +569,16 @@ export async function annotateGitProvenance(findings, ctx) {
 
   // A caller-supplied `deadlineAt` WINS over the locally-computed one. That is
   // what makes a scan-level global budget possible at all: engine.js runs this
-  // annotator three times (SAST findings, direct SCA deps, transitive SCA
-  // deps per Task 7) and each call computing its own fresh window made the
-  // effective budget a multiple of the configured timeout. Falling back to a
-  // computed one keeps every standalone caller (and every test) working
-  // unchanged.
+  // annotator five times (SAST findings, direct SCA deps, transitive SCA deps
+  // per Task 7, then secrets and blameable logicVulns per Task 11) and each
+  // call computing its own fresh window made the effective budget a multiple
+  // of the configured timeout. Falling back to a computed one keeps every
+  // standalone caller (and every test) working unchanged.
   const deadlineAt = options.deadlineAt || (Date.now() + (options.timeoutMs || DEFAULT_TIMEOUT_MS));
   // Sub-budget, from the REMAINING global budget rather than the configured
-  // timeout: on the second or third of engine.js's three calls, most of the
-  // window may already be spent, and dividing the original figure would hand
-  // each SCA entry a share of time that no longer exists.
+  // timeout: on a LATER one of engine.js's five calls, most of the window may
+  // already be spent, and dividing the original figure would hand each entry
+  // a share of time that no longer exists.
   // A caller-supplied value wins, on the same principle as `deadlineAt` above:
   // the caller is the only party that can see across multiple annotator passes.
   const remainingMs = Math.max(0, deadlineAt - Date.now());

@@ -398,9 +398,16 @@ are both pre-existing unrelated fields.
   finding carries a `findingProvenance` with one of `complete` / `partial` /
   `uncommitted` / `not_available` / `budget_exhausted` / `error`. There is no
   path — missing git binary, malformed finding, downstream throw — that leaves
-  the field absent. `engine.js` additionally backstops all four channels
-  (`findings`, `supplyChain`, `secrets`, `logicVulns`) OUTSIDE the `_runAnnotator`
-  wrapper, because that wrapper swallows throws.
+  the field absent. `engine.js` additionally backstops every channel OUTSIDE
+  the `_runAnnotator` wrapper, because that wrapper swallows throws —
+  `findings` and `supplyChain` with a full not_available/error catch-all as
+  before; since Task 11, `secrets` and blameable `logicVulns` go through REAL
+  resolution (real stableIds backfilled, real `annotateGitProvenance` calls
+  made), so their outside-the-wrapper coverage narrowed to a defensive
+  catch-all for whatever the real call somehow didn't reach, plus the 3
+  synthetic-line `logicVulns` producers (`license-policy:`/`deploy-platform:`/
+  `stack-playbook:`), which stay on a permanent, principled not_available —
+  never routed through `resolveOrigin` at all, not merely deferred.
 - **Never false certainty.** A shallow clone cannot reach `complete`; an
   unverifiable parent boundary degrades to `partial` with its reason carried
   through. `origin-resolver.js` decides this on the `shallow` flag of the
@@ -420,10 +427,10 @@ are both pre-existing unrelated fields.
   finding in it. `agentic-security scan ./typo` is the reachable form. This repo's
   own checkout accumulated a 1.1 MB ledger of spurious events that way.
 - **One budget for the whole scan.** `engine.js` computes ONE `deadlineAt` and
-  passes it to all three of its `annotateGitProvenance` calls (SAST findings,
-  direct SCA deps, then transitive SCA deps per Task 7); a caller-supplied
-  `deadlineAt`/`perFindingBudgetMs` wins over the coordinator's own
-  computation. Inside, each finding gets
+  passes it to all five of its `annotateGitProvenance` calls (SAST findings,
+  direct SCA deps, transitive SCA deps per Task 7, then secrets and blameable
+  logicVulns per Task 11); a caller-supplied `deadlineAt`/`perFindingBudgetMs`
+  wins over the coordinator's own computation. Inside, each finding gets
   `max(2s, remaining/count)` so one deep-history finding cannot starve the rest.
   `budget_exhausted` is the one result that is **never cached** — it is a property
   of the run, not the repository, and caching it would pin a timeout in place
