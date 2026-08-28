@@ -242,9 +242,23 @@ test('every supplyChain entry carries a terminal findingProvenance, transitive d
     const transitive = sc.filter(e => e.type === 'vulnerable_dep' && !e.isDirect);
     assert.ok(transitive.length > 0, `expected a TRANSITIVE vulnerable_dep; got ${JSON.stringify(sc)}`);
     for (const e of transitive) {
-      assert.equal(e.provenance.status, 'not_available');
-      assert.match(e.provenance.limitations.join(' '), /transitive dependency origin resolution/,
-        'a transitive dep must say WHY its origin is unavailable, not just that it is');
+      // M3 §3.2 wired transitive-sca.js's real resolver in (coordinator.js's
+      // isScaLike branch); this fixture's advisory has a `fixed`-only range
+      // with no `introduced` lower bound, the same reused-from-sca-origin.js
+      // ambiguity documented at coordinator.js's PARTIAL branch — a
+      // version-increasing bump can never be disambiguated under that
+      // semantics, so this resolves 'partial', not the pre-M3 placeholder
+      // 'not_available'. The reason string is the SCA manifest-ambiguity
+      // wording transitive-sca.js shares verbatim with sca-origin.js
+      // (coordinator.js's own comment: "a transitive partial must get the
+      // same 'manifest history' wording a direct one does") — NOT the old
+      // "transitive dependency origin resolution [unsupported]" placeholder,
+      // which no longer describes reality now that the resolver actually runs.
+      assert.equal(e.provenance.status, 'partial');
+      assert.match(e.provenance.limitations.join(' '), /manifest history could not confirm/,
+        'a transitive dep must go through the real resolver and report the SCA ambiguity reason, not a generic message');
+      assert.doesNotMatch(e.provenance.limitations.join(' '), /transitive dependency origin resolution/,
+        'the pre-M3 "unsupported" placeholder wording must not survive now that the resolver is wired');
       // M3 §3.2: transitive dependencies have multi-segment depChain (ancestry)
       assert.ok(Array.isArray(e.depChain), `expected depChain to be an array on transitive ${e.name}; got ${typeof e.depChain}`);
       assert.ok(e.depChain.length > 0, `expected non-empty depChain on transitive ${e.name}; got ${JSON.stringify(e.depChain)}`);
