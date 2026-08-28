@@ -31,7 +31,13 @@ const AI_PATH_RE = /\/(?:ai|chat|generate|complete|completion|embed|embedding|gp
 const PAYMENT_PATH_RE = /\/(?:pay(?:ment)?|checkout|stripe|order|subscribe|billing|invoice|charge|purchase)\b/i;
 const CONTACT_PATH_RE = /\/(?:contact|submit|feedback|form|newsletter|subscribe|waitlist|signup|onboard)\b/i;
 
-function _hasRateLimit(content) {
+// Exported (FR-PROV-017) so posture/provenance/coordinator.js can reuse the
+// EXACT SAME presence test as a `resolveMissingControl` predicate: "did a
+// commit's historical blob have rate limiting" must be answered by the same
+// logic that decides "does HEAD have rate limiting", or a drift between the
+// two could fabricate a regression (or miss a real one) that only existed in
+// the predicate's own disagreement with the detector, not in the code.
+function hasRateLimit(content) {
   return RL_IMPORT_RE.test(content) || RL_USAGE_RE.test(content) || REDIS_RL_RE.test(content);
 }
 
@@ -77,7 +83,7 @@ const CATEGORY_META = {
 function scanRateLimit(file, content) {
   if (!_SCAN_EXT_RE.test(file)) return [];
   if (_NONPROD_RE.test(file)) return [];
-  if (_hasRateLimit(content)) return [];
+  if (hasRateLimit(content)) return [];
   const findings = [];
   const lines = content.split('\n');
 
@@ -99,6 +105,18 @@ function scanRateLimit(file, content) {
         description: meta.description,
         remediation: meta.remediation,
         cwe: meta.cwe,
+        // FR-PROV-017: routes posture/provenance/coordinator.js to
+        // resolveMissingControl instead of the plain SAST origin-resolver.
+        // "A route lacks rate limiting" is exactly the "was this control
+        // ever present, and if so when did it disappear" question that
+        // resolver answers — a plain SAST resolver would instead ask "when
+        // was this LINE introduced," which is the wrong question for a
+        // finding about something ABSENT. An explicit boolean marker set
+        // here (rather than coordinator.js string-matching finding.id/vuln)
+        // keeps the two modules' string formats decoupled, matching how
+        // isDirect/isTransitiveSca-style markers already route elsewhere in
+        // this pipeline.
+        missingControlCandidate: true,
       });
     }
   }
@@ -120,6 +138,18 @@ function scanRateLimit(file, content) {
         description: meta.description,
         remediation: meta.remediation,
         cwe: meta.cwe,
+        // FR-PROV-017: routes posture/provenance/coordinator.js to
+        // resolveMissingControl instead of the plain SAST origin-resolver.
+        // "A route lacks rate limiting" is exactly the "was this control
+        // ever present, and if so when did it disappear" question that
+        // resolver answers — a plain SAST resolver would instead ask "when
+        // was this LINE introduced," which is the wrong question for a
+        // finding about something ABSENT. An explicit boolean marker set
+        // here (rather than coordinator.js string-matching finding.id/vuln)
+        // keeps the two modules' string formats decoupled, matching how
+        // isDirect/isTransitiveSca-style markers already route elsewhere in
+        // this pipeline.
+        missingControlCandidate: true,
       });
     }
   }
@@ -127,4 +157,4 @@ function scanRateLimit(file, content) {
   return findings;
 }
 
-export { scanRateLimit };
+export { scanRateLimit, hasRateLimit };

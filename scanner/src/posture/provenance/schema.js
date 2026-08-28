@@ -16,6 +16,12 @@ export const PROVENANCE_METHOD = Object.freeze({
   DEPENDENCY_GRAPH_DIFF: 'dependency-graph-diff',
   LINE_ATTRIBUTION: 'line-attribution',
   SCAN_HISTORY: 'scan-history',
+  // FR-PROV-017: a missing-control-resolver.js regression — "commit removed a
+  // previously-present safeguard" — not a code-INTRODUCTION event, so it is
+  // kept distinct from SEMANTIC_REPLAY (which always names the commit that
+  // introduced a bad pattern). A reader relying on `method` to interpret what
+  // `findingOrigin` means must be able to tell the two apart.
+  MISSING_CONTROL_REGRESSION: 'missing-control-regression',
   NONE: 'none',
 });
 

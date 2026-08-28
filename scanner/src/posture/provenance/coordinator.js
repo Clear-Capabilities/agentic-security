@@ -51,16 +51,25 @@
 //     because those are properties of the coordinator, not of the finding type.
 
 import * as crypto from 'node:crypto';
-import { getRepoState, isGitRepo, blameLine } from './git-evidence.js';
+import { getRepoState, isGitRepo, blameLine, getBlobAtCommit } from './git-evidence.js';
 import { resolveOrigin } from './origin-resolver.js';
 import { resolveDirectSCAOrigin, scaStableId } from './sca-origin.js';
 import { resolveTransitiveSCAOrigin } from './transitive-sca.js';
+import { resolveMissingControl } from './missing-control-resolver.js';
 import { resolveBranchEntry } from './branch-entry.js';
 import { attributeEvidence } from './evidence-attribution.js';
 import { assessConfidence } from './confidence.js';
 import { cacheGet, cacheSet, makeCacheKey } from './cache.js';
 import { loadRepoLineage } from './repo-lineage.js';
 import { emptyProvenance, PROVENANCE_STATUS, PROVENANCE_METHOD, EVIDENCE_ROLE, CONFIDENCE_LEVEL } from './schema.js';
+// FR-PROV-017: the missing-control-candidate branch reuses rate-limit.js's
+// OWN presence predicate rather than re-deriving one, so a historical blob is
+// judged by the exact same regexes the live detector uses on HEAD. Imported
+// statically (not via a dynamic import() inside the predicate) per this
+// module's own convention for git-evidence.js's functions above — only
+// `getBlobAtCommit` needed care about import placement, and it is already
+// imported statically alongside the rest of git-evidence.js's exports.
+import { hasRateLimit } from '../../sast/rate-limit.js';
 
 // Detector label recorded in `analysisBasis.detector` for SCA entries. A
 // dependency finding has no `parser` (no file was parsed by a SAST detector),
@@ -166,6 +175,66 @@ function describePartial(isScaLike, reason) {
   };
 }
 
+// FR-PROV-017: adapts resolveMissingControl's own status vocabulary
+// (complete / unknown / budget_exhausted) onto the originResult shape the
+// rest of resolveAndCache already branches on (status:'complete' / 'partial'
+// / 'budget_exhausted' / anything else -> not_available), instead of adding a
+// parallel branching structure below. `unknown` deliberately falls through to
+// the shared `else` (not_available) branch — see missing-control-resolver.js's
+// own header on why "control never present" and "genuine regression" must
+// never be conflated, and Step 5's own mapping in this task's brief.
+async function resolveMissingControlOrigin(scanRoot, finding, { since, deadlineAt } = {}) {
+  const result = await resolveMissingControl(scanRoot, {
+    file: finding.file,
+    predicate: async (root, sha, f) => {
+      const blob = getBlobAtCommit(root, sha, f);
+      return blob != null && hasRateLimit(blob);
+    },
+    since,
+    deadlineAt,
+  });
+
+  if (result.status === 'complete') {
+    const removedAt = result.removedAt;
+    return {
+      status: 'complete',
+      method: PROVENANCE_METHOD.MISSING_CONTROL_REGRESSION,
+      commitsConsidered: result.commitsConsidered,
+      // Standard findingOrigin shape, populated from removedAt's four fields
+      // (commit/authorName/authorDate/summary) per the brief — everything
+      // else the shape carries elsewhere (authorEmail, committerDate,
+      // revert/cherry-pick detection, AI-authorship) has no analogue in what
+      // resolveMissingControl itself observes, so it stays at its honest
+      // default rather than being fabricated.
+      findingOrigin: {
+        commit: removedAt.commit,
+        authorName: removedAt.authorName,
+        authorEmail: null,
+        authorDate: removedAt.authorDate,
+        committerDate: null,
+        summary: removedAt.summary,
+        presentInCommit: false,
+        absentInParents: [],
+        revertOf: null,
+        cherryPickOf: null,
+        aiAuthorship: { status: 'unknown', verifier: null },
+      },
+    };
+  }
+  if (result.status === 'budget_exhausted') {
+    return { status: 'budget_exhausted', commitsConsidered: result.commitsConsidered };
+  }
+  // 'unknown': the control was never observed present in reachable history.
+  // This is the ORDINARY case for a rate-limit finding on genuinely new
+  // code, not a regression — never attributed to the root commit as if a
+  // disappearance had been proven.
+  return {
+    status: 'unknown',
+    reason: 'no prior version of this control was observed in reachable history — this may be new code rather than a regression',
+    commitsConsidered: result.commitsConsidered,
+  };
+}
+
 async function resolveOne(finding, ctx) {
   const { scanRoot, repoState, deadlineAt } = ctx;
   // Direct-dependency (SCA) entries are a different shape AND a different
@@ -179,6 +248,13 @@ async function resolveOne(finding, ctx) {
   // resolver runs (Task 6 vs sca-origin.js) and what evidence/detector
   // label gets attached differ between them.
   const isScaLike = isSca || isTransitiveSca;
+  // FR-PROV-017: an explicit boolean marker set at finding-construction time
+  // (rate-limit.js), not a string-match on finding.id/finding.vuln here —
+  // string-matching would couple this module's branching to another
+  // module's id/vuln string format, which is exactly the fragility the
+  // isDirect/isTransitiveSca-style markers already avoid elsewhere in this
+  // pipeline.
+  const isMissingControlCandidate = !isScaLike && !!finding.missingControlCandidate;
 
   // THE BUDGET CHECK COMES FIRST — before the blame call, not after it.
   //
@@ -248,12 +324,12 @@ async function resolveOne(finding, ctx) {
   // awaits the same in-flight work instead of starting its own.
   if (ctx.memo && ctx.memo.has(cacheKey)) return ctx.memo.get(cacheKey);
 
-  const promise = resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca);
+  const promise = resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, isMissingControlCandidate);
   if (ctx.memo) ctx.memo.set(cacheKey, promise);
   return promise;
 }
 
-async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca) {
+async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, isMissingControlCandidate = false) {
   const { scanRoot, repoState, deadlineAt } = ctx;
   const cached = cacheGet(scanRoot, cacheKey);
   if (cached) return cached;
@@ -279,6 +355,14 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca) {
     ? await resolveDirectSCAOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt })
     : isTransitiveSca
     ? await resolveTransitiveSCAOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt })
+    // FR-PROV-017: "control absent" findings (rate-limit.js today) answer a
+    // fundamentally different question from every other SAST finding — "when
+    // did a previously-present safeguard disappear," not "when did this bad
+    // pattern first appear" — so they route to resolveMissingControl instead
+    // of resolveOrigin, same precedent as the isSca/isTransitiveSca branches
+    // above routing to their own question-specific resolvers.
+    : isMissingControlCandidate
+    ? await resolveMissingControlOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt })
     // M3 §3.1: `ctx.mode` was already threaded into the CACHE KEY
     // (makeCacheKey's `mode` field, present since M0+M1) but never actually
     // reached resolveOrigin itself — `--provenance deep` was accepted and
@@ -324,6 +408,15 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca) {
       confidence,
       historyCoverage: { complete: !repoState.shallow, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered, crossRepoLineage: false },
       analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector, dirty: repoState.dirty },
+      // FR-PROV-017: a missing-control-regression `findingOrigin` names the
+      // commit that REMOVED the safeguard, not the commit that introduced the
+      // finding's line — every other `complete` result in this file means the
+      // opposite. Said explicitly so a reader of `findingOrigin` alone (which
+      // looks identical in shape to an ordinary origin) isn't misled by the
+      // field name.
+      limitations: isMissingControlCandidate
+        ? ['this is a control-removal event (the safeguard was present in an earlier commit and absent as of this one) — not an ordinary code-introduction event; findingOrigin names the commit that REMOVED the control']
+        : [],
     });
   } else if (originResult.status === 'partial') {
     // isScaLike, not isSca: transitive-sca.js reuses sca-origin.js's exact
