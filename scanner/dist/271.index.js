@@ -99,6 +99,16 @@ function buildProvenanceEvidenceBundle(finding, { engineVersion, repoIdentity, h
         ? { level: fp.confidence.level ?? null, score: fp.confidence.score ?? null, reasons: fp.confidence.reasons || [] }
         : null,
       limitations: fp.limitations || [],
+      // M4 §4.2 final-review fix: this module was written (Task 1) before
+      // the cross-repo lineage feature existed (Task 5), so a
+      // cross-repo-resolved origin's boundary-crossing marker was dropped
+      // from the signed bundle — a foreign repository's commit SHA and a
+      // real author name, with no MACHINE-READABLE signal that the origin
+      // crossed a repository boundary (only the prose in `limitations`
+      // said so, and a programmatic verifier does not read prose). Nested
+      // under `provenance` alongside the fields above, so it is part of
+      // what gets signed — never a new top-level key.
+      historyCoverage: { crossRepoLineage: fp.historyCoverage?.crossRepoLineage ?? false },
     },
     engine: { engineVersion: engineVersion ?? null },
     proves: PROVES,

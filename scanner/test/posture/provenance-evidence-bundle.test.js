@@ -91,3 +91,55 @@ test('verify: unrecognised schema is rejected before touching the signature', ()
   assert.equal(r.ok, false);
   assert.match(r.reason, /unrecognised schema/);
 });
+
+// Item 3 fix (M4 final-review): a cross-repo-resolved origin's
+// boundary-crossing marker (`findingProvenance.historyCoverage.crossRepoLineage`,
+// M4 §4.2/Task 5) was dropped entirely from the bundle this module builds —
+// this module (Task 1) predates the cross-repo feature (Task 5). Without a
+// MACHINE-READABLE flag, a signed bundle for a cross-repo-resolved finding
+// carried a foreign repository's commit SHA and a real author name with
+// nothing but prose (`limitations`) to say the origin came from a different
+// repository.
+const CROSS_REPO_FINDING = {
+  id: 'f2', stableId: 'sid-2',
+  findingProvenance: {
+    status: 'partial',
+    findingOrigin: { commit: 'linked-sha-123', authorName: 'Bob', authorDate: '2025-01-01T00:00:00Z', summary: 'the real original introduction' },
+    branchIntroduction: null,
+    evidenceAttribution: [{ role: 'sink', path: 'shared.js', line: 1, commit: 'linked-sha-123' }],
+    method: 'semantic-history-replay',
+    confidence: { level: 'low', score: 0.2, reasons: ['cross_repo_lineage_best_effort'] },
+    limitations: ['origin resolved via a DIFFERENT, operator-linked repository (.agentic-security/repo-lineage.json) — a cross-repo content-presence match, not this repository\'s own verified history'],
+    historyCoverage: { complete: false, shallow: false, boundaryCommit: null, commitsConsidered: 3, crossRepoLineage: true },
+    analysisBasis: { head: 'own-head-sha' },
+  },
+};
+
+test('buildProvenanceEvidenceBundle: a cross-repo-resolved origin carries crossRepoLineage:true under provenance.historyCoverage', () => {
+  const b = buildProvenanceEvidenceBundle(CROSS_REPO_FINDING, {});
+  assert.equal(b.provenance.historyCoverage.crossRepoLineage, true);
+});
+
+test('buildProvenanceEvidenceBundle: a same-repo-resolved origin defaults to crossRepoLineage:false, not undefined/omitted', () => {
+  const b = buildProvenanceEvidenceBundle(SAMPLE_FINDING, {});
+  assert.equal(b.provenance.historyCoverage.crossRepoLineage, false);
+});
+
+test('sign + verify: a cross-repo bundle round-trips through sign+verify correctly', () => {
+  const kp = ensureKeyPair(tmpKeyDir());
+  const bundle = signProvenanceEvidenceBundle(buildProvenanceEvidenceBundle(CROSS_REPO_FINDING, {}), kp.privateKeyPem);
+  assert.equal(bundle.provenance.historyCoverage.crossRepoLineage, true);
+  const r = verifyProvenanceEvidenceBundle(bundle, kp.publicKeyPem);
+  assert.equal(r.ok, true, r.reason);
+});
+
+test('verify: tampering with historyCoverage.crossRepoLineage after signing fails verification (it is signed, not smuggled in unsigned)', () => {
+  const kp = ensureKeyPair(tmpKeyDir());
+  const bundle = signProvenanceEvidenceBundle(buildProvenanceEvidenceBundle(CROSS_REPO_FINDING, {}), kp.privateKeyPem);
+  // Flip the flag an attacker would most want to hide: claim same-repo
+  // certainty for an attribution that actually crossed a repo boundary.
+  bundle.provenance.historyCoverage.crossRepoLineage = false;
+  const r = verifyProvenanceEvidenceBundle(bundle, kp.publicKeyPem);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /modified after signing/);
+});
