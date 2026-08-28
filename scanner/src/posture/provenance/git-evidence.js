@@ -77,6 +77,16 @@ export function isGitRepo(scanRoot) {
   return _run(scanRoot, ['rev-parse', '--git-dir']).ok;
 }
 
+// FR-PROV-022: repository-identity signal for provider enrichment
+// (providers/github.js / providers/gitlab.js parse owner/repo out of this
+// URL). No `origin` remote (a local-only repo, or a fixture that never added
+// one) degrades to null rather than throwing — same convention as every
+// other `_run`-backed helper here.
+export function getRemoteUrl(scanRoot) {
+  const r = _run(scanRoot, ['remote', 'get-url', 'origin']);
+  return r.ok ? r.stdout.trim() : null;
+}
+
 export function getRepoState(scanRoot) {
   if (!isGitRepo(scanRoot)) return null;
   const head = _run(scanRoot, ['rev-parse', 'HEAD']);

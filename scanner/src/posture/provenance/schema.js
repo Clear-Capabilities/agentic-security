@@ -63,6 +63,14 @@ export function emptyProvenance(status, extra = {}) {
     status,
     findingOrigin: null,
     branchIntroduction: null,
+    // FR-PROV-022: PR/reviewer/CODEOWNERS metadata is a distinct concern from
+    // "which commit/branch introduced this" (branchIntroduction) — a sibling
+    // top-level field, not nested inside it, matching this schema's existing
+    // convention of keeping origin/branch-entry/evidence-attribution as
+    // separate top-level objects. Populated only when a provider is
+    // configured AND a PR/MR was actually found for the origin commit;
+    // otherwise stays at this default (never a half-filled object).
+    providerEnrichment: null,
     firstObserved: null,
     evidenceAttribution: [],
     method: PROVENANCE_METHOD.NONE,

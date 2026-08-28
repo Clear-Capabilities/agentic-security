@@ -51,7 +51,7 @@
 //     because those are properties of the coordinator, not of the finding type.
 
 import * as crypto from 'node:crypto';
-import { getRepoState, isGitRepo, blameLine, getBlobAtCommit } from './git-evidence.js';
+import { getRepoState, isGitRepo, blameLine, getBlobAtCommit, getRemoteUrl } from './git-evidence.js';
 import { resolveOrigin } from './origin-resolver.js';
 import { resolveDirectSCAOrigin, scaStableId } from './sca-origin.js';
 import { resolveTransitiveSCAOrigin } from './transitive-sca.js';
@@ -62,6 +62,16 @@ import { assessConfidence } from './confidence.js';
 import { cacheGet, cacheSet, makeCacheKey } from './cache.js';
 import { loadRepoLineage } from './repo-lineage.js';
 import { emptyProvenance, PROVENANCE_STATUS, PROVENANCE_METHOD, EVIDENCE_ROLE, CONFIDENCE_LEVEL } from './schema.js';
+// FR-PROV-022: `resolveProviderConfig` is genuinely shared (both
+// providers/github.js and providers/gitlab.js re-export the SAME function
+// from config.js — importing it directly here avoids picking one module's
+// re-export arbitrarily). `fetchPRMetadata`/`fetchCodeowners`, by contrast,
+// are two DIFFERENT functions that happen to share a name across two
+// DIFFERENT modules — aliased on import so both are reachable without a
+// naming collision.
+import { resolveProviderConfig } from './providers/config.js';
+import { fetchPRMetadata as fetchPRMetadataGithub, fetchCodeowners as fetchCodeownersGithub } from './providers/github.js';
+import { fetchPRMetadata as fetchPRMetadataGitlab, fetchCodeowners as fetchCodeownersGitlab } from './providers/gitlab.js';
 // FR-PROV-017: the missing-control-candidate branch reuses rate-limit.js's
 // OWN presence predicate rather than re-deriving one, so a historical blob is
 // judged by the exact same regexes the live detector uses on HEAD. Imported
@@ -91,6 +101,17 @@ const MAX_CONCURRENCY = 4;
 // which is less than a single `git blame`'s own 2s timeout and would starve
 // every finding equally instead of a few. 2s is one blame's worth of work.
 const MIN_PER_FINDING_BUDGET_MS = 2000;
+
+// FR-PROV-022: an 8s-timeout-capped network call per finding is not
+// automatically bounded by the scan's own deadlineAt -- N findings x up to
+// 8s each could dwarf any reasonable scan budget. Capping the COUNT, not the
+// per-call timeout, keeps the existing AbortSignal.timeout(8000) in
+// providers/github.js and providers/gitlab.js untouched while bounding the
+// aggregate. Per this codebase's "no silent caps" convention, this cap is
+// disclosed in findingProvenance.limitations for every finding that would
+// have qualified for enrichment but didn't get it because the cap was
+// already spent.
+const MAX_PROVIDER_ENRICHMENTS_PER_SCAN = 20;
 
 // PRD Data Contract, "Evidence integrity": the digest must bind the stable
 // finding ID, repository identity, analysis HEAD, origin commit,
@@ -418,6 +439,32 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
         ? ['this is a control-removal event (the safeguard was present in an earlier commit and absent as of this one) — not an ordinary code-introduction event; findingOrigin names the commit that REMOVED the control']
         : [],
     });
+
+    // FR-PROV-022: provider (GitHub/GitLab) enrichment — strictly additive,
+    // never affects `status`/`method`/`confidence` above. Guarded on all
+    // three: a provider must actually be configured, the per-scan cap must
+    // not be spent, and the global deadline must not have already passed
+    // (the per-call 8s AbortSignal.timeout in providers/*.js is real but
+    // isn't itself deadline-aware, hence the cap — see its declaration).
+    if (ctx.providerConfig && ctx.providerEnrichmentsRemaining > 0 && !(deadlineAt && Date.now() > deadlineAt)) {
+      ctx.providerEnrichmentsRemaining--;
+      const fetchPRFn = ctx.providerName === 'github' ? fetchPRMetadataGithub : fetchPRMetadataGitlab;
+      const fetchCodeownersFn = ctx.providerName === 'github' ? fetchCodeownersGithub : fetchCodeownersGitlab;
+      const pr = await fetchPRFn(scanRoot, originResult.findingOrigin.commit, ctx.remoteUrl, ctx.providerConfig);
+      if (pr) {
+        const codeowners = await fetchCodeownersFn(scanRoot, ctx.remoteUrl, ctx.providerConfig);
+        provenance.providerEnrichment = {
+          provider: ctx.providerName,
+          prNumber: pr.prNumber,
+          reviewers: pr.reviewers,
+          approvals: pr.approvals,
+          mergedAt: pr.mergedAt,
+          codeowners: codeowners || [],
+        };
+      }
+    } else if (ctx.providerConfig && ctx.providerEnrichmentsRemaining === 0) {
+      provenance.limitations.push(`provider enrichment cap (${MAX_PROVIDER_ENRICHMENTS_PER_SCAN}/scan) reached; not attempted for this finding`);
+    }
   } else if (originResult.status === 'partial') {
     // isScaLike, not isSca: transitive-sca.js reuses sca-origin.js's exact
     // reason strings ('ambiguous-range-no-introduced-bound' /
@@ -555,7 +602,28 @@ export async function annotateGitProvenance(findings, ctx) {
   // them past the change.
   const lineage = loadRepoLineage(scanRoot);
   const lineageKey = lineage ? `${lineage.path}@${lineage.atCommit}` : 'none';
-  const fullCtx = { ...options, repoState, deadlineAt, perFindingBudgetMs, scanRoot, memo, lineageKey };
+
+  // FR-PROV-022: resolved ONCE per scan, same precedent as `lineageKey`
+  // above. `resolveProviderConfig` is a config-file/env-var read, not a
+  // network call, so this stays cheap even when nothing is configured — but
+  // `getRemoteUrl` (a git subprocess) is only ever invoked when a provider
+  // actually is, which is what makes "zero network calls when unconfigured"
+  // structural rather than merely tested. At most one provider is active at
+  // a time; if both a GitHub and a GitLab config are somehow present (e.g. a
+  // fork mirrored across both), GitHub wins — an arbitrary but documented
+  // tie-break, since a finding's origin commit can only ever live on one of
+  // the two remotes' PR/MR history in practice.
+  const githubConfig = resolveProviderConfig(scanRoot, 'github');
+  const gitlabConfig = resolveProviderConfig(scanRoot, 'gitlab');
+  const providerConfig = githubConfig || gitlabConfig;
+  const providerName = githubConfig ? 'github' : gitlabConfig ? 'gitlab' : null;
+  const remoteUrl = providerConfig ? getRemoteUrl(scanRoot) : null;
+
+  const fullCtx = {
+    ...options, repoState, deadlineAt, perFindingBudgetMs, scanRoot, memo, lineageKey,
+    providerConfig, providerName, remoteUrl,
+    providerEnrichmentsRemaining: MAX_PROVIDER_ENRICHMENTS_PER_SCAN,
+  };
 
   let active = 0;
   let idx = 0;
