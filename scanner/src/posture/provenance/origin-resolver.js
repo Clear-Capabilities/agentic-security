@@ -26,6 +26,7 @@
 import { candidateCommitsForLine, getFirstParent, commitMeta } from './git-evidence.js';
 import { replayAt } from './predicate-replay.js';
 import { PROVENANCE_METHOD } from './schema.js';
+import { checkAbsentInAllParents, detectRevert, detectCherryPick } from './dag-walk.js';
 
 function relevantFiles(finding) {
   const files = new Set();
@@ -42,11 +43,11 @@ function originFrom(meta, { absentInParents }) {
   return {
     commit: meta.commit, authorName: meta.authorName, authorEmail: meta.authorEmail,
     authorDate: meta.authorDate, committerDate: meta.committerDate, summary: meta.summary,
-    presentInCommit: true, absentInParents,
+    presentInCommit: true, absentInParents, revertOf: null, cherryPickOf: null,
   };
 }
 
-export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repoState } = {}) {
+export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repoState, mode } = {}) {
   const file = finding?.file;
   const line = finding?.line || finding?.sink?.line;
   const stableId = finding?.stableId;
@@ -120,6 +121,49 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
       findingOrigin: originFrom(meta, { absentInParents: [parent] }),
       parentBoundaryVerified: true,
     };
+  }
+
+  // M3 §3.1: `--provenance deep`. The standard walk above only ever checks a
+  // candidate's FIRST parent for absence — correct for linear history, but a
+  // vulnerability introduced via a merged feature branch never shows up
+  // absent-in-first-parent at the merge commit (the first parent is
+  // mainline, which the merge commit inherited from BEFORE the merge, so the
+  // predicate legitimately wasn't there — but it also isn't the commit that
+  // introduced it on the feature branch, which the first-parent-only walk
+  // never visited). Deep mode re-checks the SAME candidates the standard
+  // walk already found, this time requiring absence in EVERY parent, not
+  // just the first — the generalization the spec calls "explores every
+  // parent of a merge commit."
+  if (mode === 'deep') {
+    for (const sha of candidates) {
+      if (deadlineAt && Date.now() > deadlineAt) {
+        return { status: 'budget_exhausted', commitsConsidered };
+      }
+      const presentHere = await replay(sha);
+      if (!presentHere.present) continue;
+      commitsConsidered++;
+      const { absentInAll, parents, rootCommit } = await checkAbsentInAllParents(scanRoot, sha, replay);
+      if (!absentInAll) continue;
+      const meta = commitMeta(scanRoot, sha);
+      if (!meta) continue;
+      if (rootCommit && repoState && repoState.shallow) {
+        return {
+          status: 'partial', reason: 'shallow-boundary-reached', commitsConsidered,
+          findingOrigin: originFrom(meta, { absentInParents: [] }),
+          method: PROVENANCE_METHOD.SEMANTIC_REPLAY,
+        };
+      }
+      const { isRevert, revertsCommit } = detectRevert(scanRoot, sha, candidates);
+      const { isCherryPick, originalCommit } = detectCherryPick(scanRoot, sha);
+      const origin = originFrom(meta, { absentInParents: parents });
+      origin.revertOf = isRevert ? revertsCommit : null;
+      origin.cherryPickOf = isCherryPick ? originalCommit : null;
+      return {
+        status: 'complete', method: PROVENANCE_METHOD.SEMANTIC_REPLAY, commitsConsidered,
+        findingOrigin: origin,
+        parentBoundaryVerified: !rootCommit,
+      };
+    }
   }
 
   return { status: 'partial', reason: 'predicate-never-confirmed-in-candidates', commitsConsidered };

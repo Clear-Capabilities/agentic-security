@@ -222,7 +222,11 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca) {
 
   const originResult = isSca
     ? await resolveDirectSCAOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt })
-    : await resolveOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt, repoState });
+    // M3 §3.1: `ctx.mode` was already threaded into the CACHE KEY
+    // (makeCacheKey's `mode` field, present since M0+M1) but never actually
+    // reached resolveOrigin itself — `--provenance deep` was accepted and
+    // cached distinctly from `standard`, but both modes ran identical code.
+    : await resolveOrigin(scanRoot, finding, { since: ctx.since, deadlineAt: perFindingDeadlineAt, repoState, mode: ctx.mode });
 
   const detector = isSca ? SCA_DETECTOR : (finding.parser || null);
 
