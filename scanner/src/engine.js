@@ -10180,9 +10180,26 @@ function _deterministicFileTimings(timings) {
     // that sees both passes.
     const provenanceTimeoutMs = process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS
       ? parseInt(process.env.AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS, 10) : undefined;
+    // Deterministic mode promises byte-identical SARIF run-to-run
+    // (posture/deterministic.js), and `observedAt` above is already frozen to
+    // honour that. But `findingProvenance.status` (complete/partial/
+    // budget_exhausted/...) is driven by THIS deadline, which was computed
+    // from a real `Date.now()` even under --deterministic — so two runs of
+    // the identical scan could cross a 60s budget at different points under
+    // machine contention (git subprocess calls slowed by CPU/IO pressure) and
+    // land different findings on `budget_exhausted` vs a resolved status,
+    // changing the emitted SARIF between runs. An explicit
+    // --provenance-timeout / AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS still wins
+    // (an operator asking for a tight budget gets it regardless of mode);
+    // absent that, deterministic mode gets a much larger fixed ceiling so
+    // resolution has room to finish under realistic load instead of a bound
+    // that's routinely crossed — see test/proof-corpus-lib.test.js's
+    // "produces byte-identical SARIF across two runs".
+    const DETERMINISTIC_PROVENANCE_TIMEOUT_MS = 300000; // 5 minutes
     const provenanceDeadlineAt = Date.now()
       + (Number.isFinite(provenanceTimeoutMs) && provenanceTimeoutMs > 0
-        ? provenanceTimeoutMs : PROVENANCE_DEFAULT_TIMEOUT_MS);
+        ? provenanceTimeoutMs
+        : (isDeterministic() ? DETERMINISTIC_PROVENANCE_TIMEOUT_MS : PROVENANCE_DEFAULT_TIMEOUT_MS));
     const provenanceCtx = {
       scanRoot,
       deadlineAt: provenanceDeadlineAt,
