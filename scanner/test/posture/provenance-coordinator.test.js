@@ -9,6 +9,7 @@ import { runFullScan } from '../../src/engine.js';
 import { annotateGitProvenance } from '../../src/posture/provenance/coordinator.js';
 import { computeStableId } from '../../src/posture/stable-id.js';
 import { validateFindingsProvenance } from '../../src/posture/provenance/validate.js';
+import { CURRENT_RULESET_VERSION } from '../../src/posture/ruleset-version.js';
 
 test('Scenario G: uncommitted finding gets status uncommitted, author unknown, no email', async () => {
   const fx = createGitFixture();
@@ -565,4 +566,64 @@ test('computeDigest: detector/ruleset version changes the digest', async () => {
   } finally {
     fx.cleanup();
   }
+});
+
+// Second-audit remediation, Task 2 (FR-PROV-028 / "Evidence integrity"):
+// engine.js used to build `provenanceCtx.rulesetVersion` from
+// `process.env.AGENTIC_SECURITY_RULESET_VERSION || null` — an env var
+// essentially never set in practice, so the cache key's `detectorVersion`
+// slot and `computeDigest`'s `rulesetVersion` binding were always `null`
+// and upgrading the scanner (or pinning a different ruleset) never
+// invalidated cached provenance. The above two tests already prove the
+// COORDINATOR honours a distinct `ctx.rulesetVersion` when handed one
+// directly; this test proves the ENGINE actually threads the REAL
+// effective ruleset version (posture/ruleset-version.js's
+// `effectiveVersion`, via `_effectiveRulesetVersion` in engine.js) into
+// that ctx field through a real `runFullScan`, end to end — the same
+// "declare something on disk, rescan at the same HEAD, must not serve the
+// stale cache entry" shape as the repo-lineage test just above.
+test('runFullScan: rulesetVersion is the real effective version, and pinning a different one invalidates cached provenance at the same HEAD', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+
+  fx.writeFile('a.js', 'eval(x);\n');
+  fx.commit('add eval');
+
+  const src = { 'a.js': 'eval(x);\n' };
+
+  const scan1 = await runFullScan({ fileContents: src, scanRoot: fx.root }, () => {});
+  const finding1 = (scan1.findings || []).find((f) => f.file === 'a.js' && f.family === 'code-injection');
+  assert.ok(finding1, 'expected the code-injection detector to fire on a.js');
+  const fp1 = finding1.findingProvenance;
+  assert.ok(fp1, 'finding missing findingProvenance entirely');
+
+  // Not null, and not derived from the never-set env var: it's the real
+  // running scanner's ruleset version by default.
+  assert.equal(fp1.analysisBasis.ruleset, CURRENT_RULESET_VERSION);
+  assert.notEqual(fp1.analysisBasis.ruleset, null);
+
+  // Operator pins a DIFFERENT ruleset version, at the SAME HEAD — no new
+  // commit, so a cache keyed only on (HEAD, stableId, ...) would wrongly
+  // keep serving the run-1 answer.
+  fs.mkdirSync(path.join(fx.root, '.agentic-security'), { recursive: true });
+  fs.writeFileSync(
+    path.join(fx.root, '.agentic-security', 'ruleset-version.json'),
+    JSON.stringify({ version: 'pinned-test-ruleset-v2', pinned: true }),
+  );
+
+  const scan2 = await runFullScan({ fileContents: src, scanRoot: fx.root }, () => {});
+  const finding2 = (scan2.findings || []).find((f) => f.file === 'a.js' && f.family === 'code-injection');
+  assert.ok(finding2, 'expected the code-injection detector to fire on a.js again');
+  const fp2 = finding2.findingProvenance;
+  assert.ok(fp2, 'finding missing findingProvenance entirely');
+
+  assert.equal(fp2.analysisBasis.ruleset, 'pinned-test-ruleset-v2');
+  assert.notEqual(
+    fp1.analysisBasis.ruleset, fp2.analysisBasis.ruleset,
+    'pinning a different ruleset version must change analysisBasis.ruleset',
+  );
+  assert.notEqual(
+    fp1.evidenceDigest, fp2.evidenceDigest,
+    'a ruleset-version change at the same HEAD must not collide on the same evidence digest (cache must not serve the stale entry)',
+  );
 });

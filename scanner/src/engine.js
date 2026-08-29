@@ -10351,7 +10351,21 @@ function _deterministicFileTimings(timings) {
       // uses for meta.startedAt. This value predates that guarantee; it was
       // invisible before findingProvenance reached any output format.
       observedAt: isDeterministic() ? '1970-01-01T00:00:00.000Z' : new Date().toISOString(),
-      rulesetVersion: process.env.AGENTIC_SECURITY_RULESET_VERSION || null,
+      // FR-PROV-028 / "Evidence integrity": the cache key (coordinator.js's
+      // `makeCacheKey`) and `computeDigest`'s `rulesetVersion` binding both
+      // read this field, so it has to be the REAL effective ruleset version,
+      // not an env var operators essentially never set. `_effectiveRulesetVersion`
+      // (posture/ruleset-version.js's `effectiveVersion`) already resolves
+      // env override > pinned file > CURRENT_RULESET_VERSION (== the running
+      // scanner's own package version) — the same helper the checkpoint
+      // identity above (`_ckptIdentity.rulesetVersion`) already calls for an
+      // unrelated purpose. Computed ONCE here and shared via `provenanceCtx`,
+      // same precedent as `deadlineAt` and `providerEnrichments` below: it's
+      // cheap (an env read plus one small JSON file stat/read), but five
+      // recomputations across the five annotateGitProvenance calls buys
+      // nothing and risks a mid-scan pinned-file edit producing five
+      // different answers in one run.
+      rulesetVersion: (_effectiveRulesetVersion(scanRoot) || {}).version || null,
       since: process.env.AGENTIC_SECURITY_PROVENANCE_SINCE || null,
       timeoutMs: provenanceTimeoutMs,
       mode: process.env.AGENTIC_SECURITY_PROVENANCE_MODE || 'standard',
