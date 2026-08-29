@@ -8,11 +8,53 @@
 // else's tree leaves it byte-identical. See test/no-stray-state.test.js — a
 // cache that quietly writes during a read-only scan is exactly the litter that
 // guard exists to prevent.
+//
+// PRIVACY AT REST (second independent Finding Provenance PRD audit): this
+// cache deliberately stores the FULL provenance record — including raw
+// `authorEmail` — not a pre-redacted one. That is a considered choice, not an
+// oversight: `redactFindingProvenance` is applied per output boundary
+// (report/index.js, mcp/tools.js), and different callers in the SAME scan
+// legitimately want different presentations of the SAME cached record — one
+// reader wants the default-redacted view, another passes
+// `--include-author-email`, a third wants `--pseudonymize-authors`. If the
+// cache stored an already-redacted record, whichever policy was in effect at
+// WRITE time would win for every reader forever, silently breaking that
+// per-call flexibility. So redaction stays a read-time/output-time concern,
+// exactly as documented in posture/CLAUDE.md's "Privacy" section, and this
+// cache is accepted as an at-rest store of raw personal data.
+//
+// The mitigation applied here is a permissions floor, not encryption: every
+// write tightens the `provenance-cache/` directory to 0700 and the entry file
+// to 0600 (same posture this project already uses for the per-install HMAC
+// key at integrity.js's `scan-key`, mode 0600 / 0700 parent). That defeats
+// "any local user/process can read this," which is the realistic at-rest
+// threat for a developer machine or CI runner; it does NOT defeat an attacker
+// with root or the operating-system user's own privileges — no local file
+// permission ever does. Encryption-at-rest with a per-install key (the same
+// pattern as `scan-key`) was considered and rejected for this task's scope:
+// unlike the HMAC key, which only ever needs to reproduce a symmetric digest,
+// a cache that must serve back the exact original record on every read would
+// need the plaintext decrypted on every `cacheGet`, which does not raise the
+// bar much over a permissions floor while adding real complexity (key
+// rotation, corrupt-ciphertext handling) for a cache that is disposable and
+// content-addressed to begin with. If that tradeoff is revisited, encrypting
+// only `findingOrigin.authorEmail` (not the whole record) would preserve this
+// module's byte-identical round-trip property, which is asserted by this
+// file's own tests.
 
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { statePath, safeWriteState } from '../state-dir.js';
 import { FINDING_PROVENANCE_SCHEMA_VERSION } from './schema.js';
+
+// Permission floor for the cache directory and every entry inside it — see
+// the module header. Applied on every write (not just directory creation) so
+// an entry written before this floor existed, or a directory whose mode
+// drifted looser some other way, is tightened back down the next time this
+// key is touched.
+const CACHE_DIR_MODE = 0o700;
+const CACHE_FILE_MODE = 0o600;
 
 // Its own top-level `.agentic-security/provenance-cache/` directory, NOT
 // nested under `provenance/` (where it lived through M0-M4) — the artifact
@@ -76,7 +118,17 @@ export function cacheSet(scanRoot, key, value) {
     // category:'provenance-cache' lets lsp/server.js keep THIS write alive
     // while every other state write stays suppressed on every save — see
     // state-dir.js's withStateWritesDisabled.
-    safeWriteState(keyPath(scanRoot, key), JSON.stringify(value), { category: 'provenance-cache' });
+    const fp = keyPath(scanRoot, key);
+    const wrote = safeWriteState(fp, JSON.stringify(value), { category: 'provenance-cache' });
+    if (wrote) {
+      // Permission floor (see module header) — best-effort, applied AFTER a
+      // successful write so a chmod failure (e.g. an unsupported filesystem)
+      // never turns a real cache write into a reported failure.
+      try {
+        fs.chmodSync(path.dirname(fp), CACHE_DIR_MODE);
+        fs.chmodSync(fp, CACHE_FILE_MODE);
+      } catch { /* best-effort — see above */ }
+    }
   } catch {
     // best-effort — cache failures must never fail a scan
   }

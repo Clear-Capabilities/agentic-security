@@ -148,3 +148,34 @@ test('cache: omitting lineageKey defaults to the same key as an explicit "none" 
   const withExplicitNone = makeCacheKey({ repoHead: 'h', stableId: 's', detectorVersion: 'v', historyBoundary: '', mode: 'standard', lineageKey: 'none' });
   assert.equal(withDefault, withExplicitNone);
 });
+
+// Second independent Finding Provenance PRD audit: the cache stores the FULL
+// (unredacted) provenance record, including raw authorEmail, so that
+// redactFindingProvenance can apply a DIFFERENT policy per output call
+// against the SAME cached record. See cache.js's module header. The accepted
+// mitigation is a permissions floor — this pins that the directory and every
+// entry file it writes actually land at the tightened mode, not just that a
+// comment claims they do.
+test('cache: cacheSet tightens the cache directory to 0700 and the entry file to 0600', { skip: process.platform === 'win32' ? 'POSIX file modes are not meaningful on Windows' : false }, () => {
+  const fx = createGitFixture();
+  try {
+    const key = makeCacheKey({ repoHead: 'abc123', stableId: 'sid1', detectorVersion: 'v1', historyBoundary: '', mode: 'standard' });
+    cacheSet(fx.root, key, { status: 'complete', findingOrigin: { commit: 'abc123', authorEmail: 'a@b.c' } });
+
+    const dir = path.join(fx.root, '.agentic-security', 'provenance-cache');
+    const hash = crypto.createHash('sha256').update(key).digest('hex');
+    const fp = path.join(dir, `${hash}.json`);
+
+    const dirMode = fs.statSync(dir).mode & 0o777;
+    const fileMode = fs.statSync(fp).mode & 0o777;
+    assert.equal(dirMode, 0o700, `expected provenance-cache/ dir mode 0700, got ${dirMode.toString(8)}`);
+    assert.equal(fileMode, 0o600, `expected cache entry file mode 0600, got ${fileMode.toString(8)}`);
+
+    // Round-trip still works — the permissions floor must not break the
+    // three-ways-to-present-one-cached-record property this cache exists for.
+    const got = cacheGet(fx.root, key);
+    assert.equal(got.findingOrigin.authorEmail, 'a@b.c');
+  } finally {
+    fx.cleanup();
+  }
+});

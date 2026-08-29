@@ -457,6 +457,21 @@ itself — an agent caller gets no raw email regardless of that flag); the
 field that bypasses `redactFindingProvenance` entirely (see that module's own
 comment on why).
 
+**At rest, `provenance/cache.js` stores the UNREDACTED record, on purpose.**
+Redaction is a read-time/output-time concern — the same cached record gets
+replayed back out through `redactFindingProvenance` differently per output
+call (default vs. `--include-author-email` vs. `--pseudonymize-authors`), which
+only works if the cache holds one raw, policy-independent copy. Pre-redacting
+at write time would freeze whichever policy was active when the entry was
+cached, breaking that per-call flexibility for every later reader (second
+independent Finding Provenance PRD audit). The accepted mitigation is a
+permissions floor, not encryption: every `cacheSet` chmods the entry file to
+`0600` and the `provenance-cache/` directory to `0700` (same posture as
+`integrity.js`'s per-install HMAC key). This defeats other local users/processes
+reading the cache; it does not defeat root or the same OS user. See
+`cache.js`'s own header for the full tradeoff writeup, including why
+encryption-at-rest was considered and deferred.
+
 ## Gotchas
 
 - The seed `calibration-seed.json` is small (n < 30 for several families). Don't treat it as a held-out set — that's `holdout-eval.js`'s job, against an externally-supplied JSONL.
