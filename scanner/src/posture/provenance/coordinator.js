@@ -111,7 +111,16 @@ const MIN_PER_FINDING_BUDGET_MS = 2000;
 // disclosed in findingProvenance.limitations for every finding that would
 // have qualified for enrichment but didn't get it because the cap was
 // already spent.
-const MAX_PROVIDER_ENRICHMENTS_PER_SCAN = 20;
+//
+// This is a per-SCAN cap, not a per-CALL one -- engine.js invokes
+// `annotateGitProvenance` FIVE times per scan (SAST findings, direct SCA,
+// transitive SCA, secrets, blameable logicVulns), sharing one
+// `provenanceCtx`. The intent was always a single scan-wide budget of 20
+// (fix-round item 2): see the `providerEnrichments` counter below, threaded
+// through `ctx` the same way `deadlineAt` already is, so all five calls draw
+// from ONE real budget instead of each getting a fresh 20 (a silent 5x
+// looser cap than this constant and its disclosure string claimed).
+export const MAX_PROVIDER_ENRICHMENTS_PER_SCAN = 20;
 
 // PRD Data Contract, "Evidence integrity": the digest must bind the stable
 // finding ID, repository identity, analysis HEAD, origin commit,
@@ -446,8 +455,8 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
     // not be spent, and the global deadline must not have already passed
     // (the per-call 8s AbortSignal.timeout in providers/*.js is real but
     // isn't itself deadline-aware, hence the cap — see its declaration).
-    if (ctx.providerConfig && ctx.providerEnrichmentsRemaining > 0 && !(deadlineAt && Date.now() > deadlineAt)) {
-      ctx.providerEnrichmentsRemaining--;
+    if (ctx.providerConfig && ctx.providerEnrichments && ctx.providerEnrichments.remaining > 0 && !(deadlineAt && Date.now() > deadlineAt)) {
+      ctx.providerEnrichments.remaining--;
       const fetchPRFn = ctx.providerName === 'github' ? fetchPRMetadataGithub : fetchPRMetadataGitlab;
       const fetchCodeownersFn = ctx.providerName === 'github' ? fetchCodeownersGithub : fetchCodeownersGitlab;
       const pr = await fetchPRFn(scanRoot, originResult.findingOrigin.commit, ctx.remoteUrl, ctx.providerConfig);
@@ -462,8 +471,8 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
           codeowners: codeowners || [],
         };
       }
-    } else if (ctx.providerConfig && ctx.providerEnrichmentsRemaining === 0) {
-      provenance.limitations.push(`provider enrichment cap (${MAX_PROVIDER_ENRICHMENTS_PER_SCAN}/scan) reached; not attempted for this finding`);
+    } else if (ctx.providerConfig && ctx.providerEnrichments && ctx.providerEnrichments.remaining === 0) {
+      provenance.limitations.push(`provider enrichment cap (${MAX_PROVIDER_ENRICHMENTS_PER_SCAN}/scan, shared across the whole scan's annotateGitProvenance calls) reached; not attempted for this finding`);
     }
   } else if (originResult.status === 'partial') {
     // isScaLike, not isSca: transitive-sca.js reuses sca-origin.js's exact
@@ -619,10 +628,26 @@ export async function annotateGitProvenance(findings, ctx) {
   const providerName = githubConfig ? 'github' : gitlabConfig ? 'gitlab' : null;
   const remoteUrl = providerConfig ? getRemoteUrl(scanRoot) : null;
 
+  // Fix-round item 2: a caller-supplied counter WINS, same precedent as
+  // `deadlineAt` above -- this is what makes the cap a real per-SCAN budget
+  // across engine.js's five `annotateGitProvenance` calls rather than five
+  // independent fresh-20 budgets. It MUST be a mutable object, not a bare
+  // number: engine.js reuses one `provenanceCtx` but spreads it into a NEW
+  // object literal for four of its five calls
+  // (`{ ...provenanceCtx, findingType: 'sca' }`) -- a bare number would be
+  // copied by value into each spread, so a decrement in one call would be
+  // invisible to the next. A nested object's IDENTITY survives a shallow
+  // spread, so every call decrements the SAME counter. A standalone caller
+  // that never supplies one (every direct test, every non-engine.js caller)
+  // gets a fresh `{ remaining: 20 }`, unchanged from before this fix.
+  const providerEnrichments = (options.providerEnrichments && typeof options.providerEnrichments.remaining === 'number')
+    ? options.providerEnrichments
+    : { remaining: MAX_PROVIDER_ENRICHMENTS_PER_SCAN };
+
   const fullCtx = {
     ...options, repoState, deadlineAt, perFindingBudgetMs, scanRoot, memo, lineageKey,
     providerConfig, providerName, remoteUrl,
-    providerEnrichmentsRemaining: MAX_PROVIDER_ENRICHMENTS_PER_SCAN,
+    providerEnrichments,
   };
 
   let active = 0;

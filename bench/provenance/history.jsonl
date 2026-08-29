@@ -15,3 +15,4 @@
 {"withProvenanceMs":1391,"withoutProvenanceMs":62,"overheadRatio":22.4,"withProvenanceHeapDeltaBytes":46690536,"findings":15,"at":"2026-08-28T20:51:19.885Z"}
 {"withProvenanceMs":1397,"withoutProvenanceMs":61,"overheadRatio":22.93,"withProvenanceHeapDeltaBytes":46851208,"findings":15,"at":"2026-08-28T20:51:41.554Z"}
 {"withProvenanceMs":1379,"withoutProvenanceMs":53,"overheadRatio":26.06,"withProvenanceHeapDeltaBytes":27126008,"findings":15,"at":"2026-08-28T20:52:02.540Z"}
+{"withProvenanceMs":1374,"withoutProvenanceMs":60,"overheadRatio":22.71,"withProvenanceHeapDeltaBytes":78185512,"findings":15,"at":"2026-08-29T00:58:55.062Z"}

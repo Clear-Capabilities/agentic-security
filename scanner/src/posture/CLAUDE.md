@@ -387,8 +387,8 @@ are both pre-existing unrelated fields.
 | `cache.js` | per-(HEAD, stableId, ruleset, boundary, mode) memo under its own top-level `.agentic-security/provenance-cache/` (split out from `provenance/` so it can carry a `'cache'` retentionClass the permanent lifecycle ledger must not get — see artifact-registry.js) |
 | `schema.js` | the status/method/role/confidence enums, `emptyProvenance`, `redactFindingProvenance`, `isProvenanceHealthy` |
 | `validate.js` | shape assertion for tests |
-| `missing-control-resolver.js` | (M3 §3.3) when a previously-observed safeguard disappeared — **standalone library, NOT wired into the live pipeline** |
-| `providers/config.js`, `providers/github.js`, `providers/gitlab.js` | (M3 §3.4) GitHub/GitLab PR-metadata + CODEOWNERS fetch, config resolved from `.agentic-security/provenance-providers.yml` / token env vars — **standalone library, NOT wired into the live pipeline; no current caller invokes `fetchPRMetadata`/`fetchCodeowners`/`resolveProviderConfig`** |
+| `missing-control-resolver.js` | (M3 §3.3, FR-PROV-017) when a previously-observed safeguard disappeared — **wired into `coordinator.js`**: `resolveMissingControlOrigin` calls `resolveMissingControl` for any finding with `missingControlCandidate:true` (today, `sast/rate-limit.js`'s findings) |
+| `providers/config.js`, `providers/github.js`, `providers/gitlab.js` | (M3 §3.4, FR-PROV-022) GitHub/GitLab PR-metadata + CODEOWNERS fetch, config resolved from `.agentic-security/provenance-providers.yml` / token env vars — **wired into `coordinator.js`**: `resolveProviderConfig` is resolved once per scan in `annotateGitProvenance`, and `fetchPRMetadata`/`fetchCodeowners` are called per `complete`-status finding (capped, see `MAX_PROVIDER_ENRICHMENTS_PER_SCAN`), landing on `findingProvenance.providerEnrichment` |
 | `repo-lineage.js` | (M4 §4.2) loads + fully verifies an operator-declared `.agentic-security/repo-lineage.json` cross-repo link (local clones only, no remote fetch) — used by `origin-resolver.js`'s root-commit case, not a standalone-unwired module |
 | `ai-authorship.js` | (M4 §4.3) extensible AI-authorship verifier registry (`registerAIAuthorshipVerifier`/`resolveAIAuthorship`), defaults to `{status:'unknown', verifier:null}` with nothing registered (today's real state) — wired into `origin-resolver.js`'s `originFrom`, so every SAST `findingOrigin` carries `aiAuthorship`; scoped to SAST only, not direct/transitive SCA origins |
 
@@ -444,7 +444,18 @@ without bound. Present callers: `history-scan.js` (×3), `pr-delta.js`,
 
 **Privacy.** Author emails are collected but redacted by `redactFindingProvenance`
 at every output boundary (`report/index.js`, `mcp/tools.js`) unless
-`AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL=1` / `--include-author-email`.
+`AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL=1` / `--include-author-email`. Separately,
+`AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS=1` / `--pseudonymize-authors` (PRD Section 8)
+replaces `authorName` with a stable `Contributor-XXXXXXXX` pseudonym instead of
+withholding it — `redactFindingProvenance` applies the same treatment to
+`providerEnrichment.reviewers`/`codeowners` (FR-PROV-022's PR-reviewer logins and
+raw CODEOWNERS lines), not just `findingOrigin`. Both `report/index.js` and
+`mcp/tools.js` read the env var per call to build the redaction options
+(`mcp/tools.js` deliberately never reads `AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL`
+itself — an agent caller gets no raw email regardless of that flag); the
+`auditor-walkthrough.js` narrative reads it too, for the one `earliestOrigin`
+field that bypasses `redactFindingProvenance` entirely (see that module's own
+comment on why).
 
 ## Gotchas
 

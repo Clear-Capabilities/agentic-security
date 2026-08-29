@@ -387,6 +387,45 @@ test('auditor: renderWalkthrough produces Markdown with summary + per-control se
   } finally { await p.cleanup(); }
 });
 
+// Fix-round item 4b: renderWalkthrough's "Earliest proven origin" line reads
+// a raw commit-author name (deriveComplianceProvenance's earliestOrigin,
+// which deliberately bypasses redactFindingProvenance — see that function's
+// own comment). Before this fix, --pseudonymize-authors had no effect here,
+// even though it was honoured at every other output boundary
+// (report/index.js, mcp/tools.js).
+test('auditor: renderWalkthrough pseudonymizes the earliest-origin author name when AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS=1', async () => {
+  const p = await mkProject();
+  const priorEnv = process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS;
+  try {
+    const fw = loadFramework(p.dir, 'gdpr');
+    const evaluation = [{
+      control: fw.controls[0],
+      status: 'absent',
+      observations: [],
+      controlRefs: ['f1'],
+      derivedProvenance: {
+        derivedFrom: ['f1'],
+        earliestOrigin: { commit: 'abc1234', authorDate: '2026-01-01T00:00:00Z', authorName: 'Jamie Chen' },
+        confidence: 'high',
+        limitations: [],
+      },
+    }];
+
+    delete process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS;
+    const plain = renderWalkthrough(fw, evaluation);
+    assert.match(plain, /Jamie Chen/, 'sanity: the real name renders when pseudonymization is off');
+
+    process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS = '1';
+    const pseudonymized = renderWalkthrough(fw, evaluation);
+    assert.ok(!pseudonymized.includes('Jamie Chen'), 'expected the real author name to be pseudonymized, not printed raw');
+    assert.match(pseudonymized, /Contributor-[0-9a-f]{8}/, 'expected a stable Contributor-XXXXXXXX pseudonym in its place');
+  } finally {
+    if (priorEnv === undefined) delete process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS;
+    else process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS = priorEnv;
+    await p.cleanup();
+  }
+});
+
 test('auditor: persistWalkthrough writes file', async () => {
   const p = await mkProject();
   try {

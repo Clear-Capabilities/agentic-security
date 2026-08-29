@@ -65,3 +65,79 @@ test('redactFindingProvenance: pseudonymize keys on the real authorEmail even wh
   assert.equal(redacted.findingOrigin.authorEmail, null);
   assert.equal(redacted.findingOrigin.authorName, viaEmailKey);
 });
+
+// Fix-round item 3: pseudonymization must reach providerEnrichment
+// (FR-PROV-022's reviewer logins + raw CODEOWNERS lines), not just
+// findingOrigin -- before this fix, --pseudonymize-authors hid the commit
+// author's name while providerEnrichment.reviewers/codeowners still named
+// real people in plain text in the same redacted output.
+test('redactFindingProvenance: pseudonymize:true scrubs providerEnrichment.reviewers and codeowners too, leaving neither real names nor emails', () => {
+  const fp = {
+    findingOrigin: { authorName: 'Jamie Chen', authorEmail: 'jamie@example.com', commit: 'abc' },
+    providerEnrichment: {
+      provider: 'github',
+      prNumber: 7,
+      reviewers: ['alice', 'bob-reviewer'],
+      approvals: 2,
+      mergedAt: '2026-01-02T00:00:00Z',
+      codeowners: [
+        '* @alice @bob-reviewer',
+        '/src/ carol@example.com',
+        '/infra/ @dave dave@example.com',
+      ],
+    },
+  };
+
+  const redacted = redactFindingProvenance(fp, { pseudonymize: true });
+
+  // findingOrigin still redacted as before.
+  assert.match(redacted.findingOrigin.authorName, /^Contributor-[0-9a-f]{8}$/);
+
+  // reviewers: every login replaced with a stable pseudonym, none of the
+  // real logins survive.
+  assert.equal(redacted.providerEnrichment.reviewers.length, 2);
+  for (const r of redacted.providerEnrichment.reviewers) {
+    assert.match(r, /^Contributor-[0-9a-f]{8}$/);
+  }
+  assert.notEqual(redacted.providerEnrichment.reviewers[0], 'alice');
+  assert.notEqual(redacted.providerEnrichment.reviewers[1], 'bob-reviewer');
+  // Stable identity: the same login always yields the same pseudonym.
+  assert.equal(redacted.providerEnrichment.reviewers[0], pseudonymizeAuthor('alice', null));
+
+  // codeowners: no real handle or email substring survives anywhere.
+  const codeownersText = redacted.providerEnrichment.codeowners.join('\n');
+  for (const needle of ['alice', 'bob-reviewer', 'carol@example.com', 'dave@example.com', '@dave']) {
+    assert.ok(!codeownersText.includes(needle), `expected "${needle}" to be scrubbed from codeowners, got: ${codeownersText}`);
+  }
+  // Every line still has SOME pseudonymized structure (not blanket-wiped),
+  // proving this is per-identifier redaction, not a destructive blanket one.
+  for (const line of redacted.providerEnrichment.codeowners) {
+    assert.match(line, /Contributor-[0-9a-f]{8}/);
+  }
+
+  // Non-identity fields on providerEnrichment must survive untouched.
+  assert.equal(redacted.providerEnrichment.provider, 'github');
+  assert.equal(redacted.providerEnrichment.prNumber, 7);
+  assert.equal(redacted.providerEnrichment.approvals, 2);
+  assert.equal(redacted.providerEnrichment.mergedAt, '2026-01-02T00:00:00Z');
+});
+
+test('redactFindingProvenance: pseudonymize:false leaves providerEnrichment logins visible but still withholds embedded emails by default', () => {
+  const fp = {
+    findingOrigin: { authorName: 'Jamie Chen', authorEmail: 'jamie@example.com', commit: 'abc' },
+    providerEnrichment: {
+      provider: 'github', prNumber: 1, reviewers: ['alice'], approvals: null, mergedAt: null,
+      codeowners: ['/src/ @alice carol@example.com'],
+    },
+  };
+  const redacted = redactFindingProvenance(fp, {});
+  assert.deepEqual(redacted.providerEnrichment.reviewers, ['alice']);
+  assert.ok(!redacted.providerEnrichment.codeowners[0].includes('carol@example.com'));
+  assert.ok(redacted.providerEnrichment.codeowners[0].includes('@alice'), 'a bare handle is not redacted by default, same precedent as authorName');
+});
+
+test('redactFindingProvenance: providerEnrichment:null passes through as null', () => {
+  const fp = { findingOrigin: { authorName: 'Jamie Chen', authorEmail: null, commit: 'abc' }, providerEnrichment: null };
+  const redacted = redactFindingProvenance(fp, { pseudonymize: true });
+  assert.equal(redacted.providerEnrichment, null);
+});

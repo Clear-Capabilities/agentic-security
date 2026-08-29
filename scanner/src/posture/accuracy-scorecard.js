@@ -268,9 +268,11 @@ export function buildScorecard(inputs) {
 // PRD Success Metrics: "Provenance coverage >=95% complete or uncommitted
 // for P0-supported findings in full Git clones." P0-supported scope per
 // the PRD's own Release Scope table: code (SAST), secrets, IaC/config,
-// direct dependency findings. This metric will legitimately read LOW for
-// secrets until [Task 11 commit] ships real secrets provenance -- that is
-// CORRECT behavior for an honest metric, not a bug in this function.
+// direct dependency findings. Secrets now get real origin resolution
+// (Task 11 -- `engine.js` calls `annotateGitProvenance` on `scan.secrets`
+// with a real per-pattern-backfilled stableId, the same as SAST findings),
+// so this metric no longer has a structural reason to read lower for the
+// secrets share of the denominator than for any other P0-scoped channel.
 export function computeProvenanceCoverage(scan) {
   const p0Findings = [
     ...(scan.findings || []),
@@ -518,9 +520,10 @@ export function renderScorecardMarkdown(m) {
     L.push('| --- |');
     L.push(`| ${formatRate(m.provenanceCoverage.n, m.provenanceCoverage.d)} |`);
     L.push('');
-    L.push('This will legitimately read LOW for the secrets share of the denominator');
-    L.push('until real secrets provenance ships — that is an honest gap in current');
-    L.push('scope, not a defect in this measurement.');
+    L.push('Secrets, SAST, and direct-dependency findings all resolve through the same');
+    L.push('git-origin resolution pipeline, so a gap in this rate reflects the clone');
+    L.push('itself (shallow history, uncommitted lines the pipeline could not blame) —');
+    L.push('not a channel this measurement structurally cannot yet cover.');
     L.push('');
   }
   // PRD F12.6 — the honest scorecard publishes the LIMITS too, not only the

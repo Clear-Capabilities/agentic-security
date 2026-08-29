@@ -102,6 +102,58 @@ export function pseudonymizeAuthor(authorName, authorEmail) {
   return `Contributor-${hash}`;
 }
 
+// Fix-round item 3: `providerEnrichment` (FR-PROV-022) carries reviewer
+// logins and raw CODEOWNERS lines -- both routinely name real people
+// (GitHub/GitLab usernames as `@handle`s, and CODEOWNERS lines commonly
+// embed plain email addresses too) -- but were never touched by
+// `redactFindingProvenance`, so `--pseudonymize-authors` redacted
+// `findingOrigin.authorName` while `providerEnrichment.reviewers`/
+// `codeowners` still carried real identities in plain text through
+// `.agentic-security/findings.json` and SARIF. Same two knobs as
+// `redactOrigin` below: `includeEmail` gates raw email ADDRESSES embedded in
+// a codeowners line (withheld by default, same precedent as
+// `origin.authorEmail`); `pseudonymize` replaces any identifier (a reviewer
+// login, an `@handle` in a codeowners line, or an embedded email substring)
+// with `pseudonymizeAuthor`'s stable per-identifier hash, so re-running
+// produces the SAME pseudonym for the SAME person rather than a blanket
+// redaction that destroys the "which findings share a reviewer" structure.
+// Neither knob touches a bare login/handle when `pseudonymize` is off --
+// same precedent as `authorName`, which is NOT redacted by default either.
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const HANDLE_RE = /@[A-Za-z0-9][A-Za-z0-9-]*/g;
+
+function redactEmailSubstrings(text, { includeEmail, pseudonymize }) {
+  if (typeof text !== 'string') return text;
+  if (includeEmail && !pseudonymize) return text;
+  return text.replace(EMAIL_RE, (email) => (pseudonymize ? pseudonymizeAuthor(null, email) : '[email redacted]'));
+}
+
+function redactHandleSubstrings(text, { pseudonymize }) {
+  if (typeof text !== 'string' || !pseudonymize) return text;
+  // Runs AFTER redactEmailSubstrings, so an email's local-part `@` has
+  // already been consumed by the full-email replacement above and cannot be
+  // mistaken for a bare handle here.
+  return text.replace(HANDLE_RE, (match) => `@${pseudonymizeAuthor(match.slice(1), null)}`);
+}
+
+function redactCodeownersLine(line, opts) {
+  if (typeof line !== 'string') return line;
+  return redactHandleSubstrings(redactEmailSubstrings(line, opts), opts);
+}
+
+function redactProviderEnrichment(pe, opts) {
+  if (!pe) return null;
+  return {
+    ...pe,
+    reviewers: Array.isArray(pe.reviewers)
+      ? pe.reviewers.map((r) => (opts.pseudonymize ? pseudonymizeAuthor(r, null) : r))
+      : pe.reviewers,
+    codeowners: Array.isArray(pe.codeowners)
+      ? pe.codeowners.map((line) => redactCodeownersLine(line, opts))
+      : pe.codeowners,
+  };
+}
+
 export function redactFindingProvenance(fp, { includeEmail = false, pseudonymize = false } = {}) {
   if (!fp) return null;
   const redactOrigin = (origin) => origin
@@ -114,6 +166,7 @@ export function redactFindingProvenance(fp, { includeEmail = false, pseudonymize
   return {
     ...fp,
     findingOrigin: redactOrigin(fp.findingOrigin),
+    providerEnrichment: redactProviderEnrichment(fp.providerEnrichment, { includeEmail, pseudonymize }),
   };
 }
 

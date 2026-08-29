@@ -254,3 +254,75 @@ test('annotateGitProvenance: the per-scan enrichment cap is honored and disclose
   assert.equal(enriched.length, CAP, `expected exactly ${CAP} findings enriched under the cap; got ${enriched.length}`);
   assert.equal(capped.length, TOTAL - CAP, `expected the remaining ${TOTAL - CAP} findings to carry the cap-reached limitation`);
 });
+
+// Fix-round item 2: engine.js calls annotateGitProvenance FIVE times per
+// scan (SAST, direct SCA, transitive SCA, secrets, blameable logicVulns),
+// threading one shared `provenanceCtx` through all five -- and four of those
+// five calls spread it into a NEW object literal
+// (`{ ...provenanceCtx, findingType: 'sca' }`). Before this fix, the cap
+// counter was reset to a fresh 20 INSIDE annotateGitProvenance on every
+// call, so the real aggregate bound was 5 x 20 = 100/scan against a "20/scan"
+// disclosure. This test drives two separate annotateGitProvenance calls
+// against one shared `providerEnrichments` counter object -- the same
+// mechanism engine.js now uses -- and asserts the cap holds in AGGREGATE
+// across both calls, not per call.
+test('annotateGitProvenance: the per-scan enrichment cap is a SHARED aggregate across multiple calls (engine.js\'s 5-call pattern)', async (t) => {
+  const CAP = 20;
+  const PER_CALL = 12; // 2 x 12 = 24 > CAP, so the shared budget must bite mid-second-call
+
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  const relPaths = Array.from({ length: PER_CALL * 2 }, (_, i) => `g${i}.js`);
+  const fileContents = {};
+  for (let i = 0; i < relPaths.length; i++) fileContents[relPaths[i]] = `eval(y${i});\n`;
+  for (const [rel, content] of Object.entries(fileContents)) fx.writeFile(rel, content);
+  fx.commit('introduce eval calls', { date: '2026-01-01T00:00:00Z' });
+  execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/owner/repo.git'], { cwd: fx.root });
+
+  const scan = await runFullScan({ fileContents, scanRoot: fx.root, provenance: false }, () => {});
+  const findings = (scan.findings || []).filter((f) => f.family === 'code-injection');
+  assert.equal(findings.length, relPaths.length, `expected ${relPaths.length} real code-injection findings; got ${findings.length}`);
+  const batchA = findings.slice(0, PER_CALL);
+  const batchB = findings.slice(PER_CALL);
+
+  const priorFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (/\/pulls$/.test(url)) {
+      return { ok: true, json: async () => ([{ number: 1, requested_reviewers: [], merged_at: null }]) };
+    }
+    if (/\/contents\//.test(url)) {
+      return { ok: true, json: async () => ({ content: Buffer.from('').toString('base64') }) };
+    }
+    return { ok: false, json: async () => ({}) };
+  };
+
+  try {
+    await withEnv({ AGENTIC_SECURITY_GITHUB_TOKEN: 'ghp_test123', AGENTIC_SECURITY_GITLAB_TOKEN: undefined }, async () => {
+      // The shared counter object, constructed ONCE and threaded through
+      // both calls via a shared ctx base -- mirrors engine.js's
+      // `provenanceCtx.providerEnrichments` construction exactly.
+      const sharedCtxBase = {
+        scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', mode: 'standard',
+        providerEnrichments: { remaining: CAP },
+      };
+      await annotateGitProvenance(batchA, { ...sharedCtxBase });
+      await annotateGitProvenance(batchB, { ...sharedCtxBase });
+    });
+  } finally {
+    global.fetch = priorFetch;
+  }
+
+  for (const f of findings) {
+    assert.equal(f.findingProvenance.status, 'complete', `expected finding for ${f.file} to resolve complete`);
+  }
+
+  const enriched = findings.filter((f) => f.findingProvenance.providerEnrichment !== null);
+  const capped = findings.filter((f) => f.findingProvenance.limitations.some((l) => /provider enrichment cap/.test(l)));
+
+  assert.equal(enriched.length, CAP, `expected exactly ${CAP} findings enriched in AGGREGATE across both calls; got ${enriched.length} (a per-call-reset cap would enrich ${PER_CALL * 2})`);
+  assert.equal(capped.length, relPaths.length - CAP, `expected the remaining ${relPaths.length - CAP} findings across both calls to carry the cap-reached limitation`);
+  // The second batch alone must show the cap already exhausted for at least
+  // some of its findings -- proving the budget crossed the call boundary.
+  const cappedInBatchB = batchB.filter((f) => f.findingProvenance.limitations.some((l) => /provider enrichment cap/.test(l)));
+  assert.ok(cappedInBatchB.length > 0, 'expected the second call to inherit an already-partially-spent shared budget');
+});

@@ -52,7 +52,25 @@ import { strengthOfControl as _strengthOfControl } from './coverage-strength.js'
 // comment): printed raw or read as plain text, `Jean-Luc Picard` rendering
 // as `Jean\-Luc Picard` and `dependabot[bot]` as `dependabot\[bot\]` is a
 // visible regression on common real-world author names, not a fix.
-import { sanitizeForTerminal } from './provenance/schema.js';
+import { sanitizeForTerminal, pseudonymizeAuthor } from './provenance/schema.js';
+
+// Fix-round item 4b: this renderer had `sanitizeForTerminal` (injection
+// safety) but never honoured `--pseudonymize-authors` at all — an operator
+// who set that policy still saw a raw committer name in walkthrough output,
+// the one boundary that gap missed. Reads the SAME env var
+// `report/index.js`'s `_normalizedProvenance` and `mcp/tools.js`'s
+// `providerEnrichment`-aware call read back
+// (AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS=1 / --pseudonymize-authors). Keyed
+// on name only, not email: `deriveComplianceProvenance`'s `earliestOrigin`
+// deliberately never carries `authorEmail` (see its own comment — that
+// object bypasses the `redactFindingProvenance` sweep entirely), so the
+// pseudonym here is stable across repeated runs for the same author name but
+// not necessarily identical to the email-keyed pseudonym shown at other
+// output boundaries for the same person.
+function _maybePseudonymizeName(name) {
+  if (!name) return name;
+  return process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS === '1' ? pseudonymizeAuthor(name, null) : name;
+}
 
 // Re-exported so existing callers/tests keep importing these from here.
 export { COMPLIANCE_FAMILY_ALIAS, resolveFamilyKeys };
@@ -594,7 +612,7 @@ export function renderWalkthrough(fw, evaluation, opts = {}) {
           // object bypasses redactFindingProvenance, so authorEmail must
           // never be surfaced from it without routing through that function
           // first.
-          lines.push(`**Earliest proven origin:** ${short} — ${day} — ${sanitizeForTerminal(dp.earliestOrigin.authorName) || 'unknown'} (confidence: ${dp.confidence})`);
+          lines.push(`**Earliest proven origin:** ${short} — ${day} — ${sanitizeForTerminal(_maybePseudonymizeName(dp.earliestOrigin.authorName)) || 'unknown'} (confidence: ${dp.confidence})`);
         } else if (dp) {
           lines.push(`**Earliest proven origin:** unresolved (confidence: ${dp.confidence})`);
         }

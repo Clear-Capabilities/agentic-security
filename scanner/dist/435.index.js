@@ -1059,11 +1059,21 @@ const explain_finding = {
       epssScore: typeof f.epssScore === 'number' ? f.epssScore : null,
       epssPercentile: typeof f.epssPercentile === 'number' ? f.epssPercentile : null,
       exploitedNow: !!f.exploitedNow,
-      // Which commit introduced this finding. Redacted with the DEFAULT
-      // options (includeEmail:false) unconditionally — unlike the JSON report
-      // there is no operator-set env escape here, because the consumer is an
+      // Which commit introduced this finding. `includeEmail` stays at its
+      // DEFAULT (false) unconditionally — unlike the JSON report there is no
+      // operator-set env escape for it here, because the consumer is an
       // agent that has no business receiving a committer's email address.
-      findingProvenance: f.findingProvenance ? (0,schema/* redactFindingProvenance */.As)(f.findingProvenance) : null,
+      // `pseudonymize`, by contrast, IS read back from the same env var
+      // report/index.js's `_normalizedProvenance` reads
+      // (AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS=1 / --pseudonymize-authors) —
+      // fix-round item 4: an operator who set that policy was still getting
+      // raw committer names (and, via providerEnrichment, raw reviewer
+      // logins/CODEOWNERS lines) through this MCP surface because this call
+      // passed no options object at all, silently defeating their policy at
+      // this one output boundary while report/index.js honoured it.
+      findingProvenance: f.findingProvenance ? (0,schema/* redactFindingProvenance */.As)(f.findingProvenance, {
+        pseudonymize: process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS === '1',
+      }) : null,
     };
   },
 };

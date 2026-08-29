@@ -268,7 +268,7 @@ import { annotateGitHistory } from './posture/git-history.js';
 // argument, so a wrong import would RUN rather than fail. This one is named
 // for the mechanism that distinguishes it —
 // provenance derived from GIT HISTORY. See provenance/coordinator.js's header.
-import { annotateGitProvenance, PROVENANCE_DEFAULT_TIMEOUT_MS } from './posture/provenance/coordinator.js';
+import { annotateGitProvenance, PROVENANCE_DEFAULT_TIMEOUT_MS, MAX_PROVIDER_ENRICHMENTS_PER_SCAN } from './posture/provenance/coordinator.js';
 import { updateLifecycle } from './posture/provenance/lifecycle.js';
 import { emptyProvenance, PROVENANCE_STATUS } from './posture/provenance/schema.js';
 import { applyThreatModel } from './posture/threat-model-grounding.js';
@@ -10355,6 +10355,13 @@ function _deterministicFileTimings(timings) {
       since: process.env.AGENTIC_SECURITY_PROVENANCE_SINCE || null,
       timeoutMs: provenanceTimeoutMs,
       mode: process.env.AGENTIC_SECURITY_PROVENANCE_MODE || 'standard',
+      // Fix-round item 2: ONE shared provider-enrichment counter for the
+      // whole scan, same precedent as the single `deadlineAt` above. Object
+      // identity (not the primitive value) is what makes the cap survive the
+      // `{ ...provenanceCtx, findingType: ... }` spreads used by four of the
+      // five annotateGitProvenance calls below — see coordinator.js's
+      // `providerEnrichments` comment for why a bare number would not work.
+      providerEnrichments: { remaining: MAX_PROVIDER_ENRICHMENTS_PER_SCAN },
     };
     await annotateGitProvenance(finalFindings, provenanceCtx);
     // Direct dependencies only: a transitive dep's vulnerable version was never

@@ -765,6 +765,47 @@ test('explain_finding returns the matching finding payload', async () => {
   await cleanup();
 });
 
+// Fix-round item 4a: explain_finding's findingProvenance passthrough called
+// redactFindingProvenance with NO options object at all, so an operator's
+// --pseudonymize-authors policy (AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS=1) had
+// no effect at this one output boundary even though report/index.js honoured
+// it. includeEmail must stay withheld regardless (an agent never gets a raw
+// committer email through this tool, by design).
+test('explain_finding honors AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS on findingProvenance.findingOrigin AND providerEnrichment', async () => {
+  const findingProvenance = {
+    schemaVersion: '1.0',
+    status: 'complete',
+    findingOrigin: { commit: 'abc1234', authorName: 'Jamie Chen', authorEmail: 'jamie@example.com', authorDate: '2026-01-01T00:00:00Z' },
+    providerEnrichment: {
+      provider: 'github', prNumber: 7, reviewers: ['alice'], approvals: null, mergedAt: null,
+      codeowners: ['* @alice carol@example.com'],
+    },
+  };
+  const { handleRequest, cleanup } = await makeSession({
+    findings: [{ id: 'F1', severity: 'high', file: 'a.js', line: 7, title: 'X', description: 'Y', remediation: 'Z', cwe: 'CWE-78', findingProvenance }],
+  });
+  const priorEnv = process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS;
+  try {
+    delete process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS;
+    const plain = payload(await call(handleRequest, 'explain_finding', { finding_id: 'F1' }));
+    assert.equal(plain.findingProvenance.findingOrigin.authorName, 'Jamie Chen');
+    assert.equal(plain.findingProvenance.findingOrigin.authorEmail, null, 'email must be withheld regardless of pseudonymize policy');
+    assert.deepEqual(plain.findingProvenance.providerEnrichment.reviewers, ['alice']);
+
+    process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS = '1';
+    const pseudonymized = payload(await call(handleRequest, 'explain_finding', { finding_id: 'F1' }));
+    assert.match(pseudonymized.findingProvenance.findingOrigin.authorName, /^Contributor-[0-9a-f]{8}$/);
+    assert.equal(pseudonymized.findingProvenance.findingOrigin.authorEmail, null);
+    assert.match(pseudonymized.findingProvenance.providerEnrichment.reviewers[0], /^Contributor-[0-9a-f]{8}$/);
+    const codeownersText = pseudonymized.findingProvenance.providerEnrichment.codeowners.join('\n');
+    assert.ok(!codeownersText.includes('alice') && !codeownersText.includes('carol@example.com'));
+  } finally {
+    if (priorEnv === undefined) delete process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS;
+    else process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS = priorEnv;
+    await cleanup();
+  }
+});
+
 // ─── Audit log ───────────────────────────────────────────────────────────────
 
 test('every tools/call is recorded in mcp-audit.log', async () => {
