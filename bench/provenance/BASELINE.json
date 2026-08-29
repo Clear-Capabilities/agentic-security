@@ -1,11 +1,104 @@
 {
- "schema": "provenance/v1",
- "note": "Wall-clock overhead of provenance annotation vs. a provenance-disabled scan, on a synthetic 15-file/3-commit-each git fixture, cold cache. See runner.mjs header for why the number is a RATIO, not an absolute FR-PROV-029 percentage claim.",
+ "schema": "provenance/v2",
+ "note": "Wall-clock and peak-RSS overhead of provenance annotation vs. a provenance-disabled scan, on a synthetic 15-file/3-commit-each git fixture. cold = fresh provenance cache; warm = second with-provenance pass against the same fixture/HEAD, so the on-disk provenance cache is hit. Each dimension is a distribution over n=20 iterations (nearest-rank percentiles, matching posture/fix-metrics.js's convention); the gated number is the p95 of the per-iteration ratio, not a single sample. Memory ratio dimensions are gated with extra additive headroom (MEMORY_RATIO_ADDITIVE_MARGIN) because they are measurably noisier than the time-ratio dimensions — see runner.mjs for both that and why the ratio itself is a REGRESSION signal against ITS OWN prior baseline, not a literal FR-PROV-029 percentage claim.",
  "regressionFactor": 1.6,
- "withProvenanceMs": 1397,
- "withoutProvenanceMs": 61,
- "overheadRatio": 22.93,
- "withProvenanceHeapDeltaBytes": 46851208,
+ "n": 20,
  "findings": 15,
- "recordedAt": "2026-08-28T20:51:41.554Z"
+ "without": {
+  "ms": {
+   "n": 20,
+   "min": 39.87,
+   "p50": 41.34,
+   "p95": 69.01,
+   "max": 158.73,
+   "mean": 49.12,
+   "reliable": true
+  },
+  "rssDeltaBytes": {
+   "n": 20,
+   "min": 1785856,
+   "p50": 1818624,
+   "p95": 19775488,
+   "max": 27967488,
+   "mean": 4117299.2,
+   "reliable": true
+  }
+ },
+ "cold": {
+  "ms": {
+   "n": 20,
+   "min": 1012.98,
+   "p50": 1063.73,
+   "p95": 1084.21,
+   "max": 1095.3,
+   "mean": 1064.72,
+   "reliable": true
+  },
+  "rssDeltaBytes": {
+   "n": 20,
+   "min": 4227072,
+   "p50": 22790144,
+   "p95": 28950528,
+   "max": 49119232,
+   "mean": 18455756.8,
+   "reliable": true
+  },
+  "timeOverheadRatio": {
+   "n": 20,
+   "min": 6.9,
+   "p50": 25.45,
+   "p95": 26.54,
+   "max": 26.65,
+   "mean": 23.97,
+   "reliable": true
+  },
+  "memOverheadRatio": {
+   "n": 20,
+   "min": 0.32,
+   "p50": 9.36,
+   "p95": 14.93,
+   "max": 16.21,
+   "mean": 8.64,
+   "reliable": true
+  }
+ },
+ "warm": {
+  "ms": {
+   "n": 20,
+   "min": 74.29,
+   "p50": 77.28,
+   "p95": 86.31,
+   "max": 86.95,
+   "mean": 78.87,
+   "reliable": true
+  },
+  "rssDeltaBytes": {
+   "n": 20,
+   "min": 0,
+   "p50": 163840,
+   "p95": 11354112,
+   "max": 11632640,
+   "mean": 1880064,
+   "reliable": true
+  },
+  "timeOverheadRatio": {
+   "n": 20,
+   "min": 0.53,
+   "p50": 1.85,
+   "p95": 2.1,
+   "max": 2.11,
+   "mean": 1.77,
+   "reliable": true
+  },
+  "memOverheadRatio": {
+   "n": 20,
+   "min": 0,
+   "p50": 0.09,
+   "p95": 1.19,
+   "max": 5.02,
+   "mean": 0.57,
+   "reliable": true
+  }
+ },
+ "recordedAt": "2026-08-29T07:53:16.064Z"
 }

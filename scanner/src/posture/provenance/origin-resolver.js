@@ -23,7 +23,7 @@
 // that disambiguates them; see the branch below for exactly how each is
 // handled.
 
-import { candidateCommitsForLine, getFirstParent, commitMeta, getBlobAtCommit, isAncestor } from './git-evidence.js';
+import { candidateCommitsForLine, commitMeta, getBlobAtCommit, isAncestor } from './git-evidence.js';
 import { replayAt } from './predicate-replay.js';
 import { PROVENANCE_METHOD } from './schema.js';
 import { checkAbsentInSomeParent, detectRevert, detectCherryPick } from './dag-walk.js';
@@ -228,9 +228,16 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
       continue;
     }
 
-    const parent = getFirstParent(scanRoot, sha);
+    // Task 6 (provenance-second-audit-remediation): one `git show` call, not
+    // two — `commitMeta` now carries `parents` (see git-evidence.js), so the
+    // separate `getFirstParent(scanRoot, sha)` subprocess spawn this loop
+    // used to make for the SAME sha right before this line is gone. `<sha>^1`
+    // (what getFirstParent asked for) and `parents[0]` (the first token of
+    // `%P`) are the same first-parent semantics for both a normal and a
+    // merge commit.
     const meta = commitMeta(scanRoot, sha);
     if (!meta) continue;
+    const parent = meta.parents.length ? meta.parents[0] : null;
 
     if (!parent) {
       if (repoState && repoState.shallow) {

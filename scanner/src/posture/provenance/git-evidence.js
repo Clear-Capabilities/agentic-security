@@ -116,11 +116,23 @@ export function commitMeta(scanRoot, sha) {
   // textconv driver in current git — kept for defense-in-depth /
   // uniformity with every other `show` call in this module, not because a
   // live exploit path was found here.
-  const r = _run(scanRoot, ['show', '-s', '--no-textconv', '--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%cI%x1f%s', sha]);
+  //
+  // `%P` (Task 6, provenance-second-audit-remediation): the parent-hash list,
+  // added to this SAME `show` call rather than requiring a second
+  // `getFirstParent` subprocess spawn right after this one — profiling the
+  // bench (bench/provenance/runner.mjs) found git subprocess spawn count,
+  // not the detector pipeline, is the dominant cost of provenance overhead
+  // (~6-8ms per `execFileSync('git', ...)` on the dev machine; the standard
+  // origin-resolver.js walk calls `getFirstParent` and `commitMeta` back to
+  // back for the identical sha on every candidate). Purely additive to the
+  // returned shape and to the existing `%x1f`-delimited format — no
+  // hardening flag changed, no existing field removed.
+  const r = _run(scanRoot, ['show', '-s', '--no-textconv', '--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%cI%x1f%P%x1f%s', sha]);
   if (!r.ok) return null;
-  const [full, authorName, authorEmail, authorDate, committerDate, summary] = r.stdout.trim().split('\x1f');
+  const [full, authorName, authorEmail, authorDate, committerDate, parentsRaw, summary] = r.stdout.trim().split('\x1f');
   if (!full) return null;
-  return { commit: full, authorName, authorEmail, authorDate, committerDate, summary };
+  const parents = parentsRaw ? parentsRaw.split(' ').filter(Boolean) : [];
+  return { commit: full, authorName, authorEmail, authorDate, committerDate, summary, parents };
 }
 
 export function getFirstParent(scanRoot, sha) {

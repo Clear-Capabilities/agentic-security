@@ -27,6 +27,11 @@ test('git-evidence: repo state, blob fetch, candidates, blame', () => {
     const meta = commitMeta(fx.root, sha2);
     assert.equal(meta.authorName, 'Bob');
     assert.equal(meta.summary, 'add y');
+    // Task 6: `commitMeta` now carries `parents` itself (added so
+    // origin-resolver.js can drop a redundant `getFirstParent` git spawn per
+    // candidate) — pin it against both a normal commit and the repo root.
+    assert.deepEqual(meta.parents, [sha1]);
+    assert.deepEqual(commitMeta(fx.root, sha1).parents, []);
 
     assert.equal(getFirstParent(fx.root, sha2), sha1);
     assert.equal(getFirstParent(fx.root, sha1), null);
@@ -311,6 +316,7 @@ test('hardening flags produce byte-identical output to an ordinary, unhardened-n
     assert.deepEqual(commitMeta(fx.root, sha2), {
       commit: sha2, authorName: 'Bob', authorEmail: 'fixture@example.com',
       authorDate: '2026-01-02T00:00:00Z', committerDate: '2026-01-02T00:00:00Z', summary: 'add z',
+      parents: [sha1],
     });
     assert.equal(getFirstParent(fx.root, sha2), sha1);
     assert.equal(getBlobAtCommit(fx.root, sha2, 'a.js'), 'const x = 1;\nconst y = 2;\nconst z = 3;\n');
