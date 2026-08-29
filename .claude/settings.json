@@ -14,7 +14,7 @@
       "Read(./.agentic-security/hook-throttle.json)",
       "Read(./scanner/src/posture/.agentic-security/**)",
       "Read(./scanner/node_modules/**)",
-      "Read(./data/**)",
+      "Read(/data/**)",
       "Read(./reports/**)",
       "Read(./bench/cve-replay/results/**)",
       "Read(./bench/owasp-benchmark-v1.2/**)",
