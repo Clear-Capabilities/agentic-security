@@ -1,5 +1,4 @@
 import { el, clear } from './lib/dom.js';
-import { escapeHtml } from './lib/escape-html.js';
 import { parseStateFromHash, serializeStateToHash } from './lib/state.js';
 
 const VIEWS = [
@@ -11,18 +10,26 @@ const VIEWS = [
 /**
  * @param {HTMLElement} rootEl
  * @param {object} graph - a DataFlowGraph v1 envelope (already validated at build time)
- * @returns {{ setActiveView: (viewName: string) => void, getCanvasEl: () => HTMLElement, getInspectorEl: () => HTMLElement }}
+ * @returns {{
+ *   setActiveView: (viewName: string) => void,
+ *   getState: () => {view: string, selectedId: string|null, filters: object},
+ *   setSelection: (selectedId: string|null) => void,
+ *   setFilters: (filters: object) => void,
+ *   onStateChange: (listener: (state: object) => void) => (() => void),
+ *   getCanvasEl: () => HTMLElement,
+ *   getInspectorEl: () => HTMLElement,
+ *   destroy: () => void,
+ * }}
  */
 export function mountShell(rootEl, graph) {
   let state = parseStateFromHash(window.location.hash);
+  let stateChangeListeners = [];
 
   const shell = el('div', { class: 'shell' });
   const header = buildHeader(graph);
   const coverageBanner = buildCoverageBanner(graph);
   const tabs = buildViewTabs(state.view, (nextView) => {
-    state = { ...state, view: nextView };
-    window.location.hash = serializeStateToHash(state);
-    applyActiveTab(tabs, state.view);
+    updateState({ ...state, view: nextView });
   });
   const leftRail = el('div', { class: 'shell__left-rail' }, 'Filters (wired by the next plan)');
   const canvas = el('div', { class: 'shell__canvas' });
@@ -40,19 +47,53 @@ export function mountShell(rootEl, graph) {
   clear(rootEl);
   rootEl.appendChild(shell);
 
-  window.addEventListener('hashchange', () => {
+  function notifyStateChange() {
+    const snapshot = { ...state };
+    for (const listener of stateChangeListeners) listener(snapshot);
+  }
+
+  // Shared by setActiveView/setSelection/setFilters/the tab-click handler:
+  // update the closure state, sync the URL hash, refresh the tab UI, notify.
+  function updateState(nextState) {
+    state = nextState;
+    window.location.hash = serializeStateToHash(state);
+    applyActiveTab(tabs, state.view);
+    notifyStateChange();
+  }
+
+  function handleHashChange() {
     state = parseStateFromHash(window.location.hash);
     applyActiveTab(tabs, state.view);
-  });
+    notifyStateChange();
+  }
+
+  window.addEventListener('hashchange', handleHashChange);
 
   return {
     setActiveView(viewName) {
-      state = { ...state, view: viewName };
-      window.location.hash = serializeStateToHash(state);
-      applyActiveTab(tabs, state.view);
+      updateState({ ...state, view: viewName });
+    },
+    getState() {
+      return { ...state };
+    },
+    setSelection(selectedId) {
+      updateState({ ...state, selectedId });
+    },
+    setFilters(filters) {
+      updateState({ ...state, filters });
+    },
+    onStateChange(listener) {
+      stateChangeListeners.push(listener);
+      return () => {
+        stateChangeListeners = stateChangeListeners.filter((l) => l !== listener);
+      };
     },
     getCanvasEl: () => canvas,
     getInspectorEl: () => inspector,
+    destroy() {
+      window.removeEventListener('hashchange', handleHashChange);
+      stateChangeListeners = [];
+    },
   };
 }
 
@@ -63,14 +104,14 @@ function buildHeader(graph) {
   const isFixture = graph.scope?.source === 'fixture';
   return el('div', { class: 'shell__header' }, [
     el('div', { class: 'shell__header-title' }, 'Data Flow Explorer'),
-    el('div', { class: 'shell__header-meta' }, `${escapeHtml(repo)} · ${escapeHtml(env)} · Scan ${escapeHtml(scanStatus)}`),
+    el('div', { class: 'shell__header-meta' }, `${repo} · ${env} · Scan ${scanStatus}`),
     isFixture ? el('div', { class: 'shell__header-meta', 'data-illustrative': 'true' }, 'Illustrative demo data') : null,
   ]);
 }
 
 function buildCoverageBanner(graph) {
   const status = graph.coverage?.status ?? graph.scanHealth?.status;
-  const banner = el('div', { class: 'shell__coverage-banner' }, `Coverage: ${escapeHtml(status ?? 'unknown')} — not a complete assessment`);
+  const banner = el('div', { class: 'shell__coverage-banner' }, `Coverage: ${status ?? 'unknown'} — not a complete assessment`);
   if (status && status !== 'complete') banner.setAttribute('data-visible', 'true');
   return banner;
 }
