@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url';
 import {
   SCHEMA_VERSION, NODE_KINDS, MAPPING_TYPES, TRANSFORM_KINDS,
   COVERAGE_STATUS_VALUES, DESTINATION_RESOLUTION_VALUES, POLICY_STATES, EVIDENCE_TYPES,
+  EXTERNALITY_VALUES, GRAPH_SCOPE_SOURCES,
 } from '../../src/lineage/schema.js';
 import { PROTECTION_VERDICTS, EVIDENCE_GRADES } from '../../src/lineage/protection.js';
+import { LINEAGE_DATA_CLASSES, AI_PROCESSING_CONTEXTS } from '../../src/lineage/classification.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schemaPath = path.join(__dirname, '../../src/lineage/dataflow-graph.schema.json');
@@ -60,6 +62,30 @@ test('coverage status, destination resolution, policy state, evidence type enums
   assert.deepEqual([...schema.$defs.protocol.properties.destinationResolution.enum].sort(), [...DESTINATION_RESOLUTION_VALUES].sort());
   assert.deepEqual([...schema.$defs.flow.properties.policyVerdict.enum].sort(), [...POLICY_STATES].sort());
   assert.deepEqual([...schema.$defs.evidence.properties.evidenceType.enum].sort(), [...EVIDENCE_TYPES].sort());
+});
+
+test('node externality.value enum matches schema.js EXTERNALITY_VALUES', () => {
+  const schema = loadSchema();
+  const enumVals = schema.$defs.node.properties.externality.properties.value.enum;
+  assert.deepEqual([...enumVals].sort(), [...EXTERNALITY_VALUES].sort());
+});
+
+test('dataElement dataClasses item enum matches classification.js LINEAGE_DATA_CLASSES', () => {
+  const schema = loadSchema();
+  const enumVals = schema.$defs.dataElement.properties.dataClasses.items.enum;
+  assert.deepEqual([...enumVals].sort(), [...LINEAGE_DATA_CLASSES].sort());
+});
+
+test('dataElement aiContexts item enum matches classification.js AI_PROCESSING_CONTEXTS', () => {
+  const schema = loadSchema();
+  const enumVals = schema.$defs.dataElement.properties.aiContexts.items.enum;
+  assert.deepEqual([...enumVals].sort(), [...AI_PROCESSING_CONTEXTS].sort());
+});
+
+test('scope.source enum matches schema.js GRAPH_SCOPE_SOURCES', () => {
+  const schema = loadSchema();
+  const enumVals = schema.properties.scope.properties.source.enum;
+  assert.deepEqual([...enumVals].sort(), [...GRAPH_SCOPE_SOURCES].sort());
 });
 
 test('top-level required envelope keys are all present', () => {

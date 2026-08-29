@@ -9,7 +9,12 @@
     "schemaVersion": { "const": "1.0.0" },
     "graphId": { "type": "string", "pattern": "^dfg:" },
     "generatedAt": { "type": "string", "format": "date-time" },
-    "scope": { "type": "object" },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "source": { "type": "string", "enum": ["scan", "fixture"] }
+      }
+    },
     "scanHealth": { "type": "object" },
     "taxonomy": { "type": "object" },
     "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
@@ -37,7 +42,13 @@
         "location": { "type": ["object", "null"] },
         "system": { "type": "object" },
         "destination": { "type": ["object", "null"] },
-        "externality": { "type": "object" },
+        "externality": {
+          "type": "object",
+          "properties": {
+            "value": { "type": "string", "enum": ["internal", "external", "unknown"] },
+            "evidenceRefs": { "type": "array", "items": { "type": "string" } }
+          }
+        },
         "lifecycleStages": { "type": "array", "items": { "type": "string" } },
         "governanceRefs": { "type": "object" },
         "dataElementIds": { "type": "array", "items": { "type": "string" } },
@@ -104,8 +115,8 @@
         "name": { "type": "string" },
         "aliases": { "type": "array", "items": { "type": "string" } },
         "declaredType": { "type": ["string", "null"] },
-        "dataClasses": { "type": "array", "items": { "type": "string" } },
-        "aiContexts": { "type": "array", "items": { "type": "string" } },
+        "dataClasses": { "type": "array", "items": { "type": "string", "enum": ["PII", "PHI", "PCI", "FIN", "CREDENTIALS", "GEOLOCATION", "DEVICE_ID", "CONFIDENTIAL"] } },
+        "aiContexts": { "type": "array", "items": { "type": "string", "enum": ["ai.system_prompt", "ai.user_prompt", "ai.model_input", "ai.model_output", "ai.rag_context", "ai.embedding", "ai.vector_store", "ai.memory", "ai.tool_argument", "ai.tool_result", "ai.training_data", "ai.fine_tuning_data", "ai.evaluation_data", "ai.telemetry", "ai.model_artifact"] } },
         "sourceLocations": { "type": "array" },
         "dataSubjectCategory": { "type": ["string", "null"] },
         "classificationEvidence": { "type": "array" },
