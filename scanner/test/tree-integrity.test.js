@@ -24,9 +24,30 @@ const HERE_BENCH = path.join(REPO_ROOT, 'bench');
  * `autopilot` applies fixes and `enroll-proven-finding` writes corpus entries —
  * mutation IS the job in both cases, and they run against a project the user
  * explicitly pointed them at.
+ *
+ * `provenance/runner.mjs` is the one entry here that is a BENCH, so it needs
+ * the sharper justification. This guard exists because a bench that mutates
+ * the corpus it measures produces a number nobody should quote — but that
+ * reasoning is about a TRACKED corpus (bench/cve-replay's trees, this repo's
+ * own src/). The provenance bench's fixture is a different kind of thing: a
+ * git repo built fresh in a private os.tmpdir() per iteration by
+ * createGitFixture() and fs.rmSync'd by fx.cleanup() before the next one
+ * starts. Nothing it writes is tracked, committed, or reused across a run,
+ * so there is no corpus to contaminate.
+ *
+ * And it MUST write: the bench's warm-cache arm measures the cost of a scan
+ * that hits `.agentic-security/provenance-cache/`, and that cache is itself
+ * gated on state writes being enabled (see cache.js). Calling
+ * disableStateWrites() here would silently turn the warm arm into a second
+ * cold arm — the bench would still print a "warm" number, and it would be
+ * wrong. Leaving writes on is also the more honest measurement: a real scan
+ * writes last-scan.json and the cache too.
+ *
+ * If this bench is ever repointed at a tracked tree, remove this entry.
  */
 const SCANNERS_THAT_WRITE_BY_DESIGN = new Set([
   'scripts/autopilot.mjs', 'scripts/enroll-proven-finding.mjs',
+  'provenance/runner.mjs',
 ]);
 
 async function tmpTree() {
