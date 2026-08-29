@@ -117,11 +117,16 @@ export async function readTree(root, { ignore = [] } = {}) {
 // checkout — hardened per FR-PROV-024 / the second Finding Provenance PRD
 // audit (same exposure class as provenance/git-evidence.js: a hostile
 // .git/config's `core.fsmonitor` fires on the `git status --porcelain`
-// call below just from reading repo state).
+// call below just from reading repo state). `--no-ext-diff` is added to the
+// `diff --name-only` call too: VERIFIED that shape does not itself invoke an
+// external diff driver in current git (no content is rendered), but it costs
+// nothing and keeps every `git diff` call site in this codebase uniformly
+// hardened against the surface `material-change.js`'s `classifyGitDiff` was
+// actually caught on (see that file's comment for the live exploit).
 export function changedSince(root, gitRef) {
   if (!gitRef) return null;
   try {
-    const out = cp.execFileSync('git', hardenGitArgs(['diff', '--name-only', `${gitRef}...HEAD`]), {
+    const out = cp.execFileSync('git', hardenGitArgs(['diff', '--name-only', '--no-ext-diff', `${gitRef}...HEAD`]), {
       cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv(),
     });
     const set = new Set(out.split('\n').filter(Boolean));

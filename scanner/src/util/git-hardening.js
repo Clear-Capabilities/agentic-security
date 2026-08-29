@@ -13,8 +13,11 @@
 // Reproduced against this exact repro shape before this module existed:
 // `getRepoState()` alone wrote a marker file outside the repo.
 //
-// Three independent hostile-config surfaces, each closed by a different
-// flag/env var (do not assume one covers another):
+// Four independent hostile-config surfaces, each closed by a different
+// flag/env var (do not assume one covers another — a same-class RCE
+// survived the first round of this hardening precisely because
+// `--no-textconv` was assumed to cover `git diff` the same way it covers
+// `git show`/`git log -p`/`git blame`, and it does not):
 //   - `core.fsmonitor`   -> fires on `git status` (and other porcelain
 //                           commands that consult the index). Closed by
 //                           `-c core.fsmonitor=` (empty value disables it).
@@ -44,6 +47,40 @@
 //                           (blob cat, not a diff) were NOT exploitable in
 //                           this git version, but `git show -U0`, `git log
 //                           -L`, and `git blame` all were.
+//   - `.git/config` /       an EXTERNAL diff driver — `.gitattributes`
+//     `.gitattributes`      `diff=<name>` + `.git/config [diff "<name>"]
+//     external diff driver  command=<script>`, or the repo-local/global
+//                           `diff.external` config key — is a DIFFERENT
+//                           mechanism from the textconv driver above and is
+//                           NOT closed by `--no-textconv`. VERIFIED: `git
+//                           -c core.fsmonitor= -c core.hooksPath=/dev/null
+//                           diff --unified=0 --no-textconv <ref>...HEAD`
+//                           still runs the attacker's `diff.evil.command`
+//                           script — `--no-textconv` only suppresses the
+//                           TEXTCONV driver, and `git diff` (unlike `git
+//                           show`/`git log -p`/`git blame`, which were all
+//                           verified safe with just `--no-textconv`) honours
+//                           an external diff driver by default regardless.
+//                           Closed by `--no-ext-diff`, which must be passed
+//                           explicitly on every `git diff` invocation (same
+//                           reason `--no-textconv` isn't a `-c` flag: it's a
+//                           diff-machinery option, not repo config). This
+//                           was the live RCE a second review found after the
+//                           first round of this hardening shipped —
+//                           material-change.js's `classifyGitDiff` (the real
+//                           entry point for `/scan --diff`) had
+//                           `--no-textconv` but not `--no-ext-diff` and was
+//                           still exploitable end-to-end.
+//
+// A FIFTH surface is known but not exploitable through any call site in this
+// codebase today, so it is documented rather than closed: a `clean` smudge
+// filter (`.gitattributes` `filter=<name>` + `filter.<name>.clean`) fires on
+// a WORKTREE diff (e.g. `git diff --name-only HEAD` with no `<ref>` on the
+// other side) and has no git flag to disable it at all (unlike textconv/
+// ext-diff). Every `git diff` call site in this codebase diffs two refs
+// (`<ref>...HEAD`), never the worktree against HEAD, so nothing here hits
+// it — but a future worktree-diff call site would silently reintroduce this
+// exact vulnerability class and must not assume `hardenGitArgs` covers it.
 //
 // `GIT_CONFIG_NOSYSTEM=1` additionally blocks a SYSTEM-level git config
 // (outside any repository, e.g. /etc/gitconfig) from re-introducing a
@@ -58,7 +95,10 @@
 // through `hardenGitEnv`. A `git show`/`git diff`/`git log -p`/`git log -L`/
 // `git blame` invocation must ALSO pass `--no-textconv` explicitly (it is
 // not a `-c` config value, so it isn't folded into `GIT_HARDENED_CONFIG_ARGS`
-// — it must appear in the invocation's own args, after the config args).
+// — it must appear in the invocation's own args, after the config args), and
+// a `git diff` invocation must ADDITIONALLY pass `--no-ext-diff` (a
+// different flag for a different surface — see above; `--no-textconv` does
+// not imply it).
 
 export const GIT_HARDENED_CONFIG_ARGS = Object.freeze([
   '-c', 'core.fsmonitor=',

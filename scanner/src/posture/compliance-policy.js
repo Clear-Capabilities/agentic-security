@@ -64,7 +64,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { hardenGitArgs, hardenGitEnv } from '../util/git-hardening.js';
 import * as yaml from '../util/yaml.js';
 import { statePath, safeWriteState, STATE_DIR_NAME } from './state-dir.js';
 import { SCANNER_VERSION } from './version.js';
@@ -367,10 +368,19 @@ export function verifyPolicy(policy, ctx) {
   return { framework: policy.framework, version: policy.version, controls: results, summary, evidenceDigest };
 }
 
+// `scanRoot` is the scanned project's repository, not this project's own
+// trusted checkout — hardened per FR-PROV-024 / the second Finding
+// Provenance PRD audit sweep (found missing here by a follow-up review that
+// grepped for `child_process` usage beyond just `execFileSync('git'` call
+// sites). `rev-parse HEAD` was VERIFIED not to itself trigger
+// `core.fsmonitor`/a hook, so this is not a second live RCE — but the
+// shell-string `execSync` form was gratuitous risk with no upside (no
+// caller-controlled input to interpolate), and left this call outside the
+// config/env hardening every other git call in this codebase now has.
 function _currentCommit(scanRoot) {
   if (!scanRoot) return null;
   try {
-    return execSync('git rev-parse HEAD', { cwd: scanRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return execFileSync('git', hardenGitArgs(['rev-parse', 'HEAD']), { cwd: scanRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv() }).trim();
   } catch { return null; } // not a git repo, or git unavailable — not an error condition
 }
 

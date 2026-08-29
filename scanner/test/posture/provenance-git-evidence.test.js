@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import {
   isGitRepo, getRepoState, commitMeta, getFirstParent, getAllParents, getBlobAtCommit,
-  candidateCommitsForLine, candidateCommitsForFile, blameLine, _relPath,
+  candidateCommitsForLine, candidateCommitsForFile, blameLine, commitDiff, _relPath,
 } from '../../src/posture/provenance/git-evidence.js';
 
 test('git-evidence: repo state, blob fetch, candidates, blame', () => {
@@ -213,6 +213,113 @@ test('getRepoState: a hostile core.fsmonitor script is never executed (FR-PROV-0
   } finally {
     fx.cleanup();
     fs.rmSync(markerDir, { recursive: true, force: true });
+  }
+});
+
+// Second-round follow-up review (FR-PROV-024): the brief for the fsmonitor
+// fix above ALSO required textconv-driver regression coverage ("Add
+// additional test cases for --no-textconv ... on the file commitDiff
+// reads"), which was never added in the first round — a reviewer confirmed
+// by grep that zero tests covered `--no-textconv`/`hardenGitArgs` and that
+// deleting every `--no-textconv` from the diff left all 203 provenance
+// tests green. These three tests close that gap for the three call sites
+// this module's own comments label "VERIFIED exploitable": commitDiff,
+// candidateCommitsForLine, blameLine.
+//
+// Builds a fixture where `a.js` has a hostile `.gitattributes` textconv
+// driver attached (a `diff=<name>` attribute + a matching
+// `diff.<name>.textconv` config value pointing at an attacker script) —
+// the mechanism `--no-textconv` exists to suppress. The driver both writes
+// the marker (the exploit side effect) and cats its input back to stdout
+// (`"$1"`, the textconv protocol: git passes the blob's temp-file path as
+// argv[1]) so a misconfigured/absent `--no-textconv` still produces
+// well-formed diff output instead of git erroring out for an unrelated
+// reason.
+function buildTextconvFixture() {
+  const fx = createGitFixture();
+  const markerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-textconv-poc-'));
+  const markerFile = path.join(markerDir, 'pwned');
+  fx.writeFile('a.js', 'line1\nline2\nline3\n');
+  const sha1 = fx.commit('c1', { date: '2026-01-01T00:00:00Z' });
+  fx.writeFile('a.js', 'line1\nCHANGED\nline3\n');
+  fx.writeFile('.gitattributes', 'a.js diff=evil\n');
+  const sha2 = fx.commit('c2', { date: '2026-01-02T00:00:00Z' });
+  const driver = path.join(fx.root, 'hostile-textconv.sh');
+  fs.writeFileSync(driver, `#!/bin/sh\necho PWNED > ${JSON.stringify(markerFile)}\ncat "$1"\n`);
+  fs.chmodSync(driver, 0o755);
+  execFileSync('git', ['config', 'diff.evil.textconv', driver], { cwd: fx.root });
+  return { fx, markerDir, markerFile, sha1, sha2 };
+}
+
+test('commitDiff: a hostile .gitattributes textconv driver is never executed (FR-PROV-024)', () => {
+  const { fx, markerDir, markerFile, sha2 } = buildTextconvFixture();
+  try {
+    const diff = commitDiff(fx.root, sha2);
+    assert.ok(diff && diff.includes('CHANGED'), 'sanity: the diff must actually be produced, or this test proves nothing');
+    assert.equal(fs.existsSync(markerFile), false,
+      'a hostile textconv driver must never execute from commitDiff()');
+  } finally {
+    fx.cleanup();
+    fs.rmSync(markerDir, { recursive: true, force: true });
+  }
+});
+
+test('candidateCommitsForLine: a hostile .gitattributes textconv driver is never executed (FR-PROV-024)', () => {
+  const { fx, markerDir, markerFile, sha2 } = buildTextconvFixture();
+  try {
+    // Line 2 both exists at sha1 ("line2") and is modified at sha2
+    // ("CHANGED"), so the walk legitimately reports both commits — the
+    // point of this sanity check is just that the walk actually ran and
+    // found the real history, not the exact candidate count.
+    const candidates = candidateCommitsForLine(fx.root, 'a.js', 2);
+    assert.ok(candidates.includes(sha2), 'sanity: the line-history walk must actually reach sha2, or this test proves nothing');
+    assert.equal(fs.existsSync(markerFile), false,
+      'a hostile textconv driver must never execute from candidateCommitsForLine()');
+  } finally {
+    fx.cleanup();
+    fs.rmSync(markerDir, { recursive: true, force: true });
+  }
+});
+
+test('blameLine: a hostile .gitattributes textconv driver is never executed (FR-PROV-024)', () => {
+  const { fx, markerDir, markerFile, sha2 } = buildTextconvFixture();
+  try {
+    const blame = blameLine(fx.root, 'a.js', 2);
+    assert.equal(blame?.commit, sha2, 'sanity: blame must actually resolve to the real commit, or this test proves nothing');
+    assert.equal(fs.existsSync(markerFile), false,
+      'a hostile textconv driver must never execute from blameLine()');
+  } finally {
+    fx.cleanup();
+    fs.rmSync(markerDir, { recursive: true, force: true });
+  }
+});
+
+// Cheap explicit "no regression" coverage: the hardening flags must not
+// change any observable output for a well-behaved repository with no
+// hostile config at all — complementary to (not a replacement for) the 200+
+// other provenance tests that exercise this implicitly.
+test('hardening flags produce byte-identical output to an ordinary, unhardened-needing repo', () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'const x = 1;\nconst y = 2;\n');
+    const sha1 = fx.commit('add a.js', { date: '2026-01-01T00:00:00Z', authorName: 'Alice' });
+    fx.writeFile('a.js', 'const x = 1;\nconst y = 2;\nconst z = 3;\n');
+    const sha2 = fx.commit('add z', { date: '2026-01-02T00:00:00Z', authorName: 'Bob' });
+
+    assert.equal(isGitRepo(fx.root), true);
+    assert.deepEqual(getRepoState(fx.root), { head: sha2, branch: 'master', dirty: false, shallow: false });
+    assert.deepEqual(commitMeta(fx.root, sha2), {
+      commit: sha2, authorName: 'Bob', authorEmail: 'fixture@example.com',
+      authorDate: '2026-01-02T00:00:00Z', committerDate: '2026-01-02T00:00:00Z', summary: 'add z',
+    });
+    assert.equal(getFirstParent(fx.root, sha2), sha1);
+    assert.equal(getBlobAtCommit(fx.root, sha2, 'a.js'), 'const x = 1;\nconst y = 2;\nconst z = 3;\n');
+    assert.ok(commitDiff(fx.root, sha2).includes('+const z = 3;'));
+    assert.deepEqual(candidateCommitsForLine(fx.root, 'a.js', 3), [sha2]);
+    assert.deepEqual(candidateCommitsForFile(fx.root, 'a.js'), [sha1, sha2]);
+    assert.equal(blameLine(fx.root, 'a.js', 3).commit, sha2);
+  } finally {
+    fx.cleanup();
   }
 });
 

@@ -100,7 +100,14 @@ function _summary(findings) {
 }
 
 function _changedFiles(root, baseRef, headRef) {
-  const r = _git(root, ['diff', '--name-only', `${baseRef}...${headRef}`]);
+  // `--no-ext-diff`: found during the second-audit-remediation sweep — this
+  // is a `git diff` call site (`--name-only`, no content rendered, so not
+  // itself a verified exploit path today, same as runScan.js's
+  // `changedSince`), but every `diff` invocation in this codebase gets it
+  // uniformly per the live exploit VERIFIED in material-change.js's
+  // classifyGitDiff (external diff drivers fire on `git diff` even with
+  // `--no-textconv`, which is a surface `--no-textconv` alone does not close).
+  const r = _git(root, ['diff', '--name-only', '--no-ext-diff', `${baseRef}...${headRef}`]);
   if (!r.ok) return new Set();
   return new Set(r.stdout.trim().split('\n').filter(Boolean));
 }

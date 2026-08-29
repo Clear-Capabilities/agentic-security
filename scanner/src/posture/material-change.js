@@ -203,10 +203,22 @@ function summarize(findings) {
 // defense-in-depth: this renders real diff content, the same shape VERIFIED
 // exploitable via a hostile `.gitattributes` textconv driver in
 // provenance/git-evidence.js's `commitDiff` (FR-PROV-024 / the second audit).
+//
+// `--no-ext-diff` is ALSO load-bearing and is a SEPARATE surface from
+// `--no-textconv`: `git diff` (unlike `git show`/`git log -p`/`git blame`)
+// honours an external diff driver (`.gitattributes` `diff=<name>` +
+// `.git/config [diff "<name>"] command=<script>`, or the global
+// `diff.external`) even with `--no-textconv` set — VERIFIED empirically: the
+// exact argv this function shipped with before this fix
+// (`-c core.fsmonitor= -c core.hooksPath=/dev/null diff --unified=0
+// --no-textconv <ref>...HEAD`) still ran an attacker's `diff.evil.command`
+// script. This was the live, remaining RCE a second review caught: this
+// function is the real entry point for `/scan --diff` and
+// `security-material-change`, both invoked against the scanned project.
 export function classifyGitDiff(rootDir, ref) {
   let out;
   try {
-    out = cp.execFileSync('git', hardenGitArgs(['diff', '--unified=0', '--no-textconv', `${ref}...HEAD`]), {
+    out = cp.execFileSync('git', hardenGitArgs(['diff', '--unified=0', '--no-textconv', '--no-ext-diff', `${ref}...HEAD`]), {
       cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv(),
     });
   } catch (e) {

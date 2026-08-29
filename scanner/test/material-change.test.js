@@ -3,8 +3,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { classifyDiff, classifyFixMaterialRisk, HIGH_IMPACT_CATEGORY_OF_KIND } from '../src/posture/material-change.js';
+import { classifyDiff, classifyFixMaterialRisk, classifyGitDiff, HIGH_IMPACT_CATEGORY_OF_KIND } from '../src/posture/material-change.js';
+import { createGitFixture } from './helpers/build-git-fixture.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesPath = path.join(__dirname, 'fixtures', 'material-change', 'diffs.json');
@@ -99,4 +102,52 @@ test('classifyFixMaterialRisk: missing/null before or after content degrades saf
 test('HIGH_IMPACT_CATEGORY_OF_KIND names exactly the 7 PRD categories: auth, authZ, crypto, pii, schema, infra-privilege, public-api', () => {
   const categories = new Set(Object.values(HIGH_IMPACT_CATEGORY_OF_KIND));
   assert.deepEqual([...categories].sort(), ['auth', 'authZ', 'crypto', 'infra-privilege', 'pii', 'public-api', 'schema']);
+});
+
+// ── FR-PROV-024: classifyGitDiff against a hostile repository ─────────────
+//
+// A second, independent review of the first round of git-subprocess
+// hardening (provenance/git-evidence.js's `_run` + util/git-hardening.js)
+// found and VERIFIED a live, same-class RCE this file's `classifyGitDiff`
+// still had: `--no-textconv` does NOT disable an external diff driver, and
+// `git diff` (unlike `git show`/`git log -p`/`git blame`, all closed by
+// `--no-textconv` alone) honours one by default regardless. This function is
+// the real, shipped entry point for `/scan --diff` and
+// `security-material-change`, both invoked against the scanned project's
+// (attacker-influenceable) repository — this was not a hypothetical gap.
+//
+// Reproduces the exploit the same way the fsmonitor/textconv tests above do:
+// build a real fixture, wire a hostile git config, call the real production
+// function, assert the marker it would write is absent.
+test('classifyGitDiff: a hostile external diff driver (.gitattributes diff= + diff.<name>.command) is never executed (FR-PROV-024)', () => {
+  const fx = createGitFixture();
+  const markerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-extdiff-poc-'));
+  const markerFile = path.join(markerDir, 'pwned');
+  try {
+    fx.writeFile('a.js', 'line1\nline2\nline3\n');
+    const sha1 = fx.commit('c1', { date: '2026-01-01T00:00:00Z' });
+    fx.writeFile('a.js', 'line1\nCHANGED\nline3\n');
+    fx.writeFile('.gitattributes', 'a.js diff=evil\n');
+    fx.commit('c2', { date: '2026-01-02T00:00:00Z' });
+
+    // An external diff driver's protocol differs from textconv's: git
+    // invokes it as `<driver> path old-file old-hex old-mode new-file
+    // new-hex new-mode [rename-score]` and expects the driver itself to
+    // print the diff to stdout — so this also emits a plain unified diff
+    // (via the real `diff` binary) so a misconfigured/absent
+    // `--no-ext-diff` still produces well-formed output.
+    const driver = path.join(fx.root, 'hostile-ext-diff.sh');
+    fs.writeFileSync(driver, `#!/bin/sh\necho PWNED > ${JSON.stringify(markerFile)}\ndiff -u "$2" "$5" 2>/dev/null\nexit 0\n`);
+    fs.chmodSync(driver, 0o755);
+    execFileSync('git', ['config', 'diff.evil.command', driver], { cwd: fx.root });
+
+    const result = classifyGitDiff(fx.root, sha1);
+    assert.ok(!result.error, `sanity: classifyGitDiff must actually succeed, or this test proves nothing (error: ${result.error})`);
+
+    assert.equal(fs.existsSync(markerFile), false,
+      'a hostile external diff driver must never execute from classifyGitDiff()');
+  } finally {
+    fx.cleanup();
+    fs.rmSync(markerDir, { recursive: true, force: true });
+  }
 });
