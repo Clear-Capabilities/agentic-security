@@ -10,6 +10,7 @@ import { annotateGitProvenance } from '../../src/posture/provenance/coordinator.
 import { computeStableId } from '../../src/posture/stable-id.js';
 import { validateFindingsProvenance } from '../../src/posture/provenance/validate.js';
 import { CURRENT_RULESET_VERSION } from '../../src/posture/ruleset-version.js';
+import { updateLifecycle } from '../../src/posture/provenance/lifecycle.js';
 
 test('Scenario G: uncommitted finding gets status uncommitted, author unknown, no email', async () => {
   const fx = createGitFixture();
@@ -213,9 +214,69 @@ test('a partial result carries its method and its reason, not "none" and a gener
     assert.ok(fp.findingOrigin, 'the shallow-boundary case does report an origin commit');
     assert.match(fp.limitations[0], /shallow-boundary-reached/,
       'the specific reason must survive, not collapse into a generic string');
+
+    // Second independent Finding Provenance PRD audit (Task 7, item 2): PRD
+    // Scenario F ("shallow clone ... shallow boundary identified") was unmet
+    // — `historyCoverage.boundaryCommit` was hardcoded null at every
+    // construction site. On a REAL shallow clone (not a stub), it must now
+    // name the shallow-graft boundary commit git's own history walk treats
+    // as rootless.
+    assert.match(fp.historyCoverage.boundaryCommit, /^[0-9a-f]{40}$/,
+      `expected a real 40-hex boundary commit on a shallow clone; got ${JSON.stringify(fp.historyCoverage.boundaryCommit)}`);
   } finally {
     origin.cleanup();
     fs.rmSync(clonePath, { recursive: true, force: true });
+  }
+});
+
+// Second independent Finding Provenance PRD audit (Task 7, item 2): the
+// OTHER boundary producer — an operator-declared `--provenance-since`,
+// which must win regardless of clone depth (a deliberate statement beats an
+// incidental one) and must resolve to a real commit SHA, not the raw ref
+// string, so it survives round-tripping through the digest and any
+// consumer that expects a SHA shape.
+test('historyCoverage.boundaryCommit resolves --provenance-since to a real commit SHA', async () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'safe();\n');
+    const sinceSha = fx.commit('boundary', { date: '2026-01-01T00:00:00Z' });
+    fx.writeFile('a.js', 'db.query("SELECT * FROM t WHERE id = " + id);\n');
+    fx.commit('vuln', { date: '2026-01-02T00:00:00Z' });
+    const finding = { file: 'a.js', line: 1, ruleId: 'r' };
+    finding.stableId = computeStableId(finding);
+
+    await annotateGitProvenance([finding], {
+      scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', since: sinceSha,
+    });
+
+    assert.equal(finding.findingProvenance.historyCoverage.boundaryCommit, sinceSha);
+  } finally {
+    fx.cleanup();
+  }
+});
+
+// The null case is still correct where there is genuinely no boundary
+// concept — a full, unbounded clone with no --provenance-since. This pins
+// that the fix did not eliminate `null` universally, only where a real
+// boundary exists.
+test('historyCoverage.boundaryCommit stays null on a full clone with no --provenance-since', async () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'eval(x);\n');
+    fx.commit('c1', { date: '2026-01-01T00:00:00Z' });
+    // Real detector-produced finding (not a hand-built stableId), same
+    // precedent as the repo-lineage/ruleset-pinning tests above — a
+    // synthetic ruleId's stableId never matches what replayAt's historical
+    // rescan actually computes, which would land this on 'partial' for a
+    // reason unrelated to what this test is checking.
+    const scan = await runFullScan({ fileContents: { 'a.js': 'eval(x);\n' }, scanRoot: fx.root }, () => {});
+    const finding = (scan.findings || []).find((f) => f.file === 'a.js' && f.family === 'code-injection');
+    assert.ok(finding, 'expected the code-injection detector to fire on a.js');
+
+    assert.equal(finding.findingProvenance.status, 'complete');
+    assert.equal(finding.findingProvenance.historyCoverage.boundaryCommit, null);
+  } finally {
+    fx.cleanup();
   }
 });
 
@@ -667,4 +728,83 @@ test('runFullScan: rulesetVersion is the real effective version, and pinning a d
     fp1.evidenceDigest, fp2.evidenceDigest,
     'a ruleset-version change at the same HEAD must not collide on the same evidence digest (cache must not serve the stale entry)',
   );
+});
+
+// ── Second independent Finding Provenance PRD audit (Task 7, item 3) ──
+//
+// `firstObserved` used to be unconditionally "the current scan" — it only
+// LOOKED correct because the coordinator's own disk cache usually served the
+// same finding's whole provenance object back unchanged. A cache miss (HEAD
+// moves, the cache's TTL fires, an operator clears it) silently reset it to
+// "now." The lifecycle ledger already stores the true first `introduced`
+// event; these tests exercise the read-back.
+
+test('firstObserved survives a cold cache: two scans, an intervening cache-clear, same stableId, same firstObserved', async () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'eval(x);\n');
+    fx.commit('c1', { date: '2026-01-01T00:00:00Z' });
+
+    // Real detector-produced ruleId/line (via a `provenance:false` throwaway
+    // scan, so it doesn't populate the cache or lifecycle ledger itself) —
+    // same reasoning as the boundaryCommit test above: a hand-picked ruleId's
+    // stableId never matches what replayAt's historical rescan recomputes,
+    // which would land every call below on 'partial' for a reason unrelated
+    // to firstObserved.
+    const shape = await runFullScan({ fileContents: { 'a.js': 'eval(x);\n' }, scanRoot: fx.root, provenance: false }, () => {});
+    const real = (shape.findings || []).find((f) => f.file === 'a.js' && f.family === 'code-injection');
+    assert.ok(real && real.stableId, 'expected a real code-injection finding with a stableId');
+
+    const finding1 = { file: real.file, line: real.line, ruleId: real.ruleId, stableId: real.stableId };
+
+    // Scan 1: genuinely new finding — no ledger entry exists yet, so the
+    // honest fallback (current scan) is the correct answer here.
+    await annotateGitProvenance([finding1], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+    assert.equal(finding1.findingProvenance.status, 'complete');
+    assert.deepEqual(finding1.findingProvenance.firstObserved, { scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+
+    // engine.js's real sequence: annotateGitProvenance, THEN updateLifecycle
+    // over the same (now-annotated) findings.
+    await updateLifecycle(fx.root, [finding1], { scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+
+    // Simulate a cold cache: HEAD hasn't moved, but the operator cleared the
+    // provenance cache (or its TTL fired).
+    fs.rmSync(path.join(fx.root, '.agentic-security', 'provenance-cache'), { recursive: true, force: true });
+
+    // Scan 2: a DIFFERENT finding object, same identity (same stableId), a
+    // much later scanId/observedAt. Without the fix this would silently
+    // report scan 2's own time.
+    const finding2 = { file: real.file, line: real.line, ruleId: real.ruleId, stableId: real.stableId };
+
+    await annotateGitProvenance([finding2], { scanRoot: fx.root, scanId: 's2', observedAt: '2026-02-01T00:00:00Z' });
+    assert.equal(finding2.findingProvenance.status, 'complete', 'the cache-clear must force a real re-resolution, not a stale cache hit');
+    assert.deepEqual(
+      finding2.findingProvenance.firstObserved, { scanId: 's1', observedAt: '2026-01-01T00:00:00Z' },
+      'firstObserved must be read back from the lifecycle ledger, not reset to the current scan',
+    );
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('firstObserved falls back to the current scan when the lifecycle ledger genuinely has no prior record', async () => {
+  // No updateLifecycle call at all — this is the honest degrade for a
+  // channel (secrets/logicVulns/SCA) updateLifecycle is never fed, and for
+  // an actually-brand-new SAST finding on the very first scan.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'eval(x);\n');
+    fx.commit('c1', { date: '2026-01-01T00:00:00Z' });
+    const shape = await runFullScan({ fileContents: { 'a.js': 'eval(x);\n' }, scanRoot: fx.root, provenance: false }, () => {});
+    const real = (shape.findings || []).find((f) => f.file === 'a.js' && f.family === 'code-injection');
+    assert.ok(real && real.stableId, 'expected a real code-injection finding with a stableId');
+    const finding = { file: real.file, line: real.line, ruleId: real.ruleId, stableId: real.stableId };
+
+    await annotateGitProvenance([finding], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+
+    assert.equal(finding.findingProvenance.status, 'complete');
+    assert.deepEqual(finding.findingProvenance.firstObserved, { scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+  } finally {
+    fx.cleanup();
+  }
 });

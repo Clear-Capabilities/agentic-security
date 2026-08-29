@@ -56,6 +56,48 @@ test('missing-control wiring: a genuine rate-limit REMOVAL resolves complete, at
   );
 });
 
+// Second independent Finding Provenance PRD audit (Task 7, item 1): the
+// audit found `evidenceAttribution`'s `removed_guard` role was dead code —
+// nothing in scanner/src ever set it, even though this exact scenario (a
+// rate-limit guard present then removed) is precisely what that role
+// describes. The wiring lives in coordinator.js: when
+// `isMissingControlCandidate` and `resolveMissingControlOrigin` reaches
+// `status:'complete'`, `attributeEvidence` is called with
+// `{ removedGuard: true }`, so the finding's own file:line evidence node
+// (there is no source/sink/pathSteps shape for a control-absence finding)
+// gets role `removed_guard` instead of the generic `sink`.
+test('missing-control wiring: a genuine rate-limit REMOVAL emits a removed_guard evidence-attribution node, not a generic sink', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+
+  fx.writeFile(
+    'routes/auth.js',
+    "const router = require('express').Router();\nrouter.post('/login', rateLimit(), (req, res) => { res.send('ok'); });\nmodule.exports = router;\n",
+  );
+  fx.commit('add rate limiting to /login', { date: '2026-01-01T00:00:00Z' });
+
+  fx.writeFile(
+    'routes/auth.js',
+    "const router = require('express').Router();\nrouter.post('/login', (req, res) => { res.send('ok'); });\nmodule.exports = router;\n",
+  );
+  fx.commit('remove rate limiting (regression)', { date: '2026-01-02T00:00:00Z' });
+
+  const { scan } = await runScan(fx.root, { network: false });
+  const finding = (scan.findings || []).find(
+    (f) => f.file === 'routes/auth.js' && f.missingControlCandidate === true,
+  );
+  assert.ok(finding, 'expected a missingControlCandidate rate-limit finding');
+  const fp = finding.findingProvenance;
+  assert.equal(fp.status, 'complete');
+  assert.ok(Array.isArray(fp.evidenceAttribution) && fp.evidenceAttribution.length > 0,
+    'expected at least one evidence-attribution node');
+  const removedGuardNode = fp.evidenceAttribution.find((n) => n.role === 'removed_guard');
+  assert.ok(removedGuardNode, `expected a removed_guard-shaped node; got roles ${JSON.stringify(fp.evidenceAttribution.map((n) => n.role))}`);
+  assert.equal(removedGuardNode.path, 'routes/auth.js');
+  assert.ok(!fp.evidenceAttribution.some((n) => n.role === 'sink'),
+    'a control-absence finding must not ALSO get a generic sink node at the same location');
+});
+
 test('missing-control wiring: a rate-limit finding on code that NEVER had rate limiting resolves not_available, never falsely attributed to the root commit', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());

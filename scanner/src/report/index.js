@@ -440,6 +440,14 @@ export function normalizeFindings(scan){
       commit: s.commit || null,
       historical: s._historical === true,
       description: s.description || null,
+      // Second independent Finding Provenance PRD audit (Task 7, item 4):
+      // `stableId` was emitted for the SAST channel only (below), so a
+      // consumer of a secrets/logic/SCA finding could not recompute
+      // `findingProvenance.evidenceDigest` (it binds `stableId` as its first
+      // input — coordinator.js's `computeDigest`) — the exact case this
+      // channel needs it for, since `annotateStableIds(aSecrets)` (engine.js)
+      // already backfills a real one before provenance resolution runs.
+      stableId: s.stableId || null,
       findingProvenance: _normalizedProvenance(s),
     });
   }
@@ -468,6 +476,14 @@ export function normalizeFindings(scan){
       ecosystem: lv.ecosystem || null,
       license: lv.license || null,
       description: lv.description || null,
+      // Second independent Finding Provenance PRD audit (Task 7, item 4) —
+      // same reasoning as the secrets channel above. Note: only the
+      // `blameableLogic` subset (engine.js) gets a real backfilled stableId
+      // via `annotateStableIds`; the three synthetic-line producers
+      // (license-policy:/deploy-platform:/stack-playbook:) never go through
+      // that backfill and stay `null` here — honest, since they also stay on
+      // the permanent not_available provenance path (posture/CLAUDE.md).
+      stableId: lv.stableId || null,
       findingProvenance: _normalizedProvenance(lv),
     });
   }
@@ -523,6 +539,14 @@ export function normalizeFindings(scan){
       // Distinct from `sc.provenance`, which sca/sigstore-verify.js uses for
       // the package's Sigstore/SLSA build attestation — that one is NOT
       // carried here today and must not be conflated with this field.
+      // Second independent Finding Provenance PRD audit (Task 7, item 4) —
+      // same reasoning as the secrets/logic channels above. Only entries
+      // routed through annotateGitProvenance (engine.js's `directDeps`/
+      // `transitiveDeps`, `isSca`/`isTransitiveSca` in coordinator.js) get a
+      // real backfilled `scaStableId`; an entry that was never routed
+      // through it (e.g. `unpinned_dep`/`no_lockfile` types) honestly stays
+      // `null` here rather than fabricating one.
+      stableId: sc.stableId || null,
       findingProvenance: _normalizedProvenance(sc),
     });
   }

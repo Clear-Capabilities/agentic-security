@@ -27,6 +27,22 @@ export const PROVENANCE_METHOD = Object.freeze({
 
 export const CONFIDENCE_LEVEL = Object.freeze({ HIGH: 'high', MEDIUM: 'medium', LOW: 'low', UNKNOWN: 'unknown' });
 
+// Second independent Finding Provenance PRD audit: this enum is the PRD's
+// full role vocabulary, but not every value has a producer. Honest status
+// per role, so a reader does not assume "defined here" means "emitted
+// somewhere": SOURCE/SINK/TRANSFORMATION (evidence-attribution.js's
+// source/sink/pathSteps walk), MANIFEST/LOCKFILE (coordinator.js's SCA
+// evidence node), REMOVED_GUARD and SECRET are all live — REMOVED_GUARD via
+// the missingControlCandidate hint (rate-limit.js's routes,
+// evidence-attribution.js's `opts.removedGuard`), SECRET via the
+// `findingType: 'secret'` hint (`opts.secret`). GUARD ("a control IS
+// present at this location") and CONFIG ("a misconfigured setting, not a
+// taint sink") are declared but currently emitted by NO detector — wiring
+// either would mean new detector-side work (a "guard present" evidence
+// producer, or classifying which SAST findings are config-shaped), which is
+// out of scope for a schema-fidelity fix. Not dead in the sense of
+// unreachable code — the enum value and consumers of it (e.g. `validate.js`
+// callers, PRD-shaped JSON readers) are correct — just genuinely unemitted.
 export const EVIDENCE_ROLE = Object.freeze({
   SOURCE: 'source', SINK: 'sink', GUARD: 'guard', REMOVED_GUARD: 'removed_guard',
   TRANSFORMATION: 'transformation', CONFIG: 'config', SECRET: 'secret',

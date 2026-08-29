@@ -74,6 +74,47 @@ test('normalizeFindings carries findingProvenance on the secret / logic / sca ch
   }
 });
 
+// Second independent Finding Provenance PRD audit (Task 7, item 4):
+// `stableId` was emitted for the SAST channel only — report/index.js's sole
+// site was inside the `scan.findings` push, so a consumer of a secret/logic/
+// sca finding could never recompute `findingProvenance.evidenceDigest`
+// (coordinator.js's `computeDigest` binds `stableId` as its first input) for
+// three of the four channels. Same golden fixture as the test above, plus a
+// real `stableId` on each entry, now asserted through on all four.
+test('normalizeFindings carries stableId through on ALL FOUR channels, not just SAST', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['x'] });
+  const scan = {
+    findings: [{ id: 'f1', file: 'x.js', line: 1, severity: 'high', vuln: 'SQLi', cwe: 'CWE-89', stableId: 'sast-stable-1', findingProvenance: fp }],
+    secrets: [{ id: 's1', file: 'a.js', line: 2, stableId: 'secret-stable-1', findingProvenance: fp }],
+    logicVulns: [{ id: 'l1', vuln: 'IDOR', file: 'b.js', line: 3, stableId: 'logic-stable-1', findingProvenance: fp }],
+    supplyChain: [{ type: 'vulnerable_dep', name: 'left-pad', version: '1.0.0', file: 'package.json', stableId: 'sca-stable-1', findingProvenance: fp }],
+  };
+  const out = normalizeFindings(scan);
+  assert.equal(out.length, 4);
+  const byKind = Object.fromEntries(out.map((f) => [f.kind, f]));
+  assert.equal(byKind.sast.stableId, 'sast-stable-1');
+  assert.equal(byKind.secret.stableId, 'secret-stable-1');
+  assert.equal(byKind.logic.stableId, 'logic-stable-1');
+  assert.equal(byKind.sca.stableId, 'sca-stable-1');
+});
+
+// The honest-degrade half of the same fix: a finding with no stableId (never
+// routed through the backfill — e.g. a synthetic-line logicVulns producer,
+// or an sca entry annotateGitProvenance never saw) must surface `null`, not
+// fabricate one and not throw.
+test('normalizeFindings emits stableId:null (not fabricated) when a channel entry has none', () => {
+  const scan = {
+    findings: [{ id: 'f1', file: 'x.js', line: 1, severity: 'high', vuln: 'SQLi' }],
+    secrets: [{ id: 's1', file: 'a.js', line: 2 }],
+    logicVulns: [{ id: 'l1', vuln: 'IDOR', file: 'b.js', line: 3 }],
+    supplyChain: [{ type: 'vulnerable_dep', name: 'left-pad', version: '1.0.0', file: 'package.json' }],
+  };
+  const out = normalizeFindings(scan);
+  for (const f of out) {
+    assert.equal(f.stableId, null, `${f.kind} finding fabricated a stableId it was never given`);
+  }
+});
+
 test('explainProvenance renders a human block for a complete origin', () => {
   const fp = emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
     findingOrigin: { commit: 'abc1234567', authorName: 'Jamie Chen', authorDate: '2026-03-14T00:00:00Z' },

@@ -51,7 +51,8 @@
 //     because those are properties of the coordinator, not of the finding type.
 
 import * as crypto from 'node:crypto';
-import { getRepoState, isGitRepo, blameLine, getBlobAtCommit, getRemoteUrl } from './git-evidence.js';
+import { getRepoState, isGitRepo, blameLine, getBlobAtCommit, getRemoteUrl, resolveRevision, getRootCommits } from './git-evidence.js';
+import { readLifecycle } from './lifecycle.js';
 import { resolveOrigin } from './origin-resolver.js';
 import { resolveDirectSCAOrigin, scaStableId } from './sca-origin.js';
 import { resolveTransitiveSCAOrigin } from './transitive-sca.js';
@@ -221,6 +222,67 @@ function describePartial(isScaLike, reason) {
   };
 }
 
+// Second independent Finding Provenance PRD audit (Task 7, item 2):
+// `historyCoverage.boundaryCommit` was hardcoded `null` at all four
+// construction sites below — this is what makes it real. Resolved ONCE per
+// scan (same precedent as `repoState`/`lineageKey`/`providerConfig` above:
+// it's a couple of git calls, and every finding in one scan shares the same
+// answer), not per finding.
+//
+// Two producers, and an operator-declared boundary always wins over an
+// incidental one: `--provenance-since` is a deliberate statement ("don't
+// walk earlier than this"), so it is checked first and, when it resolves,
+// used regardless of clone depth. Only when no `since` was given (or it
+// failed to resolve — a bad ref/tag) does a genuinely shallow clone's own
+// graft boundary (`getRootCommits`) supply one. A full, unbounded clone with
+// no `--provenance-since` has no boundary concept at all — `null` remains
+// correct there, per this task's own brief: the fix is making it non-null
+// where a real boundary exists, not eliminating `null` universally.
+function resolveHistoryBoundaryCommit(scanRoot, since, shallow) {
+  if (since) {
+    const sha = resolveRevision(scanRoot, since);
+    if (sha) return sha;
+  }
+  if (shallow) {
+    const roots = getRootCommits(scanRoot);
+    if (roots.length) return roots[0];
+  }
+  return null;
+}
+
+// Second independent Finding Provenance PRD audit (Task 7, item 3):
+// `firstObserved` was unconditionally `{ scanId: ctx.scanId, observedAt:
+// ctx.observedAt }` — the CURRENT scan — on every cache miss, which only
+// looked stable because the coordinator's own disk cache (cache.js) usually
+// serves the same finding's PROVENANCE object back unchanged run-to-run. A
+// cache miss (HEAD moves, the cache's 7-day TTL fires, an operator clears
+// the cache) silently reset `firstObserved` to "now," even though this exact
+// finding may have been open for months.
+//
+// The lifecycle ledger (lifecycle.js) already answers this correctly: its
+// very first event for a stableId is ALWAYS type 'introduced' (`isOpenEvent`
+// short-circuits every later scan while the finding stays open, so no
+// second 'introduced' event is ever appended — see lifecycle.js's
+// `applyScan`), so `events[0]` IS the true first-observed record. Read it
+// back here instead of defaulting to the current scan; fall back to the
+// current scan only when the ledger genuinely has no prior record for this
+// stableId — a truly new finding, or a channel `updateLifecycle` is never
+// fed (secrets/logicVulns/SCA all currently fall in this bucket, per
+// engine.js's `updateLifecycle(scanRoot, finalFindings, ...)` call — SAST
+// findings only. That is an honest degrade to "no ledger, use current scan,"
+// not a bug this task introduces.
+function resolveFirstObserved(scanRoot, stableId, scanId, observedAt) {
+  try {
+    const store = readLifecycle(scanRoot);
+    const events = stableId ? store[stableId] : null;
+    const first = Array.isArray(events) && events.length > 0 ? events[0] : null;
+    if (first && first.type === 'introduced') {
+      return { scanId: first.scanId ?? null, observedAt: first.observedAt ?? null };
+    }
+  } catch { /* degrade to the current-scan fallback below, same as every other posture annotator */ }
+  return { scanId, observedAt };
+}
+
 // FR-PROV-017: adapts resolveMissingControl's own status vocabulary
 // (complete / unknown / budget_exhausted) onto the originResult shape the
 // rest of resolveAndCache already branches on (status:'complete' / 'partial'
@@ -282,7 +344,7 @@ async function resolveMissingControlOrigin(scanRoot, finding, { since, deadlineA
 }
 
 async function resolveOne(finding, ctx) {
-  const { scanRoot, repoState, deadlineAt } = ctx;
+  const { scanRoot, repoState, deadlineAt, historyBoundaryCommit } = ctx;
   // Direct-dependency (SCA) entries are a different shape AND a different
   // question from a SAST finding: they carry `filePath`/`name`/`ecosystem`
   // rather than `file`/`line`/`ruleId`, and their origin is a version
@@ -317,7 +379,7 @@ async function resolveOne(finding, ctx) {
   // question we can answer without spending anything.
   if (deadlineAt && Date.now() > deadlineAt) {
     return emptyProvenance(PROVENANCE_STATUS.BUDGET_EXHAUSTED, {
-      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: 0, crossRepoLineage: false },
+      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: historyBoundaryCommit || null, commitsConsidered: 0, crossRepoLineage: false },
       limitations: ['analysis budget expired before this finding was reached'],
     });
   }
@@ -376,7 +438,7 @@ async function resolveOne(finding, ctx) {
 }
 
 async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, isMissingControlCandidate = false) {
-  const { scanRoot, repoState, deadlineAt } = ctx;
+  const { scanRoot, repoState, deadlineAt, historyBoundaryCommit } = ctx;
   const cached = cacheGet(scanRoot, cacheKey);
   if (cached) return cached;
   // resolveOne computes isScaLike in its own scope; resolveAndCache does not
@@ -437,7 +499,7 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
           commit: originResult.findingOrigin.commit,
           depChain: isTransitiveSca && Array.isArray(originResult.depChain) ? originResult.depChain : null,
         }]
-      : attributeEvidence(scanRoot, finding);
+      : attributeEvidence(scanRoot, finding, { removedGuard: isMissingControlCandidate, secret: ctx.findingType === 'secret' });
     // Second independent Finding Provenance PRD audit: this call site used to
     // pass `renameAmbiguous: false` as a hardcoded literal — never computed
     // from any signal, so `confidence.js`'s `rename_ambiguous` reason was
@@ -465,11 +527,11 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
     provenance = emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
       findingOrigin: originResult.findingOrigin,
       branchIntroduction,
-      firstObserved: { scanId: ctx.scanId, observedAt: ctx.observedAt },
+      firstObserved: resolveFirstObserved(scanRoot, finding.stableId, ctx.scanId, ctx.observedAt),
       evidenceAttribution,
       method: originResult.method,
       confidence,
-      historyCoverage: { complete: !repoState.shallow, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered, crossRepoLineage: false },
+      historyCoverage: { complete: !repoState.shallow, shallow: repoState.shallow, boundaryCommit: historyBoundaryCommit || null, commitsConsidered: originResult.commitsConsidered, crossRepoLineage: false },
       analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector, dirty: repoState.dirty },
       // FR-PROV-017: a missing-control-regression `findingOrigin` names the
       // commit that REMOVED the safeguard, not the commit that introduced the
@@ -518,7 +580,7 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
     const partial = describePartial(isScaLike, originResult.reason);
     provenance = emptyProvenance(PROVENANCE_STATUS.PARTIAL, {
       findingOrigin: originResult.findingOrigin || null,
-      firstObserved: { scanId: ctx.scanId, observedAt: ctx.observedAt },
+      firstObserved: resolveFirstObserved(scanRoot, finding.stableId, ctx.scanId, ctx.observedAt),
       // `method` must be carried through. origin-resolver's shallow-boundary
       // case returns status:'partial' WITH a populated findingOrigin AND
       // method:'semantic-history-replay'. Letting emptyProvenance's 'none'
@@ -526,7 +588,7 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
       // commit, found by no method" — which also fed computeDigest.
       method: originResult.method || PROVENANCE_METHOD.NONE,
       historyCoverage: {
-        complete: false, shallow: repoState.shallow, boundaryCommit: null,
+        complete: false, shallow: repoState.shallow, boundaryCommit: historyBoundaryCommit || null,
         commitsConsidered: originResult.commitsConsidered || 0,
         // M4 §4.2: origin-resolver's cross-repo lineage continuation is the
         // only producer of this flag — every other 'partial' path (shallow
@@ -555,7 +617,7 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
     // global timeout will not help it unless the finding count drops too.
     const globalExpired = !!deadlineAt && Date.now() > deadlineAt;
     provenance = emptyProvenance(PROVENANCE_STATUS.BUDGET_EXHAUSTED, {
-      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: null, commitsConsidered: originResult.commitsConsidered || 0, crossRepoLineage: false },
+      historyCoverage: { complete: false, shallow: repoState.shallow, boundaryCommit: historyBoundaryCommit || null, commitsConsidered: originResult.commitsConsidered || 0, crossRepoLineage: false },
       limitations: [globalExpired
         ? 'analysis budget expired before origin could be resolved'
         : "this finding's per-finding share of the analysis budget expired before origin could be resolved"],
@@ -647,6 +709,14 @@ export async function annotateGitProvenance(findings, ctx) {
   const lineage = loadRepoLineage(scanRoot);
   const lineageKey = lineage ? `${lineage.path}@${lineage.atCommit}` : 'none';
 
+  // Second independent Finding Provenance PRD audit (Task 7, item 2):
+  // resolved ONCE per scan, same precedent as `lineageKey` above — every
+  // finding in this scan shares the same `--provenance-since` value and the
+  // same repo shallow-ness, so there is exactly one boundary commit (or
+  // none) for the whole call. See `resolveHistoryBoundaryCommit`'s own
+  // comment for the since-wins-over-shallow precedence.
+  const historyBoundaryCommit = resolveHistoryBoundaryCommit(scanRoot, options.since, repoState.shallow);
+
   // FR-PROV-022: resolved ONCE per scan, same precedent as `lineageKey`
   // above. `resolveProviderConfig` is a config-file/env-var read, not a
   // network call, so this stays cheap even when nothing is configured — but
@@ -682,7 +752,7 @@ export async function annotateGitProvenance(findings, ctx) {
   const fullCtx = {
     ...options, repoState, deadlineAt, perFindingBudgetMs, scanRoot, memo, lineageKey,
     providerConfig, providerName, remoteUrl,
-    providerEnrichments,
+    providerEnrichments, historyBoundaryCommit,
   };
 
   let active = 0;

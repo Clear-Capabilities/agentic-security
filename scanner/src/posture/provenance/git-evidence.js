@@ -265,6 +265,28 @@ export function candidateCommitsForFile(scanRoot, file, { since } = {}) {
   return r.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
+export function resolveRevision(scanRoot, revision) {
+  if (!_isSafeRevision(revision)) return null;
+  const r = _run(scanRoot, ['rev-parse', revision]);
+  return r.ok ? r.stdout.trim() : null;
+}
+
+// The commit(s) HEAD's history walk treats as having no parent — the true
+// repository root in a full clone, or the shallow-clone graft boundary in a
+// `--depth=N` clone (git's history walk cannot tell the two apart without
+// separately consulting `.git/shallow`, and this project doesn't need to:
+// either way, it is precisely "as far back as this checkout can see").
+// `--max-parents=0` returns them oldest-reachable-first is NOT guaranteed by
+// git, so a caller wanting a single deterministic boundary should treat the
+// first line as "a" boundary commit, not "the" canonical one when there is
+// more than one (a repo with multiple disconnected roots, or more than one
+// shallow-grafted commit).
+export function getRootCommits(scanRoot) {
+  const r = _run(scanRoot, ['rev-list', '--max-parents=0', 'HEAD']);
+  if (!r.ok) return [];
+  return r.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
 export function blameLine(scanRoot, file, line) {
   const rel = _relPath(scanRoot, file);
   if (!rel || !line || line < 1) return null;

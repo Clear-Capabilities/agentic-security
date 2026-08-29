@@ -58,6 +58,17 @@ test('secrets provenance: a real hardcoded AWS key resolves to its introducing c
   assert.equal(fp.status, 'complete', `expected status complete; got ${fp.status} (${JSON.stringify(fp.limitations)})`);
   assert.ok(fp.findingOrigin, 'expected a populated findingOrigin');
   assert.equal(fp.findingOrigin.commit, sha);
+
+  // Second independent Finding Provenance PRD audit (Task 7, item 1): the
+  // audit's own earlier finding was "a secret finding gets role sink" —
+  // engine.js routes scan.secrets through annotateGitProvenance with
+  // `findingType: 'secret'`, and coordinator.js now threads that through to
+  // attributeEvidence as `{ secret: true }`, so the evidence node names
+  // where the SECRET sits, not a generic taint sink.
+  assert.ok(Array.isArray(fp.evidenceAttribution) && fp.evidenceAttribution.length > 0,
+    'expected at least one evidence-attribution node');
+  assert.equal(fp.evidenceAttribution[0].role, 'secret',
+    `expected role 'secret', not the generic 'sink'; got ${JSON.stringify(fp.evidenceAttribution)}`);
 });
 
 test('secrets provenance: two different secret types in the same file get DIFFERENT stableIds, not collided', async (t) => {
