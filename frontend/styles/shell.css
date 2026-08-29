@@ -45,7 +45,7 @@
 .shell__coverage-banner[data-visible="true"] {
   display: block;
   background: var(--status-unknown);
-  color: #061625;
+  color: var(--status-banner-text);
   padding: 4px var(--space-2);
   border-radius: var(--radius-default);
   font-size: var(--font-size-body);

@@ -69,3 +69,22 @@ test('status/class badge colors meet the 3:1 non-text (UI component) threshold a
     assert.ok(ratio >= 3, `${name} (${hex}) on surface-panel is ${ratio.toFixed(2)}:1, below the 3:1 non-text threshold`);
   }
 });
+
+test('coverage banner text (--status-banner-text) meets AA (4.5:1) against --status-unknown in both themes', () => {
+  // Regression test: shell.css used to hardcode #061625 (the dark theme's
+  // --surface-canvas value) as the banner text color unconditionally, which
+  // measured 10.27:1 in dark theme but only 3.90:1 in light theme (below
+  // AA). --status-banner-text replaces that hardcoded value with a
+  // per-theme token; both theme's pairing must independently clear 4.5:1.
+  const pairs = {
+    dark: { bannerText: '#061625', statusUnknown: '#F5B83D' },
+    light: { bannerText: '#FFFFFF', statusUnknown: '#9A6B00' },
+  };
+  for (const [theme, { bannerText, statusUnknown }] of Object.entries(pairs)) {
+    const ratio = contrastRatio(bannerText, statusUnknown);
+    assert.ok(
+      ratio >= 4.5,
+      `${theme} theme: --status-banner-text (${bannerText}) on --status-unknown (${statusUnknown}) is ${ratio.toFixed(2)}:1, below the 4.5:1 AA threshold`,
+    );
+  }
+});

@@ -23,6 +23,14 @@
   --status-unprotected: #FF625C;
   --status-unknown: #F5B83D;
 
+  /* Text color for content painted directly on a status token background
+     (e.g. the coverage banner). NOT the same as --text-primary, which is
+     sized against --surface-canvas/--surface-panel, not against a status
+     color. Verified with lib/contrast.js's contrastRatio(): #061625 on
+     dark --status-unknown (#F5B83D) is 10.27:1. See the light-theme block
+     below for the light-theme value and its own verified ratio. */
+  --status-banner-text: #061625;
+
   /* AI processing context */
   --context-ai: #B47AFF;
 
@@ -78,6 +86,14 @@
   --status-protected: #1E8A4C;
   --status-unprotected: #C7362D;
   --status-unknown: #9A6B00;
+
+  /* Verified with lib/contrast.js's contrastRatio(): #FFFFFF on light
+     --status-unknown (#9A6B00) is 4.69:1 (>= 4.5:1 AA). The dark-block
+     value (#061625, --surface-canvas's own dark value) is 3.90:1 here --
+     below AA -- which is the bug this token pair fixes: shell.css must
+     never hardcode dark theme's value and expect it to also work in
+     light theme. */
+  --status-banner-text: #FFFFFF;
 
   --context-ai: #6E38B8;
 
