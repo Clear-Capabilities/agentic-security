@@ -75,11 +75,19 @@ stay open until a full scan says otherwise.
 
 ## What never gets a real origin, by design
 
-Three synthetic finding producers (`license-policy:`, `deploy-platform:`,
-`stack-playbook:`) and `logic-claims.js` findings describe dependency,
-deployment, or policy *state* — not a source line a commit introduced — and
-are permanently `not_available` rather than routed through resolution at all.
-This is a deliberate scope boundary, not a gap.
+Three synthetic finding producers — `license-policy:`, `deploy-platform:`,
+and `stack-playbook:` — describe dependency, deployment, or policy *state*
+rather than a source line a commit introduced. They carry a fixed placeholder
+line number, so running them through git-blame-style resolution would produce
+a plausible-looking but meaningless commit attribution. They are excluded by
+id-prefix and stay permanently `not_available`. This is a deliberate scope
+boundary, not a gap.
+
+`logic-claims.js` findings are **not** in this category — they do go through
+real origin resolution. They have a narrower limitation instead: they are
+appended late in the pipeline, so a nested historical replay cannot reproduce
+them, and a claim whose origin needs a multi-commit history walk will settle
+at `partial` rather than `complete`.
 
 ---
 
@@ -201,8 +209,10 @@ per scan.
 - **Shallow clones degrade to `partial`, and say so.** The status carries
   the reason and, where resolvable, the boundary commit it stopped at —
   never a silent `complete`.
-- **Three synthetic finding producers and `logic-claims.js` never get a real
-  origin, by design** — see "What never gets a real origin," above.
+- **Three synthetic finding producers never get a real origin, by design** —
+  see "What never gets a real origin," above. (`logic-claims.js` findings DO
+  get real resolution; they just tend to settle at `partial` on a multi-commit
+  walk.)
 
 ## The compliance boundary
 

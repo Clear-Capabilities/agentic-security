@@ -37,6 +37,7 @@
 import { loadFramework, evaluateFramework } from './auditor-walkthrough.js';
 import { statePath, safeWriteState } from './state-dir.js';
 import { EVIDENCE_GRADE_DISCLAIMER_SHORT } from './evidence-grade-wording.js';
+import { PROVENANCE_COMPLIANCE_DISCLAIMER } from './provenance/schema.js';
 
 export const PRIVACY_FRAMEWORK_ID = 'nist-privacy-1-1';
 
@@ -210,7 +211,18 @@ export function assessPrivacyFramework(scanRoot, scan, opts = {}) {
       family: 'privacy-compliance',
       complianceControl: { framework: PRIVACY_FRAMEWORK_ID, id: c.id, codeTestable: c.codeTestable || 'no' },
       controlRefs: r.controlRefs || [],
-      derivedProvenance: r.derivedProvenance || null,
+      // PRD Section 8 REQUIRED DISCLAIMER. `derivedProvenance` carries an
+      // origin commit, author and confidence onto a COMPLIANCE claim, and
+      // `compliance --privacy --format json` prints this object straight to
+      // stdout -- a second human-facing surface for the same data the auditor
+      // walkthrough disclaims inline. Found by a review of the walkthrough
+      // fix, which had asserted renderWalkthrough was the only consumer. The
+      // disclaimer travels ON the record rather than beside it, because a
+      // JSON consumer can slice a single finding out of the array and the
+      // caveat has to survive that.
+      derivedProvenance: r.derivedProvenance
+        ? { ...r.derivedProvenance, disclaimer: PROVENANCE_COMPLIANCE_DISCLAIMER }
+        : null,
     });
   }
 

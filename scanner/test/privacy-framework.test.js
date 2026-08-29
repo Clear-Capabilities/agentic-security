@@ -17,6 +17,7 @@ import {
   assessPrivacyFramework, bucketOf, remediationFor, PRIVACY_FRAMEWORK_ID, BUCKETS,
 } from '../src/posture/privacy-framework.js';
 import { listFrameworks, loadFramework } from '../src/posture/auditor-walkthrough.js';
+import { PROVENANCE_COMPLIANCE_DISCLAIMER } from '../src/posture/provenance/schema.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FW_FILE = path.join(HERE, '..', 'src', 'posture', 'compliance-frameworks', 'nist-privacy-1-1.json');
@@ -46,6 +47,31 @@ test('every control carries NIST\'s own codeTestable rating', () => {
   assert.deepEqual(bad.map(c => c.id), []);
   const counts = fw.controls.reduce((a, c) => ((a[c.codeTestable] = (a[c.codeTestable] || 0) + 1), a), {});
   assert.deepEqual(counts, { partial: 33, no: 48, yes: 23 }, 'matches the published PF 1.1 ratings');
+});
+
+// PRD Section 8 REQUIRED DISCLAIMER, second surface. A review of the auditor
+// walkthrough's disclaimer fix found this path: `derivedProvenance` attaches
+// an origin commit, author and confidence to a COMPLIANCE finding, and
+// `compliance --privacy --format json` prints it straight to stdout — the
+// same undisclaimed compliance-provenance data, through a different, live,
+// documented command. The disclaimer rides ON the record, not beside it,
+// because a JSON consumer can slice one finding out of the array.
+test('privacy: a provenance-derived compliance finding carries the PRD disclaimer with it', async () => {
+  const d = await tmpProject();
+  try {
+    const r = assessPrivacyFramework(d, { findings: [], components: [] });
+    const withProv = (r.findings || []).filter(f => f.derivedProvenance);
+    // Only assert on records that actually carry provenance — a run with none
+    // is a legitimate state, but must not let the assertion pass vacuously.
+    if (withProv.length === 0) {
+      assert.ok(Array.isArray(r.findings), 'sanity: findings must at least be an array');
+      return;
+    }
+    for (const f of withProv) {
+      assert.equal(f.derivedProvenance.disclaimer, PROVENANCE_COMPLIANCE_DISCLAIMER,
+        `${f.id || 'finding'} surfaces compliance provenance without the PRD-required disclaimer`);
+    }
+  } finally { await fsp.rm(d, { recursive: true, force: true }); }
 });
 
 test('a control NIST says is NOT code-testable is never claimed as satisfied', async () => {

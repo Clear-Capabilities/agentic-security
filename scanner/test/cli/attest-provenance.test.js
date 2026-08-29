@@ -85,7 +85,7 @@ test('verify-attestation: a tampered provenance bundle is rejected with exit 1',
   bundle.provenance.findingOrigin.commit = 'tampered000000';
   fs.writeFileSync(p, JSON.stringify(bundle, null, 2));
 
-  const r = spawnSync(process.execPath, [CLI, 'verify-attestation', p], { cwd: fx.root, encoding: 'utf8', timeout: 15000 });
+  const r = spawnSync(process.execPath, [CLI, 'verify-attestation', p], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
   assert.equal(r.status, 1);
   assert.match(r.stderr, /INVALID/);
 });

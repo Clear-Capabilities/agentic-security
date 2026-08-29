@@ -17,6 +17,7 @@ import {
   listFrameworks, loadFramework, evaluateFramework,
   renderWalkthrough, persistWalkthrough,
 } from '../src/posture/auditor-walkthrough.js';
+import { PROVENANCE_COMPLIANCE_DISCLAIMER } from '../src/posture/provenance/schema.js';
 
 async function mkProject() {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'cb5-'));
@@ -424,6 +425,50 @@ test('auditor: renderWalkthrough pseudonymizes the earliest-origin author name w
     else process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS = priorEnv;
     await p.cleanup();
   }
+});
+
+// PRD Section 8 REQUIRED DISCLAIMER. A second independent audit found this
+// sentence appeared NOWHERE in shipped code or docs; it was added alongside
+// the "Earliest proven origin" line it qualifies. This pins it, because a
+// disclaimer with no test is exactly how the first one went missing -- a
+// future refactor of this renderer could drop the line and nothing would
+// notice. Both directions are asserted: present when a compliance claim
+// actually derives from provenance, and ABSENT when there is no proven
+// origin to qualify (an unconditional disclaimer on every control would be
+// noise that trains readers to skip it).
+test('auditor: renderWalkthrough carries the PRD compliance disclaimer beside a proven origin, and only there', async () => {
+  const p = await mkProject();
+  try {
+    const fw = loadFramework(p.dir, 'gdpr');
+    const base = {
+      control: fw.controls[0], status: 'absent', observations: [], controlRefs: ['f1'],
+    };
+
+    const withOrigin = renderWalkthrough(fw, [{
+      ...base,
+      derivedProvenance: {
+        derivedFrom: ['f1'],
+        earliestOrigin: { commit: 'abc1234', authorDate: '2026-01-01T00:00:00Z', authorName: 'Jamie Chen' },
+        confidence: 'high', limitations: [],
+      },
+    }]);
+    assert.match(withOrigin, /Earliest proven origin/, 'sanity: the claim this disclaimer qualifies must be present');
+    assert.ok(withOrigin.includes(PROVENANCE_COMPLIANCE_DISCLAIMER),
+      'the PRD-required disclaimer must accompany a provenance-derived compliance claim');
+    // Pin the substance, not just the constant, so a rewording that drops the
+    // PRD's actual carve-outs fails here rather than passing silently.
+    for (const clause of ['developer intent', 'organizational compliance', 'certification']) {
+      assert.ok(withOrigin.includes(clause), `the disclaimer must still disclaim "${clause}"`);
+    }
+
+    const unresolved = renderWalkthrough(fw, [{
+      ...base,
+      derivedProvenance: { derivedFrom: ['f1'], earliestOrigin: null, confidence: 'low', limitations: [] },
+    }]);
+    assert.match(unresolved, /Earliest proven origin/, 'sanity: the unresolved branch renders');
+    assert.ok(!unresolved.includes(PROVENANCE_COMPLIANCE_DISCLAIMER),
+      'no provenance-derived claim was made, so there is nothing for the disclaimer to qualify');
+  } finally { await p.cleanup(); }
 });
 
 test('auditor: persistWalkthrough writes file', async () => {

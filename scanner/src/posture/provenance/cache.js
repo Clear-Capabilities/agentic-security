@@ -49,10 +49,18 @@ import { statePath, safeWriteState } from '../state-dir.js';
 import { FINDING_PROVENANCE_SCHEMA_VERSION } from './schema.js';
 
 // Permission floor for the cache directory and every entry inside it — see
-// the module header. Applied on every write (not just directory creation) so
-// an entry written before this floor existed, or a directory whose mode
-// drifted looser some other way, is tightened back down the next time this
-// key is touched.
+// the module header. Applied on every write, not just at directory creation.
+//
+// Precisely what that does and does not retrofit, because the distinction
+// matters and an earlier version of this comment overstated it: ANY write to
+// this directory retightens the DIRECTORY to 0700, including a write for some
+// unrelated key. An individual ENTRY's own mode is only rewritten when that
+// exact content-addressed key is written again — which a cache hit
+// short-circuits, so in practice a pre-existing 0644 entry keeps that mode.
+// It is still unreachable by another local user, because Unix requires
+// traversal (x) permission on every parent directory to open a file by path,
+// and the 0700 directory denies exactly that. The directory mode is what
+// carries the protection; the file mode is defense in depth.
 const CACHE_DIR_MODE = 0o700;
 const CACHE_FILE_MODE = 0o600;
 
