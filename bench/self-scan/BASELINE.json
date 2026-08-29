@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-28T19:39:11.304Z",
-  "commit": "03120e3db6576671a9431b583c978265bfbc3b6e",
+  "generatedAt": "2026-08-29T03:37:21.047Z",
+  "commit": "572fe91805de9a0fbe8ea381c4ad09bdba0211b9",
   "targets": {
     "hooks": {
       "total": 21,
@@ -36,7 +36,7 @@
       }
     },
     "scanner/src": {
-      "total": 453,
+      "total": 455,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -75,7 +75,7 @@
         "lsp/server.js": 3,
         "mcp/audit.js": 8,
         "mcp/server.js": 1,
-        "mcp/tools.js": 6,
+        "mcp/tools.js": 7,
         "pipeline/cascade-worker-pool.js": 2,
         "poc-video.js": 1,
         "posture/adversarial-self-test.js": 1,
@@ -84,7 +84,7 @@
         "posture/aibom.js": 3,
         "posture/api-contract.js": 1,
         "posture/attack-playbooks.js": 2,
-        "posture/auditor-walkthrough.js": 2,
+        "posture/auditor-walkthrough.js": 3,
         "posture/auth-posture-import.js": 3,
         "posture/autopilot.js": 1,
         "posture/blast-radius.js": 1,
