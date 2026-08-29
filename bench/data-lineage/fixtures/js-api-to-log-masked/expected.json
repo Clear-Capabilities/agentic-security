@@ -1,0 +1,9 @@
+{
+  "language": "js",
+  "dataClass": ["PCI"],
+  "sourceCategory": "http-body",
+  "sinkCategory": "log",
+  "expectedProtection": { "handling": "protected" },
+  "expectedTransformKind": "mask",
+  "notes": "maskCard() applied to every feasible path before logger.info()"
+}

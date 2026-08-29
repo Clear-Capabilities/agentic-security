@@ -1,0 +1,9 @@
+{
+  "language": "js",
+  "dataClass": ["PCI"],
+  "sourceCategory": "http-body",
+  "sinkCategory": "log",
+  "expectedProtection": { "handling": "unprotected" },
+  "expectedTransformKind": null,
+  "notes": "card_number reaches logger.info() with no transform on the path"
+}
