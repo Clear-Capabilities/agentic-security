@@ -1,0 +1,101 @@
+/*
+ * Data Flow Explorer design tokens (PRD §8.1). Dark is the reference theme.
+ * Values are copied verbatim from the PRD — do not adjust without a
+ * deliberate, separately-reviewed change.
+ */
+
+:root {
+  /* Surfaces */
+  --surface-canvas: #061625;
+  --surface-panel: #0B1E2F;
+  --surface-elevated: #102A40;
+  --border-default: #28445A;
+
+  /* Text */
+  --text-primary: #F3F7FA;
+  --text-secondary: #9FB3C5;
+
+  /* Selection / focus */
+  --accent-selection: #3DA9FF;
+
+  /* Protection verdict status */
+  --status-protected: #59D17D;
+  --status-unprotected: #FF625C;
+  --status-unknown: #F5B83D;
+
+  /* AI processing context */
+  --context-ai: #B47AFF;
+
+  /* Data class overlays */
+  --class-pii: #28D1C5;
+  --class-phi: #A97BFF;
+  --class-pci: #4CA7FF;
+
+  /* Spacing (8px grid, PRD §7.7) */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+
+  /* Radius / border (PRD §8.2) */
+  --radius-default: 8px;
+  --border-width: 1px;
+
+  /* Typography (PRD §8.2) — bundled system stack; never a remote/CDN font */
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-size-view-title: 23px;
+  --font-size-panel-title: 15px;
+  --font-size-node-title: 14px;
+  --font-size-body: 13px;
+  --font-size-code: 12.5px;
+
+  /* Motion (PRD §8.2 — focus/topology change only, no ambient animation) */
+  --motion-duration: 200ms;
+  --motion-duration-reduced: 0ms;
+
+  /* Shell region sizing (PRD §7.7) */
+  --header-height: 56px;
+  --view-tabs-height: 44px;
+  --left-rail-width: 248px;
+  --left-rail-collapsed-width: 56px;
+  --right-inspector-width: 360px;
+  --context-rail-height: 72px;
+}
+
+/* Light theme — same semantic tokens, WCAG-AA-equivalent contrast (PRD §8.1/§23) */
+:root[data-theme="light"] {
+  --surface-canvas: #FFFFFF;
+  --surface-panel: #F4F7FA;
+  --surface-elevated: #E7EEF3;
+  --border-default: #C7D3DC;
+
+  --text-primary: #0B1E2F;
+  --text-secondary: #3E5568;
+
+  --accent-selection: #1B6FC2;
+
+  --status-protected: #1E8A4C;
+  --status-unprotected: #C7362D;
+  --status-unknown: #9A6B00;
+
+  --context-ai: #6E38B8;
+
+  --class-pii: #0E7C73;
+  --class-phi: #6E44B8;
+  --class-pci: #1C63A8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration: var(--motion-duration-reduced);
+  }
+}
+
+body {
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  margin: 0;
+}
