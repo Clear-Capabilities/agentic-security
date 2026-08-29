@@ -11,7 +11,7 @@
 
 
 
-## Unreleased — Finding Provenance: which commit introduced each finding
+## 0.145.0 — Finding Provenance ships, and two audits find what the first one missed
 
 Every finding now carries a `findingProvenance` record answering "when did this
 enter the codebase, and how sure are we?" — resolved from Git history, not
@@ -178,11 +178,29 @@ An independent second audit of the completed Finding Provenance PRD found
 one security-critical gap and several places where a metric or a claim
 wasn't as real as it read. All fixed this release:
 
-- **Security fix.** Git subprocess calls in the provenance pipeline are now
-  hardened against a hostile repository's own `.git/config` (e.g. a
-  malicious `core.fsmonitor`) and `.gitattributes` `textconv` drivers — a
-  repository could previously trigger arbitrary code execution merely by
-  being scanned, provenance on or off.
+- **Security fix (1 of 2).** Git subprocess calls in the provenance pipeline
+  are now hardened against a hostile repository's own `.git/config` (e.g. a
+  malicious `core.fsmonitor`), `.gitattributes` `textconv` drivers, and
+  external `diff` drivers — a repository could previously trigger arbitrary
+  code execution merely by being scanned, provenance on or off. The sweep
+  covers every git invocation in the scanner, not just the provenance
+  module, and a source-level guard now fails the build if a future `git
+  diff` call site omits `--no-ext-diff`. Removing the shell from two
+  remaining `execSync` call sites also closed a command-injection path via
+  attacker-controlled filenames.
+- **Security fix (2 of 2), found while reviewing a performance optimization
+  in this same release.** A change that fused the parent-commit lookup into
+  an existing `git show` placed that field after the author name in a
+  delimiter-separated record. Git preserves a literal `0x1f` inside an
+  author name, so an outside contributor choosing their own author name
+  could shift the parse and select the bytes read as the parent commit.
+  Because a parent whose blobs cannot be fetched is indistinguishable from
+  one that genuinely lacks the finding, this could manufacture a
+  `status: 'complete'` origin with **HIGH confidence** for a boundary that
+  was never verified — a fabricated certainty claim that would then flow
+  into signed evidence bundles. The field now sits behind the commit hash
+  only, with hex validation as defense in depth. Both directions are pinned
+  by a regression test.
 - The provenance cache key and evidence digest are now genuinely bound to
   the running detector/ruleset version (previously always `null` in
   practice), so upgrading the scanner correctly invalidates stale cached
