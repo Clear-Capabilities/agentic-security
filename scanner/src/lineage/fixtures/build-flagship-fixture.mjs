@@ -64,8 +64,15 @@ function dataElement(name, discriminator) {
 }
 
 function edge({ from, to, mappings = [], protocolName = 'in-process', destinationResolution = 'literal', boundaryCrossings = [], protection = emptyProtection() }) {
+  // Discriminator includes toPath values and all dataElementIds carried in the mapping.
+  // Sort dataElementIds for determinism (matching flowId approach in ids.js).
+  const allDataElementIds = mappings.length > 0
+    ? [...new Set(mappings.flatMap((m) => m.dataElementIds || []))].sort()
+    : [];
+  const toPathValues = mappings.map((m) => m.toPath);
+  const discriminatorParts = [...toPathValues, ...allDataElementIds];
   return {
-    id: edgeId(from, to, 'data_flow', mappings.map((m) => m.toPath)),
+    id: edgeId(from, to, 'data_flow', discriminatorParts),
     from, to, relationship: 'data_flow',
     fieldMappings: mappings,
     protocol: { name: protocolName, destinationResolution },

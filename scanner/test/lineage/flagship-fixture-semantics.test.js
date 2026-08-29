@@ -90,3 +90,32 @@ test('every node referenced by extensions.fixtureNodeKeys/fixtureFlowKeys actual
     assert.ok(graph.flows.some((f) => f.id === id), `dangling fixtureFlowKeys entry ${key}`);
   }
 });
+
+// Regression: catch edge ID collisions when two edges share from/to/relationship
+// but carry different dataElementIds (e.g., card_number vs. diagnosis to model provider)
+test('all edge IDs are unique (no collisions on same from/to with different payload)', () => {
+  const edgeIds = graph.edges.map((e) => e.id);
+  const uniqueEdgeIds = new Set(edgeIds);
+  assert.equal(edgeIds.length, uniqueEdgeIds.size, `${edgeIds.length - uniqueEdgeIds.size} duplicate edge IDs found`);
+});
+
+// Regression: catch node ID collisions
+test('all node IDs are unique', () => {
+  const nodeIds = graph.nodes.map((n) => n.id);
+  const uniqueNodeIds = new Set(nodeIds);
+  assert.equal(nodeIds.length, uniqueNodeIds.size, `${nodeIds.length - uniqueNodeIds.size} duplicate node IDs found`);
+});
+
+// Regression: catch data element ID collisions
+test('all data element IDs are unique', () => {
+  const deIds = graph.dataElements.map((d) => d.id);
+  const uniqueDeIds = new Set(deIds);
+  assert.equal(deIds.length, uniqueDeIds.size, `${deIds.length - uniqueDeIds.size} duplicate data element IDs found`);
+});
+
+// Regression: catch flow ID collisions
+test('all flow IDs are unique', () => {
+  const flowIds = graph.flows.map((f) => f.id);
+  const uniqueFlowIds = new Set(flowIds);
+  assert.equal(flowIds.length, uniqueFlowIds.size, `${flowIds.length - uniqueFlowIds.size} duplicate flow IDs found`);
+});
