@@ -1,0 +1,12 @@
+{
+  "name": "@clear-capabilities/agentic-security-frontend-prototype",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Data Flow Explorer clickable prototype — zero build step, plain ES modules.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/escape-html.test.js test/contrast.test.js test/state.test.js test/fixture-module-parity.test.js",
+    "generate-fixture": "node scripts/generate-fixture-module.mjs",
+    "serve": "python3 -m http.server 8420"
+  }
+}

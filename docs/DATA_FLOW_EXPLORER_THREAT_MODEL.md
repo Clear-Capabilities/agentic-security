@@ -36,14 +36,16 @@ a node label, evidence snippet, or policy-reason string in the graph.
 - **Mitigation:** every label and snippet is escaped and inserted via
   safe DOM/text APIs; no scanned HTML or Markdown may execute (PRD
   section 16, AC-15). Bounded string length on any rendered label.
-- **Status:** contract-level guard only today — `dataElement.name`,
-  `node.label`, and evidence `claim`/`snippet` fields carry no HTML
-  interpretation semantics in the schema itself (Task 1/6, this
-  milestone). The actual escaping/rendering code is Milestone 3 (UI).
-  Milestone 3's plan MUST include an adversarial fixture (HTML/script
-  tags/control chars/very long identifiers in file and symbol names) and
-  a test asserting the rendered DOM contains no live `<script>`,
-  `javascript:` URL, or unescaped tag from that fixture.
+- **Status:** a static, zero-build-step prototype now exists (`frontend/`),
+  applying ordinary escaping hygiene via `frontend/src/lib/escape-html.js`
+  (quote-complete, escaping `&<>"'`) and `frontend/src/lib/dom.js` (never
+  `innerHTML` with graph-derived content) as baseline precautions. The
+  formal adversarial-fixture XSS test suite, CSP hardening, and server-side
+  defenses remain scoped to Milestone 3 (UI). Milestone 3's plan MUST
+  include an adversarial fixture (HTML/script tags/control chars/very long
+  identifiers in file and symbol names) and a test asserting the rendered
+  DOM contains no live `<script>`, `javascript:` URL, or unescaped tag from
+  that fixture.
 
 ### T2 — DNS rebinding / hostile Host header against the local server
 
