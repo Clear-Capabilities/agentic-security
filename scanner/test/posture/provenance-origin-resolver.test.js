@@ -503,12 +503,24 @@ test('resolveOrigin: deep mode tags a genuine revert with revertOf', async (t) =
 // is the finding's CURRENT path ('new-name.js') — a path that does not
 // exist at either pre-rename commit (only 'old-name.js' does there). Both
 // lookups return null, `replayAt` reports `no-files-at-commit`/absent, and
-// the walk falls through to `partial` / `predicate-never-confirmed-in-candidates`
-// — never `complete`, never misattributed to the rename commit. This is
-// OUTCOME A (honest-partial): a different mechanism than the brief
-// hypothesized (a path mismatch during blob lookup, not an empty candidate
-// list), but the same acceptable, non-misattributing result the brief
-// required — so no production fix to origin-resolver.js was needed.
+// the walk falls through to `partial` — never `complete`, never
+// misattributed to the rename commit. This is OUTCOME A (honest-partial): a
+// different mechanism than the brief hypothesized (a path mismatch during
+// blob lookup, not an empty candidate list), but the same acceptable,
+// non-misattributing result the brief required — so no production fix to
+// origin-resolver.js's rename-FOLLOWING behavior was needed (that gap is
+// still real and still out of scope — see rename.mjs's header).
+//
+// Second independent PRD audit (Task 3): the fallback reason string WAS
+// wrong, though — every miss shape (this one included) reported the same
+// generic `predicate-never-confirmed-in-candidates`, which describes a
+// DIFFERENT miss ("looked at the right path, predicate never held") than
+// what actually happened here ("found a candidate, its content lived at a
+// different path"). `no-files-at-commit` on a `-L`-selected candidate is
+// specifically that second shape, cheaply distinguishable with no extra git
+// call (see origin-resolver.js's `renameShapedMiss`), so this now reports
+// `reason:'rename-detected-not-followed'` — still `partial`, still no
+// misattribution, just an honest reason for staying partial.
 test('resolveOrigin: a file renamed after introduction is handled honestly — either the pre-rename origin is found, or an explicit reason is reported, never silently lost', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());
@@ -531,6 +543,12 @@ test('resolveOrigin: a file renamed after introduction is handled honestly — e
   // commit itself.
   assert.notEqual(result.status, 'complete', 'must not misattribute the origin to the rename commit');
   assert.ok(['partial', 'not_available'].includes(result.status));
+  // Task 3 (second audit remediation): the reason must name the rename-
+  // shaped miss specifically, not the generic candidates-exhausted string —
+  // see the comment above for why this is cheaply distinguishable.
+  if (result.status === 'partial') {
+    assert.equal(result.reason, 'rename-detected-not-followed');
+  }
 });
 
 // M4 §4.2: cross-repo lineage continuation. `loadRepoLineage` (Task 4) reads

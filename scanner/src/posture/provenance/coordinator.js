@@ -189,6 +189,22 @@ function describePartial(isScaLike, reason) {
         reasons: ['cross_repo_lineage_best_effort'],
       };
     }
+    // Second independent Finding Provenance PRD audit: a rename-shaped miss
+    // (origin-resolver.js's `renameShapedMiss` — a git-selected candidate's
+    // content lived at a path other than the finding's current one) is a
+    // materially different fact from the generic "we looked and it was never
+    // true" case the fallback wording below describes. This resolver still
+    // does NOT follow the rename to the true origin commit — that is the
+    // separately-scoped, honestly-disclosed engine gap
+    // (`bench/provenance-accuracy/fixtures/rename.mjs`'s header) — so this is
+    // still a `partial`/LOW-confidence result, just with an accurate reason
+    // for WHY it stayed partial instead of the misattributing generic string.
+    if (reason === 'rename-detected-not-followed') {
+      return {
+        limitation: 'a candidate commit was found for this line but its content could not be located at the finding\'s current file path — consistent with the file having been renamed after that commit; this resolver does not re-check candidates under a prior name, so the true origin could not be confirmed',
+        reasons: ['rename_detected_not_followed'],
+      };
+    }
     return {
       limitation: reason
         ? `earliest observable — history could not confirm a verified parent boundary (${reason})`
@@ -422,11 +438,28 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
           depChain: isTransitiveSca && Array.isArray(originResult.depChain) ? originResult.depChain : null,
         }]
       : attributeEvidence(scanRoot, finding);
+    // Second independent Finding Provenance PRD audit: this call site used to
+    // pass `renameAmbiguous: false` as a hardcoded literal — never computed
+    // from any signal, so `confidence.js`'s `rename_ambiguous` reason was
+    // permanently dead code. Investigated rather than just deleted: this
+    // branch only runs when `originResult.status === 'complete'`, and under
+    // this resolver's current architecture a genuine rename-ambiguous case
+    // can never reach `complete` in the first place — `replayAt` looks up
+    // every candidate's blob at the finding's CURRENT path only, so a
+    // candidate whose content actually lived at a DIFFERENT (pre-rename)
+    // path always fails with `no-files-at-commit` and the walk falls through
+    // to `status:'partial'` (see origin-resolver.js's `renameShapedMiss` /
+    // reason `rename-detected-not-followed`), never `complete`. So there is
+    // no cheap real signal to wire here without doing the separately-scoped
+    // rename-follow work (`bench/provenance-accuracy/fixtures/rename.mjs`'s
+    // header) — the parameter is simply omitted rather than passing a
+    // literal that looked computed but never was; `assessConfidence`'s own
+    // default (`renameAmbiguous = false`) still applies, which is accurate
+    // here precisely because this path is unreachable with it true.
     const confidence = assessConfidence({
       parentBoundaryVerified: originResult.parentBoundaryVerified,
       historyComplete: !repoState.shallow,
       detectorCompatible: true,
-      renameAmbiguous: false,
       shallow: repoState.shallow,
     });
     provenance = emptyProvenance(PROVENANCE_STATUS.COMPLETE, {
@@ -504,8 +537,10 @@ async function resolveAndCache(finding, ctx, cacheKey, isSca, isTransitiveSca, i
       analysisBasis: { head: repoState.head, ruleset: ctx.rulesetVersion || null, detector, dirty: repoState.dirty },
       // The partial reasons mean materially different things — for SAST,
       // 'shallow-boundary-reached' ("we could not see far enough") vs
-      // 'predicate-never-confirmed-in-candidates' ("we looked and never saw it
-      // hold"); for SCA, 'ambiguous-range-no-introduced-bound' vs
+      // 'predicate-never-confirmed-in-candidates' ("we looked at the right
+      // path and it was never true there") vs 'rename-detected-not-followed'
+      // ("we found a candidate but its content lived at a different path");
+      // for SCA, 'ambiguous-range-no-introduced-bound' vs
       // 'version-never-confirmed-in-candidates'. Collapsing any of them into one
       // hardcoded string made them indistinguishable downstream, while the
       // not_available branch below has always propagated its reason. See

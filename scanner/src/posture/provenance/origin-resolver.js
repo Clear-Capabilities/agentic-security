@@ -180,6 +180,25 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
 
   const files = relevantFiles(finding);
   let commitsConsidered = 0;
+  // Second independent Finding Provenance PRD audit: the generic fallback
+  // reason at the bottom of this function ('predicate-never-confirmed-in-
+  // candidates') was reported for every kind of replay miss alike, including
+  // the specific rename-shaped one `bench/provenance-accuracy/fixtures/
+  // rename.mjs`'s header and `provenance-origin-resolver.test.js`'s
+  // "Rename-boundary honesty" test already traced precisely: `-L` has its
+  // own built-in rename tracing independent of `--follow` (verified in both
+  // places above), so a candidate this search returns for the finding's
+  // CURRENT path can legitimately be a commit where the content lived under
+  // an OLDER path — `replayAt`/`getBlobAtCommit` only ever look up the
+  // CURRENT path, so such a candidate reproducibly fails with
+  // `reason:'no-files-at-commit'` (`predicate-replay.js`), never
+  // `stableId-not-reproduced` (the "we looked at the right file and the
+  // predicate just wasn't true here" case). That distinction is already
+  // sitting in `presentHere.reason` below — no extra git call needed to
+  // surface it. This flag does NOT make the resolver follow the rename (that
+  // is the separately-scoped, honestly-disclosed engine gap); it only makes
+  // the fallback reason say which honest-miss shape actually occurred.
+  let renameShapedMiss = false;
 
   // M2 §2.4 performance fix: within ONE resolveOrigin call, replayAt(sha) is
   // pure given (scanRoot, sha, files, stableId) — all fixed for this call.
@@ -204,7 +223,10 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
     }
     commitsConsidered++;
     const presentHere = await replay(sha);
-    if (!presentHere.present) continue;
+    if (!presentHere.present) {
+      if (presentHere.reason === 'no-files-at-commit') renameShapedMiss = true;
+      continue;
+    }
 
     const parent = getFirstParent(scanRoot, sha);
     const meta = commitMeta(scanRoot, sha);
@@ -295,5 +317,19 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
     }
   }
 
-  return { status: 'partial', reason: 'predicate-never-confirmed-in-candidates', commitsConsidered };
+  // 'rename-detected-not-followed': at least one candidate's blob lookup
+  // failed with 'no-files-at-commit' — the specific, cheaply-observed shape
+  // that means git found this content living at a path other than the
+  // finding's current one, and this resolver never re-tries the lookup
+  // under an older name (see the comment on `renameShapedMiss` above). This
+  // does NOT mean every such miss IS a rename — the same shape could
+  // theoretically come from an unrelated path mismatch — only that it is
+  // never the generic "we looked at the right path and the predicate simply
+  // wasn't true" miss, so reporting the generic reason here would be
+  // actively misleading about WHAT the search looked at, not merely vague.
+  return {
+    status: 'partial',
+    reason: renameShapedMiss ? 'rename-detected-not-followed' : 'predicate-never-confirmed-in-candidates',
+    commitsConsidered,
+  };
 }

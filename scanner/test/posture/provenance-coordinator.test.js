@@ -219,6 +219,47 @@ test('a partial result carries its method and its reason, not "none" and a gener
   }
 });
 
+// Second independent Finding Provenance PRD audit (Task 3): the rename-
+// shaped miss (origin-resolver.js's `renameShapedMiss`) must surface its own
+// specific reason end-to-end through the coordinator, not collapse into the
+// generic `predicate-never-confirmed-in-candidates` string — same shape as
+// the shallow-boundary test above, for the sibling reason. This does NOT
+// assert the origin resolves correctly (it still doesn't — that is the
+// separately-scoped, honestly-disclosed rename-follow gap; see
+// bench/provenance-accuracy/fixtures/rename.mjs's header), only that the
+// reason is now honest about WHY it stayed partial.
+test('a rename-shaped partial result reports rename-detected-not-followed, not the generic reason', async () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile(
+      'server.js',
+      'function h(req) {\n  const input = req.query.id;\n  db.query("SELECT * FROM t WHERE id = " + input);\n}\n',
+    );
+    fx.commit('introduce sqli', { date: '2026-01-01T00:00:00Z', authorName: 'Bob' });
+
+    const serverPath = path.join(fx.root, 'server.js');
+    const content = fs.readFileSync(serverPath, 'utf8');
+    fs.rmSync(serverPath);
+    fx.writeFile('api.js', content + '\n// renamed module\n');
+    fx.commit('rename server.js to api.js', { date: '2026-01-02T00:00:00Z', authorName: 'Carol' });
+
+    const finding = { file: 'api.js', line: 3, vuln: 'SQL Injection', ruleId: 'sql-injection', cwe: 'CWE-89' };
+    finding.stableId = computeStableId(finding);
+
+    await annotateGitProvenance([finding], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
+
+    const fp = finding.findingProvenance;
+    assert.equal(fp.status, 'partial');
+    assert.match(fp.limitations[0], /renamed after that commit/,
+      'the rename-specific limitation text must survive, not collapse into the generic reason');
+    assert.ok(fp.confidence.reasons.includes('rename_detected_not_followed'));
+    const { valid } = validateFindingsProvenance([finding]);
+    assert.equal(valid, true);
+  } finally {
+    fx.cleanup();
+  }
+});
+
 test('--no-provenance (ctx.disabled) short-circuits to not_available for every finding', async () => {
   const fx = createGitFixture();
   try {
