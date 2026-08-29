@@ -20,6 +20,7 @@ Node-only scan engine. ESM throughout, Node ≥ 24. The CLI bundle (`dist/agenti
 | `npm run test:dataflow` | IR, taint engine, calibration, held-out evaluator | When editing `src/dataflow/`, `src/ir/`, or calibration |
 | `npm run test:mcp` | MCP server tools + audit log | When editing `src/mcp/` |
 | `npm run test:report` | Report emit (SARIF/JUnit/CI/PoC/verifier) | When editing `src/report/` |
+| `npm run test:lineage` | `src/lineage/` — DataFlowGraph v1 contract, IDs, fixture | When editing `src/lineage/` |
 | `npm run test:lifecycle` | Dead-code + dead-module guards | Before committing a remediation that adds new modules |
 | `npm run smoke` | One-shot: run the CLI against the vulnerable-js fixture | Sanity-check the bundle |
 

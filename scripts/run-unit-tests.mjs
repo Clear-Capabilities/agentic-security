@@ -70,7 +70,7 @@ const SCANNER = path.join(HERE, '..', 'scanner');
 // `test:*` script whose value contains `node --test`.
 export const SCOPES = [
   'smoke', 'glob', 'sast', 'posture', 'dataflow', 'mcp',
-  'report', 'bench-modules', 'lifecycle', 'eval', 'discovery',
+  'report', 'bench-modules', 'lifecycle', 'eval', 'discovery', 'lineage',
 ];
 
 const FILE_RE = /test\/[\w.\-/]+\.test\.js/g;
