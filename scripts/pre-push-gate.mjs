@@ -158,6 +158,19 @@ export const CHECKS = [
       'on syntax rather than semantics. See the printed case for which mutant flipped.',
   },
   {
+    // Task 8 (Finding Provenance second-audit remediation). An independent
+    // PRD audit found this bench reachable from no gate at all, so its
+    // 12/13 known-origin-accuracy number could silently rot. Measured ~9s
+    // (2026-08-29), well inside the pre-push budget — placed here, after
+    // mutation-gate (~0.85s) and before layer-recall-gate (~11.5s), to keep
+    // the cheapest-first ordering roughly intact.
+    id: 'provenance-accuracy-gate',
+    title: 'Known-origin provenance accuracy baseline holds',
+    npmScript: 'bench:provenance-accuracy:check',
+    remedy: 'Run `npm run bench:provenance-accuracy:check` in scanner/ and resolve the ' +
+      'drift (fix the regression, or re-baseline only if the change is intended).',
+  },
+  {
     id: 'layer-recall-gate',
     title: 'Per-layer, per-language taint recall baseline holds',
     npmScript: 'bench:layer-recall:check',

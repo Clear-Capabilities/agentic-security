@@ -1,104 +1,104 @@
 {
- "schema": "provenance/v2",
- "note": "Wall-clock and peak-RSS overhead of provenance annotation vs. a provenance-disabled scan, on a synthetic 15-file/3-commit-each git fixture. cold = fresh provenance cache; warm = second with-provenance pass against the same fixture/HEAD, so the on-disk provenance cache is hit. Each dimension is a distribution over n=20 iterations (nearest-rank percentiles, matching posture/fix-metrics.js's convention); the gated number is the p95 of the per-iteration ratio, not a single sample. Memory ratio dimensions are gated with extra additive headroom (MEMORY_RATIO_ADDITIVE_MARGIN) because they are measurably noisier than the time-ratio dimensions — see runner.mjs for both that and why the ratio itself is a REGRESSION signal against ITS OWN prior baseline, not a literal FR-PROV-029 percentage claim.",
+ "schema": "provenance/v3",
+ "note": "Wall-clock and peak-RSS overhead of provenance annotation vs. a provenance-disabled scan, on a synthetic 15-file/3-commit-each git fixture. cold = fresh provenance cache; warm = second with-provenance pass against the same fixture/HEAD, so the on-disk provenance cache is hit. Each dimension is a distribution over n=20 iterations (nearest-rank percentiles, matching posture/fix-metrics.js's convention); the gated number is the p95 of the per-iteration ratio, not a single sample. GATED: cold.timeOverheadRatio, warm.timeOverheadRatio, cold.memOverheadRatio, each at a plain 1.6x-of-baseline-p95 limit (no additive margin — Task 8 removed it once repeated real runs showed cold memory ratio holds within ~12% of its own baseline, so a pure multiplicative factor is already wide enough to avoid noise-only failures while still catching a genuine ~2x regression). NOT GATED: warm.memOverheadRatio — still measured and recorded every run, but its own run-to-run noise (observed 0x-5x+ on an unchanged engine, because the warm arm's scan is tens of ms and its ratio denominator sits at or near the sampler's floor) makes it unfalsifiable at this fixture size; a gate that cannot fail advertises coverage it does not have, so it is honestly excluded instead of padded with a margin wide enough to never trip. Every checkDim'd dimension also requires `reliable: true` (n >= 10) — an unreliable sample size fails the gate rather than silently comparing too few points. See runner.mjs for the full reasoning (Task 6 review; Task 8 fix).",
  "regressionFactor": 1.6,
  "n": 20,
  "findings": 15,
  "without": {
   "ms": {
    "n": 20,
-   "min": 39.87,
-   "p50": 41.34,
-   "p95": 69.01,
-   "max": 158.73,
-   "mean": 49.12,
+   "min": 38.42,
+   "p50": 41,
+   "p95": 46.34,
+   "max": 171.16,
+   "mean": 47.87,
    "reliable": true
   },
   "rssDeltaBytes": {
    "n": 20,
-   "min": 1785856,
-   "p50": 1818624,
-   "p95": 19775488,
-   "max": 27967488,
-   "mean": 4117299.2,
+   "min": 0,
+   "p50": 2048000,
+   "p95": 2539520,
+   "max": 13778944,
+   "mean": 2548531.2,
    "reliable": true
   }
  },
  "cold": {
   "ms": {
    "n": 20,
-   "min": 1012.98,
-   "p50": 1063.73,
-   "p95": 1084.21,
-   "max": 1095.3,
-   "mean": 1064.72,
+   "min": 969.87,
+   "p50": 1068.49,
+   "p95": 1083.54,
+   "max": 1157.83,
+   "mean": 1061.94,
    "reliable": true
   },
   "rssDeltaBytes": {
    "n": 20,
-   "min": 4227072,
-   "p50": 22790144,
-   "p95": 28950528,
-   "max": 49119232,
-   "mean": 18455756.8,
+   "min": 13582336,
+   "p50": 21839872,
+   "p95": 31211520,
+   "max": 61145088,
+   "mean": 24181964.8,
    "reliable": true
   },
   "timeOverheadRatio": {
    "n": 20,
-   "min": 6.9,
-   "p50": 25.45,
-   "p95": 26.54,
-   "max": 26.65,
-   "mean": 23.97,
+   "min": 6.76,
+   "p50": 25.63,
+   "p95": 27.28,
+   "max": 27.28,
+   "mean": 24.64,
    "reliable": true
   },
   "memOverheadRatio": {
-   "n": 20,
-   "min": 0.32,
-   "p50": 9.36,
-   "p95": 14.93,
-   "max": 16.21,
-   "mean": 8.64,
+   "n": 19,
+   "min": 4.44,
+   "p50": 10.17,
+   "p95": 15.24,
+   "max": 15.24,
+   "mean": 10.72,
    "reliable": true
   }
  },
  "warm": {
   "ms": {
    "n": 20,
-   "min": 74.29,
-   "p50": 77.28,
-   "p95": 86.31,
-   "max": 86.95,
-   "mean": 78.87,
+   "min": 73.44,
+   "p50": 78.4,
+   "p95": 86.41,
+   "max": 86.91,
+   "mean": 79.18,
    "reliable": true
   },
   "rssDeltaBytes": {
    "n": 20,
    "min": 0,
-   "p50": 163840,
-   "p95": 11354112,
-   "max": 11632640,
-   "mean": 1880064,
+   "p50": 180224,
+   "p95": 1949696,
+   "max": 8421376,
+   "mean": 693043.2,
    "reliable": true
   },
   "timeOverheadRatio": {
    "n": 20,
-   "min": 0.53,
-   "p50": 1.85,
-   "p95": 2.1,
-   "max": 2.11,
-   "mean": 1.77,
+   "min": 0.5,
+   "p50": 1.87,
+   "p95": 2.12,
+   "max": 2.26,
+   "mean": 1.84,
    "reliable": true
   },
   "memOverheadRatio": {
-   "n": 20,
+   "n": 19,
    "min": 0,
    "p50": 0.09,
-   "p95": 1.19,
-   "max": 5.02,
-   "mean": 0.57,
+   "p95": 1.07,
+   "max": 1.07,
+   "mean": 0.17,
    "reliable": true
   }
  },
- "recordedAt": "2026-08-29T07:53:16.064Z"
+ "recordedAt": "2026-08-29T08:38:43.232Z"
 }

@@ -67,6 +67,24 @@
 // ratio, because wall-clock on a shared machine is noisy even across 10
 // samples. Records the raw p95s every run so a slow drift is visible in
 // history even when it never trips the gate.
+//
+// WARM MEMORY OVERHEAD IS RECORDED BUT NOT GATED (Task 8 fix)
+// -------------------------------------------------------------
+// The Task 6 review found this dimension's gate could not actually fail: at
+// the previous baseline (p95 1.19x) the additive-margin limit was 7.90x, so a
+// genuine 3-4x regression sailed through — and repeated real measurements
+// during this fix swung the ratio itself from 1.1x to 4.96x run-to-run on an
+// UNCHANGED engine, purely from noise. The root cause is structural, not a
+// badly-chosen constant: the warm arm's own scan is tens of milliseconds, so
+// its rssDeltaBytes denominator (the without-provenance arm) is frequently at
+// or near the sampler's floor, and a ratio of two near-floor numbers is not a
+// stable signal at this fixture's size. `warm.ms`/`warm.rssDeltaBytes` (the
+// absolute distributions, not the ratio) are still recorded in
+// history.jsonl/BASELINE.json every run — the number is not hidden, it is
+// just honestly excluded from `checkDim`, which is a `gatedDimensions: false`
+// flag away from being re-enabled if a larger fixture ever makes it stable
+// enough to gate for real. See scripts/pre-push-gate.mjs / release-check.mjs
+// for the exact declared coverage this note is describing.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -304,15 +322,23 @@ function summaryLine(label, d) {
 
 if (isUpdate) {
   fs.writeFileSync(BASELINE, JSON.stringify({
-    schema: 'provenance/v2',
+    schema: 'provenance/v3',
     note: 'Wall-clock and peak-RSS overhead of provenance annotation vs. a provenance-disabled scan, on a ' +
       'synthetic 15-file/3-commit-each git fixture. cold = fresh provenance cache; warm = second with-provenance ' +
       'pass against the same fixture/HEAD, so the on-disk provenance cache is hit. Each dimension is a ' +
       `distribution over n=${N} iterations (nearest-rank percentiles, matching posture/fix-metrics.js's ` +
-      'convention); the gated number is the p95 of the per-iteration ratio, not a single sample. Memory ratio ' +
-      'dimensions are gated with extra additive headroom (MEMORY_RATIO_ADDITIVE_MARGIN) because they are ' +
-      'measurably noisier than the time-ratio dimensions — see runner.mjs for both that and why the ratio ' +
-      'itself is a REGRESSION signal against ITS OWN prior baseline, not a literal FR-PROV-029 percentage claim.',
+      'convention); the gated number is the p95 of the per-iteration ratio, not a single sample. GATED: ' +
+      'cold.timeOverheadRatio, warm.timeOverheadRatio, cold.memOverheadRatio, each at a plain ' +
+      `${REGRESSION_FACTOR}x-of-baseline-p95 limit (no additive margin — Task 8 removed it once repeated real ` +
+      'runs showed cold memory ratio holds within ~12% of its own baseline, so a pure multiplicative factor is ' +
+      'already wide enough to avoid noise-only failures while still catching a genuine ~2x regression). NOT ' +
+      'GATED: warm.memOverheadRatio — still measured and recorded every run, but its own run-to-run noise ' +
+      '(observed 0x-5x+ on an unchanged engine, because the warm arm\'s scan is tens of ms and its ratio ' +
+      'denominator sits at or near the sampler\'s floor) makes it unfalsifiable at this fixture size; a gate ' +
+      'that cannot fail advertises coverage it does not have, so it is honestly excluded instead of padded ' +
+      'with a margin wide enough to never trip. Every checkDim\'d dimension also requires `reliable: true` ' +
+      `(n >= ${RELIABLE_N}) — an unreliable sample size fails the gate rather than silently comparing too few ` +
+      'points. See runner.mjs for the full reasoning (Task 6 review; Task 8 fix).',
     regressionFactor: REGRESSION_FACTOR,
     ...run,
     recordedAt: record.at,
@@ -336,36 +362,36 @@ try {
   process.exit(1);
 }
 const base = JSON.parse(baseRaw);
-if (base.schema !== 'provenance/v2') {
-  console.error(`✗ baseline schema is ${JSON.stringify(base.schema)}, expected 'provenance/v2' — ` +
-    're-baseline with `npm run bench:provenance:update-baseline` after the schema change (Task 6).');
+if (base.schema !== 'provenance/v3') {
+  console.error(`✗ baseline schema is ${JSON.stringify(base.schema)}, expected 'provenance/v3' — ` +
+    're-baseline with `npm run bench:provenance:update-baseline` after the schema change (Task 8: ' +
+    'warm memory overhead is no longer gated, and cold memory overhead dropped its additive margin — ' +
+    'see this file\'s header).');
   process.exit(1);
 }
 
-// Additive headroom folded into the memory-ratio dimensions' limit only (not
-// the time-ratio dimensions, whose baselines are stable double-digit- or
-// low-single-digit-x numbers where a pure multiplicative factor already
-// holds up across repeated runs — measured directly, not assumed). The warm
-// arm's own RSS delta is frequently at or near the sampler's floor (its scan
-// is tens of ms; see SAMPLE_INTERVAL_MS's comment) — a purely multiplicative
-// REGRESSION_FACTOR against a near-zero baseline (e.g. 0.26x) produces a
-// limit (0.42x) narrower than this bench's OWN observed run-to-run noise on
-// this exact dimension (0 to just over 5x across repeated real runs while
-// iterating on this file), which would fail the gate on noise alone —
-// exactly the "a gate that cries wolf gets disabled" failure mode this
-// project's own REGRESSION_FACTOR rationale (see this file's header) exists
-// to avoid. The additive margin is sized to that observed range, not picked
-// to make a number pass.
-const MEMORY_RATIO_ADDITIVE_MARGIN = 6;
-
+// Task 8 fix #2 (Task 6 review, second finding): `checkDim` used to only
+// treat n=0 (p95 === null) as unscoreable. The memory-ratio arrays are
+// conditionally populated (`if (without.rssDeltaBytes > 0)` above), so their
+// `n` could fall below RELIABLE_N without any signal — the gate would
+// silently compare single samples while claiming the same coverage as a
+// dimension backed by all N=20 iterations. `dist()` already computes
+// `reliable` (n >= RELIABLE_N, same convention as posture/fix-metrics.js);
+// this is now actually consulted.
 let failed = false;
-function checkDim(label, runDist, baseDist, { additiveMargin = 0 } = {}) {
+function checkDim(label, runDist, baseDist) {
+  if (!runDist.reliable) {
+    console.error(`✗ ${label}: only ${runDist.n}/${N} iterations produced a usable sample ` +
+      `(need >= ${RELIABLE_N}) — an unreliable sample size is a failure, not a pass.`);
+    failed = true;
+    return;
+  }
   if (runDist.p95 == null || baseDist.p95 == null) {
     console.error(`✗ ${label} p95 could not be computed (a divide-by-near-zero denominator) — treat as a failure, not a pass.`);
     failed = true;
     return;
   }
-  const limit = Math.round((baseDist.p95 * REGRESSION_FACTOR + additiveMargin) * 100) / 100;
+  const limit = Math.round((baseDist.p95 * REGRESSION_FACTOR) * 100) / 100;
   if (runDist.p95 > limit) {
     console.error(`✗ ${label} regressed: p95 ${runDist.p95}x vs baseline p95 ${baseDist.p95}x (limit ${limit}x, ${REGRESSION_FACTOR}×)`);
     console.error('  If this is an accepted cost, re-baseline deliberately and say why in the commit.');
@@ -377,7 +403,11 @@ function checkDim(label, runDist, baseDist, { additiveMargin = 0 } = {}) {
 
 checkDim('cold time overhead', run.cold.timeOverheadRatio, base.cold.timeOverheadRatio);
 checkDim('warm time overhead', run.warm.timeOverheadRatio, base.warm.timeOverheadRatio);
-checkDim('cold memory overhead', run.cold.memOverheadRatio, base.cold.memOverheadRatio, { additiveMargin: MEMORY_RATIO_ADDITIVE_MARGIN });
-checkDim('warm memory overhead', run.warm.memOverheadRatio, base.warm.memOverheadRatio, { additiveMargin: MEMORY_RATIO_ADDITIVE_MARGIN });
+checkDim('cold memory overhead', run.cold.memOverheadRatio, base.cold.memOverheadRatio);
+// warm memory overhead is DELIBERATELY NOT GATED — see the "WARM MEMORY
+// OVERHEAD IS RECORDED BUT NOT GATED" note at the top of this file. It is
+// still measured and appended to history.jsonl/BASELINE.json every run.
+console.log(`  (warm memory overhead: p95 ${run.warm.memOverheadRatio.p95 == null ? 'n/a' : run.warm.memOverheadRatio.p95 + 'x'} ` +
+  `recorded, NOT gated — ratio is unfalsifiable at this fixture size, see runner.mjs header)`);
 
 if (failed) process.exit(1);

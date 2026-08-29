@@ -114,8 +114,23 @@ test('pre-push-gate — checks run cheapest-first: the guards and bundle integri
   assert.deepEqual(ids, [
     'worktree-matches-push', 'push-blast-radius',
     'bundle-integrity', 'package-contents', 'ci-parity', 'test-suite', 'corpus-gate', 'self-scan-gate',
-    'mutation-gate', 'layer-recall-gate',
+    'mutation-gate', 'provenance-accuracy-gate', 'layer-recall-gate',
   ]);
+});
+
+// Task 8 (Finding Provenance second-audit remediation). An independent PRD
+// audit found bench:provenance-accuracy:check reachable from no gate at all,
+// so its 12/13 known-origin-accuracy number could silently rot forever.
+test('pre-push-gate — provenance-accuracy gate is present, cheap enough to sit before layer-recall', () => {
+  const provenance = CHECKS.find(c => c.id === 'provenance-accuracy-gate');
+  assert.ok(provenance, 'provenance-accuracy-gate must be a registered pre-push check');
+  assert.equal(provenance.npmScript, 'bench:provenance-accuracy:check');
+  // Measured this session: ~9s, well under layer-recall's ~11.5s.
+  const ids = orderedCheckIds();
+  assert.ok(ids.indexOf('mutation-gate') < ids.indexOf('provenance-accuracy-gate'),
+    'mutation-gate (~0.85s) must run before provenance-accuracy-gate (~9s)');
+  assert.ok(ids.indexOf('provenance-accuracy-gate') < ids.indexOf('layer-recall-gate'),
+    'provenance-accuracy-gate (~9s) must run before layer-recall-gate (~11.5s)');
 });
 
 // M2 (Stage-0 audit, 2026). bench:mutation:check and bench:layer-recall:check
