@@ -48,14 +48,17 @@ bound), `uncommitted` (the finding exists only in the working tree),
 `complete`. Author emails are redacted from every output format unless
 `--include-author-email` is passed.
 
-**New flags** (`agentic-security scan --help` documents all six):
+**New flags** (`agentic-security scan --help` documents all seven):
 `--provenance <standard|deep>`, `--no-provenance`, `--provenance-since <ref>`,
-`--provenance-timeout <ms>`, `--include-author-email`, `--require-provenance`.
-`deep` mode is accepted and warns that it runs `standard` in this release.
+`--provenance-timeout <ms>`, `--include-author-email`, `--pseudonymize-authors`,
+`--require-provenance`. `deep` mode performs real non-linear DAG analysis (see
+the M3 subsection below) — it is no longer a stub that silently runs `standard`.
 `--require-provenance` reports unresolved provenance as a scan-health condition
 and downgrades `scanHealth.status` to `partial`; it never changes the exit code
 by itself — see the M2 subsection below for the mechanism that does.
 `--verbose --firehose` prints the provenance block per finding in text output.
+See [`docs/guides/finding-provenance.md`](docs/guides/finding-provenance.md)
+for the full user-facing writeup.
 
 ### M2: format parity, compliance/MTTR/fix-lifecycle surfacing, and `--assurance strict` can now fail the build
 
@@ -92,6 +95,122 @@ completeness the power to fail a CI build.
   latter two are a category error — there is no commit that introduced a
   *missing* lockfile — not merely a deferral), so `--assurance strict` will fail
   on nearly any real project with a dependency manifest until that gap closes.
+
+### M3: real non-linear history, transitive-dependency provenance, missing-control regressions, PR/CODEOWNERS enrichment
+
+- **`--provenance deep` now does real work.** Instead of the M0–M2 stub that
+  accepted the flag and silently ran `standard`, deep mode walks every parent
+  of a merge commit (not just the first), which resolves origins standard
+  mode's first-parent-only walk cannot see, and detects reverts and
+  cherry-picks — surfaced as `findingOrigin.revertOf` / `.cherryPickOf` — via
+  a real unified-diff inversion.
+- **Transitive-dependency provenance is now live-wired**, not merely
+  modeled: `transitive-sca.js` re-derives lockfile ancestry per historical
+  commit to find the commit that moved a *lockfile-resolved* (not
+  manifest-declared) dependency into an advisory's vulnerable range.
+- **Missing-control regressions** — a previously-observed safeguard (today:
+  `sast/rate-limit.js`'s findings) disappearing — can now resolve a real
+  origin via `missing-control-resolver.js`.
+- **Optional GitHub/GitLab PR-metadata + CODEOWNERS enrichment**
+  (`findingProvenance.providerEnrichment`) is live for `complete`-status
+  findings, configured via `.agentic-security/provenance-providers.yml` /
+  `AGENTIC_SECURITY_GITHUB_TOKEN` / `AGENTIC_SECURITY_GITLAB_TOKEN`, capped
+  per scan.
+
+### M4: signed provenance evidence bundles, cross-repository lineage, an AI-authorship hook
+
+- **`agentic-security attest --provenance`** signs a per-finding provenance
+  record (origin commit, confidence, evidence attribution) with the same
+  Ed25519 key material as the existing finding-evidence bundle mechanism;
+  `verify-attestation` auto-detects and verifies it against a public key
+  alone. Note the flag-shape collision with `scan`: on `attest`, `--provenance`
+  takes an optional *finding id*, not a mode — `attest --provenance deep`
+  looks for a finding literally named `deep`.
+- **Cross-repository lineage.** An operator-declared
+  `.agentic-security/repo-lineage.json` can link a root-commit origin (a
+  finding whose earliest commit has no parent in the current repo) across a
+  prior, local-clone-only fork/split history. Resolution is conservative:
+  content at the linked line must actually match, not merely exist, before
+  an origin is reported, and the record discloses the boundary crossing
+  explicitly.
+- **An extensible AI-authorship verifier registry**
+  (`registerAIAuthorshipVerifier` / `resolveAIAuthorship`) now stamps every
+  SAST `findingOrigin` with an `aiAuthorship` field; no verifier is
+  registered today, so it defaults honestly to `{status:'unknown', verifier:null}`.
+- **Fleet-wide rollups** (`fleet.js`) now surface provenance-proven
+  remediation debt. Fleet MTTR is honestly disclosed rather than fabricated:
+  real remediation-timing data isn't reachable from the production fleet
+  driver without new state, so `rollupFleet` distinguishes "never tracked"
+  from "tracked, zero remediations" instead of reporting a misleading number.
+
+### PRD completion: injection hardening, evidence-digest binding, retention split, and the first real coverage/accuracy measurements
+
+- Author names and commit summaries are now sanitized against terminal
+  control-character and Markdown/HTML injection everywhere they reach a
+  human (FR-PROV-026).
+- The run-attestation digest and provenance cache key are now genuinely
+  bound to the PRD-named inputs they claim to cover, including
+  detector/ruleset version.
+- Symlink-escape protection added to the git evidence layer.
+- **`--pseudonymize-authors`** (new flag, listed above) replaces raw
+  commit-author names with a stable `Contributor-XXXXXXXX` id — for when you
+  need to compare "who introduced what" without a raw name in the output.
+  Honored everywhere `--include-author-email`'s redaction already was,
+  including PR-reviewer logins and CODEOWNERS entries from provider
+  enrichment.
+- The provenance cache now lives in its own top-level, independently-retained
+  state directory (`.agentic-security/provenance-cache/`), split from the
+  permanent lifecycle ledger (`.agentic-security/provenance/lifecycle.json`),
+  so cache eviction can never touch permanent history.
+- **Two PRD success metrics are now genuinely measured and published, not
+  just designed:** known-origin accuracy (12/13 = 92.3% on the labeled
+  corpus, against a ≥98% target) and provenance coverage (311/341 = 91.2% on
+  this repository's own tree, against a ≥95% target — all 30 shortfall
+  findings resolve to `partial`, not `error`/`not_available`, so the gap is
+  reduced confidence rather than pipeline failure).
+- `scan.secrets` and blameable `scan.logicVulns` entries now go through real
+  origin resolution (real stableIds, real git history) instead of a
+  permanent `not_available` placeholder.
+
+### Second-audit remediation: a hostile-repository RCE closed, and further honesty fixes
+
+An independent second audit of the completed Finding Provenance PRD found
+one security-critical gap and several places where a metric or a claim
+wasn't as real as it read. All fixed this release:
+
+- **Security fix.** Git subprocess calls in the provenance pipeline are now
+  hardened against a hostile repository's own `.git/config` (e.g. a
+  malicious `core.fsmonitor`) and `.gitattributes` `textconv` drivers — a
+  repository could previously trigger arbitrary code execution merely by
+  being scanned, provenance on or off.
+- The provenance cache key and evidence digest are now genuinely bound to
+  the running detector/ruleset version (previously always `null` in
+  practice), so upgrading the scanner correctly invalidates stale cached
+  provenance.
+- `ageBasis` and `provenAgeDays` are now rendered wherever a finding's age is
+  shown, not only written to `last-scan.json`.
+- Provenance coverage is now wired into the real, running scorecard-generation
+  path (see "PRD completion" above for the number) instead of always
+  reporting "unmeasured."
+- **Performance measurement is now honest end-to-end**, and the honest
+  numbers are a real miss against target: real p95 (n=20) over both cold and
+  warm cache arms, and a genuine two-sided memory comparison (not a one-arm
+  heap delta). Measured this release — cold-cache time ~27x wall-clock p95
+  against a ≤1.3x (≤30% overhead) target, warm-cache ~2x; cold-cache memory
+  ~13x against a ≤1.2x target. `bench:provenance-accuracy:check` is now
+  wired into the pre-push gate so the known-origin-accuracy number can no
+  longer silently rot.
+- The PRD's **required compliance-evidence disclaimer** ("Provenance
+  establishes repository history for technical evidence. It does not prove
+  developer intent, control operation outside code, organizational
+  compliance, or certification.") now appears next to every
+  provenance-derived origin the auditor walkthrough renders
+  (`compliance --walkthrough`), and user-facing documentation for the whole
+  feature now exists at
+  [`docs/guides/finding-provenance.md`](docs/guides/finding-provenance.md).
+- **Not fixed, disclosed honestly:** a finding in a file renamed after
+  introduction still degrades to `status: 'partial'` rather than resolving
+  its true pre-rename origin commit. Known and traced, not fixed this round.
 
 ### Breaking: SCA finding ids change for manifest-declared dependencies
 

@@ -26,6 +26,8 @@ context. Run any command with `--help` for its live flags.
 | `digest --slack <url>` | Post a security digest to Slack (or `--discord <url>`). Reads the last scan. |
 | `cve-watch --root <dir>` | One-shot check for new CVEs against installed dependencies. |
 | `verify [--finding <id>]` | Re-run the verifier loop on last-scan findings. `--live --target <url>` executes PoCs. |
+| `attest [--id <finding>]` | Write signed evidence bundles to `.agentic-security/attestations/`. `--provenance [<finding-id>]` signs [finding-provenance](../guides/finding-provenance.md) records instead of ordinary finding evidence — bare `--provenance` signs every finding that has one, `--provenance <finding-id>` scopes to one (note: this is a *different* argument shape from `--id` above, and from `scan`'s own `--provenance <standard\|deep>` — `attest --provenance deep` looks for a finding literally named `deep`, not a mode). |
+| `verify-attestation <bundle.json> --public-key <path>` | Verify a signed bundle (finding evidence, a run attestation, or a provenance record — auto-detected) with only the public key. Exits `0` valid, `1` invalid. |
 | `scan-baseline --current <f> --previous <f>` | Finding-level diff between two scan JSON outputs. |
 | `reset` | Wipe accumulated learned state under `.agentic-security/` (preserves operator-authored config). `--yes`, `--keep <...>`. |
 | `mcp` | Start the MCP stdio server. See [MCP tools](../../scanner/src/mcp/CLAUDE.md). |
@@ -81,6 +83,15 @@ Pro/advanced: `org-scan`, `triage list\|assign\|trend`, `rules validate`,
 
 `--no-network` / offline, `--deterministic` (stable sort, no network,
 lockfile-checked), `--incremental` (reuse taint summaries).
+
+**Provenance** (which commit introduced each finding — on by default in a
+git repo; see the [finding provenance guide](../guides/finding-provenance.md))
+
+`--provenance <standard|deep>`, `--no-provenance`, `--provenance-since <ref>`,
+`--provenance-timeout <ms>`, `--include-author-email`,
+`--pseudonymize-authors`, `--require-provenance` (flags unresolved provenance
+as a scan-health condition; `ci`'s own `--assurance strict` is what can
+actually fail the build on it).
 
 ---
 

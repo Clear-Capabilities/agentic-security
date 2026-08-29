@@ -52,7 +52,7 @@ import { strengthOfControl as _strengthOfControl } from './coverage-strength.js'
 // comment): printed raw or read as plain text, `Jean-Luc Picard` rendering
 // as `Jean\-Luc Picard` and `dependabot[bot]` as `dependabot\[bot\]` is a
 // visible regression on common real-world author names, not a fix.
-import { sanitizeForTerminal, pseudonymizeAuthor } from './provenance/schema.js';
+import { sanitizeForTerminal, pseudonymizeAuthor, PROVENANCE_COMPLIANCE_DISCLAIMER } from './provenance/schema.js';
 
 // Fix-round item 4b: this renderer had `sanitizeForTerminal` (injection
 // safety) but never honoured `--pseudonymize-authors` at all — an operator
@@ -613,6 +613,10 @@ export function renderWalkthrough(fw, evaluation, opts = {}) {
           // never be surfaced from it without routing through that function
           // first.
           lines.push(`**Earliest proven origin:** ${short} — ${day} — ${sanitizeForTerminal(_maybePseudonymizeName(dp.earliestOrigin.authorName)) || 'unknown'} (confidence: ${dp.confidence})`);
+          // PRD Section 8 REQUIRED DISCLAIMER, alongside the claim it
+          // qualifies (not just once at the top of the document) — a reader
+          // who skips straight to a control's evidence must still see it.
+          lines.push(`_${PROVENANCE_COMPLIANCE_DISCLAIMER}_`);
         } else if (dp) {
           lines.push(`**Earliest proven origin:** unresolved (confidence: ${dp.confidence})`);
         }

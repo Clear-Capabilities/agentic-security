@@ -27,6 +27,21 @@ export const PROVENANCE_METHOD = Object.freeze({
 
 export const CONFIDENCE_LEVEL = Object.freeze({ HIGH: 'high', MEDIUM: 'medium', LOW: 'low', UNKNOWN: 'unknown' });
 
+// PRD Section 8 "Compliance evidence boundary" — REQUIRED DISCLAIMER, verbatim.
+// Second independent audit (2026-08-29): this exact sentence appeared nowhere
+// in shipped code or docs. It is distinct from evidence-grade-wording.js's
+// EVIDENCE_GRADE_DISCLAIMER_SHORT (which disclaims the WALKTHROUGH narrative
+// as a whole — "this isn't a certification/attestation") — this one disclaims
+// what git PROVENANCE data specifically can and cannot support once it is
+// used as compliance evidence. Any renderer that surfaces a findingProvenance-
+// derived fact (an origin commit, an author, a confidence level) alongside a
+// compliance claim must show this next to it. Kept verbatim per the PRD
+// rather than paraphrased, so a reader comparing this tool's output against
+// the PRD text can confirm the boundary was actually implemented.
+export const PROVENANCE_COMPLIANCE_DISCLAIMER =
+  'Provenance establishes repository history for technical evidence. It does not prove ' +
+  'developer intent, control operation outside code, organizational compliance, or certification.';
+
 // Second independent Finding Provenance PRD audit: this enum is the PRD's
 // full role vocabulary, but not every value has a producer. Honest status
 // per role, so a reader does not assume "defined here" means "emitted

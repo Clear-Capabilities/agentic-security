@@ -30,6 +30,23 @@ All are prefixed `AGENTIC_SECURITY_`. The ones you're most likely to touch:
 | `AGENTIC_SECURITY_PRIVACY_FRAMEWORK` | Emit NIST Privacy Framework 1.1 gaps as fixable findings (see [compliance](../guides/compliance.md)). |
 | `AGENTIC_SECURITY_OFFLINE` | Skip all network (OSV/registry/EPSS) — same as `--no-network`. |
 
+### Finding provenance
+
+Set by `scan`'s own `--provenance*` / `--*-author-*` flags — see the
+[finding provenance guide](../guides/finding-provenance.md) for the full
+picture. Documented here because they can also be set directly, e.g. from a
+CI environment that doesn't invoke the CLI flags:
+
+| Variable | Effect |
+|---|---|
+| `AGENTIC_SECURITY_NO_PROVENANCE` | Same as `--no-provenance`: skip git-history resolution, findings report `not_available`. |
+| `AGENTIC_SECURITY_PROVENANCE_MODE` | `standard` (default) or `deep` — same as `--provenance <mode>`. |
+| `AGENTIC_SECURITY_PROVENANCE_SINCE` | Same as `--provenance-since <ref>`: don't walk history earlier than this ref. |
+| `AGENTIC_SECURITY_PROVENANCE_TIMEOUT_MS` | Whole-scan provenance budget in milliseconds — same as `--provenance-timeout`. |
+| `AGENTIC_SECURITY_INCLUDE_AUTHOR_EMAIL` | Same as `--include-author-email`: keep author emails in output (withheld by default). |
+| `AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS` | Same as `--pseudonymize-authors`: replace author names with a stable `Contributor-XXXXXXXX` id. |
+| `AGENTIC_SECURITY_GITHUB_TOKEN` / `AGENTIC_SECURITY_GITLAB_TOKEN` | Token for optional PR-metadata/CODEOWNERS provider enrichment; takes precedence over a token in `provenance-providers.yml`. |
+
 ### Turning a detector off
 
 Most detectors have a `AGENTIC_SECURITY_NO_<NAME>` kill switch (e.g.
@@ -78,6 +95,8 @@ files you author.
 | `privacy-framework.{json,md}` | compliance assessment | `/compliance` |
 | `fix-metrics.jsonl` | the fix loop | MTTR / acceptance-rate reporting |
 | `scan-checkpoint.jsonl` | a resumable scan | `--resume` |
+| `provenance/lifecycle.json` | every scan (git repos) | [finding provenance](../guides/finding-provenance.md) — the introduce/remediate/reintroduce ledger; **not** subject to normal cache expiry, since it's permanent history |
+| `provenance-cache/` | provenance resolution | provenance resolution — a pure `HEAD`-keyed memo, safe to delete, subject to normal cache retention |
 
 `last-scan.json` is signed with the per-install HMAC key; tampering with it
 outside the scanner makes the next read warn and re-scan.
@@ -91,6 +110,8 @@ outside the scanner makes the next read warn and re-scan.
 | `forbidden-apis.yml` | Per-project API denylist for the write-time bodyguard |
 | `license-policy.yml` | Allow/deny/review licenses for the supply-chain license gate |
 | `compliance/<id>/controls.json` | Bring-your-own compliance controls |
+| `provenance-providers.yml` | Opt-in GitHub/GitLab PR-metadata + CODEOWNERS enrichment config (token per provider) — see [finding provenance](../guides/finding-provenance.md) |
+| `repo-lineage.json` | Cross-repository lineage link (`{linkedFrom: {path, atCommit}}`) for a root-commit finding origin — local clones only, no remote fetch |
 
 ### The `rules.yml` gate
 

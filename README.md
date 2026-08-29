@@ -111,7 +111,7 @@ You'll get a plain-English verdict, per-finding fixes, and an exit code you can 
 | I'm here to… | Start with |
 |---|---|
 | **Try it** — get a win in 15 minutes | [Quickstart](docs/guides/quickstart.md) |
-| **Do a specific task** | [How-to guides](docs/guides/) — [scanning](docs/guides/scanning.md) · [fixing vulns](docs/guides/fixing-vulnerabilities.md) · [SBOM & AI-BOM](docs/guides/sbom-and-ai-bom.md) · [compliance](docs/guides/compliance.md) · [CI setup](docs/guides/ci-setup.md) · [leaked secrets](docs/guides/leaked-secrets.md) |
+| **Do a specific task** | [How-to guides](docs/guides/) — [scanning](docs/guides/scanning.md) · [fixing vulns](docs/guides/fixing-vulnerabilities.md) · [SBOM & AI-BOM](docs/guides/sbom-and-ai-bom.md) · [compliance](docs/guides/compliance.md) · [CI setup](docs/guides/ci-setup.md) · [leaked secrets](docs/guides/leaked-secrets.md) · [finding provenance](docs/guides/finding-provenance.md) |
 | **Evaluate it for my company** | [Architecture](docs/ARCHITECTURE.md) · [Metrics](docs/METRICS.md) · [Scorecard](docs/SCORECARD.md) · [Compliance coverage](docs/compliance/) · [Threat model](docs/AGENT_THREAT_MODEL.md) |
 | **Reference** | [CLI](docs/reference/cli.md) · [Configuration & env vars](docs/reference/configuration.md) · [Cost optimization](docs/MODEL_COST_OPTIMIZATION.md) |
 
