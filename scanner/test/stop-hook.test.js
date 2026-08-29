@@ -29,12 +29,18 @@ function mkTmp() {
 function runHook(cwd) {
   const r = cp.spawnSync('node', [HOOK], {
     cwd, env: { ...process.env, CLAUDE_PROJECT_DIR: cwd },
-    // 20s, not 4s: this spawns a real child process, and a busy machine
-    // (concurrent test runs, unrelated background load) can starve it well
-    // past 4s even though the hook itself normally completes in ~100-300ms.
-    // A 4s cap was producing false failures (status:null from the timeout,
-    // not a real assertion failure) under ordinary machine contention.
-    input: '{}', encoding: 'utf8', timeout: 20000,
+    // 60s, not 20s and originally not 4s: this spawns a real child process,
+    // and the ceiling has to cover the WORST case this test actually runs in,
+    // which is `npm test`'s full parallel suite (~200 files), not an idle
+    // machine. Measured: the whole file completes in ~444ms run alone, and
+    // still blew past 20s under full-suite contention — a >45x starvation
+    // factor — where it failed the pre-push gate and blocked a release. Each
+    // raise here (4s → 20s → 60s) came from the same false failure: a
+    // `status:null` timeout, never a real assertion. 60s matches the budget
+    // other real-CLI-subprocess tests in this repo already use for the same
+    // reason (see test/cli/attest-provenance.test.js) and still catches a
+    // genuine hang, since the real work is sub-second.
+    input: '{}', encoding: 'utf8', timeout: 60000,
   });
   return { code: r.status, stderr: r.stderr || '', stdout: r.stdout || '' };
 }
