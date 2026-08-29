@@ -185,6 +185,14 @@ function countPartiallyEvidenced(dir) {
     corpusDetail: corpus.detail || [],
     selfScan,
     layerRecall,
+    // PRD Success Metrics: provenance coverage. The self-scan harness already
+    // runs a real `runScan()` over this project's own full (non-shallow) git
+    // clone with provenance resolution on by default — see
+    // bench/self-scan/measure.mjs's `provenanceScan`, which trims each
+    // target's findings/secrets/supplyChain down to exactly the fields
+    // `computeProvenanceCoverage` reads. Reusing it is what keeps this a
+    // free measurement rather than a second full scan.
+    scan: selfScan.provenanceScan,
     committed: {
       corpusBaseline: readJsonIfPresent('bench/cve-replay/corpus-baseline.json'),
       proofCorpus: readJsonIfPresent('bench/proof-corpus/results/summary.json'),

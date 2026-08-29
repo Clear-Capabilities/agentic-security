@@ -123,13 +123,17 @@ export function aggregateCorpus(detail) {
  *                — measured THIS run
  *   committed    { corpusBaseline, proofCorpus } — read from committed files,
  *                labelled as such in the output, never used to derive a rate
- *   scan         optional — a full scan object (`{findings, secrets,
- *                supplyChain, ...}`) from a run over a full (non-shallow) Git
- *                clone, used ONLY to compute provenanceCoverage below. Absent
- *                by default: `scripts/scorecard.mjs`'s existing runs (the
- *                CVE corpus, the self-scan harness) do not currently surface
- *                a scan object with `findingProvenance` attached, so the
- *                section renders as "not measured this run" rather than a
+ *   scan         optional — a scan-shaped object (`{findings, secrets,
+ *                supplyChain}`, trimmed to just those arrays) from a run over
+ *                a full (non-shallow) Git clone, used ONLY to compute
+ *                provenanceCoverage below. `scripts/scorecard.mjs` passes
+ *                `selfScan.provenanceScan` — the self-scan harness
+ *                (bench/self-scan/measure.mjs) already runs a real
+ *                `runScan()` over this project's own full git clone with
+ *                provenance resolution on by default, so this reuses that
+ *                run's already-computed `findingProvenance` rather than
+ *                performing a second scan. Still optional: a caller with no
+ *                such scan renders "not measured this run" rather than a
  *                fabricated rate. See PRD Success Metrics.
  */
 export function buildScorecard(inputs) {

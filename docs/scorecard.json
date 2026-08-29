@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.144.0",
-    "bundleSha256": "cdbd5909c8fe1682a351069baff2466e3d1ee7c525f2122909a4954f0c488edf",
-    "commit": "2f7f2f3fe241ffa7ae9fbd1e0d51e24af5fba5be",
+    "bundleSha256": "ea6d6599531d1233b5f784076a9245fde4c57f4b6fc7c28c7cf23b94c4ede56f",
+    "commit": "b23faaa683cf4c4b79da237b2e7be5b51f1c17fb",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-26T22:22:31.430Z",
+    "generatedAt": "2026-08-29T06:41:19.019Z",
     "corpusVersion": "879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -576,7 +576,7 @@
         }
       },
       "scanner/src": {
-        "total": 447,
+        "total": 455,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -615,7 +615,7 @@
           "lsp/server.js": 3,
           "mcp/audit.js": 8,
           "mcp/server.js": 1,
-          "mcp/tools.js": 6,
+          "mcp/tools.js": 7,
           "pipeline/cascade-worker-pool.js": 2,
           "poc-video.js": 1,
           "posture/adversarial-self-test.js": 1,
@@ -624,7 +624,7 @@
           "posture/aibom.js": 3,
           "posture/api-contract.js": 1,
           "posture/attack-playbooks.js": 2,
-          "posture/auditor-walkthrough.js": 2,
+          "posture/auditor-walkthrough.js": 3,
           "posture/auth-posture-import.js": 3,
           "posture/autopilot.js": 1,
           "posture/blast-radius.js": 1,
@@ -684,6 +684,10 @@
           "posture/pre-incident-archaeology.js": 1,
           "posture/production-feedback.js": 1,
           "posture/profile.js": 4,
+          "posture/provenance/cache.js": 1,
+          "posture/provenance/lifecycle.js": 1,
+          "posture/provenance/providers/config.js": 1,
+          "posture/provenance/repo-lineage.js": 1,
           "posture/realtime-cve-monitor.js": 5,
           "posture/retention-policy.js": 1,
           "posture/risk-dollars.js": 3,
@@ -721,7 +725,7 @@
           "posture/waf-ingest.js": 5,
           "posture/workflow-installer.js": 2,
           "pr-comment.js": 1,
-          "report/index.js": 3,
+          "report/index.js": 5,
           "runScan.js": 1,
           "sandbox/backend-namespace.js": 1,
           "sast/agent-untrusted-flow.js": 2,
@@ -782,6 +786,11 @@
       "total": 0,
       "byLanguage": {}
     }
+  },
+  "provenanceCoverage": {
+    "measuredThisRun": true,
+    "n": 311,
+    "d": 341
   },
   "taintRecall": {
     "measuredThisRun": true,

@@ -81,6 +81,23 @@ function countByFile(scan) {
   return { total: all.length, byFile: sorted };
 }
 
+// PRD Success Metrics (provenance coverage) — this harness already runs a
+// real `runScan()` over this project's own (full, non-shallow) git clone,
+// and `runFullScan` resolves findingProvenance by DEFAULT (nothing here sets
+// AGENTIC_SECURITY_NO_PROVENANCE or --no-provenance), so every finding this
+// harness already produces carries a `findingProvenance` for free — no
+// second scan needed. `computeProvenanceCoverage` (accuracy-scorecard.js)
+// only reads `.findingProvenance` off each element and `.type`/`.isDirect`
+// off supplyChain entries, so only those fields are carried through here
+// rather than the full finding object (file contents, blame detail, ...),
+// keeping the --json payload proportional to what's actually consumed.
+function trimForProvenance(arr) {
+  return (arr || []).map((f) => ({ findingProvenance: f.findingProvenance }));
+}
+function trimSupplyChainForProvenance(arr) {
+  return (arr || []).map((s) => ({ type: s.type, isDirect: s.isDirect, findingProvenance: s.findingProvenance }));
+}
+
 async function main() {
   // STATE_SEAM_COMPLETION_PRD M3 — a benchmark must not mutate what it measures.
   // Every runner disables state writing; runners with a well-defined corpus
@@ -91,9 +108,17 @@ async function main() {
   process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
 
   const targets = {};
+  // P0-scoped denominator (`scan.findings` + `scan.secrets` +
+  // direct-dep `scan.supplyChain`) aggregated across every target scanned
+  // this run, over this project's own full git clone — see
+  // computeProvenanceCoverage (scanner/src/posture/accuracy-scorecard.js).
+  const provenanceScan = { findings: [], secrets: [], supplyChain: [] };
   for (const t of TARGETS) {
     const { scan } = await runScan(path.join(REPO, t));
     targets[t] = countByFile(scan);
+    provenanceScan.findings.push(...trimForProvenance(scan.findings));
+    provenanceScan.secrets.push(...trimForProvenance(scan.secrets));
+    provenanceScan.supplyChain.push(...trimSupplyChainForProvenance(scan.supplyChain));
   }
 
   const { scan: poly } = await runScan(path.join(HERE, 'fixtures', 'polyglot'));
@@ -103,7 +128,11 @@ async function main() {
     byLanguage[ext] = (byLanguage[ext] || 0) + 1;
   }
 
-  const out = { targets, polyglot: { total: Object.values(byLanguage).reduce((a, b) => a + b, 0), byLanguage } };
+  const out = {
+    targets,
+    polyglot: { total: Object.values(byLanguage).reduce((a, b) => a + b, 0), byLanguage },
+    provenanceScan,
+  };
   if (process.argv.includes('--json')) process.stdout.write(JSON.stringify(out, null, 2) + '\n');
   else {
     for (const [t, v] of Object.entries(targets)) process.stdout.write(`${t}: ${v.total}\n`);
@@ -112,7 +141,7 @@ async function main() {
   return 0;
 }
 
-main().then(c => process.exit(c)).catch(e => {
+main().then(c => { process.exitCode = c; }).catch(e => {
   process.stderr.write(`fatal: ${e && e.stack}\n`);
-  process.exit(2);
+  process.exitCode = 2;
 });

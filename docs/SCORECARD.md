@@ -10,14 +10,14 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.144.0 |
-| Bundle SHA-256 | `cdbd5909c8fe1682a351069baff2466e3d1ee7c525f2122909a4954f0c488edf` |
-| Commit | `2f7f2f3fe241ffa7ae9fbd1e0d51e24af5fba5be` |
+| Bundle SHA-256 | `ea6d6599531d1233b5f784076a9245fde4c57f4b6fc7c28c7cf23b94c4ede56f` |
+| Commit | `b23faaa683cf4c4b79da237b2e7be5b51f1c17fb` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
 | Corpus version | `879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-08-26T22:22:31.430Z |
+| Generated (UTC) | 2026-08-29T06:41:19.019Z |
 
 ## What these numbers are, and what they are not
 
@@ -209,13 +209,29 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 447 |
+| `scanner/src` | 455 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
 a false-positive count would be wrong in both directions.
 
 Per-file counts are in `docs/scorecard.json`.
+
+## Provenance coverage
+
+PRD Success Metric: **>=95% of P0-scoped findings (SAST + secrets + direct**
+**dependency findings) resolve to `complete` or `uncommitted` git provenance**
+in a full (non-shallow) clone. Transitive dependency findings are excluded —
+the PRD's Release Scope table names direct dependency findings only.
+
+| P0-scoped findings — complete/uncommitted provenance |
+| --- |
+| 311/341 (91.2%) |
+
+Secrets, SAST, and direct-dependency findings all resolve through the same
+git-origin resolution pipeline, so a gap in this rate reflects the clone
+itself (shallow history, uncommitted lines the pipeline could not blame) —
+not a channel this measurement structurally cannot yet cover.
 
 ## Independent evaluation population — the number that matters
 
