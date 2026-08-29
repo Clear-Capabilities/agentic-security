@@ -124,3 +124,9 @@ bench/independent/why-missed-output/
 ide/jetbrains/.gradle/
 ide/jetbrains/.intellijPlatform/
 ide/jetbrains/build/
+
+# Source PRD working documents kept in the repo root. Untracked deliberately:
+# this is a PUBLIC repository, and these are internal requirement documents
+# nobody has asked to publish. Track one explicitly if that ever changes.
+/*-PRD.docx
+/*_PRD.docx
