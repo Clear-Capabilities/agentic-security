@@ -23,6 +23,14 @@ globalThis.fetch = async (url) => {
 };
 
 const HERE = new URL('.', import.meta.url);
+// Belt-and-braces: runner.mjs already passes AGENTIC_SECURITY_NO_STATE=1 when
+// spawning this subprocess, which stateWritesEnabled() checks first — so
+// writes are already off. This call is what test/tree-integrity.test.js's
+// "no bench runner can scan without disabling state writes" guard requires of
+// every runScan-calling file directly, on the assumption that env var
+// propagation from a caller is not something the guard can verify statically.
+const { disableStateWrites } = await import(new URL('../_lib/tree-integrity.mjs', HERE));
+await disableStateWrites();
 const { runScan } = await import(new URL('../../scanner/src/runScan.js', HERE));
 
 const [, , fixtureRoot] = process.argv;
