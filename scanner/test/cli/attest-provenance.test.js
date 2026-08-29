@@ -56,8 +56,13 @@ test('verify-attestation: round-trips a real provenance bundle end-to-end', asyn
 
   const outDir = path.join(fx.root, '.agentic-security', 'attestations');
   const file = fs.readdirSync(outDir).find((f) => f.startsWith('provenance-'));
+  // 60s, matching this file's own established budget for a real CLI
+  // subprocess call under load (see the `scan` step above) — the previous
+  // 15s timeout fired under parallel load even though the underlying
+  // `verify-attestation` command itself completes in well under a second
+  // when run alone (second independent Finding Provenance PRD audit).
   const r = spawnSync(process.execPath, [CLI, 'verify-attestation', path.join(outDir, file)], {
-    cwd: fx.root, encoding: 'utf8', timeout: 15000,
+    cwd: fx.root, encoding: 'utf8', timeout: 60000,
   });
   assert.equal(r.status, 0, `verify-attestation failed: ${r.stderr}\n${r.stdout}`);
   assert.match(r.stdout, /VALID/);
