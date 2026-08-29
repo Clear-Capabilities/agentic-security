@@ -114,7 +114,12 @@ before(() => {
 after(() => { try { fs.rmSync(GIT_TARGET, { recursive: true, force: true }); } catch { /* best effort */ } });
 
 function emitGit(format) {
-  const r = spawnSync(process.execPath, [CLI, 'scan', '.', '--format', format, '--deterministic'], {
+  // `--provenance` is explicit as of 0.145.0: provenance became opt-in when
+  // the release gate measured on-by-default at 4.5s -> 45s time-to-first-
+  // finding. This whole test exists to prove the observedAt FREEZE under
+  // --deterministic, so it has to actually resolve provenance — and the
+  // vacuous-pass guard below correctly caught the moment it stopped.
+  const r = spawnSync(process.execPath, [CLI, 'scan', '.', '--format', format, '--deterministic', '--provenance'], {
     cwd: GIT_TARGET, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
   });
   return r.stdout || '';

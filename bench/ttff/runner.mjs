@@ -51,6 +51,16 @@ async function measure() {
   // Cold cache: a fresh module registry per run is the closest we get without
   // spawning, and the state dir is not reused.
   const { runScan } = await import(path.join(REPO, 'scanner', 'src', 'runScan.js'));
+  // Measure the DEFAULT experience, which is what this metric is about.
+  // `runScan` still resolves provenance when asked, but as of 0.145.0 the CLI
+  // no longer asks by default (see parseProvenanceFlags in
+  // bin/agentic-security.js): provenance on every finding took this exact
+  // measurement from 4.5s to 45s, and a first-time user is not waiting on
+  // commit history. This line mirrors the CLI default so the gate keeps
+  // tracking what a real `agentic-security scan` costs -- if that default
+  // ever flips back, delete this and re-baseline deliberately, because the
+  // number WILL move by ~8x and that is the honest signal, not noise.
+  process.env.AGENTIC_SECURITY_NO_PROVENANCE = '1';
   const t0 = process.hrtime.bigint();
   const { scan } = await runScan(TARGET);
   const t1 = process.hrtime.bigint();

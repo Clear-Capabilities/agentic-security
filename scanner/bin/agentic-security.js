@@ -420,7 +420,20 @@ const PROVENANCE_MODES = new Set(['standard', 'deep']);
 // Kept as a pure function (argv in, plain object out) so it's unit-testable
 // without invoking the CLI dispatch or touching process.env.
 export function parseProvenanceFlags(argv) {
-  const result = { mode: 'standard', since: null, timeoutMs: undefined, includeEmail: false, pseudonymize: false, requireProvenance: false, disabled: false, warning: null };
+  // OPT-IN, not opt-out (0.145.0). Provenance was on by default through M0-M4,
+  // and the release gate caught what that costs: time-to-first-finding on a
+  // 207-file tree went 4.5s -> 45s, a 7.6x regression on the ONE metric
+  // bench/ttff/runner.mjs's own header calls the binding constraint for this
+  // product's vibecoder ICP ("how long until the FIRST useful result, not
+  // aggregate F1"). Resolving history for every finding is simply not what a
+  // first-time user is waiting for. It stays one flag away, and CI/compliance
+  // callers that DO want it pass `--provenance` explicitly.
+  //
+  // `disabled` therefore starts true, and any provenance-shaped flag flips it
+  // off — asking for `--provenance-since` or `--require-provenance` is asking
+  // for provenance, and making the user also pass a bare `--provenance`
+  // alongside it would be a papercut with no upside.
+  const result = { mode: 'standard', since: null, timeoutMs: undefined, includeEmail: false, pseudonymize: false, requireProvenance: false, disabled: true, warning: null };
   const warnings = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -450,6 +463,7 @@ export function parseProvenanceFlags(argv) {
 
     if (key === '--no-provenance') result.disabled = true;
     else if (key === '--provenance') {
+      result.disabled = false;
       // The SPACE form only claims the next token when it actually names a
       // mode. `--provenance` is legal on its own (provenance is on by default;
       // the flag is how you say "standard, explicitly"), and this CLI's target
@@ -468,7 +482,7 @@ export function parseProvenanceFlags(argv) {
       } else {
         warnings.push(`unrecognised --provenance mode '${v}' (expected standard|deep), running standard`);
       }
-    } else if (key === '--provenance-since') { result.since = takeValue() ?? null; }
+    } else if (key === '--provenance-since') { result.since = takeValue() ?? null; result.disabled = false; }
     else if (key === '--provenance-timeout') {
       // MILLISECONDS, and validated as such. `parseInt` alone turned
       // `--provenance-timeout 30s` into 30 — a 30-MILLISECOND budget that
@@ -485,11 +499,12 @@ export function parseProvenanceFlags(argv) {
         warnings.push(`--provenance-timeout expects a positive integer number of MILLISECONDS, got '${raw}'; using the default budget`);
       } else {
         result.timeoutMs = parseInt(raw, 10);
+        result.disabled = false;
       }
     }
-    else if (key === '--include-author-email') { result.includeEmail = true; }
-    else if (key === '--pseudonymize-authors') { result.pseudonymize = true; }
-    else if (key === '--require-provenance') { result.requireProvenance = true; }
+    else if (key === '--include-author-email') { result.includeEmail = true; result.disabled = false; }
+    else if (key === '--pseudonymize-authors') { result.pseudonymize = true; result.disabled = false; }
+    else if (key === '--require-provenance') { result.requireProvenance = true; result.disabled = false; }
   }
   // One field, so a caller that prints `warning` cannot drop the second one.
   result.warning = warnings.length ? warnings.join('; ') : null;

@@ -15,8 +15,16 @@
 
 Every finding now carries a `findingProvenance` record answering "when did this
 enter the codebase, and how sure are we?" — resolved from Git history, not
-guessed. It is on by default in any scan of a Git repository and costs nothing
-outside one.
+guessed. It is **opt-in**: pass `--provenance` (or any provenance flag, e.g.
+`--provenance-since`, `--require-provenance`) on a scan of a Git repository.
+
+It is opt-in rather than on-by-default because the release gate measured what
+on-by-default costs: time-to-first-finding over a 207-file tree went 4.5s to
+45s. That is a 7.6x regression on the one metric this product's own benchmark
+calls the binding constraint for its ICP — "how long until the FIRST useful
+result, not aggregate F1" — and resolving commit history for every finding is
+not what a first-time user is waiting on. CI, compliance and triage callers
+that want provenance ask for it explicitly and pay the cost knowingly.
 
 **What it resolves.** For a SAST finding: the commit that introduced it, found
 by replaying the finding's own predicate against historical blobs (`git blame`

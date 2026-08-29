@@ -5,8 +5,16 @@ confident that answer is — resolved from real git history, not guessed from
 `git blame` (which answers "who last touched this line," a different and
 usually wrong question).
 
-**Prerequisites:** a git repository. Provenance resolution is **on by
-default** for any scan of one, and costs nothing outside a git repo.
+**Prerequisites:** a git repository, and the `--provenance` flag.
+
+Provenance is **opt-in**. It resolves commit history for every finding, which
+takes real time — measured on a 207-file tree, it moved time-to-first-finding
+from ~5s to ~45s. That is the right trade when you are producing compliance
+evidence or triaging ownership, and the wrong one when you are waiting on a
+first scan, so you ask for it rather than pay for it unasked. Any provenance
+flag turns it on (`--provenance`, `--provenance-since`, `--provenance-timeout`,
+`--require-provenance`, `--include-author-email`, `--pseudonymize-authors`).
+Outside a git repository it costs nothing regardless.
 
 ---
 
@@ -120,8 +128,8 @@ only ever flags, the second can fail a CI build.
 ## Commands
 
 ```bash
-# Standard resolution (the default — no flag needed)
-agentic-security scan .
+# Standard resolution — the flag IS required; a bare `scan` has no provenance
+agentic-security scan . --provenance
 
 # Non-linear history: merges, reverts, cherry-picks
 agentic-security scan . --provenance deep

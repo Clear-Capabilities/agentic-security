@@ -15,7 +15,11 @@ test('attest --provenance: signs a real bundle from a real scan, distinct from f
   fx.writeFile('server.js', 'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = " + input);\n');
   fx.commit('introduce sqli');
 
-  const scanR = spawnSync(process.execPath, [CLI, 'scan', '.'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
+  // `--provenance` is explicit as of 0.145.0 (provenance became opt-in when
+  // the release gate measured on-by-default at 4.5s -> 45s time-to-first-
+  // finding). A scan without it produces nothing for `attest --provenance`
+  // to sign, so these tests would assert against an empty bundle.
+  const scanR = spawnSync(process.execPath, [CLI, 'scan', '.', '--provenance'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
   // `scan` exit code encodes the deploy-gate verdict, not scan success —
   // 3 is expected here because the fixture's critical sqli finding trips
   // the gate (src/report/index.js#exitCodeFor). "<=3" is the established
@@ -51,7 +55,7 @@ test('verify-attestation: round-trips a real provenance bundle end-to-end', asyn
   fx.writeFile('server.js', 'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = " + input);\n');
   fx.commit('introduce sqli');
 
-  spawnSync(process.execPath, [CLI, 'scan', '.'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
+  spawnSync(process.execPath, [CLI, 'scan', '.', '--provenance'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
   spawnSync(process.execPath, [CLI, 'attest', '--provenance'], { cwd: fx.root, encoding: 'utf8', timeout: 30000 });
 
   const outDir = path.join(fx.root, '.agentic-security', 'attestations');
@@ -74,7 +78,7 @@ test('verify-attestation: a tampered provenance bundle is rejected with exit 1',
   t.after(() => fx.cleanup());
   fx.writeFile('server.js', 'const input = req.query.id;\ndb.query("SELECT * FROM t WHERE id = " + input);\n');
   fx.commit('introduce sqli');
-  spawnSync(process.execPath, [CLI, 'scan', '.'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
+  spawnSync(process.execPath, [CLI, 'scan', '.', '--provenance'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
   spawnSync(process.execPath, [CLI, 'attest', '--provenance'], { cwd: fx.root, encoding: 'utf8', timeout: 30000 });
 
   const outDir = path.join(fx.root, '.agentic-security', 'attestations');

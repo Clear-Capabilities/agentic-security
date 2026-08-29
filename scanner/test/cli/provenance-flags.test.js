@@ -7,13 +7,32 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-test('parseProvenanceFlags: defaults to standard mode, nothing disabled', () => {
+// 0.145.0 inverted this: provenance is OPT-IN. On-by-default cost 4.5s -> 45s
+// of time-to-first-finding on a 207-file tree, a 7.6x regression on the metric
+// bench/ttff calls this product's binding ICP constraint. `mode` still defaults
+// to 'standard' because it describes HOW to resolve once asked, not WHETHER to.
+test('parseProvenanceFlags: with no flags, provenance is off (opt-in) and mode still defaults to standard', () => {
   const f = parseProvenanceFlags([]);
   assert.equal(f.mode, 'standard');
-  assert.equal(f.disabled, false);
+  assert.equal(f.disabled, true, 'provenance must be OFF unless explicitly requested');
   assert.equal(f.includeEmail, false);
   assert.equal(f.pseudonymize, false);
   assert.equal(f.requireProvenance, false);
+});
+
+// Each of these means "I want provenance"; requiring a redundant bare
+// --provenance alongside them would be a papercut with no upside.
+test('parseProvenanceFlags: every provenance-shaped flag enables it, not just --provenance', () => {
+  assert.equal(parseProvenanceFlags(['--provenance']).disabled, false);
+  assert.equal(parseProvenanceFlags(['--provenance=deep']).disabled, false);
+  assert.equal(parseProvenanceFlags(['--provenance-since', 'v1.0.0']).disabled, false);
+  assert.equal(parseProvenanceFlags(['--provenance-timeout', '30000']).disabled, false);
+  assert.equal(parseProvenanceFlags(['--require-provenance']).disabled, false);
+  assert.equal(parseProvenanceFlags(['--include-author-email']).disabled, false);
+  assert.equal(parseProvenanceFlags(['--pseudonymize-authors']).disabled, false);
+  // ...and an explicit --no-provenance still wins over the default-off, so the
+  // flag keeps working for anyone who already has it in a script.
+  assert.equal(parseProvenanceFlags(['--no-provenance']).disabled, true);
 });
 
 test('parseProvenanceFlags: --no-provenance disables', () => {
@@ -153,8 +172,12 @@ test('I2: --verbose --firehose renders the provenance block on a real git repo s
     git('add', '-A');
     git('commit', '-q', '-m', 'introduce sqli');
 
+    // `--provenance` is explicit as of 0.145.0: provenance became opt-in when
+    // the release gate measured on-by-default at 4.5s -> 45s time-to-first-
+    // finding. Without it there is no provenance block to render, and this
+    // test would be asserting the absence of a feature rather than its output.
     const run = (extra) => spawnSync(process.execPath,
-      [CLI, 'scan', dir, '--format', 'ship', '--firehose', '--no-network', ...extra],
+      [CLI, 'scan', dir, '--format', 'ship', '--firehose', '--no-network', '--provenance', ...extra],
       { encoding: 'utf8', timeout: 300000, env: { ...process.env, NO_COLOR: '1' } });
 
     const verbose = run(['--verbose']);
@@ -249,8 +272,13 @@ test('--pseudonymize-authors replaces the real author name with a stable Contrib
       assert.ok(!origin.authorName.includes('Jamie'), 'real author name leaked through pseudonymization');
     }
 
-    // Without the flag, the real name still ships (backward-compatible default).
-    const without = JSON.parse(run([]).stdout);
+    // Without the PSEUDONYMIZE flag the real name still ships. `--provenance`
+    // is still needed here: as of 0.145.0 provenance is opt-in, so a bare
+    // `run([])` would have no findingOrigin at all and this control case would
+    // pass vacuously rather than proving the name survives.
+    // (`--pseudonymize-authors` above enables provenance on its own — asking
+    // to pseudonymize authors is asking for provenance.)
+    const without = JSON.parse(run(['--provenance']).stdout);
     const originsWithout = (without.findings || [])
       .map((f) => f.findingProvenance?.findingOrigin)
       .filter(Boolean);
