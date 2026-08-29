@@ -76,6 +76,56 @@ test('renderSlaSummary: null when nothing is past SLA', () => {
   assert.equal(renderSlaSummary([]), null);
 });
 
+// FR-PROV-019 (second-audit remediation, Task 4): "reports never show an age
+// without its basis and confidence." renderSlaSummary's median-age note must
+// differ, honestly, between a proven-origin finding and one that only has a
+// wall-clock first-seen fallback — never a bare "median open age Nd" with no
+// indication of which kind of number it is.
+test('renderSlaSummary: median age note names a proven git origin + its confidence level', () => {
+  const findings = [
+    {
+      severity: 'critical', ageDays: 10, provenAgeDays: 12, ageBasis: 'finding_origin',
+      findingProvenance: { confidence: { level: 'high', score: 0.9, reasons: [] } },
+    },
+  ];
+  const s = renderSlaSummary(findings);
+  assert.match(s, /median open age 12d/);
+  assert.match(s, /proven origin/);
+  assert.match(s, /HIGH confidence/);
+  assert.doesNotMatch(s, /not proven/);
+});
+
+test('renderSlaSummary: median age note honestly flags a first-seen fallback as not proven', () => {
+  const findings = [
+    { severity: 'critical', ageDays: 10, provenAgeDays: 10, ageBasis: 'first_observed' },
+  ];
+  const s = renderSlaSummary(findings);
+  assert.match(s, /median open age 10d/);
+  assert.match(s, /first-seen fallback/);
+  assert.match(s, /origin not proven/);
+  assert.doesNotMatch(s, /proven origin/);
+});
+
+test('renderSlaSummary: findings with no ageBasis at all (pre-provenance caller) degrade to the same honest fallback label, never a bare number', () => {
+  const findings = [{ severity: 'critical', ageDays: 10 }];
+  const s = renderSlaSummary(findings);
+  assert.match(s, /median open age 10d/);
+  assert.match(s, /first-seen fallback — origin not proven/);
+});
+
+test('renderSlaSummary: earliest_observable (partial history) is distinguished from a fully proven origin', () => {
+  const findings = [
+    {
+      severity: 'critical', ageDays: 10, provenAgeDays: 8, ageBasis: 'earliest_observable',
+      findingProvenance: { confidence: { level: 'medium', score: 0.5, reasons: [] } },
+    },
+  ];
+  const s = renderSlaSummary(findings);
+  assert.match(s, /median open age 8d/);
+  assert.match(s, /earliest observable commit, partial history/);
+  assert.match(s, /MEDIUM confidence/);
+});
+
 // S7 (Stage 2 measurement-completeness audit): computeMTTR was fully built
 // and unit-tested (above) but had zero real callers anywhere in bin/ or src/
 // — the module's own comment calls it "true MTTR," distinct from the open-

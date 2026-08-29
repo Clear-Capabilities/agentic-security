@@ -10,6 +10,28 @@
 import * as crypto from 'node:crypto';
 import { AGE_BASIS } from './provenance/schema.js';
 
+// FR-PROV-019: "reports never show an age without its basis and confidence."
+// FINDING_ORIGIN is the only basis backed by a resolved git commit for the
+// finding's actual introduction; EARLIEST_OBSERVABLE is also git-derived but
+// partial (weaker claim, no exact introduction commit). UNCOMMITTED and
+// FIRST_OBSERVED are both wall-clock fallbacks — the age is a first-seen
+// timestamp, never resolved against git history — and must say so honestly
+// rather than read like a proven date.
+function _ageBasisLabel(ageBasis, confidence) {
+  const level = confidence?.level && confidence.level !== 'unknown' ? confidence.level.toUpperCase() : null;
+  switch (ageBasis) {
+    case AGE_BASIS.FINDING_ORIGIN:
+      return `proven origin${level ? `, ${level} confidence` : ''}`;
+    case AGE_BASIS.EARLIEST_OBSERVABLE:
+      return `earliest observable commit, partial history${level ? `, ${level} confidence` : ''}`;
+    case AGE_BASIS.UNCOMMITTED:
+      return 'uncommitted — first-seen fallback, origin not proven';
+    case AGE_BASIS.FIRST_OBSERVED:
+    default:
+      return 'first-seen fallback — origin not proven';
+  }
+}
+
 // Stable fingerprint for cross-scan finding identity. Mirrors the dedupe key.
 // Exported so a caller can compute the "removed since baseline" (i.e. fixed)
 // set that computeMTTR needs, using the exact same identity function
@@ -88,28 +110,49 @@ export function findingsExceedingSLA(findings, slaDays = null) {
   });
 }
 
-// Median age (days) of the currently-open findings — a single-scan proxy for
-// "how long has this debt been sitting". True MTTR (computeMTTR) needs the set
-// of findings that were FIXED; this reports the open backlog's median age so a
-// scan can show whether debt is getting older. Returns null on empty input.
-// Local — surfaced only through renderSlaSummary (its sole consumer).
-function medianOpenAgeDays(findings) {
-  const ages = (findings || []).map(f => f.ageDays || 0).sort((a, b) => a - b);
-  if (!ages.length) return null;
-  return ages[Math.floor(ages.length / 2)];
+// Median age (days) of the currently-open findings, PLUS the ageBasis/
+// confidence of whichever finding landed on that median — a single-scan proxy
+// for "how long has this debt been sitting". True MTTR (computeMTTR) needs the
+// set of findings that were FIXED; this reports the open backlog's median age
+// so a scan can show whether debt is getting older. Returns null on empty
+// input. Local — surfaced only through renderSlaSummary (its sole consumer).
+//
+// FR-PROV-019: the days figure prefers `provenAgeDays` (git-derived when
+// available) over the pure-wall-clock `ageDays`, and the ageBasis/confidence
+// travel WITH the day count they describe — never a bare number with the
+// basis looked up separately, which is how the original miss happened
+// (ageBasis was stamped onto the finding but never reached the string that
+// printed its age). Findings stamped by an older/test caller that never ran
+// through stampFindingTimestamps (no ageBasis at all) degrade to the same
+// honest "not proven" label FIRST_OBSERVED gets, never a false claim.
+function medianOpenAge(findings) {
+  const entries = (findings || [])
+    .map(f => ({
+      days: f.provenAgeDays != null ? f.provenAgeDays : (f.ageDays || 0),
+      ageBasis: f.ageBasis || AGE_BASIS.FIRST_OBSERVED,
+      confidence: f.findingProvenance?.confidence || null,
+    }))
+    .sort((a, b) => a.days - b.days);
+  if (!entries.length) return null;
+  return entries[Math.floor(entries.length / 2)];
 }
 
 // One-line SLA-breach summary for surfacing after a scan (#10). Returns null
-// when nothing is past its per-severity SLA. Pairs with medianOpenAgeDays for a
+// when nothing is past its per-severity SLA. Pairs with medianOpenAge for a
 // "is my security debt aging" readout that the vibecoder can act on.
+//
+// FR-PROV-019: never prints the median age number without its basis and
+// confidence alongside it — see medianOpenAge/_ageBasisLabel above.
 export function renderSlaSummary(findings, slaDays = null) {
   const breached = findingsExceedingSLA(findings || [], slaDays);
   if (!breached.length) return null;
   const bySev = {};
   for (const f of breached) bySev[f.severity] = (bySev[f.severity] || 0) + 1;
   const parts = ['critical', 'high', 'medium', 'low', 'info'].filter(s => bySev[s]).map(s => `${bySev[s]} ${s}`);
-  const median = medianOpenAgeDays(findings);
-  const ageNote = median != null ? ` (median open age ${median}d)` : '';
+  const median = medianOpenAge(findings);
+  const ageNote = median != null
+    ? ` (median open age ${median.days}d, ${_ageBasisLabel(median.ageBasis, median.confidence)})`
+    : '';
   return `${breached.length} finding(s) past remediation SLA: ${parts.join(', ')}${ageNote}`;
 }
 
