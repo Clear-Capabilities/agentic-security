@@ -27,8 +27,12 @@
 //     even considers the commit that actually introduced the finding.
 //
 // The net effect: the resolver degrades to
-// `status:'partial', reason:'predicate-never-confirmed-in-candidates'`
-// instead of resolving to the true origin commit. This fixture's expectation
+// `status:'partial', reason:'rename-detected-not-followed'` instead of
+// resolving to the true origin commit. (That reason string used to be the
+// generic `predicate-never-confirmed-in-candidates`; the second-audit
+// remediation made it rename-specific, since the `no-files-at-commit` reason
+// described above is itself the distinguishing signal — the degradation
+// itself is unchanged, only its honesty about the cause.) This fixture's expectation
 // is the CORRECT, PRD-mandated answer (the pre-rename commit) — it is
 // EXPECTED to score a miss against the current shipped pipeline, and that
 // miss is exactly the honest signal this corpus exists to surface. Fixing
