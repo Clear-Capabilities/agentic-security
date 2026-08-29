@@ -40,7 +40,11 @@
         "collection"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:f68cbbd8e123",
+        "data:c929a6c5128b",
+        "data:2eda79a2e73e"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -96,7 +100,9 @@
         "processing"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -124,7 +130,9 @@
         "processing"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:2eda79a2e73e"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -152,7 +160,10 @@
         "processing"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:f68cbbd8e123",
+        "data:c929a6c5128b"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -180,7 +191,9 @@
         "storage"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -208,7 +221,9 @@
         "storage"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -238,7 +253,9 @@
         "sharing"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -269,7 +286,9 @@
         "sharing"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:2eda79a2e73e"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -297,7 +316,10 @@
         "sharing"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:f68cbbd8e123",
+        "data:c929a6c5128b"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -325,7 +347,9 @@
         "storage"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:c929a6c5128b"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -353,7 +377,9 @@
         "sharing"
       ],
       "governanceRefs": {},
-      "dataElementIds": [],
+      "dataElementIds": [
+        "data:2eda79a2e73e"
+      ],
       "evidenceRefs": [],
       "confidence": {
         "score": 1,
@@ -494,7 +520,9 @@
           "evidenceGrade": "code"
         }
       },
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "evidence:ea9ebd25bed2"
+      ],
       "coverageStatus": "modeled"
     },
     {
@@ -532,7 +560,9 @@
           "evidenceGrade": "code"
         }
       },
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "evidence:81618d7d7576"
+      ],
       "coverageStatus": "modeled"
     },
     {
@@ -570,7 +600,9 @@
           "evidenceGrade": "none"
         }
       },
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "evidence:1c1d5891a518"
+      ],
       "coverageStatus": "modeled"
     },
     {
@@ -610,7 +642,9 @@
           "evidenceGrade": "none"
         }
       },
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "evidence:7f6318f5b8bd"
+      ],
       "coverageStatus": "modeled"
     },
     {
@@ -1074,7 +1108,9 @@
       "alternatePathCount": 0,
       "policyVerdict": "not_evaluated",
       "protectionSummary": "protected",
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "evidence:ea9ebd25bed2"
+      ],
       "confidence": {
         "score": 1,
         "tier": "high"
@@ -1099,7 +1135,9 @@
       "alternatePathCount": 0,
       "policyVerdict": "not_evaluated",
       "protectionSummary": "unprotected",
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "evidence:81618d7d7576"
+      ],
       "confidence": {
         "score": 1,
         "tier": "high"
@@ -1126,7 +1164,9 @@
       "alternatePathCount": 0,
       "policyVerdict": "not_evaluated",
       "protectionSummary": "unknown",
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "evidence:1c1d5891a518"
+      ],
       "confidence": {
         "score": 1,
         "tier": "high"
@@ -1153,7 +1193,9 @@
       "alternatePathCount": 0,
       "policyVerdict": "not_evaluated",
       "protectionSummary": "unprotected",
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "evidence:7f6318f5b8bd"
+      ],
       "confidence": {
         "score": 1,
         "tier": "high"

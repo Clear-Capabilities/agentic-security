@@ -82,6 +82,63 @@ test('Appendix A: not every card_number flow is protected — a mixed picture is
   assert.ok(summaries.has('unprotected') || summaries.has('unknown'), 'at least one PCI flow must be non-protected — the fixture must not launder an overall-safe claim');
 });
 
+// I4 regression: nodes central to the PCI/PHI/AI scenario must actually
+// list the data elements that flow through them, not an empty array.
+test('nodes central to the PCI/PHI/AI scenario have non-empty dataElementIds', () => {
+  const cardId = graph.dataElements.find((d) => d.name === 'card_number').id;
+  const diagnosisId = graph.dataElements.find((d) => d.name === 'diagnosis').id;
+  const emailId = graph.dataElements.find((d) => d.name === 'email').id;
+
+  const web = nodeByKey('node.web');
+  assert.ok(web.dataElementIds.includes(cardId), 'Web App should carry card_number');
+  assert.ok(web.dataElementIds.includes(diagnosisId), 'Web App should carry diagnosis');
+  assert.ok(web.dataElementIds.includes(emailId), 'Web App should carry email');
+
+  const payments = nodeByKey('node.payments');
+  assert.ok(payments.dataElementIds.includes(cardId), 'Payments Service should carry card_number');
+
+  const ai = nodeByKey('node.ai');
+  assert.ok(ai.dataElementIds.includes(cardId), 'AI Assistant should carry card_number');
+  assert.ok(ai.dataElementIds.includes(diagnosisId), 'AI Assistant should carry diagnosis');
+
+  const postgres = nodeByKey('node.postgres');
+  assert.ok(postgres.dataElementIds.includes(cardId), 'PostgreSQL should carry card_number');
+
+  const logs = nodeByKey('node.logs');
+  assert.ok(logs.dataElementIds.includes(cardId), 'Application Logs should carry card_number');
+});
+
+// I4 regression: the masked-log edge's evidenceRefs must resolve to a
+// real, non-orphaned evidence object — not just an empty array or an id
+// nothing in graph.evidence actually has.
+test('the masked-log edge evidenceRefs resolves to a real evidence object', () => {
+  const masked = flowByKey('flow.pci.masked_log');
+  const maskedEdge = graph.edges.find((e) => e.id === masked.edgeIds[masked.edgeIds.length - 1]);
+  assert.ok(maskedEdge.evidenceRefs.length > 0, 'masked-log edge must reference at least one evidence entry');
+  for (const refId of maskedEdge.evidenceRefs) {
+    const ev = graph.evidence.find((e) => e.id === refId);
+    assert.ok(ev, `evidenceRefs entry ${refId} must resolve to a real graph.evidence object`);
+  }
+  // The flow itself should carry the same evidence, not just the edge.
+  assert.ok(masked.evidenceRefs.length > 0, 'flow.pci.masked_log must also carry evidenceRefs');
+  for (const refId of masked.evidenceRefs) {
+    assert.ok(graph.evidence.some((e) => e.id === refId), `flow evidenceRefs entry ${refId} must resolve to a real graph.evidence object`);
+  }
+});
+
+// I4 regression: no evidence object in the fixture may be structurally
+// orphaned — every entry in graph.evidence must be referenced by at least
+// one node, edge, or flow's evidenceRefs.
+test('every evidence object is referenced by at least one node/edge/flow', () => {
+  const referenced = new Set();
+  for (const n of graph.nodes) for (const id of n.evidenceRefs || []) referenced.add(id);
+  for (const e of graph.edges) for (const id of e.evidenceRefs || []) referenced.add(id);
+  for (const f of graph.flows) for (const id of f.evidenceRefs || []) referenced.add(id);
+  for (const ev of graph.evidence) {
+    assert.ok(referenced.has(ev.id), `evidence "${ev.claim}" (${ev.id}) is not referenced by any node/edge/flow`);
+  }
+});
+
 test('every node referenced by extensions.fixtureNodeKeys/fixtureFlowKeys actually resolves', () => {
   for (const [key, id] of Object.entries(graph.extensions.fixtureNodeKeys)) {
     assert.ok(graph.nodes.some((n) => n.id === id), `dangling fixtureNodeKeys entry ${key}`);

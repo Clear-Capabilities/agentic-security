@@ -97,32 +97,43 @@ function build() {
     scope: { source: 'fixture', repository: REPO, commit: COMMIT, environment: 'production' },
   });
 
-  // --- Nodes (Appendix D.2 + the documented node.events extension) ---
-  const web = node({ key: 'web', kind: 'source', subtype: 'web-app', label: 'Web App', aliases: ['Checkout Form', 'Registration Form'], lifecycleStages: ['collection'], externality: 'internal' });
-  const gateway = node({ key: 'gateway', kind: 'api', subtype: 'api-gateway', label: 'API Gateway', lifecycleStages: ['processing'] });
-  const payments = node({ key: 'payments', kind: 'process', subtype: 'service', label: 'Payments Service', lifecycleStages: ['processing'] });
-  const events = node({ key: 'events', kind: 'process', subtype: 'service', label: 'Events Service', lifecycleStages: ['processing'] });
-  const ai = node({ key: 'ai', kind: 'process', subtype: 'ai-assistant', label: 'AI Assistant', lifecycleStages: ['processing'] });
-  const postgres = node({ key: 'postgres', kind: 'store', subtype: 'postgres-table', label: 'PostgreSQL', lifecycleStages: ['storage'] });
-  const logs = node({ key: 'logs', kind: 'log', subtype: 'application-logs', label: 'Application Logs', lifecycleStages: ['storage'] });
-  const paymentApi = node({ key: 'payment_api', kind: 'external', subtype: 'payment-api', label: 'Payment API', aliases: ['Payment Processor'], lifecycleStages: ['sharing'], externality: 'external' });
-  const analytics = node({ key: 'analytics', kind: 'external', subtype: 'analytics-api', label: 'Analytics API', aliases: ['Analytics Provider', 'Analytics DB'], lifecycleStages: ['sharing'], externality: 'external' });
-  const model = node({ key: 'model', kind: 'external', subtype: 'ai-model-provider', label: 'Model Provider', lifecycleStages: ['sharing'], externality: 'external' });
-  const vector = node({ key: 'vector', kind: 'store', subtype: 'vector-store', label: 'Vector Store', lifecycleStages: ['storage'], externality: 'unknown' });
-  const unresolved = node({ key: 'unresolved', kind: 'unresolved', subtype: 'unresolved-destination', label: 'Unresolved Destination', lifecycleStages: ['sharing'], externality: 'unknown' });
-  const retention = node({ key: 'retention', kind: 'process', subtype: 'retention-policy', label: 'Retention Policy', lifecycleStages: ['retention'] });
-  const deletion = node({ key: 'deletion', kind: 'process', subtype: 'deletion-job', label: 'Deletion Job', lifecycleStages: ['deletion'] });
-
-  // --- Data elements ---
+  // --- Data elements (defined first: node.dataElementIds below is derived
+  // from which elements actually flow through each node per the edges/
+  // flows this generator builds, never guessed independently of them) ---
   const cardNumber = dataElement('card_number', 'payments');
   const diagnosis = dataElement('diagnosis', 'support');
   const email = dataElement('email', 'events');
+  const cardIds = [cardNumber.id];
+  const phiIds = [diagnosis.id];
+  const piiIds = [email.id];
+
+  // --- Nodes (Appendix D.2 + the documented node.events extension) ---
+  // dataElementIds per node is derived from the edges/flows below: web is
+  // the shared collection point for all three elements; payments/logs/
+  // postgres/payment_api/ai/model see card_number (the PCI path fans out
+  // to log/db/external-API/AI sinks); ai/model/vector see diagnosis (the
+  // PHI-plus-AI path); events/analytics/unresolved see email (the PII
+  // path). gateway/retention/deletion have no data-carrying edge in this
+  // fixture (retention/deletion are declared process steps, not data-flow
+  // hops — see the comment at their edges below), so they stay empty.
+  const web = node({ key: 'web', kind: 'source', subtype: 'web-app', label: 'Web App', aliases: ['Checkout Form', 'Registration Form'], lifecycleStages: ['collection'], externality: 'internal', dataElementIds: [cardNumber.id, diagnosis.id, email.id] });
+  const gateway = node({ key: 'gateway', kind: 'api', subtype: 'api-gateway', label: 'API Gateway', lifecycleStages: ['processing'] });
+  const payments = node({ key: 'payments', kind: 'process', subtype: 'service', label: 'Payments Service', lifecycleStages: ['processing'], dataElementIds: [cardNumber.id] });
+  const events = node({ key: 'events', kind: 'process', subtype: 'service', label: 'Events Service', lifecycleStages: ['processing'], dataElementIds: [email.id] });
+  const ai = node({ key: 'ai', kind: 'process', subtype: 'ai-assistant', label: 'AI Assistant', lifecycleStages: ['processing'], dataElementIds: [cardNumber.id, diagnosis.id] });
+  const postgres = node({ key: 'postgres', kind: 'store', subtype: 'postgres-table', label: 'PostgreSQL', lifecycleStages: ['storage'], dataElementIds: [cardNumber.id] });
+  const logs = node({ key: 'logs', kind: 'log', subtype: 'application-logs', label: 'Application Logs', lifecycleStages: ['storage'], dataElementIds: [cardNumber.id] });
+  const paymentApi = node({ key: 'payment_api', kind: 'external', subtype: 'payment-api', label: 'Payment API', aliases: ['Payment Processor'], lifecycleStages: ['sharing'], externality: 'external', dataElementIds: [cardNumber.id] });
+  const analytics = node({ key: 'analytics', kind: 'external', subtype: 'analytics-api', label: 'Analytics API', aliases: ['Analytics Provider', 'Analytics DB'], lifecycleStages: ['sharing'], externality: 'external', dataElementIds: [email.id] });
+  const model = node({ key: 'model', kind: 'external', subtype: 'ai-model-provider', label: 'Model Provider', lifecycleStages: ['sharing'], externality: 'external', dataElementIds: [cardNumber.id, diagnosis.id] });
+  const vector = node({ key: 'vector', kind: 'store', subtype: 'vector-store', label: 'Vector Store', lifecycleStages: ['storage'], externality: 'unknown', dataElementIds: [diagnosis.id] });
+  const unresolved = node({ key: 'unresolved', kind: 'unresolved', subtype: 'unresolved-destination', label: 'Unresolved Destination', lifecycleStages: ['sharing'], externality: 'unknown', dataElementIds: [email.id] });
+  const retention = node({ key: 'retention', kind: 'process', subtype: 'retention-policy', label: 'Retention Policy', lifecycleStages: ['retention'] });
+  const deletion = node({ key: 'deletion', kind: 'process', subtype: 'deletion-job', label: 'Deletion Job', lifecycleStages: ['deletion'] });
 
   [web, gateway, payments, events, ai, postgres, logs, paymentApi, analytics, model, vector, unresolved, retention, deletion]
     .forEach((n) => { graph.nodes.push(n); });
   [cardNumber, diagnosis, email].forEach((d) => { graph.dataElements.push(d); });
-
-  const cardIds = [cardNumber.id];
 
   // --- flow.pci.masked_log: Web -> Payments -> maskCard() -> Application Logs (handling protected) ---
   const maskTransform = { id: transformationId(payments.id, 'maskCard'), inputPath: 'payment.pan', outputPath: 'maskedPan', callee: 'maskCard', location: { file: 'services/payment.js', line: 55 }, kind: 'mask', reversibility: 'irreversible', algorithm: null, appliesToAllPaths: true, controlCredit: true, controlCreditReason: 'maskCard() proven on this branch (all feasible paths)' };
@@ -165,7 +176,6 @@ function build() {
   graph.flows.push(flowPciAi);
 
   // --- flow.phi.ai: Support Form (Web) -> AI Assistant -> Model Provider + Vector Store ---
-  const phiIds = [diagnosis.id];
   const e6a = edge({ from: web.id, to: ai.id, mappings: [{ fromPath: 'req.body.diagnosis', toPath: 'promptContext.summary', dataElementIds: phiIds, mappingType: 'rename', transformationIds: [] }] });
   const e6b = edge({ from: ai.id, to: model.id, mappings: [{ fromPath: 'promptContext.summary', toPath: 'model.messages[].content', dataElementIds: phiIds, mappingType: 'projection', transformationIds: [] }], boundaryCrossings: ['trust-zone:external'] });
   const e6c = edge({ from: ai.id, to: vector.id, mappings: [{ fromPath: 'promptContext.summary', toPath: 'vector.document', dataElementIds: phiIds, mappingType: 'transformation', transformationIds: [] }] });
@@ -179,7 +189,6 @@ function build() {
   graph.flows.push(flowPhiAi);
 
   // --- flow.pii.analytics: Web (Registration) -> Events Service -> Analytics API (90-day retention only if evidenced) ---
-  const piiIds = [email.id];
   const e7a = edge({ from: web.id, to: events.id, mappings: [{ fromPath: 'req.body.email', toPath: 'event.email', dataElementIds: piiIds, mappingType: 'rename', transformationIds: [] }] });
   const e7b = edge({ from: events.id, to: analytics.id, mappings: [{ fromPath: 'event.email', toPath: 'traits.email', dataElementIds: piiIds, mappingType: 'projection', transformationIds: [] }], boundaryCrossings: ['trust-zone:external'] });
   graph.edges.push(e7a, e7b);
@@ -206,15 +215,28 @@ function build() {
   });
   graph.flows.push(flowUnresolved);
 
-  // --- Evidence (one representative entry per flow, matching PRD 16's four-question shape) ---
-  for (const [claim, evType, note] of [
-    ['card_number reaches Application Logs via maskCard() on the masked branch', 'code', 'services/payment.js:55'],
-    ['card_number reaches Application Logs raw on a separate branch', 'code', 'services/payment.js:60'],
-    ['card_number reaches payments.pan with no correlated at-rest configuration', 'code', 'services/payment.js:70'],
-    ['card_number reaches http://payments.example/charge over cleartext HTTP', 'code', 'clients/gateway.js:72'],
-  ]) {
-    graph.evidence.push({ id: evidenceId(claim, note), claim, evidenceType: evType, location: { note }, producer: 'lineage-fixture-builder', confidenceTier: 'high', snippet: null, timestamp: GENERATED_AT, commit: COMMIT, limitations: [], conflict: false });
+  // --- Evidence (one representative entry per flow, matching PRD 16's
+  // four-question shape). Each entry is the evidence FOR the protection
+  // verdict on the specific edge/flow named in its claim, so it is wired
+  // back via evidenceRefs on that edge and that flow — an evidence object
+  // nothing references is structurally orphaned and proves nothing.
+  function evidence(claim, evType, note) {
+    return { id: evidenceId(claim, note), claim, evidenceType: evType, location: { note }, producer: 'lineage-fixture-builder', confidenceTier: 'high', snippet: null, timestamp: GENERATED_AT, commit: COMMIT, limitations: [], conflict: false };
   }
+  const evMaskedLog = evidence('card_number reaches Application Logs via maskCard() on the masked branch', 'code', 'services/payment.js:55');
+  const evRawLog = evidence('card_number reaches Application Logs raw on a separate branch', 'code', 'services/payment.js:60');
+  const evDatabase = evidence('card_number reaches payments.pan with no correlated at-rest configuration', 'code', 'services/payment.js:70');
+  const evPaymentApi = evidence('card_number reaches http://payments.example/charge over cleartext HTTP', 'code', 'clients/gateway.js:72');
+  graph.evidence.push(evMaskedLog, evRawLog, evDatabase, evPaymentApi);
+
+  e1b.evidenceRefs = [evMaskedLog.id];
+  flowMaskedLog.evidenceRefs = [evMaskedLog.id];
+  e2.evidenceRefs = [evRawLog.id];
+  flowRawLog.evidenceRefs = [evRawLog.id];
+  e3.evidenceRefs = [evDatabase.id];
+  flowDatabase.evidenceRefs = [evDatabase.id];
+  e4.evidenceRefs = [evPaymentApi.id];
+  flowPaymentApi.evidenceRefs = [evPaymentApi.id];
 
   graph.coverage = { languages: [{ language: 'js', filesExpected: 6, filesAnalyzed: 6 }], parseFailures: [], destinationResolutionStatus: 'complete-for-fixture', pathBudgetTruncation: false };
   graph.limitations = ['This is a synthetic fixture graph, not a real repository scan. See scope.source.'];
