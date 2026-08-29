@@ -15,6 +15,7 @@
 
 import { SCHEMA_VERSION, NODE_KINDS, MAPPING_TYPES, COVERAGE_STATUS_VALUES, EXTERNALITY_VALUES } from './schema.js';
 import { isValidProtectionDimension, PROTECTION_DIMENSIONS } from './protection.js';
+import { LINEAGE_DATA_CLASSES, isAiContext } from './classification.js';
 
 function _err(errors, path, message) {
   errors.push({ path, message });
@@ -30,11 +31,23 @@ function _requireObject(graph, key, errors) {
   }
 }
 
+const ID_PREFIXES = {
+  node: /^node:/,
+  edge: /^edge:/,
+  data: /^data:/,
+  flow: /^flow:/,
+  transform: /^transform:/,
+  evidence: /^evidence:/,
+};
+
 function _validateNode(node, idx, errors, seenIds) {
   const path = (suffix) => `$.nodes[${idx}]${suffix}`;
   if (!node || typeof node !== 'object') { _err(errors, path(''), 'node must be an object'); return; }
   if (typeof node.id !== 'string' || !node.id) _err(errors, path('.id'), 'node.id is required');
-  else seenIds.add(node.id);
+  else {
+    if (!ID_PREFIXES.node.test(node.id)) _err(errors, path('.id'), `node.id must start with "node:"`);
+    seenIds.add(node.id);
+  }
   if (!NODE_KINDS.includes(node.kind)) _err(errors, path('.kind'), `unrecognized node kind "${node.kind}"`);
   if (typeof node.label !== 'string' || !node.label) _err(errors, path('.label'), 'node.label is required');
   if (!Array.isArray(node.aliases)) _err(errors, path('.aliases'), 'node.aliases must be an array');
@@ -50,16 +63,36 @@ function _validateDataElement(de, idx, errors, seenIds) {
   const path = (suffix) => `$.dataElements[${idx}]${suffix}`;
   if (!de || typeof de !== 'object') { _err(errors, path(''), 'dataElement must be an object'); return; }
   if (typeof de.id !== 'string' || !de.id) _err(errors, path('.id'), 'dataElement.id is required');
-  else seenIds.add(de.id);
+  else {
+    if (!ID_PREFIXES.data.test(de.id)) _err(errors, path('.id'), `dataElement.id must start with "data:"`);
+    seenIds.add(de.id);
+  }
   if (typeof de.name !== 'string' || !de.name) _err(errors, path('.name'), 'dataElement.name is required');
   if (!Array.isArray(de.dataClasses)) _err(errors, path('.dataClasses'), 'dataElement.dataClasses must be an array');
+  else {
+    for (let i = 0; i < de.dataClasses.length; i++) {
+      const cls = de.dataClasses[i];
+      if (!LINEAGE_DATA_CLASSES.includes(cls)) {
+        _err(errors, path(`.dataClasses[${i}]`), `unrecognized data class "${cls}"`);
+      }
+    }
+  }
   if (!Array.isArray(de.aiContexts)) _err(errors, path('.aiContexts'), 'dataElement.aiContexts must be an array');
+  else {
+    for (let i = 0; i < de.aiContexts.length; i++) {
+      const ctx = de.aiContexts[i];
+      if (!isAiContext(ctx)) {
+        _err(errors, path(`.aiContexts[${i}]`), `unrecognized AI processing context "${ctx}"`);
+      }
+    }
+  }
 }
 
 function _validateEdge(edge, idx, errors, nodeIds, dataElementIds) {
   const path = (suffix) => `$.edges[${idx}]${suffix}`;
   if (!edge || typeof edge !== 'object') { _err(errors, path(''), 'edge must be an object'); return; }
   if (typeof edge.id !== 'string' || !edge.id) _err(errors, path('.id'), 'edge.id is required');
+  else if (!ID_PREFIXES.edge.test(edge.id)) _err(errors, path('.id'), `edge.id must start with "edge:"`);
   if (!nodeIds.has(edge.from)) _err(errors, path('.from'), `unknown node id "${edge.from}"`);
   if (!nodeIds.has(edge.to)) _err(errors, path('.to'), `unknown node id "${edge.to}"`);
   if (edge.relationship !== 'data_flow') _err(errors, path('.relationship'), `unrecognized relationship "${edge.relationship}"`);
@@ -85,6 +118,7 @@ function _validateFlow(flow, idx, errors, nodeIds, dataElementIds, edgeIds) {
   const path = (suffix) => `$.flows[${idx}]${suffix}`;
   if (!flow || typeof flow !== 'object') { _err(errors, path(''), 'flow must be an object'); return; }
   if (typeof flow.id !== 'string' || !flow.id) _err(errors, path('.id'), 'flow.id is required');
+  else if (!ID_PREFIXES.flow.test(flow.id)) _err(errors, path('.id'), `flow.id must start with "flow:"`);
   if (!nodeIds.has(flow.source)) _err(errors, path('.source'), `unknown node id "${flow.source}"`);
   if (!nodeIds.has(flow.sink)) _err(errors, path('.sink'), `unknown node id "${flow.sink}"`);
   for (const deId of flow.dataElementIds || []) {

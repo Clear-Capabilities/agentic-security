@@ -2,8 +2,7 @@
 // DataFlowGraph v1 — canonical envelope and enum contract (Data Flow
 // Explorer PRD section 10). This module carries only pure constants and
 // the empty-envelope constructor; no analysis logic lives here. A change
-// to any array below is a schema-version-bumping change — see
-// scanner/src/lineage/CLAUDE.md.
+// to any array below is a schema-version-bumping change.
 //
 // Isolated from scanner/src/dataflow/ on purpose (PRD section 18.1): this
 // package may read pure, stateless exports from dataflow/privacy-taxonomy.js

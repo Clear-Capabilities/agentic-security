@@ -64,3 +64,91 @@ test('an edge referencing a nonexistent node id is rejected', () => {
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((e) => e.message.includes('unknown node id')));
 });
+
+test('a node with wrong id prefix is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push({
+    id: 'whatever:not-a-node', kind: 'source', subtype: 'x', label: 'X',
+    aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] },
+    lifecycleStages: [], governanceRefs: {}, dataElementIds: [], evidenceRefs: [],
+    confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled',
+  });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[0].id' && e.message.includes('must start with "node:"')));
+});
+
+test('an edge with wrong id prefix is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.edges.push({
+    id: 'bad-prefix:123', from: 'node:a', to: 'node:b', relationship: 'data_flow',
+    fieldMappings: [], protocol: {}, boundaryCrossings: [], protection: emptyProtection(),
+    evidenceRefs: [], coverageStatus: 'modeled',
+  });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.edges[0].id' && e.message.includes('must start with "edge:"')));
+});
+
+test('a flow with wrong id prefix is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.flows.push({
+    id: 'wrong:prefix', dataElementIds: [], source: 'node:a', sink: 'node:b',
+    edgeIds: [], policyVerdict: 'not_evaluated', protectionSummary: 'not_assessed',
+    evidenceRefs: [], coverageStatus: 'modeled',
+  });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.flows[0].id' && e.message.includes('must start with "flow:"')));
+});
+
+test('a dataElement with wrong id prefix is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.dataElements.push({
+    id: 'notdata:123', name: 'field', aliases: [], dataClasses: [],
+    aiContexts: [], sourceLocations: [], classificationEvidence: [], manualOverride: false,
+  });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.dataElements[0].id' && e.message.includes('must start with "data:"')));
+});
+
+test('a dataElement with unknown dataClass is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.dataElements.push({
+    id: dataElementId('field', []), name: 'field', aliases: [], dataClasses: ['PCI', 'TOTALLY_MADE_UP'],
+    aiContexts: [], sourceLocations: [], classificationEvidence: [], manualOverride: false,
+  });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.dataElements[0].dataClasses[1]' && e.message.includes('TOTALLY_MADE_UP')));
+});
+
+test('a dataElement with unknown aiContext is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.dataElements.push({
+    id: dataElementId('field', []), name: 'field', aliases: [], dataClasses: ['PCI'],
+    aiContexts: ['ai.model_input', 'not.a.real.context'], sourceLocations: [], classificationEvidence: [], manualOverride: false,
+  });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.dataElements[0].aiContexts[1]' && e.message.includes('not.a.real.context')));
+});
+
+test('a valid two-node, one-edge, one-flow graph with valid dataClasses and aiContexts still passes (no regression)', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  const src = nodeId('source', ['payments-platform', 'web']);
+  const sink = nodeId('log', ['payments-platform', 'logs']);
+  const de = dataElementId('card_number', ['payments-platform']);
+  graph.nodes.push(
+    { id: src, kind: 'source', subtype: 'web-app', label: 'Web App', aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: ['collection'], governanceRefs: {}, dataElementIds: [de], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled' },
+    { id: sink, kind: 'log', subtype: 'application-logs', label: 'Application Logs', aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: ['storage'], governanceRefs: {}, dataElementIds: [de], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled' },
+  );
+  graph.dataElements.push({ id: de, name: 'card_number', aliases: [], declaredType: null, dataClasses: ['PCI'], aiContexts: ['ai.model_input'], sourceLocations: [], dataSubjectCategory: null, classificationEvidence: [], manualOverride: false });
+  const edge = { id: edgeId(src, sink, 'data_flow'), from: src, to: sink, relationship: 'data_flow', fieldMappings: [{ fromPath: 'card_number', toPath: 'maskedPan', dataElementIds: [de], mappingType: 'transformation', transformationIds: [] }], protocol: { name: 'in-process', destinationResolution: 'literal' }, boundaryCrossings: [], protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled' };
+  graph.edges.push(edge);
+  graph.flows.push({ id: flowId(src, sink, [de]), dataElementIds: [de], source: src, sink: sink, edgeIds: [edge.id], transformationIds: [], alternatePathCount: 0, policyVerdict: 'not_evaluated', protectionSummary: 'not_assessed', evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled', findingRefs: [], governanceRefs: {}, limitations: [] });
+  const result = validateGraph(graph);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.valid, true);
+});
