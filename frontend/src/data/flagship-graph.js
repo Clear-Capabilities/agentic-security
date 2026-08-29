@@ -1,0 +1,1445 @@
+// GENERATED FILE — do not edit by hand.
+// Source: scanner/src/lineage/fixtures/flagship-graph.json
+// Regenerate: node frontend/scripts/generate-fixture-module.mjs
+// This copy has been validated by the real validateGraph() at generation
+// time (see frontend/test/fixture-module-parity.test.js for the ongoing
+// proof) — the browser bundle itself never imports scanner/src/lineage/.
+
+export const FLAGSHIP_GRAPH = {
+  "schemaVersion": "1.0.0",
+  "graphId": "dfg:payments-platform:fixture0000000000000000000000000000000:fixture-default",
+  "generatedAt": "2026-08-29T00:00:00.000Z",
+  "scope": {
+    "source": "fixture",
+    "repository": "payments-platform",
+    "commit": "fixture0000000000000000000000000000000",
+    "environment": "production"
+  },
+  "scanHealth": {
+    "status": "complete",
+    "reason": "fixture"
+  },
+  "taxonomy": {
+    "version": "1.0.0",
+    "source": "built-in + CONFIDENTIAL extension"
+  },
+  "nodes": [
+    {
+      "id": "node:source:4aa6d910c10e",
+      "kind": "source",
+      "subtype": "web-app",
+      "label": "Web App",
+      "aliases": [
+        "Checkout Form",
+        "Registration Form"
+      ],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "internal",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "collection"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:f68cbbd8e123",
+        "data:c929a6c5128b",
+        "data:2eda79a2e73e"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:api:02d844c7d1cd",
+      "kind": "api",
+      "subtype": "api-gateway",
+      "label": "API Gateway",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "internal",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "processing"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:process:b3cd659d55dd",
+      "kind": "process",
+      "subtype": "service",
+      "label": "Payments Service",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "internal",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "processing"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:process:c0402f8ccc97",
+      "kind": "process",
+      "subtype": "service",
+      "label": "Events Service",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "internal",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "processing"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:2eda79a2e73e"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:process:d09c75cee70b",
+      "kind": "process",
+      "subtype": "ai-assistant",
+      "label": "AI Assistant",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "internal",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "processing"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:f68cbbd8e123",
+        "data:c929a6c5128b"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:store:a58eb8ae3e2c",
+      "kind": "store",
+      "subtype": "postgres-table",
+      "label": "PostgreSQL",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "internal",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "storage"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:log:608492464d54",
+      "kind": "log",
+      "subtype": "application-logs",
+      "label": "Application Logs",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "internal",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "storage"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:external:eedca8089e42",
+      "kind": "external",
+      "subtype": "payment-api",
+      "label": "Payment API",
+      "aliases": [
+        "Payment Processor"
+      ],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "external",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "sharing"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:external:4ecf6cdd76c4",
+      "kind": "external",
+      "subtype": "analytics-api",
+      "label": "Analytics API",
+      "aliases": [
+        "Analytics Provider",
+        "Analytics DB"
+      ],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "external",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "sharing"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:2eda79a2e73e"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:external:cb19872a775c",
+      "kind": "external",
+      "subtype": "ai-model-provider",
+      "label": "Model Provider",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "external",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "sharing"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:f68cbbd8e123",
+        "data:c929a6c5128b"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:store:99b330ddb7fc",
+      "kind": "store",
+      "subtype": "vector-store",
+      "label": "Vector Store",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "unknown",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "storage"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:c929a6c5128b"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:unresolved:b67f539cc277",
+      "kind": "unresolved",
+      "subtype": "unresolved-destination",
+      "label": "Unresolved Destination",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "unknown",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "sharing"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [
+        "data:2eda79a2e73e"
+      ],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:process:0ee928561e67",
+      "kind": "process",
+      "subtype": "retention-policy",
+      "label": "Retention Policy",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "internal",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "retention"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "node:process:04497a9f442c",
+      "kind": "process",
+      "subtype": "deletion-job",
+      "label": "Deletion Job",
+      "aliases": [],
+      "location": null,
+      "system": {
+        "application": "payments-platform",
+        "environment": "production"
+      },
+      "destination": null,
+      "externality": {
+        "value": "internal",
+        "evidenceRefs": []
+      },
+      "lifecycleStages": [
+        "deletion"
+      ],
+      "governanceRefs": {},
+      "dataElementIds": [],
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge:54d5b1db3415",
+      "from": "node:source:4aa6d910c10e",
+      "to": "node:process:b3cd659d55dd",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "req.body.card_number",
+          "toPath": "payment.pan",
+          "dataElementIds": [
+            "data:f68cbbd8e123"
+          ],
+          "mappingType": "rename",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:d613505336aa",
+      "from": "node:process:b3cd659d55dd",
+      "to": "node:log:608492464d54",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "payment.pan",
+          "toPath": "maskedPan",
+          "dataElementIds": [
+            "data:f68cbbd8e123"
+          ],
+          "mappingType": "transformation",
+          "transformationIds": [
+            "transform:d82a7390c177"
+          ]
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "protected",
+          "evidenceGrade": "code"
+        }
+      },
+      "evidenceRefs": [
+        "evidence:ea9ebd25bed2"
+      ],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:a6fb8d3fdecc",
+      "from": "node:process:b3cd659d55dd",
+      "to": "node:log:608492464d54",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "payment.pan",
+          "toPath": "payment.pan",
+          "dataElementIds": [
+            "data:f68cbbd8e123"
+          ],
+          "mappingType": "identity",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "unprotected",
+          "evidenceGrade": "code"
+        }
+      },
+      "evidenceRefs": [
+        "evidence:81618d7d7576"
+      ],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:fde2387ae333",
+      "from": "node:process:b3cd659d55dd",
+      "to": "node:store:a58eb8ae3e2c",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "payment.pan",
+          "toPath": "payments.pan",
+          "dataElementIds": [
+            "data:f68cbbd8e123"
+          ],
+          "mappingType": "identity",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "unknown",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [
+        "evidence:1c1d5891a518"
+      ],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:b397f3640150",
+      "from": "node:process:b3cd659d55dd",
+      "to": "node:external:eedca8089e42",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "payment.pan",
+          "toPath": "payload.cardNumber",
+          "dataElementIds": [
+            "data:f68cbbd8e123"
+          ],
+          "mappingType": "rename",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "http",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [
+        "trust-zone:external"
+      ],
+      "protection": {
+        "transit": {
+          "verdict": "unprotected",
+          "evidenceGrade": "code"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [
+        "evidence:7f6318f5b8bd"
+      ],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:12086bfdcb38",
+      "from": "node:process:b3cd659d55dd",
+      "to": "node:process:d09c75cee70b",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "payment.pan",
+          "toPath": "promptContext.paymentCard",
+          "dataElementIds": [
+            "data:f68cbbd8e123"
+          ],
+          "mappingType": "rename",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:8736e42f5744",
+      "from": "node:process:d09c75cee70b",
+      "to": "node:external:cb19872a775c",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "promptContext.paymentCard",
+          "toPath": "model.messages[].content",
+          "dataElementIds": [
+            "data:f68cbbd8e123"
+          ],
+          "mappingType": "projection",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [
+        "trust-zone:external"
+      ],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:43c85eec3733",
+      "from": "node:source:4aa6d910c10e",
+      "to": "node:process:d09c75cee70b",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "req.body.diagnosis",
+          "toPath": "promptContext.summary",
+          "dataElementIds": [
+            "data:c929a6c5128b"
+          ],
+          "mappingType": "rename",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:503be4d731cd",
+      "from": "node:process:d09c75cee70b",
+      "to": "node:external:cb19872a775c",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "promptContext.summary",
+          "toPath": "model.messages[].content",
+          "dataElementIds": [
+            "data:c929a6c5128b"
+          ],
+          "mappingType": "projection",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [
+        "trust-zone:external"
+      ],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:7a1ec420d86a",
+      "from": "node:process:d09c75cee70b",
+      "to": "node:store:99b330ddb7fc",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "promptContext.summary",
+          "toPath": "vector.document",
+          "dataElementIds": [
+            "data:c929a6c5128b"
+          ],
+          "mappingType": "transformation",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:106113ca2b45",
+      "from": "node:source:4aa6d910c10e",
+      "to": "node:process:c0402f8ccc97",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "req.body.email",
+          "toPath": "event.email",
+          "dataElementIds": [
+            "data:2eda79a2e73e"
+          ],
+          "mappingType": "rename",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:88fae9a9b67f",
+      "from": "node:process:c0402f8ccc97",
+      "to": "node:external:4ecf6cdd76c4",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "event.email",
+          "toPath": "traits.email",
+          "dataElementIds": [
+            "data:2eda79a2e73e"
+          ],
+          "mappingType": "projection",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [
+        "trust-zone:external"
+      ],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:7e89a832924a",
+      "from": "node:external:4ecf6cdd76c4",
+      "to": "node:process:0ee928561e67",
+      "relationship": "data_flow",
+      "fieldMappings": [],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:45861b8f1424",
+      "from": "node:process:0ee928561e67",
+      "to": "node:process:04497a9f442c",
+      "relationship": "data_flow",
+      "fieldMappings": [],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "literal"
+      },
+      "boundaryCrossings": [],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    },
+    {
+      "id": "edge:116d8e384d78",
+      "from": "node:source:4aa6d910c10e",
+      "to": "node:unresolved:b67f539cc277",
+      "relationship": "data_flow",
+      "fieldMappings": [
+        {
+          "fromPath": "req.body.email",
+          "toPath": "unknown",
+          "dataElementIds": [
+            "data:2eda79a2e73e"
+          ],
+          "mappingType": "unknown",
+          "transformationIds": []
+        }
+      ],
+      "protocol": {
+        "name": "in-process",
+        "destinationResolution": "dynamic"
+      },
+      "boundaryCrossings": [
+        "trust-zone:unknown"
+      ],
+      "protection": {
+        "transit": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "atRest": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        },
+        "handling": {
+          "verdict": "not_assessed",
+          "evidenceGrade": "none"
+        }
+      },
+      "evidenceRefs": [],
+      "coverageStatus": "modeled"
+    }
+  ],
+  "dataElements": [
+    {
+      "id": "data:f68cbbd8e123",
+      "name": "card_number",
+      "aliases": [],
+      "declaredType": null,
+      "dataClasses": [
+        "PCI"
+      ],
+      "aiContexts": [],
+      "sourceLocations": [],
+      "dataSubjectCategory": null,
+      "classificationEvidence": [],
+      "manualOverride": false,
+      "firstSeenProvenance": {
+        "commit": "fixture0000000000000000000000000000000",
+        "note": "fixture evidence only, not default production content"
+      }
+    },
+    {
+      "id": "data:c929a6c5128b",
+      "name": "diagnosis",
+      "aliases": [],
+      "declaredType": null,
+      "dataClasses": [
+        "PHI"
+      ],
+      "aiContexts": [],
+      "sourceLocations": [],
+      "dataSubjectCategory": null,
+      "classificationEvidence": [],
+      "manualOverride": false,
+      "firstSeenProvenance": {
+        "commit": "fixture0000000000000000000000000000000",
+        "note": "fixture evidence only, not default production content"
+      }
+    },
+    {
+      "id": "data:2eda79a2e73e",
+      "name": "email",
+      "aliases": [],
+      "declaredType": null,
+      "dataClasses": [
+        "PII"
+      ],
+      "aiContexts": [],
+      "sourceLocations": [],
+      "dataSubjectCategory": null,
+      "classificationEvidence": [],
+      "manualOverride": false,
+      "firstSeenProvenance": {
+        "commit": "fixture0000000000000000000000000000000",
+        "note": "fixture evidence only, not default production content"
+      }
+    }
+  ],
+  "transformations": [
+    {
+      "id": "transform:d82a7390c177",
+      "inputPath": "payment.pan",
+      "outputPath": "maskedPan",
+      "callee": "maskCard",
+      "location": {
+        "file": "services/payment.js",
+        "line": 55
+      },
+      "kind": "mask",
+      "reversibility": "irreversible",
+      "algorithm": null,
+      "appliesToAllPaths": true,
+      "controlCredit": true,
+      "controlCreditReason": "maskCard() proven on this branch (all feasible paths)"
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow:f7273b6e7b61",
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
+      "source": "node:source:4aa6d910c10e",
+      "sink": "node:log:608492464d54",
+      "edgeIds": [
+        "edge:54d5b1db3415",
+        "edge:d613505336aa"
+      ],
+      "transformationIds": [
+        "transform:d82a7390c177"
+      ],
+      "alternatePathCount": 0,
+      "policyVerdict": "not_evaluated",
+      "protectionSummary": "protected",
+      "evidenceRefs": [
+        "evidence:ea9ebd25bed2"
+      ],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled",
+      "findingRefs": [],
+      "governanceRefs": {},
+      "limitations": []
+    },
+    {
+      "id": "flow:154396169be8",
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
+      "source": "node:source:4aa6d910c10e",
+      "sink": "node:log:608492464d54",
+      "edgeIds": [
+        "edge:54d5b1db3415",
+        "edge:a6fb8d3fdecc"
+      ],
+      "transformationIds": [],
+      "alternatePathCount": 0,
+      "policyVerdict": "not_evaluated",
+      "protectionSummary": "unprotected",
+      "evidenceRefs": [
+        "evidence:81618d7d7576"
+      ],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled",
+      "findingRefs": [],
+      "governanceRefs": {},
+      "limitations": [
+        "RAW PCI: card_number logged without masking on this branch"
+      ]
+    },
+    {
+      "id": "flow:7dc7f3f11c47",
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
+      "source": "node:source:4aa6d910c10e",
+      "sink": "node:store:a58eb8ae3e2c",
+      "edgeIds": [
+        "edge:54d5b1db3415",
+        "edge:fde2387ae333"
+      ],
+      "transformationIds": [],
+      "alternatePathCount": 0,
+      "policyVerdict": "not_evaluated",
+      "protectionSummary": "unknown",
+      "evidenceRefs": [
+        "evidence:1c1d5891a518"
+      ],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled",
+      "findingRefs": [],
+      "governanceRefs": {},
+      "limitations": [
+        "No correlated at-rest encryption configuration found for this store"
+      ]
+    },
+    {
+      "id": "flow:a411014f471c",
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
+      "source": "node:source:4aa6d910c10e",
+      "sink": "node:external:eedca8089e42",
+      "edgeIds": [
+        "edge:54d5b1db3415",
+        "edge:b397f3640150"
+      ],
+      "transformationIds": [],
+      "alternatePathCount": 0,
+      "policyVerdict": "not_evaluated",
+      "protectionSummary": "unprotected",
+      "evidenceRefs": [
+        "evidence:7f6318f5b8bd"
+      ],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled",
+      "findingRefs": [],
+      "governanceRefs": {},
+      "limitations": [
+        "Cleartext HTTP scheme: no TLS termination evidence found"
+      ]
+    },
+    {
+      "id": "flow:273d8cf683b9",
+      "dataElementIds": [
+        "data:f68cbbd8e123"
+      ],
+      "source": "node:source:4aa6d910c10e",
+      "sink": "node:external:cb19872a775c",
+      "edgeIds": [
+        "edge:54d5b1db3415",
+        "edge:12086bfdcb38",
+        "edge:8736e42f5744"
+      ],
+      "transformationIds": [],
+      "alternatePathCount": 0,
+      "policyVerdict": "manual_review_required",
+      "protectionSummary": "unknown",
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled",
+      "findingRefs": [],
+      "governanceRefs": {
+        "recipient": "manual_required",
+        "purpose": "manual_required",
+        "lawfulBasis": "manual_required"
+      },
+      "limitations": [
+        "AI recipient/purpose/retention evidence not established from code alone"
+      ]
+    },
+    {
+      "id": "flow:5eaf2ae939ad",
+      "dataElementIds": [
+        "data:c929a6c5128b"
+      ],
+      "source": "node:source:4aa6d910c10e",
+      "sink": "node:external:cb19872a775c",
+      "edgeIds": [
+        "edge:43c85eec3733",
+        "edge:503be4d731cd",
+        "edge:7a1ec420d86a"
+      ],
+      "transformationIds": [],
+      "alternatePathCount": 0,
+      "policyVerdict": "manual_review_required",
+      "protectionSummary": "unknown",
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled",
+      "findingRefs": [],
+      "governanceRefs": {
+        "lawfulBasis": "manual_required",
+        "retention": "unknown",
+        "transfer": "review"
+      },
+      "limitations": [
+        "Lawful basis, retention, and transfer mechanism not established from code alone"
+      ]
+    },
+    {
+      "id": "flow:17540e61c302",
+      "dataElementIds": [
+        "data:2eda79a2e73e"
+      ],
+      "source": "node:source:4aa6d910c10e",
+      "sink": "node:external:4ecf6cdd76c4",
+      "edgeIds": [
+        "edge:106113ca2b45",
+        "edge:88fae9a9b67f"
+      ],
+      "transformationIds": [],
+      "alternatePathCount": 0,
+      "policyVerdict": "not_evaluated",
+      "protectionSummary": "unknown",
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled",
+      "findingRefs": [],
+      "governanceRefs": {
+        "retention": "unknown",
+        "deletion": "not_found"
+      },
+      "limitations": [
+        "No correlated retention/deletion policy evidence found for this recipient"
+      ]
+    },
+    {
+      "id": "flow:0e5d4036b740",
+      "dataElementIds": [
+        "data:2eda79a2e73e"
+      ],
+      "source": "node:source:4aa6d910c10e",
+      "sink": "node:unresolved:b67f539cc277",
+      "edgeIds": [
+        "edge:116d8e384d78"
+      ],
+      "transformationIds": [],
+      "alternatePathCount": 0,
+      "policyVerdict": "not_evaluated",
+      "protectionSummary": "unknown",
+      "evidenceRefs": [],
+      "confidence": {
+        "score": 1,
+        "tier": "high"
+      },
+      "coverageStatus": "modeled",
+      "findingRefs": [],
+      "governanceRefs": {},
+      "limitations": [
+        "Destination computed from an unresolved runtime value (dynamic URL expression)"
+      ]
+    }
+  ],
+  "controls": [],
+  "policies": [],
+  "evidence": [
+    {
+      "id": "evidence:ea9ebd25bed2",
+      "claim": "card_number reaches Application Logs via maskCard() on the masked branch",
+      "evidenceType": "code",
+      "location": {
+        "note": "services/payment.js:55"
+      },
+      "producer": "lineage-fixture-builder",
+      "confidenceTier": "high",
+      "snippet": null,
+      "timestamp": "2026-08-29T00:00:00.000Z",
+      "commit": "fixture0000000000000000000000000000000",
+      "limitations": [],
+      "conflict": false
+    },
+    {
+      "id": "evidence:81618d7d7576",
+      "claim": "card_number reaches Application Logs raw on a separate branch",
+      "evidenceType": "code",
+      "location": {
+        "note": "services/payment.js:60"
+      },
+      "producer": "lineage-fixture-builder",
+      "confidenceTier": "high",
+      "snippet": null,
+      "timestamp": "2026-08-29T00:00:00.000Z",
+      "commit": "fixture0000000000000000000000000000000",
+      "limitations": [],
+      "conflict": false
+    },
+    {
+      "id": "evidence:1c1d5891a518",
+      "claim": "card_number reaches payments.pan with no correlated at-rest configuration",
+      "evidenceType": "code",
+      "location": {
+        "note": "services/payment.js:70"
+      },
+      "producer": "lineage-fixture-builder",
+      "confidenceTier": "high",
+      "snippet": null,
+      "timestamp": "2026-08-29T00:00:00.000Z",
+      "commit": "fixture0000000000000000000000000000000",
+      "limitations": [],
+      "conflict": false
+    },
+    {
+      "id": "evidence:7f6318f5b8bd",
+      "claim": "card_number reaches http://payments.example/charge over cleartext HTTP",
+      "evidenceType": "code",
+      "location": {
+        "note": "clients/gateway.js:72"
+      },
+      "producer": "lineage-fixture-builder",
+      "confidenceTier": "high",
+      "snippet": null,
+      "timestamp": "2026-08-29T00:00:00.000Z",
+      "commit": "fixture0000000000000000000000000000000",
+      "limitations": [],
+      "conflict": false
+    }
+  ],
+  "coverage": {
+    "languages": [
+      {
+        "language": "js",
+        "filesExpected": 6,
+        "filesAnalyzed": 6
+      }
+    ],
+    "parseFailures": [],
+    "destinationResolutionStatus": "complete-for-fixture",
+    "pathBudgetTruncation": false
+  },
+  "limitations": [
+    "This is a synthetic fixture graph, not a real repository scan. See scope.source."
+  ],
+  "extensions": {
+    "fixtureNodeKeys": {
+      "node.web": "node:source:4aa6d910c10e",
+      "node.gateway": "node:api:02d844c7d1cd",
+      "node.payments": "node:process:b3cd659d55dd",
+      "node.ai": "node:process:d09c75cee70b",
+      "node.postgres": "node:store:a58eb8ae3e2c",
+      "node.logs": "node:log:608492464d54",
+      "node.payment_api": "node:external:eedca8089e42",
+      "node.analytics": "node:external:4ecf6cdd76c4",
+      "node.model": "node:external:cb19872a775c",
+      "node.vector": "node:store:99b330ddb7fc",
+      "node.unresolved": "node:unresolved:b67f539cc277",
+      "node.retention": "node:process:0ee928561e67",
+      "node.deletion": "node:process:04497a9f442c",
+      "node.events": "node:process:c0402f8ccc97"
+    },
+    "fixtureFlowKeys": {
+      "flow.pci.masked_log": "flow:f7273b6e7b61",
+      "flow.pci.raw_log": "flow:154396169be8",
+      "flow.pci.database": "flow:7dc7f3f11c47",
+      "flow.pci.payment_api": "flow:a411014f471c",
+      "flow.pci.ai": "flow:273d8cf683b9",
+      "flow.phi.ai": "flow:5eaf2ae939ad",
+      "flow.pii.analytics": "flow:17540e61c302",
+      "flow.pii.unresolved": "flow:0e5d4036b740"
+    }
+  }
+};
