@@ -140,7 +140,19 @@ function _provenanceDebtForRepo(findings, now = Date.now()) {
     completeCount++;
     const ageDays = Math.max(0, Math.floor((now - Date.parse(authorDate)) / 86400000));
     if (!oldest || ageDays > oldest.ageDays) {
-      oldest = { findingId: f.id || f.stableId || null, authorDate, ageDays };
+      // FR-PROV-019: "Reports never show an age without its basis and
+      // confidence." The basis is structurally implied here (only
+      // status:'complete' findings reach this line, so the age is always
+      // git-derived, and the rendered text says "proven-origin") — but the
+      // confidence half has to be carried explicitly, same as
+      // mttr.js's renderSlaSummary. Captured at selection time so the
+      // renderers below cannot show the age without it.
+      oldest = {
+        findingId: f.id || f.stableId || null,
+        authorDate,
+        ageDays,
+        confidence: f.findingProvenance?.confidence?.level || null,
+      };
     }
   }
   return { oldest, completeCount };
@@ -385,8 +397,13 @@ export function renderFleetSummary(rollup) {
   const prov = rollup.provenance;
   let provClause = '';
   if (prov) {
+    // FR-PROV-019: the age never ships without its basis ("proven-origin",
+    // structurally guaranteed by the status:'complete' filter upstream) AND
+    // its confidence. A finding whose provenance carried no confidence level
+    // says so rather than implying certainty by omission.
     const bits = prov.oldestProvenDebt
-      ? [`oldest proven-origin finding: ${prov.oldestProvenDebt.repo} (${prov.oldestProvenDebt.ageDays}d)`]
+      ? [`oldest proven-origin finding: ${prov.oldestProvenDebt.repo} (${prov.oldestProvenDebt.ageDays}d, `
+         + `${prov.oldestProvenDebt.confidence ? `${String(prov.oldestProvenDebt.confidence).toUpperCase()} confidence` : 'confidence unknown'})`]
       : ['no proven-origin findings across the fleet'];
     if (prov.reposWithNoProvenDebt.length) bits.push(`${prov.reposWithNoProvenDebt.length} repo(s) with no complete-status provenance`);
     provClause = ` PROVENANCE: ${bits.join('; ')}.`;
@@ -450,12 +467,18 @@ ${govRows}
   const prov = rollup.provenance;
   let provSection = '';
   if (prov) {
+    // FR-PROV-019: the confidence column is not decoration — an age column
+    // with no confidence beside it is exactly the "age without its basis and
+    // confidence" the PRD forbids. The basis is the table's own framing
+    // (every row is proven-origin by construction); the confidence has to be
+    // shown per row, and an absent level reads "unknown" rather than blank,
+    // so a missing value can never be mistaken for a confident one.
     const provRows = (prov.perRepoOldestProvenDebt || [])
-      .map(p => `<tr><td>${esc(p.repo)}</td><td>${esc(p.findingId ?? 'unknown')}</td><td>${esc(p.authorDate)}</td><td>${p.ageDays}</td></tr>`)
+      .map(p => `<tr><td>${esc(p.repo)}</td><td>${esc(p.findingId ?? 'unknown')}</td><td>${esc(p.authorDate)}</td><td>${p.ageDays}</td><td>${esc(p.confidence ? String(p.confidence).toUpperCase() : 'unknown')}</td></tr>`)
       .join('\n');
     const provTable = provRows
       ? `<table border="1" cellpadding="4">
-<tr><th>repo</th><th>finding</th><th>author date</th><th>age (days)</th></tr>
+<tr><th>repo</th><th>finding</th><th>author date</th><th>age (days)</th><th>origin confidence</th></tr>
 ${provRows}
 </table>`
       : `<p>No complete-status (proven-origin) findings across the fleet.</p>`;

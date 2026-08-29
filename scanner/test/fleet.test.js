@@ -643,3 +643,64 @@ test('M4 §4.4: rollupFleet.provenance.mttr stays null when every scanned entry\
   const rollup = rollupFleet(results);
   assert.equal(rollup.provenance.mttr, null);
 });
+
+// FR-PROV-019 ("Reports never show an age without its basis and confidence").
+// The second-audit remediation closed this in mttr.js's renderSlaSummary, and
+// a review of that work found fleet.js's two renderers carrying the SAME
+// defect in a narrower form: both print a finding's age, the basis is
+// structurally implied (only status:'complete' findings reach them, so the
+// age is always git-derived and the text says "proven-origin"), but neither
+// carried the confidence half of the criterion. These pin both renderers.
+test('FR-PROV-019: renderFleetSummary never shows the proven-origin age without its confidence', () => {
+  const rollup = rollupFleet([
+    {
+      repo: 'r1', ok: true, total: 1, proven: 0, bySeverity: { critical: 1 },
+      provenanceDebt: {
+        oldest: { findingId: 'f1', authorDate: '2020-01-01T00:00:00Z', ageDays: 2000, confidence: 'high' },
+        completeCount: 1,
+      },
+    },
+  ]);
+  const out = renderFleetSummary(rollup);
+  assert.match(out, /oldest proven-origin finding/, 'sanity: the provenance clause must be present at all');
+  assert.match(out, /2000d/, 'sanity: the age itself must still be shown');
+  assert.match(out, /HIGH confidence/,
+    'the age must never ship without its confidence — that is the whole of FR-PROV-019');
+});
+
+test('FR-PROV-019: a proven finding with NO confidence level reads "unknown", never blank (silence must not imply certainty)', () => {
+  const rollup = rollupFleet([
+    {
+      repo: 'r1', ok: true, total: 1, proven: 0, bySeverity: { critical: 1 },
+      // confidence deliberately absent — an older checkpoint, or a resolver
+      // path that produced an origin without scoring it.
+      provenanceDebt: {
+        oldest: { findingId: 'f1', authorDate: '2020-01-01T00:00:00Z', ageDays: 2000 },
+        completeCount: 1,
+      },
+    },
+  ]);
+  const out = renderFleetSummary(rollup);
+  assert.match(out, /2000d/);
+  assert.match(out, /confidence unknown/,
+    'an absent confidence must be stated as unknown, not omitted — omission reads as certainty');
+  assert.doesNotMatch(out, /HIGH confidence|MEDIUM confidence|LOW confidence/,
+    'must not fabricate a confidence level that the provenance never carried');
+});
+
+test('FR-PROV-019: renderFleetHtml carries an origin-confidence column beside its age column', () => {
+  const results = [
+    {
+      repo: 'r1', ok: true, total: 1, proven: 0, bySeverity: { critical: 1 },
+      provenanceDebt: {
+        oldest: { findingId: 'f1', authorDate: '2020-01-01T00:00:00Z', ageDays: 2000, confidence: 'medium' },
+        completeCount: 1,
+      },
+    },
+  ];
+  const html = renderFleetHtml(rollupFleet(results), results);
+  assert.match(html, /<th>age \(days\)<\/th>/, 'sanity: the age column must still exist');
+  assert.match(html, /<th>origin confidence<\/th>/,
+    'an age column with no confidence column beside it is the exact defect FR-PROV-019 forbids');
+  assert.match(html, /<td>MEDIUM<\/td>/, 'the real confidence level must reach the rendered row');
+});
