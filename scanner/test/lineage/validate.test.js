@@ -135,6 +135,155 @@ test('a dataElement with unknown aiContext is rejected', () => {
   assert.ok(result.errors.some((e) => e.path === '$.dataElements[0].aiContexts[1]' && e.message.includes('not.a.real.context')));
 });
 
+test('a graph.scope.source outside GRAPH_SCOPE_SOURCES is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg', scope: { source: 'banana' } });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.scope.source' && e.message.includes('banana')));
+});
+
+test('a flow with a bogus policyVerdict is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.flows.push({
+    id: 'flow:abc', dataElementIds: [], source: 'node:a', sink: 'node:b',
+    edgeIds: [], policyVerdict: 'TOTALLY_FINE', protectionSummary: 'not_assessed',
+    evidenceRefs: [], coverageStatus: 'modeled',
+  });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.flows[0].policyVerdict' && e.message.includes('TOTALLY_FINE')));
+});
+
+test('a flow with a bogus protectionSummary is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.flows.push({
+    id: 'flow:abc', dataElementIds: [], source: 'node:a', sink: 'node:b',
+    edgeIds: [], policyVerdict: 'not_evaluated', protectionSummary: 'super-protected',
+    evidenceRefs: [], coverageStatus: 'modeled',
+  });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.flows[0].protectionSummary' && e.message.includes('super-protected')));
+});
+
+test('an edge with a bogus protocol.destinationResolution is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.edges.push({
+    id: 'edge:abc', from: 'node:a', to: 'node:b', relationship: 'data_flow',
+    fieldMappings: [], protocol: { name: 'http', destinationResolution: 'teleportation' },
+    boundaryCrossings: [], protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled',
+  });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.edges[0].protocol.destinationResolution' && e.message.includes('teleportation')));
+});
+
+test('a transformation with a bogus kind or reversibility is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.transformations.push({ id: 'transform:abc', kind: 'BANANA', reversibility: 'sure-why-not' });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.transformations[0].kind' && e.message.includes('BANANA')));
+  assert.ok(result.errors.some((e) => e.path === '$.transformations[0].reversibility' && e.message.includes('sure-why-not')));
+});
+
+test('a valid transformation entry passes (no regression)', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.transformations.push({ id: 'transform:abc', kind: 'mask', reversibility: 'irreversible' });
+  const result = validateGraph(graph);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.valid, true);
+});
+
+test('an evidence entry with a bogus evidenceType is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.evidence.push({ id: 'evidence:abc', claim: 'x', evidenceType: 'made-up' });
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.evidence[0].evidenceType' && e.message.includes('made-up')));
+});
+
+test('a valid evidence entry passes (no regression)', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.evidence.push({ id: 'evidence:abc', claim: 'x', evidenceType: 'code' });
+  const result = validateGraph(graph);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.valid, true);
+});
+
+test('two nodes sharing an id are rejected as duplicates', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  const dupId = nodeId('source', ['x']);
+  const n = (id) => ({
+    id, kind: 'source', subtype: 'x', label: 'X', aliases: [], system: {},
+    externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: [], governanceRefs: {},
+    dataElementIds: [], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled',
+  });
+  graph.nodes.push(n(dupId), n(dupId));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[1].id' && e.message.includes('duplicate id') && e.message.includes(dupId)));
+});
+
+test('two edges sharing an id are rejected as duplicates', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  const dupId = edgeId('node:a', 'node:b', 'data_flow');
+  const e = (id) => ({
+    id, from: 'node:a', to: 'node:b', relationship: 'data_flow', fieldMappings: [],
+    protocol: { name: 'in-process', destinationResolution: 'literal' }, boundaryCrossings: [],
+    protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled',
+  });
+  graph.edges.push(e(dupId), e(dupId));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.edges[1].id' && e.message.includes('duplicate id') && e.message.includes(dupId)));
+});
+
+test('two dataElements sharing an id are rejected as duplicates', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  const dupId = dataElementId('field', []);
+  const d = (id) => ({
+    id, name: 'field', aliases: [], dataClasses: [], aiContexts: [],
+    sourceLocations: [], classificationEvidence: [], manualOverride: false,
+  });
+  graph.dataElements.push(d(dupId), d(dupId));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.dataElements[1].id' && e.message.includes('duplicate id') && e.message.includes(dupId)));
+});
+
+test('two flows sharing an id are rejected as duplicates', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  const dupId = flowId('node:a', 'node:b', []);
+  const f = (id) => ({
+    id, dataElementIds: [], source: 'node:a', sink: 'node:b', edgeIds: [],
+    policyVerdict: 'not_evaluated', protectionSummary: 'not_assessed', evidenceRefs: [], coverageStatus: 'modeled',
+  });
+  graph.flows.push(f(dupId), f(dupId));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.flows[1].id' && e.message.includes('duplicate id') && e.message.includes(dupId)));
+});
+
+test("reviewer's live reproduction: every stated bogus value now fails validation, never a thrown exception", () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg', scope: { source: 'banana' } });
+  graph.transformations.push({ id: 'transform:abc', kind: 'BANANA', reversibility: 'sure-why-not' });
+  graph.evidence.push({ id: 'evidence:abc', claim: 'x', evidenceType: 'made-up' });
+  graph.flows.push({
+    id: 'flow:abc', dataElementIds: [], source: 'node:a', sink: 'node:b', edgeIds: [],
+    policyVerdict: 'TOTALLY_FINE', protectionSummary: 'super-protected', evidenceRefs: [], coverageStatus: 'modeled',
+  });
+  let result;
+  assert.doesNotThrow(() => { result = validateGraph(graph); });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.scope.source'));
+  assert.ok(result.errors.some((e) => e.path === '$.flows[0].policyVerdict'));
+  assert.ok(result.errors.some((e) => e.path === '$.flows[0].protectionSummary'));
+  assert.ok(result.errors.some((e) => e.path === '$.transformations[0].kind'));
+  assert.ok(result.errors.some((e) => e.path === '$.transformations[0].reversibility'));
+  assert.ok(result.errors.some((e) => e.path === '$.evidence[0].evidenceType'));
+});
+
 test('a valid two-node, one-edge, one-flow graph with valid dataClasses and aiContexts still passes (no regression)', () => {
   const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
   const src = nodeId('source', ['payments-platform', 'web']);

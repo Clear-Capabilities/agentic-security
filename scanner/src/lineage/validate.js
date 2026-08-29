@@ -13,7 +13,11 @@
 // returns early; a malformed nested entity is skipped for further
 // structural checks on ITSELF but does not stop validation of siblings.
 
-import { SCHEMA_VERSION, NODE_KINDS, MAPPING_TYPES, COVERAGE_STATUS_VALUES, EXTERNALITY_VALUES } from './schema.js';
+import {
+  SCHEMA_VERSION, NODE_KINDS, MAPPING_TYPES, COVERAGE_STATUS_VALUES, EXTERNALITY_VALUES,
+  TRANSFORM_KINDS, REVERSIBILITY_VALUES, DESTINATION_RESOLUTION_VALUES, POLICY_STATES,
+  FLOW_SUMMARY_VALUES, EVIDENCE_TYPES, GRAPH_SCOPE_SOURCES,
+} from './schema.js';
 import { isValidProtectionDimension, PROTECTION_DIMENSIONS } from './protection.js';
 import { LINEAGE_DATA_CLASSES, isAiContext } from './classification.js';
 
@@ -112,6 +116,11 @@ function _validateEdge(edge, idx, errors, nodeIds, dataElementIds) {
       if (!isValidProtectionDimension(edge.protection[dim])) _err(errors, path(`.protection.${dim}`), `invalid protection dimension`);
     }
   }
+  if (edge.protocol && typeof edge.protocol === 'object') {
+    if (!DESTINATION_RESOLUTION_VALUES.includes(edge.protocol.destinationResolution)) {
+      _err(errors, path('.protocol.destinationResolution'), `unrecognized destinationResolution "${edge.protocol.destinationResolution}"`);
+    }
+  }
 }
 
 function _validateFlow(flow, idx, errors, nodeIds, dataElementIds, edgeIds) {
@@ -127,6 +136,44 @@ function _validateFlow(flow, idx, errors, nodeIds, dataElementIds, edgeIds) {
   for (const eId of flow.edgeIds || []) {
     if (!edgeIds.has(eId)) _err(errors, path('.edgeIds'), `unknown edge id "${eId}"`);
   }
+  if (!POLICY_STATES.includes(flow.policyVerdict)) _err(errors, path('.policyVerdict'), `unrecognized policyVerdict "${flow.policyVerdict}"`);
+  if (!FLOW_SUMMARY_VALUES.includes(flow.protectionSummary)) _err(errors, path('.protectionSummary'), `unrecognized protectionSummary "${flow.protectionSummary}"`);
+}
+
+function _validateTransformation(t, idx, errors) {
+  const path = (suffix) => `$.transformations[${idx}]${suffix}`;
+  if (!t || typeof t !== 'object') { _err(errors, path(''), 'transformation must be an object'); return; }
+  if (typeof t.id !== 'string' || !t.id) _err(errors, path('.id'), 'transformation.id is required');
+  else if (!ID_PREFIXES.transform.test(t.id)) _err(errors, path('.id'), `transformation.id must start with "transform:"`);
+  if (!TRANSFORM_KINDS.includes(t.kind)) _err(errors, path('.kind'), `unrecognized transformation kind "${t.kind}"`);
+  if (!REVERSIBILITY_VALUES.includes(t.reversibility)) _err(errors, path('.reversibility'), `unrecognized reversibility "${t.reversibility}"`);
+}
+
+function _validateEvidence(e, idx, errors) {
+  const path = (suffix) => `$.evidence[${idx}]${suffix}`;
+  if (!e || typeof e !== 'object') { _err(errors, path(''), 'evidence must be an object'); return; }
+  if (typeof e.id !== 'string' || !e.id) _err(errors, path('.id'), 'evidence.id is required');
+  else if (!ID_PREFIXES.evidence.test(e.id)) _err(errors, path('.id'), `evidence.id must start with "evidence:"`);
+  if (!EVIDENCE_TYPES.includes(e.evidenceType)) _err(errors, path('.evidenceType'), `unrecognized evidenceType "${e.evidenceType}"`);
+}
+
+/**
+ * Report a validation error for every duplicate id beyond the first
+ * occurrence in a top-level entity array. Entities with a missing/invalid
+ * id are skipped here — that is already reported by the per-entity
+ * structural check, and treating `undefined` as a colliding "id" would be
+ * noise, not signal.
+ */
+function _checkDuplicateIds(items, key, errors) {
+  const seenAt = new Map();
+  items.forEach((item, idx) => {
+    if (!item || typeof item.id !== 'string' || !item.id) return;
+    if (seenAt.has(item.id)) {
+      _err(errors, `$.${key}[${idx}].id`, `duplicate id "${item.id}" (also used at $.${key}[${seenAt.get(item.id)}])`);
+    } else {
+      seenAt.set(item.id, idx);
+    }
+  });
 }
 
 /**
@@ -151,6 +198,11 @@ export function validateGraph(graph) {
   for (const key of ['scope', 'scanHealth', 'taxonomy', 'coverage', 'extensions']) {
     _requireObject(graph, key, errors);
   }
+  if (graph.scope && typeof graph.scope === 'object' && !Array.isArray(graph.scope)) {
+    if (!GRAPH_SCOPE_SOURCES.includes(graph.scope.source)) {
+      _err(errors, '$.scope.source', `unrecognized scope.source "${graph.scope.source}"`);
+    }
+  }
 
   const nodeIds = new Set();
   const dataElementIds = new Set();
@@ -163,6 +215,13 @@ export function validateGraph(graph) {
     if (e && typeof e.id === 'string') edgeIds.add(e.id);
   });
   (Array.isArray(graph.flows) ? graph.flows : []).forEach((f, i) => _validateFlow(f, i, errors, nodeIds, dataElementIds, edgeIds));
+  (Array.isArray(graph.transformations) ? graph.transformations : []).forEach((t, i) => _validateTransformation(t, i, errors));
+  (Array.isArray(graph.evidence) ? graph.evidence : []).forEach((e, i) => _validateEvidence(e, i, errors));
+
+  _checkDuplicateIds(Array.isArray(graph.nodes) ? graph.nodes : [], 'nodes', errors);
+  _checkDuplicateIds(Array.isArray(graph.edges) ? graph.edges : [], 'edges', errors);
+  _checkDuplicateIds(Array.isArray(graph.dataElements) ? graph.dataElements : [], 'dataElements', errors);
+  _checkDuplicateIds(Array.isArray(graph.flows) ? graph.flows : [], 'flows', errors);
 
   return { valid: errors.length === 0, errors };
 }
