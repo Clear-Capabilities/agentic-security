@@ -364,3 +364,62 @@ test('_relPath: a symlink loop (ELOOP, not ENOENT) fails CLOSED, not silently op
     fx.cleanup();
   }
 });
+
+// SECURITY REGRESSION PIN (second-audit remediation, Task 6 review).
+//
+// `commitMeta` reads its fields out of a single 0x1f-delimited `git show`
+// record. `%P` was originally fused in at index 5 — AFTER `%an` and `%ae` —
+// and git strips only `\n`/`<`/`>` from an ident, so a literal 0x1f inside an
+// author name survives an ordinary `git commit` and shifts every later field
+// one slot left. An attacker who picks their own author name (an outside PR
+// contributor; no hostile clone, no crafted objects) could therefore choose
+// the bytes this code reads as the first parent.
+//
+// That is load-bearing, not cosmetic: origin-resolver.js feeds `parents[0]`
+// into `replay(parent)`, and a parent whose blobs cannot be fetched is
+// indistinguishable from a parent that genuinely lacks the finding — so a
+// spoofed value yields absentInParent=true → status:'complete' →
+// parentBoundaryVerified:true → confidence HIGH (0.95). A fabricated
+// "we verified the boundary" claim, which then reaches signed evidence
+// bundles. This pins the fix: `%P` sits at index 1 behind `%H` only.
+test('commitMeta: a 0x1f in the author name cannot spoof the parent list (delimiter injection)', () => {
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'const x = 1;\n');
+    const sha1 = fx.commit('one', { date: '2026-01-01T00:00:00Z' });
+    fx.writeFile('a.js', 'const x = 2;\n');
+    // The payload: extra 0x1f separators plus a plausible-looking 40-hex SHA
+    // positioned exactly where the OLD format string would have read `%P`.
+    const hostile = 'Alice\x1fx\x1fy\x1fz\x1fdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+    const sha2 = fx.commit('two', { date: '2026-01-02T00:00:00Z', authorName: hostile });
+
+    const meta = commitMeta(fx.root, sha2);
+    assert.ok(meta, 'sanity: the commit must still parse at all');
+    // The load-bearing assertion: the REAL parent, never the attacker's string.
+    assert.deepEqual(meta.parents, [sha1],
+      'a 0x1f in the author name must not be able to shift the parse and choose parents[0]');
+    assert.ok(!JSON.stringify(meta.parents).includes('deadbeef'),
+      'the attacker-supplied hex must never appear as a parent');
+    // And it must still agree with the independent, structurally-immune path.
+    assert.equal(meta.parents[0], getFirstParent(fx.root, sha2),
+      'the fused %P must agree with the separate `rev-parse <sha>^1` call it replaced');
+  } finally {
+    fx.cleanup();
+  }
+});
+
+test('commitMeta: a non-hex parent entry is rejected wholesale rather than resolved against', () => {
+  // Defense in depth behind the field ordering above. `[]` is the safe
+  // degradation: origin-resolver.js reads it as "root commit", which is
+  // treated as unverifiable — NOT as verified-absent.
+  const fx = createGitFixture();
+  try {
+    fx.writeFile('a.js', 'const x = 1;\n');
+    const sha1 = fx.commit('one', { date: '2026-01-01T00:00:00Z' });
+    const meta = commitMeta(fx.root, sha1);
+    assert.deepEqual(meta.parents, [], 'a root commit has no parents');
+    assert.ok(Array.isArray(meta.parents), 'parents is always an array, never null/undefined');
+  } finally {
+    fx.cleanup();
+  }
+});

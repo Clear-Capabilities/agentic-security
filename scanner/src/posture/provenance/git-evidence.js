@@ -127,12 +127,44 @@ export function commitMeta(scanRoot, sha) {
   // back for the identical sha on every candidate). Purely additive to the
   // returned shape and to the existing `%x1f`-delimited format — no
   // hardening flag changed, no existing field removed.
-  const r = _run(scanRoot, ['show', '-s', '--no-textconv', '--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%cI%x1f%P%x1f%s', sha]);
+  //
+  // `%P` SITS AT INDEX 1, IMMEDIATELY AFTER `%H`, AND MUST STAY THERE.
+  // It was first added at index 5 (after `%an`/`%ae`), which was a real,
+  // demonstrated vulnerability caught in review before release: git strips
+  // only `\n`/`<`/`>` from an ident, so a literal 0x1f inside an AUTHOR NAME
+  // survives `git commit` and shifts every later field left. An attacker who
+  // controls their own author name (an outside PR contributor is enough — no
+  // hostile clone, no crafted objects) could therefore choose the string this
+  // code reads as the first parent. That is not cosmetic: origin-resolver.js
+  // feeds `parents[0]` to `replay(parent)`, and a parent whose blobs cannot
+  // be fetched is INDISTINGUISHABLE from a parent that genuinely lacks the
+  // finding — so a spoofed or garbage value yields absentInParent=true,
+  // status:'complete', parentBoundaryVerified:true, and CONFIDENCE HIGH
+  // (0.95, `parent_absence_verified`) for a finding whose boundary was never
+  // actually verified. That is the exact "never false certainty" invariant in
+  // posture/CLAUDE.md, and these values reach signed evidence bundles.
+  //
+  // Only `%H` may precede it: 40 chars of git-generated hex, not
+  // attacker-influenceable. The residual shift risk on `authorName`/`summary`
+  // is pre-existing and cosmetic — those fields are display-only and feed no
+  // trust decision. Validating parents as hex (below) is defense in depth,
+  // NOT a substitute for the ordering: an attacker can supply valid hex.
+  const r = _run(scanRoot, ['show', '-s', '--no-textconv', '--format=%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%cI%x1f%s', sha]);
   if (!r.ok) return null;
-  const [full, authorName, authorEmail, authorDate, committerDate, parentsRaw, summary] = r.stdout.trim().split('\x1f');
+  const [full, parentsRaw, authorName, authorEmail, authorDate, committerDate, summary] = r.stdout.trim().split('\x1f');
   if (!full) return null;
+  // Every parent must look like a real object name. A non-hex entry here can
+  // only mean the record was malformed or tampered with, and silently
+  // accepting it is what turns a parse bug into a false HIGH-confidence
+  // verdict — drop the whole list rather than resolve against a value we
+  // cannot vouch for. `[]` is safe: it reads as "root commit", which
+  // origin-resolver.js treats as unverifiable, not as verified-absent.
   const parents = parentsRaw ? parentsRaw.split(' ').filter(Boolean) : [];
-  return { commit: full, authorName, authorEmail, authorDate, committerDate, summary, parents };
+  const parentsValid = parents.every((p) => /^[0-9a-f]{4,40}$/i.test(p));
+  return {
+    commit: full, authorName, authorEmail, authorDate, committerDate, summary,
+    parents: parentsValid ? parents : [],
+  };
 }
 
 export function getFirstParent(scanRoot, sha) {
