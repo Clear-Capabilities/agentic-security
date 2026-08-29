@@ -120,7 +120,10 @@ export function pseudonymizeAuthor(authorName, authorEmail) {
 // Neither knob touches a bare login/handle when `pseudonymize` is off --
 // same precedent as `authorName`, which is NOT redacted by default either.
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const HANDLE_RE = /@[A-Za-z0-9][A-Za-z0-9-]*/g;
+// `.`/`_` included: GitLab usernames legally contain both (`@r.smith`,
+// `@jane_doe`) — a narrower class left real surname fragments unredacted
+// under `pseudonymize:true` (found in the plan's own re-review of this fix).
+const HANDLE_RE = /@[A-Za-z0-9][A-Za-z0-9._-]*/g;
 
 function redactEmailSubstrings(text, { includeEmail, pseudonymize }) {
   if (typeof text !== 'string') return text;

@@ -84,6 +84,10 @@ test('redactFindingProvenance: pseudonymize:true scrubs providerEnrichment.revie
         '* @alice @bob-reviewer',
         '/src/ carol@example.com',
         '/infra/ @dave dave@example.com',
+        // GitLab-legal username characters ('.', '_') — a narrower handle
+        // regex once left these surname fragments unredacted (found in this
+        // plan's own re-review of the fix that added this test).
+        '/gitlab/ @jane_doe @r.smith',
       ],
     },
   };
@@ -104,9 +108,13 @@ test('redactFindingProvenance: pseudonymize:true scrubs providerEnrichment.revie
   // Stable identity: the same login always yields the same pseudonym.
   assert.equal(redacted.providerEnrichment.reviewers[0], pseudonymizeAuthor('alice', null));
 
-  // codeowners: no real handle or email substring survives anywhere.
+  // codeowners: no real handle or email substring survives anywhere,
+  // including as a substring trailing a '.'/'_'-containing GitLab handle.
   const codeownersText = redacted.providerEnrichment.codeowners.join('\n');
-  for (const needle of ['alice', 'bob-reviewer', 'carol@example.com', 'dave@example.com', '@dave']) {
+  for (const needle of [
+    'alice', 'bob-reviewer', 'carol@example.com', 'dave@example.com', '@dave',
+    'jane_doe', 'doe', '@r.smith', 'smith',
+  ]) {
     assert.ok(!codeownersText.includes(needle), `expected "${needle}" to be scrubbed from codeowners, got: ${codeownersText}`);
   }
   // Every line still has SOME pseudonymized structure (not blanket-wiped),
