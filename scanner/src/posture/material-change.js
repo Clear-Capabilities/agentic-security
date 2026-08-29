@@ -11,6 +11,7 @@
 // or the command runner) collects the unified diff and feeds hunks into classifyHunk.
 
 import * as cp from 'node:child_process';
+import { hardenGitArgs, hardenGitEnv } from '../util/git-hardening.js';
 import { loadPrivacyTaxonomy } from '../dataflow/privacy-taxonomy.js';
 
 // Patterns that fire on the deletion side (auth/check removed).
@@ -196,11 +197,17 @@ function summarize(findings) {
 }
 
 // Convenience: invoke `git diff <ref>...HEAD` for the project and classify it.
+//
+// `rootDir` is the scanned project's repository, not this project's own
+// trusted checkout. `--no-textconv` is load-bearing here, not
+// defense-in-depth: this renders real diff content, the same shape VERIFIED
+// exploitable via a hostile `.gitattributes` textconv driver in
+// provenance/git-evidence.js's `commitDiff` (FR-PROV-024 / the second audit).
 export function classifyGitDiff(rootDir, ref) {
   let out;
   try {
-    out = cp.execFileSync('git', ['diff', '--unified=0', `${ref}...HEAD`], {
-      cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    out = cp.execFileSync('git', hardenGitArgs(['diff', '--unified=0', '--no-textconv', `${ref}...HEAD`]), {
+      cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv(),
     });
   } catch (e) {
     return { materialRisk: 'unknown', error: 'git diff failed: ' + (e.message || e), findings: [], perKindCounts: {}, byFile: {} };

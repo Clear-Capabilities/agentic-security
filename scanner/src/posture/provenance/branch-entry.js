@@ -17,14 +17,24 @@
 // via flag injection).
 
 import * as cp from 'node:child_process';
+import { hardenGitArgs, hardenGitEnv } from '../../util/git-hardening.js';
 
 const GIT_TIMEOUT_MS = 2000;
 
+// Same hostile-repo hardening as git-evidence.js's `_run`, and for the same
+// reason (FR-PROV-024 / second audit) — this module reimplements its own
+// `_run` rather than importing git-evidence.js's, but that must not mean
+// skipping the config/env hardening every other resolver in this directory
+// gets. `--no-textconv` isn't blanket-applied here: this module's own
+// `_run` calls are `rev-parse`/`merge-base`/`log --format=%H` (no diff/blob
+// CONTENT rendered), so there's no textconv surface to close — see
+// git-evidence.js for the calls where `--no-textconv` is load-bearing.
 function _run(scanRoot, args) {
   try {
-    const stdout = cp.execFileSync('git', args, {
+    const stdout = cp.execFileSync('git', hardenGitArgs(args), {
       cwd: scanRoot, encoding: 'utf8', timeout: GIT_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+      env: hardenGitEnv(),
     });
     return { ok: true, stdout };
   } catch (e) {

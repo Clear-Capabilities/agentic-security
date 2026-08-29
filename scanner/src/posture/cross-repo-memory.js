@@ -24,6 +24,7 @@ import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
+import { hardenGitArgs, hardenGitEnv } from '../util/git-hardening.js';
 
 // Lazy — process.env.HOME may be mutated mid-process (e.g. tests isolating).
 function _storeDir() {
@@ -43,8 +44,12 @@ function _ensureDir() { try { fs.mkdirSync(_storeDir(), { recursive: true }); } 
 export function repoFingerprint(scanRoot) {
   let source = String(scanRoot || '');
   try {
-    const remote = cp.execFileSync('git', ['remote', 'get-url', 'origin'],
-      { cwd: scanRoot, encoding: 'utf8', timeout: 800, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    // `scanRoot` is the scanned project's repository, not this project's
+    // own trusted checkout — hardened per FR-PROV-024 / the second Finding
+    // Provenance PRD audit (same exposure class as
+    // provenance/git-evidence.js's `_run`).
+    const remote = cp.execFileSync('git', hardenGitArgs(['remote', 'get-url', 'origin']),
+      { cwd: scanRoot, encoding: 'utf8', timeout: 800, stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv() }).trim();
     if (remote) source = remote;
   } catch {}
   return crypto.createHash('sha256').update(source).digest('hex').slice(0, 12);

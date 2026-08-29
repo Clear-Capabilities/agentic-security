@@ -20,13 +20,20 @@
 
 import { getFirstParent, commitMeta, _relPath, _isSafeRevision } from './git-evidence.js';
 import * as cp from 'node:child_process';
+import { hardenGitArgs, hardenGitEnv } from '../../util/git-hardening.js';
 
 const GIT_TIMEOUT_MS = 2000;
+// Same hostile-repo hardening as git-evidence.js's `_run` (FR-PROV-024 /
+// second audit). This module's own `_run` call is `log --format=%H
+// --follow -- <path>` — no `-p`/`-L`, no diff/blob content rendered, so no
+// `--no-textconv` surface to close here (see git-evidence.js for the calls
+// where it is load-bearing).
 function _run(scanRoot, args) {
   try {
-    const stdout = cp.execFileSync('git', args, {
+    const stdout = cp.execFileSync('git', hardenGitArgs(args), {
       cwd: scanRoot, encoding: 'utf8', timeout: GIT_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+      env: hardenGitEnv(),
     });
     return { ok: true, stdout };
   } catch (e) {

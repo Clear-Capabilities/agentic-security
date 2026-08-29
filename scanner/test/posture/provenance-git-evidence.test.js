@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 import {
   isGitRepo, getRepoState, commitMeta, getFirstParent, getAllParents, getBlobAtCommit,
@@ -170,6 +171,48 @@ test('_relPath: a symlink whose target resolves back inside scanRoot is still ac
     assert.equal(result, 'alias.js', 'a symlink that stays inside scanRoot is not an escape');
   } finally {
     fx.cleanup();
+  }
+});
+
+// Second independent Finding Provenance PRD audit (FR-PROV-024 / Section 8
+// control 3, "never run repository hooks or untrusted build scripts"):
+// git-evidence.js's `_run` invoked `git` with no config hardening at all, so
+// a repo whose .git/config sets core.fsmonitor to a script gets that script
+// executed by getRepoState()'s own `git status --porcelain` -- no clone, no
+// checkout, no deliberate command needed, just this module reading repo
+// state. Verified against real git behaviour (see util/git-hardening.js's
+// header) before writing this test: `git -c core.fsmonitor= status
+// --porcelain` does NOT run the script; plain `git status --porcelain`
+// does.
+test('getRepoState: a hostile core.fsmonitor script is never executed (FR-PROV-024)', () => {
+  const fx = createGitFixture();
+  const markerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-fsmonitor-poc-'));
+  const markerFile = path.join(markerDir, 'pwned');
+  try {
+    fx.writeFile('a.js', 'const x = 1;\n');
+    fx.commit('c1');
+
+    // Beyond the exploit side effect, this also implements the real
+    // fsmonitor hook v2 protocol (write the SIDE effect, then echo the
+    // update token git passed as argv[2] back on stdout with no changed
+    // paths after it, meaning "nothing changed since that token"). A hook
+    // that doesn't speak the protocol still gets EXECUTED (the exploit
+    // already fired by then) but makes git fall back to a slower full
+    // rescan, which raced against `_run`'s own 2s subprocess timeout and
+    // made this test flaky. Speaking the protocol keeps `git status`
+    // itself fast, decoupling the assertion from that race.
+    const hookScript = path.join(fx.root, 'hostile-fsmonitor.sh');
+    fs.writeFileSync(hookScript, `#!/bin/sh\necho PWNED > ${JSON.stringify(markerFile)}\necho "$2"\n`);
+    fs.chmodSync(hookScript, 0o755);
+    execFileSync('git', ['config', 'core.fsmonitor', hookScript], { cwd: fx.root });
+
+    getRepoState(fx.root);
+
+    assert.equal(fs.existsSync(markerFile), false,
+      'a hostile core.fsmonitor script must never execute merely from getRepoState() reading repo status');
+  } finally {
+    fx.cleanup();
+    fs.rmSync(markerDir, { recursive: true, force: true });
   }
 });
 

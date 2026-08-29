@@ -17,13 +17,22 @@
 //     lifecycle.js's event vocabulary (Task 4) needs to say so.
 import { getAllParents, commitDiff } from './git-evidence.js';
 import * as cp from 'node:child_process';
+import { hardenGitArgs, hardenGitEnv } from '../../util/git-hardening.js';
 
 const GIT_TIMEOUT_MS = 2000;
+// Same hostile-repo hardening as git-evidence.js's `_run` (FR-PROV-024 /
+// second audit). This module's own `_run` calls are both `show -s
+// --format=...` (detectRevert's message check, detectCherryPick) — no diff
+// content rendered, so `--no-textconv` is defense-in-depth/uniformity here
+// rather than closing a verified path (the diff-content case,
+// `commitDiff`, is imported from git-evidence.js and already hardened
+// there).
 function _run(scanRoot, args) {
   try {
-    const stdout = cp.execFileSync('git', args, {
+    const stdout = cp.execFileSync('git', hardenGitArgs(args), {
       cwd: scanRoot, encoding: 'utf8', timeout: GIT_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+      env: hardenGitEnv(),
     });
     return { ok: true, stdout };
   } catch (e) {
@@ -86,7 +95,7 @@ const REVERT_MESSAGE_RE = /^Revert "/;
  */
 export function detectRevert(scanRoot, sha, candidateShas) {
   if (!_isSha(sha)) return { isRevert: false, revertsCommit: null };
-  const meta = _run(scanRoot, ['show', '-s', '--format=%s', sha]);
+  const meta = _run(scanRoot, ['show', '-s', '--no-textconv', '--format=%s', sha]);
   if (!meta.ok || !REVERT_MESSAGE_RE.test(meta.stdout.trim())) {
     return { isRevert: false, revertsCommit: null };
   }
@@ -232,7 +241,7 @@ const CHERRY_PICK_TRAILER_RE = /\(cherry picked from commit ([0-9a-f]{4,40})\)/;
 
 export function detectCherryPick(scanRoot, sha) {
   if (!_isSha(sha)) return { isCherryPick: false, originalCommit: null };
-  const r = _run(scanRoot, ['show', '-s', '--format=%B', sha]);
+  const r = _run(scanRoot, ['show', '-s', '--no-textconv', '--format=%B', sha]);
   if (!r.ok) return { isCherryPick: false, originalCommit: null };
   const m = r.stdout.match(CHERRY_PICK_TRAILER_RE);
   if (!m) return { isCherryPick: false, originalCommit: null };

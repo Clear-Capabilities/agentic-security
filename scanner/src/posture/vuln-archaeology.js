@@ -34,6 +34,7 @@
 // timeout, degrading to an empty result in a non-repository.
 
 import { execFileSync } from 'node:child_process';
+import { hardenGitArgs, hardenGitEnv } from '../util/git-hardening.js';
 
 const CVE_RE = /\b(?:CVE-\d{4}-\d{4,7}|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\b/i;
 
@@ -87,14 +88,19 @@ export function classifyCommit(subject) {
   return { tier: 'mentioned', evidence: `mentions "${noun[0]}" with no fix verb` };
 }
 
+// `scanRoot` is the scanned project's repository, not this project's own
+// trusted checkout — hardened per FR-PROV-024 / the second Finding
+// Provenance PRD audit (same exposure class as
+// provenance/git-evidence.js's `_run`). No `--no-textconv` needed: this
+// invocation has no `-p`/`-L`, so no diff/blob content is rendered.
 function _gitLog(scanRoot, { maxCommits, timeoutMs }) {
   // NUL-delimited records so subjects containing newlines cannot split a
   // record — a commit message is arbitrary user text and must not be able to
   // forge a record boundary.
-  const out = execFileSync('git', [
+  const out = execFileSync('git', hardenGitArgs([
     '-C', scanRoot, 'log', '-n', String(maxCommits), '--no-merges', '--no-color',
     '--name-only', '--format=%x00%H%x1f%aI%x1f%s',
-  ], { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  ]), { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv() });
   const commits = [];
   for (const block of out.split('\0')) {
     if (!block.trim()) continue;

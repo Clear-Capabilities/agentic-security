@@ -11,7 +11,8 @@ export const modules = {
 /* harmony export */   renderPrDeltaText: () => (/* binding */ renderPrDeltaText)
 /* harmony export */ });
 /* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1421);
-/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(7691);
+/* harmony import */ var _util_git_hardening_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(8844);
+/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(7691);
 // Shadowscan / security-DELTA on PR (v0.72).
 //
 // Most SAST PR-comment integrations show absolute counts — "12 findings
@@ -40,16 +41,25 @@ export const modules = {
 
 
 
+
 const FILE_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs|py|java|cs|kt|go|rb|php|sol|swift|rs|tf|yml|yaml|json|toml|md)$/i;
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
+// `root` is the PR's repository — a scan target, not this project's own
+// trusted checkout — hardened per FR-PROV-024 / the second Finding
+// Provenance PRD audit (same exposure class as
+// provenance/git-evidence.js's `_run`).
 function _git(root, args) {
-  const r = (0,node_child_process__WEBPACK_IMPORTED_MODULE_0__.spawnSync)('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const r = (0,node_child_process__WEBPACK_IMPORTED_MODULE_0__.spawnSync)('git', (0,_util_git_hardening_js__WEBPACK_IMPORTED_MODULE_1__/* .hardenGitArgs */ .Ax)(args), { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: (0,_util_git_hardening_js__WEBPACK_IMPORTED_MODULE_1__/* .hardenGitEnv */ .Si)() });
   return { ok: r.status === 0, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
 function _readFileAtRef(root, ref, file) {
-  const r = _git(root, ['show', `${ref}:${file}`]);
+  // `--no-textconv`: this blob-cat form of `show` (`<ref>:<file>`, not a
+  // diff) was verified NOT reachable via a hostile textconv driver in
+  // current git, same as git-evidence.js's getBlobAtCommit — kept for
+  // defense-in-depth/uniformity.
+  const r = _git(root, ['show', '--no-textconv', `${ref}:${file}`]);
   return r.ok ? r.stdout : null;
 }
 
@@ -75,7 +85,7 @@ async function _scanAtRef(root, ref) {
   // absent from the finding set it is handed as `remediated`; running the PR
   // delta gate would silently rewrite the project's lifecycle store from the
   // base ref's findings.
-  return (0,_engine_js__WEBPACK_IMPORTED_MODULE_1__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
+  return (0,_engine_js__WEBPACK_IMPORTED_MODULE_2__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
 }
 
 function _summary(findings) {

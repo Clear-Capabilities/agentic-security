@@ -18,12 +18,16 @@
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { hardenGitArgs, hardenGitEnv } from './util/git-hardening.js';
 import { runFullScan } from './engine.js';
 
 const MAX_FILES_PER_SCAN = 5000;
 
+// `root` is the scan target's repository, not this project's own trusted
+// checkout — hardened per FR-PROV-024 / the second Finding Provenance PRD
+// audit (same exposure class as provenance/git-evidence.js's `_run`).
 function _git(root, args) {
-  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync('git', hardenGitArgs(args), { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: hardenGitEnv() });
   return { ok: r.status === 0, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
@@ -83,7 +87,10 @@ function _listFilesAtRef(root, ref) {
 }
 
 function _readFileAtRef(root, ref, file) {
-  const r = _git(root, ['show', `${ref}:${file}`]);
+  // `--no-textconv`: this blob-cat form of `show` was verified NOT
+  // reachable via a hostile textconv driver in current git — kept for
+  // defense-in-depth/uniformity, same as pr-delta.js's equivalent.
+  const r = _git(root, ['show', '--no-textconv', `${ref}:${file}`]);
   if (!r.ok) return null;
   return r.stdout;
 }

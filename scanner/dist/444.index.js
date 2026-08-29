@@ -10,6 +10,7 @@ export const modules = {
 /* harmony export */ });
 /* unused harmony exports extractAddedLines, scanHistoryDiff */
 /* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1421);
+/* harmony import */ var _util_git_hardening_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(8844);
 // R15 (PRD §5) — git-history secret sweep.
 //
 // A secret removed from HEAD but present in any past commit is still
@@ -22,6 +23,7 @@ export const modules = {
 // no dependency back into engine.js (avoids a circular import) and the parsing
 // stays pure + unit-testable. Live-credential validation (is the key active?)
 // needs network and is deferred — see the rollup.
+
 
 
 
@@ -74,8 +76,15 @@ function sweepGitHistory(scanRoot, detectFn, { maxCommits = 50, timeoutMs = 2000
   if (!scanRoot || typeof detectFn !== 'function') return [];
   let out;
   try {
-    out = (0,node_child_process__WEBPACK_IMPORTED_MODULE_0__.execFileSync)('git', ['-C', scanRoot, 'log', '-p', '-n', String(maxCommits), '--no-color', '--no-merges', '--no-textconv'],
-      { encoding: 'utf8', maxBuffer: 96 * 1024 * 1024, timeout: timeoutMs, stdio: ['ignore', 'pipe', 'ignore'] });
+    // Second independent Finding Provenance PRD audit (FR-PROV-024): this
+    // scanRoot is a scanned repository, not this project's own trusted
+    // checkout. `--no-textconv` alone (the pre-existing hardening here) closes
+    // the .gitattributes textconv surface but NOT `core.fsmonitor` /
+    // `core.hooksPath` — this `log -p` call renders every historical commit's
+    // diff content, the same shape verified exploitable in
+    // provenance/git-evidence.js, so it gets the full hardening too.
+    out = (0,node_child_process__WEBPACK_IMPORTED_MODULE_0__.execFileSync)('git', (0,_util_git_hardening_js__WEBPACK_IMPORTED_MODULE_1__/* .hardenGitArgs */ .Ax)(['-C', scanRoot, 'log', '-p', '-n', String(maxCommits), '--no-color', '--no-merges', '--no-textconv']),
+      { encoding: 'utf8', maxBuffer: 96 * 1024 * 1024, timeout: timeoutMs, stdio: ['ignore', 'pipe', 'ignore'], env: (0,_util_git_hardening_js__WEBPACK_IMPORTED_MODULE_1__/* .hardenGitEnv */ .Si)() });
   } catch { return []; }
   const parts = out.split(/^commit ([0-9a-f]{7,40})/m); // [pre, sha, body, sha, body, ...]
   const findings = [];

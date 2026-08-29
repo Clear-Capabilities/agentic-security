@@ -4,6 +4,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
 import { listFiles } from './util/glob.js';
+import { hardenGitArgs, hardenGitEnv } from './util/git-hardening.js';
 import { runFullScan, shouldScan, isKubernetesManifest, isCloudFormationTemplate, isInstructionFile } from './engine.js';
 import { appendScanSnapshot } from './posture/security-trend.js';
 import { recover as recoverFixHistory } from './posture/fix-history.js';
@@ -111,17 +112,23 @@ export async function readTree(root, { ignore = [] } = {}) {
 
 // Feat-10: incremental scan via `--changed-since <git-ref>`. Returns the set of
 // repo-relative paths modified since the ref, or null if git is unavailable.
+//
+// `root` is the scan target's repository, not this project's own trusted
+// checkout — hardened per FR-PROV-024 / the second Finding Provenance PRD
+// audit (same exposure class as provenance/git-evidence.js: a hostile
+// .git/config's `core.fsmonitor` fires on the `git status --porcelain`
+// call below just from reading repo state).
 export function changedSince(root, gitRef) {
   if (!gitRef) return null;
   try {
-    const out = cp.execFileSync('git', ['diff', '--name-only', `${gitRef}...HEAD`], {
-      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    const out = cp.execFileSync('git', hardenGitArgs(['diff', '--name-only', `${gitRef}...HEAD`]), {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv(),
     });
     const set = new Set(out.split('\n').filter(Boolean));
     // Also include uncommitted changes
     try {
-      const dirty = cp.execFileSync('git', ['status', '--porcelain'], {
-        cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+      const dirty = cp.execFileSync('git', hardenGitArgs(['status', '--porcelain']), {
+        cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv(),
       });
       for (const line of dirty.split('\n')) {
         const f = line.slice(3).trim();

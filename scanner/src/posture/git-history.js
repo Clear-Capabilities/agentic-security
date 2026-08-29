@@ -19,14 +19,19 @@
 import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { hardenGitArgs, hardenGitEnv } from '../util/git-hardening.js';
 
 const MAX_BLAME_PER_SCAN = 500;
 const SUBPROC_TIMEOUT_MS = 1500;
 const PROMPT_MARKER_RE = /(?:^|\n)(?:Prompt|User asked|Original request|Co-Authored-By:\s*Claude)/i;
 
+// `scanRoot` is the scanned project's repository, not this project's own
+// trusted checkout — every call below is hardened per FR-PROV-024 / the
+// second Finding Provenance PRD audit (same exposure class as
+// provenance/git-evidence.js's `_run`).
 function _isGitRepo(scanRoot) {
   try {
-    cp.execFileSync('git', ['rev-parse', '--git-dir'], { cwd: scanRoot, stdio: 'ignore', timeout: SUBPROC_TIMEOUT_MS });
+    cp.execFileSync('git', hardenGitArgs(['rev-parse', '--git-dir']), { cwd: scanRoot, stdio: 'ignore', timeout: SUBPROC_TIMEOUT_MS, env: hardenGitEnv() });
     return true;
   } catch { return false; }
 }
@@ -36,10 +41,13 @@ function _blame(scanRoot, file, line) {
   const rel = path.isAbsolute(file) ? path.relative(scanRoot, file) : file;
   if (rel.startsWith('..')) return null;
   try {
+    // `--no-textconv`: VERIFIED exploitable without it — `git blame`
+    // applies a hostile `.gitattributes` textconv driver by default in
+    // current git, same as provenance/git-evidence.js's blameLine.
     const stdout = cp.execFileSync(
       'git',
-      ['blame', '-L', `${line},${line}`, '--porcelain', '--', rel],
-      { cwd: scanRoot, encoding: 'utf8', timeout: SUBPROC_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'] },
+      hardenGitArgs(['blame', '-L', `${line},${line}`, '--porcelain', '--no-textconv', '--', rel]),
+      { cwd: scanRoot, encoding: 'utf8', timeout: SUBPROC_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv() },
     );
     return _parsePorcelain(stdout);
   } catch { return null; }
@@ -66,8 +74,8 @@ function _parsePorcelain(out) {
 function _fullMessage(scanRoot, sha) {
   try {
     return cp.execFileSync(
-      'git', ['show', '-s', '--format=%B', sha],
-      { cwd: scanRoot, encoding: 'utf8', timeout: SUBPROC_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'] },
+      'git', hardenGitArgs(['show', '-s', '--no-textconv', '--format=%B', sha]),
+      { cwd: scanRoot, encoding: 'utf8', timeout: SUBPROC_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'], env: hardenGitEnv() },
     );
   } catch { return ''; }
 }

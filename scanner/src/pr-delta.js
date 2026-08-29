@@ -24,18 +24,27 @@
 // comment) can transform without re-walking IR.
 
 import { spawnSync } from 'node:child_process';
+import { hardenGitArgs, hardenGitEnv } from './util/git-hardening.js';
 import { runFullScan } from './engine.js';
 
 const FILE_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs|py|java|cs|kt|go|rb|php|sol|swift|rs|tf|yml|yaml|json|toml|md)$/i;
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
+// `root` is the PR's repository — a scan target, not this project's own
+// trusted checkout — hardened per FR-PROV-024 / the second Finding
+// Provenance PRD audit (same exposure class as
+// provenance/git-evidence.js's `_run`).
 function _git(root, args) {
-  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync('git', hardenGitArgs(args), { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: hardenGitEnv() });
   return { ok: r.status === 0, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
 function _readFileAtRef(root, ref, file) {
-  const r = _git(root, ['show', `${ref}:${file}`]);
+  // `--no-textconv`: this blob-cat form of `show` (`<ref>:<file>`, not a
+  // diff) was verified NOT reachable via a hostile textconv driver in
+  // current git, same as git-evidence.js's getBlobAtCommit — kept for
+  // defense-in-depth/uniformity.
+  const r = _git(root, ['show', '--no-textconv', `${ref}:${file}`]);
   return r.ok ? r.stdout : null;
 }
 

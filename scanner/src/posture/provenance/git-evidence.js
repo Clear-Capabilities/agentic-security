@@ -1,6 +1,7 @@
 import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { hardenGitArgs, hardenGitEnv } from '../../util/git-hardening.js';
 
 // 2s keeps a single call bounded for the common case; `-L`/`--follow` walks on a
 // very large history can be slower, at which point they just return an empty/
@@ -8,11 +9,18 @@ import * as path from 'node:path';
 // preferable to a longer timeout that lets one pathological repo stall a scan.
 const GIT_TIMEOUT_MS = 2000;
 
+// Second independent Finding Provenance PRD audit (FR-PROV-024 / Section 8
+// control 3): this scanRoot is a SCANNED repository, not this project's own
+// trusted checkout — its .git/config is attacker-influenceable. Every git
+// invocation in this module MUST route through this one function so the
+// hardening applies uniformly; see util/git-hardening.js for what each flag
+// closes and why it was verified necessary.
 function _run(scanRoot, args) {
   try {
-    const stdout = cp.execFileSync('git', args, {
+    const stdout = cp.execFileSync('git', hardenGitArgs(args), {
       cwd: scanRoot, encoding: 'utf8', timeout: GIT_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+      env: hardenGitEnv(),
     });
     return { ok: true, stdout };
   } catch (e) {
@@ -103,7 +111,12 @@ export function getRepoState(scanRoot) {
 
 export function commitMeta(scanRoot, sha) {
   if (!_isSha(sha)) return null;
-  const r = _run(scanRoot, ['show', '-s', '--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%cI%x1f%s', sha]);
+  // `--no-textconv`: verified this specific invocation (`-s`, no diff/blob
+  // content rendered) is NOT reachable via a hostile `.gitattributes`
+  // textconv driver in current git — kept for defense-in-depth /
+  // uniformity with every other `show` call in this module, not because a
+  // live exploit path was found here.
+  const r = _run(scanRoot, ['show', '-s', '--no-textconv', '--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%cI%x1f%s', sha]);
   if (!r.ok) return null;
   const [full, authorName, authorEmail, authorDate, committerDate, summary] = r.stdout.trim().split('\x1f');
   if (!full) return null;
@@ -137,7 +150,12 @@ export function getAllParents(scanRoot, sha) {
 // edits between the two commits don't defeat the comparison.
 export function commitDiff(scanRoot, sha) {
   if (!_isSha(sha)) return null;
-  const r = _run(scanRoot, ['show', '--no-color', '-U0', '--format=', sha]);
+  // `--no-textconv`: VERIFIED exploitable without it — a hostile
+  // `.gitattributes` `diff=<name>` attribute + a matching
+  // `diff.<name>.textconv` config value runs an attacker script on this
+  // exact invocation shape (`show -U0`, real diff content rendered). This
+  // is the call the second audit named explicitly.
+  const r = _run(scanRoot, ['show', '--no-color', '--no-textconv', '-U0', '--format=', sha]);
   return r.ok ? r.stdout : null;
 }
 
@@ -163,7 +181,11 @@ export function getBlobAtCommit(scanRoot, sha, file) {
   // git repository (e.g. one package of a monorepo). Without it, `git show
   // <sha>:<bare-relative-path>` resolves the bare path against the repo
   // root and silently fails for every caller whose scanRoot != repo root.
-  const r = _run(scanRoot, ['show', `${sha}:./${rel}`]);
+  //
+  // `--no-textconv`: verified this blob-cat form of `show` (`<sha>:<path>`,
+  // not a diff) is NOT reachable via a hostile textconv driver in current
+  // git — kept for defense-in-depth / uniformity, same as commitMeta above.
+  const r = _run(scanRoot, ['show', '--no-textconv', `${sha}:./${rel}`]);
   return r.ok ? r.stdout : null;
 }
 
@@ -173,7 +195,10 @@ export function candidateCommitsForLine(scanRoot, file, line, { since } = {}) {
   if (since && !_isSafeRevision(since)) return [];
   const args = ['log', '--format=commit %H', '--reverse'];
   if (since) args.push(`${since}..HEAD`);
-  args.push('-L', `${line},${line}:${rel}`);
+  // `-L` renders per-commit line-history diff content, which VERIFIED goes
+  // through a hostile textconv driver the same way `commitDiff`'s `show
+  // -U0` does — `--no-textconv` is required here for the same real reason.
+  args.push('-L', `${line},${line}:${rel}`, '--no-textconv');
   const r = _run(scanRoot, args);
   if (!r.ok) return [];
   const shas = [];
@@ -199,7 +224,9 @@ export function candidateCommitsForFile(scanRoot, file, { since } = {}) {
 export function blameLine(scanRoot, file, line) {
   const rel = _relPath(scanRoot, file);
   if (!rel || !line || line < 1) return null;
-  const r = _run(scanRoot, ['blame', '-L', `${line},${line}`, '--porcelain', '--', rel]);
+  // `--no-textconv`: VERIFIED exploitable without it — `git blame` applies
+  // a hostile `.gitattributes` textconv driver by default in current git.
+  const r = _run(scanRoot, ['blame', '-L', `${line},${line}`, '--porcelain', '--no-textconv', '--', rel]);
   if (!r.ok || !r.stdout) return null;
   const lines = r.stdout.split('\n');
   const head = lines[0].split(' ');

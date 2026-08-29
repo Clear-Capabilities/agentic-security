@@ -13,7 +13,8 @@ export const modules = {
 /* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1421);
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
-/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(7691);
+/* harmony import */ var _util_git_hardening_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(8844);
+/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(7691);
 // Time-travel + counterfactual scanning (v0.68).
 //
 // Two new modes that exploit the pure-input shape of runFullScan:
@@ -36,10 +37,14 @@ export const modules = {
 
 
 
+
 const MAX_FILES_PER_SCAN = 5000;
 
+// `root` is the scan target's repository, not this project's own trusted
+// checkout — hardened per FR-PROV-024 / the second Finding Provenance PRD
+// audit (same exposure class as provenance/git-evidence.js's `_run`).
 function _git(root, args) {
-  const r = (0,node_child_process__WEBPACK_IMPORTED_MODULE_0__.spawnSync)('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const r = (0,node_child_process__WEBPACK_IMPORTED_MODULE_0__.spawnSync)('git', (0,_util_git_hardening_js__WEBPACK_IMPORTED_MODULE_3__/* .hardenGitArgs */ .Ax)(args), { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: (0,_util_git_hardening_js__WEBPACK_IMPORTED_MODULE_3__/* .hardenGitEnv */ .Si)() });
   return { ok: r.status === 0, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
@@ -99,7 +104,10 @@ function _listFilesAtRef(root, ref) {
 }
 
 function _readFileAtRef(root, ref, file) {
-  const r = _git(root, ['show', `${ref}:${file}`]);
+  // `--no-textconv`: this blob-cat form of `show` was verified NOT
+  // reachable via a hostile textconv driver in current git — kept for
+  // defense-in-depth/uniformity, same as pr-delta.js's equivalent.
+  const r = _git(root, ['show', '--no-textconv', `${ref}:${file}`]);
   if (!r.ok) return null;
   return r.stdout;
 }
@@ -117,7 +125,7 @@ async function _scanAtRef(root, ref) {
   // updateLifecycle see this partial, historical finding set as the current
   // one — it marks every open stableId NOT in the set as `remediated`, so one
   // per-ref scan would mass-remediate the whole project's real open findings.
-  const scan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_3__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
+  const scan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_4__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
   return {
     ref,
     fileCount: Object.keys(fileContents).length,
@@ -203,8 +211,8 @@ async function runWhatIf(root, { overlays = [], remove = [] } = {}) {
   // never the repo's current state — `provenance:false` for the same reason as
   // _scanAtRef above (no provenance to resolve, and updateLifecycle must not
   // treat either snapshot as "what is open right now").
-  const baseScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_3__/* .runFullScan */ .wW)({ fileContents: _baselineFor(fileContents, overlays, remove, root), scanRoot: root, provenance: false }, () => {});
-  const whatIfScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_3__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
+  const baseScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_4__/* .runFullScan */ .wW)({ fileContents: _baselineFor(fileContents, overlays, remove, root), scanRoot: root, provenance: false }, () => {});
+  const whatIfScan = await (0,_engine_js__WEBPACK_IMPORTED_MODULE_4__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
   const baseIds = new Set((baseScan.findings || []).map(f => f.stableId || f.id));
   const wIds = new Set((whatIfScan.findings || []).map(f => f.stableId || f.id));
   const introduced = (whatIfScan.findings || []).filter(f => !baseIds.has(f.stableId || f.id)).map(_compact);
