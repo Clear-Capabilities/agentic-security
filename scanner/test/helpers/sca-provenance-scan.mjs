@@ -47,6 +47,13 @@ const out = (scan.supplyChain || []).map((sc) => ({
         method: sc.findingProvenance.method,
         confidence: sc.findingProvenance.confidence || null,
         findingOrigin: sc.findingProvenance.findingOrigin || null,
+        // Needed by the caller to assert the RIGHT thing per environment:
+        // this fixture is a subdirectory of this repository, so it resolves
+        // against the enclosing repo's history — full locally, but shallow
+        // under actions/checkout's default fetch-depth:1. Confidence is
+        // legitimately 'high' in one and 'low' in the other, and the test
+        // cannot tell which without this.
+        historyCoverage: sc.findingProvenance.historyCoverage || null,
       }
     : null,
 }));

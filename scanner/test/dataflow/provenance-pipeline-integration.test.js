@@ -271,12 +271,37 @@ test('every supplyChain entry carries a terminal findingProvenance, transitive d
       // `confidence.level:'high'` / `score:0.95`, and those are earned: the
       // absence really was checked against the real parent blob, unlike the
       // fabricated-certainty bug fixed in item #2 of this same review round.
-      assert.equal(e.provenance.status, 'complete');
+      //
+      // ENVIRONMENT-DEPENDENT, and deliberately asserted both ways. The
+      // paragraph above describes a FULL clone. This fixture is a
+      // subdirectory of this repository, so it resolves against the
+      // enclosing repo's history — and CI checks out with
+      // actions/checkout's default `fetch-depth: 1`, where the origin
+      // commit's parent is not present at all. Absence therefore cannot be
+      // verified there, and 'high' is not available to be earned.
+      //
+      // Hardcoding 'high' made this pass locally and fail in CI. The fix is
+      // not to relax the assertion to whichever value shows up — it is to
+      // assert the property that must hold in EITHER environment: confidence
+      // is high only when the boundary was really checked, and when it was
+      // not, the record must SAY the history was incomplete rather than
+      // quietly downgrade. That is the feature's own "never false certainty"
+      // invariant, and this now pins it on both sides.
       assert.equal(e.provenance.method, 'dependency-graph-diff');
-      assert.equal(e.provenance.confidence.level, 'high');
-      assert.equal(e.provenance.confidence.score, 0.95);
-      assert.ok(Array.isArray(e.provenance.findingOrigin?.absentInParents) && e.provenance.findingOrigin.absentInParents.length > 0,
-        'a genuinely verified transition must record the parent commit(s) the dependency was confirmed absent from');
+      const shallow = e.provenance.historyCoverage?.shallow === true
+        || e.provenance.historyCoverage?.complete === false;
+      if (!shallow) {
+        assert.equal(e.provenance.status, 'complete');
+        assert.equal(e.provenance.confidence.level, 'high');
+        assert.equal(e.provenance.confidence.score, 0.95);
+        assert.ok(Array.isArray(e.provenance.findingOrigin?.absentInParents) && e.provenance.findingOrigin.absentInParents.length > 0,
+          'a genuinely verified transition must record the parent commit(s) the dependency was confirmed absent from');
+      } else {
+        assert.notEqual(e.provenance.confidence.level, 'high',
+          'a shallow clone cannot verify the parent boundary, so it must never claim high confidence');
+        assert.ok(e.provenance.historyCoverage,
+          'a downgraded confidence must be explained by a historyCoverage record, not left unexplained');
+      }
       assert.doesNotMatch(e.provenance.limitations.join(' '), /transitive dependency origin resolution/,
         'the pre-M3 "unsupported" placeholder wording must not survive now that the resolver is wired');
       // M3 §3.2: transitive dependencies have multi-segment depChain (ancestry)
