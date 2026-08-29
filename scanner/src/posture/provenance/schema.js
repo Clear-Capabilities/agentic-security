@@ -30,19 +30,33 @@ export const CONFIDENCE_LEVEL = Object.freeze({ HIGH: 'high', MEDIUM: 'medium', 
 // Second independent Finding Provenance PRD audit: this enum is the PRD's
 // full role vocabulary, but not every value has a producer. Honest status
 // per role, so a reader does not assume "defined here" means "emitted
-// somewhere": SOURCE/SINK/TRANSFORMATION (evidence-attribution.js's
-// source/sink/pathSteps walk), MANIFEST/LOCKFILE (coordinator.js's SCA
-// evidence node), REMOVED_GUARD and SECRET are all live — REMOVED_GUARD via
-// the missingControlCandidate hint (rate-limit.js's routes,
-// evidence-attribution.js's `opts.removedGuard`), SECRET via the
-// `findingType: 'secret'` hint (`opts.secret`). GUARD ("a control IS
-// present at this location") and CONFIG ("a misconfigured setting, not a
-// taint sink") are declared but currently emitted by NO detector — wiring
-// either would mean new detector-side work (a "guard present" evidence
-// producer, or classifying which SAST findings are config-shaped), which is
-// out of scope for a schema-fidelity fix. Not dead in the sense of
-// unreachable code — the enum value and consumers of it (e.g. `validate.js`
-// callers, PRD-shaped JSON readers) are correct — just genuinely unemitted.
+// somewhere".
+//
+// LIVE (something in src/ actually constructs one): SOURCE, SINK,
+// TRANSFORMATION (evidence-attribution.js's source/sink/pathSteps walk);
+// MANIFEST (coordinator.js's SCA evidence node); REMOVED_GUARD via the
+// missingControlCandidate hint (rate-limit.js's routes,
+// evidence-attribution.js's `opts.removedGuard`); SECRET via the
+// `findingType: 'secret'` hint (`opts.secret`).
+//
+// DECLARED BUT EMITTED BY NOTHING: GUARD ("a control IS present at this
+// location"), CONFIG ("a misconfigured setting, not a taint sink"),
+// LOCKFILE, and OTHER. Verified by grep, not assumed. Wiring GUARD or
+// CONFIG would mean new detector-side work (a "guard present" evidence
+// producer, or classifying which SAST findings are config-shaped), out of
+// scope for a schema-fidelity fix. LOCKFILE is the subtler one and the
+// reason this list is spelled out rather than summarized: the transitive-SCA
+// path IS lockfile-diff-derived, so it reads as though it should emit
+// LOCKFILE — but coordinator.js labels both the direct and transitive SCA
+// evidence nodes MANIFEST, so LOCKFILE has no producer at all. (An earlier
+// version of this very comment grouped it with the live roles; a review
+// caught it. The failure mode this comment exists to prevent is easy to
+// reintroduce inside the comment itself — check `grep -rn
+// "EVIDENCE_ROLE.<NAME>" src/` before moving any role between these lists.)
+//
+// None of these are dead in the sense of unreachable code — the enum values
+// and their consumers (`validate.js` callers, PRD-shaped JSON readers) are
+// correct — they are simply never produced today.
 export const EVIDENCE_ROLE = Object.freeze({
   SOURCE: 'source', SINK: 'sink', GUARD: 'guard', REMOVED_GUARD: 'removed_guard',
   TRANSFORMATION: 'transformation', CONFIG: 'config', SECRET: 'secret',
