@@ -21,6 +21,8 @@ import { parseJsFile } from '../../src/ir/parser-js.js';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
 import { FieldIdentitySummaryCache, createCallSummaryResolver } from '../../src/lineage/summaries.js';
+import { buildCallGraph } from '../../src/ir/callgraph.js';
+import { createCallGraphLookup } from '../../src/lineage/summaries.js';
 
 // Parses `src` for real and returns the named function's IR record.
 function parseFn(src, fnName, file = '/x/a.js') {
@@ -488,4 +490,75 @@ test('returning a spread object directly aggregates every field (complementary t
   const result = analyzeFunctionFieldIdentity(fn, entryState);
   assert.equal(result.returnFacts.length, 1);
   assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn']);
+});
+
+test('real call-graph integration: a function in one file calling a bare-identifier function in ANOTHER file resolves through the real call graph, not a hand-built map (Sub-project B, increment 3)', () => {
+  // Two real, separately-parsed source files. File B defines a plain
+  // function with no import wiring needed for `resolveKnownCallee` to find
+  // it — bare-name project-wide fallback (see callgraph.js's `resolve`/
+  // `resolveKnownCallee` precedence: same-file first, then any file
+  // defining the name) is exactly the mechanism this test exercises,
+  // deliberately not exercising import/export resolution (out of scope for
+  // this increment — see the plan's Global Constraints).
+  const sourceB = `
+function getUser(userId) {
+  return { email: userId, ssn: 'unrelated' };
+}
+`;
+  const sourceA = `
+function outer(id) {
+  const u = getUser(id);
+  return u;
+}
+`;
+
+  const irA = parseJsFile('/x/a.js', sourceA);
+  const irB = parseJsFile('/x/b.js', sourceB);
+  assert.ok(irA, 'real parser must successfully parse file A');
+  assert.ok(irB, 'real parser must successfully parse file B');
+
+  const perFileIR = { '/x/a.js': irA, '/x/b.js': irB };
+  const callGraph = buildCallGraph(perFileIR, { '/x/a.js': sourceA, '/x/b.js': sourceB });
+
+  const outerFn = irA.functions.find(f => f.name === 'outer');
+  assert.ok(outerFn, 'expected to find outer() in the real parsed IR for a.js');
+
+  const cache = new FieldIdentitySummaryCache();
+  const lookupCallee = createCallGraphLookup(callGraph, '/x/a.js');
+  const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
+
+  // DEVIATION FROM THE PLAN'S LITERAL TEXT (see Task 2 report for the full
+  // writeup): the plan called for `emptyState()` as the entry state and an
+  // assertion on `returnFacts[0].widened`. Neither works against the actual
+  // engine. `returnFacts[i]` objects only ever carry `{nodeId, line,
+  // identities}` (see engine.js's `returnFactsByNode.set(...)` /
+  // `.map(([nodeId, fact]) => ...)`) — there is no per-fact `widened` field
+  // anywhere in this file, so `returnFacts[0].widened` is always `undefined`
+  // and `assert.strictEqual(returnFacts[0].widened, false)` fails
+  // unconditionally, for BOTH a correctly-resolved and a broken lookupCallee
+  // — it cannot discriminate the thing this test exists to prove. Separately,
+  // `emptyState()` carries no identity at all, and a return fact is only
+  // recorded when `identities.size > 0` (see the `if (returnFact &&
+  // returnFact.size > 0)` guard in `analyzeFunctionFieldIdentity`), so with
+  // a genuinely empty entry state `returnFacts` is EMPTY regardless of
+  // whether the cross-file call resolves — also non-discriminating.
+  // Fixed by seeding one real identity onto `id` (mirroring how every other
+  // test in this file seeds identities before analyzing) and asserting on
+  // `result.widenings` instead — the actual per-function signal the
+  // unresolved-call fallback populates (`reason: 'unresolved-call'`) and a
+  // correctly-resolved, structure-preserving call does not. Manually
+  // confirmed against the real engine: with the real callGraph wired up,
+  // `widenings` is `[]`; swapping in `() => null` for lookupCallee (Step 3's
+  // mutation test) produces exactly one `unresolved-call` widening entry.
+  const entryState = addIdentity(emptyState(), 'id', 'data:id');
+  const { returnFacts, widenings } = analyzeFunctionFieldIdentity(outerFn, entryState, { resolveCallSummary });
+
+  // outer()'s return value is getUser(id)'s real return value — the
+  // identities should reflect getUser's ACTUAL structured return (an
+  // object literal), not the generic unresolved-call fallback (flat +
+  // widened:true) that this SAME test would produce if createCallGraphLookup
+  // failed to resolve the cross-file call.
+  assert.strictEqual(returnFacts.length, 1);
+  assert.deepEqual([...returnFacts[0].identities], ['data:id']);
+  assert.strictEqual(widenings.length, 0, 'a correctly-resolved cross-file call must record no unresolved-call widening event');
 });
