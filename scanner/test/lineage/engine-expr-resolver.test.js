@@ -238,3 +238,58 @@ test('a computed member access with an unknown key on a NON-path base (e.g. `(us
   assert.deepEqual([...r.flat].sort(), ['data:email', 'data:name']);
   assert.equal(r.widened, true);
 });
+
+// Sub-project B, increment 2: resolveExprIdentities(state, expr, ctx?) — the
+// `call` case now consults ctx.resolveCallSummary when present. ctx is
+// optional and backward-compatible; every test above this line calls the
+// function with exactly two arguments and must keep passing unchanged.
+
+test('resolveExprIdentities without a ctx argument behaves exactly as before (backward compatibility)', () => {
+  const state = stateWith([['user.email', 'data:email']]);
+  const r = resolveExprIdentities(state, { kind: 'ident', name: 'user' });
+  assert.deepEqual([...r.byPath.get('email')], ['data:email']);
+});
+
+test('a call with no ctx.resolveCallSummary falls back to the existing unresolved-call behavior (union of args, widened)', () => {
+  const state = stateWith([['secret', 'data:x']]);
+  const expr = { kind: 'call', callee: { kind: 'ident', name: 'someFn' }, args: [{ kind: 'ident', name: 'secret' }] };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.flat], ['data:x']);
+  assert.equal(r.widened, true);
+});
+
+test('a call resolves via ctx.resolveCallSummary when it returns a summary, bypassing the unresolved fallback entirely', () => {
+  const state = stateWith([['user', 'data:should-not-appear']]);
+  const expr = { kind: 'call', callee: { kind: 'ident', name: 'known' }, args: [{ kind: 'ident', name: 'user' }] };
+  const ctx = {
+    resolveCallSummary: (calleeExpr) => {
+      assert.equal(calleeExpr.name, 'known');
+      return { returnFlat: new Set(['data:from-summary']), returnByPath: new Map([['field', new Set(['data:nested'])]]) };
+    },
+  };
+  const r = resolveExprIdentities(state, expr, ctx);
+  assert.deepEqual([...r.flat], ['data:from-summary'], 'must use the summary\'s return facts, not the args-union fallback');
+  assert.deepEqual([...r.byPath.get('field')], ['data:nested'], 'byPath from the summary must be forwarded, not dropped');
+  assert.equal(r.widened, false, 'a genuinely resolved call is not a widened/unknown flow');
+});
+
+test('a call with ctx.resolveCallSummary present but returning null falls back to the unresolved behavior for THAT call (per-call, not global)', () => {
+  const state = stateWith([['secret', 'data:x']]);
+  const expr = { kind: 'call', callee: { kind: 'ident', name: 'unknownFn' }, args: [{ kind: 'ident', name: 'secret' }] };
+  const ctx = { resolveCallSummary: () => null };
+  const r = resolveExprIdentities(state, expr, ctx);
+  assert.deepEqual([...r.flat], ['data:x']);
+  assert.equal(r.widened, true);
+});
+
+test('ctx threads through nested constructs so a call INSIDE an object literal / ternary / template also resolves via the summary', () => {
+  const state = stateWith([['user', 'data:x']]);
+  const ctx = { resolveCallSummary: () => ({ returnFlat: new Set(['data:resolved']), returnByPath: new Map() }) };
+  const objExpr = { kind: 'object', props: [{ key: 'a', value: { kind: 'call', callee: { kind: 'ident', name: 'f' }, args: [] } }] };
+  const r1 = resolveExprIdentities(state, objExpr, ctx);
+  assert.deepEqual([...r1.byPath.get('a')], ['data:resolved']);
+
+  const ternaryExpr = { kind: 'union', branches: [{ kind: 'call', callee: { kind: 'ident', name: 'f' }, args: [] }, { kind: 'literal', value: 1 }] };
+  const r2 = resolveExprIdentities(state, ternaryExpr, ctx);
+  assert.deepEqual([...r2.flat], ['data:resolved']);
+});

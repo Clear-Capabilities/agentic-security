@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
-import { emptyFieldSummary, FieldIdentitySummaryCache, entryStateFromCall, applyAtCallSite } from '../../src/lineage/summaries.js';
+import { emptyFieldSummary, FieldIdentitySummaryCache, entryStateFromCall, applyAtCallSite, createCallSummaryResolver } from '../../src/lineage/summaries.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
 
 test('emptyFieldSummary returns an empty, correctly-shaped summary', () => {
@@ -241,4 +241,56 @@ test('compute: a throwing analyzeFn does not permanently poison the recursion gu
   const result = cache.compute('fn1', state, () => { ran = true; return { ...emptyFieldSummary(), returnFlat: new Set(['data:recovered']) }; });
   assert.equal(ran, true, 'a later compute() call for the same qid must genuinely re-run analyzeFn, not silently degrade to a permanent bottom stub');
   assert.deepEqual([...result.returnFlat], ['data:recovered']);
+});
+
+// Sub-project B, increment 2: createCallSummaryResolver — the closure
+// resolveExprIdentities's `call` case consults via ctx.resolveCallSummary.
+
+test('createCallSummaryResolver returns null when lookupCallee cannot resolve the call', () => {
+  const cache = new FieldIdentitySummaryCache();
+  const resolver = createCallSummaryResolver(cache, () => null);
+  const result = resolver({ kind: 'ident', name: 'unknownFn' }, [], emptyState());
+  assert.equal(result, null);
+});
+
+test('createCallSummaryResolver computes and caches a real summary via analyzeFunctionFieldIdentity when lookupCallee resolves', () => {
+  const cache = new FieldIdentitySummaryCache();
+  // function copyEmail(source) { return source.email; }
+  const calleeFn = {
+    params: ['source'],
+    cfg: {
+      entry: 'c0', exit: 'c1',
+      nodes: {
+        c0: { kind: 'entry', line: 1, succ: ['c1'], pred: [] },
+        c1: { kind: 'return', line: 1, succ: [], pred: ['c0'], value: { kind: 'member', object: { kind: 'ident', name: 'source' }, prop: 'email' } },
+      },
+    },
+  };
+  const resolver = createCallSummaryResolver(cache, (calleeExpr) => (calleeExpr.name === 'copyEmail' ? { qid: 'test::copyEmail', fn: calleeFn } : null));
+  const callerState = addIdentity(emptyState(), 'user.email', 'data:email');
+  const result = resolver({ kind: 'ident', name: 'copyEmail' }, [{ kind: 'ident', name: 'user' }], callerState);
+  assert.deepEqual([...result.returnFlat], ['data:email']);
+  assert.equal(cache.size(), 1, 'the computed summary must be cached');
+});
+
+test('createCallSummaryResolver unions identities across ALL of a function\'s return sites, not just the first (a genuine correctness improvement over increment B1\'s own single-return-site test shortcut)', () => {
+  const cache = new FieldIdentitySummaryCache();
+  // function pick(a, b, flag) { if (flag) { return a.x; } return b.y; }
+  const calleeFn = {
+    params: ['a', 'b', 'flag'],
+    cfg: {
+      entry: 'c0', exit: 'c3',
+      nodes: {
+        c0: { kind: 'entry', line: 1, succ: ['c1'], pred: [] },
+        c1: { kind: 'if', line: 1, succ: ['c2', 'c3'], pred: ['c0'], cond: { kind: 'ident', name: 'flag' } },
+        c2: { kind: 'return', line: 1, succ: [], pred: ['c1'], value: { kind: 'member', object: { kind: 'ident', name: 'a' }, prop: 'x' } },
+        c3: { kind: 'return', line: 1, succ: [], pred: ['c1'], value: { kind: 'member', object: { kind: 'ident', name: 'b' }, prop: 'y' } },
+      },
+    },
+  };
+  const resolver = createCallSummaryResolver(cache, () => ({ qid: 'test::pick', fn: calleeFn }));
+  let callerState = addIdentity(emptyState(), 'p.x', 'data:p-x');
+  callerState = addIdentity(callerState, 'q.y', 'data:q-y');
+  const result = resolver({ kind: 'ident', name: 'pick' }, [{ kind: 'ident', name: 'p' }, { kind: 'ident', name: 'q' }, { kind: 'literal', value: true }], callerState);
+  assert.deepEqual([...result.returnFlat].sort(), ['data:p-x', 'data:q-y'], 'both return sites\' identities must be present, not just one');
 });

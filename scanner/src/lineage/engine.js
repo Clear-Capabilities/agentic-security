@@ -57,7 +57,7 @@ function pathHasWildcard(path) {
   return path.split('.').includes('*');
 }
 
-export function resolveExprIdentities(state, expr) {
+export function resolveExprIdentities(state, expr, ctx) {
   if (!expr) return noIdentity();
 
   switch (expr.kind) {
@@ -121,7 +121,7 @@ export function resolveExprIdentities(state, expr) {
       // `assign`/`object` already use) — a coarse/ancestor-level fact on the
       // base conservatively applies to every field read off it, same
       // reasoning as `identitiesAt`'s ancestor coverage for state-backed reads.
-      const base = resolveExprIdentities(state, expr.object);
+      const base = resolveExprIdentities(state, expr.object, ctx);
       if (expr.prop === '*') {
         // Same reasoning as the path-succeeds branch above: unknown key on a
         // non-path base — conservatively use everything the base carries
@@ -152,7 +152,7 @@ export function resolveExprIdentities(state, expr) {
       const flat = new Set();
       const byPath = new Map();
       for (const prop of expr.props) {
-        const r = resolveExprIdentities(state, prop.value);
+        const r = resolveExprIdentities(state, prop.value, ctx);
         for (const id of r.flat) flat.add(id);
         if (prop.spread) {
           // Object spread ({...src}) copies ALL of src's own properties onto
@@ -205,7 +205,7 @@ export function resolveExprIdentities(state, expr) {
     case 'array': {
       const flat = new Set();
       for (const el of expr.elements) {
-        const r = resolveExprIdentities(state, el);
+        const r = resolveExprIdentities(state, el, ctx);
         for (const id of r.flat) flat.add(id);
       }
       return { flat, byPath: new Map(), widened: false };
@@ -214,7 +214,7 @@ export function resolveExprIdentities(state, expr) {
     case 'tpl': {
       const flat = new Set();
       for (const part of expr.parts) {
-        const r = resolveExprIdentities(state, part);
+        const r = resolveExprIdentities(state, part, ctx);
         for (const id of r.flat) flat.add(id);
       }
       return { flat, byPath: new Map(), widened: false };
@@ -225,8 +225,8 @@ export function resolveExprIdentities(state, expr) {
       // structure-flattening by design, not a gap. See
       // DESIGN_INTRAPROCEDURAL.md §4's "structure-preserving vs.
       // structure-flattening" invariant.
-      const left = resolveExprIdentities(state, expr.left);
-      const right = resolveExprIdentities(state, expr.right);
+      const left = resolveExprIdentities(state, expr.left, ctx);
+      const right = resolveExprIdentities(state, expr.right, ctx);
       return { flat: new Set([...left.flat, ...right.flat]), byPath: new Map(), widened: false };
     }
 
@@ -237,8 +237,8 @@ export function resolveExprIdentities(state, expr) {
       // byPath, merged per sub-path across both operands, the same way
       // `union` merges per sub-path across branches. See
       // DESIGN_INTRAPROCEDURAL.md §4.
-      const left = resolveExprIdentities(state, expr.left);
-      const right = resolveExprIdentities(state, expr.right);
+      const left = resolveExprIdentities(state, expr.left, ctx);
+      const right = resolveExprIdentities(state, expr.right, ctx);
       const flat = new Set([...left.flat, ...right.flat]);
       const byPath = new Map();
       for (const r of [left, right]) {
@@ -259,7 +259,7 @@ export function resolveExprIdentities(state, expr) {
       const flat = new Set();
       const byPath = new Map();
       for (const branch of expr.branches) {
-        const r = resolveExprIdentities(state, branch);
+        const r = resolveExprIdentities(state, branch, ctx);
         for (const id of r.flat) flat.add(id);
         for (const [subPath, ids] of r.byPath) {
           const existing = byPath.get(subPath) ?? new Set();
@@ -270,9 +270,29 @@ export function resolveExprIdentities(state, expr) {
     }
 
     case 'call': {
+      // NEW (Sub-project B, increment 2): if the caller supplied a resolver
+      // and it recognizes this specific call, use the resolved callee's REAL
+      // return facts (both flat and byPath, so a caller selecting one field
+      // off a resolved call's structured return value gets the same
+      // field-level precision as any other structure-preserving construct)
+      // instead of the generic unresolved-call fallback below. This is what
+      // makes the structure-preserving/structure-flattening invariant (see
+      // DESIGN_INTRAPROCEDURAL.md §3) genuinely true for a call now: a
+      // RESOLVED call is structure-preserving (forwards byPath); an
+      // UNRESOLVED one remains structure-flattening (flat + widened),
+      // exactly as before this increment. `ctx` is optional and
+      // backward-compatible — no `ctx` (or no `ctx.resolveCallSummary`)
+      // falls straight through to the pre-existing behavior below,
+      // unchanged.
+      if (ctx?.resolveCallSummary) {
+        const summary = ctx.resolveCallSummary(expr.callee, expr.args ?? [], state);
+        if (summary) {
+          return { flat: new Set(summary.returnFlat), byPath: new Map(summary.returnByPath), widened: false };
+        }
+      }
       const flat = new Set();
       for (const arg of expr.args ?? []) {
-        const r = resolveExprIdentities(state, arg);
+        const r = resolveExprIdentities(state, arg, ctx);
         for (const id of r.flat) flat.add(id);
       }
       return { flat, byPath: new Map(), widened: flat.size > 0 };
@@ -287,7 +307,7 @@ export function resolveExprIdentities(state, expr) {
       // A simple pass-through of whatever the assignment's source resolves
       // to (structure-preserving), so its byPath is forwarded directly, not
       // dropped. See DESIGN_INTRAPROCEDURAL.md §4.
-      const r = resolveExprIdentities(state, expr.source);
+      const r = resolveExprIdentities(state, expr.source, ctx);
       return { flat: r.flat, byPath: r.byPath, widened: r.widened };
     }
 

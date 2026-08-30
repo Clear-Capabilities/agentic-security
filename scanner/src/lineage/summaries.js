@@ -1,5 +1,5 @@
 import { hashState, emptyState, addIdentity } from './field-identity.js';
-import { resolveExprIdentities, residualFlat } from './engine.js';
+import { resolveExprIdentities, residualFlat, analyzeFunctionFieldIdentity } from './engine.js';
 import { accessPathOf } from '../dataflow/access-paths.js';
 
 export function emptyFieldSummary() {
@@ -145,4 +145,42 @@ export function applyAtCallSite(summary, paramNames, callArgs) {
     mutations.push({ path: fullPath, dataElementIds: [...ids] });
   }
   return { returnFlat: summary.returnFlat, returnByPath: summary.returnByPath, mutations };
+}
+
+// Builds a `resolveCallSummary` closure — the shape `resolveExprIdentities`'s
+// `call` case now consults (see engine.js) — wired to a real
+// FieldIdentitySummaryCache. `lookupCallee` is itself injected and
+// deliberately opaque to this function: this increment's own tests pass a
+// simple hand-built name-to-function map; increment B3's real call-graph
+// integration will pass a resolver backed by `scanner/src/ir/callgraph.js`
+// instead, without this function (or `resolveExprIdentities`) needing to
+// change at all.
+export function createCallSummaryResolver(cache, lookupCallee) {
+  return function resolveCallSummary(calleeExpr, callArgs, callerState) {
+    const resolved = lookupCallee(calleeExpr);
+    if (!resolved) return null;
+    const { qid, fn } = resolved;
+    const entryState = entryStateFromCall(fn.params, callArgs, callerState);
+    return cache.compute(qid, entryState, (es) => {
+      const result = analyzeFunctionFieldIdentity(fn, es);
+      // Union across EVERY return site, not just the first — a function
+      // with multiple return statements (e.g. an early-return branch) must
+      // have all of them reflected, not just whichever happened to be
+      // recorded first. This is a genuine correctness improvement over
+      // increment B1's own round-trip test's `returnFacts[0]` shortcut
+      // (that test only ever exercised a single-return-site function, so
+      // the shortcut was harmless there — this shared, reusable resolver is
+      // the right place to do it correctly going forward).
+      const returnFlat = new Set();
+      for (const rf of result.returnFacts) {
+        for (const id of rf.identities) returnFlat.add(id);
+      }
+      return {
+        returnFlat,
+        returnByPath: new Map(), // still flat-only — see B1's disclosed limitation in CLAUDE.md; not closed by this increment either
+        mutatedParams: result.mutatedParams,
+        widenings: result.widenings,
+      };
+    });
+  };
 }
