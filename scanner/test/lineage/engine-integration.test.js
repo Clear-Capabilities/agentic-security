@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import { parseJsFile } from '../../src/ir/parser-js.js';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
+import { FieldIdentitySummaryCache, createCallSummaryResolver } from '../../src/lineage/summaries.js';
 
 // Parses `src` for real and returns the named function's IR record.
 function parseFn(src, fnName, file = '/x/a.js') {
@@ -414,6 +415,35 @@ test('object spread in a real parsed object literal keeps fields isolated, match
   const result = analyzeFunctionFieldIdentity(fn, entryState);
   assert.equal(result.returnFacts.length, 1);
   assert.deepEqual([...result.returnFacts[0].identities], ['data:email'], 'spreading user into c must not merge ssn into an email-only read');
+});
+
+test('a resolved call to a real, separately-parsed function returns its actual field identity, not the generic unresolved-call fallback (Sub-project B, increment 2, real parser)', () => {
+  const src = `
+    function copyEmail(source) {
+      return source.email;
+    }
+    function caller(user) {
+      return copyEmail(user);
+    }
+  `;
+  const ir = parseJsFile('/x/a.js', src);
+  assert.ok(ir, 'real parser must successfully parse this fixture source');
+  const calleeFn = ir.functions.find(f => f.name === 'copyEmail');
+  const callerFn = ir.functions.find(f => f.name === 'caller');
+  assert.ok(calleeFn, 'expected a function named "copyEmail" in the parsed IR');
+  assert.ok(callerFn, 'expected a function named "caller" in the parsed IR');
+
+  const cache = new FieldIdentitySummaryCache();
+  const lookupCallee = (calleeExpr) => (calleeExpr.kind === 'ident' && calleeExpr.name === 'copyEmail' ? { qid: 'copyEmail', fn: calleeFn } : null);
+  const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
+
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+
+  const result = analyzeFunctionFieldIdentity(callerFn, entryState, { resolveCallSummary });
+
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email'], 'the call to copyEmail must resolve to its real return fact (only email, since copyEmail only reads source.email), not the generic widened union-of-args fallback (which would have included data:ssn too)');
 });
 
 test('returning a spread object directly aggregates every field (complementary to the isolation test above)', () => {

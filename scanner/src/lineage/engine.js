@@ -316,7 +316,7 @@ export function resolveExprIdentities(state, expr, ctx) {
   }
 }
 
-function step(node, stateIn, widenings) {
+function step(node, stateIn, widenings, ctx) {
   switch (node.kind) {
     case 'assign': {
       if (typeof node.target !== 'string') {
@@ -335,7 +335,7 @@ function step(node, stateIn, widenings) {
         // rather than guessing) rather than attempted here.
         return { state: stateIn, returnFact: null };
       }
-      const resolved = resolveExprIdentities(stateIn, node.source);
+      const resolved = resolveExprIdentities(stateIn, node.source, ctx);
       if (pathHasWildcard(node.target)) {
         // A computed-key write (`obj[k] = ...`) must be a WEAK update (add to
         // whatever the container already carries, never clear it first) — a
@@ -383,8 +383,21 @@ function step(node, stateIn, widenings) {
     }
 
     case 'call': {
+      // This CFG node kind is a bare call-statement (its return value is
+      // discarded, e.g. `logEvent(user);`), evaluated here purely to flag
+      // widening on its ARGUMENT expressions. `ctx` is threaded through
+      // for consistency with every other resolveExprIdentities call site
+      // in this file — an argument can itself be a nested, RESOLVED call
+      // expression (e.g. `logEvent(copyEmail(user))`), and without `ctx`
+      // that nested call would spuriously widen on the resolved callee's
+      // full argument set instead of using its real (possibly narrower)
+      // return facts, exactly the same imprecision increment B2 closes for
+      // the `assign`/`return` cases. This does not change what this case
+      // itself does with the result (still only checks `r.flat` for a
+      // widening event) — it only lets a nested `call` sub-expression
+      // resolve precisely when `ctx` makes that possible.
       for (const arg of node.args ?? []) {
-        const r = resolveExprIdentities(stateIn, arg);
+        const r = resolveExprIdentities(stateIn, arg, ctx);
         if (r.flat.size > 0) {
           widenings.push({ atPath: null, dataElementIds: [...r.flat], reason: 'unresolved-call-arg', line: node.line });
         }
@@ -393,7 +406,7 @@ function step(node, stateIn, widenings) {
     }
 
     case 'return': {
-      const resolved = node.value ? resolveExprIdentities(stateIn, node.value) : { flat: new Set(), widened: false };
+      const resolved = node.value ? resolveExprIdentities(stateIn, node.value, ctx) : { flat: new Set(), widened: false };
       if (resolved.widened && resolved.flat.size > 0) {
         widenings.push({ atPath: null, dataElementIds: [...resolved.flat], reason: 'unresolved-call', line: node.line });
       }
@@ -423,7 +436,7 @@ function step(node, stateIn, widenings) {
 // not a load-bearing part of the termination proof.
 const ITER_BUDGET = 5000;
 
-export function analyzeFunctionFieldIdentity(fn, entryState) {
+export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
   const nodes = fn.cfg.nodes;
   const work = [fn.cfg.entry];
   const inStates = new Map([[fn.cfg.entry, entryState]]);
@@ -438,7 +451,7 @@ export function analyzeFunctionFieldIdentity(fn, entryState) {
     const node = nodes[nid];
     if (!node) continue;
     const incoming = inStates.get(nid) ?? emptyState();
-    const { state: out, returnFact } = step(node, incoming, widenings);
+    const { state: out, returnFact } = step(node, incoming, widenings, ctx);
     if (returnFact && returnFact.size > 0) {
       // Union onto any existing fact for this node rather than pushing a
       // new array entry every visit — see Fix 2 in the final whole-branch
