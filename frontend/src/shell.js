@@ -147,6 +147,6 @@ function applyActiveTab(tabsEl, activeView) {
   }
 }
 
-function buildContextRailText(graph) {
+export function buildContextRailText(graph) {
   return `${graph.nodes.length} nodes · ${graph.edges.length} edges · ${graph.flows.length} flows`;
 }

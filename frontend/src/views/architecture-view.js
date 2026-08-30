@@ -1,5 +1,5 @@
 import { worstVerdict, protectionVisual } from '../lib/protection-visual.js';
-import { clear } from '../lib/dom.js';
+import { el, clear } from '../lib/dom.js';
 import { flowPathNodeIds } from '../lib/flow-path.js';
 
 export const ZONE_ORDER = Object.freeze(['Public Internet', 'Application Layer', 'Service Layer', 'Data Layer', 'External Zone']);
@@ -144,6 +144,39 @@ export function computeArchitectureViewModel(graph, state) {
   const flowSummary = selection.flow ? computeFlowSummary(graph, selection.flow) : null;
 
   return { zones, nodes, edges, flowSummary };
+}
+
+// Renders computeFlowSummary()'s output into the shell's context rail
+// (frontend/src/shell.js's getContextRailEl()). This is a plain HTML panel,
+// not part of the SVG canvas, so it's built via el() (lib/dom.js) — NOT
+// svgEl() — matching Privacy View / Trace View's convention of using el()
+// for anything outside the <svg> tree.
+export function renderFlowSummary(flowSummary, contextRailEl) {
+  clear(contextRailEl);
+  if (!flowSummary) return;
+
+  const dims = [
+    ['Transit', flowSummary.transitVerdict],
+    ['At rest', flowSummary.atRestVerdict],
+    ['Handling', flowSummary.handlingVerdict],
+  ].map(([label, verdict]) => {
+    const v = protectionVisual(verdict);
+    return el('div', {}, `${v.glyph} ${label}: ${v.label}`);
+  });
+
+  const recipientsLine = (label, names) => (names.length > 0 ? el('div', {}, `${label}: ${names.join(', ')}`) : null);
+
+  contextRailEl.appendChild(
+    el('div', { class: 'flow-summary' }, [
+      el('h4', {}, flowSummary.dataElementName),
+      el('div', {}, flowSummary.dataClasses.join(', ')),
+      el('div', {}, `${flowSummary.sourceLabel} → ${flowSummary.destinationLabel}`),
+      el('div', {}, `${flowSummary.protectedCount} protected · ${flowSummary.unprotectedCount} unprotected · ${flowSummary.unknownCount} unknown`),
+      recipientsLine('External recipients', flowSummary.externalRecipients),
+      recipientsLine('Unknown-externality recipients', flowSummary.unknownRecipients),
+      ...dims,
+    ].filter(Boolean)),
+  );
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
