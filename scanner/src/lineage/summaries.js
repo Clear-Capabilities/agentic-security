@@ -40,7 +40,41 @@ export class FieldIdentitySummaryCache {
   }
 
   compute(qid, entryState, analyzeFn) {
-    if (this.has(qid, entryState)) return this.get(qid, entryState);
+    // Ordering matches dataflow/summaries.js's own compute() exactly:
+    // cache-hit checked FIRST, before the `_stack`-based recursion guard.
+    // This is load-bearing, not incidental — B5's whole point is that a
+    // nested self/mutual-reference call, on a LATER refinement round, must
+    // see the PRIOR round's real (already-cached) summary instead of the
+    // bottom stub, so the summary can genuinely grow round over round (e.g.
+    // a self-recursive `function chain() { return {base: X, nested:
+    // chain()}}` picks up one more `nested:` layer per round). An earlier
+    // version of this method checked `_stack.has(qid)` BEFORE the cache-hit
+    // check specifically to keep the pre-existing B1 recursion test passing
+    // unmodified — but that ordering makes every nested self-call within
+    // the SAME compute() invocation hit the bottom-stub branch on every
+    // round (since `qid` never leaves `_stack` until the whole call
+    // returns), so round 2's self-call is byte-identical to round 1's, and
+    // `fieldSummaryEq` converges immediately without ever changing anything
+    // — refinement runs but is a structural no-op for genuine
+    // self-recursion, defeating the actual purpose of this increment.
+    // Verified empirically: with `_stack` checked first, a self-referencing
+    // `chain()`-shaped scenario stays stuck at `{'data:base'}` forever;
+    // with the cache-hit checked first (this ordering), it genuinely grows
+    // (`{'data:base', 'nested:data:base', 'nested:nested:data:base', ...}`)
+    // across rounds, bounded by FP_MAX. The pre-existing B1 test's own
+    // safety property (a nested self-call is NEVER unboundedly recursive,
+    // and — checked once, on its FIRST occurrence — gets a genuine bottom
+    // stub) still holds under this ordering; only the test's assertion
+    // needed updating to check the FIRST occurrence rather than every
+    // occurrence, since round 2+'s nested self-call now legitimately
+    // resolves to the real (still `_stack`-guarded from ever calling
+    // `innerFn` a second time — see below) prior-round summary. This is
+    // this increment's own coordinator-reviewed correction — see the
+    // Task 1 report's "Fix round" section for the full trace.
+    if (this.has(qid, entryState)) {
+      const cached = this.get(qid, entryState);
+      if (!cached._recursive) return cached;
+    }
 
     const hash = hashState(entryState);
     const seen = this._contextsByQid.get(qid) ?? new Set();
@@ -55,17 +89,32 @@ export class FieldIdentitySummaryCache {
     }
 
     if (this._stack.has(qid)) {
-      // Recursion guard, THIS INCREMENT'S SCOPE: return a bottom stub
-      // immediately, never recurse further, and do NOT attempt any
-      // fixed-point refinement here — that precision improvement is
-      // increment B5's job. This guard's only job in B1 is safety (never
-      // infinite-loop on a hand-built recursive call graph), not
-      // precision. A caller receiving `_recursive: true` knows this
-      // summary may under-approximate the function's real behavior.
+      // Recursion guard: return a bottom stub immediately to the NESTED
+      // caller, never recurse further — this part is unchanged from B1 and
+      // stays the safety mechanism (never infinite-loop on a recursive call
+      // graph). What B5 adds is downstream of this: this ALSO flags
+      // `_hitRecursion` on the cache instance (shared across the whole
+      // nested call chain, mirroring dataflow/summaries.js's own exact
+      // design) so that whichever OUTER compute() call is currently
+      // mid-analyzeFn() knows, once its own analyzeFn() returns, to
+      // refine its result via the bounded fixed-point loop below. This
+      // branch is only ever reached when the cache-hit check above found
+      // NOTHING cached yet for this exact qid+entryState — i.e. the FIRST
+      // time this qid is encountered while still on `_stack` (every LATER
+      // encounter, within the same or a later refinement round, hits the
+      // cache-hit branch above instead, once the first round has cached a
+      // real summary).
+      this._hitRecursion = true;
       return { ...emptyFieldSummary(), _recursive: true };
     }
 
     this._stack.add(qid);
+    // Mirrors dataflow/summaries.js's own exact placement: reset AFTER
+    // pushing onto `_stack`, immediately before the analyzeFn() call this
+    // flag is scoped to. Nothing reads `_hitRecursion` between the push and
+    // this reset, so the two orderings are behaviorally identical here —
+    // reset-after-push is what the reference precedent actually does.
+    this._hitRecursion = false;
     try {
       // A final whole-branch review found this method previously had no
       // try/finally around analyzeFn — if it threw, qid stayed on _stack
@@ -81,8 +130,42 @@ export class FieldIdentitySummaryCache {
       // intraprocedural engine spent six rounds closing. Mirrors
       // dataflow/summaries.js's own try/finally around the identical
       // stack-push/pop pattern.
-      const summary = analyzeFn(entryState);
+      let summary = analyzeFn(entryState);
       this.set(qid, entryState, summary);
+      // Increment B5: bounded fixed-point refinement. If a NESTED call for
+      // THIS SAME qid (still on `_stack` for the duration of this
+      // analyzeFn() call) hit the recursion guard above, the summary just
+      // computed treated that self/mutual reference as carrying zero
+      // identity (the bottom stub) — an honest but possibly permanent
+      // under-approximation if nothing ever revisits it. Re-invoking
+      // analyzeFn() now, AFTER this qid is already cached with a real
+      // (non-bottom-stub) summary, lets a nested self-call resolve against
+      // THAT cached value instead of the guard on the next round, so each
+      // round can only get more complete, never regress. Bounded by
+      // FP_MAX (mirrors dataflow's own `FP_MAX = 3`) as a hard safety cap,
+      // not a precision target — a function that never converges within
+      // the cap is left at whatever the last round produced, an honest,
+      // sound under-approximation. `fieldSummaryEq` (membership-based, see
+      // below) decides convergence: a round judged equal to the previous
+      // one is NOT cached (the cache still holds the prior — equal — round,
+      // which is correct), and the loop stops. Ordering (cache the round
+      // BEFORE the loop starts; compare BEFORE caching each subsequent
+      // round) mirrors dataflow/summaries.js's own compute() exactly.
+      if (this._hitRecursion) {
+        const FP_MAX = 3;
+        for (let fp = 0; fp < FP_MAX; fp++) {
+          const prev = summary;
+          summary = analyzeFn(entryState);
+          if (fieldSummaryEq(prev, summary)) break;
+          this.set(qid, entryState, summary);
+        }
+      }
+      // Defensive strip, mirroring dataflow's own equivalent: analyzeFn's
+      // real return shape here never actually carries `_recursive` under
+      // normal operation, but this guards against a future change to
+      // analyzeFn's callers accidentally leaking it through a cached,
+      // externally-visible summary.
+      if (summary._recursive) delete summary._recursive;
       return summary;
     } finally {
       this._stack.delete(qid);
@@ -98,6 +181,43 @@ export class FieldIdentitySummaryCache {
     this._stack.clear();
     this._contextsByQid.clear();
   }
+}
+
+// Compares two FieldSummary objects for VALUE equality — by membership,
+// never by size alone. dataflow/summaries.js's own equivalent (_summaryEq)
+// carries a documented, previously-shipped bug ("Stage 3 correctness
+// audit," see that file's comment directly above _summaryEq): an earlier
+// version compared mutatedParams by SIZE only, so two summaries with the
+// same cardinality but different actual members were wrongly judged
+// equal — the fixed-point loop then broke early WITHOUT caching the
+// fresher, more-correct summary, silently serving a stale one to any
+// LATER cache read. This function is written correctly from the start,
+// citing that precedent as the reason, not discovered the same way twice.
+//
+// Deliberately does NOT compare `widenings` — mirrors dataflow's own
+// `_summaryEq`, which also excludes its diagnostic-list equivalent
+// (`findings`) from the equality check. Two summaries that agree on their
+// actual FACTS (returnFlat, returnByPath, mutatedParams) but happen to
+// carry a differently-ordered or differently-worded widening-reason list
+// should still be treated as converged — the facts are what a caller
+// actually consumes; the widening list is diagnostic.
+//
+// `returnByPath` is deliberately NOT compared either — it is currently
+// always `new Map()` for every summary this cache ever stores, per B1's
+// own disclosed, still-open limitation; comparing two always-empty Maps
+// would be a no-op check, not a meaningful omission. If a future
+// increment populates `returnByPath`, this function will need extending.
+export function fieldSummaryEq(a, b) {
+  if (!a || !b) return a === b;
+  if (a.returnFlat.size !== b.returnFlat.size) return false;
+  for (const id of a.returnFlat) if (!b.returnFlat.has(id)) return false;
+  if (a.mutatedParams.size !== b.mutatedParams.size) return false;
+  for (const [path, ids] of a.mutatedParams) {
+    const bIds = b.mutatedParams.get(path);
+    if (!bIds || bIds.size !== ids.size) return false;
+    for (const id of ids) if (!bIds.has(id)) return false;
+  }
+  return true;
 }
 
 // Maps a call site's argument expressions onto a fresh entry state for the

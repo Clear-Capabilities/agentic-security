@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
-import { emptyFieldSummary, FieldIdentitySummaryCache, entryStateFromCall, applyAtCallSite, createCallSummaryResolver, createCallGraphLookup, summaryFromAnalysisResult } from '../../src/lineage/summaries.js';
+import { emptyFieldSummary, FieldIdentitySummaryCache, entryStateFromCall, applyAtCallSite, createCallSummaryResolver, createCallGraphLookup, summaryFromAnalysisResult, fieldSummaryEq } from '../../src/lineage/summaries.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
 import { buildCallGraph } from '../../src/ir/callgraph.js';
 
@@ -66,20 +66,146 @@ test('compute: past the per-function distinct-context cap, degrades to the empty
   assert.deepEqual([...result.returnFlat], ['data:base'], 'past the cap, the result must be the empty-entry-state summary, not empty/undefined');
 });
 
-test('compute: a recursive call (same qid already being analyzed) gets an immediate bottom-stub summary, not infinite recursion', () => {
+test('compute: a recursive call (same qid already being analyzed) gets an immediate bottom-stub summary on its FIRST occurrence, not infinite recursion', () => {
+  // Increment B5 correction: since B5's refinement loop legitimately
+  // re-invokes the SAME outer analyzeFn multiple times once recursion is
+  // detected, a nested self-call made on round 2+ now resolves against
+  // the PRIOR round's real, cached summary (see the `compute: self-
+  // recursion genuinely REFINES...` test below for why that's the actual
+  // point of this increment) rather than the bottom stub — only the
+  // FIRST time 'fn1' is encountered while still being analyzed (nothing
+  // cached for it yet) does the nested call hit the true recursion guard.
+  // This test now pins that FIRST-occurrence behavior specifically,
+  // using a per-round-varying return value (`data:outer${callCount}`) so
+  // the refinement loop genuinely runs multiple rounds — proving this
+  // property holds even once refinement is actively re-invoking
+  // analyzeFn, not just on a single, un-refined pass.
   const cache = new FieldIdentitySummaryCache();
   const state = emptyState();
-  let recursiveResult = null;
-  cache.compute('fn1', state, () => {
+  let firstRecursiveResult = null;
+  let callCount = 0;
+  cache.compute('fn1', state, function analyzeFn() {
+    callCount++;
     // Simulate fn1 calling itself recursively during its own analysis.
-    recursiveResult = cache.compute('fn1', state, () => {
+    // The inner analyzeFn passed here must NEVER actually run — on the
+    // first occurrence 'fn1' is still on `_stack` with nothing cached yet
+    // (recursion guard fires); on every later round 'fn1' already has a
+    // real cached summary (cache-hit fires first) — neither path ever
+    // reaches the point of invoking this inner function.
+    const recursiveResult = cache.compute('fn1', state, () => {
       throw new Error('must never reach here — this would be true unbounded recursion');
     });
-    return { ...emptyFieldSummary(), returnFlat: new Set(['data:outer']) };
+    if (firstRecursiveResult === null) firstRecursiveResult = recursiveResult;
+    return { ...emptyFieldSummary(), returnFlat: new Set([`data:outer${callCount}`]) };
   });
-  assert.ok(recursiveResult, 'the recursive inner compute() call must return SOMETHING, not throw or hang');
-  assert.equal(recursiveResult._recursive, true, 'the bottom-stub summary must be marked so a caller can tell it is an under-approximation');
-  assert.equal(recursiveResult.returnFlat.size, 0, 'the bottom stub carries no facts — B5 will refine this, not this increment');
+  assert.ok(firstRecursiveResult, 'the FIRST recursive self-call must return SOMETHING, not throw or hang');
+  assert.equal(firstRecursiveResult._recursive, true, 'the FIRST time recursion is detected, it must be marked as a bottom-stub under-approximation');
+  assert.equal(firstRecursiveResult.returnFlat.size, 0, 'the bottom stub carries no facts on its first occurrence');
+  assert.ok(callCount > 1, `sanity check: this scenario must actually trigger multiple refinement rounds (varying return value each round), not converge trivially after one pass; got ${callCount} call(s)`);
+});
+
+test('compute: self-recursion genuinely REFINES across bounded rounds — a self-referencing function\'s summary grows richer with each round instead of staying stuck at the first pass\'s bottom-stub-informed result (increment B5, corrected ordering)', () => {
+  // Models: function chain() { return { base: X, nested: chain() }; }
+  // Each round's own self-call should be able to fold the PRIOR round's
+  // real (already-cached) summary into a "nested:"-prefixed identity, so
+  // the summary genuinely grows round over round — this IS the actual
+  // value this increment is supposed to deliver. Empirically confirmed
+  // (see the Task 1 report's "Fix round" section): with the recursion
+  // guard checked before the cache-hit check (the prior, INCORRECT
+  // ordering), this scenario stayed permanently stuck at just
+  // {'data:base'} — refinement ran (multiple analyzeFn calls) but
+  // accomplished nothing, because every round's self-call kept hitting
+  // the bottom stub instead of the growing prior-round summary.
+  const cache = new FieldIdentitySummaryCache();
+  const state = emptyState();
+  let callCount = 0;
+  const analyzeFn = () => {
+    callCount++;
+    const selfSummary = cache.compute('chain', state, analyzeFn);
+    const result = new Set(['data:base']);
+    for (const id of selfSummary.returnFlat) result.add(`nested:${id}`);
+    return { ...emptyFieldSummary(), returnFlat: result };
+  };
+
+  const finalResult = cache.compute('chain', state, analyzeFn);
+
+  assert.ok(finalResult.returnFlat.size > 1, `a self-recursive function's summary must genuinely GROW across refinement rounds, not stay stuck at just the base fact; got ${[...finalResult.returnFlat]}`);
+  assert.ok(finalResult.returnFlat.has('data:base'), 'the base (non-recursive) contribution must always be present');
+  assert.ok(finalResult.returnFlat.has('nested:data:base'), 'at least one layer of the recursive self-reference\'s OWN identity must be folded in — proof the nested self-call resolved against a real prior-round summary, not the bottom stub, on at least one round');
+  assert.ok(callCount <= 4, `must still be BOUNDED (1 initial pass + FP_MAX=3 refinement rounds) even though it never truly converges (each round adds one more nesting layer); got ${callCount} calls`);
+  assert.equal(cache._stack.size, 0, 'the recursion guard stack must be fully unwound after compute() returns');
+});
+
+test('compute: recursion detected mid-analysis triggers a BOUNDED refinement loop — analyzeFn is re-invoked more than once, not just the initial pass (increment B5)', () => {
+  const cache = new FieldIdentitySummaryCache();
+  const state = emptyState();
+  let callCount = 0;
+  const analyzeFn = () => {
+    callCount++;
+    // fn1 "calls itself" during its own analysis — this is what sets
+    // _hitRecursion (via the nested compute() call hitting the existing
+    // _stack guard from increment B1).
+    cache.compute('fn1', state, analyzeFn);
+    // A different result each round (keyed off callCount) so this test
+    // isolates "does the loop re-invoke analyzeFn at all" from "does it
+    // correctly detect convergence" (Task 1's next test covers the latter).
+    return { ...emptyFieldSummary(), returnFlat: new Set([`data:round${callCount}`]) };
+  };
+
+  const result = cache.compute('fn1', state, analyzeFn);
+
+  assert.ok(callCount > 1, `analyzeFn must be re-invoked at least once beyond the initial pass when recursion was detected mid-analysis; got ${callCount} call(s)`);
+  assert.ok(callCount <= 4, `must be BOUNDED — 1 initial pass + at most FP_MAX=3 refinement rounds — got ${callCount} calls`);
+  assert.deepEqual([...result.returnFlat], [`data:round${callCount}`], 'the returned AND cached summary must reflect the LAST round actually computed, not the first');
+  assert.equal(cache._stack.size, 0, 'the recursion guard stack must be fully unwound after compute() returns, even after multiple refinement rounds');
+  assert.equal(cache.get('fn1', state).returnFlat.has(`data:round${callCount}`), true, 'the CACHED value (not just the returned one) must reflect the final round');
+});
+
+test('compute: refinement stops EARLY once the summary stops changing, not always running the full bound (increment B5)', () => {
+  const cache = new FieldIdentitySummaryCache();
+  const state = emptyState();
+  let callCount = 0;
+  const analyzeFn = () => {
+    callCount++;
+    cache.compute('fn1', state, analyzeFn);
+    // SAME result every round (independent of callCount and of the
+    // self-call's own — always-empty — contribution) — round 2 must be
+    // judged identical to round 1 and the loop must break immediately,
+    // not burn through all FP_MAX rounds needlessly.
+    return { ...emptyFieldSummary(), returnFlat: new Set(['data:stable']) };
+  };
+
+  cache.compute('fn1', state, analyzeFn);
+
+  assert.ok(callCount <= 2, `a stable (non-improving) recursive summary must converge almost immediately, not burn the full refinement budget; got ${callCount} calls`);
+});
+
+test('compute: a pathologically non-converging recursive summary is still BOUNDED by FP_MAX, never loops unboundedly (increment B5)', () => {
+  const cache = new FieldIdentitySummaryCache();
+  const state = emptyState();
+  let callCount = 0;
+  const analyzeFn = () => {
+    callCount++;
+    cache.compute('fn1', state, analyzeFn);
+    // A DIFFERENT identity every single round, forever — this can never
+    // converge. The loop must still terminate.
+    return { ...emptyFieldSummary(), returnFlat: new Set([`data:unique${callCount}`]) };
+  };
+
+  cache.compute('fn1', state, analyzeFn);
+
+  assert.ok(callCount <= 4, `must terminate within the bound (1 initial + FP_MAX=3) even when the summary never converges; got ${callCount} calls`);
+});
+
+test('fieldSummaryEq compares returnFlat and mutatedParams by MEMBERSHIP, not just size (regression for the exact bug class dataflow/summaries.js documents fixing — "Stage 3 correctness audit")', () => {
+  const a = { ...emptyFieldSummary(), returnFlat: new Set(['data:a']), mutatedParams: new Map([['x', new Set(['data:a'])]]) };
+  const b = { ...emptyFieldSummary(), returnFlat: new Set(['data:b']), mutatedParams: new Map([['x', new Set(['data:b'])]]) };
+  // Same CARDINALITY (1 identity in returnFlat, 1 mutated param with 1
+  // identity each) but DIFFERENT actual members — must be judged UNEQUAL.
+  assert.equal(fieldSummaryEq(a, b), false, 'same-size but different-membership summaries must NOT be judged equal');
+
+  const c = { ...emptyFieldSummary(), returnFlat: new Set(['data:a']), mutatedParams: new Map([['x', new Set(['data:a'])]]) };
+  assert.equal(fieldSummaryEq(a, c), true, 'genuinely identical summaries must be judged equal');
 });
 
 test('entryStateFromCall maps each call argument\'s resolved identities onto the corresponding parameter name', () => {
