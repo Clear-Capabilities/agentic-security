@@ -170,7 +170,7 @@ export function analyzeFunctionFieldIdentity(fn, entryState) {
   const inStates = new Map([[fn.cfg.entry, entryState]]);
   const outStates = new Map();
   const widenings = [];
-  const returnFacts = [];
+  const returnFactsByNode = new Map();
   let iterations = 0;
 
   while (work.length) {
@@ -181,7 +181,17 @@ export function analyzeFunctionFieldIdentity(fn, entryState) {
     const incoming = inStates.get(nid) ?? emptyState();
     const { state: out, returnFact } = step(node, incoming, widenings);
     if (returnFact && returnFact.size > 0) {
-      returnFacts.push({ nodeId: nid, line: node.line, identities: returnFact });
+      // Union onto any existing fact for this node rather than pushing a
+      // new array entry every visit — see Fix 2 in the final whole-branch
+      // review: a `return` node revisited by the worklist (its incoming
+      // join hadn't settled on an earlier visit) used to produce a second,
+      // stale, strictly-weaker entry for the same nodeId/line. A consumer
+      // doing `returnFacts.find(f => f.nodeId === X)` would silently get
+      // the wrong, under-approximating answer. Mirrors how outStates/
+      // inStates already union via joinStates below.
+      const existing = returnFactsByNode.get(nid);
+      const identities = existing ? new Set([...existing.identities, ...returnFact]) : new Set(returnFact);
+      returnFactsByNode.set(nid, { line: node.line, identities });
     }
 
     const prevOut = outStates.get(nid);
@@ -198,6 +208,9 @@ export function analyzeFunctionFieldIdentity(fn, entryState) {
       }
     }
   }
+
+  const returnFacts = [...returnFactsByNode.entries()]
+    .map(([nodeId, fact]) => ({ nodeId, line: fact.line, identities: fact.identities }));
 
   const exitState = outStates.get(fn.cfg.exit) ?? emptyState();
   const mutatedParams = new Map();

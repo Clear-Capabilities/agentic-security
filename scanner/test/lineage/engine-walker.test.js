@@ -154,6 +154,46 @@ test('FR-301 regression (final whole-branch review counter-example): a field rea
     'justEmail must carry ONLY data:email — data:ssn must never leak in via rec');
 });
 
+test('returnFacts deduplicates a revisited return node instead of pushing a stale duplicate entry (Fix 2 regression)', () => {
+  // A diamond CFG where the join node (n4, the return) is reached by the
+  // worklist BEFORE both of its predecessors have contributed their state,
+  // forcing at least one revisit before the incoming join settles:
+  //
+  //   n0 (entry) -> n1 (if)
+  //   n1 -> n2 (assign x = user.email) -> n4 (return x)
+  //   n1 -> n3 (assign x = user.ssn)   -> n4 (return x)
+  //
+  // n4's succ list is ordered so its FIRST predecessor to reach it (n2) is
+  // processed, queuing n4; n4 runs and records a returnFact carrying only
+  // data:email (n3 hasn't run yet). n3 then runs, joins into n4's inState,
+  // and re-queues n4 — a genuine revisit. Before Fix 2, this produced TWO
+  // entries in returnFacts for the same nodeId, the first stale and missing
+  // data:ssn.
+  const fn = {
+    params: ['user'],
+    cfg: {
+      entry: 'n0', exit: 'n5',
+      nodes: {
+        n0: { kind: 'entry', line: 1, succ: ['n1'], pred: [] },
+        n1: { kind: 'if', line: 1, succ: ['n2', 'n3'], pred: ['n0'], cond: { kind: 'ident', name: 'flag' } },
+        n2: { kind: 'assign', line: 2, succ: ['n4'], pred: ['n1'],
+          target: 'x', source: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'email' } },
+        n3: { kind: 'assign', line: 3, succ: ['n4'], pred: ['n1'],
+          target: 'x', source: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'ssn' } },
+        n4: { kind: 'return', line: 4, succ: ['n5'], pred: ['n2', 'n3'], value: { kind: 'ident', name: 'x' } },
+        n5: { kind: 'exit', line: 4, succ: [], pred: ['n4'] },
+      },
+    },
+  };
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  const factsForN4 = result.returnFacts.filter(f => f.nodeId === 'n4');
+  assert.equal(factsForN4.length, 1, 'exactly one returnFacts entry for the revisited return node, not a stale duplicate');
+  assert.deepEqual([...factsForN4[0].identities].sort(), ['data:email', 'data:ssn'],
+    'the single entry must carry the UNION of every branch, not just whichever branch happened to reach the node first');
+});
+
 test('a simple loop back-edge converges (does not infinite-loop) and preserves the identity carried around it', () => {
   // function f(user) { let x = user.email; while (cond) { } return x; }
   // (loop body doesn't touch x — this just proves the worklist terminates on a back-edge)
