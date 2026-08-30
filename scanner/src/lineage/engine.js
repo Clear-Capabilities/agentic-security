@@ -26,6 +26,37 @@ function residualFlat(flat, byPath) {
   return residual;
 }
 
+// Round 6 finding: round 5's wildcard guards (`path === '*' ||
+// path.endsWith('.*')`) only recognized a TRAILING wildcard segment. A
+// wildcard segment can also appear in the MIDDLE of a path — `store[k].name`
+// lowers to the access path `store.*.name` (accessPathOf's own, pre-existing
+// convention for a statically-unknown computed key), which is neither
+// exactly '*' nor ending in '.*', so it fell through to the OLD, unfixed
+// strong-update/silent-drop behavior — round 5's own bug recurring one path
+// segment deeper. These two helpers generalize both the selection-side
+// (`member`) and write-out-side (`assign`) guards to be position-
+// independent: any '*' segment anywhere in the path, not just a trailing
+// one.
+//
+// Finds the longest DEFINITE (wildcard-free) prefix of `path` before its
+// first '*' segment — e.g. 'store.*.name' -> 'store', 'bag.*' -> 'bag',
+// '*' -> null (no definite prefix at all), 'a.b.c' -> null (no wildcard
+// present, caller should not treat this as a wildcard path in the first
+// place). This subsumes round 5's trailing-only `endsWith('.*')` handling
+// as a special case ('bag.*' through this function gives the same 'bag'
+// round 5's `slice(0, -2)` gave) while also correctly handling an INTERIOR
+// wildcard, which round 5 missed.
+function definitePrefixBeforeWildcard(path) {
+  const segments = path.split('.');
+  const idx = segments.indexOf('*');
+  if (idx <= 0) return null; // no wildcard present, or '*' is the very first segment (no definite prefix)
+  return segments.slice(0, idx).join('.');
+}
+
+function pathHasWildcard(path) {
+  return path.split('.').includes('*');
+}
+
 export function resolveExprIdentities(state, expr) {
   if (!expr) return noIdentity();
 
@@ -48,16 +79,19 @@ export function resolveExprIdentities(state, expr) {
     case 'member': {
       const path = accessPathOf(expr);
       if (path) {
-        if (path === '*' || path.endsWith('.*')) {
+        if (pathHasWildcard(path)) {
           // A computed member access with a statically-unknown key (`obj[k]`) —
           // we don't know WHICH field is being read, so conservatively resolve
-          // the WHOLE base object's aggregate identity (identitiesAt's existing
+          // the definite prefix's aggregate identity (identitiesAt's existing
           // descendant aggregation, from round 2, already does exactly this
-          // when queried at the base's own path) and flag it widened, per
+          // when queried at that prefix path) and flag it widened, per
           // DESIGN_INTRAPROCEDURAL.md §4's dynamic-property-key example. Never
           // silently drop it (FR-306's "never launder identity into a clean
-          // value" principle) — see the round-5 re-review that found this gap.
-          const basePath = path === '*' ? null : path.slice(0, -2);
+          // value" principle) — see the round-5 re-review that found this gap,
+          // and round 6's generalization to an INTERIOR wildcard (e.g.
+          // 'store.*.name' from `store[k].name`), which round 5's
+          // trailing-only check missed.
+          const basePath = definitePrefixBeforeWildcard(path);
           const flat = basePath ? identitiesAt(state, basePath) : new Set();
           return { flat, byPath: new Map(), widened: flat.size > 0 };
         }
@@ -268,15 +302,19 @@ function step(node, stateIn, widenings) {
         return { state: stateIn, returnFact: null };
       }
       const resolved = resolveExprIdentities(stateIn, node.source);
-      if (node.target === '*' || node.target.endsWith('.*')) {
+      if (pathHasWildcard(node.target)) {
         // A computed-key write (`obj[k] = ...`) must be a WEAK update (add to
         // whatever the container already carries, never clear it first) — a
         // strong update here would treat two genuinely different (but
         // statically indistinguishable) write locations as the same location,
         // silently deleting an earlier write. scanner/src/dataflow/engine.js's
         // `_addPathAliasAware` already established this exact precedent for
-        // the sibling taint engine; this mirrors it.
-        const containerPath = node.target === '*' ? null : node.target.slice(0, -2);
+        // the sibling taint engine; this mirrors it. Round 6: generalized to
+        // an INTERIOR wildcard too (e.g. 'store.*.name' from
+        // `store[k].name = ...`) — round 5's trailing-only check
+        // (`endsWith('.*')`) let this fall through to a strong update one
+        // path segment deeper, recreating round 5's own bug.
+        const containerPath = definitePrefixBeforeWildcard(node.target);
         let wState = stateIn;
         if (containerPath) {
           const allIds = new Set([...residualFlat(resolved.flat, resolved.byPath), ...[...resolved.byPath.values()].flatMap((s) => [...s])]);

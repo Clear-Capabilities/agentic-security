@@ -320,3 +320,64 @@ test('destructuring with a computed key does not fabricate a colliding key from 
   assert.deepEqual([...result.returnFacts[0].identities], ['data:email'],
     'a computed destructuring key must conservatively widen to the base object\'s aggregate identity, never silently drop it');
 });
+
+// Round 6, Finding 2: round 5's wildcard guards (`path === '*' ||
+// path.endsWith('.*')`) only recognized a TRAILING wildcard segment.
+// `store[k1].name`/`store[k2].name` both lower to the access path
+// `store.*.name` (the '*' is INTERIOR, not trailing) — `endsWith('.*')` is
+// false for this string, so pre-fix it fell through to the OLD, unfixed
+// strong-update behavior: the second assign's `removeIdentitiesAt`
+// silently deleted the first write's identity. The generalized
+// `definitePrefixBeforeWildcard`/`pathHasWildcard` helpers fix this by
+// finding the wildcard at ANY position, not just the end.
+test('an interior wildcard write (obj[k].field = ...) accumulates instead of overwriting a prior write through a different unknown key (regression for a round-6 finding)', () => {
+  const src = `
+    function f(user, other) {
+      store[k1].name = user.email;
+      store[k2].name = user.ssn;
+      return store;
+    }
+  `;
+  const fn = parseFn(src, 'f');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn'],
+    'the second interior-wildcard write must not have deleted the first (pre-fix bug returned only data:ssn)');
+});
+
+test('an interior wildcard read (obj.a.field after obj[k].field = ...) conservatively resolves via the definite prefix, does not silently drop the identity', () => {
+  const src = `
+    function f(user) {
+      store[k].name = user.ssn;
+      return store.a.name;
+    }
+  `;
+  const fn = parseFn(src, 'f');
+  const entryState = addIdentity(emptyState(), 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:ssn'],
+    'a read through an interior wildcard must conservatively resolve via the definite prefix ("store"), not silently return nothing (pre-fix bug returned [])');
+});
+
+test('the trailing-wildcard case from round 5 still works after generalizing to position-independence (no regression)', () => {
+  const src = `
+    function f(user, other) {
+      bag[k1] = user.email;
+      bag[k2] = user.ssn;
+      return bag;
+    }
+  `;
+  const fn = parseFn(src, 'f');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn'],
+    'the trailing-wildcard case round 5 already fixed must keep working after generalizing the guard to be position-independent');
+});
