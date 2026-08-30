@@ -250,7 +250,10 @@ checked against this invariant whenever the switch changes.
 
 - **Structure-preserving** — its result could genuinely BE an existing
   structured value from `state`, by reference/selection, not by computing
-  something new. Must forward `byPath`: `ident`/`member` (round 2),
+  something new. Must forward `byPath`: `ident` (round 2), `member`
+  (round 2 for the case where its base is a pure ident/member chain
+  resolvable via `accessPathOf`; round 4 added a second path — see below —
+  for when the base is NOT a pure chain, e.g. `(user ?? other).email`),
   `object` (constructs new structure directly; round 1/2), `union`
   (selects one branch verbatim; round 3), `logical` (short-circuit
   evaluation can return an operand verbatim; round 3), `assign-expr`
@@ -261,12 +264,71 @@ checked against this invariant whenever the switch changes.
   new string, primitivizing whatever's interpolated), `binary` (arithmetic/
   comparison operators always produce a new primitive — this is why
   `binary` and `logical` are split into separate cases as of round 3, not
-  shared), `array` (this IR has no index-sensitive access paths, so arrays
-  cannot preserve per-element structure — a deliberate, already-documented
-  limitation, not a bug), `call` (an unresolved call's return value is
-  genuinely UNKNOWN structure — correctly flat + `widened: true`, honestly
-  modeling "we don't know," not laundering an identity), `unknown`/default
-  (nothing to preserve).
+  shared), `array` (this IR's parser transparently unwraps `SpreadElement`
+  — see `scanner/src/ir/parser-js.js`'s `exprOf`'s `SpreadElement` case —
+  so `[...xs, user]` and `[xs, user]` are byte-identical in the IR; naive
+  per-index attribution would actively MISATTRIBUTE a spread source's
+  contents to a literal index, which is worse than staying uniformly flat.
+  This is corrected from an earlier, factually false version of this
+  rationale — "no index-sensitive access paths" — which round 4's review
+  found untrue: `accessPathOf`/the parser's `exprOf`/`lhsPath` DO extract
+  literal computed keys and can build paths like `arr.0`. The spread
+  ambiguity, not a missing capability, is the real reason to stay flat.
+  Fixing this properly would require the parser to distinguish spread
+  elements from literal elements first — out of scope for this plan),
+  `call` (an unresolved call's return value is genuinely UNKNOWN structure
+  — correctly flat + `widened: true`, honestly modeling "we don't know,"
+  not laundering an identity), `unknown`/default (nothing to preserve).
+
+### The three hop types the invariant covers (round 4 — broadens the invariant beyond `resolveExprIdentities`'s own switch)
+
+A fourth re-review found the invariant as stated through round 3 was
+itself scoped too narrowly: it only asked "which `resolveExprIdentities`
+switch cases PRODUCE `byPath`," which is exactly the round-1-through-3
+bug class, but misses two other places structure is lost that are not
+about which case *produces* `byPath` at all.
+
+- **Production** — a switch case building a value's structure. This is
+  rounds 1-3's fixes, and the category the "structure-preserving vs.
+  structure-flattening" list above documents.
+- **Selection** — reading a field off an already-produced structured
+  value. Round 3 taught `union`/`logical`/`object`/`assign-expr` to
+  correctly report their structure via `byPath` when RESOLVED AS A WHOLE
+  (e.g. `const c = user ?? other; return c.email;` correctly resolves to
+  `[email]`), but the pre-round-3 `member` case resolved its base only via
+  `accessPathOf`, which returns `null` for anything that isn't a pure
+  ident/member chain — so `member` fell into `noIdentity()` and silently
+  DROPPED the identity the moment the exact same value was read directly,
+  with no intermediate variable: `return (user ?? other).email;` returned
+  `[]`. Same semantics, two syntactic forms, two different (and one
+  wrong) answers — the same tell every prior round used to find its bug.
+  Fixed by giving `member` a second resolution path, alongside its
+  existing `accessPathOf`-based one, that resolves the base recursively
+  and selects `prop` out of the base's `byPath` — the read-side mirror of
+  how `object`'s construction attributes a property to its own key.
+- **Write-out** — writing a resolved value to a target path that must
+  itself be a valid, non-fabricated path. `step()`'s `assign` case passed
+  `node.target` straight through to `removeIdentitiesAt`/`addIdentity`
+  with no guard that it was actually a string path. Assignment-expression-
+  form destructuring (`({a} = obj)`, lowered by the real parser into one
+  `assign` CFG node whose `target` is the raw pattern object, not a
+  string) implicitly stringified to the literal string `"[object Object]"`
+  — every such destructuring anywhere in a function collided onto this
+  one fabricated key, silently merging fields from unrelated statements.
+  Fixed by guarding `node.target` to be a string before writing anything
+  (skip rather than fabricate a key), matching a precedent already
+  established in the sibling taint engine (`scanner/src/dataflow/
+  engine.js`'s own `assign` case) that this package had not inherited.
+
+**The general rule going forward:** a structured value's `byPath` must
+survive every hop it passes through — anywhere structure is built,
+selected out of, or written to a target — losing it (via an empty
+fallback, a fabricated key, or a coarse merge) at ANY of these three hop
+types is this bug class, regardless of which specific construct triggers
+it. Checking only "does this switch case forward `byPath`" (round 3's own
+framing) is necessary but not sufficient — selection sites outside the
+switch's own recursive calls, and write-out sites in `step()`, must be
+checked too.
 
 ## 4. Per-construct handling (JS/TS, this plan's scope)
 
@@ -292,16 +354,32 @@ checked against this invariant whenever the switch changes.
   (`target = someOtherRef`) — see §3's "The residual principle" note —
   since round 2 made `resolveExprIdentities` report `byPath` structure
   for those references too, not just for object literals.
-- **Array literals**: flattened, no index sensitivity — matches
-  `access-paths.js`'s own documented limitation (no `[i]`/`[*]` support;
-  "index sensitivity is a follow-on"). An array carrying two different
+- **Array literals**: flattened, no index sensitivity. **Not** because this
+  IR lacks index-sensitive access paths — round 4's review found that
+  claim false: `accessPathOf`/the parser's `exprOf`/`lhsPath` DO extract
+  literal computed keys for both reads and writes, and paths like `arr.0`
+  are buildable. The real reason: the parser transparently unwraps
+  `SpreadElement` (`scanner/src/ir/parser-js.js`'s `exprOf`'s
+  `SpreadElement` case), so `[...xs, user]` and `[xs, user]` are
+  byte-identical in the IR — naive per-index attribution would actively
+  MISATTRIBUTE a spread source's contents to a literal index, which is
+  worse than staying uniformly flat. An array carrying two different
   fields at two different indices is not distinguishable in this slice;
   this is an accepted, documented limitation, not silently wrong (every
   element's identities are still recorded, just flattened into one bag
-  rather than per-index).
-- **Member access** (property read): resolves via `accessPathOf` +
-  `identitiesAt` — no new logic needed, this is what those functions exist
-  for.
+  rather than per-index). Fixing this properly would require the parser
+  to distinguish spread elements from literal elements first — out of
+  scope for this plan.
+- **Member access** (property read): when the whole `object.prop...` chain
+  is a pure ident/member chain, resolves via `accessPathOf` + `identitiesAt`
+  — no new logic needed, this is what those functions exist for. When the
+  base is NOT a pure chain (a ternary, a logical expression, an object
+  literal, an assign-expr, a call — anything `accessPathOf` returns `null`
+  for), round 4 added a fallback: resolve the base recursively and SELECT
+  `prop` out of the base's `byPath` (plus its residual), so reading a field
+  directly off one of these constructs gives the same answer as going
+  through an intermediate variable first. See the "three hop types" note
+  above (the "selection" hop) for the full story.
 - **Template literals and string concatenation (`binary`/`logical` with
   string operators, `tpl` interpolation)**: DO propagate identity normally
   (not flagged as widened/implicit). Rationale: the underlying value is
