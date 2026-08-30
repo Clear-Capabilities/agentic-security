@@ -413,6 +413,74 @@ modeled unknown (`'*'`), and every kill (`removeIdentitiesAt`) must be
 justified as a strong update on a definite, uniquely-identified location —
 a write to an unknown/aliased location must be a weak update instead.
 
+### Two under-enforcements of the round-5 invariant (round 6 — the invariant itself was correct, its application wasn't complete)
+
+A sixth re-review found the round-5 invariant CORRECT but under-enforced in
+two places, both fixed together.
+
+**Finding 1 — destructuring keys had the same computed-key bug round 5
+fixed for object literals.** Round 5 fixed `parser-js.js`'s
+`ObjectExpression` handling (production, for `{[k]: v}`) but never touched
+`lhsPath`'s `ObjectPattern` branch — the DESTRUCTURING-pattern lowering, a
+different code path in the same file, used for `const {[field]: value} =
+user`. It had the identical bug: a non-literal computed key resolved to the
+key EXPRESSION's own variable name instead of `'*'`, so `const { [field]:
+value } = user; return value;` silently dropped `value`'s identity
+entirely (`returnFacts: []`) — the equivalent `return user[field]` already
+widened correctly per round 5's fix.
+
+Fixed by extracting the shared `resolveObjectKey(p)` helper from
+`ObjectExpression`'s already-fixed logic and calling it from both sites, so
+a third instance of this exact bug class can't appear in some future
+object-key-reading code path in this file.
+
+**Finding 2 — the round-5 wildcard guards only handled a TRAILING `'*'`,
+not an INTERIOR one.** Round 5's guards in `engine.js` (`path === '*' ||
+path.endsWith('.*')` on the selection side; `node.target === '*' ||
+node.target.endsWith('.*')` on the write-out side) only recognized a
+wildcard segment at the very end of a path. A wildcard can appear in the
+MIDDLE too: `store[k1].name`/`store[k2].name` both lower to the identical
+access path `'store.*.name'` (the `'*'` is interior, not trailing) —
+`endsWith('.*')` is false for this string, so it fell through to the OLD,
+unfixed strong-update/silent-drop behavior. This is round 5's own bug (b)
+recurring one path segment deeper: the second assign's
+`removeIdentitiesAt(state, 'store.*.name')` deleted the first write's
+identity, and the read-side equivalent (`store[k].name = user.ssn; return
+store.a.name;`) silently returned `[]` instead of conservatively resolving
+via the definite prefix.
+
+Fixed by replacing both position-dependent checks with two new shared
+helpers in `engine.js`, `definitePrefixBeforeWildcard(path)` and
+`pathHasWildcard(path)` — the former finds the longest wildcard-free prefix
+of a path before its FIRST `'*'` segment, at any position, subsuming round
+5's trailing-only handling as a special case (`'bag.*'` still resolves to
+`'bag'`, exactly as before) while also correctly handling an interior one
+(`'store.*.name'` now resolves to `'store'`, not falling through
+unguarded).
+
+`member`'s non-path fallback branch (round 4, for when `accessPathOf`
+returns `null` because the base isn't a pure ident/member chain) needed no
+change: it never constructs or parses a dotted path string in the first
+place — it resolves the base recursively via the expression tree, and each
+recursive call independently checks its own single-segment `expr.prop ===
+'*'`. An "interior" wildcard in this branch's terms is just an outer
+`member` node whose base (a nested `member`) itself has `prop === '*'` —
+already handled by that same check firing one recursion level in, with no
+path-string parsing involved at any level.
+
+**Deferred, not fixed this round (Finding 3 from the same re-review):** a
+widening event recorded by `assign`/`return`'s widening-push always uses
+the hardcoded reason string `'unresolved-call'`, even when the actual
+cause was a dynamic property key (`'dynamic-property-key'` is used
+correctly at the `assign` case's own `'*'`-target weak-update branch, but
+NOT at the general `resolved.widened` push a few lines below it, which
+covers e.g. a `return`-side dynamic-key read). This is Minor and
+soundness-unaffected — the identity SETS themselves are correct either
+way, only the stated cause in the widening ledger can be wrong — and is
+left as a documented follow-up: a real fix would require threading a
+reason string through `resolveExprIdentities`'s return shape more broadly
+than this round's scope covers.
+
 ## 4. Per-construct handling (JS/TS, this plan's scope)
 
 - **Assignment** (`target: string`, `source: exprDesc`): resolve `source`'s
