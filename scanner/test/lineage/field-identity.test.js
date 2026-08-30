@@ -24,18 +24,34 @@ test('an ancestor path\'s identity is visible when querying a descendant path', 
   assert.deepEqual([...identitiesAt(s, 'user.email')], ['data:whole-object']);
 });
 
-test('a descendant path\'s identity is NOT visible when querying its ancestor', () => {
+test('a descendant path\'s identity IS visible when querying its ancestor (whole-container reads aggregate every field)', () => {
   const s = addIdentity(emptyState(), 'user.email', 'data:email');
-  assert.equal(identitiesAt(s, 'user').size, 0);
+  assert.deepEqual([...identitiesAt(s, 'user')], ['data:email']);
 });
 
-test('two distinct fields on the same object coexist without merging (FR-301 core case)', () => {
+test('two distinct fields on the same object coexist without merging, and querying either field individually never sees the other (FR-301 core case)', () => {
   let s = emptyState();
   s = addIdentity(s, 'combined.email', 'data:email');
   s = addIdentity(s, 'combined.ssn', 'data:ssn');
   assert.deepEqual([...identitiesAt(s, 'combined.email')], ['data:email']);
   assert.deepEqual([...identitiesAt(s, 'combined.ssn')], ['data:ssn']);
-  assert.equal(identitiesAt(s, 'combined').size, 0, 'no identity was ever recorded at the object root itself');
+  assert.deepEqual([...identitiesAt(s, 'combined')].sort(), ['data:email', 'data:ssn'],
+    'querying the container as a whole aggregates every field recorded under it');
+});
+
+test('two distinct fields recorded via byPath-only writes remain isolated from each other when queried individually (FR-301, no coarse root entry)', () => {
+  let s = emptyState();
+  s = addIdentity(s, 'rec.email', 'data:email');
+  s = addIdentity(s, 'rec.ssn', 'data:ssn');
+  assert.deepEqual([...identitiesAt(s, 'rec.email')], ['data:email']);
+  assert.deepEqual([...identitiesAt(s, 'rec.ssn')], ['data:ssn']);
+});
+
+test('querying the container as a whole aggregates every field recorded under it', () => {
+  let s = emptyState();
+  s = addIdentity(s, 'rec.email', 'data:email');
+  s = addIdentity(s, 'rec.ssn', 'data:ssn');
+  assert.deepEqual([...identitiesAt(s, 'rec')].sort(), ['data:email', 'data:ssn']);
 });
 
 test('removeIdentitiesAt clears the exact path and every descendant, leaving unrelated paths untouched', () => {

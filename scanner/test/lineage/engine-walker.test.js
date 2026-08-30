@@ -111,6 +111,49 @@ test('an unresolved call\'s widening event is recorded, not silently dropped', (
   assert.deepEqual(result.widenings[0].dataElementIds, ['data:x']);
 });
 
+test('FR-301 regression (final whole-branch review counter-example): a field read back off an object literal built via an intermediate variable carries ONLY its own identity, never a sibling field\'s', () => {
+  // function f(user) {
+  //   const rec = { email: user.email, ssn: user.ssn };
+  //   const justEmail = rec.email;
+  //   return justEmail;
+  // }
+  //
+  // This is the exact shape that slipped past every individual task review:
+  // the object-literal `assign` used to also write the FLAT UNION of
+  // {email, ssn} at `rec`'s own path (the bug), which then leaked back into
+  // `rec.email` via the (then one-directional) ancestor-coverage rule in
+  // identitiesAt. Must fail against the pre-fix `assign` case (flat-union
+  // write at the container's own path) and pass against the fix.
+  const fn = {
+    params: ['user'],
+    cfg: {
+      entry: 'n0', exit: 'n4',
+      nodes: {
+        n0: { kind: 'entry', line: 1, succ: ['n1'], pred: [] },
+        n1: { kind: 'assign', line: 2, succ: ['n2'], pred: ['n0'],
+          target: 'rec',
+          source: {
+            kind: 'object',
+            props: [
+              { key: 'email', value: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'email' } },
+              { key: 'ssn', value: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'ssn' } },
+            ],
+          } },
+        n2: { kind: 'assign', line: 3, succ: ['n3'], pred: ['n1'],
+          target: 'justEmail', source: { kind: 'member', object: { kind: 'ident', name: 'rec' }, prop: 'email' } },
+        n3: { kind: 'return', line: 4, succ: ['n4'], pred: ['n2'], value: { kind: 'ident', name: 'justEmail' } },
+        n4: { kind: 'exit', line: 4, succ: [], pred: ['n3'] },
+      },
+    },
+  };
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email'],
+    'justEmail must carry ONLY data:email — data:ssn must never leak in via rec');
+});
+
 test('a simple loop back-edge converges (does not infinite-loop) and preserves the identity carried around it', () => {
   // function f(user) { let x = user.email; while (cond) { } return x; }
   // (loop body doesn't touch x — this just proves the worklist terminates on a back-edge)

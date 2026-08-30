@@ -1,4 +1,4 @@
-import { accessPathOf, pathIsCoveredByPrefix } from '../dataflow/access-paths.js';
+import { accessPathOf } from '../dataflow/access-paths.js';
 import { identitiesAt, emptyState, removeIdentitiesAt, addIdentity, joinStates, statesEqual } from './field-identity.js';
 
 function noIdentity() {
@@ -101,9 +101,21 @@ function step(node, stateIn, widenings) {
     case 'assign': {
       const resolved = resolveExprIdentities(stateIn, node.source);
       let state = removeIdentitiesAt(stateIn, node.target);
-      for (const id of resolved.flat) state = addIdentity(state, node.target, id);
-      for (const [subPath, ids] of resolved.byPath) {
-        for (const id of ids) state = addIdentity(state, `${node.target}.${subPath}`, id);
+      // A source with a byPath breakdown (an object-literal RHS) writes ONLY
+      // the per-field entries — see DESIGN_INTRAPROCEDURAL.md §3's "Corrected
+      // design" note. Writing the flat union at the container's own path too
+      // would re-merge distinct fields (FR-301's violation), and is no longer
+      // needed: identitiesAt now aggregates descendants when the container is
+      // queried as a whole (e.g. `return rec`), so per-field writes alone
+      // answer both "give me this exact field" and "give me the whole object".
+      // A source with no byPath breakdown (a plain value, e.g. `user.email`)
+      // is unaffected and still writes `flat` at `target` exactly as before.
+      if (resolved.byPath.size > 0) {
+        for (const [subPath, ids] of resolved.byPath) {
+          for (const id of ids) state = addIdentity(state, `${node.target}.${subPath}`, id);
+        }
+      } else {
+        for (const id of resolved.flat) state = addIdentity(state, node.target, id);
       }
       if (resolved.widened && resolved.flat.size > 0) {
         widenings.push({ atPath: node.target, dataElementIds: [...resolved.flat], reason: 'unresolved-call', line: node.line });
@@ -190,26 +202,21 @@ export function analyzeFunctionFieldIdentity(fn, entryState) {
   const exitState = outStates.get(fn.cfg.exit) ?? emptyState();
   const mutatedParams = new Map();
   for (const param of fn.params) {
-    // NOT identitiesAt(exitState, param): identitiesAt(state, path) answers
-    // "what identity covers THIS path" by looking at path itself plus any
-    // ANCESTOR entry in state (a shorter prefix that covers it) — e.g. if
-    // the whole `user` object were tainted, identitiesAt(state, 'user.email')
-    // would correctly inherit it. That is the wrong direction here: a param
-    // is "mutated" when the function body wrote an identity onto the
-    // param's OWN path or any DESCENDANT of it (`target.copiedEmail = ...`
-    // must be attributed to `target`), which is the reverse traversal.
-    // identitiesAt(exitState, 'target') would miss `target.copiedEmail`
-    // entirely — confirmed empirically: running the brief's literal code
-    // against the "mutatedParams" test below threw immediately
-    // (`mutatedParams.get('target')` was undefined, not an iterable Set)
-    // because identitiesAt never looked downward from 'target' into
-    // 'target.copiedEmail'.
-    const ids = new Set();
-    for (const [candidatePath, candidateIds] of exitState) {
-      if (candidatePath === param || pathIsCoveredByPrefix(candidatePath, param)) {
-        for (const id of candidateIds) ids.add(id);
-      }
-    }
+    // identitiesAt now aggregates both ancestor coverage AND descendant
+    // coverage (see field-identity.js), so this correctly reports every
+    // identity recorded on the param's own path or any field under it —
+    // e.g. `target.copiedEmail = user.email` is attributed to `target`.
+    //
+    // NOTE — this is sound but NOT "write-only": if the param's entry-state
+    // facts were never touched at all (a purely read-only param), those
+    // original facts still survive unchanged into exitState and are
+    // reported here too. `mutatedParams` means "what this param carries at
+    // function exit" (a safe over-approximation a caller can rely on never
+    // under-reporting), not "was this param's value replaced by an
+    // assignment." Do not rename this without checking every consumer's
+    // expectations first — Sub-project B is the intended reader of this
+    // exact contract.
+    const ids = identitiesAt(exitState, param);
     if (ids.size > 0) mutatedParams.set(param, ids);
   }
 
