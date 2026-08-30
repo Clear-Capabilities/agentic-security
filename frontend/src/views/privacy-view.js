@@ -61,6 +61,7 @@ export function renderPrivacyView(viewModel, canvasEl, onSelectFlow) {
 
   const headerRow = el('tr', {}, [
     el('th', {}, 'Field'),
+    el('th', {}, 'Protection'),
     ...viewModel.stages.map((stage) => el('th', {}, stage.charAt(0).toUpperCase() + stage.slice(1))),
   ]);
 
@@ -82,6 +83,13 @@ function renderPrivacyRow(row, onSelectFlow) {
     row.isAiRelevant ? el('span', { class: 'privacy-governance-badge', style: 'border-color: var(--context-ai); color: var(--context-ai)' }, 'AI processing') : null,
   ]);
 
+  const visual = protectionVisual(row.protectionSummary);
+  const protectionCell = el(
+    'td',
+    { class: 'privacy-protection-cell' },
+    el('span', { style: `border-color: var(${visual.colorVar}); color: var(${visual.colorVar})` }, `${visual.glyph} ${visual.label}`),
+  );
+
   const stageCells = row.stageCells.map((cell) => renderStageCell(cell, row));
 
   return el(
@@ -101,19 +109,24 @@ function renderPrivacyRow(row, onSelectFlow) {
         }
       },
     },
-    [fieldCell, ...stageCells],
+    [fieldCell, protectionCell, ...stageCells],
   );
 }
 
 function renderStageCell(cell, row) {
-  if (cell.nodeLabels.length === 0) {
-    return el('td', { class: 'privacy-stage-cell privacy-stage-cell-empty' }, '—');
+  const children = [];
+  if (cell.nodeLabels.length > 0) {
+    children.push(el('div', {}, cell.nodeLabels.join(', ')));
+  } else {
+    children.push(el('div', { class: 'privacy-stage-cell-empty-label' }, '—'));
   }
-  const children = [el('div', {}, cell.nodeLabels.join(', '))];
 
   // Governance facts are shown once, on whichever stage cell is the most
   // relevant home for them — sharing (recipient/purpose/lawfulBasis/transfer)
-  // or retention/deletion — rather than repeating them on every cell.
+  // or retention/deletion — rather than repeating them on every cell. This
+  // loop runs unconditionally (independent of whether nodeLabels is empty)
+  // so a fact like deletion:not_found is never structurally unreachable just
+  // because a flow's path happens not to touch a deletion-stage node.
   const governanceKeysForStage = {
     sharing: ['recipient', 'purpose', 'lawfulBasis', 'transfer'],
     retention: ['retention'],
@@ -127,10 +140,5 @@ function renderStageCell(cell, row) {
     }
   }
 
-  if (cell.stage === 'sharing' && row.protectionSummary) {
-    const visual = protectionVisual(row.protectionSummary === 'unknown' ? 'unknown' : row.protectionSummary);
-    children.push(el('div', { class: 'privacy-governance-badge', style: `border-color: var(${visual.colorVar}); color: var(${visual.colorVar})` }, `${visual.glyph} ${visual.label}`));
-  }
-
-  return el('td', { class: 'privacy-stage-cell' }, children);
+  return el('td', { class: cell.nodeLabels.length === 0 ? 'privacy-stage-cell privacy-stage-cell-empty' : 'privacy-stage-cell' }, children);
 }

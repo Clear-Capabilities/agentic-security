@@ -56,6 +56,16 @@
   color: var(--border-default);
 }
 
+.privacy-stage-cell-empty-label {
+  color: inherit;
+}
+
+.privacy-protection-cell {
+  padding: var(--space-1) var(--space-2);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
 .privacy-governance-badge {
   display: inline-block;
   border: 1px solid var(--status-unknown);
