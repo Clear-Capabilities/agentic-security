@@ -525,8 +525,11 @@ than this round's scope covers.
   literal) and `const {...rest} = user` (object rest in a destructuring
   pattern) were previously silently dropped entirely by the parser —
   confirmed pre-existing since `scanner/src/ir/parser-js.js`'s first
-  commit. Both are now fixed via orthogonal parser changes (shared
-  utilities, zero engine changes required):
+  commit. Both are now fixed — a parser change for each, plus one small
+  new branch in this package's own `engine.js` for the spread case (the
+  rest fix genuinely needed zero engine changes, reusing an already-built
+  wildcard-selection mechanism unchanged; the spread fix did not — see the
+  first sub-bullet below):
   - Object literal spread (`{...user}`) merges the resolved source's
     `byPath` structure as top-level siblings, preserving field-level
     distinctness. A spread property contributes to the object's
