@@ -50,10 +50,10 @@ never `engine.js`'s live taint state).
   through H (see
   `docs/superpowers/plans/2026-08-30-data-flow-explorer-m1-lineage-engine-scoping.md`).
   Interprocedural summaries (Sub-project B) are now partially here —
-  see the module table above; increments B2 (real `call`-case
-  integration), B3 (real call-graph/parser integration), B4 (the
-  project-wide two-phase driver), B5 (recursion refinement), and B6
-  (context-sensitivity tuning) are still ahead, per
+  see the module table above; increments B1-B3 (summary cache core,
+  real `call`-case integration, real call-graph integration) are done;
+  B4 (the project-wide two-phase driver), B5 (recursion refinement),
+  and B6 (context-sensitivity tuning) are still ahead, per
   `docs/superpowers/plans/2026-08-30-data-flow-explorer-m1-subproject-b-scoping.md`.
 - External destination resolution, database/queue field mapping,
   transit/at-rest/handling ANALYZERS (this package only defines the

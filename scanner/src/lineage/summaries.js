@@ -206,17 +206,35 @@ export function createCallSummaryResolver(cache, lookupCallee) {
 // Resolves a call expression's callee to a bare, resolvable name — the
 // lineage-engine analog of dataflow/engine.js's own `_resolvableCalleeName`
 // BASE CASE (before that file's later, CHA-gated member-expression
-// extension). Deliberately narrow: only a bare identifier callee
-// (`helper(x)`) resolves to a name at all. A member-expression callee
-// (`obj.helper(x)`) returns null here, on purpose — resolving THAT safely
-// needs class-hierarchy analysis (which method does the object concretely
-// carry), a separate, much larger mechanism dataflow built specifically for
-// its own R11 requirement (`_resolveMemberCalleeViaCHA`, gated on a `_cha`
-// object this package has no equivalent of and is not in scope to build
-// here). Guessing from the property name alone would fabricate a call edge
-// that may not exist — worse than leaving the call unresolved, matching
-// this whole codebase's own stated doctrine (see callgraph.js's comments
-// on `resolveKnownCallee` vs. the guessing `resolve()`).
+// extension) for the `calleeExpr.kind === 'ident'` branch specifically.
+// Deliberately narrow: only a bare identifier callee (`helper(x)`) resolves
+// to a name at all. A member-expression callee (`obj.helper(x)`) returns
+// null here, on purpose — resolving THAT safely needs class-hierarchy
+// analysis (which method does the object concretely carry), a separate,
+// much larger mechanism dataflow built specifically for its own R11
+// requirement (`_resolveMemberCalleeViaCHA`, gated on a `_cha` object this
+// package has no equivalent of and is not in scope to build here).
+// Guessing from the property name alone would fabricate a call edge that
+// may not exist — worse than leaving the call unresolved, matching this
+// whole codebase's own stated doctrine (see callgraph.js's comments on
+// `resolveKnownCallee` vs. the guessing `resolve()`).
+//
+// UNLIKE dataflow's version, this one does NOT also accept a plain string
+// callee (`typeof calleeExpr === 'string'`). Per the IR shape contract
+// (scanner/src/ir/CLAUDE.md), `callee` is `string|expr` — the seven
+// hand-rolled parsers (Python/Ruby/PHP/Go/Java/C#/Kotlin) emit a flat,
+// dot-joined STRING callee, never a structured `{kind:'ident'}` node. This
+// means `createCallGraphLookup` below resolves NOTHING for those
+// languages' IR today — every call in a non-JS/TS file silently takes the
+// unresolved-call fallback (flat + widened:true), the same fail-safe
+// direction as an unresolvable JS/TS call, just unconditionally so. This
+// is not an oversight: naively accepting a dotted string (e.g. Java's
+// class-qualified `"App.getUser"`) and handing it to `resolveKnownCallee`
+// would resolve it via that function's project-wide bare-name index —
+// which is member-call resolution in disguise, exactly what this
+// increment's CHA-free scope forbids. Whether/how to extend real
+// interprocedural resolution to the hand-rolled-parser languages is
+// undecided and out of scope for Sub-project B's current B1-B6 breakdown.
 function _resolvableCalleeName(calleeExpr) {
   if (!calleeExpr) return null;
   if (calleeExpr.kind === 'ident') return calleeExpr.name || null;
