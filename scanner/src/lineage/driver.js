@@ -68,11 +68,24 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
     // (not via cache.compute, which is reserved for a CALL SITE resolving
     // an as-yet-uncomputed callee) — this is what lets a LATER function in
     // fnList that calls this one reuse the driver's own result instead of
-    // silently recomputing it a second time. Safe to overwrite an entry a
-    // callee-triggered lazy compute() may have already written for the
-    // SAME (qid, emptyState()) key earlier in this loop — deterministic
-    // analysis means both would agree; this is redundant work in that
-    // case, never a correctness issue.
+    // silently recomputing it a second time.
+    //
+    // This CAN overwrite an entry a callee-triggered lazy compute() already
+    // wrote for the SAME (qid, emptyState()) key earlier in this loop — and
+    // a final whole-branch review proved by direct construction that the
+    // two computations are NOT guaranteed to agree: createCallGraphLookup's
+    // `callerFile` is fixed to the CALLING function's file, so when fn was
+    // first analyzed lazily (as someone else's callee), any bare-identifier
+    // call fn itself makes was resolved preferring THAT CALLER's file, not
+    // fn's own. This loop's own direct call above uses fn.file, the
+    // correct scope, so the overwrite here always uses the more precise of
+    // the two answers, never a worse one — but it is a real overwrite of a
+    // possibly-different prior value, not merely redundant re-computation
+    // of an identical one. Today every entry state is emptyState() (no
+    // source registry yet), so no identity can actually differ between the
+    // two computations and this is unobservable; it becomes load-bearing
+    // the moment entry states carry real identities, which is why it's
+    // called out for increment B5/B6 rather than silently relied upon.
     cache.set(fn.qid, emptyState(), summaryFromAnalysisResult(result));
   }
 
