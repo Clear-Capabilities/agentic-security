@@ -114,6 +114,26 @@ export class FieldIdentitySummaryCache {
     // flag is scoped to. Nothing reads `_hitRecursion` between the push and
     // this reset, so the two orderings are behaviorally identical here —
     // reset-after-push is what the reference precedent actually does.
+    //
+    // Known, disclosed imprecision (a final whole-branch review found this
+    // via a real 2-function, non-recursive-then-recursive scenario through
+    // the real driver — see CLAUDE.md's B5 section): this flag is
+    // LAST-WRITER-WINS across the whole nested call chain, not scoped to
+    // "did MY OWN analyzeFn() hit recursion." If `analyzeFn`'s body first
+    // makes a self/mutual-recursive call (setting the flag true) and THEN
+    // makes an unrelated, cache-missing call to some other function, that
+    // second call's own `this._hitRecursion = false` (right here, for ITS
+    // OWN frame) does not touch the OUTER flag — but if that inner call
+    // itself hits a recursion or cache-miss chain, the flag can end up
+    // reset by the time control returns to this frame's own post-analyze
+    // check, silently skipping refinement this frame otherwise deserved.
+    // Sound either way (skipping refinement only under-approximates,
+    // never fabricates), but means refinement reliably fires only when
+    // the recursive self-call is the LAST uncached compute() an
+    // analyzeFn() body makes — not merely "somewhere in the body."
+    // Mirrors dataflow/summaries.js's own precedent exactly, so not a new
+    // risk this package introduces; inherit this knowledge if B6 touches
+    // this same flag.
     this._hitRecursion = false;
     try {
       // A final whole-branch review found this method previously had no
@@ -331,7 +351,14 @@ export function summaryFromAnalysisResult(result) {
   }
   return {
     returnFlat,
-    returnByPath: new Map(), // still flat-only — see B1's disclosed limitation in CLAUDE.md; not closed by this increment either
+    returnByPath: new Map(), // still flat-only — see B1's disclosed limitation in CLAUDE.md; not closed by this increment either.
+    // If this ever stops being an unconditional empty Map, fieldSummaryEq
+    // (above) MUST be extended to compare it too — that function currently
+    // omits it, reasoned as safe only because every value here is always
+    // empty. Skipping this would silently reintroduce the exact
+    // "Stage 3 correctness audit" bug class dataflow/summaries.js
+    // documents: two summaries wrongly judged equal, the fresher one
+    // never cached, a later reader silently served the stale value.
     mutatedParams: result.mutatedParams,
     widenings: result.widenings,
   };
