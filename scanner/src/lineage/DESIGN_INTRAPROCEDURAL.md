@@ -521,6 +521,27 @@ than this round's scope covers.
   rather than per-index). Fixing this properly would require the parser
   to distinguish spread elements from literal elements first — out of
   scope for this plan.
+- **Object spread/rest — KNOWN, UNFIXED LIMITATION, not covered by the array
+  reassurance above.** `{...user}` (object spread in a literal) and
+  `const {...rest} = user` (object rest in a destructuring pattern) are
+  **silently dropped entirely** by the parser today — `scanner/src/ir/parser-js.js`'s
+  `ObjectExpression` handling filters out `SpreadElement` properties
+  *before* building the `props` array, and its destructuring lowering does
+  the analogous drop for a rest binding, so `{...user}` and `{}` are
+  byte-identical in the emitted IR. This is **not** "flattened into one
+  bag" the way array spread is (that reassurance, immediately above, does
+  NOT extend to objects) — the identity vanishes completely, a false
+  negative (`return {...user};` currently resolves to nothing, not to a
+  coarse aggregate). Confirmed pre-existing since the parser's first
+  commit, not introduced or missed by any round of this plan's own fix
+  chain — every fix in this document (the residual principle, the
+  production/selection/write-out invariant, the wildcard/fabricated-key
+  closure) provably never reaches this code path, since the `SpreadElement`
+  node is filtered out before any of those mechanisms would see it.
+  Possible wider blast radius into `scanner/src/dataflow/`'s own taint
+  engine (which shares this parser) is flagged but not confirmed. Fixing
+  this is real, scoped, follow-up work for a later sub-project — not
+  attempted here, and not silently glossed over either.
 - **Member access** (property read): when the whole `object.prop...` chain
   is a pure ident/member chain, resolves via `accessPathOf` + `identitiesAt`
   — no new logic needed, this is what those functions exist for. When the
