@@ -30,8 +30,7 @@ export function resolveExprIdentities(state, expr) {
   if (!expr) return noIdentity();
 
   switch (expr.kind) {
-    case 'ident':
-    case 'member': {
+    case 'ident': {
       const path = accessPathOf(expr);
       if (!path) return noIdentity();
       const flat = identitiesAt(state, path);
@@ -44,6 +43,52 @@ export function resolveExprIdentities(state, expr) {
         }
       }
       return { flat, byPath, widened: false };
+    }
+
+    case 'member': {
+      const path = accessPathOf(expr);
+      if (path) {
+        // Pure ident/member chain — resolve directly against state, same
+        // logic as the `ident` case above.
+        const flat = identitiesAt(state, path);
+        const byPath = new Map();
+        for (const [candidatePath, ids] of state) {
+          if (candidatePath !== path && pathIsCoveredByPrefix(candidatePath, path)) {
+            const subPath = candidatePath.slice(path.length + 1);
+            const existing = byPath.get(subPath) ?? new Set();
+            byPath.set(subPath, new Set([...existing, ...ids]));
+          }
+        }
+        return { flat, byPath, widened: false };
+      }
+
+      // The base isn't a pure path (e.g. `(user ?? other).email`,
+      // `(flag ? a : b).email`, `({a: user}).a.email`) — resolve the base
+      // recursively and SELECT `prop` out of its `byPath`, mirroring how the
+      // `object` case's construction attributes a property to its own key.
+      // This is the read-side mirror of that write-side logic — without it,
+      // a value round 3 correctly taught to carry structure via `byPath`
+      // silently loses that structure the moment a field is read off it
+      // directly, rather than through an intermediate variable. Also inherit
+      // the base's RESIDUAL (via the existing `residualFlat` helper, same one
+      // `assign`/`object` already use) — a coarse/ancestor-level fact on the
+      // base conservatively applies to every field read off it, same
+      // reasoning as `identitiesAt`'s ancestor coverage for state-backed reads.
+      const base = resolveExprIdentities(state, expr.object);
+      const baseResidual = residualFlat(base.flat, base.byPath);
+      const flat = new Set(baseResidual);
+      const byPath = new Map();
+      for (const [subPath, ids] of base.byPath) {
+        if (subPath === expr.prop) {
+          for (const id of ids) flat.add(id);
+        } else if (subPath.startsWith(`${expr.prop}.`)) {
+          const rebased = subPath.slice(expr.prop.length + 1);
+          const existing = byPath.get(rebased) ?? new Set();
+          byPath.set(rebased, new Set([...existing, ...ids]));
+          for (const id of ids) flat.add(id);
+        }
+      }
+      return { flat, byPath, widened: base.widened };
     }
 
     case 'literal':

@@ -158,3 +158,25 @@ test('a ternary between the SAME object on both branches must not merge that obj
   assert.deepEqual([...r.byPath.get('email')], ['data:email'], 'must not pick up ssn just because the ternary syntax is present');
   assert.deepEqual([...r.byPath.get('ssn')], ['data:ssn']);
 });
+
+test('member selection off a ternary base correctly selects the field instead of silently dropping the identity (regression for a gap a final review found)', () => {
+  const state = stateWith([['user.email', 'data:email'], ['user.ssn', 'data:ssn'], ['other.name', 'data:name']]);
+  const expr = {
+    kind: 'member',
+    object: { kind: 'union', branches: [{ kind: 'ident', name: 'user' }, { kind: 'ident', name: 'other' }] },
+    prop: 'email',
+  };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.flat], ['data:email'], 'must select only the email field, not silently return nothing');
+});
+
+test('member selection off a logical (??) base correctly selects the field', () => {
+  const state = stateWith([['user.email', 'data:email']]);
+  const expr = {
+    kind: 'member',
+    object: { kind: 'logical', op: '??', left: { kind: 'ident', name: 'user' }, right: { kind: 'object', props: [] } },
+    prop: 'email',
+  };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.flat], ['data:email']);
+});

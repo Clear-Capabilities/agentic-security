@@ -147,6 +147,20 @@ test('the CFG branch-join and the equivalent ternary must give the SAME (correct
     'the two syntactic forms of the identical semantics must resolve to the identical result');
 });
 
+test('reading a field directly off a ternary/logical expression (no intermediate variable) gives the SAME answer as going through one (regression for a gap found via the real parser)', () => {
+  const src = `
+    function directRead(user, other) {
+      return (user ?? other).email;
+    }
+  `;
+  const fn = parseFn(src, 'directRead');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email']);
+});
+
 test('template literal propagation from real parsed source: identity flows through interpolation, no widening', () => {
   const src = `
 function greet(user) {
