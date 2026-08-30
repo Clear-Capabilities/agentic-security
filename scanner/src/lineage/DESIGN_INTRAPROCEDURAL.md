@@ -126,6 +126,76 @@ efficiency, never correctness, since `identitiesAt`'s union already handles
 it. Left as a documented, deferred optimization, not built now, per this
 project's "don't design for hypothetical future requirements" convention.
 
+### The residual principle (round 2 — closes an aliasing gap round 1 left open)
+
+The bidirectional `identitiesAt` fix above (round 1) was necessary but not
+sufficient. A final re-review of round 1 found the exact same coarse-merge
+bug survives through one level of variable aliasing, because round 1 only
+applied the "write per-field, not a coarse root value" rule at the object-
+literal call site — `resolveExprIdentities`'s `ident`/`member` case still
+unconditionally returned an empty `byPath`, even when the state genuinely
+had per-field structure recorded under the resolved path. Concretely:
+
+```js
+function combine(user) {
+  const copy = user;       // copy = user is a plain alias, not an object
+                            // literal, so round 1's `assign` fix never
+                            // triggers: resolveExprIdentities(state, user)
+                            // returned byPath: Map() (always empty for
+                            // ident/member), so `assign` fell into the
+                            // byPath-empty branch and wrote the FULL flat
+                            // union ({email, ssn}) at `copy`'s own path —
+                            // exactly the coarse-root-write bug round 1
+                            // fixed for object literals, recreated here.
+  const e = copy.email;    // identitiesAt('copy.email') then ancestor-
+                            // inherits from that coarse `copy` entry and
+                            // returns {email, ssn} — both fields.
+  return e;                 // WRONG: should be {email} only.
+}
+```
+
+This was measurably *worse* than the pre-round-1 code for this exact shape:
+before round 1, a one-directional `identitiesAt` silently dropped this flow
+entirely (safe but useless); round 1's bidirectional `identitiesAt` can now
+correctly resolve `user`'s full field set on read, but `assign` had nowhere
+to put that structured information except a coarse merge — going from
+"silently drops the flow" to "silently merges distinct fields", the more
+serious of FR-301's two failure modes.
+
+The fix generalizes round 1's rule into one helper, `residualFlat(flat,
+byPath)` (`engine.js`), applied consistently at three sites rather than
+being special-cased at `assign` alone:
+
+1. `resolveExprIdentities`'s `ident`/`member` case now populates `byPath`
+   from the state's recorded descendants of the resolved path — an alias
+   like `user` (with `user.email`/`user.ssn` recorded) is now structurally
+   indistinguishable from a fresh object literal `{email: ..., ssn: ...}`
+   for every downstream consumer of `byPath`.
+2. `resolveExprIdentities`'s `object` case writes `residualFlat(r.flat,
+   r.byPath)` — not the full `r.flat` — coarsely at a property's own key.
+   This closes a *deeper, compounding* version of the same bug that (1)
+   alone would reintroduce: `{ a: someAliasedObject }`, where
+   `someAliasedObject` is itself an alias with `byPath` structure (per (1)).
+   Without this, the coarse write at key `a` would duplicate what the
+   nested `a.x`/`a.y` entries already separate, one level deeper than round
+   1 ever checked.
+3. `step()`'s `assign` case collapses round 1's explicit
+   byPath-empty-vs-nonempty branching into one rule: write every `byPath`
+   entry at its own sub-path, and write `residualFlat(resolved.flat,
+   resolved.byPath)` — whatever isn't already captured by that
+   structure — coarsely at the target's own root. An empty residual is a
+   no-op, so this naturally subsumes both of round 1's cases without
+   branching on them explicitly.
+
+`identitiesAt`'s read-side logic (the bidirectional aggregation from round
+1) is untouched by this round — only the *write* side (what gets recorded
+by `assign`, and how `resolveExprIdentities` reports structure to it)
+changed. A whole-object read through an alias (`const copy = user; return
+copy;`) still correctly aggregates every field, exactly as round 1's fix
+already guaranteed, because that guarantee never depended on `assign`
+writing a coarse value — it depended on `identitiesAt`'s descendant
+aggregation, which this round doesn't touch.
+
 ## 4. Per-construct handling (JS/TS, this plan's scope)
 
 - **Assignment** (`target: string`, `source: exprDesc`): resolve `source`'s
@@ -139,11 +209,17 @@ project's "don't design for hypothetical future requirements" convention.
   elements, land at two different access paths in the state, never merged.
   `assign`'s handling of this case writes ONLY these per-field `byPath`
   entries — never a coarse value at the container's own path (`target`
-  itself). This is the documented, correct behavior (see §3's "Corrected
-  design" note for why a coarse root write was tried and rejected), not an
-  oversight: `identitiesAt`'s descendant aggregation (§3) already answers a
-  whole-object read like `return target` correctly from the per-field
-  entries alone.
+  itself) — because for a plain object literal the residual is always
+  empty (see §3's "Corrected design" and "The residual principle"
+  notes for why a coarse root write was tried and rejected, and for the
+  general rule this is a special case of). This is the documented,
+  correct behavior, not an oversight: `identitiesAt`'s descendant
+  aggregation (§3) already answers a whole-object read like `return
+  target` correctly from the per-field entries alone. The same residual
+  rule applies identically to a plain variable/property alias
+  (`target = someOtherRef`) — see §3's "The residual principle" note —
+  since round 2 made `resolveExprIdentities` report `byPath` structure
+  for those references too, not just for object literals.
 - **Array literals**: flattened, no index sensitivity — matches
   `access-paths.js`'s own documented limitation (no `[i]`/`[*]` support;
   "index sensitivity is a follow-on"). An array carrying two different
