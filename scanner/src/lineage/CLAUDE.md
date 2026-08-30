@@ -10,7 +10,9 @@ engine sharing only pure, stateless utilities, never mutable taint state —
 e.g. `access-paths.js`'s `accessPathOf`/`pathIsCoveredByPrefix`/`isCoveredBy`,
 never `engine.js`'s live taint state).
 
-## What's here (Milestone 0 — contract and fixture only)
+## What's here
+
+**Milestone 0 (contract and fixture):**
 
 | Module | Responsibility |
 |---|---|
@@ -22,10 +24,21 @@ never `engine.js`'s live taint state).
 | `dataflow-graph.schema.json` | Authoritative JSON Schema (2020-12) document for external interop/documentation |
 | `fixtures/build-flagship-fixture.mjs` | Deterministic generator for the payments-platform reference fixture (PRD Appendix D.2/D.3) — re-run and re-commit `flagship-graph.json` if you change the generator; a diff test (`flagship-fixture.test.js`) enforces idempotence. Entity-id discriminators (see `ids.js`) must include every field that can vary between two otherwise-similar entities (e.g. an edge's `dataElementIds`) — two edges over the same node pair carrying different payloads collided on id once before this was tightened; `flagship-fixture-semantics.test.js` now pins uniqueness of every id array as a regression guard. |
 
-## What is NOT here yet (later milestones)
+**Milestone 1, Sub-project A (field-identity engine core — design spike + intraprocedural, single-function only):**
 
-- The actual lineage-tracking engine (source/sink registries, worklist,
-  interprocedural summaries, path DAG) — Milestone 1 (DFG-004, DFG-005).
+| Module | Responsibility |
+|---|---|
+| `DESIGN_INTRAPROCEDURAL.md` | Design record: the field-identity state shape (`Map<accessPath, Set<dataElementId>>`, replacing boolean taint so FR-301's multi-label requirement holds), the exact reuse boundary against `scanner/src/dataflow/` (what's pure-reusable vs. must-be-reimplemented), and per-construct handling rules (object literals attribute each property to its own sub-path; template literals/string concatenation propagate identity normally, not as a widened/implicit flow; unresolved calls ARE flagged as widened). Read this before touching `field-identity.js` or `engine.js` — it's the binding reference both were built against. |
+| `field-identity.js` | Pure state module: `emptyState`/`identitiesAt`/`addIdentity`/`removeIdentitiesAt`/`joinStates`/`statesEqual`/`hashState` over the `Map<path, Set<dataElementId>>` shape. Ancestor/descendant asymmetry (an ancestor's identity is visible when querying a descendant path; the reverse is never true) mirrors `dataflow/access-paths.js`'s `isCoveredBy` semantics — see the ADR §3 for why. Imports `pathIsCoveredByPrefix` from `dataflow/access-paths.js` (the one function from that package currently reused in practice; see this file's header for the full allowed-reuse list). Unit-tested in `test/lineage/field-identity.test.js`, including the FR-301 "two distinct fields coexist without merging" case. |
+| `engine.js` | `resolveExprIdentities(state, expr)`: recursively resolves which data-element identities a parsed JS/TS expression carries — object literals attribute each property to its own dotted sub-path (the direct mechanism proving FR-301), arrays/binary/logical/ternary flatten conservatively, unresolved function calls are flagged `widened: true` rather than silently dropped or silently trusted. `analyzeFunctionFieldIdentity(fn, entryState)`: a forward-worklist CFG analysis over a single function, structurally mirroring `dataflow/engine.js`'s `analyzeFunction` (same fixed-point/join algorithm, entirely different state type — never imports or touches that file's taint state) — returns `{exitState, returnFacts, mutatedParams, widenings}`. No interprocedural resolution, no path DAG, no registry/graph-output wiring yet — see the ADR §5 for the explicit scope line. Unit-tested against hand-built fixtures in `test/lineage/engine-expr-resolver.test.js` and `test/lineage/engine-walker.test.js`, and against real parsed JS/TS source (via `scanner/src/ir/parser-js.js`) in `test/lineage/engine-integration.test.js`. |
+
+## What is NOT here yet (later milestones / later sub-projects)
+
+- Interprocedural summaries, the path DAG, source/sink registries,
+  transformation-kind recognition, and any `DataFlowGraph v1` graph
+  output — Milestone 1, Sub-projects B through H (see
+  `docs/superpowers/plans/2026-08-30-data-flow-explorer-m1-lineage-engine-scoping.md`).
+  Sub-project A (above) is intraprocedural-only, by design.
 - External destination resolution, database/queue field mapping,
   transit/at-rest/handling ANALYZERS (this package only defines the
   verdict *model*, not what decides a verdict) — Milestone 2.
