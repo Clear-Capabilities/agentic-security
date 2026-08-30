@@ -159,6 +159,19 @@ test('mountShell exposes getContextRailEl returning the context rail element', (
   shell.destroy();
 });
 
+test('mountShell exposes getLeftRailEl returning the left rail element', () => {
+  window.location.hash = '';
+  const root = document.createElement('div');
+  const shell = mountShell(root, makeGraph());
+
+  const leftRailEl = shell.getLeftRailEl();
+
+  assert.ok(leftRailEl);
+  assert.equal(leftRailEl.className, 'shell__left-rail');
+
+  shell.destroy();
+});
+
 test('an external hashchange (e.g. back/forward navigation) still updates state and notifies subscribers', () => {
   window.location.hash = '';
   const root = document.createElement('div');
