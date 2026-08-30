@@ -92,6 +92,187 @@ test('opt-out: a ctx WITHOUT recordHop (but with resolveCallSummary, mirroring S
   assert.deepEqual([...result.returnFacts[0].identities], ['data:email']);
 });
 
+// Canonicalizes a Map<path, Set<id>> (exitState / mutatedParams) into a
+// sorted, iteration-order-independent array-of-arrays so two structurally
+// equal Maps compare equal under assert.deepEqual regardless of insertion
+// order or Set iteration order.
+function canonicalizeStateMap(map) {
+  return [...map.entries()]
+    .map(([path, ids]) => [path, [...ids].sort()])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+}
+
+function canonicalizeReturnFacts(returnFacts) {
+  return returnFacts
+    .map((f) => ({ nodeId: f.nodeId, line: f.line, identities: [...f.identities].sort() }))
+    .sort((a, b) => (a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0));
+}
+
+function canonicalizeWidenings(widenings) {
+  return widenings
+    .map((w) => ({ ...w, dataElementIds: [...w.dataElementIds].sort() }))
+    .map((w) => JSON.stringify(w, Object.keys(w).sort()))
+    .sort();
+}
+
+// Decision 1's write-only invariant, made mechanically checkable rather
+// than merely asserted in prose: canonicalizes the FULL analysis result —
+// all five fields the invariant names (`state`'s externally observable
+// form, `exitState`; `returnFacts`; `mutatedParams`; `widenings`) — into a
+// Map/Set-iteration-order-independent, JSON-comparable shape.
+function canonicalizeResult({ exitState, returnFacts, mutatedParams, widenings }) {
+  return {
+    exitState: canonicalizeStateMap(exitState),
+    returnFacts: canonicalizeReturnFacts(returnFacts),
+    mutatedParams: canonicalizeStateMap(mutatedParams),
+    widenings: canonicalizeWidenings(widenings),
+  };
+}
+
+// ---------------------------------------------------------------------
+// L1 fix-round addition: the three tests above never actually compared
+// full output between a with-recorder and without-recorder run — they
+// hardcoded expected `returnFacts` values only, leaving `exitState`,
+// `mutatedParams`, and `widenings` (three of Decision 1's five named
+// fields) completely unchecked. A reviewer confirmed this with a real
+// mutant: `if (ctx?.recordHop) state = addIdentity(state, 'SIDE_EFFECT',
+// 'data:leak');` injected into step()'s assign case still passed all 217
+// lineage tests. This test runs each fixture TWICE — once with a recorder
+// attached, once without — and deepEquals the canonicalized
+// {exitState, returnFacts, mutatedParams, widenings} between the two runs,
+// across a representative spread of shapes (straight-line, a wildcard
+// write — a site NOT instrumented by this task, an object literal with a
+// computed "*" key, a hand-built branch-join fixture that revisits a node
+// per Decision 8, and a ctx that also carries resolveCallSummary). This is
+// the guard C2 through C6 (roughly 20 more instrumented sites in these
+// same functions) will lean on hardest.
+// ---------------------------------------------------------------------
+
+test('write-only invariant (Decision 1): attaching a recorder must not change exitState/returnFacts/mutatedParams/widenings, across a spread of fixture shapes', () => {
+  const fixtures = [];
+
+  {
+    const fn = parseFn(`
+function f(user) {
+  const u = user;
+  const o = { email: u.email, ssn: u.ssn };
+  return o;
+}
+`, 'f', '/x/wo1.js');
+    let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+    fixtures.push({ label: '§6 worked example', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    const fn = parseFn(`
+function combine(user) {
+  return { email: user.email, ssn: user.ssn };
+}
+`, 'combine', '/x/wo2.js');
+    let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+    fixtures.push({ label: 'FR-301 core proof (combine)', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    // Wildcard-write branch — deliberately NOT one of the four instrumented
+    // sites — must remain unaffected by recorder presence too.
+    const fn = parseFn(`
+      function f(user, k1, k2) {
+        const bag = {};
+        bag[k1] = user.email;
+        bag[k2] = user.ssn;
+        return bag;
+      }
+    `, 'f', '/x/wo3.js');
+    let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+    fixtures.push({ label: 'wildcard-write (uninstrumented branch)', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    // A computed "*"-keyed object property alongside a literal sibling —
+    // the exact shape M1's fix touches.
+    const fn = parseFn(`
+      function h(user, k) {
+        const c = { k: user.ssn, [k]: user.email };
+        return c;
+      }
+    `, 'h', '/x/wo4.js');
+    let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+    fixtures.push({ label: 'object literal with a computed "*" key', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    // Hand-built branch-join fixture (Decision 8's own re-emission case —
+    // the return node here is visited more than once).
+    const fn = {
+      qid: 'test::branchJoinWriteOnly',
+      params: ['user', 'flag'],
+      cfg: {
+        entry: 'n0', exit: 'n5',
+        nodes: {
+          n0: { kind: 'entry', line: 1, succ: ['n1'], pred: [] },
+          n1: { kind: 'if', line: 1, succ: ['n2', 'n3'], pred: ['n0'], cond: { kind: 'ident', name: 'flag' } },
+          n2: { kind: 'assign', line: 2, succ: ['n4'], pred: ['n1'],
+            target: 'x', source: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'email' } },
+          n3: { kind: 'assign', line: 3, succ: ['n4'], pred: ['n1'],
+            target: 'x', source: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'name' } },
+          n4: { kind: 'return', line: 4, succ: ['n5'], pred: ['n2', 'n3'], value: { kind: 'ident', name: 'x' } },
+          n5: { kind: 'exit', line: 4, succ: [], pred: ['n4'] },
+        },
+      },
+    };
+    let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    entryState = addIdentity(entryState, 'user.name', 'data:name');
+    fixtures.push({ label: 'branch-join (hand-built, revisits n4)', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    // A ctx that ALSO carries resolveCallSummary (Sub-project B usage) —
+    // confirm adding recordHop alongside it doesn't perturb the resolved
+    // call path either.
+    const src = `
+      function copyEmail(source) {
+        return source.email;
+      }
+      function caller(user) {
+        return copyEmail(user);
+      }
+    `;
+    const ir = parseJsFile('/x/wo5.js', src);
+    const calleeFn = ir.functions.find((f) => f.name === 'copyEmail');
+    const callerFn = ir.functions.find((f) => f.name === 'caller');
+    const resolveCallSummary = (calleeExpr, callArgs, callerState) => {
+      if (calleeExpr.kind !== 'ident' || calleeExpr.name !== 'copyEmail') return null;
+      let calleeEntryState = emptyState();
+      const userIds = identitiesAt(callerState, callArgs[0].name);
+      for (const id of userIds) calleeEntryState = addIdentity(calleeEntryState, 'source.email', id);
+      const r = analyzeFunctionFieldIdentity(calleeFn, calleeEntryState);
+      const returnFlat = new Set();
+      for (const f of r.returnFacts) for (const id of f.identities) returnFlat.add(id);
+      return { returnFlat, returnByPath: new Map() };
+    };
+    const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    fixtures.push({ label: 'resolved call (ctx also carries resolveCallSummary)', fn: callerFn, entryState, extraCtx: { resolveCallSummary } });
+  }
+
+  for (const { label, fn, entryState, extraCtx } of fixtures) {
+    const without = analyzeFunctionFieldIdentity(fn, entryState, extraCtx);
+    const hops = [];
+    const withRecorder = analyzeFunctionFieldIdentity(fn, entryState, { ...extraCtx, recordHop: (h) => hops.push(h) });
+
+    assert.deepEqual(
+      canonicalizeResult(withRecorder),
+      canonicalizeResult(without),
+      `${label}: attaching a recorder must not change exitState/returnFacts/mutatedParams/widenings (Decision 1's write-only invariant)`,
+    );
+    assert.ok(hops.length > 0, `${label}: sanity check — expected the recorder to have captured at least one hop`);
+  }
+});
+
 // ---------------------------------------------------------------------
 // 2 & 3. A real parsed example exercising all four instrumented sites in
 //    one function (DESIGN_PATH_PROVENANCE.md §6's own worked example),
@@ -220,6 +401,95 @@ function f(user) {
   // including two additional selection/member rows that only a FULL
   // (post-C2) instrumentation would actually emit.
   assert.equal(hops.length, 12, `expected exactly 12 deduplicated hop records for this fixture under Task 2's four-site scope, got ${hops.length}: ${JSON.stringify(hops, null, 2)}`);
+});
+
+// ---------------------------------------------------------------------
+// M1 fix-round addition: DESIGN_PATH_PROVENANCE.md §10.1's `object` table
+// has three rows (plain / spread / `*`-keyed) that agree on kind/fromPath/
+// toPath but NOT on widenReason — only the `*`-keyed row is
+// 'dynamic-property-key'. A reviewer confirmed the shipped code's single
+// unified emission point set `widenReason: null` unconditionally,
+// contradicting the spec (and an in-code comment overstating "all three
+// rows... agree on this shape"). Fixed by computing widenReason per
+// property from `prop.key === '*'` at the emission site.
+// ---------------------------------------------------------------------
+
+test('M1: an object literal computed "*" key emits widenReason "dynamic-property-key"; a plain sibling property does not', () => {
+  const src = `
+    function h(user, k) {
+      const c = { k: user.ssn, [k]: user.email };
+      return c;
+    }
+  `;
+  const fn = parseFn(src, 'h', '/x/m1-star.js');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+
+  const hops = [];
+  analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+
+  const objectHops = dedupeHops(hops).filter((h) => h.kind === 'production' && h.subKind === 'object');
+  // '[k]: user.email' — the computed, statically-unknown key.
+  const starHop = objectHops.find((h) => h.dataElementId === 'data:email');
+  // 'k: user.ssn' — the literal, explicit key.
+  const plainHop = objectHops.find((h) => h.dataElementId === 'data:ssn');
+
+  assert.ok(starHop, `expected a production/object hop for data:email (the '[k]: user.email' property), got: ${JSON.stringify(objectHops)}`);
+  assert.equal(starHop.widenReason, 'dynamic-property-key', 'a computed "*"-keyed object property must be graded widened per §10.1, not an explicit flow');
+
+  assert.ok(plainHop, `expected a production/object hop for data:ssn (the literal "k" property), got: ${JSON.stringify(objectHops)}`);
+  assert.equal(plainHop.widenReason, null, 'a plain, non-computed object property must remain an explicit flow (widenReason: null)');
+});
+
+// ---------------------------------------------------------------------
+// M2 fix-round addition (recommended, not required): the §6 fixture is
+// straight-line, so every shipped assertion above has `raw === deduped`
+// and dedupeHops is exercised as a no-op wherever it's actually tested.
+// This hand-built branch-join fixture forces the worklist to revisit the
+// return node (n4, reached from both n2 and n3) — Decision 8's own
+// re-emission case — closing that gap.
+// ---------------------------------------------------------------------
+
+test('M2: the worklist re-emits hops on revisit (Decision 8) — a branch-join fixture produces strictly more raw records than deduplicated ones', () => {
+  // function f(user, flag) { let x; if (flag) { x = user.email; } else { x = user.name; } return x; }
+  // n4 (return, pred: n2 AND n3) is visited twice: once when n2's branch
+  // state first arrives, again once n3's branch state joins in and grows
+  // inStates[n4] — each visit re-runs step() and re-records hops.
+  const fn = {
+    qid: 'test::branchJoinDedupe',
+    params: ['user', 'flag'],
+    cfg: {
+      entry: 'n0', exit: 'n5',
+      nodes: {
+        n0: { kind: 'entry', line: 1, succ: ['n1'], pred: [] },
+        n1: { kind: 'if', line: 1, succ: ['n2', 'n3'], pred: ['n0'], cond: { kind: 'ident', name: 'flag' } },
+        n2: { kind: 'assign', line: 2, succ: ['n4'], pred: ['n1'],
+          target: 'x', source: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'email' } },
+        n3: { kind: 'assign', line: 3, succ: ['n4'], pred: ['n1'],
+          target: 'x', source: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'name' } },
+        n4: { kind: 'return', line: 4, succ: ['n5'], pred: ['n2', 'n3'], value: { kind: 'ident', name: 'x' } },
+        n5: { kind: 'exit', line: 4, succ: [], pred: ['n4'] },
+      },
+    },
+  };
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.name', 'data:name');
+
+  const raw = [];
+  const result = analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => raw.push(h) });
+  assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:name']);
+
+  const deduped = dedupeHops(raw);
+  assert.ok(raw.length > deduped.length, `expected the worklist to re-emit at least one duplicate hop at the revisited return node (raw=${raw.length}, deduped=${deduped.length})`);
+
+  // Per Decision 8: the deduplicated set is still complete and correct —
+  // the return node's ident in-half and write-out/return out-half must
+  // each carry BOTH ids exactly once, not the partial set an early,
+  // un-deduplicated visit alone would show.
+  const returnIdentHops = deduped.filter((h) => h.kind === 'production' && h.subKind === 'ident' && h.nodeId === 'n4');
+  assert.deepEqual(returnIdentHops.map((h) => h.dataElementId).sort(), ['data:email', 'data:name']);
+  const returnWriteOutHops = deduped.filter((h) => h.kind === 'write-out' && h.subKind === 'return');
+  assert.deepEqual(returnWriteOutHops.map((h) => h.dataElementId).sort(), ['data:email', 'data:name']);
 });
 
 // ---------------------------------------------------------------------

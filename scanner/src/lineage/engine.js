@@ -220,17 +220,24 @@ export function resolveExprIdentities(state, expr, ctx) {
         // Path provenance (Sub-project C, increment 1, Task 2 instrumented
         // site 2 of 4): one production/object in-half per id this property
         // contributes, fromPath null — a fresh structural annotation, not a
-        // prior aliasing source (Decision 5/§10.1). Applies uniformly to a
-        // plain property, a spread property, and a `*`-keyed property alike
-        // (all three rows of §10.1's `object` table agree on this shape),
-        // so this is emitted once here rather than duplicated in each of
-        // the three branches below.
+        // prior aliasing source (Decision 5/§10.1). All three rows of
+        // §10.1's `object` table (plain, spread, `*`-keyed) agree on
+        // kind/fromPath/toPath, so this is emitted once here rather than
+        // duplicated in each of the three branches below — but they do NOT
+        // agree on widenReason: the `*`-keyed row is explicitly
+        // `'dynamic-property-key'` (a computed key we cannot statically
+        // resolve), while a plain or spread property is an explicit,
+        // non-widened flow. A fix-round review caught this file's own
+        // earlier comment overstating the agreement to cover widenReason
+        // too, which had silently left `{[k]: v}` graded as an explicit
+        // flow.
         if (ctx?.recordHop) {
+          const objWidenReason = prop.key === '*' ? 'dynamic-property-key' : null;
           for (const id of r.flat) {
             ctx.recordHop({
               kind: 'production', subKind: 'object',
               fromPath: null, toPath: null, dataElementId: id,
-              syntacticPath: null, widenReason: null, lossReason: null,
+              syntacticPath: null, widenReason: objWidenReason, lossReason: null,
             });
           }
         }
