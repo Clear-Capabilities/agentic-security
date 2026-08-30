@@ -132,3 +132,29 @@ test('an object literal property that is itself an aliased/structured object kee
   assert.deepEqual([...r.byPath.get('a.y')], ['data:y']);
   assert.ok(!r.byPath.has('a'), 'must NOT also have a coarse "a" entry duplicating both nested fields together');
 });
+
+test('logical (??) can select an existing structured value, and must forward its field structure, not flatten it', () => {
+  const state = stateWith([['user.email', 'data:email'], ['user.ssn', 'data:ssn']]);
+  const expr = { kind: 'logical', op: '??', left: { kind: 'ident', name: 'user' }, right: { kind: 'object', props: [] } };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.byPath.get('email')], ['data:email']);
+  assert.deepEqual([...r.byPath.get('ssn')], ['data:ssn']);
+});
+
+test('ternary (union) unions branch byPath PER SUB-PATH, never coarsely at the root — same principle as a CFG branch join', () => {
+  const state = stateWith([['user.email', 'data:email'], ['user.ssn', 'data:ssn'], ['other.name', 'data:name']]);
+  const expr = { kind: 'union', branches: [{ kind: 'ident', name: 'user' }, { kind: 'ident', name: 'other' }] };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.byPath.get('email')], ['data:email']);
+  assert.deepEqual([...r.byPath.get('ssn')], ['data:ssn']);
+  assert.deepEqual([...r.byPath.get('name')], ['data:name']);
+  assert.ok(!r.byPath.has(''), 'must never have a coarse root-level entry merging all three fields together');
+});
+
+test('a ternary between the SAME object on both branches must not merge that object\'s own distinct fields (there is no real alternative to justify a union)', () => {
+  const state = stateWith([['user.email', 'data:email'], ['user.ssn', 'data:ssn']]);
+  const expr = { kind: 'union', branches: [{ kind: 'ident', name: 'user' }, { kind: 'ident', name: 'user' }] };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.byPath.get('email')], ['data:email'], 'must not pick up ssn just because the ternary syntax is present');
+  assert.deepEqual([...r.byPath.get('ssn')], ['data:ssn']);
+});

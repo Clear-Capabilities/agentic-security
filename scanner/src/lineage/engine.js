@@ -94,20 +94,53 @@ export function resolveExprIdentities(state, expr) {
       return { flat, byPath: new Map(), widened: false };
     }
 
-    case 'binary':
-    case 'logical': {
+    case 'binary': {
+      // Arithmetic/comparison operators always PRODUCE A NEW PRIMITIVE —
+      // structure-flattening by design, not a gap. See
+      // DESIGN_INTRAPROCEDURAL.md §4's "structure-preserving vs.
+      // structure-flattening" invariant.
       const left = resolveExprIdentities(state, expr.left);
       const right = resolveExprIdentities(state, expr.right);
       return { flat: new Set([...left.flat, ...right.flat]), byPath: new Map(), widened: false };
     }
 
+    case 'logical': {
+      // Unlike `binary`, `||`/`&&`/`??` can return one operand VERBATIM, BY
+      // REFERENCE, via short-circuit evaluation — structurally identical to
+      // `union` below (select/pass through an existing value). Must forward
+      // byPath, merged per sub-path across both operands, the same way
+      // `union` merges per sub-path across branches. See
+      // DESIGN_INTRAPROCEDURAL.md §4.
+      const left = resolveExprIdentities(state, expr.left);
+      const right = resolveExprIdentities(state, expr.right);
+      const flat = new Set([...left.flat, ...right.flat]);
+      const byPath = new Map();
+      for (const r of [left, right]) {
+        for (const [subPath, ids] of r.byPath) {
+          const existing = byPath.get(subPath) ?? new Set();
+          byPath.set(subPath, new Set([...existing, ...ids]));
+        }
+      }
+      return { flat, byPath, widened: false };
+    }
+
     case 'union': {
+      // A ternary selects one branch's value VERBATIM at runtime — this is
+      // the expression-level equivalent of the CFG's own branch join
+      // (joinStates), which unions PER PATH rather than flattening. Must do
+      // the same here: merge each branch's byPath per sub-path, never
+      // collapse into one coarse flat blob. See DESIGN_INTRAPROCEDURAL.md §4.
       const flat = new Set();
+      const byPath = new Map();
       for (const branch of expr.branches) {
         const r = resolveExprIdentities(state, branch);
         for (const id of r.flat) flat.add(id);
+        for (const [subPath, ids] of r.byPath) {
+          const existing = byPath.get(subPath) ?? new Set();
+          byPath.set(subPath, new Set([...existing, ...ids]));
+        }
       }
-      return { flat, byPath: new Map(), widened: false };
+      return { flat, byPath, widened: false };
     }
 
     case 'call': {
@@ -125,8 +158,11 @@ export function resolveExprIdentities(state, expr) {
       // does NOT write into `x` in `state` — see
       // scanner/src/lineage/DESIGN_INTRAPROCEDURAL.md §4 for why this is a
       // deliberate, documented limitation, not an oversight.
+      // A simple pass-through of whatever the assignment's source resolves
+      // to (structure-preserving), so its byPath is forwarded directly, not
+      // dropped. See DESIGN_INTRAPROCEDURAL.md §4.
       const r = resolveExprIdentities(state, expr.source);
-      return { flat: r.flat, byPath: new Map(), widened: r.flat.size > 0 };
+      return { flat: r.flat, byPath: r.byPath, widened: r.flat.size > 0 };
     }
 
     default:

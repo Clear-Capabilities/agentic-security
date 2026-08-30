@@ -89,6 +89,64 @@ test('aliasing a real parsed object through an intermediate variable keeps field
   assert.deepEqual([...result.returnFacts[0].identities], ['data:email']);
 });
 
+test('the CFG branch-join and the equivalent ternary must give the SAME (correct) answer for the same program (regression for a gap found in round 3)', () => {
+  // Two functions expressing the exact same semantics two different ways:
+  //   viaBranch:  if (flag) { c = user; } else { c = other; } return c.email;
+  //   viaTernary: const c = flag ? user : other;              return c.email;
+  // joinStates (the CFG-level branch join) already keeps user.email/user.ssn/
+  // other.name separated per sub-path, so viaBranch was always correct. The
+  // 'union' case (before this round's fix) instead flattened both branches'
+  // identities into one coarse blob, so viaTernary incorrectly returned
+  // [data:email, data:ssn, data:name] instead of just [data:email]. Both
+  // forms must now resolve identically.
+  const src = `
+    function viaBranch(user, other, flag) {
+      let c;
+      if (flag) {
+        c = user;
+      } else {
+        c = other;
+      }
+      return c.email;
+    }
+
+    function viaTernary(user, other, flag) {
+      const c = flag ? user : other;
+      return c.email;
+    }
+  `;
+  const ir = parseJsFile('/x/a.js', src);
+  assert.ok(ir, 'real parser must successfully parse this fixture source');
+
+  const buildEntryState = () => {
+    let s = addIdentity(emptyState(), 'user.email', 'data:email');
+    s = addIdentity(s, 'user.ssn', 'data:ssn');
+    s = addIdentity(s, 'other.name', 'data:name');
+    return s;
+  };
+
+  const branchFn = ir.functions.find(f => f.name === 'viaBranch');
+  const ternaryFn = ir.functions.find(f => f.name === 'viaTernary');
+  assert.ok(branchFn, 'expected a function named "viaBranch" in the parsed IR');
+  assert.ok(ternaryFn, 'expected a function named "viaTernary" in the parsed IR');
+
+  const branchResult = analyzeFunctionFieldIdentity(branchFn, buildEntryState());
+  const ternaryResult = analyzeFunctionFieldIdentity(ternaryFn, buildEntryState());
+
+  assert.equal(branchResult.returnFacts.length, 1);
+  assert.equal(ternaryResult.returnFacts.length, 1);
+
+  const branchFlat = [...branchResult.returnFacts[0].identities].sort();
+  const ternaryFlat = [...ternaryResult.returnFacts[0].identities].sort();
+
+  assert.deepEqual(branchFlat, ['data:email'],
+    'the if/else branch-join form must return only data:email (already correct via joinStates)');
+  assert.deepEqual(ternaryFlat, ['data:email'],
+    'the ternary form must return only data:email — must match the branch-join form exactly, not the wider [data:email, data:ssn, data:name] the coarse-merge bug produced');
+  assert.deepEqual(ternaryFlat, branchFlat,
+    'the two syntactic forms of the identical semantics must resolve to the identical result');
+});
+
 test('template literal propagation from real parsed source: identity flows through interpolation, no widening', () => {
   const src = `
 function greet(user) {
