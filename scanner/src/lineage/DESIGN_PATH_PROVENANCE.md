@@ -161,7 +161,7 @@ of an invariant that must be re-checked, not assumed:
 > be instrumented.
 
 That is an *enumeration principle*, deliberately not a count of today's node
-kinds — see §6.
+kinds — see §10.
 
 **A gap a design review found in this rule as originally written, closed
 here:** the rule above says WHEN two records join; it did not say what a
@@ -196,6 +196,24 @@ being extended without the review the taxonomy earned.
  * Every field is always present; nullable fields carry `null`, never
  * `undefined` and never an omitted key (a stable shape is what lets C4
  * hash a record for deduplication without a canonicalization step).
+ *
+ * This completeness guarantee is delivered by `analyzeFunctionFieldIdentity`'s
+ * OWN worklist wrapper (§7.2's "progressive stamping"), not by
+ * `resolveExprIdentities`/`step()` individually — those only ever emit the
+ * SEMANTIC fields (kind/subKind/fromPath/toPath/dataElementId/
+ * syntacticPath/widenReason/lossReason). `scope`/`nodeId`/`line` are
+ * stamped onto every record by the wrapper as it flows through `ctx`,
+ * BEFORE any site ever sees it. A whole-branch review confirmed this
+ * empirically: calling `resolveExprIdentities` directly with a bare
+ * `{recordHop}` (bypassing `analyzeFunctionFieldIdentity`) emits records
+ * missing `scope`/`nodeId`/`line` entirely — not `null`, ABSENT. Unreachable
+ * in shipped code today (the sole caller, `summaries.js`'s `resolveCallSummary`,
+ * passes no `ctx` at all — see §7.4's ctx holes), but §7.4 tells C3 to wire a
+ * recorder in at exactly that site. **Binding on C3:** any new emission path
+ * that does not route through `analyzeFunctionFieldIdentity`'s own wrapper
+ * must independently stamp all three progressive fields itself, or this
+ * completeness guarantee — and the no-canonicalization contract C4 is being
+ * designed around — silently breaks.
  */
 {
   kind: 'production' | 'selection' | 'write-out',
@@ -352,7 +370,7 @@ location, used as an identity key.** The rule above is the general form.
 - **`typeof node.target !== 'string'`** (assignment-expression destructuring,
   `({a} = obj)`): the engine deliberately skips rather than fabricating a key.
   Provenance must not fabricate one either. This is a **loss** site — see the
-  checklist in §8 for how to record it.
+  checklist in §10.2 for how to record it.
 - **`prop.key === '*'`** in an `object` literal: the engine folds it into the
   coarse residual and writes it at the container root. So the eventual
   `toPath` is the container, from the residual write — already correct under

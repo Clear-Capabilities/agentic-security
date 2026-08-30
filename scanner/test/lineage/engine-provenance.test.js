@@ -130,7 +130,7 @@ function canonicalizeResult({ exitState, returnFacts, mutatedParams, widenings }
 }
 
 // ---------------------------------------------------------------------
-// L1 fix-round addition: the three tests above never actually compared
+// L1 fix-round addition: the two tests above never actually compared
 // full output between a with-recorder and without-recorder run — they
 // hardcoded expected `returnFacts` values only, leaving `exitState`,
 // `mutatedParams`, and `widenings` (three of Decision 1's five named
