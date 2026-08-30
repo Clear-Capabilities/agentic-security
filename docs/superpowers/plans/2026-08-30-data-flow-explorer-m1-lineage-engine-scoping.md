@@ -1,0 +1,90 @@
+# Data Flow Explorer Milestone 1 — Typed Lineage Engine: Scoping Document
+
+**Status:** scoping only — no implementation plan yet. This document exists to turn PRD §26/§13's Milestone 1 description into a sequence of right-sized, independently plannable sub-projects, and to force a small number of architectural decisions into the open *before* any detailed task-by-task plan gets written for them. Per `superpowers:writing-plans`' own scope check ("if the spec covers multiple independent subsystems, it should have been broken into sub-project specs"), Milestone 1 is too large for one plan — this document is that breakdown.
+
+**Source:** `AGENTIC_SECURITY_DATA_FLOW_EXPLORER_PRD.md` §26 (Milestone 1 deliverables + exit gate), §13 (FR-301–307), the source/sink inventory requirements Milestone 1 owns (FR-101–103, FR-201, partial FR-204/205), §18.1 (architecture/reuse boundary), §22 (benchmark corpus), §21 (performance), §3.1 (extend-not-fork principle). Cross-checked against the real current state of `scanner/src/lineage/` (Milestone 0, merged), `scanner/src/dataflow/` (existing taint engine), and `scanner/src/ir/` (existing parsers).
+
+---
+
+## 1. What Milestone 1 actually is (restated precisely)
+
+**Deliverables (PRD §26, near-verbatim):** an isolated `scanner/src/lineage/` engine; JS/TS first; field identities, aliases, interprocedural summaries, path DAG; complete source/sink inventories and candidate ledger; *initial* database/logging/file/queue/HTTP/AI lineage; a comparison against current privacy artifacts.
+
+**Exit gate (PRD §26, verbatim):** "AC-01, AC-02, AC-07, AC-11, and schema completeness pass on the supported-language corpus."
+
+**What it is NOT** (confirmed against the PRD and `scanner/src/lineage/CLAUDE.md`'s own "What is NOT here yet" list, which was written at Milestone 0 time specifically to draw this line):
+
+| Explicitly Milestone 2+ | Why it matters to scope discipline here |
+|---|---|
+| External destination resolution (full FR-202) | Milestone 1 only needs to recognize *that* a flow reaches "a database" / "an external API" as a typed sink category — not resolve *which* one, hostname, provider identity, etc. |
+| DB/queue field-level mapping (full FR-204/205 beyond "initial") | Milestone 1's "initial lineage" language is a real, deliberate scope cut — see §3 below for where the line is drawn. |
+| Transit/at-rest/handling **analyzers** (all of §14, FR-401–405) | `protection.js` (Milestone 0) already defines the verdict *model*. Nothing decides a verdict yet, and nothing in Milestone 1 should try to. Every edge Milestone 1 emits legitimately carries `not_assessed`/`none` on all three protection dimensions. |
+| Policy/governance verdicts (FR-404/405) | Same reasoning. |
+| Any UI, local server/API | Milestone 3's job; Milestone 0 already shipped the static-fixture-driven prototype these views run against. |
+| Any language beyond JS/TS | The deliverable text ("JS/TS implementation first, followed by languages passing the gate") is ambiguous enough to misread as "start Python too" — **recommendation: read it as JS/TS-only for Milestone 1's exit gate.** The IR layer's own per-language gap list (real, documented, substantial for every non-JS parser) makes a multi-language Milestone 1 a much bigger undertaking than the deliverable bullet implies, and the exit gate only requires "the supported-language corpus," singular-scoped, to pass. |
+
+## 2. What already exists to build on (so tasks don't re-derive it)
+
+- **`scanner/src/lineage/`** (Milestone 0, merged, unchanged by Milestone 1): `schema.js` (envelope + every enum), `ids.js` (deterministic content-hash stable IDs), `protection.js` (verdict *model*, not analyzer), `classification.js` (data-class + 15 AI-context taxonomy, reused from `dataflow/privacy-taxonomy.js`), `validate.js` + `dataflow-graph.schema.json` (structural validator, kept in parity). Every graph Milestone 1's engine emits must pass `validate.js` unchanged — this is "schema completeness" in the exit gate.
+- **The flagship fixture** (`scanner/src/lineage/fixtures/flagship-graph.json`) becomes a **golden comparison target**, not dead weight — see sub-project F below.
+- **`scanner/src/dataflow/`'s existing taint engine** has real, working machinery that overlaps heavily with what Milestone 1 needs, but is shaped for boolean/family taint, not field identity:
+  - `summaries.js`'s `SummaryCache` — real interprocedural summaries, context-sensitive up to a per-function cap, 3-pass fixed-point convergence, already handles mutated params/closures/recursion. Structurally the right pattern for Milestone 1's own summary cache — **but its context granularity is per-parameter boolean, not per-access-path multi-label, and this is a real fork point, not a detail** (see Decision 1 below).
+  - `access-paths.js` — field-sensitive access-path lattice already distinguishes `user.email` from `user.password`. Likely reusable as a *pure* utility (per §18.1's reuse boundary) even though the taint state built on top of it isn't.
+  - Container/collection-element taint (recently closed) — same class of gap the lineage engine's path DAG and implicit/widened-flow detection (FR-303/306) will hit again.
+- **`scanner/src/ir/`** — Babel-based JS/TS parser is the most mature; this is what Milestone 1 actually depends on. Every other language's parser has real, documented, still-open gaps (per-language CLAUDE.md files) — irrelevant to Milestone 1 under the JS/TS-only reading above, but a hard dependency the moment Milestone 1 is extended.
+- **§18.1's binding reuse rule**: "may reuse pure IR, call-graph, access-path, string-domain, and schema-parsing utilities. May not share mutable taint state with the general engine in P0." This is a real constraint on every sub-project below, not just an aspiration.
+
+## 3. Real gaps — nothing today does these
+
+1. **Multi-label, field-identity-preserving lineage state.** The single biggest, most novel, least-sized piece of work in the whole milestone. Nothing today tracks "this value is simultaneously data-element X AND data-element Y, distinguishably."
+2. **Typed source/sink registries** mapped onto `DataFlowGraph v1`'s `node.kind`/`subtype` taxonomy — distinct from the taint engine's existing 655-entry threat-family-keyed catalog. Likely a reclassification pass over that catalog, not a from-scratch build, but the mapping doesn't exist anywhere yet.
+3. **A compact predecessor/provenance DAG with bounded, non-eager path reconstruction** (FR-303) — the taint engine doesn't need this (boolean tainted/not, not "the ordered path"). SARIF `codeFlows` is the closest precedent, but per-finding, not a durable queryable graph structure.
+4. **Graph-builder**: normalizing engine output into the `DataFlowGraph v1` envelope — nothing produces this today except the hand-written fixture generator.
+5. **Coverage/candidate-ledger accounting** in the DataFlowGraph v1 sense (AC-11's "disconnected sources/sinks remain visible with a coverage reason") — the posture layer's coverage/scan-health machinery is finding-shaped, not source/sink-inventory-shaped.
+6. **Transformation-*kind* recognition** (mask/hash/tokenize/encrypt/... vs. the taint engine's binary "is a sanitizer for family X") — AC-02's masked-vs-raw distinction depends entirely on this existing, even though full handling-verdict *credit* is Milestone 2.
+7. **"Initial" DB/log/file/queue/HTTP/AI lineage** — recognizing a sink's *category* without doing full external resolution. The PRD doesn't draw this line precisely; §4 below draws it explicitly.
+
+## 4. Four decisions this scoping makes explicitly (so sub-project plans don't have to improvise them)
+
+These are the places the research pass found real ambiguity or fork risk. Per "go with your recommendations," each gets a recommended answer rather than being left open — flag disagreement before the corresponding sub-project starts, since reversing one after code exists is a rewrite, not a patch.
+
+**Decision 1 — Field identity is a new state shape; do not reuse `SummaryCache`'s context shape directly.**
+FR-301 requires preserving multiple distinct field identities through a shared function without merging them. The taint engine's existing summary-context granularity is per-parameter boolean (`f(obj)` with `obj.a` tainted is indistinguishable from `obj.b` tainted). Reusing that shape naively would silently violate FR-301 the first time a benchmark case exercises it. **Recommendation:** build a new field-identity-aware summary representation (own `summaries.js` in `scanner/src/lineage/`), reusing only the *pure* underlying utilities (`access-paths.js`'s lattice structure, IR walking, call-graph resolution) per §18.1 — not the taint engine's `SummaryCache` state shape or caching keys. This is Sub-project A's first real deliverable, not an assumption baked into later tasks.
+
+**Decision 2 — AC-01/AC-02/AC-07's protection-verdict language is satisfied honestly by universal `not_assessed`/`unknown`, except transformation-*kind* recognition.**
+Milestone 0's `protection.js` treats "unknown" as a first-class, honest result (Product Principle 2). AC-01 ("each sink shows its own handling, transit, or at-rest verdict") is satisfiable with every edge showing `not_assessed`/`unknown` — that IS a real verdict, just not a resolved one. AC-02 is sharper ("masked flow... may receive handling-control credit") — this needs transformation-*kind* recognition (item 6 in §3) to exist, but NOT full handling-verdict analysis end-to-end (that's Milestone 2's FR-401–405, separately gated). **Recommendation:** Sub-project D (transformation-kind recognition) is in scope for Milestone 1; awarding verdict "credit" from that recognition is explicitly out of scope and stays `not_assessed` until Milestone 2.
+
+**Decision 3 — the benchmark corpus is its own sub-project, sized and sequenced explicitly, never folded into engine tasks.**
+§22.2's "100+ positive / 100+ clean flows across every source/sink category, direct/aliased/cross-file/interprocedural/serialized/DB/queue/API/AI paths" scale is realistically a multi-task effort in its own right — the existing `bench/data-lineage/` is 3 seed fixtures from Milestone 0, nowhere near this scale. **Recommendation:** treat it as Sub-project E, running in parallel with (not sequentially blocked by) engine sub-projects once the engine has *some* working output to validate against, modeled on `bench/cve-replay/`'s baseline-gated pattern.
+
+**Decision 4 — performance is measured from day one, not gated from day one.**
+§21's "no more than 35% p50 overhead" target has no milestone tag, but full gating is unnecessary risk this early. **Recommendation:** add a lightweight, non-blocking benchmark harness (Sub-project G, small) once the engine has real output on a real repo, so a regression is visible in the numbers even before it's a release gate — defer the actual gate to whenever Milestone 3/5 performance-hardening work happens.
+
+One more scope line worth stating precisely rather than inferring: **"comparison against current privacy artifacts"** (§26's last deliverable bullet, one line, underspecified in the PRD) is scoped here as a **one-time diff report** — the engine's real output on the flagship demo repo vs. the hand-built `flagship-graph.json` fixture, documenting where they agree/disagree and why — not a standing comparison harness or a dual-running migration mode (§19.1's heavier mechanism is for the actual cutover, which is a later milestone concern once the engine is trusted).
+
+## 5. Sub-project breakdown (recommended order)
+
+Each row is a plannable unit — right-sized for its own `writing-plans` pass and its own `subagent-driven-development` execution, the same process used for Milestones 0's three plans this session. Sizes are relative complexity, not time estimates.
+
+| # | Sub-project | Depends on | Size | What it delivers |
+|---|---|---|---|---|
+| A | **Field-identity engine core (design spike + intraprocedural)** | Milestone 0 contract | **Very Large** | Resolves Decision 1 as a short design note first (which utilities are reused vs. reimplemented, per-module, not left ad hoc), then builds the field-identity lineage state and intraprocedural (single-function) tracking on top of the real JS/TS IR. No interprocedural or path DAG yet — proves the core representation on the smallest possible slice first. |
+| B | **Interprocedural summaries** | A | **Large** | Extends A across function/file boundaries: parameters, returns, captured values, receiver fields, mutations (FR-302). This is where Decision 1's reuse boundary gets tested for real. |
+| C | **Path DAG + bounded reconstruction** | A, B | **Large** | `path-store.js`: compact predecessor/provenance structure, path budget/truncation semantics designed alongside it (not retrofitted — §18.4's "never translate 'path budget exhausted' into 'no path'" is a real constraint on the data structure, not just the UI). Multiple-path support (FR-305) and implicit/widened-flow marking (FR-306) land here. |
+| D | **Source/sink registries + transformation-kind recognition** | Milestone 0 contract; can start in parallel with A | **Medium** | Reclassifies the existing taint catalog into `DataFlowGraph v1` node kind/subtype categories (FR-101/FR-201's full inventory); adds transformation-*kind* recognition (mask/hash/tokenize/encrypt/etc., needed for AC-02 per Decision 2). Also delivers "initial" DB/log/file/queue/HTTP/AI lineage — sink-*category* recognition only, no field-level mapping (that line is Milestone 2's). |
+| E | **Graph builder + coverage/candidate ledger** | A, B, D (needs real engine output and registries to normalize) | **Medium** | `graph-builder.js`: normalizes engine output into the validated `DataFlowGraph v1` envelope; coverage accounting so disconnected sources/sinks stay visible with a reason (AC-11). This is the sub-project that makes the engine's output real graphs for the first time, wired into the existing scan CLI path. |
+| F | **JS/TS benchmark corpus** | D (needs registries to know what to test); can start once D lands, run in parallel with A/B/C | **Large** | The 100+/100+ scale corpus per §22.2, JS/TS only, structured like `bench/cve-replay/`'s baseline-gated pattern (own `bench/lineage/` directory). Sized and sequenced independently per Decision 3 — not folded into engine tasks. |
+| G | **Comparison report + light performance harness** | E, F | **Small** | The one-time flagship-fixture-vs-real-output diff report (Decision 4's scoping), plus a non-blocking performance measurement harness per Decision 4. |
+| H | **Exit-gate closure** | All above | **Small** | Runs AC-01, AC-02, AC-07, AC-11, and schema completeness against the real JS/TS corpus (F); this is verification and cleanup, not new engine capability — the milestone's actual "done" checkpoint. |
+
+**Recommended sequencing:** A → (B and D can run in parallel once A's design note lands) → C → E → (F can start once D lands, runs in parallel with B/C) → G → H. D doesn't block A and could start first if there's appetite to parallelize early, since it touches almost entirely different code (catalog reclassification, not engine internals).
+
+## 6. What I'd plan first
+
+**Sub-project A**, specifically its design-spike half (Decision 1's per-module reuse-boundary ADR, plus the field-identity state shape), is the right first `writing-plans` target: everything else in this table either depends on it directly or benefits from its reuse-boundary decisions being settled before more code gets written against an assumption. It's also the highest-uncertainty piece — the PRD itself gives it no algorithm, just a requirement (FR-301) — so a focused design pass before a full task-by-task implementation plan reduces the risk of a mid-implementation rewrite the way Decision 1 already flagged as a real failure mode.
+
+I'd suggest: write a `writing-plans`-format plan for Sub-project A's design spike alone first (small enough to be one plan, output is a short ADR-style doc plus the intraprocedural engine skeleton with real tests against a handful of hand-picked JS/TS cases), get that reviewed and merged, and only then plan B/C/D/E/F/G/H — each of which can now cite A's settled decisions instead of re-litigating them.
+
+## 7. Explicitly out of scope for all of Milestone 1 (confirmed, not inferred)
+
+Any language beyond JS/TS; external destination resolution; DB/queue field-level mapping beyond category recognition; any protection-verdict *analysis* (transit/at-rest/handling beyond `not_assessed`/`unknown`, except transformation-kind recognition per Decision 2); policy/governance verdicts; any UI or local server/API work (Milestone 3 already has its static-fixture-driven prototype); all seven decision-intelligence capabilities, exports, MCP tools, DPIA/RoPA, simulation, runtime twin, remediation (Milestones 4/5).
