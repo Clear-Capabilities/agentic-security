@@ -140,8 +140,19 @@ function renderTraceStep(step, number) {
   }
 
   if (step.protection) {
-    const visual = protectionVisual(step.protection.handling.verdict);
-    bodyChildren.push(el('div', { class: 'trace-step-mapping' }, `${visual.glyph} Handling: ${visual.label}`));
+    const dims = [
+      ['Transit', step.protection.transit.verdict],
+      ['At rest', step.protection.atRest.verdict],
+      ['Handling', step.protection.handling.verdict],
+    ];
+    for (const [label, verdict] of dims) {
+      const visual = protectionVisual(verdict);
+      bodyChildren.push(el('div', { class: 'trace-step-mapping' }, `${visual.glyph} ${label}: ${visual.label}`));
+    }
+  }
+
+  if (step.evidenceRefs?.length > 0) {
+    bodyChildren.push(el('div', { class: 'trace-step-mapping' }, `${step.evidenceRefs.length} evidence reference(s)`));
   }
 
   if (step.kind === 'sink') {
