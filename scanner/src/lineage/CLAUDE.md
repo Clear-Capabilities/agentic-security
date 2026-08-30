@@ -6,7 +6,9 @@ convention of not committing in-progress PRDs; ask the maintainer for the
 current copy if you need it).
 Isolated by design from `scanner/src/dataflow/`'s taint engine — see that
 package's own CLAUDE.md for why (D-0047's precedent: a second, independent
-engine sharing only pure, stateless utilities, never mutable taint state).
+engine sharing only pure, stateless utilities, never mutable taint state —
+e.g. `access-paths.js`'s `accessPathOf`/`pathIsCoveredByPrefix`/`isCoveredBy`,
+never `engine.js`'s live taint state).
 
 ## What's here (Milestone 0 — contract and fixture only)
 
