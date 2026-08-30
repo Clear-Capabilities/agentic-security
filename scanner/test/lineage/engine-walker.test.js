@@ -155,20 +155,21 @@ test('FR-301 regression (final whole-branch review counter-example): a field rea
 });
 
 test('returnFacts deduplicates a revisited return node instead of pushing a stale duplicate entry (Fix 2 regression)', () => {
-  // A diamond CFG where the join node (n4, the return) is reached by the
-  // worklist BEFORE both of its predecessors have contributed their state,
-  // forcing at least one revisit before the incoming join settles:
-  //
-  //   n0 (entry) -> n1 (if)
-  //   n1 -> n2 (assign x = user.email) -> n4 (return x)
-  //   n1 -> n3 (assign x = user.ssn)   -> n4 (return x)
-  //
-  // n4's succ list is ordered so its FIRST predecessor to reach it (n2) is
-  // processed, queuing n4; n4 runs and records a returnFact carrying only
-  // data:email (n3 hasn't run yet). n3 then runs, joins into n4's inState,
-  // and re-queues n4 — a genuine revisit. Before Fix 2, this produced TWO
-  // entries in returnFacts for the same nodeId, the first stale and missing
-  // data:ssn.
+  // A diamond CFG where the join node (n4, the return) is revisited by the
+  // worklist: both of its predecessors (n2, n3) are siblings under the same
+  // `if`, so both get queued together and BOTH run (iterations 3 and 4)
+  // before n4 is first dequeued (iteration 5) — under this CFG's FIFO
+  // timing, n4's incoming join has therefore already settled to the full
+  // union by its first visit. So pre-fix (a plain push on every visit) this
+  // specific CFG does NOT reproduce a stale-then-correct pair; it reproduces
+  // the OTHER half of the original bug: n4 gets dequeued twice (once queued
+  // by n2's run, once by n3's run), so it runs twice and pushes two
+  // IDENTICAL full-union entries for the same nodeId. That is still a real,
+  // separate violation of "one entry per node" (a naive `.find(nodeId)`
+  // consumer only sees the first anyway, but `.filter(nodeId)` or a length
+  // assertion would wrongly see 2), and this test remains a valid regression
+  // guard for it. It does NOT exercise the stale-weaker-entry half of the
+  // bug — see the "skewed CFG" test below for that.
   const fn = {
     params: ['user'],
     cfg: {
@@ -192,6 +193,56 @@ test('returnFacts deduplicates a revisited return node instead of pushing a stal
   assert.equal(factsForN4.length, 1, 'exactly one returnFacts entry for the revisited return node, not a stale duplicate');
   assert.deepEqual([...factsForN4[0].identities].sort(), ['data:email', 'data:ssn'],
     'the single entry must carry the UNION of every branch, not just whichever branch happened to reach the node first');
+});
+
+test('returnFacts unions a genuinely STALE, weaker first visit with a later, stronger one (skewed-timing regression, complementary to the test above)', () => {
+  // A CFG deliberately skewed so the two branches reach the return node at
+  // DIFFERENT worklist times, unlike the symmetric diamond above: the
+  // data:ssn branch (n3) has an extra intermediate hop (n3b, a noop) before
+  // it reaches the return node (n4), while the data:email branch (n2) goes
+  // straight there.
+  //
+  //   n0 (entry) -> n1 (if)
+  //   n1 -> n2 (assign x = user.email) -----------> n4 (return x)
+  //   n1 -> n3 (assign x = user.ssn) -> n3b (noop) -> n4
+  //
+  // Trace (FIFO worklist): n2 and n3 both run before n4 is first queued.
+  // n2's run queues n4 with ONLY n2's contribution (x = {email}) — n3's
+  // contribution hasn't reached n4 yet, it's still sitting at n3b. n4 is
+  // dequeued and runs with this partial state: a genuinely stale returnFact
+  // carrying only data:email. n3b then runs, propagates n3's state into
+  // n4's inState (joining to {email, ssn}), and re-queues n4. n4 runs again
+  // with the full union. Pre-fix (a plain push on every visit — see git
+  // history on Fix 2), this produces a real [stale {email}, correct
+  // {email, ssn}] pair, in that order — exercising the more consequential
+  // half of the original bug that the symmetric-diamond test above does
+  // not. Confirmed via temporary revert of round 1's Fix 2 (the
+  // returnFactsByNode Map accumulation) that this CFG shape genuinely
+  // reproduces a stale-then-stronger pair before re-applying the fix.
+  const fn = {
+    params: ['user'],
+    cfg: {
+      entry: 'n0', exit: 'n6',
+      nodes: {
+        n0: { kind: 'entry', line: 1, succ: ['n1'], pred: [] },
+        n1: { kind: 'if', line: 1, succ: ['n2', 'n3'], pred: ['n0'], cond: { kind: 'ident', name: 'flag' } },
+        n2: { kind: 'assign', line: 2, succ: ['n4'], pred: ['n1'],
+          target: 'x', source: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'email' } },
+        n3: { kind: 'assign', line: 3, succ: ['n3b'], pred: ['n1'],
+          target: 'x', source: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'ssn' } },
+        n3b: { kind: 'noop', line: 3, succ: ['n4'], pred: ['n3'] },
+        n4: { kind: 'return', line: 4, succ: ['n6'], pred: ['n2', 'n3b'], value: { kind: 'ident', name: 'x' } },
+        n6: { kind: 'exit', line: 4, succ: [], pred: ['n4'] },
+      },
+    },
+  };
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  const factsForN4 = result.returnFacts.filter(f => f.nodeId === 'n4');
+  assert.equal(factsForN4.length, 1, 'exactly one returnFacts entry for the revisited return node, not a stale-then-correct pair');
+  assert.deepEqual([...factsForN4[0].identities].sort(), ['data:email', 'data:ssn'],
+    'the single entry must carry the FULL unioned identity set, not the first (weaker, stale) visit\'s partial one');
 });
 
 test('aliasing an object through a plain variable keeps field isolation through the alias (regression — a final review found this survives round 1\'s fix)', () => {
