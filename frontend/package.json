@@ -5,7 +5,7 @@
   "description": "Data Flow Explorer clickable prototype — zero build step, plain ES modules.",
   "type": "module",
   "scripts": {
-    "test": "node --test test/escape-html.test.js test/contrast.test.js test/state.test.js test/fixture-module-parity.test.js test/dom.test.js test/shell.test.js test/protection-visual.test.js test/architecture-view.test.js test/architecture-view-render.test.js test/evidence-inspector.test.js test/flow-path.test.js",
+    "test": "node --test test/escape-html.test.js test/contrast.test.js test/state.test.js test/fixture-module-parity.test.js test/dom.test.js test/shell.test.js test/protection-visual.test.js test/architecture-view.test.js test/architecture-view-render.test.js test/evidence-inspector.test.js test/flow-path.test.js test/privacy-view.test.js",
     "generate-fixture": "node scripts/generate-fixture-module.mjs",
     "serve": "python3 -m http.server 8420"
   }
