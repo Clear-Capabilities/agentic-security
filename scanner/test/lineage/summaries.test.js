@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
-import { emptyFieldSummary, FieldIdentitySummaryCache, entryStateFromCall, applyAtCallSite, createCallSummaryResolver, createCallGraphLookup } from '../../src/lineage/summaries.js';
+import { emptyFieldSummary, FieldIdentitySummaryCache, entryStateFromCall, applyAtCallSite, createCallSummaryResolver, createCallGraphLookup, summaryFromAnalysisResult } from '../../src/lineage/summaries.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
 import { buildCallGraph } from '../../src/ir/callgraph.js';
 
@@ -294,6 +294,31 @@ test('createCallSummaryResolver unions identities across ALL of a function\'s re
   callerState = addIdentity(callerState, 'q.y', 'data:q-y');
   const result = resolver({ kind: 'ident', name: 'pick' }, [{ kind: 'ident', name: 'p' }, { kind: 'ident', name: 'q' }, { kind: 'literal', value: true }], callerState);
   assert.deepEqual([...result.returnFlat].sort(), ['data:p-x', 'data:q-y'], 'both return sites\' identities must be present, not just one');
+});
+
+test('summaryFromAnalysisResult unions identities across every return site, not just the first', () => {
+  const analysisResult = {
+    exitState: null,
+    returnFacts: [
+      { nodeId: 'n1', line: 2, identities: new Set(['data:email']) },
+      { nodeId: 'n2', line: 4, identities: new Set(['data:ssn']) },
+    ],
+    mutatedParams: new Map([['x', new Set(['data:x'])]]),
+    widenings: [{ reason: 'unresolved-call', atPath: 'y', line: 9 }],
+  };
+
+  const summary = summaryFromAnalysisResult(analysisResult);
+
+  assert.deepStrictEqual([...summary.returnFlat].sort(), ['data:email', 'data:ssn']);
+  assert.deepStrictEqual(summary.returnByPath, new Map());
+  assert.strictEqual(summary.mutatedParams, analysisResult.mutatedParams);
+  assert.strictEqual(summary.widenings, analysisResult.widenings);
+});
+
+test('summaryFromAnalysisResult with no return facts produces an empty returnFlat', () => {
+  const analysisResult = { exitState: null, returnFacts: [], mutatedParams: new Map(), widenings: [] };
+  const summary = summaryFromAnalysisResult(analysisResult);
+  assert.strictEqual(summary.returnFlat.size, 0);
 });
 
 // Sub-project B, increment 3: createCallGraphLookup — a real lookupCallee

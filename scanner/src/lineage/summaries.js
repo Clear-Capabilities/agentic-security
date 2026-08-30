@@ -181,25 +181,39 @@ export function createCallSummaryResolver(cache, lookupCallee) {
       // returning an empty, honestly-unrefined result — precision there
       // is increment B5's job, not this fix's).
       const result = analyzeFunctionFieldIdentity(fn, es, { resolveCallSummary });
-      // Union across EVERY return site, not just the first — a function
-      // with multiple return statements (e.g. an early-return branch) must
-      // have all of them reflected, not just whichever happened to be
-      // recorded first. This is a genuine correctness improvement over
-      // increment B1's own round-trip test's `returnFacts[0]` shortcut
-      // (that test only ever exercised a single-return-site function, so
-      // the shortcut was harmless there — this shared, reusable resolver is
-      // the right place to do it correctly going forward).
-      const returnFlat = new Set();
-      for (const rf of result.returnFacts) {
-        for (const id of rf.identities) returnFlat.add(id);
-      }
-      return {
-        returnFlat,
-        returnByPath: new Map(), // still flat-only — see B1's disclosed limitation in CLAUDE.md; not closed by this increment either
-        mutatedParams: result.mutatedParams,
-        widenings: result.widenings,
-      };
+      return summaryFromAnalysisResult(result);
     });
+  };
+}
+
+// Converts analyzeFunctionFieldIdentity's raw per-function result
+// (`{exitState, returnFacts, mutatedParams, widenings}`) into the
+// FieldSummary shape (`{returnFlat, returnByPath, mutatedParams,
+// widenings}`) that FieldIdentitySummaryCache stores and every consumer of
+// a resolved summary reads. Extracted (increment B4) from what was
+// previously inline-only logic inside createCallSummaryResolver's own
+// cache.compute callback, so increment B4's project-wide driver can seed
+// the cache with the exact SAME conversion for a function's own top-level
+// analysis, rather than reimplementing it a second time and risking the
+// two copies drifting apart.
+//
+// Unions identities across EVERY return site, not just the first — a
+// function with multiple return statements (e.g. an early-return branch)
+// must have all of them reflected, not just whichever happened to be
+// recorded first. This was a genuine correctness improvement over
+// increment B1's own round-trip test's `returnFacts[0]` shortcut (that
+// test only ever exercised a single-return-site function, so the shortcut
+// was harmless there).
+export function summaryFromAnalysisResult(result) {
+  const returnFlat = new Set();
+  for (const rf of result.returnFacts) {
+    for (const id of rf.identities) returnFlat.add(id);
+  }
+  return {
+    returnFlat,
+    returnByPath: new Map(), // still flat-only — see B1's disclosed limitation in CLAUDE.md; not closed by this increment either
+    mutatedParams: result.mutatedParams,
+    widenings: result.widenings,
   };
 }
 
