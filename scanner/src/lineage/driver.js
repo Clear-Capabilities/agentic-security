@@ -84,8 +84,11 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
     // of an identical one. Today every entry state is emptyState() (no
     // source registry yet), so no identity can actually differ between the
     // two computations and this is unobservable; it becomes load-bearing
-    // the moment entry states carry real identities, which is why it's
-    // called out for increment B5/B6 rather than silently relied upon.
+    // the moment entry states carry real identities. B5 and B6 (Sub-project
+    // B's final two increments) have both since landed without addressing
+    // this — it remains open for whichever later sub-project next needs
+    // real, non-empty entry states through this driver, called out here
+    // rather than silently relied upon.
     cache.set(fn.qid, emptyState(), summaryFromAnalysisResult(result));
   }
 

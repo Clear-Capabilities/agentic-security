@@ -13,10 +13,26 @@ export function emptyFieldSummary() {
 // — per the isolation principle every prior increment in this sub-project
 // has verified holds, the two engines' tuning knobs must stay decoupled,
 // so an operator tuning one engine's cap can never silently affect the
-// other's. Mirrors dataflow's own exact validation logic
+// other's. Mirrors dataflow's own exact validation FORMULA
 // (`Number.isFinite(...) && ... >= 0`, falling back to 16 on anything
 // invalid or absent) — same reasoning, independently re-derived for this
 // package rather than shared config.
+//
+// The formula match does NOT extend to what a cap of exactly `0` means,
+// though — a final whole-branch review found and corrected an earlier,
+// wrong claim of full equivalence here (see the regression test's own
+// comment in summaries.test.js for the full trace). dataflow's own
+// compute() exempts the empty-entry context from its cap entirely ("Empty
+// entry is always allowed"), so a cap of 0 there is genuinely monovariant
+// — the empty-entry pass still runs, over-cap contexts reuse it. THIS
+// package's compute() has no such exemption (unchanged since B1): the
+// empty-entry context counts against the cap like any other, so
+// AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS=0 degrades EVERY context,
+// including the empty one, to an empty summary with nothing real to fall
+// back to — resolution goes fully off, not merely monovariant. Verified
+// empirically through a real call-graph/parser scenario. Closing this gap
+// (giving the empty-entry context the same exemption dataflow's own has)
+// is a candidate for a later increment; nothing in B1-B6 commits to it.
 //
 // Evaluated as a FUNCTION (not a module-level constant) specifically so it
 // is read fresh on every `new FieldIdentitySummaryCache()` call with no

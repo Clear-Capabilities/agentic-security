@@ -114,18 +114,37 @@ test('FieldIdentitySummaryCache: an invalid env var value (non-numeric or negati
   // increment's explicit, repeated architecture requirement. `Number('')`
   // is `0` in JS (not `NaN`) — `Number.isFinite(0) && 0 >= 0` is true, so an
   // empty env var value is genuinely a VALID cap of 0 under this exact
-  // formula (matching dataflow's own documented "0 = pure monovariant /
-  // disables context-sensitivity" semantics), not something that falls
-  // back to 16. Confirmed dataflow/summaries.js has the byte-identical
-  // formula and therefore the byte-identical behavior for
-  // AGENTIC_SECURITY_KCFA_MAX_CONTEXTS='' — this is existing, mirrored
-  // precedent, not a defect introduced here. The original plan draft's
-  // loop included '' expecting a fall-back-to-16, which contradicts the
-  // plan's own Step-3-mandated formula; that assertion would have passed
-  // vacuously anyway (a cap of 0 degrades every non-empty context from the
-  // very first one, so "the 17th distinct context degrades" holds true
-  // whether the real cap is 0 or 16 — it would not have caught the
-  // discrepancy). See the Task 1 report for the full trace.
+  // formula, not something that falls back to 16. The original plan
+  // draft's loop included '' expecting a fall-back-to-16, which
+  // contradicts the plan's own Step-3-mandated formula; that assertion
+  // would have passed vacuously anyway (a cap of 0 degrades every
+  // non-empty context from the very first one, so "the 17th distinct
+  // context degrades" holds true whether the real cap is 0 or 16 — it
+  // would not have caught the discrepancy).
+  //
+  // CORRECTION (a final whole-branch review found and empirically
+  // disproved the ORIGINAL version of this comment's claim that cap=0
+  // here matches dataflow's own documented "0 = pure monovariant"
+  // semantics for AGENTIC_SECURITY_KCFA_MAX_CONTEXTS=0): the two engines'
+  // validation FORMULA is genuinely byte-identical, but their CAP-COUNTING
+  // is NOT. dataflow/summaries.js's own compute() explicitly exempts the
+  // empty-entry context from the cap ("Empty entry is always allowed —
+  // it's the base summary the pre-pass computes for every function"), so
+  // cap=0 there still lets the empty-entry pass run and every over-cap
+  // context reuse that real base summary — genuinely monovariant, not
+  // disabled. This package's own compute() (unchanged by this increment,
+  // from B1) has no such exemption: the empty-entry context counts against
+  // the cap like any other, so cap=0 here degrades EVERY context,
+  // including the empty one, to `emptyFieldSummary()` with no real base to
+  // fall back to — resolution is silently OFF, not merely monovariant.
+  // Verified via a real call-graph/parser scenario: cap=16 resolves a
+  // seeded identity through a real call site; cap=0 resolves nothing.
+  // AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS=0 is therefore NOT this
+  // package's equivalent of dataflow's "pure monovariant" setting —
+  // closing that gap (giving the empty-entry context the same
+  // cap-exemption dataflow's own does) is a candidate for a later
+  // increment, not committed to by B1-B6. See the Task 1 report for the
+  // original trace and the final review for this correction's own trace.
   for (const badValue of ['not-a-number', '-5']) {
     const prev = process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
     try {
