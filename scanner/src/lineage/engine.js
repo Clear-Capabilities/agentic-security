@@ -600,6 +600,34 @@ function step(node, stateIn, widenings, ctx) {
         // same way the parser already does for declaration-form destructuring
         // — deferred (matching the sibling engine's own precedent of skipping
         // rather than guessing) rather than attempted here.
+        //
+        // Path provenance (Sub-project C, increment 2, Task 2, §10.2
+        // `assign`/target-not-a-string row): a genuine LOSS site —
+        // `lossReason: 'unsupported-target'`. Resolving `node.source` here
+        // is extra, discarded computation when no recorder is present
+        // (Decision 1), so it is guarded on `ctx?.recordHop`, exactly like
+        // `contributingKeysAllIds` elsewhere in this file. The design doc's
+        // own dated correction to this row is explicit that this is NOT
+        // merely discarded computation once a recorder IS present: running
+        // the full resolveExprIdentities tree on node.source genuinely
+        // EMITS real production/selection in-half hops for whatever it
+        // reads — these correctly join with this row's own loss marker to
+        // show "this data was read here, then lost, because the target
+        // couldn't be represented" (arguably necessary for §18.4's
+        // transparency requirement, not incidental). If node.source
+        // resolves no identity at all, none of that fires and there is
+        // nothing to lose.
+        if (ctx?.recordHop) {
+          const resolved = resolveExprIdentities(stateIn, node.source, ctx);
+          const allIds = new Set([...residualFlat(resolved.flat, resolved.byPath), ...[...resolved.byPath.values()].flatMap((s) => [...s])]);
+          for (const id of allIds) {
+            ctx.recordHop({
+              kind: 'write-out', subKind: 'assign',
+              fromPath: null, toPath: null, dataElementId: id,
+              syntacticPath: null, widenReason: null, lossReason: 'unsupported-target',
+            });
+          }
+        }
         return { state: stateIn, returnFact: null };
       }
       const resolved = resolveExprIdentities(stateIn, node.source, ctx);
@@ -619,7 +647,24 @@ function step(node, stateIn, widenings, ctx) {
         let wState = stateIn;
         if (containerPath) {
           const allIds = new Set([...residualFlat(resolved.flat, resolved.byPath), ...[...resolved.byPath.values()].flatMap((s) => [...s])]);
-          for (const id of allIds) wState = addIdentity(wState, containerPath, id);
+          // Path provenance (§10.2 `assign`/wildcard-target row): one
+          // write-out/assign-weak record per (containerPath, id) — toPath
+          // is the DEFINITE PREFIX before the wildcard (Decision 5, same
+          // discipline as `member`'s wildcard-read branch), never the raw
+          // '*'-containing `node.target`, which is carried instead on
+          // `syntacticPath`. This is a WEAK update (no kill), so
+          // `widenReason: 'dynamic-property-key'` — mirrors the widenings
+          // ledger push below, not a new/better reason.
+          for (const id of allIds) {
+            wState = addIdentity(wState, containerPath, id);
+            if (ctx?.recordHop) {
+              ctx.recordHop({
+                kind: 'write-out', subKind: 'assign-weak',
+                fromPath: null, toPath: containerPath, dataElementId: id,
+                syntacticPath: node.target, widenReason: 'dynamic-property-key', lossReason: null,
+              });
+            }
+          }
           if (allIds.size > 0) {
             widenings.push({ atPath: containerPath, dataElementIds: [...allIds], reason: 'dynamic-property-key', line: node.line });
           }
@@ -701,6 +746,21 @@ function step(node, stateIn, widenings, ctx) {
         const r = resolveExprIdentities(stateIn, arg, ctx);
         if (r.flat.size > 0) {
           widenings.push({ atPath: null, dataElementIds: [...r.flat], reason: 'unresolved-call-arg', line: node.line });
+        }
+        // Path provenance (§10.2 `call` bare-statement row): one
+        // write-out/call-arg record per id in the argument's resolved
+        // identity set — the value LEAVES the analysis via an argument.
+        // This is an ESCAPE, not a loss (the natural sink-attachment point
+        // for Sub-project D), so no lossReason/widenReason here — mirrors
+        // `return`'s own write-out hop shape (toPath deliberately null).
+        if (ctx?.recordHop) {
+          for (const id of r.flat) {
+            ctx.recordHop({
+              kind: 'write-out', subKind: 'call-arg',
+              fromPath: null, toPath: null, dataElementId: id,
+              syntacticPath: null, widenReason: null, lossReason: null,
+            });
+          }
         }
       }
       return { state: stateIn, returnFact: null };

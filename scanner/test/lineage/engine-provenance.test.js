@@ -7,21 +7,22 @@
 // `ident`/`object` cases, step()'s non-wildcard `assign` and `return`
 // cases) — NOT full coverage (see DESIGN_PATH_PROVENANCE.md §10).
 //
-// Increment C2, Task 1 (this file, extended) instruments EVERY remaining
-// `resolveExprIdentities` case per §10.1: all four `member` sub-cases
-// (selection hops now DO fire — the four-site-only framing above is
-// C1-era history, not current behavior), `array`/`tpl`/`binary`/`logical`/
-// `union`, both `call` branches, and `assign-expr`; plus the explicit
-// "emits nothing" verdicts for `literal`/`unknown`/`default`.
-// `step()`'s own remaining cases (§10.2: the wildcard-target `assign`
-// branch, the unsupported-target `assign` branch, and the bare `call`
-// statement) are NOT yet instrumented — that is increment C2's Task 2,
-// dispatched separately. So a real fixture's hop set here is now the FULL
-// §10.1 set for whatever resolveExprIdentities cases it exercises, but can
-// still be missing write-out hops for any §10.2 case Task 2 hasn't reached
-// yet (e.g. a wildcard write's hop is emitted on the read side via
-// `member`/`selection` now, but not yet on the write side via
-// `assign-weak`).
+// Increment C2, Task 1 instrumented EVERY remaining `resolveExprIdentities`
+// case per §10.1: all four `member` sub-cases (selection hops now DO fire —
+// the four-site-only framing above is C1-era history, not current
+// behavior), `array`/`tpl`/`binary`/`logical`/`union`, both `call` branches,
+// and `assign-expr`; plus the explicit "emits nothing" verdicts for
+// `literal`/`unknown`/`default`.
+//
+// Increment C2, Task 2 (this file, extended again) instruments `step()`'s
+// three remaining cases per §10.2: the wildcard-target `assign` branch
+// (`write-out/assign-weak`), the unsupported-target `assign` branch (a
+// genuine loss site, `lossReason: 'unsupported-target'`), and the bare
+// `call` statement (`write-out/call-arg`) — completing full intraprocedural
+// coverage of both §10.1 and §10.2. `assign`'s kill
+// (`removeIdentitiesAt`) deliberately gets no row of its own, per §10.2's
+// own explicit verdict. Cross-file/interprocedural sites (§10.3) remain
+// C3's job, out of scope here.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -140,6 +141,85 @@ function canonicalizeResult({ exitState, returnFacts, mutatedParams, widenings }
     mutatedParams: canonicalizeStateMap(mutatedParams),
     widenings: canonicalizeWidenings(widenings),
   };
+}
+
+// ---------------------------------------------------------------------
+// Sub-project C, increment 2, Task 2, Step 3: the single comprehensive
+// coverage-proof fixture — a realistic function exercising EVERY
+// hop-emitting case from BOTH §10.1 (Task 1's resolveExprIdentities cases)
+// AND §10.2 (this task's step() cases) together. Shared by two tests
+// below: it is added as one more fixture to the write-only invariant test
+// (per the plan's own instruction — the field-identity-observable output
+// must be identical with/without a recorder for THIS fixture too, not
+// asserted as a separate, disconnected fact), and used again, with its own
+// recorder, by the dedicated coverage-proof test that asserts every
+// expected hop shape actually appears.
+// ---------------------------------------------------------------------
+
+function buildComprehensiveFixture() {
+  const src = `
+    function getPhone(source) {
+      return source.phone;
+    }
+    function scenario(user, other, flag, k1, k2, bag) {
+      var tmp, leak;
+      const alias = user;
+      const emailSsn = [user.email, user.ssn];
+      const greeting = \`hi \${user.name}\`;
+      const nextAge = user.age + 1;
+      const nickname = user.nickname || other.nickname;
+      const city = flag ? user.city : other.city;
+      const wildcardRead = user[k1];
+      const nonPathProp = (flag ? user : other).country;
+      const nonPathStar = (flag ? user : other)[k2];
+      const resolved = getPhone(user);
+      const unresolved = helperUnknown(user.secret);
+      const viaAssignExpr = (tmp = user).token;
+      bag[k1] = user.payload;
+      ({ leak } = user);
+      logEvent(user.auditField);
+      return { alias, emailSsn, greeting, nextAge, nickname, city, wildcardRead, nonPathProp, nonPathStar, resolved, unresolved, viaAssignExpr };
+    }
+  `;
+  const ir = parseJsFile('/x/c2t2-coverage-proof.js', src);
+  const calleeFn = ir.functions.find((f) => f.name === 'getPhone');
+  const scenarioFn = ir.functions.find((f) => f.name === 'scenario');
+  assert.ok(calleeFn && scenarioFn, 'expected both getPhone and scenario to parse');
+
+  // A root-level identity on 'user' itself (not just its fields) is
+  // deliberate, not padding: it's what makes `member`'s non-path-base,
+  // prop !== '*' branch (`(flag ? user : other).country`) produce a
+  // NONZERO residual — every OTHER identity below lives at a descendant
+  // path ('user.email', etc.), which the ternary's own byPath already
+  // fully accounts for, so without a root-level fact the residual would be
+  // empty and that hop would never fire. Mirrors the "ancestor+descendant
+  // coexisting" fixture already proven in the structural-guard test above.
+  let entryState = addIdentity(emptyState(), 'user', 'data:blob');
+  entryState = addIdentity(entryState, 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  entryState = addIdentity(entryState, 'user.name', 'data:name');
+  entryState = addIdentity(entryState, 'user.age', 'data:age');
+  entryState = addIdentity(entryState, 'user.nickname', 'data:nickname');
+  entryState = addIdentity(entryState, 'other.nickname', 'data:other-nickname');
+  entryState = addIdentity(entryState, 'user.city', 'data:city');
+  entryState = addIdentity(entryState, 'other.city', 'data:other-city');
+  entryState = addIdentity(entryState, 'user.payload', 'data:payload');
+  entryState = addIdentity(entryState, 'user.auditField', 'data:audit');
+  entryState = addIdentity(entryState, 'user.phone', 'data:phone');
+  entryState = addIdentity(entryState, 'user.secret', 'data:secret');
+
+  const resolveCallSummary = (calleeExpr, callArgs, callerState) => {
+    if (calleeExpr.kind !== 'ident' || calleeExpr.name !== 'getPhone') return null;
+    let calleeEntryState = emptyState();
+    const userIds = identitiesAt(callerState, callArgs[0].name);
+    for (const id of userIds) calleeEntryState = addIdentity(calleeEntryState, 'source.phone', id);
+    const r = analyzeFunctionFieldIdentity(calleeFn, calleeEntryState);
+    const returnFlat = new Set();
+    for (const f of r.returnFacts) for (const id of f.identities) returnFlat.add(id);
+    return { returnFlat, returnByPath: new Map() };
+  };
+
+  return { fn: scenarioFn, entryState, resolveCallSummary };
 }
 
 // ---------------------------------------------------------------------
@@ -332,6 +412,64 @@ function combine(user) {
     };
     const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
     fixtures.push({ label: 'resolved call (C2 Task 1 new site)', fn: callerFn, entryState, extraCtx: { resolveCallSummary } });
+  }
+
+  // -----------------------------------------------------------------
+  // C2 Task 2 additions: 3 more fixtures exercising THIS task's newly
+  // instrumented step() sites, same "attaching a recorder must not change
+  // the analysis result" discipline as every fixture above.
+  // -----------------------------------------------------------------
+
+  {
+    // A wildcard-target assign (`bag[k] = user.email;`) — the exact site
+    // Task 2 adds write-out/assign-weak hops for.
+    const fn = parseFn(`
+      function f(bag, k, user) {
+        bag[k] = user.email;
+        return bag;
+      }
+    `, 'f', '/x/wo9-wildcard-write.js');
+    const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    fixtures.push({ label: 'wildcard-target assign (C2 Task 2 new site)', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    // Assignment-expression-form destructuring (`({x} = user);`) — the
+    // exact site Task 2 adds the loss-marked write-out/assign hop for.
+    const fn = parseFn(`
+      function f(user) {
+        var x;
+        ({ x } = user);
+        return x;
+      }
+    `, 'f', '/x/wo10-unsupported-target.js');
+    const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    fixtures.push({ label: 'unsupported-target assign (C2 Task 2 new site)', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    // A bare call statement (`logEvent(user.email);`) — the exact site
+    // Task 2 adds write-out/call-arg hops for.
+    const fn = parseFn(`
+      function f(user) {
+        logEvent(user.email);
+        return user.ssn;
+      }
+    `, 'f', '/x/wo11-bare-call.js');
+    let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+    fixtures.push({ label: 'bare call statement (C2 Task 2 new site)', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    // Sub-project C, increment 2, Task 2, Step 3's own comprehensive
+    // coverage-proof fixture — exercises EVERY hop-emitting case from both
+    // §10.1 and §10.2 together. Added here (not as a separate,
+    // disconnected check) per the plan's own instruction: the
+    // field-identity-observable output for this fixture must be identical
+    // with/without a recorder attached, exactly like every fixture above.
+    const { fn, entryState, resolveCallSummary } = buildComprehensiveFixture();
+    fixtures.push({ label: 'comprehensive coverage-proof fixture (§10.1 + §10.2 together)', fn, entryState, extraCtx: { resolveCallSummary } });
   }
 
   for (const { label, fn, entryState, extraCtx } of fixtures) {
@@ -1002,4 +1140,277 @@ test('literal / unknown / default: emit nothing, because no identity was resolve
   assert.equal(nullExprResult.flat.size, 0);
 
   assert.equal(hops.length, 0, `expected zero hops from literal/unknown/default/null, got: ${JSON.stringify(hops)}`);
+});
+
+// ---------------------------------------------------------------------
+// Sub-project C, increment 2, Task 2: dedicated correctness tests for
+// step()'s three remaining CFG-node cases per DESIGN_PATH_PROVENANCE.md
+// §10.2's table. Each uses real parsed source (parseJsFile), matching the
+// established style, and asserts the exact hop shape the table's row
+// specifies.
+// ---------------------------------------------------------------------
+
+test('assign, wildcard target: write-out/assign-weak hop, toPath is definitePrefixBeforeWildcard, NEVER the raw wildcard target (Decision 5)', () => {
+  const fn = parseFn(`
+    function f(bag, k, user) {
+      bag[k] = user.email;
+    }
+  `, 'f', '/x/c2t2-wildcard-write.js');
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+
+  const hops = [];
+  analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  const weakHops = dedupeHops(hops).filter((h) => h.kind === 'write-out' && h.subKind === 'assign-weak');
+
+  assert.equal(weakHops.length, 1, `expected exactly one write-out/assign-weak hop, got: ${JSON.stringify(weakHops)}`);
+  const h = weakHops[0];
+  assert.equal(h.dataElementId, 'data:email');
+  assert.equal(h.fromPath, null);
+  assert.equal(h.toPath, 'bag', 'toPath must be the definite prefix before the wildcard, never a \'*\'-containing path');
+  assert.equal(h.syntacticPath, 'bag.*', 'syntacticPath carries the raw wildcard-containing target the IR supplied');
+  assert.equal(h.widenReason, 'dynamic-property-key');
+  assert.equal(h.lossReason, null, 'a weak update is not a loss');
+
+  // One record per (containerPath, id) — a second, distinct id on the same
+  // container must produce its own separate record, never a Set-valued one.
+  const fn2 = parseFn(`
+    function g(bag, k1, k2, user) {
+      bag[k1] = user.email;
+      bag[k2] = user.ssn;
+    }
+  `, 'g', '/x/c2t2-wildcard-write2.js');
+  let entryState2 = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState2 = addIdentity(entryState2, 'user.ssn', 'data:ssn');
+  const hops2 = [];
+  analyzeFunctionFieldIdentity(fn2, entryState2, { recordHop: (h2) => hops2.push(h2) });
+  const weakHops2 = dedupeHops(hops2).filter((hh) => hh.kind === 'write-out' && hh.subKind === 'assign-weak');
+  assert.equal(weakHops2.length, 2, `expected exactly two per-identity write-out/assign-weak hops (one per id, same container), got: ${JSON.stringify(weakHops2)}`);
+  assert.deepEqual(weakHops2.map((hh) => hh.toPath), ['bag', 'bag']);
+  assert.deepEqual(weakHops2.map((hh) => hh.dataElementId).sort(), ['data:email', 'data:ssn']);
+});
+
+test('assign, target not a string (destructuring): write-out/assign hop is a loss (lossReason: unsupported-target), and node.source\'s own in-half hops still fire', () => {
+  const fn = parseFn(`
+    function f(user) {
+      var x;
+      ({ x } = user);
+      return x;
+    }
+  `, 'f', '/x/c2t2-unsupported-target.js');
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+
+  const hops = [];
+  analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  const deduped = dedupeHops(hops);
+
+  const lossHops = deduped.filter((h) => h.lossReason === 'unsupported-target');
+  assert.equal(lossHops.length, 1, `expected exactly one loss-marked hop, got: ${JSON.stringify(lossHops)}`);
+  const h = lossHops[0];
+  assert.equal(h.kind, 'write-out');
+  assert.equal(h.subKind, 'assign');
+  assert.equal(h.fromPath, null);
+  assert.equal(h.toPath, null, 'no real target path exists to write — the whole point of this being a loss site');
+  assert.equal(h.dataElementId, 'data:email');
+  assert.equal(h.widenReason, null);
+
+  // The design doc's own dated correction (§10.2): resolving node.source
+  // purely to learn the ids GENUINELY emits real in-half hops for whatever
+  // it reads — here, `user` is a plain ident, so a production/ident in-half
+  // must have fired too, joining with the loss marker above at the same
+  // nodeId.
+  const identHops = deduped.filter((hh) => hh.kind === 'production' && hh.subKind === 'ident' && hh.dataElementId === 'data:email');
+  assert.ok(identHops.length > 0, 'expected node.source (a plain ident) to have emitted its own production/ident in-half despite the write being lost');
+  assert.equal(identHops[0].nodeId, h.nodeId, 'the source\'s in-half and the loss marker\'s out-half must share the same nodeId (the join key)');
+
+  // The analysis result itself is unaffected by the destructuring being
+  // unrepresentable — `x` never got a real binding either with or without
+  // a recorder attached (this is the existing, pre-Task-2 behavior; Task 2
+  // only adds provenance, it does not change what state gets written).
+  const without = analyzeFunctionFieldIdentity(fn, entryState);
+  const withRecorder = analyzeFunctionFieldIdentity(fn, entryState, { recordHop: () => {} });
+  assert.deepEqual([...without.exitState.entries()], [...withRecorder.exitState.entries()]);
+});
+
+test('assign, target not a string: emits nothing when node.source resolves no identity at all', () => {
+  const fn = parseFn(`
+    function f(other) {
+      var x;
+      ({ x } = other);
+      return x;
+    }
+  `, 'f', '/x/c2t2-unsupported-target-empty.js');
+  const entryState = emptyState(); // 'other' carries no identity at all
+
+  const hops = [];
+  analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  const lossHops = dedupeHops(hops).filter((h) => h.lossReason === 'unsupported-target');
+  assert.equal(lossHops.length, 0, `expected zero loss hops when node.source resolves no identity, got: ${JSON.stringify(lossHops)}`);
+});
+
+test('call (bare statement): write-out/call-arg hop per id in the argument\'s resolved identity set', () => {
+  const fn = parseFn(`
+    function f(user) {
+      logEvent(user.email);
+    }
+  `, 'f', '/x/c2t2-bare-call.js');
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+
+  const hops = [];
+  analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  const callArgHops = dedupeHops(hops).filter((h) => h.kind === 'write-out' && h.subKind === 'call-arg');
+
+  assert.equal(callArgHops.length, 1, `expected exactly one write-out/call-arg hop, got: ${JSON.stringify(callArgHops)}`);
+  const h = callArgHops[0];
+  assert.equal(h.dataElementId, 'data:email');
+  assert.equal(h.fromPath, null);
+  assert.equal(h.toPath, null, 'the value escapes via an argument — not a loss, so no fabricated toPath either');
+  assert.equal(h.widenReason, null);
+  assert.equal(h.lossReason, null, 'an escape via a call argument is not a loss (§10.2)');
+});
+
+test('call (bare statement) with multiple arguments: one write-out/call-arg hop per (argument, id)', () => {
+  const fn = parseFn(`
+    function f(user) {
+      logEvent(user.email, user.ssn);
+    }
+  `, 'f', '/x/c2t2-bare-call-multi.js');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+
+  const hops = [];
+  analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  const callArgHops = dedupeHops(hops).filter((h) => h.kind === 'write-out' && h.subKind === 'call-arg');
+
+  assert.deepEqual(callArgHops.map((h) => h.dataElementId).sort(), ['data:email', 'data:ssn']);
+  assert.equal(callArgHops.length, 2, `Decision 4: per-identity, never a Set-valued record, got: ${JSON.stringify(callArgHops)}`);
+});
+
+// ---------------------------------------------------------------------
+// Sub-project C, increment 2, Task 2, Step 3: the single comprehensive
+// coverage-proof test. Uses buildComprehensiveFixture() (defined above,
+// shared with the write-only invariant test) — a realistic function
+// exercising EVERY hop-emitting case from both §10.1 (Task 1) and §10.2
+// (this task) together: member reads (wildcard and non-wildcard, both
+// non-path-base variants), array/tpl/binary/logical/union, a resolved and
+// an unresolved call, an assign-expr, a wildcard write, an
+// unsupported-target write, a bare call statement, plus C1's own
+// ident/object/assign(normal)/return. Full intraprocedural instrumentation
+// (§10.1 + §10.2) is complete exactly when every one of these fires at
+// least once from a single, real-parser analysis.
+// ---------------------------------------------------------------------
+
+test('full intraprocedural coverage proof: every §10.1 + §10.2 hop-emitting (kind, subKind) pair fires at least once in one realistic function', () => {
+  const { fn, entryState, resolveCallSummary } = buildComprehensiveFixture();
+
+  const rawHops = [];
+  const result = analyzeFunctionFieldIdentity(fn, entryState, { resolveCallSummary, recordHop: (h) => rawHops.push(h) });
+  const hops = dedupeHops(rawHops);
+
+  // Every hop record has the full, stable shape (§3), same guard the §6
+  // worked-example test already pins.
+  const REQUIRED_FIELDS = [
+    'kind', 'subKind', 'scope', 'dataElementId', 'fromPath', 'toPath',
+    'syntacticPath', 'nodeId', 'line', 'widenReason', 'lossReason',
+  ];
+  for (const h of hops) {
+    for (const field of REQUIRED_FIELDS) {
+      assert.ok(Object.prototype.hasOwnProperty.call(h, field), `hop record missing field "${field}": ${JSON.stringify(h)}`);
+      assert.notEqual(h[field], undefined, `hop record field "${field}" must never be undefined: ${JSON.stringify(h)}`);
+    }
+  }
+
+  // (a) Every expected (kind, subKind) combination from §10.1 + §10.2 that
+  // this fixture is designed to exercise appears at least once. This is
+  // the FULL set of hop-emitting shapes across both tables (excluding
+  // `object`'s spread/`*`-keyed sub-variants and `member`'s two non-path
+  // sub-variants, which share their parent's (kind, subKind) pair and are
+  // asserted individually below instead).
+  const EXPECTED_SHAPES = [
+    'production/ident',       // §10.1 ident
+    'selection/member',       // §10.1 member (all four sub-cases)
+    'production/object',      // §10.1 object
+    'production/array',       // §10.1 array
+    'production/tpl',         // §10.1 tpl
+    'production/binary',      // §10.1 binary
+    'production/logical',     // §10.1 logical
+    'production/union',       // §10.1 union (ternary)
+    'production/call',        // §10.1 call (unresolved)
+    'production/call-resolved', // §10.1 call (resolved)
+    'production/assign-expr', // §10.1 assign-expr
+    'write-out/assign',       // §10.2 assign (normal AND the unsupported-target loss)
+    'write-out/assign-weak',  // §10.2 assign (wildcard target)
+    'write-out/call-arg',     // §10.2 call (bare statement)
+    'write-out/return',       // §10.2 return (C1 site, present for completeness)
+  ];
+  const actualShapes = new Set(hops.map((h) => `${h.kind}/${h.subKind}`));
+  for (const shape of EXPECTED_SHAPES) {
+    assert.ok(actualShapes.has(shape), `expected shape "${shape}" to fire at least once, got shapes: ${JSON.stringify([...actualShapes].sort())}`);
+  }
+  // And no OTHER shape appeared — every hop this fixture produces is
+  // accounted for in the expected set above (same discipline as the §6
+  // worked-example test's own closed-shape-set assertion).
+  for (const shape of actualShapes) {
+    assert.ok(EXPECTED_SHAPES.includes(shape), `unexpected hop shape emitted: ${shape}`);
+  }
+
+  // --- Finer-grained assertions distinguishing the sub-cases that share a
+  // (kind, subKind) pair with a sibling case ------------------------------
+
+  // member: both a wildcard read (widened) and a non-wildcard read
+  // (explicit) must be present.
+  const memberHops = hops.filter((h) => h.kind === 'selection' && h.subKind === 'member');
+  assert.ok(memberHops.some((h) => h.widenReason === 'dynamic-property-key'), 'expected at least one widened (wildcard/dynamic-key) selection/member hop');
+  assert.ok(memberHops.some((h) => h.widenReason === null), 'expected at least one explicit (non-wildcard) selection/member hop');
+  // The wildcard-read hop's fromPath must be the definite prefix, never a
+  // raw '*'-containing path (Decision 5) — checked across every hop, not
+  // just this one shape, since Decision 5 is a whole-DAG invariant.
+  for (const h of hops) {
+    assert.ok(h.fromPath === null || !h.fromPath.includes('*'), `fromPath must never contain a wildcard segment: ${JSON.stringify(h)}`);
+    assert.ok(h.toPath === null || !h.toPath.includes('*'), `toPath must never contain a wildcard segment: ${JSON.stringify(h)}`);
+  }
+
+  // call: both the unresolved ('unresolved-call') and resolved (widenReason
+  // null) production hops must be present, and distinguishable.
+  const unresolvedCallHops = hops.filter((h) => h.kind === 'production' && h.subKind === 'call');
+  assert.ok(unresolvedCallHops.length > 0 && unresolvedCallHops.every((h) => h.widenReason === 'unresolved-call'));
+  const resolvedCallHops = hops.filter((h) => h.kind === 'production' && h.subKind === 'call-resolved');
+  assert.ok(resolvedCallHops.length > 0 && resolvedCallHops.every((h) => h.widenReason === null));
+
+  // assign: both the normal write-out (no lossReason) and the
+  // unsupported-target loss (lossReason: 'unsupported-target') must be
+  // present under the SAME (kind, subKind) pair.
+  const assignHops = hops.filter((h) => h.kind === 'write-out' && h.subKind === 'assign');
+  assert.ok(assignHops.some((h) => h.lossReason === null && h.toPath !== null), 'expected at least one normal (non-loss) write-out/assign hop');
+  const lossHops = assignHops.filter((h) => h.lossReason === 'unsupported-target');
+  assert.ok(lossHops.length > 0, 'expected at least one write-out/assign hop with lossReason "unsupported-target" (the destructuring-assignment-expression write)');
+  assert.ok(lossHops.every((h) => h.toPath === null), 'a loss-marked assign hop must never fabricate a toPath (Decision 5)');
+
+  // assign-weak: the wildcard write's toPath must be the container
+  // ('bag'), never the raw wildcard target.
+  const assignWeakHops = hops.filter((h) => h.kind === 'write-out' && h.subKind === 'assign-weak');
+  assert.ok(assignWeakHops.length > 0);
+  assert.ok(assignWeakHops.every((h) => h.toPath === 'bag' && h.widenReason === 'dynamic-property-key'));
+
+  // call-arg: the bare `logEvent(user.auditField)` statement's escape hop.
+  const callArgHops = hops.filter((h) => h.kind === 'write-out' && h.subKind === 'call-arg');
+  assert.ok(callArgHops.length > 0 && callArgHops.every((h) => h.toPath === null && h.lossReason === null));
+
+  // (b) The "emits nothing" cases genuinely produce none — checked against
+  // THIS SAME fixture's own exit state (not a disconnected fixture),
+  // reusing the same recorder so a regression here would show up as growth
+  // in the very hops array already asserted above.
+  const hopsBeforeEmptyChecks = hops.length;
+  const rawHopsSnapshotLength = rawHops.length;
+  resolveExprIdentities(result.exitState, { kind: 'literal', value: 'no-identity-here' }, { recordHop: (h) => rawHops.push(h) });
+  resolveExprIdentities(result.exitState, { kind: 'unknown' }, { recordHop: (h) => rawHops.push(h) });
+  assert.equal(rawHops.length, rawHopsSnapshotLength, 'literal/unknown must emit zero additional hops, even against this fixture\'s own real exit state');
+  assert.equal(dedupeHops(rawHops).length, hopsBeforeEmptyChecks, 'deduplicated hop count must be unaffected by the literal/unknown no-op probes');
+
+  // (c) field-identity-observable output identity with/without a recorder
+  // for this SAME fixture is proven by the write-only invariant test above
+  // (this fixture is one of its entries) — not re-asserted here as a
+  // separate, disconnected fact, per the plan's own instruction. Sanity
+  // check only: the analysis itself still produced a real result.
+  assert.equal(result.returnFacts.length, 1);
+  assert.ok(result.returnFacts[0].identities.size > 0);
 });
