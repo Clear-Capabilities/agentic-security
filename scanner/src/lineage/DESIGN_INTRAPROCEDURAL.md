@@ -163,38 +163,110 @@ to put that structured information except a coarse merge — going from
 serious of FR-301's two failure modes.
 
 The fix generalizes round 1's rule into one helper, `residualFlat(flat,
-byPath)` (`engine.js`), applied consistently at three sites rather than
-being special-cased at `assign` alone:
+byPath)` (`engine.js`), applied consistently everywhere a `flat`+`byPath`
+pair is written to a target/key — not special-cased at `assign` alone.
+Two concrete applications from round 2:
 
-1. `resolveExprIdentities`'s `ident`/`member` case now populates `byPath`
-   from the state's recorded descendants of the resolved path — an alias
-   like `user` (with `user.email`/`user.ssn` recorded) is now structurally
-   indistinguishable from a fresh object literal `{email: ..., ssn: ...}`
-   for every downstream consumer of `byPath`.
-2. `resolveExprIdentities`'s `object` case writes `residualFlat(r.flat,
-   r.byPath)` — not the full `r.flat` — coarsely at a property's own key.
-   This closes a *deeper, compounding* version of the same bug that (1)
-   alone would reintroduce: `{ a: someAliasedObject }`, where
-   `someAliasedObject` is itself an alias with `byPath` structure (per (1)).
-   Without this, the coarse write at key `a` would duplicate what the
-   nested `a.x`/`a.y` entries already separate, one level deeper than round
-   1 ever checked.
-3. `step()`'s `assign` case collapses round 1's explicit
-   byPath-empty-vs-nonempty branching into one rule: write every `byPath`
-   entry at its own sub-path, and write `residualFlat(resolved.flat,
-   resolved.byPath)` — whatever isn't already captured by that
-   structure — coarsely at the target's own root. An empty residual is a
-   no-op, so this naturally subsumes both of round 1's cases without
-   branching on them explicitly.
+- `resolveExprIdentities`'s `ident`/`member` case now populates `byPath`
+  from the state's recorded descendants of the resolved path — an alias
+  like `user` (with `user.email`/`user.ssn` recorded) is now structurally
+  indistinguishable from a fresh object literal `{email: ..., ssn: ...}`
+  for every downstream consumer of `byPath`.
+- `resolveExprIdentities`'s `object` case writes `residualFlat(r.flat,
+  r.byPath)` — not the full `r.flat` — coarsely at a property's own key.
+  This closes a *deeper, compounding* version of the same bug that the
+  point above alone would reintroduce: `{ a: someAliasedObject }`, where
+  `someAliasedObject` is itself an alias with `byPath` structure. Without
+  this, the coarse write at key `a` would duplicate what the nested
+  `a.x`/`a.y` entries already separate, one level deeper than round 1 ever
+  checked.
+- `step()`'s `assign` case collapses round 1's explicit
+  byPath-empty-vs-nonempty branching into one rule: write every `byPath`
+  entry at its own sub-path, and write `residualFlat(resolved.flat,
+  resolved.byPath)` — whatever isn't already captured by that
+  structure — coarsely at the target's own root. An empty residual is a
+  no-op, so this naturally subsumes both of round 1's cases without
+  branching on them explicitly.
+
+**This was originally written up as "applied consistently at exactly three
+sites."** That was a mistake independent of whether the three were
+correctly identified: a hand-counted enumeration reads as a closed,
+completed list, and a fixed-count claim is exactly what let a fourth,
+fifth, and sixth site (`union`, `logical`, `assign-expr` — see round 3
+below) go unexamined through two further rounds of scrutiny. The durable
+statement is the general invariant in "The structure-preserving vs.
+structure-flattening invariant (round 3)" below, not a count. Treat any
+future "N sites" phrasing in this document as a bug in the document.
 
 `identitiesAt`'s read-side logic (the bidirectional aggregation from round
-1) is untouched by this round — only the *write* side (what gets recorded
-by `assign`, and how `resolveExprIdentities` reports structure to it)
-changed. A whole-object read through an alias (`const copy = user; return
-copy;`) still correctly aggregates every field, exactly as round 1's fix
-already guaranteed, because that guarantee never depended on `assign`
+1) is untouched by round 2 or round 3 — only the *write* side (what gets
+recorded by `assign`, and how `resolveExprIdentities` reports structure to
+it) has changed. A whole-object read through an alias (`const copy = user;
+return copy;`) still correctly aggregates every field, exactly as round 1's
+fix already guaranteed, because that guarantee never depended on `assign`
 writing a coarse value — it depended on `identitiesAt`'s descendant
-aggregation, which this round doesn't touch.
+aggregation, which neither round 2 nor round 3 touches.
+
+### The structure-preserving vs. structure-flattening invariant (round 3 — closes the bug CLASS, not just individual sites)
+
+A third re-review found the SAME coarse-merge bug survived, untouched by
+rounds 1-2, in three more `resolveExprIdentities` cases: `union` (ternary),
+`logical` (`||`/`&&`/`??`), and `assign-expr`. All three unconditionally
+returned `byPath: new Map()` regardless of what their operands' `byPath`
+contained — the same class of bug round 2 closed for `ident`/`member` and
+`object`, just not yet applied here.
+
+Confirmed via the real parser:
+
+```js
+const c = flag ? user : other;  return c.email;  // → [email, ssn, name] instead of [email]
+const c = user ?? {};           return c.email;  // → [email, ssn]      instead of [email]
+const c = flag ? user : user;   return c.email;  // → [email, ssn]      instead of [email]
+```
+
+The third example is the sharpest proof this is a bug rather than a
+legitimate approximation: both ternary branches ARE the same object, so
+there is no real alternative to justify merging `user`'s own fields
+together — yet the pre-fix code did exactly that, purely because the
+ternary *syntax* was present.
+
+**Why this is the SAME bug, not the (legitimately different, already-
+accepted) branch-alternatives approximation**: the CFG's own branch join
+(`joinStates`) already handles the equivalent
+`if (flag) { c = user; } else { c = other; } return c.email;` correctly —
+it unions PER PATH, so `c.email`/`c.ssn`/`c.name` stay separated even
+though the join conservatively doesn't know which branch ran. The
+ternary/logical form of the exact same program gave a strictly WORSE
+(wrong) answer for identical semantics — that asymmetry between two
+syntactic forms of the same semantics is the tell. The correct
+approximation is "union per sub-path across alternatives" (exactly what
+`joinStates` already does at the CFG level) — NOT "flatten everything into
+one coarse blob."
+
+Rather than enumerate a fixed site count again (see the note above on why
+that failed twice), the durable rule is: every `resolveExprIdentities` case
+falls into one of two categories, and every case in the switch must be
+checked against this invariant whenever the switch changes.
+
+- **Structure-preserving** — its result could genuinely BE an existing
+  structured value from `state`, by reference/selection, not by computing
+  something new. Must forward `byPath`: `ident`/`member` (round 2),
+  `object` (constructs new structure directly; round 1/2), `union`
+  (selects one branch verbatim; round 3), `logical` (short-circuit
+  evaluation can return an operand verbatim; round 3), `assign-expr`
+  (simple pass-through of its resolved source; round 3).
+- **Structure-flattening, correctly and by design** — nothing to forward,
+  or forwarding would be actively wrong. Stays flat-only, deliberately:
+  `literal` (no state involved), `tpl` (template literals always produce a
+  new string, primitivizing whatever's interpolated), `binary` (arithmetic/
+  comparison operators always produce a new primitive — this is why
+  `binary` and `logical` are split into separate cases as of round 3, not
+  shared), `array` (this IR has no index-sensitive access paths, so arrays
+  cannot preserve per-element structure — a deliberate, already-documented
+  limitation, not a bug), `call` (an unresolved call's return value is
+  genuinely UNKNOWN structure — correctly flat + `widened: true`, honestly
+  modeling "we don't know," not laundering an identity), `unknown`/default
+  (nothing to preserve).
 
 ## 4. Per-construct handling (JS/TS, this plan's scope)
 
@@ -263,9 +335,18 @@ aggregation, which this round doesn't touch.
   confirmed end to end against the real parser in
   `test/lineage/engine-integration.test.js`.
 - **Ternary/conditional expressions** (`union` kind, both branches kept by
-  the parser — never resolved to one): both branches' identities are
-  unioned, matching the conservative "either could execute" semantics the
-  worklist's branch-join already uses at the CFG level.
+  the parser — never resolved to one) and **logical expressions**
+  (`logical` kind, `||`/`&&`/`??`): both/all alternatives' identities are
+  unioned PER SUB-PATH — the exact same per-path union `joinStates`
+  already performs at the CFG branch-join level, not a coarse flat merge.
+  (A previous revision of this bullet claimed this parity while the code
+  underneath still flattened `union`/`logical` into one flat blob, entirely
+  dropping `byPath` — see round 3's "The structure-preserving vs.
+  structure-flattening invariant" note below for the fix and why the false
+  claim is believed to be why the gap survived two rounds of review: it read
+  as an already-accepted approximation rather than a bug.) `binary`
+  (arithmetic/comparison operators) is deliberately NOT part of this
+  group — see the invariant below for why.
 - **`unknown`-kind expressions** (JSX, anything the parser doesn't handle):
   resolve to "carries no identity" — fails open, matching the general IR
   contract's own `unknown` CFG-node-kind treatment. Not flagged as a
