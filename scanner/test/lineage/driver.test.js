@@ -7,6 +7,31 @@ import { parseJsFile } from '../../src/ir/parser-js.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
 
+// Counts how many times `FieldIdentitySummaryCache.compute()` invokes its
+// `analyzeFn` argument, PER qid, by temporarily wrapping the class's own
+// `compute` method (no source edits to summaries.js/driver.js needed — pure
+// black-box instrumentation from the test file). Always restore the
+// original method in a `finally`, since this class is a shared singleton
+// import reused by every other test in this file (and, within the same
+// `node --test` process, potentially other lineage test files too).
+function instrumentComputeCallCounts() {
+  const counts = new Map();
+  const original = FieldIdentitySummaryCache.prototype.compute;
+  FieldIdentitySummaryCache.prototype.compute = function (qid, entryState, analyzeFn) {
+    const wrapped = (es) => {
+      counts.set(qid, (counts.get(qid) ?? 0) + 1);
+      return analyzeFn(es);
+    };
+    return original.call(this, qid, entryState, wrapped);
+  };
+  return {
+    counts,
+    restore() {
+      FieldIdentitySummaryCache.prototype.compute = original;
+    },
+  };
+}
+
 // Minimal hand-built callGraph fixture matching buildCallGraph's own
 // output shape ({functions: Map<qid, fn>, resolveKnownCallee(name, callerFile)}) —
 // isolates driver.js's own orchestration logic from real-parser/real-callgraph
@@ -207,4 +232,165 @@ function getUser(userId) {
     assert.strictEqual(result1.widenings.length, result2.widenings.length);
     assert.strictEqual(result1.returnFacts.length, result2.returnFacts.length);
   }
+});
+
+// --- Sub-project B, increment 5, Task 2: real self-/mutually-recursive proof ---
+//
+// STEP 1 INVESTIGATION FINDING (empirical, via a temporary throwaway script,
+// deleted before this commit — not the fixed script below): for THIS
+// engine's current mechanics, a recursive function's refined vs. unrefined
+// `returnFlat`/`mutatedParams` OUTPUT is byte-IDENTICAL through the real
+// parser, across every shape tried — plain self-recursion (the plan's own
+// literal `chain(user, depth)`-shaped suggestion), a 2-function mutual
+// cycle, a 3-function cycle, and a function that self-calls TWICE within
+// one return statement. Verified directly (not assumed) by temporarily
+// forcing `FP_MAX` to `0` in `summaries.js` (reverted before this commit —
+// `git diff` on that file is empty) and diffing the driver's real output
+// against the FP_MAX=3 (committed) behavior: identical in every case.
+//
+// The reason, worked out by hand-tracing and confirmed by the experiment:
+// `resolveCallSummary`'s calls are fully SYNCHRONOUS — a callee's own
+// `compute()` (including any refinement rounds IT needed) always finishes
+// completely before its result is used at the call site. So the first,
+// un-refined DFS traversal of a recursive/cyclic call graph already
+// incorporates every fact any deeper call could ever contribute; nothing a
+// later refinement round resolves against was previously invisible to the
+// union that already happened while unwinding. Combined with `returnFlat`
+// being a flat, deduplicated `Set` of stable data-element id STRINGS (never
+// a per-recursion-depth-distinct value, unlike Task 1's own hand-built
+// mock `analyzeFn`, which fabricated a fresh string per round specifically
+// to make growth observable in isolation) — union with an already-present
+// identity is a no-op — round 2 of a real recursive function's own
+// analysis reproduces exactly what round 1 already established. This is a
+// property of the CURRENT feature set specifically: `mutatedParams` is
+// never propagated from a callee back onto a caller's own state during
+// analysis (`applyAtCallSite` exists but is not wired into `engine.js`'s
+// `step()` — grep confirms zero call sites outside its own tests), and
+// `returnByPath` is never populated (`summaryFromAnalysisResult` always
+// writes `new Map()`), so neither channel can carry recursion-depth-
+// dependent structure either. A future increment that changes either of
+// those could reopen room for genuine, visible growth — this is not a
+// claim that refinement is inherently unobservable, only that it is not
+// observable in OUTPUT with what this package can express today.
+//
+// Per this task's own instructions, an honest negative output-level result
+// does not mean "skip testing" — it means fall back to a MECHANISM-level
+// assertion that genuinely discriminates refined from unrefined behavior.
+// `instrumentComputeCallCounts()` (top of this file) proves that exact
+// thing: wrapping `compute()`'s `analyzeFn` argument to count invocations
+// per qid, run through the unmodified real driver, shows the refinement
+// loop actually re-invokes `analyzeFn` a second time once recursion is
+// detected — confirmed genuinely discriminating by the same temporary
+// FP_MAX=0 experiment above: with refinement disabled the count is
+// exactly 1 for the recursive qid (only the initial pass), with the
+// committed FP_MAX=3 code it is exactly 2 (the initial pass plus one
+// refinement round, which then converges and stops). An assertion that
+// `analyzeFn` was invoked more than once for the recursive qid therefore
+// would NOT pass if Task 1's refinement code were absent — unlike an
+// output-only assertion here, which (per the finding above) would pass
+// identically either way.
+
+test('B5: self-recursion — the real driver genuinely runs the bounded refinement loop for a self-recursive JS/TS function (mechanism-level proof; see the comment above for why an output-level assertion here would be vacuous)', () => {
+  const source = `
+function chain(user, other, depth) {
+  if (depth <= 0) return {};
+  return { v: other.secret, next: chain(user, other, depth - 1) };
+}
+`;
+  const ir = parseJsFile('/rec1/a.js', source);
+  assert.ok(ir, 'real parser must successfully parse the self-recursive source');
+  const callGraph = buildCallGraph({ '/rec1/a.js': ir }, { '/rec1/a.js': source });
+  const chainFn = ir.functions.find(f => f.name === 'chain');
+  assert.ok(chainFn, 'the real parser must produce a function record for chain');
+
+  const { counts, restore } = instrumentComputeCallCounts();
+  let results, cache;
+  try {
+    ({ results, cache } = runFieldIdentityAnalysis(callGraph));
+  } finally {
+    restore();
+  }
+
+  // Mechanism: refinement genuinely re-ran analyzeFn beyond the initial
+  // pass, bounded by FP_MAX=3 (1 initial + at most 3 refinement rounds).
+  const chainCallCount = counts.get(chainFn.qid) ?? 0;
+  assert.ok(chainCallCount > 1,
+    `analyzeFn must be re-invoked at least once beyond the initial pass for the self-recursive qid through the real driver; got ${chainCallCount} call(s)`);
+  assert.ok(chainCallCount <= 4, `must stay BOUNDED (1 initial + FP_MAX=3); got ${chainCallCount} calls`);
+
+  // Safety: the recursion guard stack is always fully unwound, and the
+  // driver's whole-project pass produced a real, non-crashing, non-
+  // "_recursive"-flagged final summary for the recursive function.
+  assert.equal(cache._stack.size, 0, 'the recursion guard stack must be fully unwound after the driver run');
+  assert.ok(results.has(chainFn.qid));
+  const cachedSummary = cache.get(chainFn.qid, emptyState());
+  assert.ok(cachedSummary, 'the driver must have cached a real summary for the recursive function');
+  assert.ok(!cachedSummary._recursive, 'the FINAL cached summary must never carry the transient bottom-stub marker');
+
+  // Content sanity (not the discriminating assertion — see the comment
+  // above): re-analyzing with a seeded identity via the driver's own real
+  // cache/lookupCallee (the established pattern this file's own increment
+  // B4 test uses) confirms the recursive call genuinely resolves to real
+  // facts, not a silently-empty result.
+  const lookupCallee = createCallGraphLookup(callGraph, '/rec1/a.js');
+  const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
+  const seededEntryState = addIdentity(emptyState(), 'other', 'data:secret');
+  const reAnalyzed = analyzeFunctionFieldIdentity(chainFn, seededEntryState, { resolveCallSummary });
+  assert.deepStrictEqual([...reAnalyzed.returnFacts.flatMap(rf => [...rf.identities])].sort(), ['data:secret'],
+    'the recursive function must resolve real field identity, not a silently-empty bottom stub');
+});
+
+test('B5: mutual recursion — the real driver genuinely runs the bounded refinement loop for a 2-function mutually-recursive JS/TS cycle (mechanism-level proof)', () => {
+  const source = `
+function ping(x, n) {
+  if (n <= 0) return {};
+  return { p: x.a, viaB: pong(x, n - 1) };
+}
+function pong(x, n) {
+  if (n <= 0) return {};
+  return { q: x.b, viaA: ping(x, n - 1) };
+}
+`;
+  const ir = parseJsFile('/rec2/a.js', source);
+  assert.ok(ir, 'real parser must successfully parse the mutually-recursive source');
+  const callGraph = buildCallGraph({ '/rec2/a.js': ir }, { '/rec2/a.js': source });
+  const pingFn = ir.functions.find(f => f.name === 'ping');
+  const pongFn = ir.functions.find(f => f.name === 'pong');
+  assert.ok(pingFn && pongFn, 'the real parser must produce function records for both ping and pong');
+
+  const { counts, restore } = instrumentComputeCallCounts();
+  let results, cache;
+  try {
+    ({ results, cache } = runFieldIdentityAnalysis(callGraph));
+  } finally {
+    restore();
+  }
+
+  // Mechanism: BOTH functions in the mutually-recursive pair genuinely got
+  // refined beyond their initial pass, bounded by FP_MAX=3.
+  const pingCallCount = counts.get(pingFn.qid) ?? 0;
+  const pongCallCount = counts.get(pongFn.qid) ?? 0;
+  assert.ok(pingCallCount > 1, `ping's analyzeFn must be re-invoked beyond the initial pass; got ${pingCallCount} call(s)`);
+  assert.ok(pongCallCount > 1, `pong's analyzeFn must be re-invoked beyond the initial pass; got ${pongCallCount} call(s)`);
+  assert.ok(pingCallCount <= 4 && pongCallCount <= 4, `must stay BOUNDED (1 initial + FP_MAX=3); got ping=${pingCallCount}, pong=${pongCallCount}`);
+
+  // Safety: recursion guard stack fully unwound; both functions get a
+  // real, non-crashing, non-"_recursive"-flagged final summary.
+  assert.equal(cache._stack.size, 0, 'the recursion guard stack must be fully unwound after the driver run, even for a mutual cycle');
+  assert.ok(results.has(pingFn.qid));
+  assert.ok(results.has(pongFn.qid));
+  const pingSummary = cache.get(pingFn.qid, emptyState());
+  const pongSummary = cache.get(pongFn.qid, emptyState());
+  assert.ok(pingSummary && !pingSummary._recursive, 'ping must get a real final summary, never the transient bottom-stub marker');
+  assert.ok(pongSummary && !pongSummary._recursive, 'pong must get a real final summary, never the transient bottom-stub marker');
+
+  // Content sanity: seeded re-analysis (same established pattern as above)
+  // confirms both directions of the cycle resolve to real field identity.
+  const lookupCallee = createCallGraphLookup(callGraph, '/rec2/a.js');
+  const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
+  let seededEntryState = addIdentity(emptyState(), 'x', 'data:a');
+  seededEntryState = addIdentity(seededEntryState, 'x', 'data:b');
+  const reAnalyzedPing = analyzeFunctionFieldIdentity(pingFn, seededEntryState, { resolveCallSummary });
+  assert.deepStrictEqual([...reAnalyzedPing.returnFacts.flatMap(rf => [...rf.identities])].sort(), ['data:a', 'data:b'],
+    'ping must resolve real field identity from both sides of the mutually-recursive cycle');
 });
