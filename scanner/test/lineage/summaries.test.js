@@ -66,6 +66,127 @@ test('compute: past the per-function distinct-context cap, degrades to the empty
   assert.deepEqual([...result.returnFlat], ['data:base'], 'past the cap, the result must be the empty-entry-state summary, not empty/undefined');
 });
 
+test('FieldIdentitySummaryCache: AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS env var sets the default cap when no explicit constructor argument is given', () => {
+  const prev = process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+  try {
+    process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS = '2';
+    const cache = new FieldIdentitySummaryCache();
+    // Prove the cap is actually 2, not the hardcoded 16, by exercising the
+    // SAME degradation behavior the existing cap test already proves works
+    // — this is a behavioral proof, not just reading a private field.
+    const emptyEntry = emptyState();
+    cache.compute('fn1', emptyEntry, () => ({ ...emptyFieldSummary(), returnFlat: new Set(['data:base']) }));
+    cache.compute('fn1', addIdentity(emptyState(), 'a', 'data:a'), () => ({ ...emptyFieldSummary(), returnFlat: new Set(['data:a']) }));
+    let thirdCallRan = false;
+    const result = cache.compute('fn1', addIdentity(emptyState(), 'b', 'data:b'), () => { thirdCallRan = true; return { ...emptyFieldSummary(), returnFlat: new Set(['data:b']) }; });
+    assert.equal(thirdCallRan, false, 'with the env var set to 2, the 3rd distinct context must degrade to the cap, exactly as the hardcoded-16 test proves at a different threshold');
+    assert.deepEqual([...result.returnFlat], ['data:base']);
+  } finally {
+    if (prev === undefined) delete process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+    else process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS = prev;
+  }
+});
+
+test('FieldIdentitySummaryCache: an explicit constructor argument overrides the env var', () => {
+  const prev = process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+  try {
+    process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS = '2';
+    const cache = new FieldIdentitySummaryCache(16); // explicit arg must win over the env var's 2
+    const emptyEntry = emptyState();
+    cache.compute('fn1', emptyEntry, () => ({ ...emptyFieldSummary(), returnFlat: new Set(['data:base']) }));
+    cache.compute('fn1', addIdentity(emptyState(), 'a', 'data:a'), () => ({ ...emptyFieldSummary(), returnFlat: new Set(['data:a']) }));
+    // This would degrade under the env var's cap of 2, but must NOT degrade
+    // under the explicit constructor argument of 16.
+    let thirdCallRan = false;
+    cache.compute('fn1', addIdentity(emptyState(), 'b', 'data:b'), () => { thirdCallRan = true; return { ...emptyFieldSummary(), returnFlat: new Set(['data:b']) }; });
+    assert.equal(thirdCallRan, true, 'an explicit constructor argument must override the env var, not merely supplement it');
+  } finally {
+    if (prev === undefined) delete process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+    else process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS = prev;
+  }
+});
+
+test('FieldIdentitySummaryCache: an invalid env var value (non-numeric or negative) falls back to the hardcoded default of 16, not a crash or a 0-context cap', () => {
+  // NOTE: '' is deliberately NOT included here (deviation from the original
+  // plan draft, verified before changing it). The implementation mirrors
+  // dataflow/summaries.js's own EXACT validation logic
+  // (`Number.isFinite(envCap) && envCap >= 0 ? envCap : 16`), per this
+  // increment's explicit, repeated architecture requirement. `Number('')`
+  // is `0` in JS (not `NaN`) — `Number.isFinite(0) && 0 >= 0` is true, so an
+  // empty env var value is genuinely a VALID cap of 0 under this exact
+  // formula (matching dataflow's own documented "0 = pure monovariant /
+  // disables context-sensitivity" semantics), not something that falls
+  // back to 16. Confirmed dataflow/summaries.js has the byte-identical
+  // formula and therefore the byte-identical behavior for
+  // AGENTIC_SECURITY_KCFA_MAX_CONTEXTS='' — this is existing, mirrored
+  // precedent, not a defect introduced here. The original plan draft's
+  // loop included '' expecting a fall-back-to-16, which contradicts the
+  // plan's own Step-3-mandated formula; that assertion would have passed
+  // vacuously anyway (a cap of 0 degrades every non-empty context from the
+  // very first one, so "the 17th distinct context degrades" holds true
+  // whether the real cap is 0 or 16 — it would not have caught the
+  // discrepancy). See the Task 1 report for the full trace.
+  for (const badValue of ['not-a-number', '-5']) {
+    const prev = process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+    try {
+      process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS = badValue;
+      const cache = new FieldIdentitySummaryCache();
+      const emptyEntry = emptyState();
+      cache.compute('fn1', emptyEntry, () => ({ ...emptyFieldSummary(), returnFlat: new Set(['data:base']) }));
+      // Add 15 more distinct non-empty contexts (16 total with the empty
+      // one) — must NOT degrade yet if the fallback is genuinely 16, not 0
+      // or NaN-derived garbage.
+      for (let i = 0; i < 15; i++) {
+        cache.compute('fn1', addIdentity(emptyState(), `k${i}`, `data:${i}`), () => ({ ...emptyFieldSummary(), returnFlat: new Set([`data:${i}`]) }));
+      }
+      let ranFor16th = false;
+      cache.compute('fn1', addIdentity(emptyState(), 'overflow', 'data:overflow'), () => { ranFor16th = true; return emptyFieldSummary(); });
+      assert.equal(ranFor16th, false, `bad env value ${JSON.stringify(badValue)} must fall back to the cap of 16 (so the 17th distinct context — 1 empty + 16 real — degrades), not something smaller`);
+    } finally {
+      if (prev === undefined) delete process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+      else process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS = prev;
+    }
+  }
+});
+
+test('FieldIdentitySummaryCache: an empty-string env var value parses to a VALID cap of 0 (Number(\'\') === 0), not a fallback to 16 — documents the exact-mirrored-from-dataflow edge case rather than leaving it silently unverified', () => {
+  const prev = process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+  try {
+    process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS = '';
+    const cache = new FieldIdentitySummaryCache();
+    // With a cap of 0, even the FIRST distinct context (the empty entry
+    // state itself) is immediately at-or-past the cap, so analyzeFn never
+    // runs for it — the cache degrades to the (not-yet-existing) empty-entry
+    // fallback, i.e. emptyFieldSummary().
+    let firstCallRan = false;
+    const result = cache.compute('fn1', emptyState(), () => { firstCallRan = true; return { ...emptyFieldSummary(), returnFlat: new Set(['data:base']) }; });
+    assert.equal(firstCallRan, false, 'a cap of 0 must degrade even the very first (empty-entry) context — analyzeFn must not run');
+    assert.deepEqual([...result.returnFlat], [], 'the degraded result must be the empty summary, since no empty-entry summary was ever computed to fall back to');
+  } finally {
+    if (prev === undefined) delete process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+    else process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS = prev;
+  }
+});
+
+test('FieldIdentitySummaryCache: with the env var UNSET, the default remains 16, byte-identical to pre-increment behavior', () => {
+  const prev = process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+  try {
+    delete process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+    const cache = new FieldIdentitySummaryCache();
+    const emptyEntry = emptyState();
+    cache.compute('fn1', emptyEntry, () => ({ ...emptyFieldSummary(), returnFlat: new Set(['data:base']) }));
+    for (let i = 0; i < 15; i++) {
+      cache.compute('fn1', addIdentity(emptyState(), `k${i}`, `data:${i}`), () => ({ ...emptyFieldSummary(), returnFlat: new Set([`data:${i}`]) }));
+    }
+    let ranFor17th = false;
+    cache.compute('fn1', addIdentity(emptyState(), 'overflow', 'data:overflow'), () => { ranFor17th = true; return emptyFieldSummary(); });
+    assert.equal(ranFor17th, false, 'unset env var must preserve the exact pre-increment default of 16');
+  } finally {
+    if (prev === undefined) delete process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS;
+    else process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS = prev;
+  }
+});
+
 test('compute: a recursive call (same qid already being analyzed) gets an immediate bottom-stub summary on its FIRST occurrence, not infinite recursion', () => {
   // Increment B5 correction: since B5's refinement loop legitimately
   // re-invokes the SAME outer analyzeFn multiple times once recursion is

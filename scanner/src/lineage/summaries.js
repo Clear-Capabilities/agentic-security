@@ -7,12 +7,30 @@ export function emptyFieldSummary() {
   return { returnFlat: new Set(), returnByPath: new Map(), mutatedParams: new Map(), widenings: [] };
 }
 
-const DEFAULT_MAX_CONTEXTS = 16; // matches dataflow/summaries.js's own default, chosen independently for this
-                                  // package (a lineage-specific cap, not shared config, per the isolation
-                                  // principle — see the constructor param below for how a caller can override it)
+// Increment B6: the per-function distinct-context cap's operator-facing
+// knob. `AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS` is DELIBERATELY a separate
+// env var from dataflow/summaries.js's own `AGENTIC_SECURITY_KCFA_MAX_CONTEXTS`
+// — per the isolation principle every prior increment in this sub-project
+// has verified holds, the two engines' tuning knobs must stay decoupled,
+// so an operator tuning one engine's cap can never silently affect the
+// other's. Mirrors dataflow's own exact validation logic
+// (`Number.isFinite(...) && ... >= 0`, falling back to 16 on anything
+// invalid or absent) — same reasoning, independently re-derived for this
+// package rather than shared config.
+//
+// Evaluated as a FUNCTION (not a module-level constant) specifically so it
+// is read fresh on every `new FieldIdentitySummaryCache()` call with no
+// explicit constructor argument — JS default-parameter expressions are
+// evaluated at CALL time, not at module-load time, which is what makes
+// this testable via `process.env` mutation without needing to re-import
+// the module between test cases.
+function _defaultMaxContexts() {
+  const envCap = Number(process.env.AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS);
+  return Number.isFinite(envCap) && envCap >= 0 ? envCap : 16;
+}
 
 export class FieldIdentitySummaryCache {
-  constructor(maxContextsPerFn = DEFAULT_MAX_CONTEXTS) {
+  constructor(maxContextsPerFn = _defaultMaxContexts()) {
     this._cache = new Map();
     this._stack = new Set();
     this._contextsByQid = new Map();
