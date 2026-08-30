@@ -163,6 +163,22 @@ of an invariant that must be re-checked, not assumed:
 That is an *enumeration principle*, deliberately not a count of today's node
 kinds — see §6.
 
+**A gap a design review found in this rule as originally written, closed
+here:** the rule above says WHEN two records join; it did not say what a
+`null`-`fromPath` in-half means when it joins alongside a non-null one at
+the same key. This matters concretely: `const o = {email: u.email}` at one
+CFG node produces, for `data:email`, TWO in-halves (a `selection` hop from
+`u.email`, AND a `production/object` hop with `fromPath: null`) and ONE
+out-half (`write-out` to `o.email`). Read literally, the join rule would
+emit a spurious extra edge with no real source. The intended semantics,
+already implicit in §2.1's worked examples but not stated as a rule: **a
+`null`-`fromPath` in-half is an ANNOTATION on the edges formed by any
+non-null in-half at the same key, not an edge-forming half-edge of its
+own.** It forms a real edge only when NO non-null in-half exists at that
+key — which is precisely the "value with no prior aliasing source" case
+(a literal, or — the one case that matters for interprocedural stitching —
+a resolved call's return value, which is C3's join point, not C1/C2's).
+
 The three hop types are exactly `DESIGN_INTRAPROCEDURAL.md`'s already-hardened
 production / selection / write-out taxonomy. That is not a coincidence to be
 grateful for; it is the point. Every place structure can be *lost* is a place
@@ -382,9 +398,17 @@ Mechanically this needs one new pure helper in `engine.js` (not in
 function contributingKeys(state, path, id) { /* … */ }
 ```
 
-It is O(|state|) per read, the same cost `identitiesAt` already pays, and it
-must be called **only when `ctx?.recordHop` is present** — squarely within
-Decision 1's "extra discarded computation" allowance.
+**Cost, corrected — a design review caught this understated:** naively
+calling `contributingKeys(state, path, id)` once per id (as the signature
+above suggests) is O(|state| × |ids at path|), not O(|state|) — the state
+scan repeats per id. The fix is a single pass: scan `state` once against
+`path` (the same prefix-coverage test `identitiesAt` already does), and for
+each covered key partition ITS ids by contributing key in one step, rather
+than re-scanning per id. That is O(|state|) total for all ids at a path, the
+cost this section originally claimed. C2's implementer should build the
+single-pass version, not the naive per-id loop the signature above implies
+— and it must be called **only when `ctx?.recordHop` is present**, squarely
+within Decision 1's "extra discarded computation" allowance.
 
 ### Worked example — the plan's own Task 2 fixture, traced end to end
 
@@ -584,9 +608,31 @@ not.
 — the sub-path *within the value under construction* that a hop contributes
 to — and join on `(scope, nodeId, dataElementId, slot)`. It is deferred, not
 overlooked, because it requires threading a slot prefix down through
-`resolveExprIdentities`'s recursion (the resolver does not know its own
-position in its parent), which is a real signature change bought for a narrow
-case that has not yet been shown to occur. Do not adopt it speculatively.
+`resolveExprIdentities`'s recursion for the **in-expression** case (the
+resolver does not know its own position in its parent). The cost is lower
+than that framing suggests for a real, non-exotic shape a design review
+confirmed by execution: a plain alias of a multi-field object —
+`const u = user;` where `state` already has `user.a: X, user.b: X` — trips
+this exact condition (`distinctInPaths=2, distinctOutPaths=2` for the same
+id) with **neither** half needing anything threaded through, since both
+in-halves (`user.a`, `user.b`) and both out-halves (`u.a`, `u.b`) already
+carry their own sub-path as their own `fromPath`/`toPath`. A `slot` for
+THIS shape is a same-node string transform, not a signature change — only
+the in-expression case (`{a: p.email, b: q.email}`, where the resolver
+itself must know it's building the `a` vs `b` slot) needs the recursion
+change. Do not adopt either half speculatively; measure first — but do not
+assume both halves cost the same when deciding whether to.
+
+**Frequency, corrected:** the paragraph above previously called this "a
+narrow case that has not yet been shown to occur." A design review
+reproduced it with the plain-alias shape by running the real walker — it is
+not exotic, and any object carrying the same identity at two fields, then
+aliased or passed through untouched, hits it. This does not change the
+decision (detect-and-mark is still correct, and still sound — nothing is
+silently wrong), but `ambiguousCorrelation: true` should be expected to
+appear on a real, non-trivial share of ordinary aliasing edges, not treated
+as a rare corner case when C4 is scoping how much weight to give it in
+FR-306's confidence grading.
 
 ### 9.2 The DAG is flow-insensitive at reconstruction time
 
@@ -614,6 +660,59 @@ and a path truncated by cycle-breaking must be reported as truncated, per
 §18.4. Stated here so C5 does not treat acyclicity as an inherited guarantee:
 **the "DAG" in FR-303 names the intent, not a property this recording
 mechanism enforces.**
+
+### 9.4 The join key does not distinguish entry contexts — a real gap for C3, named now
+
+`(scope, nodeId, dataElementId)` is the join key throughout this document
+(§2.2). It is sufficient for ONE analysis run of ONE function under ONE
+entry state. It is NOT sufficient once `FieldIdentitySummaryCache` (Sub-
+project B, B1/B6) computes up to 16 distinct entry contexts for the SAME
+qid — which `driver.js` already triggers today, independent of anything
+Sub-project C adds. Two contexts of the same function emit hops that share
+`(scope, nodeId, dataElementId)` but describe DIFFERENT endpoints:
+
+```js
+function g(x) { const y = x; return y; }
+// context A (entry: x.email → data:email): in-half from 'x.email', out-half to 'y.email'
+// context B (entry: x        → data:email): in-half from 'x',       out-half to 'y'
+// joined at n1 for data:email: 2 in-halves × 2 out-halves = 4 edges,
+// 2 of which (x.email→y, x→y.email) never actually happened in either context
+```
+
+§8's monotonicity argument does not cover this — it is scoped to worklist
+revisits WITHIN one analysis run, and neither context's hop set is a subset
+of the other's. This is a different failure from §9.1's cross-join (that one
+is real ambiguity within a single, real execution; this one mixes hops from
+executions that never coexisted).
+
+**Not this increment's or C2's problem to fix** — C1/C2 only ever run one
+entry state at a time, so it cannot manifest yet. **Named here, now,
+specifically so C3 (which is what actually turns on multi-context analysis
+for provenance) does not rediscover it expensively**, matching this
+document's own stated purpose. The fix is additive and cheap when C3 gets
+there: add a `context` field (e.g. `hashState(entryState)`, reusing the
+exact primitive `FieldIdentitySummaryCache` already keys on) to the record
+and fold it into the join key — no change to the half-edge model, the node
+granularity, or anything C1/C2 build.
+
+### 9.5 The worklist's own iteration budget is an unrepresented truncation
+
+`analyzeFunctionFieldIdentity`'s `ITER_BUDGET` (5000) is a defensive backstop
+against a malformed/generated CFG — on a real, well-formed CFG the fixed
+point is reached in finitely many steps and the budget is never hit (see
+`engine.js`'s own comment on `ITER_BUDGET`). But if it ever IS hit, the
+worklist `break`s and returns a silently partial fixed point — exactly the
+"path budget exhausted" class §18.4 requires never be presented as "no
+path." This design has no `lossReason` value for it today (`§3`'s value set
+covers per-hop losses like `unsupported-target`/`dynamic-property-key`, not
+a whole-analysis-run truncation). Defensive-only, not expected to fire on
+real code — but §18.4 treats exactly this constraint as load-bearing, so it
+should not be the one gap this document leaves unnamed. **For whichever
+increment first surfaces analysis-level (not per-hop) truncation to a
+consumer** (plausibly C5's reconstruction-result shape, per the scoping
+doc's own §3): a function whose `analyzeFunctionFieldIdentity` run hit
+`ITER_BUDGET` should mark its ENTIRE result set as budget-truncated, not
+leave individual hops looking complete.
 
 ---
 
@@ -660,10 +759,11 @@ case, this table is stale until it grows a row.
 
 | case | hop type | `fromPath` | `toPath` | notes |
 |---|---|---|---|---|
-| `assign`, target not a string | write-out | `null` | `null` | **Loss site.** `lossReason: 'unsupported-target'`. Requires resolving `node.source` purely to learn the ids — permitted (Decision 1) but must be guarded on `ctx?.recordHop` and its result discarded. If no identity resolves, record nothing: there is nothing to lose. |
+| `assign`, target not a string | write-out | `null` | `null` | **Loss site.** `lossReason: 'unsupported-target'`. Requires resolving `node.source` purely to learn the ids — permitted (Decision 1) but must be guarded on `ctx?.recordHop`. **Not merely discarded computation, a design review flagged this understated:** resolving `node.source` recursively runs the FULL `resolveExprIdentities` tree for that expression, which — when `ctx?.recordHop` is present — genuinely EMITS real in-half (`production`/`selection`) hops for whatever `node.source` reads, exactly as it would for any other resolved expression. These are not spurious: they correctly join with THIS row's `lossReason` write-out to show "this data was read here, then lost, because the target couldn't be represented" — arguably necessary for §18.4's transparency requirement, not incidental. Just don't write it up as if nothing gets emitted before this row's own loss marker. If no identity resolves from `node.source`, none of that fires and there is nothing to lose. |
 | `assign`, wildcard target | write-out | `null` | `definitePrefixBeforeWildcard(node.target)` | `subKind: 'assign-weak'`, `widenReason: 'dynamic-property-key'`, `syntacticPath` = raw target. **Weak update** — no kill. One record per `(containerPath, id)`. |
 | `assign`, normal — residual write | write-out | `null` | `node.target` | One record per id in the residual. |
 | `assign`, normal — `byPath` writes | write-out | `null` | `` `${node.target}.${subPath}` `` | **One record per `addIdentity` call**, at the exact sub-path written. Recording `node.target` here instead is the most likely C2 mistake: it would claim `o` where the identity is really at `o.email`, mismatching the granularity every read hop uses and disconnecting the DAG. |
+| `assign`, normal — the kill (`removeIdentitiesAt(stateIn, node.target)`) | — | — | — | **No row of its own, and that is the correct answer, not an oversight** (§10's own rule requires every case get a verdict, including "emits nothing, because…" — this is that verdict, made explicit per a design review's request). §9.2 already covers this from the reconstruction side: a killed identity simply has no outgoing hop past the kill point, so backward reconstruction never visits the dead branch — at no representation cost. Nothing to emit here beyond what the surrounding residual/byPath writes above already record. |
 | `call` (bare call statement) | write-out | `null` | `null` | `subKind: 'call-arg'`. The value leaves the analysis via an argument — not a loss, an escape. This is the natural sink-attachment point for Sub-project D. |
 | `return` | write-out | `null` | `null` | `subKind: 'return'`. Deliberately **not** a pseudo-path like `'@return'` — mixing a fabricated token into the endpoint namespace is the bug class of Decision 5. C3/C4 identify a function exit by `kind === 'write-out' && subKind === 'return' && toPath === null`, scoped by `scope`. |
 | `throw` | — | — | — | Currently a no-op in `step()`. Emits nothing. Revisit only if `throw` ever becomes a real transfer function. |
@@ -679,6 +779,11 @@ must also mark hops recorded during a B5 bottom-stub round and hops from a
 B6 context-capped, degraded summary — §3 of the scoping doc names both, and
 neither is representable in today's shape without a new `subKind` or
 `lossReason` value. That is C3's call to make, and it is additive.
+
+**Also C3's, and load-bearing, not optional:** §9.4's `context` field. C3 is
+what actually exercises multiple entry contexts for the same qid through
+this recording mechanism — closing §9.4 is a precondition for C3's own hops
+being correct, not a nice-to-have alongside them.
 
 ---
 
