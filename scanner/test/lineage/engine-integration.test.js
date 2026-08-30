@@ -281,3 +281,42 @@ test('object literal with an explicit key and a colliding-by-variable-name compu
   assert.equal(result.returnFacts.length, 1);
   assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn']);
 });
+
+// Round 6, Finding 1: `lhsPath`'s `ObjectPattern` branch (the destructuring-
+// pattern lowering, in parser-js.js) had the identical computed-key bug
+// round 5 fixed for `ObjectExpression` (object literals) — it resolved a
+// non-literal computed key (`{[field]: value}`) to the key EXPRESSION's own
+// variable name ('field') instead of the explicit unknown marker '*'.
+// Pre-fix, `member`'s path-succeeds branch queried `identitiesAt(state,
+// 'user.field')` for a fabricated path that was never actually written
+// (there is no real property literally named "field" on `user` here), so
+// it silently returned nothing — `returnFacts: []`, dropping the identity
+// entirely. Post-fix, the shared `resolveObjectKey` helper (now used by
+// both `ObjectExpression` and `ObjectPattern`) resolves the non-literal
+// computed key to '*', so the lowered source is `member(user, '*')`, which
+// round 5's wildcard handling in engine.js correctly and conservatively
+// widens to the WHOLE base's aggregate identity — the equivalent
+// `return user[field]` already widened correctly per round 5; this closes
+// the exact same gap for the destructuring-pattern spelling of the same
+// read.
+test('destructuring with a computed key does not fabricate a colliding key from the key variable\'s own name (regression for a round-6 finding)', () => {
+  const src = `
+    function f(user) {
+      const { [field]: value } = user;
+      return value;
+    }
+  `;
+  const fn = parseFn(src, 'f');
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+
+  // Verified against the actual fixed code's output (not assumed): the
+  // computed key resolves to '*', so `value`'s source is `member(user,
+  // '*')`, which conservatively widens to user's full aggregate identity —
+  // here just {data:email}, since that's the only identity recorded on
+  // `user` in this entry state. Pre-fix this returned `[]` (see the
+  // comment above).
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email'],
+    'a computed destructuring key must conservatively widen to the base object\'s aggregate identity, never silently drop it');
+});

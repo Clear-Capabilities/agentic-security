@@ -47,6 +47,30 @@ import presetTypescript from '@babel/preset-typescript';
 let _nodeIdSeq = 0;
 function nextNodeId() { return 'n' + (++_nodeIdSeq); }
 
+// Round-5 lineage-engine finding, generalized in round 6: resolve a Babel
+// object-property-shaped node's key (`ObjectProperty` from either an
+// `ObjectExpression` or an `ObjectPattern` — both share the same
+// `{computed, key}` shape) to either its real, distinct property name, or
+// the explicit unknown marker '*' when the key is computed and not itself
+// a resolvable literal. A computed key that IS a literal (`{[42]: v}`,
+// `{['literal']: v}` — Babel still marks these `computed: true`) still
+// resolves to that literal's own string form; a computed key that is an
+// arbitrary expression (most commonly an Identifier, e.g. `{[field]: v}`)
+// resolves to '*', NEVER to the key expression's own variable name — using
+// `p.key.name` unconditionally there would attribute the property to the
+// key expression's OWN name as if it were a real, distinct property,
+// colliding e.g. `{ field: a, [field]: b }` onto one shared 'field' key.
+// Originally fixed only for `ObjectExpression` (round 5); round 6 found the
+// identical bug, unfixed, in `lhsPath`'s `ObjectPattern` (destructuring)
+// branch and extracted this shared helper so a third instance of the same
+// bug can't appear in some future object-key-reading code path. See
+// DESIGN_INTRAPROCEDURAL.md §4 and CLAUDE.md's "three hop types" note.
+function resolveObjectKey(p) {
+  return p.computed
+    ? (p.key?.value != null ? String(p.key.value) : '*')
+    : (p.key?.name || (p.key?.value != null ? String(p.key.value) : '*'));
+}
+
 // Compact a Babel AST node into our exprDesc.
 function exprOf(n) {
   if (!n) return { kind: 'unknown' };
@@ -109,9 +133,7 @@ function exprOf(n) {
       // new one. See DESIGN_INTRAPROCEDURAL.md §4 and CLAUDE.md's "three
       // hop types" note.
       props: (n.properties || []).filter(p => p.type === 'ObjectProperty' && p.key).map(p => ({
-        key: p.computed
-          ? (p.key.value != null ? String(p.key.value) : '*')
-          : (p.key.name || (p.key.value != null ? String(p.key.value) : '*')),
+        key: resolveObjectKey(p),
         value: exprOf(p.value),
       })),
     };
@@ -189,9 +211,14 @@ function lhsPath(n) {
     return base + '.' + prop;
   }
   if (n.type === 'ObjectPattern') {
-    // Destructured: return an array of (key, alias) pairs the caller can iterate.
+    // Destructured: return an array of (key, alias) pairs the caller can
+    // iterate. Round 6: uses the same `resolveObjectKey` helper
+    // `ObjectExpression` uses above, so a non-literal computed key
+    // (`const { [field]: value } = user`) resolves to '*' instead of
+    // fabricating a colliding key from the key variable's own name — see
+    // `resolveObjectKey`'s header comment for the full rationale.
     return { kind: 'object-pattern', props: (n.properties || []).map(p => ({
-      key: p.key?.name || (p.key?.value != null ? String(p.key.value) : '*'),
+      key: resolveObjectKey(p),
       alias: lhsPath(p.value),
     }))};
   }
