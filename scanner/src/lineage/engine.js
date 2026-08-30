@@ -603,22 +603,41 @@ function step(node, stateIn, widenings, ctx) {
         //
         // Path provenance (Sub-project C, increment 2, Task 2, §10.2
         // `assign`/target-not-a-string row): a genuine LOSS site —
-        // `lossReason: 'unsupported-target'`. Resolving `node.source` here
-        // is extra, discarded computation when no recorder is present
-        // (Decision 1), so it is guarded on `ctx?.recordHop`, exactly like
-        // `contributingKeysAllIds` elsewhere in this file. The design doc's
-        // own dated correction to this row is explicit that this is NOT
-        // merely discarded computation once a recorder IS present: running
-        // the full resolveExprIdentities tree on node.source genuinely
-        // EMITS real production/selection in-half hops for whatever it
-        // reads — these correctly join with this row's own loss marker to
-        // show "this data was read here, then lost, because the target
-        // couldn't be represented" (arguably necessary for §18.4's
-        // transparency requirement, not incidental). If node.source
-        // resolves no identity at all, none of that fires and there is
-        // nothing to lose.
+        // `lossReason: 'unsupported-target'`. The design doc's own dated
+        // correction to this row is explicit that resolving `node.source`
+        // is NOT merely discarded computation once a recorder IS present:
+        // running the full resolveExprIdentities tree on node.source
+        // genuinely EMITS real production/selection in-half hops for
+        // whatever it reads — these correctly join with this row's own
+        // loss marker to show "this data was read here, then lost, because
+        // the target couldn't be represented" (arguably necessary for
+        // §18.4's transparency requirement, not incidental). If
+        // node.source resolves no identity at all, none of that fires and
+        // there is nothing to lose.
+        //
+        // CORRECTION (final whole-branch review): this resolve must run
+        // UNCONDITIONALLY, not gated on `ctx?.recordHop` — an earlier
+        // version gated it, reasoning it was "extra, discarded computation"
+        // per Decision 1. That reasoning is wrong for THIS call specifically:
+        // resolveExprIdentities is not side-effect-free when
+        // ctx.resolveCallSummary is present (interprocedural mode) — its
+        // `call` case can trigger FieldIdentitySummaryCache.compute() for a
+        // callee, which registers a context against that function's
+        // distinct-context cap (summaries.js). Gating the resolve on
+        // ctx?.recordHop therefore meant a recorder's mere PRESENCE could
+        // consume cap budget a non-recorder run never would, silently
+        // changing a LATER, unrelated call site's own resolution once the
+        // cap is hit — a real, reproduced violation of this whole
+        // increment's own "byte-identical with no recorder" acceptance bar,
+        // in the unsound direction (attaching a recorder made the analysis
+        // LOSE an identity a no-recorder run kept). The fix: resolve
+        // unconditionally (matching the sibling `assign` branches below,
+        // which already do this), and gate ONLY the hop emission on
+        // `ctx?.recordHop` — mirroring Decision 1's own "extra computation
+        // is fine to skip, but only when it is genuinely side-effect-free"
+        // intent, which this call never actually satisfied.
+        const resolved = resolveExprIdentities(stateIn, node.source, ctx);
         if (ctx?.recordHop) {
-          const resolved = resolveExprIdentities(stateIn, node.source, ctx);
           const allIds = new Set([...residualFlat(resolved.flat, resolved.byPath), ...[...resolved.byPath.values()].flatMap((s) => [...s])]);
           for (const id of allIds) {
             ctx.recordHop({

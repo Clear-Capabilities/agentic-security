@@ -29,6 +29,7 @@ import assert from 'node:assert/strict';
 import { parseJsFile } from '../../src/ir/parser-js.js';
 import { emptyState, addIdentity, identitiesAt } from '../../src/lineage/field-identity.js';
 import { analyzeFunctionFieldIdentity, contributingKeys, resolveExprIdentities } from '../../src/lineage/engine.js';
+import { FieldIdentitySummaryCache, createCallSummaryResolver } from '../../src/lineage/summaries.js';
 
 function parseFn(src, fnName, file = '/x/prov.js') {
   const ir = parseJsFile(file, src);
@@ -472,6 +473,15 @@ function combine(user) {
     fixtures.push({ label: 'comprehensive coverage-proof fixture (§10.1 + §10.2 together)', fn, entryState, extraCtx: { resolveCallSummary } });
   }
 
+  // NOTE: the cache-side-effect regression case (real FieldIdentitySummaryCache
+  // + low cap + the unsupported-target loss site) is deliberately NOT added
+  // as a fixture in this shared loop — this loop reuses ONE `extraCtx` (and
+  // therefore one cache instance) across BOTH the "without" and "with
+  // recorder" sub-runs below, so the second sub-run would see a cache already
+  // warmed by the first, masking exactly the divergence that regression needs
+  // two INDEPENDENTLY FRESH caches to expose. See the dedicated test after
+  // this one instead.
+
   for (const { label, fn, entryState, extraCtx } of fixtures) {
     const without = analyzeFunctionFieldIdentity(fn, entryState, extraCtx);
     const hops = [];
@@ -484,6 +494,68 @@ function combine(user) {
     );
     assert.ok(hops.length > 0, `${label}: sanity check — expected the recorder to have captured at least one hop`);
   }
+});
+
+// REGRESSION (final whole-branch review, Sub-project C increment 2): a real
+// FieldIdentitySummaryCache at a LOW per-function distinct-context cap,
+// combined with the `assign`/unsupported-target loss site (§10.2), exposed
+// a genuine Decision-1 violation — attaching a recorder could silently
+// change the analysis RESULT, not just add hops.
+//
+// `resolveExprIdentities` is not side-effect-free when `ctx.resolveCallSummary`
+// is present: its `call` case can trigger `FieldIdentitySummaryCache.compute()`
+// for a callee, which registers a context against that function's distinct-
+// context cap. An earlier version of the unsupported-target loss site gated
+// its resolve of `node.source` on `ctx?.recordHop` ("extra, discarded
+// computation" per Decision 1) — but that resolve was NOT side-effect-free
+// when the source was itself a resolvable call, so a recorder's mere
+// PRESENCE could consume cap budget a no-recorder run never would, changing
+// which of two calls to the SAME function "won" a tight cap and therefore
+// changing the caller's own resolved identity.
+//
+// This needs TWO INDEPENDENTLY FRESH caches (one per sub-run) to expose —
+// unlike the write-only-invariant test above, which deliberately shares one
+// `extraCtx`/cache across its "without" and "with recorder" sub-runs (fine
+// for every OTHER fixture there, since none of them have live, stateful
+// cap-registration side effects to accidentally warm from one run to the
+// next) — so this is its own dedicated test, not one more shared-loop entry.
+test('REGRESSION: a real FieldIdentitySummaryCache + low cap + the unsupported-target loss site must not let recorder presence change which call context wins the cap', () => {
+  const src = `
+    function helper(x) {
+      return { v: x.email };
+    }
+    function f(user, other) {
+      var a;
+      ({ a } = helper(user));
+      const b = helper(other);
+      return b;
+    }
+  `;
+  const ir = parseJsFile('/x/wo12-cache-side-effect.js', src);
+  const helperFn = ir.functions.find((fn) => fn.name === 'helper');
+  const fFn = ir.functions.find((fn) => fn.name === 'f');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'other.email', 'data:other-email');
+
+  function run(withRecorder) {
+    // cap=1: only the FIRST distinct context requested for `helper` computes
+    // for real; the second one degrades to the (empty) fallback — this is
+    // what makes "which call resolves first" observable in the result.
+    const cache = new FieldIdentitySummaryCache(1);
+    const lookupCallee = (calleeExpr) => (calleeExpr.kind === 'ident' && calleeExpr.name === 'helper' ? { qid: 'helper', fn: helperFn } : null);
+    const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
+    const ctx = withRecorder ? { resolveCallSummary, recordHop: () => {} } : { resolveCallSummary };
+    return analyzeFunctionFieldIdentity(fFn, entryState, ctx);
+  }
+
+  const without = run(false);
+  const withRecorder = run(true);
+
+  assert.deepEqual(
+    canonicalizeResult(without),
+    canonicalizeResult(withRecorder),
+    'attaching a recorder must not change which call context wins a tight cap, and therefore must not change the analysis result',
+  );
 });
 
 // ---------------------------------------------------------------------
