@@ -22,6 +22,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDomShim } from './dom-shim.js';
+import { protectionVisual } from '../src/lib/protection-visual.js';
 
 const { document } = createDomShim();
 globalThis.document = document;
@@ -49,20 +50,20 @@ function findByClassName(root, className) {
   return results;
 }
 
-test('renderPrivacyView gives every row a non-empty, non-placeholder protection verdict cell (Fix 3b regression)', () => {
+test('renderPrivacyView shows the CORRECT protection verdict per row, not just a non-empty one (tightened Fix 3b regression)', () => {
   const canvasEl = document.createElement('div');
   const viewModel = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: {} });
   renderPrivacyView(viewModel, canvasEl, () => {});
 
   const protectionCells = findByClassName(canvasEl, 'privacy-protection-cell');
-  assert.equal(protectionCells.length, viewModel.rows.length, 'expected exactly one dedicated protection cell per row');
+  assert.equal(protectionCells.length, viewModel.rows.length, 'expected one protection cell per row, in row order');
   assert.ok(protectionCells.length >= 8, 'sanity: the real fixture has 8 flows');
 
-  for (const cell of protectionCells) {
-    const text = cell.textContent.trim();
-    assert.notEqual(text, '', 'protection verdict cell must never be empty');
-    assert.notEqual(text, '—', 'protection verdict cell must never be the empty-stage-cell placeholder');
-  }
+  viewModel.rows.forEach((row, i) => {
+    const expected = protectionVisual(row.protectionSummary);
+    const text = protectionCells[i].textContent.trim();
+    assert.equal(text, `${expected.glyph} ${expected.label}`, `row ${row.flowId}'s protection cell must show its real protectionSummary (${row.protectionSummary}), not just any non-empty text`);
+  });
 });
 
 test('renderPrivacyView surfaces retention/deletion governance facts even when their stage cell has no path nodes (Fix 3a regression)', () => {
