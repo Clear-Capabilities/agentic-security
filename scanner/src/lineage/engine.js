@@ -156,6 +156,20 @@ export function resolveExprIdentities(state, expr, ctx) {
           // trailing-only check missed.
           const basePath = definitePrefixBeforeWildcard(path);
           const flat = basePath ? identitiesAt(state, basePath) : new Set();
+          // Path provenance (Sub-project C, increment 2, Task 1, §10.1
+          // `member` path-branch/wildcard row): fromPath is the DEFINITE
+          // PREFIX before the wildcard, never the raw '*'-containing path
+          // (Decision 5) — recording the wildcard form would create a DAG
+          // node no read hop could ever reach.
+          if (ctx?.recordHop) {
+            for (const id of flat) {
+              ctx.recordHop({
+                kind: 'selection', subKind: 'member',
+                fromPath: basePath, toPath: null, dataElementId: id,
+                syntacticPath: path, widenReason: 'dynamic-property-key', lossReason: null,
+              });
+            }
+          }
           return { flat, byPath: new Map(), widened: flat.size > 0 };
         }
         // Pure ident/member chain — resolve directly against state, same
@@ -167,6 +181,26 @@ export function resolveExprIdentities(state, expr, ctx) {
             const subPath = candidatePath.slice(path.length + 1);
             const existing = byPath.get(subPath) ?? new Set();
             byPath.set(subPath, new Set([...existing, ...ids]));
+          }
+        }
+        // Path provenance (§10.1 `member` path-branch/no-wildcard row): one
+        // selection in-half per (contributing state key, dataElementId)
+        // pair — Decision 6, exactly the same pattern as `ident` above
+        // (this branch IS structurally identical to ident's own
+        // resolution, just against a dotted path instead of a bare name).
+        if (ctx?.recordHop) {
+          const contrib = contributingKeysAllIds(state, path);
+          for (const id of flat) {
+            const keys = contrib.get(id);
+            if (!keys) continue;
+            for (const key of keys) {
+              ctx.recordHop({
+                kind: 'selection', subKind: 'member',
+                fromPath: key, toPath: null, dataElementId: id,
+                syntacticPath: key === path ? null : path,
+                widenReason: null, lossReason: null,
+              });
+            }
           }
         }
         return { flat, byPath, widened: false };
@@ -189,7 +223,22 @@ export function resolveExprIdentities(state, expr, ctx) {
         // Same reasoning as the path-succeeds branch above: unknown key on a
         // non-path base — conservatively use everything the base carries
         // (base.flat is already that full aggregate), flagged widened.
-        return { flat: new Set(base.flat), byPath: new Map(), widened: base.flat.size > 0 };
+        const flat = new Set(base.flat);
+        // Path provenance (§10.1 `member` non-path-base/`prop==='*'` row):
+        // fromPath null — the base is an in-flight value, not itself a
+        // state key; the base's own recursion already emitted whatever
+        // state-backed in-halves it carries. This hop only annotates the
+        // (widened) selection.
+        if (ctx?.recordHop) {
+          for (const id of flat) {
+            ctx.recordHop({
+              kind: 'selection', subKind: 'member',
+              fromPath: null, toPath: null, dataElementId: id,
+              syntacticPath: null, widenReason: 'dynamic-property-key', lossReason: null,
+            });
+          }
+        }
+        return { flat, byPath: new Map(), widened: base.flat.size > 0 };
       }
       const baseResidual = residualFlat(base.flat, base.byPath);
       const flat = new Set(baseResidual);
@@ -204,9 +253,27 @@ export function resolveExprIdentities(state, expr, ctx) {
           for (const id of ids) flat.add(id);
         }
       }
+      // Path provenance (§10.1 `member` non-path-base/`prop !== '*'` row):
+      // fromPath null, same reasoning as the `prop === '*'` branch above —
+      // this hop only annotates the selection, per id in the resulting
+      // (post-selection) flat set.
+      if (ctx?.recordHop) {
+        for (const id of flat) {
+          ctx.recordHop({
+            kind: 'selection', subKind: 'member',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: null, lossReason: null,
+          });
+        }
+      }
       return { flat, byPath, widened: base.widened };
     }
 
+    // Path provenance (§10.1): `literal` emits nothing, because no identity
+    // exists to have provenance. `unknown` also emits nothing — nothing was
+    // resolved, so nothing is being dropped; a `lossReason` here would be
+    // speculative, and §10.1 is explicit that this is a decide-with-
+    // evidence call, not something to add on spec alone.
     case 'literal':
     case 'unknown':
       return noIdentity();
@@ -295,6 +362,19 @@ export function resolveExprIdentities(state, expr, ctx) {
         const r = resolveExprIdentities(state, el, ctx);
         for (const id of r.flat) flat.add(id);
       }
+      // Path provenance (§10.1 `array` row): structure-flattening by
+      // design (spread ambiguity, ADR §4) — identity propagates FULLY;
+      // only per-index distinction is lost, which is a precision fact, not
+      // an identity loss, so no widenReason/lossReason here.
+      if (ctx?.recordHop) {
+        for (const id of flat) {
+          ctx.recordHop({
+            kind: 'production', subKind: 'array',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: null, lossReason: null,
+          });
+        }
+      }
       return { flat, byPath: new Map(), widened: false };
     }
 
@@ -303,6 +383,18 @@ export function resolveExprIdentities(state, expr, ctx) {
       for (const part of expr.parts) {
         const r = resolveExprIdentities(state, part, ctx);
         for (const id of r.flat) flat.add(id);
+      }
+      // Path provenance (§10.1 `tpl` row): transformation-bearing — the
+      // identity is embedded in a new string. This is an EXPLICIT flow, not
+      // a widened one (ADR §4), so no widenReason.
+      if (ctx?.recordHop) {
+        for (const id of flat) {
+          ctx.recordHop({
+            kind: 'production', subKind: 'tpl',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: null, lossReason: null,
+          });
+        }
       }
       return { flat, byPath: new Map(), widened: false };
     }
@@ -314,7 +406,19 @@ export function resolveExprIdentities(state, expr, ctx) {
       // structure-flattening" invariant.
       const left = resolveExprIdentities(state, expr.left, ctx);
       const right = resolveExprIdentities(state, expr.right, ctx);
-      return { flat: new Set([...left.flat, ...right.flat]), byPath: new Map(), widened: false };
+      const flat = new Set([...left.flat, ...right.flat]);
+      // Path provenance (§10.1 `binary` row): same as `tpl` — deliberately
+      // a separate case (not shared) per ADR §4, but the hop shape agrees.
+      if (ctx?.recordHop) {
+        for (const id of flat) {
+          ctx.recordHop({
+            kind: 'production', subKind: 'binary',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: null, lossReason: null,
+          });
+        }
+      }
+      return { flat, byPath: new Map(), widened: false };
     }
 
     case 'logical': {
@@ -334,6 +438,18 @@ export function resolveExprIdentities(state, expr, ctx) {
           byPath.set(subPath, new Set([...existing, ...ids]));
         }
       }
+      // Path provenance (§10.1 `logical` row): structure-preserving
+      // (short-circuit evaluation can return an operand verbatim) — no
+      // widenReason.
+      if (ctx?.recordHop) {
+        for (const id of flat) {
+          ctx.recordHop({
+            kind: 'production', subKind: 'logical',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: null, lossReason: null,
+          });
+        }
+      }
       return { flat, byPath, widened: false };
     }
 
@@ -351,6 +467,20 @@ export function resolveExprIdentities(state, expr, ctx) {
         for (const [subPath, ids] of r.byPath) {
           const existing = byPath.get(subPath) ?? new Set();
           byPath.set(subPath, new Set([...existing, ...ids]));
+        }
+      }
+      // Path provenance (§10.1 `union` row): structure-preserving — both
+      // branches emitted their own in-halves during recursion above; this
+      // hop annotates the resulting selection. Both branches' ids landing
+      // here is FR-305's genuine multiple-path case, not §9.1's phantom
+      // cross-join.
+      if (ctx?.recordHop) {
+        for (const id of flat) {
+          ctx.recordHop({
+            kind: 'production', subKind: 'union',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: null, lossReason: null,
+          });
         }
       }
       return { flat, byPath, widened: false };
@@ -374,13 +504,39 @@ export function resolveExprIdentities(state, expr, ctx) {
       if (ctx?.resolveCallSummary) {
         const summary = ctx.resolveCallSummary(expr.callee, expr.args ?? [], state);
         if (summary) {
-          return { flat: new Set(summary.returnFlat), byPath: new Map(summary.returnByPath), widened: false };
+          const flat = new Set(summary.returnFlat);
+          const byPath = new Map(summary.returnByPath);
+          // Path provenance (§10.1 `call` resolved row): records only that
+          // a RESOLVED call contributed — the actual cross-function stitch
+          // is C3's job, not C2's.
+          if (ctx?.recordHop) {
+            for (const id of flat) {
+              ctx.recordHop({
+                kind: 'production', subKind: 'call-resolved',
+                fromPath: null, toPath: null, dataElementId: id,
+                syntacticPath: null, widenReason: null, lossReason: null,
+              });
+            }
+          }
+          return { flat, byPath, widened: false };
         }
       }
       const flat = new Set();
       for (const arg of expr.args ?? []) {
         const r = resolveExprIdentities(state, arg, ctx);
         for (const id of r.flat) flat.add(id);
+      }
+      // Path provenance (§10.1 `call` unresolved row): an unresolved call's
+      // return is genuinely unknown structure — flat + widened, never
+      // laundered into a clean value.
+      if (ctx?.recordHop) {
+        for (const id of flat) {
+          ctx.recordHop({
+            kind: 'production', subKind: 'call',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: 'unresolved-call', lossReason: null,
+          });
+        }
       }
       return { flat, byPath: new Map(), widened: flat.size > 0 };
     }
@@ -395,9 +551,33 @@ export function resolveExprIdentities(state, expr, ctx) {
       // to (structure-preserving), so its byPath is forwarded directly, not
       // dropped. See DESIGN_INTRAPROCEDURAL.md §4.
       const r = resolveExprIdentities(state, expr.source, ctx);
+      // Path provenance (§10.1 `assign-expr` row): pure pass-through — the
+      // source's own recursion already emitted its own in-halves; this hop
+      // forwards the source's `widened` flag, so it forwards an approximate
+      // widenReason too, matching the SAME documented-approximate
+      // 'unresolved-call' convention step()'s `assign`/`return` hops
+      // already use (resolveExprIdentities's return shape has no real
+      // reason string to forward — see Decision 3's deviation note; a full
+      // fix needs a broader threading change, out of this task's scope).
+      // Note the known limitation this case already documents: it does not
+      // write to state, so there is no write-out hop here — an in-half with
+      // no out-half that is NOT a loss.
+      if (ctx?.recordHop) {
+        const assignExprWidenReason = r.widened && r.flat.size > 0 ? 'unresolved-call' : null;
+        for (const id of r.flat) {
+          ctx.recordHop({
+            kind: 'production', subKind: 'assign-expr',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: assignExprWidenReason, lossReason: null,
+          });
+        }
+      }
       return { flat: r.flat, byPath: r.byPath, widened: r.widened };
     }
 
+    // Path provenance (§10.1): the switch's own `default` — no known case
+    // matched, nothing was resolved, so (same reasoning as `unknown` above)
+    // nothing is being dropped and there is nothing to record.
     default:
       return noIdentity();
   }

@@ -1,20 +1,33 @@
-// Path provenance hop-recording proof of concept (Sub-project C, increment
-// 1, Task 2). See scanner/src/lineage/DESIGN_PATH_PROVENANCE.md — the
-// binding spec for the hop record shape and injection mechanism. This task
-// instruments a deliberately small, representative FOUR-site subset only
-// (resolveExprIdentities's `ident`/`object` cases, step()'s non-wildcard
-// `assign` and `return` cases) — NOT full coverage (that's increment C2,
-// see DESIGN_PATH_PROVENANCE.md §10). `member`/`selection` hops are
-// therefore NEVER emitted by this task's code, which is why the hop set a
-// real fixture produces here is a strict subset of DESIGN_PATH_PROVENANCE
-// .md §6's full worked-example table (that table also includes two
-// selection/member rows this increment does not instrument).
+// Path provenance hop-recording. See scanner/src/lineage/
+// DESIGN_PATH_PROVENANCE.md — the binding spec for the hop record shape and
+// injection mechanism.
+//
+// Increment C1 (Sub-project C, Task 2) instrumented a deliberately small,
+// representative FOUR-site subset only (resolveExprIdentities's
+// `ident`/`object` cases, step()'s non-wildcard `assign` and `return`
+// cases) — NOT full coverage (see DESIGN_PATH_PROVENANCE.md §10).
+//
+// Increment C2, Task 1 (this file, extended) instruments EVERY remaining
+// `resolveExprIdentities` case per §10.1: all four `member` sub-cases
+// (selection hops now DO fire — the four-site-only framing above is
+// C1-era history, not current behavior), `array`/`tpl`/`binary`/`logical`/
+// `union`, both `call` branches, and `assign-expr`; plus the explicit
+// "emits nothing" verdicts for `literal`/`unknown`/`default`.
+// `step()`'s own remaining cases (§10.2: the wildcard-target `assign`
+// branch, the unsupported-target `assign` branch, and the bare `call`
+// statement) are NOT yet instrumented — that is increment C2's Task 2,
+// dispatched separately. So a real fixture's hop set here is now the FULL
+// §10.1 set for whatever resolveExprIdentities cases it exercises, but can
+// still be missing write-out hops for any §10.2 case Task 2 hasn't reached
+// yet (e.g. a wildcard write's hop is emitted on the read side via
+// `member`/`selection` now, but not yet on the write side via
+// `assign-weak`).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseJsFile } from '../../src/ir/parser-js.js';
 import { emptyState, addIdentity, identitiesAt } from '../../src/lineage/field-identity.js';
-import { analyzeFunctionFieldIdentity, contributingKeys } from '../../src/lineage/engine.js';
+import { analyzeFunctionFieldIdentity, contributingKeys, resolveExprIdentities } from '../../src/lineage/engine.js';
 
 function parseFn(src, fnName, file = '/x/prov.js') {
   const ir = parseJsFile(file, src);
@@ -259,6 +272,68 @@ function combine(user) {
     fixtures.push({ label: 'resolved call (ctx also carries resolveCallSummary)', fn: callerFn, entryState, extraCtx: { resolveCallSummary } });
   }
 
+  // -----------------------------------------------------------------
+  // C2 Task 1 additions: 3 more fixtures exercising this task's newly
+  // instrumented sites, per the same "attaching a recorder must not
+  // change the analysis result" discipline as every fixture above.
+  // -----------------------------------------------------------------
+
+  {
+    // A member read (path branch, no wildcard) — the exact site Task 1
+    // adds selection/member hops for.
+    const fn = parseFn(`
+      function f(user) {
+        return user.email;
+      }
+    `, 'f', '/x/wo6-member.js');
+    const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    fixtures.push({ label: 'member read (C2 Task 1 new site)', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    // A ternary (`union`) selecting between two member reads — exercises
+    // both the new production/union site and, via its branches, the new
+    // selection/member site, together.
+    const fn = parseFn(`
+      function f(user, other, flag) {
+        return flag ? user.email : other.email;
+      }
+    `, 'f', '/x/wo7-ternary.js');
+    let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    entryState = addIdentity(entryState, 'other.email', 'data:other-email');
+    fixtures.push({ label: 'ternary/union (C2 Task 1 new site)', fn, entryState, extraCtx: {} });
+  }
+
+  {
+    // A resolved call, dedicated to Task 1's new production/call-resolved
+    // hop site (distinct fixture from the pre-existing C1 "ctx also
+    // carries resolveCallSummary" fixture above, which was added to prove
+    // C1-era opt-out, not this task's new hop).
+    const src = `
+      function getEmail(source) {
+        return source.email;
+      }
+      function caller(user) {
+        return getEmail(user);
+      }
+    `;
+    const ir = parseJsFile('/x/wo8-resolved-call.js', src);
+    const calleeFn = ir.functions.find((f) => f.name === 'getEmail');
+    const callerFn = ir.functions.find((f) => f.name === 'caller');
+    const resolveCallSummary = (calleeExpr, callArgs, callerState) => {
+      if (calleeExpr.kind !== 'ident' || calleeExpr.name !== 'getEmail') return null;
+      let calleeEntryState = emptyState();
+      const userIds = identitiesAt(callerState, callArgs[0].name);
+      for (const id of userIds) calleeEntryState = addIdentity(calleeEntryState, 'source.email', id);
+      const r = analyzeFunctionFieldIdentity(calleeFn, calleeEntryState);
+      const returnFlat = new Set();
+      for (const f of r.returnFacts) for (const id of f.identities) returnFlat.add(id);
+      return { returnFlat, returnByPath: new Map() };
+    };
+    const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+    fixtures.push({ label: 'resolved call (C2 Task 1 new site)', fn: callerFn, entryState, extraCtx: { resolveCallSummary } });
+  }
+
   for (const { label, fn, entryState, extraCtx } of fixtures) {
     const without = analyzeFunctionFieldIdentity(fn, entryState, extraCtx);
     const hops = [];
@@ -282,7 +357,7 @@ function combine(user) {
 //    separate records, never one carrying a Set.
 // ---------------------------------------------------------------------
 
-test('DESIGN_PATH_PROVENANCE.md §6 worked example, real parsed source: hops for all four instrumented sites are correct and complete', () => {
+test('DESIGN_PATH_PROVENANCE.md §6 worked example, real parsed source: hops are correct and complete (C1\'s four sites + C2 Task 1\'s member/selection)', () => {
   const src = `
 function f(user) {
   const u = user;
@@ -318,14 +393,17 @@ function f(user) {
     }
   }
 
-  // Only the four instrumented site (kind, subKind) shapes ever appear —
-  // proof that no other resolveExprIdentities/step case was accidentally
-  // instrumented too.
+  // Only the shapes this fixture's cases actually produce ever appear —
+  // C1's original four sites, plus C2 Task 1's `member`/`selection` (this
+  // fixture's `u.email`/`u.ssn` reads inside the object literal are now
+  // instrumented; `array`/`tpl`/`binary`/`logical`/`union`/`call`/
+  // `assign-expr` don't appear because this fixture doesn't use them —
+  // covered by their own dedicated tests below).
   const shapes = new Set(hops.map((h) => `${h.kind}/${h.subKind}`));
   for (const shape of shapes) {
     assert.ok(
-      ['production/ident', 'production/object', 'write-out/assign', 'write-out/return'].includes(shape),
-      `unexpected hop shape emitted: ${shape} (Task 2 instruments exactly four sites)`,
+      ['production/ident', 'production/object', 'selection/member', 'write-out/assign', 'write-out/return'].includes(shape),
+      `unexpected hop shape emitted: ${shape}`,
     );
   }
 
@@ -346,9 +424,26 @@ function f(user) {
   assert.ok(assignHops.some((h) => h.toPath === 'u.ssn' && h.dataElementId === 'data:ssn'), `expected write-out/assign to 'u.ssn', got: ${JSON.stringify(assignHops)}`);
 
   // --- n2: `const o = { email: u.email, ssn: u.ssn };` -----------------
-  // `member` is NOT instrumented by this task, so there is no selection
-  // in-half here — only the object literal's own production/object
-  // annotation (fromPath: null, per identity) and the write-out to o.*.
+  // `member` (path branch, no wildcard) is now instrumented (C2 Task 1,
+  // §10.1) — one selection in-half per (contributing state key, id) pair,
+  // Decision 6, exactly the same shape as `ident`'s in-halves above. Here
+  // the queried path ('u.email'/'u.ssn') IS itself the contributing state
+  // key (an exact match — it was written as its own key at n1), so
+  // syntacticPath is null, not the queried path.
+  const memberHops = hops.filter((h) => h.kind === 'selection' && h.subKind === 'member');
+  const uEmailMember = memberHops.find((h) => h.dataElementId === 'data:email');
+  assert.ok(uEmailMember, `expected a selection/member hop for data:email, got: ${JSON.stringify(memberHops)}`);
+  assert.equal(uEmailMember.fromPath, 'u.email');
+  assert.equal(uEmailMember.toPath, null);
+  assert.equal(uEmailMember.syntacticPath, null, 'contributing key exactly matches the queried path here, so syntacticPath must be null');
+  assert.equal(uEmailMember.widenReason, null);
+  const uSsnMember = memberHops.find((h) => h.dataElementId === 'data:ssn');
+  assert.ok(uSsnMember, `expected a selection/member hop for data:ssn, got: ${JSON.stringify(memberHops)}`);
+  assert.equal(uSsnMember.fromPath, 'u.ssn');
+  assert.equal(memberHops.length, 2, `expected exactly two per-identity selection/member hops, not one Set-valued record: ${JSON.stringify(memberHops)}`);
+
+  // The object literal's own production/object annotation (fromPath: null,
+  // per identity) and the write-out to o.*.
   const objectHops = hops.filter((h) => h.kind === 'production' && h.subKind === 'object');
   assert.ok(objectHops.some((h) => h.dataElementId === 'data:email' && h.fromPath === null && h.toPath === null), `expected production/object hop for data:email, got: ${JSON.stringify(objectHops)}`);
   assert.ok(objectHops.some((h) => h.dataElementId === 'data:ssn' && h.fromPath === null && h.toPath === null), `expected production/object hop for data:ssn, got: ${JSON.stringify(objectHops)}`);
@@ -378,29 +473,30 @@ function f(user) {
   assert.ok(returnHops.every((h) => h.toPath === null), 'a return hop must never carry a fabricated pseudo-path (e.g. "@return") as toPath — must be exactly null (Decision 5)');
   assert.deepEqual(returnHops.map((h) => h.dataElementId).sort(), ['data:email', 'data:ssn']);
 
-  // --- Joining the two INSTRUMENTED ends of the flow (Decision 6) ------
+  // --- Joining the ends of the flow (Decision 6) — now complete for all
+  // three nodes, now that C2 Task 1 instruments `member`:
   // n1's in-half + out-half join into a real edge at each id's own node:
   //   user.email -> u.email  (data:email)
   //   user.ssn   -> u.ssn    (data:ssn)
+  // n2's in-half (selection/member) + out-half join into a real edge too:
+  //   u.email -> o.email     (data:email)
+  //   u.ssn   -> o.ssn       (data:ssn)
   // n3's in-half + out-half join into a real exit edge:
   //   o.email -> <return>    (data:email)
   //   o.ssn   -> <return>    (data:ssn)
-  // (n2's own join is intentionally partial in this increment — see the
-  // module comment above; C2 closes it by instrumenting `member`.)
   assert.equal(uEmailIdent.nodeId, assignHops.find((h) => h.toPath === 'u.email').nodeId, 'n1\'s in-half and out-half for data:email must share the same nodeId (the join key)');
+  assert.equal(uEmailMember.nodeId, assignHops.find((h) => h.toPath === 'o.email').nodeId, 'n2\'s selection/member in-half and write-out/assign out-half for data:email must share the same nodeId (the join key)');
   assert.equal(oEmailIdent.nodeId, returnHops.find((h) => h.dataElementId === 'data:email').nodeId, 'n3\'s in-half and out-half for data:email must share the same nodeId (the join key)');
 
   // Total record count for this fixture, deduplicated: 4 hops at n1
-  // (2 production/ident + 2 write-out/assign) + 4 hops at n2 (2
-  // production/object + 2 write-out/assign; no selection/member since
-  // that case is not instrumented by this task) + 4 hops at n3 (2
-  // production/ident + 2 write-out/return) = 12. Matches
-  // DESIGN_PATH_PROVENANCE.md §6's own closing count ("twelve deduplicated
-  // records") for exactly this fixture under this increment's four-site
-  // scope — see that document's note on the worked-example table
-  // including two additional selection/member rows that only a FULL
-  // (post-C2) instrumentation would actually emit.
-  assert.equal(hops.length, 12, `expected exactly 12 deduplicated hop records for this fixture under Task 2's four-site scope, got ${hops.length}: ${JSON.stringify(hops, null, 2)}`);
+  // (2 production/ident + 2 write-out/assign) + 6 hops at n2 (2
+  // selection/member + 2 production/object + 2 write-out/assign — now that
+  // C2 Task 1 instruments `member`, DESIGN_PATH_PROVENANCE.md §6's own
+  // closing count of twelve records — which was explicit that it excluded
+  // the two selection/member rows a FULL instrumentation would add — grows
+  // by exactly those two rows) + 4 hops at n3 (2 production/ident + 2
+  // write-out/return) = 14.
+  assert.equal(hops.length, 14, `expected exactly 14 deduplicated hop records for this fixture now that member/selection is instrumented (C2 Task 1), got ${hops.length}: ${JSON.stringify(hops, null, 2)}`);
 });
 
 // ---------------------------------------------------------------------
@@ -638,4 +734,272 @@ test('structural guard: contributingKeys reconstructs identitiesAt exactly, over
     assert.deepEqual([...contributingKeys(state, 'user', 'data:blob')], ['user']);
     assert.deepEqual([...contributingKeys(state, 'user', 'data:email')], ['user.email']);
   }
+});
+
+// ---------------------------------------------------------------------
+// Sub-project C, increment 2, Task 1: dedicated correctness tests for
+// every remaining `resolveExprIdentities` case per DESIGN_PATH_PROVENANCE
+// .md §10.1's table. Each uses real parsed source (parseJsFile), matching
+// the established style, and asserts the exact hop shape (kind/subKind/
+// fromPath/toPath/syntacticPath/widenReason) the table's row specifies.
+// ---------------------------------------------------------------------
+
+test('member (path branch, wildcard): selection hop\'s fromPath is definitePrefixBeforeWildcard, NEVER the raw \'*\'-containing path (Decision 5)', () => {
+  const fn = parseFn(`
+    function f(store, k) {
+      return store[k];
+    }
+  `, 'f', '/x/c2-member-wildcard.js');
+  const entryState = addIdentity(emptyState(), 'store.email', 'data:email');
+
+  const hops = [];
+  analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  const memberHops = dedupeHops(hops).filter((h) => h.kind === 'selection' && h.subKind === 'member');
+
+  assert.equal(memberHops.length, 1, `expected exactly one selection/member hop, got: ${JSON.stringify(memberHops)}`);
+  const h = memberHops[0];
+  assert.equal(h.dataElementId, 'data:email');
+  assert.equal(h.fromPath, 'store', 'fromPath must be the definite prefix before the wildcard, never a \'*\'-containing path');
+  assert.equal(h.toPath, null);
+  assert.equal(h.syntacticPath, 'store.*', 'syntacticPath carries the raw wildcard-containing path the IR supplied');
+  assert.equal(h.widenReason, 'dynamic-property-key');
+  // No hop anywhere in this fixture may carry a fromPath/toPath/syntacticPath
+  // containing a raw, unresolved wildcard segment (Decision 5's forbidden
+  // bug class) except syntacticPath, which is explicitly the one field
+  // allowed to carry that framing.
+  for (const hop of dedupeHops(hops)) {
+    assert.ok(hop.fromPath === null || !hop.fromPath.includes('*'), `fromPath must never contain a wildcard segment: ${JSON.stringify(hop)}`);
+    assert.ok(hop.toPath === null || !hop.toPath.includes('*'), `toPath must never contain a wildcard segment: ${JSON.stringify(hop)}`);
+  }
+});
+
+test('member (non-path base, prop !== "*"): selection hop annotates the selection with no state-backed fromPath', () => {
+  const fn = parseFn(`
+    function f(user, other, flag) {
+      return (flag ? user : other).email;
+    }
+  `, 'f', '/x/c2-member-nonpath.js');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'other.email', 'data:other');
+
+  const hops = [];
+  const result = analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:other']);
+
+  const deduped = dedupeHops(hops);
+  const memberHops = deduped.filter((h) => h.kind === 'selection' && h.subKind === 'member');
+  assert.deepEqual(memberHops.map((h) => h.dataElementId).sort(), ['data:email', 'data:other']);
+  for (const h of memberHops) {
+    assert.equal(h.fromPath, null, 'the base is an in-flight value (a ternary), not itself a state key');
+    assert.equal(h.toPath, null);
+    assert.equal(h.widenReason, null, 'a known (non-computed) property selection is an explicit flow');
+  }
+
+  // The base's own recursion (the ternary) must ALSO have emitted its own
+  // in-halves — this member hop is annotation-only, not a substitute.
+  const unionHops = deduped.filter((h) => h.kind === 'production' && h.subKind === 'union');
+  assert.deepEqual(unionHops.map((h) => h.dataElementId).sort(), ['data:email', 'data:other']);
+});
+
+test('member (non-path base, prop === "*"): selection hop is widened, dynamic-property-key', () => {
+  const fn = parseFn(`
+    function f(user, other, flag, k) {
+      return (flag ? user : other)[k];
+    }
+  `, 'f', '/x/c2-member-nonpath-star.js');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'other.email', 'data:other');
+
+  const hops = [];
+  analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  const memberHops = dedupeHops(hops).filter((h) => h.kind === 'selection' && h.subKind === 'member');
+
+  assert.deepEqual(memberHops.map((h) => h.dataElementId).sort(), ['data:email', 'data:other']);
+  for (const h of memberHops) {
+    assert.equal(h.fromPath, null);
+    assert.equal(h.toPath, null);
+    assert.equal(h.widenReason, 'dynamic-property-key', 'an unknown computed key on a non-path base must be graded widened');
+  }
+});
+
+test('array/tpl/binary: structure-flattening production hops, per id, no widenReason', () => {
+  const cases = [
+    {
+      subKind: 'array',
+      src: `function f(user) { return [user.email, user.ssn]; }`,
+      buildEntryState: () => {
+        let s = addIdentity(emptyState(), 'user.email', 'data:email');
+        return addIdentity(s, 'user.ssn', 'data:ssn');
+      },
+      ids: ['data:email', 'data:ssn'],
+    },
+    {
+      subKind: 'tpl',
+      src: `function f(user) { return \`hello \${user.email}\`; }`,
+      buildEntryState: () => addIdentity(emptyState(), 'user.email', 'data:email'),
+      ids: ['data:email'],
+    },
+    {
+      subKind: 'binary',
+      src: `function f(user) { return user.age + 1; }`,
+      buildEntryState: () => addIdentity(emptyState(), 'user.age', 'data:age'),
+      ids: ['data:age'],
+    },
+  ];
+  for (const { src, subKind, buildEntryState, ids } of cases) {
+    const fn = parseFn(src, 'f', `/x/c2-${subKind}.js`);
+    const entryState = buildEntryState();
+    const hops = [];
+    analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+    const caseHops = dedupeHops(hops).filter((h) => h.kind === 'production' && h.subKind === subKind);
+    assert.deepEqual(caseHops.map((h) => h.dataElementId).sort(), [...ids].sort(), `${subKind}: expected one production hop per id`);
+    for (const h of caseHops) {
+      assert.equal(h.fromPath, null, `${subKind}: fromPath must be null (structure-flattening)`);
+      assert.equal(h.toPath, null);
+      assert.equal(h.widenReason, null, `${subKind}: must be an explicit flow, not widened`);
+    }
+  }
+});
+
+test('logical/union: structure-preserving production hops, per id, no widenReason', () => {
+  {
+    const fn = parseFn(`
+      function f(user, other) {
+        return user.email || other.email;
+      }
+    `, 'f', '/x/c2-logical.js');
+    let entryState = addIdentity(emptyState(), 'user.email', 'data:x');
+    entryState = addIdentity(entryState, 'other.email', 'data:y');
+    const hops = [];
+    analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+    const logicalHops = dedupeHops(hops).filter((h) => h.kind === 'production' && h.subKind === 'logical');
+    assert.deepEqual(logicalHops.map((h) => h.dataElementId).sort(), ['data:x', 'data:y']);
+    for (const h of logicalHops) {
+      assert.equal(h.fromPath, null);
+      assert.equal(h.toPath, null);
+      assert.equal(h.widenReason, null, 'short-circuit evaluation returning an operand verbatim is an explicit flow');
+    }
+  }
+
+  {
+    const fn = parseFn(`
+      function f(user, other, flag) {
+        return flag ? user.email : other.email;
+      }
+    `, 'f', '/x/c2-union.js');
+    let entryState = addIdentity(emptyState(), 'user.email', 'data:x');
+    entryState = addIdentity(entryState, 'other.email', 'data:y');
+    const hops = [];
+    analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+    const unionHops = dedupeHops(hops).filter((h) => h.kind === 'production' && h.subKind === 'union');
+    assert.deepEqual(unionHops.map((h) => h.dataElementId).sort(), ['data:x', 'data:y']);
+    for (const h of unionHops) {
+      assert.equal(h.fromPath, null);
+      assert.equal(h.toPath, null);
+      assert.equal(h.widenReason, null, 'a ternary selecting one branch verbatim is FR-305\'s genuine multiple-path case, not a widened flow');
+    }
+  }
+});
+
+test('call (unresolved): production/call hop is widened "unresolved-call"', () => {
+  const fn = parseFn(`
+    function f(user) {
+      return helper(user.email);
+    }
+  `, 'f', '/x/c2-call-unresolved.js');
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+
+  const hops = [];
+  analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  const callHops = dedupeHops(hops).filter((h) => h.kind === 'production' && h.subKind === 'call');
+
+  assert.equal(callHops.length, 1);
+  assert.equal(callHops[0].dataElementId, 'data:email');
+  assert.equal(callHops[0].fromPath, null);
+  assert.equal(callHops[0].toPath, null);
+  assert.equal(callHops[0].widenReason, 'unresolved-call');
+});
+
+test('call (resolved via ctx.resolveCallSummary): production/call-resolved hop, widenReason null (the cross-function stitch itself is C3\'s job)', () => {
+  const src = `
+    function copyEmail(source) {
+      return source.email;
+    }
+    function caller(user) {
+      return copyEmail(user);
+    }
+  `;
+  const ir = parseJsFile('/x/c2-call-resolved.js', src);
+  const calleeFn = ir.functions.find((f) => f.name === 'copyEmail');
+  const callerFn = ir.functions.find((f) => f.name === 'caller');
+  const resolveCallSummary = (calleeExpr, callArgs, callerState) => {
+    if (calleeExpr.kind !== 'ident' || calleeExpr.name !== 'copyEmail') return null;
+    let calleeEntryState = emptyState();
+    const userIds = identitiesAt(callerState, callArgs[0].name);
+    for (const id of userIds) calleeEntryState = addIdentity(calleeEntryState, 'source.email', id);
+    const r = analyzeFunctionFieldIdentity(calleeFn, calleeEntryState);
+    const returnFlat = new Set();
+    for (const f of r.returnFacts) for (const id of f.identities) returnFlat.add(id);
+    return { returnFlat, returnByPath: new Map() };
+  };
+
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  const hops = [];
+  analyzeFunctionFieldIdentity(callerFn, entryState, { resolveCallSummary, recordHop: (h) => hops.push(h) });
+
+  const resolvedHops = dedupeHops(hops).filter((h) => h.kind === 'production' && h.subKind === 'call-resolved');
+  assert.equal(resolvedHops.length, 1, `expected exactly one production/call-resolved hop, got: ${JSON.stringify(resolvedHops)}`);
+  assert.equal(resolvedHops[0].dataElementId, 'data:email');
+  assert.equal(resolvedHops[0].fromPath, null);
+  assert.equal(resolvedHops[0].toPath, null);
+  assert.equal(resolvedHops[0].widenReason, null, 'C2 records only that a resolved call contributed; the cross-function stitch itself is C3\'s job');
+  // No generic unresolved production/call hop should also fire for the
+  // same call site now that it resolved.
+  assert.equal(dedupeHops(hops).filter((h) => h.kind === 'production' && h.subKind === 'call').length, 0);
+});
+
+test('assign-expr: production hop is a pure pass-through of the resolved source, per id, no write-out (documented limitation)', () => {
+  const fn = parseFn(`
+    function f(user) {
+      return (x = user).email;
+    }
+  `, 'f', '/x/c2-assign-expr.js');
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+
+  const hops = [];
+  const result = analyzeFunctionFieldIdentity(fn, entryState, { recordHop: (h) => hops.push(h) });
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email']);
+
+  const deduped = dedupeHops(hops);
+  const assignExprHops = deduped.filter((h) => h.kind === 'production' && h.subKind === 'assign-expr');
+  assert.equal(assignExprHops.length, 1, `expected exactly one production/assign-expr hop, got: ${JSON.stringify(assignExprHops)}`);
+  assert.equal(assignExprHops[0].dataElementId, 'data:email');
+  assert.equal(assignExprHops[0].fromPath, null);
+  assert.equal(assignExprHops[0].toPath, null);
+  assert.equal(assignExprHops[0].widenReason, null, 'a plain, no-call source is not a widened flow');
+
+  // The source's own recursion (the ident `user`) must have emitted its own
+  // in-half — assign-expr is a pass-through annotation, not a substitute.
+  const identHops = deduped.filter((h) => h.kind === 'production' && h.subKind === 'ident' && h.fromPath === 'user.email');
+  assert.ok(identHops.length > 0, 'expected the assign-expr\'s source (a plain ident) to have emitted its own production/ident in-half');
+});
+
+test('literal / unknown / default: emit nothing, because no identity was resolved (§10.1\'s explicit "emits nothing" verdict)', () => {
+  const hops = [];
+  const ctx = { recordHop: (h) => hops.push(h) };
+  const state = addIdentity(emptyState(), 'user.email', 'data:email');
+
+  const litResult = resolveExprIdentities(state, { kind: 'literal', value: 42 }, ctx);
+  assert.equal(litResult.flat.size, 0);
+
+  const unknownResult = resolveExprIdentities(state, { kind: 'unknown' }, ctx);
+  assert.equal(unknownResult.flat.size, 0);
+
+  const defaultResult = resolveExprIdentities(state, { kind: 'some-future-unmodelled-node-kind' }, ctx);
+  assert.equal(defaultResult.flat.size, 0);
+
+  const nullExprResult = resolveExprIdentities(state, null, ctx);
+  assert.equal(nullExprResult.flat.size, 0);
+
+  assert.equal(hops.length, 0, `expected zero hops from literal/unknown/default/null, got: ${JSON.stringify(hops)}`);
 });

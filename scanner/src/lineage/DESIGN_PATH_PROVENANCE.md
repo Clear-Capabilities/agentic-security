@@ -790,6 +790,21 @@ case, this table is stale until it grows a row.
 | `call` (resolved via `ctx.resolveCallSummary`) | production | `null` | `null` | `subKind: 'call-resolved'`, `widenReason: null`. The cross-function stitching itself is **C3**, not C2 — C2 records only that a resolved call contributed. |
 | `assign-expr` | production | `null` | `null` | Pure pass-through; forwards the source's `widened`, so forward its `widenReason` too. Note the known limitation: it does **not** write to state, so there is no write-out hop — an in-half with no out-half that is *not* a loss. |
 
+**2026-08-30 implementation note (C2, Task 1):** the `assign-expr` row's
+"forward its `widenReason` too" instruction assumed a real reason string was
+available to forward. It isn't — `resolveExprIdentities`'s return shape is
+`{flat, byPath, widened}`, a boolean, not a reason string (that's exactly
+Decision 3's own already-disclosed gap: only a *hop*, not the general
+return value, carries `widenReason`). Resolved by applying the SAME
+documented-approximate `'unresolved-call'` convention `step()`'s
+`assign`/`return` cases already use when forwarding a bare `widened` flag
+(`r.widened && r.flat.size > 0 ? 'unresolved-call' : null`) — not a new
+mechanism, just the existing one, applied consistently. This inherits
+those cases' already-disclosed mislabeling risk (a widening actually
+caused by a dynamic property key can read as `'unresolved-call'`); it does
+not worsen it. A real fix still needs `resolveExprIdentities` to thread an
+actual reason string through its return value, out of C2's scope.
+
 ### 10.2 `step()` — every CFG node kind
 
 | case | hop type | `fromPath` | `toPath` | notes |
