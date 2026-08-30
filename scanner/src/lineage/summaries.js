@@ -162,7 +162,24 @@ export function createCallSummaryResolver(cache, lookupCallee) {
     const { qid, fn } = resolved;
     const entryState = entryStateFromCall(fn.params, callArgs, callerState);
     return cache.compute(qid, entryState, (es) => {
-      const result = analyzeFunctionFieldIdentity(fn, es);
+      // Pass THIS SAME resolver down as the callee's own ctx — without
+      // this, a chain of resolved calls (outer resolves to middle, middle
+      // itself calls inner) would silently stop resolving after one hop:
+      // middle's own analysis would run with no ctx, so its call to inner
+      // would take the unresolved fallback, and outer would receive a
+      // coarsely-widened summary reported as `widened: false` (since
+      // resolveExprIdentities's call case only reads summary.returnFlat/
+      // returnByPath, never summary.widenings) — a confident-looking
+      // answer that's silently wrong one level down. A final whole-branch
+      // review found and proved this exact gap via a real three-function
+      // chain. Passing the resolver down makes resolution recurse through
+      // as many resolved hops as `lookupCallee` can cover, with the
+      // existing recursion guard (field-identity summary cache's `_stack`
+      // bottom-stub) already sufficient to keep a self- or mutually-
+      // recursive chain safe (verified: both terminate immediately,
+      // returning an empty, honestly-unrefined result — precision there
+      // is increment B5's job, not this fix's).
+      const result = analyzeFunctionFieldIdentity(fn, es, { resolveCallSummary });
       // Union across EVERY return site, not just the first — a function
       // with multiple return statements (e.g. an early-return branch) must
       // have all of them reflected, not just whichever happened to be

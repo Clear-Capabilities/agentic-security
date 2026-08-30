@@ -446,6 +446,36 @@ test('a resolved call to a real, separately-parsed function returns its actual f
   assert.deepEqual([...result.returnFacts[0].identities], ['data:email'], 'the call to copyEmail must resolve to its real return fact (only email, since copyEmail only reads source.email), not the generic widened union-of-args fallback (which would have included data:ssn too)');
 });
 
+test('a THREE-function chain of resolved calls (outer -> middle -> inner) resolves through BOTH hops, not just one (regression for a final-review finding: createCallSummaryResolver was not passing itself down as the callee\'s own ctx, so a callee\'s OWN resolved call silently fell back to the unresolved/widened path, and the resulting over-broad summary was reported to the outer caller as confidently resolved — widened: false — with no signal anything was lost)', () => {
+  const src = `
+    function inner(x) {
+      return x.email;
+    }
+    function middle(u) {
+      return inner(u);
+    }
+    function outer(user) {
+      return middle(user);
+    }
+  `;
+  const innerFn = parseFn(src, 'inner');
+  const middleFn = parseFn(src, 'middle');
+  const outerFn = parseFn(src, 'outer');
+
+  const cache = new FieldIdentitySummaryCache();
+  const byName = { inner: innerFn, middle: middleFn, outer: outerFn };
+  const lookupCallee = (calleeExpr) => (calleeExpr.kind === 'ident' && byName[calleeExpr.name] ? { qid: calleeExpr.name, fn: byName[calleeExpr.name] } : null);
+  const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
+
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+
+  const result = analyzeFunctionFieldIdentity(outerFn, entryState, { resolveCallSummary });
+
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email'], 'outer must resolve through BOTH hops (outer->middle->inner) to inner\'s real fact (only email), not silently widen to include ssn one hop down');
+});
+
 test('returning a spread object directly aggregates every field (complementary to the isolation test above)', () => {
   const src = `
     function combine(user) {
