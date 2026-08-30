@@ -161,6 +161,29 @@ test('reading a field directly off a ternary/logical expression (no intermediate
   assert.deepEqual([...result.returnFacts[0].identities], ['data:email']);
 });
 
+test('assignment-expression-form destructuring does not fabricate a colliding shared key across unrelated destructurings (regression for a gap found via the real parser)', () => {
+  const src = `
+    function f(user, other) {
+      let a, b;
+      ({name: a} = other);
+      ({name: b} = user);
+      return a;
+    }
+  `;
+  const fn = parseFn(src, 'f');
+  let entryState = addIdentity(emptyState(), 'user.name', 'data:user-name');
+  entryState = addIdentity(entryState, 'other.name', 'data:other-name');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  // Confirm no collision: exitState must not have a single shared "[object Object]"-style
+  // key holding both identities merged together. Given the fix skips (rather than tracks)
+  // this form, `a`/`b` will not carry the expected identity either — confirm the state does
+  // NOT contain a wrongly-populated stringified-object key, which is the actual defect this
+  // guards against; do not assert that `a` correctly carries `data:other-name` (out of scope
+  // for this fix, per the deferred-limitation note in step()).
+  const hasCollisionKey = [...result.exitState.keys()].some((k) => k.includes('[object Object]'));
+  assert.ok(!hasCollisionKey, 'must never write to a stringified-pattern-object fabricated key');
+});
+
 test('template literal propagation from real parsed source: identity flows through interpolation, no widening', () => {
   const src = `
 function greet(user) {

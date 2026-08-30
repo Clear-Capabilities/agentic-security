@@ -218,6 +218,22 @@ export function resolveExprIdentities(state, expr) {
 function step(node, stateIn, widenings) {
   switch (node.kind) {
     case 'assign': {
+      if (typeof node.target !== 'string') {
+        // Assignment-expression-form destructuring (`({a} = obj)`, as opposed
+        // to `const {a} = obj`) is lowered by the real parser into a single
+        // `assign` node whose `target` is the raw pattern object, not a
+        // string path — scanner/src/dataflow/engine.js (the sibling taint
+        // engine) already guards this exact shape, a bug it once hit; this
+        // package inherited the same gap until a final review found it.
+        // Writing to a stringified pattern object as a fabricated path key
+        // would silently collide across every unrelated destructuring
+        // assignment in the function, merging their fields together.
+        // Correctly tracking this form would require walking the pattern the
+        // same way the parser already does for declaration-form destructuring
+        // — deferred (matching the sibling engine's own precedent of skipping
+        // rather than guessing) rather than attempted here.
+        return { state: stateIn, returnFact: null };
+      }
       const resolved = resolveExprIdentities(stateIn, node.source);
       let state = removeIdentitiesAt(stateIn, node.target);
       // Write every byPath entry at its own sub-path, and write only the
