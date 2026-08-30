@@ -233,3 +233,51 @@ test('two computed-key writes to the same object accumulate instead of the secon
   assert.deepEqual([...flat].sort(), ['data:email', 'data:ssn'],
     'the second computed-key write must not have deleted the first (pre-fix bug returned only data:ssn)');
 });
+
+// Round 5, fix (c): an object literal's COMPUTED key with a non-literal key
+// expression (`[k]: ...`) was resolved by parser-js.js's ObjectExpression
+// handling to the key EXPRESSION's own variable name ('k') — colliding with
+// an explicit, non-computed property literally named `k` on the same
+// object, since an Identifier key node has a `.name` regardless of whether
+// `computed` is true. `{ k: user.ssn, [k]: user.email }` pre-fix wrote BOTH
+// properties' identities to the exact same access path `c.k`, as a single
+// false-certain fact (a genuine FR-301 merge). Post-fix, the parser marks
+// the unresolvable computed key '*' (mirroring the existing computed-
+// MEMBER-access convention) and engine.js's `object` case folds a
+// '*'-keyed property into the object's coarse RESIDUAL, not a byPath entry.
+test('object literal with an explicit key and a colliding-by-variable-name computed key no longer merges them into one fabricated key at the parser layer (regression for a round-5 finding touching the shared parser)', () => {
+  const src = `
+    function h(user, k) {
+      const c = { k: user.ssn, [k]: user.email };
+      return c;
+    }
+  `;
+  const fn = parseFn(src, 'h');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+
+  // Checked directly against exitState's raw entries (not via identitiesAt's
+  // own ancestor-aggregation semantics, which legitimately re-combines the
+  // two below for a DIFFERENT, correct reason — see the comment on the
+  // final assertion): `c.k` must hold ONLY the identity of the property
+  // that genuinely, definitely owns that literal key. Pre-fix this held
+  // BOTH `data:ssn` and `data:email` merged as one false-certain fact.
+  assert.deepEqual([...result.exitState.get('c.k')], ['data:ssn'],
+    'c.k must hold ONLY the identity of the property that genuinely, definitely owns that literal key — not merged with the computed-key property');
+  // The unknown-key property's identity must be folded into the coarse
+  // residual at the CONTAINER's own path, not fabricated onto "c.k".
+  assert.deepEqual([...result.exitState.get('c')], ['data:email'],
+    'the unknown-key property must be folded into the coarse residual at the container\'s own path');
+
+  // A read of `c.k` (or of `c` as a whole) still correctly sees BOTH
+  // identities once identitiesAt's existing ancestor-coverage semantics
+  // apply: the residual at `c` conservatively applies to every field under
+  // it, since the unknown-key write genuinely MIGHT have landed on 'k'.
+  // This is intentional, honest widening (FR-306), not the pre-fix bug —
+  // the distinction proven above is WHERE each identity is recorded
+  // (definite vs. residual/conservative), not whether a downstream read
+  // ever sees both.
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn']);
+});

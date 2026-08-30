@@ -120,6 +120,20 @@ export function resolveExprIdentities(state, expr) {
       for (const prop of expr.props) {
         const r = resolveExprIdentities(state, prop.value);
         for (const id of r.flat) flat.add(id);
+        if (prop.key === '*') {
+          // Unknown computed key (`{[k]: v}`, round 5 — see
+          // scanner/src/ir/parser-js.js's ObjectExpression case, which now
+          // emits the literal key '*' for a non-literal computed key,
+          // mirroring computed-member-access's existing convention) —
+          // fold into the coarse residual for this object rather than a
+          // specific byPath entry, which would just be a differently-
+          // shaped version of the same fabricated-key collision bug (only
+          // with '*' as the fabricated key instead of the key expression's
+          // own variable name). Nothing to do here beyond adding to `flat`
+          // above — leaving it OUT of `byPath` is exactly what makes it
+          // residual when this object is later written via `assign`.
+          continue;
+        }
         // Use the RESIDUAL, not the full r.flat: if prop.value is itself an
         // aliased/structured reference (now possible via the ident/member
         // case above returning a populated byPath), writing the full flat

@@ -91,8 +91,27 @@ function exprOf(n) {
       return { kind: 'union', branches: [exprOf(n.consequent), exprOf(n.alternate)] };
     case 'ObjectExpression':  return {
       kind: 'object',
+      // Round-5 lineage-engine finding: for a COMPUTED property
+      // (`{[k]: v}`, `p.computed === true`), `p.key` is an arbitrary
+      // expression node, not a name — and an Identifier key expression
+      // (`k`) HAS a `.name` ('k'), same as a real, non-computed property
+      // literally named `k` would. Using `p.key.name` unconditionally
+      // therefore attributed a computed property to the key EXPRESSION's
+      // own variable name as if it were a real, distinct property name,
+      // colliding `{ k: user.ssn, [k]: user.email }` onto one shared 'k'
+      // key. A computed key IS still resolvable when it's itself a literal
+      // (`{[42]: v}`, `{['literal']: v}` — Babel marks these
+      // `computed: true` too, but `p.key.value` gives the real value), so
+      // only an Identifier/expression computed key (no `.value`) falls
+      // back to the literal string '*' — mirroring the EXISTING computed-
+      // MEMBER-access convention (`n.computed` handling just above, and
+      // `lhsPath`'s computed-write handling below) rather than inventing a
+      // new one. See DESIGN_INTRAPROCEDURAL.md §4 and CLAUDE.md's "three
+      // hop types" note.
       props: (n.properties || []).filter(p => p.type === 'ObjectProperty' && p.key).map(p => ({
-        key: p.key.name || (p.key.value != null ? String(p.key.value) : '*'),
+        key: p.computed
+          ? (p.key.value != null ? String(p.key.value) : '*')
+          : (p.key.name || (p.key.value != null ? String(p.key.value) : '*')),
         value: exprOf(p.value),
       })),
     };
