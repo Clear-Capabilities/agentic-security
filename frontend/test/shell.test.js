@@ -146,6 +146,19 @@ test('view-tab clicking still updates aria-selected and the URL hash, and also n
   shell.destroy();
 });
 
+test('mountShell exposes getContextRailEl returning the context rail element', () => {
+  window.location.hash = '';
+  const root = document.createElement('div');
+  const shell = mountShell(root, makeGraph());
+
+  const contextRailEl = shell.getContextRailEl();
+
+  assert.ok(contextRailEl);
+  assert.equal(contextRailEl.className, 'shell__context-rail');
+
+  shell.destroy();
+});
+
 test('an external hashchange (e.g. back/forward navigation) still updates state and notifies subscribers', () => {
   window.location.hash = '';
   const root = document.createElement('div');

@@ -18,6 +18,7 @@ const VIEWS = [
  *   onStateChange: (listener: (state: object) => void) => (() => void),
  *   getCanvasEl: () => HTMLElement,
  *   getInspectorEl: () => HTMLElement,
+ *   getContextRailEl: () => HTMLElement,
  *   destroy: () => void,
  * }}
  */
@@ -90,6 +91,7 @@ export function mountShell(rootEl, graph) {
     },
     getCanvasEl: () => canvas,
     getInspectorEl: () => inspector,
+    getContextRailEl: () => contextRail,
     destroy() {
       window.removeEventListener('hashchange', handleHashChange);
       stateChangeListeners = [];

@@ -6,15 +6,17 @@
   <title>Data Flow Explorer — Illustrative demo data</title>
   <link rel="stylesheet" href="styles/tokens.css" />
   <link rel="stylesheet" href="styles/shell.css" />
+  <link rel="stylesheet" href="styles/architecture-view.css" />
+  <link rel="stylesheet" href="styles/inspector.css" />
 </head>
 <body>
   <div id="app-root"></div>
   <script type="module">
-    import { mountShell } from './src/shell.js';
+    import { bootstrap } from './src/app.js';
     import { FLAGSHIP_GRAPH } from './src/data/flagship-graph.js';
 
     const root = document.getElementById('app-root');
-    mountShell(root, FLAGSHIP_GRAPH);
+    bootstrap(root, FLAGSHIP_GRAPH);
   </script>
 </body>
 </html>
