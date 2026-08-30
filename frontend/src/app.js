@@ -34,7 +34,12 @@ export function bootstrap(rootEl, graph) {
     const inspectorViewModel = computeInspectorViewModel(graph, state.selectedId);
     renderInspector(inspectorViewModel, shellApi.getInspectorEl());
 
-    renderFilterRail(filterFacets, state.filters ?? {}, shellApi.getLeftRailEl(), (nextFilters) => shellApi.setFilters(nextFilters));
+    if (state.view === 'privacy') {
+      renderFilterRail(filterFacets, state.filters ?? {}, shellApi.getLeftRailEl(), (nextFilters) => shellApi.setFilters(nextFilters));
+    } else {
+      const railEl = shellApi.getLeftRailEl();
+      railEl.textContent = 'Filters apply to Privacy View.';
+    }
   }
 
   shellApi.onStateChange(rerender);
