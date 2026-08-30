@@ -79,6 +79,14 @@ export function computeFlowSummary(graph, flow) {
   const externalRecipients = graph.nodes
     .filter((n) => pathNodeIds.has(n.id) && n.externality?.value === 'external')
     .map((n) => n.label);
+  // 'unknown' externality is NOT safe to fold into "no external recipients" —
+  // it means the scanner could not resolve the destination (e.g. a dynamic
+  // URL expression), which is a distinct risk from a confirmed-internal
+  // recipient. Tracked separately so callers can't mistake "we don't know"
+  // for "we checked and it's fine" (I4, final whole-branch review).
+  const unknownRecipients = graph.nodes
+    .filter((n) => pathNodeIds.has(n.id) && n.externality?.value === 'unknown')
+    .map((n) => n.label);
 
   let protectedCount = 0;
   let unprotectedCount = 0;
@@ -96,11 +104,11 @@ export function computeFlowSummary(graph, flow) {
     dataClasses: dataElement?.dataClasses ?? [],
     sourceLabel: sourceNode?.label ?? 'unknown source',
     destinationLabel: sinkNode?.label ?? 'unknown destination',
-    totalDestinations: 1,
     protectedCount,
     unprotectedCount,
     unknownCount,
     externalRecipients,
+    unknownRecipients,
     transitVerdict: worstVerdict(edges.map((e) => e.protection.transit.verdict)),
     atRestVerdict: worstVerdict(edges.map((e) => e.protection.atRest.verdict)),
     handlingVerdict: worstVerdict(edges.map((e) => e.protection.handling.verdict)),

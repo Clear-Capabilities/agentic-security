@@ -127,3 +127,43 @@ test('computeFlowSummary aggregates per-dimension verdicts using worstVerdict ac
   const summary = computeFlowSummary(FLAGSHIP_GRAPH, maskedLogFlow);
   assert.equal(summary.handlingVerdict, 'protected', 'the masked-log flow\'s handling dimension should reflect the proven maskCard() protection');
 });
+
+// I4 (final whole-branch review): a node with externality.value === 'unknown'
+// must NOT be silently folded into "no external recipients" — that reads as
+// false reassurance when the truth is "the scanner couldn't resolve this
+// destination". The real fixture's flow.pii.unresolved flow sinks at
+// "Unresolved Destination" (node:unresolved:b67f539cc277), whose
+// externality.value is 'unknown', not 'external'.
+test('computeFlowSummary surfaces an unknown-externality recipient separately from external recipients', () => {
+  const unresolvedFlow = FLAGSHIP_GRAPH.flows.find((f) => f.id === FLOW_KEYS['flow.pii.unresolved']);
+  const sinkNode = FLAGSHIP_GRAPH.nodes.find((n) => n.id === unresolvedFlow.sink);
+  assert.equal(sinkNode.externality.value, 'unknown', 'sanity check: the fixture node this test targets must actually have unknown externality');
+
+  const summary = computeFlowSummary(FLAGSHIP_GRAPH, unresolvedFlow);
+  assert.deepEqual(summary.externalRecipients, [], 'a merely-unknown recipient must not be counted as external');
+  assert.deepEqual(summary.unknownRecipients, [sinkNode.label]);
+});
+
+// I5 (final whole-branch review): totalDestinations was a hardcoded literal
+// (always 1) masquerading as a computed field — this data model has each
+// flow point at exactly one sink by construction, so the field was removed
+// entirely rather than kept as fake computation.
+test('computeFlowSummary does not report a totalDestinations field', () => {
+  const rawLogFlow = FLAGSHIP_GRAPH.flows.find((f) => f.id === FLOW_KEYS['flow.pci.raw_log']);
+  const summary = computeFlowSummary(FLAGSHIP_GRAPH, rawLogFlow);
+  assert.equal('totalDestinations' in summary, false);
+});
+
+// I6 (final whole-branch review): resolveSelection's edge-ID branch had no
+// test coverage. Selecting by a real edge ID (not a node or flow ID) should
+// select exactly that edge and its two endpoint nodes.
+test('resolveSelection on an edge ID selects that edge and its two endpoint nodes', () => {
+  const maskedLogFlow = FLAGSHIP_GRAPH.flows.find((f) => f.id === FLOW_KEYS['flow.pci.masked_log']);
+  const edgeId = maskedLogFlow.edgeIds[0];
+  const edge = FLAGSHIP_GRAPH.edges.find((e) => e.id === edgeId);
+
+  const selection = resolveSelection(FLAGSHIP_GRAPH, edgeId);
+  assert.equal(selection.active, true);
+  assert.deepEqual(selection.nodeIds, new Set([edge.from, edge.to]));
+  assert.deepEqual(selection.edgeIds, new Set([edgeId]));
+});
