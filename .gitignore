@@ -2,6 +2,12 @@ scanner/node_modules/
 ide/vscode/node_modules/
 ide/vscode/dist/
 
+# superpowers:subagent-driven-development scratch workspace (ledgers, task
+# briefs, review packages) — per-plan working state, never meant to enter
+# history. Delete when a plan finishes; this entry just stops an accidental
+# `git add`/`git commit` from tracking it in the meantime.
+.superpowers/
+
 # scanner/dist/agentic-security.mjs IS tracked in git on purpose: the
 # reusable .github/workflows/scan.yml fetches it from raw.githubusercontent.com
 # at HEAD-of-main so downstream CI users don't need to install anything to use
