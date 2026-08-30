@@ -381,3 +381,22 @@ test('the trailing-wildcard case from round 5 still works after generalizing to 
   assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn'],
     'the trailing-wildcard case round 5 already fixed must keep working after generalizing the guard to be position-independent');
 });
+
+test('object rest in destructuring binds to the source object\'s full aggregate, flagged widened (fixes a documented, pre-existing gap: rest was previously silently dropped entirely)', () => {
+  const src = `
+    function f(user) {
+      const { email, ...rest } = user;
+      return rest;
+    }
+  `;
+  const fn = parseFn(src, 'f');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  // `rest` conservatively includes BOTH fields (the safe over-approximation
+  // this task's brief documents — real JS would exclude `email`, but this
+  // fix does not attempt that precision) and the read is flagged widened.
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn'],
+    'rest must carry the source object\'s full aggregate identity instead of vanishing (pre-fix: returnFacts was empty)');
+});

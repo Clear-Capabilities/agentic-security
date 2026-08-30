@@ -217,9 +217,27 @@ function lhsPath(n) {
     // (`const { [field]: value } = user`) resolves to '*' instead of
     // fabricating a colliding key from the key variable's own name — see
     // `resolveObjectKey`'s header comment for the full rationale.
+    //
+    // A `RestElement` (`const {a, ...rest} = obj`) has its bound identifier
+    // at `.argument`, not `.value` (only a real `ObjectProperty` has
+    // `.value`) — using `.value` unconditionally here made `lhsPath`
+    // resolve to `null` for every rest binding (`lhsPath(undefined)` hits
+    // the `if (!n) return null;` guard before ever reaching the
+    // `RestElement` case below), so the consumer's `if (!alias) continue;`
+    // guard silently skipped it entirely: a real, pre-existing FR-306
+    // violation where the rest binding vanished with no trace, not merged,
+    // not flattened. `resolveObjectKey(p)` already correctly resolves to
+    // '*' for a RestElement (it has no `.key`/`.computed`), which is
+    // exactly the right marker: the consumer already treats a `'*'`-keyed
+    // destructured binding as a computed-unknown-key selection
+    // (`{kind:'member', object: initExpr, prop: '*'}`), and the lineage
+    // engine's existing wildcard-selection machinery (built for `obj[k]`)
+    // already resolves that correctly — conservatively aggregating the
+    // source's full field set, flagged widened. No engine-level change
+    // needed for this fix.
     return { kind: 'object-pattern', props: (n.properties || []).map(p => ({
       key: resolveObjectKey(p),
-      alias: lhsPath(p.value),
+      alias: lhsPath(p.type === 'RestElement' ? p.argument : p.value),
     }))};
   }
   if (n.type === 'ArrayPattern') {

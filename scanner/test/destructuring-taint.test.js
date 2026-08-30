@@ -88,6 +88,25 @@ app.get('/run', (req, res) => {
     `expected array destructuring off a tainted variable to propagate taint, got: ${JSON.stringify(irFindings.map(f => f.vuln))}`);
 });
 
+test('object rest destructuring (`const {a, ...rest} = req.body`) propagates taint to the rest binding (fixes a documented, pre-existing gap: rest was previously silently dropped entirely, emitting no CFG node at all)', async () => {
+  const dir = mkTmp('rest', {
+    'app.js': `
+const cp = require('child_process');
+const express = require('express');
+const app = express();
+app.get('/run', (req, res) => {
+  const { extra, ...rest } = req.body;
+  cp.exec(rest.cmd);
+});
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
+  const cmdFindings = irFindings.filter(f => /command|exec|injection/i.test(f.vuln || ''));
+  assert.ok(cmdFindings.length >= 1,
+    `expected object rest destructuring of req.body to propagate taint to rest, got: ${JSON.stringify(irFindings.map(f => f.vuln))}`);
+});
+
 test('object destructuring of a clean literal does not fire (control)', async () => {
   const dir = mkTmp('control', {
     'app.js': `
