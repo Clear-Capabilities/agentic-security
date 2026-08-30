@@ -1,8 +1,29 @@
-import { accessPathOf } from '../dataflow/access-paths.js';
+import { accessPathOf, pathIsCoveredByPrefix } from '../dataflow/access-paths.js';
 import { identitiesAt, emptyState, removeIdentitiesAt, addIdentity, joinStates, statesEqual } from './field-identity.js';
 
 function noIdentity() {
   return { flat: new Set(), byPath: new Map(), widened: false };
+}
+
+function unionOfByPath(byPath) {
+  const union = new Set();
+  for (const ids of byPath.values()) for (const id of ids) union.add(id);
+  return union;
+}
+
+// Whatever in `flat` is NOT already captured by `byPath` — this is the part
+// of a value's identity set that has no more specific field-level home, and
+// is safe to write coarsely (it was never distinguished field-by-field to
+// begin with, so writing it coarsely does not merge two ALREADY-DISTINGUISHED
+// facts the way writing the full `flat` at a root would). See
+// DESIGN_INTRAPROCEDURAL.md §3 for the full reasoning and the bug this
+// closes (a plain-variable alias, e.g. `const copy = user;`, surviving one
+// level of aliasing past round 1's object-literal-only fix).
+function residualFlat(flat, byPath) {
+  const covered = unionOfByPath(byPath);
+  const residual = new Set();
+  for (const id of flat) if (!covered.has(id)) residual.add(id);
+  return residual;
 }
 
 export function resolveExprIdentities(state, expr) {
@@ -12,7 +33,17 @@ export function resolveExprIdentities(state, expr) {
     case 'ident':
     case 'member': {
       const path = accessPathOf(expr);
-      return { flat: path ? identitiesAt(state, path) : new Set(), byPath: new Map(), widened: false };
+      if (!path) return noIdentity();
+      const flat = identitiesAt(state, path);
+      const byPath = new Map();
+      for (const [candidatePath, ids] of state) {
+        if (candidatePath !== path && pathIsCoveredByPrefix(candidatePath, path)) {
+          const subPath = candidatePath.slice(path.length + 1);
+          const existing = byPath.get(subPath) ?? new Set();
+          byPath.set(subPath, new Set([...existing, ...ids]));
+        }
+      }
+      return { flat, byPath, widened: false };
     }
 
     case 'literal':
@@ -25,9 +56,16 @@ export function resolveExprIdentities(state, expr) {
       for (const prop of expr.props) {
         const r = resolveExprIdentities(state, prop.value);
         for (const id of r.flat) flat.add(id);
-        if (r.flat.size > 0) {
+        // Use the RESIDUAL, not the full r.flat: if prop.value is itself an
+        // aliased/structured reference (now possible via the ident/member
+        // case above returning a populated byPath), writing the full flat
+        // here would duplicate what the nested subPath entries below already
+        // separate — the same coarse-merge bug one level deeper. See
+        // DESIGN_INTRAPROCEDURAL.md §3.
+        const propResidual = residualFlat(r.flat, r.byPath);
+        if (propResidual.size > 0) {
           const existing = byPath.get(prop.key) ?? new Set();
-          byPath.set(prop.key, new Set([...existing, ...r.flat]));
+          byPath.set(prop.key, new Set([...existing, ...propResidual]));
         }
         for (const [subPath, ids] of r.byPath) {
           const fullPath = `${prop.key}.${subPath}`;
@@ -101,21 +139,21 @@ function step(node, stateIn, widenings) {
     case 'assign': {
       const resolved = resolveExprIdentities(stateIn, node.source);
       let state = removeIdentitiesAt(stateIn, node.target);
-      // A source with a byPath breakdown (an object-literal RHS) writes ONLY
-      // the per-field entries — see DESIGN_INTRAPROCEDURAL.md §3's "Corrected
-      // design" note. Writing the flat union at the container's own path too
-      // would re-merge distinct fields (FR-301's violation), and is no longer
-      // needed: identitiesAt now aggregates descendants when the container is
-      // queried as a whole (e.g. `return rec`), so per-field writes alone
-      // answer both "give me this exact field" and "give me the whole object".
-      // A source with no byPath breakdown (a plain value, e.g. `user.email`)
-      // is unaffected and still writes `flat` at `target` exactly as before.
-      if (resolved.byPath.size > 0) {
-        for (const [subPath, ids] of resolved.byPath) {
-          for (const id of ids) state = addIdentity(state, `${node.target}.${subPath}`, id);
-        }
-      } else {
-        for (const id of resolved.flat) state = addIdentity(state, node.target, id);
+      // Write every byPath entry at its own sub-path, and write only the
+      // RESIDUAL (whatever in `flat` isn't already captured by byPath's
+      // union) coarsely at the target's own root — never the full `flat`
+      // when byPath has structure, since that recreates the coarse-merge
+      // bug (FR-301). This single rule subsumes round 1's explicit
+      // byPath-empty-vs-nonempty branching: an empty residual is a no-op, so
+      // a plain value (byPath empty, e.g. `user.email`) still writes its
+      // full `flat` at `target` exactly as before, and an object-literal or
+      // aliased-reference RHS (byPath populated) writes only its per-field
+      // entries. See DESIGN_INTRAPROCEDURAL.md §3 for the full reasoning,
+      // including the aliasing gap (`const copy = user;`) this closes.
+      const residual = residualFlat(resolved.flat, resolved.byPath);
+      for (const id of residual) state = addIdentity(state, node.target, id);
+      for (const [subPath, ids] of resolved.byPath) {
+        for (const id of ids) state = addIdentity(state, `${node.target}.${subPath}`, id);
       }
       if (resolved.widened && resolved.flat.size > 0) {
         widenings.push({ atPath: node.target, dataElementIds: [...resolved.flat], reason: 'unresolved-call', line: node.line });

@@ -107,3 +107,28 @@ test('unknown-kind expression resolves to no identity, fails open', () => {
   assert.equal(r.flat.size, 0);
   assert.equal(r.widened, false);
 });
+
+test('resolving a bare ident whose value has recorded field structure populates byPath from its descendants (fixes an aliasing gap a final review found)', () => {
+  const state = stateWith([['user.email', 'data:email'], ['user.ssn', 'data:ssn']]);
+  const r = resolveExprIdentities(state, { kind: 'ident', name: 'user' });
+  assert.deepEqual([...r.flat].sort(), ['data:email', 'data:ssn']);
+  assert.deepEqual([...r.byPath.get('email')], ['data:email']);
+  assert.deepEqual([...r.byPath.get('ssn')], ['data:ssn']);
+});
+
+test('resolving an ident with BOTH a coarse fact at its own path AND descendant field facts keeps the coarse fact as residual only, never merged into a field entry', () => {
+  let state = stateWith([['rec.email', 'data:email']]);
+  state = addIdentity(state, 'rec', 'data:generic');
+  const r = resolveExprIdentities(state, { kind: 'ident', name: 'rec' });
+  assert.deepEqual([...r.flat].sort(), ['data:email', 'data:generic']);
+  assert.deepEqual([...r.byPath.get('email')], ['data:email'], 'the field entry must contain ONLY its own field\'s identity, not the coarse one too');
+});
+
+test('an object literal property that is itself an aliased/structured object keeps its fields isolated, not coarsely re-merged at the property key', () => {
+  const state = stateWith([['src.x', 'data:x'], ['src.y', 'data:y']]);
+  const expr = { kind: 'object', props: [{ key: 'a', value: { kind: 'ident', name: 'src' } }] };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.byPath.get('a.x')], ['data:x']);
+  assert.deepEqual([...r.byPath.get('a.y')], ['data:y']);
+  assert.ok(!r.byPath.has('a'), 'must NOT also have a coarse "a" entry duplicating both nested fields together');
+});

@@ -71,6 +71,24 @@ function extract(user) {
     'destructured `email` must carry ONLY data:email — proving destructuring extracts one field without conflating it with its sibling `ssn`');
 });
 
+test('aliasing a real parsed object through an intermediate variable keeps fields isolated (regression for a gap a final review found via the real parser)', () => {
+  const src = `
+    function combine(user) {
+      const copy = user;
+      const e = copy.email;
+      return e;
+    }
+  `;
+  const fn = parseFn(src, 'combine');
+  assert.deepEqual(fn.params, ['user']);
+
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email']);
+});
+
 test('template literal propagation from real parsed source: identity flows through interpolation, no widening', () => {
   const src = `
 function greet(user) {

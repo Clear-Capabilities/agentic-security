@@ -194,6 +194,47 @@ test('returnFacts deduplicates a revisited return node instead of pushing a stal
     'the single entry must carry the UNION of every branch, not just whichever branch happened to reach the node first');
 });
 
+test('aliasing an object through a plain variable keeps field isolation through the alias (regression — a final review found this survives round 1\'s fix)', () => {
+  // function f(user) { const copy = user; const e = copy.email; return e; }
+  const fn = {
+    params: ['user'],
+    cfg: {
+      entry: 'n0', exit: 'n4',
+      nodes: {
+        n0: { kind: 'entry', line: 1, succ: ['n1'], pred: [] },
+        n1: { kind: 'assign', line: 1, succ: ['n2'], pred: ['n0'], target: 'copy', source: { kind: 'ident', name: 'user' } },
+        n2: { kind: 'assign', line: 2, succ: ['n3'], pred: ['n1'], target: 'e', source: { kind: 'member', object: { kind: 'ident', name: 'copy' }, prop: 'email' } },
+        n3: { kind: 'return', line: 3, succ: ['n4'], pred: ['n2'], value: { kind: 'ident', name: 'e' } },
+        n4: { kind: 'exit', line: 3, succ: [], pred: ['n3'] },
+      },
+    },
+  };
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email']);
+});
+
+test('aliasing an object and returning the WHOLE alias still aggregates every field (complementary to the isolation test above — proves the fix does not break whole-object reads)', () => {
+  // function f(user) { const copy = user; return copy; }
+  const fn = {
+    params: ['user'],
+    cfg: {
+      entry: 'n0', exit: 'n3',
+      nodes: {
+        n0: { kind: 'entry', line: 1, succ: ['n1'], pred: [] },
+        n1: { kind: 'assign', line: 1, succ: ['n2'], pred: ['n0'], target: 'copy', source: { kind: 'ident', name: 'user' } },
+        n2: { kind: 'return', line: 2, succ: ['n3'], pred: ['n1'], value: { kind: 'ident', name: 'copy' } },
+        n3: { kind: 'exit', line: 2, succ: [], pred: ['n2'] },
+      },
+    },
+  };
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn']);
+});
+
 test('a simple loop back-edge converges (does not infinite-loop) and preserves the identity carried around it', () => {
   // function f(user) { let x = user.email; while (cond) { } return x; }
   // (loop body doesn't touch x — this just proves the worklist terminates on a back-edge)
