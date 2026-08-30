@@ -1,3 +1,6 @@
+import { el, clear } from '../lib/dom.js';
+import { protectionVisual } from '../lib/protection-visual.js';
+
 export function computeTraceSteps(graph, flow) {
   const steps = [];
   const sourceNode = graph.nodes.find((n) => n.id === flow.source);
@@ -72,4 +75,79 @@ export function computeTraceViewModel(graph, state) {
     steps: computeTraceSteps(graph, flow),
     alternatePaths: computeAlternatePaths(graph, flow),
   };
+}
+
+/**
+ * @param {ReturnType<typeof computeTraceViewModel>} viewModel
+ * @param {HTMLElement} canvasEl
+ * @param {(flowId: string) => void} onSelectAlternate
+ */
+export function renderTraceView(viewModel, canvasEl, onSelectAlternate) {
+  clear(canvasEl);
+
+  if (!viewModel) {
+    canvasEl.appendChild(el('p', { class: 'trace-empty' }, 'Select a flow from Privacy View (or click a node/edge in Architecture View that resolves to a flow) to trace it.'));
+    return;
+  }
+
+  const container = el('div', { class: 'trace-view' });
+  viewModel.steps.forEach((step, i) => {
+    container.appendChild(renderTraceStep(step, i + 1));
+  });
+
+  if (viewModel.alternatePaths.length > 0) {
+    const items = viewModel.alternatePaths.map((alt) => {
+      const visual = protectionVisual(alt.protectionSummary);
+      return el(
+        'div',
+        {
+          class: 'trace-alternate-item',
+          tabindex: '0',
+          role: 'button',
+          onClick: () => onSelectAlternate(alt.flowId),
+          onKeydown: (evt) => {
+            if (evt.key === 'Enter' || evt.key === ' ') {
+              evt.preventDefault();
+              onSelectAlternate(alt.flowId);
+            }
+          },
+        },
+        `${visual.glyph} ${alt.destinationLabel} — ${visual.label}`,
+      );
+    });
+    container.appendChild(el('div', { class: 'trace-alternates' }, [el('h4', {}, 'Alternate destinations'), ...items]));
+  }
+
+  canvasEl.appendChild(container);
+}
+
+function renderTraceStep(step, number) {
+  const bodyChildren = [el('div', { class: 'trace-step-kind' }, step.kind)];
+
+  if (step.kind === 'source') {
+    bodyChildren.push(el('div', { class: 'trace-step-mapping' }, step.fieldName));
+  } else if (step.kind === 'transformation' || step.kind === 'propagation') {
+    bodyChildren.push(el('div', { class: 'trace-step-mapping' }, `${step.fromPath} → ${step.toPath} (${step.mappingType})`));
+    for (const t of step.transformations) {
+      bodyChildren.push(el('div', { class: 'trace-step-mapping' }, `${t.callee}() — ${t.kind}, ${t.reversibility}`));
+    }
+  }
+
+  bodyChildren.push(el('div', { class: 'trace-step-node' }, step.node));
+
+  if (step.boundaryCrossing) {
+    bodyChildren.push(el('span', { class: 'trace-step-boundary' }, 'Trust boundary crossing'));
+  }
+
+  if (step.protection) {
+    const visual = protectionVisual(step.protection.handling.verdict);
+    bodyChildren.push(el('div', { class: 'trace-step-mapping' }, `${visual.glyph} Handling: ${visual.label}`));
+  }
+
+  if (step.kind === 'sink') {
+    const visual = protectionVisual(step.protectionSummary);
+    bodyChildren.push(el('div', { class: 'trace-step-mapping' }, `${visual.glyph} Overall: ${visual.label} · ${step.externality} destination`));
+  }
+
+  return el('div', { class: 'trace-step' }, [el('div', { class: 'trace-step-number' }, String(number)), el('div', { class: 'trace-step-body' }, bodyChildren)]);
 }
