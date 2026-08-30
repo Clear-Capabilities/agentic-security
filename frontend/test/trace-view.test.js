@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FLAGSHIP_GRAPH } from '../src/data/flagship-graph.js';
-import { computeTraceSteps, computeAlternatePaths, computeTraceViewModel } from '../src/views/trace-view.js';
+import { computeTraceSteps, computeAlternatePaths, computeTraceViewModel, computeTraceStepGroups } from '../src/views/trace-view.js';
 
 const FLOW_KEYS = FLAGSHIP_GRAPH.extensions.fixtureFlowKeys;
 const flowByKey = (key) => FLAGSHIP_GRAPH.flows.find((f) => f.id === FLOW_KEYS[key]);
@@ -64,6 +64,43 @@ test('computeAlternatePaths for a PII flow never lists a PCI flow (different dat
   const analyticsFlow = flowByKey('flow.pii.analytics');
   const alternates = computeAlternatePaths(FLAGSHIP_GRAPH, analyticsFlow);
   assert.ok(!alternates.some((a) => a.flowId === FLOW_KEYS['flow.pci.masked_log']));
+});
+
+test('computeTraceSteps tags every hop/transformation/propagation step with the edge\'s fromNodeId', () => {
+  const flow = flowByKey('flow.phi.ai');
+  const steps = computeTraceSteps(FLAGSHIP_GRAPH, flow);
+  const middleSteps = steps.filter((s) => s.kind !== 'source' && s.kind !== 'sink');
+  assert.equal(middleSteps.length, 3, 'expected 3 middle steps: Web App->AI Assistant, AI Assistant->Model Provider, AI Assistant->Vector Store');
+  for (const step of middleSteps) {
+    assert.ok(step.fromNodeId, 'expected every middle step to carry the edge\'s from-node id');
+  }
+});
+
+test('computeTraceStepGroups groups the AI Assistant fan-out (flow.phi.ai) as one branch, not three sequential steps', () => {
+  const flow = flowByKey('flow.phi.ai');
+  const steps = computeTraceSteps(FLAGSHIP_GRAPH, flow);
+  const groups = computeTraceStepGroups(steps);
+
+  assert.equal(groups[0].type, 'source');
+  assert.equal(groups[groups.length - 1].type, 'sink');
+
+  const branchGroups = groups.filter((g) => g.type === 'branch');
+  assert.equal(branchGroups.length, 1, 'expected exactly one branch group for the AI Assistant fan-out');
+  assert.equal(branchGroups[0].steps.length, 2, 'expected both the Model Provider and Vector Store hops in the same branch group');
+  const destinations = branchGroups[0].steps.map((s) => s.node).sort();
+  assert.deepEqual(destinations, ['Model Provider', 'Vector Store']);
+
+  const sequentialGroups = groups.filter((g) => g.type === 'sequential');
+  assert.equal(sequentialGroups.length, 1, 'expected exactly one plain sequential step: Web App -> AI Assistant');
+  assert.equal(sequentialGroups[0].step.node, 'AI Assistant');
+});
+
+test('computeTraceStepGroups produces zero branch groups for a non-branching flow', () => {
+  const flow = flowByKey('flow.pci.masked_log');
+  const steps = computeTraceSteps(FLAGSHIP_GRAPH, flow);
+  const groups = computeTraceStepGroups(steps);
+  assert.equal(groups.filter((g) => g.type === 'branch').length, 0);
+  assert.equal(groups.filter((g) => g.type === 'sequential').length, groups.length - 2, 'every non-source/sink group should be sequential when nothing branches');
 });
 
 test('computeTraceViewModel returns null when nothing is selected', () => {

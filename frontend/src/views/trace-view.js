@@ -21,6 +21,7 @@ export function computeTraceSteps(graph, flow) {
       steps.push({
         kind: 'hop',
         node: toNode?.label ?? 'unknown',
+        fromNodeId: edge.from,
         protection: edge.protection,
         evidenceRefs: edge.evidenceRefs ?? [],
       });
@@ -38,6 +39,7 @@ export function computeTraceSteps(graph, flow) {
         mappingType: mapping.mappingType,
         transformations,
         node: toNode?.label ?? 'unknown',
+        fromNodeId: edge.from,
         boundaryCrossing: (edge.boundaryCrossings ?? []).length > 0,
         protection: edge.protection,
         evidenceRefs: edge.evidenceRefs ?? [],
@@ -54,6 +56,30 @@ export function computeTraceSteps(graph, flow) {
   });
 
   return steps;
+}
+
+export function computeTraceStepGroups(steps) {
+  const middleSteps = steps.filter((s) => s.kind !== 'source' && s.kind !== 'sink');
+  const sourceStep = steps.find((s) => s.kind === 'source');
+  const sinkStep = steps.find((s) => s.kind === 'sink');
+
+  const groupsByFrom = new Map();
+  for (const step of middleSteps) {
+    if (!groupsByFrom.has(step.fromNodeId)) groupsByFrom.set(step.fromNodeId, []);
+    groupsByFrom.get(step.fromNodeId).push(step);
+  }
+
+  const groups = [];
+  if (sourceStep) groups.push({ type: 'source', step: sourceStep });
+  for (const groupSteps of groupsByFrom.values()) {
+    if (groupSteps.length > 1) {
+      groups.push({ type: 'branch', steps: groupSteps });
+    } else {
+      groups.push({ type: 'sequential', step: groupSteps[0] });
+    }
+  }
+  if (sinkStep) groups.push({ type: 'sink', step: sinkStep });
+  return groups;
 }
 
 export function computeAlternatePaths(graph, flow) {
@@ -91,9 +117,16 @@ export function renderTraceView(viewModel, canvasEl, onSelectAlternate) {
   }
 
   const container = el('div', { class: 'trace-view' });
-  viewModel.steps.forEach((step, i) => {
-    container.appendChild(renderTraceStep(step, i + 1));
-  });
+  const groups = computeTraceStepGroups(viewModel.steps);
+  let stepNumber = 0;
+  for (const group of groups) {
+    stepNumber += 1;
+    if (group.type === 'branch') {
+      container.appendChild(renderTraceBranchGroup(group.steps, stepNumber));
+    } else {
+      container.appendChild(renderTraceStep(group.step, String(stepNumber)));
+    }
+  }
 
   if (viewModel.alternatePaths.length > 0) {
     const items = viewModel.alternatePaths.map((alt) => {
@@ -121,7 +154,16 @@ export function renderTraceView(viewModel, canvasEl, onSelectAlternate) {
   canvasEl.appendChild(container);
 }
 
-function renderTraceStep(step, number) {
+function renderTraceBranchGroup(steps, number) {
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  const items = steps.map((step, i) => renderTraceStep(step, `${number}${letters[i]}`));
+  return el('div', { class: 'trace-branch-group' }, [
+    el('div', { class: 'trace-branch-label' }, `${steps.length} branches from here`),
+    ...items,
+  ]);
+}
+
+function renderTraceStep(step, label) {
   const bodyChildren = [el('div', { class: 'trace-step-kind' }, step.kind)];
 
   if (step.kind === 'source') {
@@ -160,5 +202,5 @@ function renderTraceStep(step, number) {
     bodyChildren.push(el('div', { class: 'trace-step-mapping' }, `${visual.glyph} Overall: ${visual.label} · ${step.externality} destination`));
   }
 
-  return el('div', { class: 'trace-step' }, [el('div', { class: 'trace-step-number' }, String(number)), el('div', { class: 'trace-step-body' }, bodyChildren)]);
+  return el('div', { class: 'trace-step' }, [el('div', { class: 'trace-step-number' }, label), el('div', { class: 'trace-step-body' }, bodyChildren)]);
 }

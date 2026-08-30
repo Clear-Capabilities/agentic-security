@@ -58,3 +58,30 @@ test('renderTraceView shows the unprotected-transit verdict for the Payments Ser
   assert.match(stepEl.textContent, /Transit: Unprotected/, 'the rendered step must show the real unprotected-transit verdict');
   assert.doesNotMatch(stepEl.textContent, /Transit: Not assessed/, 'this step\'s edge has a real transit verdict; it must never render as "not assessed"');
 });
+
+test('renderTraceView shows the AI Assistant fan-out (flow.phi.ai) as one branch group with lettered sub-steps, not implied sequence (I2 regression)', () => {
+  const flowId = FLOW_KEYS['flow.phi.ai'];
+  const state = { view: 'trace', selectedId: flowId, filters: {} };
+  const viewModel = computeTraceViewModel(FLAGSHIP_GRAPH, state);
+  assert.ok(viewModel, 'expected a trace view model for this flow');
+
+  const canvasEl = document.createElement('div');
+  renderTraceView(viewModel, canvasEl, () => {});
+
+  const container = canvasEl.firstChild;
+  const branchGroupEls = [...container.childNodes].filter((n) => n.className === 'trace-branch-group');
+  assert.equal(branchGroupEls.length, 1, 'expected exactly one rendered branch-group container');
+
+  const branchGroupEl = branchGroupEls[0];
+  const stepEls = [...branchGroupEl.childNodes].filter((n) => n.className === 'trace-step');
+  assert.equal(stepEls.length, 2, 'expected both branch destinations rendered as sibling steps inside the branch group');
+
+  const stepNumberTexts = stepEls.map((s) => s.childNodes[0].textContent);
+  assert.ok(stepNumberTexts.every((t) => /^\d+[a-z]$/.test(t)), `expected lettered sub-step numbers (e.g. "3a"), got: ${stepNumberTexts.join(', ')}`);
+  const baseNumbers = new Set(stepNumberTexts.map((t) => t.match(/^(\d+)/)[1]));
+  assert.equal(baseNumbers.size, 1, 'both branch destinations must share the same base step number');
+
+  const destinationTexts = stepEls.map((s) => s.textContent);
+  assert.ok(destinationTexts.some((t) => t.includes('Model Provider')));
+  assert.ok(destinationTexts.some((t) => t.includes('Vector Store')));
+});
