@@ -1,6 +1,7 @@
 import { hashState, emptyState, addIdentity } from './field-identity.js';
 import { resolveExprIdentities, residualFlat, analyzeFunctionFieldIdentity } from './engine.js';
 import { accessPathOf } from '../dataflow/access-paths.js';
+import { functionRecord } from '../ir/callgraph.js';
 
 export function emptyFieldSummary() {
   return { returnFlat: new Set(), returnByPath: new Map(), mutatedParams: new Map(), widenings: [] };
@@ -199,5 +200,53 @@ export function createCallSummaryResolver(cache, lookupCallee) {
         widenings: result.widenings,
       };
     });
+  };
+}
+
+// Resolves a call expression's callee to a bare, resolvable name — the
+// lineage-engine analog of dataflow/engine.js's own `_resolvableCalleeName`
+// BASE CASE (before that file's later, CHA-gated member-expression
+// extension). Deliberately narrow: only a bare identifier callee
+// (`helper(x)`) resolves to a name at all. A member-expression callee
+// (`obj.helper(x)`) returns null here, on purpose — resolving THAT safely
+// needs class-hierarchy analysis (which method does the object concretely
+// carry), a separate, much larger mechanism dataflow built specifically for
+// its own R11 requirement (`_resolveMemberCalleeViaCHA`, gated on a `_cha`
+// object this package has no equivalent of and is not in scope to build
+// here). Guessing from the property name alone would fabricate a call edge
+// that may not exist — worse than leaving the call unresolved, matching
+// this whole codebase's own stated doctrine (see callgraph.js's comments
+// on `resolveKnownCallee` vs. the guessing `resolve()`).
+function _resolvableCalleeName(calleeExpr) {
+  if (!calleeExpr) return null;
+  if (calleeExpr.kind === 'ident') return calleeExpr.name || null;
+  return null;
+}
+
+// Builds a real `lookupCallee` closure — the shape `createCallSummaryResolver`
+// expects as its second argument — backed by a real call graph from
+// `scanner/src/ir/callgraph.js#buildCallGraph`. `callerFile` is fixed at
+// construction time: one `lookupCallee` closure is built per analyzed
+// function/file (mirroring how `dataflow/engine.js`'s own
+// `_resolveCalleeForSummary` derives `_callerFile` fresh per call context),
+// so `createCallSummaryResolver`'s existing single-argument `lookupCallee`
+// shape (no caller-file parameter) does not need to change.
+//
+// Uses `resolveKnownCallee` — never `resolve()` — matching `callgraph.js`'s
+// own documented distinction: `resolveKnownCallee` is "safe-by-default,"
+// refusing the bare-name-tail guess `resolve()` is willing to make. This
+// package's own doctrine (see FR-301, never silently merge/drop distinct
+// identities) treats a fabricated call edge as strictly worse than a missed
+// one, same as dataflow's own precedent.
+export function createCallGraphLookup(callGraph, callerFile) {
+  return function lookupCallee(calleeExpr) {
+    if (!callGraph || typeof callGraph.resolveKnownCallee !== 'function') return null;
+    const name = _resolvableCalleeName(calleeExpr);
+    if (!name) return null;
+    const resolved = callGraph.resolveKnownCallee(name, callerFile);
+    if (!resolved) return null;
+    const fn = functionRecord(callGraph, resolved);
+    if (!fn) return null;
+    return { qid: resolved, fn };
   };
 }

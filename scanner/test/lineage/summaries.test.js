@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
-import { emptyFieldSummary, FieldIdentitySummaryCache, entryStateFromCall, applyAtCallSite, createCallSummaryResolver } from '../../src/lineage/summaries.js';
+import { emptyFieldSummary, FieldIdentitySummaryCache, entryStateFromCall, applyAtCallSite, createCallSummaryResolver, createCallGraphLookup } from '../../src/lineage/summaries.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
+import { buildCallGraph } from '../../src/ir/callgraph.js';
 
 test('emptyFieldSummary returns an empty, correctly-shaped summary', () => {
   const s = emptyFieldSummary();
@@ -293,4 +294,68 @@ test('createCallSummaryResolver unions identities across ALL of a function\'s re
   callerState = addIdentity(callerState, 'q.y', 'data:q-y');
   const result = resolver({ kind: 'ident', name: 'pick' }, [{ kind: 'ident', name: 'p' }, { kind: 'ident', name: 'q' }, { kind: 'literal', value: true }], callerState);
   assert.deepEqual([...result.returnFlat].sort(), ['data:p-x', 'data:q-y'], 'both return sites\' identities must be present, not just one');
+});
+
+// Sub-project B, increment 3: createCallGraphLookup — a real lookupCallee
+// factory backed by scanner/src/ir/callgraph.js's buildCallGraph/resolveKnownCallee.
+
+test('createCallGraphLookup resolves a bare-identifier call to a real function record via resolveKnownCallee', () => {
+  // Hand-built IR shape matching the documented contract in ir/CLAUDE.md —
+  // deliberately NOT going through the real parser here (Task 2 does that);
+  // this test isolates createCallGraphLookup's own logic against a minimal,
+  // exact-shape fixture.
+  const calleeFn = {
+    qid: 'a.js::helper@1#abc',
+    name: 'helper',
+    params: ['x'],
+    file: 'a.js',
+    cfg: { entry: 'n0', exit: 'n1', nodes: {
+      n0: { kind: 'entry', succ: ['n1'], pred: [] },
+      n1: { kind: 'exit', succ: [], pred: ['n0'] },
+    } },
+  };
+  const perFileIR = { 'a.js': { functions: [calleeFn] } };
+  const callGraph = buildCallGraph(perFileIR, {});
+
+  const lookupCallee = createCallGraphLookup(callGraph, 'a.js');
+  const result = lookupCallee({ kind: 'ident', name: 'helper' });
+
+  assert.ok(result);
+  assert.strictEqual(result.qid, 'a.js::helper@1#abc');
+  assert.strictEqual(result.fn, calleeFn);
+});
+
+test('createCallGraphLookup returns null for an unresolvable bare identifier (no matching function)', () => {
+  const perFileIR = { 'a.js': { functions: [] } };
+  const callGraph = buildCallGraph(perFileIR, {});
+  const lookupCallee = createCallGraphLookup(callGraph, 'a.js');
+
+  assert.strictEqual(lookupCallee({ kind: 'ident', name: 'doesNotExist' }), null);
+});
+
+test('createCallGraphLookup returns null for a member-expression callee (no CHA — must not guess)', () => {
+  const calleeFn = {
+    qid: 'a.js::helper@1#abc',
+    name: 'helper',
+    params: [],
+    file: 'a.js',
+    cfg: { entry: 'n0', exit: 'n1', nodes: {
+      n0: { kind: 'entry', succ: ['n1'], pred: [] },
+      n1: { kind: 'exit', succ: [], pred: ['n0'] },
+    } },
+  };
+  const perFileIR = { 'a.js': { functions: [calleeFn] } };
+  const callGraph = buildCallGraph(perFileIR, {});
+  const lookupCallee = createCallGraphLookup(callGraph, 'a.js');
+
+  // obj.helper() must NOT resolve just because a same-named bare function
+  // exists — that would be exactly the fabricated-edge class of bug the
+  // isolation-from-CHA constraint above exists to prevent.
+  const result = lookupCallee({ kind: 'member', object: { kind: 'ident', name: 'obj' }, prop: 'helper' });
+  assert.strictEqual(result, null);
+});
+
+test('createCallGraphLookup returns null when given a falsy callGraph or one missing resolveKnownCallee', () => {
+  assert.strictEqual(createCallGraphLookup(null, 'a.js')({ kind: 'ident', name: 'x' }), null);
+  assert.strictEqual(createCallGraphLookup({}, 'a.js')({ kind: 'ident', name: 'x' }), null);
 });
