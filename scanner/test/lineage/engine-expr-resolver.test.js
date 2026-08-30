@@ -180,3 +180,11 @@ test('member selection off a logical (??) base correctly selects the field', () 
   const r = resolveExprIdentities(state, expr);
   assert.deepEqual([...r.flat], ['data:email']);
 });
+
+test('assign-expr resolves to its source\'s identity and forwards byPath, without a false widening flag', () => {
+  const state = stateWith([['user.email', 'data:email']]);
+  const expr = { kind: 'assign-expr', target: 'x', source: { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: 'email' } };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.flat], ['data:email']);
+  assert.equal(r.widened, false, 'no call is involved, this must not be flagged as an unresolved-call widening');
+});

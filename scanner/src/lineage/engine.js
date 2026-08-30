@@ -207,7 +207,7 @@ export function resolveExprIdentities(state, expr) {
       // to (structure-preserving), so its byPath is forwarded directly, not
       // dropped. See DESIGN_INTRAPROCEDURAL.md §4.
       const r = resolveExprIdentities(state, expr.source);
-      return { flat: r.flat, byPath: r.byPath, widened: r.flat.size > 0 };
+      return { flat: r.flat, byPath: r.byPath, widened: r.widened };
     }
 
     default:
