@@ -521,27 +521,39 @@ than this round's scope covers.
   rather than per-index). Fixing this properly would require the parser
   to distinguish spread elements from literal elements first — out of
   scope for this plan.
-- **Object spread/rest — KNOWN, UNFIXED LIMITATION, not covered by the array
-  reassurance above.** `{...user}` (object spread in a literal) and
-  `const {...rest} = user` (object rest in a destructuring pattern) are
-  **silently dropped entirely** by the parser today — `scanner/src/ir/parser-js.js`'s
-  `ObjectExpression` handling filters out `SpreadElement` properties
-  *before* building the `props` array, and its destructuring lowering does
-  the analogous drop for a rest binding, so `{...user}` and `{}` are
-  byte-identical in the emitted IR. This is **not** "flattened into one
-  bag" the way array spread is (that reassurance, immediately above, does
-  NOT extend to objects) — the identity vanishes completely, a false
-  negative (`return {...user};` currently resolves to nothing, not to a
-  coarse aggregate). Confirmed pre-existing since the parser's first
-  commit, not introduced or missed by any round of this plan's own fix
-  chain — every fix in this document (the residual principle, the
-  production/selection/write-out invariant, the wildcard/fabricated-key
-  closure) provably never reaches this code path, since the `SpreadElement`
-  node is filtered out before any of those mechanisms would see it.
-  Possible wider blast radius into `scanner/src/dataflow/`'s own taint
-  engine (which shares this parser) is flagged but not confirmed. Fixing
-  this is real, scoped, follow-up work for a later sub-project — not
-  attempted here, and not silently glossed over either.
+- **Object spread/rest — NOW FIXED.** `{...user}` (object spread in a
+  literal) and `const {...rest} = user` (object rest in a destructuring
+  pattern) were previously silently dropped entirely by the parser —
+  confirmed pre-existing since `scanner/src/ir/parser-js.js`'s first
+  commit. Both are now fixed via orthogonal parser changes (shared
+  utilities, zero engine changes required):
+  - Object literal spread (`{...user}`) merges the resolved source's
+    `byPath` structure as top-level siblings, preserving field-level
+    distinctness. A spread property contributes to the object's
+    structured `byPath`, not to its coarse residual — two spread
+    sources (`{...user, ...other}`) each contribute their own fields
+    without merging, the same way two explicit properties do. Confirmed
+    tested by real before/after `runScan` comparison.
+  - Destructuring rest (`const {...rest} = user`) reuses the existing
+    wildcard-selection machinery: rest bindings use the container's
+    full aggregate (`identitiesAt` of the source over its `path.*`),
+    **over-approximating by including sibling-destructured keys rather
+    than precisely excluding them** — when `const {a, ...rest} = user`,
+    `rest` conservatively carries `user`'s full set, not just
+    `{b, c, ...}`. This is a real limitation, explicitly called out so
+    it isn't silently assumed to be precise. The tradeoff is worth the
+    simplicity, and it's still sound for taint/lineage purposes.
+  - Both fixes were confirmed to also resolve the identical blindness
+    in `scanner/src/dataflow/`'s shared taint engine, which consumes
+    the same parser (no engine changes needed there either).
+  - **Array rest's separate, lower-severity, still-unfixed imprecision:**
+    Unlike object rest, array rest (`const [first, ...tail] = arr`) is
+    NOT a `SpreadElement` that was being filtered out — it's a legitimate
+    IR `RestElement` node that already exists in the parsed tree. The
+    imprecision here is architectural (index-insensitive flattening, same
+    as array literals' own by-design limitation documented above) —
+    out of scope for this plan's parser-level fixes, left as a documented
+    future refinement if per-index attribution ever becomes feasible.
 - **Member access** (property read): when the whole `object.prop...` chain
   is a pure ident/member chain, resolves via `accessPathOf` + `identitiesAt`
   — no new logic needed, this is what those functions exist for. When the
