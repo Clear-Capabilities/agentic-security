@@ -1,4 +1,5 @@
-import { worstVerdict } from '../lib/protection-visual.js';
+import { worstVerdict, protectionVisual } from '../lib/protection-visual.js';
+import { el, clear } from '../lib/dom.js';
 
 export const ZONE_ORDER = Object.freeze(['Public Internet', 'Application Layer', 'Service Layer', 'Data Layer', 'External Zone']);
 
@@ -138,4 +139,122 @@ export function computeArchitectureViewModel(graph, state) {
   const flowSummary = selection.flow ? computeFlowSummary(graph, selection.flow) : null;
 
   return { zones, nodes, edges, flowSummary };
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const ZONE_WIDTH = 220;
+const ZONE_PADDING = 12;
+const NODE_HEIGHT = 44;
+const NODE_GAP = 16;
+const NODE_WIDTH = ZONE_WIDTH - ZONE_PADDING * 2;
+
+function svgEl(tag, attrs = {}) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value === undefined || value === null) continue;
+    node.setAttribute(key, String(value));
+  }
+  return node;
+}
+
+/**
+ * @param {ReturnType<typeof computeArchitectureViewModel>} viewModel
+ * @param {HTMLElement} canvasEl
+ * @param {(id: string) => void} onSelect
+ */
+export function renderArchitectureView(viewModel, canvasEl, onSelect) {
+  clear(canvasEl);
+
+  const zoneCount = viewModel.zones.length;
+  const maxNodesInAZone = Math.max(1, ...viewModel.zones.map((z) => z.nodeIds.length));
+  const height = Math.max(480, maxNodesInAZone * (NODE_HEIGHT + NODE_GAP) + 80);
+  const width = zoneCount * ZONE_WIDTH;
+
+  const svg = svgEl('svg', { class: 'arch-view', viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': 'Architecture view: trust zones, nodes, and data-flow edges' });
+
+  const nodePositions = new Map();
+  viewModel.zones.forEach((zone, zoneIndex) => {
+    const zoneX = zoneIndex * ZONE_WIDTH;
+    svg.appendChild(svgEl('rect', { class: 'arch-zone-bg', x: zoneX, y: 0, width: ZONE_WIDTH, height, rx: 4 }));
+    const zoneLabel = svgEl('text', { class: 'arch-zone-label', x: zoneX + ZONE_PADDING, y: 24 });
+    zoneLabel.textContent = zone.name;
+    svg.appendChild(zoneLabel);
+
+    zone.nodeIds.forEach((nodeId, i) => {
+      const node = viewModel.nodes.find((n) => n.id === nodeId);
+      const y = 48 + i * (NODE_HEIGHT + NODE_GAP);
+      const x = zoneX + ZONE_PADDING;
+      nodePositions.set(nodeId, { x: x + NODE_WIDTH / 2, y: y + NODE_HEIGHT / 2 });
+      svg.appendChild(renderNode(node, x, y, onSelect));
+    });
+  });
+
+  // Edges drawn after nodes so they can reference final positions; dimmed
+  // edges are drawn first so a highlighted edge always renders on top.
+  const sortedEdges = [...viewModel.edges].sort((a, b) => Number(a.selected) - Number(b.selected));
+  for (const edge of sortedEdges) {
+    const from = nodePositions.get(edge.from);
+    const to = nodePositions.get(edge.to);
+    if (!from || !to) continue; // an edge whose endpoint isn't rendered (shouldn't happen with this fixture) is safely skipped, not a crash
+    svg.appendChild(renderEdge(edge, from, to, onSelect));
+  }
+
+  canvasEl.appendChild(svg);
+}
+
+function renderNode(node, x, y, onSelect) {
+  const group = el('g', {
+    class: 'arch-node',
+    'data-selected': String(node.selected),
+    'data-dimmed': String(node.dimmed),
+    tabindex: '0',
+    role: 'button',
+    'aria-label': `${node.label}, ${node.kind}${node.selected ? ', selected' : ''}`,
+    onClick: () => onSelect(node.id),
+    onKeydown: (evt) => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        evt.preventDefault();
+        onSelect(node.id);
+      }
+    },
+  });
+  group.appendChild(svgEl('rect', { class: 'arch-node-box', x, y, width: NODE_WIDTH, height: NODE_HEIGHT }));
+  const glyph = svgEl('text', { class: 'arch-node-glyph', x: x + 8, y: y + 16 });
+  glyph.textContent = node.kind.slice(0, 3).toUpperCase();
+  group.appendChild(glyph);
+  const label = svgEl('text', { class: 'arch-node-label', x: x + 8, y: y + 34 });
+  label.textContent = node.label;
+  group.appendChild(label);
+  return group;
+}
+
+function renderEdge(edge, from, to, onSelect) {
+  const visual = protectionVisual(edge.verdict);
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  const path = svgEl('path', {
+    d: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+    style: `stroke: var(${visual.colorVar})`,
+  });
+  const group = el('g', {
+    class: 'arch-edge',
+    'data-selected': String(edge.selected),
+    'data-dimmed': String(edge.dimmed),
+    tabindex: '0',
+    role: 'button',
+    'aria-label': `Edge, protection ${visual.label}${edge.selected ? ', selected' : ''}`,
+    onClick: () => onSelect(edge.id),
+    onKeydown: (evt) => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        evt.preventDefault();
+        onSelect(edge.id);
+      }
+    },
+  });
+  path.classList.add(`arch-edge-linestyle-${visual.lineStyle === 'solid' ? 'solid' : visual.lineStyle}`);
+  group.appendChild(path);
+  const glyph = svgEl('text', { class: 'arch-edge-glyph', x: midX, y: midY - 4, fill: `var(${visual.colorVar})` });
+  glyph.textContent = visual.glyph;
+  group.appendChild(glyph);
+  return group;
 }

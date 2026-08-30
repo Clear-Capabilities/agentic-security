@@ -1,0 +1,77 @@
+.arch-view {
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+}
+
+.arch-zone-label {
+  fill: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-panel-title);
+  font-weight: 600;
+}
+
+.arch-zone-bg {
+  fill: var(--surface-panel);
+  stroke: var(--border-default);
+  stroke-width: var(--border-width);
+}
+
+.arch-node {
+  cursor: pointer;
+}
+
+.arch-node-box {
+  fill: var(--surface-elevated);
+  stroke: var(--border-default);
+  stroke-width: 1.5px;
+  rx: var(--radius-default);
+}
+
+.arch-node[data-selected="true"] .arch-node-box {
+  stroke: var(--accent-selection);
+  stroke-width: 2.5px;
+}
+
+.arch-node[data-dimmed="true"] {
+  opacity: 0.35;
+}
+
+.arch-node-label {
+  fill: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-node-title);
+}
+
+.arch-node-glyph {
+  fill: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.arch-edge {
+  fill: none;
+  stroke-width: 2px;
+  cursor: pointer;
+}
+
+.arch-edge[data-dimmed="true"] {
+  opacity: 0.25;
+}
+
+.arch-edge[data-selected="true"] {
+  stroke-width: 3px;
+}
+
+.arch-edge-linestyle-dashed {
+  stroke-dasharray: 6 4;
+}
+
+.arch-edge-linestyle-dotted {
+  stroke-dasharray: 2 3;
+}
+
+.arch-edge-glyph {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
