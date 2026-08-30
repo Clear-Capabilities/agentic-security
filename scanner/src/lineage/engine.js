@@ -154,6 +154,20 @@ export function resolveExprIdentities(state, expr) {
       for (const prop of expr.props) {
         const r = resolveExprIdentities(state, prop.value);
         for (const id of r.flat) flat.add(id);
+        if (prop.spread) {
+          // Object spread ({...src}) copies ALL of src's own properties onto
+          // this object as TOP-LEVEL siblings — merge the spread source's
+          // byPath structure directly into this object's own byPath,
+          // preserving field-level distinctness (a spread's contents are
+          // fully known, unlike a computed-unknown-key property, which is
+          // why this is a different branch from the `prop.key === '*'` case
+          // below, not the same one).
+          for (const [subPath, ids] of r.byPath) {
+            const existing = byPath.get(subPath) ?? new Set();
+            byPath.set(subPath, new Set([...existing, ...ids]));
+          }
+          continue;
+        }
         if (prop.key === '*') {
           // Unknown computed key (`{[k]: v}`, round 5 — see
           // scanner/src/ir/parser-js.js's ObjectExpression case, which now

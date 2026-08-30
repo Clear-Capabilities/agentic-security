@@ -42,6 +42,30 @@ test('object literal attributes each property to its own byPath sub-key, distinc
   assert.deepEqual([...r.byPath.get('ssn')], ['data:ssn']);
 });
 
+test('an object literal spread merges the source\'s fields as top-level siblings, preserving field-level distinctness (fixes a documented, pre-existing gap: spread was previously silently dropped entirely)', () => {
+  const state = stateWith([['user.email', 'data:email'], ['user.ssn', 'data:ssn']]);
+  const expr = { kind: 'object', props: [{ spread: true, value: { kind: 'ident', name: 'user' } }] };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.flat].sort(), ['data:email', 'data:ssn']);
+  assert.deepEqual([...r.byPath.get('email')], ['data:email']);
+  assert.deepEqual([...r.byPath.get('ssn')], ['data:ssn']);
+});
+
+test('a spread combined with an explicit named property both contribute, without collapsing into one coarse fact', () => {
+  const state = stateWith([['user.email', 'data:email'], ['user.ssn', 'data:ssn'], ['other.name', 'data:name']]);
+  const expr = {
+    kind: 'object',
+    props: [
+      { spread: true, value: { kind: 'ident', name: 'user' } },
+      { key: 'name', value: { kind: 'member', object: { kind: 'ident', name: 'other' }, prop: 'name' } },
+    ],
+  };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.byPath.get('email')], ['data:email']);
+  assert.deepEqual([...r.byPath.get('ssn')], ['data:ssn']);
+  assert.deepEqual([...r.byPath.get('name')], ['data:name']);
+});
+
 test('nested object literal produces dotted sub-paths', () => {
   const state = stateWith([['x', 'data:inner']]);
   const expr = { kind: 'object', props: [{ key: 'a', value: { kind: 'object', props: [{ key: 'b', value: { kind: 'ident', name: 'x' } }] } } ] };

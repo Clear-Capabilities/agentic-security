@@ -400,3 +400,32 @@ test('object rest in destructuring binds to the source object\'s full aggregate,
   assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn'],
     'rest must carry the source object\'s full aggregate identity instead of vanishing (pre-fix: returnFacts was empty)');
 });
+
+test('object spread in a real parsed object literal keeps fields isolated, matching the equivalent explicit-property form (regression for a documented gap)', () => {
+  const src = `
+    function combine(user) {
+      const c = { ...user };
+      return c.email;
+    }
+  `;
+  const fn = parseFn(src, 'combine');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email'], 'spreading user into c must not merge ssn into an email-only read');
+});
+
+test('returning a spread object directly aggregates every field (complementary to the isolation test above)', () => {
+  const src = `
+    function combine(user) {
+      return { ...user };
+    }
+  `;
+  const fn = parseFn(src, 'combine');
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+  assert.equal(result.returnFacts.length, 1);
+  assert.deepEqual([...result.returnFacts[0].identities].sort(), ['data:email', 'data:ssn']);
+});

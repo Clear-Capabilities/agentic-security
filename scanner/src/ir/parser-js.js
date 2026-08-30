@@ -132,10 +132,33 @@ function exprOf(n) {
       // `lhsPath`'s computed-write handling below) rather than inventing a
       // new one. See DESIGN_INTRAPROCEDURAL.md §4 and CLAUDE.md's "three
       // hop types" note.
-      props: (n.properties || []).filter(p => p.type === 'ObjectProperty' && p.key).map(p => ({
-        key: resolveObjectKey(p),
-        value: exprOf(p.value),
-      })),
+      //
+      // A `SpreadElement` (`{...user}`) previously fell out of the
+      // `.filter` entirely — `{...user}` and `{}` were byte-identical in
+      // the emitted IR, a real, pre-existing false negative (the identity
+      // vanishes, not merged, not flattened — found and documented but
+      // not fixed by a final review of an earlier plan). Represented here
+      // as a distinct `{spread: true, value: <expr>}` shape (no `key`
+      // field) rather than a regular `{key, value}` property, so
+      // `scanner/src/lineage/engine.js`'s `resolveExprIdentities` can
+      // merge the spread source's OWN field structure directly into this
+      // object's structure (see that file for the full mechanism) — a
+      // DIFFERENT, more precise handling than a computed-unknown-key
+      // property gets (that case folds into one opaque residual bucket; a
+      // spread's contents are fully known, just not yet assigned a key in
+      // THIS literal, so they can and should stay field-distinguished).
+      // Every consumer of `expr.props` outside this package
+      // (scanner/src/dataflow/engine.js, higher-order.js,
+      // privacy-deep-walker.js — audited before this change) reads only
+      // `p.value`, never `p.key`, so this shape is compatible with all of
+      // them without any change there — and several gain correct taint/
+      // privacy detection through object spread as a direct result, since
+      // the spread's value is no longer silently absent from `props`.
+      props: (n.properties || []).map(p => {
+        if (p.type === 'SpreadElement') return { spread: true, value: exprOf(p.argument) };
+        if (p.type !== 'ObjectProperty' || !p.key) return null;
+        return { key: resolveObjectKey(p), value: exprOf(p.value) };
+      }).filter(Boolean),
     };
     case 'ArrayExpression':   return { kind: 'array', elements: (n.elements || []).map(exprOf) };
     case 'SpreadElement':     return exprOf(n.argument);
