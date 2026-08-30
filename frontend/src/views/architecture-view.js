@@ -1,5 +1,5 @@
 import { worstVerdict, protectionVisual } from '../lib/protection-visual.js';
-import { el, clear } from '../lib/dom.js';
+import { clear } from '../lib/dom.js';
 
 export const ZONE_ORDER = Object.freeze(['Public Internet', 'Application Layer', 'Service Layer', 'Data Layer', 'External Zone']);
 
@@ -148,11 +148,24 @@ const NODE_HEIGHT = 44;
 const NODE_GAP = 16;
 const NODE_WIDTH = ZONE_WIDTH - ZONE_PADDING * 2;
 
-function svgEl(tag, attrs = {}) {
+// Builds an element in the SVG namespace (createElementNS), unlike `el()`
+// (lib/dom.js) which always calls createElement and produces an HTML-
+// namespaced element — a foreign element inside an <svg> tree that neither
+// paints nor paints its children (C1, final whole-branch review). Event
+// handlers are wired the same way `el()` does (addEventListener, not
+// setAttribute); everything else — including `class` — goes through plain
+// setAttribute, which is correct for SVG elements. Do NOT set `.className`
+// here: it's a read-only SVGAnimatedString on SVG elements, and assigning to
+// it is a silent no-op that would drop every CSS class.
+export function svgEl(tag, attrs = {}) {
   const node = document.createElementNS(SVG_NS, tag);
   for (const [key, value] of Object.entries(attrs)) {
-    if (value === undefined || value === null) continue;
-    node.setAttribute(key, String(value));
+    if (value === undefined || value === null || value === false) continue;
+    if (key.startsWith('on') && typeof value === 'function') {
+      node.addEventListener(key.slice(2).toLowerCase(), value);
+    } else {
+      node.setAttribute(key, String(value));
+    }
   }
   return node;
 }
@@ -203,7 +216,7 @@ export function renderArchitectureView(viewModel, canvasEl, onSelect) {
 }
 
 function renderNode(node, x, y, onSelect) {
-  const group = el('g', {
+  const group = svgEl('g', {
     class: 'arch-node',
     'data-selected': String(node.selected),
     'data-dimmed': String(node.dimmed),
@@ -236,7 +249,7 @@ function renderEdge(edge, from, to, onSelect) {
     d: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
     style: `stroke: var(${visual.colorVar})`,
   });
-  const group = el('g', {
+  const group = svgEl('g', {
     class: 'arch-edge',
     'data-selected': String(edge.selected),
     'data-dimmed': String(edge.dimmed),

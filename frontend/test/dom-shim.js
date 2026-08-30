@@ -6,6 +6,13 @@
 // shape shell.js issues), and textContent. Shared by test/dom.test.js and
 // test/shell.test.js rather than duplicated, since both need the identical
 // shim (per the final-review finding covering both files).
+//
+// Also implements createElementNS (distinct `namespaceURI` from
+// createElement's) and a minimal classList.add, so architecture-view.js's
+// svgEl()-built tree (including renderEdge's path.classList.add(...) call)
+// can be rendered and inspected end-to-end without a real browser — this is
+// what makes the SVG-namespace regression test (C1, final whole-branch
+// review) possible under `node --test`.
 
 class FakeNode {
   constructor() {
@@ -28,6 +35,13 @@ class FakeNode {
   get textContent() {
     return this.childNodes.map((c) => c.textContent).join('');
   }
+  // Real DOM's textContent is a read/write property (assigning replaces all
+  // children with a single text node) — architecture-view.js's svgEl()-built
+  // <text> elements rely on the setter, so it's implemented here even though
+  // earlier consumers of this shim (dom.js, shell.js) only ever read it.
+  set textContent(value) {
+    this.childNodes = [new FakeTextNode(value)];
+  }
 }
 
 class FakeTextNode extends FakeNode {
@@ -42,13 +56,22 @@ class FakeTextNode extends FakeNode {
 }
 
 class FakeElement extends FakeNode {
-  constructor(tag) {
+  constructor(tag, namespaceURI = null) {
     super();
     this.nodeType = 'element';
     this.tagName = String(tag).toUpperCase();
+    this.namespaceURI = namespaceURI;
     this.attrs = new Map();
     this.className = '';
     this.listeners = new Map();
+    const self = this;
+    this.classList = {
+      add(name) {
+        const existing = (self.attrs.get('class') ?? '').split(/\s+/).filter(Boolean);
+        if (!existing.includes(name)) existing.push(name);
+        self.attrs.set('class', existing.join(' '));
+      },
+    };
   }
   setAttribute(name, value) {
     this.attrs.set(name, String(value));
@@ -93,7 +116,8 @@ class FakeElement extends FakeNode {
 
 export function createDomShim() {
   const document = {
-    createElement: (tag) => new FakeElement(tag),
+    createElement: (tag) => new FakeElement(tag, 'http://www.w3.org/1999/xhtml'),
+    createElementNS: (ns, tag) => new FakeElement(tag, ns),
     createTextNode: (data) => new FakeTextNode(data),
   };
 
