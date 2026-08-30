@@ -19,7 +19,7 @@ function unionOfByPath(byPath) {
 // DESIGN_INTRAPROCEDURAL.md §3 for the full reasoning and the bug this
 // closes (a plain-variable alias, e.g. `const copy = user;`, surviving one
 // level of aliasing past round 1's object-literal-only fix).
-function residualFlat(flat, byPath) {
+export function residualFlat(flat, byPath) {
   const covered = unionOfByPath(byPath);
   const residual = new Set();
   for (const id of flat) if (!covered.has(id)) residual.add(id);
