@@ -65,10 +65,27 @@ export class FieldIdentitySummaryCache {
     }
 
     this._stack.add(qid);
-    const summary = analyzeFn(entryState);
-    this.set(qid, entryState, summary);
-    this._stack.delete(qid);
-    return summary;
+    try {
+      // A final whole-branch review found this method previously had no
+      // try/finally around analyzeFn — if it threw, qid stayed on _stack
+      // forever, and every LATER compute() call for that qid would fall
+      // into the recursion guard above and silently return a bottom stub,
+      // permanently. Not reachable at this increment's own hand-built-test
+      // scope, but live the moment a real driver (B4) runs
+      // analyzeFunctionFieldIdentity over real parsed IR — that function
+      // throws a plain TypeError on a malformed `fn`, and a sensible
+      // driver catching-and-continuing would otherwise silently spread
+      // "one function failed" into "this function under-reports for the
+      // rest of the run," the exact silent-under-approximation class the
+      // intraprocedural engine spent six rounds closing. Mirrors
+      // dataflow/summaries.js's own try/finally around the identical
+      // stack-push/pop pattern.
+      const summary = analyzeFn(entryState);
+      this.set(qid, entryState, summary);
+      return summary;
+    } finally {
+      this._stack.delete(qid);
+    }
   }
 
   size() {

@@ -228,3 +228,17 @@ test('full round-trip: a caller\'s field identity flows into a callee via entryS
   assert.deepEqual([...otherSummary.returnFlat], ['data:other-email']);
   assert.equal(cache.size(), 2, 'two distinct entry-state contexts for the same qid must produce two distinct cache entries');
 });
+
+test('compute: a throwing analyzeFn does not permanently poison the recursion guard for that qid (regression for a final-review finding)', () => {
+  const cache = new FieldIdentitySummaryCache();
+  const state = emptyState();
+  assert.throws(() => cache.compute('fn1', state, () => { throw new Error('boom'); }));
+  // Before the fix, qid 'fn1' would still be on _stack here (analyzeFn
+  // threw before _stack.delete ran), so this second call would silently
+  // fall into the recursion guard and return a bottom stub forever,
+  // instead of genuinely re-attempting the analysis.
+  let ran = false;
+  const result = cache.compute('fn1', state, () => { ran = true; return { ...emptyFieldSummary(), returnFlat: new Set(['data:recovered']) }; });
+  assert.equal(ran, true, 'a later compute() call for the same qid must genuinely re-run analyzeFn, not silently degrade to a permanent bottom stub');
+  assert.deepEqual([...result.returnFlat], ['data:recovered']);
+});
