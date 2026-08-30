@@ -188,3 +188,29 @@ test('assign-expr resolves to its source\'s identity and forwards byPath, withou
   assert.deepEqual([...r.flat], ['data:email']);
   assert.equal(r.widened, false, 'no call is involved, this must not be flagged as an unresolved-call widening');
 });
+
+// Round 5: a statically-unknown computed member key (`obj[k]`, lowered by
+// accessPathOf/the parser to a trailing '*' path segment) must never
+// silently resolve to nothing (FR-306's "never launder identity into a
+// clean value" principle) — it must conservatively resolve the whole base
+// object's aggregate identity, flagged widened. See DESIGN_INTRAPROCEDURAL.md
+// §4 and scanner/src/lineage/CLAUDE.md.
+test('a computed member access with an unknown key resolves the container\'s full aggregate, flagged widened, instead of silently returning nothing', () => {
+  const state = stateWith([['user.email', 'data:email'], ['user.ssn', 'data:ssn']]);
+  const expr = { kind: 'member', object: { kind: 'ident', name: 'user' }, prop: '*' };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.flat].sort(), ['data:email', 'data:ssn']);
+  assert.equal(r.widened, true);
+});
+
+test('a computed member access with an unknown key on a NON-path base (e.g. `(user ?? other)[k]`) also resolves the base\'s aggregate, flagged widened', () => {
+  const state = stateWith([['user.email', 'data:email'], ['other.name', 'data:name']]);
+  const expr = {
+    kind: 'member',
+    object: { kind: 'logical', op: '??', left: { kind: 'ident', name: 'user' }, right: { kind: 'ident', name: 'other' } },
+    prop: '*',
+  };
+  const r = resolveExprIdentities(state, expr);
+  assert.deepEqual([...r.flat].sort(), ['data:email', 'data:name']);
+  assert.equal(r.widened, true);
+});

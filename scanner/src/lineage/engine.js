@@ -48,6 +48,19 @@ export function resolveExprIdentities(state, expr) {
     case 'member': {
       const path = accessPathOf(expr);
       if (path) {
+        if (path === '*' || path.endsWith('.*')) {
+          // A computed member access with a statically-unknown key (`obj[k]`) —
+          // we don't know WHICH field is being read, so conservatively resolve
+          // the WHOLE base object's aggregate identity (identitiesAt's existing
+          // descendant aggregation, from round 2, already does exactly this
+          // when queried at the base's own path) and flag it widened, per
+          // DESIGN_INTRAPROCEDURAL.md §4's dynamic-property-key example. Never
+          // silently drop it (FR-306's "never launder identity into a clean
+          // value" principle) — see the round-5 re-review that found this gap.
+          const basePath = path === '*' ? null : path.slice(0, -2);
+          const flat = basePath ? identitiesAt(state, basePath) : new Set();
+          return { flat, byPath: new Map(), widened: flat.size > 0 };
+        }
         // Pure ident/member chain — resolve directly against state, same
         // logic as the `ident` case above.
         const flat = identitiesAt(state, path);
@@ -75,6 +88,12 @@ export function resolveExprIdentities(state, expr) {
       // base conservatively applies to every field read off it, same
       // reasoning as `identitiesAt`'s ancestor coverage for state-backed reads.
       const base = resolveExprIdentities(state, expr.object);
+      if (expr.prop === '*') {
+        // Same reasoning as the path-succeeds branch above: unknown key on a
+        // non-path base — conservatively use everything the base carries
+        // (base.flat is already that full aggregate), flagged widened.
+        return { flat: new Set(base.flat), byPath: new Map(), widened: base.flat.size > 0 };
+      }
       const baseResidual = residualFlat(base.flat, base.byPath);
       const flat = new Set(baseResidual);
       const byPath = new Map();
@@ -235,6 +254,25 @@ function step(node, stateIn, widenings) {
         return { state: stateIn, returnFact: null };
       }
       const resolved = resolveExprIdentities(stateIn, node.source);
+      if (node.target === '*' || node.target.endsWith('.*')) {
+        // A computed-key write (`obj[k] = ...`) must be a WEAK update (add to
+        // whatever the container already carries, never clear it first) — a
+        // strong update here would treat two genuinely different (but
+        // statically indistinguishable) write locations as the same location,
+        // silently deleting an earlier write. scanner/src/dataflow/engine.js's
+        // `_addPathAliasAware` already established this exact precedent for
+        // the sibling taint engine; this mirrors it.
+        const containerPath = node.target === '*' ? null : node.target.slice(0, -2);
+        let wState = stateIn;
+        if (containerPath) {
+          const allIds = new Set([...residualFlat(resolved.flat, resolved.byPath), ...[...resolved.byPath.values()].flatMap((s) => [...s])]);
+          for (const id of allIds) wState = addIdentity(wState, containerPath, id);
+          if (allIds.size > 0) {
+            widenings.push({ atPath: containerPath, dataElementIds: [...allIds], reason: 'dynamic-property-key', line: node.line });
+          }
+        }
+        return { state: wState, returnFact: null };
+      }
       let state = removeIdentitiesAt(stateIn, node.target);
       // Write every byPath entry at its own sub-path, and write only the
       // RESIDUAL (whatever in `flat` isn't already captured by byPath's

@@ -203,3 +203,33 @@ function greet(user) {
   assert.equal(result.widenings.length, 0,
     'per the ADR (§4): template-literal interpolation propagates identity normally and must NOT be recorded as a widening event');
 });
+
+// Round 5 regression: two computed-key writes to the same object must
+// ACCUMULATE (weak update), not have the second overwrite the first (strong
+// update) — every computed-key write on the same container lowers to the
+// SAME literal target string ('bag.*'), since the actual runtime key is
+// statically unknown, so a strong update on that shared string would treat
+// two genuinely different write locations as the same location. Mirrors
+// scanner/src/dataflow/engine.js's `_addPathAliasAware` precedent.
+test('two computed-key writes to the same object accumulate instead of the second overwriting the first (regression for a round-5 finding)', () => {
+  const src = `
+    function f(user, k1, k2) {
+      const bag = {};
+      bag[k1] = user.email;
+      bag[k2] = user.ssn;
+      return bag;
+    }
+  `;
+  const fn = parseFn(src, 'f');
+  assert.deepEqual(fn.params, ['user', 'k1', 'k2']);
+
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'user.ssn', 'data:ssn');
+
+  const result = analyzeFunctionFieldIdentity(fn, entryState);
+
+  assert.equal(result.returnFacts.length, 1);
+  const flat = result.returnFacts[0].identities;
+  assert.deepEqual([...flat].sort(), ['data:email', 'data:ssn'],
+    'the second computed-key write must not have deleted the first (pre-fix bug returned only data:ssn)');
+});
