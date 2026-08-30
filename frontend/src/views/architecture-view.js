@@ -1,5 +1,6 @@
 import { worstVerdict, protectionVisual } from '../lib/protection-visual.js';
 import { clear } from '../lib/dom.js';
+import { flowPathNodeIds } from '../lib/flow-path.js';
 
 export const ZONE_ORDER = Object.freeze(['Public Internet', 'Application Layer', 'Service Layer', 'Data Layer', 'External Zone']);
 
@@ -71,11 +72,7 @@ export function computeFlowSummary(graph, flow) {
   const sourceNode = graph.nodes.find((n) => n.id === flow.source);
   const sinkNode = graph.nodes.find((n) => n.id === flow.sink);
 
-  const pathNodeIds = new Set([flow.source, flow.sink]);
-  for (const e of edges) {
-    pathNodeIds.add(e.from);
-    pathNodeIds.add(e.to);
-  }
+  const pathNodeIds = flowPathNodeIds(graph, flow);
   const externalRecipients = graph.nodes
     .filter((n) => pathNodeIds.has(n.id) && n.externality?.value === 'external')
     .map((n) => n.label);
