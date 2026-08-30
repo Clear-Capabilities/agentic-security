@@ -54,16 +54,64 @@ here, not left to a later task to discover partway through implementation.
 touching its live taint `Set<accessPath>` state. Per
 `scanner/src/lineage/CLAUDE.md` and PRD §3.1/§18.1.
 
-## 3. Ancestor/descendant semantics (deliberately asymmetric, mirrors access-paths.js)
+## 3. Ancestor/descendant semantics (bidirectional — corrected from the original one-directional design)
 
-An ancestor path's recorded identity IS visible when querying a descendant
-path (`identitiesAt(state, 'obj.email')` includes any identity recorded at
-`'obj'` itself) — mirrors `access-paths.js`'s `isCoveredBy`: a coarser fact
-is sound information about everything under it. The reverse does NOT hold:
-a descendant's identity is never visible when querying its ancestor
-(`identitiesAt(state, 'obj')` does NOT include an identity recorded only at
-`'obj.email'`) — asking about the whole object doesn't imply you learn a
-fact that was only ever established about one of its fields.
+`identitiesAt(state, path)` aggregates in BOTH directions:
+
+- **Ancestor coverage** (original): a coarser recorded fact about a
+  container implies the same fact about anything under it, when nothing
+  more specific overrides it — `identitiesAt(state, 'obj.email')` includes
+  any identity recorded at `'obj'` itself. Mirrors `access-paths.js`'s
+  `isCoveredBy`.
+- **Descendant coverage** (added by the corrected design below): asking
+  about a container AS A WHOLE aggregates everything recorded under it —
+  `identitiesAt(state, 'obj')` includes an identity recorded only at
+  `'obj.email'`. The object legitimately carries every field's identity
+  when read as a whole (`return obj` after `obj = {email: X, ssn: Y}` must
+  see both).
+
+This does NOT reintroduce cross-field leakage: querying `obj.email` never
+picks up a sibling path like `obj.ssn` — neither is a prefix of the other,
+so descendant coverage only ever aggregates when the query path is an
+actual ancestor of the recorded path, never across siblings.
+
+### Corrected design
+
+The original design (above, before this note) was one-directional:
+ancestor-visible-from-descendant only, with the reverse deliberately
+excluded ("asking about the whole object doesn't imply you learn a fact
+that was only ever established about one of its fields"). This was wrong,
+and the final whole-branch review (composing pieces no single task review
+had reason to combine) found why: `assign`'s object-literal handling
+combined with the one-directional `identitiesAt` forced a choice between
+two broken options —
+
+(a) write the object literal's resolved identities BOTH at each field's
+    own sub-path (`rec.email`, `rec.ssn`) AND as a flat union at the
+    container's own path (`rec`) — needed so a later whole-object read
+    (`return rec`) could see every field, since one-directional
+    `identitiesAt` couldn't look downward. But this write is exactly
+    FR-301's violation: `identitiesAt(state, 'rec.email')` then
+    ancestor-inherits from the coarse `rec` entry and returns
+    `{email, ssn}` — both fields, merged, for a query that asked about
+    only one. This was the actual bug (see `engine.js`'s pre-fix `assign`
+    case), and it was a plan-authoring bug, not an implementer error — the
+    flat-union-at-root write was specified verbatim in this project's own
+    original brief.
+
+(b) drop the flat-union-at-root write and keep only the per-field
+    sub-path writes — this fixes (a) but breaks `return rec`: with the
+    old one-directional `identitiesAt`, querying `rec` finds nothing,
+    since no identity was ever recorded at `rec` itself.
+
+The bidirectional design resolves both without a redundant coarse write:
+per-field writes alone are sufficient (`assign`'s object-literal case now
+writes ONLY `rec.email`/`rec.ssn`, never `rec`), `identitiesAt(state,
+'rec.email')` correctly returns only `{email}` (no ancestor entry exists
+to leak from), and `identitiesAt(state, 'rec')` correctly returns
+`{email, ssn}` via descendant aggregation. Sibling paths remain correctly
+isolated from each other throughout, since aggregation only ever follows
+an actual prefix relationship.
 
 Unlike boolean taint (where recording a fact at a coarser path makes any
 existing finer-path fact redundant and `access-paths.js`'s `addPath` prunes
@@ -89,6 +137,13 @@ project's "don't design for hypothetical future requirements" convention.
   sub-paths like `target.a.b`) — this is the concrete mechanism that proves
   FR-301: two properties on one object literal, from two different data
   elements, land at two different access paths in the state, never merged.
+  `assign`'s handling of this case writes ONLY these per-field `byPath`
+  entries — never a coarse value at the container's own path (`target`
+  itself). This is the documented, correct behavior (see §3's "Corrected
+  design" note for why a coarse root write was tried and rejected), not an
+  oversight: `identitiesAt`'s descendant aggregation (§3) already answers a
+  whole-object read like `return target` correctly from the per-field
+  entries alone.
 - **Array literals**: flattened, no index sensitivity — matches
   `access-paths.js`'s own documented limitation (no `[i]`/`[*]` support;
   "index sensitivity is a follow-on"). An array carrying two different
@@ -119,13 +174,18 @@ project's "don't design for hypothetical future requirements" convention.
   budget exhausted' into 'no path'" spirit) without requiring this plan to
   build the registry integration that would let some calls resolve
   precisely (that's Sub-project D's job).
-- **Destructuring**: NOT resolved in this design record — the real IR
-  lowering for `const {a, b} = x` was not read during this plan's research
-  pass (parser-js.js's destructuring-to-CFG lowering lives before the
-  section that was read). Task 4/5 must read that code directly before
-  implementing destructuring handling; see those tasks' explicit
-  verification steps. This ADR intentionally does not assert a shape it
-  cannot back with a real code citation.
+- **Destructuring**: resolved (Task 5 read the real IR lowering directly,
+  closing the open question this ADR originally left unanswered).
+  `const {email, ssn} = user;` lowers to one plain `assign` CFG node per
+  bound name — a string `target` (e.g. `'email'`) and a `member`-kind
+  `source` (e.g. `{kind: 'member', object: {kind: 'ident', name: 'user'},
+  prop: 'email'}`) — see `scanner/src/ir/parser-js.js`'s
+  `VariableDeclarator` visitor, the `id.kind === 'object-pattern'` branch,
+  around lines 453-463. This is byte-identical to the shape `step()`'s
+  `'assign'` case already handles for a plain `member`-sourced assignment,
+  so destructuring required zero special-case code in `engine.js` —
+  confirmed end to end against the real parser in
+  `test/lineage/engine-integration.test.js`.
 - **Ternary/conditional expressions** (`union` kind, both branches kept by
   the parser — never resolved to one): both branches' identities are
   unioned, matching the conservative "either could execute" semantics the
