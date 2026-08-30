@@ -1,5 +1,6 @@
 import { hashState, emptyState, addIdentity } from './field-identity.js';
 import { resolveExprIdentities, residualFlat } from './engine.js';
+import { accessPathOf } from '../dataflow/access-paths.js';
 
 export function emptyFieldSummary() {
   return { returnFlat: new Set(), returnByPath: new Map(), mutatedParams: new Map(), widenings: [] };
@@ -103,4 +104,28 @@ export function entryStateFromCall(paramNames, callArgs, callerState) {
     }
   }
   return entryState;
+}
+
+// Maps a callee's summary back onto the CALLER's own state at the call
+// site — the interprocedural analog of reading a function's return value
+// and observing its side effects. Unlike dataflow/summaries.js's
+// applyAtCallSite (which only propagates a mutation back for a bare
+// `ident` argument, silently dropping a `member`-expression argument like
+// `f(obj.field)`), this version also resolves a member-expression argument
+// via `accessPathOf` — a deliberate, scoped improvement: field mutations
+// plausibly target `obj.field`-shaped arguments often enough that
+// dropping them silently would be a real, avoidable under-approximation.
+export function applyAtCallSite(summary, paramNames, callArgs) {
+  const mutations = [];
+  for (const [paramPath, ids] of summary.mutatedParams) {
+    const [rootParamName, ...rest] = paramPath.split('.');
+    const idx = paramNames.indexOf(rootParamName);
+    if (idx === -1) continue;
+    const arg = callArgs[idx];
+    const argPath = accessPathOf(arg);
+    if (!argPath) continue;
+    const fullPath = rest.length > 0 ? `${argPath}.${rest.join('.')}` : argPath;
+    mutations.push({ path: fullPath, dataElementIds: [...ids] });
+  }
+  return { returnFlat: summary.returnFlat, returnByPath: summary.returnByPath, mutations };
 }
