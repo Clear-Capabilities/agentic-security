@@ -435,9 +435,26 @@ data:ssn   :  user.ssn   → u.ssn   → o.ssn   → ⟨return⟩   (via: object
 ```
 
 Two ordered paths, field-distinct end to end, from a structure containing
-twelve deduplicated records and zero materialized paths. Note that the two
-elements never touch, at any hop — which is FR-301's requirement carried
-into FR-303's structure.
+fourteen deduplicated records (the table above: 4 at n1 + 6 at n2 + 4 at n3)
+and zero materialized paths. Note that the two elements never touch, at any
+hop — which is FR-301's requirement carried into FR-303's structure.
+
+**Correction found during Task 2's real implementation (this document
+previously said "twelve" here, which was simply a miscount of the table
+two paragraphs above — a genuine defect, not a deliberate simplification):**
+fourteen is the count once EVERY hop type in the table is instrumented,
+which requires `member`'s selection case (the two `selection/member` rows
+at n2) — that is increment C2's job, not C1's. Task 2's own four-site POC
+(§11 — `ident`, `object`, `assign`, `return`; deliberately NOT `member`)
+was run against this exact fixture and produces exactly **twelve**
+deduplicated records for it (4 at n1 + 4 at n2, since the two
+`selection/member` rows never fire + 4 at n3) — confirmed by
+`scanner/test/lineage/engine-provenance.test.js`, which pins this count.
+So "twelve" was a real number, just attached to the wrong scope (it
+describes Task 2's own POC output, not this section's full-coverage
+worked example) — both twelve and fourteen are now stated explicitly,
+against the scope each actually belongs to, so a future reader doesn't
+have to re-derive which is which by hand.
 
 Had `fromPath` been the queried path, n1 would have emitted
 `from 'user'` for both ids and n3 `from 'o'` for both, and the reconstruction

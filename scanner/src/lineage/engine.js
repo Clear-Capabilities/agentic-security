@@ -57,6 +57,49 @@ function pathHasWildcard(path) {
   return path.split('.').includes('*');
 }
 
+// --- Path provenance hop recording (Sub-project C, increment 1) ---------
+// See DESIGN_PATH_PROVENANCE.md for the full design. Only two helpers below
+// are new; everything else in this file is unchanged in shape, and the
+// accumulator (`ctx.recordHop`) is threaded exactly the way `ctx` already
+// flows everywhere (Decision 7) — no new plumbing, no new parameters.
+
+// Which state keys jointly contributed each id to identitiesAt(state, path)?
+// Mirrors identitiesAt's own bidirectional prefix-coverage test (field-
+// identity.js) EXACTLY — if that test ever changes, this must change with
+// it or the provenance DAG silently disconnects (Decision 6). Single pass
+// over `state`: O(|state|) total for every id at `path`, not O(|state| x
+// |ids|) — the naive per-id-loop cost the design doc's initial draft
+// understated and a review corrected (Decision 6, "Cost, corrected"). Used
+// internally by the engine's own hop-recording sites; never called on the
+// hot path when no recorder is present (guarded by `ctx?.recordHop` at each
+// call site, matching Decision 1's "extra, discarded computation" allowance).
+function contributingKeysAllIds(state, path) {
+  const byId = new Map();
+  for (const [candidatePath, ids] of state) {
+    if (!(pathIsCoveredByPrefix(path, candidatePath) || pathIsCoveredByPrefix(candidatePath, path))) continue;
+    for (const id of ids) {
+      const set = byId.get(id) ?? new Set();
+      set.add(candidatePath);
+      byId.set(id, set);
+    }
+  }
+  return byId;
+}
+
+// Per-id form of the above, exported for DESIGN_PATH_PROVENANCE.md's
+// structural test guard (a design review recommendation, folded into Task
+// 2 of the Sub-project C increment-1 plan): a test asserts that
+// unioning `contributingKeys(state, path, id)` over every id in
+// `identitiesAt(state, path)` reconstructs that same set exactly, so a
+// future change to identitiesAt's coverage test that isn't mirrored here
+// fails loudly instead of silently disconnecting the DAG. Not on the
+// engine's own hot path (see contributingKeysAllIds above) — this is a
+// thin per-id wrapper for test/debugging use, where re-scanning `state`
+// once per call is fine.
+export function contributingKeys(state, path, id) {
+  return contributingKeysAllIds(state, path).get(id) ?? new Set();
+}
+
 export function resolveExprIdentities(state, expr, ctx) {
   if (!expr) return noIdentity();
 
@@ -71,6 +114,26 @@ export function resolveExprIdentities(state, expr, ctx) {
           const subPath = candidatePath.slice(path.length + 1);
           const existing = byPath.get(subPath) ?? new Set();
           byPath.set(subPath, new Set([...existing, ...ids]));
+        }
+      }
+      // Path provenance (Sub-project C, increment 1, Task 2 instrumented
+      // site 1 of 4): one production/ident in-half per (contributing state
+      // key, dataElementId) pair — Decision 6, NOT one per queried `path`.
+      // Extra computation whose result is entirely discarded when no
+      // recorder is present (Decision 1).
+      if (ctx?.recordHop) {
+        const contrib = contributingKeysAllIds(state, path);
+        for (const id of flat) {
+          const keys = contrib.get(id);
+          if (!keys) continue;
+          for (const key of keys) {
+            ctx.recordHop({
+              kind: 'production', subKind: 'ident',
+              fromPath: key, toPath: null, dataElementId: id,
+              syntacticPath: key === path ? null : path,
+              widenReason: null, lossReason: null,
+            });
+          }
         }
       }
       return { flat, byPath, widened: false };
@@ -154,6 +217,23 @@ export function resolveExprIdentities(state, expr, ctx) {
       for (const prop of expr.props) {
         const r = resolveExprIdentities(state, prop.value, ctx);
         for (const id of r.flat) flat.add(id);
+        // Path provenance (Sub-project C, increment 1, Task 2 instrumented
+        // site 2 of 4): one production/object in-half per id this property
+        // contributes, fromPath null — a fresh structural annotation, not a
+        // prior aliasing source (Decision 5/§10.1). Applies uniformly to a
+        // plain property, a spread property, and a `*`-keyed property alike
+        // (all three rows of §10.1's `object` table agree on this shape),
+        // so this is emitted once here rather than duplicated in each of
+        // the three branches below.
+        if (ctx?.recordHop) {
+          for (const id of r.flat) {
+            ctx.recordHop({
+              kind: 'production', subKind: 'object',
+              fromPath: null, toPath: null, dataElementId: id,
+              syntacticPath: null, widenReason: null, lossReason: null,
+            });
+          }
+        }
         if (prop.spread) {
           // Object spread ({...src}) copies ALL of src's own properties onto
           // this object as TOP-LEVEL siblings — merge the spread source's
@@ -371,10 +451,44 @@ function step(node, stateIn, widenings, ctx) {
       // aliased-reference RHS (byPath populated) writes only its per-field
       // entries. See DESIGN_INTRAPROCEDURAL.md §3 for the full reasoning,
       // including the aliasing gap (`const copy = user;`) this closes.
+      //
+      // Path provenance (Sub-project C, increment 1, Task 2 instrumented
+      // site 3 of 4): one write-out/assign out-half per `addIdentity` call,
+      // at the EXACT path just written (never `node.target` alone for a
+      // byPath entry — DESIGN_PATH_PROVENANCE.md §10.1 flags recording the
+      // coarser `node.target` here as "the most likely C2 mistake", since it
+      // would mismatch the granularity every read hop uses and disconnect
+      // the DAG). `widenReason` mirrors the SAME (documented-approximate)
+      // 'unresolved-call' label the widenings ledger below already uses in
+      // this exact branch — not a new/better reason, just the one this
+      // task's scope has evidence for; see the CLAUDE.md note on that
+      // ledger's own known mislabeling, which this hop record inherits
+      // rather than fixes (fixing it needs resolveExprIdentities's return
+      // shape to thread a real reason string, out of Task 2's scope).
       const residual = residualFlat(resolved.flat, resolved.byPath);
-      for (const id of residual) state = addIdentity(state, node.target, id);
+      const assignWidenReason = resolved.widened && resolved.flat.size > 0 ? 'unresolved-call' : null;
+      for (const id of residual) {
+        state = addIdentity(state, node.target, id);
+        if (ctx?.recordHop) {
+          ctx.recordHop({
+            kind: 'write-out', subKind: 'assign',
+            fromPath: null, toPath: node.target, dataElementId: id,
+            syntacticPath: null, widenReason: assignWidenReason, lossReason: null,
+          });
+        }
+      }
       for (const [subPath, ids] of resolved.byPath) {
-        for (const id of ids) state = addIdentity(state, `${node.target}.${subPath}`, id);
+        for (const id of ids) {
+          const toPath = `${node.target}.${subPath}`;
+          state = addIdentity(state, toPath, id);
+          if (ctx?.recordHop) {
+            ctx.recordHop({
+              kind: 'write-out', subKind: 'assign',
+              fromPath: null, toPath, dataElementId: id,
+              syntacticPath: null, widenReason: assignWidenReason, lossReason: null,
+            });
+          }
+        }
       }
       if (resolved.widened && resolved.flat.size > 0) {
         widenings.push({ atPath: node.target, dataElementIds: [...resolved.flat], reason: 'unresolved-call', line: node.line });
@@ -410,6 +524,24 @@ function step(node, stateIn, widenings, ctx) {
       if (resolved.widened && resolved.flat.size > 0) {
         widenings.push({ atPath: null, dataElementIds: [...resolved.flat], reason: 'unresolved-call', line: node.line });
       }
+      // Path provenance (Sub-project C, increment 1, Task 2 instrumented
+      // site 4 of 4): one write-out/return out-half per id, toPath
+      // deliberately null (a return exits the function, it doesn't land at
+      // a path) — never a fabricated pseudo-path like '@return'
+      // (DESIGN_PATH_PROVENANCE.md §3/§10.1: mixing a fabricated token into
+      // the endpoint namespace is exactly Decision 5's forbidden bug class).
+      // C3/C4 identify a function exit by
+      // `kind === 'write-out' && subKind === 'return' && toPath === null`.
+      if (ctx?.recordHop) {
+        const returnWidenReason = resolved.widened && resolved.flat.size > 0 ? 'unresolved-call' : null;
+        for (const id of resolved.flat) {
+          ctx.recordHop({
+            kind: 'write-out', subKind: 'return',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: returnWidenReason, lossReason: null,
+          });
+        }
+      }
       return { state: stateIn, returnFact: resolved.flat };
     }
 
@@ -444,6 +576,10 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
   const widenings = [];
   const returnFactsByNode = new Map();
   let iterations = 0;
+  // Path provenance (Sub-project C, increment 1, Decision 7.2): stamped
+  // once for the whole analysis, since resolveExprIdentities never sees the
+  // enclosing function.
+  const scope = fn.qid ?? null;
 
   while (work.length) {
     if (++iterations > ITER_BUDGET) break;
@@ -451,7 +587,18 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
     const node = nodes[nid];
     if (!node) continue;
     const incoming = inStates.get(nid) ?? emptyState();
-    const { state: out, returnFact } = step(node, incoming, widenings, ctx);
+    // Path provenance (Decision 7.2): `nodeId`/`line` are stamped here, once
+    // per node visit, from the worklist's own map key `nid` — NEVER from
+    // `node.id` (hand-built CFG fixtures, e.g. test/lineage/engine-walker
+    // .test.js, set no `id` field on their nodes at all; the real parser
+    // does set `node.id`, equal to the map key, so `nid` is correct for
+    // both). With no recorder present, `stepCtx` is the SAME `ctx` reference
+    // — no allocation, nothing for a backward-compatibility test to catch
+    // (Decision 7.2's "true by construction" point).
+    const stepCtx = ctx?.recordHop
+      ? { ...ctx, recordHop: (h) => ctx.recordHop({ scope, nodeId: nid, line: node.line ?? null, ...h }) }
+      : ctx;
+    const { state: out, returnFact } = step(node, incoming, widenings, stepCtx);
     if (returnFact && returnFact.size > 0) {
       // Union onto any existing fact for this node rather than pushing a
       // new array entry every visit — see Fix 2 in the final whole-branch
