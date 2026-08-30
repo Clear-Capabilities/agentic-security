@@ -330,6 +330,89 @@ framing) is necessary but not sufficient — selection sites outside the
 switch's own recursive calls, and write-out sites in `step()`, must be
 checked too.
 
+### Statically-unknown path components (round 5 — the three hop types were right, but assumed every PATH COMPONENT flowing through them was a real property name)
+
+A fifth re-review found that round 4's three-hop-types invariant, while
+correctly identifying *where* structure can be lost, never questioned
+whether the path components flowing through those hops (`node.target`,
+`expr.prop`, `prop.key`) are always real, distinct property names. They
+are not: `scanner/src/dataflow/access-paths.js`'s `accessPathOf` — reused
+directly by this package per §2's reuse boundary — already maps a
+computed member access with a statically-unknown key (`user[k]`, where `k`
+is a variable, not a literal) to a path ending in the literal segment `*`
+(e.g. `"user.*"`). This is an existing, already-established convention in
+the shared IR/access-path layer (`scanner/src/ir/parser-js.js`'s
+`MemberExpression` case and `lhsPath`'s computed-write handling both
+already emit it), not something round 5 invented — but this package had
+never interpreted it specially, and it broke all three hop types at once:
+
+- **Selection**: `member`'s path-succeeds branch queried
+  `identitiesAt(state, 'user.*')` for `user[k]`, which never matches real
+  entries like `'user.email'` — silently returning `[]` instead of
+  propagating a widened flow. This directly contradicted this document's
+  own §4 "Unresolved function calls" entry, which already named a dynamic
+  property key as an example that must propagate as a widened flow, never
+  silently vanish (FR-306's "never launder identity into a clean value"
+  principle).
+- **Write-out**: every computed-key write on the SAME container lowers to
+  the SAME literal target string (`'bag.*'`), since the actual runtime key
+  is statically unknown — `bag[k1] = user.email; bag[k2] = user.ssn;`
+  produces two `assign` nodes with the identical target `'bag.*'`.
+  `step()`'s `assign` case's STRONG update (`removeIdentitiesAt` before
+  writing) treated these as the same location a later write legitimately
+  overwrites, silently deleting the first write's identity —
+  `scanner/src/dataflow/engine.js`'s `_addPathAliasAware` had already
+  solved exactly this for the sibling taint engine (a trailing `.*` write
+  must be a WEAK update — add to the container, never clear it first) but
+  this package had not inherited that precedent, the same pattern as round
+  4's Finding 5 (write-out sites need their own scrutiny, not just
+  production/selection).
+- **Production**: `scanner/src/ir/parser-js.js`'s `ObjectExpression`
+  handling built each property's `key` as `p.key.name || ...` with no
+  check of Babel's own `p.computed` flag — so a computed property with a
+  non-literal key expression (`{[k]: v}`) resolved to the key
+  EXPRESSION's own variable name (`'k'`), colliding with an explicit,
+  non-computed property literally named `k` on the same object:
+  `{ k: user.ssn, [k]: user.email }` produced two properties both keyed
+  `'k'`, which `resolveExprIdentities`'s `object` case then merged into
+  ONE byPath entry — FR-301's core violation, via a more innocuous-looking
+  fabricated key than any prior round's finding.
+
+**The fix**, entirely at the engine layer for selection/write-out
+(wildcard handling is a policy decision about how to interpret a path
+component, not something baked into `field-identity.js`'s pure state
+primitives) plus a minimal, convention-following change to the shared
+parser for production: a `'*'`-ending (or bare `'*'`) path component is
+now recognized wherever it can appear —
+
+- `member`'s path-succeeds branch and its non-path fallback both check for
+  a `'*'` key/trailing-`.*` path and resolve the CONTAINER's full
+  aggregate (via `identitiesAt`'s existing descendant aggregation, or the
+  base's own `flat`), flagged `widened: true`.
+- `step()`'s `assign` case checks for a `'*'`-ending target and performs a
+  WEAK update (`addIdentity` onto whatever the container already carries,
+  never `removeIdentitiesAt` first), flagged as a `dynamic-property-key`
+  widening event.
+- `parser-js.js`'s `ObjectExpression` handling now checks `p.computed`: a
+  computed key that is itself a resolvable literal (`{[42]: v}`,
+  `{['literal']: v}` — Babel still marks these `computed: true`) still
+  resolves to that literal's string form, exactly as before; a computed
+  key that is NOT a literal resolves to the literal string `'*'` —
+  mirroring the EXISTING computed-member-access convention this same file
+  already uses for `obj[k]` reads and writes, not a new one.
+  `resolveExprIdentities`'s `object` case folds a `key === '*'` property
+  into the object's coarse residual (never a byPath entry keyed `'*'`,
+  which would just be a differently-shaped version of the same collision
+  bug).
+
+**The durable framing, restated once more per this round's own finding
+(subsumes round 4's "three hop types" note and this round's finding
+without needing to re-enumerate constructs again):** every path component
+the IR supplies must be either a real property name or an explicitly
+modeled unknown (`'*'`), and every kill (`removeIdentitiesAt`) must be
+justified as a strong update on a definite, uniquely-identified location —
+a write to an unknown/aliased location must be a weak update instead.
+
 ## 4. Per-construct handling (JS/TS, this plan's scope)
 
 - **Assignment** (`target: string`, `source: exprDesc`): resolve `source`'s
