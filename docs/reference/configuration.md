@@ -29,6 +29,9 @@ All are prefixed `AGENTIC_SECURITY_`. The ones you're most likely to touch:
 | `AGENTIC_SECURITY_RESUME` | Resume an interrupted scan from its checkpoint instead of restarting. |
 | `AGENTIC_SECURITY_PRIVACY_FRAMEWORK` | Emit NIST Privacy Framework 1.1 gaps as fixable findings (see [compliance](../guides/compliance.md)). |
 | `AGENTIC_SECURITY_OFFLINE` | Skip all network (OSV/registry/EPSS) — same as `--no-network`. |
+| `AGENTIC_SECURITY_LINEAGE_DEEP` | Opt in to building the Data Flow Explorer lineage graph during a scan. Independent of `AGENTIC_SECURITY_DEEP` — see `src/lineage/DESIGN_GRAPH_BUILDER.md` §9.5. |
+| `AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS` | Soft budget (ms) for the lineage graph build; measured, not enforced by interruption — an over-budget build still completes and emits an info finding. Default `300000`. |
+| `AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS` | Per-function distinct-context cap for the lineage engine's interprocedural summary cache. Default `16`. |
 
 ### Finding provenance
 
@@ -90,6 +93,7 @@ files you author.
 | File | Written by | Read by |
 |---|---|---|
 | `last-scan.json` (+ `.sig`) | every scan | every downstream command; the canonical output |
+| `lineage-graph.json` (+ `.sig`) | a scan with `AGENTIC_SECURITY_LINEAGE_DEEP=1` | the Data Flow Explorer's `DataFlowGraph v1` document for the scanned project |
 | `findings.json` | every scan | digest, quick reads |
 | `*-history.json`, `streak.json` | scans over time | trend / report-card |
 | `privacy-framework.{json,md}` | compliance assessment | `/compliance` |

@@ -88,3 +88,31 @@ test('E5/wiring-3: AGENTIC_SECURITY_LINEAGE_DEEP=1 alone (AGENTIC_SECURITY_DEEP 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Sub-project E, increment 5, final-review nitpick N-5: the lineage-timeout
+// info-finding branch (engine.js, `_lr.elapsedMs > _lineageBudgetMs`) had no
+// test coverage at all — this forces it live with a budget of 0ms, which
+// any real build (however small) exceeds.
+test('E5/wiring-4: AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS=0 forces the over-budget branch, emitting an info finding — mirrors deep mode\'s own ir-taint-timeout finding shape', async () => {
+  const prevLineage = process.env.AGENTIC_SECURITY_LINEAGE_DEEP;
+  const prevTimeout = process.env.AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS;
+  process.env.AGENTIC_SECURITY_LINEAGE_DEEP = '1';
+  process.env.AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS = '0';
+  const dir = mkTmpProject();
+  try {
+    const fileContents = { 'app.js': "function h(req, res){ const pw = req.body.password; res.send(pw); }" };
+    const { scan } = await runScan(dir, { fileContents });
+    // The build must still succeed (budget is measured, not enforced by
+    // interruption) — only the info finding is new.
+    assert.ok(scan.lineageGraph, 'an over-budget build still completes and produces a graph');
+    const timeoutFindings = (scan.findings || []).filter(f => typeof f.id === 'string' && f.id.startsWith('lineage-timeout:'));
+    assert.equal(timeoutFindings.length, 1, `expected exactly one lineage-timeout finding, got: ${JSON.stringify(scan.findings?.map(f => f.id))}`);
+    const f = timeoutFindings[0];
+    assert.equal(f.severity, 'info');
+    assert.equal(f.parser, 'LINEAGE');
+  } finally {
+    if (prevLineage === undefined) delete process.env.AGENTIC_SECURITY_LINEAGE_DEEP; else process.env.AGENTIC_SECURITY_LINEAGE_DEEP = prevLineage;
+    if (prevTimeout === undefined) delete process.env.AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS; else process.env.AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS = prevTimeout;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

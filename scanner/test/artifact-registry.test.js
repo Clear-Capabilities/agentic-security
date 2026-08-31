@@ -165,3 +165,35 @@ test('reset: an unregistered, unknown file is left untouched (unknown is not the
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// Sub-project E, increment 5, final-review MUST-FIX 1: lineage-graph.json +
+// its .sig were written by bin/agentic-security.js but never registered
+// here, so `reset` treated them as unregistered/unknown and preserved them
+// under the "Preserving operator-authored config: ..." message — the
+// opposite of correct for a scanner-GENERATED artifact that can carry
+// dataElements[].dataClasses derived from the user's own source. Proven
+// live against an unpatched worktree before this fix (reset preserved
+// both files); this test pins the fixed behavior so it cannot regress.
+test('reset: lineage-graph.json + .sig are registered as generated and ARE wiped by reset --yes (MF-1)', () => {
+  const { root, stateDir } = makeFixtureProject();
+  try {
+    writeState(stateDir, 'last-scan.json', '{"findings":[]}');
+    writeState(stateDir, 'lineage-graph.json', '{"schemaVersion":"1.0.0","nodes":[],"edges":[],"dataElements":[],"flows":[]}');
+    writeState(stateDir, 'lineage-graph.json.sig', 'deadbeef');
+
+    const dry = runReset(root);
+    assert.equal(dry.status, 0, dry.stderr);
+    assert.ok(dry.stdout.includes('lineage-graph.json'), 'dry-run must list lineage-graph.json as a removal target');
+    assert.ok(dry.stdout.includes('lineage-graph.json.sig'), 'dry-run must list lineage-graph.json.sig as a removal target');
+    assert.ok(!dry.stdout.includes('Preserving operator-authored config: lineage-graph.json'),
+      'lineage-graph.json must never be reported as preserved operator-authored config');
+
+    const run = runReset(root, ['--yes']);
+    assert.equal(run.status, 0, run.stderr);
+    const remaining = fs.readdirSync(stateDir);
+    assert.ok(!remaining.includes('lineage-graph.json'), `expected lineage-graph.json to be removed, remaining: ${JSON.stringify(remaining)}`);
+    assert.ok(!remaining.includes('lineage-graph.json.sig'), `expected lineage-graph.json.sig to be removed, remaining: ${JSON.stringify(remaining)}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -9236,6 +9236,15 @@ function _deterministicFileTimings(timings) {
   // degraded/non-IR-backed mode, so gating it on deep mode ALSO being on
   // would make AGENTIC_SECURITY_LINEAGE_DEEP=1 alone silently produce
   // nothing whenever deep mode itself was off.
+  //
+  // Undisclosed-until-final-review side effect (N-4): this block populates
+  // the SAME `_sharedIR` memo the privacy-taint block further below reads
+  // (`_privacyIrBacked = !!(_sharedIR && _sharedIR.perFile)`), so setting
+  // AGENTIC_SECURITY_LINEAGE_DEEP=1 also upgrades privacy-taint annotation
+  // to IR-backed (`privacyIrBacked: true` instead of `false`) even with
+  // AGENTIC_SECURITY_DEEP itself off. A real, deliberate-once-noticed
+  // consequence of the memo sharing, not a bug — but worth knowing about
+  // before being surprised by it.
   const _lineageRequested = process.env.AGENTIC_SECURITY_LINEAGE_DEEP === '1';
   const _lineageStatus = {
     requested: _lineageRequested,

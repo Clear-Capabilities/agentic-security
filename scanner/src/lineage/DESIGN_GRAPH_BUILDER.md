@@ -708,6 +708,19 @@ up front here:
 1. Copy the `AGENTIC_SECURITY_PRIVACY_DEEP` block's shape in
    `dataflow/index.js`: opt-in, best-effort, failure **recorded** in
    `scanHealth`, never swallowed, never able to fail a scan.
+   **Correction (final whole-branch review, N-6): this item's own wording
+   is wrong about which block's failure-handling to copy, and was never
+   amended when item 5 below and `src/lineage/index.js`'s own header
+   comment already corrected it.** The `AGENTIC_SECURITY_PRIVACY_DEEP`
+   block's actual failure-handling is a bare `catch {}` that silently
+   swallows — the opposite of "recorded in scanHealth, never swallowed"
+   this item asks for in the same sentence. What E5 actually shipped
+   copies `_deepEnabled`'s own failure-handling instead (status
+   `'complete'`/`'failed'`/`'not_available'`, `failure` folded into
+   `scanHealth.lineageAnalysis`, never a bare `catch {}`) — see item 5's
+   own "Disclosed, deliberate difference" note for the full reasoning and
+   `src/lineage/index.js`'s header for where this is stated at the
+   implementation site.
 2. Consume `runScan`'s existing `_sharedIR` `{perFile, callGraph}` memo. No
    new IR pass.
 3. Settle `generatedAt` under `--deterministic` (§2.7 of the scoping doc) and

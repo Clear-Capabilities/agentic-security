@@ -83,6 +83,18 @@ export const ARTIFACT_REGISTRY = [
   { name: 'scan-history.json', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'last-scan.json', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'last-scan.json.sig', kind: 'file', classification: 'generated', retentionClass: 'scan' },
+  // Sub-project E, increment 5: the Data Flow Explorer's DataFlowGraph v1
+  // document + signature, written by bin/agentic-security.js alongside
+  // last-scan.json whenever AGENTIC_SECURITY_LINEAGE_DEEP=1 produced a
+  // graph. NOT to be confused with the similarly-named, already-registered
+  // `repo-lineage.json` below — that one is an operator-authored
+  // cross-repo provenance declaration (classification 'operator-config',
+  // never written by the scanner); this one is scanner-generated scan
+  // output derived from the user's own source (dataElements[].dataClasses
+  // included), so it belongs in the 'generated'/'scan' bucket `reset`
+  // clears by default, same as last-scan.json itself.
+  { name: 'lineage-graph.json', kind: 'file', classification: 'generated', retentionClass: 'scan' },
+  { name: 'lineage-graph.json.sig', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'shadow-findings.json', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'mcp-audit.log', kind: 'file', classification: 'generated', retentionClass: 'evidence' },
   { name: 'egress-audit.log', kind: 'file', classification: 'generated', retentionClass: 'evidence', note: "FR-604 per-call egress audit log — hash-chained NDJSON written by egress/audit.js's recordEgressCall, never read as config" },
