@@ -172,22 +172,34 @@ fabricated verdict.
 
 ## What is NOT here yet (later milestones / later sub-projects)
 
-- **Milestone 1, Sub-project E (E1-E5) is now fully complete.** A `DataFlowGraph v1`
-  document IS now wired into a real scan run: `AGENTIC_SECURITY_LINEAGE_DEEP=1`
-  makes `runFullScan` build it via `buildGraphWithCoverage`, attach it to the
-  scan result, report its status on `scanHealth.lineageAnalysis`, and (through
-  the CLI) persist it as a signed, right-to-delete-registered artifact at
+- **Milestone 1, Sub-projects E through H are now all complete — Milestone 1
+  itself is COMPLETE as of 2026-08-31.** A `DataFlowGraph v1` document IS
+  wired into a real scan run: `AGENTIC_SECURITY_LINEAGE_DEEP=1` makes
+  `runFullScan` build it via `buildGraphWithCoverage`, attach it to the scan
+  result, report its status on `scanHealth.lineageAnalysis`, and (through the
+  CLI) persist it as a signed, right-to-delete-registered artifact at
   `.agentic-security/lineage-graph.json`. Env vars documented at
-  `docs/reference/configuration.md`. What remains is Sub-projects **F
-  (JS/TS benchmark corpus, `bench/lineage/`), G (comparison report + light
-  performance harness), and H (exit-gate closure — AC-01/AC-02/AC-07/AC-11 +
-  schema completeness against F's corpus)** — see
-  `docs/superpowers/plans/2026-08-30-data-flow-explorer-m1-lineage-engine-scoping.md`.
-  AC-07 is already known, per D5's own measurement, to be UNSATISFIABLE
-  without new AI-sink detection nobody has attempted — a known, disclosed
-  Milestone-1-level blocker for H, not yet resolved by anything built so far.
-  The plurality tie-break in multi-candidate sink resolution also remains
-  arbitrary-but-disclosed (§4.3), not solved by anything in E1-E5.
+  `docs/reference/configuration.md`. **F** (JS/TS benchmark corpus,
+  `bench/data-lineage/`) shipped 24 fixtures (17 passing, 7 honestly
+  disclosed `capability`-tier gaps), growing toward the separate §22.2
+  100+/100+ floor as ongoing, non-blocking work. **G** (comparison report +
+  perf harness) shipped `bench/privacy-recall/compare-lineage.mjs` +
+  `docs/lineage/PRIVACY_COMPARISON.md`, and extended
+  `bench/data-lineage/perf/runner.mjs` to time `buildGraphWithCoverage`
+  overhead against PRD §21's "≤35% p50 over the equivalent deep scan"
+  target (measured well under target, negative on the reference fixture).
+  **H** (exit-gate closure) is this section: AC-01/AC-02/AC-07/AC-11 +
+  schema completeness all have real, verified proofs — see the table above.
+  AC-07 was NOT left unsatisfiable: the AI-model-provider catalog bridge
+  (4 new `dataflow/catalog.js` sink entries + 1 `sink-registry.js` `CWE_MAP`
+  row, with a real over-firing precision bug found and fixed via
+  `receiverBase` constraints — see `test/catalog-ai-model-provider-precision.test.js`)
+  closed it for real. See
+  `docs/superpowers/plans/2026-08-30-data-flow-explorer-m1-lineage-engine-scoping.md`
+  for the original sub-project breakdown. The plurality tie-break in
+  multi-candidate sink resolution remains arbitrary-but-disclosed (§4.3),
+  not a Milestone 1 exit-gate blocker — carried forward as a known,
+  disclosed limitation, not solved by anything in E-H.
   **Sub-project D (D1-D5) is now fully complete.** The SOURCE registry
   (D2, `source-registry.js`), the SINK registry (D3, `sink-registry.js`),
   transformation-kind recognition (D4, `transform-catalog.js`), and the
