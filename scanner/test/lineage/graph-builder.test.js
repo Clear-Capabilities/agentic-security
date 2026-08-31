@@ -365,3 +365,62 @@ test('E1/13 (AC-11 coarse half): a sink nothing reaches is still a node with a c
   // E1/6's own hop count and source-seeding.js's own re-measurement.
   assert.equal(r.graph.coverage.provenance.hops, 23);
 });
+
+// =========================================================================
+// E4 (Task 1): the additive `opts.resolveSiteDecision` hook + the two
+// additive site fields (`args`, `connected`). See DESIGN_GRAPH_BUILDER.md
+// §9.4 item 5b and this file's own module-header note above.
+// =========================================================================
+
+test('E4/hook-1: opts.resolveSiteDecision is a no-op when omitted — byte-identical to a hardcoded pre-hook golden literal', () => {
+  const cg = irOf({ 'a.js': 'function h(res, x){ res.send(x); }' });
+  const r = buildDataFlowGraph(cg, { repository: 'r' });
+  // Hardcoded, not a self-comparison (DESIGN_PATH_PROVENANCE.md §13.2a's
+  // vacuous-test trap) — captured from this exact fixture before Task 1's
+  // changes landed (measured directly: `x` is a bare parameter with no
+  // recognized source seeding it, so this fixture mints only the sink
+  // node — the plan's own draft literal of 2 was corrected to the real,
+  // observed value of 1 during implementation).
+  assert.equal(r.graph.nodes.length, 1);
+  assert.equal(r.sites.length, 1);
+  assert.equal(r.sites[0].decision.kind, 'sink');
+  assert.equal(r.sites[0].decision.category, 'http-response');
+});
+
+test('E4/hook-2: opts.resolveSiteDecision, when it returns a value, replaces site.decision for every later use', () => {
+  const cg = irOf({ 'a.js': 'function h(res, x){ res.send(x); }' });
+  const r = buildDataFlowGraph(cg, {
+    repository: 'r',
+    resolveSiteDecision: (site) => ({ ...site.decision, kind: 'unresolved', externality: 'unknown', reason: 'forced for test' }),
+  });
+  assert.equal(r.sites[0].decision.kind, 'unresolved');
+  const n = r.graph.nodes.find((x) => x.subtype === 'http-response');
+  assert.ok(n, 'a node still exists at the http-response category');
+  assert.equal(n.externality.value, 'unknown', 'the node was minted from the OVERRIDDEN decision, not the original');
+});
+
+test('E4/hook-3: opts.resolveSiteDecision returning undefined/null/falsy leaves site.decision untouched', () => {
+  const cg = irOf({ 'a.js': 'function h(res, x){ res.send(x); }' });
+  const r = buildDataFlowGraph(cg, { repository: 'r', resolveSiteDecision: () => undefined });
+  assert.equal(r.sites[0].decision.kind, 'sink');
+});
+
+test('E4/args-1: enumerateSinkSites now carries each statement site\'s own call arguments', () => {
+  const cg = irOf({ 'a.js': "function h(res, x){ res.send(x, 'literal'); }" });
+  const { sites } = enumerateSinkSites(cg);
+  assert.equal(sites.length, 1);
+  assert.equal(sites[0].args.length, 2);
+  assert.equal(sites[0].args[1].kind, 'literal');
+});
+
+test('E4/connected-1: buildDataFlowGraph stamps site.connected — true when a real flow reaches it, false when nothing does', () => {
+  const cg = irOf({
+    'a.js': "function h(req, res){ const pw = req.body.password; res.send(pw); }",
+    'b.js': "function noop(res){ res.send('static'); }",
+  });
+  const r = buildDataFlowGraph(cg, { repository: 'r' });
+  const connectedSite = r.sites.find((s) => s.qid.includes('::h@'));
+  const disconnectedSite = r.sites.find((s) => s.qid.includes('::noop@'));
+  assert.equal(connectedSite.connected, true);
+  assert.equal(disconnectedSite.connected, false);
+});

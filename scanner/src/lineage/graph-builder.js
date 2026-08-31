@@ -27,6 +27,18 @@
 // two-argument signature; §9.3 item 1's own prose was corrected to match in
 // the same commit that shipped this file.
 //
+// E4 addition (DESIGN_GRAPH_BUILDER.md §9.4 item 5b): `opts.resolveSiteDecision`
+// is the chosen resolution of that item's open hook-vs-post-processing-pass
+// question. A post-processing pass over the BUILT GRAPH was rejected: FR-203
+// changes a decision's `kind`/`externality`, which are part of a node's own
+// identity discriminator (§6.1) — adjusting them after nodes are already
+// minted would mean re-minting nodes and re-linking every edge/dataElement
+// reference by hand, in effect reimplementing this function a second time.
+// Intercepting the DECISION before minting, once, right after
+// `enumerateSinkSites`, is the only point where an override is both
+// consistent (every later read of `site.decision` sees it) and cheap
+// (one small hook, zero structural changes to the projection below).
+//
 // Reuse boundary (§12, confirmed against the source): imports ONLY
 // `matchSource`/`matchSinkOrSanitizer` from `../dataflow/catalog.js`,
 // `matchPrivacySink` from `../dataflow/privacy-catalog.js`, and
@@ -120,7 +132,7 @@ export function enumerateSinkSites(callGraph) {
     for (const [nid, node] of Object.entries(fn.cfg?.nodes ?? {})) {
       if (node.kind === 'call' && node.callee) {
         const r = resolveSinkAtCallSite(node.callee, fn.file);
-        if (r) sites.push({ file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null, calleeExpr: node.callee, ...r });
+        if (r) sites.push({ file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null, calleeExpr: node.callee, args: node.args ?? [], ...r });
       }
       for (const root of exprRoots(node)) {
         walkExpr(root, (e) => {
@@ -296,6 +308,20 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   };
 
   const { sites, nonStatementSites } = enumerateSinkSites(callGraph);
+  // E4's FR-203 closure hook (DESIGN_GRAPH_BUILDER.md §9.4 item 5b): a
+  // caller may substitute an adjusted decision for a site — e.g.
+  // coverage.js's `resolveSiteDecision`, which reclassifies a sink whose
+  // destination expression is not statically resolvable. Applied once,
+  // before anything else reads `site.decision`, so every later use in
+  // this build (node minting, coverage counting, flow limitations) sees
+  // the same, consistent decision. A no-op when omitted — every existing
+  // caller's behavior is unchanged.
+  if (typeof opts.resolveSiteDecision === 'function') {
+    for (const site of sites) {
+      const override = opts.resolveSiteDecision(site);
+      if (override) site.decision = override;
+    }
+  }
   const escapesBySite = new Map();
   for (const e of store.nodes()) {
     if (e.kind !== 'escape') continue;
@@ -410,6 +436,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
         groupsByFlowKey.get(flowKey).push({ p, g, src, snk, de, edgeIdStr, sortedT, site, unattributed, truncated: r.truncated, truncationReasons: r.truncationReasons });
       }
     }
+    site.connected = connected;
     if (connected) stats.connectedSinkSites += 1;
     // AC-11's coarse half: a sink node exists whether or not anything
     // reached it. A disconnected sink is a node with no flow, never absent.
