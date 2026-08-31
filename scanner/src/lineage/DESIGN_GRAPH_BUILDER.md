@@ -642,11 +642,20 @@ up front here:
    irreproducible. Record the harness, not just the number.
 5. Do **not** pick `frontend/` as a measurement target (§3.7).
 
-### 9.3 E3 — src/lineage/graph-builder.js (not yet in the tree)
+### 9.3 E3 — src/lineage/graph-builder.js — SHIPPED, see src/lineage/CLAUDE.md
 
-1. `buildDataFlowGraph(perFileIR, callGraph, opts)` — mirror
-   `dataflow/index.js`'s `runDeepAnalysis` **shape** and import nothing from
-   it.
+1. `buildDataFlowGraph(callGraph, opts)` — **corrected by E3, per this
+   file's own §9.1 policy** ("where this document and that PoC disagree,
+   the PoC is right and this document is stale — fix it here, do not fork
+   it"): this item originally stated the signature as
+   `buildDataFlowGraph(perFileIR, callGraph, opts)` (three arguments), but
+   the PoC's own shipped, tested implementation was always the
+   two-argument form above — it reads everything it needs from
+   `callGraph.functions[*].cfg` and never used a separate `perFileIR`
+   parameter. E3 shipped the PoC's real two-argument signature rather than
+   forking it to match this document's stale prose. Still mirror
+   `dataflow/index.js`'s `runDeepAnalysis` **shape** and import nothing
+   from it.
 2. Node minting per §6.1; edge/flow keys per §6.4; `subtype` per §6.6, with
    the schema divergence escalated in the PR, not silently emitted.
 3. Ship the four assertions `validate.js` cannot make (`E1/8`): every
