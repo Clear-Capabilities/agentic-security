@@ -85,4 +85,78 @@ git commit -m "docs(lineage): design C5's bounded path reconstruction (backward 
 
 ## Post-Task-1 note
 
-This plan gains its implementation task(s) here, scoped exactly to what §15's checklist specifies, once Task 1's addendum is committed and reviewed. Do not pre-write them — §15 does not exist yet at the time this plan file was first saved.
+Task 1 landed as `DESIGN_PATH_PROVENANCE.md` §15 (commit `e9a86ec7`), a fix round closing one blocking finding plus 8 non-blocking ones (commit `99f26113`), a scoped re-review confirming the fix round genuinely closed the blocking finding, and a small direct follow-up fixing 3 more small findings (commit `14e1564e`). §15.10 is the accepted, binding file/line/signature checklist for Task 2 below; every reference in Task 2 is to that checklist's 17 rows (items 1-15, plus 11b).
+
+---
+
+### Task 2: Implement `path-query.js`, the `pathId` function, and absorb the PoC into the permanent suite
+
+**Files:**
+- Create: `scanner/src/lineage/path-query.js` (§15.10 items 4-11b)
+- Modify: `scanner/src/lineage/ids.js` (§15.10 items 1-3)
+- Modify: `scanner/test/lineage/ids.test.js` (§15.10 item 2)
+- Rename/absorb: `scanner/test/lineage/path-query-poc.test.js` → `scanner/test/lineage/path-query.test.js`, re-pointed at the shipped module (§15.10 item 12)
+- Modify: `scanner/package.json` — update the `test:lineage` script's file list to the renamed file (same commit as the rename, per §15.10 item 12 / C3's item-15 / C4's item-11 precedent)
+- Modify: `scanner/src/lineage/CLAUDE.md` — new module-table row for `path-query.js`, mirroring the style of every prior increment's own row (see the existing `path-store.js` row for the density/citation bar)
+- Read only: `scanner/src/lineage/DESIGN_PATH_PROVENANCE.md` §15 in full (§15.1 through §15.11 — this is the binding spec; the PoC file being absorbed is a prototype of it, not a substitute for reading it — the prototype went through a fix round and a scoped re-review that corrected real defects in it, so read the LIVE §15 text, never an earlier mental model of what the PoC does), `scanner/test/lineage/path-query-poc.test.js` (what you're absorbing and deleting the prototype halves of), `scanner/src/lineage/path-store.js` and its read API (this module's only real dependency), `scanner/src/lineage/ids.js` in full (the convention `pathId` must match exactly)
+
+**Interfaces:**
+- Consumes: `PathStore`'s public read API exactly as `path-store.js` ships it, and nothing else — never a `_`-prefixed field.
+- Produces: `pathId({ startNodeId, edgeIds }, discriminatorParts = [])` in `ids.js` (§15.10 item 1's exact signature — confirm against the LIVE §15.10/§15.2 text before writing, the same discipline every prior increment's brief has required). `reconstructPaths(store, startNodeId, opts)`, `sinkCandidates(store)`, `isIncompleteAnswer(result)`, and `comparePaths(a, b)` from `path-query.js` (§15.10 items 6, 10, 11, 11b — `comparePaths` is exported, not merely internal, per fix round 1's own correction to the original design's export list).
+
+- [ ] **Step 1: Read §15 in full, then `path-store.js`'s read API and `ids.js` in full**
+
+Do not start from the PoC file's prototype code as if it were the spec — it went through a fix round that corrected the per-terminal truncation-honesty defect (§15.5), the mixed-terminal-reason bug (§15.6), and two "prose stronger than proof" test weaknesses (§15.5/§15.6's own measurement fixtures) — §15's prose is the authority when the two differ, more so here than in any prior increment's Task 2 given how much the design changed after its own first draft. Confirm `ids.js`'s exact current `_hash`/`_canon`/`ID_HEX_LEN` shape and the `provenanceNodeId`/`provenanceEdgeId` precedent (§14.5) before writing `pathId`.
+
+- [ ] **Step 2: `ids.js` — the `pathId` function (items 1-3)**
+
+Add `pathId({ startNodeId, edgeIds }, discriminatorParts = [])` immediately after `provenanceEdgeId`, per §15.10 item 1's exact signature — object argument, matching the `provenanceNodeId`/`provenanceEdgeId` precedent. Prefix `ppath:`. Extend `test/lineage/ids.test.js` with idempotence (the same logical path, reconstructed twice, produces the same id) and non-collision (a changed edge id ANYWHERE in the sequence, and a REORDERED sequence, must both move the id — order matters for a path, unlike a node/edge discriminator's set-like fields). Confirm item 3: `validate.js` needs literally no change (`ppath:` is not a `DataFlowGraph v1` entity kind) — verify by running `npm run test:lineage` and confirming `json-schema-parity.test.js` stays green.
+
+- [ ] **Step 3: `path-query.js` — the module (items 4-11b)**
+
+Create the file. Imports: `ids.js` only (item 4) — add the same import-list self-check test `path-store.test.js`'s own boundary test uses, PLUS the `store\._`/private-field-by-name source scan the PoC's `C5/6` carries (read that test's own comment about its own limitation — a hand-written function list cannot detect an added, unscanned function; if you have a real module to introspect by the time you write this, use programmatic export enumeration instead of a hand-written list, per that test's own fix-round-1 note).
+
+`DEFAULTS`: `{ maxPaths: 32, maxPathsPerTerminal: 8, maxCandidatePaths: 256, maxExpansions: 10000, maxDepth: 64 }`, all `opts`-overridable, documented as uncalibrated (§15.3 — every fixture measured against them so far is tiny; nothing bigger is measurable until a driver run emits real hops, Sub-project D/E).
+
+`reconstructPaths(store, startNodeId, opts)`: an ITERATIVE DFS over an explicit stack — no recursion anywhere (the DAG can genuinely be cyclic, §9.3/proven by `C4/4`'s mutual-recursion fixture; recursion here would risk both infinite loops on a cycle and a stack-depth failure mode `path-store.js`'s own construction never had to worry about). A per-path visited set (not a global one — the SAME node can legitimately appear on two different candidate paths). `edgesTo` results sorted by edge id before expansion, for determinism. The zero-in-edges check must run BEFORE the depth check (§15.3's exact ordering constraint — get this backwards and a node that's a genuine, well-formed dead end gets mislabeled as depth-truncated).
+
+Terminal classification: `'origin'` (a genuine `origin`-kind node, §14.2) / `'incomplete-record'` (the node appears in `store.diagnostics().orphanedPeerSources` — §14.4's disclosed stream-completeness gap surfacing here) / `'cycle'` (every continuation from this node was already visited on this path) / `'depth-limit'` (the per-path budget hit `maxDepth`). `'expansion-budget'` and `'candidate-cap'` are RESULT-level truncation reasons only — those two branches are ABANDONED when hit, never emitted as a marked partial path (§15.4 — only `'cycle'`/`'depth-limit'` produce an emitted `complete: false` path; the other two just stop expanding silently at the result level, which the result's own `truncated`/`truncationReasons` fields report).
+
+The cap: apply `maxPathsPerTerminal` per `terminal.nodeId` FIRST, then a diversity-first round-robin over `(terminal.nodeId, shape)` buckets for the global `maxPaths` cap (§15.5/§15.7 — read §15.7's exact prioritization rule text, it uses only signals that exist today: `crossScopeCount`, presence of `ambiguousCorrelation`/`widenReasons`/`lossReasons`, and `complete` as the first sort key). `result.terminals[]` per §15.5's exact shape — **critical, this is what the blocking finding from Task 1's review was about**: `terminals[].truncated` and `terminals[].droppedPathCount` MUST be computed AFTER the global round-robin runs, never from the per-terminal cap alone — read §15.5's corrected text closely, it gives the exact formula (`enumeratedPathCount > returnedPathCount`) and explains exactly why the naive ordering is wrong.
+
+The result shape: exactly §15.4's table, plus `startNodeId`/`startNodeKind`/`enumeratedPathCount`/`returnedPathCount`/`droppedPathCount`/`completePathCount`/`cyclesClipped`/`analysisTruncated`/`terminals[]`/`budget.expansionsUsed`. `noPathReason` must be computed ONLY when `truncated === false` — this ordering IS §18.4's own load-bearing constraint made concrete in code, not a stylistic choice: a truncated result must never look like "no path exists," and computing `noPathReason` unconditionally would risk exactly that confusion if the two fields were ever read independently.
+
+`sinkCandidates(store)`: §15.9's filter over `store.nodes()` — read §15.9's own text for the exact filter and its "this is not a source/sink registry, just a shape-based candidate list for THIS task's own testing" disclaimer, since Sub-project D's eventual real registry is a different, later mechanism.
+
+`isIncompleteAnswer(result)`: §15.4's five-term predicate, exported so AC-10's eventual UI banner has exactly one function deciding "should this show the partial-coverage banner," never a re-derived check at the call site.
+
+`comparePaths(a, b)`: §15.7's total order, exported (not merely internal — fix round 1's own correction; the shipped tests call it directly to build contrast fixtures, so it must be part of the public surface, not deleted along with the rest of the local prototype in Step 4).
+
+- [ ] **Step 4: Absorb the PoC, rename it, wire it into `test:lineage` (item 12)**
+
+Re-point `path-query-poc.test.js`'s tests at the shipped `path-query.js`/`ids.js` (delete the local prototype block), rename the file to `path-query.test.js`, and update `scanner/package.json`'s `test:lineage` script entry in the SAME commit — mirrors C3's own item-15 and C4's own item-11 precedent exactly.
+
+**Keep every assertion, and especially keep `C5/4b`** (the three empty-looking-but-distinguishable results as literal JSON — this is §18.4's own constraint made concrete) **and `C5/4c`** (the `'incomplete-record'` terminal reason) — together they are the only guard against §18.4's constraint being silently undone by a future refactor. Also keep `C5/5e` (the per-terminal truncation-honesty fix's own regression guard — fix round 1's blocking finding) and `C5/5f`/`C5/5d` (the two "prose stronger than proof" tests the fix round and scoped re-review both strengthened) intact; these are this increment's own hardened core, analogous to C4's `C4/Q2b`.
+
+**Do not add a driver-level test yet** (item 15) — a driver run still emits zero hops today (no source registry, Sub-project D/E), so a driver-fed reconstruction test at this stage would assert on an empty store and be vacuous, matching the exact reasoning `path-store.js`'s own item 13 and `engine-provenance-interprocedural.test.js`'s own driver test note already established for the identical situation.
+
+- [ ] **Step 5: `scanner/src/lineage/CLAUDE.md` — new module-table row**
+
+Add a `path-query.js` row to the Sub-project C module table (or extend the existing increment grouping to "increments 1-5"), describing the module's role, the terminal-classification taxonomy (§15.4), the per-terminal-then-global cap and the truncation-honesty fix (§15.5), the dedup/prioritization decisions (§15.6/§15.7), and the `pathId` addition to `ids.js` — mirroring the density and citation style every prior row in this file already uses, including naming the fix round's own blocking finding the way `path-store.js`'s row names C4's own final-review finding. Update "What is NOT here yet" to move C5 from "still ahead" to done.
+
+- [ ] **Step 6: Run the full scoped suite and doc-drift check**
+
+```bash
+npm run test:lineage
+node ../scripts/check-doc-drift.mjs
+```
+
+Confirm test count and doc-drift status (the pre-existing `path-store.js`-shaped forward reference should now be fully resolved; C4 already closed its own instance of this — confirm nothing new appears for `path-query.js`).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add scanner/src/lineage/path-query.js scanner/src/lineage/ids.js scanner/test/lineage/ids.test.js scanner/test/lineage/path-query.test.js scanner/package.json scanner/src/lineage/CLAUDE.md
+git rm scanner/test/lineage/path-query-poc.test.js
+git commit -m "feat(lineage): implement path-query.js, bounded path reconstruction (Sub-project C, increment 5)"
+```
