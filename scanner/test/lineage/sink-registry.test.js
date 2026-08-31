@@ -160,14 +160,17 @@ test("D3/3c: sink node kinds are category-derived, and the biconditional kind ==
   // NOTE (documented fragility, per DESIGN_REGISTRIES.md §7.1's own boxed
   // note): this biconditional holds ONLY because `ai-local-model` — the
   // one OTHER category that maps to `process` — is vacuously unreachable
-  // today (no catalog entry produces any ai-* sink, §7.2). The moment
-  // AI-destination detection lands, an `ai-local-model` sink will have
-  // `kind: 'process'` with a non-null category and a non-`unsupported`
-  // status, and the REVERSE implication (`kind === 'process'` ⟹
-  // `unsupported`) becomes false — a correct consequence of new coverage,
-  // not a regression, and NOT this task's problem to fix. Asserted as a
-  // full biconditional here deliberately, because until then it is true
-  // and catches more.
+  // today (§7.2). Sub-project H's AC-07 closure made the FIRST ai-* sink
+  // category reachable (`ai-model-provider`, via CWE-201), and the
+  // biconditional survived it unchanged — measured, not assumed — precisely
+  // because `CATEGORY_NODE_KIND['ai-model-provider']` is `'external'`, not
+  // `'process'`. The moment an `ai-local-model` sink entry lands, that
+  // sink will have `kind: 'process'` with a non-null category and a
+  // non-`unsupported` status, and the REVERSE implication
+  // (`kind === 'process'` ⟹ `unsupported`) becomes false — a correct
+  // consequence of new coverage, not a regression, and NOT this task's
+  // problem to fix. Asserted as a full biconditional here deliberately,
+  // because until then it is true and catches more.
   const kinds = new Set(SINKS.map((e) => reclassifySink(e).kind));
   assert.deepEqual([...kinds].sort(), ['external', 'process', 'sink', 'store']);
   for (const e of SINKS) {
@@ -256,6 +259,19 @@ test('representative real entries produce the stated (kind, category, coverageSt
     assert.equal(r.kind, kind, `${id}: kind`);
     assert.equal(r.category, category, `${id}: category`);
     assert.equal(r.coverageStatus, status, `${id}: coverageStatus`);
+  }
+});
+
+test('AC-07 closure: all 4 new AI-model-provider entries reclassify to ai-model-provider/modeled/external', () => {
+  for (const id of ['js-openai-chat-completions-create', 'js-openai-responses-create', 'js-anthropic-messages-create', 'js-bedrock-invoke-model-command']) {
+    const entry = byId.get(id);
+    assert.ok(entry, `${id} must exist in CATALOG`);
+    assert.equal(entry.vuln.cwe, 'CWE-201', `${id}: CWE-359 is FORBIDDEN here — see completeness/1c`);
+    const decision = reclassifySink(entry);
+    assert.equal(decision.category, 'ai-model-provider');
+    assert.equal(decision.coverageStatus, 'modeled');
+    assert.equal(decision.externality, 'external');
+    assert.equal(decision.kind, 'external');
   }
 });
 
@@ -421,14 +437,19 @@ test('D3/FR-203 vs §16.7: the two `unresolved`-kind cases are structurally DIST
 // number survive silently for weeks).
 // ───────────────────────────────────────────────────────────────────────────
 
-test('pinned sink coverage counts: 97 modeled / 6 partial / 9 candidate / 82 unsupported', () => {
+test('pinned sink coverage counts: 101 modeled / 6 partial / 9 candidate / 82 unsupported', () => {
+  // 194 -> 198 entries and 97 -> 101 modeled: Sub-project H's AC-07 closure
+  // added the four CWE-201 AI-model-provider sink entries (OpenAI
+  // chat.completions/responses, Anthropic messages, Bedrock
+  // InvokeModelCommand). Re-measured against the live catalog, not adjusted
+  // by arithmetic.
   const results = SINKS.map((e) => reclassifySink(e));
-  assert.equal(SINKS.length, 194);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 97);
+  assert.equal(SINKS.length, 198);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 101);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 82);
-  assert.equal(97 + 6 + 9 + 82, SINKS.length);
+  assert.equal(101 + 6 + 9 + 82, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {
@@ -446,7 +467,7 @@ test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candida
 // list so it cannot go stale silently. Mirrors D1's own D1/6b.
 // ───────────────────────────────────────────────────────────────────────────
 
-test('unreachable sink categories match the pinned list from DESIGN_REGISTRIES.md §7.2 — including EVERY ai-* sink', () => {
+test('unreachable sink categories match the pinned list from DESIGN_REGISTRIES.md §7.2 — all ai-* EXCEPT ai-model-provider, closed by the AC-07 catalog bridge', () => {
   const reachable = new Set([
     ...SINKS.map((e) => reclassifySink(e).category),
     ...PRIVACY_SINK_CATALOG.map((e) => reclassifyPrivacySink(e).category),
@@ -454,14 +475,17 @@ test('unreachable sink categories match the pinned list from DESIGN_REGISTRIES.m
   const unreachable = SINK_CATEGORIES.filter((c) => !reachable.has(c)).sort();
   assert.deepEqual(unreachable, [
     'ai-agent', 'ai-evaluation', 'ai-local-model', 'ai-memory',
-    'ai-model-provider', 'ai-telemetry', 'ai-tool', 'ai-training',
+    'ai-telemetry', 'ai-tool', 'ai-training',
     'ai-vector-store', 'backup', 'cache', 'collaboration', 'declared',
     'export', 'monitoring', 'push-notification', 'sms', 'stdout', 'webhook',
   ], 'sink-side coverage gap changed — re-read DESIGN_REGISTRIES.md §7.2');
-  assert.equal(reachable.size, 10);
+  assert.equal(reachable.size, 11);
   const aiSinks = SINK_CATEGORIES.filter((c) => c.startsWith('ai-'));
   assert.equal(aiSinks.length, 9);
-  for (const c of aiSinks) assert.ok(!reachable.has(c), `${c} unexpectedly reachable`);
+  for (const c of aiSinks) {
+    if (c === 'ai-model-provider') { assert.ok(reachable.has(c), 'ai-model-provider must now be reachable — AC-07 closure'); continue; }
+    assert.ok(!reachable.has(c), `${c} unexpectedly reachable`);
+  }
 });
 
 test('the category vocabularies are 21 source / 29 sink — SINK_CATEGORIES has 29 values, not 28', () => {

@@ -49,6 +49,14 @@
 //   - For a bare-statement call, `fn.calls[].callee` IS a flat string —
 //     confirmed exactly as the module header states:
 //     `db.query(sql)` -> `'db.query'`, `fetch(url)` -> `'fetch'`.
+//     CORRECTED (Sub-project H, AC-07 closure — measured from a real test
+//     failure): that flattening keeps only ONE level of receiver.
+//     `anthropic.messages.create(x)` -> `'create'`, NOT
+//     `'anthropic.messages.create'`. The real matcher never reads this
+//     field (it walks the CFG call node's structured `callee` exprDesc via
+//     `_receiverSegments`), so nothing in the engine is affected — but this
+//     file's own structural stand-in was, and now flattens the structured
+//     CFG callee itself. See `flatCalleeOfStatementCall` below.
 //   - `fn.cfg.nodes` is a plain Object keyed by node id (`{n5: {...}, ...}`)
 //     at runtime, NOT a `Map` as the header comment states — irrelevant to
 //     what this file needs (it only ever needs the VALUES, found via
@@ -69,12 +77,15 @@
 // narrowly, keyed on the exact same fields; `receiverTypeIn` is
 // deliberately left unvalidated by this file's structural check — checking
 // it here would fabricate a signal this isolated comparison cannot honestly
-// compute. None of the 24 entries chosen below declare `match.receiver` /
-// `match.receiverBase`, so `callMatches` reduces to a callee-name check for
-// every one of them; the field is still wired up and doc'd from
-// `js-sql-query`'s `receiverTypeIn` structure so a future entry that DOES
-// set `receiver`/`receiverBase` fails loudly here instead of passing by
-// accident.
+// compute. This was originally written when NONE of the 24 entries chosen
+// below declared `match.receiver` / `match.receiverBase`, so `callMatches`
+// reduced to a callee-name check for every one of them — the fields were
+// wired up anyway so a future entry that DOES set them fails loudly here
+// instead of passing by accident. That future entry has now arrived:
+// `js-anthropic-messages-create` (the 25th proof, Sub-project H's AC-07
+// closure) declares `receiver: '^messages$'`, and its proof genuinely
+// exercises the `receiver` branch of `callSinkMatches` rather than reducing
+// to a callee-name check.
 //
 
 import test from 'node:test';
@@ -104,6 +115,39 @@ function firstAssignNode(fn) {
   const node = Object.values(fn.cfg.nodes).find((n) => n.kind === 'assign');
   assert.ok(node, 'snippet produced no assign CFG node');
   return node;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MEASURED CORRECTION (Sub-project H, AC-07 closure — found by a real test
+// failure, not predicted): `fn.calls[].callee` flattens only ONE level of a
+// member chain. `db.query(sql)` -> `'db.query'` (as this file's header
+// says), but `anthropic.messages.create(x)` -> `'create'` and
+// `openai.chat.completions.create(x)` -> `'create'` — the receiver segments
+// are GONE. The real matcher is unaffected: `matchSinkOrSanitizer` reads the
+// CFG call node's STRUCTURED `callee` exprDesc and `_receiverSegments` walks
+// the whole chain outward, which is why the real engine matches these entries
+// correctly (independently verified against `matchSinkOrSanitizer` itself).
+// Only THIS file's structural stand-in was reading the lossy field. Fixed by
+// flattening the structured CFG callee here instead, which reproduces exactly
+// what `_receiverSegments` sees. Every pre-existing proof in this file uses a
+// bare or one-level callee, so this returns a byte-identical string for all
+// of them.
+// ─────────────────────────────────────────────────────────────────────────
+function flatCalleeOfStatementCall(fn) {
+  const node = Object.values(fn.cfg.nodes).find((n) => n.kind === 'call' && n.callee);
+  assert.ok(node, 'snippet produced no bare-statement call CFG node');
+  const segs = [];
+  let cur = node.callee;
+  let depth = 0;
+  while (cur && depth++ < 8) {
+    if (cur.kind === 'ident') { segs.unshift(cur.name); break; }
+    if (cur.kind === 'member') { if (typeof cur.prop === 'string') segs.unshift(cur.prop); cur = cur.object; continue; }
+    break;
+  }
+  // A non-JS-parser flat string callee would arrive already dotted.
+  if (typeof node.callee === 'string') return node.callee;
+  assert.ok(segs.length, `could not flatten CFG callee ${JSON.stringify(node.callee)}`);
+  return segs.join('.');
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -300,12 +344,17 @@ const SINK_PROOFS = [
   { category: 'analytics', entryId: 'privacy-js-analytics-track', catalogSide: 'privacy', extraction: 'call-sink', src: 'analytics.track(props);' },
   { category: 'email', entryId: 'privacy-js-sendMail', catalogSide: 'privacy', extraction: 'call-sink', src: 'sendMail(msg);' },
   { category: 'external-api', entryId: 'js-fetch', catalogSide: 'catalog', extraction: 'call-sink', src: 'fetch(url);' },
+  // AC-07 closure (Sub-project H): the 11th reachable sink category, and the
+  // first ai-* one. The call is written as a BARE STATEMENT deliberately —
+  // an assign-form call (`const r = anthropic.messages.create(...)`) never
+  // reaches `fn.calls[]` at all, per this file's own Step-1 finding.
+  { category: 'ai-model-provider', entryId: 'js-anthropic-messages-create', catalogSide: 'catalog', extraction: 'call-sink', src: 'anthropic.messages.create(params);' },
 ];
 
-test('D5/3: SINK_PROOFS covers exactly the 10 reachable sink categories, no duplicates, no typos', () => {
-  assert.equal(SINK_PROOFS.length, 10);
+test('D5/3: SINK_PROOFS covers exactly the 11 reachable sink categories, no duplicates, no typos', () => {
+  assert.equal(SINK_PROOFS.length, 11);
   const cats = new Set(SINK_PROOFS.map((p) => p.category));
-  assert.equal(cats.size, 10, 'a category is duplicated');
+  assert.equal(cats.size, 11, 'a category is duplicated');
   for (const c of cats) assert.ok(SINK_CATEGORIES.includes(c), `${c} is not a real SINK_CATEGORIES value`);
 });
 
@@ -319,7 +368,9 @@ for (const proof of SINK_PROOFS) {
 
     if (proof.extraction === 'call-sink') {
       assert.equal(fn.calls.length, 1, `expected exactly one bare-statement call in: ${proof.src}`);
-      const flatCallee = fn.calls[0].callee;
+      // NOT `fn.calls[0].callee` — see flatCalleeOfStatementCall's own header
+      // for the measured reason (that field truncates a >1-level chain).
+      const flatCallee = flatCalleeOfStatementCall(fn);
       assert.ok(
         callSinkMatches(flatCallee, entry.match),
         `${proof.entryId}: parsed callee '${flatCallee}' does not structurally match entry.match ${JSON.stringify(entry.match)}`,
@@ -396,11 +447,13 @@ test('D5/5d: AC-02 — the masked and raw call sites, both from real parsed code
 // this count too, not just the missing individual test.
 // ─────────────────────────────────────────────────────────────────────────
 
-test('D5/6: exactly 24 distinct reachable categories (14 source + 10 sink) got a real-code proof in this file', () => {
+test('D5/6: exactly 25 distinct reachable categories (14 source + 11 sink) got a real-code proof in this file', () => {
+  // 24 -> 25 (sink 10 -> 11): Sub-project H's AC-07 closure made
+  // `ai-model-provider` the 11th reachable sink category.
   const sourceCats = new Set(SOURCE_PROOFS.map((p) => p.category));
   const sinkCats = new Set(SINK_PROOFS.map((p) => p.category));
   for (const c of sourceCats) assert.ok(!sinkCats.has(c), `${c} appears in both source and sink proofs`);
   assert.equal(sourceCats.size, 14);
-  assert.equal(sinkCats.size, 10);
-  assert.equal(sourceCats.size + sinkCats.size, 24);
+  assert.equal(sinkCats.size, 11);
+  assert.equal(sourceCats.size + sinkCats.size, 25);
 });

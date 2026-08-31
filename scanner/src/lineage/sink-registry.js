@@ -24,7 +24,8 @@
 // below for FR-203, which the design specifies field-by-field but not as
 // runnable code). Every mapping row traces to `DESIGN_REGISTRIES.md`:
 //   §5.1  — CWE_MAP, the primary sink-side mapping (keyed on `vuln.cwe`,
-//           20 rows).
+//           21 rows — 20 from D1, plus CWE-201 added by Sub-project H's
+//           AC-07 closure).
 //   §5.2  — the CWE-79 `framework` refinement: DOM/React sinks are
 //           `client-storage` (partial); every other framework is
 //           `http-response` (modeled).
@@ -103,7 +104,7 @@ import { PRIVACY_SINK_CATALOG } from '../dataflow/privacy-catalog.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // §5.1 — CWE_MAP: the primary sink-side mapping, keyed on the entry's
-// `vuln.cwe` field (20 rows). A `null` category is NOT a dropped entry —
+// `vuln.cwe` field (21 rows). A `null` category is NOT a dropped entry —
 // see §6.4: it is retained with node kind `process` and a stated reason,
 // which is what AC-11 / FR-201 require.
 // ─────────────────────────────────────────────────────────────────────────
@@ -122,6 +123,13 @@ export const CWE_MAP = Object.freeze({
   // `agent-tool` row in source-registry.js).
   'CWE-79':   Object.freeze({ category: null,            status: 'split',       why: "REFINED ON `framework`: browser-DOM sinks and server-side response writers are different destinations" }),
   'CWE-90':   Object.freeze({ category: 'database',      status: 'candidate',   why: 'an LDAP directory is a queryable store, structurally like a DB, but FR-201 never names directory services' }),
+  // AC-07 closure (Sub-project H): the AI-sink catalog bridge. CWE-201
+  // (Insertion of Sensitive Information Into Sent Data) is the general
+  // CATALOG's own key for the four OpenAI/Anthropic/Bedrock sink entries.
+  // Deliberately NOT CWE-359 — that CWE belongs exclusively to
+  // PRIVACY_SINK_CATALOG's "Privacy Leak" family, and this file's own
+  // `completeness/1c` test fails the build if CWE_MAP ever maps it.
+  'CWE-201':  Object.freeze({ category: 'ai-model-provider', status: 'modeled', why: 'a call to a named AI model provider SDK (OpenAI/Anthropic/Bedrock) is unambiguously an AI-model-provider destination' }),
   // Everything below: the data's destination is IN-PROCESS COMPUTATION (an
   // interpreter, parser, template engine, regex engine, loader, or raw
   // memory). FR-201's category list is an EGRESS taxonomy and models none

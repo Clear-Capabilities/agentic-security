@@ -606,6 +606,40 @@ export const CATALOG = [
     vuln: { name: 'SSRF (axios/http.get)', severity: 'high', cwe: 'CWE-918',
             remediation: 'Validate the target URL against an allow-list before fetching; reject RFC1918 + metadata endpoints.' } },
 
+  // ─── SINKS (AI model provider) ────────────────────────────────────────────
+  // AC-07 closure (Data Flow Explorer, Sub-project H). Regulated data
+  // (PCI/PHI/PII) reaching a hosted third-party AI model provider is a real
+  // data-exposure concern the same way any other third-party API call is —
+  // CWE-201 (Insertion of Sensitive Information Into Sent Data), NOT CWE-359
+  // (reserved exclusively for privacy-catalog.js's own "Privacy Leak" family
+  // — sink-registry.js's completeness/1c test enforces this).
+  //
+  // Precision comes entirely from `receiver`/`receiverBase`: CALLEE_INDEX is
+  // keyed on the bare name `create`, so every `X.create(...)` in the tree is a
+  // candidate. `receiverBase: '^chat$'` is what separates
+  // `openai.chat.completions.create` from the legacy
+  // `anthropic.completions.create` shape (deliberately not cataloged here —
+  // AC-07 names only OpenAI/Anthropic/Bedrock).
+  { kind: 'sink', id: 'js-openai-chat-completions-create', language: 'js', framework: 'openai',
+    match: { type: 'call', callee: 'create', receiver: '^completions$', receiverBase: '^chat$' }, argIndex: 0,
+    vuln: { name: 'Regulated Data to AI Model Provider (OpenAI chat.completions.create)', severity: 'medium', cwe: 'CWE-201',
+            remediation: 'Confirm the request payload carries no PCI/PHI/PII before sending to a third-party model provider, or route through an approved DPA / redaction layer.' } },
+  { kind: 'sink', id: 'js-openai-responses-create', language: 'js', framework: 'openai',
+    match: { type: 'call', callee: 'create', receiver: '^responses$' }, argIndex: 0,
+    vuln: { name: 'Regulated Data to AI Model Provider (OpenAI responses.create)', severity: 'medium', cwe: 'CWE-201',
+            remediation: 'Confirm the request payload carries no PCI/PHI/PII before sending to a third-party model provider, or route through an approved DPA / redaction layer.' } },
+  { kind: 'sink', id: 'js-anthropic-messages-create', language: 'js', framework: 'anthropic',
+    match: { type: 'call', callee: 'create', receiver: '^messages$' }, argIndex: 0,
+    vuln: { name: 'Regulated Data to AI Model Provider (Anthropic messages.create)', severity: 'medium', cwe: 'CWE-201',
+            remediation: 'Confirm the request payload carries no PCI/PHI/PII before sending to a third-party model provider, or route through an approved DPA / redaction layer.' } },
+  // Bare, constructor-shaped call with no fixed receiver — safe to match on the
+  // bare name alone, the same precedent `js-fetch` already uses, because
+  // `InvokeModelCommand` is a distinctive, unambiguous identifier.
+  { kind: 'sink', id: 'js-bedrock-invoke-model-command', language: 'js', framework: 'bedrock',
+    match: { type: 'call', callee: 'InvokeModelCommand' }, argIndex: 0,
+    vuln: { name: 'Regulated Data to AI Model Provider (AWS Bedrock InvokeModelCommand)', severity: 'medium', cwe: 'CWE-201',
+            remediation: 'Confirm the request payload carries no PCI/PHI/PII before sending to a third-party model provider, or route through an approved DPA / redaction layer.' } },
+
   // ─── SINKS (command exec) ─────────────────────────────────────────────────
   { kind: 'sink', id: 'py-subprocess-run',      language: 'py', framework: 'subprocess', match: { type: 'call', callee: 'run', requireKeyword: { name: 'shell', pattern: '^(?:true|True|1)$' } }, argIndex: 0,
     vuln: { name: 'Command Injection (subprocess.run shell=True)', severity: 'critical', cwe: 'CWE-78',
