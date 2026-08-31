@@ -105,8 +105,17 @@ function materialize(store, nodesRev, edgesRev, terminalReason) {
   const edgeIds = hops.map((h) => h.edgeId);
   const nodes = nodeIds.map((id) => store.getNode(id));
   const crossScopeCount = hops.filter((h) => h.crossScope).length;
-  const widenedHopCount = hops.filter((h) => h.widenReasons.length > 0).length;
-  const lossHopCount = hops.filter((h) => h.lossReasons.length > 0).length;
+  // §16.7 Finding 1 / §16.8 item 7: read `hop.annotations[]` too, not just
+  // the two edge-forming top-level arrays — a genuine widen/loss reason can
+  // live ONLY in `annotations[]` (§16.5), and a consumer reading only the
+  // top-level arrays under-reports it. Do NOT push this into
+  // `path-store.js`'s `edge.widenReasons`/`edge.lossReasons`: those two
+  // arrays are part of `provenanceEdgeId`'s discriminator (§14.5), so
+  // widening them would move every `pedge:`/`ppath:` id.
+  const _annWiden = (h) => h.widenReasons.length > 0 || (h.annotations ?? []).some((a) => a.widenReason != null);
+  const _annLoss = (h) => h.lossReasons.length > 0 || (h.annotations ?? []).some((a) => a.lossReason != null);
+  const widenedHopCount = hops.filter(_annWiden).length;
+  const lossHopCount = hops.filter(_annLoss).length;
   const ambiguousHopCount = hops.filter((h) => h.ambiguousCorrelation).length;
   const analysisTruncated = nodes.some((n) => n && n.truncated) || hops.some((h) => h.truncated);
   return {

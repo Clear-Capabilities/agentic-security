@@ -1,14 +1,12 @@
-// Sub-project C, increment C6 — FR-306 edge grading: DESIGN-TASK PROOF OF
-// CONCEPT.
+// Sub-project C, increment C6 — FR-306 edge grading (`flow-grade.js`).
 //
-// Throwaway-named on purpose, exactly as C1's/C3's/C4's/C5's own design
-// tasks were (`engine-provenance-interprocedural-poc.test.js`,
-// `path-store-poc.test.js`, `path-query-poc.test.js` — each absorbed into
-// the permanent suite and deleted by its follow-up implementation task).
-// This file prototypes the proposed `flow-grade.js` LOCALLY; shipped source
-// under `src/lineage/` is unmodified by this task. Every number and every
-// behavioural claim in DESIGN_PATH_PROVENANCE.md §16 was produced by
-// running this file.
+// Absorbed from the design task's own PoC (flow-grade-poc.test.js, deleted
+// in the same commit that lands this file — §16.8 item 11 / C3's item 15 /
+// C4's item 11 / C5's item 12 precedent). Every assertion below was
+// originally proven against a LOCAL prototype in DESIGN_PATH_PROVENANCE.md
+// §16's own design task; this file re-points them at the SHIPPED
+// `src/lineage/flow-grade.js` module instead, with the local prototype
+// block deleted.
 //
 // The fixture harness below is `path-query.test.js`'s own, verbatim in
 // shape: real parsed JS/TS through the real `parser-js.js`, hand-seeded
@@ -20,6 +18,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseJsFile } from '../../src/ir/parser-js.js';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
@@ -30,218 +30,34 @@ import {
 import { PathStore } from '../../src/lineage/path-store.js';
 import { reconstructPaths, sinkCandidates } from '../../src/lineage/path-query.js';
 import { EVIDENCE_GRADES } from '../../src/lineage/protection.js';
+import {
+  FLOW_EVIDENCE_GRADES,
+  IMPLICIT_FLOW_REASONS,
+  DEGRADED_LOSS_REASONS,
+  flowGradeRank,
+  aggregateFlowGrades,
+  gradeHop,
+  gradePath,
+} from '../../src/lineage/flow-grade.js';
 
 // =====================================================================
-// LOCAL PROTOTYPE of the proposed `scanner/src/lineage/flow-grade.js`.
-// The follow-up implementation task lifts this block into that file
-// verbatim, deletes it here, and re-points the imports (§16.8 item 1).
-//
-// It imports NOTHING — one step stricter than `path-query.js`'s own
-// `['./ids.js']` boundary. Grading is a pure function of the fields a
-// `PathStore` EDGE already carries, so it needs neither `ids.js` nor the
-// store nor a reconstructed path (proven by C6/10).
+// §16.8 item 1: the isolation boundary is enforced by a test, not just
+// documented. `flow-grade.js` must import NOTHING at all — one step
+// stricter than `path-query.js`'s own `['./ids.js']` boundary.
 // =====================================================================
 
-/**
- * §16.2. The flow-evidence vocabulary, in CONFIDENCE order, most
- * confident first. Deliberately NOT `protection.js`'s `EVIDENCE_GRADES`
- * — see §16.2's rejection note (that enum grades the SOURCE of a
- * protection verdict; this one grades how explicit a recorded data
- * movement is, and every value here comes from the same evidence source).
- *
- * `implicit` is RESERVED: nothing in the engine emits a control-dependence
- * reason today (§10.2 — "the engine models no implicit flow today; do not
- * invent one"). It is present because FR-306 names it first and because
- * §14.2's `origin` node kind set the precedent for keeping, and hand-
- * testing, the exact shape a later increment will produce.
- *
- * `unassessed` is the empty-input answer only, mirroring
- * `protection.js`'s `aggregateVerdicts` returning `'not_assessed'` for an
- * empty array. Nothing ever grades a real hop `unassessed`.
- */
-const FLOW_EVIDENCE_GRADES = Object.freeze([
-  'explicit', 'widened', 'implicit', 'severed', 'ambiguous', 'unassessed',
-]);
-
-/**
- * §16.4. Risk precedence for aggregation — lower index wins, exactly like
- * `protection.js`'s own private `_PRECEDENCE`. This is the reverse of the
- * confidence order above for the five real grades, with `unassessed` kept
- * last so it survives an aggregation only when there is nothing else in it.
- */
-const _PRECEDENCE = Object.freeze([
-  'ambiguous', 'severed', 'implicit', 'widened', 'explicit', 'unassessed',
-]);
-
-/**
- * §16.3. Reason strings that mean "this hop is control-dependent, not a
- * data assignment". Empty of anything the engine emits today, by design.
- */
-const IMPLICIT_FLOW_REASONS = Object.freeze(['control-dependence']);
-
-/** §16.5. Loss reasons that mean "an engine budget degraded this away". */
-const DEGRADED_LOSS_REASONS = Object.freeze(['context-cap-degraded']);
-
-function flowGradeRank(grade) {
-  const i = FLOW_EVIDENCE_GRADES.indexOf(grade);
-  if (i === -1) throw new Error(`flowGradeRank: unrecognized flow evidence grade "${grade}"`);
-  return i;
-}
-
-/**
- * §16.4. Reduce hop grades to one path grade: the WORST wins. Never
- * guesses — an empty array is `'unassessed'`, and an unrecognized grade
- * throws rather than silently sorting last, verbatim `aggregateVerdicts`'
- * own contract ("a typo here must not quietly rank as safest").
- */
-function aggregateFlowGrades(grades) {
-  if (!Array.isArray(grades) || grades.length === 0) return 'unassessed';
-  let worst = null;
-  let worstRank = Infinity;
-  for (const g of grades) {
-    const rank = _PRECEDENCE.indexOf(g);
-    if (rank === -1) throw new Error(`aggregateFlowGrades: unrecognized flow evidence grade "${g}"`);
-    if (rank < worstRank) { worstRank = rank; worst = g; }
-  }
-  return worst;
-}
-
-function _sortedUnion(...arrays) {
-  const s = new Set();
-  for (const a of arrays) for (const v of a ?? []) if (v != null) s.add(v);
-  return [...s].sort();
-}
-
-/**
- * §16.3. Grade ONE hop. Accepts either a `path-query.js` `Hop` or a raw
- * `path-store.js` EDGE — they carry the same grading fields, a hop being a
- * denormalized copy of its edge (proven by C6/10).
- *
- * **The annotation rule (§16.5), and it is load-bearing:** `widenReasons`
- * and `lossReasons` are read as the UNION of the hop's own top-level
- * arrays AND every `annotations[].widenReason` / `.lossReason`. §2.2
- * classifies a null-`fromPath`, null-`peerScope` in-half as an annotation
- * on the edges its siblings form, so a genuine widening recorded at an
- * expression-internal construct lands ONLY in `annotations[]` — measured
- * on three real fixtures (C6/5). A grader reading only the top-level
- * arrays grades those flows `explicit`, which is FR-306's own literal
- * prohibition.
- *
- * `crossScope` is carried as a FACTOR and never affects `grade` (§16.6).
- */
-function gradeHop(hop) {
-  const annotations = Array.isArray(hop.annotations) ? hop.annotations : [];
-  const topWiden = Array.isArray(hop.widenReasons) ? hop.widenReasons : [];
-  const topLoss = Array.isArray(hop.lossReasons) ? hop.lossReasons : [];
-  const widenAll = _sortedUnion(topWiden, annotations.map((a) => a.widenReason));
-  const lossAll = _sortedUnion(topLoss, annotations.map((a) => a.lossReason));
-
-  // A control-dependence reason is not a widening — it selects the
-  // `implicit` tier and is removed from `widenReasons` so it never
-  // double-counts.
-  //
-  // §16.3: the subtraction is applied to the WIDEN side ONLY, deliberately
-  // (fix round 1, nitpick 8). Applying it to `lossAll` too would let a
-  // future `lossReason: 'control-dependence'` be silently UPGRADED from
-  // `severed` to the more-confident `implicit` tier — a grade moving in
-  // the optimistic direction because a new reason string was added
-  // elsewhere. Unreachable today (no loss reason is in the set), and kept
-  // unreachable by construction rather than by luck.
-  const isImplicit = (r) => IMPLICIT_FLOW_REASONS.includes(r);
-  const implicitReasons = widenAll.filter(isImplicit).sort();
-  const widenReasons = widenAll.filter((r) => !isImplicit(r));
-  const lossReasons = [...lossAll];
-
-  // Exactly which reasons would have been invisible to a top-level-only
-  // reader. Named, not merely folded — §18.4's transparency requirement
-  // applied to the grade's own inputs.
-  const annotationOnly = [
-    ...widenAll.filter((r) => !topWiden.includes(r)).map((r) => `widen:${r}`),
-    ...lossAll.filter((r) => !topLoss.includes(r)).map((r) => `loss:${r}`),
-  ].sort();
-
-  const ambiguousCorrelation = hop.ambiguousCorrelation === true;
-  const truncated = hop.truncated === true;
-  const crossScope = hop.crossScope === true;
-
-  const grade = ambiguousCorrelation ? 'ambiguous'
-    : lossReasons.length > 0 ? 'severed'
-      : implicitReasons.length > 0 ? 'implicit'
-        : widenReasons.length > 0 ? 'widened'
-          : 'explicit';
-
-  const factors = [
-    ...widenReasons.map((r) => `widen:${r}`),
-    ...lossReasons.map((r) => `loss:${r}`),
-    ...implicitReasons.map((r) => `implicit:${r}`),
-    ...(ambiguousCorrelation ? ['ambiguous-correlation'] : []),
-    ...(truncated ? ['analysis-truncated'] : []),
-    ...(crossScope ? ['cross-scope'] : []),
-  ].sort();
-
-  const degraded = lossAll.some((r) => DEGRADED_LOSS_REASONS.includes(r));
-  return {
-    grade,
-    rank: flowGradeRank(grade),
-    factors,
-    widenReasons,
-    lossReasons,
-    implicitReasons,
-    annotationOnly,
-    ambiguousCorrelation,
-    degraded,
-    truncated,
-    crossScope,
-    incomplete: grade === 'severed' || degraded || truncated,
-  };
-}
-
-/**
- * §16.4. Grade one reconstructed `Path`. The path's grade is the WORST of
- * its hops' — `protection.js`'s `aggregateVerdicts` risk-precedence
- * reduction, applied to the one axis FR-306 governs.
- *
- * Counts are recomputed from `gradeHop`, deliberately NOT read off the
- * Path's own `widenedHopCount`/`lossHopCount` — those are computed in
- * `path-query.js`'s `materialize()` from the edge's TOP-LEVEL arrays only
- * and therefore under-report annotation-carried reasons (§16.7, Finding 1).
- */
-function gradePath(path) {
-  const hops = Array.isArray(path.hops) ? path.hops : [];
-  const hopGrades = hops.map((h) => gradeHop(h));
-  const grade = aggregateFlowGrades(hopGrades.map((g) => g.grade));
-  const complete = path.complete === true;
-  const analysisTruncated = path.analysisTruncated === true;
-  const factors = _sortedUnion(
-    hopGrades.flatMap((g) => g.factors),
-    complete ? [] : ['partial-path'],
-    analysisTruncated ? ['analysis-truncated'] : [],
-  );
-  return {
-    grade,
-    rank: flowGradeRank(grade),
-    // §16.4 (fix round 1, finding 3): the FULL `HopGrade` objects, in path
-    // order — not a parallel array of bare grade strings. A bare-string
-    // array loses per-hop CAUSE, forcing every caller that wants to render
-    // FR-306's "visually distinct" half to re-invoke `gradeHop` per hop and
-    // re-derive what this function already computed.
-    hops: hopGrades,
-    worstHopIndex: hopGrades.findIndex((g) => g.grade === grade),
-    factors,
-    widenedHopCount: hopGrades.filter((g) => g.widenReasons.length > 0).length,
-    lossHopCount: hopGrades.filter((g) => g.lossReasons.length > 0).length,
-    implicitHopCount: hopGrades.filter((g) => g.implicitReasons.length > 0).length,
-    ambiguousHopCount: hopGrades.filter((g) => g.ambiguousCorrelation).length,
-    degradedHopCount: hopGrades.filter((g) => g.degraded).length,
-    truncatedHopCount: hopGrades.filter((g) => g.truncated).length,
-    degraded: hopGrades.some((g) => g.degraded),
-    truncated: analysisTruncated || hopGrades.some((g) => g.truncated),
-    complete,
-    incomplete: !complete || analysisTruncated || hopGrades.some((g) => g.incomplete),
-  };
-}
-
-// ===================== end of local prototype =====================
+test('boundary: flow-grade.js imports NOTHING — its specifier list is EXACTLY [] (§16.1)', () => {
+  const modulePath = fileURLToPath(new URL('../../src/lineage/flow-grade.js', import.meta.url));
+  const src = fs.readFileSync(modulePath, 'utf8');
+  // Same order/line-layout-independent scan `path-store.test.js`'s and
+  // `path-query.test.js`'s own boundary tests use: match every module
+  // specifier string that follows `from`/`import(`/`export ... from`
+  // ANYWHERE in the source, not just a line-anchored `/^import\s.*$/gm`
+  // (which a multi-line specifier list, a re-export, or a dynamic import
+  // can hide from).
+  const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  assert.deepEqual(specifiers, [], 'flow-grade.js must import nothing — a pure function library over the fields it is handed');
+});
 
 // =====================================================================
 // Shared fixture harness — `path-query.test.js`'s, unchanged.
@@ -287,45 +103,6 @@ function allPaths(store) {
 const hopGradeNames = (pathGrade) => pathGrade.hops.map((h) => h.grade);
 
 /**
- * §16.7 Finding 1 / §16.8's `path-query.js` remediation item, prototyped
- * LOCALLY exactly as the grading functions above are.
- *
- * This is the whole fix: `path-query.js`'s `materialize()` currently
- * computes `widenedHopCount` / `lossHopCount` — and, from them, §15.7's
- * `shape` signature — with `hops.filter((h) => h.widenReasons.length > 0)`,
- * i.e. from the two EDGE-FORMING halves only. It is exactly the consumer
- * §14.9's own correction and §15.8 tell to "read `annotations[]` too, not
- * only the edge's top-level reason arrays", and it does not.
- *
- * The fix belongs in `materialize()` and NOWHERE ELSE. It must NOT be
- * pushed down into `path-store.js`'s `edge.widenReasons`/`edge.lossReasons`:
- * those two arrays are part of `provenanceEdgeId`'s discriminator (§14.5),
- * so changing them would move every edge id, and with it every `ppath:` id
- * (§15.6) — a re-hash of the whole DAG to fix a display count.
- */
-function withAnnotationAwareCounts(path) {
-  const annWiden = (h) => h.widenReasons.length > 0 || (h.annotations ?? []).some((a) => a.widenReason != null);
-  const annLoss = (h) => h.lossReasons.length > 0 || (h.annotations ?? []).some((a) => a.lossReason != null);
-  const widenedHopCount = path.hops.filter(annWiden).length;
-  const lossHopCount = path.hops.filter(annLoss).length;
-  return {
-    ...path,
-    widenedHopCount,
-    lossHopCount,
-    // `shape` is rebuilt from the corrected counts — it is derived from the
-    // same two filters in `materialize()`, so a fix that left it alone
-    // would leave §15.7's diversity bucketing reading the stale answer.
-    shape: [
-      path.complete ? 'complete' : 'partial',
-      path.crossScopeCount > 0 ? 'boundary' : 'local',
-      widenedHopCount > 0 ? 'widened' : 'explicit',
-      lossHopCount > 0 ? 'lossy' : 'intact',
-      path.ambiguousHopCount > 0 ? 'ambiguous' : 'correlated',
-    ].join('/'),
-  };
-}
-
-/**
  * The NAIVE grader §14.9's own corrected note warns a C6 implementer
  * would write: identical precedence, but reading ONLY the edge's
  * top-level reason arrays. Executed rather than described, so the
@@ -352,10 +129,17 @@ test('C6/0: the flow-evidence vocabulary is a NEW, separate enum — it shares n
   assert.equal(new Set(ranks).size, ranks.length);
   assert.equal(FLOW_EVIDENCE_GRADES[0], 'explicit');
   // The aggregation table is a permutation of the value list — a value
-  // missing from either side would silently throw or silently win.
-  assert.deepEqual([...FLOW_EVIDENCE_GRADES].sort(), [..._PRECEDENCE].sort());
-  assert.equal(_PRECEDENCE[_PRECEDENCE.length - 1], 'unassessed',
-    "'unassessed' loses every aggregation it is not alone in — aggregateVerdicts' own 'not_assessed' precedent");
+  // missing from either side would silently throw or silently win. The
+  // table itself is private (`_PRECEDENCE`), so the parity check is run
+  // indirectly: every grade must aggregate against every other without
+  // throwing, and the worst-wins result must always be one of the two.
+  for (const a of FLOW_EVIDENCE_GRADES) {
+    for (const b of FLOW_EVIDENCE_GRADES) {
+      const result = aggregateFlowGrades([a, b]);
+      assert.ok(result === a || result === b || (a === 'unassessed' && b === 'unassessed'),
+        `aggregateFlowGrades([${a}, ${b}]) must resolve to one of its inputs`);
+    }
+  }
 });
 
 // =====================================================================
@@ -543,7 +327,7 @@ test('C6/5: a genuine widening can live ONLY in `annotations[]`, with the edge\'
   assert.equal(provenCases, 3, 'all three shapes reproduce it — this is not one exotic corner');
 });
 
-test('C6/5b: §16.8\'s `materialize()` remediation, prototyped — the annotation-aware counts report `widenedHopCount: 1` and a `widened` shape on the fixture C5 currently scores as explicit', () => {
+test('C6/5b: `path-query.js`\'s `materialize()` fix (§16.8 item 7) — the Path\'s OWN `widenedHopCount`/`shape` report `1`/`widened` on the fixture the pre-fix code scored as explicit', () => {
   const src = 'function f(user) { sink(mystery(user.email)); }';
   const byName = parseFns(src, '/x/c6-5b.js');
   const { store } = record(byName.f, addIdentity(emptyState(), 'user.email', 'data:email'));
@@ -554,33 +338,24 @@ test('C6/5b: §16.8\'s `materialize()` remediation, prototyped — the annotatio
   const p = paths.find((x) => x.hops.some((h) => h.annotations.some((a) => a.widenReason === 'unresolved-call')));
   assert.ok(p, 'the annotation-carrying path exists');
 
-  // THE REGRESSION ASSERTION — the behaviour §16.8's `path-query.js` item
-  // must ship. Written against the local prototype so it states the target
-  // rather than the defect, and so it keeps passing unchanged once the fix
-  // lands in `materialize()` itself.
-  const fixed = withAnnotationAwareCounts(p);
-  assert.equal(fixed.widenedHopCount, 1,
+  // THE REGRESSION ASSERTION — `materialize()`'s own fields, now
+  // annotation-aware, no local prototype helper needed.
+  assert.equal(p.widenedHopCount, 1,
     'the widening is real and the count must see it');
-  assert.equal(fixed.shape.split('/')[2], 'widened',
+  assert.equal(p.shape.split('/')[2], 'widened',
     "§15.7's diversity `shape` signature must see it too — it is derived from the same filter");
-  assert.equal(fixed.lossHopCount, 0, 'and the loss half is untouched by a widen-only fixture');
-  assert.equal(fixed.shape.split('/')[3], 'intact');
-
-  // Forward-compatible: the SHIPPED count may be either the design-time
-  // measured value (0) or the fixed one (1), and this test must not be the
-  // thing that blocks the fix. Deliberately not `assert.equal(p.widenedHopCount, 0)`
-  // (fix round 1, finding 1 — that assertion pinned the DEFECT).
-  assert.ok(p.widenedHopCount <= fixed.widenedHopCount,
-    'shipped `materialize()` measured 0 here at design time; it becomes 1 once §16.8\'s item lands, and never exceeds the corrected count');
+  assert.equal(p.lossHopCount, 0, 'and the loss half is untouched by a widen-only fixture');
+  assert.equal(p.shape.split('/')[3], 'intact');
 
   // And the grade agrees with the corrected count, which is the whole point
-  // of §16.7 Finding 1: `gradePath` never depended on the buggy field.
+  // of §16.7 Finding 1: `gradePath` never depended on the buggy field — it
+  // computes its own union regardless.
   const g = gradePath(p);
-  assert.equal(g.widenedHopCount, fixed.widenedHopCount);
+  assert.equal(g.widenedHopCount, p.widenedHopCount);
   assert.equal(g.grade, 'widened');
 });
 
-test('C6/5c: the SAME remediation fixes the loss half — a §13.6-degraded path\'s `lossHopCount`/`shape` are annotation-blind today and correct under the prototype', () => {
+test('C6/5c: the SAME `materialize()` fix closes the loss half — a §13.6-degraded path\'s `lossHopCount`/`shape` are correct, not annotation-blind', () => {
   const src = `
     function inner(u) { return { v: u.email }; }
     function middle(u) { const r = inner(u); return r; }
@@ -604,12 +379,9 @@ test('C6/5c: the SAME remediation fixes the loss half — a §13.6-degraded path
   assert.equal(r.paths.length, 1);
   const p = r.paths[0];
 
-  const fixed = withAnnotationAwareCounts(p);
-  assert.equal(fixed.lossHopCount, 1,
+  assert.equal(p.lossHopCount, 1,
     "the honestly-degraded hop must count as lossy — anything else is §18.4's failure mode inside a display count");
-  assert.equal(fixed.shape.split('/')[3], 'lossy');
-  assert.ok(p.lossHopCount <= fixed.lossHopCount,
-    'shipped `materialize()` measured 0 here at design time; it becomes 1 once §16.8\'s item lands');
+  assert.equal(p.shape.split('/')[3], 'lossy');
   assert.equal(gradePath(p).grade, 'severed');
   assert.equal(gradePath(p).degraded, true);
 });
@@ -806,6 +578,7 @@ test('C6/10: `implicit` is RESERVED — nothing the engine emits today produces 
   // (b) The reserved tier is not a dead branch — §14.2's `origin` node
   // precedent: kept, hand-tested, and disclosed as the exact shape a later
   // increment will produce.
+  assert.deepEqual(IMPLICIT_FLOW_REASONS, ['control-dependence']);
   const implicitHop = {
     widenReasons: ['control-dependence'], lossReasons: [], annotations: [],
     ambiguousCorrelation: false, crossScope: false, truncated: false,
@@ -816,6 +589,10 @@ test('C6/10: `implicit` is RESERVED — nothing the engine emits today produces 
   assert.deepEqual(g.widenReasons, [], 'a control-dependence reason selects its own tier and never double-counts as a widening');
   assert.ok(flowGradeRank('implicit') > flowGradeRank('widened'));
   assert.ok(flowGradeRank('implicit') < flowGradeRank('severed'));
+});
+
+test('C6/10b: `DEGRADED_LOSS_REASONS` names exactly the reason §13.6 emits', () => {
+  assert.deepEqual(DEGRADED_LOSS_REASONS, ['context-cap-degraded']);
 });
 
 // =====================================================================
