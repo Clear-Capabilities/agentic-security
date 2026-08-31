@@ -184,6 +184,21 @@ key — which is precisely the "value with no prior aliasing source" case
 (a literal, or — the one case that matters for interprocedural stitching —
 a resolved call's return value, which is C3's join point, not C1/C2's).
 
+> **CORRECTED 2026-08-30 by increment C4 — see §14.4.** The parenthesis
+> above names the resolved-call return value, and the rule then EXCLUDES
+> it: in the real C3 stream the argument expression's own non-null in-half
+> sits at the *same* join key as the `production/call-resolved` hop, so
+> "only when NO non-null in-half exists" demotes the return stitch to an
+> annotation and silently deletes it (measured — a store built that way
+> leaves the callee's exit node with zero outgoing edges). **The
+> discriminator is `peerScope`, not `fromPath`:** a null `fromPath` with a
+> non-null `peerScope` is PEER-ADDRESSED — its source is the callee's own
+> function-exit node — and is always edge-forming, except when it also
+> carries a `lossReason` (§13.6's context-cap marker, whose callee has no
+> recorded body, so an edge from it would fabricate an origin). The rule as
+> written above remains correct, unchanged, for the genuinely source-less
+> case: `peerScope === null`.
+
 The three hop types are exactly `DESIGN_INTRAPROCEDURAL.md`'s already-hardened
 production / selection / write-out taxonomy. That is not a coincidence to be
 grateful for; it is the point. Every place structure can be *lost* is a place
@@ -649,6 +664,19 @@ grade for less-certain hops; this feeds it directly, and FR-305's constraint
 is about not *hiding* differences, which marking satisfies and silence would
 not.
 
+> **CORRECTED by increment C4 — see §14.7.** The group-level measure above
+> (`distinctInPaths ≥ 2 && distinctOutPaths ≥ 2` on the WHOLE group) is too
+> coarse: applied to a plain resolved call, it marks every edge in the
+> group — including both edges of the correct call-boundary chain — because
+> the annotation-only `call-resolved` in-half (`fromPath: null`) counts as
+> a second "distinct" in-path even though it never forms its own edge
+> (§2.2's correction). §14.7 replaces this with a per-*pairing* measure
+> (ambiguous only when the SPECIFIC in-half/out-half pair being joined has
+> a same-key sibling on both sides), verified against a real resolved-call
+> fixture where the group-level form over-marks 3 of 5 edges and the
+> per-pairing form marks exactly the 1 genuinely ambiguous one. The
+> `slot`-field discussion below is unaffected by this correction.
+
 **The known fix, if C4 measures this as a real problem:** add a `slot` field
 — the sub-path *within the value under construction* that a hop contributes
 to — and join on `(scope, nodeId, dataElementId, slot)`. It is deferred, not
@@ -968,6 +996,19 @@ shape (§13.2); whether call-site identity needs its own `hopSite` field
 Two levers are named but **not** adopted here, with their trigger conditions,
 so a later increment adopts them on evidence rather than on taste: the `slot`
 correlation field (§9.1) and hop-order filtering during reconstruction (§9.2).
+
+**Updated 2026-08-30 by increment C4.** The first item on this list — "the
+storage structure and its stable ID (`path-store.js`, `ids.js`'s `pathId` —
+C4)" — is now **decided in §14**, including the two things this section
+could not have anticipated: cross-function node addressing (§14.3) and the
+correction §2.2's annotation rule needed before the resolved-call return
+value could be stitched at all (§14.4). §14 also settles the "one edge, two,
+or a typed call segment" question this section punted (two cross-scope
+edges — §14.3/§14.4), declines the library/framework-collapse item as
+Sub-project D's rather than C4's (§14.9), and supplies part of the evidence
+§9.1's `slot` lever was waiting on (§14.7). Everything else on this list is
+still open, and `pathId` itself is now deliberately left unclaimed for C5
+(§14.5).
 
 ---
 
@@ -1528,3 +1569,531 @@ re-derivation. Files, in dependency order.
 `applyAtCallSite` (not wired into `engine.js`; see §10.3's correction), the
 cache hop-replay fix (§13.4), a `hopSite` field (§13.5), and any change to
 `field-identity.js` (never).
+
+---
+
+## 14. `path-store.js`: the compact DAG (Sub-project C, increment 4)
+
+Added 2026-08-30 by increment C4's design task. Everything in this section
+is **decided**, not proposed, and every behavioural claim and every number
+in it was produced by running code in
+`scanner/test/lineage/path-store-poc.test.js` — a throwaway-named PoC
+committed alongside this section, which prototypes `path-store.js` and the
+two new `ids.js` functions LOCALLY (shipped source is unmodified by this
+design task, exactly as C3's own design task did). §14.10 is the follow-up
+implementation task's file/line checklist.
+
+Two questions were open when this increment was scoped, and neither is
+answerable on paper. Both are now answered by execution:
+
+- **Q1 — cross-function node addressing.** A `write-out/call-arg-bind`
+  hop's destination is `(peerScope, peerContext, toPath, dataElementId)`,
+  **not** `(scope, context, …)`. §14.3.
+- **Q2 — does `call-resolved`'s `fromPath: null` ever form a real edge?**
+  **Yes** — it is the caller-side half of the return stitch, and its source
+  is the callee's own function-exit node. But §2.2's annotation rule, read
+  literally, demotes exactly this hop to an annotation and silently deletes
+  the stitch. §14.4 corrects §2.2 in place.
+
+### 14.1 What `path-store.js` is, and the isolation boundary it introduces
+
+`path-store.js` is a **pure consumer of a hop-record stream**. It takes
+hop records — the exact 14-field shape §3 + §13.0 define — and builds a
+deduplicated DAG. It does not run analysis, and:
+
+> **`path-store.js` must NEVER import `engine.js`, `summaries.js`, or
+> `driver.js`.** It consumes their OUTPUT, never their internals. This is a
+> stronger, additional boundary on top of the existing "`src/lineage/` may
+> import pure utilities from `src/dataflow/`, never that package's
+> `engine.js`/`summaries.js`" rule.
+
+This is not tidiness. It is what makes the store testable at all right now:
+there is still no source registry (Sub-projects D/E), so
+`runFieldIdentityAnalysis` analyzes every function from `emptyState()` and a
+real project-wide driver run emits **zero** hops today. A store that could
+only be exercised through the driver would be untestable by construction. A
+store fed a hand-built or hand-seeded array is testable immediately, and
+every fixture below does exactly that.
+
+It also means `path-store.js`'s only dependency is `ids.js`.
+
+### 14.2 The node: `(scope, context, kind, path | siteNodeId, dataElementId)`
+
+§2.1 decided the node is `(scope, accessPath, dataElementId)`. C4 makes two
+additions, both forced by evidence rather than taste.
+
+**(a) `context` is part of node identity.** §13.3 already moved the *join
+key* to four parts. The node must follow, for a reason §13.2 states
+directly: `peerContext` "is what makes the binding land in the *right*
+context of the callee." If node identity ignored `context`, `peerContext`
+would be decorative and §9.4's phantom would return one level up — two entry
+contexts of one function would share a node, and a backward walk in
+context B could leave through an edge that only ever existed in context A.
+Cost, measured: the two-context `function g(x) { const y = x; return y; }`
+fixture builds 6 nodes with `context` in the identity and would collapse to
+5 without it. The blow-up is bounded by the B6 per-function context cap
+(default 16), and correctness wins.
+
+**(b) Terminal endpoints get their own node `kind`, never a fabricated
+path.** §10.2 is explicit that a `return` must not be given a pseudo-path
+like `'@return'`, and that C3/C4 identify a function exit structurally
+(`kind === 'write-out' && subKind === 'return' && toPath === null`). C4 needs
+those endpoints to *be* nodes, so it keeps them in a separate namespace
+rather than inventing a path string that could collide with a real one:
+
+| node `kind` | created by | keyed on | why |
+|---|---|---|---|
+| `path` | any half with a non-null `fromPath`/`toPath` | `(scope, context, path, id)` | the ordinary state location |
+| `return` | `write-out/return`; also *addressed* by `production/call-resolved` via `(peerScope, peerContext)` | `(scope, context, id)` — **per function-context, not per CFG node** | forced: a `call-resolved` hop names only `(peerScope, peerContext)`, with no node id, so every return site of a context must aggregate into one exit node |
+| `escape` | `write-out/call-arg` (a bare call statement) | `(scope, context, siteNodeId, id)` | the value leaves the analysis; §10.2 calls this the natural sink-attachment point for Sub-project D. Nothing addresses it from elsewhere, so per-CFG-node precision is free |
+| `loss` | any `write-out` with `toPath === null` and a non-null `lossReason` (today: `assign`/`unsupported-target`) | `(scope, context, siteNodeId, id)` | §18.4: a dead end that is *recorded as a dead end* is the data-layer form of "never present a truncation as an absence" |
+| `origin` | §2.2's surviving half — a group whose ONLY in-halves are annotations | `(scope, context, siteNodeId, id)` | "a value with no prior aliasing source" |
+
+`origin` is exercised only by a hand-built hop pair in this task's PoC — no
+real-parser fixture in C1-C3's own instrumentation reaches it today, since
+every construct that carries a `dataElementId` currently inherits it from
+somewhere already in `state` (a contributing key `production`/`selection`
+hop always accompanies it). This is a real, honestly-disclosed gap, but not
+a dead branch: it is the exact shape a Sub-project D source registry will
+produce the first time it seeds an identity at a source site with no prior
+state to point to (a null-`fromPath`, null-`peerScope` in-half is precisely
+"this value originates here, not upstream"). Kept, tested with the hand-built
+pair, and left for D's own real-parser coverage rather than removed.
+
+Expression-internal constructs still create **no** nodes (§2.1). An object
+literal, a ternary, a template literal survive as `annotations[]` on the
+edges they helped form — pinned by a test asserting the `production/object`
+hop is present as an annotation and that no node was created for it.
+
+### 14.3 Half-edge classification — the exact rules, and the answer to Q1
+
+Grouped by §13.3's four-part join key `(scope, nodeId, dataElementId,
+context)`. Within a group:
+
+**In-halves** (`kind` is `production` or `selection`):
+
+1. `fromPath !== null` → **sourced**, at `(scope, context, path, id)`.
+2. `fromPath === null && peerScope !== null && lossReason === null` →
+   **peer-sourced**, at `(peerScope, peerContext, ⟨return⟩, id)`. See §14.4.
+3. otherwise → **annotation**.
+
+**Out-halves** (`kind === 'write-out'`), in this order:
+
+1. `toPath !== null && peerScope !== null` → **peer-targeted**, at
+   `(peerScope, peerContext, toPath, id)`. **This is Q1's answer.**
+2. `toPath !== null` → **targeted**, at `(scope, context, toPath, id)`.
+3. `subKind === 'return'` → the `return` terminal.
+4. `subKind === 'call-arg'` → the `escape` terminal.
+5. `lossReason !== null` → the `loss` terminal.
+6. otherwise → **unclassified**, recorded in `diagnostics().unclassified`
+   and never silently dropped. Empty for every fixture in the PoC — which
+   is the closed-set proof that rules 1-5 cover today's whole out-half
+   vocabulary (`assign`, `assign-weak`, `call-arg`, `call-arg-bind`,
+   `return`, and `assign`-with-`unsupported-target`).
+
+**Q1, proven rather than argued.** For
+`function helper(u) { return u.email; } function caller(a) { const out = helper(a); return out; }`
+seeded `a.email → data:email`, the bind hop is stamped `scope: caller`,
+`peerScope: helper`, `toPath: 'u.email'`. The PoC asserts that the node id
+computed from `(peerScope, peerContext, 'u.email', id)` is **byte-identical**
+to the node id computed from the callee's OWN
+`selection/member from 'u.email'` hop (`scope: helper`, its own `context`) —
+i.e. peer addressing lands exactly on a node the callee independently
+created. The naive alternative computes a different id, and
+`store.getNode(thatId)` is `null`: it is an orphan no hop anywhere can reach.
+
+And the hazard is not hypothetical. With a caller that also has a local
+variable named `u`, the PoC shows own-scope addressing of the callee's
+parameter produces the **same id** as the caller's own local `u` — Decision
+5's bug class ("an endpoint that is not the location it names") in a new
+disguise, exactly as §13.2 predicted. Peer addressing keeps them apart, and
+no binding edge lands on the caller-local `u`.
+
+**A pair whose BOTH endpoints are peer-addressed is excluded.** At any
+resolved call, the `call-resolved` in-half and the `call-arg-bind` out-half
+share a join key (asserted in the PoC), so a naive full cross product pairs
+them and manufactures a `callee ⟨return⟩ → callee parameter` edge that no
+program ever executed — a fabricated cycle, created by C4 rather than by the
+code. Such a pair always describes a transition *entirely inside* the
+callee, which the callee's own hops already record, so excluding it can
+never drop a real caller-side fact. Nothing else is pruned; see §14.7.
+
+### 14.4 Q2 — the return stitch, and a correction to §2.2
+
+Running the two-function fixture above with a recorder produces, at the
+caller's `const out = helper(a)` CFG node, **four** hops sharing one join
+key:
+
+```
+production/ident      fromPath 'a.email'  (the argument's own in-half)
+write-out/call-arg-bind  toPath 'u.email'  peer=(helper, Ch)
+production/call-resolved fromPath null     peer=(helper, Ch)
+write-out/assign      toPath 'out'
+```
+
+and, inside `helper` under context `Ch`, `selection/member from 'u.email'`
+plus `write-out/return toPath null`.
+
+**The stitch exists, and it goes through the callee.** The
+`production/call-resolved` hop is `kind: 'production'`, so per §13.0 its
+peer is its *source* — and that source is the callee's function-exit node
+`(helper, Ch, ⟨return⟩, id)`, which the callee's own `write-out/return` hop
+independently creates. `peerContext` is byte-equal to the `context` the
+callee's body was recorded under (asserted). The PoC walks the whole chain:
+
+```
+(caller, Ca, a.email) → (helper, Ch, u.email) → (helper, Ch, ⟨return⟩)
+                      → (caller, Ca, out)     → (caller, Ca, ⟨return⟩)
+```
+
+Four edges, two of them cross-scope, and no step is asserted rather than
+built.
+
+> **Correction to §2.2, per this document's own fix-rather-than-diverge
+> policy.** §2.2 says a `null`-`fromPath` in-half "forms a real edge only
+> when NO non-null in-half exists at that key — which is precisely the
+> 'value with no prior aliasing source' case (a literal, or — the one case
+> that matters for interprocedural stitching — a resolved call's return
+> value, which is C3's join point…)". That parenthesis names the right case
+> and the rule then **excludes** it: in the real C3 stream the argument
+> expression's own `production/ident from 'a.email'` in-half sits at the
+> *same* join key as the `call-resolved` hop (measured — the PoC asserts
+> it), so the literal rule demotes `call-resolved` to an annotation. A
+> `PathStore` built that way leaves the callee's exit node with **zero**
+> outgoing edges: reconstruction from `out` reports the argument as its
+> immediate predecessor and the callee body is unreachable. The PoC builds
+> exactly that store and asserts the dead end, so the defect cannot be
+> re-argued away.
+>
+> **The corrected discriminator is `peerScope`, not `fromPath`.** A null
+> `fromPath` with a non-null `peerScope` is not source-less; it is
+> **peer-addressed**. §2.2's annotation rule survives unchanged for the
+> genuinely source-less case (`peerScope === null`), which is what the
+> `origin` node kind covers.
+
+**The one exception, and it is `lossReason`.** §13.6's context-cap
+degradation hop is also `production/call-resolved` with `fromPath: null`
+and a non-null `peerScope` — but it names a callee whose body was **never
+analyzed**, so `(peerScope, peerContext, ⟨return⟩, id)` does not exist in
+the stream. Treating it as peer-sourced would fabricate an origin node with
+no predecessors and report a path that begins in the middle of nothing —
+Decision 5's bug class again. `lossReason === null` is therefore part of
+rule 2, and a degraded hop falls through to *annotation*, which is exactly
+the reading §13.6 asked for ("the marker belongs *on* the real
+`argument → parameter` edge"). Verified against the shipped resolver under
+`new FieldIdentitySummaryCache(1)`: no exit node is fabricated for the
+degraded callee, and the `lossReason: 'context-cap-degraded'` marker is
+present on the real `call-arg-bind` edge. It is never dropped — which is
+the half §13.6 says matters most.
+
+> **Disclosed precondition, found by task review, not closed this
+> increment.** The `lossReason === null` guard correctly distinguishes "the
+> callee's body was analyzed" from "it was degraded away" WITHIN one fully
+> recorded analysis run. It does not, on its own, guarantee the callee's
+> exit hops are actually PRESENT in the stream `path-store.js` was fed —
+> that additionally requires the stream to be complete for
+> `(peerScope, peerContext)`. A reachable counter-shape: analyze `callerA`
+> against a shared `FieldIdentitySummaryCache` with NO recorder attached
+> (warming the cache with `helper`'s summary), then analyze `callerB`
+> against that SAME cache with a recorder attached. `helper` is now a cache
+> HIT for `callerB` — `resolveCallSummary`'s `cache.compute()` never
+> re-invokes `analyzeFn`, so `helper`'s own body hops never fire a second
+> time — yet the resolved summary still carries `lossReason: null` (it was
+> genuinely, precisely resolved; it just wasn't resolved *this run*). Fed
+> into `path-store.js`, `callerB`'s `call-resolved` hop is peer-sourced at
+> `(helper, Ch, ⟨return⟩)`, a node the store never otherwise creates —
+> exactly the fabricated-origin failure mode the `lossReason` guard exists
+> to prevent, reached by a different door. Not reachable within a SINGLE
+> fully-recorded run (checked across 6 fixtures: 2-fn, 3-fn/2-site, mutual
+> recursion, self recursion, mutated-param return, §9.6's own same-context
+> cache hit — zero orphaned exit nodes in any of them), but directly
+> reachable through `driver.js`'s own returned-and-reused `cache`, which
+> `driver.test.js` already exercises in this exact shape. **Left for the
+> follow-up implementation task (§14.10 item 10):** `path-store.js` must
+> treat this as a build-time DIAGNOSTIC, not a silent fabrication — a
+> `return` node with zero in-edges that nonetheless sources a real
+> cross-scope edge is detectable with the same `inIndex`/`outIndex` the
+> store already builds, and must be recorded via `diagnostics()`, never
+> thrown and never dropped, per this document's own established §9 culture
+> and §14.9's "recorded, never silent" framing.
+
+### 14.5 The two new `ids.js` functions
+
+`DESIGN_PATH_PROVENANCE.md` §12 and the C-scoping doc both anticipated a
+single `pathId`. Two functions are needed, and neither is called `pathId`:
+
+```js
+provenanceNodeId({ kind, scope, context, path, siteNodeId, dataElementId },
+                 discriminatorParts = [])      // -> `pnode:<kind>:<12 hex>`
+provenanceEdgeId({ fromNodeId, toNodeId, dataElementId,
+                   scope, context, siteNodeId,
+                   inKind, inSubKind, outKind, outSubKind,
+                   widenReasons = [], lossReasons = [] },
+                 discriminatorParts = [])      // -> `pedge:<12 hex>`
+```
+
+Both use `ids.js`'s existing `_hash`/`_canon` helpers unchanged: sha256 over
+a canonicalized, pipe-joined material string, truncated to `ID_HEX_LEN`,
+prefixed by the entity kind. Never a counter.
+
+- **Distinct `pnode:`/`pedge:` prefixes, not `node:`/`edge:`.** A provenance
+  node is not a `DataFlowGraph v1` node; `validate.js` regex-checks the
+  `node:`/`edge:` prefixes for graph entities, and making the two
+  indistinguishable would be a latent contract bug. Sub-project E maps
+  between the two namespaces; it must not confuse them.
+- **`pathId` is deliberately left unused.** The thing C5 reconstructs *is* a
+  path, and it will plausibly want that name for its own entity. Calling an
+  edge a path now would cost C5 the obvious name.
+- **The edge discriminator carries the SITE** (`scope`, `context`,
+  `siteNodeId`) as well as both endpoint ids. `fromNodeId`/`toNodeId` already
+  embed each side's own scope/context, but not the CFG node the pair was
+  observed at — and two structurally identical hops at two different program
+  points are two materially different edges (FR-305), each needing its own
+  `line` for display and for §9.2's hop-ordering lever. Omit `siteNodeId` and
+  they silently collide into one edge carrying one arbitrary line.
+- **It also carries both halves' `kind`/`subKind` and their reason strings.**
+  This is the `flagship-fixture.mjs` lesson applied deliberately: that
+  module's edge ids once collided because `dataElementIds` was left out of
+  the discriminator (see this package's own CLAUDE.md row). Over-specifying a
+  content hash costs nothing; under-specifying it is a silent merge.
+- **Object arguments, not `ids.js`'s usual positional form.** A deliberate,
+  narrow divergence (`graphId` is the in-file precedent). `provenanceEdgeId`'s
+  discriminator is twelve fields wide, `provenanceNodeId`'s is six, and a
+  positional `discriminatorParts` array is exactly the shape from which a
+  field gets omitted.
+
+  > **Corrected by the final whole-branch review (finding 2).** The
+  > sentence above originally said "`path-store.js` calls each of these
+  > from ONE place" as the justification. `provenanceEdgeId` genuinely has
+  > one call site; `provenanceNodeId` has FIVE (`intern`, `sourcesFor`,
+  > `targetsFor`, the `orphanedPeerSources` check, and `nodeIdFor`). The
+  > object-argument choice is still correct — arguably more so at five call
+  > sites than at one, since a positional array is exactly as easy to get
+  > wrong the second, third, fourth, and fifth time as the first — but the
+  > stated reason was wrong. `scanner/src/lineage/CLAUDE.md`'s own
+  > `path-store.js` row repeated the same error and has been corrected too.
+- **Not in the discriminator:** `syntacticPath` and `line` (display
+  material — pinned by a test where two hop records differing only in
+  `syntacticPath` collapse to one edge), edge `annotations[]`, and
+  `ambiguousCorrelation` (both are functions of the group and of the
+  endpoints already in the id, so they cannot distinguish two edges).
+
+The PoC pins idempotence (two independent analysis runs of the same fixture
+produce identical edge ids; re-delivering a stream changes nothing) and
+non-collision (every discriminator field, changed alone, moves the id;
+reason arrays are order-independent sets; 5000 distinct node descriptors
+produce 5000 distinct ids).
+
+### 14.6 Deduplication — two boundaries, and they are not interchangeable
+
+§8 pushes worklist re-emission onto the consumer. The consumer needs **both**
+of these, and the plan's own framing of them as alternatives is wrong:
+
+1. **Raw-hop dedup, at ingest.** A `Set` keyed on the 14 fields in a fixed
+   order. This is the volume control: it collapses the re-visit
+   multiplicity §8 describes. Measured on a `while`-loop fixture: 12 records
+   offered, 8 accepted. It is safe precisely because of §8's monotonicity
+   argument — duplicates are exact repeats, never stale facts.
+   The key is built from an **explicit field list**, not `Object.keys(h)`,
+   so a hop with an ABSENT key (§3 warns this is reachable for any emission
+   path bypassing `analyzeFunctionFieldIdentity`'s progressive stamping)
+   is recorded in `diagnostics().malformed` instead of silently hashing to a
+   different key than its fully-stamped twin. C4 is where §3's completeness
+   guarantee becomes checkable rather than merely asserted.
+2. **Node/edge dedup, at materialization.** Content-hash ids are Map keys,
+   so two structurally identical edges collapse. This is the
+   **correctness-bearing** one: two hop records that are NOT byte-identical
+   can still describe the same logical edge (the PoC pins a pair differing
+   only in `syntacticPath`), and (1) keeps both. (2) collapses them to one.
+
+Dedup (1) alone leaves duplicate edges. Dedup (2) alone would be correct but
+would let group membership grow unboundedly on a hot loop, and the per-group
+cross product is quadratic in group size. Ship both.
+
+**Where `context`'s memory cost actually lands, unmeasured but named.**
+`context` (§13.3's `hashState(entryState)`) is `hashState`'s full canonical
+string — bounded by the entry state's size, not the function's — computed
+once per analysis run and held by reference on every node/edge record
+sharing it, so the per-record field cost is one pointer, not N copies of the
+string. The real, unmeasured cost is in the DERIVED key strings this
+increment builds from it: dedup (1)'s ingest key and (2)'s node/edge id
+discriminator each concatenate the full `context` text once per hop/group,
+and those concatenated strings are retained for the store's lifetime in
+`_seen`/the group index. This is what C5/Sub-project E should profile at
+real project scale, not the record fields themselves.
+
+**Construction is two-phase**: `addHop`/`addHops` accumulate into groups;
+nodes and edges are materialized lazily on the first read and cached until
+the next `addHop`. This is what lets an edge's annotation set be complete
+before its id is computed, and it makes the store order-insensitive — the
+same hops delivered in any order produce the same DAG.
+
+**Cycle safety (§9.3).** Construction is one linear pass over the hop stream
+plus a per-group cross product; it never walks the graph, so it cannot
+recurse into a cycle. The read API is deliberately **traversal-free** —
+`nodes()`, `edges()`, `getNode`, `getEdge`, `edgesFrom`, `edgesTo`,
+`hasEdge`, `nodeIdFor`, `stats`, `diagnostics` are all O(1) or O(degree)
+index lookups. There is no recursion anywhere in this increment's code, by
+construction rather than by discipline. Bounded backward reconstruction is
+C5's job and C5's alone. Proven on a mutual-recursion fixture
+(`ping`/`pong`/`top`): the store builds 8 nodes and 11 edges from 34 raw
+records without recursing, and an explicitly budgeted walk *in the test*
+confirms a genuine cycle really is present — §9.3 is not hypothetical.
+
+### 14.7 Correlation ambiguity is measured per pairing, not per group
+
+§9.1 marks an edge `ambiguousCorrelation: true` when, at a group,
+`distinctInPaths ≥ 2 && distinctOutPaths ≥ 2`. Applied verbatim to a C3
+stream this is far too coarse, and the measurement is the argument: at the
+two-function resolved-call fixture it marks **3 of 5** edges — including
+both genuinely correct call-boundary edges — because the argument's in-half
+and the return's in-half share one join key by construction (§14.4). A
+marker that fires on the right answers is not usable input to FR-306's
+confidence grading.
+
+**Decided: count only the pairings the store would actually form.** For an
+edge `(s, o)`, ambiguity is `|{s' : pairable(s', o)}| ≥ 2 && |{o' :
+pairable(s, o')}| ≥ 2`, where `pairable` is §14.3's peer×peer exclusion.
+Measured effect, same fixtures: the resolved-call fixture drops from 3
+marked edges to **1**; a 3-function/2-call-site fixture from 6 to 2; the
+mutual-recursion fixture from 6 to 2. §9.1's own genuine intraprocedural
+case (`const x = { a: p.email, b: q.email }`, both carrying the same id) is
+**unchanged at 4** — the refinement removes only the marks that the call
+boundary's own structure introduced, not §9.1's real ambiguity. No new hop
+field, no threading, no `slot`.
+
+**The one artefact that survives, disclosed rather than pruned.** The
+remaining marked edge at a resolved call is the **bypass**: `a.email → out`,
+which skips the callee. It is real data flow (the identity genuinely reaches
+`out`) but it is not the route the program takes, and it lets a
+reconstruction report a path that never enters the callee. Pruning it would
+require a leg-based rule ("in a group containing a peer half, a non-peer ×
+non-peer pair is not an edge") and that rule was tried and **rejected on a
+counter-example**: at `const o = { r: helper(a), s: b.email }` the group also
+contains a legitimate non-peer × non-peer pair (`b.email → o.s`), which the
+rule deletes. Losing a real edge is a worse failure than keeping a marked
+extra one — §9.1's own "detect and mark, do not prevent" verdict, reached
+here for the second time on independent evidence.
+
+**The cheap closure remains on the table, unchanged from §13.2's own note:**
+the parameter index is known for free at the bind emission site, so a `slot`
+field would separate the legs exactly. §9.1's evidence-first policy still
+applies; this section now supplies part of that evidence.
+
+### 14.8 §9.5's analysis-level truncation: a reserved out-of-band channel
+
+**Decided: reserve it in C4, do not invent a hop for it.** An `ITER_BUDGET`
+break in `analyzeFunctionFieldIdentity` is a whole-analysis-run truncation,
+and §9.5 says the entire result set for that function must be marked, not
+individual hops. Representing it as a hop would mean a fourth hop `kind` —
+which §2.2 explicitly guards against ("a provenance site that is not one of
+those three is a sign the taxonomy is being extended without the review the
+taxonomy earned"). So it arrives out of band:
+
+```js
+store.markTruncated(scope, context, reason)   // e.g. reason: 'iter-budget'
+```
+
+Every node and edge in that `(scope, context)` then carries
+`truncated: true`, and `diagnostics().truncations` lists them. Prototyped
+and pinned: before the call nothing is marked, after it everything in that
+scope-context is. **Reserving costs one method and one Map now; retrofitting
+it in C5 would mean revisiting the node and edge shape after C5 has been
+built on them.** The *producer* side — engine or driver actually calling it
+when the budget breaks — is deliberately NOT in C4's scope: it is an
+`engine.js` change, and C4 changes no existing file.
+
+### 14.9 What C4 deliberately does not do
+
+- **No backward walk, no reconstruction, no path budget, no prioritization.**
+  C5's, entirely. C4 ships the structure and the minimum read API needed to
+  prove that structure correct.
+- **No `DataFlowGraph v1` output.** Sub-project E.
+- **No FR-306 grade computation.** C6 reads `widenReasons`/`lossReasons`/
+  `ambiguousCorrelation`/`truncated`/**`annotations[]`** off the edges; C4
+  only carries them.
+
+  > **Corrected by the final whole-branch review (finding 5): `annotations[]`
+  > was missing from this list, and its absence would reintroduce exactly
+  > the silence §13.6 exists to prevent.** A §13.6 context-cap-degraded
+  > marker (`lossReason: 'context-cap-degraded'`) is classified as an
+  > ANNOTATION, not a source (correctly, per §14.4's `lossReason` exception
+  > — the peer was never analyzed, so it cannot be peer-sourced) — it
+  > therefore never reaches `edge.lossReasons`, only `edge.annotations[]`.
+  > `C4/Q2c` proves this is exactly where it lives (it finds the marker via
+  > `e.annotations.some(a => a.lossReason === 'context-cap-degraded')`, not
+  > via `e.lossReasons`). A C6 implementer reading only "reads
+  > `widenReasons`/`lossReasons`/…" off the edges would drop the marker
+  > silently — the precise §18.4 failure mode §13.6 was written to close.
+  > C6 must read `annotations[]` too, not only the edge's own top-level
+  > reason arrays.
+- **No collapsing of repeated library/framework nodes into typed summary
+  hops.** §12 and the C-scoping doc both left this "plausibly D or C4". It is
+  **not** C4: deciding that a node is a library node needs a registry that
+  does not exist yet (Sub-project D). C4 has no way to tell a framework
+  function from an application one, and guessing would be the same class of
+  error as a fabricated endpoint.
+- **No wiring into `runFieldIdentityAnalysis`.** A driver run emits zero hops
+  today (§14.1). Wiring is a follow-up task's item, and it is a `driver.js`
+  change, not a `path-store.js` one.
+- **No change to `field-identity.js`** (never), and no change to any existing
+  `src/lineage/*.js` file in the design task itself.
+
+### 14.10 What the follow-up implementation task must do
+
+Written the way §10.1/§10.2/§13.7 were, so the next brief needs no
+re-derivation.
+
+**`scanner/src/lineage/ids.js`**
+
+| # | Site | Change |
+|---|---|---|
+| 1 | after `edgeId` | add `provenanceNodeId` with §14.5's exact object signature; prefix `pnode:<kind>:`, via the existing `_hash`/`_canon` |
+| 2 | after it | add `provenanceEdgeId` with §14.5's exact object signature; prefix `pedge:` |
+| 3 | `test/lineage/ids.test.js` | extend with the discriminator-separation and bulk-non-collision cases the PoC carries (`C4/5`, `C4/5b`) |
+| 4 | `validate.js` | **no change.** `pnode:`/`pedge:` are not `DataFlowGraph v1` entity kinds and must not be added to its id-prefix regexes. Confirm by running `npm run test:lineage` — the json-schema-parity test must stay green untouched |
+
+**`scanner/src/lineage/path-store.js` (new)**
+
+| # | Item | Detail |
+|---|---|---|
+| 5 | imports | `ids.js` ONLY. Never `engine.js`/`summaries.js`/`driver.js` (§14.1). Add a test that asserts this by reading the file's own import list, so the boundary is enforced rather than documented |
+| 6 | `HOP_FIELDS` | the explicit 14-field list from §3 + §13.0, in a fixed order — never `Object.keys(h)` (§14.6) |
+| 7 | `classifyIn` / `classifyOut` | §14.3's rules verbatim, including `lossReason === null` in the peer-sourced branch (§14.4) and the `unclassified` fallthrough |
+| 8 | `PathStore` | `addHop(hop) -> boolean`, `addHops(hops) -> number`, `markTruncated(scope, context, reason)`; two-phase build; the traversal-free read API listed in §14.6 |
+| 9 | edge construction | per-group cross product with the peer×peer exclusion (§14.3) and the per-pairing ambiguity measure (§14.7) |
+| 10 | `diagnostics()` | `{ malformed, unclassified, truncations, orphanedPeerSources }` — all four are "recorded, never thrown, never dropped". `orphanedPeerSources` is §14.4's disclosed stream-completeness gap: a peer-sourced `call-resolved` hop (`lossReason: null`, non-null `peerScope`) whose named `(peerScope, peerContext, ⟨return⟩, dataElementId)` node has zero real in-edges once the whole stream has been ingested — detectable via the store's own `inIndex`/`outIndex` at build-finalize time, no new input needed. Reachable today via a cache warmed by a no-recorder run and reused by a later recorder-attached run (`driver.js`'s own returned cache, exactly as `driver.test.js` reuses it) — record it, do not fabricate an origin for it and do not drop the edge. |
+
+**Tests**
+
+| # | Change |
+|---|---|
+| 11 | Re-point `path-store-poc.test.js` at the shipped `path-store.js`/`ids.js`, delete its two local prototype blocks, rename it to `path-store.test.js`, and update the `test:lineage` script in `scanner/package.json` in the SAME commit — C3's item 15 precedent |
+| 12 | Keep every assertion, and especially keep `C4/Q2b` (the literal-§2.2 store with a dead-end callee exit) — it is the only guard that stops the §14.4 correction being silently undone by a future refactor of `classifyIn` |
+| 13 | Add a driver-level test only once a hop-emitting driver run is possible (Sub-project D/E). Until then a driver test would assert on an empty stream and be vacuous — see the note at the top of `engine-provenance-interprocedural.test.js`'s own driver test for the same reasoning |
+
+**Deliberately NOT in the follow-up's scope:** everything in §14.9, plus any
+change to `engine.js`/`summaries.js` (C4 consumes the C3 stream exactly as
+shipped — no hop shape change is needed to answer Q1 or Q2).
+
+### 14.11 Measured numbers
+
+Every row produced by running the PoC's own fixtures through the prototype
+store on 2026-08-30. "raw" is records offered, "dedup" is records accepted
+after §14.6's ingest dedup.
+
+| fixture | raw | dedup | groups | nodes | edges | cross-scope | ambiguous |
+|---|---|---|---|---|---|---|---|
+| `const b = a.email; return b;` | 4 | 4 | 2 | 3 | 2 | 0 | 0 |
+| §6's own worked example (2 fields, object literal) | 14 | 14 | 6 | 8 | 6 | 0 | 0 |
+| `while` loop with a re-assigned variable | 12 | 8 | 4 | 4 | 4 | 0 | 0 |
+| 2-function resolved call | 8 | 8 | 3 | 5 | 5 | 2 | 1 |
+| 3-function chain, 2 call sites | 20 | 20 | 7 | 11 | 11 | 6 | 2 |
+| mutual recursion (`ping`/`pong`/`top`) | 34 | 19 | 6 | 8 | 11 | 5 | 2 |
+| §9.1's cross-join (`{a: p.email, b: q.email}`) | 9 | 8 | 2 | 5 | 6 | 0 | 4 |
+
+§6's fixture is the one to read closely: its 14 deduplicated records become
+**8 nodes and 6 edges** — the two field-distinct three-hop paths §6 predicts
+(`user.email → u.email → o.email → ⟨return⟩` and the same for `.ssn`), with
+**zero** materialized paths. That is FR-303's compactness requirement,
+measured rather than claimed.
