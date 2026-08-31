@@ -263,10 +263,24 @@ function reconstructPaths(store, startNodeId, opts = {}) {
     kept.push(...take);
     terminals.push({
       nodeId,
-      terminalReason: group[0].terminal.reason,
+      // Fix round 1, finding 2: a terminal can genuinely carry MIXED
+      // reasons across its own paths (the mutual-recursion fixture at
+      // maxDepth 3 produces one sink whose paths back to a single terminal
+      // are part 'cycle' and part 'depth-limit'). Picking `group[0]`'s
+      // reason made the answer depend on array order — the SAME
+      // representative-picking bug class C4's own final whole-branch review
+      // found in `path-store.js`'s `origin` branch (`g.annotations[0]`),
+      // fixed there the same way: a content-sorted UNION, never a
+      // positional pick.
+      terminalReasons: [...new Set(group.map((p) => p.terminal.reason))].sort(),
       enumeratedPathCount: group.length,
       keptPathCount: take.length,
-      truncated: ordered.length > take.length,
+      // Filled in AFTER the global cap runs — see the note below. Computing
+      // `truncated` here would report `false` for a terminal the GLOBAL cap
+      // later starves to zero returned paths.
+      returnedPathCount: 0,
+      droppedPathCount: 0,
+      truncated: false,
     });
   }
 
@@ -301,7 +315,21 @@ function reconstructPaths(store, startNodeId, opts = {}) {
   result.returnedPathCount = returned.length;
   result.droppedPathCount = candidates.length - returned.length;
   result.analysisTruncated = returned.some((p) => p.analysisTruncated);
-  for (const t of terminals) t.returnedPathCount = returned.filter((p) => p.terminal.nodeId === t.nodeId).length;
+  // Fix round 1, finding 1 (BLOCKING): per-terminal truncation must
+  // reflect BOTH caps. It was previously computed from the per-terminal cap
+  // alone, BEFORE the global diversity round-robin ran — so a terminal the
+  // GLOBAL cap starved to zero returned paths still reported
+  // `truncated: false`. That is §18.4's exact failure mode ("budget
+  // exhausted" presented as "no path") reproduced at pair granularity,
+  // inside the very field §15.5 introduces to satisfy FR-305's per-pair
+  // path count. `enumerated > returned` is the only definition that covers
+  // both caps, and `droppedPathCount` makes the count explicit per pair the
+  // way `result.droppedPathCount` does per call.
+  for (const t of terminals) {
+    t.returnedPathCount = returned.filter((p) => p.terminal.nodeId === t.nodeId).length;
+    t.droppedPathCount = t.enumeratedPathCount - t.returnedPathCount;
+    t.truncated = t.droppedPathCount > 0;
+  }
   result.terminals = terminals;
 
   result.truncated = truncationReasons.size > 0 || result.droppedPathCount > 0;
@@ -680,6 +708,110 @@ test('C5/3c: a path that ends only because every continuation would revisit a no
   assert.ok(seen.has('origin'), 'and at least one genuinely complete one, so the two are demonstrably different labels');
 });
 
+test('C5/3d: `maxDepth` is load-bearing, not decorative — it is the only knob that bounds the O(depth^2) cost of ONE path, and the only one whose limit produces an EMITTED, marked partial', () => {
+  // Fix round 1, finding 5. The Task-1 report guessed maxDepth was the
+  // "most subsumable" knob. That guess was WRONG, and this is the
+  // measurement that shows it: a DFS frame carries a copy of the path so
+  // far (nodesRev / edgesRev / onPath), so extending a k-hop path costs
+  // O(k) — one path of depth D costs O(D^2), and `maxExpansions` (which
+  // counts EDGES examined, not elements copied) cannot see that cost at
+  // all. On a straight 3000-hop chain the whole walk is only 3000
+  // expansions, ~0.03% of the default expansion budget, yet it copies
+  // ~4.5M path elements.
+  const N = 3000;
+  const hops = [];
+  for (let i = 0; i < N; i++) {
+    const base = {
+      scope: 'S', nodeId: `n${i}`, context: 'C', dataElementId: 'data:e', line: i + 1,
+      peerScope: null, peerContext: null, syntacticPath: null,
+      widenReason: null, lossReason: null,
+    };
+    hops.push({ ...base, kind: 'production', subKind: 'ident', fromPath: `v${i}`, toPath: null });
+    hops.push({ ...base, kind: 'write-out', subKind: 'assign', fromPath: null, toPath: `v${i + 1}` });
+  }
+  const store = new PathStore();
+  store.addHops(hops);
+  const chainNode = (path) => store.nodeIdFor({
+    kind: 'path', scope: 'S', context: 'C', path, siteNodeId: null, dataElementId: 'data:e',
+  });
+  const sink = chainNode(`v${N}`);
+  assert.ok(store.getNode(sink), 'the chain really is N hops long');
+
+  // Unbounded depth: correct, complete — and it is `maxDepth`, not
+  // `maxExpansions`, that would be the only guard if this chain were 100x
+  // longer.
+  const tUnbounded = process.hrtime.bigint();
+  const full = reconstructPaths(store, sink, { maxDepth: 1e6 });
+  const msUnbounded = Number(process.hrtime.bigint() - tUnbounded) / 1e6;
+  assert.equal(full.paths.length, 1);
+  assert.equal(full.paths[0].hopCount, N);
+  assert.equal(full.paths[0].complete, true);
+  assert.equal(full.truncated, false);
+  assert.ok(full.budget.expansionsUsed <= N + 1,
+    `only ${full.budget.expansionsUsed} expansions for a ${N}-hop path — maxExpansions cannot see the quadratic copying cost`);
+  assert.ok(full.budget.expansionsUsed < DEFAULTS.maxExpansions,
+    'and it is nowhere near the default expansion budget, so that budget would never have fired');
+
+  // With maxDepth in force the same walk is cheap AND honest: it stops,
+  // it says why, and it hands back the prefix it did reconstruct.
+  const tCapped = process.hrtime.bigint();
+  const capped = reconstructPaths(store, sink, { maxDepth: 8 });
+  const msCapped = Number(process.hrtime.bigint() - tCapped) / 1e6;
+  assert.equal(capped.paths.length, 1);
+  assert.equal(capped.paths[0].hopCount, 8);
+  assert.equal(capped.paths[0].complete, false);
+  assert.equal(capped.paths[0].terminal.reason, 'depth-limit');
+  assert.equal(capped.truncated, true);
+  assert.ok(capped.truncationReasons.includes('depth-limit'));
+  assert.equal(capped.noPathReason, null);
+  assert.ok(msCapped < msUnbounded,
+    `the depth cap is what makes the walk cheap: ${msCapped.toFixed(1)}ms capped vs ${msUnbounded.toFixed(1)}ms unbounded`);
+  if (process.env.C5_PRINT_TABLE) console.log(`3d: N=${N} unbounded=${msUnbounded.toFixed(1)}ms capped=${msCapped.toFixed(1)}ms expansions=${full.budget.expansionsUsed}`); // eslint-disable-line no-console
+
+  // And it is the ONLY budget whose limit produces an emitted, MARKED
+  // partial rather than an abandoned branch — proven by contrast on the
+  // same store.
+  const abandoned = reconstructPaths(store, sink, { maxExpansions: 3 });
+  assert.deepEqual(abandoned.paths, [], 'the expansion budget abandons the in-flight branch');
+  assert.equal(abandoned.truncated, true);
+  assert.equal(abandoned.noPathReason, null);
+});
+
+test('C5/3e: `maxCandidatePaths` is a TIGHTENING constant, not an independent safety guarantee — `maxExpansions` already bounds the candidate array at `expansionsUsed + 1`, measured on every fixture', () => {
+  // Fix round 1, finding 5. §15.3 originally justified maxCandidatePaths
+  // as "bounds memory", which is wrong as written: the DFS emits at most
+  // one candidate per POPPED frame, and frames are only ever pushed by an
+  // expansion, so `candidates.length <= expansionsUsed + 1` holds
+  // unconditionally, with or without the knob. What the knob genuinely
+  // buys is a much TIGHTER default (256, vs the ~10001 maxExpansions alone
+  // would allow) and an early exit for a caller who wants a few paths fast.
+  const fixtures = [
+    ['function f(a) { const b = a.email; return b; }', 'f', [['a.email', 'data:email']], false],
+    ['function f(p, q) { const x = { a: p.email, b: q.email }; return x; }', 'f', [['p.email', 'data:email'], ['q.email', 'data:email']], false],
+    [`
+      function ping(u) { const r = pong(u); return { a: u.email, b: r }; }
+      function pong(u) { const r = ping(u); return { c: u.email, d: r }; }
+      function top(user) { return ping(user); }
+    `, 'top', [['user.email', 'data:email']], true],
+  ];
+  let checked = 0;
+  for (const [src, fn, seed, ip] of fixtures) {
+    const byName = parseFns(src, `/x/c5-3e-${fn}.js`);
+    let es = emptyState();
+    for (const [pp, id] of seed) es = addIdentity(es, pp, id);
+    const { store } = record(byName[fn], es, ip ? { byName } : {});
+    for (const sn of store.nodes()) {
+      // Deliberately WITHOUT the knob (raised out of the way), so the
+      // bound is proven to hold on maxExpansions alone.
+      const r = reconstructPaths(store, sn.id, { maxCandidatePaths: 1e9, maxPaths: 1e6, maxPathsPerTerminal: 1e6 });
+      assert.ok(r.enumeratedPathCount <= r.budget.expansionsUsed + 1,
+        `candidates (${r.enumeratedPathCount}) must never exceed expansions+1 (${r.budget.expansionsUsed + 1})`);
+      checked += 1;
+    }
+  }
+  assert.ok(checked > 10, `bound holds across ${checked} start nodes`);
+});
+
 // =====================================================================
 // 4. "Genuinely no path" vs "truncated" — two DIFFERENT empty results
 //    (§15.4). This is §18.4's single most load-bearing constraint.
@@ -872,7 +1004,8 @@ test('C5/5c: pathId is a content hash — the same logical path from two indepen
   assert.match(a.paths[0].id, /^ppath:[0-9a-f]{12}$/);
 });
 
-test('C5/5d: §9.1\'s cross-join keeps its phantom alternates as SEPARATE paths and de-prioritizes them by their ambiguity marker — detect-and-mark carried all the way to the ordered output', () => {
+test('C5/5d: §9.1\'s cross-join keeps its phantom alternates as SEPARATE paths — and, on a fixture with GENUINELY MIXED ambiguity, the ordering rule actually de-prioritizes the ambiguous ones', () => {
+  // (a) §9.1's own cross-join: four distinct routes, none collapsed.
   const src = 'function f(p, q) { const x = { a: p.email, b: q.email }; return x; }';
   const byName = parseFns(src, '/x/c5-xjoin.js');
   let es = addIdentity(emptyState(), 'p.email', 'data:email');
@@ -883,25 +1016,49 @@ test('C5/5d: §9.1\'s cross-join keeps its phantom alternates as SEPARATE paths 
   const sink = store.nodeIdFor(returnNode(scope, ctx, 'data:email'));
 
   const r = reconstructPaths(store, sink);
-  assert.ok(r.paths.length >= 4, `the 2x2 cross product yields ${r.paths.length} distinct paths, all kept`);
+  assert.equal(r.paths.length, 4, 'the 2x2 cross product yields exactly 4 distinct paths, all kept');
   assert.equal(r.truncated, false, 'nothing was capped away at the default budget');
-
-  // Every path is distinct by node sequence here — the cross-join produces
-  // genuinely different routes, so nothing is collapsed.
   const seqs = new Set(r.paths.map((p) => p.nodeIds.join('>')));
-  assert.equal(seqs.size, r.paths.length);
+  assert.equal(seqs.size, r.paths.length, 'every path is a genuinely different route — nothing is collapsed');
 
-  // Ordering: any unambiguous path sorts ahead of every ambiguous one.
-  const firstAmbiguousIdx = r.paths.findIndex((p) => p.ambiguousHopCount > 0);
-  const lastCleanIdx = r.paths.map((p) => p.ambiguousHopCount).lastIndexOf(0);
-  if (firstAmbiguousIdx !== -1 && lastCleanIdx !== -1) {
-    assert.ok(lastCleanIdx < firstAmbiguousIdx, 'ambiguity-free paths come first');
-  }
-  // Non-decreasing ambiguity across the whole ordered list.
-  for (let i = 1; i < r.paths.length; i++) {
-    assert.ok(r.paths[i].ambiguousHopCount >= r.paths[i - 1].ambiguousHopCount,
-      'the ordered list never puts a more-ambiguous path ahead of a less-ambiguous one');
-  }
+  // Fix round 1, finding 4: this fixture's own ambiguity vector is [1,1,1,1],
+  // so ordering assertions made ON IT are VACUOUS — a guarded
+  // "unambiguous before ambiguous" check never executes, and a
+  // monotonicity loop only ever compares 1 >= 1. Pin the flatness
+  // explicitly, so nobody mistakes this fixture for ordering evidence
+  // again, and prove the ordering on (b) instead.
+  assert.deepEqual(r.paths.map((p) => p.ambiguousHopCount), [1, 1, 1, 1],
+    'DISCLOSED: uniform ambiguity here, so this fixture cannot and does not prove any ORDERING claim');
+
+  // (b) §14.7's leg fixture, which DOES have mixed ambiguity (1 vs 2) and
+  // therefore makes the ordering rule's second key do real, observable work.
+  const legSrc = `
+    function helper(u) { return u.email; }
+    function f(a, b) { const o = { r: helper(a), s: b.email }; return o; }
+  `;
+  const legFns = parseFns(legSrc, '/x/c5-5d-leg.js');
+  let les = addIdentity(emptyState(), 'a.email', 'data:email');
+  les = addIdentity(les, 'b.email', 'data:email');
+  const { store: legStore, raw: legRaw } = record(legFns.f, les, { byName: legFns });
+  const legSink = legStore.nodeIdFor(returnNode(
+    legFns.f.qid, legRaw.find((h) => h.subKind === 'call-resolved').context, 'data:email',
+  ));
+  const lr = reconstructPaths(legStore, legSink, { maxPaths: 1e6, maxPathsPerTerminal: 1e6 });
+  const amb = lr.paths.map((p) => p.ambiguousHopCount);
+  assert.ok(new Set(amb).size >= 2,
+    `the ordering assertions below are only meaningful on MIXED ambiguity; got ${JSON.stringify(amb)}`);
+  assert.deepEqual(amb, [...amb].sort((a, b) => a - b),
+    'the ordered list never puts a more-ambiguous path ahead of a less-ambiguous one');
+  assert.ok(amb[0] < amb[amb.length - 1],
+    'and the difference is real: the least-ambiguous path is strictly less ambiguous than the last');
+
+  // The reorder is genuine, not enumeration order: the more-ambiguous
+  // paths here are ALSO the boundary-crossing ones, so key 2 (ambiguity)
+  // demonstrably outranks key 4 (cross-scope) rather than both agreeing.
+  const worst = lr.paths[lr.paths.length - 1];
+  const best = lr.paths[0];
+  assert.ok(worst.crossScopeCount > best.crossScopeCount,
+    'the demoted paths cross MORE boundaries — so ambiguity really did override the boundary key, it did not merely agree with it');
 });
 
 test('C5/5e: the cap is applied PER TERMINAL first, so one prolific source can never crowd another out of the result entirely (§15.5)', () => {
@@ -927,37 +1084,150 @@ test('C5/5e: the cap is applied PER TERMINAL first, so one prolific source can n
   for (const t of capped.terminals) {
     assert.equal(t.returnedPathCount, 1);
     assert.ok(t.enumeratedPathCount >= t.returnedPathCount);
-    assert.equal(t.truncated, t.enumeratedPathCount > t.keptPathCount);
+    assert.equal(t.droppedPathCount, t.enumeratedPathCount - t.returnedPathCount);
+    assert.equal(t.truncated, t.droppedPathCount > 0);
   }
+
+  // ------------------------------------------------------------------
+  // Fix round 1, finding 1 (BLOCKING). The case above can NEVER expose the
+  // bug this closes, because the per-terminal cap is the only one that
+  // binds there. Here the GLOBAL cap alone starves a terminal to ZERO
+  // returned paths while the per-terminal cap never fires at all — and
+  // before the fix that terminal's row still said `truncated: false`,
+  // i.e. §18.4's "budget exhausted presented as no path", at pair
+  // granularity, inside the field designed to prevent it at call
+  // granularity.
+  // ------------------------------------------------------------------
+  const starved = reconstructPaths(store, sink, { maxPaths: 1, maxPathsPerTerminal: 8 });
+  assert.equal(starved.paths.length, 1);
+  assert.equal(starved.truncated, true);
+  assert.ok(starved.truncationReasons.includes('path-cap'));
+  assert.ok(!starved.truncationReasons.includes('per-terminal-cap'),
+    'the per-terminal cap did NOT fire here — the global cap alone did all the truncating');
+
+  if (process.env.C5_PRINT_TABLE) {
+    for (const t of starved.terminals) {
+      const n = store.getNode(t.nodeId);
+      console.log(`5e-starved: ${n.path} enumerated=${t.enumeratedPathCount} kept=${t.keptPathCount} returned=${t.returnedPathCount} dropped=${t.droppedPathCount} truncated=${t.truncated}`); // eslint-disable-line no-console
+    }
+  }
+  const zeroRows = starved.terminals.filter((t) => t.returnedPathCount === 0);
+  assert.ok(zeroRows.length > 0, 'the global cap really did starve at least one terminal to zero');
+  // The task review's own concrete reproduction, pinned verbatim: this row
+  // read `enumerated=2 kept=2 returned=0 truncated=FALSE` before the fix.
+  assert.ok(zeroRows.some((t) => t.enumeratedPathCount === 2 && t.keptPathCount === 2
+    && t.returnedPathCount === 0 && t.droppedPathCount === 2 && t.truncated === true),
+  'the review\'s exact row now reads enumerated=2 kept=2 returned=0 dropped=2 truncated=true');
+  for (const t of zeroRows) {
+    assert.ok(t.enumeratedPathCount > 0, 'that terminal genuinely HAS paths');
+    assert.equal(t.truncated, true,
+      'and its row must say so — a terminal with zero returned paths can never report truncated:false');
+    assert.equal(t.droppedPathCount, t.enumeratedPathCount, 'with the explicit per-pair count §18.4 asks for');
+  }
+  // Every row's arithmetic closes, and the per-call total agrees with the
+  // per-terminal rows — so a consumer cannot be told two different stories.
+  assert.equal(
+    starved.terminals.reduce((n, t) => n + t.droppedPathCount, 0),
+    starved.droppedPathCount,
+    'the per-terminal drop counts sum to the per-call drop count',
+  );
+  assert.equal(
+    starved.terminals.reduce((n, t) => n + t.returnedPathCount, 0),
+    starved.returnedPathCount,
+  );
 });
 
-test('C5/5f: a purely GLOBAL cap would crowd a terminal out entirely — this is the measurement that motivated the per-terminal cap, not an assumption', () => {
-  const src = 'function f(p, q) { const x = { a: p.email, b: q.email }; return x; }';
+test('C5/5f: a purely GLOBAL cap covers fewer terminals than the designed one — re-anchored on a fixture where the ranking reason is REAL and deterministic, not a hash coincidence', () => {
+  // Fix round 1, finding 3. This measurement was originally taken on the
+  // §9.1 cross-join fixture, where it is TRUE but proves nothing: all four
+  // of that fixture's paths share an identical comparePaths content tuple
+  // (`C5/5d` now pins the flat [1,1,1,1] ambiguity vector), so which two
+  // survive a naive cap is decided purely by `pathId`'s hash. Re-anchored
+  // here on the mutual-recursion fixture, where `complete` — comparePaths'
+  // FIRST key — genuinely and deterministically separates the two
+  // terminals: every complete path terminates at one, every
+  // cycle-terminated path at the other.
+  const src = `
+    function ping(u) { const r = pong(u); return { a: u.email, b: r }; }
+    function pong(u) { const r = ping(u); return { c: u.email, d: r }; }
+    function top(user) { return ping(user); }
+  `;
   const byName = parseFns(src, '/x/c5-globalcap.js');
-  let es = addIdentity(emptyState(), 'p.email', 'data:email');
-  es = addIdentity(es, 'q.email', 'data:email');
-  const { store, raw } = record(byName.f, es);
-  const sink = store.nodeIdFor(returnNode(byName.f.qid, raw[0].context, 'data:email'));
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  const { store } = record(byName.top, entryState, { byName });
+  const big = { maxPaths: 1e6, maxPathsPerTerminal: 1e6, maxCandidatePaths: 1e6 };
 
-  const full = reconstructPaths(store, sink);
+  // Pick the sink that actually has two terminals with a real ranking
+  // separation, and assert that separation rather than assuming it.
+  const candidates = sinkCandidates(store)
+    .map((sn) => ({ sn, r: reconstructPaths(store, sn.id, big) }))
+    .filter(({ r }) => new Set(r.paths.map((p) => p.terminal.nodeId)).size >= 2);
+  assert.ok(candidates.length > 0, 'the cyclic fixture has a sink with 2+ distinct terminals');
+  const { sn, r: full } = candidates[0];
+
   const terminals = [...new Set(full.paths.map((p) => p.terminal.nodeId))];
-  assert.ok(terminals.length >= 2);
+  assert.equal(terminals.length, 2);
+  const completeTerminals = new Set(full.paths.filter((p) => p.complete).map((p) => p.terminal.nodeId));
+  const partialTerminals = new Set(full.paths.filter((p) => !p.complete).map((p) => p.terminal.nodeId));
+  assert.equal(completeTerminals.size, 1);
+  assert.equal(partialTerminals.size, 1);
+  assert.equal([...completeTerminals][0] === [...partialTerminals][0], false,
+    'THE REAL RANKING REASON: one terminal carries only complete paths, the other only cycle-terminated ones — and `complete` is comparePaths\' first key, so a naive top-N provably fills from one terminal before it ever reaches the other');
+
+  const n = full.paths.filter((p) => p.complete).length; // N = every complete path
+  assert.ok(n >= 2 && n < full.paths.length);
 
   // Naive global-only cap: rank everything, keep the top N.
-  const naive = [...full.paths].sort(comparePaths).slice(0, 2);
-  const naiveTerminals = new Set(naive.map((p) => p.terminal.nodeId));
-
+  const naiveTerminals = new Set([...full.paths].sort(comparePaths).slice(0, n).map((p) => p.terminal.nodeId));
   // The shipped design's cap, at the same total size.
-  const designed = reconstructPaths(store, sink, { maxPathsPerTerminal: 1, maxPaths: 2 });
+  const designed = reconstructPaths(store, sn.id, { maxPaths: n, maxPathsPerTerminal: 1e6 });
   const designedTerminals = new Set(designed.paths.map((p) => p.terminal.nodeId));
 
+  if (process.env.C5_PRINT_TABLE) console.log(`5f: N=${n} terminals=${terminals.length} naiveCovers=${naiveTerminals.size} designedCovers=${designedTerminals.size} totalPaths=${full.paths.length}`); // eslint-disable-line no-console
+  assert.ok(naiveTerminals.size < terminals.length,
+    `MEASURED: a naive global-only top-${n} cap covers ${naiveTerminals.size} of ${terminals.length} terminals — the missing one is reported as having zero paths`);
   assert.equal(designedTerminals.size, terminals.length,
-    'the designed cap keeps every terminal represented at N=2');
-  if (process.env.C5_PRINT_TABLE) console.log(`5f: terminals=${terminals.length} naiveCovers=${naiveTerminals.size} designedCovers=${designedTerminals.size} totalPaths=${full.paths.length}`); // eslint-disable-line no-console
-  assert.equal(naiveTerminals.size, 1,
-    'MEASURED: a naive global-only top-N cap at N=2 returns two paths that both terminate at the SAME source, reporting the other source as having zero paths');
-  assert.ok(naiveTerminals.size < designedTerminals.size,
-    `naive global-only ranking covers ${naiveTerminals.size} terminal(s) at N=2 vs the designed cap's ${designedTerminals.size}`);
+    'the designed diversity-first cap keeps every terminal represented at the same total size');
+});
+
+test('C5/5h: a terminal can genuinely carry MIXED terminal reasons across its own paths, so the per-terminal row unions them — never a positional pick (the C4 `g.annotations[0]` bug class)', () => {
+  // Fix round 1, finding 2. `terminals[].terminalReason = group[0].terminal.reason`
+  // made the reported reason depend on candidate array order whenever a
+  // terminal's paths do not agree — the SAME representative-picking defect
+  // C4's own final whole-branch review found in `path-store.js`'s `origin`
+  // branch and fixed the same way (content-sorted union, not position).
+  const src = `
+    function ping(u) { const r = pong(u); return { a: u.email, b: r }; }
+    function pong(u) { const r = ping(u); return { c: u.email, d: r }; }
+    function top(user) { return ping(user); }
+  `;
+  const byName = parseFns(src, '/x/c5-mixedterm.js');
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  const { store } = record(byName.top, entryState, { byName });
+
+  const big = { maxPaths: 1e6, maxPathsPerTerminal: 1e6, maxCandidatePaths: 1e6 };
+  let mixed = null;
+  for (const sn of sinkCandidates(store)) {
+    const r = reconstructPaths(store, sn.id, { ...big, maxDepth: 3 });
+    const row = r.terminals.find((t) => t.terminalReasons.length > 1);
+    if (row) { mixed = { r, row }; break; }
+  }
+  assert.ok(mixed, 'the cyclic fixture at maxDepth 3 really does produce a terminal with 2+ distinct reasons');
+  assert.deepEqual(mixed.row.terminalReasons, ['cycle', 'depth-limit'],
+    'both reasons are reported, sorted — one path reached that node via a cycle clip, another via the depth limit');
+
+  // The union genuinely matches the paths' own reasons, so the row can
+  // never disagree with the per-path data a consumer would cross-check.
+  const own = [...new Set(mixed.r.paths
+    .filter((p) => p.terminal.nodeId === mixed.row.nodeId)
+    .map((p) => p.terminal.reason))].sort();
+  assert.deepEqual(mixed.row.terminalReasons, own);
+
+  // And it is ORDER-INDEPENDENT: nothing about the row depends on which
+  // path the DFS happened to enumerate first.
+  assert.ok(mixed.row.terminalReasons.every((x, i, a) => i === 0 || a[i - 1] <= x), 'sorted');
+  assert.ok(!Object.prototype.hasOwnProperty.call(mixed.row, 'terminalReason'),
+    'the singular, order-dependent field is gone, not merely supplemented');
 });
 
 test('C5/5g: the global cap is DIVERSITY-first — at a cap smaller than the bucket count it spans distinct path SHAPES rather than filling up from one bucket (§18.4: "prioritize paths that DIFFER in boundary…")', () => {
@@ -1010,8 +1280,18 @@ test('C5/6: the whole design needs nothing from PathStore that PathStore does no
   assert.ok(Array.isArray(store.diagnostics().orphanedPeerSources), 'diagnostics — the incomplete-record signal');
   assert.equal(typeof store.stats().nodes, 'number');
 
-  const srcText = reconstructPaths.toString() + materialize.toString() + sinkCandidates.toString() + hopOf.toString();
+  // Fix round 1, nitpick 9: scan EVERY function in the prototype, not the
+  // four that happen to take a store — the assertion's message claims a
+  // whole-module guarantee, so it must check the whole module.
+  const prototypeFns = [
+    reconstructPaths, materialize, sinkCandidates, hopOf,
+    comparePaths, isIncompleteAnswer, pathId,
+  ];
+  const srcText = prototypeFns.map((f) => f.toString()).join('\n');
+  assert.equal(prototypeFns.length, 7, 'every function the prototype defines is in the scan');
   assert.equal(/store\._/.test(srcText), false, 'the prototype never touches a private PathStore field');
+  assert.equal(/\._(groups|seen|built|peerSourced|truncations|malformed|unclassified|stats)\b/.test(srcText), false,
+    'nor any of PathStore\'s private fields by name, through any alias');
 });
 
 // =====================================================================
@@ -1081,8 +1361,11 @@ test('C5/M: §15.11\'s measured-numbers table, produced by running every fixture
     }
     const got = { sinks: sinks.length, enumerated, complete, maxHops, expansions, clipped };
     rows.push([m.name, got]);
+    // Fix round 1, finding 7: the env var may only ADD diagnostic output.
+    // It previously replaced the assertion, which meant the one guard
+    // stopping §15.11 going stale could be switched off by an env var.
     if (process.env.C5_PRINT_TABLE) console.log(`RAW ${m.name} -> ${JSON.stringify(got)}`); // eslint-disable-line no-console
-    else assert.deepEqual(got, m.expect, `${m.name}: §15.11's published row`);
+    assert.deepEqual(got, m.expect, `${m.name}: §15.11's published row`);
   }
   if (process.env.C5_PRINT_TABLE) {
     for (const [name, got] of rows) {
@@ -1091,3 +1374,4 @@ test('C5/M: §15.11\'s measured-numbers table, produced by running every fixture
     }
   }
 });
+

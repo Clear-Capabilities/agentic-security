@@ -2247,10 +2247,33 @@ graph walk and still has none).
    the hard, shape-independent termination guarantee, and the only one that
    bounds *work* rather than *output*. It is the budget the brief's "a cap
    on total paths explored, not just total nodes visited" asks for.
-3. **`maxCandidatePaths`** (default 256) — stop enumerating once this many
-   complete-or-partial branches have been collected. Bounds memory.
-4. **`maxDepth`** (default 64) — hops on a single path. Bounds the *length*
-   of any one answer, which `maxExpansions` does not.
+3. **`maxDepth`** (default 64) — hops on a single path.
+   > **Corrected by fix round 1 (finding 5): this is the SECOND most
+   > load-bearing knob, not the most droppable one.** A DFS frame carries a
+   > copy of the path so far, so extending a k-hop path costs O(k) and one
+   > path of depth D costs **O(D²)** — a cost `maxExpansions` cannot see,
+   > because it counts edges examined, not elements copied. Measured
+   > (`C5/3d`) on a hand-built straight 3000-hop chain: the whole walk is
+   > 3000 expansions — 0.03% of the default expansion budget, so that
+   > budget would never fire — yet it takes ~150 ms unbounded against
+   > ~0 ms at `maxDepth: 8`. It is also the **only** budget whose limit
+   > produces an EMITTED, marked partial rather than an abandoned branch
+   > (§15.4), proven by contrast on the same store.
+4. **`maxCandidatePaths`** (default 256) — stop enumerating once this many
+   complete-or-partial branches have been collected.
+   > **Corrected by fix round 1 (finding 5). This knob is a TIGHTENING
+   > constant, not an independent safety guarantee, and the earlier text
+   > here ("bounds memory") was wrong as written.** The DFS emits at most
+   > one candidate per *popped* frame, and a frame is only ever pushed by
+   > an expansion, so `enumeratedPathCount ≤ expansionsUsed + 1` holds
+   > **unconditionally** — `maxExpansions` already bounds the candidate
+   > array on its own. `C5/3e` measures that bound across every start node
+   > of three fixtures with this knob raised out of the way. What the knob
+   > genuinely buys is a much tighter *default* (256, against the ~10001
+   > `maxExpansions` alone would permit) and an early exit for a caller who
+   > wants a few paths fast. It is kept for that, stated as that. Dropping
+   > it, and its `'candidate-cap'` truncation reason with it, would also
+   > have been defensible.
 
 **The depth check runs AFTER the zero-in-edges check, deliberately.** A
 node with no predecessors is a genuine origin no matter how deep the walk
@@ -2275,6 +2298,10 @@ They are a starting point to re-measure then, not a tuned result.
 
 The result shape makes **five** answers pairwise distinguishable **in the
 data**, not by convention or by a caller's discipline:
+
+Every result also carries `startNodeId` and `startNodeKind` (the started-from
+node's `kind`, or `null` when it is unknown), so a consumer can tell what it
+asked about without a second `getNode` call.
 
 | answer | `truncated` | `unknownStartNode` | `noPathReason` | `truncationReasons` | means |
 |---|---|---|---|---|---|
@@ -2356,14 +2383,26 @@ The naive reading — cap the paths returned by one call, i.e. per *start
 node* — is strictly coarser than "per pair", and the difference is not
 academic:
 
-> **MEASURED (`C5/5f`), on the real §9.1 cross-join fixture
-> `function f(p, q) { const x = { a: p.email, b: q.email }; return x; }`
-> seeded so both parameters carry `data:email`.** The sink has 4 paths back
-> to 2 distinct terminals. A naive global top-N cap at N=2 returns two
-> paths that **both terminate at the same source** — so the other source is
-> reported as having *zero* paths. That is §18.4's own failure mode
-> ("budget exhausted" presented as "no path") reached through the cap
+> **MEASURED (`C5/5f`), on the mutual-recursion fixture.** At the first
+> sink with two terminals the walk finds **6 paths across 2 distinct
+> terminals** — 4 complete, 2 cycle-terminated — and the two terminals are
+> separated by a real, deterministic ranking reason rather than by chance:
+> every *complete* path terminates at one of them, every
+> *cycle-terminated* path at the other, and `complete` is `comparePaths`'
+> **first** key. So a naive global top-N cap at **N = 4** fills entirely
+> from the complete terminal and covers **1 of 2**; the other terminal is
+> reported as having *zero* paths. That is §18.4's own failure
+> mode ("budget exhausted" presented as "no path") reached through the cap
 > rather than through the walk.
+>
+> **Re-anchored by fix round 1 (finding 3).** This measurement was
+> originally taken on the §9.1 cross-join fixture. The claim was true
+> there, but it proved nothing: all four of that fixture's paths share an
+> **identical** `comparePaths` content tuple (`C5/5d` now pins the flat
+> `[1,1,1,1]` ambiguity vector), so which two survived a naive cap was
+> decided purely by `pathId`'s hash. A measurement that holds by hash
+> coincidence is exactly the "prose stronger than the proof" failure this
+> document exists to prevent.
 
 **Decided: the cap is applied per TERMINAL first, then globally.**
 
@@ -2375,10 +2414,47 @@ academic:
 - `maxPaths` (default 32) — a global ceiling on the returned list,
   applied diversity-first (§15.7).
 - `result.terminals[]` reports, per terminal:
-  `{nodeId, terminalReason, enumeratedPathCount, keptPathCount,
-  returnedPathCount, truncated}`. This is also what FR-305's *"the UI must
-  show a path count"* needs — a count **per source/sink pair**, not one
-  aggregate.
+  `{nodeId, terminalReasons, enumeratedPathCount, keptPathCount,
+  returnedPathCount, droppedPathCount, truncated}`. This is also what
+  FR-305's *"the UI must show a path count"* needs — a count **per
+  source/sink pair**, not one aggregate.
+
+  Two properties of that row are load-bearing, and fix round 1 found both
+  of them wrong in the first draft:
+
+  > **`truncated` is `enumeratedPathCount > returnedPathCount` — measured
+  > AFTER the global cap, never from the per-terminal cap alone (finding 1,
+  > blocking).** The first draft computed it from `maxPathsPerTerminal`
+  > only, *before* the diversity round-robin ran, so a terminal that the
+  > **global** cap starved to zero returned paths still reported
+  > `truncated: false`. Reproduced concretely on the §9.1 cross-join
+  > fixture at `{maxPaths: 1, maxPathsPerTerminal: 8}`: the `p.email`
+  > terminal showed `enumerated=2 kept=2 returned=0 truncated=false` — a
+  > terminal with ZERO returned paths claiming it was not truncated. (That
+  > exact row now reads `enumerated=2 kept=2 returned=0 droppedPathCount=2
+  > truncated=true`, pinned verbatim by `C5/5e`.) That
+  > is §18.4's exact failure mode reproduced at *pair* granularity, inside
+  > the very field this section introduces to satisfy it at *call*
+  > granularity, and it would have been read by precisely the consumers
+  > (C6, Milestone 3's UI) that the field exists for. `droppedPathCount`
+  > makes the count explicit per pair the way `result.droppedPathCount`
+  > does per call, and `C5/5e` now pins BOTH cases — the per-terminal cap
+  > (where the bug structurally cannot fire) and the global cap alone
+  > (where it did) — plus the arithmetic that the per-terminal rows sum to
+  > the per-call totals, so a consumer can never be told two different
+  > stories.
+  >
+  > **`terminalReasons` is a sorted UNION over the terminal's own paths,
+  > never a positional pick (finding 2).** A terminal can genuinely carry
+  > MIXED reasons: on the mutual-recursion fixture at `maxDepth: 3`, one
+  > sink has a terminal reached by both a `'cycle'` clip and a
+  > `'depth-limit'` stop. The first draft's `group[0].terminal.reason`
+  > therefore reported whichever the DFS happened to enumerate first —
+  > the SAME representative-picking bug class C4's own final whole-branch
+  > review found in `path-store.js`'s `origin` branch (`g.annotations[0]`)
+  > and fixed the same way. The singular field is **removed**, not
+  > supplemented, so no consumer can keep reading the order-dependent one;
+  > `C5/5h` asserts its absence as well as the union's correctness.
 
 **What changes when Sub-project D's registry lands.** Very little, and that
 is the point. D relabels *which* terminals are registered sources; the
@@ -2446,12 +2522,25 @@ every node of the cyclic fixture rather than asserting it.
 **What is NOT collapsed, and why.** §9.1's cross-join phantoms
 (`p.email → x.b` where the value came from `q.email`) are genuinely
 different node sequences and are **kept**, marked
-`ambiguousCorrelation: true` on the offending hop and de-prioritized by
+`ambiguousCorrelation: true` on the offending hop, and de-prioritized by
 §15.7's order. That is §9.1's own "detect and mark, do not prevent"
 verdict carried to the output — and §14.7 reached the same verdict a second
 time on independent evidence. Silently collapsing them would be exactly the
 hiding FR-305 forbids; the `ambiguousHopCount` on the path is how a
-consumer tells them apart.
+consumer tells them apart. `C5/5d` pins the *keeping* half on §9.1's own
+fixture (4 distinct routes, none collapsed).
+
+> **Where the DE-PRIORITIZING half is actually proven, corrected by fix
+> round 1 (finding 4).** Not on §9.1's fixture: its ambiguity vector is a
+> flat `[1,1,1,1]`, so every ordering assertion made on it is **vacuous** —
+> a guarded "unambiguous before ambiguous" check never executes and a
+> monotonicity loop only ever compares `1 >= 1`. `C5/5d` now pins that
+> flatness explicitly, so the fixture can never again be mistaken for
+> ordering evidence, and proves the ordering on §14.7's leg fixture
+> instead, whose ambiguity genuinely varies (`1` vs `2`) — and where the
+> more-ambiguous paths are ALSO the boundary-crossing ones, so key 2
+> (ambiguity) is shown to *override* key 4 (cross-scope) rather than merely
+> agree with it. `C5/2` is the other genuine reorder (§15.7).
 
 ### 15.7 Q7 — prioritization: diversity first, and what is honestly deferred
 
@@ -2613,9 +2702,10 @@ re-derivation.
 | 6 | `reconstructPaths(store, startNodeId, opts)` | iterative DFS over an explicit stack — **no recursion**. Per-path visited set. `edgesTo` sorted by edge id. Zero-in-edges check BEFORE the depth check (§15.3) |
 | 7 | terminal classification | `'origin'` / `'incomplete-record'` (node in `diagnostics().orphanedPeerSources`) / `'cycle'` (every continuation clipped) / `'depth-limit'`. `'expansion-budget'`/`'candidate-cap'` are result-level only — those branches are abandoned, never emitted (§15.4) |
 | 8 | the cap | per `terminal.nodeId` first (`maxPathsPerTerminal`), then a diversity-first round-robin over `(terminal.nodeId, shape)` buckets for `maxPaths` (§15.5/§15.7). `result.terminals[]` per §15.5 |
-| 9 | the result shape | exactly §15.4's table, plus `enumeratedPathCount`/`returnedPathCount`/`droppedPathCount`/`completePathCount`/`cyclesClipped`/`analysisTruncated`/`budget.expansionsUsed`. `noPathReason` must be computed ONLY when `truncated === false` — that ordering IS §18.4's constraint |
+| 9 | the result shape | exactly §15.4's table, plus `startNodeId`/`startNodeKind`/`enumeratedPathCount`/`returnedPathCount`/`droppedPathCount`/`completePathCount`/`cyclesClipped`/`analysisTruncated`/`terminals[]`/`budget.expansionsUsed`. `noPathReason` must be computed ONLY when `truncated === false` — that ordering IS §18.4's constraint, and `terminals[].truncated`/`droppedPathCount` must be computed AFTER the global cap, never from the per-terminal cap alone (§15.5) |
 | 10 | `sinkCandidates(store)` | §15.9's filter, with the "not a registry" doc comment |
 | 11 | `isIncompleteAnswer(result)` | §15.4's five-term predicate, exported so AC-10's banner has one owner |
+| 11b | `comparePaths(a, b)` | §15.7's total order, **also exported**. It is not merely internal: the tests call it directly to build the naive-global-cap contrast (`C5/5f`), so items 12/13 below are unsatisfiable without it. Added by fix round 1 (finding 6) |
 
 **Tests**
 
@@ -2623,7 +2713,7 @@ re-derivation.
 |---|---|
 | 12 | Re-point `path-query-poc.test.js` at the shipped `path-query.js`/`ids.js`, delete its local prototype block, rename it to `path-query.test.js`, and update the `test:lineage` script in `scanner/package.json` in the SAME commit — C3's item 15 / C4's item 11 precedent |
 | 13 | Keep every assertion, and especially keep `C5/4b` (the three empty-looking results as literal JSON) and `C5/4c` (`incomplete-record`) — together they are the only guard that stops §18.4's constraint being silently undone |
-| 14 | Keep `C5/M`'s measured-numbers table asserted against §15.11's published rows, so a refactor that changes a published number fails a test rather than leaving this document stale (C4's `C4/1b`/`C4/4` precedent) |
+| 14 | Keep `C5/M`'s measured-numbers table asserted against §15.11's published rows, so a refactor that changes a published number fails a test rather than leaving this document stale (C4's `C4/1b`/`C4/4` precedent). **The trade-off, stated rather than discovered later:** these numbers are a property of the current parser/IR/engine as much as of `path-query.js`, so an unrelated IR or engine change CAN fail this test without anything being wrong with reconstruction. That is the intended cost — the same one §14.11's own pinned counts carry — and the correct response is to re-measure and update §15.11's table in the same commit, never to relax the assertion. The `C5_PRINT_TABLE` env var prints the freshly measured rows to make that re-measurement one command; it must never be allowed to SKIP the assertion (fix round 1, finding 7) |
 | 15 | Add a driver-level test only once a hop-emitting driver run is possible (Sub-projects D/E) — until then it would assert on an empty store and be vacuous, same reasoning as §14.10 item 13 |
 
 **Deliberately NOT in the follow-up's scope:** everything in §15.8, plus
