@@ -90,7 +90,19 @@ never `engine.js`'s live taint state).
   bounded backward reconstruction + truncation semantics, per
   `DESIGN_PATH_PROVENANCE.md` §15) is now also **complete** — see the
   module table above. Still ahead: C6 (FR-306 edge grading), per
-  `docs/superpowers/plans/2026-08-30-data-flow-explorer-m1-subproject-c-scoping.md`.
+  `docs/superpowers/plans/2026-08-30-data-flow-explorer-m1-subproject-c-scoping.md`
+  — its **design** has landed (`DESIGN_PATH_PROVENANCE.md` §16, plus the
+  throwaway PoC `test/lineage/flow-grade-poc.test.js`); the module it
+  specifies — flow-grade.js, not backtick-quoted here on purpose, since it
+  does not exist in the tree yet and this document's own doc-drift checker
+  flags a dangling backtick-quoted path — is **not built yet** (§16.8 is
+  its work order). Two things a reader of §16 must not miss: a genuine
+  `widenReason` can live ONLY in `edge.annotations[]` with the edge's own
+  `widenReasons` empty — measured on three ordinary fixtures, so a grader
+  reading only the top-level arrays violates FR-306 outright (§16.5) — and
+  `path-query.js`'s own `Path.widenedHopCount`/`lossHopCount`/`shape`
+  inherit exactly that blind spot (§16.7 Finding 1: disclosed, measured,
+  deliberately NOT fixed by C6, which recomputes instead).
 - External destination resolution, database/queue field mapping,
   transit/at-rest/handling ANALYZERS (this package only defines the
   verdict *model*, not what decides a verdict) — Milestone 2.

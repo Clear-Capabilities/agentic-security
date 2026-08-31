@@ -1010,6 +1010,19 @@ Sub-project D's rather than C4's (§14.9), and supplies part of the evidence
 still open, and `pathId` itself is now deliberately left unclaimed for C5
 (§14.5).
 
+**Updated 2026-08-30 by increment C6.** This list's third item — "how
+`widenReason` maps onto FR-306's evidence grades (C6)" — is now **decided
+in §16**, and the answer is wider than the item's own wording: `widenReason`
+is one of *four* grading inputs (`ambiguousCorrelation`, `lossReason`,
+`widenReason`, and — the one §14.9's own correction warned about, measured
+larger than that warning states — reasons carried in `annotations[]`
+rather than on the edge's top-level arrays, §16.5). §16 also declines to
+reuse `protection.js`'s `EVIDENCE_GRADES` for it, with the reason stated
+(§16.2), and keeps the `implicit` half of FR-306 as a **reserved,
+unreachable** tier rather than inventing an implicit-flow analysis §10.2
+explicitly forbids (§16.3). Everything else on this list — the backward-walk
+question aside, which §15 closed — is still open.
+
 ---
 
 ## 13. Interprocedural hop recording (Sub-project C, increment 3)
@@ -2767,3 +2780,486 @@ Three rows to read closely:
   `'cycle'`-terminated. They are labelled, not dropped, and not disguised
   as origins. 35 expansions and 7 clips on an 8-node/11-edge cyclic graph
   is the whole termination story, and no budget was involved in it.
+
+---
+
+## 16. FR-306 edge grading (Sub-project C, increment 6)
+
+Added 2026-08-30 by increment C6's design task. Everything in this section
+is **decided**, not proposed, and every behavioural claim and every number
+in it was produced by running code in
+`scanner/test/lineage/flow-grade-poc.test.js` — a throwaway-named PoC
+committed alongside this section, which prototypes `flow-grade.js` LOCALLY
+(shipped source under `src/lineage/` is unmodified by this design task,
+exactly as C1's, C3's, C4's and C5's own design tasks were). §16.8 is the
+follow-up implementation task's file/line checklist.
+
+**FR-306, verbatim:** *"Implicit/control-dependent and unknown-field
+widened flows must be visually distinct and lower-confidence. They may not
+be displayed as the same evidence grade as an explicit field assignment."*
+
+§15.8 drew the boundary this section crosses: *"No FR-306 grade
+computation. C5's path output CARRIES every grading input … and computes
+only counts. Turning counts into a grade is C6."* Five questions were open
+when this increment was scoped, and none is answerable on paper. All five
+are now answered by execution:
+
+- **Q8 — how many tiers, and separated by what?** Five, plus an
+  empty-input answer: `explicit` > `widened` > `implicit` (reserved) >
+  `severed` > `ambiguous`. §16.2/§16.3.
+- **Q9 — does crossing a function boundary lower a hop's grade?** **No.**
+  A sound interprocedural stitch grades identically to the same flow
+  inlined, and a cross-scope demotion would have *inverted* the ranking
+  C5's own `comparePaths` already ships. §16.6.
+- **Q10 — does `annotations[]` factor into the grade?** **Yes, and this is
+  the single most load-bearing decision in the section.** A genuine
+  widening lives ONLY in `annotations[]` on three real, separately-parsed
+  fixtures — not just §13.6's context-cap marker. A grader reading only
+  the edge's top-level arrays grades those flows `explicit`, which is
+  FR-306's own literal prohibition. §16.5.
+- **Q11 — is a per-path aggregate needed, or is per-hop grading enough?**
+  **Both are needed**, and FR-306's two clauses are why. §16.4.
+- **Q12 — reuse `protection.js`'s `EVIDENCE_GRADES`?** **No**, and the
+  reason is a correctness hazard rather than taste. §16.2.
+
+### 16.1 `flow-grade.js`: a new module, not new exports on `path-query.js`
+
+**Decided:** a new file, `scanner/src/lineage/flow-grade.js`, with **zero
+imports** — one step stricter than `path-query.js`'s own `['./ids.js']`
+boundary, and it inherits §14.1/§15.1's rule unchanged (never
+`engine.js`/`summaries.js`/`driver.js`).
+
+The obvious alternative — `gradeHop`/`gradePath` exported from
+`path-query.js` itself, since they consume nothing it does not already
+produce — was evaluated and rejected on three grounds, one of which is
+measured:
+
+- **Grading needs neither a path nor the store.** `gradeHop` returns
+  **byte-identical** results for a raw `PathStore` **edge** and for the
+  `Hop` denormalized from it (`C6/11`, over every edge of the 2-function
+  resolved-call fixture) — because a hop *is* a denormalized copy of its
+  edge (§15.2). So Sub-project E's graph builder and Milestone 3's API can
+  grade an edge without running a DFS, and Milestone 4 can grade a stored
+  edge with no reconstruction at all. Putting the function inside the
+  reconstruction module would make every such consumer import the walk.
+- **`path-query.js`'s shipped boundary test asserts its import list is
+  EXACTLY `['./ids.js']`.** A separate grading module could not be
+  imported by it without weakening that test, and this increment
+  deliberately does not weaken it.
+- **C6's implementation then touches zero existing `src/lineage/*.js`
+  files** — the same property C4's and C5's design tasks preserved.
+
+**Exports** (the exact signatures the follow-up task must ship):
+
+```js
+export const FLOW_EVIDENCE_GRADES;                 // frozen, confidence order
+export const IMPLICIT_FLOW_REASONS;                // frozen, ['control-dependence']
+export const DEGRADED_LOSS_REASONS;                // frozen, ['context-cap-degraded']
+export function flowGradeRank(grade);              // -> 0..5, throws on unrecognized
+export function aggregateFlowGrades(grades);       // -> grade, mirrors aggregateVerdicts
+export function gradeHop(hop);                     // -> HopGrade  (§16.3)
+export function gradePath(path);                   // -> PathGrade (§16.4)
+```
+
+`gradeHop` accepts a `path-query.js` `Hop` **or** a `path-store.js` edge;
+`gradePath` accepts a `path-query.js` `Path`. Neither mutates its input,
+and neither reads a `_`-prefixed field of anything.
+
+### 16.2 Q12 — a NEW vocabulary, and why `EVIDENCE_GRADES` is the wrong one
+
+```js
+export const FLOW_EVIDENCE_GRADES = Object.freeze([
+  'explicit', 'widened', 'implicit', 'severed', 'ambiguous', 'unassessed',
+]);   // CONFIDENCE order: index 0 is the most confident
+```
+
+**`protection.js`'s `EVIDENCE_GRADES` (`['runtime', 'code_and_config',
+'code', 'config', 'declared', 'manual', 'none']`) is deliberately NOT
+reused or extended.** It was read in full before this was decided, and the
+rejection is on substance, not on convenience:
+
+- **It grades a different axis.** Those values name *where a protection
+  verdict's evidence came from* — observed at runtime, read out of code,
+  read out of configuration, merely declared. Every flow grade in this
+  section comes from **the same** evidence source (static field-identity
+  analysis of code); what varies is how *explicit* the recorded data
+  movement is. Mapping `widened` onto `declared`, or `explicit` onto
+  `code`, would be a category error that silently changes what
+  `protection.js` means.
+- **Extending it would be a live correctness hazard, not just churn.**
+  `EVIDENCE_GRADES` is consumed by `protection.js`'s own
+  `isValidProtectionDimension` and, through this package's stated "every
+  enum here is a single source of truth" convention, by
+  `dataflow-graph.schema.json` and `validate.js`. Adding `widened` to it
+  would make a flow grade **validate cleanly as a protection evidence
+  grade** on a `DataFlowGraph v1` entity. That is exactly the
+  indistinguishable-namespace bug §14.5 rejected `node:`/`edge:` prefixes
+  for.
+- **A separate vocabulary touches none of those files this increment**,
+  which is a factor in its favour rather than an afterthought — see
+  §16.10 for what Sub-project E must do when a grade *does* reach a
+  `DataFlowGraph v1` entity.
+
+`C6/0` asserts the two enums share **no** value, that the ranks are a
+total order, and — the check that actually stops a future edit going
+wrong — that the aggregation table (§16.4) is a permutation of the value
+list, so no grade can be silently missing from either side.
+
+**What each value means:**
+
+| grade | meaning | produced by |
+|---|---|---|
+| `explicit` | the engine resolved a real, field-precise data movement exactly | a hop with no widen/loss/implicit reason and `ambiguousCorrelation: false` |
+| `widened` | the movement is real but over-approximated — FR-306's "unknown-field widened" | any `widenReason` (`dynamic-property-key`, `unresolved-call`), top-level **or** annotation-carried |
+| `implicit` | control-dependent, not a data assignment — FR-306's "implicit/control-dependent" | **RESERVED. Nothing emits it today** (§16.3) |
+| `severed` | the trail is honestly recorded as stopping here | any `lossReason` (`unsupported-target`, `context-cap-degraded`), top-level **or** annotation-carried |
+| `ambiguous` | the engine cannot confirm this specific pairing happened at all | `ambiguousCorrelation: true` (§9.1/§14.7) |
+| `unassessed` | there was nothing to grade | `aggregateFlowGrades([])` only — never a real hop |
+
+**Why `ambiguous` is the lowest tier**, below both `widened` and
+`severed`: a widened hop *certainly happened* and is merely imprecise; a
+severed hop *certainly happened* and its continuation is unrepresented; an
+ambiguous hop **may never have happened at all** — §14.7's own resolved-call
+bypass is exactly such an edge, real data flow that is not the route the
+program takes. This is also the order C5 already shipped: §15.7's
+`comparePaths` keys are `ambiguousHopCount`, then `lossHopCount`, then
+`widenedHopCount`, and §15.7's own prose calls the latter two "FR-306's
+lower-confidence grades, in the order a reader would rank them". C6 adopts
+that order rather than inventing a competing one.
+
+**Why `implicit` sits between `widened` and `severed`:** it is FR-306's
+other named category, so it belongs adjacent to `widened`; and it is
+weaker evidence than a widened data assignment, because no data movement
+was observed at all — only an inference from control.
+
+### 16.3 The per-hop rule
+
+`gradeHop(hop)` returns an **object**, never a bare string — see §16.5 for
+why that is structural rather than stylistic:
+
+```js
+{
+  grade,                  // one of FLOW_EVIDENCE_GRADES, never 'unassessed'
+  rank,                   // flowGradeRank(grade); 0 = most confident
+  factors,                // sorted, deduped: 'widen:<r>' | 'loss:<r>' |
+                          // 'implicit:<r>' | 'ambiguous-correlation' |
+                          // 'analysis-truncated' | 'cross-scope'
+  widenReasons,           // sorted UNION of top-level + annotations[]
+  lossReasons,            // sorted UNION of top-level + annotations[]
+  implicitReasons,        // the IMPLICIT_FLOW_REASONS subset, removed from the two above
+  annotationOnly,         // the reasons that would have been INVISIBLE to a
+                          // top-level-only reader — see §16.5
+  ambiguousCorrelation, degraded, truncated, crossScope,
+  incomplete,             // grade === 'severed' || degraded || truncated
+}
+```
+
+**Precedence, worst wins within one hop** (a hop can carry several
+signals at once — `C6/2b` measures a real hop with two widen reasons):
+
+1. `ambiguousCorrelation === true` → `ambiguous`
+2. any non-implicit `lossReason` → `severed`
+3. any `IMPLICIT_FLOW_REASONS` reason → `implicit`
+4. any non-implicit `widenReason` → `widened`
+5. otherwise → `explicit`
+
+**`implicit` is reserved and currently unreachable, deliberately.**
+§10.2's own verdict for `if` is explicit: *"the engine models no implicit
+flow today, so there is nothing to emit; do not invent one."* The tier
+exists because FR-306 names it first, and it is kept-but-hand-tested on
+exactly §14.2's `origin`-node-kind precedent (*"a real, honestly-disclosed
+gap, but not a dead branch: it is the exact shape a Sub-project D … will
+produce"*). Its trigger is a reason string in the exported
+`IMPLICIT_FLOW_REASONS` set (today `['control-dependence']`), which is
+also **removed** from `widenReasons`/`lossReasons` so it can never
+double-count. `C6/10` proves both halves: no hop of five real fixtures
+grades `implicit`, and a hand-built control-dependence hop does.
+
+**`crossScope`, `originated` and `truncated` are never grade inputs.**
+`crossScope` is §16.6; `truncated` (§14.8's `markTruncated`) is an
+analysis-run fact, not a statement about this hop's explicitness, so it is
+a flag and a factor only — `C6/9` marks a clean fixture truncated and
+asserts the grade stays `explicit` while `truncated`/`incomplete` flip to
+`true`.
+
+### 16.4 Q11 — the per-path aggregate is worst-wins, and per-hop alone is NOT enough
+
+**Decided: both, and FR-306's two clauses are the reason.** The sentence
+has two halves and they are different requirements:
+
+- *"must be visually distinct"* — a **per-hop** claim. A UI marks the
+  widened hop, not the whole path; if the whole path were graded down
+  uniformly, the reader could not see which step is the weak one.
+  `gradePath` therefore returns `hopGrades[]` and `worstHopIndex`.
+- *"may not be displayed as the same evidence grade as an explicit field
+  assignment"* — a claim about **the evidence grade a flow is displayed
+  at**, i.e. one scalar per path. With per-hop grading alone there is no
+  such scalar, so nothing prevents a UI from displaying a path containing
+  a widened hop as an explicit flow.
+
+**The aggregate is the WORST grade among the hops**, mirroring
+`protection.js`'s `aggregateVerdicts()` risk-precedence reduction — the
+established precedent in this exact package — via a private precedence
+table that is the reverse of the confidence order, with `unassessed` last
+so it survives only when it is alone:
+
+```js
+const _PRECEDENCE = ['ambiguous', 'severed', 'implicit', 'widened', 'explicit', 'unassessed'];
+```
+
+`aggregateFlowGrades` copies `aggregateVerdicts`' contract verbatim,
+including its refusals: an empty array is `'unassessed'`, and an
+**unrecognized grade throws** rather than silently sorting last (`C6/7c`
+— a typo, or a `protection.js` value handed in by mistake, must not
+quietly rank as safest).
+
+**Every other reduction was executed, not argued** (`C6/7`, on
+`const a = user.email; const b = mystery(a); return b;` — hop grades
+`['explicit', 'widened', 'explicit']`): first-wins, last-wins, best-wins
+and majority-wins all report `explicit` for a path that provably contains
+a widened hop. Only worst-wins satisfies FR-306. `C6/7b` additionally
+proves the reduction is **order-independent** across all 5×5 tier pairs —
+an order-dependent aggregate would be the representative-picking bug class
+C4 found in `path-store.js`'s `origin` branch and C5 found in
+`terminals[].terminalReasons`, for the third time.
+
+`gradePath` also **recomputes** its counts from `gradeHop` and
+deliberately does **not** read the Path's own
+`widenedHopCount`/`lossHopCount`/`ambiguousHopCount` — see §16.7 Finding 1.
+
+### 16.5 Q10 — `annotations[]` is folded into the grade AND flagged separately
+
+§14.9's own corrected note warned that a C6 implementer reading only
+`widenReasons`/`lossReasons` off the edges would silently drop §13.6's
+context-cap-degraded marker. **Measured, the problem is larger than that
+warning states**, and it is what forced this decision:
+
+> **`C6/5` — a genuine `widenReason: 'unresolved-call'` lives ONLY in
+> `annotations[]`, with the edge's own `widenReasons` EMPTY, on three
+> real, separately-parsed fixtures:**
+>
+> ```js
+> function f(user) { sink(mystery(user.email)); }                        // member -> call-arg
+> function f(user) { const o = { a: mystery(user.email) }; return o; }   // member -> assign
+> function f(user, c) { const o = c ? mystery(user.email) : user.email; return o; }
+> ```
+>
+> In each, the widening is produced by an expression-internal construct
+> whose hop §2.2 classifies as an **annotation** (null `fromPath`, null
+> `peerScope`), so `path-store.js` never folds its reason into
+> `edge.widenReasons` — that array is built from the *edge-forming* halves
+> only (`s.hop.widenReason`, `o.hop.widenReason`). The PoC runs the naive
+> top-level-only grader against these hops and measures it returning
+> **`explicit`** — FR-306's literal prohibition, reached by reading the
+> field the requirement's own material appears to live in. This is not
+> §13.6's one exotic marker; it is an ordinary shape of ordinary code.
+
+**Decided, and the two halves are not alternatives:**
+
+1. **Fold annotation-carried reasons into the grade.** `widenReasons` and
+   `lossReasons` on a `HopGrade` are the sorted UNION of the hop's own
+   top-level arrays and every `annotations[].widenReason` / `.lossReason`.
+   An annotation's reason is the same *kind of fact* as a top-level one —
+   it is on a different field only because §2.2 classified that half as an
+   annotation, which is a statement about edge formation, not about
+   evidence quality.
+2. **AND surface it separately, by cause.** `degraded: true` is raised
+   whenever a `DEGRADED_LOSS_REASONS` value is present, the specific
+   reason is named in `factors`, and `annotationOnly[]` names exactly
+   which inputs a top-level-only reader would have missed. §18.4 requires
+   the *cause* be visible, not merely a tier: "context budget exhausted"
+   must stay distinguishable from "the target was unrepresentable", and
+   both must stay distinguishable from "no flow".
+
+For §13.6's marker specifically (`C6/6`): the degraded `call-arg-bind`
+edge has `lossReasons: []` and `widenReasons: []` at top level, the naive
+grader calls it `explicit`, and `gradeHop` returns
+`grade: 'severed', degraded: true, annotationOnly: ['loss:context-cap-degraded']`.
+Grading it `severed` is the reading §13.6 itself asked for — the marker
+belongs *on* the real argument→parameter edge, saying the data was bound
+into a callee whose downstream is unrepresented.
+
+**Why `gradeHop` returns an object rather than a string.** The brief for
+this increment asked that an annotation-only marker never be "silently
+invisible to a consumer reading only the grade". The structural answer is
+that **there is no way to read only the grade**: the return value is an
+object whose `grade` is one field among `factors`, `annotationOnly`,
+`degraded`, `truncated` and `incomplete`. A consumer that wants the
+scalar must reach through an object that already handed it the
+disclosure.
+
+### 16.6 Q9 — crossing a function boundary does NOT lower the grade
+
+**Decided: `crossScope` is a factor, never a demotion.** Three
+independent reasons, two of them measured:
+
+- **FR-306 names two lower-confidence categories, and this is neither.**
+  Implicit/control-dependent, and unknown-field widened. A function
+  boundary is not an imprecision.
+- **The stitch is proven sound, not merely plausible.** §14.3's Q1 proof:
+  the node id computed from `(peerScope, peerContext, toPath, id)` is
+  **byte-identical** to the node id the callee independently created from
+  its own hop. There is no over-approximation to grade down.
+- **A cross-scope demotion would report code structure, not evidence
+  quality.** `C6/4` grades the same flow twice — inlined
+  (`const b = user.email; return b;`) and factored into two functions
+  (`helper(u){return u.email}` / `caller(a){const out = helper(a); …}`) —
+  and measures **the same grade** (`explicit`, rank 0, hop grades
+  `['explicit','explicit']`). Under a demotion, well-factored code would
+  systematically grade below the identical inlined flow.
+- **And it would invert C5's own ranking.** `C6/4b`: at the 2-function
+  resolved call, the real through-the-callee chain (`crossScopeCount: 2`)
+  grades `explicit` while §14.7's disclosed bypass (`crossScopeCount: 0`)
+  grades `ambiguous` — the correct path outranks the artefact. §15.7's
+  `comparePaths` already ranks **more** `crossScopeCount` as **better**
+  (key 4); a cross-scope demotion would have put C6's grade in direct
+  contradiction with C5's shipped order.
+
+The boundary crossing is still disclosed — `crossScope: true` on the
+`HopGrade` and `'cross-scope'` in `factors` — so a UI can render it
+distinctly without it being a confidence claim.
+
+### 16.7 Findings this increment does NOT fix, named rather than patched
+
+**Finding 1 (Minor, soundness-unaffected) — `path-query.js`'s
+`Path.widenedHopCount` / `lossHopCount` / `shape` under-report
+annotation-carried reasons.** `materialize()` computes them as
+`hops.filter((h) => h.widenReasons.length > 0).length` etc., i.e. from the
+edge's top-level arrays only — the exact blind spot §16.5 measures.
+`C6/5b` pins it: on `sink(mystery(user.email))` the annotation-carrying
+path reports `widenedHopCount: 0` and a `shape` whose third component is
+`explicit`, while `gradePath` reports `widenedHopCount: 1` and
+`grade: 'widened'`. **Deliberately not fixed here**, for the same reason
+§3 gives for routing around the `widenings` ledger's own mislabel rather
+than fixing it: changing those counts changes `comparePaths`' ordering,
+§15.7's `shape` bucketing for the diversity cap, and §15.11's published
+measured table — a C5 change, with its own re-measurement, not a
+side effect of C6's design task. C6 routes around it by recomputing from
+`gradeHop`. **A follow-up increment should decide whether to close it in
+`materialize()`**, at which point §15.11's table must be re-measured in the
+same commit.
+
+**Finding 2 (Minor) — a §13.6-degraded binding edge is unreachable from
+every structural sink candidate.** `C6/6b` measures it: the degraded
+`call-arg-bind` edge's target is an ordinary `path` node (the callee's
+parameter) with **zero** outgoing edges, because the callee's body was
+never analyzed. It is therefore not a `sinkCandidates()` result
+(`return`/`escape`/`loss` only) and not on any path leading to one, so a
+sink-rooted reconstruction surfaces **no** path carrying the marker — the
+§16.9 table's last row shows the whole degraded fixture yielding only
+`explicit`/`ambiguous` path grades. It *is* reachable and correctly graded
+when the walk starts at that node directly (proven in the same test).
+**Not C6's to fix:** the fix is either a `sinkCandidates()` change (a
+*query* concern, §15.9) or Sub-project D's registry deciding that a
+degraded dead end is a reportable endpoint. Named here so it is not
+rediscovered as "C6's grading dropped the marker" — grading does not drop
+it; nothing asks grading about it.
+
+**Finding 3 (Minor, tier-unaffected) — `factors` inherits
+`DESIGN_INTRAPROCEDURAL.md`'s round-6 Finding 3 mislabel.** `step()`'s
+`assign`/`return` sites stamp a hardcoded `'unresolved-call'` whenever
+they forward a bare `widened` flag (§10.1's own 2026-08-30 note), so a
+widening actually caused by a dynamic property key can be *named*
+`widen:unresolved-call` in a grade's `factors`. The **grade** is
+unaffected — both are widenings and both select the `widened` tier — and
+`C6/2b` shows the read side does carry both reasons where it knows them.
+Closing it needs `resolveExprIdentities` to thread a real reason string
+through its return value, which has been out of scope since C2.
+
+### 16.8 What the follow-up implementation task must do
+
+Written the way §10.1/§13.7/§14.10/§15.10 were, so the next brief needs no
+re-derivation.
+
+**`scanner/src/lineage/flow-grade.js` (new)**
+
+| # | Item | Detail |
+|---|---|---|
+| 1 | the whole module | Lift the local prototype block at the top of `test/lineage/flow-grade-poc.test.js` verbatim (it is written to be lifted: no test-only code inside it). **Zero imports** — add the same import-list self-check test `path-store.test.js`/`path-query.test.js` already carry, asserting the specifier list is EXACTLY `[]` |
+| 2 | `FLOW_EVIDENCE_GRADES` | §16.2's frozen array, in CONFIDENCE order. Export `IMPLICIT_FLOW_REASONS` and `DEGRADED_LOSS_REASONS` too — a consumer must be able to test membership without re-typing a literal |
+| 3 | `_PRECEDENCE` | §16.4's private table. Keep it private, exactly as `protection.js` keeps its own; the parity check in `C6/0` is what stops it drifting from the value list |
+| 4 | `flowGradeRank` / `aggregateFlowGrades` | throw on an unrecognized grade, `'unassessed'` for empty — `aggregateVerdicts`' contract verbatim |
+| 5 | `gradeHop` | §16.3's precedence and §16.5's UNION. It must accept a raw `PathStore` edge as well as a `Hop`; `C6/11` is the guard |
+| 6 | `gradePath` | §16.4's worst-wins, `hopGrades[]`, `worstHopIndex`, and counts **recomputed from `gradeHop`** — never read off the Path (§16.7 Finding 1) |
+
+**No change to any other file.**
+
+| # | File | Change |
+|---|---|---|
+| 7 | `path-query.js` | **none.** Do not attach a `grade` to `Path` this increment — it would change the shape `C5/4b`'s literal-JSON guard and §15.11's table are pinned against, and it would force `path-query.js` to import a second module in violation of its own boundary test. A consumer calls `gradePath(path)` |
+| 8 | `path-store.js`, `engine.js`, `summaries.js`, `driver.js`, `field-identity.js` | **none** (`field-identity.js`: never) |
+| 9 | `schema.js` / `dataflow-graph.schema.json` / `validate.js` | **none this increment.** A flow grade is not a `DataFlowGraph v1` entity field yet. Confirm by running `npm run test:lineage` — `json-schema-parity.test.js` must stay green untouched. **Binding on Sub-project E:** the moment a flow grade is written onto a `DataFlowGraph v1` edge, this package's "every enum here is a single source of truth" convention applies and all three files must gain it in the same commit |
+| 10 | `protection.js` | **none.** §16.2 |
+
+**Tests**
+
+| # | Change |
+|---|---|
+| 11 | Re-point `flow-grade-poc.test.js` at the shipped `flow-grade.js`, delete its local prototype block, rename it to `flow-grade.test.js`, and update the `test:lineage` script in `scanner/package.json` in the SAME commit — C3's item 15 / C4's item 11 / C5's item 12 precedent |
+| 12 | Keep every assertion, and especially keep **`C6/5`** (the three annotation-only widening fixtures with the naive grader executed alongside) and **`C6/6`** (§13.6's marker) — together they are the only guard that stops §16.5's union being silently narrowed back to the top-level arrays, which would restore the exact FR-306 violation this increment exists to close |
+| 13 | Keep `C6/12`'s pinned hop count and §16.9's table asserted, per §15.10 item 14's stated trade-off: an unrelated IR/engine change CAN move these numbers, and the correct response is to re-measure and update §16.9 in the same commit, never to relax the assertion |
+| 14 | Add a driver-level test only once a hop-emitting driver run is possible (Sub-projects D/E) — until then it would grade an empty store and be vacuous, same reasoning as §14.10 item 13 / §15.10 item 15 |
+
+### 16.9 Measured numbers
+
+Every row produced by running the PoC's own fixtures on 2026-08-30, with
+the reconstruction budgets left at their `DEFAULTS`. "paths" is summed
+across every `sinkCandidates()` start node; "hops" is the total hop count
+across those paths.
+
+| fixture | paths | hops | hop grades | path grades | annotation-only reasons |
+|---|---|---|---|---|---|
+| `const b = user.email; return b;` | 1 | 2 | explicit:2 | explicit:1 | — |
+| unresolved call `mystery(user.email)` | 1 | 2 | widened:1 explicit:1 | widened:1 | — |
+| dynamic-key write `bag[k] = user.email` | 1 | 2 | widened:1 explicit:1 | widened:1 | — |
+| dynamic-key read `user[k]` | 1 | 2 | widened:1 explicit:1 | widened:1 | — |
+| §9.1 cross-join `{a: p.email, b: q.email}` | 4 | 8 | ambiguous:4 explicit:4 | ambiguous:4 | — |
+| 2-function resolved call | 3 | 8 | explicit:7 ambiguous:1 | explicit:2 ambiguous:1 | — |
+| bare-call arg `sink(mystery(user.email))` | 2 | 2 | widened:1 explicit:1 | widened:1 explicit:1 | `widen:unresolved-call` |
+| object prop `{a: mystery(user.email)}` | 2 | 3 | explicit:2 widened:1 | explicit:1 widened:1 | `widen:unresolved-call` |
+| ternary `c ? mystery(user.email) : user.email` | 2 | 3 | explicit:2 widened:1 | explicit:1 widened:1 | `widen:unresolved-call` |
+| unsupported target `({a: obj.z} = user)` | 1 | 1 | severed:1 | severed:1 | — |
+| mixed clean + widened | 1 | 3 | explicit:2 widened:1 | widened:1 | — |
+| §13.6 context-cap degraded (cap 1) | 6 | 25 | explicit:22 ambiguous:3 | explicit:3 ambiguous:3 | — |
+
+Three rows to read closely:
+
+- **The three annotation-only rows** are §16.5's whole argument. Each has
+  a hop the naive top-level-only grader calls `explicit` and this design
+  calls `widened`, and the `annotationOnly` column names the input that
+  made the difference. `bare-call arg` is the sharpest: two `escape`
+  sinks, two one-hop paths, and only one of them is widened — so the
+  distinction is not an artefact of the fixture having one path.
+- **The 2-function resolved call** is §16.6's: 7 of its 8 hops grade
+  `explicit` despite three of them crossing a function boundary, and the
+  single `ambiguous` hop is §14.7's disclosed bypass, not the stitch.
+- **§13.6's degraded fixture** shows **no** `severed` and **no** degraded
+  path grade — that is §16.7 Finding 2, measured. The marker is graded
+  correctly (`C6/6`); it is simply not reachable from any sink candidate.
+
+`C6/12` additionally sweeps **28 real hops across 10 fixtures** and asserts
+the closed-set property FR-306 literally demands, in both directions: a
+hop carrying any widen/loss/implicit/ambiguity signal — top-level **or**
+annotation-only — is never graded `explicit`, and a hop carrying none is
+never graded lower.
+
+### 16.10 What C6 deliberately does not do
+
+- **No transformation-kind or protection component in the grade.**
+  §15.7's honest deferral stands: transformation-kind recognition does not
+  exist (Sub-project D) and no analyzer produces a protection verdict
+  (Milestone 2). When either lands it adds a *separate* dimension
+  alongside this one, not a value inside `FLOW_EVIDENCE_GRADES` — a flow's
+  explicitness and its protection state are orthogonal, exactly as
+  `protection.js` keeps verdict and evidence grade orthogonal.
+- **No implicit/control-dependence ANALYSIS.** The `implicit` tier is
+  reserved (§16.3). Producing the reason that fills it is an `engine.js`
+  change at §10.2's `if` row and is not in Sub-project C's scope.
+- **No grade attached to `Path` or to a `DataFlowGraph v1` edge.**
+  §16.8 items 7 and 9.
+- **No UI or visual grammar.** FR-306's "visually distinct" half is
+  satisfied here by making the distinction *available and unmissable* per
+  hop; rendering it is Milestone 3's.
+- **No change to `path-query.js`'s counts.** §16.7 Finding 1.
+- **No change to `field-identity.js`** (never), and no change to any
+  existing `src/lineage/*.js` file in the design task itself.
