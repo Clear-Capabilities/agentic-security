@@ -166,7 +166,12 @@ export function comparePaths(a, b) {
  * once Sub-project D lands, the caller supplies a registered sink here and
  * nothing about the signature changes). Iterative — an explicit stack,
  * never recursion — cycle-safe by a PER-PATH visited set, and bounded by
- * four independent budgets plus the two post-hoc caps below.
+ * three independent in-walk budgets (`maxExpansions`, `maxDepth`,
+ * `maxCandidatePaths`) plus the two post-hoc caps below (`maxPaths`,
+ * `maxPathsPerTerminal`) — five knobs total, matching `DEFAULTS`' own key
+ * count (Task 2 review finding 5: an earlier comment here and in this
+ * module's CLAUDE.md row both said "four," inherited from §15.1/§15.3's
+ * own inconsistent framing — corrected here).
  *
  * Returns a `ReconstructionResult`: §15.4's five pairwise-distinguishable
  * answers, so a truncated result can NEVER be mistaken for "no path exists"
@@ -231,7 +236,16 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     // origin no matter how deep the walk is, so a path that reaches one is
     // `complete: true` even at `maxDepth: 1`. Only a branch the LIMIT
     // stopped is marked partial.
-    if (hops >= budget.maxDepth) {
+    //
+    // Task 2 review finding 2: `hops > 0` guards against `maxDepth: 0`
+    // emitting a degenerate ZERO-hop "path" at the start frame itself
+    // (edgeIds: [], dataElementId: null) — §15.6's own stated invariant is
+    // that a path always has at least one hop. `maxDepth: 0` is a nonsense
+    // setting either way (the walk can never leave the start node), but it
+    // should honestly report `no-incoming-edges`/an unreachable-in-N-hops
+    // shape rather than materialize a hop-less path a consumer might key
+    // `dataElementId` off of.
+    if (hops >= budget.maxDepth && hops > 0) {
       truncationReasons.add('depth-limit');
       candidates.push(materialize(store, frame.nodesRev, frame.edgesRev, TERMINAL_DEPTH));
       continue;
@@ -261,6 +275,14 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
 
   result.budget.expansionsUsed = expansions;
   result.enumeratedPathCount = candidates.length;
+  // Task 2 review finding 1: this is scoped to EVERY complete path found
+  // during enumeration, not just the ones the caps below end up returning
+  // in `result.paths` — the same enumeration scope `enumeratedPathCount`
+  // and `droppedPathCount` already carry, so it can legitimately exceed
+  // `result.paths.length` under a tight cap. A consumer wanting "how many
+  // complete paths are actually IN this response" should filter
+  // `result.paths` itself (`.filter(p => p.complete).length`), not read
+  // this field for that purpose.
   result.completePathCount = candidates.filter((p) => p.complete).length;
 
   // §15.5's cap, applied PER TERMINAL first. The terminal node is the

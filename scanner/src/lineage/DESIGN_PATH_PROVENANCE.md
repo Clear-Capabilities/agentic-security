@@ -2120,9 +2120,12 @@ on paper. All five are now answered by execution:
   sequence that joins it, with the grading-bearing edge fields carried
   inline. A bare node sequence is provably insufficient. §15.2.
 - **Q4 — what stops a backward walk on a genuinely cyclic DAG?** An
-  explicit **per-path** visited set (never a global one), plus four
-  independent budgets. Proven terminating on `C4/4`'s real mutual-recursion
-  cycle. §15.3.
+  explicit **per-path** visited set (never a global one), plus three
+  in-walk budgets (`maxExpansions`, `maxDepth`, `maxCandidatePaths`) — see
+  §15.10's own corrected count (Task 2 review finding 5; an earlier draft
+  here said "four," double-counting or mis-scoping against the two
+  post-hoc caps §15.5 adds separately). Proven terminating on `C4/4`'s real
+  mutual-recursion cycle. §15.3.
 - **Q5 — what does §18.4's "cap alternate paths per source/sink pair" bound
   when there is no source/sink registry?** The **(terminal node, start
   node) pair** — the terminal node is the closest thing to a "source" this

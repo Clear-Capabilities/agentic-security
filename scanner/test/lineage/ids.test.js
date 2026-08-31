@@ -184,6 +184,16 @@ test('C5/id-4: startNodeId is also part of the discriminator, even though it is 
   assert.notEqual(a, b, 'a changed startNodeId (same edges) must still move the id — over-specifying costs nothing');
 });
 
+test('C5/id-5: discriminatorParts moves the id (Task 2 review finding 6 — the parameter was spec\'d and implemented but had no test)', () => {
+  const startNodeId = 'pnode:path:aaa';
+  const edgeIds = ['pedge:111', 'pedge:222'];
+  const bare = pathId({ startNodeId, edgeIds });
+  const withPart = pathId({ startNodeId, edgeIds }, ['extra-discriminator']);
+  assert.notEqual(bare, withPart, 'a non-empty discriminatorParts must move the id relative to the same path with none');
+  const same = pathId({ startNodeId, edgeIds }, ['extra-discriminator']);
+  assert.equal(withPart, same, 'the same discriminatorParts must still be idempotent');
+});
+
 test('C4/5c: pnode:/pedge: are distinct from node:/edge: and never match validate.js\'s id-prefix regexes for the other namespace', () => {
   const pn = provenanceNodeId({ kind: 'path', scope: 'S', context: 'C', path: 'a', siteNodeId: null, dataElementId: 'data:e' });
   const pe = provenanceEdgeId({
