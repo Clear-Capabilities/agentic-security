@@ -2097,3 +2097,579 @@ after §14.6's ingest dedup.
 (`user.email → u.email → o.email → ⟨return⟩` and the same for `.ssn`), with
 **zero** materialized paths. That is FR-303's compactness requirement,
 measured rather than claimed.
+
+---
+
+## 15. Bounded path reconstruction (Sub-project C, increment 5)
+
+Added 2026-08-30 by increment C5's design task. Everything in this section
+is **decided**, not proposed, and every behavioural claim and every number
+in it was produced by running code in
+`scanner/test/lineage/path-query-poc.test.js` — a throwaway-named PoC
+committed alongside this section, which prototypes `path-query.js` and the
+one new `ids.js` function LOCALLY (shipped source is unmodified by this
+design task, exactly as C1's, C3's and C4's own design tasks did). §15.10
+is the follow-up implementation task's file/line checklist.
+
+§14.9 drew the boundary this section crosses: *"No backward walk, no
+reconstruction, no path budget, no prioritization. C5's, entirely."* Five
+questions were open when this increment was scoped, and none is answerable
+on paper. All five are now answered by execution:
+
+- **Q3 — what IS a path in the output?** A node id sequence *and* the edge
+  sequence that joins it, with the grading-bearing edge fields carried
+  inline. A bare node sequence is provably insufficient. §15.2.
+- **Q4 — what stops a backward walk on a genuinely cyclic DAG?** An
+  explicit **per-path** visited set (never a global one), plus four
+  independent budgets. Proven terminating on `C4/4`'s real mutual-recursion
+  cycle. §15.3.
+- **Q5 — what does §18.4's "cap alternate paths per source/sink pair" bound
+  when there is no source/sink registry?** The **(terminal node, start
+  node) pair** — the terminal node is the closest thing to a "source" this
+  increment has, and a purely global cap is measurably worse. §15.5.
+- **Q6 — what is FR-305's "materially different" with today's signals?**
+  The **edge** id sequence, never the node id sequence. Proven against a
+  real fixture where the two disagree. §15.6.
+- **Q7 — what does §18.4's "prioritize paths that differ in boundary,
+  transformation, or protection state" mean when two of those three do not
+  exist yet?** It asks for a **diverse retained set**, not a top-N by any
+  scalar — so the cap is diversity-first over the signals that do exist,
+  and the two absent dimensions are named, not faked. §15.7.
+
+### 15.1 `path-query.js`: what it is, and the boundary it inherits
+
+`path-query.js` is a **pure consumer of a built `PathStore`**. It takes a
+store and one node id and returns a bounded, ordered, honestly-labelled
+list of reconstructed paths. It never sees a hop record — C4 already turned
+those into a DAG — and it inherits §14.1's isolation rule unchanged:
+
+> **`path-query.js` must NEVER import `engine.js`, `summaries.js`, or
+> `driver.js`**, and must consume `PathStore` ONLY through its public read
+> API — never `_groups`/`_build()`/`_peerSourced`/any other `_`-prefixed
+> field. Its only import is `ids.js`, for `pathId`.
+
+Same reason as C4's: a real project-wide driver run still emits **zero**
+hops today (no source registry — Sub-projects D/E), so a query module that
+could only be exercised through the driver would be untestable by
+construction. The PoC pins the private-field half of this by string-matching
+the prototype's own source for `store._`.
+
+**One entry point, plus two small helpers:**
+
+```js
+reconstructPaths(store, startNodeId, opts = {})  // -> ReconstructionResult
+sinkCandidates(store)                            // -> node[]  (§15.9)
+isIncompleteAnswer(result)                       // -> boolean (AC-10)
+```
+
+`startNodeId`, deliberately **not** named `sinkNodeId`. There is no sink
+registry, so calling the parameter a sink would import vocabulary the
+codebase does not have and would read as a promise this increment cannot
+keep. Once Sub-project D lands, the caller supplies a registered sink node
+here and nothing about the signature changes.
+
+### 15.2 Q3 — what a path IS: nodes AND edges, with the grading material inline
+
+FR-306 requires that a path's output carry enough to grade each hop
+(implicit/widened vs. explicit). A bare node-id sequence cannot: every
+grading signal C4 records — `widenReasons`, `lossReasons`,
+`ambiguousCorrelation`, `annotations[]`, `crossScope`, `line`, and the four
+`inKind`/`inSubKind`/`outKind`/`outSubKind` fields — lives on the **edge**,
+not on either endpoint. And the node sequence is not even a unique key
+(§15.6). So:
+
+```js
+Path = {
+  id,                 // `ppath:<12 hex>` — see §15.6
+  nodeIds: [...],     // SOURCE-FIRST; length = hopCount + 1
+  edgeIds: [...],     // SOURCE-FIRST; edgeIds[i] joins nodeIds[i] -> nodeIds[i+1]
+  hops:    [...],     // one per edge, denormalized (below)
+  hopCount,
+  dataElementId,      // singular — see the note below
+  sourceNodeId, sinkNodeId,
+  terminal: { nodeId, reason, kind },   // reason ∈ §15.4's terminal vocabulary
+  complete,                             // === (terminal.reason === 'origin')
+  crossScopeCount, widenedHopCount, lossHopCount, ambiguousHopCount,
+  analysisTruncated,                    // §14.8's markTruncated, reaching a consumer at last
+  shape,                                // §15.7's diversity signature
+}
+```
+
+**Source-first, even though the walk runs sink-first.** A human reads a
+flow source → sink; the walk is an implementation detail. The PoC asserts
+the exact node sequence §6 predicts, in that order, and asserts
+`hops[i].fromNodeId === nodeIds[i] && hops[i].toNodeId === nodeIds[i+1]`
+for every hop.
+
+**A hop is a denormalized copy of the edge, not the edge id alone.** Ids
+alone would be smaller and would still round-trip through `store.getEdge`
+(the PoC checks that every `edgeIds[i]` does), but a path that cannot be
+graded without also carrying the store is a poor hand-off to C6, to
+Sub-project E's graph builder, and to Milestone 3's API. FR-303's
+compactness constraint governs the **store**, not an on-demand query
+result — §18.4's own wording is "store a provenance DAG, not a list of
+every expanded path", and the cap plus the budgets are what keep the
+materialized list bounded.
+
+**A path never changes data element, and this needs no filtering.** Every
+edge `path-store.js` builds joins two nodes whose descriptors both take
+`dataElementId` from the same hop (§14.3), so a connected walk is
+field-precise by construction — FR-301's distinctness carried into
+FR-303's structure for free. Pinned directly (`C5/1b`: every edge in a real
+two-identity store has `from.dataElementId === e.dataElementId ===
+to.dataElementId`). A future change that broke this would silently let a
+reconstruction wander between data elements, so it is asserted rather than
+assumed.
+
+### 15.3 Q4 — the backward walk, and how it terminates on a real cycle
+
+`edgesTo(nodeId)` is the traversal primitive. The walk is an **iterative
+DFS over an explicit stack — never recursion**, matching this package's own
+established discipline (`path-store.js` has no recursion at all; C5 has a
+graph walk and still has none).
+
+**Termination discipline, in order of what actually does the work:**
+
+1. **A per-path visited set** — the set of nodes already on the current
+   partial path. An in-edge whose source is already on the path is
+   *clipped* and counted (`cyclesClipped`). This is what makes the walk
+   terminate on a cyclic DAG regardless of budget: every enumerated path is
+   a **simple** path, and a finite graph has finitely many. Measured on
+   `C4/4`'s real 8-node/11-edge mutual-recursion cycle (§15.11's last row):
+   the walk finishes having used **35 expansions** summed across all four
+   sink candidates, with **7 clips**. `C5/3` re-runs it with every budget
+   raised to 10^6 and asserts the expansion count is unchanged and far
+   below the ceiling — the visited set, not a budget, is what stopped it.
+   > **A GLOBAL visited set would be wrong, not merely conservative.** It
+   > would make every node reachable on at most one path, which
+   > deletes exactly the alternate paths FR-305 exists to show.
+2. **`maxExpansions`** (default 10000) — total in-edges examined. This is
+   the hard, shape-independent termination guarantee, and the only one that
+   bounds *work* rather than *output*. It is the budget the brief's "a cap
+   on total paths explored, not just total nodes visited" asks for.
+3. **`maxCandidatePaths`** (default 256) — stop enumerating once this many
+   complete-or-partial branches have been collected. Bounds memory.
+4. **`maxDepth`** (default 64) — hops on a single path. Bounds the *length*
+   of any one answer, which `maxExpansions` does not.
+
+**The depth check runs AFTER the zero-in-edges check, deliberately.** A
+node with no predecessors is a genuine origin no matter how deep the walk
+is, so a path that reaches one is `complete: true` even at `maxDepth: 1`
+(`C5/3b` pins exactly this). Only a branch the *limit* stopped is marked
+partial.
+
+**`edgesTo` is sorted by edge id before traversal.** `path-store.js` backs
+its indexes with `Set`s and the read API carries no inherent order, so an
+unsorted walk would be insertion-order-dependent. Sorting makes the
+enumeration order, and therefore every tie-broken output order, stable.
+
+**Defaults are honestly uncalibrated.** They are two-plus orders of
+magnitude above what every fixture in the PoC needs (§15.11's largest row
+uses 35 expansions), but no fixture here is a real project, and no real
+project can be measured until a driver run emits hops (Sub-projects D/E).
+They are a starting point to re-measure then, not a tuned result.
+
+### 15.4 §18.4's load-bearing constraint: five distinguishable answers
+
+> *"Never translate 'path budget exhausted' into 'no path.'"*
+
+The result shape makes **five** answers pairwise distinguishable **in the
+data**, not by convention or by a caller's discipline:
+
+| answer | `truncated` | `unknownStartNode` | `noPathReason` | `truncationReasons` | means |
+|---|---|---|---|---|---|
+| complete, with paths | `false` | `false` | `null` | `[]` | this really is everything |
+| genuinely empty | `false` | `false` | `'no-incoming-edges'` | `[]` | we looked exhaustively; nothing flows in |
+| **recording gap** | `false` | `false` | `'incomplete-record'` | `[]` | nothing flows in *in the recorded stream*, and the store itself knows the stream is incomplete here — **not proof of absence** |
+| unknown node | `false` | `true` | `null` | `[]` | you asked about a node that is not in this store |
+| budget-truncated | `true` | `false` | **`null`** | non-empty | the list is short because a limit stopped us |
+
+`C5/4b` asserts three of these — genuinely-empty, unknown-node and
+budget-truncated — are pairwise different as **literal JSON**, not merely
+different in spirit; `C5/4c` adds the recording-gap row against a real
+cache-warming fixture, and `C5/1` the first. The single most important cell is
+the bold `null`: **a truncated result can never acquire a `noPathReason`**,
+because `noPathReason` is only ever computed when `truncated === false`.
+That is the §18.4 constraint expressed as a code path, not as a comment.
+
+**Truncation reasons** (result-level, sorted, non-empty iff `truncated`):
+`'expansion-budget'`, `'candidate-cap'`, `'depth-limit'`,
+`'per-terminal-cap'`, `'path-cap'`. `truncated` is *also* set whenever
+`droppedPathCount > 0`, so a cap that silently discarded a path is
+impossible.
+
+**Terminal reasons** (per path): `'origin'` (the only one that sets
+`complete: true`), `'incomplete-record'`, `'cycle'`, `'depth-limit'`.
+
+- A branch that ends because **every** continuation would revisit a node
+  reports `'cycle'` — never `'origin'`. Presenting a cycle-clip as an
+  origin would be §18.4's failure mode at path granularity. `C5/3c` proves
+  a real cyclic fixture produces both labels, so they are demonstrably
+  different rather than nominally so.
+- A branch that ends at a node in `diagnostics().orphanedPeerSources`
+  reports `'incomplete-record'`. This is §14.4's disclosed
+  stream-completeness gap reaching a consumer for the first time: C4
+  records it, C5 is the first thing that must not lie about it. `C5/4c`
+  builds the real cache-warmed-without-a-recorder scenario and proves both
+  the zero-path form and the walked-into form.
+- **`'expansion-budget'` and `'candidate-cap'` are deliberately NOT
+  terminal reasons.** When those trip, in-flight branches are **abandoned,
+  not emitted**: a branch cut at an arbitrary global point has a
+  meaningless prefix, and emitting it would manufacture a "path" the graph
+  does not contain. `'depth-limit'` is different — that branch genuinely
+  reached a stated ceiling — so it *is* emitted, marked partial. `C5/3b`
+  pins that; `C5/3`'s two starved runs pin both of the others
+  (`maxExpansions: 1` and `maxCandidatePaths: 1`), each producing
+  `truncated: true` with `noPathReason: null` and no fabricated partial.
+
+**Two further incompleteness signals, both distinct from `truncated`:**
+
+- `analysisTruncated` — true when any node or edge on a returned path
+  carries §14.8's `truncated: true` from `markTruncated(scope, context,
+  reason)`. §14.8 reserved that channel and named no consumer; **C5 is its
+  consumer.** `C5/4d` proves the path is still *returned* (never withheld)
+  and still *labelled*, and that the flag stays separate from C5's own
+  `truncated` so the two causes never merge.
+- `paths.some(p => !p.complete)` — a returned list every one of whose paths
+  is partial is a very different answer from a list of complete ones.
+
+`isIncompleteAnswer(result)` is the single derived predicate AC-10's
+persistent partial-coverage banner should drive off, so no caller
+re-derives it (and no caller forgets a term):
+
+```js
+result.truncated || result.unknownStartNode || result.analysisTruncated
+  || result.noPathReason === 'incomplete-record'
+  || result.paths.some((p) => !p.complete)
+```
+
+AC-10's *"a zero-flow filter result must say that the scope is
+incomplete"* then falls straight out: an empty `paths` with
+`isIncompleteAnswer() === true` is exactly that case, and an empty `paths`
+with `isIncompleteAnswer() === false` is honestly a real zero.
+
+### 15.5 Q5 — the alternate-path cap: per (terminal, start) pair, today
+
+§18.4 says *"cap alternate paths per source/sink pair with an explicit
+truncation count."* `path-store.js` has no notion of a source or a sink.
+The naive reading — cap the paths returned by one call, i.e. per *start
+node* — is strictly coarser than "per pair", and the difference is not
+academic:
+
+> **MEASURED (`C5/5f`), on the real §9.1 cross-join fixture
+> `function f(p, q) { const x = { a: p.email, b: q.email }; return x; }`
+> seeded so both parameters carry `data:email`.** The sink has 4 paths back
+> to 2 distinct terminals. A naive global top-N cap at N=2 returns two
+> paths that **both terminate at the same source** — so the other source is
+> reported as having *zero* paths. That is §18.4's own failure mode
+> ("budget exhausted" presented as "no path") reached through the cap
+> rather than through the walk.
+
+**Decided: the cap is applied per TERMINAL first, then globally.**
+
+- `maxPathsPerTerminal` (default 8) — candidates are grouped by
+  `terminal.nodeId`, ordered within the group (§15.7), and truncated there.
+  Because every call already fixes one start node, "(terminal, start)" *is*
+  a pair, and the terminal node is the closest thing to a source this
+  increment has. This is a genuine per-pair cap today, not a stand-in.
+- `maxPaths` (default 32) — a global ceiling on the returned list,
+  applied diversity-first (§15.7).
+- `result.terminals[]` reports, per terminal:
+  `{nodeId, terminalReason, enumeratedPathCount, keptPathCount,
+  returnedPathCount, truncated}`. This is also what FR-305's *"the UI must
+  show a path count"* needs — a count **per source/sink pair**, not one
+  aggregate.
+
+**What changes when Sub-project D's registry lands.** Very little, and that
+is the point. D relabels *which* terminals are registered sources; the
+grouping key does not change, and neither does the cap's meaning. The one
+thing D adds is the ability to say "this terminal is not a registered
+source" — at which point a caller may want to *drop* rather than cap such
+paths, which is a filter, not a cap, and belongs in D's own increment. The
+per-call framing is therefore already correct: today's cap does not need to
+be revisited, only supplemented.
+
+### 15.6 Q6 — deduplication, and what FR-305 forbids hiding
+
+> FR-305: *"Deduplication may collapse identical internal segments but
+> cannot hide materially different transformations or controls."*
+
+**Decided: a path's identity is its EDGE id sequence, never its node id
+sequence.**
+
+```js
+pathId({ startNodeId, edgeIds })   // -> `ppath:<12 hex>`
+```
+
+§14.5 left `pathId` deliberately unclaimed for exactly this entity
+("`pathId` is deliberately left unused. The thing C5 reconstructs *is* a
+path, and it will plausibly want that name"). C5 claims it, with a
+`ppath:` prefix joining the `pnode:`/`pedge:` family — a reconstructed path
+is not a `DataFlowGraph v1` entity either, so `validate.js` stays untouched
+(§15.10 item 4). `startNodeId` is in the discriminator even though it is
+strictly **redundant today** — a path always has at least one hop (a start
+node with no in-edges yields zero paths, never one empty path, §15.4), so
+the last edge id already determines it. It is kept because over-specifying
+a content hash costs nothing while under-specifying one is a silent merge —
+§14.5's own lesson, applied rather than re-learned — and because it keeps
+the id well-defined if a later increment ever admits a zero-hop or
+otherwise edge-less path entity.
+
+**Why node-keyed dedup would violate FR-305, proven on a real fixture.**
+`C5/5` builds
+
+```js
+function f(user) { let a = user.email; let b = a; b = a; return b; }
+```
+
+and measures that the node pair `(a, data:email) -> (b, data:email)` is
+joined by **two distinct edges** — two assignments at two CFG nodes, which
+`provenanceEdgeId` keeps apart precisely because §14.5 put `siteNodeId` in
+the discriminator ("two structurally identical hops at two different
+program points are two materially different edges (FR-305)"). Reconstruction
+returns them as two paths with an **identical node sequence** and different
+`line`s. Collapsing on nodes would hide the differing program point — the
+one thing a reader would notice, and squarely inside "materially
+different". Collapsing on edge ids cannot hide anything, because an edge id
+is a content hash over every grading-bearing field (§14.5): two paths with
+the same edge sequence are identical hop-for-hop, in kind, sub-kind,
+reasons, and site.
+
+**Honest scope, measured not assumed.** Within one `reconstructPaths` call
+a DFS with a per-path visited set **cannot** emit the same edge sequence
+twice, so dedup is *not* a volume control here — it is an identity
+definition (stable across runs and across calls: `C5/5c` proves two
+independent analysis runs of the same fixture produce the same `ppath:`
+id) and a safety net. `C5/5b` measures the no-duplicates property across
+every node of the cyclic fixture rather than asserting it.
+
+**What is NOT collapsed, and why.** §9.1's cross-join phantoms
+(`p.email → x.b` where the value came from `q.email`) are genuinely
+different node sequences and are **kept**, marked
+`ambiguousCorrelation: true` on the offending hop and de-prioritized by
+§15.7's order. That is §9.1's own "detect and mark, do not prevent"
+verdict carried to the output — and §14.7 reached the same verdict a second
+time on independent evidence. Silently collapsing them would be exactly the
+hiding FR-305 forbids; the `ambiguousHopCount` on the path is how a
+consumer tells them apart.
+
+### 15.7 Q7 — prioritization: diversity first, and what is honestly deferred
+
+> §18.4: *"Prioritize paths that differ in boundary, transformation, or
+> protection state."*
+
+Read carefully, that sentence asks for a **diverse retained set** — show
+the user paths that differ from each other — not a ranking by any single
+scalar. Both halves are implemented, and they are different mechanisms.
+
+**(a) The cap is diversity-first.** Each path carries a `shape` signature
+built ONLY from signals that exist today:
+
+```
+<complete|partial> / <boundary|local> / <widened|explicit> / <lossy|intact> / <ambiguous|correlated>
+```
+
+from `terminal.reason`, `crossScopeCount`, `widenReasons`, `lossReasons`
+and `ambiguousCorrelation` respectively. When `maxPaths` binds, candidates
+are bucketed by `(terminal.nodeId, shape)` and taken **round-robin** across
+buckets, so no bucket is crowded out. `C5/5g` proves this on a real
+fixture (`{ r: helper(a), s: b.email }` — 8 paths from its `⟨return⟩` sink
+alone, spanning 2 shapes: `complete/boundary/…` and `complete/local/…`, a
+genuine boundary difference). Capped to exactly the bucket count, the
+retained set spans **every** shape — which a plain top-N by rank does not
+guarantee.
+
+**(b) Within that, a deterministic total order** (`comparePaths`), keys in
+order:
+
+1. `complete` first — an incomplete path is not evidence of a full flow.
+2. fewer `ambiguousHopCount` — §9.1/§14.7's marker, lower confidence.
+3. fewer `lossHopCount`, then fewer `widenedHopCount` — FR-306's
+   lower-confidence grades, in the order a reader would rank them.
+4. **more** `crossScopeCount` — §18.4's "boundary" dimension, and this
+   document's own repeated emphasis on interprocedural stitching being the
+   hard, load-bearing case.
+5. fewer hops — a shorter explanation, all else equal.
+6. `id` lexicographic — stability, never a tie left to insertion order.
+
+`C5/2` proves this order does real work rather than being decorative: at
+the plain 2-function resolved call, the **4-hop through-the-callee chain**
+(`crossScope 2`, `ambiguous 0`) is ranked **ahead of** the 2-hop bypass
+(`crossScope 0`, `ambiguous 1`) — the correct answer wins despite being
+twice as long, because length is the last content key rather than the
+first.
+
+**Honestly deferred, and named:**
+
+- **Transformation kind** — there is no transformation-kind recognition in
+  this codebase at all. **Sub-project D.** Today's nearest signals
+  (`widenReasons`/`lossReasons`) describe *analysis imprecision*, not a
+  transformation the program performs, and using them as a stand-in would
+  be inventing vocabulary that isn't backed by data.
+- **Protection state** — `protection.js` defines the verdict *model*; no
+  analyzer produces a verdict. **Milestone 2.**
+
+When either lands, it adds a component to `shape` and a key to
+`comparePaths`. Neither changes the mechanism, and neither is faked in the
+meantime.
+
+### 15.8 What C5 deliberately does not do
+
+- **No source/sink registry.** `sinkCandidates()` (§15.9) is a structural
+  stand-in and says so. **Sub-project D.**
+- **No FR-306 grade computation.** C5's path output *carries* every
+  grading input (`widenReasons`, `lossReasons`, `ambiguousCorrelation`,
+  `annotations[]`, `crossScope`, plus the four kind/sub-kind fields) and
+  computes only counts. Turning counts into a grade is **C6**. Note
+  §14.9's own correction: a consumer must read `annotations[]` too, not
+  only the edge's top-level reason arrays — `hops[].annotations` is
+  therefore carried verbatim.
+- **No `DataFlowGraph v1` output.** Sub-project E.
+- **No flow-sensitivity filter.** §9.2 offered C5 a lever (require
+  non-decreasing `line`/`nodeId` along a path, or de-prioritize paths that
+  violate it) and explicitly left the call to C5 "made against real
+  measurements". **Declined for now, with the reason stated:** the
+  measurement that would justify it does not exist — no fixture here has a
+  real kill-then-reuse shape at scale, and §9.2's own note that the lever
+  carries "false-negative risk on loops and back-edges" is not something to
+  accept against zero evidence. The material is on the path (`hops[].line`,
+  `hops[].siteNodeId`) for whichever increment does measure it.
+- **No change to `path-store.js`, and none to `field-identity.js`
+  (never).** §15.9.
+- **No driver wiring.** A driver run emits zero hops today (§14.1); wiring
+  is Sub-project D/E's, and it is a `driver.js` change, not a
+  `path-query.js` one.
+
+### 15.9 `path-store.js`'s read API is sufficient — no change, and why
+
+Checked by building the whole prototype against it. The query itself needs
+exactly **four** of the ten exported reads:
+
+| read | used for |
+|---|---|
+| `getNode(id)` | start-node existence (the `unknownStartNode` answer), terminal `kind`, and each node's `truncated` flag |
+| `edgesTo(id)` | **the** traversal primitive — the only walk call, and the only read inside the loop |
+| `nodes()` | `sinkCandidates()`'s O(N) filter (§15.9's registry stand-in) |
+| `diagnostics()` | `orphanedPeerSources` → the `'incomplete-record'` signal, read once per call |
+
+A hop is denormalized straight off the edge objects `edgesTo` already
+returns, so **`getEdge` is never called by the query** — it is used only by
+the tests, to prove every emitted `edgeIds[i]` round-trips. `nodeIdFor` is
+likewise fixtures-only. `edges`, `edgesFrom`, `hasEdge` and `stats` are
+unused entirely.
+
+**The one question the brief raised explicitly — is there a cheap way to
+find every sink-shaped node without a registry? — is answered YES with no
+API addition.** `store.nodes()` already returns every node with its `kind`,
+so:
+
+```js
+function sinkCandidates(store) {
+  return store.nodes().filter((n) =>
+    n.kind === 'return' || n.kind === 'escape' || n.kind === 'loss');
+}
+```
+
+is an O(N) filter over the public API. It belongs in `path-query.js`, not
+in `path-store.js`: deciding what counts as a sink is a *query* concern,
+and the moment D ships a registry this helper is superseded rather than
+extended. It is named `sinkCandidates`, not `sinks`, for the same reason
+the entry point's parameter is `startNodeId` — it is a structural filter
+with no security opinion, and its doc comment says so.
+
+`escape` and `loss` cannot appear as intermediates: `classifyIn` never
+produces them as a source, so nothing in the store ever points *out* of
+one. `C5/2b` asserts `edgesFrom(n).length === 0` for every such node in a
+real fixture, which is what makes them safe start nodes and impossible
+mid-path nodes.
+
+**One observation, deliberately NOT a change request.** `edgesFrom`/
+`edgesTo` each call `this._build()` twice per invocation, and `nodes()`/
+`edges()` copy the whole map on every call. At `maxExpansions` scale
+(10^4 `edgesTo` calls, each an O(1) cached `_build()` plus an O(degree)
+map) this is immaterial, and §14.6 already names the real profiling target
+(the derived `context` key strings) for Sub-project E. Recorded so a later
+reader knows it was looked at and judged, not missed.
+
+### 15.10 What the follow-up implementation task must do
+
+Written the way §10.1/§13.7/§14.10 were, so the next brief needs no
+re-derivation.
+
+**`scanner/src/lineage/ids.js`**
+
+| # | Site | Change |
+|---|---|---|
+| 1 | after `provenanceEdgeId` | add `pathId({ startNodeId, edgeIds }, discriminatorParts = [])` → `ppath:<12 hex>`, via the existing `_hash`/`_canon`. Object argument, matching the `provenanceNodeId`/`provenanceEdgeId` precedent (§14.5) |
+| 2 | `test/lineage/ids.test.js` | extend with `pathId` idempotence + non-collision (a changed edge id anywhere in the sequence, and a reordered sequence, must both move the id) |
+| 3 | — | **no change to `validate.js`.** `ppath:` is not a `DataFlowGraph v1` entity kind. Confirm by running `npm run test:lineage`; `json-schema-parity.test.js` must stay green untouched |
+
+**`scanner/src/lineage/path-query.js` (new)**
+
+| # | Item | Detail |
+|---|---|---|
+| 4 | imports | `ids.js` ONLY. Never `engine.js`/`summaries.js`/`driver.js`, and never a `_`-prefixed `PathStore` field. Add the same import-list self-check test `path-store.test.js`'s boundary test uses (§14.10 item 5), plus the `store\._` source scan the PoC's `C5/6` already carries |
+| 5 | `DEFAULTS` | `{ maxPaths: 32, maxPathsPerTerminal: 8, maxCandidatePaths: 256, maxExpansions: 10000, maxDepth: 64 }`, all `opts`-overridable. Document them as uncalibrated (§15.3) |
+| 6 | `reconstructPaths(store, startNodeId, opts)` | iterative DFS over an explicit stack — **no recursion**. Per-path visited set. `edgesTo` sorted by edge id. Zero-in-edges check BEFORE the depth check (§15.3) |
+| 7 | terminal classification | `'origin'` / `'incomplete-record'` (node in `diagnostics().orphanedPeerSources`) / `'cycle'` (every continuation clipped) / `'depth-limit'`. `'expansion-budget'`/`'candidate-cap'` are result-level only — those branches are abandoned, never emitted (§15.4) |
+| 8 | the cap | per `terminal.nodeId` first (`maxPathsPerTerminal`), then a diversity-first round-robin over `(terminal.nodeId, shape)` buckets for `maxPaths` (§15.5/§15.7). `result.terminals[]` per §15.5 |
+| 9 | the result shape | exactly §15.4's table, plus `enumeratedPathCount`/`returnedPathCount`/`droppedPathCount`/`completePathCount`/`cyclesClipped`/`analysisTruncated`/`budget.expansionsUsed`. `noPathReason` must be computed ONLY when `truncated === false` — that ordering IS §18.4's constraint |
+| 10 | `sinkCandidates(store)` | §15.9's filter, with the "not a registry" doc comment |
+| 11 | `isIncompleteAnswer(result)` | §15.4's five-term predicate, exported so AC-10's banner has one owner |
+
+**Tests**
+
+| # | Change |
+|---|---|
+| 12 | Re-point `path-query-poc.test.js` at the shipped `path-query.js`/`ids.js`, delete its local prototype block, rename it to `path-query.test.js`, and update the `test:lineage` script in `scanner/package.json` in the SAME commit — C3's item 15 / C4's item 11 precedent |
+| 13 | Keep every assertion, and especially keep `C5/4b` (the three empty-looking results as literal JSON) and `C5/4c` (`incomplete-record`) — together they are the only guard that stops §18.4's constraint being silently undone |
+| 14 | Keep `C5/M`'s measured-numbers table asserted against §15.11's published rows, so a refactor that changes a published number fails a test rather than leaving this document stale (C4's `C4/1b`/`C4/4` precedent) |
+| 15 | Add a driver-level test only once a hop-emitting driver run is possible (Sub-projects D/E) — until then it would assert on an empty store and be vacuous, same reasoning as §14.10 item 13 |
+
+**Deliberately NOT in the follow-up's scope:** everything in §15.8, plus
+any change to `path-store.js`, `engine.js`, `summaries.js` or `driver.js`
+(C5 consumes the C4 DAG exactly as shipped — no store change is needed to
+answer Q3-Q7).
+
+### 15.11 Measured numbers
+
+Every row produced by running the PoC's own fixtures through the prototype
+on 2026-08-30 (`C5/M`), with the three OUTPUT caps (`maxPaths`,
+`maxPathsPerTerminal`, `maxCandidatePaths`) raised to 10^6 and the work
+budgets left at their defaults, so the numbers describe the graph rather
+than a cap. Every row asserts `truncated: false`, which is what proves no
+budget bound it. "sinks" is `sinkCandidates()`'s count; the walk is run once
+per sink candidate and the remaining columns are summed across them.
+"expansions" is in-edges examined; "clipped" is per-path visited-set
+rejections (i.e. cycle encounters).
+
+| fixture | sinks | paths | complete | partial | max hops | expansions | clipped |
+|---|---|---|---|---|---|---|---|
+| `const b = a.email; return b;` | 1 | 1 | 1 | 0 | 2 | 2 | 0 |
+| §6's worked example (2 fields, object literal) | 2 | 2 | 2 | 0 | 3 | 6 | 0 |
+| 2-function resolved call | 2 | 3 | 3 | 0 | 4 | 7 | 0 |
+| §9.1's cross-join (`{a: p.email, b: q.email}`) | 1 | 4 | 4 | 0 | 2 | 6 | 0 |
+| §14.7's leg counter-example (`{r: helper(a), s: b.email}`) | 3 | 11 | 11 | 0 | 4 | 18 | 0 |
+| mutual recursion (`ping`/`pong`/`top`) — cyclic | 4 | 13 | 9 | 4 | 6 | 35 | 7 |
+
+Three rows to read closely:
+
+- **§6's worked example** reconstructs into exactly the **two field-distinct
+  three-hop paths** §14.11 predicted from its 8 nodes / 6 edges —
+  `user.email → u.email → o.email → ⟨return⟩` and the same for `.ssn`, with
+  zero truncation and zero cross-contamination. §14.11 proved the structure
+  was there; this row is the structure actually being read back out. That
+  is FR-303's *"ordered paths can be reconstructed"* half, measured.
+- **The 2-function resolved call**'s 3 paths split 1 + 2 across its two
+  sink candidates: `helper`'s own exit node yields the single path
+  `u.email → ⟨return helper⟩`, and `caller`'s exit node yields **two** —
+  the real 4-hop through-the-callee chain
+  (`a.email → u.email → ⟨return helper⟩ → out → ⟨return caller⟩`) and
+  §14.7's disclosed 2-hop **bypass** (`a.email → out → ⟨return caller⟩`),
+  which skips the callee. The bypass is kept, marked
+  `ambiguousCorrelation`, and ranked **last** (`C5/2`) — the shipped design
+  neither deletes it nor lets it outrank the real chain.
+- **Mutual recursion** is the only row with partial paths: 4 of its 13 are
+  `'cycle'`-terminated. They are labelled, not dropped, and not disguised
+  as origins. 35 expansions and 7 clips on an 8-node/11-edge cyclic graph
+  is the whole termination story, and no budget was involved in it.
