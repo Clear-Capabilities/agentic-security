@@ -472,22 +472,41 @@ breaking id stability across runs. Do not do that. If a per-site inventory row
 is required, it must be an additional, always-present entity (a ledger row, or
 an `evidence` entity), never a conditional node.
 
-### 6.6 `node.subtype: null` — an escalated schema divergence
+### 6.6 `node.subtype: null` — an escalated schema divergence — RESOLVED
+
+**RESOLVED** by the `2026-08-31-lineage-schema-subtype-nullability-hotfix`
+Milestone-0 hotfix — this file is committed in the same commit as the fix
+itself, so it cannot self-reference its own hash; find the exact commit via
+`git log --grep='relax node.subtype schema nullability'` (the commit message
+starts `fix(lineage): relax node.subtype schema nullability`).
 
 Decision 1 (inherited, `DESIGN_REGISTRIES.md` §9.0) says a `null` category
-becomes a `null`/absent `subtype`. `validate.js` accepts that — it never looks
-at `subtype` at all.
+becomes a `null`/absent `subtype`. `validate.js` accepted that already — it
+never looked at `subtype` at all, which was itself half the bug: it was also
+silently accepting genuinely wrong values (e.g. a bare number) with no check.
 
-**`dataflow-graph.schema.json` does not.** Its node definition has `subtype`
-in `required` with `"type": "string"`, so a null-category node is invalid
+**`dataflow-graph.schema.json` did not.** Its node definition had `subtype` in
+`required` with `"type": "string"`, so a null-category node was invalid
 against the JSON-Schema twin while being valid against the runtime validator,
-and `json-schema-parity.test.js` cannot see the difference (it compares enum
-arrays). E may modify neither file.
+and `json-schema-parity.test.js` could not see the difference (it only ever
+compared enum arrays and the top-level envelope's `required` keys, never a
+per-entity `$defs.<entity>.required` array).
 
-E3 must not paper over this. Emit `subtype: null` per Decision 1, and
-**escalate**: making `subtype` nullable in `dataflow-graph.schema.json` is a
-Milestone 0 contract change that belongs to whoever owns that file. Until then
-the two validators disagree about 2 of `vulnerable-js`'s 9 nodes.
+**The fix, applied outside Sub-project E** (this file's own node contract
+description above is unaffected — E still emits `subtype: null` per Decision
+1, exactly as originally written): `dataflow-graph.schema.json`'s `$defs.node`
+now declares `"subtype": { "type": ["string", "null"] }` and no longer lists
+`subtype` in `required` (both `null` and a fully absent field are legal, per
+`DESIGN_REGISTRIES.md` §9.0's own "null/absent" phrasing, which never
+committed to one representation over the other); `validate.js` gained an
+active check — present-and-non-null-and-non-string (a number, object, array,
+etc.) is now a validation error, present-and-null or absent are not;
+`json-schema-parity.test.js` gained a new block comparing every
+`$defs.<entity>.required` array against the fields `validate.js` actually
+enforces as required, per entity, closing the exact blind spot that let this
+divergence go undetected. The two validators no longer disagree on any of
+`vulnerable-js`'s 9 nodes (nor on the flagship fixture's 14, which all already
+carried string subtypes and needed no change).
 
 ---
 
@@ -717,9 +736,15 @@ hops / 14 pnodes / 8 pedges.
    escalated, not fixed. **It is a prerequisite for Sub-project F**: a corpus
    built before it is closed will bake in false negatives.
 
-2. **`node.subtype: null` is invalid against `dataflow-graph.schema.json`**
-   while valid against `validate.js` — §6.6. Needs a Milestone 0 contract
-   decision.
+2. **RESOLVED.** ~~`node.subtype: null` is invalid against
+   `dataflow-graph.schema.json` while valid against `validate.js`~~ — §6.6.
+   Fixed by the `2026-08-31-lineage-schema-subtype-nullability-hotfix`
+   Milestone-0 hotfix: the schema now declares `subtype`'s type as
+   `["string", "null"]` and drops it from `required`; `validate.js` gained an
+   active check accepting `string | null | absent` and rejecting anything
+   else (a bare number, previously silently accepted); the parity test now
+   compares `$defs.<entity>.required` arrays, not just enums. Find the exact
+   commit via `git log --grep='relax node.subtype schema nullability'`.
 
 3. **A sink in an assignment RHS, a return value, or a nested argument has no
    `escape` provenance node**, so no sink-rooted reconstruction can start

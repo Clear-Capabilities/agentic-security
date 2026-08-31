@@ -32,11 +32,11 @@
   "$defs": {
     "node": {
       "type": "object",
-      "required": ["id", "kind", "subtype", "label", "aliases", "system", "externality", "lifecycleStages", "governanceRefs", "dataElementIds", "evidenceRefs", "confidence", "coverageStatus"],
+      "required": ["id", "kind", "label", "aliases", "system", "externality", "lifecycleStages", "governanceRefs", "dataElementIds", "evidenceRefs", "confidence", "coverageStatus"],
       "properties": {
         "id": { "type": "string", "pattern": "^node:" },
         "kind": { "type": "string", "enum": ["source", "process", "transform", "api", "store", "queue", "log", "sink", "external", "boundary", "unresolved"] },
-        "subtype": { "type": "string" },
+        "subtype": { "type": ["string", "null"] },
         "label": { "type": "string" },
         "aliases": { "type": "array", "items": { "type": "string" } },
         "location": { "type": ["object", "null"] },
