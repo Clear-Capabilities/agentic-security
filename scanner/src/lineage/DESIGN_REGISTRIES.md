@@ -664,7 +664,15 @@ the meaning instead.
    this design — its resolved `category` retained (the *category* is known even
    when the *destination* is not), `externality: 'unknown'`, and a `reason`
    naming the expression that prevented resolution, since FR-203 requires the
-   evidence panel to show it. **Never** drop the node, and never let it
+   evidence panel to show it. **`coverageStatus`** carries over unchanged from
+   whatever the category mapping already assigned the underlying catalog entry
+   (§4/§5) — destination resolution is a different axis from classification
+   confidence (this item's own opening sentence), so a `modeled` sink whose
+   destination happens to be dynamic stays `modeled`; it does NOT demote to
+   `partial` the way §16.7 half 2's degraded-dead-end node does (that node
+   carries `partial` for an unrelated reason — the analysis itself is
+   incomplete, not the classification, per §9.2's own routing above — do not
+   conflate the two `unresolved`-kind cases). **Never** drop the node, and never let it
    degrade into the `process`/`unsupported` bucket, which means something
    entirely different (§3: no category exists at all). Note D3 can only mark
    the *shape*; actually resolving destinations is FR-202 and lands in
