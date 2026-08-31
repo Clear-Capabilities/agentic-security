@@ -214,6 +214,18 @@ function findEntry(catalog, id) {
 // `entry.language`) and Sub-project D4's own precedent
 // (`transform-catalog.js`, gap 8) already discloses catalog entries ahead
 // of this engine's JS/TS-only parsing scope.
+//
+// task review MF-1: name the sharper limit precisely, don't understate it.
+// The REAL matcher (`dataflow/catalog.js`'s `matchSource`) applies
+// `_languageAllowed` before ever consulting `match` — for a file the real
+// engine treats as JS (e.g. `scratch.js`), a `py-*`-tagged entry is
+// discarded by that language gate regardless of how well its `match`
+// shape corresponds to the parsed code. These four proofs therefore cover
+// EXTRACTION-SHAPE CORRESPONDENCE ONLY ("the IR extracts exactly what this
+// entry's `match` field declares") — not "real parsed JS/TS code would
+// reach this catalog entry through the real engine's matcher", which it
+// would not, for these four specifically. The other 20 proofs, all
+// `language: 'js'`-tagged, carry no such gap.
 const SOURCE_PROOFS = [
   { category: 'http-body', entryId: 'js-req-body', extraction: 'member-read', src: 'const x = req.body;' },
   { category: 'http-query', entryId: 'js-req-query', extraction: 'member-read', src: 'const x = req.query;' },
