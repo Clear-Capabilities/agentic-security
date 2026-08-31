@@ -710,10 +710,11 @@ mechanism enforces.**
 
 > **CLOSED by increment C3 — see §13.3**, which adds the `context` field
 > proposed at the end of this section and moves the join key to
-> `(scope, nodeId, dataElementId, context)`. The worked example below is
-> reproduced, and both phantoms shown excluded, in
-> `test/lineage/engine-provenance-interprocedural-poc.test.js`. The section
-> is kept as written because it is the reasoning §13.3 rests on.
+> `(scope, nodeId, dataElementId, context)`. The worked example below was
+> reproduced, and both phantoms shown excluded, in this design's own
+> now-deleted PoC file at design time, and again in the permanent suite
+> (`test/lineage/engine-provenance-interprocedural.test.js`) once shipped.
+> The section is kept as written because it is the reasoning §13.3 rests on.
 
 `(scope, nodeId, dataElementId)` is the join key throughout this document
 (§2.2). It is sufficient for ONE analysis run of ONE function under ONE
@@ -971,6 +972,18 @@ correlation field (§9.1) and hop-order filtering during reconstruction (§9.2).
 ---
 
 ## 13. Interprocedural hop recording (Sub-project C, increment 3)
+
+**Implemented.** Design landed as `a2d42695` (fix round `fa27354e`, correction
+`a8846463`); shipped by Task 2 (`5ee9143d`) and Task 3 (`119cff02`), whole-branch
+reviewed clean at `ac6ed4c2`. The section below is kept in its original,
+design-time voice (future tense, "the follow-up task must…") as the historical
+record of what was decided and why — read `summaries.js`/`engine.js`/`driver.js`
+themselves, or `scanner/src/lineage/CLAUDE.md`'s own module-table rows, for the
+current, as-shipped description. The design-time PoC file this section
+originally shipped alongside it (`engine-provenance-interprocedural-poc.test.js`)
+no longer exists — Task 3 absorbed everything it proved into the permanent
+suite (`engine-provenance-interprocedural.test.js`, `engine-provenance.test.js`,
+`driver.test.js`) and deleted it, per item 15 below.
 
 Added 2026-08-30. Everything in this section is **decided**, not proposed,
 and every behavioural claim in it was produced by running code in
