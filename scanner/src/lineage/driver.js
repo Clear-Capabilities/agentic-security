@@ -62,7 +62,14 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
   for (const fn of fnList) {
     const lookupCallee = createCallGraphLookup(callGraph, fn.file);
     const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
-    const result = analyzeFunctionFieldIdentity(fn, emptyState(), { resolveCallSummary });
+    // Path provenance (Sub-project C, increment 3, §13.7 item 14): thread
+    // opts.recordHop into the per-function ctx CONDITIONALLY, so a caller
+    // that supplies none gets a byte-identical `{ resolveCallSummary }`
+    // object to what this function constructed before this change —
+    // Decision 7.2's "true by construction" property, extended to the
+    // driver.
+    const ctx = opts.recordHop ? { resolveCallSummary, recordHop: opts.recordHop } : { resolveCallSummary };
+    const result = analyzeFunctionFieldIdentity(fn, emptyState(), ctx);
     results.set(fn.qid, result);
     // Seed the cache with this function's OWN empty-entry summary directly
     // (not via cache.compute, which is reserved for a CALL SITE resolving

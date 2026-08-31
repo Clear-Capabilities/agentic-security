@@ -283,12 +283,33 @@ export function fieldSummaryEq(a, b) {
 // corresponding parameter name, using the exact same residual+byPath split
 // `assign` already uses — this is a direct, deliberate reuse of Sub-project
 // A's already-hardened write pattern, not a new mechanism.
-export function entryStateFromCall(paramNames, callArgs, callerState) {
+export function entryStateFromCall(paramNames, callArgs, callerState, ctx) {
+  // Path provenance (Sub-project C, increment 3, §13.2a). `ctx` is an
+  // OPTIONAL 4th parameter. THE SINGLE MOST IMPORTANT THING HERE: derive a
+  // RECORDER-ONLY ctx — never forward `ctx` itself to resolveExprIdentities.
+  // Forwarding the full ctx hands resolveExprIdentities a live
+  // `resolveCallSummary`, so a call argument that is itself a resolvable
+  // call (e.g. `sink(scrub(user))`) starts resolving interprocedurally
+  // where the shipped engine takes the unresolved fallback — changing the
+  // ANALYSIS RESULT with no recorder attached anywhere, in the unsound
+  // direction under a tight B6 context cap (the extra nested resolve
+  // consumes the callee's only context slot, so a later, unrelated call
+  // degrades to an empty summary and loses an identity the shipped engine
+  // keeps). This is exactly the hazard found and closed in
+  // DESIGN_PATH_PROVENANCE.md §13.2a's fix round; see
+  // engine-provenance-interprocedural.test.js's golden-baseline regression
+  // tests for the guard that pins this closed.
+  //
+  // Deriving this ONCE, here, inside entryStateFromCall itself (not at a
+  // call site) is load-bearing, not stylistic — it means no future second
+  // caller of entryStateFromCall can reintroduce the hazard by passing the
+  // full ctx through a different path.
+  const argCtx = ctx?.recordHop ? { recordHop: ctx.recordHop } : undefined;
   let entryState = emptyState();
   const n = Math.min(paramNames.length, callArgs.length);
   for (let i = 0; i < n; i++) {
     const paramName = paramNames[i];
-    const resolved = resolveExprIdentities(callerState, callArgs[i]);
+    const resolved = resolveExprIdentities(callerState, callArgs[i], argCtx);
     const residual = residualFlat(resolved.flat, resolved.byPath);
     for (const id of residual) entryState = addIdentity(entryState, paramName, id);
     for (const [subPath, ids] of resolved.byPath) {
@@ -331,12 +352,47 @@ export function applyAtCallSite(summary, paramNames, callArgs) {
 // instead, without this function (or `resolveExprIdentities`) needing to
 // change at all.
 export function createCallSummaryResolver(cache, lookupCallee) {
-  return function resolveCallSummary(calleeExpr, callArgs, callerState) {
+  return function resolveCallSummary(calleeExpr, callArgs, callerState, ctx) {
     const resolved = lookupCallee(calleeExpr);
     if (!resolved) return null;
     const { qid, fn } = resolved;
-    const entryState = entryStateFromCall(fn.params, callArgs, callerState);
-    return cache.compute(qid, entryState, (es) => {
+    // Path provenance (Sub-project C, increment 3, §13.7 item 7):
+    // `entryStateFromCall` does the recorder-only stripping itself (see its
+    // own header comment) — this call site forwards the caller's `ctx`
+    // unmodified; the hazard cannot reappear here because the strip
+    // happens one level down, not at each call site.
+    const entryState = entryStateFromCall(fn.params, callArgs, callerState, ctx);
+    // §13.2's first half: the callee's own entry context, computed once so
+    // both the bind hop below and the return-direction wrapper at the
+    // bottom of this function can reference the exact same value.
+    const calleeContext = hashState(entryState);
+
+    // Path provenance (§13.2b): the argument -> parameter binding out-half,
+    // emitted once per (path, id) entry of the freshly built entryState —
+    // entryState IS the complete record of every (toPath, id) the binding
+    // wrote, so nothing has to be re-resolved to enumerate them. fromPath
+    // stays null: the argument expression's own in-halves (emitted inside
+    // entryStateFromCall, above) already carry the real contributing keys
+    // at the join key (callerScope, callerNodeId, id, callerContext); a
+    // non-null fromPath here would double-emit the same information in a
+    // differently-shaped record. peerScope/peerContext are mandatory, not
+    // decorative: toPath lives in the CALLEE's namespace, so without them
+    // C4 would collide this binding's target with any caller-local
+    // variable of the same name (Decision 5's bug class).
+    if (ctx?.recordHop) {
+      for (const [path, ids] of entryState) {
+        for (const id of ids) {
+          ctx.recordHop({
+            kind: 'write-out', subKind: 'call-arg-bind',
+            fromPath: null, toPath: path, dataElementId: id,
+            syntacticPath: null, widenReason: null, lossReason: null,
+            peerScope: qid, peerContext: calleeContext,
+          });
+        }
+      }
+    }
+
+    const summary = cache.compute(qid, entryState, (es) => {
       // Pass THIS SAME resolver down as the callee's own ctx — without
       // this, a chain of resolved calls (outer resolves to middle, middle
       // itself calls inner) would silently stop resolving after one hop:
@@ -354,9 +410,31 @@ export function createCallSummaryResolver(cache, lookupCallee) {
       // recursive chain safe (verified: both terminate immediately,
       // returning an empty, honestly-unrefined result — precision there
       // is increment B5's job, not this fix's).
-      const result = analyzeFunctionFieldIdentity(fn, es, { resolveCallSummary });
+      //
+      // Path provenance (§13.7 item 9, hole 3): keep the caller's recorder
+      // alive on the callee's own ctx instead of discarding it (the
+      // pre-C3 `{ resolveCallSummary }`-only object was hole 3). Do NOT
+      // re-stamp `context` here — the callee's own analyzeFunctionFieldIdentity
+      // call (engine.js's stepCtx wrapper) computes and stamps its own
+      // `context` from ITS OWN entry state (`es`, not the caller's), and
+      // its stamps win over anything this object would set, by spread
+      // order (`{ ...ctx, ..., ...h }` — the innermost `h` from the
+      // deepest call always wins). Passing a `context` field here would be
+      // silently overwritten and is dead code.
+      const calleeCtx = ctx?.recordHop
+        ? { resolveCallSummary, recordHop: ctx.recordHop }
+        : { resolveCallSummary };
+      const result = analyzeFunctionFieldIdentity(fn, es, calleeCtx);
       return summaryFromAnalysisResult(result);
     });
+
+    // §13.2(c), the return direction: a FRESH wrapper every call — the
+    // cached summary is never mutated, so fieldSummaryEq and the B5
+    // refinement loop are untouched. engine.js reads only
+    // returnFlat/returnByPath, so this augmentation is inert to it; it
+    // exists purely so `case 'call'`'s own production/call-resolved hop can
+    // carry peerScope/peerContext naming the callee it resolved to.
+    return summary ? { ...summary, resolvedQid: qid, resolvedContext: calleeContext } : summary;
   };
 }
 
