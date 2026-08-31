@@ -119,9 +119,86 @@ analyzers' job to make it scoreable.
 
 ### Corpus state
 
-4 fixtures (the 3 seeded above plus `js-api-to-log-disconnected/`, the
-AC-11 disconnected-node proof), all `regression`-tier, all passing.
-Sub-project F's remaining increments (F2 onward) mass-author the rest of
+**23 fixtures — 16 `regression`-tier (all passing) and 7
+`capability`-tier (all failing, deliberately and with a documented
+reason each). `--check` exits 0.** Re-measure with
+`node bench/data-lineage/runner.mjs --check` rather than trusting this
+paragraph; it is a snapshot, not a gate.
+
+The 4 seed fixtures above came from Milestone 0 and F1. Increment F2
+added the other 19:
+
+- **14 category-coverage fixtures**, one per reachable
+  `SOURCE_CATEGORIES` value. The 10 that are reachable from a JS-parsed
+  fixture pass, and between them exercise all 10 reachable
+  `SINK_CATEGORIES` (`database`, `log`, `external-api`, `analytics`,
+  `http-response`, `queue`, `client-storage`, `object-storage`, `file`,
+  `email`).
+- **3 aliasing/interprocedural fixtures** —
+  `js-http-body-to-log-alias-of-field/` (passing),
+  `js-http-body-to-log-aliased/` and
+  `js-http-body-to-log-interprocedural/` (both capability-tier).
+- **2 negative/clean fixtures** —
+  `js-http-query-to-log-unclassified-clean/` (passing) and
+  `js-exec-unsupported-sink/` (capability-tier).
+
+#### Why 7 fixtures are capability-tier
+
+Every one of them records real ground truth the engine or the runner
+cannot satisfy today. Each fixture's own `notes` carries the measured
+evidence; the four causes are:
+
+1. **Four source categories have no `language: 'js'` catalog entry at
+   all** — `http-upload`, `cli-argument`, `storage-read` and
+   `user-input` are represented only by `py`/`php`/`cpp`-tagged entries.
+   `runner.mjs` parses every fixture with
+   `parseJsFile('source.js', …)`, so `dataflow/catalog.js`'s
+   `_languageAllowed` discards those entries before `match` is ever
+   consulted and no source node can be minted. Fixing this means a
+   multi-language runner — a real runner extension, deferred to F3+.
+   (`storage-read` and `user-input` have a second, independent blocker:
+   `open(path)`/`input()` are bare calls with no enclosing member
+   access, so `accessPathOf` returns `null` and the match lands in
+   `planSeeds`' `unseedable[]`.)
+2. **An aliased CONTAINER loses field-level classification.**
+   `const body = req.body; body.card_number` seeds the container path
+   (`source-seeding.js`'s `seedPathFor` only extends through member
+   accesses enclosing the matched expression in the same statement), so
+   the graph mints a dataElement literally named `body` with
+   `dataClasses: []`. The flow is built; it just carries nothing
+   classified. This is an extremely common Express shape, which is why
+   the fixture is kept visible rather than relabelled.
+3. **The projection does not span a call boundary.** An interprocedural
+   flow produces the source node, the sink node and a correctly
+   classified `card_number` `[PCI]` dataElement — and zero flows. Three
+   interprocedural shapes were measured and all behave identically. See
+   `DESIGN_GRAPH_BUILDER.md` §3.6 for why a call site deliberately does
+   not inherit the driver's seed.
+4. **`scoreFixture` cannot address an unsupported/process-kind sink.**
+   `js-exec-unsupported-sink/` mints exactly one node — `kind: 'process'`,
+   `subtype: null`, `coverageStatus: 'unsupported'`, with a non-empty
+   `coverageReason`, which is the AC-11 property that matters — but the
+   contract asserts by `subtype` category match and has no way to say
+   "an unsupported-kind node with `subtype: null` exists". Extending the
+   contract is F3+ work; the runner was confirmed to degrade to a clean
+   FAIL report rather than throwing.
+
+#### A shipped-code defect found while authoring this batch
+
+`coverage.js`'s FR-203 hook guards itself with
+`if (site.entry?.vuln?.cwe === undefined) return undefined;`, whose
+comment states that privacy-catalog entries carry no `vuln.cwe`. They
+do — `privacy-js-s3-putObject` carries `CWE-359`. So the guard does not
+exclude them, and `resolveSiteDecision` re-runs `reclassifySink` (which
+keys on `CWE_MAP`) on a privacy entry, producing a `null` category and
+collapsing a perfectly good `store`/`object-storage` node to
+`process`/`null`/`unsupported`. Reproduce with
+`s3.putObject({ Body: x })` — a computed first argument is what makes
+the arg0 signal fire. `js-ai-model-output-to-object-storage-phi/` uses a
+LITERAL key argument to route around it. Not fixed here: F2 is a
+fixture-authoring increment and does not touch `src/lineage/`.
+
+Sub-project F's remaining increments (F3 onward) mass-author the rest of
 the ~200-entry floor described under "Target corpus shape" above.
 
 Two of the nine corpus dimensions listed there — the transport-protection

@@ -93,13 +93,27 @@ test('F1/10: buildFixtureGraph produces a real, validateGraph()-clean graph end 
   assert.deepEqual(validateGraph(graph).errors, []);
 });
 
-test('F1/11: the real seed corpus (all 4 fixtures) scores clean end to end — the actual regression pin', async () => {
+// F2 (the category-coverage batch) grew this corpus from 4 fixtures to 23
+// and, for the first time, introduced capability-tier entries — fixtures
+// whose expected.json records GROUND TRUTH the engine cannot satisfy yet
+// (a py-only source category the JS-only runner can never mint a node for;
+// an interprocedural flow the projection does not span; an
+// unsupported/process-kind sink the shape-match contract cannot address).
+// Those are EXPECTED to score `pass: false`, exactly as `--check` reports
+// them, so this pin asserts `pass: true` over the REGRESSION tier only —
+// the same rule runner.mjs's own exit code uses — while still running
+// every fixture through scoreFixture so a capability entry that throws is
+// still caught. It iterates the fixture directory at runtime, so it adds
+// no test() call per fixture and the test COUNT is unchanged by F2.
+test('F1/11: every regression-tier fixture in the real corpus scores clean end to end — the actual regression pin', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');
   const { fileURLToPath } = await import('node:url');
   const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'bench', 'data-lineage', 'fixtures');
   const ids = fs.readdirSync(dir).filter((f) => fs.statSync(path.join(dir, f)).isDirectory());
-  assert.ok(ids.length >= 4, 'the 4 seed fixtures from Task 1 Step 1 must all exist');
+  assert.ok(ids.length >= 23, 'the 4 seed fixtures plus F2\'s 19-fixture batch must all exist');
+  let regression = 0;
+  let capability = 0;
   for (const id of ids) {
     const fxDir = path.join(dir, id);
     const sourceFile = fs.readdirSync(fxDir).find((f) => f.startsWith('source.'));
@@ -107,6 +121,16 @@ test('F1/11: the real seed corpus (all 4 fixtures) scores clean end to end — t
     const expected = JSON.parse(fs.readFileSync(path.join(fxDir, 'expected.json'), 'utf8'));
     const graph = buildFixtureGraph(id, source);
     const r = scoreFixture(graph, expected);
-    assert.equal(r.pass, true, `${id}: ${JSON.stringify(r.errors)}`);
+    if ((expected.tier ?? 'regression') === 'regression') {
+      regression++;
+      assert.equal(r.pass, true, `${id}: ${JSON.stringify(r.errors)}`);
+    } else {
+      capability++;
+      // A capability entry may fail, but it must fail with a real,
+      // readable reason — never an empty error list, never a throw.
+      if (!r.pass) assert.ok(r.errors.length > 0, `${id}: capability failure with no error text`);
+    }
   }
+  assert.ok(regression >= 16, `expected at least 16 regression-tier fixtures, found ${regression}`);
+  assert.ok(capability >= 7, `expected at least 7 capability-tier fixtures, found ${capability}`);
 });
