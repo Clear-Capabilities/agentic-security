@@ -101,8 +101,11 @@ never `engine.js`'s live taint state).
   `widenReasons` empty — measured on three ordinary fixtures, so a grader
   reading only the top-level arrays violates FR-306 outright (§16.5) — and
   `path-query.js`'s own `Path.widenedHopCount`/`lossHopCount`/`shape`
-  inherit exactly that blind spot (§16.7 Finding 1: disclosed, measured,
-  deliberately NOT fixed by C6, which recomputes instead).
+  inherit exactly that blind spot (§16.7 Finding 1 — measured, and
+  **scheduled** as §16.8 item 7: a four-line change confined to
+  `materialize()`, verified to break no existing test, and explicitly NOT
+  to be pushed down into `path-store.js`, whose `edge.widenReasons` sits
+  in `provenanceEdgeId`'s discriminator).
 - External destination resolution, database/queue field mapping,
   transit/at-rest/handling ANALYZERS (this package only defines the
   verdict *model*, not what decides a verdict) — Milestone 2.

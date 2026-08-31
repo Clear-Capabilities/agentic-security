@@ -136,13 +136,21 @@ function gradeHop(hop) {
   const widenAll = _sortedUnion(topWiden, annotations.map((a) => a.widenReason));
   const lossAll = _sortedUnion(topLoss, annotations.map((a) => a.lossReason));
 
-  // A control-dependence reason is not a widening/loss — it selects the
-  // `implicit` tier and is removed from the other two so it never
+  // A control-dependence reason is not a widening — it selects the
+  // `implicit` tier and is removed from `widenReasons` so it never
   // double-counts.
+  //
+  // §16.3: the subtraction is applied to the WIDEN side ONLY, deliberately
+  // (fix round 1, nitpick 8). Applying it to `lossAll` too would let a
+  // future `lossReason: 'control-dependence'` be silently UPGRADED from
+  // `severed` to the more-confident `implicit` tier — a grade moving in
+  // the optimistic direction because a new reason string was added
+  // elsewhere. Unreachable today (no loss reason is in the set), and kept
+  // unreachable by construction rather than by luck.
   const isImplicit = (r) => IMPLICIT_FLOW_REASONS.includes(r);
-  const implicitReasons = [...widenAll, ...lossAll].filter(isImplicit).sort();
+  const implicitReasons = widenAll.filter(isImplicit).sort();
   const widenReasons = widenAll.filter((r) => !isImplicit(r));
-  const lossReasons = lossAll.filter((r) => !isImplicit(r));
+  const lossReasons = [...lossAll];
 
   // Exactly which reasons would have been invisible to a top-level-only
   // reader. Named, not merely folded — §18.4's transparency requirement
@@ -212,7 +220,12 @@ function gradePath(path) {
   return {
     grade,
     rank: flowGradeRank(grade),
-    hopGrades: hopGrades.map((g) => g.grade),
+    // §16.4 (fix round 1, finding 3): the FULL `HopGrade` objects, in path
+    // order — not a parallel array of bare grade strings. A bare-string
+    // array loses per-hop CAUSE, forcing every caller that wants to render
+    // FR-306's "visually distinct" half to re-invoke `gradeHop` per hop and
+    // re-derive what this function already computed.
+    hops: hopGrades,
     worstHopIndex: hopGrades.findIndex((g) => g.grade === grade),
     factors,
     widenedHopCount: hopGrades.filter((g) => g.widenReasons.length > 0).length,
@@ -270,6 +283,48 @@ function allPaths(store) {
   return out;
 }
 
+/** Test-side convenience: the per-hop grade strings of a `PathGrade`. */
+const hopGradeNames = (pathGrade) => pathGrade.hops.map((h) => h.grade);
+
+/**
+ * §16.7 Finding 1 / §16.8's `path-query.js` remediation item, prototyped
+ * LOCALLY exactly as the grading functions above are.
+ *
+ * This is the whole fix: `path-query.js`'s `materialize()` currently
+ * computes `widenedHopCount` / `lossHopCount` — and, from them, §15.7's
+ * `shape` signature — with `hops.filter((h) => h.widenReasons.length > 0)`,
+ * i.e. from the two EDGE-FORMING halves only. It is exactly the consumer
+ * §14.9's own correction and §15.8 tell to "read `annotations[]` too, not
+ * only the edge's top-level reason arrays", and it does not.
+ *
+ * The fix belongs in `materialize()` and NOWHERE ELSE. It must NOT be
+ * pushed down into `path-store.js`'s `edge.widenReasons`/`edge.lossReasons`:
+ * those two arrays are part of `provenanceEdgeId`'s discriminator (§14.5),
+ * so changing them would move every edge id, and with it every `ppath:` id
+ * (§15.6) — a re-hash of the whole DAG to fix a display count.
+ */
+function withAnnotationAwareCounts(path) {
+  const annWiden = (h) => h.widenReasons.length > 0 || (h.annotations ?? []).some((a) => a.widenReason != null);
+  const annLoss = (h) => h.lossReasons.length > 0 || (h.annotations ?? []).some((a) => a.lossReason != null);
+  const widenedHopCount = path.hops.filter(annWiden).length;
+  const lossHopCount = path.hops.filter(annLoss).length;
+  return {
+    ...path,
+    widenedHopCount,
+    lossHopCount,
+    // `shape` is rebuilt from the corrected counts — it is derived from the
+    // same two filters in `materialize()`, so a fix that left it alone
+    // would leave §15.7's diversity bucketing reading the stale answer.
+    shape: [
+      path.complete ? 'complete' : 'partial',
+      path.crossScopeCount > 0 ? 'boundary' : 'local',
+      widenedHopCount > 0 ? 'widened' : 'explicit',
+      lossHopCount > 0 ? 'lossy' : 'intact',
+      path.ambiguousHopCount > 0 ? 'ambiguous' : 'correlated',
+    ].join('/'),
+  };
+}
+
 /**
  * The NAIVE grader §14.9's own corrected note warns a C6 implementer
  * would write: identical precedence, but reading ONLY the edge's
@@ -314,7 +369,7 @@ test('C6/1: a plain, unwidened, unambiguous, intraprocedural assignment chain gr
   const paths = allPaths(store);
   assert.equal(paths.length, 1);
   const g = gradePath(paths[0]);
-  assert.deepEqual(g.hopGrades, ['explicit', 'explicit']);
+  assert.deepEqual(hopGradeNames(g), ['explicit', 'explicit']);
   assert.equal(g.grade, 'explicit');
   assert.equal(g.rank, 0, 'the top of the confidence order');
   assert.deepEqual(g.factors, [], 'nothing to disclose about a clean flow');
@@ -351,8 +406,11 @@ test('C6/2: a real `widenReason` grades `widened` — strictly lower-ranked than
     // "visually distinct" is a per-HOP claim: exactly one hop is widened,
     // and the grade says which.
     assert.equal(g.widenedHopCount, 1);
-    assert.equal(g.hopGrades.filter((x) => x === 'widened').length, 1);
-    assert.equal(g.hopGrades[g.worstHopIndex], 'widened');
+    assert.equal(hopGradeNames(g).filter((x) => x === 'widened').length, 1);
+    assert.equal(g.hops[g.worstHopIndex].grade, 'widened');
+    // The per-hop CAUSE is on the path answer itself — no second
+    // `gradeHop` call needed to render FR-306's "visually distinct" half.
+    assert.ok(g.hops[g.worstHopIndex].factors.includes(`widen:${reason}`));
   }
 });
 
@@ -415,8 +473,8 @@ test('C6/4: a sound interprocedural stitch grades IDENTICALLY to the same flow i
   assert.equal(stitched.length, 1);
   const stitchedGrade = gradePath(stitched[0]);
 
-  assert.equal(stitchedGrade.hopGrades.length, 2, 'arg -> param, then param -> callee exit');
-  assert.deepEqual(stitchedGrade.hopGrades, ['explicit', 'explicit'],
+  assert.equal(stitchedGrade.hops.length, 2, 'arg -> param, then param -> callee exit');
+  assert.deepEqual(hopGradeNames(stitchedGrade), ['explicit', 'explicit'],
     'C3/C4 PROVED the stitch lands on the node the callee independently created (§14.3 Q1) — there is no imprecision to grade');
   assert.equal(stitchedGrade.grade, inlinedGrade.grade,
     'the same flow, factored into two functions, grades the same — a grade must report evidence quality, not code structure');
@@ -485,7 +543,7 @@ test('C6/5: a genuine widening can live ONLY in `annotations[]`, with the edge\'
   assert.equal(provenCases, 3, 'all three shapes reproduce it — this is not one exotic corner');
 });
 
-test('C6/5b: the shipped `Path.widenedHopCount` under-reports the same flow — C6 must recompute from hops, never read C5\'s counts (§16.7 Finding 1)', () => {
+test('C6/5b: §16.8\'s `materialize()` remediation, prototyped — the annotation-aware counts report `widenedHopCount: 1` and a `widened` shape on the fixture C5 currently scores as explicit', () => {
   const src = 'function f(user) { sink(mystery(user.email)); }';
   const byName = parseFns(src, '/x/c6-5b.js');
   const { store } = record(byName.f, addIdentity(emptyState(), 'user.email', 'data:email'));
@@ -496,14 +554,64 @@ test('C6/5b: the shipped `Path.widenedHopCount` under-reports the same flow — 
   const p = paths.find((x) => x.hops.some((h) => h.annotations.some((a) => a.widenReason === 'unresolved-call')));
   assert.ok(p, 'the annotation-carrying path exists');
 
-  assert.equal(p.widenedHopCount, 0,
-    'C5 computes this from the edge top-level arrays only — measured, not asserted from reading');
-  assert.equal(p.shape.split('/')[2], 'explicit',
-    "and §15.7's diversity `shape` signature inherits the same blind spot");
+  // THE REGRESSION ASSERTION — the behaviour §16.8's `path-query.js` item
+  // must ship. Written against the local prototype so it states the target
+  // rather than the defect, and so it keeps passing unchanged once the fix
+  // lands in `materialize()` itself.
+  const fixed = withAnnotationAwareCounts(p);
+  assert.equal(fixed.widenedHopCount, 1,
+    'the widening is real and the count must see it');
+  assert.equal(fixed.shape.split('/')[2], 'widened',
+    "§15.7's diversity `shape` signature must see it too — it is derived from the same filter");
+  assert.equal(fixed.lossHopCount, 0, 'and the loss half is untouched by a widen-only fixture');
+  assert.equal(fixed.shape.split('/')[3], 'intact');
 
+  // Forward-compatible: the SHIPPED count may be either the design-time
+  // measured value (0) or the fixed one (1), and this test must not be the
+  // thing that blocks the fix. Deliberately not `assert.equal(p.widenedHopCount, 0)`
+  // (fix round 1, finding 1 — that assertion pinned the DEFECT).
+  assert.ok(p.widenedHopCount <= fixed.widenedHopCount,
+    'shipped `materialize()` measured 0 here at design time; it becomes 1 once §16.8\'s item lands, and never exceeds the corrected count');
+
+  // And the grade agrees with the corrected count, which is the whole point
+  // of §16.7 Finding 1: `gradePath` never depended on the buggy field.
   const g = gradePath(p);
-  assert.equal(g.widenedHopCount, 1, 'the grade recomputes it and finds the widening');
+  assert.equal(g.widenedHopCount, fixed.widenedHopCount);
   assert.equal(g.grade, 'widened');
+});
+
+test('C6/5c: the SAME remediation fixes the loss half — a §13.6-degraded path\'s `lossHopCount`/`shape` are annotation-blind today and correct under the prototype', () => {
+  const src = `
+    function inner(u) { return { v: u.email }; }
+    function middle(u) { const r = inner(u); return r; }
+    function outer(a, b) {
+      const x = middle(a);
+      const y = middle(b);
+      return { x, y };
+    }
+  `;
+  const byName = parseFns(src, '/x/c6-5c.js');
+  let entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  entryState = addIdentity(entryState, 'b.ssn', 'data:ssn');
+  const { store } = record(byName.outer, entryState, { byName, cache: new FieldIdentitySummaryCache(1) });
+
+  // The degraded binding edge is only reachable from its own target node —
+  // that is Finding 2, and it is why this fixture needs a direct start node
+  // rather than a sink candidate.
+  const e = store.edges().find((x) => x.annotations.some((a) => a.lossReason === 'context-cap-degraded'));
+  assert.ok(e);
+  const r = reconstructPaths(store, e.toNodeId);
+  assert.equal(r.paths.length, 1);
+  const p = r.paths[0];
+
+  const fixed = withAnnotationAwareCounts(p);
+  assert.equal(fixed.lossHopCount, 1,
+    "the honestly-degraded hop must count as lossy — anything else is §18.4's failure mode inside a display count");
+  assert.equal(fixed.shape.split('/')[3], 'lossy');
+  assert.ok(p.lossHopCount <= fixed.lossHopCount,
+    'shipped `materialize()` measured 0 here at design time; it becomes 1 once §16.8\'s item lands');
+  assert.equal(gradePath(p).grade, 'severed');
+  assert.equal(gradePath(p).degraded, true);
 });
 
 // =====================================================================
@@ -597,7 +705,7 @@ test('C6/7: a path mixing clean and widened hops grades WORST-WINS — per-hop g
   assert.equal(p.hopCount, 3);
 
   const g = gradePath(p);
-  assert.deepEqual(g.hopGrades, ['explicit', 'widened', 'explicit'],
+  assert.deepEqual(hopGradeNames(g), ['explicit', 'widened', 'explicit'],
     'FR-306\'s "visually distinct" half: the widened hop is identifiable, the clean ones are not dragged down');
   assert.equal(g.grade, 'widened',
     'FR-306\'s "may not be displayed as the same evidence grade" half: the PATH cannot claim explicit');
@@ -605,11 +713,12 @@ test('C6/7: a path mixing clean and widened hops grades WORST-WINS — per-hop g
 
   // The alternatives, executed rather than argued: every other reduction
   // lets the widened hop hide behind two clean ones.
-  assert.equal(g.hopGrades[0], 'explicit', 'first-wins would report explicit');
-  assert.equal(g.hopGrades[g.hopGrades.length - 1], 'explicit', 'last-wins would report explicit');
-  const best = g.hopGrades.map(flowGradeRank).sort((a, b) => a - b)[0];
+  const names = hopGradeNames(g);
+  assert.equal(names[0], 'explicit', 'first-wins would report explicit');
+  assert.equal(names[names.length - 1], 'explicit', 'last-wins would report explicit');
+  const best = names.map(flowGradeRank).sort((a, b) => a - b)[0];
   assert.equal(FLOW_EVIDENCE_GRADES[best], 'explicit', 'best-wins would report explicit');
-  const majority = g.hopGrades.filter((x) => x === 'explicit').length > g.hopGrades.length / 2;
+  const majority = names.filter((x) => x === 'explicit').length > names.length / 2;
   assert.equal(majority, true, 'majority-wins would report explicit');
 });
 

@@ -2798,6 +2798,22 @@ follow-up implementation task's file/line checklist.
 widened flows must be visually distinct and lower-confidence. They may not
 be displayed as the same evidence grade as an explicit field assignment."*
 
+> **Fix round 1 (2026-08-30), from this increment's own task review.** One
+> BLOCKING defect and three refinements were found in §16's first draft and
+> are corrected in place, each marked where it applies — recorded here
+> rather than silently rewritten, per this document's own policy (§13's
+> own fix-round box set the precedent). The BLOCKING one is worth stating
+> at the top because it is the same failure mode this document exists to
+> prevent: **§16.7 Finding 1 deferred a fix on a cost estimate that was
+> never measured, and the estimate was false.** The reviewer ran the
+> four-line fix and found it breaks nothing; the deferral survived, the
+> false reason did not, and §16.8 now *schedules* the remediation instead
+> of recording "`path-query.js`: none". Also corrected: `gradePath` now
+> returns full `HopGrade` objects rather than bare strings (§16.4);
+> §16.7 Finding 2 is restated as the §18.4 re-opening it actually is,
+> with a binding hand-off to Sub-project D's scoping; and §16.10 states
+> the explicitness-vs-completeness asymmetry as a trade-off.
+
 §15.8 drew the boundary this section crosses: *"No FR-306 grade
 computation. C5's path output CARRIES every grading input … and computes
 only counts. Turning counts into a grade is C6."* Five questions were open
@@ -2971,9 +2987,20 @@ exactly §14.2's `origin`-node-kind precedent (*"a real, honestly-disclosed
 gap, but not a dead branch: it is the exact shape a Sub-project D … will
 produce"*). Its trigger is a reason string in the exported
 `IMPLICIT_FLOW_REASONS` set (today `['control-dependence']`), which is
-also **removed** from `widenReasons`/`lossReasons` so it can never
-double-count. `C6/10` proves both halves: no hop of five real fixtures
-grades `implicit`, and a hand-built control-dependence hop does.
+also **removed** from `widenReasons` so it can never double-count.
+`C6/10` proves both halves: no hop of five real fixtures grades
+`implicit`, and a hand-built control-dependence hop does.
+
+> **The subtraction applies to the WIDEN side ONLY** (fix round 1,
+> nitpick 8). Subtracting `IMPLICIT_FLOW_REASONS` from `lossReasons` too
+> would mean that if a future increment ever emitted
+> `lossReason: 'control-dependence'`, that hop would be silently
+> **upgraded** from `severed` to the *more confident* `implicit` tier —
+> a grade moving in the optimistic direction as a side effect of a reason
+> string being added somewhere else. Unreachable today (no loss reason is
+> in the set), and now unreachable by construction rather than by luck.
+> A control-dependent hop that is also a recorded dead end grades
+> `severed`, which is the safe direction.
 
 **`crossScope`, `originated` and `truncated` are never grade inputs.**
 `crossScope` is §16.6; `truncated` (§14.8's `markTruncated`) is an
@@ -2990,7 +3017,7 @@ has two halves and they are different requirements:
 - *"must be visually distinct"* — a **per-hop** claim. A UI marks the
   widened hop, not the whole path; if the whole path were graded down
   uniformly, the reader could not see which step is the weak one.
-  `gradePath` therefore returns `hopGrades[]` and `worstHopIndex`.
+  `gradePath` therefore returns `hops[]` and `worstHopIndex`.
 - *"may not be displayed as the same evidence grade as an explicit field
   assignment"* — a claim about **the evidence grade a flow is displayed
   at**, i.e. one scalar per path. With per-hop grading alone there is no
@@ -3023,6 +3050,39 @@ an order-dependent aggregate would be the representative-picking bug class
 C4 found in `path-store.js`'s `origin` branch and C5 found in
 `terminals[].terminalReasons`, for the third time.
 
+**`gradePath` returns the FULL `HopGrade` objects, not bare grade
+strings** (fix round 1, finding 3). The first draft returned
+`hopGrades: string[]` plus a path-level `factors` union, which loses
+per-hop *cause*: a caller rendering FR-306's "visually distinct" half
+would have had to re-invoke `gradeHop` on every hop to learn *which*
+factor drove *that* hop's grade, re-deriving what `gradePath` had just
+computed and thrown away. Settled now rather than after a follow-up task
+has implemented against the narrower shape.
+
+> **The trade-off, stated rather than left implicit.** A `PathGrade` now
+> carries N objects instead of N strings, which is strictly more memory
+> per graded path. This is the same trade §15.2 already made deliberately
+> one layer down — carrying a denormalized copy of each edge on the path
+> rather than an edge id — for the same reason: *"a path that cannot be
+> graded without also carrying the store is a poor hand-off."* A path
+> grade that cannot be **rendered** without re-grading every hop is the
+> same mistake one layer up. The rejected middle option, a parallel
+> `hopFactors[]` array alongside `hopGrades[]`, is exactly the
+> redundant-fields-drift shape §3 rejected `widened` for. A caller wanting
+> only the strings writes `g.hops.map((h) => h.grade)`.
+
+> **`rank` is NOT a monotone image of `_PRECEDENCE`, and no consumer
+> should derive one from the other** (fix round 1, nitpick 7). For the
+> five real grades they are exact reverses, but `'unassessed'` is last in
+> **both** — so `flowGradeRank('unassessed')` is 5 (least confident) while
+> its aggregation precedence is also 5 (loses to everything). That is
+> deliberate, and it is the same asymmetry `protection.js` carries between
+> `EVIDENCE_GRADES` and its own `_PRECEDENCE`. It is unreachable through a
+> real `Path` today — `path-query.js` guarantees `hopCount >= 1` (§15.6),
+> so `gradePath` never sees an empty hop list — but a consumer that
+> computed one table from the other would get `'unassessed'` wrong the
+> first time it *was* reachable.
+
 `gradePath` also **recomputes** its counts from `gradeHop` and
 deliberately does **not** read the Path's own
 `widenedHopCount`/`lossHopCount`/`ambiguousHopCount` — see §16.7 Finding 1.
@@ -3048,7 +3108,15 @@ warning states**, and it is what forced this decision:
 > whose hop §2.2 classifies as an **annotation** (null `fromPath`, null
 > `peerScope`), so `path-store.js` never folds its reason into
 > `edge.widenReasons` — that array is built from the *edge-forming* halves
-> only (`s.hop.widenReason`, `o.hop.widenReason`). The PoC runs the naive
+> (`s.hop.widenReason`, `o.hop.widenReason`) in every case that occurs
+> here. **One narrow exception, for accuracy** (fix round 1, nitpick 6):
+> `path-store.js`'s `origin` branch *does* union the annotations' own
+> reasons into `originWidenReasons`/`originLossReasons`, so in that ONE
+> case an annotation's reason reaches `edge.widenReasons` after all. It is
+> immaterial today — §14.2 discloses `origin` as hand-fixture-only, and no
+> real-parser fixture reaches it — but the union in §16.5's rule is what
+> makes the grade correct under *both* branches rather than only the
+> common one. The PoC runs the naive
 > top-level-only grader against these hops and measures it returning
 > **`explicit`** — FR-306's literal prohibition, reached by reading the
 > field the requirement's own material appears to live in. This is not
@@ -3121,39 +3189,93 @@ distinctly without it being a confidence claim.
 
 ### 16.7 Findings this increment does NOT fix, named rather than patched
 
-**Finding 1 (Minor, soundness-unaffected) — `path-query.js`'s
-`Path.widenedHopCount` / `lossHopCount` / `shape` under-report
-annotation-carried reasons.** `materialize()` computes them as
-`hops.filter((h) => h.widenReasons.length > 0).length` etc., i.e. from the
-edge's top-level arrays only — the exact blind spot §16.5 measures.
-`C6/5b` pins it: on `sink(mystery(user.email))` the annotation-carrying
-path reports `widenedHopCount: 0` and a `shape` whose third component is
-`explicit`, while `gradePath` reports `widenedHopCount: 1` and
-`grade: 'widened'`. **Deliberately not fixed here**, for the same reason
-§3 gives for routing around the `widenings` ledger's own mislabel rather
-than fixing it: changing those counts changes `comparePaths`' ordering,
-§15.7's `shape` bucketing for the diversity cap, and §15.11's published
-measured table — a C5 change, with its own re-measurement, not a
-side effect of C6's design task. C6 routes around it by recomputing from
-`gradeHop`. **A follow-up increment should decide whether to close it in
-`materialize()`**, at which point §15.11's table must be re-measured in the
-same commit.
+**Finding 1 (Minor, soundness-unaffected; SCHEDULED, not merely
+disclosed) — `path-query.js`'s `Path.widenedHopCount` / `lossHopCount` /
+`shape` under-report annotation-carried reasons.** `materialize()`
+computes them as `hops.filter((h) => h.widenReasons.length > 0).length`
+etc., i.e. from the two edge-forming halves only — the exact blind spot
+§16.5 measures. It is the same document-vs-code gap in miniature:
+§14.9's own correction and §15.8 both state the rule (*"a consumer must
+read `annotations[]` too, not only the edge's top-level reason arrays"*),
+and `materialize()` is precisely such a consumer, written in the same
+increment that wrote both sentences.
 
-**Finding 2 (Minor) — a §13.6-degraded binding edge is unreachable from
-every structural sink candidate.** `C6/6b` measures it: the degraded
+> **CORRECTED 2026-08-30 by this increment's own fix round 1 (finding 1,
+> BLOCKING). The first draft of this paragraph deferred the fix and gave a
+> FALSE reason for deferring** — it claimed closing it "changes
+> `comparePaths`' ordering, §15.7's `shape` bucketing for the diversity
+> cap, and §15.11's published measured table." **Measured, all three are
+> false**, and the measurement is the argument:
+>
+> - The whole fix is four lines inside `materialize()` (§16.8's
+>   `path-query.js` row carries them verbatim). Applied to the shipped
+>   file, `npm run test:lineage` ran **328/329**, and the ONE failure was
+>   this document's own PoC test asserting the defect's *presence* — which
+>   is a test that is supposed to fail once the defect is gone, and has
+>   since been flipped to assert the fixed behaviour instead (`C6/5b`).
+>   **Zero** other tests moved.
+> - **§15.11's table is not a function of these fields at all.** Its
+>   columns are sinks / paths / complete / partial / max hops / expansions
+>   / clipped; none is derived from `widenedHopCount`, `lossHopCount` or
+>   `shape`. This is not an inspection claim — `C5/M` pins that table and
+>   passed unchanged under the patched build.
+> - The `comparePaths` / diversity-bucket risk is **unexercised by any
+>   fixture in the tree**: every annotation-carrying fixture's terminal
+>   yields exactly one path, so there is nothing to reorder and nothing to
+>   bucket. (§15.11's own runs also raise the output caps out of the way,
+>   so `shape` cannot bind there even in principle.)
+>
+> The **deferral itself stands** — a design task changes no shipped
+> `src/lineage/*.js` file, and C6's grade functions never depended on the
+> buggy field — but it is now scheduled as its own item (§16.8's
+> `path-query.js` row) rather than dismissed with "`path-query.js`: none",
+> which is what the false cost estimate had produced.
+
+**The fix belongs in `materialize()` and nowhere else.** It must NOT be
+pushed down into `path-store.js`'s `edge.widenReasons` / `edge.lossReasons`:
+those two arrays are part of `provenanceEdgeId`'s discriminator (§14.5),
+so widening them would move every `pedge:` id and, through them, every
+`ppath:` id (§15.6) — a re-hash of the entire DAG to correct a display
+count. `C6/5b` (widen) and `C6/5c` (loss) prototype the corrected
+computation locally and assert the target behaviour; both pass against the
+current tree **and** against the patched build, so neither blocks the fix
+nor goes vacuous after it.
+
+**Finding 2 (§18.4's own load-bearing constraint, re-opened at the query
+boundary) — a §13.6-degraded binding edge is unreachable from every
+structural sink candidate.** `C6/6b` measures it: the degraded
 `call-arg-bind` edge's target is an ordinary `path` node (the callee's
 parameter) with **zero** outgoing edges, because the callee's body was
 never analyzed. It is therefore not a `sinkCandidates()` result
 (`return`/`escape`/`loss` only) and not on any path leading to one, so a
 sink-rooted reconstruction surfaces **no** path carrying the marker — the
 §16.9 table's last row shows the whole degraded fixture yielding only
-`explicit`/`ambiguous` path grades. It *is* reachable and correctly graded
-when the walk starts at that node directly (proven in the same test).
-**Not C6's to fix:** the fix is either a `sinkCandidates()` change (a
-*query* concern, §15.9) or Sub-project D's registry deciding that a
-degraded dead end is a reportable endpoint. Named here so it is not
-rediscovered as "C6's grading dropped the marker" — grading does not drop
-it; nothing asks grading about it.
+`explicit`/`ambiguous` path grades.
+
+This is **not** a scoping footnote, and the first draft of this paragraph
+understated it. §13.6 exists because a B6 cap degradation was *"completely
+silent"* — *"'context budget exhausted' is indistinguishable from 'no flow
+crosses this call'"*, §18.4's single most load-bearing constraint. C3
+closed that at the hop layer, C4 proved the marker survives onto a real
+edge (`C4/Q2c`), C5 built the query — and at the query boundary the
+silence **returns**: a caller who asks the only question the API makes
+easy (walk back from the sink candidates) is told about zero degraded
+flows, with nothing anywhere in the answer saying a degradation happened.
+The marker is intact in the store and graded correctly the moment anything
+looks at it (`C6/6`); what is missing is that nothing *asks*.
+
+**Not C6's to fix** — grading is handed a hop and grades it; the gap is in
+which start nodes a caller is pointed at. The fix is either a
+`sinkCandidates()` change (a *query* concern, §15.9, which already frames
+that helper as a structural stand-in to be superseded) or Sub-project D's
+registry deciding a degraded dead end is a reportable endpoint. **Binding
+on whoever scopes Sub-project D:** carry this forward as an explicit
+scoping item, not as a note inherited from here. The candidate shape, so D
+does not re-derive it: a `path` node with zero out-edges whose in-edges
+carry a `context-cap-degraded` annotation is exactly a
+*truncation-terminal*, detectable with the `outIndex` the store already
+builds, and it is a sink in every sense that matters to §18.4 even though
+it is a sink in none of the three senses §14.2's node-kind table records.
 
 **Finding 3 (Minor, tier-unaffected) — `factors` inherits
 `DESIGN_INTRAPROCEDURAL.md`'s round-6 Finding 3 mislabel.** `step()`'s
@@ -3175,18 +3297,29 @@ re-derivation.
 
 | # | Item | Detail |
 |---|---|---|
-| 1 | the whole module | Lift the local prototype block at the top of `test/lineage/flow-grade-poc.test.js` verbatim (it is written to be lifted: no test-only code inside it). **Zero imports** — add the same import-list self-check test `path-store.test.js`/`path-query.test.js` already carry, asserting the specifier list is EXACTLY `[]` |
+| 1 | the whole module | Lift the local prototype block at the top of `test/lineage/flow-grade-poc.test.js` — it is written to be lifted (no test-only code inside it), but **"verbatim" is not literally executable: every declaration in it is a bare `const`/`function`, so the follow-up must add `export` to each of the seven public ones** (fix round 1, nitpick 5), and must NOT export `_PRECEDENCE` (item 3). `_sortedUnion` stays private too. **Zero imports** — add the same import-list self-check test `path-store.test.js`/`path-query.test.js` already carry, asserting the specifier list is EXACTLY `[]` |
 | 2 | `FLOW_EVIDENCE_GRADES` | §16.2's frozen array, in CONFIDENCE order. Export `IMPLICIT_FLOW_REASONS` and `DEGRADED_LOSS_REASONS` too — a consumer must be able to test membership without re-typing a literal |
 | 3 | `_PRECEDENCE` | §16.4's private table. Keep it private, exactly as `protection.js` keeps its own; the parity check in `C6/0` is what stops it drifting from the value list |
 | 4 | `flowGradeRank` / `aggregateFlowGrades` | throw on an unrecognized grade, `'unassessed'` for empty — `aggregateVerdicts`' contract verbatim |
 | 5 | `gradeHop` | §16.3's precedence and §16.5's UNION. It must accept a raw `PathStore` edge as well as a `Hop`; `C6/11` is the guard |
-| 6 | `gradePath` | §16.4's worst-wins, `hopGrades[]`, `worstHopIndex`, and counts **recomputed from `gradeHop`** — never read off the Path (§16.7 Finding 1) |
+| 6 | `gradePath` | §16.4's worst-wins, `hops[]` (the **full `HopGrade` objects**, not bare strings — fix round 1, finding 3), `worstHopIndex`, and counts **recomputed from `gradeHop`** — never read off the Path (§16.7 Finding 1) |
+
+**`scanner/src/lineage/path-query.js` — one small, separately-committable
+remediation, distinct from the `flow-grade.js` work above.** Added by fix
+round 1 (finding 1), replacing this table's original "`path-query.js`:
+none", which rested on a cost estimate §16.7 Finding 1 has since measured
+to be false.
+
+| # | Site | Change |
+|---|---|---|
+| 7 | `materialize()`, the `widenedHopCount`/`lossHopCount` lines (today `path-query.js:108-109`) | Make the two counts annotation-aware, closing §16.7 Finding 1: <br>`const _annWiden = (h) => h.widenReasons.length > 0 \|\| (h.annotations ?? []).some((a) => a.widenReason != null);`<br>`const _annLoss = (h) => h.lossReasons.length > 0 \|\| (h.annotations ?? []).some((a) => a.lossReason != null);`<br>then `hops.filter(_annWiden)` / `hops.filter(_annLoss)`. §15.7's `shape` is derived from the same two filters and is therefore fixed by the same change — do **not** leave `shape` reading the old predicate. **Do NOT push this into `path-store.js`**: `edge.widenReasons`/`edge.lossReasons` are in `provenanceEdgeId`'s discriminator (§14.5), so changing them moves every `pedge:`/`ppath:` id |
+| 7b | verification | Measured on the shipped tree during fix round 1: the patch above takes `test:lineage` to **330/330** with no other assertion moved, and §15.11's `C5/M` table passes untouched. `C6/5b`/`C6/5c` already assert the post-fix behaviour, so they are the regression guard and need no edit when it lands. Re-measure §16.9's own table in the same commit only if a number there moves — it did not under the round-1 patch |
+| 7c | **not** in scope | Do **not** attach a `grade` to `Path` — it would change the shape `C5/4b`'s literal-JSON guard is pinned against, and it would force `path-query.js` to import a second module in violation of its own boundary test. A consumer calls `gradePath(path)` |
 
 **No change to any other file.**
 
 | # | File | Change |
 |---|---|---|
-| 7 | `path-query.js` | **none.** Do not attach a `grade` to `Path` this increment — it would change the shape `C5/4b`'s literal-JSON guard and §15.11's table are pinned against, and it would force `path-query.js` to import a second module in violation of its own boundary test. A consumer calls `gradePath(path)` |
 | 8 | `path-store.js`, `engine.js`, `summaries.js`, `driver.js`, `field-identity.js` | **none** (`field-identity.js`: never) |
 | 9 | `schema.js` / `dataflow-graph.schema.json` / `validate.js` | **none this increment.** A flow grade is not a `DataFlowGraph v1` entity field yet. Confirm by running `npm run test:lineage` — `json-schema-parity.test.js` must stay green untouched. **Binding on Sub-project E:** the moment a flow grade is written onto a `DataFlowGraph v1` edge, this package's "every enum here is a single source of truth" convention applies and all three files must gain it in the same commit |
 | 10 | `protection.js` | **none.** §16.2 |
@@ -3197,6 +3330,7 @@ re-derivation.
 |---|---|
 | 11 | Re-point `flow-grade-poc.test.js` at the shipped `flow-grade.js`, delete its local prototype block, rename it to `flow-grade.test.js`, and update the `test:lineage` script in `scanner/package.json` in the SAME commit — C3's item 15 / C4's item 11 / C5's item 12 precedent |
 | 12 | Keep every assertion, and especially keep **`C6/5`** (the three annotation-only widening fixtures with the naive grader executed alongside) and **`C6/6`** (§13.6's marker) — together they are the only guard that stops §16.5's union being silently narrowed back to the top-level arrays, which would restore the exact FR-306 violation this increment exists to close |
+| 12b | **`C6/5b`/`C6/5c` outlive their prototype.** They currently assert item 7's target behaviour against the file-local `withAnnotationAwareCounts` helper. When item 7 lands in `materialize()`, delete that helper and re-point both tests at the Path's OWN `widenedHopCount`/`lossHopCount`/`shape`, keeping the assertions identical (`1`, `1`, `'widened'`, `'lossy'`). Drop the two forward-compatible `<=` guards at the same time — they exist only to let these tests pass on both sides of the fix, and once it has landed a `<=` where an `===` belongs is a weaker test than the tree deserves |
 | 13 | Keep `C6/12`'s pinned hop count and §16.9's table asserted, per §15.10 item 14's stated trade-off: an unrelated IR/engine change CAN move these numbers, and the correct response is to re-measure and update §16.9 in the same commit, never to relax the assertion |
 | 14 | Add a driver-level test only once a hop-emitting driver run is possible (Sub-projects D/E) — until then it would grade an empty store and be vacuous, same reasoning as §14.10 item 13 / §15.10 item 15 |
 
@@ -3252,6 +3386,25 @@ never graded lower.
   alongside this one, not a value inside `FLOW_EVIDENCE_GRADES` — a flow's
   explicitness and its protection state are orthogonal, exactly as
   `protection.js` keeps verdict and evidence grade orthogonal.
+- **The single grade scalar conflates explicitness with one KIND of
+  completeness, and deliberately not with another. Stated as a trade-off,
+  not left implicit** (fix round 1, finding 4). `severed` — a per-hop
+  `lossReason` — is folded INTO the grade, while `truncated` (§14.8's
+  analysis-run `markTruncated`) and `complete: false` (a partial path) are
+  kept OUT of it, as flags. The line is *what the fact is about*: a
+  `lossReason` is a statement about **this hop** ("the data went somewhere
+  this analysis cannot represent"), which is the same subject FR-306's
+  other tiers speak about, so it belongs on the same axis; an
+  `ITER_BUDGET` break or a depth-limited walk is a statement about **the
+  run**, and folding it in would make one function's budget silently
+  re-grade every hop in it, including hops that are perfectly explicit
+  (`C6/9` measures exactly that not happening). The cost of the asymmetry,
+  disclosed: a reader who takes `grade` alone as "how much do I trust this
+  flow" gets the loss half and misses the truncation half — which is why
+  `incomplete` folds all three and why §16.5 makes the return value an
+  object rather than a scalar. A future increment that finds the line
+  drawn in the wrong place should move `severed` OUT to a flag (making the
+  grade purely an explicitness axis), never move `truncated` IN.
 - **No implicit/control-dependence ANALYSIS.** The `implicit` tier is
   reserved (§16.3). Producing the reason that fills it is an `engine.js`
   change at §10.2's `if` row and is not in Sub-project C's scope.
@@ -3260,6 +3413,11 @@ never graded lower.
 - **No UI or visual grammar.** FR-306's "visually distinct" half is
   satisfied here by making the distinction *available and unmissable* per
   hop; rendering it is Milestone 3's.
-- **No change to `path-query.js`'s counts.** §16.7 Finding 1.
+- **No change to `path-query.js`'s counts *in this design task*** — but the
+  change is **scheduled**, not declined: §16.8 item 7 carries the exact
+  four-line fix, and §16.7 Finding 1 carries the measurement that the
+  first draft's cost estimate for it was wrong. A design task changes no
+  shipped `src/lineage/*.js` file; that is the only reason it is not done
+  here.
 - **No change to `field-identity.js`** (never), and no change to any
   existing `src/lineage/*.js` file in the design task itself.
