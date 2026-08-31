@@ -1,51 +1,33 @@
-// Sub-project C, increment C4 — DESIGN-TASK proof-of-concept for
-// `path-store.js` (the compact provenance DAG) and `ids.js`'s two new
-// stable-ID functions.
+// Sub-project C, increment C4 — `path-store.js` (the compact provenance
+// DAG) and `ids.js`'s two new stable-ID functions, `provenanceNodeId`/
+// `provenanceEdgeId`.
 //
-// THIS FILE IS DELIBERATELY THROWAWAY-NAMED, exactly like increment C3's
-// own `engine-provenance-interprocedural-poc.test.js` was (since deleted).
-// Every behavioural claim in `DESIGN_PATH_PROVENANCE.md` §14 was produced
-// by running this file. The prototypes below (`provenanceNodeId`,
-// `provenanceEdgeId`, `PathStore`) are LOCAL — shipped source is unmodified
-// by this design task, so the design can be reviewed before any of it is
-// wired in. §14.10 is the follow-up implementation task's checklist for
-// extracting them into `scanner/src/lineage/ids.js` and
-// `scanner/src/lineage/path-store.js` and re-pointing this file at them.
+// Absorbed from the design task's throwaway-named PoC
+// (`path-store-poc.test.js`, deleted in the same commit that absorbed it —
+// §14.10 item 11), re-pointed at the SHIPPED `src/lineage/path-store.js`/
+// `src/lineage/ids.js` rather than a local prototype. Every assertion from
+// the PoC is kept, including `C4/Q2b` (§14.10 item 12) — it is the only
+// guard that stops §14.4's correction to §2.2 being silently undone by a
+// future refactor of `classifyIn`. Two new fixtures close Task 1's own
+// review findings 2 and 3 (§14.7's rejected leg-based-pruning
+// counter-example, and §14.11's headline compactness numbers) — see the
+// bottom of this file.
 //
-// The three prototype symbols are `export`ed purely so §14.11's measured
-// numbers could be reproduced from a throwaway script against the exact
-// same code the assertions below run against, rather than a hand-copied
-// second version of it. The follow-up task drops the exports along with
-// the prototypes themselves.
-//
-// The two questions this file exists to ANSWER (both were open when the
-// task was scoped, and neither is answerable on paper — see §14.3/§14.4):
+// The two questions this design answers (both proven, not argued — see
+// DESIGN_PATH_PROVENANCE.md §14.3/§14.4):
 //
 //   Q1  Cross-function node addressing: is a `write-out/call-arg-bind`
 //       hop's DESTINATION node `(peerScope, peerContext, toPath, id)`,
-//       rather than `(scope, context, toPath, id)`?
+//       rather than `(scope, context, toPath, id)`? Yes (test "C4/Q1").
 //   Q2  Does the `call-resolved` hop's `fromPath: null` ever form a real
-//       edge — i.e. what actually connects a callee's return value to the
-//       caller's variable — or is the hop stream insufficient?
-//
-// ANSWERS, both proven below by running the real engine over real parsed
-// JS/TS: Q1 yes (test "Q1"); Q2 yes, it forms a real CROSS-SCOPE edge from
-// the callee's own function-exit node — but ONLY once §2.2's annotation
-// rule is corrected, because as literally written it demotes exactly this
-// hop to an annotation and silently drops the stitch (test "Q2b").
-//
-// Note on hand-seeding: `runFieldIdentityAnalysis` (driver.js) analyzes
-// every function from `emptyState()` and there is still no source registry
-// (Sub-project D/E), so a real project-wide driver run emits ZERO hops
-// today. Every fixture here therefore seeds an entry state by hand and
-// drives `analyzeFunctionFieldIdentity` / the real
-// `FieldIdentitySummaryCache` + `createCallSummaryResolver` machinery
-// directly — the identical technique
-// `engine-provenance-interprocedural.test.js` already uses.
+//       edge? Yes — a real CROSS-SCOPE edge from the callee's own
+//       function-exit node — but only once §2.2's annotation rule is
+//       corrected (test "C4/Q2", "C4/Q2b").
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseJsFile } from '../../src/ir/parser-js.js';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
@@ -53,359 +35,35 @@ import {
   FieldIdentitySummaryCache,
   createCallSummaryResolver,
 } from '../../src/lineage/summaries.js';
+import { provenanceNodeId, provenanceEdgeId } from '../../src/lineage/ids.js';
+import { PathStore, classifyIn, classifyOut } from '../../src/lineage/path-store.js';
 
 // =====================================================================
-// PROTOTYPE 1 — `ids.js`'s two new functions (§14.5).
-//
-// Copied convention, byte-for-byte, from `src/lineage/ids.js`: sha256 over
-// a canonicalized, pipe-joined material string, truncated to ID_HEX_LEN,
-// prefixed by the entity kind. Never a counter.
+// §14.10 item 5: the isolation boundary is enforced by a test, not just
+// documented. `path-store.js` must NEVER import engine.js/summaries.js/
+// driver.js — it consumes their OUTPUT (a hop-record stream), never their
+// internals.
 // =====================================================================
 
-const ID_HEX_LEN = 12;
-
-function _hash(material, len = ID_HEX_LEN) {
-  return crypto.createHash('sha256').update(material).digest('hex').slice(0, len);
-}
-
-function _canon(parts) {
-  return parts.map((p) => (p === undefined || p === null ? '' : String(p))).join('|');
-}
-
-/**
- * A node in the provenance DAG. See §14.2 for why `context` is part of the
- * identity and why terminal nodes live in their own `kind` namespace
- * rather than behind a fabricated path token like '@return' (Decision 5's
- * bug class).
- *
- * Object-argument rather than ids.js's usual positional-plus-
- * discriminatorParts form, deliberately — see §14.5's note on the
- * flagship-fixture collision precedent.
- */
-export function provenanceNodeId(
-  { kind, scope, context, path, siteNodeId, dataElementId },
-  discriminatorParts = [],
-) {
-  return `pnode:${kind}:${_hash(_canon([kind, scope, context, path, siteNodeId, dataElementId, ...discriminatorParts]))}`;
-}
-
-/**
- * An edge in the provenance DAG: one (in-half, out-half) pair at one join
- * group. The discriminator carries the SITE (`scope`/`context`/
- * `siteNodeId`) as well as the endpoints, because two structurally
- * identical hops at two different program points are two materially
- * different edges (FR-305) that must keep their own `line` for display and
- * for §9.2's hop-ordering lever.
- */
-export function provenanceEdgeId(
-  {
-    fromNodeId, toNodeId, dataElementId,
-    scope, context, siteNodeId,
-    inKind, inSubKind, outKind, outSubKind,
-    widenReasons = [], lossReasons = [],
-  },
-  discriminatorParts = [],
-) {
-  return `pedge:${_hash(_canon([
-    fromNodeId, toNodeId, dataElementId,
-    scope, context, siteNodeId,
-    inKind, inSubKind, outKind, outSubKind,
-    [...widenReasons].sort().join(','), [...lossReasons].sort().join(','),
-    ...discriminatorParts,
-  ]))}`;
-}
-
-// =====================================================================
-// PROTOTYPE 2 — `path-store.js`.
-//
-// PURE CONSUMER: this block imports nothing from engine.js/summaries.js/
-// driver.js and knows nothing about how a hop was produced. That is the
-// isolation boundary §14.1 introduces on top of the pre-existing
-// lineage/dataflow one, and it is what makes the store testable against a
-// hand-built hop array with zero dependency on a real analysis run.
-// =====================================================================
-
-// §3 + §13.0's exact 14-field shape. Listed explicitly rather than derived
-// from `Object.keys(h)` so a hop with an ABSENT key (§3 warns this is
-// reachable for any emission path that bypasses
-// `analyzeFunctionFieldIdentity`'s progressive stamping) is DETECTED here
-// instead of silently hashing to a different dedupe key than its
-// fully-stamped twin.
-const HOP_FIELDS = [
-  'kind', 'subKind', 'scope', 'dataElementId', 'fromPath', 'toPath',
-  'syntacticPath', 'nodeId', 'line', 'widenReason', 'lossReason',
-  'context', 'peerScope', 'peerContext',
-];
-
-const IN_KINDS = new Set(['production', 'selection']);
-
-function hopDedupeKey(h) {
-  return HOP_FIELDS.map((f) => JSON.stringify(h[f] ?? null)).join('|');
-}
-
-function joinKeyOf(h) {
-  // §13.3's four-part join key, superseding §2.2's three-part form.
-  return [h.scope, h.nodeId, h.dataElementId, h.context]
-    .map((p) => JSON.stringify(p ?? null)).join('|');
-}
-
-function scopeKeyOf(scope, context) {
-  return `${JSON.stringify(scope ?? null)}|${JSON.stringify(context ?? null)}`;
-}
-
-/** §14.3: which node does an inbound half start at? */
-function classifyIn(h) {
-  if (h.fromPath !== null && h.fromPath !== undefined) {
-    return {
-      role: 'source',
-      crossScope: false,
-      node: {
-        kind: 'path', scope: h.scope, context: h.context,
-        path: h.fromPath, siteNodeId: null, dataElementId: h.dataElementId,
-      },
-    };
+test('boundary: path-store.js never imports engine.js, summaries.js, or driver.js (§14.1)', () => {
+  const modulePath = fileURLToPath(new URL('../../src/lineage/path-store.js', import.meta.url));
+  const src = fs.readFileSync(modulePath, 'utf8');
+  const importLines = [...src.matchAll(/^import\s.*$/gm)].map((m) => m[0]);
+  assert.ok(importLines.length > 0, 'sanity: the file does import something (ids.js)');
+  for (const line of importLines) {
+    assert.ok(!/['"].*\/(engine|summaries|driver)\.js['"]/.test(line),
+      `path-store.js must never import engine.js/summaries.js/driver.js — found: ${line}`);
   }
-  // §14.4, THE CORRECTION TO §2.2: a null `fromPath` with a non-null
-  // `peerScope` is NOT source-less. It is PEER-ADDRESSED — its source is
-  // the callee's own function-exit node. `lossReason === null` is the
-  // discriminator that keeps a §13.6 context-cap-degraded hop out of this
-  // branch: that hop names a callee whose body was never analyzed, so an
-  // edge from its (non-existent) exit node would be a fabricated origin.
-  if (h.peerScope !== null && h.peerScope !== undefined && h.lossReason == null) {
-    return {
-      role: 'source',
-      crossScope: true,
-      node: {
-        kind: 'return', scope: h.peerScope, context: h.peerContext,
-        path: null, siteNodeId: null, dataElementId: h.dataElementId,
-      },
-    };
-  }
-  return { role: 'annotation', crossScope: false, node: null };
-}
-
-/** §14.3: which node does an outbound half land at? */
-function classifyOut(h) {
-  if (h.toPath !== null && h.toPath !== undefined) {
-    const cross = h.peerScope !== null && h.peerScope !== undefined;
-    return {
-      role: 'target',
-      crossScope: cross,
-      node: {
-        kind: 'path',
-        scope: cross ? h.peerScope : h.scope,
-        context: cross ? h.peerContext : h.context,
-        path: h.toPath, siteNodeId: null, dataElementId: h.dataElementId,
-      },
-    };
-  }
-  // Terminal out-halves. `return` is per-(scope, context) — it must be,
-  // because a `call-resolved` hop addresses it with only
-  // (peerScope, peerContext) and no node id. `escape`/`loss` are
-  // per-CFG-node, since nothing addresses them from elsewhere and the
-  // extra precision tells a reader WHICH call/assignment ended the path.
-  if (h.subKind === 'return') {
-    return {
-      role: 'target', crossScope: false,
-      node: { kind: 'return', scope: h.scope, context: h.context, path: null, siteNodeId: null, dataElementId: h.dataElementId },
-    };
-  }
-  if (h.subKind === 'call-arg') {
-    return {
-      role: 'target', crossScope: false,
-      node: { kind: 'escape', scope: h.scope, context: h.context, path: null, siteNodeId: h.nodeId, dataElementId: h.dataElementId },
-    };
-  }
-  if (h.lossReason != null) {
-    return {
-      role: 'target', crossScope: false,
-      node: { kind: 'loss', scope: h.scope, context: h.context, path: null, siteNodeId: h.nodeId, dataElementId: h.dataElementId },
-    };
-  }
-  return { role: 'unclassified', crossScope: false, node: null };
-}
-
-export class PathStore {
-  constructor() {
-    this._groups = new Map();
-    this._seen = new Set();
-    this._truncations = new Map();
-    this._malformed = [];
-    this._unclassified = [];
-    this._stats = { hopsOffered: 0, hopsAccepted: 0 };
-    this._built = null;
-  }
-
-  addHop(hop) {
-    this._stats.hopsOffered += 1;
-    const missing = HOP_FIELDS.filter((f) => !Object.prototype.hasOwnProperty.call(hop, f));
-    if (missing.length > 0) {
-      // §3's completeness guarantee, made checkable at the consumer rather
-      // than merely asserted at the producer. Recorded, never thrown — a
-      // store that dies on one malformed record would lose the whole run.
-      this._malformed.push({ hop, missing });
-    }
-    const k = hopDedupeKey(hop);
-    if (this._seen.has(k)) return false;   // Decision 8's worklist re-emission
-    this._seen.add(k);
-    this._stats.hopsAccepted += 1;
-
-    const jk = joinKeyOf(hop);
-    let g = this._groups.get(jk);
-    if (!g) {
-      g = {
-        scope: hop.scope, nodeId: hop.nodeId, dataElementId: hop.dataElementId,
-        context: hop.context, line: hop.line ?? null,
-        in: [], out: [], annotations: [],
-      };
-      this._groups.set(jk, g);
-    }
-    if (IN_KINDS.has(hop.kind)) {
-      const c = classifyIn(hop);
-      if (c.role === 'source') g.in.push({ hop, ...c });
-      else g.annotations.push(hop);
-    } else if (hop.kind === 'write-out') {
-      const c = classifyOut(hop);
-      if (c.role === 'target') g.out.push({ hop, ...c });
-      else this._unclassified.push(hop);
-    } else {
-      this._unclassified.push(hop);
-    }
-    this._built = null;
-    return true;
-  }
-
-  addHops(hops) { let n = 0; for (const h of hops) if (this.addHop(h)) n += 1; return n; }
-
-  /**
-   * §9.5's reserved channel. Analysis-level (not per-hop) truncation — an
-   * `ITER_BUDGET` break in `analyzeFunctionFieldIdentity` — has no hop
-   * representation and deliberately must not get one (§2.2's three-kind
-   * taxonomy is closed). It arrives out of band, and every node and edge
-   * in that (scope, context) is then marked `truncated: true`.
-   */
-  markTruncated(scope, context, reason) {
-    this._truncations.set(scopeKeyOf(scope, context), reason);
-    this._built = null;
-  }
-
-  _build() {
-    if (this._built) return this._built;
-    const nodes = new Map();
-    const edges = new Map();
-    const outIndex = new Map();
-    const inIndex = new Map();
-
-    const intern = (desc) => {
-      const id = provenanceNodeId(desc);
-      let n = nodes.get(id);
-      if (!n) {
-        n = {
-          id, ...desc,
-          truncated: this._truncations.has(scopeKeyOf(desc.scope, desc.context)),
-        };
-        nodes.set(id, n);
-      }
-      return n;
-    };
-
-    for (const g of this._groups.values()) {
-      let sources = g.in;
-      let originated = false;
-      if (sources.length === 0 && g.annotations.length > 0) {
-        // §2.2's annotation rule, in the ONE direction it is still right:
-        // with no non-null in-half anywhere at this key, the annotation is
-        // itself the origin of the value ("no prior aliasing source").
-        originated = true;
-        sources = [{
-          hop: g.annotations[0], role: 'source', crossScope: false,
-          node: { kind: 'origin', scope: g.scope, context: g.context, path: null, siteNodeId: g.nodeId, dataElementId: g.dataElementId },
-        }];
-      }
-      // §9.1's correlation ambiguity, extended to the call boundary by
-      // §13.2's own disclosure — but measured PER PAIRING, not per group
-      // (§14.7). §9.1's original group-level test
-      // (`distinctInPaths >= 2 && distinctOutPaths >= 2`) marks every edge
-      // at a resolved call site, including the two that are exactly right,
-      // because the argument's in-half and the return's in-half share one
-      // join key. Counting only the pairings the store would ACTUALLY form
-      // (i.e. after the peer x peer exclusion) recovers the distinction at
-      // zero cost and with no new hop field.
-      const pairable = (s, o) => !(s.crossScope && o.crossScope);
-      const sourcesFor = (o) => new Set(sources.filter((s) => pairable(s, o)).map((s) => provenanceNodeId(s.node)));
-      const targetsFor = (s) => new Set(g.out.filter((o) => pairable(s, o)).map((o) => provenanceNodeId(o.node)));
-
-      const annotations = g.annotations.map((a) => ({
-        kind: a.kind, subKind: a.subKind,
-        widenReason: a.widenReason ?? null, lossReason: a.lossReason ?? null,
-        peerScope: a.peerScope ?? null, peerContext: a.peerContext ?? null,
-      }));
-
-      for (const s of sources) {
-        for (const o of g.out) {
-          // §14.3: an edge with BOTH endpoints in the peer's namespace is
-          // never a caller-side fact — it is a transition entirely inside
-          // the callee, which the callee's own hops already record, and
-          // materializing it manufactures a callee return -> callee param
-          // cycle that no program ever executed.
-          if (!pairable(s, o)) continue;
-          const from = intern(s.node);
-          const to = intern(o.node);
-          const widenReasons = [...new Set([s.hop.widenReason, o.hop.widenReason].filter((r) => r != null))].sort();
-          const lossReasons = [...new Set([s.hop.lossReason, o.hop.lossReason].filter((r) => r != null))].sort();
-          const desc = {
-            fromNodeId: from.id, toNodeId: to.id, dataElementId: g.dataElementId,
-            scope: g.scope, context: g.context, siteNodeId: g.nodeId,
-            inKind: s.hop.kind, inSubKind: s.hop.subKind,
-            outKind: o.hop.kind, outSubKind: o.hop.subKind,
-            widenReasons, lossReasons,
-          };
-          const id = provenanceEdgeId(desc);
-          if (!edges.has(id)) {
-            edges.set(id, {
-              id, ...desc, line: g.line,
-              crossScope: s.crossScope || o.crossScope,
-              originated,
-              ambiguousCorrelation: sourcesFor(o).size >= 2 && targetsFor(s).size >= 2,
-              annotations,
-              truncated: this._truncations.has(scopeKeyOf(g.scope, g.context)),
-            });
-            if (!outIndex.has(from.id)) outIndex.set(from.id, new Set());
-            if (!inIndex.has(to.id)) inIndex.set(to.id, new Set());
-            outIndex.get(from.id).add(id);
-            inIndex.get(to.id).add(id);
-          }
-        }
-      }
-    }
-    this._built = { nodes, edges, outIndex, inIndex };
-    return this._built;
-  }
-
-  // ---- minimal read API. C4 ships NO traversal (§14.6): every method
-  // below is an O(1)/O(degree) index lookup, so no code in this increment
-  // can recurse into a cycle. Bounded backward reconstruction is C5's.
-  nodes() { return [...this._build().nodes.values()]; }
-  edges() { return [...this._build().edges.values()]; }
-  getNode(id) { return this._build().nodes.get(id) ?? null; }
-  getEdge(id) { return this._build().edges.get(id) ?? null; }
-  nodeIdFor(desc) { return provenanceNodeId(desc); }
-  edgesFrom(nodeId) { return [...(this._build().outIndex.get(nodeId) ?? [])].map((e) => this._build().edges.get(e)); }
-  edgesTo(nodeId) { return [...(this._build().inIndex.get(nodeId) ?? [])].map((e) => this._build().edges.get(e)); }
-  hasEdge(fromId, toId) { return this.edgesFrom(fromId).some((e) => e.toNodeId === toId); }
-  stats() { return { ...this._stats, groups: this._groups.size, nodes: this._build().nodes.size, edges: this._build().edges.size }; }
-  diagnostics() {
-    return {
-      malformed: this._malformed,
-      unclassified: this._unclassified,
-      truncations: [...this._truncations.entries()],
-    };
-  }
-}
+  assert.ok(importLines.some((l) => /['"].*\/ids\.js['"]/.test(l)), 'it must still import ids.js');
+});
 
 // =====================================================================
 // Shared harness (the hand-seeding technique from
-// engine-provenance-interprocedural.test.js).
+// engine-provenance-interprocedural.test.js). A real project-wide driver
+// run still emits ZERO hops today (no source registry, Sub-project D/E),
+// so every fixture below seeds an entry state by hand and drives
+// `analyzeFunctionFieldIdentity` / the real `FieldIdentitySummaryCache` +
+// `createCallSummaryResolver` machinery directly.
 // =====================================================================
 
 function parseFns(src, file) {
@@ -445,7 +103,7 @@ const returnNode = (scope, context, dataElementId) => ({
 });
 
 // =====================================================================
-// 1. The simple intraprocedural chain (plan Step 2, item 1).
+// 1. The simple intraprocedural chain.
 // =====================================================================
 
 test('C4/1: `const b = a.email; return b;` builds exactly 3 nodes and 2 edges — no more, no fewer', () => {
@@ -484,9 +142,10 @@ test('C4/1: `const b = a.email; return b;` builds exactly 3 nodes and 2 edges �
   }
   assert.deepEqual(store.diagnostics().unclassified, [], 'every hop shape in this fixture is classified');
   assert.deepEqual(store.diagnostics().malformed, [], 'every hop carries all 14 fields');
+  assert.deepEqual(store.diagnostics().orphanedPeerSources, [], 'no peer-sourced hop in a plain intraprocedural fixture');
 });
 
-test('C4/1b: two identities through one construct stay field-distinct end to end (FR-301 carried into FR-303\'s structure)', () => {
+test('C4/1b: two identities through one construct stay field-distinct end to end (FR-301 carried into FR-303\'s structure) — and this IS §6\'s own worked example: 14 dedup records -> 8 nodes / 6 edges (§14.11)', () => {
   const src = `
     function f(user) {
       const u = user;
@@ -523,6 +182,17 @@ test('C4/1b: two identities through one construct stay field-distinct end to end
   assert.ok(store.nodes().every((n) => n.kind !== 'origin'), 'the object literal produced no node of its own');
   const objAnnotated = store.edges().filter((e) => e.annotations.some((a) => a.subKind === 'object'));
   assert.ok(objAnnotated.length > 0, 'the production/object hop survives as an edge annotation');
+
+  // (review finding 3, §14.10 item 10 / §14.11) — the FR-303 compactness
+  // headline: 14 deduplicated records become 8 nodes and 6 edges, with
+  // zero materialized paths. Pinned so a future refactor that silently
+  // changes these published numbers fails a test rather than just leaving
+  // CLAUDE.md/the design doc stale.
+  const s = store.stats();
+  assert.equal(s.hopsOffered, 14, 'raw records offered');
+  assert.equal(s.hopsAccepted, 14, 'no re-visitation on this straight-line fixture, so dedup accepts all 14');
+  assert.equal(s.nodes, 8, '§14.11: 14 dedup records -> 8 nodes');
+  assert.equal(s.edges, 6, '§14.11: 14 dedup records -> 6 edges (FR-303\'s compactness proof)');
 });
 
 test('C4/1c: worklist re-emission (Decision 8) is collapsed at ingest — a loop fixture offers far more hops than it accepts, and the DAG is identical either way', () => {
@@ -569,7 +239,7 @@ test('C4/1d: the two dedup boundaries are NOT equivalent — raw-hop dedup alone
 });
 
 // =====================================================================
-// 2. Q1 — cross-function node addressing (plan Step 2, item 2).
+// 2. Q1 — cross-function node addressing.
 // =====================================================================
 
 test('C4/Q1: a call-arg-bind hop\'s DESTINATION node is (peerScope, peerContext, toPath, id) — proven by it being byte-identical to the node the CALLEE\'s own hops independently create', () => {
@@ -638,7 +308,6 @@ test('C4/Q1b: naive own-scope addressing COLLIDES with a caller-local variable o
 
 // =====================================================================
 // 3. Q2 — does `call-resolved`'s null fromPath stitch the return value?
-//    (plan Step 2, item 3.)
 // =====================================================================
 
 test('C4/Q2: the callee\'s return value reaches the caller\'s variable — via a CROSS-SCOPE edge from the callee\'s own function-exit node, addressed by the call-resolved hop\'s peerScope/peerContext', () => {
@@ -688,6 +357,13 @@ test('C4/Q2: the callee\'s return value reaches the caller\'s variable — via a
   for (const e of [store.edgesFrom(nArg).find((x) => x.toNodeId === nParam), stitch]) {
     assert.equal(e.ambiguousCorrelation, false, 'the two genuine call-boundary edges are NOT devalued by the marker');
   }
+
+  // §14.11's measured numbers for the plain 2-function resolved call.
+  const s = store.stats();
+  assert.equal(s.hopsOffered, 8);
+  assert.equal(s.hopsAccepted, 8);
+  assert.equal(s.nodes, 5);
+  assert.equal(s.edges, 5);
 });
 
 test('C4/Q2b: §2.2\'s annotation rule, applied LITERALLY, silently deletes that stitch — this is the correction §14.4 makes', () => {
@@ -759,13 +435,14 @@ test('C4/Q2c: the peer-addressed rule does NOT fire for a §13.6 context-cap-deg
   assert.ok(annotated.length > 0, 'the degradation is visible on a real edge');
   assert.ok(annotated.some((e) => e.outSubKind === 'call-arg-bind'),
     'specifically on the argument -> parameter binding edge, which is where the data actually went');
+  assert.deepEqual(store.diagnostics().orphanedPeerSources, [], 'a degraded hop is classified as an annotation, never as peer-sourced — nothing to orphan here');
 });
 
 // =====================================================================
-// 4. Cycles (plan Step 2, item 4).
+// 4. Cycles.
 // =====================================================================
 
-test('C4/4: a mutually-recursive call graph builds without recursing, stack-overflowing, or looping — and the store honestly contains a cycle', () => {
+test('C4/4: a mutually-recursive call graph builds without recursing, stack-overflowing, or looping — and the store honestly contains a cycle (§14.11: 34 raw -> 19 dedup -> 8 nodes / 11 edges)', () => {
   const src = `
     function ping(u) { const r = pong(u); return { a: u.email, b: r }; }
     function pong(u) { const r = ping(u); return { c: u.email, d: r }; }
@@ -779,6 +456,14 @@ test('C4/4: a mutually-recursive call graph builds without recursing, stack-over
 
   const s = store.stats();
   assert.ok(s.nodes > 0 && s.edges > 0, `built ${s.nodes} nodes / ${s.edges} edges without recursing`);
+
+  // (review finding 3, §14.11) — the mutual-recursion fixture's own
+  // published numbers, pinned so a future refactor cannot silently drift
+  // them without failing a test.
+  assert.equal(s.hopsOffered, 34, '§14.11: 34 raw records offered');
+  assert.equal(s.hopsAccepted, 19, '§14.11: 19 accepted after ingest dedup');
+  assert.equal(s.nodes, 8, '§14.11: 8 nodes');
+  assert.equal(s.edges, 11, '§14.11: 11 edges');
 
   // The store's own construction never walks the graph, so it cannot spin.
   // Prove a cycle nonetheless EXISTS, with an explicitly bounded walk in
@@ -824,17 +509,22 @@ test('C4/4b: the peer x peer exclusion is load-bearing — without it, EVERY res
   assert.equal(store.hasEdge(nExit, nParam), false,
     'and the reverse edge — which a naive full cross product of the call group WOULD create — is excluded');
 
-  // Show the naive product really would create it.
+  // Show the naive product really would create it: the call-resolved
+  // in-half and the call-arg-bind out-half share a join key (same
+  // scope/nodeId/dataElementId/context), so a naive cross product pairs
+  // them, and both classify as crossScope.
   const cr = raw.find((h) => h.subKind === 'call-resolved');
   const bind = raw.find((h) => h.subKind === 'call-arg-bind');
-  assert.equal(joinKeyOf(cr), joinKeyOf(bind),
-    'the call-resolved in-half and the call-arg-bind out-half share a join key, so a naive cross product pairs them');
+  assert.equal(cr.scope, bind.scope);
+  assert.equal(cr.nodeId, bind.nodeId);
+  assert.equal(cr.dataElementId, bind.dataElementId);
+  assert.equal(cr.context, bind.context);
   assert.equal(classifyIn(cr).crossScope, true);
   assert.equal(classifyOut(bind).crossScope, true);
 });
 
 // =====================================================================
-// 5. Stable-ID behaviour (plan Step 2, item 5).
+// 5. Stable-ID behaviour.
 // =====================================================================
 
 test('C4/5: provenanceEdgeId is idempotent for the same logical edge and never collides for a structurally different one', () => {
@@ -852,58 +542,8 @@ test('C4/5: provenanceEdgeId is idempotent for the same logical edge and never c
   assert.deepEqual(ids(s1), ids(s2), 're-delivering the same stream yields identical edge ids');
   assert.deepEqual(ids(s1), ids(s3), 'a second independent analysis run yields identical edge ids (content hash, not a counter)');
 
-  // Non-collision: every field of the discriminator must move the id.
-  const base = {
-    fromNodeId: 'pnode:path:aaa', toNodeId: 'pnode:path:bbb', dataElementId: 'data:e',
-    scope: 'S', context: 'C', siteNodeId: 'n1',
-    inKind: 'production', inSubKind: 'ident', outKind: 'write-out', outSubKind: 'assign',
-    widenReasons: [], lossReasons: [],
-  };
-  const seen = new Map([[provenanceEdgeId(base), 'base']]);
-  const variants = {
-    fromNodeId: 'pnode:path:zzz', toNodeId: 'pnode:path:zzz', dataElementId: 'data:x',
-    scope: 'S2', context: 'C2', siteNodeId: 'n2',
-    inKind: 'selection', inSubKind: 'member', outKind: 'write-out-x', outSubKind: 'return',
-  };
-  for (const [field, value] of Object.entries(variants)) {
-    const id = provenanceEdgeId({ ...base, [field]: value });
-    assert.ok(!seen.has(id), `changing ${field} must change the edge id (collided with ${seen.get(id)})`);
-    seen.set(id, field);
-  }
-  for (const [field, value] of [['widenReasons', ['unresolved-call']], ['lossReasons', ['unsupported-target']]]) {
-    const id = provenanceEdgeId({ ...base, [field]: value });
-    assert.ok(!seen.has(id), `changing ${field} must change the edge id`);
-    seen.set(id, field);
-  }
-  // Reason arrays are SETS — order must not matter.
-  assert.equal(
-    provenanceEdgeId({ ...base, widenReasons: ['a', 'b'] }),
-    provenanceEdgeId({ ...base, widenReasons: ['b', 'a'] }),
-  );
-  assert.match(provenanceEdgeId(base), /^pedge:[0-9a-f]{12}$/);
-  assert.match(provenanceNodeId({ kind: 'path', scope: 'S', context: 'C', path: 'a', siteNodeId: null, dataElementId: 'data:e' }), /^pnode:path:[0-9a-f]{12}$/);
-});
-
-test('C4/5b: provenanceNodeId separates every discriminator, and 5000 distinct nodes never collide', () => {
-  const base = { kind: 'path', scope: 'S', context: 'C', path: 'a.b', siteNodeId: null, dataElementId: 'data:e' };
-  const seen = new Set([provenanceNodeId(base)]);
-  for (const [field, value] of Object.entries({ kind: 'return', scope: 'S2', context: 'C2', path: 'a.c', siteNodeId: 'n1', dataElementId: 'data:f' })) {
-    const id = provenanceNodeId({ ...base, [field]: value });
-    assert.ok(!seen.has(id), `changing ${field} must change the node id`);
-    seen.add(id);
-  }
-  // The §9.4 case that motivates `context` being part of node identity.
-  assert.notEqual(
-    provenanceNodeId({ ...base, context: 'x.email=data:email' }),
-    provenanceNodeId({ ...base, context: 'x=data:email' }),
-    'two entry contexts of one function must not share a node',
-  );
-  const bulk = new Set();
-  for (let i = 0; i < 5000; i++) {
-    const id = provenanceNodeId({ kind: 'path', scope: `svc-${i % 41}`, context: `ctx-${i % 7}`, path: `p.${i}`, siteNodeId: null, dataElementId: `data:${i % 13}` });
-    assert.ok(!bulk.has(id), `collision at i=${i}`);
-    bulk.add(id);
-  }
+  assert.match(s1.edges()[0].id, /^pedge:[0-9a-f]{12}$/);
+  assert.match(s1.nodes()[0].id, /^pnode:[a-z]+:[0-9a-f]{12}$/);
 });
 
 // =====================================================================
@@ -1006,4 +646,123 @@ test('C4/6e: an annotation-only group (no non-null in-half anywhere at the key) 
   assert.equal(origin.kind, 'origin');
   assert.equal(origin.siteNodeId, 'n1');
   assert.equal(store.edgesTo(origin.id).length, 0);
+});
+
+// =====================================================================
+// 7. §14.10 item 10 — the `orphanedPeerSources` diagnostic (Task 1's own
+// review finding; the 4th diagnostics() bucket).
+// =====================================================================
+
+test('C4/diag: orphanedPeerSources fires for §14.4\'s disclosed stream-completeness gap — a cache warmed by a no-recorder run and reused by a later recorder-attached run leaves a genuinely peer-sourced hop\'s target node with zero real in-edges', () => {
+  const src = `
+    function helper(u) { return u.email; }
+    function callerA(a) { const out = helper(a); return out; }
+    function callerB(a) { const out = helper(a); return out; }
+  `;
+  const byName = parseFns(src, '/x/c4-orphan.js');
+  const entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  const cache = new FieldIdentitySummaryCache();
+
+  // Warm the cache with callerA's run, with NO recorder attached — helper's
+  // own body hops never fire.
+  const ctxA = { resolveCallSummary: createCallSummaryResolver(cache, lookupCalleeFor(byName)) };
+  analyzeFunctionFieldIdentity(byName.callerA, entryState, ctxA);
+
+  // Now analyze callerB against the SAME cache, WITH a recorder attached.
+  // helper is a cache HIT for callerB, so helper's own body hops still
+  // never fire a second time — yet the resolved summary still carries
+  // lossReason: null (it was genuinely, precisely resolved; just not
+  // resolved THIS run).
+  const raw = [];
+  const ctxB = {
+    recordHop: (h) => raw.push(h),
+    resolveCallSummary: createCallSummaryResolver(cache, lookupCalleeFor(byName)),
+  };
+  analyzeFunctionFieldIdentity(byName.callerB, entryState, ctxB);
+
+  const cr = raw.find((h) => h.subKind === 'call-resolved');
+  assert.ok(cr, 'callerB\'s call-resolved hop is in the stream');
+  assert.equal(cr.lossReason, null, 'it is genuinely, precisely resolved — not degraded');
+  assert.ok(cr.peerScope, 'and it names the callee');
+
+  const store = new PathStore();
+  store.addHops(raw);
+
+  const returnNodeId = store.nodeIdFor(returnNode(cr.peerScope, cr.peerContext, cr.dataElementId));
+  assert.ok(store.getNode(returnNodeId), 'the node is real — it IS peer-sourced (lossReason: null), not degraded, so it is never withheld');
+  assert.equal(store.edgesTo(returnNodeId).length, 0,
+    'but it has zero real in-edges: helper\'s own body hops never fired during THIS run to create them');
+
+  const orphaned = store.diagnostics().orphanedPeerSources;
+  assert.ok(orphaned.length > 0, 'the gap is recorded as a diagnostic — never fabricated, never silently dropped');
+  assert.ok(orphaned.some((o) => o.nodeId === returnNodeId));
+});
+
+// =====================================================================
+// 8. §14.7's rejected leg-based-pruning counter-example (Task 1's own
+// review finding 2). Exists only as prose in the design doc and the task
+// review's own report before this task — this is the fixture that makes
+// it re-verifiable rather than merely asserted.
+//
+// §14.7: "Pruning [the bypass] would require a leg-based rule ('in a
+// group containing a peer half, a non-peer x non-peer pair is not an
+// edge') and that rule was tried and rejected on a counter-example: at
+// `const o = { r: helper(a), s: b.email }` the group also contains a
+// legitimate non-peer x non-peer pair (`b.email -> o.s`), which the rule
+// deletes. Losing a real edge is a worse failure than keeping a marked
+// extra one."
+//
+// Verified against the real engine (not hand-derived): this group has
+// TWO non-peer in-halves (a.email, b.email) and TWO non-peer out-halves
+// (o.r, o.s) — a genuine §9.1-style 2x2 cross-join that exists
+// independently of the call boundary — so per-pairing ambiguity marks
+// BOTH the bypass (a.email -> o.r) AND b.email -> o.s, matching §14.7's
+// own "keeping a marked extra one" phrasing precisely: the shipped design
+// never claims b.email -> o.s is unambiguous, only that it is KEPT.
+// =====================================================================
+
+test('C4/leg: the rejected leg-based-pruning rule would delete a genuine, purely-intraprocedural edge alongside the bypass it targets — the shipped per-pairing design keeps both', () => {
+  const src = `
+    function helper(u) { return u.email; }
+    function f(a, b) { const o = { r: helper(a), s: b.email }; return o; }
+  `;
+  const byName = parseFns(src, '/x/c4-leg.js');
+  let entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  entryState = addIdentity(entryState, 'b.email', 'data:email');
+  const { store, raw } = record(byName.f, entryState, { byName });
+
+  const scope = byName.f.qid;
+  const ctx = raw.find((h) => h.subKind === 'call-resolved').context;
+  const nAEmail = store.nodeIdFor(pathNode(scope, ctx, 'a.email', 'data:email'));
+  const nBEmail = store.nodeIdFor(pathNode(scope, ctx, 'b.email', 'data:email'));
+  const nOR = store.nodeIdFor(pathNode(scope, ctx, 'o.r', 'data:email'));
+  const nOS = store.nodeIdFor(pathNode(scope, ctx, 'o.s', 'data:email'));
+
+  // The bypass: real data flow that skips the callee, kept (not pruned)
+  // and marked ambiguous.
+  const bypass = store.edgesFrom(nAEmail).find((e) => e.toNodeId === nOR);
+  assert.ok(bypass, 'the bypass edge a.email -> o.r is present');
+  assert.equal(bypass.crossScope, false, 'it is a non-peer x non-peer pair — exactly what the rejected rule targets');
+  assert.equal(bypass.ambiguousCorrelation, true, '§14.7: the bypass IS marked');
+
+  // The genuine, purely-intraprocedural edge the rejected rule would have
+  // deleted ALONGSIDE the bypass, since it is ALSO a non-peer x non-peer
+  // pair in the same group.
+  const genuine = store.edgesFrom(nBEmail).find((e) => e.toNodeId === nOS);
+  assert.ok(genuine, 'b.email -> o.s is present — the SHIPPED per-pairing design never deletes it');
+  assert.equal(genuine.crossScope, false, 'it too is a non-peer x non-peer pair — the rejected rule cannot distinguish it from the bypass');
+
+  // The counter-example itself: this group also contains a peer half (the
+  // call-resolved source, addressing helper's own exit node) — proven by
+  // a real cross-scope edge landing on o.r from that source. A leg-based
+  // rule keyed on "does this group contain a peer half" would therefore
+  // have deleted BOTH bypass and genuine, since neither can be
+  // distinguished by that rule alone.
+  const stitch = store.edgesTo(nOR).find((e) => e.crossScope);
+  assert.ok(stitch, 'the group contains a peer half — the real call-boundary stitch helper\'s <return> -> o.r');
+
+  // Both surviving edges genuinely carry the correct data-element identity
+  // end to end, proving neither is a fabrication of the store.
+  assert.equal(bypass.dataElementId, 'data:email');
+  assert.equal(genuine.dataElementId, 'data:email');
 });

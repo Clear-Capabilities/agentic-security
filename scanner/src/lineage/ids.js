@@ -42,6 +42,58 @@ export function edgeId(fromId, toId, relationship, discriminatorParts = []) {
 }
 
 /**
+ * A node in `path-store.js`'s provenance DAG (Sub-project C, increment 4;
+ * DESIGN_PATH_PROVENANCE.md §14.2/§14.5). `pnode:`/`pedge:` are deliberately
+ * distinct prefixes from `node:`/`edge:` above: a provenance node is NOT a
+ * `DataFlowGraph v1` node, and `validate.js`'s id-prefix regexes must never
+ * be able to confuse the two namespaces.
+ *
+ * Object-argument, not this file's usual positional-plus-discriminatorParts
+ * form (a deliberate, narrow divergence — `graphId` is the in-file
+ * precedent) — the discriminator is wide enough that a positional array is
+ * exactly the shape a future field addition would silently omit from.
+ */
+export function provenanceNodeId(
+  { kind, scope, context, path, siteNodeId, dataElementId },
+  discriminatorParts = [],
+) {
+  return `pnode:${kind}:${_hash(_canon([kind, scope, context, path, siteNodeId, dataElementId, ...discriminatorParts]))}`;
+}
+
+/**
+ * An edge in `path-store.js`'s provenance DAG: one (in-half, out-half) pair
+ * at one join group (§14.5). The discriminator carries the SITE (`scope`,
+ * `context`, `siteNodeId`) as well as both endpoint ids — two structurally
+ * identical hops at two different program points are two materially
+ * different edges (FR-305), each needing its own `line` for display and
+ * §9.2's hop-ordering lever; omitting `siteNodeId` would silently collide
+ * them into one edge carrying one arbitrary line. It also carries both
+ * halves' `kind`/`subKind` and their reason strings — the
+ * `flagship-fixture.mjs` lesson (see this package's own CLAUDE.md row)
+ * applied deliberately: under-specifying a content-hash discriminator is a
+ * silent merge. NOT in the discriminator: `syntacticPath` and `line`
+ * (display material), edge `annotations[]`, and `ambiguousCorrelation`
+ * (both are functions of the group and the endpoints already in the id).
+ */
+export function provenanceEdgeId(
+  {
+    fromNodeId, toNodeId, dataElementId,
+    scope, context, siteNodeId,
+    inKind, inSubKind, outKind, outSubKind,
+    widenReasons = [], lossReasons = [],
+  },
+  discriminatorParts = [],
+) {
+  return `pedge:${_hash(_canon([
+    fromNodeId, toNodeId, dataElementId,
+    scope, context, siteNodeId,
+    inKind, inSubKind, outKind, outSubKind,
+    [...widenReasons].sort().join(','), [...lossReasons].sort().join(','),
+    ...discriminatorParts,
+  ]))}`;
+}
+
+/**
  * dataElementIds is treated as a SET (sorted before hashing) — a flow
  * carrying {card_number, cvv} has one identity regardless of the order the
  * builder discovered them in. `discriminatorParts` is the escape hatch for

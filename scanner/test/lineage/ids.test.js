@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   graphId, nodeId, dataElementId, edgeId, flowId, transformationId, evidenceId,
+  provenanceNodeId, provenanceEdgeId,
 } from '../../src/lineage/ids.js';
 
 test('graphId follows the dfg:<repo>:<commit>:<configHash> shape from PRD 10.2', () => {
@@ -81,4 +82,76 @@ test('no collisions across 5000 distinct nodeId discriminators (PRD 21 scale tar
     assert.ok(!seen.has(id), `collision at i=${i}`);
     seen.add(id);
   }
+});
+
+// Sub-project C, increment 4 (DESIGN_PATH_PROVENANCE.md §14.5): the two
+// provenance-DAG stable-ID functions. Ported from the design task's own
+// C4/5 and C4/5b PoC tests (path-store-poc.test.js), not reinvented.
+
+test('C4/5: provenanceEdgeId is deterministically prefixed pedge: and every discriminator field, changed alone, moves the id', () => {
+  const base = {
+    fromNodeId: 'pnode:path:aaa', toNodeId: 'pnode:path:bbb', dataElementId: 'data:e',
+    scope: 'S', context: 'C', siteNodeId: 'n1',
+    inKind: 'production', inSubKind: 'ident', outKind: 'write-out', outSubKind: 'assign',
+    widenReasons: [], lossReasons: [],
+  };
+  assert.equal(provenanceEdgeId(base), provenanceEdgeId({ ...base }), 'deterministic, not a counter');
+  assert.match(provenanceEdgeId(base), /^pedge:[0-9a-f]{12}$/);
+
+  const seen = new Map([[provenanceEdgeId(base), 'base']]);
+  const variants = {
+    fromNodeId: 'pnode:path:zzz', toNodeId: 'pnode:path:zzz', dataElementId: 'data:x',
+    scope: 'S2', context: 'C2', siteNodeId: 'n2',
+    inKind: 'selection', inSubKind: 'member', outKind: 'write-out-x', outSubKind: 'return',
+  };
+  for (const [field, value] of Object.entries(variants)) {
+    const id = provenanceEdgeId({ ...base, [field]: value });
+    assert.ok(!seen.has(id), `changing ${field} must change the edge id (collided with ${seen.get(id)})`);
+    seen.set(id, field);
+  }
+  for (const [field, value] of [['widenReasons', ['unresolved-call']], ['lossReasons', ['unsupported-target']]]) {
+    const id = provenanceEdgeId({ ...base, [field]: value });
+    assert.ok(!seen.has(id), `changing ${field} must change the edge id`);
+    seen.set(id, field);
+  }
+  // Reason arrays are SETS — order must not matter.
+  assert.equal(
+    provenanceEdgeId({ ...base, widenReasons: ['a', 'b'] }),
+    provenanceEdgeId({ ...base, widenReasons: ['b', 'a'] }),
+  );
+});
+
+test('C4/5b: provenanceNodeId separates every discriminator, and 5000 distinct nodes never collide', () => {
+  const base = { kind: 'path', scope: 'S', context: 'C', path: 'a.b', siteNodeId: null, dataElementId: 'data:e' };
+  assert.match(provenanceNodeId(base), /^pnode:path:[0-9a-f]{12}$/);
+  const seen = new Set([provenanceNodeId(base)]);
+  for (const [field, value] of Object.entries({ kind: 'return', scope: 'S2', context: 'C2', path: 'a.c', siteNodeId: 'n1', dataElementId: 'data:f' })) {
+    const id = provenanceNodeId({ ...base, [field]: value });
+    assert.ok(!seen.has(id), `changing ${field} must change the node id`);
+    seen.add(id);
+  }
+  // The §9.4 case that motivates `context` being part of node identity.
+  assert.notEqual(
+    provenanceNodeId({ ...base, context: 'x.email=data:email' }),
+    provenanceNodeId({ ...base, context: 'x=data:email' }),
+    'two entry contexts of one function must not share a node',
+  );
+  const bulk = new Set();
+  for (let i = 0; i < 5000; i++) {
+    const id = provenanceNodeId({ kind: 'path', scope: `svc-${i % 41}`, context: `ctx-${i % 7}`, path: `p.${i}`, siteNodeId: null, dataElementId: `data:${i % 13}` });
+    assert.ok(!bulk.has(id), `collision at i=${i}`);
+    bulk.add(id);
+  }
+});
+
+test('C4/5c: pnode:/pedge: are distinct from node:/edge: and never match validate.js\'s id-prefix regexes for the other namespace', () => {
+  const pn = provenanceNodeId({ kind: 'path', scope: 'S', context: 'C', path: 'a', siteNodeId: null, dataElementId: 'data:e' });
+  const pe = provenanceEdgeId({
+    fromNodeId: pn, toNodeId: pn, dataElementId: 'data:e', scope: 'S', context: 'C', siteNodeId: 'n1',
+    inKind: 'production', inSubKind: 'ident', outKind: 'write-out', outSubKind: 'assign',
+  });
+  assert.ok(!/^node:/.test(pn), 'a provenance node id must never match the DataFlowGraph v1 node: prefix regex');
+  assert.ok(!/^edge:/.test(pe), 'a provenance edge id must never match the DataFlowGraph v1 edge: prefix regex');
+  assert.match(pn, /^pnode:/);
+  assert.match(pe, /^pedge:/);
 });
