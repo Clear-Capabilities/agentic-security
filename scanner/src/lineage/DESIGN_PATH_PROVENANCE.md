@@ -1126,9 +1126,14 @@ That forwarding is what makes the argument's **in-halves** exist: ordinary
 > **Note for whoever writes the guard:** §13.7 item 16's own
 > with-recorder/without-recorder comparison is structurally BLIND to this,
 > because the divergence moves both arms identically. The guard that
-> catches it must compare against the **shipped** resolver, which is what
-> the PoC's two regression tests do (three arms: shipped / fixed / the
-> hazard, the last pinned so the test cannot go vacuous).
+> catches it must compare against a **hardcoded pre-C3 golden literal**
+> (§13.7 item 15b), never "the shipped resolver" by name — once this task's
+> own wiring lands, the shipped resolver IS that wiring, so a live
+> comparison degenerates into `assert.deepEqual(result, result)`. The PoC's
+> two regression tests (three arms: shipped / fixed / the hazard, the last
+> pinned so the test cannot go vacuous) prove this NOW, while "shipped"
+> still means something distinct — the golden values they hardcode are
+> what item 15b's follow-up test must carry forward.
 
 **(b) The binding out-half is emitted in `createCallSummaryResolver`,
 not in `entryStateFromCall`:**
@@ -1487,7 +1492,7 @@ re-derivation. Files, in dependency order.
 | 8 | same, after `entryStateFromCall` | compute `const calleeContext = hashState(entryState);` and, when `ctx?.recordHop`, emit one `write-out/call-arg-bind` per `(path, id)` of `entryState` (§13.2b's exact shape) |
 | 9 | same, inside `cache.compute`'s callback, line 357 | build the callee ctx as `ctx?.recordHop ? { resolveCallSummary, recordHop: ctx.recordHop } : { resolveCallSummary }` — **hole 3**. Do not re-stamp `context` here; the callee's own `analyzeFunctionFieldIdentity` (change #2/#3) does it, and its stamps win by spread order. |
 | 10 | same, at return | wrap: `{ ...summary, resolvedQid: qid, resolvedContext: calleeContext }` — a fresh object, never a mutation |
-| 11 | `FieldIdentitySummaryCache.compute`, cap branch, lines 115-123 | return/cache a **shallow copy** carrying `degradedReason: 'context-cap'` (§13.6, Finding 2). Prototyped in the PoC as `MarkingSummaryCache`; move that body inline. |
+| 11 | `FieldIdentitySummaryCache.compute`, cap branch, lines 115-123 | return/cache a **shallow copy** carrying `degradedReason: 'context-cap'` (§13.6, Finding 2). Prototyped in the PoC as `MarkingSummaryCache` — but that subclass re-derives `willDegrade` by re-testing the cap (`!seen.has(hash) && seen.size >= this._maxContextsPerFn`) *outside* `compute`, purely because a subclass cannot see which branch `super.compute` took. Do NOT carry that re-derivation inline: mark `fallback` at its one real call site, inside the existing cap-branch `if` (lines 115-123), right where the branch is already decided — a single `fallback.degradedReason = 'context-cap';` before `this.set(...)`/`return fallback;`, not a second cap test. |
 | 12 | `createCallSummaryResolver` | when `summary.degradedReason` and `ctx?.recordHop`, emit the §13.6 loss hop per entry-state id |
 | 13 | `fieldSummaryEq` comment | note that `degradedReason` is deliberately not compared (diagnostic, like `widenings`) |
 
@@ -1502,7 +1507,7 @@ re-derivation. Files, in dependency order.
 | # | Change |
 |---|---|
 | 15 | Re-point `engine-provenance-interprocedural-poc.test.js`'s local prototypes at the shipped functions, delete the `this`-binding stand-in and the "hole is real" tests (they will correctly start failing), and fold what remains into `engine-provenance.test.js`. Drop the PoC file and its `package.json` `test:lineage` entry in the same commit. |
-| 15b | Add the **shipped-baseline** regression the PoC now carries: for a fixture whose call ARGUMENT is itself a resolvable call, and again for a two-call-site cap-1 cache, assert the new wiring's recorder-free result equals the **shipped** resolver's. Item 16's with/without-recorder comparison cannot catch this class (the divergence moves both arms identically) — the comparison must be against shipped behaviour. |
+| 15b | Add the **golden-baseline** regression the PoC now carries: for a fixture whose call ARGUMENT is itself a resolvable call, and again for a two-call-site cap-1 cache, assert the new wiring's recorder-free result equals a **hardcoded pre-C3 golden literal** (`['data:email']` and `['data:other-email']` respectively — the exact values the PoC pins), comparing the full canonicalized `{exitState, returnFacts, mutatedParams, widenings}` shape (matching item 16's own canonicalization), not just `returnFacts`' identities. **Do NOT compare against "the shipped resolver"** — after this task lands, the shipped resolver IS the new wiring, so a live comparison degenerates into `assert.deepEqual(result, result)`, a vacuous, always-passing test. Only a value fixed independently of whichever implementation is live stays meaningful. Item 16's with/without-recorder comparison cannot catch this class either way (the divergence moves both arms identically) — the guard must be a fixed golden, not a relative comparison. |
 | 16 | Extend the existing **write-only invariant** test (`engine-provenance.test.js`, ~line 245) with at least one multi-function fixture driven through a real `FieldIdentitySummaryCache`, run with and without a recorder. This is the guard that catches the C2-era class of bug where a recorder's presence perturbed cache-cap accounting; C3 adds three new recorder-conditional branches inside `summaries.js`, so it must cover them. |
 | 17 | Add a `driver.js` test proving `opts.recordHop` reaches every function in a multi-file project AND that omitting it leaves `runFieldIdentityAnalysis`'s `results`/`cache` unchanged. |
 
