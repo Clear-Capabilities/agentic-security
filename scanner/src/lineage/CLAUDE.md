@@ -139,6 +139,37 @@ Two Step-1 empirical findings worth a future reader's attention, since they cont
 | `engine.js` (extended, additively) | `runFullScan` gained a top-level gate block, structurally parallel to (and placed immediately after) `_deepEnabled`: `AGENTIC_SECURITY_LINEAGE_DEEP=1` builds and reuses the SAME `_sharedIR || (_sharedIR = await _buildIR())` memo `_deepEnabled` uses — no second IR pass, proven live (instrumented `_buildIR` call count: 1, not 2, when both flags are set together). **Deliberately gated INDEPENDENTLY of `AGENTIC_SECURITY_DEEP`** (a real design ruling, not an oversight): lineage analysis has no degraded/non-IR-backed mode the way privacy-taint does, so piggybacking on deep mode alone would make `AGENTIC_SECURITY_LINEAGE_DEEP=1` alone silently produce nothing whenever deep mode itself was off. **A real crash bug was found and fixed here** (task review MF-1, proven by live fault injection into `buildCallGraph`): the block's first cut had no `try/catch` around `_buildIR()`, so an IR-build failure the engine used to survive gracefully (as a recorded, non-fatal `_deepStatus.failure`) instead crashed the entire scan — closed by wrapping the block exactly like `_deepEnabled`'s own `catch`, regression-tested in `test/lineage-fault-injection.test.js` (proven non-vacuous: fails against the pre-fix commit, passes against the fix). Attaches `scan.lineageGraph`/`scan.lineageStatus` to `runFullScan`'s return object; `computeScanHealth` (`pipeline/scan-health.js`) gained an additive `lineageStatus` parameter, kept structurally separate from `deepStatus` (never folded in — a lineage failure must never read as an IR-taint failure). **Disclosed, undissolved side effect**: setting `AGENTIC_SECURITY_LINEAGE_DEEP=1` alone (deep mode off) also upgrades privacy-taint annotation to IR-backed, since both consult the same shared `_sharedIR` memo — a real, measured consequence, not a bug, now disclosed in the gate block's own comment. Proven backward-compatible field-by-field: with the env var genuinely absent, a scan's output differs from pre-E5 `main` in exactly the two new top-level keys plus one new `scanHealth.lineageAnalysis` sub-key — every other field, including all findings, byte-identical. Import-time cost of the new static import measured at ~9ms marginal (module resolution only — no lineage module does heavy work at import time), not a per-scan regression for the overwhelming majority of scans that never set the flag. |
 | `bin/agentic-security.js` (extended, additively) | Persists `scan.lineageGraph` to `.agentic-security/lineage-graph.json` + `.sig`, mirroring `last-scan.json`'s own write+sign pattern exactly (same `signLastScan`/`verifyLastScan` from `posture/integrity.js`, confirmed fully generic — no filename baked in — so no new signing mechanism was introduced), inside the SAME `_writesOnScan()`/`_isSafeStateDir()` gate `last-scan.json` itself respects, written only when a graph actually exists. `persistedScan.lineageGraph` is explicitly `delete`d before writing `last-scan.json` (confirmed defensive, not a fix for a real leak — `toJSON`'s own hand-enumerated allowlist never included it) so the graph is never duplicated across the two artifacts. **The two new artifacts are registered in `posture/artifact-registry.js`** (`classification: 'generated'`, `retentionClass: 'scan'`, matching `last-scan.json`'s own entries) — a real gap the final whole-branch review caught: without this, `agentic-security reset` misclassified the lineage artifact as operator-authored config and never deleted it, proven live (files survived `reset --yes` pre-fix, are genuinely deleted post-fix) and pinned by a permanent regression test in `test/artifact-registry.test.js`. |
 
+## Milestone 1 exit-gate status
+
+The PRD's own Milestone 1 exit gate (§26, line 1796): *"AC-01, AC-02, AC-07,
+AC-11, and schema completeness pass on the supported-language corpus."* As of
+2026-08-31, **all four acceptance criteria have a real, verified proof**
+against actual `buildGraphWithCoverage` output on JS/TS (the only supported
+language per §22.1's own recommended implementation order — Python/Java/C#/
+Go/Kotlin/Ruby/PHP lineage support has not been attempted):
+
+| AC | Proof | Where |
+|---|---|---|
+| AC-01 (PCI to multiple sinks) | `req.body.card_number` reaching log/database/external-api as 3 distinct flows | `test/lineage/ac01-multi-sink.test.js` — a direct unit test, NOT a corpus fixture (F1's `runner.mjs` scoring contract asserts one sourceCategory/sinkCategory pair per fixture and cannot express "one field, three sinks" — extending it is real, undecided scope, deliberately not improvised) |
+| AC-02 (masked vs. raw log differ) | `maskCard()` before `logger.info()` vs. the same field logged raw | `bench/data-lineage/fixtures/js-api-to-log-masked/` + `js-api-to-log-raw/`, scored by `runner.mjs` |
+| AC-07 (AI + regulated data) | `patient_record` (PHI) reaching `anthropic.messages.create()` | `bench/data-lineage/fixtures/js-ai-model-output-to-ai-model-provider-phi/`, closed by Sub-project H's catalog bridge (4 new `dataflow/catalog.js` sink entries + 1 `sink-registry.js` `CWE_MAP` row) |
+| AC-11 (disconnected sources/sinks stay visible) | a matched log sink nothing reaches, still present with a `coverageReason` | `bench/data-lineage/fixtures/js-api-to-log-disconnected/` |
+| Schema completeness | `validateGraph()` returns zero errors | proven repeatedly — every fixture above, every `test/lineage/*.test.js` file, D5's own 24-category real-code proof set |
+
+**What this does NOT mean:** the PRD's separate §22.2/§22.3 "benchmark
+expansion"/"release thresholds" requirement (a 100+/100+-entry corpus with
+measured precision/recall ≥ 90%/85%) is a LARGER, ongoing target, not the
+exit gate's own literal wording — `bench/data-lineage/` currently has 24
+fixtures (17 passing, 7 honestly disclosed `capability`-tier gaps — see that
+directory's own README), well short of the 100+/100+ floor. Sub-project F's
+remaining increments continue growing the corpus toward that floor as
+ongoing work; they are not what's blocking Milestone 1's own exit gate as
+literally worded. AC-01's own per-sink "handling/transit/at-rest verdict"
+clause, and AC-07's "provider, model when known" clause, are both explicitly
+Milestone 2 work (protection verdicts and external destination resolution)
+— proven here only as an honest `not_assessed`/absent placeholder, never a
+fabricated verdict.
+
 ## What is NOT here yet (later milestones / later sub-projects)
 
 - **Milestone 1, Sub-project E (E1-E5) is now fully complete.** A `DataFlowGraph v1`
