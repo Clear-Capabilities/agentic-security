@@ -16,7 +16,7 @@
 import {
   SCHEMA_VERSION, NODE_KINDS, MAPPING_TYPES, COVERAGE_STATUS_VALUES, EXTERNALITY_VALUES,
   TRANSFORM_KINDS, REVERSIBILITY_VALUES, DESTINATION_RESOLUTION_VALUES, POLICY_STATES,
-  FLOW_SUMMARY_VALUES, EVIDENCE_TYPES, GRAPH_SCOPE_SOURCES,
+  FLOW_SUMMARY_VALUES, EVIDENCE_TYPES, GRAPH_SCOPE_SOURCES, HANDLING_VALUES,
 } from './schema.js';
 import { isValidProtectionDimension, PROTECTION_DIMENSIONS } from './protection.js';
 import { LINEAGE_DATA_CLASSES, isAiContext } from './classification.js';
@@ -157,6 +157,13 @@ function _validateFlow(flow, idx, errors, nodeIds, dataElementIds, edgeIds) {
   }
   if (!POLICY_STATES.includes(flow.policyVerdict)) _err(errors, path('.policyVerdict'), `unrecognized policyVerdict "${flow.policyVerdict}"`);
   if (!FLOW_SUMMARY_VALUES.includes(flow.protectionSummary)) _err(errors, path('.protectionSummary'), `unrecognized protectionSummary "${flow.protectionSummary}"`);
+  // Milestone 2, Sub-project D, increment 1: `flow.handling` is `null` on
+  // every flow this increment's own caller chose not to populate — only
+  // checked when non-null, mirroring `_validateNode`'s own `node.destination`
+  // pattern above.
+  if (flow.handling != null && !HANDLING_VALUES.includes(flow.handling)) {
+    _err(errors, path('.handling'), `unrecognized handling "${flow.handling}"`);
+  }
 }
 
 function _validateTransformation(t, idx, errors) {

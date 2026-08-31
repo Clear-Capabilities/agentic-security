@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyGraphEnvelope } from '../../src/lineage/schema.js';
+import { emptyGraphEnvelope, HANDLING_VALUES } from '../../src/lineage/schema.js';
 import { nodeId, dataElementId, edgeId, flowId } from '../../src/lineage/ids.js';
 import { emptyProtection } from '../../src/lineage/protection.js';
 import { validateGraph } from '../../src/lineage/validate.js';
@@ -229,6 +229,53 @@ test('a node with resolutionStatus: unknown and a non-null literalValue is rejec
   const result = validateGraph(graph);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((e) => e.path === '$.nodes[0].destination.literalValue'));
+});
+
+// ── Milestone 2, Sub-project D, increment 1: flow.handling taxonomy ──
+
+function graphWithFlowHandling(handling) {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  const src = nodeId('source', ['x']);
+  const sink = nodeId('log', ['y']);
+  const de = dataElementId('card_number', ['x']);
+  graph.nodes.push(
+    { id: src, kind: 'source', subtype: 'web-app', label: 'Web App', aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: ['collection'], governanceRefs: {}, dataElementIds: [de], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled' },
+    { id: sink, kind: 'log', subtype: 'application-logs', label: 'Logs', aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: ['storage'], governanceRefs: {}, dataElementIds: [de], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled' },
+  );
+  graph.dataElements.push({ id: de, name: 'card_number', aliases: [], declaredType: null, dataClasses: ['PCI'], aiContexts: [], sourceLocations: [], dataSubjectCategory: null, classificationEvidence: [], manualOverride: false });
+  const edge = { id: edgeId(src, sink, 'data_flow'), from: src, to: sink, relationship: 'data_flow', fieldMappings: [], protocol: { name: 'in-process', destinationResolution: 'unknown' }, boundaryCrossings: [], protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled' };
+  graph.edges.push(edge);
+  graph.flows.push({
+    id: flowId(src, sink, [de]), dataElementIds: [de], source: src, sink: sink, edgeIds: [edge.id],
+    transformationIds: [], alternatePathCount: 0, policyVerdict: 'not_evaluated', protectionSummary: 'not_assessed',
+    evidenceRefs: [], coverageStatus: 'modeled', findingRefs: [], governanceRefs: {}, limitations: [], handling,
+  });
+  return graph;
+}
+
+test('a flow with handling: null passes (never populated by this graph, or a caller that skips this increment\'s wiring)', () => {
+  const result = validateGraph(graphWithFlowHandling(null));
+  assert.deepEqual(result.errors, []);
+});
+
+test('a flow with the handling field omitted entirely passes too (same as null)', () => {
+  const graph = graphWithFlowHandling(undefined);
+  delete graph.flows[0].handling;
+  const result = validateGraph(graph);
+  assert.deepEqual(result.errors, []);
+});
+
+test('a flow with a valid handling value passes, for every HANDLING_VALUES member', () => {
+  for (const h of HANDLING_VALUES) {
+    const result = validateGraph(graphWithFlowHandling(h));
+    assert.deepEqual(result.errors, [], `handling "${h}" must validate cleanly`);
+  }
+});
+
+test('a flow with an unrecognized handling value is rejected', () => {
+  const result = validateGraph(graphWithFlowHandling('encrypted-with-a-typo'));
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.flows[0].handling' && e.message.includes('encrypted-with-a-typo')));
 });
 
 test('a transformation with a bogus kind or reversibility is rejected', () => {

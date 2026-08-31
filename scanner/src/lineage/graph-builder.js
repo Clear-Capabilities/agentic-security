@@ -50,6 +50,19 @@
 // like) and a site can carry both an `unresolved` decision and a `dynamic`
 // destination at once.
 //
+// Milestone 2, Sub-project D, increment 1 addition (FR-403, DESIGN_
+// HANDLING_ANALYZER.md): every emitted `flow` gains a `flow.handling`
+// taxonomy label (`classifyHandling(p, callGraph)`, `./handling-analyzer.js`
+// — a new import, mirroring `recognizeTransformation`'s own reuse boundary
+// one line above), computed once inside the `groupsByFlowKey` flow-
+// construction loop below, from that flow's own representative
+// reconstructed `Path`. This is the same attachment-point discipline
+// `emptyProtection()` already established one loop up for `edge.protection`
+// — set once, at mint time, never a post-processing pass. See
+// `DESIGN_HANDLING_ANALYZER.md` for the exact `transform-catalog.js` `kind`
+// -> `HANDLING_VALUES` mapping and why this is NOT the same field as
+// `protection.js`'s own `PROTECTION_DIMENSIONS`' `handling` dimension.
+//
 // Reuse boundary (§12, confirmed against the source): imports ONLY
 // `matchSource`/`matchSinkOrSanitizer` from `../dataflow/catalog.js`,
 // `matchPrivacySink` from `../dataflow/privacy-catalog.js`, and
@@ -68,6 +81,7 @@ import { reconstructPaths } from './path-query.js';
 import { gradePath, DEGRADED_LOSS_REASONS } from './flow-grade.js';
 import { reclassifySink, reclassifyPrivacySink } from './sink-registry.js';
 import { recognizeTransformation } from './transform-catalog.js';
+import { classifyHandling } from './handling-analyzer.js';
 import { emptyGraphEnvelope } from './schema.js';
 import { emptyProtection } from './protection.js';
 import * as ids from './ids.js';
@@ -507,6 +521,14 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       coverageStatus: snk.coverageStatus, findingRefs: [], governanceRefs: {},
       limitations,
       evidenceGrade: g.grade,
+      // Milestone 2, Sub-project D, increment 1 (FR-403): computed once,
+      // here, from this flow's own representative reconstructed path —
+      // never `null` in this increment (DESIGN_HANDLING_ANALYZER.md §4's
+      // own disclosed simplification: every flow gets a real taxonomy
+      // label, including the honest `'raw'` answer, since nothing here
+      // yet distinguishes a sink category with no natural "handling"
+      // concept from one that does).
+      handling: classifyHandling(p, callGraph).handling,
     });
   }
 

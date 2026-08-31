@@ -28,6 +28,22 @@ export const TRANSFORM_KINDS = Object.freeze([
 
 export const REVERSIBILITY_VALUES = Object.freeze(['reversible', 'irreversible', 'unknown']);
 
+// FR-403's single-path handling TAXONOMY (Milestone 2, Sub-project D,
+// increment 1 — DESIGN_HANDLING_ANALYZER.md). Lives on `flow.handling`, a
+// STRING enum — deliberately NOT the same thing as `protection.js`'s
+// `PROTECTION_DIMENSIONS`' own `handling` dimension (an per-EDGE
+// `{verdict, evidenceGrade}` object scored from `PROTECTION_VERDICTS`).
+// The two share a name because this taxonomy IS what a later Milestone 2
+// analyzer will read to populate that verdict (transform-catalog.js's own
+// header: "Recognizing that a `mask` happened is this module's job.
+// Deciding whether that `mask` earns 'protected' is Milestone 2's FR-401-
+// 405 analyzers, reading this module's output.") — but the two fields are
+// never the same value, never interchangeable, and this increment sets
+// only `flow.handling`, never `edge.protection.handling`.
+export const HANDLING_VALUES = Object.freeze([
+  'raw', 'masked', 'redacted', 'hashed', 'tokenized', 'encrypted', 'aggregated', 'unknown',
+]);
+
 export const EXTERNALITY_VALUES = Object.freeze(['internal', 'external', 'unknown']);
 
 export const COVERAGE_STATUS_VALUES = Object.freeze(['modeled', 'partial', 'candidate', 'unsupported', 'manual']);
