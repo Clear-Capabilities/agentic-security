@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PCI"],
+  "sourceCategory": "http-body",
+  "sinkCategory": "log",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "capability",
+  "notes": "GROUND TRUTH: req.body.card_number (PCI) reaches logger.info() unmasked. MEASURED ENGINE BEHAVIOUR: this fixture is EXPECTED to report FAIL today, which is why it is capability-tier (never gates --check). `req.body` is aliased to a local (`body`) BEFORE .card_number is read off it, so the two halves land in two different CFG statements. source-seeding.js seeds per matched EXPRESSION and extends outward only through member accesses ENCLOSING that expression in the same statement (seedPathFor/DESIGN_GRAPH_BUILDER.md §3.2), so the seed lands on the container path `req.body` and mints a dataElement literally named `body` with dataClasses [] — §3.2's own disclosed container-level fallback. Verified live: the graph DOES contain the http-body source node, the log sink node AND a connecting flow, but that flow carries the unclassified `body` element, so no PCI-tagged flow exists and the shape-match correctly reports no match. This is a real, common Express shape (`const body = req.body`), so the gap is worth keeping visible in the report rather than relabelled away. If a later increment extends seeding across an alias hop, re-label this fixture regression-tier. Its sibling js-http-body-to-log-alias-of-field pins the case that DOES work today."
+}

@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PCI"],
+  "sourceCategory": "http-body",
+  "sinkCategory": "log",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "capability",
+  "notes": "GROUND TRUTH: card_number (PCI) is extracted in a HELPER function, returned to the caller, and logged there. MEASURED ENGINE BEHAVIOUR: this fixture is EXPECTED to report FAIL today, hence capability-tier. Verified live: the graph contains the http-body source node, the log sink node AND the correctly-classified `card_number` [PCI] dataElement — but ZERO flows. The projection does not span the call boundary here: driver.js analyses each function with its own seeded entry state, while the caller resolves extractCard() through FieldIdentitySummaryCache under an entry state derived from the CALL ARGUMENTS (entryStateFromCall), which deliberately does NOT carry the callee's own driver-supplied seed — DESIGN_GRAPH_BUILDER.md §3.6's cache-key fix, whose whole point is that a clean call site must not inherit the driver's seed. Two further shapes were measured and behave identically (zero flows): seeding in the callee and returning through a local, and putting the SINK in the callee (`emit(logger, req.body.card_number)`). Connecting an interprocedural lineage flow end to end is therefore an engine capability nothing has shipped yet, not a fixture-authoring problem; re-label regression-tier once it lands."
+}

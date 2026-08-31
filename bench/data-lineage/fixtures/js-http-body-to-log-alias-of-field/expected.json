@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PCI"],
+  "sourceCategory": "http-body",
+  "sinkCategory": "log",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "req.body.card_number is read at field level and then aliased to a plain local before being logged — the property DESIGN_INTRAPROCEDURAL.md calls the structure-preserving `ident` case. This is the PASSING half of the aliasing pair: identity survives an alias hop once the seed itself is field-level. Its sibling js-http-body-to-log-aliased aliases the CONTAINER instead, which is where the classification is lost; see that fixture's notes."
+}
