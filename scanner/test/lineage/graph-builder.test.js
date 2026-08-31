@@ -73,6 +73,35 @@ test('E1/6: the projection produces a validated, flagship-scale DataFlowGraph v1
   assert.equal(r.hops.length, 23);
 });
 
+test('E3/det (task review MF-2): determinism — generatedAt is genuinely injectable, defaults to a fixed literal never Date.now()/toISOString(), and every entity array is emitted id-sorted regardless of build order', () => {
+  const cg = irOf(vulnerableJs());
+
+  // (a) the default is the fixed 1970 literal, not `new Date().toISOString()`.
+  const noOpts = buildDataFlowGraph(cg, { repository: 'vulnerable-js' });
+  assert.equal(noOpts.graph.generatedAt, '1970-01-01T00:00:00.000Z',
+    'generatedAt must default to the fixed literal, never wall-clock time — a wall-clock default breaks --deterministic silently');
+
+  // (b) opts.generatedAt is genuinely honoured, not ignored.
+  const withOpts = buildDataFlowGraph(cg, { repository: 'vulnerable-js', generatedAt: '2026-08-31T00:00:00.000Z' });
+  assert.equal(withOpts.graph.generatedAt, '2026-08-31T00:00:00.000Z');
+
+  // (c) two builds of the SAME input are byte-identical (the graphId/
+  // generatedAt fields aside) — proves determinism end to end, not just
+  // that individual arrays happen to be sorted.
+  const first = buildDataFlowGraph(cg, { repository: 'vulnerable-js', generatedAt: 'x' });
+  const second = buildDataFlowGraph(cg, { repository: 'vulnerable-js', generatedAt: 'x' });
+  assert.deepEqual(first.graph, second.graph, 'two builds of the same input must be byte-identical');
+
+  // (d) every entity array is id-sorted, regardless of the order functions
+  // were visited in (insertion order into the internal Maps is NOT
+  // guaranteed to be id order — this is what actually needs pinning).
+  for (const key of ['nodes', 'edges', 'dataElements', 'flows', 'transformations']) {
+    const ids = noOpts.graph[key].map((x) => x.id);
+    const sorted = [...ids].sort();
+    assert.deepEqual(ids, sorted, `graph.${key} must be emitted in id-sorted order`);
+  }
+});
+
 test('E1/7: node count is SYSTEM-granular and provably invariant under code growth, while edges/flows/dataElements stay field-granular', () => {
   const base = fs.readFileSync(path.join(VULN_JS_DIR, 'app.js'), 'utf8');
   const measured = [];
@@ -115,6 +144,10 @@ test('E1/8: the assertions validate.js structurally CANNOT make (§2.4\'s two fa
     const distinct = new Set(decisions.map((d) => JSON.stringify(d)));
     assert.equal(distinct.size, 1, `node ${nodeId} was minted from ${distinct.size} different registry decisions — the discriminator is under-specified`);
   }
+  // task review MF-1: (c) above is VACUOUS on vulnerable-js alone — its 9
+  // nodes all differ by subtypeKey, so a weakened node-id discriminator
+  // (dropping coverageStatus/externality) would still pass here. See the
+  // dedicated construction below, which actually exercises the case.
 
   // (d) flow.edgeIds are real `edge:` ids, never `pedge:`/`ppath:` ones.
   for (const f of graph.flows) {
@@ -129,6 +162,32 @@ test('E1/8: the assertions validate.js structurally CANNOT make (§2.4\'s two fa
   for (const key of ['nodes', 'edges', 'dataElements', 'flows', 'transformations']) {
     const list = graph[key].map((x) => x.id);
     assert.equal(new Set(list).size, list.length, `${key} contains a duplicate id`);
+  }
+});
+
+test('E1/8c (task review MF-1): the node-id discriminator genuinely distinguishes two DIFFERENT decisions that share a subtypeKey — the real construction the vulnerable-js fixture alone never exercises', () => {
+  // Both sites resolve to category 'file' (subtypeKey 'file' either way),
+  // but one is a §4.3 plurality demotion (coverageStatus 'partial') and the
+  // other a direct, unambiguous match (coverageStatus 'modeled'). If the
+  // node-id discriminator dropped coverageStatus/externality (as a real
+  // regression could), these two GENUINELY DIFFERENT registry decisions
+  // would collide onto one node id — exactly what (c) above exists to
+  // catch, but on a fixture that can actually trigger it.
+  const cg = irOf({
+    'a.js': "function a(ctx, x){ ctx.send(x); }", // ambiguous receiver -> plurality/partial
+    'b.js': "function b(fs, x){ fs.writeFileSync('/t', x); }", // direct match -> modeled
+  });
+  const r = buildDataFlowGraph(cg, { repository: 'discriminator-check' });
+  const { graph } = r;
+
+  const fileNodes = graph.nodes.filter((n) => n.subtype === 'file');
+  assert.equal(fileNodes.length, 2, 'the plurality/partial site and the direct/modeled site must mint TWO distinct nodes, not collide onto one');
+  const statuses = fileNodes.map((n) => n.coverageStatus).sort();
+  assert.deepEqual(statuses, ['modeled', 'partial'], 'the two nodes carry the two genuinely different coverageStatus values, never merged');
+
+  for (const [nodeId, decisions] of r.decisionsByNodeId) {
+    const distinct = new Set(decisions.map((d) => JSON.stringify(d)));
+    assert.equal(distinct.size, 1, `node ${nodeId} was minted from ${distinct.size} different registry decisions on this fixture — the discriminator is under-specified`);
   }
 });
 

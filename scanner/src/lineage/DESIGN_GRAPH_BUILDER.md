@@ -650,12 +650,21 @@ up front here:
    it"): this item originally stated the signature as
    `buildDataFlowGraph(perFileIR, callGraph, opts)` (three arguments), but
    the PoC's own shipped, tested implementation was always the
-   two-argument form above — it reads everything it needs from
+   two-argument form above — it reads everything E3 itself needs from
    `callGraph.functions[*].cfg` and never used a separate `perFileIR`
    parameter. E3 shipped the PoC's real two-argument signature rather than
-   forking it to match this document's stale prose. Still mirror
-   `dataflow/index.js`'s `runDeepAnalysis` **shape** and import nothing
-   from it.
+   forking it to match this document's stale prose. **This is scoped to
+   E3, not a claim that `perFileIR` is never needed anywhere in this
+   sub-project (task review, E3's own follow-up review)**: §10's ledger —
+   E4's job — requires `languages: [{language, filesExpected,
+   filesAnalyzed}]` and `parseFailures: []`, and a parse failure is
+   structurally invisible to a `callGraph`-only builder (a file that fails
+   to parse contributes zero functions, so nothing in `callGraph` records
+   its absence). E4 will need a per-file input of its own — either
+   `opts.perFile` or an equivalent — to populate those two fields
+   honestly; it should not assume E3's two-argument precedent means it can
+   do the same. Still mirror `dataflow/index.js`'s `runDeepAnalysis`
+   **shape** and import nothing from it.
 2. Node minting per §6.1; edge/flow keys per §6.4; `subtype` per §6.6, with
    the schema divergence escalated in the PR, not silently emitted.
 3. Ship the four assertions `validate.js` cannot make (`E1/8`): every
@@ -676,6 +685,23 @@ up front here:
 3. Ship §5's enumerator union as a real module function.
 4. Prove it the way D5 was proven: an empty-but-valid graph must **fail**
    these tests.
+5. **Two things E3's own review confirmed E4 needs, named here so neither
+   is rediscovered mid-implementation.** (a) FR-203 needs no new export
+   from `graph-builder.js` — `enumerateSinkSites` already returns, per
+   site, `{file, qid, nodeId, line, calleeExpr, entry, decision,
+   ambiguity}`, and the raw `entry` is exactly what `reclassifySink(entry,
+   {destinationUnresolved, blockingExpression})` (item 2 above) needs;
+   confirmed live, this signature composes cleanly with no change to E3's
+   shipped module. (b) `buildDataFlowGraph` currently mints sink nodes
+   from `site.decision` internally with no hook to substitute an
+   FR-203-adjusted decision, and hardcodes `coverage.languages`/
+   `parseFailures` to `[]` with no per-file input to populate them
+   honestly (a parse failure is structurally invisible to a
+   `callGraph`-only builder — see §9.3 item 1's own note above). E4 will
+   need either an `opts` hook on `buildDataFlowGraph` (e.g.
+   `opts.resolveSiteDecision`, `opts.perFile`) or a post-processing pass
+   over the built graph — decide which explicitly, don't default to
+   whichever is easiest to hack in.
 
 ### 9.5 E5 — src/lineage/index.js (not yet in the tree) + `runFullScan`
 
@@ -733,8 +759,10 @@ distinguishable from "this category matched and connected nothing".
 
 Measured on `vulnerable-js`, the sketch reports: 9 sources matched, 0
 unseedable, 6 data elements; 11 sink statement sites, 6 connected, 5
-disconnected, 1 non-statement site not enumerable; 0 degraded terminals; 19
-hops / 14 pnodes / 8 pedges.
+disconnected, 1 non-statement site not enumerable; 0 degraded terminals; 23
+hops / 15 pnodes / 9 pedges (re-measured by E3, task review N-2 — the
+`lineage-engine-receiver-identity-hotfix` moved this from the pre-hotfix
+19/14/8 §3.7 already corrected; this section had not been).
 
 ---
 
