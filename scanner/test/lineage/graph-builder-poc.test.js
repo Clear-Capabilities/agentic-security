@@ -11,10 +11,12 @@
 // │ `*-poc.test.js`, all four absorbed and deleted by the increment that  │
 // │ shipped the real module). The ABSORPTION PROTOCOL is stated exactly,  │
 // │ not left implicit, in `src/lineage/DESIGN_GRAPH_BUILDER.md` §9.1:     │
-// │   - E2 absorbs the SEEDING half (E1/1 – E1/5) into                    │
+// │   - E2 absorbs the SEEDING half (E1/1 – E1/5, PLUS E1/14, the         │
+// │     escalated engine limitation — E1/14 is about seeding reaching a   │
+// │     sink, not about projection) into                                  │
 // │     `test/lineage/source-seeding.test.js` and deletes those tests     │
 // │     from here.                                                        │
-// │   - E3 absorbs the PROJECTION half (E1/6 – E1/12) into                │
+// │   - E3 absorbs the PROJECTION half (E1/6 – E1/13) into                │
 // │     `test/lineage/graph-builder.test.js`.                             │
 // │   - Whichever of E2/E3 lands SECOND deletes this file, removes it     │
 // │     from `package.json`'s `test:lineage` script, and removes its row  │

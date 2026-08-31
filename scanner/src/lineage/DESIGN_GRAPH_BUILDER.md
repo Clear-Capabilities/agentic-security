@@ -299,8 +299,8 @@ Measured (`E1/9`):
 | call site | candidates | resolution |
 |---|---|---|
 | `res.send(x)` | `js-express-res-send`, `js-koa-send`, `privacy-js-res-send` | **receiver** → `http-response`, `modeled` |
-| `ctx.send(x)` | same three | **plurality** → `file`, `partial`, alternatives named |
-| bare `send(x)` | same three | **plurality** → `file`, `partial`, alternatives named |
+| `ctx.send(x)` | `js-koa-send`, `privacy-js-res-send` — task review MF-3: `js-express-res-send` is filtered out here by `matchSinkOrSanitizer`'s own `_receiverAllowed`, since the receiver isn't `res`; only TWO candidates, not three | **plurality** → `file`, `partial`, alternatives named |
+| bare `send(x)` | same two as `ctx.send(x)` | **plurality** → `file`, `partial`, alternatives named |
 
 **Disclosed weakness:** step 3's "plurality" is frequently a 1-1 tie, and the
 tie is broken by lexicographic category order. That is deterministic but
