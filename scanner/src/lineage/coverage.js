@@ -21,9 +21,19 @@
 // header for why a post-processing pass was rejected (FR-203 changes a
 // node's identity discriminator, so "adjust after minting" means re-minting).
 //
-// Reuse boundary: imports ONLY `reclassifySink` from `./sink-registry.js`
-// and `DEFAULTS` from `./path-query.js` — both already-shipped `src/lineage/`
-// modules. Never `dataflow/engine.js`, never `dataflow/summaries.js`.
+// Reuse boundary: imports ONLY `reclassifySink` from `./sink-registry.js`,
+// `DEFAULTS` from `./path-query.js`, and `buildDataFlowGraph` from
+// `./graph-builder.js` — all three already-shipped `src/lineage/` modules.
+// Never `dataflow/engine.js`, never `dataflow/summaries.js`.
+//
+// Disclosure: FR-203's own headline example ("fetch(url) with a computed
+// url") is currently unreachable on this project's real fixture through
+// the privacy-catalog guard below — `vulnerable-js`'s only `external-api`
+// sites are `privacy-js-axios-post`, and `reclassifyPrivacySink` has no
+// `opts.destinationUnresolved` parameter for `resolveSiteDecision` to
+// invoke (a disclosed, deliberate asymmetry — see `sink-registry.js`'s own
+// header). Correct and deliberate; recorded here so the gap is visible
+// rather than silently true of the only real fixture in this tree today.
 
 import { reclassifySink } from './sink-registry.js';
 import { DEFAULTS as PATH_QUERY_DEFAULTS } from './path-query.js';
@@ -62,16 +72,23 @@ export function renderExpr(e, depth = 0) {
  * §9.4 item 2's heuristic. `site` is one entry from `enumerateSinkSites`'s
  * `sites[]` (post Task 1: carries `.calleeExpr` and `.args`). Returns
  * `null` when nothing here looks unresolvable — never a guess in the
- * unresolved direction.
+ * unresolved direction. The result names WHICH signal fired (`via`):
+ * `'receiver'` (a computed callee receiver — "an SDK client built from
+ * config") or `'arg0'` (a non-literal first argument — "fetch(url) with a
+ * computed url"). `resolveSiteDecision` uses `via` to apply the narrower
+ * category gate the arg0 signal needs (see `FR203_ARG0_DESTINATION_CATEGORIES`
+ * below) — this function itself stays category-blind, since it has no
+ * access to the site's decision/category and is also exercised directly,
+ * without a category, by this module's own unit tests.
  */
 export function detectUnresolvedDestination(site) {
   const callee = site.calleeExpr;
   if (callee && typeof callee === 'object' && callee.kind === 'member' && typeof callee.prop === 'string' && !isPlainIdent(callee.object)) {
-    return { blockingExpression: `${renderExpr(callee.object)}.${callee.prop}` };
+    return { blockingExpression: `${renderExpr(callee.object)}.${callee.prop}`, via: 'receiver' };
   }
   const arg0 = (site.args ?? [])[0];
   if (arg0 && typeof arg0 === 'object' && arg0.kind !== 'literal') {
-    return { blockingExpression: renderExpr(arg0) };
+    return { blockingExpression: renderExpr(arg0), via: 'arg0' };
   }
   return null;
 }
@@ -81,7 +98,30 @@ export function detectUnresolvedDestination(site) {
 // 'sink' (http-response/declared — the destination IS the call itself,
 // always fixed) and 'log' (same reasoning). Mirrors sink-registry.js's own
 // CATEGORY_NODE_KIND vocabulary; not re-derived, just filtered against.
+// This is the RECEIVER signal's own eligibility set — the receiver is the
+// destination handle in every one of these (an SDK client, a DB cursor, a
+// queue channel), so the receiver check applies to all three.
+//
+// 'queue' is currently unreachable in practice: no `sink-registry.js`
+// `CWE_MAP` row maps to `queue` (only `PRIVACY_CATEGORY_MAP`'s `queues` row
+// does, and privacy-catalog sites are excluded above by the `vuln.cwe ===
+// undefined` guard) — kept for forward-compatibility with a future
+// CWE_MAP row, not a bug.
 const FR203_ELIGIBLE_KINDS = Object.freeze(['external', 'store', 'queue']);
+
+// The ARGUMENT signal's own, NARROWER eligibility set (MUST-FIX 1). Unlike
+// the receiver, the first argument only actually NAMES the destination for
+// these three categories (`fetch(url)`, `fs.writeFile(path, data)`,
+// `s3.putObject(key, body)`) — everywhere else in `FR203_ELIGIBLE_KINDS`
+// (overwhelmingly `database`/`client-storage`), the first argument is the
+// PAYLOAD being sent TO an already-resolved destination named by the
+// receiver (`cursor.execute(sql)`, `document.write(html)`), so treating a
+// non-literal payload as "destination unresolved" is a false positive —
+// measured live: 54 of 86 FR-203-eligible catalog entries (63%) are
+// `database`(48)/`client-storage`(6), where the payload argument is
+// non-literal by construction, so the un-gated arg0 signal fired
+// unconditionally there and carried no information.
+const FR203_ARG0_DESTINATION_CATEGORIES = Object.freeze(['external-api', 'file', 'object-storage']);
 
 /**
  * The exact shape `buildDataFlowGraph`'s `opts.resolveSiteDecision` hook
@@ -94,6 +134,12 @@ export function resolveSiteDecision(site) {
   // parameter is specified only for the general (CWE-keyed) catalog
   // (sink-registry.js's own disclosed asymmetry). Never applied here.
   if (site.entry?.vuln?.cwe === undefined) return undefined;
+  // Defensive: `resolveSiteDecision` is exported as a hook contract (passed
+  // straight into `buildDataFlowGraph`'s `opts.resolveSiteDecision`), so it
+  // should be as defensive against a malformed site as
+  // `detectUnresolvedDestination`/`renderExpr` already are — a site with no
+  // `.decision` at all must not throw here.
+  if (!site.decision) return undefined;
   // A null-category (unsupported/process) decision has no category to
   // retain — reclassifySink's own guard already refuses this combination;
   // checking it here too avoids computing a heuristic result that would
@@ -103,6 +149,11 @@ export function resolveSiteDecision(site) {
 
   const unresolved = detectUnresolvedDestination(site);
   if (!unresolved) return undefined;
+  // MUST-FIX 1: the arg0 signal only actually names a destination for the
+  // narrower FR203_ARG0_DESTINATION_CATEGORIES set — see that constant's
+  // own comment. The receiver signal has no such extra gate (it's eligible
+  // for everything FR203_ELIGIBLE_KINDS already allowed above).
+  if (unresolved.via === 'arg0' && !FR203_ARG0_DESTINATION_CATEGORIES.includes(site.decision.category)) return undefined;
 
   const fr203 = reclassifySink(site.entry, {
     destinationUnresolved: true,
@@ -288,7 +339,12 @@ export function buildCoverageLedger(built, opts = {}) {
  * is the only field this function changes.
  */
 export function buildGraphWithCoverage(callGraph, opts = {}) {
-  const built = buildDataFlowGraph(callGraph, { ...opts, resolveSiteDecision: resolveSiteDecision });
+  // NITPICK 4: compose with a caller-supplied `opts.resolveSiteDecision`
+  // rather than silently clobbering it — a caller's own hook always wins,
+  // matching `buildDataFlowGraph`'s own "the hook, when present, replaces
+  // `site.decision`" contract rather than this convenience wrapper quietly
+  // overriding that caller's choice.
+  const built = buildDataFlowGraph(callGraph, { ...opts, resolveSiteDecision: opts.resolveSiteDecision ?? resolveSiteDecision });
   built.graph.coverage = buildCoverageLedger(built, opts);
   return built;
 }

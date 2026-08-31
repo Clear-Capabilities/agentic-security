@@ -104,6 +104,43 @@ test('C1/3e: resolveSiteDecision composes with a §4.3 plurality demotion — th
   assert.match(r.reason, /plurality-demoted reason text/, 'the site-level reason is carried forward too, not silently dropped');
 });
 
+// ── MUST-FIX 1 regression: arg0 is a PAYLOAD for database/client-storage, not a destination ──
+
+test('MF-1a: resolveSiteDecision does NOT fire via the arg0 path for a database sink — cursor.execute(sql): sql is the payload, not the destination', () => {
+  const site = {
+    entry: { id: 'js-sql-query', vuln: { cwe: 'CWE-89' } },
+    decision: { kind: 'store', category: 'database', coverageStatus: 'modeled', externality: 'unknown', reason: 'a SQL query call is unambiguously a database destination' },
+    calleeExpr: { kind: 'member', object: { kind: 'ident', name: 'cursor' }, prop: 'execute' },
+    args: [{ kind: 'ident', name: 'sql' }],
+  };
+  assert.equal(resolveSiteDecision(site), undefined,
+    'a non-literal SQL payload must not be misread as an unresolved destination — the receiver (cursor) already names it');
+});
+
+test('MF-1b: resolveSiteDecision does NOT fire via the arg0 path for a client-storage sink — document.write(html): html is the payload, document is a plain-ident receiver', () => {
+  const site = {
+    entry: { id: 'js-dom-write', vuln: { cwe: 'CWE-79' }, framework: 'dom' },
+    decision: { kind: 'store', category: 'client-storage', coverageStatus: 'partial', externality: 'internal', reason: "LOSSY: the destination is the rendered browser DOM" },
+    calleeExpr: { kind: 'member', object: { kind: 'ident', name: 'document' }, prop: 'write' },
+    args: [{ kind: 'ident', name: 'html' }],
+  };
+  assert.equal(resolveSiteDecision(site), undefined,
+    'a non-literal HTML payload must not be misread as an unresolved destination — document is a plain-ident receiver, not computed');
+});
+
+test('MF-1c: resolveSiteDecision STILL fires via the arg0 path for an external-api sink — fetch(url) is the canonical, correctly-eligible case', () => {
+  const site = {
+    entry: { id: 'js-ssrf-fetch', vuln: { cwe: 'CWE-918' } },
+    decision: { kind: 'external', category: 'external-api', coverageStatus: 'modeled', externality: 'external', reason: 'SSRF sinks are outbound HTTP client calls' },
+    calleeExpr: { kind: 'ident', name: 'fetch' },
+    args: [{ kind: 'ident', name: 'url' }],
+  };
+  const r = resolveSiteDecision(site);
+  assert.ok(r, 'external-api is in FR203_ARG0_DESTINATION_CATEGORIES, so this must still fire');
+  assert.equal(r.kind, 'unresolved');
+  assert.match(r.reason, /destination could not be statically resolved: url/);
+});
+
 // ── real end-to-end wiring: buildGraphWithCoverage ──
 
 test('C1/4: buildGraphWithCoverage produces a validateGraph()-clean graph with a finished coverage ledger on real parsed code', async () => {
@@ -126,7 +163,11 @@ test('C1/5: buildCoverageLedger\'s byCategory buckets are real, non-vacuous coun
   });
   const built = buildDataFlowGraph(cg, { repository: 'r' });
   const ledger = buildCoverageLedger(built);
-  assert.ok(ledger.sources.byCategory['credentials'] || Object.keys(ledger.sources.byCategory).length > 0,
+  // NITPICK 2: `'credentials'` is a dataClass, never a SOURCE_CATEGORIES
+  // value (the real fixture's own categories are http-body/http-query/
+  // http-route) — that disjunct was permanently dead. Assert a genuinely
+  // nonzero count directly instead.
+  assert.ok(Object.values(ledger.sources.byCategory).some((c) => c.sites > 0),
     'at least one real source category is present with a nonzero count');
   const total = Object.values(ledger.sinks.byCategory).reduce((a, c) => a + c.sites, 0);
   assert.ok(total > 0, 'at least one sink category has at least one site');
@@ -190,6 +231,11 @@ test('C1/9: buildCoverageLedger is deterministic — two calls on the same built
 test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, path-query.js, and graph-builder.js', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../../src/lineage/coverage.js', import.meta.url), 'utf8');
-  const specifiers = [...src.matchAll(/^import\s+.*?\sfrom\s+['"](.+?)['"];?$/gm)].map((m) => m[1]);
+  // MUST-FIX 2: the sibling boundary-test pattern (path-store.test.js,
+  // path-query.test.js, flow-grade.test.js, graph-builder.test.js), not the
+  // weaker anchored single-line pattern this test originally shipped with —
+  // that weaker pattern let 4 of 5 mutants adding '../dataflow/engine.js'
+  // (the exact import this boundary exists to forbid) slip past undetected.
+  const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
   assert.deepEqual(specifiers.sort(), ['./graph-builder.js', './path-query.js', './sink-registry.js']);
 });
