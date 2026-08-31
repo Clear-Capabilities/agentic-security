@@ -105,7 +105,17 @@ never `engine.js`'s live taint state).
   **scheduled** as §16.8 item 7: a four-line change confined to
   `materialize()`, verified to break no existing test, and explicitly NOT
   to be pushed down into `path-store.js`, whose `edge.widenReasons` sits
-  in `provenanceEdgeId`'s discriminator).
+  in `provenanceEdgeId`'s discriminator). **A third thing, binding on
+  whoever scopes Sub-project D, not just a reader of §16**: a §13.6
+  context-cap-degraded binding edge's target is unreachable from
+  `sinkCandidates()` today (its node has zero out-edges and is neither a
+  `return`/`escape`/`loss` kind), so a normal sink-rooted reconstruction
+  never surfaces it at all — §18.4's own "truncation must never look like
+  no-flow" constraint re-opening at the query boundary (§16.7 Finding 2).
+  Grading handles it correctly if reached directly; nothing in a
+  sink-rooted query asks. Sub-project D's own scoping doc must carry this
+  forward explicitly (a candidate "truncation-terminal" node shape is
+  sketched in §16.7), not leave it to be rediscovered.
 - External destination resolution, database/queue field mapping,
   transit/at-rest/handling ANALYZERS (this package only defines the
   verdict *model*, not what decides a verdict) — Milestone 2.
