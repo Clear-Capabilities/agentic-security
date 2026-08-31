@@ -48,13 +48,21 @@ import { PathStore, classifyIn, classifyOut } from '../../src/lineage/path-store
 test('boundary: path-store.js never imports engine.js, summaries.js, or driver.js (§14.1)', () => {
   const modulePath = fileURLToPath(new URL('../../src/lineage/path-store.js', import.meta.url));
   const src = fs.readFileSync(modulePath, 'utf8');
-  const importLines = [...src.matchAll(/^import\s.*$/gm)].map((m) => m[0]);
-  assert.ok(importLines.length > 0, 'sanity: the file does import something (ids.js)');
-  for (const line of importLines) {
-    assert.ok(!/['"].*\/(engine|summaries|driver)\.js['"]/.test(line),
-      `path-store.js must never import engine.js/summaries.js/driver.js — found: ${line}`);
+  // Task 2 review finding 5: a line-anchored `/^import\s.*$/gm` only sees a
+  // statement's FIRST physical line, so a multi-line specifier list (or a
+  // `export { x } from '...'` re-export, or a dynamic `import('...')`) hides
+  // the module path from this guard entirely — verified by injecting such a
+  // violation and confirming it passed uncaught before this fix. Match every
+  // module specifier string that follows `from`/`import(`/`export ... from`
+  // ANYWHERE in the source instead, so the guard is order- and
+  // line-layout-independent.
+  const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  assert.ok(specifiers.length > 0, 'sanity: the file does import something (ids.js)');
+  for (const spec of specifiers) {
+    assert.ok(!/\/(engine|summaries|driver)\.js$/.test(spec),
+      `path-store.js must never import engine.js/summaries.js/driver.js — found: ${spec}`);
   }
-  assert.ok(importLines.some((l) => /['"].*\/ids\.js['"]/.test(l)), 'it must still import ids.js');
+  assert.ok(specifiers.some((s) => /\/ids\.js$/.test(s)), 'it must still import ids.js');
 });
 
 // =====================================================================
@@ -624,6 +632,37 @@ test('C4/6d: a hop with an ABSENT required key is recorded as malformed rather t
   store.addHop(missingScope);
   assert.equal(store.diagnostics().malformed.length, 1);
   assert.deepEqual(store.diagnostics().malformed[0].missing, ['scope']);
+});
+
+test('C4/6f: an unclassifiable hop is recorded in diagnostics().unclassified, never silently dropped (§14.3 rule 6) — Task 2 review finding 10', () => {
+  // Every other assertion on `unclassified` elsewhere in this suite checks
+  // it is EMPTY on a well-formed fixture — which would pass identically
+  // whether the bucket genuinely records or the pusher were replaced with
+  // a silent `continue`. This is the one positive test: two distinct ways
+  // a hop reaches `classifyOut`'s rule-6 fallthrough / the bare-unknown-kind
+  // branch, both of which must show up, not vanish.
+  const base = {
+    scope: 'S', nodeId: 'n1', context: 'C', dataElementId: 'data:e', line: 1,
+    peerScope: null, peerContext: null, syntacticPath: null, lossReason: null,
+    widenReason: null,
+  };
+  const store = new PathStore();
+  // (a) a write-out hop matching none of classifyOut's 5 named rules:
+  // toPath is null, subKind is neither 'return' nor 'call-arg', and
+  // lossReason is null — classifyOut's own rule 6.
+  store.addHop({ ...base, kind: 'write-out', subKind: 'mystery-write', toPath: null });
+  // (b) a hop whose `kind` isn't in IN_KINDS and isn't 'write-out' at all —
+  // the outer unclassified branch in `addHop`.
+  store.addHop({ ...base, kind: 'mystery-kind', subKind: 'x', toPath: null });
+
+  const { unclassified } = store.diagnostics();
+  assert.equal(unclassified.length, 2, 'both unclassifiable hops must be recorded, not dropped');
+  assert.ok(unclassified.some((h) => h.subKind === 'mystery-write'));
+  assert.ok(unclassified.some((h) => h.kind === 'mystery-kind'));
+  // Neither contributes a node or an edge — recorded as a diagnostic, not
+  // silently promoted into graph structure either.
+  assert.equal(store.nodes().length, 0);
+  assert.equal(store.edges().length, 0);
 });
 
 test('C4/6e: an annotation-only group (no non-null in-half anywhere at the key) IS edge-forming, per §2.2\'s surviving half', () => {
