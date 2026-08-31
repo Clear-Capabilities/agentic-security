@@ -716,8 +716,9 @@ test('C5/3d: `maxDepth` is load-bearing, not decorative — it is the only knob 
   // O(k) — one path of depth D costs O(D^2), and `maxExpansions` (which
   // counts EDGES examined, not elements copied) cannot see that cost at
   // all. On a straight 3000-hop chain the whole walk is only 3000
-  // expansions, ~0.03% of the default expansion budget, yet it copies
-  // ~4.5M path elements.
+  // expansions, ~30% of the default expansion budget (10000) — comfortably
+  // under it, so that budget would never fire — yet it copies ~4.5M path
+  // elements.
   const N = 3000;
   const hops = [];
   for (let i = 0; i < N; i++) {
@@ -1165,12 +1166,16 @@ test('C5/5f: a purely GLOBAL cap covers fewer terminals than the designed one �
   assert.ok(candidates.length > 0, 'the cyclic fixture has a sink with 2+ distinct terminals');
   const { sn, r: full } = candidates[0];
 
+  // Scoped re-review finding C: these three assertions are the setup for
+  // the messaged "REAL RANKING REASON" assertion below — give them their
+  // own messages too, so a future engine change that breaks this fixture's
+  // terminal partition fails with a diagnosis, not a bare "2 !== 1".
   const terminals = [...new Set(full.paths.map((p) => p.terminal.nodeId))];
-  assert.equal(terminals.length, 2);
+  assert.equal(terminals.length, 2, 'the picked sink must have exactly 2 distinct terminals');
   const completeTerminals = new Set(full.paths.filter((p) => p.complete).map((p) => p.terminal.nodeId));
   const partialTerminals = new Set(full.paths.filter((p) => !p.complete).map((p) => p.terminal.nodeId));
-  assert.equal(completeTerminals.size, 1);
-  assert.equal(partialTerminals.size, 1);
+  assert.equal(completeTerminals.size, 1, 'exactly one terminal must be reached only by COMPLETE paths');
+  assert.equal(partialTerminals.size, 1, 'exactly one terminal must be reached only by CYCLE-TERMINATED (incomplete) paths');
   assert.equal([...completeTerminals][0] === [...partialTerminals][0], false,
     'THE REAL RANKING REASON: one terminal carries only complete paths, the other only cycle-terminated ones — and `complete` is comparePaths\' first key, so a naive top-N provably fills from one terminal before it ever reaches the other');
 
@@ -1283,12 +1288,23 @@ test('C5/6: the whole design needs nothing from PathStore that PathStore does no
   // Fix round 1, nitpick 9: scan EVERY function in the prototype, not the
   // four that happen to take a store — the assertion's message claims a
   // whole-module guarantee, so it must check the whole module.
+  //
+  // Scoped re-review finding B: a hand-written array like this one cannot
+  // itself detect an EIGHTH function added later — it would simply be
+  // absent from the array, and the scan would silently not cover it. There
+  // is no `assert.equal(prototypeFns.length, N, ...)` here for exactly that
+  // reason — such an assertion would check only the length of the literal
+  // written two lines above it, which is not evidence of anything. §15.10
+  // item 12 (re-point this file at the shipped `path-query.js` module) MUST
+  // replace this hand-written array with a real introspection —
+  // `Object.values(await import('../../src/lineage/path-query.js')).filter(v
+  // => typeof v === 'function')` — so an eighth exported function is swept
+  // in automatically rather than requiring this list to be remembered.
   const prototypeFns = [
     reconstructPaths, materialize, sinkCandidates, hopOf,
     comparePaths, isIncompleteAnswer, pathId,
   ];
   const srcText = prototypeFns.map((f) => f.toString()).join('\n');
-  assert.equal(prototypeFns.length, 7, 'every function the prototype defines is in the scan');
   assert.equal(/store\._/.test(srcText), false, 'the prototype never touches a private PathStore field');
   assert.equal(/\._(groups|seen|built|peerSourced|truncations|malformed|unclassified|stats)\b/.test(srcText), false,
     'nor any of PathStore\'s private fields by name, through any alias');

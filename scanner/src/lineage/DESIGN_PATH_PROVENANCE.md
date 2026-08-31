@@ -2254,8 +2254,9 @@ graph walk and still has none).
    > path of depth D costs **O(D²)** — a cost `maxExpansions` cannot see,
    > because it counts edges examined, not elements copied. Measured
    > (`C5/3d`) on a hand-built straight 3000-hop chain: the whole walk is
-   > 3000 expansions — 0.03% of the default expansion budget, so that
-   > budget would never fire — yet it takes ~150 ms unbounded against
+   > 3000 expansions — 30% of the default expansion budget (10000, corrected
+   > from an earlier "0.03%" here that was wrong by 1000x), comfortably
+   > under that budget so it would never fire — yet it takes ~150 ms unbounded against
    > ~0 ms at `maxDepth: 8`. It is also the **only** budget whose limit
    > produces an EMITTED, marked partial rather than an abandoned branch
    > (§15.4), proven by contrast on the same store.
