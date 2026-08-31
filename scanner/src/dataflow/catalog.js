@@ -614,22 +614,30 @@ export const CATALOG = [
   // (reserved exclusively for privacy-catalog.js's own "Privacy Leak" family
   // — sink-registry.js's completeness/1c test enforces this).
   //
-  // Precision comes entirely from `receiver`/`receiverBase`: CALLEE_INDEX is
-  // keyed on the bare name `create`, so every `X.create(...)` in the tree is a
-  // candidate. `receiverBase: '^chat$'` is what separates
-  // `openai.chat.completions.create` from the legacy
-  // `anthropic.completions.create` shape (deliberately not cataloged here —
-  // AC-07 names only OpenAI/Anthropic/Bedrock).
+  // Precision comes from `receiver`/`receiverBase`: CALLEE_INDEX is keyed on
+  // the bare name `create`, so every `X.create(...)` in the tree is a
+  // candidate. Every receiver-bearing entry below constrains BOTH the
+  // property chain AND the receiver's own name/alias — `receiver` alone
+  // (checked via `_receiverAllowed`'s `.some()` over the whole member
+  // chain) is not enough: a first cut of `js-anthropic-messages-create`/
+  // `js-openai-responses-create` shipped with only `receiver` set, and a
+  // task review found it matched ordinary `db.messages.create()`/
+  // `prisma.messages.create()` (Sequelize/Prisma's idiomatic row-insert
+  // shape) — a real false-attribution SAST finding, not a hypothetical.
+  // `receiverBase: '^chat$'` on the OpenAI chat-completions entry is what
+  // separates it from the legacy `anthropic.completions.create` shape
+  // (deliberately not cataloged here — AC-07 names only OpenAI/Anthropic/
+  // Bedrock).
   { kind: 'sink', id: 'js-openai-chat-completions-create', language: 'js', framework: 'openai',
     match: { type: 'call', callee: 'create', receiver: '^completions$', receiverBase: '^chat$' }, argIndex: 0,
     vuln: { name: 'Regulated Data to AI Model Provider (OpenAI chat.completions.create)', severity: 'medium', cwe: 'CWE-201',
             remediation: 'Confirm the request payload carries no PCI/PHI/PII before sending to a third-party model provider, or route through an approved DPA / redaction layer.' } },
   { kind: 'sink', id: 'js-openai-responses-create', language: 'js', framework: 'openai',
-    match: { type: 'call', callee: 'create', receiver: '^responses$' }, argIndex: 0,
+    match: { type: 'call', callee: 'create', receiver: '^responses$', receiverBase: '^(?:openai|client|oai)$' }, argIndex: 0,
     vuln: { name: 'Regulated Data to AI Model Provider (OpenAI responses.create)', severity: 'medium', cwe: 'CWE-201',
             remediation: 'Confirm the request payload carries no PCI/PHI/PII before sending to a third-party model provider, or route through an approved DPA / redaction layer.' } },
   { kind: 'sink', id: 'js-anthropic-messages-create', language: 'js', framework: 'anthropic',
-    match: { type: 'call', callee: 'create', receiver: '^messages$' }, argIndex: 0,
+    match: { type: 'call', callee: 'create', receiver: '^messages$', receiverBase: '^(?:anthropic|client|claude)$' }, argIndex: 0,
     vuln: { name: 'Regulated Data to AI Model Provider (Anthropic messages.create)', severity: 'medium', cwe: 'CWE-201',
             remediation: 'Confirm the request payload carries no PCI/PHI/PII before sending to a third-party model provider, or route through an approved DPA / redaction layer.' } },
   // Bare, constructor-shaped call with no fixed receiver — safe to match on the

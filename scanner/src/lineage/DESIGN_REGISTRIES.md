@@ -441,21 +441,43 @@ All seven are expected. GraphQL and gRPC have no source entries in `catalog.js`
 at all; queue-message and database-read are ingress shapes the scanner does not
 pattern-match; `declared` is the operator-declaration path (§6.5).
 
-**`SINK_CATEGORIES`: only 10 of 29 reachable** — even counting
-`privacy-catalog.js`. Unreachable: `stdout`, `cache`, `monitoring`, `sms`,
-`push-notification`, `collaboration`, `webhook`, `backup`, `export`,
-`declared`, and **all nine `ai-*` values** (`ai-model-provider`,
-`ai-local-model`, `ai-agent`, `ai-tool`, `ai-vector-store`, `ai-memory`,
-`ai-training`, `ai-evaluation`, `ai-telemetry`).
+**`SINK_CATEGORIES`: only 10 of 29 reachable, as measured at D1's time of
+writing** — even counting `privacy-catalog.js`. Unreachable at THAT time:
+`stdout`, `cache`, `monitoring`, `sms`, `push-notification`, `collaboration`,
+`webhook`, `backup`, `export`, `declared`, and **all nine `ai-*` values**
+(`ai-model-provider`, `ai-local-model`, `ai-agent`, `ai-tool`,
+`ai-vector-store`, `ai-memory`, `ai-training`, `ai-evaluation`,
+`ai-telemetry`).
 
-**The headline gap: FR-205 (AI destinations) has zero sink-catalog coverage.**
-The source side *does* have AI coverage — the eight MCP entries reach three
-`ai-*` source categories — so the asymmetry is real and specific: this scanner
-can see data arriving *from* an agent context and cannot see data being sent
-*to* a model provider, vector store, or agent. AC-07 ("PHI enters an
-Anthropic/OpenAI/Bedrock model request") is **not satisfiable** by
-reclassification alone. It needs new detection, which is out of Sub-project D's
-scope entirely.
+**CORRECTED (Sub-project H, AC-07 closure, 2026-08-31): `ai-model-provider`
+is no longer unreachable.** `dataflow/catalog.js` gained four real sink
+entries (OpenAI `chat.completions.create`/`responses.create`, Anthropic
+`messages.create`, AWS Bedrock `InvokeModelCommand`) and `sink-registry.js`
+gained a `CWE-201` → `ai-model-provider` `CWE_MAP` row — see
+`docs/superpowers/plans/2026-08-31-data-flow-explorer-m1-subproject-h-ac07.md`.
+**11 of 29 `SINK_CATEGORIES` are now reachable**, not 10; the other eight
+`ai-*` values remain unreachable (`ai-local-model`/`ai-agent`/`ai-tool`/
+`ai-vector-store`/`ai-memory`/`ai-training`/`ai-evaluation`/`ai-telemetry`),
+and every OTHER category named unreachable above is still unreachable —
+this correction is scoped to `ai-model-provider` alone. Every downstream
+reference to "10 of 29" / "19 unreachable" / "all nine `ai-*`" elsewhere in
+this document (§9.2's exit criterion discussion, D5's own historical
+measurement) is a HISTORICAL record of what was true when D1-D5 shipped,
+not a live claim — read it as "at the time," not as the current state.
+
+**The headline gap this section originally recorded: FR-205 (AI
+destinations) had zero sink-catalog coverage.** The source side *did* have
+AI coverage even then — the eight MCP entries reach three `ai-*` source
+categories — so the asymmetry was real and specific: this scanner could see
+data arriving *from* an agent context and could not see data being sent *to*
+a model provider, vector store, or agent. AC-07 ("PHI enters an
+Anthropic/OpenAI/Bedrock model request") was, AT THAT TIME, **not
+satisfiable** by reclassification alone — that gap is what the correction
+above closes for the `ai-model-provider` slice of it (a direct API call to
+a hosted model provider). `ai-agent`/`ai-tool`/the other seven `ai-*`
+categories remain genuinely unreachable and are NOT closed by this
+correction — they need their own, separate catalog work, deliberately out
+of the AC-07 closure's scope.
 
 **Whose problem this is: Sub-project H, inside Milestone 1 — not Milestone 2.**
 AC-07 sits in **Milestone 1's own exit gate** (PRD §26, quoted verbatim in the
