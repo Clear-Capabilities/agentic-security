@@ -9232,13 +9232,12 @@ function _deterministicFileTimings(timings) {
   };
   // Sub-project E, increment 5 — Data Flow Explorer lineage graph.
   // DELIBERATELY INDEPENDENT of AGENTIC_SECURITY_DEEP/_deepEnabled above
-  // (see this plan's Global Constraints, ruling on scoping report open
-  // question 1): lineage analysis has no degraded/non-IR-backed mode, so
-  // gating it on deep mode ALSO being on would make
-  // AGENTIC_SECURITY_LINEAGE_DEEP=1 alone silently produce nothing whenever
-  // deep mode itself was off.
+  // (see src/lineage/DESIGN_GRAPH_BUILDER.md §9.5): lineage analysis has no
+  // degraded/non-IR-backed mode, so gating it on deep mode ALSO being on
+  // would make AGENTIC_SECURITY_LINEAGE_DEEP=1 alone silently produce
+  // nothing whenever deep mode itself was off.
   const _lineageRequested = process.env.AGENTIC_SECURITY_LINEAGE_DEEP === '1';
-  let _lineageStatus = {
+  const _lineageStatus = {
     requested: _lineageRequested,
     enabled: false,
     reason: _lineageRequested ? null : 'not requested',
@@ -9248,37 +9247,61 @@ function _deterministicFileTimings(timings) {
   if (_lineageRequested) {
     _lineageStatus.enabled = true;
     const _lineageBudgetMs = parseInt(process.env.AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS || '300000', 10);
-    // Reuses the SAME _sharedIR memo _deepEnabled's own block above uses —
-    // if deep mode already built it, this is free; if not, this is what
-    // first triggers the build (the whole reason this gate is independent).
-    const { perFile, callGraph } = _sharedIR || (_sharedIR = await _buildIR());
-    const _lr = buildLineageGraph(callGraph, {
-      repository: path.basename(path.resolve(scanRoot || '.')),
-      deterministic: isDeterministic(),
-      perFile,
-    });
-    if (_lr.status === 'complete') {
-      _lineageGraph = _lr.graph;
-      if (_lr.elapsedMs > _lineageBudgetMs) {
-        // Same "measured, not truly interrupted" disclosure _deepEnabled's
-        // own elapsed > budgetMs branch already makes for IR-taint — see
-        // this plan's Global Constraints.
-        aF.push({
-          id: `lineage-timeout:${scanRoot || ''}`,
-          file: '(lineage-engine)', line: 0,
-          vuln: `Lineage graph build exceeded ${_lineageBudgetMs}ms budget (${_lr.elapsedMs}ms used) — results may be incomplete`,
-          severity: 'info',
-          parser: 'LINEAGE',
-          confidence: 0.5,
-        });
+    try {
+      // Reuses the SAME _sharedIR memo _deepEnabled's own block above uses —
+      // if deep mode already built it, this is free; if not, this is what
+      // first triggers the build (the whole reason this gate is independent).
+      const { perFile, callGraph } = _sharedIR || (_sharedIR = await _buildIR());
+      const _lr = buildLineageGraph(callGraph, {
+        // scanRoot can be null (e.g. an MCP scan_diff caller, or
+        // runFullScan invoked directly with no scanRoot) — fall back to
+        // undefined rather than inventing a repository name from the
+        // process's own CWD basename, which would make lineage node ids
+        // depend on wherever the process happened to be launched from and
+        // collide across two unrelated repos sharing a directory basename.
+        // `undefined` lets graph-builder.js's own `opts.repository ?? 'repo'`
+        // default apply — the single source of truth for that literal.
+        repository: scanRoot ? path.basename(path.resolve(scanRoot)) : undefined,
+        deterministic: isDeterministic(),
+        perFile,
+      });
+      if (_lr.status === 'complete') {
+        _lineageGraph = _lr.graph;
+        if (_lr.elapsedMs > _lineageBudgetMs) {
+          // Same "measured, not truly interrupted" disclosure _deepEnabled's
+          // own elapsed > budgetMs branch already makes for IR-taint — see
+          // src/lineage/DESIGN_GRAPH_BUILDER.md §9.5.
+          aF.push({
+            id: `lineage-timeout:${scanRoot || ''}`,
+            file: '(lineage-engine)', line: 0,
+            vuln: `Lineage graph build exceeded ${_lineageBudgetMs}ms budget (${_lr.elapsedMs}ms used) — results may be incomplete`,
+            severity: 'info',
+            parser: 'LINEAGE',
+            confidence: 0.5,
+          });
+        }
+      } else if (_lr.status === 'failed') {
+        _lineageStatus.failure = _lr.failure;
       }
-    } else if (_lr.status === 'failed') {
-      _lineageStatus.failure = _lr.failure;
+      // status === 'not_available' needs no extra handling: _lineageGraph
+      // stays null, and enabled:true/failure:null correctly reads as "ran,
+      // produced nothing" (a genuinely empty/malformed callGraph), distinct
+      // from "never ran" (requested:false).
+    } catch (e) {
+      // Lineage is best-effort, mirroring _deepEnabled's own catch above
+      // (engine.js, `_deepFailure = String((e && e.message) || e);`):
+      // anything OUTSIDE buildLineageGraph's own try/catch — the _buildIR()
+      // call itself, path.resolve, etc. — must never kill the scan. Without
+      // this, a throw here (e.g. from buildCallGraph, which
+      // buildProjectIR/buildProjectIRAsync do NOT guard per-file the way
+      // per-file parsing is guarded) previously took down the entire scan
+      // the moment AGENTIC_SECURITY_LINEAGE_DEEP=1 was set — see
+      // src/lineage/DESIGN_GRAPH_BUILDER.md §9.5 item 1 and the Global
+      // Constraint this violated ("a lineage-build failure must never fail
+      // the scan"). Regression-tested in
+      // test/lineage-scan-wiring.test.js (E5/wiring-4).
+      _lineageStatus.failure = String((e && e.message) || e);
     }
-    // status === 'not_available' needs no extra handling: _lineageGraph
-    // stays null, and enabled:true/failure:null correctly reads as "ran,
-    // produced nothing" (a genuinely empty/malformed callGraph), distinct
-    // from "never ran" (requested:false).
   }
   // Java SCA enrichment: use deep-mode IR call graph to improve Java function reachability
   if (_deepCallGraph) {

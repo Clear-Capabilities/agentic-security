@@ -715,6 +715,17 @@ up front here:
 4. `AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS` becomes genuinely operator-facing
    here for the first time — and per §5 it now has an observable effect on
    output (degraded terminals), so document it.
+5. **Disclosed, deliberate difference from `_deepEnabled`: no CI auto-disable.**
+   `_deepEnabled`'s own gate additionally checks `inCi`/`ciOverrideAllowed`
+   (deep mode defaults OFF in CI unless `AGENTIC_SECURITY_DEEP_IN_CI=1` is
+   also set) — the lineage gate has no equivalent. `AGENTIC_SECURITY_LINEAGE_DEEP=1`
+   runs unconditionally in CI once an operator sets it, with no separate
+   "and also allow it in CI" flag. This is deliberate, not an omission:
+   deep mode's CI caution exists because it is sometimes enabled implicitly
+   by other default-on machinery, where an operator might not have
+   consciously chosen "run this in CI"; lineage is reachable only via this
+   one explicit opt-in env var, so setting it already IS the operator's own
+   CI decision — there is nothing implicit to guard against.
 
 ---
 

@@ -7,7 +7,10 @@
 // src/runScan.js directly (NOT the plan's own literal draft, which assumed
 // `runScan(null, { fileContents, scanRoot })` and a bare `scan` return
 // value — both wrong):
-//   - `runScan` lives at `../src/runScan.js`, not `../src/index.js`.
+//   - Imported from `../src/runScan.js`, matching test/state-dir.test.js's
+//     own established pattern (`src/index.js` also re-exports `runScan`,
+//     so either specifier resolves the same function — this file just
+//     follows the existing test-suite convention).
 //   - `runScan(rootDir, opts)` resolves `scanRoot` internally from the
 //     POSITIONAL `rootDir` argument (`path.resolve(rootDir)`); there is no
 //     `opts.scanRoot` read anywhere in runScan.js, so passing one is
