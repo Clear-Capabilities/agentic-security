@@ -246,14 +246,32 @@ git commit -m "feat(lineage): close C3's three ctx holes, add context/peerScope/
 
 **Files:**
 - Modify: `scanner/src/lineage/summaries.js` (§13.7 items 11-13)
+- Modify: `scanner/test/lineage/engine-provenance-interprocedural.test.js` (Task 2's own new file — 3 carry-forward findings from Task 2's task review, Step 0 below)
 - Modify: `scanner/test/lineage/engine-provenance.test.js` (§13.7 item 16 — extend the existing write-only-invariant test)
 - Create or modify: a `driver.test.js` addition (§13.7 item 17)
 - Delete: `scanner/test/lineage/engine-provenance-interprocedural-poc.test.js`, and remove its entry from `scanner/package.json`'s `test:lineage` script (§13.7 item 15) — **only after** this task's own marking work has permanent test coverage elsewhere, so no property the PoC was proving goes uncovered even momentarily within this task's own commit history
 - Read only: `scanner/src/lineage/DESIGN_PATH_PROVENANCE.md` §13.6, §13.7 (items 11-13, 15, 16, 17)
 
+**Task 2's review (commit `5ee9143d`, accepted with zero blocking issues) left 3 non-blocking findings explicitly folded into this task — see Step 0.**
+
 **Interfaces:**
 - Consumes: Task 2's `context`/`peerScope`/`peerContext` fields, `resolvedQid`/`resolvedContext` on a resolved summary.
 - Produces: `FieldSummary` objects gain an optional `degradedReason` field (string, e.g. `'context-cap'`) — permanent (not stripped like `_recursive`), diagnostic (excluded from `fieldSummaryEq`, matching `widenings`' own precedent).
+
+- [ ] **Step 0: strengthen Task 2's golden-baseline regression tests (3 carry-forward findings from Task 2's task review)**
+
+In `scanner/test/lineage/engine-provenance-interprocedural.test.js` (Task 2's item-15b tests, around what is currently lines 311-347 and 363-401):
+
+1. **Hardcode the FULL canonicalized golden, not just `returnFacts` identities** — §13.7 item 15b's own text says to compare the full canonicalized `{exitState, returnFacts, mutatedParams, widenings}` shape, but the shipped test only hardcodes `returnFacts[0].identities`. The task review already captured fixture A's live values for reuse:
+   ```
+   exitState      [["user.email",["data:email"]],["out",["data:email"]]]
+   returnFacts    [{nodeId:"n13", line:4, identities:["data:email"]}]
+   mutatedParams  [["user",["data:email"]]]
+   widenings      [{atPath:null, dataElementIds:["data:email"], reason:"unresolved-call-arg", line:4}]
+   ```
+   `widenings[0].reason === 'unresolved-call-arg'` is the single most on-point value to pin — it's the direct signal that the nested call correctly took the unresolved path. Capture fixture B's equivalent values the same way (run the current committed code, read its canonicalized output, hardcode what you observe — do not guess it) and hardcode both as literals, using whatever canonicalization helper `engine-provenance.test.js`'s own write-only-invariant test already defines (reuse it, don't reinvent).
+2. **Guard the `returnFacts[0]` dereference** — under the mutation the golden test exists to catch, `withoutRecorder.returnFacts` becomes an empty array, so the current `assert.deepEqual` throws `TypeError: Cannot read properties of undefined (reading 'identities')` before the assertion itself runs (a stack trace, not a golden-vs-actual diff). Add `assert.ok(withoutRecorder.returnFacts[0], 'expected a return fact — an empty returnFacts means the §13.2a hazard is back')` immediately before each `deepEqual`, and fix the in-file comment at both sites (currently says the assertion "would then fail with `[]`" — correct it to describe the empty-`returnFacts`/guard failure this now actually produces).
+3. Re-run your own mutation check after making these two changes (the same two mutations Task 2's review used: `const argCtx = ctx;` and `const argCtx = ctx?.recordHop ? ctx : undefined;`) and confirm both still fail loudly, now via the strengthened assertion, then restore and confirm 6/6 pass again.
 
 - [ ] **Step 1: `FieldIdentitySummaryCache.compute`'s cap branch marks its fallback (item 11)**
 
@@ -308,14 +326,15 @@ Add a test (in `driver.test.js` or a new file, following that suite's existing c
 
 Re-point any of the PoC file's assertions not already covered by Task 2's Step 4 or this task's Steps 4-5 into the permanent test files (most should already be redundant — confirm, don't assume). Delete `scanner/test/lineage/engine-provenance-interprocedural-poc.test.js` and its `test:lineage` entry in `scanner/package.json`, in the same commit as the re-pointing. The `this`-binding stand-in and the "hole is real"/hazard-reproduction tests are EXPECTED to have no permanent equivalent (they existed to prove a now-fixed hazard, not a lasting property) — do not try to preserve them; item 15b's golden-baseline regression (already added in Task 2) is what stays as the permanent guard against the same hazard class recurring.
 
-- [ ] **Step 7: run the full scoped suite and doc-drift check**
+- [ ] **Step 7: run the full scoped suite, the full gate, and doc-drift check — all must be green**
 
 ```bash
 npm run test:lineage
+npm test
 node ../scripts/check-doc-drift.mjs
 ```
 
-Confirm test count and doc-drift status (the pre-existing `path-store.js` reference in `src/lineage/CLAUDE.md` is expected and pre-dates this task — C4's future file).
+**This is an explicit completion criterion, not just a sanity check.** Task 2 left exactly 3 known failing tests (the PoC's "hole is real" tests, correctly and deliberately, per §13.7 item 15's own anticipation) — `npm test` is part of this repo's pre-push gate (root `CLAUDE.md`), so the branch cannot be pushed or merged while any test fails. This task's Step 6 deletes the 3 known-failing tests along with the rest of the PoC file; after that, `npm run test:lineage` and the full `npm test` must both report zero failures (Task 2's review separately confirmed `cpp-dataflow` and `test:python` were already green and untouched by this sub-project — re-run them too if you have any doubt, but they are not expected to need any change). Confirm doc-drift status (the pre-existing `path-store.js` reference in `src/lineage/CLAUDE.md` is expected and pre-dates this task — C4's future file, not a regression).
 
 - [ ] **Step 8: update `scanner/src/lineage/CLAUDE.md`**
 
