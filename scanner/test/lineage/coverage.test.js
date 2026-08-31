@@ -173,6 +173,22 @@ test('C1/5: buildCoverageLedger\'s byCategory buckets are real, non-vacuous coun
   assert.ok(total > 0, 'at least one sink category has at least one site');
 });
 
+test('C1/5b: sinks.unsupportedSites reconciles exactly against callStatementSites and byCategory — a reader summing the ledger never sees a gap', () => {
+  // `exec(cmd)` matches `js-exec` (CWE-78) -> null category, kind:'process'
+  // (AC-11's coarse half: discovered but unsupported, never dropped);
+  // `res.send(x)` matches `js-express-res-send` -> category 'http-response'.
+  // Both a bucketed and an unbucketed site in one fixture, so the
+  // reconciliation is genuinely exercised, not vacuous (0 + total = total).
+  const cg = irOf({ 'a.js': "function h(res, x, cmd){ res.send(x); exec(cmd); }" });
+  const built = buildDataFlowGraph(cg, { repository: 'r' });
+  const ledger = buildCoverageLedger(built);
+  const byCategoryTotal = Object.values(ledger.sinks.byCategory).reduce((a, c) => a + c.sites, 0);
+  assert.equal(ledger.sinks.unsupportedSites + byCategoryTotal, ledger.sinks.callStatementSites,
+    'unsupportedSites is the exact named residual — every site is either bucketed or counted here, never both, never neither');
+  assert.ok(ledger.sinks.unsupportedSites > 0, 'this fixture genuinely has a null-category (process) site');
+  assert.ok(byCategoryTotal > 0, 'this fixture genuinely has a bucketed site too');
+});
+
 // ── D5-style empty-graph proof: an empty-but-valid graph must FAIL these tests ──
 
 test('C1/6: an empty callGraph (zero functions) produces a ledger that is DISTINGUISHABLE from a real one — every count is genuinely zero, not just "field present"', () => {

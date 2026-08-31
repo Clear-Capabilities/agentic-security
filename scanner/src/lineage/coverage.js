@@ -26,14 +26,33 @@
 // `./graph-builder.js` — all three already-shipped `src/lineage/` modules.
 // Never `dataflow/engine.js`, never `dataflow/summaries.js`.
 //
-// Disclosure: FR-203's own headline example ("fetch(url) with a computed
-// url") is currently unreachable on this project's real fixture through
-// the privacy-catalog guard below — `vulnerable-js`'s only `external-api`
-// sites are `privacy-js-axios-post`, and `reclassifyPrivacySink` has no
-// `opts.destinationUnresolved` parameter for `resolveSiteDecision` to
-// invoke (a disclosed, deliberate asymmetry — see `sink-registry.js`'s own
-// header). Correct and deliberate; recorded here so the gap is visible
-// rather than silently true of the only real fixture in this tree today.
+// Disclosure: FR-203's own `external-api` headline example ("fetch(url)
+// with a computed url") is currently unreachable on this project's real
+// fixture through the privacy-catalog guard below — `vulnerable-js`'s only
+// `external-api` sites are `privacy-js-axios-post`, and
+// `reclassifyPrivacySink` has no `opts.destinationUnresolved` parameter for
+// `resolveSiteDecision` to invoke (a disclosed, deliberate asymmetry — see
+// `sink-registry.js`'s own header). Correct and deliberate; recorded here
+// so the gap is visible rather than silently true of the only real fixture
+// in this tree today. FR-203 DOES fire on `vulnerable-js` via a different
+// category — `file`/`js-fs-readFile` (a general, CWE-keyed catalog entry) —
+// so `unresolvedDestinations` is genuinely nonzero on that fixture; only
+// the `external-api`/`fetch`-shaped case is unreachable there.
+//
+// Disclosure: the RECEIVER signal (a non-plain-ident callee object) fires
+// on any fixed-but-nontrivial property chain, not just a genuinely dynamic
+// expression — `this.db.query(q)` and `ctx.services.db.query(q)` both fire,
+// even though both are perfectly static, readable paths; only a bare
+// single-identifier receiver (`pool.query(q)`) reads as "resolved". This is
+// the same shape MUST-FIX 1 closed on the arg0 side, one axis over: the
+// plain-ident/member discriminator approximates static resolvability, it
+// doesn't decide it. Defensible (this module resolves nothing, so
+// "unresolved" is an honest label for anything it can't itself read back
+// out as a flat name) but will inflate `unresolvedDestinations` on any
+// repository using an ORM/repository pattern with `this.`/nested-service
+// receivers. Not narrowed in this increment — narrowing it to genuinely
+// computed receivers (a `call` or computed-member object) is the natural
+// follow-up if this proves noisy in practice.
 
 import { reclassifySink } from './sink-registry.js';
 import { DEFAULTS as PATH_QUERY_DEFAULTS } from './path-query.js';
@@ -121,6 +140,9 @@ const FR203_ELIGIBLE_KINDS = Object.freeze(['external', 'store', 'queue']);
 // `database`(48)/`client-storage`(6), where the payload argument is
 // non-literal by construction, so the un-gated arg0 signal fired
 // unconditionally there and carried no information.
+// `object-storage` is currently unreachable via `CWE_MAP` today (like
+// `queue` above) — kept for forward-compatibility with a future row that
+// maps to it, not a bug.
 const FR203_ARG0_DESTINATION_CATEGORIES = Object.freeze(['external-api', 'file', 'object-storage']);
 
 /**
@@ -245,8 +267,9 @@ function sinksByCategory(sites) {
 // ir/index.js here would cross a reuse boundary no other src/lineage/
 // module crosses). A small, stable, independently-testable duplicate.
 const LANGUAGE_EXT_PATTERNS = Object.freeze([
-  [/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i, 'js'],
+  [/\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i, 'js'],
   [/\.py$/i, 'python'],
+  [/\.java$/i, 'java'],
   [/\.cs$/i, 'csharp'],
   [/\.kt$/i, 'kotlin'],
   [/\.go$/i, 'go'],
@@ -277,6 +300,13 @@ function languageForFile(file) {
  *   these itself (a parse failure never reaches `callGraph` at all —
  *   DESIGN_GRAPH_BUILDER.md §9.4 item 5b's own note); a caller with the
  *   real file list (E5/`runScan`) supplies them. Optional, defaults to `[]`.
+ *   NOTE for that future caller: `ir/index.js`'s own parse-failure tracking
+ *   (`irParseFailures().byLanguage`) keys by raw extension (`'py'`, `'ts'`,
+ *   `'java'`), not this module's normalized `languageForFile` vocabulary
+ *   (`'python'`, `'js'`) — feed `irParseFailures()`'s entries through
+ *   `languageForFile(file)` (or supply an explicit `language`) rather than
+ *   its raw extension key, or `languages[]` will report split/duplicated
+ *   buckets for the same language.
  * @param {object} [opts.budget] the same budget object passed to
  *   `buildDataFlowGraph`'s own `opts.budget` — used only to report which
  *   values were ACTUALLY in effect (merged over path-query.js's DEFAULTS,
@@ -302,6 +332,7 @@ export function buildCoverageLedger(built, opts = {}) {
   });
 
   const unresolvedDestinations = built.sites.filter((s) => s.decision.kind === 'unresolved').length;
+  const storeStats = built.store.stats();
 
   return {
     languages, parseFailures,
@@ -319,6 +350,15 @@ export function buildCoverageLedger(built, opts = {}) {
       connected: built.stats.connectedSinkSites,
       disconnected: built.sites.length - built.stats.connectedSinkSites,
       nonStatementSitesNotEnumerable: built.nonStatementSites.length,
+      // §10's own rule ("a node dropped and a node with no path must be
+      // distinguishable") applies to the reconciliation gap too: sites
+      // with a null category (kind:'process', AC-11's coarse half) are
+      // deliberately excluded from `byCategory` (see `sinksByCategory`'s
+      // own doc comment) but must not just vanish from the totals a reader
+      // sums — this count is the named residual, so
+      // `unsupportedSites + Σ byCategory[*].sites === callStatementSites`
+      // always holds.
+      unsupportedSites: built.sites.filter((s) => s.decision.category == null).length,
       byCategory: sinksByCategory(built.sites),
     },
 
@@ -328,7 +368,7 @@ export function buildCoverageLedger(built, opts = {}) {
     paths: { enumerated: built.stats.pathsEnumerated, projected: built.stats.pathsProjected, truncatedQueries: built.stats.truncatedQueries },
     budgets: { ...PATH_QUERY_DEFAULTS, ...(opts.budget ?? {}) },
 
-    provenance: { hops: built.hops.length, pnodes: built.store.stats().nodes, pedges: built.store.stats().edges },
+    provenance: { hops: built.hops.length, pnodes: storeStats.nodes, pedges: storeStats.edges },
   };
 }
 
