@@ -33,6 +33,7 @@ export const SCAN_HEALTH_SCHEMA_VERSION = 1;
  * @param {Array<{phase:string, err:string}>} input.annotatorErrors
  * @param {object} [input.engineErrors] - e.g. { cppDataflowParseErrors }
  * @param {object} [input.deepStatus] - { requested, enabled, inCi, ciOverrideAllowed, reason, failure }
+ * @param {object} [input.lineageStatus] - { requested, enabled, reason, failure } — Sub-project E, increment 5's own status, kept separate from deepStatus (IR-taint's own).
  * @param {object} [input.analyzerCoverage] - coverage-ledger.js's
  *   summarizeCoverageForScanHealth() output: {expected, completed, failed,
  *   timedOut, skippedByPolicy}. Omitted (not just empty) is treated the
@@ -41,7 +42,7 @@ export const SCAN_HEALTH_SCHEMA_VERSION = 1;
  *   never a fabricated all-zero summary.
  * @returns {object} scanHealth per PRD §10.3, additive fields only.
  */
-export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engineErrors = null, deepStatus = null, analyzerCoverage = null } = {}) {
+export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engineErrors = null, deepStatus = null, analyzerCoverage = null, lineageStatus = null } = {}) {
   const conditions = [];
   const safeAnnotatorErrors = Array.isArray(annotatorErrors) ? annotatorErrors : [];
   const filesTimedOut = Number(scanMeta?.filesTimedOut) || 0;
@@ -62,6 +63,15 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
   }
   if (deepStatus?.requested && !deepStatus.enabled) {
     conditions.push(`deep analysis was requested but did not run: ${deepStatus.reason || 'unknown reason'}`);
+  }
+  // Sub-project E, increment 5: lineage graph build status — a SEPARATE
+  // condition from deepStatus above, never folded into it. deepStatus is
+  // specifically IR-taint's own status; conflating the two would make
+  // `scanHealth.deepAnalysis.failure` ambiguous about which subsystem
+  // actually failed (the same "distinguish A from B" discipline this
+  // module already applies to analyzerCoverage vs. annotatorErrors).
+  if (lineageStatus?.failure) {
+    conditions.push(`lineage graph build threw and was skipped: ${lineageStatus.failure}`);
   }
   // FR-203: a detector that threw on at least one file (captured via
   // FR-201's runDetector isolation) is a real analysis gap distinct from
@@ -94,6 +104,14 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
           ciOverrideAllowed: !!deepStatus.ciOverrideAllowed,
           reason: deepStatus.reason ?? null,
           failure: deepStatus.failure ?? null,
+        }
+      : null,
+    lineageAnalysis: lineageStatus
+      ? {
+          requested: !!lineageStatus.requested,
+          enabled: !!lineageStatus.enabled,
+          reason: lineageStatus.reason ?? null,
+          failure: lineageStatus.failure ?? null,
         }
       : null,
     annotatorErrorCount: safeAnnotatorErrors.length,

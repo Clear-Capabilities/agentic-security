@@ -249,3 +249,23 @@ test('a real scan produces genuine kev/calibration freshness legs on scan.scanHe
   assert.ok(scan.scanHealth.freshness.calibration, 'calibration freshness must be computed for every scan');
   assert.equal(typeof scan.scanHealth.freshness.calibration.stale, 'boolean');
 });
+
+test('E5/health-1: lineageStatus.failure produces a condition and lands on scanHealth.lineageAnalysis, kept separate from deepAnalysis', () => {
+  const h = computeScanHealth({ lineageStatus: { requested: true, enabled: true, reason: null, failure: 'boom' } });
+  assert.equal(h.status, 'partial');
+  assert.ok(h.conditions.some((c) => c.includes('lineage graph build threw') && c.includes('boom')));
+  assert.deepEqual(h.lineageAnalysis, { requested: true, enabled: true, reason: null, failure: 'boom' });
+  assert.equal(h.deepAnalysis, null, 'a lineage failure must never appear under deepAnalysis');
+});
+
+test('E5/health-2: lineageStatus omitted leaves lineageAnalysis null and adds no condition (backward compatible)', () => {
+  const h = computeScanHealth({});
+  assert.equal(h.lineageAnalysis, null);
+  assert.equal(h.status, 'complete');
+});
+
+test('E5/health-3: a clean lineageStatus (no failure) reports enabled but adds no condition', () => {
+  const h = computeScanHealth({ lineageStatus: { requested: true, enabled: true, reason: null, failure: null } });
+  assert.equal(h.status, 'complete');
+  assert.deepEqual(h.lineageAnalysis, { requested: true, enabled: true, reason: null, failure: null });
+});
