@@ -760,6 +760,34 @@ hops / 14 pnodes / 8 pedges.
 5. **The plurality tie-break is arbitrary** — §4.3. Mitigated by `partial` +
    named alternatives, not solved.
 
+6. **`validate.js` does not enforce every field `dataflow-graph.schema.json`
+   declares `required`** — found and escalated by the
+   `2026-08-31-lineage-schema-subtype-nullability-hotfix` while closing
+   item 2. `test/lineage/json-schema-parity.test.js` now derives, live
+   against the flagship fixture, exactly which schema-required fields
+   `validate.js` actually enforces, and pins the rest as a documented
+   `KNOWN_REQUIRED_GAPS` allowlist so a NEW gap of this shape fails loudly.
+   Two of these are **risk-bearing, not merely opaque object bags**:
+   `edge.coverageStatus` and `flow.coverageStatus` are the SAME enum
+   `node.coverageStatus` is already checked for — AC-11's "a discovered
+   sink stays visible with a reason" rests on this field, and `validate.js`
+   checks it on a node but not on the edge or flow carrying that node's own
+   flow — and `evidence.claim` (the evidence contract's own free-text
+   assertion) is never checked at all. The full current set: `node` —
+   `system`/`externality`/`lifecycleStages`/`governanceRefs`/`confidence`;
+   `fieldMapping` — `fromPath`/`toPath`/`dataElementIds`/
+   `transformationIds`; `edge` — `protocol`/`boundaryCrossings`/
+   `evidenceRefs`/`coverageStatus`; `dataElement` —
+   `aliases`/`sourceLocations`/`classificationEvidence`/`manualOverride`;
+   `flow` — `dataElementIds`/`edgeIds`/`evidenceRefs`/`coverageStatus`;
+   `evidence` — `claim`. Out of scope for that hotfix (its own Global
+   Constraints forbade tightening any validation beyond `subtype`) and out
+   of Sub-project E's scope too (`validate.js` is Milestone-0 frozen
+   contract code) — named here so a future Milestone-0 hardening pass finds
+   it named, not rediscovered. Whoever closes this should prioritize
+   `edge.coverageStatus`/`flow.coverageStatus` first, given AC-11's own
+   stake in the property.
+
 ---
 
 ## 12. The reuse boundary (E1 item **(g)**) — confirmed against the source

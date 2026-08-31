@@ -10,12 +10,18 @@ import {
 } from '../../src/lineage/schema.js';
 import { PROTECTION_VERDICTS, EVIDENCE_GRADES } from '../../src/lineage/protection.js';
 import { LINEAGE_DATA_CLASSES, AI_PROCESSING_CONTEXTS } from '../../src/lineage/classification.js';
+import { validateGraph } from '../../src/lineage/validate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schemaPath = path.join(__dirname, '../../src/lineage/dataflow-graph.schema.json');
+const flagshipPath = path.join(__dirname, '../../src/lineage/fixtures/flagship-graph.json');
 
 function loadSchema() {
   return JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+}
+
+function loadFlagship() {
+  return JSON.parse(fs.readFileSync(flagshipPath, 'utf8'));
 }
 
 test('schema file exists and parses as JSON', () => {
@@ -108,67 +114,72 @@ test('top-level required envelope keys are all present', () => {
 // story; this is the closed blind spot.
 //
 // `validate.js` does not enforce "required" the same way the JSON Schema
-// does, and it never groups its checks by `$defs` entity name — so this
-// block hand-derives, from a direct reading of `validate.js`'s own per-
-// entity validator functions, exactly which schema-required fields
-// `validate.js` ACTUALLY treats as required (i.e. errors if the field is
-// absent or the wrong shape) versus which ones it silently never checks.
-// A field only counts as "enforced" here if a missing/absent value on its
-// own produces a validation error — a field that is merely enum/shape-
-// checked WHEN PRESENT (e.g. `edge.protocol`, node's own `externality`)
-// does not count, because `validate.js` does not error when it is absent.
+// does, and it never groups its checks by `$defs` entity name — so instead
+// of a hand-maintained table (which is exactly how the ORIGINAL `subtype`
+// gap went unnoticed: a hardcoded list nobody could catch drifting), this
+// block DERIVES, empirically, which schema-required fields `validate.js`
+// actually enforces: for each `$defs.<entity>.required` field, delete it
+// from a real, otherwise-valid instance (the flagship fixture, already
+// `validateGraph()`-clean per `flagship-fixture.test.js`) and check whether
+// `validateGraph()` now reports an error. A field only counts as "enforced"
+// if its own absence, on its own, produces a validation error — a field
+// that is merely enum/shape-checked WHEN PRESENT (e.g. `edge.protocol`,
+// node's own `externality`) does not count, because `validate.js` does not
+// error when it is absent. This is a mechanization of the plan's own
+// stated definition, not a redefinition of it (task review MF-1) — it is
+// re-run on every test invocation, so it can never silently drift from
+// what `validate.js` actually does the way a hardcoded literal already did
+// once.
 //
 // KNOWN_REQUIRED_GAPS is the accepted, pre-existing set of fields the JSON
-// Schema declares `required` but `validate.js` does not enforce at all
-// (mostly opaque `{ type: "object" }` bags like `system`/`confidence`/
-// `governanceRefs`, or array fields validate.js only shape-checks when
-// non-empty). These are NOT part of this hotfix and are deliberately left
-// as-is (the Global Constraints for this task forbid tightening any OTHER
-// validation) — they are enumerated explicitly so a NEW gap of this exact
-// kind can never again slip in silently: any field that shows up in the
-// schema's `required` array but isn't in VALIDATE_ENFORCED_REQUIRED must be
-// listed here, on purpose, or the test below fails.
+// Schema declares `required` but `validate.js` does not enforce at all.
+// Three of these are RISK-BEARING, not merely opaque object bags —
+// `edge.coverageStatus` and `flow.coverageStatus` are the same enum
+// `node.coverageStatus` IS enum-checked for (AC-11's "a discovered sink
+// stays visible with a reason" rests on this field), and `evidence.claim`
+// is the evidence contract's own free-text assertion — `validate.js`
+// checks neither at all. These, and the rest of the set, are escalated as
+// their own numbered entry in `DESIGN_GRAPH_BUILDER.md` §11 (task review
+// MF-2) rather than left implicit here; this list exists so a NEW gap of
+// this exact kind can never again slip in silently — any field that shows
+// up in the schema's `required` array but isn't derived as enforced must
+// be listed here, on purpose, or the test below fails. These are NOT part
+// of this hotfix and are deliberately left as-is — the Global Constraints
+// for this task forbid tightening any OTHER validation.
 
-const VALIDATE_ENFORCED_REQUIRED = {
-  // _validateNode: id/kind/label/aliases/dataElementIds/evidenceRefs/
-  // coverageStatus all produce an error when absent or malformed.
-  // `subtype` is deliberately NOT in this set post-hotfix: it is optional
-  // and, when present, may be `string` or `null` (see the dedicated
-  // subtype tests below). `system`/`externality`/`lifecycleStages`/
-  // `governanceRefs`/`confidence` are pre-existing, undocumented-until-now
-  // gaps — see KNOWN_REQUIRED_GAPS.node.
-  node: ['id', 'kind', 'label', 'aliases', 'dataElementIds', 'evidenceRefs', 'coverageStatus'],
-  // _validateEdge's fieldMappings loop only ever errors on `mappingType`;
-  // `dataElementIds` on a fieldMapping is iterated with `|| []` (no error
-  // if absent), and `fromPath`/`toPath`/`transformationIds` are never
-  // referenced at all.
-  fieldMapping: ['mappingType'],
-  // protection.js's isValidProtectionDimension() requires both `verdict`
-  // and `evidenceGrade` to be valid enum members — an absent field fails
-  // `Array.prototype.includes(undefined)`, so both are genuinely enforced.
-  protectionDimension: ['verdict', 'evidenceGrade'],
-  // _validateEdge: id/from/to/relationship/fieldMappings/protection are all
-  // unconditionally checked. `protocol` is only enum-checked when present
-  // and an object; `boundaryCrossings`/`evidenceRefs`/`coverageStatus` are
-  // never referenced by validate.js at all — see KNOWN_REQUIRED_GAPS.edge.
-  edge: ['id', 'from', 'to', 'relationship', 'fieldMappings', 'protection'],
-  // _validateDataElement: id/name/dataClasses/aiContexts are all
-  // unconditionally checked. `aliases`/`sourceLocations`/
-  // `classificationEvidence`/`manualOverride` are never referenced.
-  dataElement: ['id', 'name', 'dataClasses', 'aiContexts'],
-  // _validateTransformation: id/kind/reversibility are all unconditionally
-  // checked — a full match with the schema's own required list.
-  transformation: ['id', 'kind', 'reversibility'],
-  // _validateFlow: id/source/sink/policyVerdict/protectionSummary are all
-  // unconditionally checked (source/sink via the nodeIds.has() lookup,
-  // which fails closed on `undefined`). `dataElementIds`/`edgeIds` are
-  // iterated with `|| []`; `evidenceRefs`/`coverageStatus` are never
-  // referenced by validate.js at all.
-  flow: ['id', 'source', 'sink', 'policyVerdict', 'protectionSummary'],
-  // _validateEvidence: id/evidenceType are unconditionally checked;
-  // `claim` is never referenced.
-  evidence: ['id', 'evidenceType'],
+const ENTITY_TARGET = {
+  // Every locator reads from a FRESH structuredClone of the flagship
+  // fixture (never a shared mutable reference) so one field's deletion
+  // can never leak into another field's check.
+  node: (g) => g.nodes[0],
+  edge: (g) => g.edges.find((e) => Array.isArray(e.fieldMappings) && e.fieldMappings.length > 0),
+  fieldMapping: (g) => g.edges.find((e) => Array.isArray(e.fieldMappings) && e.fieldMappings.length > 0).fieldMappings[0],
+  protectionDimension: (g) => g.edges.find((e) => Array.isArray(e.fieldMappings) && e.fieldMappings.length > 0).protection.transit,
+  dataElement: (g) => g.dataElements[0],
+  transformation: (g) => g.transformations[0],
+  flow: (g) => g.flows[0],
+  evidence: (g) => g.evidence[0],
 };
+
+function deriveEnforcedRequired(entity, schemaRequiredFields) {
+  const enforced = [];
+  for (const field of schemaRequiredFields) {
+    const graph = structuredClone(loadFlagship());
+    const target = ENTITY_TARGET[entity](graph);
+    delete target[field];
+    const result = validateGraph(graph);
+    if (!result.valid) enforced.push(field);
+  }
+  return enforced;
+}
+
+function deriveAllEnforcedRequired(schema) {
+  const derived = {};
+  for (const entity of Object.keys(ENTITY_TARGET)) {
+    derived[entity] = deriveEnforcedRequired(entity, schema.$defs[entity].required);
+  }
+  return derived;
+}
 
 const KNOWN_REQUIRED_GAPS = {
   node: ['system', 'externality', 'lifecycleStages', 'governanceRefs', 'confidence'],
@@ -181,10 +192,10 @@ const KNOWN_REQUIRED_GAPS = {
   evidence: ['claim'],
 };
 
-test('every $defs entity with a `required` array is accounted for by VALIDATE_ENFORCED_REQUIRED/KNOWN_REQUIRED_GAPS', () => {
+test('every $defs entity with a `required` array is accounted for by ENTITY_TARGET/KNOWN_REQUIRED_GAPS', () => {
   const schema = loadSchema();
   const entitiesWithRequired = Object.keys(schema.$defs).filter((name) => Array.isArray(schema.$defs[name].required));
-  assert.deepEqual([...entitiesWithRequired].sort(), Object.keys(VALIDATE_ENFORCED_REQUIRED).sort(),
+  assert.deepEqual([...entitiesWithRequired].sort(), Object.keys(ENTITY_TARGET).sort(),
     'a $defs entity gained/lost a `required` array without this test being updated');
   assert.deepEqual([...entitiesWithRequired].sort(), Object.keys(KNOWN_REQUIRED_GAPS).sort());
 });
@@ -193,7 +204,8 @@ for (const entity of ['node', 'fieldMapping', 'protectionDimension', 'edge', 'da
   test(`$defs.${entity}.required: every field validate.js enforces as required is declared required in the schema`, () => {
     const schema = loadSchema();
     const schemaRequired = schema.$defs[entity].required;
-    for (const field of VALIDATE_ENFORCED_REQUIRED[entity]) {
+    const enforced = deriveEnforcedRequired(entity, schemaRequired);
+    for (const field of enforced) {
       assert.ok(schemaRequired.includes(field), `validate.js enforces "${entity}.${field}" as required, but the schema does not declare it required`);
     }
   });
@@ -201,13 +213,22 @@ for (const entity of ['node', 'fieldMapping', 'protectionDimension', 'edge', 'da
   test(`$defs.${entity}.required: no undocumented drift from what validate.js enforces (closes the subtype blind spot)`, () => {
     const schema = loadSchema();
     const schemaRequired = schema.$defs[entity].required;
-    const enforced = new Set(VALIDATE_ENFORCED_REQUIRED[entity]);
+    const enforced = new Set(deriveEnforcedRequired(entity, schemaRequired));
     const unenforced = schemaRequired.filter((f) => !enforced.has(f));
     assert.deepEqual([...unenforced].sort(), [...KNOWN_REQUIRED_GAPS[entity]].sort(),
       `$defs.${entity}.required declares a field validate.js does not enforce and that is not in KNOWN_REQUIRED_GAPS.${entity} — ` +
       `either validate.js needs a real check for it, or it must be added to KNOWN_REQUIRED_GAPS.${entity} as a deliberate, documented gap`);
   });
 }
+
+test('derivation sanity: deriveAllEnforcedRequired runs cleanly and returns a non-empty enforced set for every entity with at least one genuinely-enforced field', () => {
+  const schema = loadSchema();
+  const derived = deriveAllEnforcedRequired(schema);
+  assert.deepEqual(Object.keys(derived).sort(), Object.keys(ENTITY_TARGET).sort());
+  for (const entity of ['node', 'edge', 'dataElement', 'transformation', 'flow', 'evidence']) {
+    assert.ok(derived[entity].length > 0, `expected at least one enforced field for "${entity}"`);
+  }
+});
 
 // --- Direct regression pins for this hotfix -------------------------------
 
