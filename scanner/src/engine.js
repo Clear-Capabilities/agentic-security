@@ -9298,8 +9298,7 @@ function _deterministicFileTimings(timings) {
       // the moment AGENTIC_SECURITY_LINEAGE_DEEP=1 was set — see
       // src/lineage/DESIGN_GRAPH_BUILDER.md §9.5 item 1 and the Global
       // Constraint this violated ("a lineage-build failure must never fail
-      // the scan"). Regression-tested in
-      // test/lineage-scan-wiring.test.js (E5/wiring-4).
+      // the scan"). Regression-tested in test/lineage-fault-injection.test.js.
       _lineageStatus.failure = String((e && e.message) || e);
     }
   }
