@@ -74,4 +74,79 @@ git commit -m "docs(lineage): design C4's path-store.js (compact DAG, pathId, cr
 
 ## Post-Task-1 note
 
-This plan gains its implementation task(s) here, scoped exactly to what §14's checklist specifies, once Task 1's addendum is committed and reviewed. Do not pre-write them — §14 does not exist yet at the time this plan file was first saved.
+Task 1 landed as `DESIGN_PATH_PROVENANCE.md` §14 (commit `c53042c6`), reviewed with zero blocking findings (commit `8292287a` folds in the review's 4 most consequential findings directly — see the ledger). §14.10 is the accepted, binding file/line/signature checklist for Task 2 below; every reference in Task 2 is to that checklist's 13 rows.
+
+---
+
+### Task 2: Implement `path-store.js`, the two `ids.js` functions, and absorb the PoC into the permanent suite
+
+**Files:**
+- Create: `scanner/src/lineage/path-store.js` (§14.10 items 5-10)
+- Modify: `scanner/src/lineage/ids.js` (§14.10 items 1-2)
+- Modify: `scanner/test/lineage/ids.test.js` (§14.10 item 3)
+- Rename/absorb: `scanner/test/lineage/path-store-poc.test.js` → `scanner/test/lineage/path-store.test.js`, re-pointed at the shipped module (§14.10 item 11)
+- Modify: `scanner/package.json` — update the `test:lineage` script's file list to the renamed file (same commit as the rename, per §14.10 item 11 / C3's own item-15 precedent)
+- Modify: `scanner/src/lineage/CLAUDE.md` — new module-table row for `path-store.js`, mirroring the style of every prior increment's own row
+- Read only: `scanner/src/lineage/DESIGN_PATH_PROVENANCE.md` §14 in full (§14.1 through §14.11 — this is the binding spec; the PoC file being absorbed is a prototype of it, not a substitute for reading it), `scanner/test/lineage/path-store-poc.test.js` (what you're absorbing and deleting the prototype halves of), `scanner/src/lineage/ids.js` in full (the convention `provenanceNodeId`/`provenanceEdgeId` must match exactly)
+
+**Interfaces:**
+- Consumes: the 14-field hop-record shape from §3/§13.0, exactly as C1-C3 shipped it. Consumes nothing from `engine.js`/`summaries.js`/`driver.js` directly — `path-store.js` must never import them (§14.1, §14.10 item 5's own enforcement test).
+- Produces: `provenanceNodeId(...)`/`provenanceEdgeId(...)` in `ids.js` (§14.5's exact signatures — quoted in this plan's own text above, but confirm against the LIVE §14.5 before writing, the same discipline every prior increment's brief has required). `PathStore` from `path-store.js`: `addHop(hop) -> boolean`, `addHops(hops) -> number`, `markTruncated(scope, context, reason)`, plus the traversal-free read API §14.6 lists (`nodes()`, `edges()`, `getNode`, `getEdge`, `edgesFrom`, `edgesTo`, `hasEdge`, `nodeIdFor`, `stats`, `diagnostics`).
+
+- [ ] **Step 1: Read §14 in full, then `ids.js` in full**
+
+Do not start from the PoC file's prototype code as if it were the spec — it is a prototype OF the spec, written under this task's own predecessor's time pressure, and §14's prose (especially §14.2's node-kind table, §14.3's classification rules, §14.4's corrected join rule and its `lossReason === null` exception, §14.6's two dedup boundaries, §14.7's per-pairing ambiguity measure) is the authority when the two differ. Confirm `ids.js`'s exact current `_hash`/`_canon`/`ID_HEX_LEN` shape before writing the two new functions.
+
+- [ ] **Step 2: `ids.js` — the two new stable-ID functions (items 1-3)**
+
+Add `provenanceNodeId` and `provenanceEdgeId` immediately after the existing `edgeId` function, per §14.5's exact object-argument signatures (never `ids.js`'s usual positional-args form for these two — §14.5 explains why: a ten-field discriminator is exactly the shape a positional array silently drops a field from). Prefix `pnode:<kind>:` and `pedge:` respectively — **never** `node:`/`edge:`, which `validate.js` already regex-checks as `DataFlowGraph v1` entity prefixes (item 4: confirm `validate.js` needs literally no change, by running `npm run test:lineage` and confirming `json-schema-parity.test.js` stays green). Extend `test/lineage/ids.test.js` with the discriminator-separation and bulk-non-collision cases the PoC's own `C4/5`/`C4/5b` tests already prove — port them, don't reinvent.
+
+- [ ] **Step 3: `path-store.js` — the module (items 5-10)**
+
+Create the file. Imports: `ids.js` only (item 5) — add a test in the same file's test suite that reads `path-store.js`'s own source/import list and asserts no `engine.js`/`summaries.js`/`driver.js` import exists, so this boundary is enforced by a test, not just by discipline (a real prior increment's isolation violation would have been caught earlier by exactly this kind of self-checking test).
+
+Define `HOP_FIELDS` as the explicit 14-field list from §3/§13.0, in a FIXED order (item 6) — never derive dedup/discriminator keys via `Object.keys(h)`, which is order-dependent and would let two differently-key-ordered-but-identical hop objects hash differently.
+
+Implement `classifyIn`/`classifyOut` per §14.3's rules verbatim, including the `lossReason === null` exception in the peer-sourced branch (§14.4's correction — the single most load-bearing rule in this whole module, re-verify it against §14.4's live text one more time before writing it) and the `unclassified` fallthrough for anything §14.3 doesn't name.
+
+Implement `PathStore` with the two-phase construction §14.6 describes (`addHop`/`addHops` accumulate into groups; nodes/edges materialize lazily on first read, cached until the next `addHop`) and BOTH dedup boundaries (raw-hop ingest dedup via the fixed-order `HOP_FIELDS` key; node/edge dedup via the content-hash ids from Step 2) — §14.6 is explicit these are not alternatives, ship both. Construction must be cycle-safe by construction (one linear pass plus a per-group cross product, never a graph walk) — no recursion anywhere in this file, matching §9.3/§14.6's "there is no recursion anywhere in this increment's code, by construction rather than by discipline."
+
+Implement edge construction as the per-group cross product with the peer×peer exclusion (§14.3) and the per-pairing ambiguity measure — **not** the group-level measure §9.1's ORIGINAL text describes (§14.7's correction; the group-level form over-marks, confirmed by task review measuring it marking 3 of 5 edges at a plain resolved call including both correct call-boundary edges).
+
+Implement `diagnostics()` returning `{ malformed, unclassified, truncations, orphanedPeerSources }` (item 10 — note the 4th bucket, `orphanedPeerSources`, added during Task 1's own review: a peer-sourced `call-resolved` hop, `lossReason: null`, whose named `(peerScope, peerContext, ⟨return⟩, dataElementId)` node has zero real in-edges once the whole stream is ingested — detectable via the store's own `inIndex`/`outIndex` at build-finalize time. Reachable via a cache warmed by a no-recorder run and reused by a later recorder-attached run, per §14.4's own disclosed precondition — record it, never fabricate an origin for it, never drop the edge). All four buckets: recorded, never thrown, never silently dropped.
+
+- [ ] **Step 4: Absorb the PoC, rename it, wire it into `test:lineage` (item 11)**
+
+Re-point `path-store-poc.test.js`'s tests at the shipped `path-store.js`/`ids.js` (delete the two local prototype blocks it currently carries), rename the file to `path-store.test.js`, and update `scanner/package.json`'s `test:lineage` script entry in the SAME commit — mirrors C3's own item-15 precedent exactly.
+
+**Keep every assertion, and especially keep `C4/Q2b`** (item 12 — the literal-§2.2 store with a dead-end callee exit): it is the only guard that stops §14.4's correction being silently undone by a future refactor of `classifyIn`.
+
+**Do not add a driver-level test yet** (item 13) — a driver run still emits zero hops today (no source registry, Sub-project D/E), so a driver test at this stage would assert on an empty stream and be vacuous, matching the exact reasoning `engine-provenance-interprocedural.test.js`'s own driver test note already states for the identical situation. Defer this to whichever later increment first makes a driver run hop-emitting.
+
+- [ ] **Step 5: Close the 2 carried-forward findings from Task 1's review**
+
+1. **(review finding 2)** §14.7's leg-based-pruning counter-example (`const o = { r: helper(a), s: b.email }`, proving the pruning rule the design considered and rejected would delete a genuine, purely-intraprocedural edge `b.email → o.s`) exists only as prose in the design doc and the task review's own report — it has no committed test. Add it as a real fixture in the permanent suite, asserting the bypass edge (`a.email → o.r`, skipping the callee) is present and marked `ambiguousCorrelation: true`, AND that the unrelated `b.email → o.s` edge is present and NOT marked. This is the test that makes §14.7's rejected-alternative reasoning re-verifiable rather than merely asserted in a design doc's prose.
+2. **(review finding 3)** §14.11's measured-numbers table is mostly unpinned prose — only the simplest fixture's counts are asserted anywhere. Add explicit count assertions (nodes/edges/raw/dedup) for at least the §6 worked-example fixture (14 deduplicated records → 8 nodes / 6 edges — the FR-303 compactness proof this document treats as its headline result) and the mutual-recursion fixture, so a future refactor that silently changes these published numbers fails a test instead of just leaving `CLAUDE.md`/the design doc stale.
+
+Nitpicks 7-10 from Task 1's review (return-node aggregation losing which return site fed a value — an undisclosed consequence for C5, worth one sentence in §14.2's `return` row if you have time; the §13.6 path-less-argument-at-a-degraded-call-site composite is untested; the PoC test file's prototype-export side effect; §14.10 item 6's `HOP_FIELDS` order being unnamed in the doc) are optional polish — address them if convenient, otherwise leave them for a later cleanup pass; none are load-bearing.
+
+- [ ] **Step 6: `scanner/src/lineage/CLAUDE.md` — new module-table row**
+
+Add a `path-store.js` row to the Sub-project C module table (or start a new "Sub-project C, increment 4" sub-table, matching how increments 1-3 got their own grouping), describing the module's role, the node-kind taxonomy (§14.2's table), the two dedup boundaries, and the `diagnostics()` contract — mirroring the density and citation style every prior row in this file already uses. Update "What is NOT here yet" to move C4 from "still ahead" to done, matching the exact edit pattern used after C3's own merge.
+
+- [ ] **Step 7: Run the full scoped suite and doc-drift check**
+
+```bash
+npm run test:lineage
+node ../scripts/check-doc-drift.mjs
+```
+
+Confirm the pre-existing `path-store.js` doc-drift item (`src/lineage/CLAUDE.md:75`, a forward reference to this exact file) is now RESOLVED — the file exists — and no new drift item appears.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add scanner/src/lineage/path-store.js scanner/src/lineage/ids.js scanner/test/lineage/ids.test.js scanner/test/lineage/path-store.test.js scanner/package.json scanner/src/lineage/CLAUDE.md
+git rm scanner/test/lineage/path-store-poc.test.js
+git commit -m "feat(lineage): implement path-store.js, the compact DAG (Sub-project C, increment 4)"
+```
