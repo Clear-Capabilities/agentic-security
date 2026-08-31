@@ -101,6 +101,7 @@
 
 import { CATALOG } from '../dataflow/catalog.js';
 import { PRIVACY_SINK_CATALOG } from '../dataflow/privacy-catalog.js';
+import { ORM_WRITE_CATALOG } from '../dataflow/orm-write-catalog.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // §5.1 — CWE_MAP: the primary sink-side mapping, keyed on the entry's
@@ -364,6 +365,49 @@ export function reclassifyPrivacySink(entry) {
   };
 }
 
+/**
+ * Reclassify a single `dataflow/orm-write-catalog.js` entry into
+ * DataFlowGraph v1's vocabulary. Milestone 2, Sub-project E, increment 1.
+ * A THIRD separate function, deliberately, for the identical reason
+ * `reclassifySink`/`reclassifyPrivacySink` are already two separate
+ * functions rather than one dispatcher (§2.1 above): `ORM_WRITE_CATALOG`
+ * keys on `category` exactly like the privacy catalog does, but it is its
+ * own isolated catalog (`orm-write-catalog.js`'s own header explains why),
+ * and mirroring `reclassifyPrivacySink`'s shape here — rather than
+ * threading a third catalog through that function — keeps each
+ * reclassifier reading exactly one catalog's own field convention.
+ *
+ * `coverageStatus` is the literal string `'candidate'`, UNCONDITIONALLY,
+ * computed from nothing — never derived from `entry` the way `reclassifySink`
+ * derives it from `CWE_MAP`, since this catalog carries no `vuln.cwe` that
+ * drives classification at all (its `vuln` block exists for documentation/
+ * potential-future-use only, mirroring `reclassifyPrivacySink`'s own
+ * "category drives reclassification, not the vuln block" pattern). Even
+ * with both of `orm-write-catalog.js`'s own precision signals satisfied,
+ * this is real, disclosed uncertainty — an arbitrary capitalized-identifier
+ * receiver could still be a non-ORM builder pattern that happens to take an
+ * object-literal argument — so this is deliberately never `'modeled'`.
+ *
+ * `kind`/`externality` are derived the SAME WAY `reclassifyPrivacySink`
+ * derives them (`CATEGORY_NODE_KIND`/`CATEGORY_EXTERNALITY`, keyed on
+ * `category: 'database'`) — genuinely mirroring that function's shape,
+ * not a hand-copied literal, so this stays correct if either table's
+ * `'database'` row is ever revised.
+ *
+ * @param {object} entry an ORM_WRITE_CATALOG entry
+ * @returns {{kind: string, category: string, coverageStatus: 'candidate', externality: string, reason: string}}
+ */
+export function reclassifyOrmWrite(entry) {
+  const category = entry?.category ?? 'database';
+  return {
+    kind: CATEGORY_NODE_KIND[category] ?? 'sink',
+    category,
+    coverageStatus: 'candidate',
+    externality: CATEGORY_EXTERNALITY[category] ?? 'unknown',
+    reason: 'heuristic ORM-write recognition (create/save/update/upsert on a bare capitalized receiver with an object-literal first argument) — unconfirmed receiver identity, never full-confidence',
+  };
+}
+
 // Re-exported for callers that want the raw sink-entry slice without
 // re-filtering CATALOG themselves (the completeness guards in this
 // module's own test suite are the primary consumer) — mirrors
@@ -375,3 +419,9 @@ export const SINK_ENTRIES = Object.freeze(CATALOG.filter((e) => e.kind === 'sink
 // directly. Deliberately NOT a merge with SINK_ENTRIES (see this module's
 // own header).
 export const PRIVACY_SINK_ENTRIES = PRIVACY_SINK_CATALOG;
+
+// Re-exported for the same reason, on the ORM-write side (Milestone 2,
+// Sub-project E, increment 1) — callers that want the ORM-write sink
+// entries without importing dataflow/orm-write-catalog.js directly.
+// Deliberately NOT a merge with SINK_ENTRIES/PRIVACY_SINK_ENTRIES.
+export const ORM_WRITE_ENTRIES = ORM_WRITE_CATALOG;

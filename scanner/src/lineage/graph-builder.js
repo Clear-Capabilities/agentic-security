@@ -74,12 +74,13 @@
 
 import { matchSinkOrSanitizer } from '../dataflow/catalog.js';
 import { matchPrivacySink } from '../dataflow/privacy-catalog.js';
+import { matchOrmWrite } from '../dataflow/orm-write-catalog.js';
 
 import { runFieldIdentityAnalysis } from './driver.js';
 import { PathStore } from './path-store.js';
 import { reconstructPaths } from './path-query.js';
 import { gradePath, DEGRADED_LOSS_REASONS } from './flow-grade.js';
-import { reclassifySink, reclassifyPrivacySink } from './sink-registry.js';
+import { reclassifySink, reclassifyPrivacySink, reclassifyOrmWrite } from './sink-registry.js';
 import { recognizeTransformation } from './transform-catalog.js';
 import { classifyHandling } from './handling-analyzer.js';
 import { emptyGraphEnvelope } from './schema.js';
@@ -143,6 +144,41 @@ function resolveSinkAtCallSite(calleeExpr, file) {
 }
 
 /**
+ * Milestone 2, Sub-project E, increment 1 (ORM-write sink recognition,
+ * `docs/superpowers/plans/2026-08-31-data-flow-explorer-m2-subproject-e1-plan.md`).
+ * A SEPARATE resolver from `resolveSinkAtCallSite` above, deliberately —
+ * `ORM_WRITE_CATALOG` is its own isolated catalog (never merged into
+ * `CATALOG`/`PRIVACY_SINK_CATALOG`; see `dataflow/orm-write-catalog.js`'s
+ * own header) and needs a precision signal `resolveSinkAtCallSite`'s two
+ * matchers never do: the call's FIRST ARGUMENT must be an object-literal
+ * expression (`kind: 'object'` — confirmed against `parser-js.js`'s real
+ * `ObjectExpression` lowering, NOT `resolve-destination.js`'s `isLiteral`
+ * helper, which tests for the unrelated `kind: 'literal'`). That check
+ * cannot live inside `matchOrmWrite` itself (its signature mirrors
+ * `matchPrivacySink`'s and never receives the call's arguments), so it is
+ * applied HERE, as a hard exclusion, before a match is returned at all —
+ * not a `coverageStatus` downgrade the way `resolveSinkAtCallSite`'s own
+ * ambiguity handling works. A call whose first argument is not an object
+ * literal (`User.create(req.body)`, a bare identifier) never becomes an
+ * ORM-write sink candidate.
+ *
+ * No multi-candidate ambiguity resolution: `ORM_WRITE_CATALOG`'s entries
+ * never share a callee name with each other or with `CATALOG`/
+ * `PRIVACY_SINK_CATALOG` (verified directly — no bare `create`/`save`/
+ * `update`/`upsert` entry with an unconstrained or capitalized-identifier
+ * receiver exists in either catalog today), so `ambiguity` is always
+ * `null` here, unlike `resolveSinkAtCallSite`'s return shape.
+ */
+function resolveOrmWriteAtCallSite(calleeExpr, args, file) {
+  const hits = matchOrmWrite(calleeExpr, file);
+  if (!hits) return null;
+  const arg0 = Array.isArray(args) ? args[0] : undefined;
+  if (!arg0 || arg0.kind !== 'object') return null;
+  const entry = hits[0];
+  return { entry, decision: reclassifyOrmWrite(entry), ambiguity: null };
+}
+
+/**
  * §4.1. Registry-backed sink enumeration — the replacement for
  * `sinkCandidates()`. A CFG `call` STATEMENT node is the only shape that
  * produces an `escape` provenance node (engine.js `step()` case 'call' →
@@ -158,6 +194,12 @@ export function enumerateSinkSites(callGraph) {
       if (node.kind === 'call' && node.callee) {
         const r = resolveSinkAtCallSite(node.callee, fn.file);
         if (r) sites.push({ file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null, calleeExpr: node.callee, args: node.args ?? [], ...r });
+        // Milestone 2, Sub-project E, increment 1: ORM-write recognition,
+        // additive and independent of the general/privacy match above —
+        // see `resolveOrmWriteAtCallSite`'s own header for why no
+        // interaction between the two is expected or handled.
+        const ormR = resolveOrmWriteAtCallSite(node.callee, node.args ?? [], fn.file);
+        if (ormR) sites.push({ file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null, calleeExpr: node.callee, args: node.args ?? [], ...ormR });
       }
       for (const root of exprRoots(node)) {
         walkExpr(root, (e) => {
