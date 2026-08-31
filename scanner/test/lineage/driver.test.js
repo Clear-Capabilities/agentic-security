@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runFieldIdentityAnalysis } from '../../src/lineage/driver.js';
-import { FieldIdentitySummaryCache, createCallGraphLookup, createCallSummaryResolver } from '../../src/lineage/summaries.js';
+import {
+  FieldIdentitySummaryCache, createCallGraphLookup, createCallSummaryResolver, summaryFromAnalysisResult,
+} from '../../src/lineage/summaries.js';
 import { buildCallGraph } from '../../src/ir/callgraph.js';
 import { parseJsFile } from '../../src/ir/parser-js.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
@@ -490,4 +492,153 @@ function getUser(userId) {
   const scopes = new Set(hops.map((h) => h.scope));
   assert.ok(scopes.has(outerFn.qid), 'caller\'s own hops (file A) appear');
   assert.ok(scopes.has(getUserFn.qid), 'the resolved callee\'s own hops (file B) appear — hops genuinely span more than one file');
+});
+
+// --- Sub-project E, increment 1: opts.seedEntryState + the cache-key fix ---
+// Binding design: src/lineage/DESIGN_GRAPH_BUILDER.md §3.
+//
+// The property these three tests protect is the same one `opts.recordHop`
+// established for this file: the hook is ADDITIVE, and omitting it leaves
+// every observable output byte-identical. The guard is a hardcoded GOLDEN
+// LITERAL, not a comparison against the shipped implementation — C3's own
+// §13.2a lesson (comparing the shipped code against itself degenerates to
+// `assert.deepEqual(x, x)`, a vacuous, always-passing test).
+
+const E1_FILES = {
+  '/e1/a.js': `
+function outer(id) { const u = getUser(id); return u; }
+function alone(x) { return x.email; }
+`,
+  '/e1/b.js': `
+function getUser(id) { return { email: id.email, name: id.name }; }
+function chain(v) { return chain(v); }
+`,
+};
+
+function e1CallGraph() {
+  const perFile = Object.fromEntries(
+    Object.entries(E1_FILES).map(([f, src]) => [f, parseJsFile(f, src)]),
+  );
+  return buildCallGraph(perFile, E1_FILES);
+}
+
+test('E1/driver-1: omitting opts.seedEntryState leaves results AND cache keys byte-identical to a pre-hook golden literal', () => {
+  const callGraph = e1CallGraph();
+  const { results, cache } = runFieldIdentityAnalysis(callGraph, {});
+
+  const canon = [...results.entries()]
+    .map(([qid, r]) => [qid, canonicalizeResult(r)])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+
+  // Captured by running the PRE-hook `driver.js` (git HEAD at the time of
+  // this increment) against these exact two files. Every function is
+  // analyzed from `emptyState()`, so every result is empty — that IS the
+  // measured 0-hop baseline Sub-project E exists to close, pinned here so a
+  // future change to the hook cannot silently perturb the unseeded path.
+  const GOLDEN_RESULTS = [
+    ['/e1/a.js::<module>::alone@3', { exitState: [], returnFacts: [], mutatedParams: [], widenings: [] }],
+    ['/e1/a.js::<module>::outer@2', { exitState: [], returnFacts: [], mutatedParams: [], widenings: [] }],
+    ['/e1/a.js::top::<module>@1', { exitState: [], returnFacts: [], mutatedParams: [], widenings: [] }],
+    ['/e1/b.js::<module>::chain@3', { exitState: [], returnFacts: [], mutatedParams: [], widenings: [] }],
+    ['/e1/b.js::<module>::getUser@2', { exitState: [], returnFacts: [], mutatedParams: [], widenings: [] }],
+    ['/e1/b.js::top::<module>@1', { exitState: [], returnFacts: [], mutatedParams: [], widenings: [] }],
+  ];
+  assert.deepEqual(canon, GOLDEN_RESULTS);
+
+  // The cache-key half. `hashState(emptyState())` is the empty string, so
+  // every unseeded function is still stored under `${qid}::` — exactly what
+  // the pre-hook `cache.set(fn.qid, emptyState(), ...)` line produced.
+  for (const qid of results.keys()) {
+    assert.ok(cache.has(qid, emptyState()), `${qid} must still be cached under the empty-entry context when no hook is supplied`);
+  }
+
+  // And the hop stream is still empty, with and without a recorder.
+  const hops = [];
+  runFieldIdentityAnalysis(callGraph, { recordHop: (h) => hops.push(h) });
+  assert.equal(hops.length, 0, 'no seeding hook => zero hops, unchanged');
+});
+
+test('E1/driver-2: the hook is real, opt-in, and per-function — a falsy return means "no seed for this function", never a throw', () => {
+  const callGraph = e1CallGraph();
+  const outerQid = '/e1/a.js::<module>::outer@2';
+  const aloneQid = '/e1/a.js::<module>::alone@3';
+
+  const seen = [];
+  const { results, cache } = runFieldIdentityAnalysis(callGraph, {
+    seedEntryState: (fn) => {
+      seen.push(fn.qid);
+      if (fn.qid !== aloneQid) return null; // falsy for every other function
+      return addIdentity(emptyState(), 'x.email', 'data:seeded-email');
+    },
+  });
+
+  assert.deepEqual([...seen].sort(), [...results.keys()].sort(),
+    'the hook is consulted exactly once per function in the call graph');
+
+  // The seeded function now genuinely carries identity — the guard above is
+  // not vacuous.
+  const alone = canonicalizeResult(results.get(aloneQid));
+  assert.deepEqual(alone.returnFacts.map((f) => f.identities), [['data:seeded-email']],
+    'the seeded function returns the seeded data element');
+
+  // Every falsy-seeded function is byte-identical to the unseeded run.
+  const baseline = runFieldIdentityAnalysis(e1CallGraph(), {});
+  for (const qid of results.keys()) {
+    if (qid === aloneQid) continue;
+    assert.deepEqual(canonicalizeResult(results.get(qid)), canonicalizeResult(baseline.results.get(qid)),
+      `${qid} got no seed, so it must be byte-identical to the unseeded run`);
+  }
+  assert.ok(cache.has(aloneQid, addIdentity(emptyState(), 'x.email', 'data:seeded-email')),
+    'the seeded function is cached under the state it was actually analyzed under');
+  assert.ok(!cache.has(aloneQid, emptyState()),
+    'and NOT under the empty-entry context it was never analyzed under');
+});
+
+test('E1/driver-3: the cache-key fix, proven in BOTH directions — the pre-fix keying fabricates a data element at a call site nothing tainted', () => {
+  // `aaa.js` sorts before `zzz.js`, so the SEEDED helper is analyzed and
+  // cached first, and the clean caller resolves it from the cache.
+  const files = {
+    'aaa.js': 'function helper(req) { return req.body.secret; }',
+    'zzz.js': 'function caller(o) { const v = helper(o); leak(v); }',
+  };
+  const perFile = Object.fromEntries(Object.entries(files).map(([f, src]) => [f, parseJsFile(f, src)]));
+  const callGraph = buildCallGraph(perFile, files);
+  const helperQid = [...callGraph.functions.values()].find((f) => f.name === 'helper').qid;
+  const callerQid = [...callGraph.functions.values()].find((f) => f.name === 'caller').qid;
+  const seededState = addIdentity(emptyState(), 'req.body.secret', 'data:SEEDED');
+  const seedEntryState = (fn) => (fn.qid === helperQid ? seededState : null);
+
+  // Direction 1 — THE MUTANT. A local replica of the driver's loop that
+  // differs from the shipped one in exactly ONE character-level respect:
+  // `cache.set` keys on `emptyState()` instead of the state actually
+  // analyzed. That was the shipped line before this increment.
+  const mutantCache = new FieldIdentitySummaryCache();
+  const fnList = [...callGraph.functions.values()].sort((a, b) => (a.qid < b.qid ? -1 : 1));
+  const mutantResults = new Map();
+  for (const fn of fnList) {
+    const resolveCallSummary = createCallSummaryResolver(mutantCache, createCallGraphLookup(callGraph, fn.file));
+    const entryState = seedEntryState(fn) || emptyState();
+    const r = analyzeFunctionFieldIdentity(fn, entryState, { resolveCallSummary });
+    mutantResults.set(fn.qid, r);
+    mutantCache.set(fn.qid, emptyState(), summaryFromAnalysisResult(r)); // <- the bug
+  }
+  assert.deepEqual(
+    [...(mutantResults.get(callerQid).exitState.get('v') ?? [])],
+    ['data:SEEDED'],
+    'PRE-FIX: a clean call to helper() is handed the DRIVER\'s own seed — a fabricated identity at a call site nothing tainted',
+  );
+
+  // Direction 2 — the shipped driver, same inputs.
+  const { results, cache } = runFieldIdentityAnalysis(callGraph, { seedEntryState });
+  assert.deepEqual(
+    [...(results.get(callerQid).exitState.get('v') ?? [])],
+    [],
+    'POST-FIX: the clean call resolves helper under an EMPTY callee entry state and correctly gets nothing',
+  );
+  const emptyKeyed = cache.get(helperQid, emptyState());
+  assert.ok(emptyKeyed, 'helper is still cached under the empty-entry context (written by the lazy call-site compute)');
+  assert.deepEqual([...emptyKeyed.returnFlat], [],
+    'and that entry honestly says "nothing flows out of helper when nothing flows in"');
+  assert.deepEqual([...cache.get(helperQid, seededState).returnFlat], ['data:SEEDED'],
+    'while the seeded context keeps the real answer, under its own key');
 });
