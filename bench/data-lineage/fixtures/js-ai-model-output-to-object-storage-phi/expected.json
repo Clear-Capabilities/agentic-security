@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PHI"],
+  "sourceCategory": "ai-model-output",
+  "sinkCategory": "object-storage",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "An MCP tool-call argument (model-produced) is archived to object storage. F2 category-coverage batch, row 12. TWO corrections against this batch's own plan, both measured. (1) FIELD NAME: the plan kept AC-07's own `patient_summary`; verified live, `patient_summary` classifies as [] — the PHI patterns match `\\b(?:medical|patient|health)[_-]?record\\b`, not `summary`. `patient_record` classifies [PHI] and is used instead, so this row genuinely exercises the ai-model-output source category with a classified element rather than pinning an empty one. (2) SINK: re-paired from `log` to `object-storage` so all 10 reachable sink categories are exercised by fixtures that actually PASS (the plan's own object-storage row, js-http-upload-to-object-storage-phi, is capability-tier and cannot pass — see its notes). The s3.putObject key argument is deliberately a LITERAL: with a computed arg0, coverage.js's FR-203 hook re-runs reclassifySink on a privacy-catalog entry whose CWE (CWE-359) is absent from CWE_MAP, collapsing the node to process/null — a real shipped-code defect recorded in bench/data-lineage/README.md, out of scope for a fixture-authoring increment."
+}

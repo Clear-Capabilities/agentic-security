@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PII"],
+  "sourceCategory": "http-query",
+  "sinkCategory": "log",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "req.query.email reaches console.log() untransformed. F2 category-coverage batch, row 2: http-query -> log. Verified against real runner output: dataElement `email` classifies [PII]."
+}

@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["CREDENTIALS"],
+  "sourceCategory": "http-cookie",
+  "sinkCategory": "http-response",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "req.cookies.session_token is reflected into a res.redirect() Location header. F2 category-coverage batch, row 5: http-cookie -> http-response. Verified against real runner output: dataElement `session_token` classifies [CREDENTIALS]."
+}

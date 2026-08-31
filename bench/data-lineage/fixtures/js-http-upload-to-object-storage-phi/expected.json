@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PHI"],
+  "sourceCategory": "http-upload",
+  "sinkCategory": "object-storage",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "capability",
+  "notes": "MEASURED, DISCLOSED LIMITATION — this fixture is EXPECTED to report FAIL under the F1 scoring contract, which is why it is capability-tier (never gates --check). `http-upload` has NO `language: 'js'` catalog entry at all: its only representatives are `py-django-request-FILES` and `php-symfony-files`. runner.mjs parses every fixture with parseJsFile('source.js', ...), so dataflow/catalog.js's `_languageAllowed` discards both entries before `match` is ever consulted, and no source node with subtype 'http-upload' can exist. Verified live: the graph contains the object-storage sink node (store/object-storage, modeled, with a coverageReason) and ZERO dataElements. Same root cause as js-cli-argument-to-file-unclassified, js-storage-read-to-email-unclassified and js-user-input-to-log-unclassified — the same limitation registry-real-code.test.js's own MF-1 note names. Making these four scoreable needs a multi-language runner (a real runner extension, deferred to F3+), not a different fixture."
+}

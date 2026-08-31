@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PCI"],
+  "sourceCategory": "http-body",
+  "sinkCategory": "database",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "req.body.card_number flows into a SQL query string via template-literal concatenation, reaching db.query(sql) unmasked. F2 category-coverage batch, row 1: http-body -> database."
+}

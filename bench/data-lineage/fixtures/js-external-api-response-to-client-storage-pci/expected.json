@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PCI"],
+  "sourceCategory": "external-api-response",
+  "sinkCategory": "client-storage",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "An upstream API's response.data.card_number is written into the browser DOM. F2 category-coverage batch, row 11: external-api-response -> client-storage. CORRECTION against this batch's own plan, measured not guessed: the plan proposed the member-WRITE shape `el.innerHTML = payload` (SINK_PROOFS' own client-storage representative). That shape produces NO sink node at all here — graph-builder.js's enumerateSinkSites only enumerates CALL-statement sites, so a member-write sink is invisible to the projection. `document.write(x)` is a call-shaped client-storage sink and does mint the node (store/client-storage, coverageStatus 'partial' per sink-registry.js's disclosed CWE-79 dom/react refinement)."
+}

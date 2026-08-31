@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": [],
+  "sourceCategory": "cli-argument",
+  "sinkCategory": "file",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "capability",
+  "notes": "MEASURED, DISCLOSED LIMITATION — EXPECTED to report FAIL, hence capability-tier. `cli-argument`'s only catalog entries are Python (`py-sys-argv`, `py-argparse-parse-args`, `py-argparse-parse-known-args`); runner.mjs parses every fixture as JS, so `_languageAllowed` discards them and no source node with subtype 'cli-argument' can exist. Verified live: the graph contains only the file sink node (unresolved/file — FR-203 fires on the computed path argument — with a coverageReason) and ZERO dataElements. `dataClass` is recorded as [] rather than a guess: a CLI argument has no field name to classify, and this fixture never produced a dataElement to classify in the first place. See js-http-upload-to-object-storage-phi's notes for the shared root cause and the F3+ deferral."
+}

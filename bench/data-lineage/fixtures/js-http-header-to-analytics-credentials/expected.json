@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["CREDENTIALS"],
+  "sourceCategory": "http-header",
+  "sinkCategory": "analytics",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "req.headers.api_key is shipped to a third-party analytics SDK. F2 category-coverage batch, row 4: http-header -> analytics. Verified against real runner output: the analytics node is coverageStatus 'partial' (sink-registry.js's disclosed `thirdPartySdk` ambiguity), which the shape-match does not assert on."
+}

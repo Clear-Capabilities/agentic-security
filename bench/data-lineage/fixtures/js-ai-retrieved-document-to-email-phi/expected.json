@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PHI"],
+  "sourceCategory": "ai-retrieved-document",
+  "sinkCategory": "email",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "An MCP resource's retrieved contents are emailed out of the system. F2 category-coverage batch, row 14. CORRECTION against this batch's own plan: re-paired from `external-api` to `email` so all 10 reachable sink categories are exercised by PASSING fixtures (the plan's own email row, js-storage-read-to-email-unclassified, is capability-tier and cannot pass). Verified against real runner output: external/email node, dataElement `medical_record` classifies [PHI]."
+}

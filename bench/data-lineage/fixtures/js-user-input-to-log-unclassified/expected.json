@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": [],
+  "sourceCategory": "user-input",
+  "sinkCategory": "log",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "capability",
+  "notes": "MEASURED, DISCLOSED LIMITATION — EXPECTED to report FAIL, hence capability-tier. `user-input`'s only catalog entries are Python/C++ (`py-input`, `cpp-gets`, `cpp-scanf`); runner.mjs parses every fixture as JS, so `_languageAllowed` discards them and no source node with subtype 'user-input' can exist. Verified live: the graph contains only the log sink node (log/log, modeled, with a coverageReason) and ZERO dataElements. Like storage-read, this shape is additionally unseedable even in a Python-capable runner — `input()` is a bare call with no enclosing member access, so accessPathOf returns null. `dataClass` is [] because a bare input() call has no field name to classify. See js-http-upload-to-object-storage-phi's notes for the shared root cause and the F3+ deferral."
+}

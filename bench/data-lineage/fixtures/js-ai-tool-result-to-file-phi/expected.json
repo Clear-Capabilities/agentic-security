@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PHI"],
+  "sourceCategory": "ai-tool-result",
+  "sinkCategory": "file",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "An MCP tool RESULT's diagnosis field is concatenated into a filesystem path. F2 category-coverage batch, row 13. CORRECTION against this batch's own plan: re-paired from `database` to `file` so all 10 reachable sink categories are exercised by PASSING fixtures (the plan's own file row, js-cli-argument-to-file-unclassified, is capability-tier and cannot pass). Verified against real runner output: the sink node is kind:'unresolved' (FR-203 fires on the computed path) with subtype 'file' retained, and dataElement `diagnosis` classifies [PHI]."
+}

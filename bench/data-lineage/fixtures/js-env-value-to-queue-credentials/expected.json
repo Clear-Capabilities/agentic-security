@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["CREDENTIALS"],
+  "sourceCategory": "env-value",
+  "sinkCategory": "queue",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "process.env.PASSWORD is placed in a queue message body. F2 category-coverage batch, row 8: env-value -> queue. CORRECTION against this batch's own plan, measured not guessed: the plan proposed the field name `DATABASE_PASSWORD` and asked whether the taxonomy regex is case-sensitive. It is NOT case-sensitive (compileTaxonomy compiles every pattern with the 'i' flag), but `DATABASE_PASSWORD` still classifies as [] — CREDENTIALS' pattern is `\\bpassword\\b`, and there is no word boundary between `_` and `P` inside `DATABASE_PASSWORD` (both are word characters). `PASSWORD` on its own does classify [CREDENTIALS], so that is the field name this fixture uses."
+}

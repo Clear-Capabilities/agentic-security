@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PII"],
+  "sourceCategory": "http-route",
+  "sinkCategory": "external-api",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "req.params.ssn is concatenated into an outbound fetch() URL. F2 category-coverage batch, row 3: http-route -> external-api. Verified against real runner output: the sink node is minted kind:'unresolved' (FR-203 fires — fetch's arg0 is a computed expression), but its subtype stays 'external-api', which is what the shape-match asserts."
+}
