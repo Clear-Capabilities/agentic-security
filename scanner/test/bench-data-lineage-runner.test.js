@@ -104,14 +104,16 @@ test('F1/10: buildFixtureGraph produces a real, validateGraph()-clean graph end 
 // the same rule runner.mjs's own exit code uses — while still running
 // every fixture through scoreFixture so a capability entry that throws is
 // still caught. It iterates the fixture directory at runtime, so it adds
-// no test() call per fixture and the test COUNT is unchanged by F2.
+// no test() call per fixture and the test COUNT is unchanged by F2 — nor
+// by Sub-project H's AC-07 closure, which grew the corpus 23 -> 24
+// (regression 16 -> 17) by the same mechanism.
 test('F1/11: every regression-tier fixture in the real corpus scores clean end to end — the actual regression pin', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');
   const { fileURLToPath } = await import('node:url');
   const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'bench', 'data-lineage', 'fixtures');
   const ids = fs.readdirSync(dir).filter((f) => fs.statSync(path.join(dir, f)).isDirectory());
-  assert.ok(ids.length >= 23, 'the 4 seed fixtures plus F2\'s 19-fixture batch must all exist');
+  assert.ok(ids.length >= 24, 'the 4 seed fixtures plus F2\'s 19-fixture batch plus Sub-project H\'s AC-07 fixture must all exist');
   let regression = 0;
   let capability = 0;
   for (const id of ids) {
@@ -131,6 +133,6 @@ test('F1/11: every regression-tier fixture in the real corpus scores clean end t
       if (!r.pass) assert.ok(r.errors.length > 0, `${id}: capability failure with no error text`);
     }
   }
-  assert.ok(regression >= 16, `expected at least 16 regression-tier fixtures, found ${regression}`);
+  assert.ok(regression >= 17, `expected at least 17 regression-tier fixtures, found ${regression}`);
   assert.ok(capability >= 7, `expected at least 7 capability-tier fixtures, found ${capability}`);
 });

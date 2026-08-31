@@ -1,0 +1,10 @@
+{
+  "language": "js",
+  "dataClass": ["PHI"],
+  "sourceCategory": "ai-model-output",
+  "sinkCategory": "ai-model-provider",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "tier": "regression",
+  "notes": "AC-07's own worked example (PRD line 1629): patient_record (PHI) flows into an anthropic.messages.create() call. This is the fixture that proves the AI-sink catalog bridge (Sub-project H) end to end — before it, ai-model-provider was an unreachable SINK_CATEGORIES value and no fixture could name it as a sinkCategory at all. The call is a BARE STATEMENT (never assigned to a variable, never nested inside client.send(...)) and BOTH halves are load-bearing: enumerateSinkSites only enumerates bare-statement call CFG nodes (DESIGN_GRAPH_BUILDER.md §4.1), so an assign-form (const resp = anthropic.messages.create(...)) or nested-call (client.send(new InvokeModelCommand(...))) shape — the more 'realistic' way these SDKs are actually used — is invisible to this corpus's own scoring, per the AC-07 catalog-bridge scoping report §2. patient_record (not patient_summary) is the field name that classifies PHI — verified in Sub-project F's own F2 batch."
+}

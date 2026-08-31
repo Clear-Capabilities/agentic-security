@@ -119,21 +119,27 @@ analyzers' job to make it scoreable.
 
 ### Corpus state
 
-**23 fixtures — 16 `regression`-tier (all passing) and 7
+**24 fixtures — 17 `regression`-tier (all passing) and 7
 `capability`-tier (all failing, deliberately and with a documented
 reason each). `--check` exits 0.** Re-measure with
 `node bench/data-lineage/runner.mjs --check` rather than trusting this
 paragraph; it is a snapshot, not a gate.
 
 The 4 seed fixtures above came from Milestone 0 and F1. Increment F2
-added the other 19:
+added 19; Sub-project H's AC-07 closure added the 24th,
+`js-ai-model-output-to-ai-model-provider-phi/` — the first fixture able
+to name `ai-model-provider` as a `sinkCategory` at all, since the
+AI-sink catalog bridge that made that category reachable landed with it.
+F2's 19:
 
 - **14 category-coverage fixtures**, one per reachable
   `SOURCE_CATEGORIES` value. The 10 that are reachable from a JS-parsed
-  fixture pass, and between them exercise all 10 reachable
-  `SINK_CATEGORIES` (`database`, `log`, `external-api`, `analytics`,
-  `http-response`, `queue`, `client-storage`, `object-storage`, `file`,
-  `email`).
+  fixture pass, and between them exercise the 10 `SINK_CATEGORIES` that
+  were reachable at the time (`database`, `log`, `external-api`,
+  `analytics`, `http-response`, `queue`, `client-storage`,
+  `object-storage`, `file`, `email`). The 11th, `ai-model-provider`, was
+  not reachable until Sub-project H and is covered by that increment's
+  own fixture instead.
 - **3 aliasing/interprocedural fixtures** —
   `js-http-body-to-log-alias-of-field/` (passing),
   `js-http-body-to-log-aliased/` and
@@ -182,6 +188,38 @@ evidence; the four causes are:
    "an unsupported-kind node with `subtype: null` exists". Extending the
    contract is F3+ work; the runner was confirmed to degrade to a clean
    FAIL report rather than throwing.
+
+#### Authoring constraint: a scoreable sink call MUST be a bare statement
+
+Found while authoring the AC-07 fixture (Sub-project H), and general to
+every fixture author, not just AI ones: `graph-builder.js`'s
+`enumerateSinkSites` only enumerates **bare-statement `call`-kind CFG
+nodes** (`DESIGN_GRAPH_BUILDER.md` §4.1). Two extremely common real-world
+shapes are therefore invisible to this corpus's own scoring:
+
+- a call **nested inside another call's arguments** —
+  `client.send(new InvokeModelCommand({ body: phi }))`, the way the AWS
+  SDK v3 is actually used;
+- an **assign-form** call whose response is captured —
+  `const resp = anthropic.messages.create({ … })`, the way every AI SDK
+  is actually used (you need the response).
+
+Both are recorded only in the coverage ledger's
+`nonStatementSitesNotEnumerable`; neither ever becomes an `escape`
+provenance node, so neither can anchor a lineage flow. A fixture written
+in either shape produces `no node with subtype '<sink category>'` and
+fails, no matter how correct the catalog entry behind it is.
+
+This is a disclosed lineage-engine limitation, **not** a catalog gap —
+`dataflow/engine.js`'s `_nestedSinkFindings` does walk into nested call
+arguments for ordinary SAST/taint purposes, so the same catalog entry
+fires correctly for a real scan; only the lineage projection cannot see
+it. So: **write the sink call as a bare, un-assigned statement**, and say
+so in the fixture's own `notes` (as
+`js-ai-model-output-to-ai-model-provider-phi/` does), so nobody later
+"realistically" rewrites it and silently breaks the fixture. Extending
+`enumerateSinkSites` to nested/assign-form calls is a separate change
+with blast radius across every sink category, deferred.
 
 #### A shipped-code defect found while authoring this batch — FIXED
 
