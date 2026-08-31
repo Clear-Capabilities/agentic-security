@@ -91,13 +91,18 @@ test('E5/wiring-3: AGENTIC_SECURITY_LINEAGE_DEEP=1 alone (AGENTIC_SECURITY_DEEP 
 
 // Sub-project E, increment 5, final-review nitpick N-5: the lineage-timeout
 // info-finding branch (engine.js, `_lr.elapsedMs > _lineageBudgetMs`) had no
-// test coverage at all — this forces it live with a budget of 0ms, which
-// any real build (however small) exceeds.
-test('E5/wiring-4: AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS=0 forces the over-budget branch, emitting an info finding — mirrors deep mode\'s own ir-taint-timeout finding shape', async () => {
+// test coverage at all — this forces it live with a NEGATIVE budget, which
+// any real build exceeds even when Date.now()'s millisecond resolution
+// measures elapsedMs as 0 (a real, reproduced flake at budget=0: this test
+// running warm, after wiring-1/2/3 already JIT-warmed the same code path in
+// the same process, sometimes measures elapsedMs===0, and 0 > 0 is false —
+// a negative budget makes the comparison true regardless of clock
+// resolution, so this assertion no longer races the clock).
+test('E5/wiring-4: AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS=-1 forces the over-budget branch, emitting an info finding — mirrors deep mode\'s own ir-taint-timeout finding shape', async () => {
   const prevLineage = process.env.AGENTIC_SECURITY_LINEAGE_DEEP;
   const prevTimeout = process.env.AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS;
   process.env.AGENTIC_SECURITY_LINEAGE_DEEP = '1';
-  process.env.AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS = '0';
+  process.env.AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS = '-1';
   const dir = mkTmpProject();
   try {
     const fileContents = { 'app.js': "function h(req, res){ const pw = req.body.password; res.send(pw); }" };
