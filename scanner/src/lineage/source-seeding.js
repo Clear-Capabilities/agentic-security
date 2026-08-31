@@ -112,6 +112,18 @@ function seedPathFor(expr, parentOf) {
   }
   return accessPathOf(cur);
 }
+// task review N-1: `p.prop === 'string'` is also true for the parser's own
+// computed-key-unknown marker `'*'` (`req.body[k]`), so this rule can seed
+// a path like `req.body.*` or `req.body.*.name`, minting a data element
+// literally named `*`. This is NOT a correctness bug in seeding itself —
+// `engine.js`'s `definitePrefixBeforeWildcard` already keeps every hop
+// path at the DEFINITE prefix (`req.body`), so the provenance DAG is
+// unaffected (verified: `function h(req,k,db){const v=req.body[k];
+// db.query(v);}` still produces the correct hop/node/edge shape). It DOES
+// mean a `*`-named seed can reach `planSeeds`' own output — E3's own
+// projection module, which mints real `DataFlowGraph v1` dataElements
+// from seed records, must not surface a literal `*` name to a user
+// without translating it into an honest "dynamic key" disclosure.
 
 // ── §3.3/§3.4: planSeeds ────────────────────────────────────────────────────
 

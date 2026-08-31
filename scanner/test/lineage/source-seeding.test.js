@@ -111,6 +111,15 @@ test('E2/2: matchSource/reclassifySource/accessPathOf compose into real seeds vi
   assert.ok(pw, 'req.body.password mints a data element literally named "password"');
   assert.deepEqual(pw.dataClasses, ['CREDENTIALS'],
     'classifyDataElementName only works because the seed path reaches the field — a container-level "body" seed classifies as nothing');
+  // task review M-1: the NEGATIVE half of §3.2's own proof — a
+  // container-level seed (User.create(req.body), seedPath 'req.body',
+  // canonicalName 'body') classifies as NOTHING, which is the entire
+  // reason the field-not-container rule exists. Without this assertion,
+  // the positive half above proves the rule fires, not that it MATTERS.
+  const body = seeds.find((s) => s.canonicalName === 'body');
+  assert.ok(body, 'req.body itself is also seeded, at the container level');
+  assert.deepEqual(body.dataClasses, [],
+    'the container-level seed classifies as nothing — the negative half of §3.2');
 
   assert.equal(new Set(seeds.map((s) => s.dataElementId)).size, 6,
     'nine call sites collapse to six data elements: two reads of req.params.id in one function are ONE element');
@@ -204,6 +213,11 @@ test('E2/5 (adapted from E1/5): a seeded flow is field-precise through seeding +
   const nickSeed = seeds.find((s) => s.canonicalName === 'nickname');
   assert.ok(cardSeed && nickSeed);
   assert.notEqual(cardSeed.dataElementId, nickSeed.dataElementId, 'two distinct fields mint two distinct data elements');
+  // task review M-3: the dataClasses half of what base E1/5 proved — dropped
+  // in the initial E2/5 adaptation, restored here (needs no projection
+  // machinery, only the seed records planSeeds already produces).
+  assert.deepEqual(cardSeed.dataClasses, ['PCI'], 'card_number classifies as PCI');
+  assert.deepEqual(nickSeed.dataClasses, [], 'nickname classifies as nothing');
 
   const hops = [];
   runFieldIdentityAnalysis(callGraph, { recordHop: (h) => hops.push(h), seedEntryState: seedEntryStateFactory(seeds) });
@@ -228,6 +242,32 @@ test('E2/5 (adapted from E1/5): a seeded flow is field-precise through seeding +
   const reachedIds = dataElementIdsBySite.map((s) => s.dataElementIds[0]).sort();
   assert.deepEqual(reachedIds, [cardSeed.dataElementId, nickSeed.dataElementId].sort(),
     'the two sink sites are together reached by exactly the two seeded fields, one each, never merged');
+
+  // task review M-3: the DIRECTION half of what base E1/5 proved — which
+  // field reached WHICH sink, not just that each site got exactly one of
+  // the two. Without this, a fully swapped world (card_number -> logger,
+  // nickname -> db) would pass the assertions above equally. Recover the
+  // real callee at each site directly from the CFG (no projection needed):
+  // `escapeNode.scope` is the function's own qid, `escapeNode.siteNodeId`
+  // indexes into that function's `cfg.nodes`, whose `callee` names the
+  // real sink.
+  const fn = [...callGraph.functions.values()].find((f) => f.qid === escapeNodes[0].scope);
+  assert.ok(fn, 'the escape node\'s scope resolves to a real function in the call graph');
+  const siteCallee = (siteNodeId) => {
+    const calleeExpr = fn.cfg.nodes[siteNodeId]?.callee;
+    return calleeExpr?.kind === 'member' && calleeExpr.object?.kind === 'ident' ? calleeExpr.object.name : null;
+  };
+  const bySite = new Map(dataElementIdsBySite.map((s) => [s.siteNodeId, s.dataElementIds[0]]));
+  for (const [siteNodeId, dataElementId] of bySite) {
+    const receiver = siteCallee(siteNodeId);
+    if (receiver === 'db') {
+      assert.equal(dataElementId, cardSeed.dataElementId, 'db.query is reached by card_number, not nickname');
+    } else if (receiver === 'logger') {
+      assert.equal(dataElementId, nickSeed.dataElementId, 'logger.info is reached by nickname, not card_number');
+    } else {
+      assert.fail(`unexpected sink receiver "${receiver}" at site ${siteNodeId}`);
+    }
+  }
 });
 
 // =========================================================================
@@ -307,4 +347,27 @@ test('E2/6b (absorbs E1/14, receiver-free control): the same shape with a receiv
   // there's no unresolved call left in this receiver-free variant) and the
   // caller-side bypass §14.7 marks `ambiguousCorrelation`.
   assert.deepEqual(grades.sort(), ['ambiguous', 'explicit']);
+});
+
+// =========================================================================
+// task review N-2: the isolation boundary is enforced by a test, not just
+// documented — mirrors path-store.js's/path-query.js's/transform-catalog.js's
+// own equivalent boundary tests. Global Constraint #1 of this increment's
+// own plan is specifically about source-seeding.js's dataflow/ import list;
+// before this test, that constraint was checked only by a one-off grep in
+// an SDD task report, never a permanent, re-run-on-every-test-pass guard.
+// =========================================================================
+
+test('boundary: source-seeding.js never imports engine.js, summaries.js, or driver.js, and its dataflow/ imports are exactly matchSource + accessPathOf', () => {
+  const modulePath = fileURLToPath(new URL('../../src/lineage/source-seeding.js', import.meta.url));
+  const src = fs.readFileSync(modulePath, 'utf8');
+  const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  assert.ok(specifiers.length > 0, 'sanity: the file does import something');
+  for (const spec of specifiers) {
+    assert.ok(!/\/(engine|summaries|driver)\.js$/.test(spec),
+      `source-seeding.js must never import engine.js/summaries.js/driver.js — found: ${spec}`);
+  }
+  const dataflowSpecs = specifiers.filter((s) => s.includes('/dataflow/'));
+  assert.deepEqual([...dataflowSpecs].sort(), ['../dataflow/access-paths.js', '../dataflow/catalog.js'].sort(),
+    'source-seeding.js\'s only dataflow/ imports are matchSource (catalog.js) and accessPathOf (access-paths.js)');
 });
