@@ -107,12 +107,31 @@ function contextStamping(sink, entryState) {
 // parameter, forwarded to `resolveExprIdentities` so the ARGUMENT
 // expressions' own in-halves are recorded at the caller's node. Body is
 // otherwise byte-for-byte the shipped one.
-function entryStateFromCallC3(paramNames, callArgs, callerState, ctx) {
+//
+// THE RECORDER-ONLY DERIVATION IS LOAD-BEARING, NOT TIDINESS (fix round 1,
+// task review Finding 1). Forwarding the FULL ctx here — which is what §13
+// originally specified — hands `resolveExprIdentities` a live
+// `ctx.resolveCallSummary`, so an argument that is ITSELF a resolvable call
+// starts resolving interprocedurally where the shipped code takes the
+// unresolved fallback. That changes the ANALYSIS RESULT with **no recorder
+// attached anywhere**, violating this sub-project's zero-behaviour-change
+// bar, and it does so in the UNSOUND direction under a tight B6 cap
+// (an identity the shipped engine keeps is LOST). Both are reproduced by
+// the two regression tests at the end of this file. Stripping
+// `resolveCallSummary` adds hop RECORDING without adding RESOLUTION.
+//
+// `hazardForwardFullCtx` exists only so those regression tests can
+// demonstrate the divergence they guard against. Production code must
+// never set it.
+function entryStateFromCallC3(paramNames, callArgs, callerState, ctx, hazardForwardFullCtx = false) {
+  const argCtx = hazardForwardFullCtx
+    ? ctx
+    : (ctx?.recordHop ? { recordHop: ctx.recordHop } : undefined);
   let entryState = emptyState();
   const n = Math.min(paramNames.length, callArgs.length);
   for (let i = 0; i < n; i++) {
     const paramName = paramNames[i];
-    const resolved = resolveExprIdentities(callerState, callArgs[i], ctx);
+    const resolved = resolveExprIdentities(callerState, callArgs[i], argCtx);
     const residual = residualFlat(resolved.flat, resolved.byPath);
     for (const id of residual) entryState = addIdentity(entryState, paramName, id);
     for (const [subPath, ids] of resolved.byPath) {
@@ -123,8 +142,9 @@ function entryStateFromCallC3(paramNames, callArgs, callerState, ctx) {
 }
 
 // §13.1 + §13.2 + §13.3 prototype: the resolver closure, with all three
-// §7.4 ctx holes closed.
-function createCallSummaryResolverC3(cache, lookupCallee) {
+// §7.4 ctx holes closed. `opts.hazardForwardFullCtx` is the regression
+// tests' switch only — see entryStateFromCallC3's comment.
+function createCallSummaryResolverC3(cache, lookupCallee, opts = {}) {
   return function resolveCallSummary(calleeExpr, callArgs, callerState, ctxArg) {
     // Hole 1. `ctxArg` is what the SHIPPED fix supplies (engine.js's
     // `case 'call'` passing its own `ctx` as a 4th argument). `this` is
@@ -136,8 +156,9 @@ function createCallSummaryResolverC3(cache, lookupCallee) {
     if (!resolved) return null;
     const { qid, fn } = resolved;
 
-    // Hole 2: ctx now reaches the argument resolution.
-    const entryState = entryStateFromCallC3(fn.params, callArgs, callerState, ctx);
+    // Hole 2: the RECORDER (and only the recorder) now reaches the
+    // argument resolution — see entryStateFromCallC3's comment.
+    const entryState = entryStateFromCallC3(fn.params, callArgs, callerState, ctx, opts.hazardForwardFullCtx);
     const calleeContext = hashState(entryState);
 
     // §13.2: the argument -> parameter BINDING out-half. Emitted here (not
@@ -167,12 +188,56 @@ function createCallSummaryResolverC3(cache, lookupCallee) {
       return summaryFromAnalysisResult(analyzeFunctionFieldIdentity(fn, es, calleeCtx));
     });
 
+    // §13.6: a summary the cache honestly degraded (B6 context cap) emits
+    // one LOSS hop per id that entered the callee — the ids whose
+    // downstream fate is now unrepresented. Emitted here, not in
+    // engine.js, precisely because a degraded summary's `returnFlat` is
+    // empty, so engine.js's `for (const id of flat)` loop cannot fire.
+    // Inert unless the cache actually marks (see MarkingSummaryCache).
+    if (summary?.degradedReason && ctx?.recordHop) {
+      for (const [, ids] of entryState) {
+        for (const id of ids) {
+          ctx.recordHop({
+            kind: 'production', subKind: 'call-resolved',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: null,
+            lossReason: `${summary.degradedReason}-degraded`,
+            peerScope: qid, peerContext: calleeContext,
+          });
+        }
+      }
+    }
+
     // §13.2's return-direction counterpart: hand the caller the callee's
     // identity so `case 'call'`'s existing `production/call-resolved` hop
     // can carry `peerScope`/`peerContext`. A FRESH object every time — the
     // cached summary itself is never mutated.
     return summary ? { ...summary, resolvedQid: qid, resolvedContext: calleeContext } : summary;
   };
+}
+
+// §13.6 prototype: `FieldIdentitySummaryCache.compute`'s cap-degradation
+// branch stamps a PERMANENT `degradedReason` on the summary it returns —
+// on a SHALLOW COPY, never in place, because that branch's fallback is the
+// very object cached for the empty-entry context (Finding 2 below).
+// Subclassed here rather than edited in place because this task ships no
+// source change; §13.7 item 11 moves it into `compute` itself.
+class MarkingSummaryCache extends FieldIdentitySummaryCache {
+  compute(qid, entryState, analyzeFn) {
+    // Mirrors compute()'s own cap test exactly (summaries.js:113-115): a
+    // context not already cached, not already counted, past the cap.
+    const seen = this._contextsByQid.get(qid) ?? new Set();
+    const willDegrade = !this.has(qid, entryState)
+      && !seen.has(hashState(entryState))
+      && seen.size >= this._maxContextsPerFn;
+
+    const summary = super.compute(qid, entryState, analyzeFn);
+    if (!willDegrade || !summary) return summary;
+
+    const marked = { ...summary, degradedReason: 'context-cap' };
+    this.set(qid, entryState, marked); // replace the shared fallback with the marked copy
+    return marked;
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -706,4 +771,259 @@ function f(user) {
   // dedupe group: the count engine-provenance.test.js pins is unchanged.
   assert.equal(new Set(hops.map((h) => h.context)).size, 1);
   assert.equal(hops.length, 14, 'the §6 fixture still deduplicates to exactly 14 records with the new fields stamped on');
+});
+
+// ---------------------------------------------------------------------
+// FIX ROUND 1 — task review Finding 1 (BLOCKING).
+//
+// §13's first draft had `entryStateFromCall` forward the FULL stepCtx to
+// `resolveExprIdentities`. Because that ctx carries a live
+// `resolveCallSummary`, an argument that is itself a resolvable call
+// started resolving interprocedurally where the shipped engine takes the
+// unresolved fallback — changing the ANALYSIS RESULT with NO recorder
+// attached anywhere, which is the one thing every increment of this
+// sub-project promises never to do. The fix is to derive a RECORDER-ONLY
+// ctx at that one site.
+//
+// Both tests below assert THREE arms, so neither can go vacuous:
+//   shipped  — the real, unmodified createCallSummaryResolver
+//   fixed    — the prototype as §13 now specifies it        (must EQUAL shipped)
+//   hazard   — the prototype with the original full-ctx forwarding
+//              (must DIFFER from shipped — this is what makes the test
+//               load-bearing rather than a tautology)
+// Every arm runs with NO recordHop anywhere.
+// ---------------------------------------------------------------------
+
+function returnedIds(result) {
+  return result.returnFacts.flatMap((f) => [...f.identities]).sort();
+}
+
+test('REGRESSION (fix round 1): forwarding the full ctx at the hole-2 site changes the analysis result with NO recorder attached — a resolvable call used as an argument', () => {
+  const src = `
+    function scrub(u) { return { safe: 1 }; }
+    function sink(p) { return p; }
+    function caller(user) { const out = sink(scrub(user)); return out; }
+  `;
+  const ir = parseJsFile('/x/c3-fixround-arg-call.js', src);
+  const byName = {};
+  for (const fn of ir.functions) byName[fn.name] = fn;
+  const lookup = lookupCalleeFor(byName);
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+
+  const run = (resolveCallSummary) => returnedIds(
+    analyzeFunctionFieldIdentity(byName.caller, entryState, { resolveCallSummary }),
+  );
+
+  const shipped = run(createCallSummaryResolver(new FieldIdentitySummaryCache(), lookup));
+  const fixed = run(createCallSummaryResolverC3(new FieldIdentitySummaryCache(), lookup));
+  const hazard = run(createCallSummaryResolverC3(new FieldIdentitySummaryCache(), lookup, { hazardForwardFullCtx: true }));
+
+  // `scrub` returns a literal object, so shipped code — which never
+  // resolves the nested call at this site — keeps the argument's own
+  // identity via the unresolved-call fallback.
+  assert.deepEqual(shipped, ['data:email'], 'pre-C3 shipped behaviour, hand-checked: the nested call takes the unresolved fallback, so data:email survives into `out`');
+  assert.deepEqual(fixed, shipped, 'THE FIX: a recorder-only ctx at the hole-2 site leaves the analysis byte-identical to shipped, with no recorder attached');
+  assert.deepEqual(hazard, [], 'THE HAZARD, pinned so this test cannot go vacuous: full-ctx forwarding resolves scrub(user) and silently drops data:email');
+  assert.notDeepEqual(hazard, shipped);
+});
+
+test('REGRESSION (fix round 1): the same full-ctx forwarding goes UNSOUND under a B6 cap — an identity shipped code keeps is lost, still with no recorder', () => {
+  const src = `
+    function helper(x) { return { v: x.email }; }
+    function pass(p) { return p; }
+    function f(user, other) {
+      const a = pass(helper(user));
+      const b = helper(other);
+      return b;
+    }
+  `;
+  const ir = parseJsFile('/x/c3-fixround-cap.js', src);
+  const byName = {};
+  for (const fn of ir.functions) byName[fn.name] = fn;
+  const lookup = lookupCalleeFor(byName);
+  let entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  entryState = addIdentity(entryState, 'other.email', 'data:other-email');
+
+  // cap = 1 per function: `helper` gets exactly one real context.
+  const run = (makeResolver) => returnedIds(
+    analyzeFunctionFieldIdentity(byName.f, entryState, { resolveCallSummary: makeResolver(new FieldIdentitySummaryCache(1)) }),
+  );
+
+  const shipped = run((c) => createCallSummaryResolver(c, lookup));
+  const fixed = run((c) => createCallSummaryResolverC3(c, lookup));
+  const hazard = run((c) => createCallSummaryResolverC3(c, lookup, { hazardForwardFullCtx: true }));
+
+  assert.deepEqual(shipped, ['data:other-email'], 'shipped: the nested helper(user) never resolves, so helper\'s single cap slot is spent on helper(other), which returns its identity');
+  assert.deepEqual(fixed, shipped, 'THE FIX: unchanged under a tight cap too');
+  assert.deepEqual(hazard, [], 'THE HAZARD: the nested resolve consumes helper\'s only cap slot, so helper(other) degrades to an empty summary and data:other-email is LOST — a recorder-free unsound divergence');
+  assert.notDeepEqual(hazard, shipped);
+});
+
+test('fix round 1: with a recorder attached, the recorder-only ctx still records the argument\'s in-half — honestly, against the unresolved path the analysis actually took (§8)', () => {
+  const src = `
+    function scrub(u) { return { safe: 1 }; }
+    function sink(p) { return p; }
+    function caller(user) { const out = sink(scrub(user)); return out; }
+  `;
+  const ir = parseJsFile('/x/c3-fixround-recorded.js', src);
+  const byName = {};
+  for (const fn of ir.functions) byName[fn.name] = fn;
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+
+  const raw = [];
+  const result = analyzeFunctionFieldIdentity(byName.caller, entryState, {
+    resolveCallSummary: createCallSummaryResolverC3(new FieldIdentitySummaryCache(), lookupCalleeFor(byName)),
+    recordHop: contextStamping((h) => raw.push(h), entryState),
+  });
+  const hops = dedupeHops(raw);
+
+  // Decision 1, the whole point: the recorder changed nothing.
+  assert.deepEqual(returnedIds(result), ['data:email']);
+
+  // The argument's own in-half IS recorded, and it correctly describes the
+  // unresolved path the analysis really took — `production/call` with
+  // `widenReason: 'unresolved-call'`, not a `call-resolved` that never
+  // happened. §8: hops must not disagree with the analysis they explain.
+  const bind = hops.find((h) => h.subKind === 'call-arg-bind' && h.dataElementId === 'data:email');
+  assert.ok(bind, `expected the argument binding to still be recorded, got ${JSON.stringify(hops.map((h) => h.subKind))}`);
+  const argIn = hops.find(
+    (h) => h.kind === 'production' && h.subKind === 'call'
+      && h.nodeId === bind.nodeId && h.dataElementId === 'data:email',
+  );
+  assert.ok(argIn, 'the nested unresolved call\'s own in-half is recorded at the same node');
+  assert.equal(argIn.widenReason, 'unresolved-call');
+  assert.equal(argIn.scope, bind.scope);
+  assert.equal(argIn.context, bind.context, 'in-half and out-half share the 4-part join key');
+});
+
+// ---------------------------------------------------------------------
+// FIX ROUND 1 — task review Finding 3: §13.6's marking mechanism, actually
+// executed rather than only designed. Brief scenario 5, deferred in round
+// 0, now run.
+// ---------------------------------------------------------------------
+
+test('C3 §13.6 (executed): a cap-degraded call site\'s hop carries lossReason "context-cap-degraded"; a precisely-resolved one does not', () => {
+  const byName = parseChain('/x/c3-b6-marked.js');
+  const cache = new MarkingSummaryCache(1);
+  const resolveCallSummary = createCallSummaryResolverC3(cache, lookupCalleeFor(byName));
+
+  let entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  entryState = addIdentity(entryState, 'b.ssn', 'data:ssn');
+
+  const raw = [];
+  analyzeFunctionFieldIdentity(byName.outer, entryState, {
+    resolveCallSummary,
+    recordHop: contextStamping((h) => raw.push(h), entryState),
+  });
+  const hops = dedupeHops(raw);
+
+  const degradedHops = hops.filter((h) => h.lossReason === 'context-cap-degraded');
+  assert.ok(degradedHops.length > 0, `the degraded call site is no longer silent, got shapes ${JSON.stringify(hops.map((h) => `${h.subKind}:${h.lossReason}`))}`);
+  for (const h of degradedHops) {
+    assert.equal(h.kind, 'production');
+    assert.equal(h.subKind, 'call-resolved');
+    assert.equal(h.fromPath, null);
+    assert.equal(h.toPath, null);
+    assert.equal(typeof h.dataElementId, 'string', 'Decision 4: a real, non-null id — taken from the ARGUMENT side, since the degraded summary has none of its own');
+    assert.equal(typeof h.peerScope, 'string');
+    assert.equal(typeof h.peerContext, 'string');
+  }
+
+  // The degraded marker names exactly the bound context that has no body —
+  // i.e. it closes the §13.6 Finding 1 gap the unmarked run leaves open.
+  const bodyContexts = new Set(hops.filter((h) => h.scope === byName.middle.qid).map((h) => h.context));
+  const markedContexts = new Set(degradedHops.filter((h) => h.peerScope === byName.middle.qid).map((h) => h.peerContext));
+  assert.ok(markedContexts.size > 0);
+  for (const c of markedContexts) assert.equal(bodyContexts.has(c), false, 'a marked context is precisely one with no recorded body');
+
+  // A precisely-resolved call at the OTHER call site carries no marker.
+  const preciseResolved = hops.filter((h) => h.subKind === 'call-resolved' && h.lossReason === null);
+  assert.ok(preciseResolved.length > 0, 'the first, precisely-resolved call site still emits an unmarked call-resolved hop');
+});
+
+test('C3 §13.6 (executed): marking uses a SHALLOW COPY — the precise empty-entry summary it falls back to is never poisoned (Finding 2)', () => {
+  const cache = new MarkingSummaryCache(1);
+  const precise = { ...emptyFieldSummary(), returnFlat: new Set(['data:precise']) };
+  cache.set('qid::y', emptyState(), precise);
+
+  const other = addIdentity(emptyState(), 'p', 'data:other');
+  const degraded = cache.compute('qid::y', other, () => {
+    throw new Error('analyzeFn must not run past the cap');
+  });
+
+  assert.equal(degraded.degradedReason, 'context-cap', 'the degraded summary is marked');
+  assert.notEqual(degraded, precise, 'and it is a COPY, not the shared fallback object');
+  assert.equal(Object.prototype.hasOwnProperty.call(precise, 'degradedReason'), false,
+    'the precise empty-entry summary is untouched — an in-place mark would have retroactively degraded it for every later reader');
+  assert.equal(cache.get('qid::y', emptyState()), precise, 'and it is still the object cached for the empty-entry context');
+  assert.deepEqual([...degraded.returnFlat], ['data:precise'], 'the copy still carries the fallback\'s real facts');
+});
+
+test('C3 §13.6 (executed): a run with NO recorder is unaffected by marking — degradedReason is diagnostic, never a fact', () => {
+  const byName = parseChain('/x/c3-b6-marked-noop.js');
+  let entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  entryState = addIdentity(entryState, 'b.ssn', 'data:ssn');
+
+  const withMarking = analyzeFunctionFieldIdentity(byName.outer, entryState, {
+    resolveCallSummary: createCallSummaryResolverC3(new MarkingSummaryCache(1), lookupCalleeFor(byName)),
+  });
+  const withoutMarking = analyzeFunctionFieldIdentity(byName.outer, entryState, {
+    resolveCallSummary: createCallSummaryResolverC3(new FieldIdentitySummaryCache(1), lookupCalleeFor(byName)),
+  });
+
+  assert.deepEqual(returnedIds(withMarking), returnedIds(withoutMarking),
+    'adding degradedReason must not change what the analysis concludes — it is diagnostic, like `widenings`, and fieldSummaryEq must keep ignoring it');
+});
+
+// ---------------------------------------------------------------------
+// FIX ROUND 1 — task review Finding 2: the multi-argument phantom.
+// ---------------------------------------------------------------------
+
+test('C3 §13.2 (disclosed): two arguments at one call site carrying the SAME id produce §9.1 cross-join phantoms that the 4-part join key does NOT exclude', () => {
+  const src = `
+    function two(p, q) { return { p, q }; }
+    function caller(m, n) { const r = two(m, n); return r; }
+  `;
+  const ir = parseJsFile('/x/c3-multiarg.js', src);
+  const byName = {};
+  for (const fn of ir.functions) byName[fn.name] = fn;
+
+  let entryState = addIdentity(emptyState(), 'm.email', 'data:email');
+  entryState = addIdentity(entryState, 'n.email', 'data:email'); // SAME id, two arguments
+
+  const raw = [];
+  analyzeFunctionFieldIdentity(byName.caller, entryState, {
+    resolveCallSummary: createCallSummaryResolverC3(new FieldIdentitySummaryCache(), lookupCalleeFor(byName)),
+    recordHop: contextStamping((h) => raw.push(h), entryState),
+  });
+  const hops = dedupeHops(raw);
+
+  const binds = hops.filter((h) => h.subKind === 'call-arg-bind' && h.dataElementId === 'data:email');
+  assert.deepEqual(binds.map((h) => h.toPath).sort(), ['p.email', 'q.email'], 'two out-halves, one per parameter');
+
+  const ins = hops.filter(
+    (h) => h.kind === 'production' && h.subKind === 'ident'
+      && h.dataElementId === 'data:email' && h.nodeId === binds[0].nodeId && h.fromPath !== null,
+  );
+  assert.deepEqual([...new Set(ins.map((h) => h.fromPath))].sort(), ['m.email', 'n.email'], 'two in-halves, one per argument');
+
+  // Even with `context` in the key, all four pair — both contexts are the
+  // caller's single context, so context cannot separate them.
+  const pairs = [];
+  for (const i of ins) {
+    for (const o of binds) {
+      if (i.scope === o.scope && i.nodeId === o.nodeId && i.dataElementId === o.dataElementId && i.context === o.context) {
+        pairs.push(`${i.fromPath}->${o.toPath}`);
+      }
+    }
+  }
+  assert.deepEqual([...new Set(pairs)].sort(), ['m.email->p.email', 'm.email->q.email', 'n.email->p.email', 'n.email->q.email'],
+    '§9.1\'s cross-join, at a call site: 2 real edges plus 2 phantoms naming the WRONG parameter');
+
+  // And the cheap fix §9.1 already names is available for free here: the
+  // parameter INDEX is known at the emission site, so a `slot` field would
+  // separate these without threading anything through the resolver's
+  // recursion. Not adopted — §9.1's evidence threshold governs.
+  assert.equal(byName.two.params.indexOf('p'), 0);
+  assert.equal(byName.two.params.indexOf('q'), 1);
 });
