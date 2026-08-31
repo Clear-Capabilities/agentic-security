@@ -69,6 +69,38 @@ tokens in the call's own arguments, exactly like `resolve-destination.js`
 extracts a literal URL from a `fetch()` call's own argument) — but no
 sink-catalog entry recognizes an ORM write as a `database` sink at all yet.
 
+**Finding 3 — E1's own catalog entries need a precision mechanism that
+does not exist in `dataflow/catalog.js` today, and this codebase has
+already solved the identical problem a different way.** AC-07's own
+`receiverBase` guard worked because AI SDK receivers come from a small,
+enumerable alias list (`anthropic`/`openai`/`client`/`claude`/`oai`). An
+ORM model's receiver is an ARBITRARY application class name (`User`,
+`Order`, `Payment`, ...) — there is no fixed list to constrain against.
+`scanner/src/sast/mass-assignment.js` (a standalone SAST detector, NOT
+wired through `dataflow/catalog.js`'s `match`-object taint system at all)
+already recognizes exactly this shape —
+`/\b([A-Z]\w+)\s*\.\s*(?:create|update|build|save)\s*\(\s*(?:req|request)\s*\.\s*(?:body|params|query)/`
+— via the SAME raw-text-regex mechanism `cross-lang-orm.js` uses, not
+`catalog.js`'s structural `match` object. This means E1 cannot simply copy
+AC-07's exact playbook (new `catalog.js` entries + a `receiverBase` alias
+guard) — it needs one of: (a) a NEW precision mechanism in `catalog.js`'s
+`match` schema (e.g. a receiver-name-SHAPE regex like `^[A-Z]\w*$`,
+accepting the wider false-positive surface that implies, unlike every
+existing `receiverBase` entry which constrains to a known alias), (b)
+accepting `coverageStatus: 'candidate'` rather than `'modeled'` for these
+entries (this registry's own established precedent for genuine
+uncertainty, per Milestone 1's D2/D3 tables), or (c) deliberately reusing
+`mass-assignment.js`'s existing raw-text matches as an input signal instead
+of a new `catalog.js` entry, which would be an architecture question of
+its own (feeding a SAST-detector's raw-text findings into the lineage
+graph builder has no precedent anywhere in `src/lineage/` — every existing
+lineage sink comes from `dataflow/catalog.js`, never from a SAST
+detector's own output). **This choice needs to be made deliberately, with
+a real design note, before E1's implementation plan is written** — not
+decided inline while writing that plan, given this exact class of mistake
+(an under-guarded generic-name catalog entry) already cost this session
+one fix round on the AI-provider entries.
+
 ## Recommended increment breakdown (revised)
 
 The scoping doc's own "Medium" sizing assumed a straightforward
