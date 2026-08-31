@@ -65,6 +65,15 @@ test('completeness/1a: every distinct sink `vuln.cwe` in CATALOG has a CWE_MAP r
   assert.deepEqual(stale, [], `CWE_MAP has rows for CWEs no sink entry carries: ${stale.join(', ')}`);
 });
 
+test('completeness/1c (hotfix regression guard): no PRIVACY_SINK_CATALOG CWE value is ever present in CWE_MAP — privacy entries must stay routed by category, never accidentally picked up by CWE-keyed reclassification', async () => {
+  const { PRIVACY_SINK_CATALOG } = await import('../../src/dataflow/privacy-catalog.js');
+  const privacyCwes = new Set(PRIVACY_SINK_CATALOG.map((e) => e.vuln?.cwe).filter(Boolean));
+  assert.ok(privacyCwes.size > 0, 'sanity: privacy entries really do carry CWE values worth checking');
+  for (const cwe of privacyCwes) {
+    assert.equal(CWE_MAP[cwe], undefined, `CWE_MAP must never map ${cwe} — it is a privacy-catalog CWE, and mapping it would let reclassifySink silently reclassify a privacy-catalog entry as if it were a general-catalog one`);
+  }
+});
+
 test('completeness/1b: every distinct privacy-catalog `category` has a PRIVACY_CATEGORY_MAP row, and vice versa', () => {
   const unmapped = [...DISTINCT_PRIVACY_CATEGORY].filter((c) => !(c in PRIVACY_CATEGORY_MAP)).sort();
   assert.deepEqual(unmapped, [], `privacy-catalog.js gained category(ies) with no mapping: ${unmapped.join(', ')}`);

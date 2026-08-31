@@ -152,10 +152,27 @@ const FR203_ARG0_DESTINATION_CATEGORIES = Object.freeze(['external-api', 'file',
  * — see the Global Constraints note in this plan and the comment below.
  */
 export function resolveSiteDecision(site) {
-  // Privacy-catalog entries have no `vuln.cwe` — reclassifySink's `opts`
+  // Privacy-catalog entries are identified by carrying their own `category`
+  // field — the literal field `reclassifyPrivacySink` keys on, and one no
+  // general CATALOG sink entry ever has (sink-registry.js's own `D1/8b`
+  // pins this for the general side; independently re-confirmed live: 0 of
+  // 194 general sink entries carry `category`). `reclassifySink`'s `opts`
   // parameter is specified only for the general (CWE-keyed) catalog
-  // (sink-registry.js's own disclosed asymmetry). Never applied here.
-  if (site.entry?.vuln?.cwe === undefined) return undefined;
+  // (sink-registry.js's own disclosed asymmetry) — never applied here.
+  //
+  // CORRECTED (hotfix, 2026-08-31): the original guard checked
+  // `site.entry?.vuln?.cwe === undefined`, on the assumption that
+  // privacy-catalog entries carry no `vuln.cwe`. Measured, live: ALL 18 of
+  // 18 PRIVACY_SINK_CATALOG entries carry `vuln.cwe: 'CWE-359'` — the
+  // guard's premise was false for every single entry, so it excluded
+  // nothing. Since `'CWE-359'` has no `CWE_MAP` row, every privacy-catalog
+  // site that also triggered FR-203's heuristic silently fell through
+  // `reclassifySink`'s "unreachable from live data" fallback branch,
+  // corrupting a real store/external/queue-kind node into
+  // process/null/unsupported. Found and root-caused during Sub-project F's
+  // own corpus-authoring review; see
+  // docs/superpowers/plans/2026-08-31-lineage-coverage-privacy-catalog-fr203-hotfix.md.
+  if (typeof site.entry?.category === 'string') return undefined;
   // Defensive: `resolveSiteDecision` is exported as a hook contract (passed
   // straight into `buildDataFlowGraph`'s `opts.resolveSiteDecision`), so it
   // should be as defensive against a malformed site as

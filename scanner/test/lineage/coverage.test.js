@@ -58,9 +58,35 @@ test('C1/2: renderExpr never throws on malformed input and always returns a non-
 
 // ── resolveSiteDecision — composition with §4.3 ambiguity + the null-category/privacy guards ──
 
-test('C1/3a: resolveSiteDecision returns undefined for a privacy-catalog site (no vuln.cwe)', () => {
-  const site = { entry: { id: 'privacy-js-logger-info', category: 'log' }, decision: { kind: 'log', category: 'log', coverageStatus: 'modeled', externality: 'internal', reason: 'x' }, calleeExpr: { kind: 'ident', name: 'log' }, args: [{ kind: 'ident', name: 'x' }] };
+test('C1/3a: resolveSiteDecision returns undefined for a real privacy-catalog site — using the REAL catalog entry, not a fabricated shape missing its vuln block (hotfix regression guard)', async () => {
+  const { PRIVACY_SINK_CATALOG } = await import('../../src/dataflow/privacy-catalog.js');
+  const realEntry = PRIVACY_SINK_CATALOG.find((e) => e.id === 'privacy-js-logger-info');
+  assert.ok(realEntry, 'privacy-js-logger-info must exist in the live catalog');
+  assert.ok(realEntry.vuln && realEntry.vuln.cwe, 'sanity: the real entry DOES carry vuln.cwe — this is exactly what made the original guard wrong');
+  assert.equal(typeof realEntry.category, 'string', 'sanity: the real entry carries the category field the fix now keys on');
+  const site = { entry: realEntry, decision: { kind: 'log', category: 'log', coverageStatus: 'modeled', externality: 'internal', reason: 'x' }, calleeExpr: { kind: 'ident', name: 'log' }, args: [{ kind: 'ident', name: 'x' }] };
   assert.equal(resolveSiteDecision(site), undefined);
+});
+
+test('C1/3a-2 (hotfix regression guard): every PRIVACY_SINK_CATALOG entry is excluded by resolveSiteDecision, not just one representative', async () => {
+  const { PRIVACY_SINK_CATALOG } = await import('../../src/dataflow/privacy-catalog.js');
+  for (const entry of PRIVACY_SINK_CATALOG) {
+    const site = { entry, decision: { kind: 'external', category: 'external-api', coverageStatus: 'modeled', externality: 'external', reason: 'x' }, calleeExpr: { kind: 'ident', name: 'call' }, args: [{ kind: 'ident', name: 'computed' }] };
+    assert.equal(resolveSiteDecision(site), undefined, `${entry.id} must never be reclassified by FR-203 — it is a privacy-catalog entry`);
+  }
+});
+
+test('C1/3a-3 (hotfix regression guard): the exact corruption reproduced during Sub-project F is fixed — a real store/object-storage privacy sink with a computed argument stays store/object-storage, never process/null/unsupported', async () => {
+  const { buildGraphWithCoverage } = await import('../../src/lineage/coverage.js');
+  const { parseJsFile } = await import('../../src/ir/parser-js.js');
+  const { buildCallGraph } = await import('../../src/ir/callgraph.js');
+  const cg = buildCallGraph({ 'a.js': parseJsFile('a.js', "function h(s3, patientRecord){ s3.putObject({ Body: patientRecord }); }") });
+  const { graph } = buildGraphWithCoverage(cg, { repository: 'r' });
+  const sinkNode = graph.nodes.find((n) => n.kind !== 'source');
+  assert.ok(sinkNode, 'a sink node must exist');
+  assert.equal(sinkNode.kind, 'store');
+  assert.equal(sinkNode.subtype, 'object-storage');
+  assert.equal(sinkNode.coverageStatus, 'modeled');
 });
 
 test('C1/3b: resolveSiteDecision returns undefined for a null-category (process) decision', () => {
