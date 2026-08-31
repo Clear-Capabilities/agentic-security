@@ -254,13 +254,35 @@ export class PathStore {
     for (const g of this._groups.values()) {
       let sources = g.in;
       let originated = false;
+      // Populated only when `originated` below — the union of every
+      // annotation's widen/loss reason at this key, so an edge originating
+      // here never loses a reason just because it wasn't the first
+      // annotation delivered (final whole-branch review finding 6: picking
+      // bare `g.annotations[0]` made both the representative kind/subKind
+      // AND the edge's own widenReasons/lossReasons depend on hop delivery
+      // order, contradicting §14.6's own "order-insensitive" guarantee —
+      // unreachable via any real fixture today, since `origin` is
+      // hand-fixture-only per §14.2, but §14.2 also names this as the
+      // exact shape a Sub-project D source registry will produce first).
+      let originWidenReasons = [];
+      let originLossReasons = [];
       if (sources.length === 0 && g.annotations.length > 0) {
         // §2.2's annotation rule, in the ONE direction it is still right:
         // with no non-null in-half anywhere at this key, the annotation is
         // itself the origin of the value ("no prior aliasing source").
         originated = true;
+        originWidenReasons = [...new Set(g.annotations.map((a) => a.widenReason).filter((r) => r != null))].sort();
+        originLossReasons = [...new Set(g.annotations.map((a) => a.lossReason).filter((r) => r != null))].sort();
+        // The representative annotation for `kind`/`subKind` display is
+        // chosen by a content-derived sort key, not delivery position, so
+        // it is stable across re-deliveries in any order.
+        const representative = [...g.annotations].sort((a, b) => {
+          const ka = `${a.kind}|${a.subKind}`;
+          const kb = `${b.kind}|${b.subKind}`;
+          return ka < kb ? -1 : ka > kb ? 1 : 0;
+        })[0];
         sources = [{
-          hop: g.annotations[0], role: 'source', crossScope: false,
+          hop: representative, role: 'source', crossScope: false,
           node: { kind: 'origin', scope: g.scope, context: g.context, path: null, siteNodeId: g.nodeId, dataElementId: g.dataElementId },
         }];
       }
@@ -292,8 +314,12 @@ export class PathStore {
           if (!pairable(s, o)) continue;
           const from = intern(s.node);
           const to = intern(o.node);
-          const widenReasons = [...new Set([s.hop.widenReason, o.hop.widenReason].filter((r) => r != null))].sort();
-          const lossReasons = [...new Set([s.hop.lossReason, o.hop.lossReason].filter((r) => r != null))].sort();
+          const widenReasons = originated
+            ? [...new Set([...originWidenReasons, o.hop.widenReason].filter((r) => r != null))].sort()
+            : [...new Set([s.hop.widenReason, o.hop.widenReason].filter((r) => r != null))].sort();
+          const lossReasons = originated
+            ? [...new Set([...originLossReasons, o.hop.lossReason].filter((r) => r != null))].sort()
+            : [...new Set([s.hop.lossReason, o.hop.lossReason].filter((r) => r != null))].sort();
           const desc = {
             fromNodeId: from.id, toNodeId: to.id, dataElementId: g.dataElementId,
             scope: g.scope, context: g.context, siteNodeId: g.nodeId,

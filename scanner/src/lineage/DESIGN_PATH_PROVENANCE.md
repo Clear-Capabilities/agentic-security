@@ -1857,10 +1857,21 @@ prefixed by the entity kind. Never a counter.
   the discriminator (see this package's own CLAUDE.md row). Over-specifying a
   content hash costs nothing; under-specifying it is a silent merge.
 - **Object arguments, not `ids.js`'s usual positional form.** A deliberate,
-  narrow divergence (`graphId` is the in-file precedent). The discriminator
-  is ten fields wide, and a positional `discriminatorParts` array is exactly
-  the shape from which a field gets omitted. `path-store.js` calls each of
-  these from ONE place, so a future field addition has one call site to fix.
+  narrow divergence (`graphId` is the in-file precedent). `provenanceEdgeId`'s
+  discriminator is twelve fields wide, `provenanceNodeId`'s is six, and a
+  positional `discriminatorParts` array is exactly the shape from which a
+  field gets omitted.
+
+  > **Corrected by the final whole-branch review (finding 2).** The
+  > sentence above originally said "`path-store.js` calls each of these
+  > from ONE place" as the justification. `provenanceEdgeId` genuinely has
+  > one call site; `provenanceNodeId` has FIVE (`intern`, `sourcesFor`,
+  > `targetsFor`, the `orphanedPeerSources` check, and `nodeIdFor`). The
+  > object-argument choice is still correct — arguably more so at five call
+  > sites than at one, since a positional array is exactly as easy to get
+  > wrong the second, third, fourth, and fifth time as the first — but the
+  > stated reason was wrong. `scanner/src/lineage/CLAUDE.md`'s own
+  > `path-store.js` row repeated the same error and has been corrected too.
 - **Not in the discriminator:** `syntacticPath` and `line` (display
   material — pinned by a test where two hop records differing only in
   `syntacticPath` collapse to one edge), edge `annotations[]`, and
@@ -1999,7 +2010,23 @@ when the budget breaks — is deliberately NOT in C4's scope: it is an
   prove that structure correct.
 - **No `DataFlowGraph v1` output.** Sub-project E.
 - **No FR-306 grade computation.** C6 reads `widenReasons`/`lossReasons`/
-  `ambiguousCorrelation`/`truncated` off the edges; C4 only carries them.
+  `ambiguousCorrelation`/`truncated`/**`annotations[]`** off the edges; C4
+  only carries them.
+
+  > **Corrected by the final whole-branch review (finding 5): `annotations[]`
+  > was missing from this list, and its absence would reintroduce exactly
+  > the silence §13.6 exists to prevent.** A §13.6 context-cap-degraded
+  > marker (`lossReason: 'context-cap-degraded'`) is classified as an
+  > ANNOTATION, not a source (correctly, per §14.4's `lossReason` exception
+  > — the peer was never analyzed, so it cannot be peer-sourced) — it
+  > therefore never reaches `edge.lossReasons`, only `edge.annotations[]`.
+  > `C4/Q2c` proves this is exactly where it lives (it finds the marker via
+  > `e.annotations.some(a => a.lossReason === 'context-cap-degraded')`, not
+  > via `e.lossReasons`). A C6 implementer reading only "reads
+  > `widenReasons`/`lossReasons`/…" off the edges would drop the marker
+  > silently — the precise §18.4 failure mode §13.6 was written to close.
+  > C6 must read `annotations[]` too, not only the edge's own top-level
+  > reason arrays.
 - **No collapsing of repeated library/framework nodes into typed summary
   hops.** §12 and the C-scoping doc both left this "plausibly D or C4". It is
   **not** C4: deciding that a node is a library node needs a registry that

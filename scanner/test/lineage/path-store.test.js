@@ -246,6 +246,34 @@ test('C4/1d: the two dedup boundaries are NOT equivalent — raw-hop dedup alone
   assert.equal(store.edges().length, 1, 'edge-id dedup collapses them into ONE edge — this is the correctness-bearing dedup');
 });
 
+test('C4/1e: the ingest dedup key is the FIXED §3/§13.0 field list, not `Object.keys(h)` — final whole-branch review finding 8 (a live mutant to `JSON.stringify(h, Object.keys(h).sort())` survived the suite until this test)', () => {
+  const base = {
+    kind: 'production', subKind: 'ident', scope: 'S', dataElementId: 'data:e',
+    fromPath: 'a.email', toPath: null, syntacticPath: null, nodeId: 'n1', line: 1,
+    widenReason: null, lossReason: null, context: 'C', peerScope: null, peerContext: null,
+  };
+  // (a) An EXTRA key not in HOP_FIELDS must be invisible to the dedupe key —
+  // `Object.keys(h).sort()` would include it and hash differently.
+  const store = new PathStore();
+  assert.equal(store.addHop(base), true);
+  assert.equal(store.addHop({ ...base, _debugMarker: 'anything' }), false,
+    'an extra, non-HOP_FIELDS property must not make this look like a new hop');
+  assert.equal(store.stats().hopsAccepted, 1);
+
+  // (b) A MISSING required key and the SAME key explicitly set to `null`
+  // must dedupe-key IDENTICALLY (both read as `?? null`) — `Object.keys(h)`
+  // would instead see a shorter key list for the missing-field hop and hash
+  // it differently. (The missing-field hop is ALSO separately recorded as
+  // malformed — that is a different check, at a different point in addHop,
+  // not the dedupe key's job.)
+  const { scope, ...missingScope } = base;
+  const store2 = new PathStore();
+  assert.equal(store2.addHop({ ...base, scope: null }), true);
+  assert.equal(store2.addHop(missingScope), false,
+    'a missing `scope` and an explicit `scope: null` must produce the same dedupe key');
+  assert.equal(store2.stats().hopsAccepted, 1);
+});
+
 // =====================================================================
 // 2. Q1 — cross-function node addressing.
 // =====================================================================
@@ -687,6 +715,44 @@ test('C4/6e: an annotation-only group (no non-null in-half anywhere at the key) 
   assert.equal(store.edgesTo(origin.id).length, 0);
 });
 
+test('C4/6g: an origin group with 2+ annotations produces the SAME edge id and widenReasons/lossReasons regardless of delivery order (final whole-branch review finding 6)', () => {
+  // Two annotation-only in-halves at one key, carrying DIFFERENT widen
+  // reasons — before this fix, `sources = [{ hop: g.annotations[0], ... }]`
+  // meant both the representative kind/subKind AND the edge's own
+  // widenReasons/lossReasons depended on which annotation happened to be
+  // delivered first, contradicting §14.6's own "the same hops delivered in
+  // any order produce the same DAG" guarantee. Deliver the SAME two
+  // annotations in both orders and assert the resulting edge is identical.
+  const base = {
+    scope: 'S', nodeId: 'n1', context: 'C', dataElementId: 'data:e', line: 3,
+    peerScope: null, peerContext: null, syntacticPath: null, lossReason: null,
+  };
+  const annA = { ...base, kind: 'production', subKind: 'call', fromPath: null, toPath: null, widenReason: 'unresolved-call' };
+  const annB = { ...base, kind: 'production', subKind: 'object', fromPath: null, toPath: null, widenReason: 'dynamic-property-key' };
+  const write = { ...base, kind: 'write-out', subKind: 'assign', fromPath: null, toPath: 'x', widenReason: null };
+
+  const forward = new PathStore();
+  forward.addHop(annA);
+  forward.addHop(annB);
+  forward.addHop(write);
+
+  const reverse = new PathStore();
+  reverse.addHop(annB);
+  reverse.addHop(annA);
+  reverse.addHop(write);
+
+  assert.equal(forward.edges().length, 1);
+  assert.equal(reverse.edges().length, 1);
+  const eForward = forward.edges()[0];
+  const eReverse = reverse.edges()[0];
+
+  // Same edge id — order truly doesn't matter, not just "happens to match".
+  assert.equal(eForward.id, eReverse.id);
+  // BOTH annotations' widen reasons survive, not just whichever was first.
+  assert.deepEqual(eForward.widenReasons, ['dynamic-property-key', 'unresolved-call']);
+  assert.deepEqual(eReverse.widenReasons, ['dynamic-property-key', 'unresolved-call']);
+});
+
 // =====================================================================
 // 7. §14.10 item 10 — the `orphanedPeerSources` diagnostic (Task 1's own
 // review finding; the 4th diagnostics() bucket).
@@ -790,6 +856,12 @@ test('C4/leg: the rejected leg-based-pruning rule would delete a genuine, purely
   const genuine = store.edgesFrom(nBEmail).find((e) => e.toNodeId === nOS);
   assert.ok(genuine, 'b.email -> o.s is present — the SHIPPED per-pairing design never deletes it');
   assert.equal(genuine.crossScope, false, 'it too is a non-peer x non-peer pair — the rejected rule cannot distinguish it from the bypass');
+  // Final whole-branch review finding 9: this is the fixture's own hardest
+  // question, and it stayed unpinned — §14.7 never claims `genuine` comes
+  // back unmarked (that was an earlier, incorrect paraphrase of this
+  // fixture); it is a real §9.1-style 2x2 cross-join at the `o.s` join key,
+  // independent of the call boundary, and IS marked. Pin the conclusion.
+  assert.equal(genuine.ambiguousCorrelation, true, '§14.7: b.email -> o.s is a genuine, independent 2x2 cross-join and IS marked — not a leak from the call boundary');
 
   // The counter-example itself: this group also contains a peer half (the
   // call-resolved source, addressing helper's own exit node) — proven by
