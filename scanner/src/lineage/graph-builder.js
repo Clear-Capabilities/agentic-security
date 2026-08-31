@@ -63,6 +63,16 @@
 // -> `HANDLING_VALUES` mapping and why this is NOT the same field as
 // `protection.js`'s own `PROTECTION_DIMENSIONS`' `handling` dimension.
 //
+// Milestone 2, Sub-project B, increment 2 addition (FR-401, DESIGN_
+// TRANSIT_PROTECTION.md §6): `opts.resolveTransitProtection`, a SEPARATE,
+// additive hook applied at the exact same edge-construction point as
+// `opts.resolveDestination` above — composing into the edge's `protection`
+// object (`protection: { ...emptyProtection(), transit: resolved ??
+// emptyProtection().transit }`) rather than replacing it. Writes ONLY
+// `protection.transit`; `.atRest`/`.handling` stay `emptyProtection()`'s
+// own defaults. A no-op when omitted, mirroring every prior additive
+// hook's own "byte-identical when the hook is absent" contract.
+//
 // Reuse boundary (§12, confirmed against the source): imports ONLY
 // `matchSource`/`matchSinkOrSanitizer` from `../dataflow/catalog.js`,
 // `matchPrivacySink` from `../dataflow/privacy-catalog.js`, and
@@ -647,7 +657,19 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
             id: edgeIdStr, from: src.id, to: snk.id, relationship: 'data_flow',
             fieldMappings: [{ fromPath, toPath, dataElementIds: [de.id], mappingType, transformationIds: sortedT }],
             protocol: { name: 'in-process', destinationResolution: site.destination?.resolutionStatus ?? 'unknown' },
-            boundaryCrossings: [], protection: emptyProtection(),
+            boundaryCrossings: [],
+            // Milestone 2, Sub-project B, increment 2 (FR-401):
+            // `opts.resolveTransitProtection(site) -> {verdict, evidenceGrade}
+            // | undefined`, applied at this exact point — the same block
+            // that already reads `site.destination` above — mirroring
+            // `opts.resolveDestination`'s own additive-hook contract
+            // exactly: composes with `emptyProtection()`'s default, never
+            // replaces it wholesale, and is a no-op (byte-identical output)
+            // when the hook is omitted or returns falsy. This increment
+            // writes ONLY `.transit` — `.atRest`/`.handling` stay
+            // `emptyProtection()`'s own defaults, Sub-project C's and a
+            // later increment's own jobs respectively.
+            protection: { ...emptyProtection(), transit: opts.resolveTransitProtection?.(site) ?? emptyProtection().transit },
             evidenceRefs: [], coverageStatus: snk.coverageStatus,
           });
         }

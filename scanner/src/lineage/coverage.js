@@ -64,6 +64,12 @@ import { buildDataFlowGraph } from './graph-builder.js';
 // its own import line, not folded into the block above, so the cycle is
 // visible to a reader at a glance.
 import { resolveDestination } from './resolve-destination.js';
+// Milestone 2, Sub-project B, increment 2: `resolveTransitProtectionForSite`
+// composes with `opts.resolveTransitProtection` the same way `resolveDestination`
+// composes above — see `buildGraphWithCoverage`'s own wiring below. No ES
+// module cycle here (unlike `resolve-destination.js`) — `transit-protection.js`
+// never imports anything back from this file.
+import { resolveTransitProtectionForSite } from './transit-protection.js';
 
 // =========================================================================
 // FR-203 — the destination-unresolved heuristic.
@@ -401,6 +407,14 @@ export function buildCoverageLedger(built, opts = {}) {
  * default and the finished coverage ledger in place of E3's sketch.
  * Returns the same shape `buildDataFlowGraph` returns — `built.graph.coverage`
  * is the only field this function changes.
+ *
+ * @param {object} [opts.transitEvidenceByFile] Milestone 2, Sub-project B,
+ *   increment 2: a pre-computed `Map<file, findings[]>` — the SAME `Map`
+ *   `scanTransitEvidence` returns, computed exactly once by the caller
+ *   (`index.js`'s `buildLineageGraph`), never raw `fileContents`. This
+ *   function never calls `scanTransitEvidence`/`scanCryptoProtocol` itself
+ *   — see `index.js`'s own header for why the computation must happen
+ *   exactly once, in exactly one place.
  */
 export function buildGraphWithCoverage(callGraph, opts = {}) {
   // NITPICK 4: compose with a caller-supplied `opts.resolveSiteDecision`
@@ -410,10 +424,18 @@ export function buildGraphWithCoverage(callGraph, opts = {}) {
   // overriding that caller's choice.
   // Milestone 2, Sub-project A, increment 1: identical composition pattern
   // for `opts.resolveDestination` — a caller-supplied hook always wins.
+  // Milestone 2, Sub-project B, increment 2: identical composition pattern
+  // for `opts.resolveTransitProtection` — a caller-supplied hook always
+  // wins over this module's own default, which closes over
+  // `opts.transitEvidenceByFile` (honestly empty, via the `?? new Map()`
+  // fallback, when the caller supplies neither — never re-derived from
+  // `opts.fileContents`, which this function never reads).
   const built = buildDataFlowGraph(callGraph, {
     ...opts,
     resolveSiteDecision: opts.resolveSiteDecision ?? resolveSiteDecision,
     resolveDestination: opts.resolveDestination ?? resolveDestination,
+    resolveTransitProtection: opts.resolveTransitProtection
+      ?? ((site) => resolveTransitProtectionForSite(site, opts.transitEvidenceByFile ?? new Map())),
   });
   built.graph.coverage = buildCoverageLedger(built, opts);
   return built;
