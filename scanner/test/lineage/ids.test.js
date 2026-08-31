@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   graphId, nodeId, dataElementId, edgeId, flowId, transformationId, evidenceId,
-  provenanceNodeId, provenanceEdgeId,
+  provenanceNodeId, provenanceEdgeId, pathId,
 } from '../../src/lineage/ids.js';
 
 test('graphId follows the dfg:<repo>:<commit>:<configHash> shape from PRD 10.2', () => {
@@ -142,6 +142,56 @@ test('C4/5b: provenanceNodeId separates every discriminator, and 5000 distinct n
     assert.ok(!bulk.has(id), `collision at i=${i}`);
     bulk.add(id);
   }
+});
+
+// Sub-project C, increment 5 (DESIGN_PATH_PROVENANCE.md §15.6/§15.10 item
+// 1): `pathId`, ported from the design task's own C5/5c PoC test
+// (path-query-poc.test.js), not reinvented.
+
+test('C5/id-1: pathId is idempotent — the same logical path, reconstructed twice, produces the same id', () => {
+  const startNodeId = 'pnode:path:aaa';
+  const edgeIds = ['pedge:111', 'pedge:222', 'pedge:333'];
+  const a = pathId({ startNodeId, edgeIds });
+  const b = pathId({ startNodeId, edgeIds: [...edgeIds] });
+  assert.equal(a, b, 'deterministic, not a counter');
+  assert.match(a, /^ppath:[0-9a-f]{12}$/);
+});
+
+test('C5/id-2: a changed edge id ANYWHERE in the sequence moves the id', () => {
+  const startNodeId = 'pnode:path:aaa';
+  const base = pathId({ startNodeId, edgeIds: ['pedge:111', 'pedge:222', 'pedge:333'] });
+  const changedFirst = pathId({ startNodeId, edgeIds: ['pedge:999', 'pedge:222', 'pedge:333'] });
+  const changedMiddle = pathId({ startNodeId, edgeIds: ['pedge:111', 'pedge:999', 'pedge:333'] });
+  const changedLast = pathId({ startNodeId, edgeIds: ['pedge:111', 'pedge:222', 'pedge:999'] });
+  assert.notEqual(base, changedFirst, 'a changed FIRST edge id must move the id');
+  assert.notEqual(base, changedMiddle, 'a changed MIDDLE edge id must move the id');
+  assert.notEqual(base, changedLast, 'a changed LAST edge id must move the id');
+});
+
+test('C5/id-3: a REORDERED edge id sequence moves the id — order matters for a path, unlike a node/edge discriminator\'s set-like fields', () => {
+  const startNodeId = 'pnode:path:aaa';
+  const forward = pathId({ startNodeId, edgeIds: ['pedge:111', 'pedge:222', 'pedge:333'] });
+  const reversed = pathId({ startNodeId, edgeIds: ['pedge:333', 'pedge:222', 'pedge:111'] });
+  const swapped = pathId({ startNodeId, edgeIds: ['pedge:222', 'pedge:111', 'pedge:333'] });
+  assert.notEqual(forward, reversed, 'a reversed edge sequence is a different path, not the same one re-hashed');
+  assert.notEqual(forward, swapped, 'a swapped-adjacent-pair sequence is likewise a different path');
+});
+
+test('C5/id-4: startNodeId is also part of the discriminator, even though it is redundant given a non-empty edgeIds', () => {
+  const edgeIds = ['pedge:111', 'pedge:222'];
+  const a = pathId({ startNodeId: 'pnode:path:aaa', edgeIds });
+  const b = pathId({ startNodeId: 'pnode:path:bbb', edgeIds });
+  assert.notEqual(a, b, 'a changed startNodeId (same edges) must still move the id — over-specifying costs nothing');
+});
+
+test('C5/id-5: discriminatorParts moves the id (Task 2 review finding 6 — the parameter was spec\'d and implemented but had no test)', () => {
+  const startNodeId = 'pnode:path:aaa';
+  const edgeIds = ['pedge:111', 'pedge:222'];
+  const bare = pathId({ startNodeId, edgeIds });
+  const withPart = pathId({ startNodeId, edgeIds }, ['extra-discriminator']);
+  assert.notEqual(bare, withPart, 'a non-empty discriminatorParts must move the id relative to the same path with none');
+  const same = pathId({ startNodeId, edgeIds }, ['extra-discriminator']);
+  assert.equal(withPart, same, 'the same discriminatorParts must still be idempotent');
 });
 
 test('C4/5c: pnode:/pedge: are distinct from node:/edge: and never match validate.js\'s id-prefix regexes for the other namespace', () => {

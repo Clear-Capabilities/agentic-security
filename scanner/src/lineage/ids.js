@@ -94,6 +94,28 @@ export function provenanceEdgeId(
 }
 
 /**
+ * A reconstructed path (Sub-project C, increment 5;
+ * DESIGN_PATH_PROVENANCE.md §15.6). `pnode:`/`pedge:`'s own header left this
+ * name deliberately unclaimed (§14.5: "the thing C5 reconstructs *is* a
+ * path, and it will plausibly want that name") — increment 5 claims it,
+ * with a `ppath:` prefix joining the same family. A reconstructed path is
+ * not a `DataFlowGraph v1` entity either, so `validate.js` needs no change.
+ *
+ * The discriminator is the EDGE id SEQUENCE, never the node id sequence
+ * (§15.6/FR-305 — two paths can share a node sequence while differing in
+ * the edges that join it, e.g. two assignments at two different program
+ * points, and that difference must not be hidden by dedup) — order matters
+ * for a path, unlike a node/edge discriminator's set-like fields, so
+ * `edgeIds` is NOT sorted before hashing. `startNodeId` is strictly
+ * redundant today (a path always has at least one hop, so the last edge id
+ * already determines it) but is kept per §14.5's own lesson: over-specifying
+ * a content hash costs nothing, under-specifying one is a silent merge.
+ */
+export function pathId({ startNodeId, edgeIds }, discriminatorParts = []) {
+  return `ppath:${_hash(_canon([startNodeId, ...edgeIds, ...discriminatorParts]))}`;
+}
+
+/**
  * dataElementIds is treated as a SET (sorted before hashing) — a flow
  * carrying {card_number, cvv} has one identity regardless of the order the
  * builder discovered them in. `discriminatorParts` is the escape hatch for
