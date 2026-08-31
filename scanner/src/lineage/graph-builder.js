@@ -206,6 +206,61 @@ function ormWriteColumns(arg0) {
   return [...new Set(keys)];
 }
 
+/**
+ * Milestone 2, Sub-project E, increment 3 (`node.queueDetail.topic`,
+ * DESIGN_QUEUE_DETAIL.md §3). A small local copy of `resolve-destination
+ * .js`'s `isLiteral` check shape (not imported — this package's own
+ * established "small local copy over cross-module dependency" precedent,
+ * already used by `ormWriteColumns`/`calleeDescriptor` elsewhere in this
+ * file), scoped to this file's own extraction needs.
+ */
+function isLiteral(e) {
+  return Boolean(e) && typeof e === 'object' && e.kind === 'literal';
+}
+
+// Milestone 2, Sub-project E, increment 3 (DESIGN_QUEUE_DETAIL.md §3.1). A
+// short, disclosed alias list — deliberately not widened speculatively.
+// Checked in this order: the first alias with a matching, literal-valued
+// property wins.
+const QUEUE_TOPIC_KEY_ALIASES = Object.freeze(['QueueUrl', 'TopicArn', 'topic', 'queueName']);
+
+/**
+ * `extractQueueDetail(args)` — only needs `args`: `operation` is always
+ * `'publish'` when this is called at all (every real
+ * `PRIVACY_SINK_CATALOG` queue entry — `sendMessage`/`publish` — is
+ * unambiguously a write), so no `calleeExpr`/callee-name parameter is
+ * needed, unlike `resolveOrmWriteAtCallSite`'s `table`/`operation`
+ * extraction, which did need the callee.
+ *
+ * `topic` extraction reuses `ormWriteColumns`'s exact filter shape
+ * (exclude spread entries, exclude `'*'`-keyed computed entries) but wants
+ * the VALUE of one specific matching key, not every key name — a
+ * different, smaller function, not a call to `ormWriteColumns` itself.
+ * Covers `privacy-js-queue-sendMessage`'s shape
+ * (`sqs.sendMessage({QueueUrl: '...', MessageBody: ...})`) directly. For
+ * `privacy-js-queue-publish`'s shape (`topic.publish(...)`), the topic
+ * identity typically lives in a SEPARATE, earlier statement that
+ * constructed the receiver — a cross-statement lookup this package has no
+ * primitive for — so that shape's own call arguments never carry a
+ * matching key here, and `topic` stays `null`, honestly, exactly as it
+ * would for any other call whose object-literal argument (if any) carries
+ * none of the recognized aliases. This is a disclosed, deferred gap, not a
+ * half-attempt — see DESIGN_QUEUE_DETAIL.md §3.2.
+ */
+function extractQueueDetail(args) {
+  const arg0 = Array.isArray(args) ? args[0] : undefined;
+  const props = Array.isArray(arg0?.props) ? arg0.props : [];
+  let topic = null;
+  for (const alias of QUEUE_TOPIC_KEY_ALIASES) {
+    const prop = props.find((p) => !p.spread && p.key === alias);
+    if (prop && isLiteral(prop.value)) {
+      topic = String(prop.value.value);
+      break;
+    }
+  }
+  return { provider: null, topic, operation: 'publish' };
+}
+
 function resolveOrmWriteAtCallSite(calleeExpr, args, file) {
   const hits = matchOrmWrite(calleeExpr, file);
   if (!hits) return null;
@@ -239,7 +294,19 @@ export function enumerateSinkSites(callGraph) {
     for (const [nid, node] of Object.entries(fn.cfg?.nodes ?? {})) {
       if (node.kind === 'call' && node.callee) {
         const r = resolveSinkAtCallSite(node.callee, fn.file);
-        if (r) sites.push({ file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null, calleeExpr: node.callee, args: node.args ?? [], ...r });
+        if (r) {
+          sites.push({ file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null, calleeExpr: node.callee, args: node.args ?? [], ...r });
+          // Milestone 2, Sub-project E, increment 3: queue/topic identity
+          // extraction, a conditional POST-step on the already-pushed site
+          // object — not a change to `resolveSinkAtCallSite`'s own
+          // signature (that function has no `args` parameter today, and
+          // adding one would be a wider, unnecessary change for a fact
+          // only the queue category needs).
+          if (r.decision.category === 'queue') {
+            const site = sites[sites.length - 1];
+            site.queueDetail = extractQueueDetail(node.args ?? []);
+          }
+        }
         // Milestone 2, Sub-project E, increment 1: ORM-write recognition,
         // additive and independent of the general/privacy match above —
         // see `resolveOrmWriteAtCallSite`'s own header for why no
@@ -360,18 +427,19 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   // for the "no two DIFFERENT decisions collided onto one node" check.
   const decisionsByNodeId = new Map();
 
-  const mintNode = ({ kind, category, coverageStatus, externality, coverageReason, subtypeKey, lifecycleStages, destination, storeDetail }) => {
+  const mintNode = ({ kind, category, coverageStatus, externality, coverageReason, subtypeKey, lifecycleStages, destination, storeDetail, queueDetail }) => {
     // NOTE (Milestone 2, Sub-project A, increment 1; Sub-project E,
-    // increment 2): neither `destination` nor `storeDetail` is part of
-    // this discriminator — the node identity model stays exactly what it
-    // was in Milestone 1 (a registry decision, never a per-call-site
-    // fact), so two sites sharing one
+    // increments 2 and 3): neither `destination` nor `storeDetail` nor
+    // `queueDetail` is part of this discriminator — the node identity
+    // model stays exactly what it was in Milestone 1 (a registry decision,
+    // never a per-call-site fact), so two sites sharing one
     // (kind, subtypeKey, coverageStatus, externality) tuple still mint/
-    // collide onto ONE node, and that node's `destination`/`storeDetail`
-    // is whichever site's resolution was applied FIRST (mintNode only sets
-    // it at creation, same as every other field below) — a known,
-    // disclosed coarsening, not a bug; see DESIGN_DESTINATION_RESOLVER.md
-    // and DESIGN_STORE_DETAIL.md respectively.
+    // collide onto ONE node, and that node's `destination`/`storeDetail`/
+    // `queueDetail` is whichever site's resolution was applied FIRST
+    // (mintNode only sets it at creation, same as every other field
+    // below) — a known, disclosed coarsening, not a bug; see
+    // DESIGN_DESTINATION_RESOLVER.md, DESIGN_STORE_DETAIL.md, and
+    // DESIGN_QUEUE_DETAIL.md respectively.
     const id = ids.nodeId(kind, [repository, subtypeKey ?? category ?? '', coverageStatus, externality, /* destination, always null in M1 */ '']);
     let n = nodesById.get(id);
     if (!n) {
@@ -390,6 +458,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
         system: { application: repository, environment: null },
         destination: destination ?? null,
         storeDetail: storeDetail ?? null,
+        queueDetail: queueDetail ?? null,
         externality: { value: externality, evidenceRefs: [] },
         lifecycleStages, governanceRefs: {},
         dataElementIds: [], evidenceRefs: [],
@@ -416,6 +485,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     lifecycleStages: [site.decision.externality === 'external' ? 'sharing' : 'storage'],
     destination: site.destination ?? null,
     storeDetail: site.storeDetail ?? null,
+    queueDetail: site.queueDetail ?? null,
   });
   const mintDataElement = (s) => {
     let d = deById.get(s.dataElementId);

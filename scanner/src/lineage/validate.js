@@ -17,6 +17,7 @@ import {
   SCHEMA_VERSION, NODE_KINDS, MAPPING_TYPES, COVERAGE_STATUS_VALUES, EXTERNALITY_VALUES,
   TRANSFORM_KINDS, REVERSIBILITY_VALUES, DESTINATION_RESOLUTION_VALUES, POLICY_STATES,
   FLOW_SUMMARY_VALUES, EVIDENCE_TYPES, GRAPH_SCOPE_SOURCES, HANDLING_VALUES, STORE_OPERATION_VALUES,
+  QUEUE_OPERATION_VALUES,
 } from './schema.js';
 import { isValidProtectionDimension, PROTECTION_DIMENSIONS } from './protection.js';
 import { LINEAGE_DATA_CLASSES, isAiContext } from './classification.js';
@@ -94,6 +95,18 @@ function _validateNode(node, idx, errors, seenIds) {
       node.storeDetail.columns.forEach((c, i) => {
         if (typeof c !== 'string') _err(errors, path(`.storeDetail.columns[${i}]`), 'storeDetail.columns entries must be strings');
       });
+    }
+  }
+  // Milestone 2, Sub-project E, increment 3: `node.queueDetail` is `null`
+  // on every node this increment doesn't populate — only checked when
+  // non-null, mirroring `node.storeDetail`'s own "only checked when the
+  // parent object is present" shape immediately above.
+  if (node.queueDetail && typeof node.queueDetail === 'object') {
+    if (node.queueDetail.operation !== null && !QUEUE_OPERATION_VALUES.includes(node.queueDetail.operation)) {
+      _err(errors, path('.queueDetail.operation'), `unrecognized queueDetail.operation "${node.queueDetail.operation}"`);
+    }
+    if (node.queueDetail.topic !== null && typeof node.queueDetail.topic !== 'string') {
+      _err(errors, path('.queueDetail.topic'), 'queueDetail.topic must be a string or null');
     }
   }
 }

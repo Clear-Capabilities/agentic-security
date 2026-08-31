@@ -62,6 +62,20 @@ export const DESTINATION_RESOLUTION_VALUES = Object.freeze([
 // not a guess at which one).
 export const STORE_OPERATION_VALUES = Object.freeze(['create', 'read', 'update', 'delete', 'upsert', 'unknown']);
 
+// Milestone 2, Sub-project E, increment 3 (`node.queueDetail.operation`,
+// DESIGN_QUEUE_DETAIL.md). Only two values, deliberately — both real
+// PRIVACY_SINK_CATALOG queue entries (`sendMessage`, `publish`) are
+// unambiguously a WRITE/publish operation, unlike the database case's real
+// `create`/`update`/`upsert` spread; there is no `read`/`delete`/`create`
+// ambiguity to disclose here. Every queue site this increment recognizes
+// gets `operation: 'publish'` — never `'unknown'` in practice today (no
+// catalog entry produces anything else), but the value exists so
+// `validate.js`'s structural check has a real enum to check against, the
+// same "define the vocabulary even if only one value is reachable today"
+// precedent `HANDLING_VALUES`/`STORE_OPERATION_VALUES` both already
+// established.
+export const QUEUE_OPERATION_VALUES = Object.freeze(['publish', 'unknown']);
+
 export const POLICY_STATES = Object.freeze([
   'prohibited', 'permitted', 'conditionally_permitted', 'manual_review_required', 'not_evaluated',
 ]);

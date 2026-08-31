@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyGraphEnvelope, HANDLING_VALUES, STORE_OPERATION_VALUES } from '../../src/lineage/schema.js';
+import { emptyGraphEnvelope, HANDLING_VALUES, STORE_OPERATION_VALUES, QUEUE_OPERATION_VALUES } from '../../src/lineage/schema.js';
 import { nodeId, dataElementId, edgeId, flowId } from '../../src/lineage/ids.js';
 import { emptyProtection } from '../../src/lineage/protection.js';
 import { validateGraph } from '../../src/lineage/validate.js';
@@ -303,6 +303,59 @@ test('a node whose storeDetail.columns contains a non-string entry is rejected',
   const result = validateGraph(graph);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((e) => e.path === '$.nodes[0].storeDetail.columns[1]'));
+});
+
+// ── Milestone 2, Sub-project E, increment 3: node.queueDetail shape ──
+
+function nodeWithQueueDetail(queueDetail) {
+  return {
+    id: nodeId('queue', ['x']), kind: 'queue', subtype: 'queue', label: 'X',
+    aliases: [], system: {}, externality: { value: 'unknown', evidenceRefs: [] },
+    lifecycleStages: [], governanceRefs: {}, dataElementIds: [], evidenceRefs: [],
+    confidence: { score: 0.6, tier: 'medium' }, coverageStatus: 'modeled', queueDetail,
+  };
+}
+
+test('a node with queueDetail: null passes (the pre-E3 default, and every node this increment does not populate)', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithQueueDetail(null));
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
+test('a node with a valid, fully-populated queueDetail passes', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithQueueDetail({ provider: null, topic: 'https://sqs.../my-queue', operation: 'publish' }));
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
+test('every QUEUE_OPERATION_VALUES member is a valid queueDetail.operation', () => {
+  for (const op of QUEUE_OPERATION_VALUES) {
+    const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+    graph.nodes.push(nodeWithQueueDetail({ provider: null, topic: null, operation: op }));
+    assert.deepEqual(validateGraph(graph).errors, [], `operation "${op}" must validate`);
+  }
+});
+
+test('a node with an unrecognized queueDetail.operation is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithQueueDetail({ provider: null, topic: null, operation: 'teleport' }));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[0].queueDetail.operation' && e.message.includes('teleport')));
+});
+
+test('a node with a null queueDetail.operation passes (unavailable, not unrecognized)', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithQueueDetail({ provider: null, topic: null, operation: null }));
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
+test('a node whose queueDetail.topic is not a string is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithQueueDetail({ provider: null, topic: 42, operation: 'publish' }));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[0].queueDetail.topic'));
 });
 
 // ── Milestone 2, Sub-project D, increment 1: flow.handling taxonomy ──
