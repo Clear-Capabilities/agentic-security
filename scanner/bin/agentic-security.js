@@ -957,6 +957,12 @@ async function cmdScan(args) {
   if (_writesOnScan() && _isSafeStateDir(stateDirPath)) {
     await fsp.mkdir(stateDirPath, { recursive: true });
     persistedScan = toJSON(scan, meta);
+    // Sub-project E, increment 5: the lineage graph gets its OWN artifact
+    // file (below), never duplicated inside last-scan.json — a
+    // DataFlowGraph v1 document is a separate, potentially large artifact,
+    // and embedding it a second time here would bloat the file every other
+    // consumer of last-scan.json already reads in full.
+    delete persistedScan.lineageGraph;
     // #10 — MTTR: stamp firstSeenAt/lastSeenAt/ageDays from the PREVIOUS scan so
     // every finding carries an age, SLA breaches can be surfaced, and the fix
     // loop can report time-to-clean. Best-effort; skipped under --deterministic
@@ -1050,6 +1056,23 @@ async function cmdScan(args) {
     try {
       await fsp.writeFile(path.join(stateDirPath, 'last-scan.json.sig'), _signLastScan(lastScanBody));
     } catch { /* non-fatal — sig file is best-effort */ }
+    // Sub-project E, increment 5: persist the lineage graph as its own
+    // artifact, mirroring last-scan.json's own write+sign pattern exactly
+    // — signLastScan/verifyLastScan are fully generic (an arbitrary string
+    // body + an explicit sig-file path, no filename baked in), confirmed by
+    // reading posture/integrity.js directly, so no new signing mechanism
+    // is introduced. Written only when a graph actually exists — an
+    // ordinary scan (AGENTIC_SECURITY_LINEAGE_DEEP unset) writes nothing
+    // new here at all.
+    if (scan.lineageGraph) {
+      try {
+        const lineageBody = JSON.stringify(scan.lineageGraph, null, 2);
+        await fsp.writeFile(path.join(stateDirPath, 'lineage-graph.json'), lineageBody);
+        try {
+          await fsp.writeFile(path.join(stateDirPath, 'lineage-graph.json.sig'), _signLastScan(lineageBody));
+        } catch { /* non-fatal — sig file is best-effort, same precedent as last-scan.json.sig above */ }
+      } catch { /* non-fatal — the lineage artifact write is best-effort and must never block a scan */ }
+    }
   } else {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write state at ${stateDirPath} — no project marker in ${path.resolve(target)}\n`);
   }
