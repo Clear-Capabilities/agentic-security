@@ -206,6 +206,7 @@ import { applyPathConstraints } from './posture/path-predicates.js';
 import { buildProjectIR, buildProjectIRAsync } from './ir/index.js';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
+import { buildLineageGraph } from './lineage/index.js';
 // v3 next-gen — Pillars 1, 4, 5, 6, 8, 9.
 import { annotateCloneClusters, findCloneOutliers } from './posture/semantic-clone.js';
 import { annotateAiProvenance } from './posture/ai-code-fingerprint.js';
@@ -9229,6 +9230,56 @@ function _deterministicFileTimings(timings) {
           : (_inCi ? 'not requested (deep analysis defaults to off in CI)' : 'not requested')),
     failure: _deepFailure,
   };
+  // Sub-project E, increment 5 — Data Flow Explorer lineage graph.
+  // DELIBERATELY INDEPENDENT of AGENTIC_SECURITY_DEEP/_deepEnabled above
+  // (see this plan's Global Constraints, ruling on scoping report open
+  // question 1): lineage analysis has no degraded/non-IR-backed mode, so
+  // gating it on deep mode ALSO being on would make
+  // AGENTIC_SECURITY_LINEAGE_DEEP=1 alone silently produce nothing whenever
+  // deep mode itself was off.
+  const _lineageRequested = process.env.AGENTIC_SECURITY_LINEAGE_DEEP === '1';
+  let _lineageStatus = {
+    requested: _lineageRequested,
+    enabled: false,
+    reason: _lineageRequested ? null : 'not requested',
+    failure: null,
+  };
+  let _lineageGraph = null;
+  if (_lineageRequested) {
+    _lineageStatus.enabled = true;
+    const _lineageBudgetMs = parseInt(process.env.AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS || '300000', 10);
+    // Reuses the SAME _sharedIR memo _deepEnabled's own block above uses —
+    // if deep mode already built it, this is free; if not, this is what
+    // first triggers the build (the whole reason this gate is independent).
+    const { perFile, callGraph } = _sharedIR || (_sharedIR = await _buildIR());
+    const _lr = buildLineageGraph(callGraph, {
+      repository: path.basename(path.resolve(scanRoot || '.')),
+      deterministic: isDeterministic(),
+      perFile,
+    });
+    if (_lr.status === 'complete') {
+      _lineageGraph = _lr.graph;
+      if (_lr.elapsedMs > _lineageBudgetMs) {
+        // Same "measured, not truly interrupted" disclosure _deepEnabled's
+        // own elapsed > budgetMs branch already makes for IR-taint — see
+        // this plan's Global Constraints.
+        aF.push({
+          id: `lineage-timeout:${scanRoot || ''}`,
+          file: '(lineage-engine)', line: 0,
+          vuln: `Lineage graph build exceeded ${_lineageBudgetMs}ms budget (${_lr.elapsedMs}ms used) — results may be incomplete`,
+          severity: 'info',
+          parser: 'LINEAGE',
+          confidence: 0.5,
+        });
+      }
+    } else if (_lr.status === 'failed') {
+      _lineageStatus.failure = _lr.failure;
+    }
+    // status === 'not_available' needs no extra handling: _lineageGraph
+    // stays null, and enabled:true/failure:null correctly reads as "ran,
+    // produced nothing" (a genuinely empty/malformed callGraph), distinct
+    // from "never ran" (requested:false).
+  }
   // Java SCA enrichment: use deep-mode IR call graph to improve Java function reachability
   if (_deepCallGraph) {
     try {
@@ -10585,6 +10636,7 @@ function _deterministicFileTimings(timings) {
     engineErrors: { cppDataflowParseErrors: _cppDataflowParseErrors.value },
     deepStatus: _deepStatus,
     analyzerCoverage: summarizeCoverageForScanHealth(_coverageLedger),
+    lineageStatus: _lineageStatus,
   });
   // FR-207: stale vulnerability feeds, calibration data, and compliance
   // evidence are real assurance gaps, not just findings the feed omits --
@@ -10600,7 +10652,7 @@ function _deterministicFileTimings(timings) {
     compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
   });
   } // end if (!skipAnnotators) — FR-PROV-029
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.
