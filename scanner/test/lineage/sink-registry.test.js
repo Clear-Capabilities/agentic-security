@@ -85,6 +85,32 @@ test('the privacy vocabulary is NINE values, confirmed live, not the eight the s
   ]);
 });
 
+test('D1/8b (restored, task review M2): no sink entry carries its own `category` field, and every sink entry carries `vuln.cwe` — the two facts CWE_MAP-keying rests on', () => {
+  // The PoC's D1/8b pinned both halves of this directly; it was not carried
+  // forward into either registry's own suite when the PoC was absorbed and
+  // deleted (§9.1) — restored here per the task review's own finding, since
+  // the CWE keying `completeness/1a` above depends on it. The "every entry
+  // has a cwe" half is also indirectly covered by completeness/1a's own
+  // `<<none>>` fallback, but the "no entry has category" half was genuinely
+  // unguarded before this test.
+  assert.equal(SINKS.filter((e) => e.category).length, 0,
+    'a live catalog.js sink entry now carries its own `category` field — CWE_MAP-keying assumption broken');
+  assert.equal(SINKS.filter((e) => e.vuln?.cwe).length, SINKS.length,
+    'a live catalog.js sink entry has no vuln.cwe — CWE_MAP cannot key it');
+});
+
+test('D1/8d (restored, task review M2): no sink entry carries host/url/provider/destination/externality/system fields — the stated justification for deriving externality from CATEGORY_EXTERNALITY rather than per-entry data', () => {
+  // Cited by sink-registry.js's own module header as the reason externality
+  // must be category-derived, never entry-derived — this pin is what keeps
+  // that header's claim honest against a future catalog.js change.
+  const perEntryFields = ['host', 'url', 'provider', 'destination', 'externality', 'system'];
+  for (const field of perEntryFields) {
+    const withField = SINKS.filter((e) => field in e);
+    assert.equal(withField.length, 0,
+      `a live catalog.js sink entry now carries a '${field}' field — CATEGORY_EXTERNALITY's derivation justification may need re-checking`);
+  }
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 // Totality — every entry gets a valid decision, none throws.
 // ───────────────────────────────────────────────────────────────────────────
@@ -336,6 +362,12 @@ test('D3/FR-203: an unsupported (null-category) sink is NEVER pushed into `unres
   assert.equal(r.kind, 'process');
   assert.equal(r.coverageStatus, 'unsupported');
   assert.equal(r.category, null);
+});
+
+test('D3/opts-null (task review N4): reclassifySink(entry, null) does not throw — an explicit `null` second argument is treated the same as omitting it', () => {
+  const e = byId.get('js-exec');
+  assert.doesNotThrow(() => reclassifySink(e, null));
+  assert.deepEqual(reclassifySink(e, null), reclassifySink(e));
 });
 
 test('D3/FR-203 vs §16.7: the two `unresolved`-kind cases are structurally DISTINCT, never conflated', () => {

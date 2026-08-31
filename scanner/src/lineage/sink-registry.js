@@ -73,6 +73,17 @@
 //           degraded-analysis `unresolved` case (a different module
 //           entirely — a future Sub-project E graph builder reading
 //           `path-store.js` diagnostics, never this registry).
+//           DISCLOSED ASYMMETRY: `reclassifyPrivacySink` has no equivalent
+//           `opts.destinationUnresolved` parameter. Item 5's own text names
+//           only `reclassifySink`; nothing in the design scopes FR-203 out
+//           of the privacy side, and the design's own worked examples
+//           (a fetch() call with a computed URL) map onto privacy
+//           categories like `outboundHttp`/`thirdPartySdk` just as
+//           plausibly as onto a general CATALOG sink. Left unresolved here,
+//           not silently — no consumer exists yet to need it (Sub-project E
+//           hasn't landed), so there was nothing to prove this signature
+//           against; closing it is deferred to whichever increment adds
+//           the first real caller.
 //
 // Pure reclassification layer: reads catalog entries as DATA and maps them
 // onto the target vocabulary. It never re-derives what a call site
@@ -238,6 +249,7 @@ export const PRIVACY_CATEGORY_MAP = Object.freeze({
  * @returns {{kind: string, category: string|null, coverageStatus: string, externality: string, reason: string}}
  */
 export function reclassifySink(entry, opts = {}) {
+  opts = opts ?? {}; // guard an explicit `null` too, not just `undefined`
   const cwe = entry.vuln?.cwe ?? '<<none>>';
   let row = CWE_MAP[cwe];
   if (!row) {
