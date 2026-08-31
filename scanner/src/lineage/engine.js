@@ -536,6 +536,26 @@ export function resolveExprIdentities(state, expr, ctx) {
         }
       }
       const flat = new Set();
+      // Hotfix (found during Sub-project E1's design spike; see
+      // DESIGN_GRAPH_BUILDER.md §11): an unresolved method call's RECEIVER
+      // (`expr.callee.object` when `expr.callee.kind === 'member'`) can
+      // itself carry identity that survives into the call's own unknown
+      // return value — e.g. `pan.slice(0, 4)` still carries `pan`'s
+      // identity, the same way `pan + 'x'`/`String(pan)` already correctly
+      // do via `binary`/argument resolution. Before this fix, only
+      // `expr.args` was ever unioned here, so a receiver-only flow (no
+      // arguments carrying identity) silently dropped it entirely. Unioned
+      // the SAME way arguments already are — flat, into this unresolved
+      // call's own flat result — per DESIGN_INTRAPROCEDURAL.md's
+      // structure-flattening rule for `call` (an unresolved call's return
+      // is genuinely unknown structure; only `flat` participates, never
+      // `byPath`). Mirrors `scanner/src/dataflow/engine.js`'s
+      // `_calleeReceiverTainted` precedent for the sibling taint engine,
+      // which this package had not yet inherited.
+      if (expr.callee?.kind === 'member' && expr.callee.object) {
+        const receiver = resolveExprIdentities(state, expr.callee.object, ctx);
+        for (const id of receiver.flat) flat.add(id);
+      }
       for (const arg of expr.args ?? []) {
         const r = resolveExprIdentities(state, arg, ctx);
         for (const id of r.flat) flat.add(id);

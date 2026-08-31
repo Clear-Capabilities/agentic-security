@@ -700,22 +700,40 @@ hops / 14 pnodes / 8 pedges.
 ## 11. Escalations — things E cannot fix, named here rather than discovered later
 
 1. **`lineage/engine.js` drops RECEIVER-borne identity through a method
-   call.** `case 'call'`'s unresolved branch unions only `expr.args`, never
-   `expr.callee.object`. Measured: `pan + 'x'` and `String(pan)` keep the
-   identity; **`pan.slice(0, 4)` loses it**. `dataflow/engine.js` solved
-   exactly this with `_calleeReceiverTainted`; this package never inherited
-   it, and no lineage design document discloses the gap.
+   call. RESOLVED**, by a dedicated hotfix task (2026-08-31, "Lineage Engine
+   Hotfix: Unresolved-Call Receiver Identity" — see this file's git history
+   for the exact commit that landed this change). `case 'call'`'s unresolved
+   branch used to union only `expr.args`, never `expr.callee.object`.
+   Measured: `pan + 'x'` and `String(pan)` always kept the identity;
+   **`pan.slice(0, 4)` lost it**. `dataflow/engine.js` had already solved
+   exactly this with `_calleeReceiverTainted`; this package had not
+   inherited it, and no lineage design document disclosed the gap until this
+   escalation entry.
 
-   **The consequence is not theoretical:** it produces **zero flows** for
+   **The fix's exact mechanism**: when `expr.callee.kind === 'member'` in the
+   unresolved-`call` branch, `expr.callee.object` (the receiver) is now
+   recursively resolved via `resolveExprIdentities` and its `flat`
+   identities are unioned into the branch's own `flat` result, the same way
+   each argument's `flat` identities already were — matching
+   `DESIGN_INTRAPROCEDURAL.md`'s structure-flattening rule for `call` (an
+   unresolved call's return is genuinely unknown structure, so only `flat`
+   participates, never `byPath`).
+
+   **The consequence was not theoretical:** it produced **zero flows** for
    `bench/data-lineage/fixtures/js-api-to-log-masked` — the mask-then-log
    fixture that is AC-02's own worked example and one of only three entries in
-   the lineage accuracy corpus. `E1/14` pins both halves: the real fixture
-   yields 0 flows; the same structure with a receiver-free transform yields
-   the flow and its recognized `mask` transformation.
+   the lineage accuracy corpus. `E1/14` (now updated to assert the FIX, not
+   the bug) pins both halves: the real fixture now yields 2 flows (the real
+   cross-scope path through `maskCard`, graded `widened` because the call
+   itself stays unresolved, plus the caller-side bypass FR-305/§14.7 marks
+   `ambiguousCorrelation`); the same structure with a receiver-free transform
+   already yielded 2 flows (graded `explicit`/`ambiguous`) and still does.
 
-   `engine.js` is on Sub-project E's must-not-modify list, so this is
-   escalated, not fixed. **It is a prerequisite for Sub-project F**: a corpus
-   built before it is closed will bake in false negatives.
+   Sub-project E's own E1 PoC tests that pinned the pre-fix (buggy) numbers —
+   `E1/4`, `E1/6`, `E1/13`'s hop counts (19 -> 23 on `vulnerable-js`; node
+   count 14 -> 15, edge count 8 -> 9) and `E1/14` itself — were updated as a
+   direct, disclosed consequence of this fix, per that PoC file's own
+   comments at each changed assertion, not silently left stale.
 
 2. **`node.subtype: null` is invalid against `dataflow-graph.schema.json`**
    while valid against `validate.js` — §6.6. Needs a Milestone 0 contract

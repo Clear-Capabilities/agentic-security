@@ -699,7 +699,7 @@ test('E1/3: the dataElementId discriminator satisfies PRD §10.4 — same field 
     'the bare name alone must never produce this id');
 });
 
-test('E1/4: the real seeding mechanism produces real hops through the SHIPPED driver — 0 becomes 19 on vulnerable-js', () => {
+test('E1/4: the real seeding mechanism produces real hops through the SHIPPED driver — 0 becomes 23 on vulnerable-js', () => {
   const callGraph = irOf(vulnerableJs());
   const { seeds } = planSeeds(callGraph, { repository: 'vuln' });
   const hops = [];
@@ -707,17 +707,35 @@ test('E1/4: the real seeding mechanism produces real hops through the SHIPPED dr
   const store = new PathStore();
   store.addHops(hops);
 
-  assert.equal(hops.length, 19, 'measured: real seeding emits 19 hops where the shipped driver emits 0');
+  // Numbers updated (hotfix, 2026-08-31 — scanner/src/lineage/engine.js's
+  // unresolved-`call` receiver-identity fix; see DESIGN_GRAPH_BUILDER.md
+  // §11's now-RESOLVED escalation entry): before the fix, `pan.slice(0, 4)`
+  // (and every other method call whose RECEIVER, not its arguments, carried
+  // the only identity in play) silently dropped that identity, so real
+  // seeding on vulnerable-js undercounted. Re-measured against real parsed
+  // code: 19 -> 23 hops, 14 -> 15 nodes, edges unchanged at 8 -> now 9.
+  assert.equal(hops.length, 23, 'measured: real seeding emits 23 hops where the shipped driver emits 0');
   const st = store.stats();
-  assert.equal(st.nodes, 14);
-  assert.equal(st.edges, 8);
+  assert.equal(st.nodes, 15);
+  assert.equal(st.edges, 9);
   assert.deepEqual(store.diagnostics().malformed, [], 'no malformed hop reaches the store');
   assert.deepEqual(store.diagnostics().unclassified, [], 'every out-half matches one of §14.3\'s rules');
 
   // Real seeding is deliberately NARROWER than the synthetic per-parameter
-  // seed the scoping doc measured (21 hops / 16 pnodes / 9 pedges): it
-  // seeds only paths a registry actually matched, not every parameter.
-  assert.ok(hops.length < 21, 'a real seed is a strict subset of "one identity per parameter"');
+  // seed the scoping doc measured (21 hops / 16 pnodes / 9 pedges — this
+  // synthetic figure is UNCHANGED by the hotfix, re-measured directly
+  // against the fixed engine): it seeds only paths a registry actually
+  // matched, not every parameter, and that narrower footprint is still
+  // reflected in a strictly smaller NODE count (15 < 16). The prior raw
+  // HOP-COUNT comparison (real < synthetic) no longer holds numerically
+  // post-fix: recursively resolving a method call's receiver emits its own
+  // additional intraprocedural hops wherever a receiver carries an
+  // identity, and the fixture's specific field-precise seed paths happen to
+  // hit more such receiver call sites than the coarser per-parameter seed
+  // does here — a real, disclosed, and expected side effect of correctly
+  // no longer dropping receiver-borne identity, not a regression in
+  // narrowness of WHAT gets seeded.
+  assert.ok(st.nodes < 16, 'a real seed still produces a strict subset of "one identity per parameter"\'s pnode count');
 
   const kinds = [...new Set(store.nodes().map((n) => n.kind))].sort();
   assert.deepEqual(kinds, ['escape', 'path'],
@@ -772,7 +790,14 @@ test('E1/6: the projection produces a validated, flagship-scale DataFlowGraph v1
   // synthetic payments platform.
   assert.ok(r.graph.nodes.length <= 14,
     'a 42-line fixture must not out-node a whole synthetic platform (flagship: 14)');
-  assert.equal(r.hops.length, 19);
+  // Updated (hotfix, 2026-08-31 — scanner/src/lineage/engine.js's
+  // unresolved-`call` receiver-identity fix, see E1/4's own comment for the
+  // full explanation): 19 -> 23. Node/edge/dataElement/flow counts above
+  // are UNCHANGED by the fix — the extra hops are additional
+  // intraprocedural provenance detail for identity that was already
+  // reaching its sink through other paths, not a change to which
+  // sources/sinks/fields the projection connects.
+  assert.equal(r.hops.length, 23);
 });
 
 test('E1/7: node count is SYSTEM-granular and provably invariant under code growth, while edges/flows/dataElements stay field-granular', () => {
@@ -1007,15 +1032,20 @@ test('E1/13 (AC-11 coarse half): a sink nothing reaches is still a node with a c
     'a sink call expression with no `escape` provenance node is COUNTED, never silently dropped');
   assert.equal(r.graph.coverage.sources.matched, 9);
   assert.equal(r.graph.coverage.sources.unseedable, 0);
-  assert.equal(r.graph.coverage.provenance.hops, 19);
+  // Updated (hotfix, 2026-08-31 — see E1/4's own comment for the full
+  // explanation): 19 -> 23, the same measured hop-count change, unaffected
+  // sink/source coverage counts above.
+  assert.equal(r.graph.coverage.provenance.hops, 23);
 });
 
-test('E1/14 (measured limitation, escalated): lineage/engine.js drops RECEIVER-borne identity through a method call, which silently kills the bench corpus\'s own masked-log flow', () => {
-  // `pan + 'x'` and `String(pan)` both keep the identity; `pan.slice(0,4)`
-  // loses it, because engine.js's unresolved-`call` branch unions only
-  // `expr.args`, never `expr.callee.object`. dataflow/engine.js solved
-  // exactly this with `_calleeReceiverTainted`; this package never
-  // inherited it, and no lineage design doc discloses the gap.
+test('E1/14 (measured limitation, RESOLVED by hotfix): lineage/engine.js now keeps RECEIVER-borne identity through a method call, so the bench corpus\'s own masked-log flow connects', () => {
+  // `pan + 'x'` and `String(pan)` always kept the identity; `pan.slice(0,4)`
+  // used to lose it, because engine.js's unresolved-`call` branch unioned
+  // only `expr.args`, never `expr.callee.object`. dataflow/engine.js had
+  // already solved exactly this with `_calleeReceiverTainted`; this
+  // package had not inherited it. Fixed (hotfix, 2026-08-31): the
+  // unresolved-`call` branch now also unions the receiver's own resolved
+  // identities into its flat result, the same way arguments already are.
   const masked = 'function maskCard(pan){ return pan.slice(0, 4) + \'********\' + pan.slice(-4); }\n'
     + 'function handleCheckout(req, logger){\n'
     + '  const cardNumber = req.body.card_number;\n'
@@ -1025,8 +1055,28 @@ test('E1/14 (measured limitation, escalated): lineage/engine.js drops RECEIVER-b
   const r = buildDataFlowGraph(irOf({ 'source.js': masked }), { repository: 'm' });
   assert.equal(r.seeds.length, 1, 'the source IS matched and seeded');
   assert.equal(r.sites.length, 1, 'the logger.info sink IS enumerated');
-  assert.equal(r.graph.flows.length, 0,
-    'yet ZERO flows: the identity dies inside maskCard at `pan.slice(...)`. This is the corpus fixture bench/data-lineage/fixtures/js-api-to-log-masked, verbatim.');
+  // FIXED (hotfix, 2026-08-31 — see DESIGN_GRAPH_BUILDER.md §11's now-
+  // RESOLVED escalation entry and scanner/src/lineage/engine.js's
+  // unresolved-`call` receiver-identity fix): the identity used to die
+  // inside maskCard at `pan.slice(...)` because the unresolved-call branch
+  // only unioned `expr.args`, never the receiver. It now survives, so the
+  // corpus fixture's own masked-log flow connects — 2 flows, matching the
+  // receiver-free control fixture's own structure below (one real
+  // cross-scope path through maskCard, one caller-side bypass FR-305/§14.7
+  // correctly marks `ambiguousCorrelation`). The cross-scope path's grade
+  // is `widened` here (not `explicit`, unlike the receiver-free control
+  // below) because it still passes through an UNRESOLVED call — the
+  // receiver's identity is recovered, but the call's return remains
+  // honestly modeled as unknown structure, per DESIGN_INTRAPROCEDURAL.md's
+  // structure-flattening rule for `call`.
+  assert.equal(r.graph.flows.length, 2,
+    'the identity now survives `pan.slice(...)` inside maskCard: this is the corpus fixture bench/data-lineage/fixtures/js-api-to-log-masked, verbatim, now connecting.');
+  assert.deepEqual(r.graph.flows.map((f) => f.evidenceGrade).sort(), ['ambiguous', 'widened'],
+    'the cross-scope path through the still-unresolved maskCard call grades widened, never explicit');
+  assert.equal(r.graph.transformations.length, 1);
+  assert.equal(r.graph.transformations[0].kind, 'mask');
+  assert.ok(r.graph.flows.every((f) => f.transformationIds.length === 1),
+    'both carry the recognized mask transformation');
 
   // The same shape with a receiver-free transform DOES connect, which
   // isolates the cause to receiver-borne identity specifically.
