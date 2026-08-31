@@ -117,7 +117,19 @@ export class FieldIdentitySummaryCache {
       // empty-entry summary (if one exists) rather than computing an
       // unbounded number of contexts. Mirrors
       // dataflow/summaries.js's own graceful degradation past its own cap.
-      const fallback = this._cache.get(this._key(qid, emptyState())) ?? emptyFieldSummary();
+      //
+      // Path provenance (Sub-project C, increment 3, §13.6/§13.7 item 11):
+      // mark the degradation with a PERMANENT, externally-visible
+      // `degradedReason` — unlike `_recursive` (a transient
+      // recursion-in-progress marker stripped before external use), a
+      // degraded summary stays degraded for the life of this cache entry,
+      // so this field is never stripped. Marked on a SHALLOW COPY, never
+      // on `base` in place: `base` is the exact object already cached for
+      // this qid's empty-entry context (Finding 2) — mutating it here
+      // would retroactively mark that PRECISE summary as degraded for
+      // every later reader of the empty-entry context too.
+      const base = this._cache.get(this._key(qid, emptyState())) ?? emptyFieldSummary();
+      const fallback = { ...base, degradedReason: 'context-cap' };
       this.set(qid, entryState, fallback);
       return fallback;
     }
@@ -255,6 +267,16 @@ export class FieldIdentitySummaryCache {
 // carry a differently-ordered or differently-worded widening-reason list
 // should still be treated as converged — the facts are what a caller
 // actually consumes; the widening list is diagnostic.
+//
+// `degradedReason` (Sub-project C, increment 3, §13.6/§13.7 item 13) is
+// excluded from this comparison for the SAME reason as `widenings` — it is
+// diagnostic (why a summary is honestly incomplete), never a fact the
+// analysis result itself depends on. This is stated here deliberately, not
+// left as an accidental omission: `fieldSummaryEq`'s field-by-field
+// comparison below never touched `degradedReason` to begin with (it isn't
+// one of `returnFlat`/`mutatedParams`), so nothing had to change to keep
+// this true — the comment exists so a future reader doesn't "fix" the
+// omission by adding it.
 //
 // `returnByPath` is deliberately NOT compared either — it is currently
 // always `new Map()` for every summary this cache ever stores, per B1's
@@ -427,6 +449,31 @@ export function createCallSummaryResolver(cache, lookupCallee) {
       const result = analyzeFunctionFieldIdentity(fn, es, calleeCtx);
       return summaryFromAnalysisResult(result);
     });
+
+    // Path provenance (§13.6/§13.7 item 12): a summary the cache honestly
+    // degraded (B6 context-cap) has an empty `returnFlat`, so
+    // engine.js's `case 'call'` `for (const id of flat)` loop can never
+    // fire — there is no hop at all to carry a marker (Finding 1: the
+    // degradation is otherwise completely silent). Emitted HERE, at the
+    // resolver, one loss hop per id that entered the callee (the entry
+    // state's own ids — the identities whose downstream fate is now
+    // unrepresented), `fromPath`/`toPath` both null so it reads as an
+    // ANNOTATION on the argument's own real in-half at the same join key
+    // under §2.2's rule (or, when there is no path-shaped argument, as
+    // edge-forming in its own right) — never dropped either way.
+    if (summary?.degradedReason && ctx?.recordHop) {
+      for (const [, ids] of entryState) {
+        for (const id of ids) {
+          ctx.recordHop({
+            kind: 'production', subKind: 'call-resolved',
+            fromPath: null, toPath: null, dataElementId: id,
+            syntacticPath: null, widenReason: null,
+            lossReason: 'context-cap-degraded',
+            peerScope: qid, peerContext: calleeContext,
+          });
+        }
+      }
+    }
 
     // §13.2(c), the return direction: a FRESH wrapper every call — the
     // cached summary is never mutated, so fieldSummaryEq and the B5

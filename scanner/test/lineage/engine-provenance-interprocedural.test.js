@@ -37,6 +37,7 @@ import {
   FieldIdentitySummaryCache,
   createCallSummaryResolver,
   summaryFromAnalysisResult,
+  emptyFieldSummary,
 } from '../../src/lineage/summaries.js';
 import { runFieldIdentityAnalysis } from '../../src/lineage/driver.js';
 
@@ -308,6 +309,66 @@ test('context disambiguation (§13.3, §9.4\'s worked example): joining on (scop
 //    hazard §13.2a's fix round found and closed. See this file's header.
 // ---------------------------------------------------------------------
 
+// Hardcoded pre-C3 golden literals — the task review's own captured values
+// for fixture A, and this task's own captured values for fixture B (both
+// obtained by running the current, committed code and reading its
+// canonicalized output; never guessed). Comparing the FULL canonicalized
+// {exitState, returnFacts, mutatedParams, widenings} shape, not just
+// returnFacts' identities alone, per item 15b's own text.
+//
+// `returnFacts[].nodeId` is deliberately normalized to the placeholder
+// '<nodeId>' rather than pinned to a literal string — verified by running
+// this exact test file: `nodeId` comes from parser-js.js's `_nodeIdSeq`,
+// a MODULE-LEVEL counter that is never reset per fixture, so its value
+// depends on how many CFG nodes every earlier test in this file already
+// parsed (a fact about test ORDER, not about this fixture's own content).
+// Measured directly: fixture A's own returnFacts[0].nodeId came out 'n13'
+// parsed in isolation but 'n42' in this file's actual position (three
+// prior tests' worth of parseJsFile calls ahead of it); fixture B came out
+// 'n14' in isolation, 'n56' here. Pinning either literal would make this
+// test fail the moment an earlier test in the file changes, which is
+// exactly the "verification that doesn't hold under real execution"
+// failure mode this repo's CLAUDE.md warns against — nodeId's realness is
+// instead checked separately (a non-empty string), immediately below.
+function normalizeNodeIdForGolden(canon) {
+  return { ...canon, returnFacts: canon.returnFacts.map((f) => ({ ...f, nodeId: '<nodeId>' })) };
+}
+
+const GOLDEN_A = {
+  exitState: [
+    ['out', ['data:email']],
+    ['user.email', ['data:email']],
+  ],
+  returnFacts: [
+    { nodeId: '<nodeId>', line: 4, identities: ['data:email'] },
+  ],
+  mutatedParams: [
+    ['user', ['data:email']],
+  ],
+  widenings: [
+    '{"atPath":null,"dataElementIds":["data:email"],"line":4,"reason":"unresolved-call-arg"}',
+  ],
+};
+
+const GOLDEN_B = {
+  exitState: [
+    ['a', ['data:email']],
+    ['b', ['data:other-email']],
+    ['other.email', ['data:other-email']],
+    ['user.email', ['data:email']],
+  ],
+  returnFacts: [
+    { nodeId: '<nodeId>', line: 7, identities: ['data:other-email'] },
+  ],
+  mutatedParams: [
+    ['other', ['data:other-email']],
+    ['user', ['data:email']],
+  ],
+  widenings: [
+    '{"atPath":null,"dataElementIds":["data:email"],"line":5,"reason":"unresolved-call-arg"}',
+  ],
+};
+
 test('golden-baseline regression (item 15b): the §13.2a hazard stays closed — a call ARGUMENT that is itself a resolvable call', () => {
   const src = `
     function scrub(u) { return { safe: 1 }; }
@@ -334,12 +395,17 @@ test('golden-baseline regression (item 15b): the §13.2a hazard stays closed —
   // keeps `data:email` flowing into `out`. A regression that reintroduces
   // §13.2a's original hazard (forwarding the FULL ctx into
   // entryStateFromCall's resolveExprIdentities call) would resolve
-  // `scrub(user)` and silently drop this identity — this assertion would
-  // then fail with `[]`.
-  const golden = ['data:email'];
-  assert.deepEqual([...withoutRecorder.returnFacts[0].identities], golden, 'recorder-free result must equal the hardcoded pre-C3 golden literal');
-  assert.deepEqual([...withRecorder.returnFacts[0].identities], golden, 'attaching a recorder must not change the result either');
+  // `scrub(user)` and silently drop this identity — `withoutRecorder
+  // .returnFacts` would become an empty array, so the guard immediately
+  // below fails loudly (rather than the `deepEqual` throwing a raw
+  // `TypeError` on `returnFacts[0]` being undefined).
+  assert.ok(withoutRecorder.returnFacts[0], 'expected a return fact — an empty returnFacts means the §13.2a hazard is back');
+  assert.ok(withRecorder.returnFacts[0], 'expected a return fact — an empty returnFacts means the §13.2a hazard is back');
+  assert.equal(typeof withoutRecorder.returnFacts[0].nodeId, 'string', 'expected a real nodeId string');
+  assert.deepEqual([...withoutRecorder.returnFacts[0].identities], GOLDEN_A.returnFacts[0].identities, 'recorder-free result must equal the hardcoded pre-C3 golden literal');
+  assert.deepEqual([...withRecorder.returnFacts[0].identities], GOLDEN_A.returnFacts[0].identities, 'attaching a recorder must not change the result either');
 
+  assert.deepEqual(normalizeNodeIdForGolden(canonicalizeResult(withoutRecorder)), GOLDEN_A, 'the full canonicalized {exitState, returnFacts, mutatedParams, widenings} shape must equal the hardcoded pre-C3 golden literal (nodeId normalized — see the comment above GOLDEN_A/GOLDEN_B)');
   assert.deepEqual(
     canonicalizeResult(withRecorder),
     canonicalizeResult(withoutRecorder),
@@ -389,16 +455,367 @@ test('golden-baseline regression (item 15b): the §13.2a hazard stays closed und
   // identity survives into `b`. A regression that reintroduces §13.2a's
   // hazard would consume helper's only slot on the nested resolve,
   // degrading `helper(other)` to an empty summary and losing
-  // `data:other-email` — this assertion would then fail with `[]`.
-  const golden = ['data:other-email'];
-  assert.deepEqual([...withoutRecorder.returnFacts[0].identities], golden, 'recorder-free result must equal the hardcoded pre-C3 golden literal');
-  assert.deepEqual([...withRecorder.returnFacts[0].identities], golden, 'attaching a recorder must not change the result either');
+  // `data:other-email` — `withoutRecorder.returnFacts` would become an
+  // empty array, so the guard immediately below fails loudly (rather than
+  // the `deepEqual` throwing a raw `TypeError` on `returnFacts[0]` being
+  // undefined).
+  assert.ok(withoutRecorder.returnFacts[0], 'expected a return fact — an empty returnFacts means the §13.2a hazard is back');
+  assert.ok(withRecorder.returnFacts[0], 'expected a return fact — an empty returnFacts means the §13.2a hazard is back');
+  assert.equal(typeof withoutRecorder.returnFacts[0].nodeId, 'string', 'expected a real nodeId string');
+  assert.deepEqual([...withoutRecorder.returnFacts[0].identities], GOLDEN_B.returnFacts[0].identities, 'recorder-free result must equal the hardcoded pre-C3 golden literal');
+  assert.deepEqual([...withRecorder.returnFacts[0].identities], GOLDEN_B.returnFacts[0].identities, 'attaching a recorder must not change the result either');
 
+  assert.deepEqual(normalizeNodeIdForGolden(canonicalizeResult(withoutRecorder)), GOLDEN_B, 'the full canonicalized {exitState, returnFacts, mutatedParams, widenings} shape must equal the hardcoded pre-C3 golden literal (nodeId normalized — see the comment above GOLDEN_A/GOLDEN_B)');
   assert.deepEqual(
     canonicalizeResult(withRecorder),
     canonicalizeResult(withoutRecorder),
     'the full canonicalized {exitState, returnFacts, mutatedParams, widenings} shape must be identical with and without a recorder',
   );
+});
+
+// ---------------------------------------------------------------------
+// 4b. Item 15 absorption: the PoC's remaining non-redundant assertions,
+//     re-pointed at the SHIPPED functions (never local prototypes). The
+//     "this"-binding stand-in and the three "hole is real" tests have no
+//     permanent equivalent by design (§13.7 item 15) — they proved a
+//     now-fixed hazard, not a lasting property. Everything below DOES
+//     describe a lasting property and is absorbed here before the PoC
+//     file is deleted (Step 6).
+// ---------------------------------------------------------------------
+
+test('call-arg-bind (§13.2): two distinct fields carried by ONE argument each produce their own toPath-specific hop; a literal argument produces none', () => {
+  const src = `
+    function two(u) { return u; }
+    function caller(a) {
+      const lit = two('constant');
+      const viaField = two(a);
+      return [lit, viaField];
+    }
+  `;
+  const byName = parseFns(src, '/x/c3-bind-literal.js');
+  let entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  entryState = addIdentity(entryState, 'a.ssn', 'data:ssn');
+
+  const raw = [];
+  analyzeFunctionFieldIdentity(byName.caller, entryState, {
+    resolveCallSummary: createCallSummaryResolver(new FieldIdentitySummaryCache(), lookupCalleeFor(byName)),
+    recordHop: (h) => raw.push(h),
+  });
+  const hops = dedupeHops(raw);
+
+  const binds = hops.filter((h) => h.kind === 'write-out' && h.subKind === 'call-arg-bind');
+  // The literal argument (`two('constant')`) carries no identity, so
+  // `entryStateFromCall`'s freshly built entryState has nothing to
+  // enumerate for that call site — nothing to record, per §13.2's own
+  // "arguments that are not path-shaped" rule (matching §10.1's `literal`
+  // verdict). The field-carrying argument (`two(a)`) binds BOTH of its
+  // fields, each at its own sub-path.
+  assert.deepEqual(binds.map((h) => h.toPath).sort(), ['u.email', 'u.ssn'],
+    'exactly two bind hops — one per field the field-carrying argument carries — and NONE for the literal argument');
+  const bindEmail = binds.find((h) => h.toPath === 'u.email');
+  const bindSsn = binds.find((h) => h.toPath === 'u.ssn');
+  assert.equal(bindEmail.dataElementId, 'data:email');
+  assert.equal(bindSsn.dataElementId, 'data:ssn');
+  for (const h of binds) {
+    assert.equal(h.fromPath, null);
+    assert.equal(h.lossReason, null);
+    assert.equal(h.widenReason, null);
+    assert.equal(h.peerScope, byName.two.qid);
+    assert.equal(typeof h.peerContext, 'string');
+  }
+});
+
+test('call-arg-bind, return direction (§13.2c): the resolver hands the caller the callee\'s (qid, context) without mutating or perturbing the cached summary', () => {
+  const byName = parseFns(`
+    function inner(u) { return { v: u.email }; }
+    function middle(u) { const r = inner(u); return r; }
+    function outer(a, b) {
+      const x = middle(a);
+      const y = middle(b);
+      return { x, y };
+    }
+  `, '/x/c3-peer-return.js');
+  const cache = new FieldIdentitySummaryCache();
+  const inner = createCallSummaryResolver(cache, lookupCalleeFor(byName));
+
+  const seenReturns = [];
+  const resolveCallSummary = function (...args) {
+    const r = inner.apply(this, args);
+    if (r) seenReturns.push({ qid: r.resolvedQid, context: r.resolvedContext });
+    return r;
+  };
+
+  let entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  entryState = addIdentity(entryState, 'b.email', 'data:email');
+  const withPeer = analyzeFunctionFieldIdentity(byName.outer, entryState, { resolveCallSummary });
+
+  assert.ok(seenReturns.length > 0, 'expected at least one resolved call to have returned a peer-augmented summary');
+  assert.ok(seenReturns.every((s) => typeof s.qid === 'string' && typeof s.context === 'string'),
+    'every resolved call knows exactly which (callee qid, entry context) produced the summary');
+
+  // The cached summary object itself is untouched: a second, plain run
+  // through the SAME resolver (no peer-observing wrapper) produces the
+  // identical analysis result.
+  const cache2 = new FieldIdentitySummaryCache();
+  const plain = createCallSummaryResolver(cache2, lookupCalleeFor(byName));
+  const withoutPeerObserver = analyzeFunctionFieldIdentity(byName.outer, entryState, { resolveCallSummary: plain });
+  assert.deepEqual(
+    canonicalizeResult(withPeer),
+    canonicalizeResult(withoutPeerObserver),
+    'augmenting the resolver\'s RETURN value is inert to engine.js, which reads only returnFlat/returnByPath',
+  );
+
+  for (const [, summary] of cache._cache) {
+    assert.equal(Object.prototype.hasOwnProperty.call(summary, 'resolvedQid'), false,
+      'the resolvedQid/resolvedContext augmentation must be a fresh wrapper, never written onto the cached summary itself (item 10)');
+  }
+});
+
+// ---------------------------------------------------------------------
+// 4c. §13.4's disclosed cache-hit sharing property (§9.6): a cache HIT
+//    records the callee's internal body once per entry CONTEXT, not once
+//    per call site — measured, not assumed, and pinned here so a future
+//    change can't silently regress it into either direction (orphaning a
+//    call site, or the much larger cache-replay fix §13.4 explicitly
+//    rejects).
+// ---------------------------------------------------------------------
+
+function countCalleeInternalHops(byName, entryState) {
+  const cache = new FieldIdentitySummaryCache();
+  const resolveCallSummary = createCallSummaryResolver(cache, lookupCalleeFor(byName));
+  const raw = [];
+  analyzeFunctionFieldIdentity(byName.outer, entryState, {
+    resolveCallSummary,
+    recordHop: (h) => raw.push(h),
+  });
+  const hops = dedupeHops(raw);
+  return {
+    middleContexts: new Set(hops.filter((h) => h.scope === byName.middle.qid).map((h) => h.context)),
+    binds: hops.filter((h) => h.subKind === 'call-arg-bind'),
+  };
+}
+
+test('§13.4/§9.6: two call sites reaching the SAME (qid, entryState) get the callee\'s internal hops exactly ONCE — the cache hit shares the body, it does not orphan the call site', () => {
+  const byName = parseFns(`
+    function inner(u) { return { v: u.email }; }
+    function middle(u) { const r = inner(u); return r; }
+    function outer(a, b) {
+      const x = middle(a);
+      const y = middle(b);
+      return { x, y };
+    }
+  `, '/x/c3-cachehit.js');
+
+  // Both `a` and `b` carry the identical seeded identity, so
+  // entryStateFromCall produces the identical entry state for BOTH call
+  // sites and hashState collides -> the second compute() is a cache HIT.
+  let same = addIdentity(emptyState(), 'a.email', 'data:email');
+  same = addIdentity(same, 'b.email', 'data:email');
+  const collided = countCalleeInternalHops(byName, same);
+
+  const bindContexts = new Set(collided.binds.filter((h) => h.peerScope === byName.middle.qid).map((h) => h.peerContext));
+  assert.equal(bindContexts.size, 1, 'fixture precondition: both call sites bind middle under ONE entry context');
+  assert.equal(collided.middleContexts.size, 1, 'middle\'s own internal hops were recorded for exactly one entry context');
+
+  for (const h of collided.binds.filter((x) => x.peerScope === byName.middle.qid)) {
+    assert.ok(
+      collided.middleContexts.has(h.peerContext),
+      'every call site\'s bind hop points at a context whose body IS present in the record stream — nothing is orphaned',
+    );
+  }
+});
+
+test('§13.4/§9.6 (control): two call sites reaching DIFFERENT entry contexts each get their own copy of the callee\'s internals', () => {
+  const byName = parseFns(`
+    function inner(u) { return { v: u.email }; }
+    function middle(u) { const r = inner(u); return r; }
+    function outer(a, b) {
+      const x = middle(a);
+      const y = middle(b);
+      return { x, y };
+    }
+  `, '/x/c3-cachemiss.js');
+  let distinct = addIdentity(emptyState(), 'a.email', 'data:email');
+  distinct = addIdentity(distinct, 'b.email', 'data:other');
+  const r = countCalleeInternalHops(byName, distinct);
+  assert.equal(r.middleContexts.size, 2, 'two distinct entry contexts -> two distinct compute()s -> two distinct sets of middle-internal hops');
+});
+
+// ---------------------------------------------------------------------
+// 4d. §13.2's disclosed multi-argument cross-join (§9.1's own already-
+//    disclosed phantom-pair shape, recurring at a call boundary).
+// ---------------------------------------------------------------------
+
+test('call-arg-bind (§13.2, disclosed): two arguments at one call site carrying the SAME id produce §9.1 cross-join phantoms the 4-part join key does NOT exclude', () => {
+  const byName = parseFns(`
+    function two(p, q) { return { p, q }; }
+    function caller(m, n) { const r = two(m, n); return r; }
+  `, '/x/c3-multiarg.js');
+
+  let entryState = addIdentity(emptyState(), 'm.email', 'data:email');
+  entryState = addIdentity(entryState, 'n.email', 'data:email'); // SAME id, two arguments
+
+  const raw = [];
+  analyzeFunctionFieldIdentity(byName.caller, entryState, {
+    resolveCallSummary: createCallSummaryResolver(new FieldIdentitySummaryCache(), lookupCalleeFor(byName)),
+    recordHop: (h) => raw.push(h),
+  });
+  const hops = dedupeHops(raw);
+
+  const binds = hops.filter((h) => h.subKind === 'call-arg-bind' && h.dataElementId === 'data:email');
+  assert.deepEqual(binds.map((h) => h.toPath).sort(), ['p.email', 'q.email'], 'two out-halves, one per parameter');
+
+  const ins = hops.filter(
+    (h) => h.kind === 'production' && h.subKind === 'ident'
+      && h.dataElementId === 'data:email' && h.nodeId === binds[0].nodeId && h.fromPath !== null,
+  );
+  assert.deepEqual([...new Set(ins.map((h) => h.fromPath))].sort(), ['m.email', 'n.email'], 'two in-halves, one per argument');
+
+  // Even with `context` in the key, all four pair — both halves share the
+  // caller's single (scope, nodeId, context), so context cannot separate
+  // WHICH argument bound to WHICH parameter.
+  const pairs = new Set();
+  for (const i of ins) {
+    for (const o of binds) {
+      if (i.scope === o.scope && i.nodeId === o.nodeId && i.dataElementId === o.dataElementId && i.context === o.context) {
+        pairs.add(`${i.fromPath}->${o.toPath}`);
+      }
+    }
+  }
+  assert.deepEqual([...pairs].sort(), ['m.email->p.email', 'm.email->q.email', 'n.email->p.email', 'n.email->q.email'],
+    '§9.1\'s cross-join, at a call site: 2 real edges plus 2 phantoms naming the WRONG parameter — a disclosed, not fixed, limitation');
+});
+
+// ---------------------------------------------------------------------
+// 4e. B5/B6 degradation marking (§13.6, §13.7 items 11-12) — against
+//    SHIPPED `FieldIdentitySummaryCache`/`createCallSummaryResolver`, now
+//    that Steps 1-2 of this task have wired marking into compute() for
+//    real (the PoC proved this only via its own `MarkingSummaryCache`
+//    subclass, since shipped code did not carry it yet).
+// ---------------------------------------------------------------------
+
+test('§13.6 (B6): a cap-degraded call site\'s hop carries lossReason "context-cap-degraded"; a precisely-resolved call site does not', () => {
+  const byName = parseFns(`
+    function inner(u) { return { v: u.email }; }
+    function middle(u) { const r = inner(u); return r; }
+    function outer(a, b) {
+      const x = middle(a);
+      const y = middle(b);
+      return { x, y };
+    }
+  `, '/x/c3-b6-marked.js');
+  const cache = new FieldIdentitySummaryCache(1);
+  const resolveCallSummary = createCallSummaryResolver(cache, lookupCalleeFor(byName));
+
+  let entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  entryState = addIdentity(entryState, 'b.ssn', 'data:ssn');
+
+  const raw = [];
+  analyzeFunctionFieldIdentity(byName.outer, entryState, {
+    resolveCallSummary,
+    recordHop: (h) => raw.push(h),
+  });
+  const hops = dedupeHops(raw);
+
+  const degradedHops = hops.filter((h) => h.lossReason === 'context-cap-degraded');
+  assert.ok(degradedHops.length > 0, `the degraded call site is no longer silent, got shapes ${JSON.stringify(hops.map((h) => `${h.subKind}:${h.lossReason}`))}`);
+  for (const h of degradedHops) {
+    assert.equal(h.kind, 'production');
+    assert.equal(h.subKind, 'call-resolved');
+    assert.equal(h.fromPath, null);
+    assert.equal(h.toPath, null);
+    assert.equal(typeof h.dataElementId, 'string');
+    assert.equal(typeof h.peerScope, 'string');
+    assert.equal(typeof h.peerContext, 'string');
+  }
+
+  // The marker names exactly the bound context that has no recorded body.
+  const bodyContexts = new Set(hops.filter((h) => h.scope === byName.middle.qid).map((h) => h.context));
+  const markedContexts = new Set(degradedHops.filter((h) => h.peerScope === byName.middle.qid).map((h) => h.peerContext));
+  assert.ok(markedContexts.size > 0);
+  for (const c of markedContexts) assert.equal(bodyContexts.has(c), false, 'a marked context is precisely one with no recorded body');
+
+  // A precisely-resolved call at the OTHER call site carries no marker.
+  const preciseResolved = hops.filter((h) => h.subKind === 'call-resolved' && h.lossReason === null);
+  assert.ok(preciseResolved.length > 0, 'the first, precisely-resolved call site still emits an unmarked call-resolved hop');
+});
+
+test('§13.6 (B6): marking uses a SHALLOW COPY — the precise empty-entry summary it falls back to is never poisoned', () => {
+  const cache = new FieldIdentitySummaryCache(1);
+  const precise = { ...emptyFieldSummary(), returnFlat: new Set(['data:precise']) };
+  cache.set('qid::y', emptyState(), precise);
+
+  const other = addIdentity(emptyState(), 'p', 'data:other');
+  const degraded = cache.compute('qid::y', other, () => {
+    throw new Error('analyzeFn must not run past the cap');
+  });
+
+  assert.equal(degraded.degradedReason, 'context-cap', 'the degraded summary is marked');
+  assert.notEqual(degraded, precise, 'and it is a COPY, not the shared fallback object');
+  assert.equal(Object.prototype.hasOwnProperty.call(precise, 'degradedReason'), false,
+    'the precise empty-entry summary is untouched — an in-place mark would have retroactively degraded it for every later reader');
+  assert.equal(cache.get('qid::y', emptyState()), precise, 'and it is still the object cached for the empty-entry context');
+  assert.deepEqual([...degraded.returnFlat], ['data:precise'], 'the copy still carries the fallback\'s real facts');
+});
+
+test('§13.6 (B6): a run with NO recorder is unaffected by marking — degradedReason is diagnostic, never a fact', () => {
+  const byName = parseFns(`
+    function inner(u) { return { v: u.email }; }
+    function middle(u) { const r = inner(u); return r; }
+    function outer(a, b) {
+      const x = middle(a);
+      const y = middle(b);
+      return { x, y };
+    }
+  `, '/x/c3-b6-marked-noop.js');
+  let entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  entryState = addIdentity(entryState, 'b.ssn', 'data:ssn');
+
+  const withMarking = analyzeFunctionFieldIdentity(byName.outer, entryState, {
+    resolveCallSummary: createCallSummaryResolver(new FieldIdentitySummaryCache(1), lookupCalleeFor(byName)),
+  });
+  const withoutMarkingCtx = analyzeFunctionFieldIdentity(byName.outer, entryState, {
+    resolveCallSummary: createCallSummaryResolver(new FieldIdentitySummaryCache(1), lookupCalleeFor(byName)),
+  });
+
+  assert.deepEqual(
+    canonicalizeResult(withMarking),
+    canonicalizeResult(withoutMarkingCtx),
+    'the analysis result is identical run to run — degradedReason never perturbs it, and fieldSummaryEq keeps ignoring it (item 13)',
+  );
+});
+
+test('§13.6 (B5): a recursion bottom stub is self-effacing — its empty returnFlat means no call-resolved hop is emitted, so there is nothing to mark there either', () => {
+  const src = `
+    function selfRec(u) { const n = selfRec(u); return { base: u.email, nested: n }; }
+    function top(user) { return selfRec(user); }
+  `;
+  const byName = parseFns(src, '/x/c3-b5.js');
+
+  const cache = new FieldIdentitySummaryCache();
+  const resolveCallSummary = createCallSummaryResolver(cache, lookupCalleeFor(byName));
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+
+  const raw = [];
+  const result = analyzeFunctionFieldIdentity(byName.top, entryState, {
+    resolveCallSummary,
+    recordHop: (h) => raw.push(h),
+  });
+  const hops = dedupeHops(raw);
+
+  assert.ok(hops.some((h) => h.scope === byName.selfRec.qid), 'the recursive callee\'s own hops are recorded (holes closed)');
+  assert.deepEqual([...result.returnFacts[0].identities], ['data:email'], 'and the recursion terminates with a sound result');
+
+  // No call-resolved hop from the recursive self-call ever carries
+  // lossReason: 'context-cap-degraded' — B5's bottom stub is a DIFFERENT
+  // mechanism from B6's cap degradation, and per §13.6 Finding 3, needs no
+  // marking of its own (its empty returnFlat means engine.js's own loop
+  // over `flat` never fires for that round, so there is no hop to mark).
+  const selfCallResolved = hops.filter((h) => h.scope === byName.selfRec.qid && h.subKind === 'call-resolved');
+  for (const h of selfCallResolved) {
+    assert.equal(h.lossReason, null, 'a call-resolved hop that DOES exist for the recursive call is never B6-marked — the bottom-stub round produces no hop at all, rather than an incorrectly-marked one');
+    assert.ok(typeof h.dataElementId === 'string' && h.dataElementId.length > 0);
+  }
 });
 
 // ---------------------------------------------------------------------
