@@ -559,6 +559,70 @@ test('REGRESSION: a real FieldIdentitySummaryCache + low cap + the unsupported-t
 });
 
 // ---------------------------------------------------------------------
+// Sub-project C, increment 3, Task 3, Step 4 (§13.7 item 16): extend the
+// write-only invariant to cover the three NEW recorder-conditional
+// branches C3 adds inside summaries.js — Task 2's items 6 (entryStateFromCall's
+// recorder-only derivation) and 9 (createCallSummaryResolver's hole-3 fix,
+// keeping the caller's recorder alive on the callee's own ctx), and this
+// task's item 12 (the degradation loss hop). A multi-function fixture,
+// through a REAL FieldIdentitySummaryCache at a tight cap, exercising all
+// three in one run: `outer` calls `middle` twice (an argument-binding call
+// each time, item 6/8), the FIRST call resolves all the way through to
+// `inner` (a resolved multi-hop chain, item 9), and the SECOND call
+// degrades past the cap (a context-cap-degraded call, item 12).
+//
+// Deliberately its OWN dedicated test, not one more entry in the shared
+// `fixtures` loop above — that loop's own comment explains why: it reuses
+// ONE extraCtx/cache instance across both the "without" and "with
+// recorder" sub-runs, which would mask exactly the kind of cache-cap
+// accounting divergence this fixture exists to catch (the same class as
+// the dedicated REGRESSION test directly above this one). Two
+// INDEPENDENTLY FRESH caches, one per sub-run, are required instead.
+// ---------------------------------------------------------------------
+
+test('write-only invariant, extended (§13.7 item 16): a multi-function fixture through a real FieldIdentitySummaryCache — argument-binding, a resolved multi-hop chain, AND a context-cap-degraded call, all in one run — must be unaffected by recorder presence', () => {
+  const src = `
+    function inner(u) { return { v: u.email }; }
+    function middle(u) { const r = inner(u); return r; }
+    function outer(a, b) {
+      const x = middle(a);
+      const y = middle(b);
+      return { x, y };
+    }
+  `;
+  const ir = parseJsFile('/x/wo13-c3-degraded.js', src);
+  const byName = {};
+  for (const fn of ir.functions) byName[fn.name] = fn;
+  const lookupCallee = (calleeExpr) => {
+    if (!calleeExpr || calleeExpr.kind !== 'ident') return null;
+    const fn = byName[calleeExpr.name];
+    return fn ? { qid: fn.qid, fn } : null;
+  };
+
+  let entryState = addIdentity(emptyState(), 'a.email', 'data:email');
+  entryState = addIdentity(entryState, 'b.ssn', 'data:ssn');
+
+  function run(withRecorder) {
+    // cap=1 on `middle`: the FIRST distinct context requested (middle(a))
+    // computes for real, resolving all the way through to inner (item 9);
+    // the SECOND (middle(b)) degrades past the cap (item 11/12).
+    const cache = new FieldIdentitySummaryCache(1);
+    const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
+    const ctx = withRecorder ? { resolveCallSummary, recordHop: () => {} } : { resolveCallSummary };
+    return analyzeFunctionFieldIdentity(byName.outer, entryState, ctx);
+  }
+
+  const without = run(false);
+  const withRecorder = run(true);
+
+  assert.deepEqual(
+    canonicalizeResult(without),
+    canonicalizeResult(withRecorder),
+    'attaching a recorder must not change the analysis result — even with all three of C3\'s new recorder-conditional summaries.js branches (items 6, 9, 12) exercised in one run',
+  );
+});
+
+// ---------------------------------------------------------------------
 // 2 & 3. A real parsed example exercising all four instrumented sites in
 //    one function (DESIGN_PATH_PROVENANCE.md §6's own worked example),
 //    asserting the recorded hops are correct and complete for exactly
@@ -595,6 +659,11 @@ function f(user) {
   const REQUIRED_FIELDS = [
     'kind', 'subKind', 'scope', 'dataElementId', 'fromPath', 'toPath',
     'syntacticPath', 'nodeId', 'line', 'widenReason', 'lossReason',
+    // Sub-project C, increment 3, §13.0: three more fields, same
+    // always-present/never-undefined contract as every field above —
+    // absorbed from the PoC's own dedicated additivity test (scenario 6),
+    // which this REQUIRED_FIELDS check now subsumes.
+    'context', 'peerScope', 'peerContext',
   ];
   for (const h of hops) {
     for (const field of REQUIRED_FIELDS) {
@@ -1383,6 +1452,11 @@ test('full intraprocedural coverage proof: every §10.1 + §10.2 hop-emitting (k
   const REQUIRED_FIELDS = [
     'kind', 'subKind', 'scope', 'dataElementId', 'fromPath', 'toPath',
     'syntacticPath', 'nodeId', 'line', 'widenReason', 'lossReason',
+    // Sub-project C, increment 3, §13.0: three more fields, same
+    // always-present/never-undefined contract as every field above —
+    // absorbed from the PoC's own dedicated additivity test (scenario 6),
+    // which this REQUIRED_FIELDS check now subsumes.
+    'context', 'peerScope', 'peerContext',
   ];
   for (const h of hops) {
     for (const field of REQUIRED_FIELDS) {

@@ -1,5 +1,5 @@
 import { accessPathOf, pathIsCoveredByPrefix } from '../dataflow/access-paths.js';
-import { identitiesAt, emptyState, removeIdentitiesAt, addIdentity, joinStates, statesEqual } from './field-identity.js';
+import { identitiesAt, emptyState, removeIdentitiesAt, addIdentity, joinStates, statesEqual, hashState } from './field-identity.js';
 
 function noIdentity() {
   return { flat: new Set(), byPath: new Map(), widened: false };
@@ -502,19 +502,33 @@ export function resolveExprIdentities(state, expr, ctx) {
       // falls straight through to the pre-existing behavior below,
       // unchanged.
       if (ctx?.resolveCallSummary) {
-        const summary = ctx.resolveCallSummary(expr.callee, expr.args ?? [], state);
+        // Path provenance (Sub-project C, increment 3, §13.1): pass the
+        // whole stamped ctx as a 4th argument — this is the ONLY place the
+        // full ctx crosses from engine.js into summaries.js. `ctx` here is
+        // already the stamped `stepCtx` (§7.2), so this hands
+        // resolveCallSummary both the caller's recorder AND the caller's
+        // scope/nodeId/line/context stamping in one object.
+        const summary = ctx.resolveCallSummary(expr.callee, expr.args ?? [], state, ctx);
         if (summary) {
           const flat = new Set(summary.returnFlat);
           const byPath = new Map(summary.returnByPath);
           // Path provenance (§10.1 `call` resolved row): records only that
           // a RESOLVED call contributed — the actual cross-function stitch
           // is C3's job, not C2's.
+          //
+          // §13.2(c): peerScope/peerContext name the callee this call
+          // resolved to, so C4 can connect this hop to the callee's own
+          // write-out/return hops. `?? null`, never a bare reference — a
+          // 3-argument resolveCallSummary stub (an older/hand-built test
+          // fixture that doesn't return resolvedQid/resolvedContext) must
+          // not throw or stamp `undefined`.
           if (ctx?.recordHop) {
             for (const id of flat) {
               ctx.recordHop({
                 kind: 'production', subKind: 'call-resolved',
                 fromPath: null, toPath: null, dataElementId: id,
                 syntacticPath: null, widenReason: null, lossReason: null,
+                peerScope: summary.resolvedQid ?? null, peerContext: summary.resolvedContext ?? null,
               });
             }
           }
@@ -846,6 +860,14 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
   // once for the whole analysis, since resolveExprIdentities never sees the
   // enclosing function.
   const scope = fn.qid ?? null;
+  // Path provenance (Sub-project C, increment 3, §13.3): computed once per
+  // analysis run, alongside `scope` — never per hop. `null` when no
+  // recorder is present, matching every other conditional field this file
+  // stamps. `hashState(entryState)` is the exact primitive
+  // FieldIdentitySummaryCache already keys on (summaries.js's `_key`), so
+  // two hops share a `context` iff the cache would consider them the same
+  // context.
+  const context = ctx?.recordHop ? hashState(entryState) : null;
 
   while (work.length) {
     if (++iterations > ITER_BUDGET) break;
@@ -862,7 +884,11 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
     // — no allocation, nothing for a backward-compatibility test to catch
     // (Decision 7.2's "true by construction" point).
     const stepCtx = ctx?.recordHop
-      ? { ...ctx, recordHop: (h) => ctx.recordHop({ scope, nodeId: nid, line: node.line ?? null, ...h }) }
+      ? { ...ctx, recordHop: (h) => ctx.recordHop({
+          scope, nodeId: nid, line: node.line ?? null,
+          context, peerScope: null, peerContext: null,
+          ...h,
+        }) }
       : ctx;
     const { state: out, returnFact } = step(node, incoming, widenings, stepCtx);
     if (returnFact && returnFact.size > 0) {

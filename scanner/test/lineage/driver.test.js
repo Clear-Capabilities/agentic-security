@@ -394,3 +394,100 @@ function pong(x, n) {
   assert.deepStrictEqual([...reAnalyzedPing.returnFacts.flatMap(rf => [...rf.identities])].sort(), ['data:a', 'data:b'],
     'ping must resolve real field identity from both sides of the mutually-recursive cycle');
 });
+
+// --- Sub-project C, increment 3, Task 3, Step 5 (§13.7 item 17): opts.recordHop ---
+
+// Canonicalizes a raw analyzeFunctionFieldIdentity result the same way
+// engine-provenance.test.js/engine-provenance-interprocedural.test.js do
+// (duplicated here rather than imported, since neither exports a
+// test-support surface — matching this repo's own established precedent).
+function canonicalizeStateMap(map) {
+  return [...map.entries()]
+    .map(([path, ids]) => [path, [...ids].sort()])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+}
+function canonicalizeReturnFacts(returnFacts) {
+  return returnFacts
+    .map((f) => ({ nodeId: f.nodeId, line: f.line, identities: [...f.identities].sort() }))
+    .sort((a, b) => (a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0));
+}
+function canonicalizeWidenings(widenings) {
+  return widenings
+    .map((w) => ({ ...w, dataElementIds: [...w.dataElementIds].sort() }))
+    .map((w) => JSON.stringify(w, Object.keys(w).sort()))
+    .sort();
+}
+function canonicalizeResult({ exitState, returnFacts, mutatedParams, widenings }) {
+  return {
+    exitState: canonicalizeStateMap(exitState),
+    returnFacts: canonicalizeReturnFacts(returnFacts),
+    mutatedParams: canonicalizeStateMap(mutatedParams),
+    widenings: canonicalizeWidenings(widenings),
+  };
+}
+
+test('opts.recordHop (§13.7 item 14/17): threaded into every function\'s ctx across a real multi-file project without perturbing results, and hops genuinely span more than one file once identity is seeded through the driver\'s own cache/callGraph', () => {
+  const sourceA = `
+function outer(id) {
+  const u = getUser(id);
+  return u;
+}
+`;
+  const sourceB = `
+function getUser(userId) {
+  return { email: userId };
+}
+`;
+  const irA = parseJsFile('/drv-c3/a.js', sourceA);
+  const irB = parseJsFile('/drv-c3/b.js', sourceB);
+  assert.ok(irA && irB, 'real parser must successfully parse both files');
+  const perFileIR = { '/drv-c3/a.js': irA, '/drv-c3/b.js': irB };
+  const callGraph = buildCallGraph(perFileIR, { '/drv-c3/a.js': sourceA, '/drv-c3/b.js': sourceB });
+  const outerFn = irA.functions.find((f) => f.name === 'outer');
+  const getUserFn = irB.functions.find((f) => f.name === 'getUser');
+  assert.ok(outerFn && getUserFn, 'expected outer (file A) and getUser (file B) in the parsed IR');
+
+  // Half 1: opts.recordHop reaches EVERY function's ctx, across both files,
+  // without throwing — and does not perturb any function's own result.
+  // driver.js analyzes every function from emptyState() with no seeding
+  // hook (no source registry yet — driver.js's own header comment), so no
+  // hop content can fire from this call alone: this half proves the WIRING
+  // is safe and complete, the same property engine-provenance-
+  // interprocedural.test.js's own item-14 test already pins for a single
+  // hand-built call graph, now against a REAL multi-file callGraph too.
+  const raw = [];
+  const { results: withRecorder, cache } = runFieldIdentityAnalysis(callGraph, { recordHop: (h) => raw.push(h) });
+  assert.strictEqual(withRecorder.size, irA.functions.length + irB.functions.length,
+    'every function across BOTH files was analyzed with the recorder-bearing ctx');
+
+  const { results: withoutRecorder } = runFieldIdentityAnalysis(callGraph);
+  const canon = (results) => [...results.entries()]
+    .map(([qid, r]) => [qid, canonicalizeResult(r)])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  assert.deepEqual(
+    canon(withRecorder),
+    canon(withoutRecorder),
+    'omitting opts.recordHop must leave every function\'s analysis result byte-identical (Decision 7.2\'s "true by construction" property, extended to the driver)',
+  );
+
+  // Half 2: hops genuinely span more than one file. Reuses the driver's
+  // own returned `cache` + a real `createCallGraphLookup`/
+  // `createCallSummaryResolver` (the established content-sanity pattern
+  // this file's own B4/B5 tests already use above) to re-analyze `outer`
+  // with a genuinely seeded identity AND a recorder attached — proving
+  // that once identity actually flows, the caller's hops (file A) and the
+  // resolved callee's own hops (file B) both appear in the SAME recorder.
+  const lookupCallee = createCallGraphLookup(callGraph, '/drv-c3/a.js');
+  const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
+  const seededEntryState = addIdentity(emptyState(), 'id', 'data:id');
+  const hops = [];
+  const reAnalyzed = analyzeFunctionFieldIdentity(outerFn, seededEntryState, { resolveCallSummary, recordHop: (h) => hops.push(h) });
+
+  assert.strictEqual(reAnalyzed.returnFacts.length, 1);
+  assert.deepStrictEqual([...reAnalyzed.returnFacts[0].identities], ['data:id'],
+    'outer must resolve getUser\'s real, resolved field identity');
+
+  const scopes = new Set(hops.map((h) => h.scope));
+  assert.ok(scopes.has(outerFn.qid), 'caller\'s own hops (file A) appear');
+  assert.ok(scopes.has(getUserFn.qid), 'the resolved callee\'s own hops (file B) appear — hops genuinely span more than one file');
+});
