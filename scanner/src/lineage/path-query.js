@@ -240,11 +240,20 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     // Task 2 review finding 2: `hops > 0` guards against `maxDepth: 0`
     // emitting a degenerate ZERO-hop "path" at the start frame itself
     // (edgeIds: [], dataElementId: null) — §15.6's own stated invariant is
-    // that a path always has at least one hop. `maxDepth: 0` is a nonsense
-    // setting either way (the walk can never leave the start node), but it
-    // should honestly report `no-incoming-edges`/an unreachable-in-N-hops
-    // shape rather than materialize a hop-less path a consumer might key
-    // `dataElementId` off of.
+    // that a path always has at least one hop.
+    //
+    // Final whole-branch review finding 1: the guard's actual EFFECT,
+    // stated precisely (an earlier version of this comment claimed "the
+    // walk can never leave the start node" under `maxDepth: 0`, which is
+    // FALSE — measured: `maxDepth: 0` and `maxDepth: 1` are byte-identical,
+    // because the depth check never fires at `hops === 0`, so the walk
+    // still expands exactly one hop before the check can bind). `maxDepth`
+    // therefore has an effective floor of 1, not 0, despite what `opts`
+    // literally says — every RETURNED path still honestly has >= 1 hop
+    // (which is the property this guard actually exists to protect), and
+    // truncation is still reported honestly (`truncated: true`,
+    // `'depth-limit'`), but a caller passing `maxDepth: 0` expecting a
+    // literal zero-hop budget will not get one.
     if (hops >= budget.maxDepth && hops > 0) {
       truncationReasons.add('depth-limit');
       candidates.push(materialize(store, frame.nodesRev, frame.edgesRev, TERMINAL_DEPTH));

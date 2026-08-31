@@ -395,6 +395,36 @@ test('C5/3b: a depth-limited branch is emitted as a PARTIAL path whose terminal 
     'a 1-hop path onto a node with genuinely zero predecessors is still complete');
 });
 
+test('C5/3f: `maxDepth: 0` never emits a degenerate zero-hop path — every returned path still has >= 1 hop, a non-empty edgeIds, and a real dataElementId (final whole-branch review finding 2)', () => {
+  const src = `
+    function ping(u) { const r = pong(u); return { a: u.email, b: r }; }
+    function pong(u) { const r = ping(u); return { c: u.email, d: r }; }
+    function top(user) { return ping(user); }
+  `;
+  const byName = parseFns(src, '/x/c5-depth0.js');
+  const entryState = addIdentity(emptyState(), 'user.email', 'data:email');
+  const { store } = record(byName.top, entryState, { byName });
+  const sink = sinkCandidates(store)[0];
+
+  const zero = reconstructPaths(store, sink.id, { maxDepth: 0, maxPaths: 1e6, maxPathsPerTerminal: 1e6 });
+  const one = reconstructPaths(store, sink.id, { maxDepth: 1, maxPaths: 1e6, maxPathsPerTerminal: 1e6 });
+
+  assert.ok(zero.paths.length > 0, 'maxDepth: 0 must still return something, not silently zero paths');
+  for (const p of zero.paths) {
+    assert.ok(p.hopCount > 0, 'no returned path may have zero hops');
+    assert.ok(p.edgeIds.length > 0, 'no returned path may have an empty edgeIds array');
+    assert.ok(p.dataElementId !== null, 'no returned path may have a null dataElementId');
+  }
+  // Documented, not hidden: `maxDepth` has an effective floor of 1, so
+  // `maxDepth: 0` behaves identically to `maxDepth: 1` (the depth check
+  // cannot fire at the start frame, where `hops === 0`).
+  assert.deepEqual(
+    zero.paths.map((p) => p.id).sort(),
+    one.paths.map((p) => p.id).sort(),
+    'maxDepth: 0 and maxDepth: 1 must produce the same set of paths',
+  );
+});
+
 test('C5/3c: a path that ends only because every continuation would revisit a node reports terminal `cycle`, not `origin`', () => {
   const src = `
     function ping(u) { const r = pong(u); return { a: u.email, b: r }; }
