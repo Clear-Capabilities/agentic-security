@@ -56,7 +56,9 @@ const PROVENANCE_MAP = {
   'cookie':       { category: 'http-cookie',           status: 'modeled', why: 'pure rename' },
   'env':          { category: 'env-value',             status: 'modeled', why: 'pure rename' },
   'cli':          { category: 'cli-argument',          status: 'modeled', why: 'pure rename' },
-  'network':      { category: 'external-api-response', status: 'modeled', why: 'all 8 entries read an outbound response body (fetch/axios/requests/urlopen/recv)' },
+  // Both rows carry a `language === 'cpp'` refinement (§4.2) — C's I/O
+  // primitives are descriptor-generic, so their C entries demote to `partial`.
+  'network':      { category: 'external-api-response', status: 'modeled', why: 'reads an outbound response body (fetch/axios/requests/urlopen)' },
   'file-read':    { category: 'storage-read',          status: 'modeled', why: "FR-101 groups 'files and object storage reads'; storage-read is its only encoding" },
   'url-fragment': { category: 'http-query',            status: 'partial', why: 'LOSSY: a fragment is URL-borne but never transmitted to the server; SOURCE_CATEGORIES has no http-fragment value' },
   'stdin':        { category: 'user-input',            status: 'partial', why: 'LOSSY: broadens to the generic category; no stdin/console value exists' },
@@ -267,10 +269,22 @@ const CATEGORY_EXTERNALITY = {
 // The reclassification functions (D2/D3 implement exactly these)
 // ───────────────────────────────────────────────────────────────────────────
 
+// §4.2: within these two provenance buckets, a `cpp` entry is descriptor-
+// generic — the same call reads a file, socket, pipe or stdin, and the entry
+// cannot say which. Category stays; status demotes to `partial`.
+const CPP_DESCRIPTOR_GENERIC_PROVENANCE = new Set(['network', 'file-read']);
+const CPP_DESCRIPTOR_GENERIC_WHY = {
+  'network': 'LOSSY: a raw socket receive is directionally ambiguous — on a client socket this is an API response, on a listening socket it is an inbound client request, which external-api-response mis-describes',
+  'file-read': 'LOSSY: a C file descriptor / FILE* is equally a file, socket, pipe or stdin; the entry cannot say which',
+};
+
 function reclassifySource(entry) {
   if (entry.provenance) {
     const row = PROVENANCE_MAP[entry.provenance];
     if (!row) return { kind: 'source', category: null, coverageStatus: 'unsupported', reason: `unmapped provenance ${entry.provenance}` };
+    if (entry.language === 'cpp' && CPP_DESCRIPTOR_GENERIC_PROVENANCE.has(entry.provenance)) {
+      return { kind: 'source', category: row.category, coverageStatus: 'partial', reason: CPP_DESCRIPTOR_GENERIC_WHY[entry.provenance] };
+    }
     if (row.status === 'split') {
       const ref = AGENT_TOOL_REFINEMENT[entry.id];
       if (!ref) return { kind: 'source', category: null, coverageStatus: 'unsupported', reason: `unrefined ${entry.provenance} entry ${entry.id}` };
@@ -559,11 +573,38 @@ test('D1/5b: `unsupported` is a large, MEASURED share of the sink catalog, not a
 test('D1/5c: source-side coverage counts are pinned too', () => {
   const results = SOURCES.map(reclassifySource);
   assert.equal(SOURCES.length, 180);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 89);
-  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 9);     // 2 url-fragment + 2 stdin + 5 MCP argument entries
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 84);
+  // 2 url-fragment + 2 stdin + 5 MCP argument + 5 descriptor-generic cpp (§4.2)
+  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 14);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 82);  // every entry with no declared provenance
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0); // the source side has NO unsupported entries
-  assert.equal(89 + 9 + 82, SOURCES.length);
+  assert.equal(84 + 14 + 82, SOURCES.length);
+});
+
+test('D1/5e: §4.2 — C\'s descriptor-generic I/O entries are `partial`, not `modeled`', () => {
+  // The category is right; the confidence is not. A raw socket receive on a
+  // LISTENING socket is an inbound client request, which
+  // `external-api-response` actively mis-describes; a C fd/FILE* is equally a
+  // file, socket, pipe or stdin.
+  const expected = {
+    'cpp-recv': 'external-api-response',
+    'cpp-recvfrom': 'external-api-response',
+    'cpp-read': 'storage-read',
+    'cpp-fread': 'storage-read',
+    'cpp-fgets': 'storage-read',
+  };
+  for (const [id, category] of Object.entries(expected)) {
+    const e = byId.get(id);
+    assert.ok(e, `catalog entry ${id} no longer exists`);
+    const r = reclassifySource(e);
+    assert.equal(r.category, category, `${id}: category is unchanged by the refinement`);
+    assert.equal(r.coverageStatus, 'partial', `${id}: must not claim modeled`);
+    assert.match(r.reason, /LOSSY/);
+  }
+  // and the refinement is scoped: the non-C entries in the same buckets stay modeled
+  for (const id of ['js-fetch-json', 'py-requests-json', 'py-open-read']) {
+    assert.equal(reclassifySource(byId.get(id)).coverageStatus, 'modeled', id);
+  }
 });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -616,6 +657,16 @@ test('D1/6b: the SINK_CATEGORIES values no catalog entry can produce today — i
   // ...while the SOURCE side does have AI coverage, via the MCP entries.
   const reachableSrc = reachableSourceCategories();
   assert.ok(SOURCE_CATEGORIES.filter((c) => c.startsWith('ai-')).some((c) => reachableSrc.has(c)));
+});
+
+test('D1/6c: the category vocabularies are 21 source / 29 sink — upstream says 28 sink', () => {
+  // §7.3 item 5. Both the parent scoping doc (D3's row: "more categories:
+  // 28 vs 21") and the D1 task brief say 28. Any coverage fraction computed
+  // off 28 is wrong, and D3 is sized off this number.
+  assert.equal(SOURCE_CATEGORIES.length, 21);
+  assert.equal(SINK_CATEGORIES.length, 29);
+  assert.equal(new Set(SINK_CATEGORIES).size, 29, 'no duplicate hiding the count');
+  assert.equal(new Set(SOURCE_CATEGORIES).size, 21);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

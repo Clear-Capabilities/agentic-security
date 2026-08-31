@@ -14,8 +14,8 @@ increments; §9 is their checklist.
 **Every number, list and claim in this document was produced by running real
 code against the live catalogs in the increment that wrote it**, via
 `test/lineage/registry-mapping-poc.test.js`. Nothing here is quoted from the
-scoping doc, and §7.3 records four places where the scoping doc was measurably
-wrong.
+scoping doc, and §7.3 records five places where the upstream documents (the
+scoping doc and the D1 task brief) were measurably wrong.
 
 ---
 
@@ -123,8 +123,8 @@ Primary key: the entry's declared `provenance`.
 | `path-param` | 5 | `http-route` | `modeled` | pure rename |
 | `env` | 4 | `env-value` | `modeled` | pure rename |
 | `cli` | 3 | `cli-argument` | `modeled` | pure rename |
-| `network` | 8 | `external-api-response` | `modeled` | all 8 read an outbound response body (`fetch`/`axios`/`requests`/`urlopen`/`recv`) |
-| `file-read` | 4 | `storage-read` | `modeled` | FR-101 groups "files and object storage reads"; `storage-read` is its only encoding |
+| `network` | 8 | `external-api-response` | `modeled` ×6, **`partial` ×2** | the 6 JS/Python entries read an outbound response body (`fetch`/`axios`/`requests`/`urlopen`); the 2 `cpp` entries are refined — see §4.2 |
+| `file-read` | 4 | `storage-read` | `modeled` ×1, **`partial` ×3** | FR-101 groups "files and object storage reads"; `storage-read` is its only encoding. The 3 `cpp` entries are refined — see §4.2 |
 | `url-fragment` | 2 | `http-query` | **`partial`** | lossy — a fragment is URL-borne but never transmitted to the server; no `http-fragment` value exists |
 | `stdin` | 2 | `user-input` | **`partial`** | lossy — broadens to the generic value; no stdin/console value exists |
 | `agent-tool` | 8 | *splits* | *see below* | **the one value that does not resolve on the provenance key alone** |
@@ -142,7 +142,31 @@ refinement:
 | `js-mcp-tool-result`, `py-mcp-tool-result` | `ai-tool-result` | `modeled` |
 | `js-mcp-resource-contents` | `ai-retrieved-document` | `modeled` |
 
-### 4.2 The 82 entries with no `provenance`
+### 4.2 C's I/O primitives are descriptor-generic — the third refinement key
+
+The `network` and `file-read` rows above cannot claim `modeled` for their C
+entries, under §6.1's own bar ("resolves 1:1 with no semantic loss"). C's I/O
+primitives are **descriptor-generic**: the same call reads a file, a socket, a
+pipe or stdin, and the catalog entry has no way to say which.
+
+| entry | provenance | why not `modeled` |
+|---|---|---|
+| `cpp-recv`, `cpp-recvfrom` | `network` | directionally ambiguous — on a *client* socket this is an API response; on a *listening* socket it is an inbound client request, which `external-api-response` actively mis-describes |
+| `cpp-read` | `file-read` | a raw fd is equally a file, socket or pipe |
+| `cpp-fread`, `cpp-fgets` | `file-read` | a `FILE*` is commonly `stdin`, not a file |
+
+The refinement key is therefore **`language === 'cpp'`** within these two
+provenance buckets: category unchanged, status demoted to `partial`, caveat
+stated. This is the third and last documented refinement, alongside §4.1's
+per-entry-id one and §5.2's `framework` one — and it is the same *shape* as
+both: a declared classification value that is correct for most of its entries
+and lossy for an identifiable subset. (§4.3's 82-row override table is a
+different mechanism entirely — a fallback for entries with *no* declared value,
+not a refinement of one.) Note the `stdin` provenance (§4, also `cpp`-only) was
+already `partial` for the adjacent reason, so the C entries are now uniformly
+honest across all three buckets.
+
+### 4.3 The 82 entries with no `provenance`
 
 They get a per-entry-id override table (enumerated in full in the PoC file's
 `NO_PROVENANCE_OVERRIDES`), and every one of them is **`candidate`** — see
@@ -150,7 +174,7 @@ They get a per-entry-id override table (enumerated in full in the PoC file's
 `provenance` on literally zero of their source entries**, so entire language
 families would otherwise be uncategorized.
 
-Resulting source coverage: **89 `modeled`, 9 `partial`, 82 `candidate`, 0
+Resulting source coverage: **84 `modeled`, 14 `partial`, 82 `candidate`, 0
 `unsupported`.**
 
 ---
@@ -367,12 +391,43 @@ category → kind table is in the PoC's `CATEGORY_NODE_KIND`; its shape is
 `monitoring`, all `ai-*` except `ai-local-model`) → `external`;
 `http-response` and `declared` → `sink`.
 
+**The four `NODE_KINDS` values a reclassified sink never gets, and why** —
+recorded so a later reader sees a decision rather than an oversight.
+`api` was considered for `external-api`/`webhook` and rejected: it denotes a
+*service endpoint entity*, whereas a catalog sink is the **call site** that
+sends data to one, and `external` is the value that says "the data leaves to
+a party outside this program". (When Sub-project E builds real destination
+nodes from FR-202 resolution, *those* may well be `api`; the registry's
+call-site node is not.) `transform` belongs to `TRANSFORM_KINDS`-shaped
+transformation entities (§8), not to sinks. `boundary` is rejected for the
+same reason it is on the source side — it needs trust-zone data no entry
+carries. `unresolved` is rejected **here** but is genuinely needed one layer
+out, for a *dynamic destination* rather than an unmappable category — see
+§9's D3 checklist item 5 and the degraded-dead-end rule in §9's
+carried-forward section.
+
 **A `null` category (i.e. `unsupported`) → `process`.** This is not a fallback;
 it is the *explanation*. Every unsupported sink is an in-process computation
 destination, which is precisely why FR-201's egress taxonomy has no value for
 it. D1/3c pins the biconditional: `kind === 'process'` **iff**
 `coverageStatus === 'unsupported'`. Measured sink kinds across all 194:
 exactly `{external, process, sink, store}`.
+
+> **The biconditional is contingent, and whoever breaks it should know they
+> are meant to.** It holds today only because the one *other* category that
+> maps to `process` — `ai-local-model` — is **vacuously unreachable** (§7.2:
+> no catalog entry produces any `ai-*` sink). The moment AI-destination
+> detection lands — which §7.2 names as the single largest piece of future
+> work here — an `ai-local-model` sink will have `kind: 'process'` with a
+> non-null category and a non-`unsupported` status, and `D1/3c`'s reverse
+> implication (`kind === 'process'` ⟹ `unsupported`) becomes false.
+> **That is a correct consequence of new coverage, not a regression.**
+> Whoever adds AI-sink detection owns relaxing the assertion to its forward
+> direction only (`unsupported` ⟹ `process`), which is the half that
+> actually encodes §3's claim. The assertion is written as a biconditional
+> deliberately, because until then the stronger form is true and catches
+> more; it is flagged here so it is not mistaken for something the AI work
+> broke.
 
 ### 7.2 Categories no catalog can reach today
 
@@ -400,13 +455,29 @@ can see data arriving *from* an agent context and cannot see data being sent
 *to* a model provider, vector store, or agent. AC-07 ("PHI enters an
 Anthropic/OpenAI/Bedrock model request") is **not satisfiable** by
 reclassification alone. It needs new detection, which is out of Sub-project D's
-scope entirely and must be raised where Milestone-2 AI-BOM destination work is
-planned. `stdout` is likewise unreachable despite FR-201 naming it, because
+scope entirely.
+
+**Whose problem this is: Sub-project H, inside Milestone 1 — not Milestone 2.**
+AC-07 sits in **Milestone 1's own exit gate** (PRD §26, quoted verbatim in the
+parent M1 scoping doc: *"AC-01, AC-02, AC-07, AC-11, and schema completeness
+pass on the supported-language corpus"*), and that doc's §5 table assigns
+running it to **Sub-project H** (*"Runs AC-01, AC-02, AC-07, AC-11, and schema
+completeness against the real JS/TS corpus"*). So this is not a
+deferred-to-a-later-milestone concern that D may hand off and forget: it is a
+gap in the milestone D itself belongs to, and H will hit it as a hard exit-gate
+failure unless AI-destination detection lands somewhere in D through G first.
+**Whoever scopes Sub-project H must budget for that**, and should treat "AC-07
+passes" as blocked on new detection work that no current increment owns.
+
+`stdout` is likewise unreachable despite FR-201 naming it, because
 `console.log` is catalogued as `log`, not split.
 
-### 7.3 Four places the scoping doc was measurably wrong
+### 7.3 Five places the upstream documents were measurably wrong
 
-Recorded because later increments will otherwise re-inherit them:
+Recorded because later increments will otherwise re-inherit them. "Upstream"
+rather than "the scoping doc" deliberately — items 3 and 5 originate in the D1
+task brief, not the scoping doc, and attributing everything to one source would
+send a corrector to the wrong file.
 
 1. **Catalog size.** The scoping doc (and `scanner/src/dataflow/CLAUDE.md`)
    say **655 entries (149 source / 124 sink / 382 sanitizer)**. The live
@@ -419,12 +490,21 @@ Recorded because later increments will otherwise re-inherit them:
    the real identifiers are `emailSend`, `fileWrite`, `outboundHttp`,
    `thirdPartySdk`, plus `s3Upload`, which the eight-value list omits entirely.
    Pinned by D1/4d.
-3. **`storage` splitting.** Anticipated to need splitting; measured not to
-   (§5.3).
+3. **`storage` splitting.** The **task brief** (not the scoping doc, which only
+   says the two vocabularies don't match) predicted `storage` would need
+   splitting across `database`/`object-storage`/`cache`. Measured: it does not
+   (§5.3). Pinned by D1/4b.
 4. **The sink classification field.** The scoping doc calls it `vuln`. That is
    correct as far as it goes, but the operative sub-field is `vuln.cwe`, and
    the more important fact — that **no sink entry carries a `category` field at
    all** — is not recorded there. Pinned by D1/8b.
+5. **`SINK_CATEGORIES` has 29 values, not 28.** Both the scoping doc (D3's row:
+   *"more categories: 28 vs 21"*) and the task brief say 28. The live export
+   has **29** (`SOURCE_CATEGORIES`' 21 is correct). This document uses 29
+   throughout — §7.2's "10 of 29 reachable" and "19 unreachable" sum correctly
+   — but the correction was not flagged alongside the others in D1's first
+   draft, so it is recorded here. It matters for D3's sizing, and any
+   coverage-fraction computed off 28 is wrong. Pinned by D1/6c.
 
 ### 7.4 Two genuine schema/catalog gaps — named, deliberately not patched
 
@@ -518,14 +598,36 @@ does not decide it.
 
 ## 9. Checklist for the follow-up increments
 
+### 9.0 The decision shape, and how `category` reaches a node
+
+Both registries return the same object:
+`{kind, category, coverageStatus, externality, reason}`.
+
+**`category` is the REGISTRY's own field name. On a `DataFlowGraph v1` node it
+becomes `subtype`.** The PRD's §10.3 node contract has no `category` field at
+all — the vocabulary lands in `subtype` ("Framework/provider-specific type such
+as `express-route`, `postgres-table`, `stdout`"), and `schema.js`'s own comment
+on `SOURCE_CATEGORIES`/`SINK_CATEGORIES` says so explicitly: *"the fixed
+vocabulary a node's `subtype`/an inventory row's `category` field draws from."*
+So D2/D3 emit `category`, and Sub-project E's graph builder writes it to
+`node.subtype`. Neither side should invent a third name, and a registry must
+not emit a field literally called `subtype` — the two are the same vocabulary
+at different layers, and conflating them would let a registry decision be
+validated as a node without ever passing through the builder.
+
+A `null` `category` therefore becomes a `null`/absent `subtype`, which is
+exactly what an `unsupported` node needs (§6.4) — its `kind` and `reason` carry
+the meaning instead.
+
 ### D2 — `src/lineage/source-registry.js`
 
-1. Export `reclassifySource(entry)` returning
-   `{kind, category, coverageStatus, externality, reason}`, exactly the shape
-   proven in the PoC. `kind` is always `'source'` (§7.1).
-2. Port `PROVENANCE_MAP` (12 rows, §4), `AGENT_TOOL_REFINEMENT` (8 rows, §4.1)
-   and `NO_PROVENANCE_OVERRIDES` (82 rows, §4.2) verbatim from
-   `test/lineage/registry-mapping-poc.test.js`.
+1. Export `reclassifySource(entry)` returning the §9.0 shape. `kind` is always
+   `'source'` (§7.1).
+2. Port `PROVENANCE_MAP` (12 rows, §4), `AGENT_TOOL_REFINEMENT` (8 rows, §4.1),
+   the `language === 'cpp'` descriptor-generic refinement (§4.2) and
+   `NO_PROVENANCE_OVERRIDES` (82 rows, §4.3) from
+   `test/lineage/registry-mapping-poc.test.js` — see §9.1 for why that file is
+   the source of truth for the 82-row table and what happens to it afterwards.
 3. Import `CATALOG` from `../dataflow/catalog.js`. Import nothing else from
    `dataflow/` — no matcher, no engine (§1).
 4. Keep the completeness guards as **shipped** tests, not PoC-only: the
@@ -551,15 +653,91 @@ does not decide it.
    item, not a silent `analytics`** (§5.3): a registry cannot resolve it, but a
    later match-time consumer that knows which receiver matched can, and should
    promote `partial` → `modeled` when it does.
-5. Ship the measured-count pins (§4.2, §5.1, §5.2) as tests. `bench/layer-recall`
+5. **Close FR-203 — a dynamic destination still produces a node.** The parent
+   scoping doc assigns FR-203 to D3 explicitly, and nothing else in this
+   checklist covers it, because it is a *different axis* from everything above:
+   §5's tables answer "which category is this sink", FR-203 answers "we know
+   the call, but not where it points". A recognized sink whose destination
+   cannot be resolved (`fetch(url)` with a computed `url`, an SDK client built
+   from config) must emit a node with **`kind: 'unresolved'`** — the
+   `NODE_KINDS` value that exists for exactly this and is used nowhere else in
+   this design — its resolved `category` retained (the *category* is known even
+   when the *destination* is not), `externality: 'unknown'`, and a `reason`
+   naming the expression that prevented resolution, since FR-203 requires the
+   evidence panel to show it. **Never** drop the node, and never let it
+   degrade into the `process`/`unsupported` bucket, which means something
+   entirely different (§3: no category exists at all). Note D3 can only mark
+   the *shape*; actually resolving destinations is FR-202 and lands in
+   Milestone 2 (§7.5).
+6. Ship the measured-count pins (§4.3, §5.1, §5.2) as tests. `bench/layer-recall`
    has already demonstrated in this repo that a floor-only gate lets a stale
    published number survive for weeks; these are equality pins for that reason.
 
-### Sequencing
+### 9.1 Who owns the 82-row override table, and who deletes the PoC
+
+Two questions every prior sub-project answered explicitly and this one must
+too (the precedent is `DESIGN_PATH_PROVENANCE.md` §13.7 item 15, where a single
+absorbing task carried an explicit deletion instruction).
+
+**The override table's permanent home is `source-registry.js`.** It is code,
+not prose, and it belongs in the module that executes it. This ADR
+deliberately does **not** reproduce all 82 rows: a hand-copied 82-row table in
+markdown would drift from the executable one with nothing able to detect the
+drift, which is strictly worse than a single authoritative copy plus a pointer.
+What this document owns instead is the *derivation rule* (§4.3 + §6.3) and the
+*completeness guarantee* (D2 item 4) — both of which survive any move of the
+table itself. Until D2 lands, the PoC is the table's interim home; after D2
+lands, `source-registry.js` is, and the PoC's copy is redundant.
+
+**Deletion: whichever of D2/D3 lands SECOND deletes
+`test/lineage/registry-mapping-poc.test.js`**, in its own commit, after
+confirming the other increment's absorption is complete. D2 and D3 run in
+parallel (§9.2) and each absorbs a *disjoint* half of the PoC — D2 the source
+tables and guards, D3 the sink and privacy ones — so neither may delete it
+unilaterally while the other is still in flight. The second-lander must verify
+both halves are present as shipped tests before removing it, and must also
+remove the file from `package.json`'s `test:lineage` script and from this
+package's `CLAUDE.md` table in the same commit. If D4 somehow lands before
+either, it changes nothing: D4 absorbs no part of this file (§8 is
+confirmations only, `D1/7a`/`D1/7b` stay until the second registry lands).
+
+### 9.2 Sequencing and D5's exit criterion
 
 D2 and D3 are independent and can run in parallel — they share only this
 document and `schema.js`, and touch disjoint files. D4 depends on §8 but not on
 D2/D3.
+
+**D5's exit criterion, as the parent scoping doc states it, cannot pass — and
+must be corrected before D5 is briefed.** That doc's D5 row reads: *"every
+FR-101/FR-201 source/sink category has at least one real-code proof."* §7.2
+measures why that is unachievable: **19 of 29 sink categories and 7 of 21
+source categories have zero catalog entries mapping to them**, by construction
+rather than by any implementation gap. No quality of D2/D3/D4 execution can
+change that, because the detection those categories would need does not exist
+anywhere in the scanner (§7.2's headline: all nine `ai-*` sink categories are
+among them). Briefed as written, D5 would either fail permanently or be quietly
+softened — and quietly softening a coverage criterion is precisely the failure
+mode this whole PRD treats as load-bearing.
+
+This is a defect in D5's *paraphrase*, not in FR-201. FR-201's own text says
+**"all *supported* sinks must remain discoverable"**, and the `unsupported`-
+with-reason design satisfies that honestly: every one of the 756 entries
+produces a node carrying a non-empty reason (`D1/1e`), and every unreachable
+category is named in a test that fails if the set changes (`D1/6a`, `D1/6b`).
+
+**The corrected criterion D2–D5 should be built and judged against:**
+
+> Every **reachable** category has at least one real-code proof, **and** every
+> **unreachable** category has a recorded, tested reason — never silent
+> absence.
+
+Both halves are testable today and already have their shape fixed by `D1/6a`
+and `D1/6b`, which pin the unreachable sets as exact lists. D5's job is to
+extend that from "the registry maps it" to "real parsed code exercises it",
+for the reachable half only, while inheriting the unreachable half's existing
+assertions unchanged. A category moving from unreachable to reachable is then
+a *deliberate* event that fails a test and forces both lists to be updated —
+which is the behavior wanted, and the opposite of a floor-only gate.
 
 ### Carried forward from Sub-project C: §16.7 Finding 2
 
@@ -578,7 +756,34 @@ nothing in a sink-rooted query asks. This is §18.4's "truncation must never
 look like no-flow" constraint re-opening at the *query* boundary rather than
 the recording boundary.
 
-Why it is not D2/D3's problem: `sinkCandidates()` is documented as a
+§16.7 offers two fixes, and they are **not alternatives — they are two halves,
+one of which is D's**. Both are settled here.
+
+**Half 2 (the taxonomy) IS D's, and is decided now.** §16.7's second option —
+"Sub-project D's registry deciding a degraded dead end is a reportable
+endpoint" — is a vocabulary question in §6/§7.1's remit and needs no
+`PathStore` at all, so leaving it open would force Sub-project E to invent the
+node's vocabulary while implementing the enumerator. **A truncation-terminal —
+a `path` node with zero out-edges whose in-edges carry a
+`context-cap-degraded` annotation — is a reportable endpoint, and it carries
+`kind: 'unresolved'`, `coverageStatus: 'partial'`, `externality: 'unknown'`,
+with a `reason` naming the context-cap degradation.** The reasoning, in the
+terms §6 and §7.1 already set: `unresolved` is right for the same reason it is
+right for FR-203 (§9's D3 item 5) — the flow is known to exist and its endpoint
+is not knowable, which is exactly what that kind means, and it must **not** be
+`process`/`unsupported`, which asserts the different and false claim that no
+category models it; `partial` is right because the analyzer genuinely observed
+this flow and lost only its continuation, which is §6.2's "sure, and lossy in a
+stated way", not §6.3's "inferred" or §6.4's "unmodellable"; `externality:
+'unknown'` follows §7.5 directly, since the callee's body was never analyzed
+and nothing is known about where the data goes next. This is the one place in
+this design where a node's `coverageStatus` comes from the *analysis* rather
+than from a catalog entry — consistent, because a truncation-terminal has no
+catalog entry behind it at all, which is exactly why §4/§5's tables could not
+settle it.
+
+**Half 1 (the enumerator) is Sub-project E's, not D2's or D3's.**
+`sinkCandidates()` is documented as a
 **registry stand-in** — "there is no sink registry yet — Sub-project D" — so
 the obvious reading is that D3 replaces it and inherits the bug. That reading
 is wrong. D3 produces a *classification for a catalog entry*; it does not
