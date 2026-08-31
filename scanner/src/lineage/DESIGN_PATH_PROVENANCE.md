@@ -749,6 +749,41 @@ doc's own §3): a function whose `analyzeFunctionFieldIdentity` run hit
 `ITER_BUDGET` should mark its ENTIRE result set as budget-truncated, not
 leave individual hops looking complete.
 
+### 9.6 A callee's body is recorded once per ENTRY CONTEXT, not once per call site
+
+**Added by increment C3, from a measurement, not a prediction** — see §13.4
+for the run that produced it.
+
+`FieldIdentitySummaryCache.compute(qid, entryState, analyzeFn)` memoizes:
+`analyzeFn` — the thing that transitively emits the callee's own hops —
+runs only on a cache MISS. So when two call sites bind the *same*
+`(qid, entryState)`, the callee's internal hops are emitted **once**, for
+whichever call site missed first. The later, cache-hitting call site emits
+its own `call-arg-bind` and `call-resolved` hops (neither goes through the
+cache) and nothing else.
+
+**Accepted as a disclosed property, and it is not a loss** — *provided*
+`peerContext` is recorded (§13.2). Both call sites' `call-arg-bind` hops
+carry the same `peerContext`, which is exactly the `context` stamped on the
+single recorded copy of the callee's body, so a consumer walking forward
+from either call site reaches that body. The body is **shared, not
+orphaned**; sharing one recorded body across N call sites that produce the
+same callee behaviour *is* FR-303's compactness requirement, not a gap in
+it. Proven by execution, not argued: the PoC asserts, for the two-call-site
+fixture, that every bind hop's `peerContext` is a context whose body is
+present in the record stream.
+
+Two caveats, stated so a later increment does not rediscover them:
+
+- **Without `peerContext` this WOULD be a silent loss**, and the naive
+  wiring is precisely the one that omits it. That is what makes
+  `peerContext` load-bearing rather than decorative, and it is why §13.4
+  does not need the much larger "cache stores and replays a per-summary hop
+  list" fix that was the alternative on the table.
+- **The one genuinely orphaned case is a B6 cap degradation**, where the
+  bound context's body was never computed at all. That is a real §18.4
+  violation, it is separate from this section, and §13.6 handles it.
+
 ---
 
 ## 10. Full instrumentation checklist for increment C2
@@ -830,6 +865,26 @@ B6 context-capped, degraded summary — §3 of the scoping doc names both, and
 neither is representable in today's shape without a new `subKind` or
 `lossReason` value. That is C3's call to make, and it is additive.
 
+> **2026-08-30 correction (increment C3, per this document's own
+> fix-rather-than-diverge policy).** Three of this paragraph's instructions
+> were wrong once real code was attempted, and §13 supersedes them:
+>
+> - *"argument→parameter write-outs, in the **callee's** scope"* — **no.**
+>   The binding out-half must be stamped with the **caller's**
+>   `scope`/`nodeId`/`context`, because that is the only way it joins with
+>   the in-halves the argument expression's own resolution emits (which run
+>   under the caller's `stepCtx`). The callee's identity is carried on the
+>   new `peerScope`/`peerContext` fields instead. See §13.2.
+> - *"C3 must also mark hops recorded during a B5 bottom-stub round"* —
+>   there is **nothing to mark**: a bottom stub's `returnFlat` is empty, so
+>   `case 'call'` emits no `call-resolved` hop at all on that round. See
+>   §13.6, which measured this.
+> - *"`applyAtCallSite` (callee mutation→caller write-outs)"* — **deferred,
+>   not done.** `applyAtCallSite` is exported and unit-tested but is wired
+>   into nothing: `engine.js` never calls it (a fact `test/lineage/driver
+>   .test.js` already records). Instrumenting a mechanism that never runs
+>   would ship untested-by-construction hop code. See §13.7's exclusions.
+
 **Also C3's, and load-bearing, not optional:** §9.4's `context` field. C3 is
 what actually exercises multiple entry contexts for the same qid through
 this recording mechanism — closing §9.4 is a precondition for C3's own hops
@@ -868,6 +923,458 @@ maps onto FR-306's evidence grades (C6); any `DataFlowGraph v1` output
 (Sub-project D); collapsing repeated library/framework nodes into typed
 summary hops (§18.4 — home undecided, plausibly D or C4).
 
+**Updated 2026-08-30 by increment C3.** Removed from this list, because §13
+now decides them: the `context` field and the join-key extension (§9.4 →
+§13.3); the `resolveCallSummary` / `entryStateFromCall` signature changes
+and the three §7.4 ctx holes (§13.1); the argument→parameter binding hop's
+shape (§13.2); whether call-site identity needs its own `hopSite` field
+(§13.5 — it does not); and how a B5/B6-degraded resolution is represented
+(§13.6). Added to this list by §13, i.e. deliberately punted further:
+
+- **How C4 materializes a cross-scope half-edge.** §13.2 records the peer
+  endpoint's `(scope, context)`; it does not decide whether C4 renders the
+  caller→callee transition as one edge, two, or a typed "call" segment.
+- **Instrumenting `applyAtCallSite`** — deferred until it is actually wired
+  into `engine.js` (see §10.3's correction and §13.7).
+- **Interprocedural provenance for the hand-rolled-parser languages.**
+  `createCallGraphLookup` resolves nothing for Python/Ruby/PHP/Go/Java/C#/
+  Kotlin IR (their `callee` is a flat dotted string, deliberately not
+  resolved — see `summaries.js`'s `_resolvableCalleeName`), and no
+  member-expression callee resolves anywhere without CHA. Every such call
+  takes the unresolved fallback, so it gets `production/call` and no
+  cross-function hops at all. C3 does not change that boundary; it inherits
+  it from B3, and it is a coverage fact a consumer must not read as "no
+  flow crosses this call."
+
 Two levers are named but **not** adopted here, with their trigger conditions,
 so a later increment adopts them on evidence rather than on taste: the `slot`
 correlation field (§9.1) and hop-order filtering during reconstruction (§9.2).
+
+---
+
+## 13. Interprocedural hop recording (Sub-project C, increment 3)
+
+Added 2026-08-30. Everything in this section is **decided**, not proposed,
+and every behavioural claim in it was produced by running code in
+`scanner/test/lineage/engine-provenance-interprocedural-poc.test.js` — a
+throwaway-named PoC committed alongside this section, which the follow-up
+implementation task should re-point at the shipped functions and then fold
+into `engine-provenance.test.js`.
+
+**What C3 does NOT touch:** `field-identity.js` (unchanged, byte-for-byte,
+as in every prior increment), and the isolation rule (`src/lineage/` may
+import pure utilities from `src/dataflow/`, never `dataflow/engine.js` or
+`dataflow/summaries.js`). Every change below is additive and inert when
+`ctx.recordHop` is absent, matching Decision 1.
+
+### 13.0 The record shape gains exactly three fields
+
+Extending §3's shape. Same contract as every existing field: **always
+present, `null` when inapplicable, never `undefined`, never an omitted
+key**, so C4 can still hash a record without a canonicalization step.
+
+```js
+  context:     string | null,  // hashState(entryState) of the analysis run
+                               // this hop was emitted in. null only when a
+                               // hop is emitted outside analyzeFunctionFieldIdentity.
+  peerScope:   string | null,  // the OTHER function's qid, on a cross-function hop
+  peerContext: string | null,  // that function's entry-context hash
+```
+
+`peerScope`/`peerContext` name the function on the far side of a
+cross-function hop. **The direction is read off the existing `kind` field,
+not off a fourth new field** — §2.2 already defines `kind` as "which half
+this is", so a `write-out` hop's peer is its *destination* and a
+`production` hop's peer is its *source*. That is why this is two fields and
+not four (`fromScope`/`fromContext`/`toScope`/`toContext`): the direction is
+already in the record.
+
+Only two hop shapes ever set them: `write-out/call-arg-bind` (§13.2) and
+`production/call-resolved` (§13.2's return half). Every other hop carries
+`null` for both, stamped by the wrapper in §13.3.
+
+**Additivity, verified rather than assumed.** No test in
+`engine-provenance.test.js` compares a hop object by `deepEqual` or asserts
+a closed set of keys. Its two shape guards (lines ~595 and ~1383) are
+`hasOwnProperty` + `!== undefined` over a REQUIRED list, and its
+count assertions (`hops.length === 14`, and the per-shape counts) run on
+`dedupeHops`, whose key is `JSON.stringify(h, Object.keys(h).sort())`.
+`context` is constant within a single analysis run, so it cannot split a
+dedupe group. The PoC re-runs the §6 fixture with all three fields stamped
+on and still gets exactly 14 deduplicated records. **No existing assertion
+needs updating.**
+
+### 13.1 `resolveCallSummary` gains a 4th parameter; `case 'call'` is its one call site
+
+**Decided:**
+
+```js
+resolveCallSummary(calleeExpr, callArgs, callerState, ctx)   // ctx: NEW, 4th, optional
+```
+
+and `engine.js`'s `case 'call'` (today engine.js:505) becomes
+
+```js
+const summary = ctx.resolveCallSummary(expr.callee, expr.args ?? [], state, ctx);
+```
+
+That is the whole of hole 1. `ctx` there is already the *stamped* `stepCtx`
+(§7.2), threaded down unchanged through every recursive
+`resolveExprIdentities` call (§7.3), so passing it hands `summaries.js`
+both the caller's recorder **and** the caller's `scope`/`nodeId`/`line`/
+`context` stamping in one object. Fourth position keeps every existing
+3-parameter resolver stub — including the hand-built ones in
+`engine-provenance.test.js` and `engine-integration.test.js` — working
+untouched.
+
+**Why an explicit parameter and not `this`.** Today `case 'call'` invokes
+the resolver as a *method* (`ctx.resolveCallSummary(...)`), so `this` is
+already the stamped `stepCtx`. The PoC exploits exactly that to prove
+reachability without modifying `engine.js`, and pins it with an assertion.
+It is **not** the shipped fix: `createCallSummaryResolver` passes the
+resolver down as `{ resolveCallSummary }` and `driver.js` builds a fresh
+ctx object per function, so any caller that destructures
+(`const { resolveCallSummary } = ctx`) silently gets `this === undefined`
+and the recorder vanishes with no error. A load-bearing channel must not
+depend on call syntax.
+
+**Measured, before the change:** the resolver receives `arguments.length
+=== 3` and `arguments[3] === undefined`.
+
+### 13.2 The argument→parameter binding hop
+
+Two changes, one at each end of a resolved call.
+
+**(a) `entryStateFromCall` gains `ctx` as an optional 4th parameter:**
+
+```js
+entryStateFromCall(paramNames, callArgs, callerState, ctx)   // ctx: NEW, 4th, optional
+```
+
+Its only use is forwarding: `resolveExprIdentities(callerState, callArgs[i], ctx)`.
+Return shape unchanged (`summaries.test.js`'s existing calls keep working).
+Both of its call sites live in `summaries.js`'s `createCallSummaryResolver`;
+`driver.js` does not call it.
+
+That forwarding alone is what makes the argument's **in-halves** exist:
+they are ordinary `production`/`selection` hops with correct
+contributing-key `fromPath`s (Decision 6), stamped with the caller's
+`scope`/`nodeId`/`context` because the ctx handed in is the caller's
+`stepCtx`.
+
+**(b) The binding out-half is emitted in `createCallSummaryResolver`,
+not in `entryStateFromCall`:**
+
+```js
+{
+  kind: 'write-out', subKind: 'call-arg-bind',
+  fromPath: null,
+  toPath: <paramName> | `${paramName}.${subPath}`,
+  dataElementId: <id>,
+  syntacticPath: null, widenReason: null, lossReason: null,
+  peerScope: <callee qid>, peerContext: hashState(<callee entryState>),
+}
+```
+
+emitted once per `(path, id)` entry of the freshly built `entryState`, and
+guarded on `ctx?.recordHop`.
+
+Four decisions, each with its reason:
+
+- **`kind: 'write-out'`, not `'production'`.** §2.2's taxonomy is
+  directional: `production`/`selection` are *inbound* halves carrying a
+  `fromPath`; `write-out` is the *outbound* half carrying a `toPath`. The
+  binding has a real destination path and joins with the argument
+  expression's inbound halves at the caller's node — it is structurally the
+  same event as `assign`, which is exactly how `summaries.js` already
+  describes `entryStateFromCall` in its own header. `production/call-resolved`
+  is `kind: 'production'` for the opposite reason: it is the call's *output*
+  side, an inbound half at the caller.
+- **`fromPath: null`**, not `contributingKeys(...)` against the argument's
+  `accessPathOf`. Every write-out in §10.2 carries `fromPath: null` and
+  relies on the resolver's own in-halves for the source; because (a)
+  already forwards `ctx`, those in-halves are emitted with correct
+  contributing keys for free. Computing them a second time here would
+  emit a duplicate, differently-shaped source for the same edge. The PoC
+  asserts the argument's `production/ident from 'a.email'` in-half and the
+  bind out-half share `(scope, nodeId, dataElementId, context)` — i.e. the
+  edge joins under §2.2's existing rule with no special case.
+- **`toPath` is the exact path written**, `u` or `u.email`, never the
+  coarse `u` when a sub-path was written — the same granularity rule §10.2
+  flags as "the most likely C2 mistake".
+- **`peerScope`/`peerContext` are mandatory here, not decorative.**
+  `toPath: 'u'` is a path in the *callee's* namespace, recorded on a hop
+  stamped with the *caller's* scope. Without `peerScope`, C4 would create
+  the DAG node `(callerScope, 'u', id)` — colliding with any caller-local
+  variable named `u`. That is Decision 5's bug class (an endpoint that is
+  not the location it names) in a new disguise. `peerContext` is what makes
+  the binding land in the *right* context of the callee, i.e. §9.4's own
+  failure one level up, and it is also what makes §9.6 a sharing property
+  rather than a loss.
+
+**Arguments that are not path-shaped.** A literal argument resolves to no
+identity, so no entry appears in `entryState` and **no hop is emitted at
+all** — the same verdict §10.1 gives `literal`. An argument that is itself
+an unresolved call *does* carry ids: it emits a bind hop with
+`fromPath: null` and `widenReason: null`, because the widening is already
+carried on its own `production/call` in-half (`widenReason: 'unresolved-call'`)
+which joins with this out-half at the same key. Duplicating it would
+double-grade the edge. Both cases are pinned in the PoC.
+
+**(c) The return direction.** `case 'call'`'s existing
+`production/call-resolved` hop (engine.js:512-520) gains
+`peerScope`/`peerContext`, so C4 can connect it to the callee's own
+`write-out/return` hops (`kind === 'write-out' && subKind === 'return' &&
+toPath === null`, scoped by `scope` **and now `context`**). The information
+comes from `createCallSummaryResolver` returning a **fresh wrapper**:
+
+```js
+return summary ? { ...summary, resolvedQid: qid, resolvedContext: calleeContext } : summary;
+```
+
+A fresh object every call — the cached summary is never mutated, so
+`fieldSummaryEq` and the B5 refinement loop are untouched. `engine.js`
+reads only `returnFlat`/`returnByPath`, so a resolver that does *not*
+supply these (every existing hand-built test stub) must yield
+`peerScope: null`, not `undefined` — read them as `summary.resolvedQid ?? null`.
+The PoC proves both halves: the identity is available at the site, and the
+augmented return leaves the analysis result identical to the shipped
+resolver's.
+
+### 13.3 The `context` field and the join-key extension
+
+**Decided:** `context = hashState(entryState)` — the exact primitive
+`FieldIdentitySummaryCache` already keys on (`summaries.js`'s `_key`), so
+two hops share a `context` iff the cache would consider them the same
+context. Reusing it rather than inventing a second notion is what keeps
+"which body does this call site's `peerContext` point at" answerable by
+string equality.
+
+**Stamped in exactly one place:** `analyzeFunctionFieldIdentity`'s existing
+per-node `stepCtx` wrapper (engine.js:864-866), computed once per analysis
+alongside `scope`:
+
+```js
+const scope = fn.qid ?? null;
+const context = ctx?.recordHop ? hashState(entryState) : null;   // only when recording
+...
+const stepCtx = ctx?.recordHop
+  ? { ...ctx, recordHop: (h) => ctx.recordHop({
+        scope, nodeId: nid, line: node.line ?? null,
+        context, peerScope: null, peerContext: null,
+        ...h,
+      }) }
+  : ctx;
+```
+
+`hashState` is added to `engine.js`'s existing `./field-identity.js` import
+— no new dependency, no isolation-rule concern. Cost is one O(|state|) hash
+per analysis, and only when a recorder is attached.
+
+Two properties this buys, both already relied on by §7.2 and now
+load-bearing for C3:
+
+- **Zero change at the 15 existing `recordHop` call sites.** The three new
+  fields are stamped by the wrapper, before `...h`, so a site that supplies
+  none gets the correct nulls and a site that supplies `peerScope`/
+  `peerContext` overrides them — §7.2's spread-order rule, used for the
+  purpose it was written for.
+- **A nested analysis's stamps win.** When a callee's hops flow out through
+  the caller's already-stamped `recordHop` (§13.4's wiring), the callee's
+  own wrapper has already put `scope`/`nodeId`/`line`/`context` into `h`,
+  so the caller's outer stamp cannot overwrite them. Proven in the PoC: a
+  hop recorded two resolved hops deep carries `inner`'s qid and `inner`'s
+  own context, not `outer`'s.
+
+**The join key becomes `(scope, nodeId, dataElementId, context)`**,
+superseding §2.2's three-part key everywhere in this document. §9.4's
+worked example, reconstructed by running the real cache over
+`function g(x) { const y = x; return y; }` under two contexts:
+
+| join key | joinable pairs | phantoms |
+|---|---|---|
+| `(scope, nodeId, dataElementId)` | `x→y`, `x→y.email`, `x.email→y`, `x.email→y.email` | 2 |
+| `(scope, nodeId, dataElementId, context)` | `x→y`, `x.email→y.email` | 0 |
+
+Exactly the failure §9.4 predicted, and exactly the fix it proposed.
+
+**Existing tests broken by this: none** — see §13.0 for the evidence.
+
+### 13.4 The cache-hit finding, and why it does NOT need the big fix
+
+The question was whether `FieldIdentitySummaryCache.compute`'s memoization
+silently suppresses a callee's own internal hops on a cache HIT, and
+whether that forces the cache to store and replay a per-summary hop list.
+
+**Measured** (two call sites to the same callee, deliberately seeded so
+both produce the identical entry state and `hashState` collides):
+
+- The callee's internal hops appear for **one** entry context, not two —
+  the second call site is a cache hit and `analyzeFn` never runs again.
+  Transitively true for its own callee too (`inner`, two hops deep).
+- Both call sites *do* emit their own `call-arg-bind` and
+  `production/call-resolved` hops — those are emitted outside `compute`.
+- Control run, two *distinct* entry contexts: two distinct sets of
+  callee-internal hops, at both depths. So the suppression is genuinely the
+  cache key doing its job, not a wiring bug.
+
+**Decided: (a), accept and disclose — recorded as §9.6.** The big fix (the
+cache storing a hop list per summary and replaying it on every hit) is
+**rejected**, for a reason the measurement makes concrete rather than for
+cost: because both call sites' bind hops carry the same `peerContext`, and
+that `peerContext` equals the `context` stamped on the one recorded body,
+**nothing is orphaned** — a consumer walking forward from either call site
+reaches the same, correctly-contexted body. Replaying would emit N
+byte-identical copies of a body that C4 deduplicates by content anyway
+(Decision 8's mechanism), i.e. cost with no information gained, and it
+would make record volume O(call sites × callee size) — the opposite of
+FR-303.
+
+**Sizing, since the plan asked for it honestly:** were it ever needed, the
+replay fix is roughly *(i)* a `Map<cacheKey, hopRecord[]>` alongside
+`_cache`, *(ii)* wrapping `analyzeFn`'s recorder to tee into that list,
+*(iii)* replaying on the hit path in `compute` — but *(iv)* the replayed
+records would need the *hitting* call site's identity re-stamped onto them
+to be worth anything, which is a per-record rewrite, and *(v)* it interacts
+with B5's refinement loop, which re-invokes `analyzeFn` and would need the
+list reset per round. Non-trivial, and unnecessary. Do not do it without
+evidence from C4/C5 that shared bodies are actually a reconstruction
+problem.
+
+### 13.5 Call-site identity: no `hopSite` field — §7.4's recommendation is superseded
+
+§7.4 proposed `ctx.hopSite = {scope, nodeId, line}` as plain values on the
+derived ctx, so `summaries.js` could stamp a cross-function hop with the
+call site it crossed at.
+
+**Decided: not needed, and not added.** §13.1 threads the entire stamped
+`stepCtx` into `resolveCallSummary`, and that ctx's `recordHop` *already*
+applies `{scope, nodeId, line, context}` to everything emitted through it.
+The `call-arg-bind` hop therefore carries the call site's full identity
+with no new field, no new plumbing, and — decisively — **the same values
+the argument's own in-halves carry**, which is the property that makes the
+edge join at all. A separate `hopSite` field would be a second, parallel
+copy of information the stamping mechanism already delivers, i.e. exactly
+the redundant-fields-drift failure mode §3 rejected `widened` for.
+
+C4/C5 get call-site identity as: the caller-side `(scope, nodeId, line,
+context)` on a `call-arg-bind` / `call-resolved` hop, plus
+`(peerScope, peerContext)` for the function on the other side. That is
+strictly more than `hopSite` would have carried.
+
+### 13.6 B5/B6 degradation marking: the mechanism is decided here, the emission ships with §13.7
+
+Three things were measured before deciding.
+
+**Finding 1 — a B6 cap degradation is, today, completely silent.** With
+`maxContextsPerFn: 1` and two call sites requesting genuinely different
+contexts of the same callee, the second resolution degrades to the
+empty-entry fallback. Its `returnFlat` is empty, so `case 'call'`'s
+`for (const id of flat)` loop emits **nothing** — there is not even a hop
+present to carry a marker. The call site's `call-arg-bind` hop points at a
+`peerContext` that has no body anywhere in the record stream, and nothing
+says why. That is §18.4's constraint violated in the interprocedural
+dimension: "context budget exhausted" is indistinguishable from "no flow
+crosses this call."
+
+**Finding 2 — the fallback is the *same object* as the empty-entry
+summary.** `compute`'s cap branch returns
+`this._cache.get(this._key(qid, emptyState())) ?? emptyFieldSummary()`;
+object identity, not a copy (asserted in the PoC). Setting a flag on it in
+place would retroactively mark the **precise** empty-entry summary as
+degraded for every later reader — a real bug, avoided only by knowing
+about it in advance.
+
+**Finding 3 — B5's bottom stub needs no marking.** The stub is
+`{...emptyFieldSummary(), _recursive: true}`; empty `returnFlat`, so no
+`call-resolved` hop is emitted on that round either. And B5's refinement
+re-invokes `analyzeFn`, re-emitting the callee's hops with the *better*
+summary; per Decision 8's monotonicity argument the stub round's output is
+a subset of the refined round's, so the duplicate-tolerant record stream
+absorbs it. Nothing to mark, nothing to strip.
+
+**Decided — B6 marking is IN SCOPE for C3, B5 marking is not (there is
+nothing to mark).** Not deferred to C4/C6: C4 grades edges that exist, and
+this is about an edge that does *not* exist. Only the site that performed
+the degradation knows it happened; by C4 the information is gone. The shape:
+
+1. `FieldIdentitySummaryCache.compute`'s cap-degradation branch returns a
+   **shallow copy** — `const degraded = { ...fallback, degradedReason: 'context-cap' };`
+   — and caches the copy. Never mutates `fallback` (Finding 2).
+   `degradedReason` is a **permanent, documented, externally-visible
+   field**, deliberately unlike `_recursive`: `_recursive` is stripped
+   because it is a transient recursion-in-progress marker, whereas a
+   degraded summary stays degraded for the life of the cache entry. A
+   string, not a boolean, so a later increment can add reasons without a
+   shape change. `fieldSummaryEq` deliberately does **not** compare it —
+   it is diagnostic, exactly like `widenings`.
+2. `createCallSummaryResolver`, when `summary.degradedReason` is set and
+   `ctx?.recordHop` is present, emits **one loss hop per id that entered
+   the callee** (i.e. per `(path, id)` of the entry state it just built):
+
+   ```js
+   {
+     kind: 'production', subKind: 'call-resolved',
+     fromPath: null, toPath: null, dataElementId: <id>,
+     syntacticPath: null, widenReason: null,
+     lossReason: 'context-cap-degraded',
+     peerScope: <callee qid>, peerContext: <callee context>,
+   }
+   ```
+
+   Emitted at the resolver, not in `engine.js`, precisely because
+   `engine.js`'s loop over an empty `returnFlat` cannot fire. The ids come
+   from the *argument* side because those are exactly the identities whose
+   downstream fate is now unrepresented — Decision 4's "always a real,
+   non-null `dataElementId`" is satisfied without inventing one.
+   `lossReason`, not `widenReason`, because §3 defines `lossReason` as "why
+   this hop is a dead end", which is precisely what it is.
+
+Emission is the follow-up task's job (§13.7), like every other site here.
+
+### 13.7 What the follow-up implementation task must do
+
+Written the way §10.1/§10.2 were written for C2, so the next brief needs no
+re-derivation. Files, in dependency order.
+
+**`scanner/src/lineage/engine.js`**
+
+| # | Site | Change |
+|---|---|---|
+| 1 | imports (line 2) | add `hashState` to the existing `./field-identity.js` import |
+| 2 | `analyzeFunctionFieldIdentity`, ~line 848 | `const context = ctx?.recordHop ? hashState(entryState) : null;` beside the existing `scope` |
+| 3 | `stepCtx` wrapper, ~line 864-866 | stamp `context, peerScope: null, peerContext: null` before `...h` (§13.3's snippet, verbatim) |
+| 4 | `case 'call'`, line 505 | pass `ctx` as the 4th argument to `ctx.resolveCallSummary` |
+| 5 | `case 'call'` resolved branch, ~line 512-520 | add `peerScope: summary.resolvedQid ?? null, peerContext: summary.resolvedContext ?? null` to the `call-resolved` hop (`?? null`, never bare — a 3-arg test stub supplies neither) |
+
+**`scanner/src/lineage/summaries.js`**
+
+| # | Site | Change |
+|---|---|---|
+| 6 | `entryStateFromCall`, line 286 | add optional 4th param `ctx`; forward it to `resolveExprIdentities` (line 291). Return shape unchanged. |
+| 7 | `createCallSummaryResolver`'s closure, line 334 | add optional 4th param `ctx`; pass it to `entryStateFromCall` |
+| 8 | same, after `entryStateFromCall` | compute `const calleeContext = hashState(entryState);` and, when `ctx?.recordHop`, emit one `write-out/call-arg-bind` per `(path, id)` of `entryState` (§13.2b's exact shape) |
+| 9 | same, inside `cache.compute`'s callback, line 357 | build the callee ctx as `ctx?.recordHop ? { resolveCallSummary, recordHop: ctx.recordHop } : { resolveCallSummary }` — **hole 3**. Do not re-stamp `context` here; the callee's own `analyzeFunctionFieldIdentity` (change #2/#3) does it, and its stamps win by spread order. |
+| 10 | same, at return | wrap: `{ ...summary, resolvedQid: qid, resolvedContext: calleeContext }` — a fresh object, never a mutation |
+| 11 | `FieldIdentitySummaryCache.compute`, cap branch, lines 115-123 | return/cache a **shallow copy** carrying `degradedReason: 'context-cap'` (§13.6, Finding 2) |
+| 12 | `createCallSummaryResolver` | when `summary.degradedReason` and `ctx?.recordHop`, emit the §13.6 loss hop per entry-state id |
+| 13 | `fieldSummaryEq` comment | note that `degradedReason` is deliberately not compared (diagnostic, like `widenings`) |
+
+**`scanner/src/lineage/driver.js`**
+
+| # | Site | Change |
+|---|---|---|
+| 14 | `runFieldIdentityAnalysis`, line 65 | accept `opts.recordHop` and spread it into the per-function ctx **conditionally** (`...(opts.recordHop ? { recordHop: opts.recordHop } : {})`), so a caller that supplies none gets a byte-identical `{ resolveCallSummary }` — Decision 7.2's "true by construction" |
+
+**Tests**
+
+| # | Change |
+|---|---|
+| 15 | Re-point `engine-provenance-interprocedural-poc.test.js`'s local prototypes at the shipped functions, delete the `this`-binding stand-in and the "hole is real" tests (they will correctly start failing), and fold what remains into `engine-provenance.test.js`. Drop the PoC file and its `package.json` `test:lineage` entry in the same commit. |
+| 16 | Extend the existing **write-only invariant** test (`engine-provenance.test.js`, ~line 245) with at least one multi-function fixture driven through a real `FieldIdentitySummaryCache`, run with and without a recorder. This is the guard that catches the C2-era class of bug where a recorder's presence perturbed cache-cap accounting; C3 adds three new recorder-conditional branches inside `summaries.js`, so it must cover them. |
+| 17 | Add a `driver.js` test proving `opts.recordHop` reaches every function in a multi-file project AND that omitting it leaves `runFieldIdentityAnalysis`'s `results`/`cache` unchanged. |
+
+**Deliberately NOT in the follow-up's scope:** instrumenting
+`applyAtCallSite` (not wired into `engine.js`; see §10.3's correction), the
+cache hop-replay fix (§13.4), a `hopSite` field (§13.5), and any change to
+`field-identity.js` (never).
