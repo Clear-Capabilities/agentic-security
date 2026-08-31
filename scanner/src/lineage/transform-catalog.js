@@ -130,6 +130,25 @@
 //     That is not a conflict: "neutralizes XSS" and "is an `encode`
 //     transformation" are two different axes for two different consumers.
 //     This module never imports or consults that classification.
+//  7. Factory attribution (task review M1a): `crypto.createHash`/
+//     `createCipheriv`/`createHmac`, and Java's `MessageDigest.getInstance`,
+//     classify the FACTORY call, not the later call where the data actually
+//     flows (`h.update(pii); h.digest()`). Sub-project E — the first real
+//     consumer of this module, which attaches access paths and code
+//     location to build a real Transformation entity — must not assume the
+//     factory call site is where the input/output paths live; it is only
+//     the call site that names WHICH transformation is about to happen.
+//  8. Language scope (task review M1b): the `py`/`java` entries (9 of 42)
+//     are ahead of this engine's current JS/TS-only scope (Sub-project D's
+//     own scoping doc explicitly excludes any language beyond JS/TS) and
+//     cannot fire against anything this codebase parses today. Kept,
+//     disclosed rather than removed, since each carries a distinctive
+//     qualified receiver (`hashlib.*`, `base64.*`,
+//     `MessageDigest.getInstance`) with no plausible JS collision risk.
+//  9. The `language` field (task review M1c) is DOCUMENTARY ONLY —
+//     `_entryMatches` never reads it. Matching is language-agnostic by
+//     construction; a caller must not assume passing a `language` hint
+//     narrows which entries can match, because none does.
 //
 // ─── Entry shape ────────────────────────────────────────────────────────
 //
@@ -137,7 +156,8 @@
 // row, with `id` / `language` / `match`) for a future reader's
 // familiarity — but it is NOT that catalog's data and never reads it.
 //
-//   { id, language, kind, reversibility, algorithm, confidence,
+//   { id, language,  // documentary only — see gap 9 above, never read by matching
+//     kind, reversibility, algorithm, confidence,
 //     match: { type: 'call',        callee }          // bare/global call
 //          | { type: 'member-call', object, method }  // `object.method()`
 //          | { type: 'name-pattern', pattern, notObjects? },
