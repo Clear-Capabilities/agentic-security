@@ -11,27 +11,35 @@
 // │ `*-poc.test.js`, all four absorbed and deleted by the increment that  │
 // │ shipped the real module). The ABSORPTION PROTOCOL is stated exactly,  │
 // │ not left implicit, in `src/lineage/DESIGN_GRAPH_BUILDER.md` §9.1:     │
-// │   - E2 absorbs the SEEDING half (E1/1 – E1/5, PLUS E1/14, the         │
-// │     escalated engine limitation — E1/14 is about seeding reaching a   │
-// │     sink, not about projection) into                                  │
-// │     `test/lineage/source-seeding.test.js` and deletes those tests     │
-// │     from here.                                                        │
-// │   - E3 absorbs the PROJECTION half (E1/6 – E1/13) into                │
+// │   - E2 (COMPLETE) absorbed the SEEDING half (E1/1 – E1/5, PLUS        │
+// │     E1/14, the escalated engine limitation — E1/14 is about seeding   │
+// │     reaching a sink, not about projection) into                      │
+// │     `test/lineage/source-seeding.test.js`, shipped                   │
+// │     `src/lineage/source-seeding.js`, and deleted those tests plus     │
+// │     the now-redundant local seeding functions (exprRoots/exprChildren │
+// │     /walkExpr/seedPathFor/planSeeds/seedEntryStateFactory) from here  │
+// │     — `exprRoots`/`walkExpr` are now imported from the shipped        │
+// │     module instead, since the projection half below still needs the  │
+// │     same CFG-node expression-walking primitive.                       │
+// │   - E3 (NOT STARTED) still needs to absorb the PROJECTION half        │
+// │     (E1/6 – E1/13, still below) into                                  │
 // │     `test/lineage/graph-builder.test.js`.                             │
 // │   - Whichever of E2/E3 lands SECOND deletes this file, removes it     │
 // │     from `package.json`'s `test:lineage` script, and removes its row  │
 // │     from `src/lineage/CLAUDE.md` — after confirming the other's       │
 // │     absorption is complete. Neither may delete it unilaterally.       │
-// │     (D1 §9.1's two-lander rule, reused verbatim.)                     │
+// │     (D1 §9.1's two-lander rule, reused verbatim.) E2 landed FIRST,    │
+// │     so E2 did not delete this file — E3 still needs it.               │
 // └───────────────────────────────────────────────────────────────────────┘
 //
 // Everything below the "MECHANISM" banner is a LOCAL prototype of what
-// E2's `source-seeding.js` and E3's `graph-builder.js` will ship. It lives
-// in the test file on purpose: a design spike proves a mechanism against
-// real code without committing shipped modules to it. The ONE shipped
-// change this increment made is the additive `opts.seedEntryState` hook on
-// `driver.js` (plus the cache-key fix that hook makes load-bearing) —
-// proven backward-compatible in `driver.test.js`, not here.
+// E3's `graph-builder.js` will ship. It lives in the test file on purpose:
+// a design spike proves a mechanism against real code without committing
+// shipped modules to it. The shipped changes so far: the additive
+// `opts.seedEntryState` hook on `driver.js` (plus the cache-key fix that
+// hook makes load-bearing), proven backward-compatible in `driver.test.js`
+// (E1); and `src/lineage/source-seeding.js` itself (E2), proven in
+// `test/lineage/source-seeding.test.js`.
 //
 
 import { test } from 'node:test';
@@ -51,21 +59,27 @@ import { matchSource, matchSinkOrSanitizer } from '../../src/dataflow/catalog.js
 import { matchPrivacySink } from '../../src/dataflow/privacy-catalog.js';
 import { accessPathOf } from '../../src/dataflow/access-paths.js';
 
-import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
 import { runFieldIdentityAnalysis } from '../../src/lineage/driver.js';
 import { PathStore } from '../../src/lineage/path-store.js';
 import { reconstructPaths } from '../../src/lineage/path-query.js';
 import { gradePath, DEGRADED_LOSS_REASONS } from '../../src/lineage/flow-grade.js';
-import { reclassifySource } from '../../src/lineage/source-registry.js';
 import { reclassifySink, reclassifyPrivacySink } from '../../src/lineage/sink-registry.js';
 import { recognizeTransformation } from '../../src/lineage/transform-catalog.js';
 import {
   emptyGraphEnvelope, SOURCE_CATEGORIES, SINK_CATEGORIES, COVERAGE_STATUS_VALUES,
 } from '../../src/lineage/schema.js';
 import { emptyProtection } from '../../src/lineage/protection.js';
-import { classifyDataElementName } from '../../src/lineage/classification.js';
 import * as ids from '../../src/lineage/ids.js';
 import { validateGraph } from '../../src/lineage/validate.js';
+// Sub-project E, increment 2 (E2) shipped `source-seeding.js`, absorbing
+// this PoC's own seeding half (E1/1-E1/5, E1/14) into
+// `test/lineage/source-seeding.test.js`. The PROJECTION half below still
+// needs the SAME CFG-node → expression-roots walking primitives seeding
+// used (sink enumeration and transformation attribution both walk CFG-node
+// expressions the identical way planSeeds does) — imported from the
+// shipped module rather than re-derived here a second time, exactly per
+// this package's own no-duplicate-matcher-logic convention.
+import { planSeeds, seedEntryStateFactory, exprRoots, walkExpr } from '../../src/lineage/source-seeding.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VULN_JS_DIR = path.join(__dirname, '..', 'fixtures', 'vulnerable-js');
@@ -74,112 +88,13 @@ const VULN_JS_DIR = path.join(__dirname, '..', 'fixtures', 'vulnerable-js');
 // MECHANISM — the prototype E2/E3 implement. See DESIGN_GRAPH_BUILDER.md.
 // =========================================================================
 
-/**
- * §3.1. The expression ROOTS a CFG node carries, matching `engine.js`'s own
- * `step()` switch exactly — `assign`→`source`, `call`→`callee`+`args`,
- * `return`→`value`. Deliberately NOT `fn.reads`/`fn.calls`: D5 already
- * measured that a call used as an assignment RHS never reaches `fn.calls[]`
- * at all, so those side-channels are incomplete for this purpose.
- */
-function exprRoots(node) {
-  const r = [];
-  if (node.kind === 'assign' && node.source) r.push(node.source);
-  if (node.kind === 'call') { if (node.callee) r.push(node.callee); for (const a of node.args ?? []) r.push(a); }
-  if (node.kind === 'return' && node.value) r.push(node.value);
-  return r;
-}
-
-function exprChildren(e) {
-  switch (e.kind) {
-    case 'member': return [e.object];
-    case 'call': return [e.callee, ...(e.args ?? [])];
-    case 'tpl': return e.parts ?? [];
-    case 'binary': case 'logical': return [e.left, e.right];
-    case 'union': return e.options ?? [];
-    case 'array': return e.elements ?? [];
-    case 'object': return (e.props ?? []).map((p) => p.value);
-    case 'assign-expr': return [e.source ?? e.value];
-    default: return [];
-  }
-}
-
-function walkExpr(e, visit, parent = null) {
-  if (!e || typeof e !== 'object') return;
-  visit(e, parent);
-  for (const c of exprChildren(e)) walkExpr(c, visit, e);
-}
-
-/**
- * §3.2, THE SEED-PATH RULE. `matchSource` matches the CONTAINER
- * (`req.body`), but the thing with a field identity is the FIELD
- * (`req.body.card_number`). Extend the matched expression outward through
- * every enclosing pure-member access, then take `accessPathOf` of the
- * outermost. Falls back to the matched expression's own path when it is not
- * the object of a member access (`User.create(req.body)`), which is exactly
- * the container-level seed that case deserves.
- */
-function seedPathFor(expr, parentOf) {
-  let cur = expr;
-  for (;;) {
-    const p = parentOf.get(cur);
-    if (p && p.kind === 'member' && p.object === cur && typeof p.prop === 'string') { cur = p; continue; }
-    break;
-  }
-  return accessPathOf(cur);
-}
-
-/** §3.3. Plan the seeds for a whole project. Pure: runs no analysis. */
-function planSeeds(callGraph, { repository }) {
-  const seeds = [];
-  const unseedable = [];
-  for (const fn of callGraph.functions.values()) {
-    for (const [nid, node] of Object.entries(fn.cfg?.nodes ?? {})) {
-      const parentOf = new Map();
-      for (const root of exprRoots(node)) walkExpr(root, (e, p) => { if (p) parentOf.set(e, p); });
-      for (const root of exprRoots(node)) {
-        walkExpr(root, (e) => {
-          const entry = matchSource(e, fn.file);
-          if (!entry) return;
-          const decision = reclassifySource(entry);
-          const seedPath = seedPathFor(e, parentOf);
-          if (!seedPath) {
-            unseedable.push({ file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null, entryId: entry.id, reason: 'accessPathOf returned null for the matched expression' });
-            return;
-          }
-          const canonicalName = seedPath.slice(seedPath.lastIndexOf('.') + 1);
-          seeds.push({
-            file: fn.file, qid: fn.qid, nodeId: nid, line: node.line ?? null,
-            entryId: entry.id, seedPath, canonicalName,
-            category: decision.category, coverageStatus: decision.coverageStatus,
-            externality: decision.externality, reason: decision.reason,
-            // §3.4's minting rule. `canonicalName` alone is forbidden by
-            // PRD §10.4; the discriminator carries the system proxy
-            // (repository + file), the access path, and the category.
-            dataElementId: ids.dataElementId(canonicalName, [repository, fn.file, seedPath, decision.category ?? '']),
-            dataClasses: classifyDataElementName(canonicalName).classes,
-          });
-        });
-      }
-    }
-  }
-  return { seeds, unseedable };
-}
-
-/** §3.5. The `opts.seedEntryState(fn)` hook `driver.js` now accepts. */
-function seedEntryStateFactory(seeds) {
-  const byQid = new Map();
-  for (const s of seeds) {
-    if (!byQid.has(s.qid)) byQid.set(s.qid, []);
-    byQid.get(s.qid).push(s);
-  }
-  return (fn) => {
-    const list = byQid.get(fn.qid);
-    if (!list) return null;
-    let st = emptyState();
-    for (const s of list) st = addIdentity(st, s.seedPath, s.dataElementId);
-    return st;
-  };
-}
+// §3.1-§3.5 (exprRoots/exprChildren/walkExpr/seedPathFor/planSeeds/
+// seedEntryStateFactory) were absorbed into the shipped
+// `src/lineage/source-seeding.js` by Sub-project E, increment 2 — see this
+// file's import block above. `exprRoots`/`walkExpr` are imported from
+// there rather than re-derived here, since the projection code below (sink
+// enumeration, transformation attribution) needs the identical CFG-node
+// expression-walking primitive seeding does.
 
 /**
  * §4.2. Did the matcher accept this candidate BECAUSE of a textual receiver
@@ -623,148 +538,14 @@ function vulnerableJs() {
 }
 
 // =========================================================================
-// E1/1 – E1/5: THE SEEDING HALF (E2 absorbs these)
+// E1/1 – E1/5, E1/14 (the seeding half) were absorbed into
+// test/lineage/source-seeding.test.js by Sub-project E, increment 2, and
+// removed from here — see DESIGN_GRAPH_BUILDER.md §9.1's absorption
+// protocol and this package's CLAUDE.md for the shipped module.
 // =========================================================================
 
-test('E1/1: the SHIPPED driver still emits exactly ZERO hops on real code with no seeding hook — the measured gap this increment exists to close', () => {
-  for (const fc of [vulnerableJs()]) {
-    const callGraph = irOf(fc);
-    const hops = [];
-    runFieldIdentityAnalysis(callGraph, { recordHop: (h) => hops.push(h) });
-    const store = new PathStore();
-    store.addHops(hops);
-    assert.equal(hops.length, 0, 'no seeding hook => no identity can enter the analysis => no hop can fire');
-    assert.equal(store.stats().nodes, 0);
-    assert.equal(store.stats().edges, 0);
-  }
-});
-
-test('E1/2: matchSource/reclassifySource/accessPathOf compose into real seeds on real parsed code — 9 call-site matches, 3 distinct catalog entries, 6 data elements', () => {
-  const callGraph = irOf(vulnerableJs());
-  const { seeds, unseedable } = planSeeds(callGraph, { repository: 'vuln' });
-
-  assert.equal(seeds.length, 9, 'nine matched source call sites (the scoping doc\'s own §2.3 measurement, reproduced)');
-  assert.equal(unseedable.length, 0, 'every matched source expression has an access path');
-  assert.deepEqual([...new Set(seeds.map((s) => s.entryId))].sort(), ['js-req-body', 'js-req-params', 'js-req-query']);
-  assert.deepEqual([...new Set(seeds.map((s) => s.category))].sort(), ['http-body', 'http-query', 'http-route']);
-  assert.ok(seeds.every((s) => COVERAGE_STATUS_VALUES.includes(s.coverageStatus)));
-
-  // §3.2's seed-path rule lands on the FIELD, not the container: the
-  // matched expression is `req.body`, the seeded path is `req.body.host`.
-  const paths = [...new Set(seeds.map((s) => s.seedPath))].sort();
-  assert.deepEqual(paths, [
-    'req.body', 'req.body.expr', 'req.body.host', 'req.body.password', 'req.params.id', 'req.query.name',
-  ], 'the seed path is the longest enclosing pure-member chain, so a field keeps its own identity');
-
-  // Field-level naming is what makes classification possible at all.
-  const pw = seeds.find((s) => s.canonicalName === 'password');
-  assert.ok(pw, 'req.body.password mints a data element literally named "password"');
-  assert.deepEqual(pw.dataClasses, ['CREDENTIALS'],
-    'classifyDataElementName only works because the seed path reaches the field — a container-level "body" seed classifies as nothing');
-
-  assert.equal(new Set(seeds.map((s) => s.dataElementId)).size, 6,
-    'nine call sites collapse to six data elements: two reads of req.params.id in one function are ONE element');
-});
-
-test('E1/3: the dataElementId discriminator satisfies PRD §10.4 — same field name in two files/services is two elements, and the id is never a function of the name alone', () => {
-  const same = 'function h(req){ sink(req.body.email); }';
-  const cgA = irOf({ 'serviceA/api.js': same });
-  const cgB = irOf({ 'serviceB/api.js': same });
-  const a = planSeeds(cgA, { repository: 'r' }).seeds;
-  const b = planSeeds(cgB, { repository: 'r' }).seeds;
-  assert.equal(a.length, 1);
-  assert.equal(b.length, 1);
-  assert.equal(a[0].canonicalName, 'email');
-  assert.equal(b[0].canonicalName, 'email');
-  assert.notEqual(a[0].dataElementId, b[0].dataElementId,
-    'PRD §10.4: `email` in two unrelated services must remain TWO data elements');
-
-  // Two DIFFERENT fields in ONE file are also two elements...
-  const cgC = irOf({ 'one.js': 'function h(req){ sink(req.body.email); sink(req.body.ssn); }' });
-  const c = planSeeds(cgC, { repository: 'r' }).seeds;
-  assert.equal(new Set(c.map((s) => s.dataElementId)).size, 2);
-  // ...and the SAME field read twice in one file is ONE element.
-  const cgD = irOf({ 'one.js': 'function h(req){ sink(req.body.email); log(req.body.email); }' });
-  const d = planSeeds(cgD, { repository: 'r' }).seeds;
-  assert.equal(d.length, 2, 'two matched call sites');
-  assert.equal(new Set(d.map((s) => s.dataElementId)).size, 1, 'one logical field => one data element');
-
-  // The same repository+file+path+category always mints the same id, and
-  // the id is a content hash, never a counter.
-  assert.equal(
-    ids.dataElementId('email', ['r', 'serviceA/api.js', 'req.body.email', 'http-body']),
-    a[0].dataElementId,
-  );
-  assert.notEqual(ids.dataElementId('email', []), a[0].dataElementId,
-    'the bare name alone must never produce this id');
-});
-
-test('E1/4: the real seeding mechanism produces real hops through the SHIPPED driver — 0 becomes 23 on vulnerable-js', () => {
-  const callGraph = irOf(vulnerableJs());
-  const { seeds } = planSeeds(callGraph, { repository: 'vuln' });
-  const hops = [];
-  runFieldIdentityAnalysis(callGraph, { recordHop: (h) => hops.push(h), seedEntryState: seedEntryStateFactory(seeds) });
-  const store = new PathStore();
-  store.addHops(hops);
-
-  // Numbers updated (hotfix, 2026-08-31 — scanner/src/lineage/engine.js's
-  // unresolved-`call` receiver-identity fix; see DESIGN_GRAPH_BUILDER.md
-  // §11's now-RESOLVED escalation entry): before the fix, `pan.slice(0, 4)`
-  // (and every other method call whose RECEIVER, not its arguments, carried
-  // the only identity in play) silently dropped that identity, so real
-  // seeding on vulnerable-js undercounted. Re-measured against real parsed
-  // code: 19 -> 23 hops, 14 -> 15 nodes, edges unchanged at 8 -> now 9.
-  assert.equal(hops.length, 23, 'measured: real seeding emits 23 hops where the shipped driver emits 0');
-  const st = store.stats();
-  assert.equal(st.nodes, 15);
-  assert.equal(st.edges, 9);
-  assert.deepEqual(store.diagnostics().malformed, [], 'no malformed hop reaches the store');
-  assert.deepEqual(store.diagnostics().unclassified, [], 'every out-half matches one of §14.3\'s rules');
-
-  // Real seeding is deliberately NARROWER than the synthetic per-parameter
-  // seed the scoping doc measured (21 hops / 16 pnodes / 9 pedges — this
-  // synthetic figure is UNCHANGED by the hotfix, re-measured directly
-  // against the fixed engine): it seeds only paths a registry actually
-  // matched, not every parameter, and that narrower footprint is still
-  // reflected in a strictly smaller NODE count (15 < 16). The prior raw
-  // HOP-COUNT comparison (real < synthetic) no longer holds numerically
-  // post-fix: recursively resolving a method call's receiver emits its own
-  // additional intraprocedural hops wherever a receiver carries an
-  // identity, and the fixture's specific field-precise seed paths happen to
-  // hit more such receiver call sites than the coarser per-parameter seed
-  // does here — a real, disclosed, and expected side effect of correctly
-  // no longer dropping receiver-borne identity, not a regression in
-  // narrowness of WHAT gets seeded.
-  assert.ok(st.nodes < 16, 'a real seed still produces a strict subset of "one identity per parameter"\'s pnode count');
-
-  const kinds = [...new Set(store.nodes().map((n) => n.kind))].sort();
-  assert.deepEqual(kinds, ['escape', 'path'],
-    'real code reaches `path` and `escape` only — still zero `loss`, zero `origin`, zero `return`, matching §2.1\'s own finding');
-});
-
-test('E1/5: a seeded flow is field-precise end to end — two distinct fields of the SAME container reach two different sinks without merging (FR-301 through the whole pipeline)', () => {
-  const callGraph = irOf({
-    'r.js': 'function h(req, db, logger){ const a = req.body.card_number; const b = req.body.nickname; db.query(a); logger.info(b); }',
-  });
-  const { graph } = buildDataFlowGraph(callGraph, { repository: 'fp' });
-  assert.equal(graph.dataElements.length, 2);
-  const byName = Object.fromEntries(graph.dataElements.map((d) => [d.name, d]));
-  assert.deepEqual(byName.card_number.dataClasses, ['PCI']);
-  assert.deepEqual(byName.nickname.dataClasses, []);
-
-  assert.equal(graph.flows.length, 2);
-  for (const f of graph.flows) {
-    assert.equal(f.dataElementIds.length, 1, 'a flow carries exactly the field that reached that sink, never both');
-  }
-  const sinkKinds = graph.flows.map((f) => graph.nodes.find((n) => n.id === f.sink).subtype).sort();
-  assert.deepEqual(sinkKinds, ['database', 'log']);
-  const cardFlow = graph.flows.find((f) => f.dataElementIds[0] === byName.card_number.id);
-  assert.equal(graph.nodes.find((n) => n.id === cardFlow.sink).subtype, 'database',
-    'the PCI field reached the DATABASE, and the graph says exactly that — no cross-field merge anywhere in the chain');
-});
-
 // =========================================================================
-// E1/6 – E1/12: THE PROJECTION HALF (E3 absorbs these)
+// E1/6 – E1/13: THE PROJECTION HALF (E3 absorbs these)
 // =========================================================================
 
 test('E1/6: the projection produces a validated, flagship-scale DataFlowGraph v1 from real parsed code', () => {
@@ -1038,60 +819,3 @@ test('E1/13 (AC-11 coarse half): a sink nothing reaches is still a node with a c
   assert.equal(r.graph.coverage.provenance.hops, 23);
 });
 
-test('E1/14 (measured limitation, RESOLVED by hotfix): lineage/engine.js now keeps RECEIVER-borne identity through a method call, so the bench corpus\'s own masked-log flow connects', () => {
-  // `pan + 'x'` and `String(pan)` always kept the identity; `pan.slice(0,4)`
-  // used to lose it, because engine.js's unresolved-`call` branch unioned
-  // only `expr.args`, never `expr.callee.object`. dataflow/engine.js had
-  // already solved exactly this with `_calleeReceiverTainted`; this
-  // package had not inherited it. Fixed (hotfix, 2026-08-31): the
-  // unresolved-`call` branch now also unions the receiver's own resolved
-  // identities into its flat result, the same way arguments already are.
-  const masked = 'function maskCard(pan){ return pan.slice(0, 4) + \'********\' + pan.slice(-4); }\n'
-    + 'function handleCheckout(req, logger){\n'
-    + '  const cardNumber = req.body.card_number;\n'
-    + '  const maskedPan = maskCard(cardNumber);\n'
-    + '  logger.info(\'processing payment\', { pan: maskedPan });\n'
-    + '}';
-  const r = buildDataFlowGraph(irOf({ 'source.js': masked }), { repository: 'm' });
-  assert.equal(r.seeds.length, 1, 'the source IS matched and seeded');
-  assert.equal(r.sites.length, 1, 'the logger.info sink IS enumerated');
-  // FIXED (hotfix, 2026-08-31 — see DESIGN_GRAPH_BUILDER.md §11's now-
-  // RESOLVED escalation entry and scanner/src/lineage/engine.js's
-  // unresolved-`call` receiver-identity fix): the identity used to die
-  // inside maskCard at `pan.slice(...)` because the unresolved-call branch
-  // only unioned `expr.args`, never the receiver. It now survives, so the
-  // corpus fixture's own masked-log flow connects — 2 flows, matching the
-  // receiver-free control fixture's own structure below (one real
-  // cross-scope path through maskCard, one caller-side bypass FR-305/§14.7
-  // correctly marks `ambiguousCorrelation`). The cross-scope path's grade
-  // is `widened` here (not `explicit`, unlike the receiver-free control
-  // below) because it still passes through an UNRESOLVED call — the
-  // receiver's identity is recovered, but the call's return remains
-  // honestly modeled as unknown structure, per DESIGN_INTRAPROCEDURAL.md's
-  // structure-flattening rule for `call`.
-  assert.equal(r.graph.flows.length, 2,
-    'the identity now survives `pan.slice(...)` inside maskCard: this is the corpus fixture bench/data-lineage/fixtures/js-api-to-log-masked, verbatim, now connecting.');
-  assert.deepEqual(r.graph.flows.map((f) => f.evidenceGrade).sort(), ['ambiguous', 'widened'],
-    'the cross-scope path through the still-unresolved maskCard call grades widened, never explicit');
-  assert.equal(r.graph.transformations.length, 1);
-  assert.equal(r.graph.transformations[0].kind, 'mask');
-  assert.ok(r.graph.flows.every((f) => f.transformationIds.length === 1),
-    'both carry the recognized mask transformation');
-
-  // The same shape with a receiver-free transform DOES connect, which
-  // isolates the cause to receiver-borne identity specifically.
-  const ok = masked.replace('return pan.slice(0, 4) + \'********\' + pan.slice(-4);', 'return \'****\' + pan;');
-  const r2 = buildDataFlowGraph(irOf({ 'source.js': ok }), { repository: 'm' });
-  assert.equal(r2.graph.transformations.length, 1);
-  assert.equal(r2.graph.transformations[0].kind, 'mask');
-  // TWO flows, not one, and that is FR-305 working rather than a defect:
-  // the same source/sink/field is reached by two MATERIALLY different
-  // reconstructed paths — the real cross-scope path through maskCard, and
-  // the caller-side bypass §14.7 marks `ambiguousCorrelation`. They carry
-  // different evidence grades, so collapsing them would hide exactly what
-  // FR-305/FR-306 forbid hiding.
-  assert.equal(r2.graph.flows.length, 2, 'identical structure, receiver-free transform => flows appear');
-  assert.deepEqual(r2.graph.flows.map((f) => f.evidenceGrade).sort(), ['ambiguous', 'explicit']);
-  assert.ok(r2.graph.flows.every((f) => f.transformationIds.length === 1),
-    'both carry the recognized mask transformation');
-});
