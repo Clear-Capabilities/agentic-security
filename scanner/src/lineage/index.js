@@ -21,6 +21,7 @@
 // degraded run.
 
 import { buildGraphWithCoverage } from './coverage.js';
+import { scanTransitEvidence } from './transit-protection.js';
 
 /**
  * @param {{functions: Map}} callGraph a real callGraph — the same shape
@@ -35,15 +36,25 @@ import { buildGraphWithCoverage } from './coverage.js';
  *   ledger's `languages[]` computation.
  * @param {Array<object>} [opts.parseFailures] threaded to the coverage
  *   ledger's `parseFailures`/`languages[].filesExpected` computation.
- * @returns {{status: 'not_available'|'complete'|'failed', graph: object|null, failure: string|null, elapsedMs: number}}
+ * @param {Record<string,string>} [opts.fileContents] `{path: rawSourceString}`
+ *   — threaded to `transit-protection.js`'s `scanTransitEvidence` (Milestone 2,
+ *   Sub-project B, increment 1). Purely additive: never read by
+ *   `buildGraphWithCoverage`/`graph-builder.js`, so `graph` itself is
+ *   byte-identical whether or not this is supplied — see
+ *   `DESIGN_TRANSIT_PROTECTION.md` §3.
+ * @returns {{status: 'not_available'|'complete'|'failed', graph: object|null, transitEvidence: Map<string,object[]>, failure: string|null, elapsedMs: number}}
  *   `status` is never `'not_requested'` — that decision belongs to the
  *   CALLER (whether to call this function at all), not to this function's
- *   own return value.
+ *   own return value. `transitEvidence` is a `Map<file, findings[]>` — see
+ *   `DESIGN_TRANSIT_PROTECTION.md` §3 for why a `Map`, not a plain object.
+ *   It is a real, populated result of running `scanCryptoProtocol` over
+ *   `opts.fileContents` (empty when omitted), never joined to any specific
+ *   graph edge in this increment.
  */
 export function buildLineageGraph(callGraph, opts = {}) {
   const t0 = Date.now();
   if (!callGraph || typeof callGraph.functions?.values !== 'function') {
-    return { status: 'not_available', graph: null, failure: null, elapsedMs: Date.now() - t0 };
+    return { status: 'not_available', graph: null, transitEvidence: new Map(), failure: null, elapsedMs: Date.now() - t0 };
   }
   try {
     const built = buildGraphWithCoverage(callGraph, {
@@ -52,10 +63,11 @@ export function buildLineageGraph(callGraph, opts = {}) {
       perFile: opts.perFile,
       parseFailures: opts.parseFailures,
     });
-    return { status: 'complete', graph: built.graph, failure: null, elapsedMs: Date.now() - t0 };
+    const transitEvidence = scanTransitEvidence(opts.fileContents ?? {});
+    return { status: 'complete', graph: built.graph, transitEvidence, failure: null, elapsedMs: Date.now() - t0 };
   } catch (e) {
     // Best-effort (DESIGN_GRAPH_BUILDER.md §9.5 item 1): recorded, never
     // swallowed. The caller (runFullScan) folds `failure` into scanHealth.
-    return { status: 'failed', graph: null, failure: String((e && e.message) || e), elapsedMs: Date.now() - t0 };
+    return { status: 'failed', graph: null, transitEvidence: new Map(), failure: String((e && e.message) || e), elapsedMs: Date.now() - t0 };
   }
 }

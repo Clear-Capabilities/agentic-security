@@ -77,9 +77,9 @@ test('E5/5: buildLineageGraph.status is failed, with a recorded failure string, 
   if (r.status === 'failed') assert.ok(r.failure && r.failure.length > 0);
 });
 
-test('E5/6: reuse boundary — index.js imports only coverage.js', async () => {
+test('E5/6: reuse boundary — index.js imports only coverage.js and (as of M2 Sub-project B, increment 1) transit-protection.js', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../../src/lineage/index.js', import.meta.url), 'utf8');
   const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
-  assert.deepEqual(specifiers, ['./coverage.js']);
+  assert.deepEqual(specifiers, ['./coverage.js', './transit-protection.js']);
 });

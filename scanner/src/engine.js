@@ -9273,6 +9273,7 @@ function _deterministicFileTimings(timings) {
         repository: scanRoot ? path.basename(path.resolve(scanRoot)) : undefined,
         deterministic: isDeterministic(),
         perFile,
+        fileContents,
       });
       if (_lr.status === 'complete') {
         _lineageGraph = _lr.graph;
