@@ -257,6 +257,16 @@ fabricated verdict.
   obligations, runtime twin, recipients, impact/remediation) —
   Milestones 4/5.
 
+**Addendum (Sub-project G, increment G1, 2026-08-31):** this package's
+`classifyDataElementName` (`source-seeding.js`) classifies by the SOURCE
+EXPRESSION'S OWN field name at the seed, and never inspects a downstream
+declared-variable name the way `dataflow/privacy-taint.js`'s
+`classifyFieldAgainst(d.name, compiled)` does — measured live against
+`bench/privacy-recall/`'s 4 fixtures via
+`bench/privacy-recall/compare-lineage.mjs`. Disclosed, deliberate scope
+boundary, not a bug; see `docs/lineage/PRIVACY_COMPARISON.md` for the full
+measurement and root-cause write-up.
+
 ## Conventions
 
 - Every enum here is a single source of truth for its concept. If you add

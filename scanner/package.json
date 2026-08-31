@@ -128,6 +128,7 @@
     "bench:provenance-accuracy:check": "node ../bench/provenance-accuracy/runner.mjs --check",
     "bench:provenance-accuracy:update-baseline": "node ../bench/provenance-accuracy/runner.mjs --update-baseline",
     "bench:privacy-recall": "node ../bench/privacy-recall/measure.mjs",
+    "bench:privacy-recall:compare-lineage": "node ../bench/privacy-recall/compare-lineage.mjs",
     "bench:privacy-recall:check": "node ../bench/privacy-recall/check.mjs",
     "bench:privacy-recall:update-baseline": "node ../bench/privacy-recall/check.mjs --update-baseline",
     "bench:self-scan:update-baseline": "node ../bench/self-scan/check.mjs --update-baseline",
