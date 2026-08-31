@@ -183,20 +183,23 @@ evidence; the four causes are:
    contract is F3+ work; the runner was confirmed to degrade to a clean
    FAIL report rather than throwing.
 
-#### A shipped-code defect found while authoring this batch
+#### A shipped-code defect found while authoring this batch — FIXED
 
-`coverage.js`'s FR-203 hook guards itself with
+`coverage.js`'s FR-203 hook guarded itself with
 `if (site.entry?.vuln?.cwe === undefined) return undefined;`, whose
-comment states that privacy-catalog entries carry no `vuln.cwe`. They
-do — `privacy-js-s3-putObject` carries `CWE-359`. So the guard does not
-exclude them, and `resolveSiteDecision` re-runs `reclassifySink` (which
-keys on `CWE_MAP`) on a privacy entry, producing a `null` category and
-collapsing a perfectly good `store`/`object-storage` node to
-`process`/`null`/`unsupported`. Reproduce with
+comment claimed privacy-catalog entries carry no `vuln.cwe`. They all
+do — every `PRIVACY_SINK_CATALOG` entry carries `vuln.cwe: 'CWE-359'`.
+So the guard excluded nothing, and `resolveSiteDecision` re-ran
+`reclassifySink` (which keys on `CWE_MAP`) on privacy entries, producing
+a `null` category and collapsing a perfectly good `store`/`object-storage`
+node to `process`/`null`/`unsupported`. Reproduced with
 `s3.putObject({ Body: x })` — a computed first argument is what makes
 the arg0 signal fire. `js-ai-model-output-to-object-storage-phi/` uses a
-LITERAL key argument to route around it. Not fixed here: F2 is a
-fixture-authoring increment and does not touch `src/lineage/`.
+LITERAL key argument, which routed around the bug rather than exercising
+it — kept as-is even after the fix, since it's still a valid fixture.
+**Fixed** in a dedicated hotfix (guard now keys on `site.entry.category`,
+a field only privacy entries carry) — see
+`docs/superpowers/plans/2026-08-31-lineage-coverage-privacy-catalog-fr203-hotfix.md`.
 
 Sub-project F's remaining increments (F3 onward) mass-author the rest of
 the ~200-entry floor described under "Target corpus shape" above.
