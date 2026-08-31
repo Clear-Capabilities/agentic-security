@@ -2785,6 +2785,34 @@ Three rows to read closely:
 
 ## 16. FR-306 edge grading (Sub-project C, increment 6)
 
+**Implemented.** Design landed as `dcd06001` (fix round `120fb8c9`, small
+follow-up `79c01c13`); shipped by Task 2 (`c63c6338`), whole-branch reviewed
+clean. **This is the final increment of Sub-project C — C1-C6 are all
+complete as of this commit.** The section below is kept in its original,
+design-time voice (present/future tense, "committed alongside this
+section", "the follow-up implementation task must…") as the historical
+record of what was decided and why — read `flow-grade.js`/`path-query.js`
+themselves, or `scanner/src/lineage/CLAUDE.md`'s own module-table rows, for
+the current, as-shipped description. The design-time PoC file this section
+originally shipped alongside it (`flow-grade-poc.test.js`) no longer
+exists — Task 2 absorbed everything it proved into the permanent suite
+(`flow-grade.test.js`) and deleted it, per §16.8 item 11.
+
+**§16.7 Finding 1, specifically, is now CLOSED, not merely disclosed** —
+this section's own design task found a real, measured undercount bug in
+`path-query.js`'s already-shipped `materialize()` (from the already-merged
+increment C5), initially mis-estimated the cost of fixing it, corrected
+that estimate after independent verification (twice, by the design's own
+fix round and a separate scoped re-review) found the fix breaks nothing,
+and Task 2 shipped the fix (four lines, confined to `materialize()`,
+verified a fourth time — by the final whole-branch review — to change
+exactly zero other assertions in the tree). §16.7's own heading below
+("Findings this increment does NOT fix, named rather than patched") is
+accurate for Findings 2 and 3, which remain genuinely open and are made
+binding on Sub-project D — but Finding 1 no longer belongs under that
+heading in spirit, only in the historical record's own voice; read the
+**CORRECTED** box inside §16.7 Finding 1 for the full before/after account.
+
 Added 2026-08-30 by increment C6's design task. Everything in this section
 is **decided**, not proposed, and every behavioural claim and every number
 in it was produced by running code in
