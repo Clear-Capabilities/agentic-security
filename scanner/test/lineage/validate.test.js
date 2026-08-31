@@ -178,6 +178,59 @@ test('an edge with a bogus protocol.destinationResolution is rejected', () => {
   assert.ok(result.errors.some((e) => e.path === '$.edges[0].protocol.destinationResolution' && e.message.includes('teleportation')));
 });
 
+// ── Milestone 2, Sub-project A, increment 1: node.destination shape ──
+
+function nodeWithDestination(destination) {
+  return {
+    id: nodeId('external', ['x']), kind: 'external', subtype: 'external-api', label: 'X',
+    aliases: [], system: {}, externality: { value: 'external', evidenceRefs: [] },
+    lifecycleStages: [], governanceRefs: {}, dataElementIds: [], evidenceRefs: [],
+    confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled', destination,
+  };
+}
+
+test('a node with destination: null passes (the pre-M2 default, and every non-resolved node)', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithDestination(null));
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
+test('a node with a valid literal destination passes', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithDestination({ resolutionStatus: 'literal', raw: '"https://x"', literalValue: 'https://x', blockingExpression: null }));
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
+test('a node with a valid dynamic destination (literalValue null) passes', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithDestination({ resolutionStatus: 'dynamic', raw: 'url', literalValue: null, blockingExpression: 'url' }));
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
+test('a node with an unrecognized destination.resolutionStatus is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithDestination({ resolutionStatus: 'teleportation', raw: null, literalValue: null, blockingExpression: null }));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[0].destination.resolutionStatus' && e.message.includes('teleportation')));
+});
+
+test('a node with a non-null literalValue on a non-literal resolutionStatus is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithDestination({ resolutionStatus: 'dynamic', raw: 'url', literalValue: 'url', blockingExpression: 'url' }));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[0].destination.literalValue'));
+});
+
+test('a node with resolutionStatus: unknown and a non-null literalValue is rejected too', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithDestination({ resolutionStatus: 'unknown', raw: null, literalValue: 'oops', blockingExpression: null }));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[0].destination.literalValue'));
+});
+
 test('a transformation with a bogus kind or reversibility is rejected', () => {
   const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
   graph.transformations.push({ id: 'transform:abc', kind: 'BANANA', reversibility: 'sure-why-not' });

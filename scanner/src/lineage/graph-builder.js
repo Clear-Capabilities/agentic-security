@@ -39,6 +39,17 @@
 // consistent (every later read of `site.decision` sees it) and cheap
 // (one small hook, zero structural changes to the projection below).
 //
+// Milestone 2, Sub-project A, increment 1 addition (FR-202, DESIGN_
+// DESTINATION_RESOLVER.md): `opts.resolveDestination`, a SEPARATE,
+// additive hook applied at the exact same point as `opts.resolveSiteDecision`
+// above, right after it — same reasoning (a node's `destination` field is
+// set once, at mint time, so intercepting before minting is the only
+// consistent point). Composes with `resolveSiteDecision`, never collapses
+// into it: the two hooks answer independent questions (is this sink's
+// CLASSIFICATION resolvable vs. what does its DESTINATION EXPRESSION look
+// like) and a site can carry both an `unresolved` decision and a `dynamic`
+// destination at once.
+//
 // Reuse boundary (§12, confirmed against the source): imports ONLY
 // `matchSource`/`matchSinkOrSanitizer` from `../dataflow/catalog.js`,
 // `matchPrivacySink` from `../dataflow/privacy-catalog.js`, and
@@ -247,7 +258,16 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   // for the "no two DIFFERENT decisions collided onto one node" check.
   const decisionsByNodeId = new Map();
 
-  const mintNode = ({ kind, category, coverageStatus, externality, coverageReason, subtypeKey, lifecycleStages }) => {
+  const mintNode = ({ kind, category, coverageStatus, externality, coverageReason, subtypeKey, lifecycleStages, destination }) => {
+    // NOTE (Milestone 2, Sub-project A, increment 1): `destination` is
+    // deliberately NOT part of this discriminator — the node identity
+    // model stays exactly what it was in Milestone 1 (a registry decision,
+    // never a per-call-site fact), so two sites sharing one
+    // (kind, subtypeKey, coverageStatus, externality) tuple still mint/
+    // collide onto ONE node, and that node's `destination` is whichever
+    // site's resolution was applied FIRST (mintNode only sets it at
+    // creation, same as every other field below) — a known, disclosed
+    // coarsening, not a bug; see DESIGN_DESTINATION_RESOLVER.md.
     const id = ids.nodeId(kind, [repository, subtypeKey ?? category ?? '', coverageStatus, externality, /* destination, always null in M1 */ '']);
     let n = nodesById.get(id);
     if (!n) {
@@ -264,7 +284,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
         // nodes, so this matches the one shipped precedent.
         location: null,
         system: { application: repository, environment: null },
-        destination: null,
+        destination: destination ?? null,
         externality: { value: externality, evidenceRefs: [] },
         lifecycleStages, governanceRefs: {},
         dataElementIds: [], evidenceRefs: [],
@@ -289,6 +309,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     coverageReason: site.decision.reason,
     subtypeKey: site.decision.category ?? `unsupported-sink:${site.entry.vuln?.cwe ?? site.entry.id}`,
     lifecycleStages: [site.decision.externality === 'external' ? 'sharing' : 'storage'],
+    destination: site.destination ?? null,
   });
   const mintDataElement = (s) => {
     let d = deById.get(s.dataElementId);
@@ -320,6 +341,25 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     for (const site of sites) {
       const override = opts.resolveSiteDecision(site);
       if (override) site.decision = override;
+    }
+  }
+  // Milestone 2, Sub-project A, increment 1 (FR-202): a SEPARATE,
+  // additive hook — composes with, never replaces, `resolveSiteDecision`
+  // above. A site can be BOTH `kind: 'unresolved'` (FR-203's node-
+  // classification answer) AND carry a `resolutionStatus: 'dynamic'`
+  // destination (this hook's own, narrower "what does the destination
+  // expression look like" answer) — the two questions are independent,
+  // per DESIGN_DESTINATION_RESOLVER.md. Applied at the exact same point in
+  // the pipeline, right after `resolveSiteDecision`, for the same reason:
+  // once, before anything else reads `site.destination`
+  // (`sinkNodeFor`/the edge-protocol block below). A no-op when omitted —
+  // `site.destination` stays `undefined`, `sinkNodeFor` normalizes that to
+  // `null`, and the edge's `protocol.destinationResolution` stays
+  // `'unknown'` — byte-identical to pre-M2 behavior.
+  if (typeof opts.resolveDestination === 'function') {
+    for (const site of sites) {
+      const destination = opts.resolveDestination(site);
+      if (destination) site.destination = destination;
     }
   }
   const escapesBySite = new Map();
@@ -421,7 +461,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
           edgesById.set(edgeIdStr, {
             id: edgeIdStr, from: src.id, to: snk.id, relationship: 'data_flow',
             fieldMappings: [{ fromPath, toPath, dataElementIds: [de.id], mappingType, transformationIds: sortedT }],
-            protocol: { name: 'in-process', destinationResolution: 'unknown' },
+            protocol: { name: 'in-process', destinationResolution: site.destination?.resolutionStatus ?? 'unknown' },
             boundaryCrossings: [], protection: emptyProtection(),
             evidenceRefs: [], coverageStatus: snk.coverageStatus,
           });

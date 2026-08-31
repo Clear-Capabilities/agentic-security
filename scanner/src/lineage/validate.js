@@ -69,6 +69,17 @@ function _validateNode(node, idx, errors, seenIds) {
   if (node.externality && !EXTERNALITY_VALUES.includes(node.externality.value)) {
     _err(errors, path('.externality.value'), `unrecognized externality "${node.externality.value}"`);
   }
+  // Milestone 2, Sub-project A, increment 1: `node.destination` is `null`
+  // on every node this increment doesn't resolve — only checked when
+  // non-null, mirroring `_validateEdge`'s own `edge.protocol` pattern below.
+  if (node.destination && typeof node.destination === 'object') {
+    if (!DESTINATION_RESOLUTION_VALUES.includes(node.destination.resolutionStatus)) {
+      _err(errors, path('.destination.resolutionStatus'), `unrecognized destination.resolutionStatus "${node.destination.resolutionStatus}"`);
+    }
+    if (node.destination.resolutionStatus !== 'literal' && node.destination.literalValue !== null) {
+      _err(errors, path('.destination.literalValue'), 'destination.literalValue must be null unless resolutionStatus is "literal"');
+    }
+  }
 }
 
 function _validateDataElement(de, idx, errors, seenIds) {

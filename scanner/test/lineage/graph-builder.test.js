@@ -424,3 +424,55 @@ test('E4/connected-1: buildDataFlowGraph stamps site.connected — true when a r
   assert.equal(connectedSite.connected, true);
   assert.equal(disconnectedSite.connected, false);
 });
+
+// =========================================================================
+// Milestone 2, Sub-project A, increment 1 (FR-202): the additive
+// `opts.resolveDestination` hook — SEPARATE from `opts.resolveSiteDecision`
+// above, applied at the same point. See DESIGN_DESTINATION_RESOLVER.md §4.
+// =========================================================================
+
+test('M2A1/hook-1: opts.resolveDestination is a no-op when omitted — byte-identical to a hardcoded pre-hook golden literal (destination stays null, destinationResolution stays unknown)', () => {
+  const cg = irOf({ 'a.js': 'function h(res, x){ res.send(x); }' });
+  const r = buildDataFlowGraph(cg, { repository: 'r' });
+  assert.equal(r.graph.nodes.length, 1);
+  assert.equal(r.graph.nodes[0].destination, null);
+  assert.equal(r.sites[0].destination, undefined, 'site.destination is never set when the hook is omitted');
+});
+
+test('M2A1/hook-2: opts.resolveDestination, when it returns a value, sets node.destination and the connecting edge\'s protocol.destinationResolution', () => {
+  const cg = irOf({ 'a.js': "function h(req, res){ const pw = req.body.password; res.send(pw); }" });
+  const r = buildDataFlowGraph(cg, {
+    repository: 'r',
+    resolveDestination: () => ({ resolutionStatus: 'literal', raw: '"forced"', literalValue: 'forced', blockingExpression: null }),
+  });
+  const sinkNode = r.graph.nodes.find((n) => n.subtype === 'http-response');
+  assert.ok(sinkNode);
+  assert.deepEqual(sinkNode.destination, { resolutionStatus: 'literal', raw: '"forced"', literalValue: 'forced', blockingExpression: null });
+  const edge = r.graph.edges.find((e) => e.to === sinkNode.id);
+  assert.ok(edge, 'req.body.password must connect a source to this sink');
+  assert.equal(edge.protocol.destinationResolution, 'literal');
+});
+
+test('M2A1/hook-3: opts.resolveDestination returning undefined/null/falsy leaves site.destination unset — node.destination stays null, edge stays unknown', () => {
+  const cg = irOf({ 'a.js': "function h(req, res){ const pw = req.body.password; res.send(pw); }" });
+  const r = buildDataFlowGraph(cg, { repository: 'r', resolveDestination: () => undefined });
+  assert.equal(r.sites[0].destination, undefined);
+  const sinkNode = r.graph.nodes.find((n) => n.subtype === 'http-response');
+  assert.equal(sinkNode.destination, null);
+  const edge = r.graph.edges.find((e) => e.to === sinkNode.id);
+  assert.equal(edge.protocol.destinationResolution, 'unknown');
+});
+
+test('M2A1/hook-4: opts.resolveSiteDecision and opts.resolveDestination compose — a site can carry BOTH an overridden decision AND a resolved destination at once', () => {
+  const cg = irOf({ 'a.js': "function h(req, res){ const pw = req.body.password; res.send(pw); }" });
+  const r = buildDataFlowGraph(cg, {
+    repository: 'r',
+    resolveSiteDecision: (site) => ({ ...site.decision, kind: 'unresolved', externality: 'unknown', reason: 'forced for test' }),
+    resolveDestination: () => ({ resolutionStatus: 'dynamic', raw: 'computed', literalValue: null, blockingExpression: 'computed' }),
+  });
+  assert.equal(r.sites[0].decision.kind, 'unresolved', 'resolveSiteDecision\'s override still applies');
+  assert.equal(r.sites[0].destination.resolutionStatus, 'dynamic', 'resolveDestination\'s override applies independently, not clobbered by the decision override');
+  const n = r.graph.nodes.find((x) => x.destination && x.destination.resolutionStatus === 'dynamic');
+  assert.ok(n, 'the minted node carries both the overridden decision AND the resolved destination');
+  assert.equal(n.externality.value, 'unknown', 'minted from the OVERRIDDEN decision');
+});

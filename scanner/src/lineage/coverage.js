@@ -57,6 +57,13 @@
 import { reclassifySink } from './sink-registry.js';
 import { DEFAULTS as PATH_QUERY_DEFAULTS } from './path-query.js';
 import { buildDataFlowGraph } from './graph-builder.js';
+// Milestone 2, Sub-project A, increment 1: `resolveDestination` composes
+// with `resolveSiteDecision` below the same way it's imported here — a real
+// ES module cycle (resolve-destination.js imports THREE things back from
+// this file). See that module's own header for why this is safe. Kept as
+// its own import line, not folded into the block above, so the cycle is
+// visible to a reader at a glance.
+import { resolveDestination } from './resolve-destination.js';
 
 // =========================================================================
 // FR-203 — the destination-unresolved heuristic.
@@ -143,7 +150,7 @@ const FR203_ELIGIBLE_KINDS = Object.freeze(['external', 'store', 'queue']);
 // `object-storage` is currently unreachable via `CWE_MAP` today (like
 // `queue` above) — kept for forward-compatibility with a future row that
 // maps to it, not a bug.
-const FR203_ARG0_DESTINATION_CATEGORIES = Object.freeze(['external-api', 'file', 'object-storage']);
+export const FR203_ARG0_DESTINATION_CATEGORIES = Object.freeze(['external-api', 'file', 'object-storage']);
 
 /**
  * The exact shape `buildDataFlowGraph`'s `opts.resolveSiteDecision` hook
@@ -401,7 +408,13 @@ export function buildGraphWithCoverage(callGraph, opts = {}) {
   // matching `buildDataFlowGraph`'s own "the hook, when present, replaces
   // `site.decision`" contract rather than this convenience wrapper quietly
   // overriding that caller's choice.
-  const built = buildDataFlowGraph(callGraph, { ...opts, resolveSiteDecision: opts.resolveSiteDecision ?? resolveSiteDecision });
+  // Milestone 2, Sub-project A, increment 1: identical composition pattern
+  // for `opts.resolveDestination` — a caller-supplied hook always wins.
+  const built = buildDataFlowGraph(callGraph, {
+    ...opts,
+    resolveSiteDecision: opts.resolveSiteDecision ?? resolveSiteDecision,
+    resolveDestination: opts.resolveDestination ?? resolveDestination,
+  });
   built.graph.coverage = buildCoverageLedger(built, opts);
   return built;
 }

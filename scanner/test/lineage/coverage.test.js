@@ -268,9 +268,66 @@ test('C1/9: buildCoverageLedger is deterministic — two calls on the same built
   assert.deepEqual(Object.keys(l1.sinks.byCategory), [...Object.keys(l1.sinks.byCategory)].sort());
 });
 
+// ── FR-202 (Milestone 2, Sub-project A, increment 1): destination resolution wiring, real parsed code ──
+
+test('M2A1/wire-1: fetch(\'https://payments.example/charge\', req.body.token) — a literal arg0 URL resolves the sink node\'s destination AND the connecting edge\'s protocol.destinationResolution to literal', () => {
+  const cg = irOf({
+    'a.js': "function h(req){ fetch('https://payments.example/charge', req.body.token); }",
+  });
+  const { graph } = buildGraphWithCoverage(cg, { repository: 'r' });
+  const sinkNode = graph.nodes.find((n) => n.subtype === 'external-api');
+  assert.ok(sinkNode, 'an external-api sink node must exist');
+  assert.ok(sinkNode.destination, 'destination must be a non-null object once resolveDestination is wired');
+  assert.equal(sinkNode.destination.resolutionStatus, 'literal');
+  assert.equal(sinkNode.destination.literalValue, 'https://payments.example/charge');
+  assert.equal(sinkNode.destination.blockingExpression, null);
+  const edge = graph.edges.find((e) => e.to === sinkNode.id);
+  assert.ok(edge, 'req.body.token must connect a source to this sink');
+  assert.equal(edge.protocol.destinationResolution, 'literal');
+});
+
+test('M2A1/wire-2: fetch(url, req.body.token) — url a bare parameter, already FR-203-flagged — resolves to dynamic on both the node and the edge', () => {
+  const cg = irOf({
+    'a.js': "function h(req, url){ fetch(url, req.body.token); }",
+  });
+  const { graph } = buildGraphWithCoverage(cg, { repository: 'r' });
+  const sinkNode = graph.nodes.find((n) => n.subtype === 'external-api');
+  assert.ok(sinkNode);
+  assert.ok(sinkNode.destination);
+  assert.equal(sinkNode.destination.resolutionStatus, 'dynamic');
+  assert.equal(sinkNode.destination.blockingExpression, 'url');
+  assert.equal(sinkNode.destination.literalValue, null);
+  const edge = graph.edges.find((e) => e.to === sinkNode.id);
+  assert.ok(edge);
+  assert.equal(edge.protocol.destinationResolution, 'dynamic');
+});
+
+test('M2A1/wire-3 (regression proof): db.query(sql) — arg0 is the PAYLOAD, not eligible per FR203_ARG0_DESTINATION_CATEGORIES — stays unknown, never misread as dynamic or literal', () => {
+  const cg = irOf({
+    'a.js': "function h(db, sql){ db.query(sql); }",
+  });
+  const { graph } = buildGraphWithCoverage(cg, { repository: 'r' });
+  const sinkNode = graph.nodes.find((n) => n.subtype === 'database');
+  assert.ok(sinkNode, 'a database sink node must exist');
+  assert.ok(sinkNode.destination, 'destination is a non-null object even when unresolved — resolutionStatus itself carries "unknown"');
+  assert.equal(sinkNode.destination.resolutionStatus, 'unknown');
+  assert.equal(sinkNode.destination.raw, null);
+  assert.equal(sinkNode.destination.literalValue, null);
+  assert.equal(sinkNode.destination.blockingExpression, null);
+});
+
+test('M2A1/wire-4: the resulting graph is validateGraph()-clean with real, non-null destination objects present', async () => {
+  const { validateGraph } = await import('../../src/lineage/validate.js');
+  const cg = irOf({
+    'a.js': "function h(req){ fetch('https://payments.example/charge', req.body.token); }",
+  });
+  const { graph } = buildGraphWithCoverage(cg, { repository: 'r' });
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
 // ── isolation / reuse boundary ──
 
-test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, path-query.js, and graph-builder.js', async () => {
+test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, path-query.js, graph-builder.js, and (Milestone 2, Sub-project A, increment 1) resolve-destination.js', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../../src/lineage/coverage.js', import.meta.url), 'utf8');
   // MUST-FIX 2: the sibling boundary-test pattern (path-store.test.js,
@@ -279,5 +336,5 @@ test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, pat
   // that weaker pattern let 4 of 5 mutants adding '../dataflow/engine.js'
   // (the exact import this boundary exists to forbid) slip past undetected.
   const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
-  assert.deepEqual(specifiers.sort(), ['./graph-builder.js', './path-query.js', './sink-registry.js']);
+  assert.deepEqual(specifiers.sort(), ['./graph-builder.js', './path-query.js', './resolve-destination.js', './sink-registry.js']);
 });
