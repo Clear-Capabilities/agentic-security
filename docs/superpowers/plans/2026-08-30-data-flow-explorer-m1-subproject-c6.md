@@ -72,4 +72,86 @@ git commit -m "docs(lineage): design C6's FR-306 edge grading (taxonomy, aggrega
 
 ## Post-Task-1 note
 
-This plan gains its implementation task(s) here, scoped exactly to what §16's checklist specifies, once Task 1's addendum is committed and reviewed. Do not pre-write them — §16 does not exist yet at the time this plan file was first saved.
+Task 1 landed as `DESIGN_PATH_PROVENANCE.md` §16 (commit `dcd06001`), a fix round closing one blocking finding — a false claim about the cost of fixing a real, measured undercount bug in already-shipped `path-query.js` — plus 3 non-blocking findings and 4 nitpicks (commit `120fb8c9`), a scoped re-review independently confirming the fix round closed everything (including re-verifying the core empirical claim against the real shipped file, not just the design's PoC), and a small direct follow-up (commit `79c01c13`). §16.8 is the accepted, binding file/line/signature checklist for Task 2 below; every reference in Task 2 is to that checklist's 14 rows (items 1-14, including 7/7b/7c and 12b).
+
+**This task carries a genuine, already-measured remediation alongside the new module** — item 7 (`path-query.js`'s `materialize()` fix) is not exploratory; the exact 4-line patch was already written and verified (330/330, zero other assertions moved) during Task 1's own fix round. Apply it as measured, do not re-derive it.
+
+---
+
+### Task 2: Implement `flow-grade.js`, fix `path-query.js`'s annotation-blind undercount, and absorb the PoC into the permanent suite
+
+**Files:**
+- Create: `scanner/src/lineage/flow-grade.js` (§16.8 items 1-6)
+- Modify: `scanner/src/lineage/path-query.js` (§16.8 item 7 — the already-measured `materialize()` fix)
+- Rename/absorb: `scanner/test/lineage/flow-grade-poc.test.js` → `scanner/test/lineage/flow-grade.test.js`, re-pointed at the shipped module (§16.8 item 11)
+- Modify: `scanner/package.json` — update the `test:lineage` script's file list to the renamed file (same commit as the rename, per §16.8 item 11 / C3's item-15 / C4's item-11 / C5's item-12 precedent)
+- Modify: `scanner/src/lineage/CLAUDE.md` — new module-table row for `flow-grade.js`, and update the existing C6 bullet under "What is NOT here yet" to reflect C6 as done (it currently describes the design as landed but the module as not-yet-built)
+- Read only: `scanner/src/lineage/DESIGN_PATH_PROVENANCE.md` §16 in full (§16.1 through §16.10 — this is the binding spec; the PoC file being absorbed is a prototype of it, not a substitute for reading it, and it went through a fix round that corrected real defects, so read the LIVE §16 text), `scanner/test/lineage/flow-grade-poc.test.js` (what you're absorbing and deleting the prototype halves of), `scanner/src/lineage/path-query.js` in full (both because `flow-grade.js` consumes its `Path`/`Hop` shape and because you're making item 7's fix to it), `scanner/src/lineage/protection.js` (the `EVIDENCE_GRADES`/`aggregateVerdicts` precedent §16.2/§16.4 build against)
+
+**Interfaces:**
+- Consumes: `path-query.js`'s `Path`/`Hop` shape exactly as shipped (§15.2), reading `hop.annotations[]` as well as the two top-level `widenReasons`/`lossReasons` arrays (§16.5's union — the whole point of this increment).
+- Produces: `flow-grade.js`'s seven exported names (§16.8 items 2-6: `FLOW_EVIDENCE_GRADES`, `IMPLICIT_FLOW_REASONS`, `DEGRADED_LOSS_REASONS`, `flowGradeRank`, `aggregateFlowGrades`, `gradeHop`, `gradePath`) — `_PRECEDENCE` and `_sortedUnion` stay private. `path-query.js`'s `materialize()` now computes `widenedHopCount`/`lossHopCount`/`shape` annotation-aware (item 7).
+
+- [ ] **Step 1: Read §16 in full, then `path-query.js` and `protection.js` in full**
+
+Do not start from the PoC file's prototype code as if it were the final word without cross-checking §16's prose — it went through a fix round that changed real things (the `gradePath` return shape, the `IMPLICIT_FLOW_REASONS` subtraction scope, the §16.7 Finding 1 correction) — §16's text is the authority when the two differ, and by more than in any prior increment's Task 2, given how much this design changed after its own first draft.
+
+- [ ] **Step 2: `path-query.js` — apply item 7's already-measured fix FIRST**
+
+Do this before building `flow-grade.js`, since `flow-grade.js`'s own tests (once absorbed) will assert against the corrected `Path` shape. In `materialize()` (currently around `path-query.js:108-109`), replace the `widenedHopCount`/`lossHopCount` computation with:
+
+```js
+const _annWiden = (h) => h.widenReasons.length > 0 || (h.annotations ?? []).some((a) => a.widenReason != null);
+const _annLoss  = (h) => h.lossReasons.length  > 0 || (h.annotations ?? []).some((a) => a.lossReason  != null);
+const widenedHopCount = hops.filter(_annWiden).length;
+const lossHopCount    = hops.filter(_annLoss).length;
+```
+
+**`shape` is derived from these same two filters — do not leave it reading the old predicate** (§16.8 item 7's own explicit warning). **Do NOT push this into `path-store.js`**: `edge.widenReasons`/`edge.lossReasons` are part of `provenanceEdgeId`'s discriminator (§14.5) — changing them moves every `pedge:`/`ppath:` id, which would silently invalidate every id-idempotence test C4/C5 already shipped. Run `npm run test:lineage` immediately after this one change and confirm the count matches what fix round 1 measured (330/330, with `C6/5b`/`C6/5c` — still reading the PoC's own local prototype at this point — passing since they assert the SAME formula) before moving on to Step 3.
+
+- [ ] **Step 3: `flow-grade.js` — the new module (items 1-6)**
+
+Create the file. Lift the local prototype block from `flow-grade-poc.test.js`, but do not treat "lift verbatim" as literal — per §16.8 item 1's own correction, every prototype declaration is a bare `const`/`function`; add `export` to each of the seven public names (`FLOW_EVIDENCE_GRADES`, `IMPLICIT_FLOW_REASONS`, `DEGRADED_LOSS_REASONS`, `flowGradeRank`, `aggregateFlowGrades`, `gradeHop`, `gradePath`) and keep `_PRECEDENCE`/`_sortedUnion` private (items 1-3).
+
+**While lifting, fix two small, already-identified defects in the prototype itself (scoped re-review findings N1/N2 — do not carry these into shipped code):**
+1. The prototype's comments citing the byte-identity proof reference the WRONG test name (`C6/10` in two places) — the real proof is `C6/11` (per §16.1's own correct citation). Correct the comment(s) when you lift them.
+2. The prototype's `gradePath` JSDoc still describes `Path`'s own counts as under-reporting "and therefore" needing the union — true before Step 2's fix, false after it (which, in this task, is already the case by the time you write this file, since Step 2 runs first). Update the comment to describe `gradePath`'s union as authoritative by design, not as a workaround for a bug that (as of this task) no longer exists.
+
+Add the same zero-import self-check test `path-store.test.js`/`path-query.test.js` already carry (item 1's own instruction), asserting `flow-grade.js`'s specifier list is EXACTLY `[]`.
+
+`flowGradeRank`/`aggregateFlowGrades`: throw on an unrecognized grade, `'unassessed'` for empty input — `protection.js`'s `aggregateVerdicts` contract verbatim (item 4).
+
+`gradeHop`: §16.3's precedence order and §16.5's union (reading `hop.annotations[]`, not just the two top-level arrays). Must accept a raw `PathStore` edge as well as a `Hop` — `C6/11` is the shape guard proving both inputs grade identically (item 5).
+
+`gradePath`: §16.4's worst-wins aggregation, `hops[]` as the **full `HopGrade` objects** (not bare strings — fix round 1's own correction), `worstHopIndex`, and its counts **recomputed from `gradeHop`**, never read off `path.widenedHopCount`/`lossHopCount` directly — even though Step 2 already fixed those fields, `gradePath` must not silently re-couple itself to `Path`'s own counts, per §16.7 Finding 1's own stated reasoning for why grading needs its own union in the first place (item 6).
+
+- [ ] **Step 4: Absorb the PoC, rename it, wire it into `test:lineage` (item 11)**
+
+Re-point `flow-grade-poc.test.js`'s tests at the shipped `flow-grade.js` (delete the local prototype block, now that Step 3 shipped it for real), rename the file to `flow-grade.test.js`, and update `scanner/package.json`'s `test:lineage` script entry in the SAME commit — mirrors C3's item-15/C4's item-11/C5's item-12 precedent exactly.
+
+**Keep every assertion, and especially keep `C6/5` and `C6/6`** (item 12 — the three annotation-only widening fixtures with a naive top-level-only grader run alongside for contrast, and §13.6's degraded-marker case) — together they are the only guard against §16.5's union being silently narrowed back to the top-level-only arrays, which would restore the exact FR-306 violation this whole increment exists to close.
+
+**Retire `C6/5b`/`C6/5c`'s prototype-only shape (item 12b).** They currently assert Step 2's target behavior against a file-local `withAnnotationAwareCounts()` helper (since Task 1 itself was design-only). Now that Step 2 has landed the real fix, delete that helper and re-point both tests at the `Path`'s OWN `widenedHopCount`/`lossHopCount`/`shape` fields directly, keeping the asserted values identical (`1`, `1`, `'widened'`, `'lossy'`). **Drop the two forward-compatible `<=` guards at the same time** — they existed only to let the tests pass on both sides of the fix; with the fix landed, a `<=` where an `===` belongs is a weaker test than this tree's own standard.
+
+**Do not add a driver-level test yet** (item 14) — a driver run still emits zero hops today (no source registry, Sub-project D/E), so a driver-fed grading test at this stage would grade an empty store and be vacuous, matching the exact reasoning every prior increment's own driver-test deferral already established.
+
+- [ ] **Step 5: `scanner/src/lineage/CLAUDE.md` — new module-table row, and close out the C6 bullet**
+
+Add a `flow-grade.js` row to the Sub-project C module table, describing the grade taxonomy, the per-hop rule, the aggregation rule, the annotation-union fix to `path-query.js`, and the vocabulary-rejection decision — mirroring the density and citation style every prior row in this file already uses. Update the existing "What is NOT here yet" C6 bullet (which currently says the design landed but the module doesn't exist yet) to reflect C6 as fully done — this closes out Sub-project C (C1-C6) in this file. Keep the third "must not miss" item (the §13.6-marker/`sinkCandidates()` gap, added by the scoped re-review) — it's still true and still binding on Sub-project D after C6 ships.
+
+- [ ] **Step 6: Run the full scoped suite and doc-drift check**
+
+```bash
+npm run test:lineage
+node ../scripts/check-doc-drift.mjs
+```
+
+Confirm the test count and doc-drift status.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add scanner/src/lineage/flow-grade.js scanner/src/lineage/path-query.js scanner/test/lineage/flow-grade.test.js scanner/package.json scanner/src/lineage/CLAUDE.md
+git rm scanner/test/lineage/flow-grade-poc.test.js
+git commit -m "feat(lineage): implement flow-grade.js (FR-306 edge grading) and fix path-query.js's annotation-blind undercount (Sub-project C, increment 6)"
+```
