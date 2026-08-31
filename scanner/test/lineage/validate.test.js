@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyGraphEnvelope, HANDLING_VALUES } from '../../src/lineage/schema.js';
+import { emptyGraphEnvelope, HANDLING_VALUES, STORE_OPERATION_VALUES } from '../../src/lineage/schema.js';
 import { nodeId, dataElementId, edgeId, flowId } from '../../src/lineage/ids.js';
 import { emptyProtection } from '../../src/lineage/protection.js';
 import { validateGraph } from '../../src/lineage/validate.js';
@@ -229,6 +229,80 @@ test('a node with resolutionStatus: unknown and a non-null literalValue is rejec
   const result = validateGraph(graph);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((e) => e.path === '$.nodes[0].destination.literalValue'));
+});
+
+// ── Milestone 2, Sub-project E, increment 2: node.storeDetail shape ──
+
+function nodeWithStoreDetail(storeDetail) {
+  return {
+    id: nodeId('store', ['x']), kind: 'store', subtype: 'database', label: 'X',
+    aliases: [], system: {}, externality: { value: 'unknown', evidenceRefs: [] },
+    lifecycleStages: [], governanceRefs: {}, dataElementIds: [], evidenceRefs: [],
+    confidence: { score: 0.6, tier: 'medium' }, coverageStatus: 'candidate', storeDetail,
+  };
+}
+
+test('a node with storeDetail: null passes (the pre-E2 default, and every node this increment does not populate)', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithStoreDetail(null));
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
+test('a node with a valid, fully-populated storeDetail passes', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithStoreDetail({
+    provider: null, host: null, database: null, schema: null,
+    table: 'User', operation: 'create', columns: ['email', 'password'],
+  }));
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
+test('every STORE_OPERATION_VALUES member is a valid storeDetail.operation', () => {
+  for (const op of STORE_OPERATION_VALUES) {
+    const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+    graph.nodes.push(nodeWithStoreDetail({
+      provider: null, host: null, database: null, schema: null, table: 'X', operation: op, columns: [],
+    }));
+    assert.deepEqual(validateGraph(graph).errors, [], `operation "${op}" must validate`);
+  }
+});
+
+test('a node with an unrecognized storeDetail.operation is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithStoreDetail({
+    provider: null, host: null, database: null, schema: null, table: 'X', operation: 'teleport', columns: [],
+  }));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[0].storeDetail.operation' && e.message.includes('teleport')));
+});
+
+test('a node with a null storeDetail.operation passes (unavailable, not unrecognized)', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithStoreDetail({
+    provider: null, host: null, database: null, schema: null, table: null, operation: null, columns: [],
+  }));
+  assert.deepEqual(validateGraph(graph).errors, []);
+});
+
+test('a node whose storeDetail.columns is not an array is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithStoreDetail({
+    provider: null, host: null, database: null, schema: null, table: 'X', operation: 'create', columns: 'email',
+  }));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[0].storeDetail.columns'));
+});
+
+test('a node whose storeDetail.columns contains a non-string entry is rejected', () => {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  graph.nodes.push(nodeWithStoreDetail({
+    provider: null, host: null, database: null, schema: null, table: 'X', operation: 'create', columns: ['email', 42],
+  }));
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.nodes[0].storeDetail.columns[1]'));
 });
 
 // ── Milestone 2, Sub-project D, increment 1: flow.handling taxonomy ──

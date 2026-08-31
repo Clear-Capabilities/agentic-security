@@ -19,7 +19,8 @@ import { buildProjectIR } from '../src/ir/index.js';
 import { runTaintEngine } from '../src/dataflow/engine.js';
 import { matchSinkOrSanitizer, CATALOG } from '../src/dataflow/catalog.js';
 import { ORM_WRITE_CATALOG, matchOrmWrite } from '../src/dataflow/orm-write-catalog.js';
-import { enumerateSinkSites } from '../src/lineage/graph-builder.js';
+import { enumerateSinkSites, buildDataFlowGraph } from '../src/lineage/graph-builder.js';
+import { validateGraph } from '../src/lineage/validate.js';
 
 function irOf(files) {
   const perFile = {};
@@ -62,6 +63,60 @@ test('ORM-write: Account.upsert({...}) matches with coverageStatus candidate', (
   assert.equal(sites.length, 1);
   assert.equal(sites[0].entry.id, 'orm-write-js-upsert');
   assert.equal(sites[0].decision.coverageStatus, 'candidate');
+});
+
+// ── 1b. Milestone 2, Sub-project E, increment 2: node.storeDetail
+//         extraction (table/operation/columns) ─────────────────────────
+
+test('storeDetail: User.create({ email: x, password: y }) extracts table/operation/columns', () => {
+  const sites = ormSites('User.create({ email: x, password: y });');
+  assert.equal(sites.length, 1);
+  const { storeDetail } = sites[0];
+  assert.equal(storeDetail.table, 'User');
+  assert.equal(storeDetail.operation, 'create');
+  assert.deepEqual([...storeDetail.columns].sort(), ['email', 'password']);
+  // FR-204's own "unknown portions remain unknown" clause — this
+  // increment never populates these four fields, in every case it
+  // produces (DESIGN_STORE_DETAIL.md §2).
+  assert.equal(storeDetail.provider, null);
+  assert.equal(storeDetail.host, null);
+  assert.equal(storeDetail.database, null);
+  assert.equal(storeDetail.schema, null);
+});
+
+test('storeDetail: Order.save({...}) maps operation to "upsert", never "create" — save is genuinely undecidable statically (INSERT on a new document, UPDATE on one loaded from the database), so "upsert" is the honest umbrella, not a guess at which one', () => {
+  const sites = ormSites('Order.save({ total: x });');
+  assert.equal(sites.length, 1);
+  assert.equal(sites[0].storeDetail.operation, 'upsert');
+});
+
+test('storeDetail: a spread argument mixed with real keys never fabricates a column name for the spread', () => {
+  const sites = ormSites('User.create({ email: x, ...extra });');
+  assert.equal(sites.length, 1);
+  assert.deepEqual(sites[0].storeDetail.columns, ['email']);
+});
+
+test('storeDetail: a computed, non-literal key never reports "*" as a column name', () => {
+  const sites = ormSites('User.create({ [dynamicKey]: x, email: y });');
+  assert.equal(sites.length, 1);
+  assert.deepEqual(sites[0].storeDetail.columns, ['email']);
+  assert.ok(!sites[0].storeDetail.columns.includes('*'));
+});
+
+test('storeDetail: duplicate-value properties sharing a key are deduplicated', () => {
+  const sites = ormSites('User.create({ email: a, email: b });');
+  assert.equal(sites.length, 1);
+  assert.deepEqual(sites[0].storeDetail.columns, ['email']);
+});
+
+test('storeDetail: validateGraph() stays clean on a real graph containing an ORM-write node with a populated storeDetail', () => {
+  const cg = irOf({ 'a.js': `function h(req) { User.create({ email: req.body.email, password: req.body.password }); }` });
+  const r = buildDataFlowGraph(cg, { repository: 'orm-store-detail' });
+  assert.deepEqual(validateGraph(r.graph).errors, []);
+  const ormNode = r.graph.nodes.find((n) => n.storeDetail && n.storeDetail.table === 'User');
+  assert.ok(ormNode, 'expected an ORM-write sink node carrying storeDetail');
+  assert.equal(ormNode.storeDetail.operation, 'create');
+  assert.deepEqual([...ormNode.storeDetail.columns].sort(), ['email', 'password']);
 });
 
 // ── 2. The object-literal gate rejects non-literal arguments ───────────

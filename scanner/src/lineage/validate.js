@@ -16,7 +16,7 @@
 import {
   SCHEMA_VERSION, NODE_KINDS, MAPPING_TYPES, COVERAGE_STATUS_VALUES, EXTERNALITY_VALUES,
   TRANSFORM_KINDS, REVERSIBILITY_VALUES, DESTINATION_RESOLUTION_VALUES, POLICY_STATES,
-  FLOW_SUMMARY_VALUES, EVIDENCE_TYPES, GRAPH_SCOPE_SOURCES, HANDLING_VALUES,
+  FLOW_SUMMARY_VALUES, EVIDENCE_TYPES, GRAPH_SCOPE_SOURCES, HANDLING_VALUES, STORE_OPERATION_VALUES,
 } from './schema.js';
 import { isValidProtectionDimension, PROTECTION_DIMENSIONS } from './protection.js';
 import { LINEAGE_DATA_CLASSES, isAiContext } from './classification.js';
@@ -78,6 +78,22 @@ function _validateNode(node, idx, errors, seenIds) {
     }
     if (node.destination.resolutionStatus !== 'literal' && node.destination.literalValue !== null) {
       _err(errors, path('.destination.literalValue'), 'destination.literalValue must be null unless resolutionStatus is "literal"');
+    }
+  }
+  // Milestone 2, Sub-project E, increment 2: `node.storeDetail` is `null`
+  // on every node this increment doesn't populate — only checked when
+  // non-null, mirroring `node.destination`'s own "only checked when the
+  // parent object is present" shape immediately above.
+  if (node.storeDetail && typeof node.storeDetail === 'object') {
+    if (node.storeDetail.operation !== null && !STORE_OPERATION_VALUES.includes(node.storeDetail.operation)) {
+      _err(errors, path('.storeDetail.operation'), `unrecognized storeDetail.operation "${node.storeDetail.operation}"`);
+    }
+    if (Object.prototype.hasOwnProperty.call(node.storeDetail, 'columns') && !Array.isArray(node.storeDetail.columns)) {
+      _err(errors, path('.storeDetail.columns'), 'storeDetail.columns must be an array');
+    } else if (Array.isArray(node.storeDetail.columns)) {
+      node.storeDetail.columns.forEach((c, i) => {
+        if (typeof c !== 'string') _err(errors, path(`.storeDetail.columns[${i}]`), 'storeDetail.columns entries must be strings');
+      });
     }
   }
 }

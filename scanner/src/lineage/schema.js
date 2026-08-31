@@ -53,6 +53,15 @@ export const DESTINATION_RESOLUTION_VALUES = Object.freeze([
   'declared_service', 'runtime_corroborated', 'dynamic', 'unknown',
 ]);
 
+// Milestone 2, Sub-project E, increment 2 (`node.storeDetail.operation`,
+// DESIGN_STORE_DETAIL.md). `save` deliberately maps to `'upsert'`, never
+// `'create'` — see graph-builder.js's own method-name mapping comment for
+// the full reasoning (Mongoose's `.save()` is an INSERT on a new document
+// but an UPDATE on one loaded from the database, genuinely undecidable
+// statically from the call site alone; `'upsert'` is the honest umbrella,
+// not a guess at which one).
+export const STORE_OPERATION_VALUES = Object.freeze(['create', 'read', 'update', 'delete', 'upsert', 'unknown']);
+
 export const POLICY_STATES = Object.freeze([
   'prohibited', 'permitted', 'conditionally_permitted', 'manual_review_required', 'not_evaluated',
 ]);

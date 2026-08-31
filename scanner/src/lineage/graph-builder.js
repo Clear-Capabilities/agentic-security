@@ -169,13 +169,59 @@ function resolveSinkAtCallSite(calleeExpr, file) {
  * receiver exists in either catalog today), so `ambiguity` is always
  * `null` here, unlike `resolveSinkAtCallSite`'s return shape.
  */
+/**
+ * Milestone 2, Sub-project E, increment 2 (`node.storeDetail.operation`,
+ * DESIGN_STORE_DETAIL.md §4). Mapping logic, not an enum — lives here, not
+ * `schema.js`, per this package's own established separation. `save` maps
+ * to `'upsert'`, NOT `'create'` — a deliberate, disclosed judgment call:
+ * Mongoose's `.save()` performs an INSERT on a new document but an UPDATE
+ * on one loaded from the database, which is genuinely undecidable
+ * statically from the call site alone; `'upsert'` is the honest umbrella
+ * covering both, not a guess at which one it is.
+ */
+const ORM_OPERATION_MAP = Object.freeze({
+  create: 'create',
+  update: 'update',
+  upsert: 'upsert',
+  save: 'upsert',
+});
+
+/**
+ * Milestone 2, Sub-project E, increment 2 (DESIGN_STORE_DETAIL.md §5).
+ * `arg0.props` entries are EITHER `{key: <string>, value: <exprDesc>}` (a
+ * real or literal-computed property) OR `{spread: true, value: <exprDesc>}`
+ * (an object spread — no key at all), per `parser-js.js`'s real
+ * `ObjectExpression` lowering (confirmed by direct read, ~line 116-159). A
+ * spread entry has no key to report; a `'*'`-keyed entry is a genuinely
+ * UNKNOWN column name (a non-literal computed key, `resolveObjectKey`'s
+ * own convention), not a literal column named `"*"` — reporting either
+ * would be a fabrication. Deduplicated since two distinct-value properties
+ * can share a key in real (if unusual) source (`{email: a, email: b}`).
+ */
+function ormWriteColumns(arg0) {
+  const props = Array.isArray(arg0?.props) ? arg0.props : [];
+  const keys = props
+    .filter((p) => !p.spread && typeof p.key === 'string' && p.key !== '*')
+    .map((p) => p.key);
+  return [...new Set(keys)];
+}
+
 function resolveOrmWriteAtCallSite(calleeExpr, args, file) {
   const hits = matchOrmWrite(calleeExpr, file);
   if (!hits) return null;
   const arg0 = Array.isArray(args) ? args[0] : undefined;
   if (!arg0 || arg0.kind !== 'object') return null;
   const entry = hits[0];
-  return { entry, decision: reclassifyOrmWrite(entry), ambiguity: null };
+  // DESIGN_STORE_DETAIL.md §3: `table` re-verifies defensively rather than
+  // assuming the shape `_ormReceiverIsCapitalizedIdent` already checked
+  // inside `matchOrmWrite` survived unchanged into this file.
+  const table = typeof calleeExpr?.object?.name === 'string' ? calleeExpr.object.name : null;
+  const operation = ORM_OPERATION_MAP[entry.match?.callee] ?? null;
+  const storeDetail = {
+    provider: null, host: null, database: null, schema: null,
+    table, operation, columns: ormWriteColumns(arg0),
+  };
+  return { entry, decision: reclassifyOrmWrite(entry), ambiguity: null, storeDetail };
 }
 
 /**
@@ -314,16 +360,18 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   // for the "no two DIFFERENT decisions collided onto one node" check.
   const decisionsByNodeId = new Map();
 
-  const mintNode = ({ kind, category, coverageStatus, externality, coverageReason, subtypeKey, lifecycleStages, destination }) => {
-    // NOTE (Milestone 2, Sub-project A, increment 1): `destination` is
-    // deliberately NOT part of this discriminator — the node identity
-    // model stays exactly what it was in Milestone 1 (a registry decision,
-    // never a per-call-site fact), so two sites sharing one
+  const mintNode = ({ kind, category, coverageStatus, externality, coverageReason, subtypeKey, lifecycleStages, destination, storeDetail }) => {
+    // NOTE (Milestone 2, Sub-project A, increment 1; Sub-project E,
+    // increment 2): neither `destination` nor `storeDetail` is part of
+    // this discriminator — the node identity model stays exactly what it
+    // was in Milestone 1 (a registry decision, never a per-call-site
+    // fact), so two sites sharing one
     // (kind, subtypeKey, coverageStatus, externality) tuple still mint/
-    // collide onto ONE node, and that node's `destination` is whichever
-    // site's resolution was applied FIRST (mintNode only sets it at
-    // creation, same as every other field below) — a known, disclosed
-    // coarsening, not a bug; see DESIGN_DESTINATION_RESOLVER.md.
+    // collide onto ONE node, and that node's `destination`/`storeDetail`
+    // is whichever site's resolution was applied FIRST (mintNode only sets
+    // it at creation, same as every other field below) — a known,
+    // disclosed coarsening, not a bug; see DESIGN_DESTINATION_RESOLVER.md
+    // and DESIGN_STORE_DETAIL.md respectively.
     const id = ids.nodeId(kind, [repository, subtypeKey ?? category ?? '', coverageStatus, externality, /* destination, always null in M1 */ '']);
     let n = nodesById.get(id);
     if (!n) {
@@ -341,6 +389,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
         location: null,
         system: { application: repository, environment: null },
         destination: destination ?? null,
+        storeDetail: storeDetail ?? null,
         externality: { value: externality, evidenceRefs: [] },
         lifecycleStages, governanceRefs: {},
         dataElementIds: [], evidenceRefs: [],
@@ -366,6 +415,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     subtypeKey: site.decision.category ?? `unsupported-sink:${site.entry.vuln?.cwe ?? site.entry.id}`,
     lifecycleStages: [site.decision.externality === 'external' ? 'sharing' : 'storage'],
     destination: site.destination ?? null,
+    storeDetail: site.storeDetail ?? null,
   });
   const mintDataElement = (s) => {
     let d = deById.get(s.dataElementId);
