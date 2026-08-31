@@ -448,10 +448,19 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
             evidence: rec
               ? rec.evidence
               : `a call to ${calleeDisplay(d)} widened this value's identity (hop record: unresolved-call); transform-catalog.js recognizes no transformation for this callee`,
-            // §7.3: honest absences. `appliesToAllPaths` needs FR-307's
-            // all-path proof, which nothing here does. There is NO
-            // control-credit key of any kind — not even `false`, which
-            // would read as "considered and denied" (Decision 2).
+            // §7.3: honest absences at MINT time. `appliesToAllPaths`
+            // needs FR-307's all-path proof, which nothing in this
+            // per-hop loop does — it can only be answered once every
+            // flow group sharing this transform's coarse (source, sink,
+            // dataElement) key is known, which is not true yet at this
+            // point in the build. Milestone 2, Sub-project D, increment 2
+            // overwrites this `null` with a real `true`/`false` in the
+            // aggregation pass below (after `groupsByFlowKey` is fully
+            // populated) — see DESIGN_HANDLING_ANALYZER.md §5. There is
+            // still NO separate control-credit key of any kind — not even
+            // a bare `false` here would read as "considered and denied"
+            // this early (Decision 2); the real answer is written once,
+            // later, by the pass that can actually prove it.
             appliesToAllPaths: null,
           };
           if (!transformsById.has(t.id)) transformsById.set(t.id, t);
@@ -530,6 +539,27 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       // concept from one that does).
       handling: classifyHandling(p, callGraph).handling,
     });
+  }
+
+  // Milestone 2, Sub-project D, increment 2 (FR-307): appliesToAllPaths.
+  // Must run AFTER groupsByFlowKey is fully populated (every flow group for
+  // every sink has been discovered) and BEFORE transformsById is read into
+  // graph.transformations — see DESIGN_HANDLING_ANALYZER.md §5 for the full
+  // rule and why no special-casing is needed for a truncated/incomplete path.
+  const coarseGroups = new Map();
+  for (const [, group] of groupsByFlowKey) {
+    const { src, snk, de, sortedT } = group[0];
+    const coarseKey = `${src.id}|${snk.id}|${de.id}`;
+    if (!coarseGroups.has(coarseKey)) coarseGroups.set(coarseKey, []);
+    coarseGroups.get(coarseKey).push(sortedT);
+  }
+  for (const flowsSortedT of coarseGroups.values()) {
+    const relevantIds = new Set(flowsSortedT.flat());
+    for (const tid of relevantIds) {
+      const appliesToAll = flowsSortedT.every((st) => st.includes(tid));
+      const t = transformsById.get(tid);
+      t.appliesToAllPaths = t.appliesToAllPaths === null ? appliesToAll : (t.appliesToAllPaths && appliesToAll);
+    }
   }
 
   // AC-11's coarse half, source side: every seeded source is a node and a

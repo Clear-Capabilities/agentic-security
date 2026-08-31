@@ -1,25 +1,29 @@
-# DESIGN_HANDLING_ANALYZER.md — Sub-project D's binding design record (Milestone 2, increment 1)
+# DESIGN_HANDLING_ANALYZER.md — Sub-project D's binding design record (Milestone 2, increments 1-2)
 
-**Status:** landed as Milestone 2, Sub-project D, increment **1** — a first
-slice of a "Large" sub-project (FR-403's own taxonomy label only), per
-`docs/superpowers/plans/2026-08-31-data-flow-explorer-m2-subproject-d1-plan.md`.
+**Status:** landed as Milestone 2, Sub-project D, increments **1** (FR-403's
+taxonomy label, §1-§4) and **2** (FR-307's multi-path control-credit rule,
+§5) — two slices of a "Large" sub-project, per
+`docs/superpowers/plans/2026-08-31-data-flow-explorer-m2-subproject-d1-plan.md`
+and
+`docs/superpowers/plans/2026-08-31-data-flow-explorer-m2-subproject-d2-plan.md`.
 Binding on later Sub-project D increments the same way `DESIGN_
 DESTINATION_RESOLVER.md` binds Sub-project A — MUCH shorter than
 `DESIGN_GRAPH_BUILDER.md`/`DESIGN_PATH_PROVENANCE.md`/`DESIGN_REGISTRIES.md`
-on purpose: this is one slice of a larger sub-project, not the whole thing.
+on purpose: this is two slices of a larger sub-project, not the whole thing.
 
 ---
 
 ## 1. What this increment actually is
 
 FR-403 asks: for a field reaching a sink, what HANDLING was applied to it
-along the way — raw, masked, hashed, tokenized, encrypted, etc.? This
-increment produces that TAXONOMY LABEL for one already-reconstructed path
-(the caller picks which path — this increment does not iterate multiple
-paths to one sink). It deliberately does NOT implement FR-307's multi-path
+along the way — raw, masked, hashed, tokenized, encrypted, etc.? Increment 1
+produces that TAXONOMY LABEL for one already-reconstructed path (the caller
+picks which path — increment 1 does not iterate multiple paths to one
+sink). Increment 1 deliberately did NOT implement FR-307's multi-path
 control-credit rule (AC-12: "a transform on one branch cannot make the full
-flow green") — that needs comparing MULTIPLE paths to the same sink, a
-distinct, larger follow-up (D2), named here and not silently attempted.
+flow green") — that needed comparing MULTIPLE paths to the same sink, named
+here at the time as a distinct, larger follow-up (D2) rather than silently
+attempted. **D2 is now done** — see §5 below.
 
 No new detection. This increment is entirely a RECLASSIFICATION of
 `transform-catalog.js`'s already-shipped `recognizeTransformation` output
@@ -62,7 +66,7 @@ The `transform-catalog.js` `kind` → `HANDLING_VALUES` mapping:
 | `decode` | `unknown` | the direct counterpart of `encode` |
 | `truncate` | `unknown` | general-purpose shortening, not necessarily a privacy control (`transform-catalog.js`'s own disclosed low-confidence note) |
 | `normalize` | `unknown` | reversibility itself is `unknown` at the catalog level; no protective claim is possible |
-| `aggregate` | `unknown` | **disclosed, not a drive-by decision**: `HANDLING_VALUES` carries its own `aggregated` value, but awarding it needs shape-level reasoning about a WHOLE collection (is EVERY record aggregated, or just this one hop's local variable?) that a single-hop, single-path classifier cannot do soundly. Deferred to D2/later — `classifyHandling` never emits `'aggregated'` in this increment, the same way `transform-catalog.js` itself never emits `custom`/`unknown` as a recognized kind: an honest gap, not a guess. |
+| `aggregate` | `unknown` | **disclosed, not a drive-by decision**: `HANDLING_VALUES` carries its own `aggregated` value, but awarding it needs shape-level reasoning about a WHOLE collection (is EVERY record aggregated, or just this one hop's local variable?) that a single-hop, single-path classifier cannot do soundly. Deferred beyond D2, still open (§6) — `classifyHandling` never emits `'aggregated'`, the same way `transform-catalog.js` itself never emits `custom`/`unknown` as a recognized kind: an honest gap, not a guess. |
 
 `custom`/`unknown` never reach this table because `recognizeTransformation`
 never emits them (`transform-catalog.js`'s own documented contract) — a
@@ -178,15 +182,95 @@ re-derivation if a flow's underlying path later changes).
 
 ---
 
-## 5. Explicitly deferred (named, not silently skipped)
+## 5. FR-307 multi-path control-credit (increment 2)
 
-- **FR-307's multi-path control-credit rule (AC-12)** — "a transform on one
-  branch cannot make the full flow green" needs enumerating every path to
-  a sink and checking a transform applies on ALL of them, not one. This is
-  D2, a distinct and larger follow-up.
+**Status:** landed as Milestone 2, Sub-project D, increment **2**, per
+`docs/superpowers/plans/2026-08-31-data-flow-explorer-m2-subproject-d2-plan.md`.
+Computes `transformation.appliesToAllPaths` — the field `graph-builder.js`
+had stubbed at `null` on every transformation entity since increment 1 (§4's
+"honest absences" note) — and nothing else.
+
+### Scope boundary
+
+This increment does **NOT** compute `flow.protectionSummary` as
+`mixed`/`unprotected` (AC-12's own literal end-to-end verdict wording) —
+that field stays `'not_assessed'`, exactly as before. Populating it for real
+needs a real protection-verdict analyzer (Sub-project B/C's transit/at-rest
+analyzers, or Sub-project G's policy verdict), none of which exist yet.
+`appliesToAllPaths` is the load-bearing SIGNAL those future analyzers will
+consume, not the verdict itself.
+
+### The rule
+
+For every **coarse key** `[src.id, snk.id, de.id].join('|')` — deliberately
+coarser than `groupsByFlowKey`'s own key, since it drops `shape`/`grade`/
+`sortedT`, so every flow group reaching the same sink for the same field
+from the same source, regardless of which transforms were found on it,
+collapses into one coarse group:
+
+1. Collect every DISTINCT flow group (post-dedup — `groupsByFlowKey`'s own
+   entries, not raw reconstructed paths) sharing that coarse key, and each
+   one's `sortedT` (its ordered transformation-id array).
+2. For every transformation id `tid` appearing in ANY flow group's
+   `sortedT` within that coarse group: `tid` "applies to all paths" for
+   THIS coarse group iff `sortedT.includes(tid)` is true for **every** flow
+   group in the coarse group — not just the ones where it appears.
+3. Write the result onto `transformsById.get(tid).appliesToAllPaths`.
+
+Note that `groupsByFlowKey`'s own key already includes the transformation-id
+set (`sortedT.join(',')`), which was Milestone 1's own flow-key design, not
+something this increment needed to build — two paths to the same
+`(source, sink, dataElement)` that apply DIFFERENT transforms already landed
+in DIFFERENT flow groups before this increment, each with its own
+`flow.handling`. This increment adds the cross-group AGGREGATION on top:
+comparing every flow group in a coarse key against every other one, which
+`groupsByFlowKey`'s own per-group key cannot do by itself.
+
+### Conjunction across coarse groups (a disclosed rare-collision case)
+
+A transformation's own id (`ids.transformationId(anchor, ...)`) is keyed on
+the SINK node id, not the data-element id — a `transformsById` entry can in
+principle (rare, not observed in any shipped fixture) be referenced by flows
+for more than one data element, if two different fields happen to produce
+byte-identical `(file, line, fromPath, toPath)` at the same sink. If the
+SAME `tid` is relevant to more than one coarse group, the final
+`appliesToAllPaths` is the AND of every coarse group's own answer for that
+`tid` — `true` only if every coarse group where it is relevant judges it
+`true`. This is the conservative (never-overclaim) direction, consistent
+with FR-307's own "insufficient" framing and with Milestone 2's own
+"false-protected" exit-gate concern: a release must never assert credit it
+cannot prove. This case is disclosed but not separately fixture-tested — see
+§5's own "Explicitly deferred" entry below.
+
+### Why a truncated/incomplete path needs no special-case code
+
+If one path to a sink was cut short by `path-query.js`'s own budget/depth
+limits before reaching a transform call site, that path's own flow-group
+`sortedT` simply won't contain that transform's id — the hop was never
+walked, so `recognizeTransformation` never ran on it. Under the rule above,
+that flow group's absence of `tid` in its own `sortedT` already forces
+`appliesToAllPaths` to `false` for any `tid` present in a SIBLING flow group
+in the same coarse key — the conservative answer falls out of the existing
+conjunction, with no additional "is this path incomplete" branch needed.
+`test/lineage/graph-builder.test.js`'s truncated-path test proves this is
+real, not just argued in prose, by forcing a real `path-query.js` depth
+truncation (via `buildDataFlowGraph`'s existing `opts.budget` passthrough)
+on one branch while a sibling branch's transform completes.
+
+### Implementation
+
+`graph-builder.js` only — a second pass over data the existing
+flow-construction loop already builds (`groupsByFlowKey`/`transformsById`),
+not new detection. Runs strictly after the flow-construction loop finishes
+populating those maps and before `graph.transformations`/`graph.flows` are
+assigned from them. See that file's own inline comment at the aggregation
+block for the exact code.
+
+## 6. Explicitly deferred (named, not silently skipped)
+
 - **`aggregate`'s own `'aggregated'` verdict** — needs shape-level
   reasoning about a WHOLE collection, not a single hop. See §2's table.
-  D2 or later.
+  Deferred, not scheduled.
 - **Any UI/display of the handling taxonomy.**
 - **Re-deriving `handling` for a flow whose reconstructed path changes**
   after a later Sub-project A/E change — this increment computes it once,
@@ -194,3 +278,12 @@ re-derivation if a flow's underlying path later changes).
 - **Populating `edge.protection.handling`'s own verdict** from this
   taxonomy — a later Milestone 2 analyzer's job, not this increment's
   (§2's naming note).
+- **`flow.protectionSummary` computation** (`mixed`/`unprotected`/
+  `protected`) — AC-12's own literal end-to-end verdict wording — stays
+  `'not_assessed'`. Needs a real protection-verdict analyzer consuming
+  `appliesToAllPaths` as one of its inputs (Sub-project B/C/G, none built
+  yet); increment 2 produces the SIGNAL, not the verdict.
+- **The rare same-call-site-different-data-element `t.id` collision** (see
+  §5's "Conjunction across coarse groups") — handled conservatively (AND
+  across groups) but not separately tested with a dedicated collision
+  fixture, since no real catalog/parser shape produces it today.

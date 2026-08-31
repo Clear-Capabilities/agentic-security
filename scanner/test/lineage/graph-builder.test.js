@@ -291,8 +291,29 @@ test('E1/11 (Step 5): transformation entities — a recognized `mask`, an honest
   assert.equal(byCallee.reshapeForVendor.algorithm, null);
   assert.ok(byCallee.reshapeForVendor.evidence.includes('unresolved-call'));
 
+  // Milestone 2, Sub-project D, increment 2 (FR-307): `logger.info(...)`
+  // and `logger.warn(...)` both resolve to the SAME `category: 'log'`
+  // registry decision, so — per §6.1's node-identity rule ("a node is a
+  // registry decision, never a call site") — they mint the SAME sink node,
+  // confirmed directly below rather than assumed. Both `masked` and
+  // `shaped` are also derived from the SAME `card` field (one
+  // dataElementId). The two statements therefore share one coarse
+  // `(source, sink, dataElement)` key, exactly like AC-12's own branching
+  // scenario — each transform is present on only ONE of the two flow
+  // groups sharing that key, so BOTH become `false`, not the naive
+  // "only path to its own call site, so trivially true" a reader
+  // considering `maskCard`/`reshapeForVendor` in isolation might expect.
+  // (This is stronger than a plain single-path fixture would have been —
+  // an earlier draft of this test assumed `logger.info`/`logger.warn`
+  // mint two separate nodes and expected `true`/`true`; that assumption
+  // was checked directly against this file's real output before writing
+  // this comment, not carried over unverified.)
+  const logNodes = r.graph.nodes.filter((n) => n.kind === 'log');
+  assert.equal(logNodes.length, 1, 'logger.info and logger.warn collapse onto ONE category-granular sink node — the precondition for the false/false result below');
+  assert.equal(byCallee.maskCard.appliesToAllPaths, false, 'maskCard\'s own flow is a sibling of reshapeForVendor\'s flow to the SAME sink/field, and lacks reshapeForVendor\'s transform id, so it cannot claim to apply on every path to that coarse group');
+  assert.equal(byCallee.reshapeForVendor.appliesToAllPaths, false, 'symmetric reasoning: reshapeForVendor\'s own flow lacks maskCard\'s transform id');
+
   for (const t of r.graph.transformations) {
-    assert.equal(t.appliesToAllPaths, null, 'FR-307\'s all-path proof does not exist yet; null, never true/false');
     const keys = Object.keys(t).join(' ');
     assert.ok(!/credit|granted|denied|verdict|protected/i.test(keys),
       `Decision 2: a transformation entity must carry NO control-credit field, not even false — got keys: ${keys}`);
@@ -475,4 +496,145 @@ test('M2A1/hook-4: opts.resolveSiteDecision and opts.resolveDestination compose 
   const n = r.graph.nodes.find((x) => x.destination && x.destination.resolutionStatus === 'dynamic');
   assert.ok(n, 'the minted node carries both the overridden decision AND the resolved destination');
   assert.equal(n.externality.value, 'unknown', 'minted from the OVERRIDDEN decision');
+});
+
+// =========================================================================
+// Milestone 2, Sub-project D, increment 2 (FR-307): the multi-path
+// control-credit aggregation pass. See DESIGN_HANDLING_ANALYZER.md §5.
+// =========================================================================
+
+test('FR-307: the trivial `true` case is genuinely reachable — a transform that is the only relevant transform anywhere in its coarse (source, sink, dataElement) group applies to all paths that exist', () => {
+  // The single-statement half of what E1/11 above uses — deliberately
+  // WITHOUT the second, reshapeForVendor-reaching statement, so this
+  // fixture's coarse group has exactly one transform id in play (E1/11's
+  // own two-statement fixture puts maskCard and reshapeForVendor in the
+  // SAME coarse group as each other, which is why both read `false` there
+  // — see that test's own comment). Every flow group this fixture produces
+  // (real interprocedural analysis yields more than one — a resolved
+  // variant and an ambiguous-correlation variant — even for one textual
+  // call site) carries the SAME transform id, so the conjunction is
+  // trivially satisfied.
+  const code = "function maskCard(pan){ return '****' + pan; }\n"
+    + 'function handle(req, logger){\n'
+    + '  const card = req.body.card_number;\n'
+    + '  const masked = maskCard(card);\n'
+    + '  logger.info(masked);\n'
+    + '}';
+  const r = buildDataFlowGraph(irOf({ 'trivial-true.js': code }), { repository: 'tt' });
+  assert.deepEqual(validateGraph(r.graph).errors, []);
+  const maskT = r.graph.transformations.find((t) => t.callee === 'maskCard');
+  assert.ok(maskT);
+  assert.ok(r.graph.flows.length >= 2, 'sanity: this fixture genuinely produces more than one flow group, so `true` here is not vacuous over a single-group coarse key');
+  for (const f of r.graph.flows) assert.ok(f.transformationIds.includes(maskT.id), 'every flow group in this fixture\'s coarse group carries the transform');
+  assert.equal(maskT.appliesToAllPaths, true, 'a transform present on EVERY flow group sharing its coarse key must read true, not just non-false');
+});
+
+test('AC-12 (FR-307): a transform on ONE branch cannot make appliesToAllPaths true when a SIBLING branch to the SAME sink skips it', () => {
+  // One field (req.body.card_number) reaches the SAME logger.info(...) sink
+  // CATEGORY via two branches of an if/else: one masks first, the other
+  // logs the raw value. `logger.info` matches on a receiver-name pattern
+  // (privacy-catalog.js's `receiverTypeIn: ['log|logger|Logger']`, which
+  // graph-builder.js's own `receiverJustified` deliberately treats as
+  // vacuously satisfied, not a real receiver constraint — see that
+  // function's own comment) so both call sites resolve to the identical
+  // registry decision and therefore the identical, category-granular sink
+  // NODE (§6.1) — confirmed below, not assumed, since AC-12's whole point
+  // depends on it being genuinely the same sink.
+  const code = "function maskCard(pan){ return '****' + pan; }\n"
+    + 'function handle(req, logger, flag){\n'
+    + '  const card = req.body.card_number;\n'
+    + '  if (flag) {\n'
+    + '    const masked = maskCard(card);\n'
+    + '    logger.info(masked);\n'
+    + '  } else {\n'
+    + '    logger.info(card);\n'
+    + '  }\n'
+    + '}';
+  const r = buildDataFlowGraph(irOf({ 'ac12.js': code }), { repository: 'ac12' });
+  assert.deepEqual(validateGraph(r.graph).errors, []);
+
+  const sinkNodes = r.graph.nodes.filter((n) => n.kind === 'log');
+  assert.equal(sinkNodes.length, 1, 'both branches\' logger.info(...) call sites must collapse onto ONE registry-decision node, not two — this is the precondition AC-12\'s own rule depends on');
+  const snk = sinkNodes[0];
+
+  const maskT = r.graph.transformations.find((t) => t.callee === 'maskCard');
+  assert.ok(maskT, 'the masked branch\'s transform is a real, recognized entity');
+
+  // The coarse group for (source, sink, card) contains at least one flow
+  // WITH the transform (the masked branch) and at least one flow WITHOUT it
+  // (the raw branch) — both sharing the same sink node.
+  const coarseFlows = r.graph.flows.filter((f) => f.sink === snk.id);
+  assert.ok(coarseFlows.length >= 2, 'both branches must produce real, distinct flow groups');
+  assert.ok(coarseFlows.some((f) => f.transformationIds.includes(maskT.id)), 'the masked branch\'s flow carries the transform');
+  assert.ok(coarseFlows.some((f) => !f.transformationIds.includes(maskT.id)), 'the raw branch\'s flow does NOT carry the transform');
+
+  // AC-12's own literal claim: a transform on one branch cannot make the
+  // full flow green. Proven here as the load-bearing SIGNAL this increment
+  // computes — `appliesToAllPaths` false, never true, whenever a sibling
+  // flow to the same sink skips the transform.
+  assert.equal(maskT.appliesToAllPaths, false, 'AC-12: a transform present on only one of two sibling paths to the same sink must never read as applying to all paths');
+
+  // §5's own scope boundary: this increment does NOT compute
+  // flow.protectionSummary — it stays not_assessed on every flow, even the
+  // masked one, since awarding an end-to-end verdict from appliesToAllPaths
+  // alone is explicitly deferred to a later protection-verdict analyzer.
+  for (const f of r.graph.flows) assert.equal(f.protectionSummary, 'not_assessed');
+});
+
+test('FR-307 (Sub-project D, increment 2): a transform genuinely present and reached on one COMPLETE path still loses control credit when a sibling path to the same sink is cut short by path-query.js\'s own depth budget before it could be checked', () => {
+  // Reuses graph-builder.js's own pre-existing `opts.budget` passthrough to
+  // path-query.js's `reconstructPaths` (E3's already-shipped mechanism,
+  // not a new one this increment invents) to force a real depth-limit
+  // truncation on one branch while a sibling branch to the SAME sink
+  // completes and genuinely carries the transform. Both branches route
+  // `req.body.card_number` through the SAME single `maskCard` call site
+  // (inside the shared `wrap` helper) — the `long` branch pushes that call
+  // site several hops further from the sink via a chain of identity calls,
+  // so a tight `maxDepth` cuts the BACKWARD walk off before it ever reaches
+  // the transform's own hop, while the `short` branch (few hops) still
+  // reaches it cleanly.
+  const code = "function id(v){ return v; }\n"
+    + "function maskCard(pan){ return '****' + pan; }\n"
+    + 'function wrap(pan){ return maskCard(pan); }\n'
+    + 'function short(req, logger){\n'
+    + '  const card = req.body.card_number;\n'
+    + '  const masked = wrap(card);\n'
+    + '  logger.info(masked);\n'
+    + '}\n'
+    + 'function long(req, logger){\n'
+    + '  const card = req.body.card_number;\n'
+    + '  const masked = wrap(card);\n'
+    + '  const a1 = id(masked); const a2 = id(a1); const a3 = id(a2); const a4 = id(a3); const a5 = id(a4);\n'
+    + '  logger.info(a5);\n'
+    + '}';
+  const r = buildDataFlowGraph(irOf({ 'trunc.js': code }), { repository: 'trunc', budget: { maxDepth: 8 } });
+  assert.deepEqual(validateGraph(r.graph).errors, []);
+
+  const maskT = r.graph.transformations.find((t) => t.callee === 'maskCard');
+  assert.ok(maskT, 'the single, shared maskCard call site is a real, recognized entity');
+
+  const sinkNodes = r.graph.nodes.filter((n) => n.kind === 'log');
+  assert.equal(sinkNodes.length, 1, 'short and long both reach the same registry-decision sink node');
+  const coarseFlows = r.graph.flows.filter((f) => f.sink === sinkNodes[0].id);
+
+  // A REAL, COMPLETE (non-truncated) flow genuinely carries the transform —
+  // this is not a fixture where the transform was never reachable at all.
+  const complete = coarseFlows.find((f) => f.transformationIds.includes(maskT.id)
+    && !f.limitations.some((l) => l.includes('depth-limit')));
+  assert.ok(complete, 'at least one flow group must reach the transform cleanly, with no truncation of any kind — proving the transform really is on a real path to this sink');
+
+  // A SIBLING flow group to the identical sink was genuinely cut short by
+  // the depth budget before the walk could reach the transform's own hop —
+  // its own `sortedT` therefore never contains the transform id, not
+  // because the transform doesn't apply there, but because the analyzer
+  // never got to look.
+  const truncatedSibling = coarseFlows.find((f) => !f.transformationIds.includes(maskT.id)
+    && f.limitations.some((l) => l.includes('reconstruction truncated: depth-limit')));
+  assert.ok(truncatedSibling, 'a sibling flow group to the same sink must have been genuinely truncated by the depth budget before reaching the transform');
+
+  // The design doc's own load-bearing claim, proven rather than argued: no
+  // special-case code is needed for this — the conservative AND over every
+  // flow group in the coarse key already forces `false` the moment ANY
+  // sibling's own `sortedT` lacks the id, truncated or not.
+  assert.equal(maskT.appliesToAllPaths, false, 'a truncated sibling must conservatively deny control credit — the analyzer never proved the transform applies EVERYWHERE, so it must not claim that it does');
 });
