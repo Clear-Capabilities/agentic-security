@@ -5,5 +5,6 @@
   "sinkCategory": "external-api",
   "expectedProtection": { "transit": "unprotected" },
   "expectedTransformKind": null,
+  "tier": "regression",
   "notes": "literal http:// scheme, no TLS — transit must be unprotected regardless of scheme alone (PRD FR-401)"
 }

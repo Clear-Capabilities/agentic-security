@@ -1,0 +1,11 @@
+{
+  "language": "js",
+  "dataClass": ["PCI"],
+  "sourceCategory": "http-body",
+  "sinkCategory": "log",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "expectedConnected": false,
+  "tier": "regression",
+  "notes": "AC-11: card_number never reaches the logger (logger.info logs a different variable, `status`) — the log sink node must still be visible in graph.nodes with a coverage reason, not silently absent, even though no flow connects it to the PCI source."
+}

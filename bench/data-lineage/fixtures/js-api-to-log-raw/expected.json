@@ -5,5 +5,6 @@
   "sinkCategory": "log",
   "expectedProtection": { "handling": "unprotected" },
   "expectedTransformKind": null,
+  "tier": "regression",
   "notes": "card_number reaches logger.info() with no transform on the path"
 }
