@@ -552,7 +552,31 @@ export function resolveExprIdentities(state, expr, ctx) {
       // `byPath`). Mirrors `scanner/src/dataflow/engine.js`'s
       // `_calleeReceiverTainted` precedent for the sibling taint engine,
       // which this package had not yet inherited.
-      if (expr.callee?.kind === 'member' && expr.callee.object) {
+      // task review MF-1 (engine-receiver-identity-hotfix): the initial fix
+      // only handled `parser-js.js`'s structured `{kind:'member', object,
+      // prop}` callee shape. Every OTHER language parser
+      // (parser-py.js/parser-java.js/parser-go.js/parser-php.js/
+      // parser-rb.js/parser-cs.js/parser-kt.js/parser-cpp.js) instead emits
+      // a flat, dot-joined STRING callee ("pan.slice", not an exprDesc) —
+      // there is no sub-expression to recurse into, so the receiver is
+      // recovered by slicing off the string after its LAST '.' and looking
+      // up that prefix directly, mirroring `dataflow/engine.js`'s
+      // `_calleeReceiverTainted` string branch exactly (that function
+      // returns a boolean via `isCoveredBy`; this one needs the actual
+      // identity SET, so it queries `identitiesAt` instead). Not reachable
+      // from any shipped caller today (this package is wired only against
+      // `parser-js.js`'s JS/TS output — see `DESIGN_GRAPH_BUILDER.md`'s own
+      // scope note), but `resolveExprIdentities` is a generic function with
+      // no JS-only gate of its own, and leaving this branch half-ported
+      // would silently reproduce the exact "sibling engine already solved
+      // this and we didn't inherit it" bug class one language over.
+      if (typeof expr.callee === 'string') {
+        const idx = expr.callee.lastIndexOf('.');
+        if (idx > 0) {
+          const receiverPath = expr.callee.slice(0, idx);
+          for (const id of identitiesAt(state, receiverPath)) flat.add(id);
+        }
+      } else if (expr.callee?.kind === 'member' && expr.callee.object) {
         const receiver = resolveExprIdentities(state, expr.callee.object, ctx);
         for (const id of receiver.flat) flat.add(id);
       }

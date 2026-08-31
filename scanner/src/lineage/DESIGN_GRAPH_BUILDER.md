@@ -219,14 +219,27 @@ empty one.
 
 | Project | seeds | hops | pnodes / pedges | node kinds reached |
 |---|---|---|---|---|
-| `vulnerable-js` | 9 | **19** | 14 / 8 | `path`, `escape` |
+| `vulnerable-js` | 9 | **23** | 15 / 9 | `path`, `escape` |
 | `frontend/` | **0** | 0 | 0 / 0 | — |
+
+(Re-measured after the `lineage-engine-receiver-identity-hotfix` — task
+review MF-2. The receiver-identity fix adds real intraprocedural hops that
+were previously silently dropped, so these numbers moved from the design
+task's own original measurement: **19** hops / 14 pnodes / 8 pedges. See
+§11 item 1's RESOLVED note.)
 
 Two things follow, and E2/F must not be surprised by either:
 
-- **A real seed is strictly narrower than the synthetic per-parameter seed**
-  (19 hops vs 21; 14/8 pnodes/pedges vs 16/9). It seeds only what a registry
-  matched. That is the point.
+- **A real seed's `pnodes` count is narrower than the synthetic
+  per-parameter seed's, though `hops` and `pedges` are not** (task review
+  MF-3 corrected this claim's original overreach): post-fix, `pnodes` is
+  15 vs the synthetic seed's 16 (narrower, by 1); `hops` is 23 vs 21
+  (WIDER, since the receiver fix surfaces real hops the synthetic seed's
+  own per-parameter approach never modeled); `pedges` is 9 vs 9 (tied). The
+  real seed still seeds only what a registry matched — that property
+  holds — but "strictly narrower on every dimension" no longer does, and
+  this table states the true per-dimension comparison rather than the
+  original, now-false blanket claim.
 - **`frontend/` produces zero seeds and therefore zero hops** — not a bug. It
   is a browser prototype with no HTTP-request-shaped source in the catalog.
   Every non-zero number the scoping doc measured for `frontend/` came from the
@@ -710,14 +723,35 @@ hops / 14 pnodes / 8 pedges.
    inherited it, and no lineage design document disclosed the gap until this
    escalation entry.
 
-   **The fix's exact mechanism**: when `expr.callee.kind === 'member'` in the
-   unresolved-`call` branch, `expr.callee.object` (the receiver) is now
-   recursively resolved via `resolveExprIdentities` and its `flat`
-   identities are unioned into the branch's own `flat` result, the same way
-   each argument's `flat` identities already were — matching
-   `DESIGN_INTRAPROCEDURAL.md`'s structure-flattening rule for `call` (an
-   unresolved call's return is genuinely unknown structure, so only `flat`
-   participates, never `byPath`).
+   **The fix's exact mechanism, BOTH callee shapes (task review MF-1: the
+   first cut of this fix ported only half of `_calleeReceiverTainted`'s own
+   precedent and was found to still lose the identity for every non-JS
+   parser's callee shape — closed in the same hotfix, not left as a second
+   escalation):**
+   - `parser-js.js`'s structured `{kind:'member', object, prop}` callee:
+     `expr.callee.object` (the receiver) is recursively resolved via
+     `resolveExprIdentities` and its `flat` identities are unioned into the
+     branch's own `flat` result, the same way each argument's `flat`
+     identities already were.
+   - Every OTHER language parser's flat, dot-joined STRING callee
+     (`"pan.slice"`, not an exprDesc — `parser-py.js`/`parser-java.js`/
+     `parser-go.js`/`parser-php.js`/`parser-rb.js`/`parser-cs.js`/
+     `parser-kt.js`/`parser-cpp.js` all emit this shape): the receiver is
+     recovered by slicing the string after its LAST `.` and querying that
+     prefix directly via `identitiesAt`, mirroring
+     `_calleeReceiverTainted`'s own string branch (`isCoveredBy`) — this
+     one needs the actual identity SET, not a boolean.
+   - Both match `DESIGN_INTRAPROCEDURAL.md`'s structure-flattening rule for
+     `call` (an unresolved call's return is genuinely unknown structure, so
+     only `flat` participates, never `byPath`). Proven permanently in
+     `test/lineage/engine-receiver-identity.test.js` against both real
+     JS/TS (`parser-js.js`) and real Python (`parser-py.js`) parsed IR —
+     not reachable from any shipped caller today (this package's only real
+     caller, Sub-project E, is wired against `parser-js.js`'s JS/TS output
+     only), but `resolveExprIdentities` has no JS-only gate of its own, and
+     shipping the fix for one callee shape while leaving the other
+     half-inherited would have reproduced this exact bug class one
+     language over.
 
    **The consequence was not theoretical:** it produced **zero flows** for
    `bench/data-lineage/fixtures/js-api-to-log-masked` — the mask-then-log
