@@ -102,6 +102,229 @@ git commit -m "docs(lineage): design C3's interprocedural hop recording (context
 
 ---
 
-## Post-Task-1 note (filled in once Task 1 lands)
+## Post-Task-1 note
 
-This plan gains its implementation task(s) here, scoped exactly to what §13.7's checklist specifies, once Task 1's addendum is committed and reviewed. Do not pre-write them — §13 does not exist yet at the time this plan file was first saved.
+Task 1 landed as `DESIGN_PATH_PROVENANCE.md` §13 (commit `a2d42695`), a fix round closing one blocking backward-compat finding (commit `fa27354e`), and a small text-only correction to the fix round's own guard wording (commit `a8846463`) applied directly after a scoped re-review confirmed the design otherwise ready. §13.7 is the accepted, binding file/line/signature checklist for the two implementation tasks below — every reference in Tasks 2-3 is to that checklist's 18 rows (items 1-17 plus 15b), which a scoped re-review independently verified against live source line-by-line.
+
+Split rationale: §13.7's checklist is one cohesive deliverable, but its 3 source files plus test suite is too much for one dispatch. Task 2 delivers "the three `ctx` holes are closed and the context field disambiguates entry contexts, end to end, provably" — the load-bearing correctness work, including the golden-baseline regression (item 15b) that guards the exact hazard Task 1's fix round found, added at the same time the hazard's fix lands rather than deferred. Task 3 delivers B5/B6 degradation marking (a smaller, lower-risk addition sharing `summaries.js`) and retires the PoC file into the permanent suite (item 15) only once everything it was proving is covered by permanent tests — never before.
+
+---
+
+### Task 2: Close the three `ctx` holes, add the `context`/`peerScope`/`peerContext` fields, wire the argument→parameter binding hop
+
+**Files:**
+- Modify: `scanner/src/lineage/engine.js` (§13.7 items 1-5)
+- Modify: `scanner/src/lineage/summaries.js` (§13.7 items 6-10)
+- Modify: `scanner/src/lineage/driver.js` (§13.7 item 14)
+- Create: `scanner/test/lineage/engine-provenance-interprocedural.test.js` (permanent test file — NOT the throwaway PoC, which stays untouched by this task; item 15's absorption/deletion of the PoC is Task 3's job, after Task 3's own marking work also has permanent coverage)
+- Modify: `scanner/package.json` — add the new test file to the `test:lineage` script (required per `scanner/CLAUDE.md`'s "if you add a new test file, also add it to the matching script" rule; the pre-existing PoC entry stays as-is for this task, Task 3 removes it)
+- Read only: `scanner/src/lineage/DESIGN_PATH_PROVENANCE.md` §13.0-§13.4, §13.7 (items 1-10, 14, 15b); `scanner/test/lineage/engine-provenance-interprocedural-poc.test.js` (the accepted design's own PoC — mirror its scenarios into permanent tests against the now-real shipped code, do not just copy-paste the prototypes verbatim since they exist specifically to stand in for code this task now writes for real)
+
+**Interfaces:**
+- Consumes: `contributingKeys(state, path, id)`, exported from `engine.js` (unchanged this task); `hashState`, exported from `field-identity.js` (already used elsewhere; not yet imported into `engine.js` — item 1 adds that).
+- Produces: `resolveCallSummary(calleeExpr, callArgs, callerState, ctx)` — 4th param, optional; `entryStateFromCall(paramNames, callArgs, callerState, ctx)` — 4th param, optional; every hop record now additionally carries `context` (string|null), `peerScope` (string|null), `peerContext` (string|null) — Task 3 consumes these for its own marking hop, and both fields are additive to the record shape every C1/C2 hop-emission site already produces (no existing site's OWN code changes — only the wrapper that stamps `scope`/`nodeId`/`line` onto every hop gains 3 more stamped fields).
+
+- [ ] **Step 1: `engine.js` — imports, context stamping, `case 'call'` ctx forwarding (items 1-5)**
+
+At the top of `scanner/src/lineage/engine.js`, add `hashState` to the existing `field-identity.js` import (currently `import { identitiesAt, emptyState, removeIdentitiesAt, addIdentity, joinStates, statesEqual } from './field-identity.js';`) — item 1.
+
+In `analyzeFunctionFieldIdentity` (~line 848, right after `const scope = fn.qid ?? null;`), add:
+
+```js
+const context = ctx?.recordHop ? hashState(entryState) : null;
+```
+
+— item 2 (computed once per analysis run, not per hop; `null` when no recorder is present, matching every other conditional field this file already stamps).
+
+In the `stepCtx` wrapper (~lines 864-866), currently:
+
+```js
+const stepCtx = ctx?.recordHop
+  ? { ...ctx, recordHop: (h) => ctx.recordHop({ scope, nodeId: nid, line: node.line ?? null, ...h }) }
+  : ctx;
+```
+
+change the stamped object to also carry `context, peerScope: null, peerContext: null` before the `...h` spread — item 3. `peerScope`/`peerContext` default to `null` here because most hops are NOT cross-function; only the `call-resolved` hop (below) and `call-arg-bind` hop (Task 2 Step 2) ever set them non-null, and `...h` lets those two sites override the default exactly like every other per-hop field already does.
+
+In `resolveExprIdentities`'s `case 'call'` (line ~505), currently `ctx.resolveCallSummary(expr.callee, expr.args ?? [], state)` — change to pass `ctx` as a 4th argument: `ctx.resolveCallSummary(expr.callee, expr.args ?? [], state, ctx)` — item 4. **This is the only place the full `ctx` crosses from `engine.js` into `summaries.js`.** Task 2 Step 2's changes to `entryStateFromCall`/`createCallSummaryResolver` must not let `resolveCallSummary` (as opposed to a recorder-only derivation) reach any further `resolveExprIdentities` call — that is exactly the hazard Task 1's fix round found and closed in the design; Step 2 below implements the closed version, not the original.
+
+In the same `case 'call'`'s resolved branch (~lines 512-520), the existing `call-resolved` hop-emission loop:
+
+```js
+if (ctx?.recordHop) {
+  for (const id of flat) {
+    ctx.recordHop({
+      kind: 'production', subKind: 'call-resolved',
+      fromPath: null, toPath: null, dataElementId: id,
+      syntacticPath: null, widenReason: null, lossReason: null,
+    });
+  }
+}
+```
+
+add `peerScope: summary.resolvedQid ?? null, peerContext: summary.resolvedContext ?? null` to the object literal — item 5. Use `?? null`, never a bare reference — a 3-argument `resolveCallSummary` stub (e.g. an older/hand-built test fixture that hasn't been updated to return `resolvedQid`/`resolvedContext`) must not throw or stamp `undefined`.
+
+- [ ] **Step 2: `summaries.js` — close holes 2 and 3, emit the argument→parameter binding hop (items 6-10)**
+
+In `entryStateFromCall` (line 286), add an optional 4th parameter `ctx`. At the top of the function body (before the `for` loop), derive:
+
+```js
+const argCtx = ctx?.recordHop ? { recordHop: ctx.recordHop } : undefined;
+```
+
+and change the existing `resolveExprIdentities(callerState, callArgs[i])` call (line 291) to `resolveExprIdentities(callerState, callArgs[i], argCtx)` — item 6. **Deriving `argCtx` inside `entryStateFromCall` itself (not at a call site) is load-bearing, not stylistic** — it means no future second caller of `entryStateFromCall` can reintroduce the hazard by passing the full `ctx` through a different path. Never pass `ctx` itself to `resolveExprIdentities` here — only `argCtx`, which strips `resolveCallSummary` and keeps only `recordHop`. Passing the full `ctx` changes the ANALYSIS RESULT with no recorder attached anywhere (an argument that is itself a resolvable call would resolve interprocedurally where the shipped engine takes the unresolved fallback), in the unsound direction under a tight B6 context cap — this is exactly Task 1's fix-round finding; Step 3's own regression test (item 15b) is what proves this stays closed.
+
+After deriving `argCtx` and inside the existing per-parameter loop (which already computes `resolved`, `residual`, and writes to `entryState` — do not change that write logic), when `ctx?.recordHop` is present, emit one `write-out/call-arg-bind` hop per identity written this iteration (both the residual write at `paramName` and each `byPath` write at `paramName.subPath`), matching this file's own §13.2(b) shape:
+
+```js
+kind: 'write-out', subKind: 'call-arg-bind',
+fromPath: null, toPath: <paramName or `${paramName}.${subPath}`>, dataElementId: id,
+syntacticPath: null, widenReason: null, lossReason: null,
+```
+
+`fromPath` is deliberately `null` — read §13.2(a)'s rationale in the design doc before changing this (the argument's own in-halves, emitted by the now-ctx-forwarded `resolveExprIdentities` call inside `argCtx`, already carry the real contributing keys at the join key `(callerScope, callerNodeId, id, callerContext)`; a non-null `fromPath` here would double-emit the same information in a differently-shaped record). This is item 6's second half (the design doc's item 6 row covers only the ctx-stripping; the hop emission is specified in §13.2(b), referenced from item 6's own text) — confirm against the live §13.2(b) text before writing this, since it is the exact shape a task review will check byte-for-byte.
+
+In `createCallSummaryResolver`'s returned closure (line 334), add an optional 4th parameter `ctx`, and pass it straight through to `entryStateFromCall`'s new 4th parameter (`entryStateFromCall(fn.params, callArgs, callerState, ctx)`) — item 7. `entryStateFromCall` does the stripping (Step 2's item 6 code above), so this call site forwards the caller's `ctx` unmodified; the hazard cannot reappear here because the strip happens one level down, not at each call site.
+
+Immediately after that `entryStateFromCall` call, compute `const calleeContext = hashState(entryState);` — item 8's first half.
+
+Inside `cache.compute`'s callback (line 357), the existing callee-ctx construction is `{ resolveCallSummary }` (a fresh object every time, discarding any recorder — this is hole 3). Change it to:
+
+```js
+const calleeCtx = ctx?.recordHop
+  ? { resolveCallSummary, recordHop: ctx.recordHop }
+  : { resolveCallSummary };
+const result = analyzeFunctionFieldIdentity(fn, es, calleeCtx);
+```
+
+— item 9. **Do not re-stamp `context` here** — the callee's own `analyzeFunctionFieldIdentity` call (Step 1's item 2/3 changes) computes and stamps its own `context` from ITS OWN `entryState` (`es`, the callee's entry state — different from the caller's `entryState`), and its `stepCtx` wrapper's stamps win over anything this object would set, by spread order (`{ ...ctx, ..., ...h }` — the innermost `h` from the deepest call always wins). Passing a `context` field here would be silently overwritten and is dead code.
+
+At `cache.compute`'s return point (still inside the same callback, where it currently does `return summaryFromAnalysisResult(result);`), wrap the result: `return { ...summaryFromAnalysisResult(result), resolvedQid: qid, resolvedContext: calleeContext };` — item 10. A fresh object via spread, never a mutation of `summaryFromAnalysisResult`'s return value (which `fieldSummaryEq` and the cache's own equality checks read elsewhere — mutating it risks a subtle aliasing bug with whatever else holds a reference).
+
+Then, still in `createCallSummaryResolver`, when `ctx?.recordHop` is present, emit the `write-out/call-arg-bind` hop's cross-function complement: this is item 8's second half — but re-check the live §13.2(b) text for the exact record shape (it specifies whether this second hop belongs here or was already fully covered by Step 2's per-parameter loop in `entryStateFromCall` above; do not assume — the design doc is the authority, this brief is not a substitute for reading it).
+
+- [ ] **Step 3: `driver.js` — thread `opts.recordHop` (item 14)**
+
+In `runFieldIdentityAnalysis` (line 65), the current per-function ctx construction is `{ resolveCallSummary }`. Change to accept an optional `opts.recordHop` and spread it in conditionally:
+
+```js
+const ctx = opts.recordHop ? { resolveCallSummary, recordHop: opts.recordHop } : { resolveCallSummary };
+const result = analyzeFunctionFieldIdentity(fn, emptyState(), ctx);
+```
+
+so a caller that supplies no `opts.recordHop` gets a byte-identical `{ resolveCallSummary }` object to what this function constructs today — Decision 7.2's "true by construction" property, extended to the driver.
+
+- [ ] **Step 4: Write `engine-provenance-interprocedural.test.js` (permanent tests proving items 1-10, 14, and the golden-baseline regression, item 15b)**
+
+Cover, against the REAL shipped functions (import from `../../src/lineage/summaries.js`, `../../src/lineage/driver.js`, `../../src/lineage/engine.js` — no local reimplementation, unlike the PoC this mirrors):
+
+1. **Argument-binding hop**: a real 2-function fixture (caller passes an argument to a callee), asserting a `write-out/call-arg-bind` hop appears with the right `toPath`/`dataElementId` when a recorder is attached, and that identity resolution is unaffected when no recorder is attached (mirrors PoC scenario 1, against shipped `entryStateFromCall`).
+2. **Two-hole-closure**: a 3-function resolved chain (`outer` → `middle` → `inner`), through a real `FieldIdentitySummaryCache` + hand-built `lookupCallee`, proving hops recorded INSIDE `inner`'s own analysis are visible in the top-level `outer` recorder (mirrors PoC scenario 2, now against shipped `createCallSummaryResolver`/`resolveCallSummary`).
+3. **Context disambiguation**: reconstruct §9.4's own worked example (`function g(x) { const y = x; return y; }` under two distinct entry contexts) through the real cache, and confirm joining on `(scope, nodeId, dataElementId, context)` excludes the phantom pairs a 3-part join would include (mirrors PoC scenario 4).
+4. **Golden-baseline regression (item 15b)** — the guard for the exact hazard Task 1's fix round found and fixed:
+   - Fixture A: `function scrub(u){return {safe:1}}; function sink(p){return p}; function caller(user){const out = sink(scrub(user)); return out;}`, seeded `user.email -> data:email`, run through the real driver/cache with **no recorder anywhere**. Assert the result's returned identity for `out` is `['data:email']` — a hardcoded golden literal, not a comparison against any other live code path (per the design doc's explicit correction: comparing against "the shipped resolver" is meaningless once this task's own wiring IS the shipped resolver).
+   - Fixture B: a two-call-site, cap-1-cache B6 scenario (two calls to the same `id2`-shaped function under a tight cap), no recorder anywhere. Assert the golden literal `['data:other-email']` (or whichever identity the design doc's own reproduction pins — check the PoC's existing scenario for the exact expected value before writing this assertion; do not guess it).
+   - Compare the FULL canonicalized `{exitState, returnFacts, mutatedParams, widenings}` shape for both fixtures (matching item 16's own canonicalization approach — reuse or adapt whatever canonicalization helper `engine-provenance.test.js` already defines for its write-only-invariant test), not just `returnFacts`' identities alone.
+   - These two tests MUST currently pass against the code Step 1-3 just wrote (they are a regression guard, not a TDD-red step — the hazard was already fixed in the design's own PoC; this step proves the SHIPPED code has the same property). If either fails, Steps 1-3 have reintroduced the hazard — stop and fix before proceeding, do not weaken the assertion.
+
+- [ ] **Step 5: Wire the new test file into `test:lineage` and run the full scoped suite**
+
+Add `test/lineage/engine-provenance-interprocedural.test.js` to the `test:lineage` script's file list in `scanner/package.json` (follow the existing entries' exact pattern). Run `npm run test:lineage` from `scanner/` and confirm every test passes, including the pre-existing 257 (236 baseline + the 21-test PoC file, still present and untouched) plus this task's new tests.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add scanner/src/lineage/engine.js scanner/src/lineage/summaries.js scanner/src/lineage/driver.js scanner/test/lineage/engine-provenance-interprocedural.test.js scanner/package.json
+git commit -m "feat(lineage): close C3's three ctx holes, add context/peerScope/peerContext fields, wire call-arg-bind hop (Sub-project C, increment 3, Task 2)"
+```
+
+---
+
+### Task 3: B5/B6 degradation marking, absorb the PoC into the permanent suite, finish the write-only-invariant and driver coverage
+
+**Depends on:** Task 2 (this task's marking hop reuses `peerScope`/`peerContext`/the `context` field Task 2 adds, and Step 3's PoC-deletion step must not run before Task 2's own permanent tests exist to replace what the PoC was proving).
+
+**Files:**
+- Modify: `scanner/src/lineage/summaries.js` (§13.7 items 11-13)
+- Modify: `scanner/test/lineage/engine-provenance.test.js` (§13.7 item 16 — extend the existing write-only-invariant test)
+- Create or modify: a `driver.test.js` addition (§13.7 item 17)
+- Delete: `scanner/test/lineage/engine-provenance-interprocedural-poc.test.js`, and remove its entry from `scanner/package.json`'s `test:lineage` script (§13.7 item 15) — **only after** this task's own marking work has permanent test coverage elsewhere, so no property the PoC was proving goes uncovered even momentarily within this task's own commit history
+- Read only: `scanner/src/lineage/DESIGN_PATH_PROVENANCE.md` §13.6, §13.7 (items 11-13, 15, 16, 17)
+
+**Interfaces:**
+- Consumes: Task 2's `context`/`peerScope`/`peerContext` fields, `resolvedQid`/`resolvedContext` on a resolved summary.
+- Produces: `FieldSummary` objects gain an optional `degradedReason` field (string, e.g. `'context-cap'`) — permanent (not stripped like `_recursive`), diagnostic (excluded from `fieldSummaryEq`, matching `widenings`' own precedent).
+
+- [ ] **Step 1: `FieldIdentitySummaryCache.compute`'s cap branch marks its fallback (item 11)**
+
+In the cap-degradation branch (lines 115-123), currently:
+
+```js
+if (!seen.has(hash) && seen.size >= this._maxContextsPerFn) {
+  const fallback = this._cache.get(this._key(qid, emptyState())) ?? emptyFieldSummary();
+  this.set(qid, entryState, fallback);
+  return fallback;
+}
+```
+
+change to mark a **shallow copy** (never mutate the shared fallback object in place — the same object may already be cached under a different key, e.g. the function's own empty-entry summary):
+
+```js
+if (!seen.has(hash) && seen.size >= this._maxContextsPerFn) {
+  const base = this._cache.get(this._key(qid, emptyState())) ?? emptyFieldSummary();
+  const fallback = { ...base, degradedReason: 'context-cap' };
+  this.set(qid, entryState, fallback);
+  return fallback;
+}
+```
+
+Per the design doc's own correction (§13.7 item 11's live text): do NOT port the PoC's `MarkingSummaryCache` subclass verbatim — that subclass re-derives the cap test outside `compute()` only because a subclass cannot see which branch its parent took; inline, mark `fallback` right here, at the one real call site, with no second cap test.
+
+- [ ] **Step 2: emit the loss hop when a resolved call receives a degraded summary (item 12)**
+
+In `createCallSummaryResolver`'s closure, after `cache.compute(...)` returns (wherever Task 2's Step 2 wrapped the result with `resolvedQid`/`resolvedContext`), when the summary carries `degradedReason` AND `ctx?.recordHop` is present, emit one loss hop per identity in the callee's entry state (`entryState`, already computed earlier in this closure):
+
+```js
+kind: 'production', fromPath: null, toPath: null, dataElementId: id,
+syntacticPath: null, widenReason: null, lossReason: 'context-cap-degraded',
+peerScope: qid, peerContext: calleeContext,
+```
+
+Confirm the exact field list against the live §13.6/§13.7 item 12 text before writing this — the design doc is the authority on whether `peerScope`/`peerContext` are included here (this brief's best reconstruction from context, not a verbatim quote).
+
+- [ ] **Step 3: `fieldSummaryEq` excludes `degradedReason` (item 13)**
+
+Add a one-line comment near `fieldSummaryEq`'s existing exclusion of `widenings` (it's already documented as deliberately not compared, being diagnostic) noting that `degradedReason` is excluded for the same reason. No behavior change — `fieldSummaryEq`'s existing field-by-field comparison already doesn't touch `degradedReason` since it was never in the comparison list; this step is documentation only, making the omission a stated decision rather than an accidental one a future reader might "fix."
+
+- [ ] **Step 4: extend the write-only-invariant test (item 16)**
+
+In `engine-provenance.test.js`'s existing write-only-invariant test (~line 245), add at least one multi-function fixture driven through a real `FieldIdentitySummaryCache`, run once with a recorder attached and once without, asserting the canonicalized `{exitState, returnFacts, mutatedParams, widenings}` is identical between the two runs. This is the guard against the C2-era bug class (a recorder's presence perturbing cache-cap accounting) — C3 adds three new recorder-conditional branches inside `summaries.js` (Task 2's items 6, 9, and this task's item 12), so the fixture must exercise all three: an argument-binding call, a resolved multi-hop chain, and a context-cap-degraded call.
+
+- [ ] **Step 5: driver test for `opts.recordHop` (item 17)**
+
+Add a test (in `driver.test.js` or a new file, following that suite's existing conventions) proving `opts.recordHop` reaches every function across a real multi-file project (hops recorded for functions in more than one file), AND that omitting `opts.recordHop` leaves `runFieldIdentityAnalysis`'s `results`/`cache` unchanged from calling it with no `opts` at all (byte-identical, matching Decision 7.2).
+
+- [ ] **Step 6: absorb the PoC into the permanent suite, then delete it (item 15)**
+
+Re-point any of the PoC file's assertions not already covered by Task 2's Step 4 or this task's Steps 4-5 into the permanent test files (most should already be redundant — confirm, don't assume). Delete `scanner/test/lineage/engine-provenance-interprocedural-poc.test.js` and its `test:lineage` entry in `scanner/package.json`, in the same commit as the re-pointing. The `this`-binding stand-in and the "hole is real"/hazard-reproduction tests are EXPECTED to have no permanent equivalent (they existed to prove a now-fixed hazard, not a lasting property) — do not try to preserve them; item 15b's golden-baseline regression (already added in Task 2) is what stays as the permanent guard against the same hazard class recurring.
+
+- [ ] **Step 7: run the full scoped suite and doc-drift check**
+
+```bash
+npm run test:lineage
+node ../scripts/check-doc-drift.mjs
+```
+
+Confirm test count and doc-drift status (the pre-existing `path-store.js` reference in `src/lineage/CLAUDE.md` is expected and pre-dates this task — C4's future file).
+
+- [ ] **Step 8: update `scanner/src/lineage/CLAUDE.md`**
+
+Move C3 from "designed but not yet implemented" to complete in the module table (mirroring how every prior increment's own completion was documented), and update "What is NOT here yet" to reflect C3's closure and C4-C6's continued absence.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add scanner/src/lineage/summaries.js scanner/test/lineage/engine-provenance.test.js scanner/test/lineage/driver.test.js scanner/src/lineage/CLAUDE.md scanner/package.json
+git rm scanner/test/lineage/engine-provenance-interprocedural-poc.test.js
+git commit -m "feat(lineage): B5/B6 degradation marking, absorb C3's PoC into the permanent suite (Sub-project C, increment 3, Task 3)"
+```
