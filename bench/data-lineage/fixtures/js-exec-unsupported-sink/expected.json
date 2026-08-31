@@ -1,0 +1,11 @@
+{
+  "language": "js",
+  "dataClass": [],
+  "sourceCategory": "http-body",
+  "sinkCategory": "database",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "expectedConnected": false,
+  "tier": "capability",
+  "notes": "AC-11's OTHER coarse-half case: a real, DISCOVERED sink with no egress category. VERIFIED against real runner output: exec(cmd) matches js-exec (CWE-78) and the graph mints exactly one node, kind:'process' / subtype:null / coverageStatus:'unsupported', WITH a non-empty coverageReason — it stays visible, never silently dropped, which is the property AC-11 exists to protect. There is no PCI/http-body source in this fixture at all, so `sourceCategory`/`sinkCategory` above are placeholders the current scoreFixture contract cannot actually target: it asserts by `subtype` category match and has no way to express 'an unsupported-kind node with subtype:null exists'. Marked capability-tier and EXPECTED to report FAIL with two clean errors (no node with subtype 'http-body'; no node with subtype 'database') — confirmed live to be a readable FAIL report, never an uncaught exception. Deliberately NOT fixed by extending scoreFixture, per this increment's own no-runner-changes constraint; extending the contract to assert kind:'process'/subtype:null nodes directly is F3+ work. Authored now so the shape exists in the corpus even though the runner cannot fully evaluate it yet."
+}

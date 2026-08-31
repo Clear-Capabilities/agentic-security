@@ -1,0 +1,11 @@
+{
+  "language": "js",
+  "dataClass": ["PII"],
+  "sourceCategory": "http-query",
+  "sinkCategory": "log",
+  "expectedProtection": null,
+  "expectedTransformKind": null,
+  "expectedConnected": false,
+  "tier": "regression",
+  "notes": "req.query.page is a pagination index, not PII. VERIFIED against real runner output, not assumed: graph.dataElements DOES mint an entry for `page` (seeding is structural — it registers every matched source expression regardless of classification) and a flow http-query -> log genuinely exists carrying it — but classifyDataElementName returns NO classes for `page`, so its dataClasses is [] and no PII-tagged flow connects the two nodes. That is exactly what expectedConnected:false asserts here, plus AC-11's requirement that the log sink node still be present with a coverageReason (it is: log/log, modeled). A genuinely clean negative, distinct from js-api-to-log-disconnected's 'right data, wrong sink' shape — this one is 'right category shape, right flow, wrong data entirely', which is the case that would silently mis-tag a whole corpus if classification ever widened."
+}
