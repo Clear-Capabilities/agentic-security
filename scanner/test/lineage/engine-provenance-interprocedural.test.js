@@ -4,10 +4,10 @@
 // See scanner/src/lineage/DESIGN_PATH_PROVENANCE.md §13 — the binding
 // design this file proves against real, parsed JS/TS code, using the real
 // exported functions (never local reimplementations, unlike this design's
-// own PoC file, `engine-provenance-interprocedural-poc.test.js`, which
-// prototyped these signatures locally because the shipped code didn't
-// exist yet). §13.7 is the exact file/line/signature checklist this test
-// file proves was correctly wired: `engine.js` items 1-5 (the `context`
+// own throwaway PoC file, since deleted, which prototyped these signatures
+// locally because the shipped code didn't exist yet). §13.7 is the exact
+// file/line/signature checklist this test file proves was correctly wired:
+// `engine.js` items 1-5 (the `context`
 // field, the `stepCtx` stamping, `case 'call'` forwarding the full `ctx`
 // as resolveCallSummary's 4th argument, `peerScope`/`peerContext` on the
 // `call-resolved` hop), `summaries.js` items 6-10 (`entryStateFromCall`'s
