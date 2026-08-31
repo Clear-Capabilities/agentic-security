@@ -664,6 +664,19 @@ grade for less-certain hops; this feeds it directly, and FR-305's constraint
 is about not *hiding* differences, which marking satisfies and silence would
 not.
 
+> **CORRECTED by increment C4 — see §14.7.** The group-level measure above
+> (`distinctInPaths ≥ 2 && distinctOutPaths ≥ 2` on the WHOLE group) is too
+> coarse: applied to a plain resolved call, it marks every edge in the
+> group — including both edges of the correct call-boundary chain — because
+> the annotation-only `call-resolved` in-half (`fromPath: null`) counts as
+> a second "distinct" in-path even though it never forms its own edge
+> (§2.2's correction). §14.7 replaces this with a per-*pairing* measure
+> (ambiguous only when the SPECIFIC in-half/out-half pair being joined has
+> a same-key sibling on both sides), verified against a real resolved-call
+> fixture where the group-level form over-marks 3 of 5 edges and the
+> per-pairing form marks exactly the 1 genuinely ambiguous one. The
+> `slot`-field discussion below is unaffected by this correction.
+
 **The known fix, if C4 measures this as a real problem:** add a `slot` field
 — the sub-path *within the value under construction* that a hop contributes
 to — and join on `(scope, nodeId, dataElementId, slot)`. It is deferred, not
@@ -1636,6 +1649,17 @@ rather than inventing a path string that could collide with a real one:
 | `loss` | any `write-out` with `toPath === null` and a non-null `lossReason` (today: `assign`/`unsupported-target`) | `(scope, context, siteNodeId, id)` | §18.4: a dead end that is *recorded as a dead end* is the data-layer form of "never present a truncation as an absence" |
 | `origin` | §2.2's surviving half — a group whose ONLY in-halves are annotations | `(scope, context, siteNodeId, id)` | "a value with no prior aliasing source" |
 
+`origin` is exercised only by a hand-built hop pair in this task's PoC — no
+real-parser fixture in C1-C3's own instrumentation reaches it today, since
+every construct that carries a `dataElementId` currently inherits it from
+somewhere already in `state` (a contributing key `production`/`selection`
+hop always accompanies it). This is a real, honestly-disclosed gap, but not
+a dead branch: it is the exact shape a Sub-project D source registry will
+produce the first time it seeds an identity at a source site with no prior
+state to point to (a null-`fromPath`, null-`peerScope` in-half is precisely
+"this value originates here, not upstream"). Kept, tested with the hand-built
+pair, and left for D's own real-parser coverage rather than removed.
+
 Expression-internal constructs still create **no** nodes (§2.1). An object
 literal, a ternary, a template literal survive as `annotations[]` on the
 edges they helped form — pinned by a test asserting the `production/object`
@@ -1762,6 +1786,37 @@ degraded callee, and the `lossReason: 'context-cap-degraded'` marker is
 present on the real `call-arg-bind` edge. It is never dropped — which is
 the half §13.6 says matters most.
 
+> **Disclosed precondition, found by task review, not closed this
+> increment.** The `lossReason === null` guard correctly distinguishes "the
+> callee's body was analyzed" from "it was degraded away" WITHIN one fully
+> recorded analysis run. It does not, on its own, guarantee the callee's
+> exit hops are actually PRESENT in the stream `path-store.js` was fed —
+> that additionally requires the stream to be complete for
+> `(peerScope, peerContext)`. A reachable counter-shape: analyze `callerA`
+> against a shared `FieldIdentitySummaryCache` with NO recorder attached
+> (warming the cache with `helper`'s summary), then analyze `callerB`
+> against that SAME cache with a recorder attached. `helper` is now a cache
+> HIT for `callerB` — `resolveCallSummary`'s `cache.compute()` never
+> re-invokes `analyzeFn`, so `helper`'s own body hops never fire a second
+> time — yet the resolved summary still carries `lossReason: null` (it was
+> genuinely, precisely resolved; it just wasn't resolved *this run*). Fed
+> into `path-store.js`, `callerB`'s `call-resolved` hop is peer-sourced at
+> `(helper, Ch, ⟨return⟩)`, a node the store never otherwise creates —
+> exactly the fabricated-origin failure mode the `lossReason` guard exists
+> to prevent, reached by a different door. Not reachable within a SINGLE
+> fully-recorded run (checked across 6 fixtures: 2-fn, 3-fn/2-site, mutual
+> recursion, self recursion, mutated-param return, §9.6's own same-context
+> cache hit — zero orphaned exit nodes in any of them), but directly
+> reachable through `driver.js`'s own returned-and-reused `cache`, which
+> `driver.test.js` already exercises in this exact shape. **Left for the
+> follow-up implementation task (§14.10 item 10):** `path-store.js` must
+> treat this as a build-time DIAGNOSTIC, not a silent fabrication — a
+> `return` node with zero in-edges that nonetheless sources a real
+> cross-scope edge is detectable with the same `inIndex`/`outIndex` the
+> store already builds, and must be recorded via `diagnostics()`, never
+> thrown and never dropped, per this document's own established §9 culture
+> and §14.9's "recorded, never silent" framing.
+
 ### 14.5 The two new `ids.js` functions
 
 `DESIGN_PATH_PROVENANCE.md` §12 and the C-scoping doc both anticipated a
@@ -1843,6 +1898,18 @@ of these, and the plan's own framing of them as alternatives is wrong:
 Dedup (1) alone leaves duplicate edges. Dedup (2) alone would be correct but
 would let group membership grow unboundedly on a hot loop, and the per-group
 cross product is quadratic in group size. Ship both.
+
+**Where `context`'s memory cost actually lands, unmeasured but named.**
+`context` (§13.3's `hashState(entryState)`) is `hashState`'s full canonical
+string — bounded by the entry state's size, not the function's — computed
+once per analysis run and held by reference on every node/edge record
+sharing it, so the per-record field cost is one pointer, not N copies of the
+string. The real, unmeasured cost is in the DERIVED key strings this
+increment builds from it: dedup (1)'s ingest key and (2)'s node/edge id
+discriminator each concatenate the full `context` text once per hop/group,
+and those concatenated strings are retained for the store's lifetime in
+`_seen`/the group index. This is what C5/Sub-project E should profile at
+real project scale, not the record fields themselves.
 
 **Construction is two-phase**: `addHop`/`addHops` accumulate into groups;
 nodes and edges are materialized lazily on the first read and cached until
@@ -1968,7 +2035,7 @@ re-derivation.
 | 7 | `classifyIn` / `classifyOut` | §14.3's rules verbatim, including `lossReason === null` in the peer-sourced branch (§14.4) and the `unclassified` fallthrough |
 | 8 | `PathStore` | `addHop(hop) -> boolean`, `addHops(hops) -> number`, `markTruncated(scope, context, reason)`; two-phase build; the traversal-free read API listed in §14.6 |
 | 9 | edge construction | per-group cross product with the peer×peer exclusion (§14.3) and the per-pairing ambiguity measure (§14.7) |
-| 10 | `diagnostics()` | `{ malformed, unclassified, truncations }` — all three are "recorded, never thrown, never dropped" |
+| 10 | `diagnostics()` | `{ malformed, unclassified, truncations, orphanedPeerSources }` — all four are "recorded, never thrown, never dropped". `orphanedPeerSources` is §14.4's disclosed stream-completeness gap: a peer-sourced `call-resolved` hop (`lossReason: null`, non-null `peerScope`) whose named `(peerScope, peerContext, ⟨return⟩, dataElementId)` node has zero real in-edges once the whole stream has been ingested — detectable via the store's own `inIndex`/`outIndex` at build-finalize time, no new input needed. Reachable today via a cache warmed by a no-recorder run and reused by a later recorder-attached run (`driver.js`'s own returned cache, exactly as `driver.test.js` reuses it) — record it, do not fabricate an origin for it and do not drop the edge. |
 
 **Tests**
 
