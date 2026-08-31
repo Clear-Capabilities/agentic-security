@@ -1,24 +1,26 @@
-// Sub-project C, increment C5 — DESIGN TASK proof-of-concept for the
-// bounded backward-reconstruction query (`path-query.js`, working name).
+// Sub-project C, increment C5 — the bounded backward-reconstruction query
+// (`path-query.js`) and the `pathId` function (`ids.js`).
 //
-// Deliberately throwaway-named (`-poc`), mirroring C1's / C3 Task 1's /
-// C4 Task 1's own precedent: this file PROTOTYPES the module locally and
-// ships NO change to any `src/lineage/*.js` file. Every claim in
-// DESIGN_PATH_PROVENANCE.md §15 was produced by running this file. The
-// follow-up implementation task re-points these assertions at the shipped
-// `src/lineage/path-query.js` and renames the file (§15.10 item 11).
+// Absorbed from the design task's own PoC (path-query-poc.test.js, deleted
+// in the same commit that lands this file — §15.10 item 12 / C3's item 15 /
+// C4's item 11 precedent). Every assertion below was originally proven
+// against a local prototype in DESIGN_PATH_PROVENANCE.md §15's own design
+// task; this file re-points them at the SHIPPED `src/lineage/path-query.js`
+// module instead, with the local prototype block deleted.
 //
-// The prototype consumes `PathStore` ONLY through its public read API
-// (`nodes`/`edges`/`getNode`/`getEdge`/`edgesFrom`/`edgesTo`/`hasEdge`/
-// `nodeIdFor`/`stats`/`diagnostics`) — never a `_`-prefixed field — and,
-// like `path-store.js` itself, never imports `engine.js`/`summaries.js`/
-// `driver.js`. (The FIXTURES below do import those, exactly as
-// `path-store.test.js`'s own fixtures do; the module under design does
-// not.)
+// This file consumes `PathStore`/`path-query.js` ONLY through their public
+// read APIs (`nodes`/`edges`/`getNode`/`getEdge`/`edgesFrom`/`edgesTo`/
+// `hasEdge`/`nodeIdFor`/`stats`/`diagnostics`, and `reconstructPaths`/
+// `sinkCandidates`/`isIncompleteAnswer`/`comparePaths`/`DEFAULTS`) — never a
+// `_`-prefixed field, and, like `path-store.js`/`path-query.js` themselves,
+// never imports `engine.js`/`summaries.js`/`driver.js` for anything other
+// than building the FIXTURES below (exactly `path-store.test.js`'s own
+// precedent: the module under test never imports them, the fixtures do).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseJsFile } from '../../src/ir/parser-js.js';
 import { emptyState, addIdentity } from '../../src/lineage/field-identity.js';
 import { analyzeFunctionFieldIdentity } from '../../src/lineage/engine.js';
@@ -27,328 +29,33 @@ import {
   createCallSummaryResolver,
 } from '../../src/lineage/summaries.js';
 import { PathStore } from '../../src/lineage/path-store.js';
+import {
+  reconstructPaths, sinkCandidates, isIncompleteAnswer, comparePaths, DEFAULTS,
+} from '../../src/lineage/path-query.js';
 
 // =====================================================================
-// LOCAL PROTOTYPE of the module §15 designs. Shipped source is unmodified
-// by this design task.
+// §15.10 item 4: the isolation boundary is enforced by a test, not just
+// documented. `path-query.js` must NEVER import engine.js/summaries.js/
+// driver.js, and its only import must be ids.js (mirrors §14.10 item 5's
+// boundary test for `path-store.js`).
 // =====================================================================
 
-const ID_HEX_LEN = 12;
-
-/**
- * §14.5 deliberately left `pathId` unclaimed ("The thing C5 reconstructs
- * *is* a path, and it will plausibly want that name for its own entity").
- * C5 claims it. `ppath:` joins the `pnode:`/`pedge:` family — a
- * reconstructed path is not a `DataFlowGraph v1` entity either, so
- * `validate.js` stays untouched.
- *
- * The discriminator is the EDGE id sequence plus the start node id. It is
- * deliberately NOT the node id sequence — see §15.6 (FR-305): the edges
- * are what carry the transformation/control evidence, and two paths over
- * the same nodes through different edges are two materially different
- * paths.
- */
-function pathId({ startNodeId, edgeIds }) {
-  const material = [startNodeId, ...edgeIds].map((p) => (p == null ? '' : String(p))).join('|');
-  return `ppath:${crypto.createHash('sha256').update(material).digest('hex').slice(0, ID_HEX_LEN)}`;
-}
-
-const DEFAULTS = {
-  maxPaths: 32,
-  maxPathsPerTerminal: 8,
-  maxCandidatePaths: 256,
-  maxExpansions: 10000,
-  maxDepth: 64,
-};
-
-/** Terminal reasons. Only `origin` means "this really is where the recorded flow starts". */
-const TERMINAL_ORIGIN = 'origin';
-const TERMINAL_INCOMPLETE = 'incomplete-record';
-const TERMINAL_CYCLE = 'cycle';
-const TERMINAL_DEPTH = 'depth-limit';
-
-/**
- * §15.9's stand-in for Sub-project D's source/sink registry, which does
- * not exist. NOT a registry: it returns every structurally terminal node
- * kind, with no notion of whether any of them is a security-relevant sink.
- */
-function sinkCandidates(store) {
-  return store.nodes().filter((n) => n.kind === 'return' || n.kind === 'escape' || n.kind === 'loss');
-}
-
-function hopOf(edge) {
-  return {
-    edgeId: edge.id,
-    fromNodeId: edge.fromNodeId,
-    toNodeId: edge.toNodeId,
-    line: edge.line,
-    scope: edge.scope,
-    context: edge.context,
-    siteNodeId: edge.siteNodeId,
-    dataElementId: edge.dataElementId,
-    inKind: edge.inKind,
-    inSubKind: edge.inSubKind,
-    outKind: edge.outKind,
-    outSubKind: edge.outSubKind,
-    crossScope: edge.crossScope,
-    widenReasons: edge.widenReasons,
-    lossReasons: edge.lossReasons,
-    ambiguousCorrelation: edge.ambiguousCorrelation,
-    annotations: edge.annotations,
-    originated: edge.originated,
-    truncated: edge.truncated,
-  };
-}
-
-/** Source-first materialization of one enumerated DFS branch. */
-function materialize(store, nodesRev, edgesRev, terminalReason) {
-  const nodeIds = [...nodesRev].reverse();
-  const edges = [...edgesRev].reverse();
-  const hops = edges.map((e) => hopOf(e));
-  const edgeIds = hops.map((h) => h.edgeId);
-  const nodes = nodeIds.map((id) => store.getNode(id));
-  const crossScopeCount = hops.filter((h) => h.crossScope).length;
-  const widenedHopCount = hops.filter((h) => h.widenReasons.length > 0).length;
-  const lossHopCount = hops.filter((h) => h.lossReasons.length > 0).length;
-  const ambiguousHopCount = hops.filter((h) => h.ambiguousCorrelation).length;
-  const analysisTruncated = nodes.some((n) => n && n.truncated) || hops.some((h) => h.truncated);
-  return {
-    id: pathId({ startNodeId: nodeIds[nodeIds.length - 1], edgeIds }),
-    nodeIds,
-    edgeIds,
-    hops,
-    hopCount: hops.length,
-    dataElementId: hops[0]?.dataElementId ?? null,
-    sourceNodeId: nodeIds[0],
-    sinkNodeId: nodeIds[nodeIds.length - 1],
-    terminal: { nodeId: nodeIds[0], reason: terminalReason, kind: nodes[0]?.kind ?? null },
-    complete: terminalReason === TERMINAL_ORIGIN,
-    crossScopeCount,
-    widenedHopCount,
-    lossHopCount,
-    ambiguousHopCount,
-    analysisTruncated,
-    // §15.7's diversity signature. `transformation` and `protection` are
-    // DELIBERATELY absent — Sub-project D / Milestone 2 own them.
-    shape: [
-      terminalReason === TERMINAL_ORIGIN ? 'complete' : 'partial',
-      crossScopeCount > 0 ? 'boundary' : 'local',
-      widenedHopCount > 0 ? 'widened' : 'explicit',
-      lossHopCount > 0 ? 'lossy' : 'intact',
-      ambiguousHopCount > 0 ? 'ambiguous' : 'correlated',
-    ].join('/'),
-  };
-}
-
-/** §15.7's total order. Deterministic: the final key is the content-hash id. */
-function comparePaths(a, b) {
-  if (a.complete !== b.complete) return a.complete ? -1 : 1;
-  if (a.ambiguousHopCount !== b.ambiguousHopCount) return a.ambiguousHopCount - b.ambiguousHopCount;
-  if (a.lossHopCount !== b.lossHopCount) return a.lossHopCount - b.lossHopCount;
-  if (a.widenedHopCount !== b.widenedHopCount) return a.widenedHopCount - b.widenedHopCount;
-  if (a.crossScopeCount !== b.crossScopeCount) return b.crossScopeCount - a.crossScopeCount;
-  if (a.hopCount !== b.hopCount) return a.hopCount - b.hopCount;
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-}
-
-/**
- * §15.3's bounded backward walk. Iterative (an explicit stack, never
- * recursion), cycle-safe by an explicit PER-PATH visited set, and bounded
- * by four independent budgets. `path-store.js`'s own construction is a
- * single linear pass and never needed any of this — §9.3/§14.6 hand the
- * whole problem here.
- */
-function reconstructPaths(store, startNodeId, opts = {}) {
-  const budget = { ...DEFAULTS, ...opts };
-  const startNode = store.getNode(startNodeId);
-  const truncationReasons = new Set();
-
-  const result = {
-    startNodeId,
-    startNodeKind: startNode ? startNode.kind : null,
-    unknownStartNode: !startNode,
-    paths: [],
-    truncated: false,
-    truncationReasons: [],
-    noPathReason: null,
-    enumeratedPathCount: 0,
-    returnedPathCount: 0,
-    droppedPathCount: 0,
-    completePathCount: 0,
-    cyclesClipped: 0,
-    terminals: [],
-    analysisTruncated: false,
-    budget: { ...budget, expansionsUsed: 0 },
-  };
-  // An id that names no node is NOT "no path exists" — it is "you asked
-  // about something that is not in this store". §15.4 keeps the two
-  // apart, because collapsing them is §18.4's failure mode wearing a
-  // different hat.
-  if (!startNode) return result;
-
-  const orphaned = new Set(store.diagnostics().orphanedPeerSources.map((o) => o.nodeId));
-
-  const candidates = [];
-  let expansions = 0;
-  const stack = [{
-    nodeId: startNodeId,
-    nodesRev: [startNodeId],
-    edgesRev: [],
-    onPath: new Set([startNodeId]),
-  }];
-
-  while (stack.length > 0) {
-    if (candidates.length >= budget.maxCandidatePaths) { truncationReasons.add('candidate-cap'); break; }
-    if (expansions >= budget.maxExpansions) { truncationReasons.add('expansion-budget'); break; }
-    const frame = stack.pop();
-    const hops = frame.edgesRev.length;
-    // `edgesTo` is the traversal primitive; sorted for determinism, since
-    // it is backed by a Set and carries no inherent order.
-    const incoming = [...store.edgesTo(frame.nodeId)].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
-
-    if (incoming.length === 0) {
-      if (hops > 0) {
-        candidates.push(materialize(store, frame.nodesRev, frame.edgesRev,
-          orphaned.has(frame.nodeId) ? TERMINAL_INCOMPLETE : TERMINAL_ORIGIN));
-      }
-      continue;
-    }
-    if (hops >= budget.maxDepth) {
-      truncationReasons.add('depth-limit');
-      candidates.push(materialize(store, frame.nodesRev, frame.edgesRev, TERMINAL_DEPTH));
-      continue;
-    }
-
-    let extended = 0;
-    let clipped = 0;
-    for (const e of incoming) {
-      expansions += 1;
-      if (frame.onPath.has(e.fromNodeId)) { clipped += 1; continue; }
-      extended += 1;
-      stack.push({
-        nodeId: e.fromNodeId,
-        nodesRev: [...frame.nodesRev, e.fromNodeId],
-        edgesRev: [...frame.edgesRev, e],
-        onPath: new Set([...frame.onPath, e.fromNodeId]),
-      });
-    }
-    result.cyclesClipped += clipped;
-    if (extended === 0 && hops > 0) {
-      // Every continuation would revisit a node already on this path. The
-      // branch ends HERE, and it ends because of a cycle — never silently
-      // as if this node were the flow's origin.
-      candidates.push(materialize(store, frame.nodesRev, frame.edgesRev, TERMINAL_CYCLE));
-    }
+test('boundary: path-query.js never imports engine.js, summaries.js, or driver.js, and imports ONLY ids.js (§15.1)', () => {
+  const modulePath = fileURLToPath(new URL('../../src/lineage/path-query.js', import.meta.url));
+  const src = fs.readFileSync(modulePath, 'utf8');
+  // Same order/line-layout-independent scan `path-store.test.js`'s own
+  // boundary test uses: match every module specifier string that follows
+  // `from`/`import(`/`export ... from` ANYWHERE in the source, not just a
+  // line-anchored `/^import\s.*$/gm` (which a multi-line specifier list, a
+  // re-export, or a dynamic import can hide from).
+  const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  assert.ok(specifiers.length > 0, 'sanity: the file does import something (ids.js)');
+  for (const spec of specifiers) {
+    assert.ok(!/\/(engine|summaries|driver)\.js$/.test(spec),
+      `path-query.js must never import engine.js/summaries.js/driver.js — found: ${spec}`);
   }
-
-  result.budget.expansionsUsed = expansions;
-  result.enumeratedPathCount = candidates.length;
-  result.completePathCount = candidates.filter((p) => p.complete).length;
-
-  // §15.5's cap, applied PER TERMINAL first. The terminal node is the
-  // closest thing to a "source" this increment has; a purely global cap
-  // lets one prolific terminal crowd another out entirely, which would
-  // report a real source as having zero paths.
-  const byTerminal = new Map();
-  for (const p of candidates) {
-    if (!byTerminal.has(p.terminal.nodeId)) byTerminal.set(p.terminal.nodeId, []);
-    byTerminal.get(p.terminal.nodeId).push(p);
-  }
-  const kept = [];
-  const terminals = [];
-  for (const [nodeId, group] of [...byTerminal.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-    const ordered = [...group].sort(comparePaths);
-    const take = ordered.slice(0, budget.maxPathsPerTerminal);
-    if (ordered.length > take.length) truncationReasons.add('per-terminal-cap');
-    kept.push(...take);
-    terminals.push({
-      nodeId,
-      // Fix round 1, finding 2: a terminal can genuinely carry MIXED
-      // reasons across its own paths (the mutual-recursion fixture at
-      // maxDepth 3 produces one sink whose paths back to a single terminal
-      // are part 'cycle' and part 'depth-limit'). Picking `group[0]`'s
-      // reason made the answer depend on array order — the SAME
-      // representative-picking bug class C4's own final whole-branch review
-      // found in `path-store.js`'s `origin` branch (`g.annotations[0]`),
-      // fixed there the same way: a content-sorted UNION, never a
-      // positional pick.
-      terminalReasons: [...new Set(group.map((p) => p.terminal.reason))].sort(),
-      enumeratedPathCount: group.length,
-      keptPathCount: take.length,
-      // Filled in AFTER the global cap runs — see the note below. Computing
-      // `truncated` here would report `false` for a terminal the GLOBAL cap
-      // later starves to zero returned paths.
-      returnedPathCount: 0,
-      droppedPathCount: 0,
-      truncated: false,
-    });
-  }
-
-  // §15.7: the global cap is applied DIVERSITY-FIRST, round-robin across
-  // (terminal, shape) buckets, so §18.4's "prioritize paths that differ in
-  // boundary/transformation/protection state" is honoured as written — it
-  // asks for a DIVERSE retained set, not a top-N by any single scalar.
-  let returned = kept;
-  if (kept.length > budget.maxPaths) {
-    truncationReasons.add('path-cap');
-    const buckets = new Map();
-    for (const p of [...kept].sort(comparePaths)) {
-      const key = `${p.terminal.nodeId}|${p.shape}`;
-      if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key).push(p);
-    }
-    const order = [...buckets.keys()].sort();
-    returned = [];
-    let progress = true;
-    while (returned.length < budget.maxPaths && progress) {
-      progress = false;
-      for (const k of order) {
-        if (returned.length >= budget.maxPaths) break;
-        const b = buckets.get(k);
-        if (b.length > 0) { returned.push(b.shift()); progress = true; }
-      }
-    }
-  }
-
-  returned = [...returned].sort(comparePaths);
-  result.paths = returned;
-  result.returnedPathCount = returned.length;
-  result.droppedPathCount = candidates.length - returned.length;
-  result.analysisTruncated = returned.some((p) => p.analysisTruncated);
-  // Fix round 1, finding 1 (BLOCKING): per-terminal truncation must
-  // reflect BOTH caps. It was previously computed from the per-terminal cap
-  // alone, BEFORE the global diversity round-robin ran — so a terminal the
-  // GLOBAL cap starved to zero returned paths still reported
-  // `truncated: false`. That is §18.4's exact failure mode ("budget
-  // exhausted" presented as "no path") reproduced at pair granularity,
-  // inside the very field §15.5 introduces to satisfy FR-305's per-pair
-  // path count. `enumerated > returned` is the only definition that covers
-  // both caps, and `droppedPathCount` makes the count explicit per pair the
-  // way `result.droppedPathCount` does per call.
-  for (const t of terminals) {
-    t.returnedPathCount = returned.filter((p) => p.terminal.nodeId === t.nodeId).length;
-    t.droppedPathCount = t.enumeratedPathCount - t.returnedPathCount;
-    t.truncated = t.droppedPathCount > 0;
-  }
-  result.terminals = terminals;
-
-  result.truncated = truncationReasons.size > 0 || result.droppedPathCount > 0;
-  result.truncationReasons = [...truncationReasons].sort();
-
-  if (result.paths.length === 0 && !result.truncated) {
-    // The one place a genuinely empty answer is produced — and it says
-    // WHICH kind of empty it is. §18.4's load-bearing constraint.
-    result.noPathReason = orphaned.has(startNodeId) ? TERMINAL_INCOMPLETE : 'no-incoming-edges';
-  }
-  return result;
-}
-
-/** AC-10's banner predicate, derived from the result — never re-derived by a caller. */
-function isIncompleteAnswer(r) {
-  return r.truncated || r.unknownStartNode || r.analysisTruncated
-    || r.noPathReason === TERMINAL_INCOMPLETE
-    || r.paths.some((p) => !p.complete);
-}
+  assert.deepEqual(specifiers, ['./ids.js'], 'path-query.js\'s only import is ids.js, for pathId');
+});
 
 // =====================================================================
 // Shared fixture harness — identical to `path-store.test.js`'s, so every
@@ -1269,8 +976,8 @@ test('C5/5g: the global cap is DIVERSITY-first — at a cap smaller than the buc
 // 6. The read-API sufficiency question (§15.9) and the isolation boundary.
 // =====================================================================
 
-test('C5/6: the whole design needs nothing from PathStore that PathStore does not already export — no `_`-prefixed access anywhere in the prototype', () => {
-  // Every read the prototype performs, exercised explicitly against the
+test('C5/6: the whole module needs nothing from PathStore that PathStore does not already export — no `_`-prefixed access anywhere in path-query.js', async () => {
+  // Every read the module performs, exercised explicitly against the
   // public API. If any of these needed a private field, `path-store.js`
   // would have to change; none does.
   const byName = parseFns('function f(a) { const b = a.email; return b; }', '/x/c5-api.js');
@@ -1285,29 +992,26 @@ test('C5/6: the whole design needs nothing from PathStore that PathStore does no
   assert.ok(Array.isArray(store.diagnostics().orphanedPeerSources), 'diagnostics — the incomplete-record signal');
   assert.equal(typeof store.stats().nodes, 'number');
 
-  // Fix round 1, nitpick 9: scan EVERY function in the prototype, not the
-  // four that happen to take a store — the assertion's message claims a
-  // whole-module guarantee, so it must check the whole module.
-  //
-  // Scoped re-review finding B: a hand-written array like this one cannot
-  // itself detect an EIGHTH function added later — it would simply be
-  // absent from the array, and the scan would silently not cover it. There
-  // is no `assert.equal(prototypeFns.length, N, ...)` here for exactly that
-  // reason — such an assertion would check only the length of the literal
-  // written two lines above it, which is not evidence of anything. §15.10
-  // item 12 (re-point this file at the shipped `path-query.js` module) MUST
-  // replace this hand-written array with a real introspection —
-  // `Object.values(await import('../../src/lineage/path-query.js')).filter(v
-  // => typeof v === 'function')` — so an eighth exported function is swept
-  // in automatically rather than requiring this list to be remembered.
-  const prototypeFns = [
-    reconstructPaths, materialize, sinkCandidates, hopOf,
-    comparePaths, isIncompleteAnswer, pathId,
-  ];
-  const srcText = prototypeFns.map((f) => f.toString()).join('\n');
-  assert.equal(/store\._/.test(srcText), false, 'the prototype never touches a private PathStore field');
+  // §15.10 item 4 / the PoC's own fix-round-1 nitpick 9: a hand-written
+  // function list cannot detect an EIGHTH function added later — it would
+  // simply be absent, and the scan would silently not cover it. Enumerate
+  // the shipped module's exports PROGRAMMATICALLY instead, so a future
+  // export is swept in automatically rather than requiring this list to be
+  // remembered.
+  const mod = await import('../../src/lineage/path-query.js');
+  const moduleFns = Object.values(mod).filter((v) => typeof v === 'function');
+  assert.ok(moduleFns.length >= 4, `sanity: path-query.js exports at least reconstructPaths/sinkCandidates/isIncompleteAnswer/comparePaths, got ${moduleFns.length}`);
+  const srcText = moduleFns.map((f) => f.toString()).join('\n');
+  assert.equal(/store\._/.test(srcText), false, 'no exported function touches a private PathStore field');
   assert.equal(/\._(groups|seen|built|peerSourced|truncations|malformed|unclassified|stats)\b/.test(srcText), false,
     'nor any of PathStore\'s private fields by name, through any alias');
+
+  // The module's own source file too — `Function.prototype.toString` only
+  // sees exported functions, not any private helper `path-query.js` might
+  // define; scanning the file text directly closes that gap.
+  const modulePath = fileURLToPath(new URL('../../src/lineage/path-query.js', import.meta.url));
+  const fileText = fs.readFileSync(modulePath, 'utf8');
+  assert.equal(/store\._/.test(fileText), false, 'the module source never touches a private PathStore field');
 });
 
 // =====================================================================
@@ -1390,4 +1094,3 @@ test('C5/M: §15.11\'s measured-numbers table, produced by running every fixture
     }
   }
 });
-
