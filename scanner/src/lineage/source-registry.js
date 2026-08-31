@@ -234,18 +234,29 @@ export const NO_PROVENANCE_OVERRIDES = Object.freeze({
 // `subtype: 'web-app'`, `externality: 'internal'`. That fixture models the
 // checkout/registration form collection point as INTERNAL even though the
 // person submitting the form is an anonymous public user — establishing
-// that a source's externality answers "is the COLLECTION POINT itself part
-// of the analyzed system", not "is the eventual human origin of the bytes
-// untrusted" (every catalog source entry answers yes to the latter by
-// construction — that's why it's a taint source at all — so that question
-// cannot be what externality encodes, or every source would trivially be
-// `external` and the field would carry no information).
+// that a source's externality reads the SAME counterparty rule §7.5 already
+// states for sinks: *is the counterparty on the other side of this data
+// exchange a party outside this program?* An end user hitting your own
+// HTTP/GraphQL/gRPC/CLI endpoint, or your own process's env/argv/stdin, is
+// your front door, not an outside party — so the analyzed system's own code
+// is the counterparty, giving `internal`. (This is NOT "is the collection
+// point itself part of the analyzed system" — every catalog source entry's
+// collection point is trivially part of the analyzed system, or there
+// would be no call site to catalog at all, so that framing collapses to
+// "always true" and predicts nothing; it is specifically the identity of
+// the COUNTERPARTY, symmetric with the sink-side rule, that this table
+// encodes.) Nor is it "is the eventual human origin of the bytes untrusted"
+// — every catalog source entry answers yes to that by construction, which
+// is why it's a taint source at all, so that question cannot be what
+// externality encodes either, or every source would trivially be
+// `external` and the field would carry no information.
 //
-// This table mirrors CATEGORY_EXTERNALITY's own reasoning, one class at a
-// time:
+// This table mirrors CATEGORY_EXTERNALITY's own counterparty-rule reasoning,
+// one class at a time:
 //   - ordinary in-app collection points (HTTP shapes, CLI, env, stdin /
 //     user-input) → `internal`, matching the flagship precedent directly:
-//     the code doing the collecting is part of the analyzed system.
+//     the counterparty is this program's own front door, not an outside
+//     party.
 //   - genuinely third-party-origin categories (an external API's response
 //     body, a webhook payload, anything AI-model/tool/resource-sourced) →
 //     `external`, matching CATEGORY_EXTERNALITY's identical treatment of
@@ -257,6 +268,11 @@ export const NO_PROVENANCE_OVERRIDES = Object.freeze({
 //     managed.
 //   - `declared` (the unreached operator-declaration path, §6.5) →
 //     `unknown`, matching the sink table's own choice for that category.
+//
+// Evidence-grade consequence (§7.5, carried over unchanged for the source
+// side): the accompanying evidence grade for any of the above is at best
+// `declared` — it comes from this table, not from executed code — never
+// `code`. Real externality resolution is FR-202's job, landing in Milestone 2.
 // ─────────────────────────────────────────────────────────────────────────
 
 export const SOURCE_CATEGORY_EXTERNALITY = Object.freeze({

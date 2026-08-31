@@ -292,3 +292,10 @@ test('SOURCE_CATEGORY_EXTERNALITY covers every category this registry can ever e
     assert.ok(c in SOURCE_CATEGORY_EXTERNALITY, `no externality entry for reachable category ${c}`);
   }
 });
+
+test('SOURCE_CATEGORY_EXTERNALITY exactly equals SOURCE_CATEGORIES, both directions — the stronger pin: the table is total over the whole schema vocabulary, not merely the subset this catalog snapshot happens to reach today', () => {
+  assert.deepEqual(
+    Object.keys(SOURCE_CATEGORY_EXTERNALITY).sort(),
+    [...SOURCE_CATEGORIES].sort(),
+  );
+});

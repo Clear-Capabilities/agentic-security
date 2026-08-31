@@ -557,6 +557,48 @@ The consequence D2/D3 must respect: the accompanying evidence grade is at best
 resolution is FR-202's job and lands in Milestone 2. Emitting `external` with a
 `code` grade off this table would be an unsupported claim.
 
+**2026-08-31 implementation note (D2, Task 1):** §9.0's decision shape —
+`{kind, category, coverageStatus, externality, reason}` — requires
+`externality` on BOTH registries' output, but the `CATEGORY_EXTERNALITY`
+table above only ever covers `SINK_CATEGORIES`; no source-side twin
+existed anywhere in this document. This went undetected through D1's own
+review, fix round, and scoped re-review because the design-task PoC's own
+totality test (`D1/1e`) asserted the `externality` enum only inside its
+SINKS loop, never its SOURCES loop — the field was simply never exercised
+for a source, so the gap was invisible to every check that ran.
+
+D2 closed it by building **`SOURCE_CATEGORY_EXTERNALITY`**, in
+`source-registry.js`, deriving all 21 `SOURCE_CATEGORIES` values via the
+SAME rule this section's own reasoning already states for sinks — read
+symmetrically: *is the counterparty the data came from a party outside
+this program?* An end user hitting your own HTTP/GraphQL/gRPC/CLI
+endpoint, or your own process's env/argv, is your front door → `internal`
+(the flagship fixture's own `source`/`web-app` node pins exactly this:
+`externality: 'internal'`, `fixtures/build-flagship-fixture.mjs:119`).
+Another service's response, an AI provider's output, or an inbound
+webhook payload is a genuine outside party → `external`. A store/queue
+read where the entry gives no way to tell what's on the other end →
+`unknown` (mirroring the sink table's own reasoning for `database`/
+`object-storage`/etc.).
+
+Two deliberate asymmetries with the sink table, so a reader doesn't mistake
+either for drift: (1) the null-category (`unsupported`) fallback is
+`externality: 'unknown'` on the source side, not `internal` as the sink
+table gives it — a sink's `unsupported` still means "the call site is in
+YOUR process," which is genuinely `internal`; a source's `unsupported`
+means "we don't know what this construct even is," which has no honest
+`internal` claim to make. (2) `storage-read` (D1's own merge of what would,
+on the sink side, be two distinct categories — `file` and
+`object-storage`, `internal` and `unknown` respectively) resolves to
+`unknown`, the more conservative of the two, since the merged category
+genuinely cannot distinguish which case a given entry is — never
+`internal`-by-default.
+
+The evidence-grade consequence above (`declared`, never `code`) applies
+identically to `SOURCE_CATEGORY_EXTERNALITY` — nothing about deriving
+externality from a table rather than an entry changes which grade that
+derivation earns.
+
 ---
 
 ## 8. Confirmations for D4 (transformation-kind recognition)
@@ -622,7 +664,10 @@ the meaning instead.
 ### D2 — `src/lineage/source-registry.js`
 
 1. Export `reclassifySource(entry)` returning the §9.0 shape. `kind` is always
-   `'source'` (§7.1).
+   `'source'` (§7.1). `externality` is derived via `SOURCE_CATEGORY_EXTERNALITY`
+   — see §7.5's 2026-08-31 implementation note for the table and the
+   counterparty-rule derivation this section's own reasoning did not
+   originally cover for the source side.
 2. Port `PROVENANCE_MAP` (12 rows, §4), `AGENT_TOOL_REFINEMENT` (8 rows, §4.1),
    the `language === 'cpp'` descriptor-generic refinement (§4.2) and
    `NO_PROVENANCE_OVERRIDES` (82 rows, §4.3) from
