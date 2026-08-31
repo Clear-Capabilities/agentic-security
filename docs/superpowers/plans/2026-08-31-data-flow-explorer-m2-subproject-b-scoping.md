@@ -131,6 +131,59 @@ target shape needs no new schema work, unlike Sub-project D/E's own
   decision object" discipline every prior increment's own exit-gate proof
   used.
 
+## Correction (post-B1, before B2): the join must happen INSIDE `graph-builder.js`, not as a pure post-pass
+
+B1 shipped exactly what this document recommended — a post-pass at the
+`index.js` layer, touching neither `coverage.js` nor `graph-builder.js` —
+and that was the RIGHT call for B1's own job (proving `fileContents` flows
+through and `scanCryptoProtocol` runs). But re-reading `graph-builder.js`
+directly while scoping B2 found this document's Option 2 recommendation
+does NOT extend to the verdict-computation job itself, and B2's own plan
+must not inherit it unmodified.
+
+**The real constraint, confirmed by direct read:** `DESIGN_GRAPH_BUILDER.md`
+§6.1's own rule — "a node is a REGISTRY DECISION, not a provenance node and
+not a call site" — means a node's own `location` field is unconditionally
+`null` (confirmed in `mintNode`'s node-construction object). Many distinct
+call sites, in different files, at different lines, can collide onto ONE
+network sink node. **The per-site `file`/`line` this whole increment needs
+to correlate against a `crypto-protocol.js` finding is available ONLY on
+the `site` object `enumerateSinkSites` builds — and that object is
+consumed and discarded INSIDE `graph-builder.js`'s own edge-construction
+loop, never surfaced onto the final `graph.edges[]` output.** Confirmed by
+reading the exact edge-construction line: `protocol: { name: 'in-process',
+destinationResolution: site.destination?.resolutionStatus ?? 'unknown' }`
+(`graph-builder.js`, inside the same block that sets `protection:
+emptyProtection()`, immediately below it) — `site` is ALREADY in scope
+there, reading Sub-project A's own per-site resolution the identical way
+B2 needs to read a per-site transit verdict.
+
+**Corrected design for B2:** a new `opts.resolveTransitProtection(site) ->
+{verdict, evidenceGrade} | undefined` hook on `buildDataFlowGraph`
+(`graph-builder.js`), applied at that exact same block, composing into
+`protection: {...emptyProtection(), transit: resolved ?? emptyProtection().transit}`
+— mirroring `opts.resolveDestination`'s own additive-hook precedent
+EXACTLY (Sub-project A, increment 1), not a new pattern. `coverage.js`'s
+`buildGraphWithCoverage` gains the matching `opts.fileContents` passthrough
+(one more parameter alongside `opts.perFile`/`opts.parseFailures`, already
+an established list) and wires in a DEFAULT `resolveTransitProtection`
+built from it — calling B1's own `scanTransitEvidence` once per build
+(cached, never once per site) plus a new file+line join function, the
+exact "hook composes with a caller-supplied override, defaults to the
+real implementation" pattern `resolveDestination`/`resolveOrmWriteAtCallSite`
+already established. `index.js`'s own B1-shipped `opts.fileContents` →
+`transitEvidence` plumbing is UNCHANGED and still valid — it was never
+wrong, just not sufficient on its own for B2's deeper hook point; B2 adds
+a SECOND `opts.fileContents` consumer one layer down, in `coverage.js`,
+not a replacement.
+
+This is disclosed here, in the scoping doc, rather than silently
+corrected inside B2's own plan without a trace — the same "when a plan and
+reality disagree, fix it here and say so" discipline this session's other
+increments have already established (`DESIGN_GRAPH_BUILDER.md`'s own
+§9.1 policy, `DESIGN_DESTINATION_RESOLVER.md`'s corrections, and Sub-project
+E's own scoping-doc-level corrections).
+
 ## What this does NOT do
 
 AC-06 (database encryption unknown — that's Sub-project C, at-rest, an
