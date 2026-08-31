@@ -53,6 +53,14 @@ function _validateNode(node, idx, errors, seenIds) {
     seenIds.add(node.id);
   }
   if (!NODE_KINDS.includes(node.kind)) _err(errors, path('.kind'), `unrecognized node kind "${node.kind}"`);
+  // node.subtype is optional and may be `null` — an `unsupported`-coverage
+  // node (e.g. a sink registry decision with `category: null`, PRD 6.4/
+  // DESIGN_REGISTRIES.md §9.0) legitimately carries no subtype at all,
+  // either as an absent field or an explicit `null`; only a present,
+  // non-null, non-string value (a number, object, array, etc.) is invalid.
+  if (Object.prototype.hasOwnProperty.call(node, 'subtype') && node.subtype !== null && typeof node.subtype !== 'string') {
+    _err(errors, path('.subtype'), 'node.subtype must be a string or null');
+  }
   if (typeof node.label !== 'string' || !node.label) _err(errors, path('.label'), 'node.label is required');
   if (!Array.isArray(node.aliases)) _err(errors, path('.aliases'), 'node.aliases must be an array');
   if (!Array.isArray(node.dataElementIds)) _err(errors, path('.dataElementIds'), 'node.dataElementIds must be an array');
