@@ -119,7 +119,7 @@ const KNOWN_EXAMPLE_BASENAMES = new Set([
   // .agentic-security/ prefix RUNTIME_OR_EXAMPLE_RE already catches), and
   // example contract-artifact filenames the scanner recognizes in projects
   // it scans — neither is a source file in THIS repo.
-  'last-scan.json', 'openapi.json',
+  'last-scan.json', 'openapi.json', 'lineage-graph.json',
   // Gitignored, user-created override file (root CLAUDE.md documents it as
   // exactly that: "Override locally via `.claude/settings.local.json`
   // (gitignored)"). It exists only on machines where someone created one —

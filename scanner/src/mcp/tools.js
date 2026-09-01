@@ -30,6 +30,7 @@ import { _remediationOf, normalizeFindings } from '../report/index.js';
 // `finding.provenance` (AI-authorship) and from an SCA entry's `provenance`
 // (Sigstore/SLSA attestation) — see report/index.js's import comment.
 import { redactFindingProvenance } from '../posture/provenance/schema.js';
+import { dataflow_get_graph, dataflow_get_node, dataflow_get_edge, dataflow_get_flow } from './dataflow-tools.js';
 
 // Lazy-loaded: these transitively pull in npm packages (@babel/core and
 // friends) that aren't available in the plugin-cache install path
@@ -1544,4 +1545,4 @@ export const apply_sca_upgrade = {
   },
 };
 
-export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry];
+export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, dataflow_get_graph, dataflow_get_node, dataflow_get_edge, dataflow_get_flow];

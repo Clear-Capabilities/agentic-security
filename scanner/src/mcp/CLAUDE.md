@@ -23,8 +23,12 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 | `query_triage_memory` | ✓ | reads past triage decisions (wont-fix/false-positive) by natural-language query |
 | `query_findings_memory` | ✓ | reads accumulated scan memory (findings + triage history + AGENTS.md) by natural-language query |
 | `query_cache_telemetry` | ✓ | reads prompt-cache economics from the current session transcript; no network |
+| `dataflow_get_graph` | ✓ | reads the signed `lineage-graph.json` (via `server/graph-loader.js`, reused unmodified); returns the full DataFlowGraph v1 artifact |
+| `dataflow_get_node` | ✓ | as above, ID-scoped node lookup (via `server/routes.js`'s `handleNode`, reused unmodified) |
+| `dataflow_get_edge` | ✓ | as above, ID-scoped edge lookup (`handleEdge`) |
+| `dataflow_get_flow` | ✓ | as above, ID-scoped flow lookup (`handleFlow`), includes contributing node/edge canonical ids |
 
-**17 tools, not 12** — this table previously stopped at 12 and the count quoted elsewhere (root `CLAUDE.md`, the non-Claude plugin manifests) said "Six." Re-derive with `grep -c "name: '" scanner/src/mcp/tools.js` rather than trusting a hardcoded number here again.
+**21 tools, not 12** — this table previously stopped at 12 and the count quoted elsewhere (root `CLAUDE.md`, the non-Claude plugin manifests) said "Six." Re-derive with `grep -c "name: '" scanner/src/mcp/tools.js` rather than trusting a hardcoded number here again.
 
 **Two write tools, not one.** `apply_fix` and `apply_sca_upgrade` both write; `verify_fix` also writes (see its row above) though not to the target project's own files. `apply_fix` additionally requires `confirm:true` AND the last-scan HMAC to verify AND the target path not on the reserved-write list; `apply_sca_upgrade` requires `confirm:true` and gates on its own test-restore cycle.
 
