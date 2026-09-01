@@ -158,6 +158,17 @@ export const CHECKS = [
       'on syntax rather than semantics. See the printed case for which mutant flipped.',
   },
   {
+    // M2 Sub-project H, increment 1 (Decision 2's false-protected release
+    // gate, transit/atRest only). Measured ~0.15s — placed alongside
+    // mutation-gate, before provenance-accuracy-gate/layer-recall-gate.
+    id: 'protection-verdict-gate',
+    title: 'False-protected release gate holds (transit/atRest verdicts)',
+    npmScript: 'bench:protection-verdict:check',
+    remedy: 'Run `npm run bench:protection-verdict:check` in scanner/ — a protection ' +
+      'verdict is asserting `protected` without real evidence. See the printed case for ' +
+      'which mutant failed to flip.',
+  },
+  {
     // Task 8 (Finding Provenance second-audit remediation). An independent
     // PRD audit found this bench reachable from no gate at all, so its
     // 12/13 known-origin-accuracy number could silently rot. Measured ~9s

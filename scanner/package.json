@@ -112,6 +112,7 @@
     "bench:self-scan": "node ../bench/self-scan/measure.mjs",
     "bench:self-scan:check": "node ../bench/self-scan/check.mjs",
     "bench:mutation:check": "node ../bench/mutation/runner.mjs",
+    "bench:protection-verdict:check": "node ../bench/protection-verdict/runner.mjs",
     "bench:fix-correctness": "node ../bench/fix-correctness/runner.mjs",
     "bench:iac-coverage": "node ../bench/iac-coverage/runner.mjs",
     "bench:prompt-injection": "node ../bench/prompt-injection/runner.mjs",

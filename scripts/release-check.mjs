@@ -186,6 +186,18 @@ export const CHECKS = [
       'on syntax rather than semantics. See the printed case for which mutant flipped.',
   },
   {
+    // M2 Sub-project H, increment 1 (Decision 2's false-protected release
+    // gate, transit/atRest only — see docs/superpowers/plans/
+    // 2026-08-31-data-flow-explorer-m2-subproject-h1-plan.md). Mirrors
+    // mutation-gate's own dual release-check/pre-push wiring.
+    id: 'protection-verdict-gate',
+    title: 'False-protected release gate holds (transit/atRest verdicts)',
+    slow: true,
+    remedy: 'Run `npm run bench:protection-verdict:check` in scanner/ — a protection ' +
+      'verdict is asserting `protected` without real evidence. See the printed case for ' +
+      'which mutant failed to flip.',
+  },
+  {
     id: 'layer-recall-gate',
     title: 'Per-layer, per-language taint recall baseline holds',
     slow: true,
@@ -820,6 +832,7 @@ function main(argv) {
   evaluate('corpus-gate', () => runNpmGate('bench:cve-replay:check'));
   evaluate('self-scan-gate', () => runNpmGate('bench:self-scan:check'));
   evaluate('mutation-gate', () => runNpmGate('bench:mutation:check'));
+  evaluate('protection-verdict-gate', () => runNpmGate('bench:protection-verdict:check'));
   evaluate('layer-recall-gate', () => runNpmGate('bench:layer-recall:check'));
   evaluate('ttff-gate', () => runNpmGate('bench:ttff:check'));
   evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
