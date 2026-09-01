@@ -405,6 +405,109 @@ and its companion plan.
   server/worker-side projections, and M3-UX's own still-unscoped
   territory (search, query language, saved views) are all untouched.
 
+**M3-UX, sub-project Query — COMPLETE (2026-09-01):** PRD §15.2's query
+language, §15.3's 9 focus controls, 2 real saved views, and basic text
+search, all as pure functions over graph fields a real audit confirmed
+are genuinely populated by real scan code (not just schema-present).
+Full rationale in `docs/superpowers/plans/2026-09-01-data-flow-explorer-m3-ux-scoping.md`
+and its companion Query plan — M3-UX itself has its own sub-project
+table (Query done; Filters and SemanticZoom remain future, separately-
+scoped work).
+
+- **`lib/query-language.js`**: a hand-written tokenizer + recursive-
+  descent parser (`tokenize`/`parseQuery`, never throws — a malformed
+  query returns a structured `{error: {message, pos}}`) for §15.2's exact
+  grammar (`field:value`, `field:(a,b,c)`, `field!=value`, `AND`/`OR` with
+  `AND` binding tighter, parenthesized groups, quoted strings, bare TEXT
+  terms for basic search), plus `compileQuery(ast, graph) -> (flow) ->
+  boolean`, a field-name → real-graph-accessor predicate evaluator. Field
+  mappings (`class`, `field`, `sink`, `source`, `transit.verdict`,
+  `at_rest.verdict`, `handling.verdict`, `policy`, `coverage`, `ai`,
+  `destination.external`) each read a schema field the parent M3-UX
+  scoping doc's own audit confirmed is real. An unrecognized field name
+  throws from the returned predicate (not at compile time) — a real,
+  actionable, caught condition, never a silent always-false.
+  **Two real, disclosed findings from testing against the actual flagship
+  fixture** (not assumed): PRD §15.2's own illustrative example
+  (`sink:(log,database,external_api)`) does NOT match this fixture — the
+  `sink` accessor reads the real `node.subtype` value verbatim
+  (`"application-logs"`, not the coarser `"log"` category the PRD's
+  prose implies), a genuine vocabulary mismatch for a future increment
+  to reconcile. And the fixture has NO flow with `policyVerdict:
+  "permitted"` or any edge with `transit.verdict: "protected"` — both
+  confirmed by reading every real value, not guessed.
+- **`lib/focus-controls.js`**: 9 pure graph-traversal functions
+  (`showUpstream`/`showDownstream`/`showAllPaths` — BFS;
+  `showShortestPath` — BFS with parent-tracking;
+  `showExternalPathsOnly`/`showUnprotectedPathsOnly` — graph-wide
+  predicate filters; `showAliases`; `showDisconnected`), each returning
+  the SAME `{nodeIds, edgeIds}` shape `architecture-view.js`'s own
+  `resolveSelection` already produces, so the render layer needed zero
+  new consumption code. `resetToOverview` (the PRD's 9th control)
+  deliberately lives in `app.js` instead — it's just clearing state, not
+  a traversal. **A real correction to this sub-project's own planning
+  doc**: `node.aliases` is NOT always empty — that claim held only for
+  REAL SCAN OUTPUT (`graph-builder.js` unconditionally sets `aliases:
+  []`, independently reconfirmed); the hand-authored flagship FIXTURE
+  has real, non-empty illustrative aliases on 3 nodes (alternate display
+  names for the SAME node, never pointers to a distinct node record) —
+  `showAliases` is a real, honest implementation either way, disclosed in
+  both code and tests, no alias data invented.
+- **`components/query-bar.js`**: `computeQueryBarViewModel(state)`
+  (pure, syntax-only) / `renderQueryBar()` (text input + error area + 2
+  saved-view chips: `PCI Exposure` → `class:PCI`, real-fixture-spot-
+  checked at 5/8 flows; `AI + Regulated Data` → `class:(PII,PHI) AND
+  ai:true`, spot-checked at 1/8) / `compileQuerySafely(graph, queryText)`
+  — the graph-aware superset `app.js` actually calls: parses, compiles,
+  and does a trial evaluation against every real flow so an
+  unrecognized-field-name error (which only throws at evaluation time)
+  is caught upfront rather than mid-render. **A malformed query NEVER
+  changes the active filter** (PRD §15.2's own explicit requirement) —
+  verified two ways: unit tests, AND an independent real-browser smoke
+  check this session (typing `class:` after `class:PCI` left Privacy
+  View's visible-row count unchanged at 5, with a real error shown).
+- **`app.js`'s own real architectural decision** (this task's one
+  genuinely open design question, resolved before implementation): a
+  focus control's `{nodeIds, edgeIds}` result has no single canonical
+  `selectedId` to thread through the existing selection mechanism, so
+  `computeArchitectureViewModel` gained a third, OPTIONAL parameter
+  (`focusSelection = null`) — when present it's used directly as the
+  `selection`, bypassing `resolveSelection` entirely; when omitted
+  (every pre-existing caller), behavior is unchanged. The focus result
+  itself lives as module-local state in `app.js` (`currentFocusSelection`
+  — real but transient/non-shareable, same precedent A11y's
+  `inspectorOverlayOpen` and M3-Render's `currentViewport` both already
+  established), cleared automatically whenever the user makes any NEW
+  plain selection through an existing path. **Independently verified
+  end-to-end in a real browser this session** (not just unit-tested):
+  clicking "Show downstream" from Web App un-dimmed 13 of 14 real nodes,
+  leaving only the real orphan node (API Gateway, confirmed by Task 3's
+  own fixture analysis) dimmed; "Reset to application overview" cleared
+  it back to zero dimmed and removed the focus-control menu. No console
+  errors.
+- **Privacy View and Inventory View both gained an optional 3rd
+  `queryPredicate` parameter**, applied as an ADDITIONAL condition
+  alongside their existing dataClass/protection filters (a row must pass
+  both). **Inventory's own query wiring is honestly flow-scoped only** —
+  the DSL is fundamentally about flows, so only `policyPermittedFlows`
+  rows and `manualGovernanceGaps`' "Flow"-subject rows (both of which use
+  a real flow id) are affected; every other category's rows have no flow
+  to test the query against and are unaffected by it, by design, not a
+  bug — disclosed in `inventory-view.js`'s own code comment.
+- **What this does NOT mean**: Trace View does not receive the query
+  predicate (it shows one selected flow's own detail, not a filterable
+  list — the query has nothing to narrow there). No dedicated render-
+  level test file exists for the focus-control MENU itself (only its
+  underlying 9 functions and the real end-to-end browser check above).
+  `app.js` itself still has no dedicated unit-test file (none existed
+  before this sub-project either) — its own new orchestration logic was
+  verified via a manual smoke script plus this session's own independent
+  real-browser check, not a committed automated suite. The Filters
+  sub-project (expanding `filter-rail.js` from 3 to the ~9 real
+  dimensions this scoping pass' own audit found) and SemanticZoom remain
+  entirely unscoped, named but not started.
+
+| Module | Responsibility |
 | Module | Responsibility |
 |---|---|
 | `src/lib/escape-html.js` | Escapes text for the rare case of building a raw HTML/attribute STRING outside of `el()` (e.g. a future `document.title` assignment, or serializing to an SVG attribute string). Quote-complete (escapes `&<>"'`) — neither existing in-repo escaper (`scanner/src/posture/fleet.js`, `scanner/src/badge.js`) is. **Never combine with `el()`'s text-child insertion** — `el()` already escapes via `createTextNode` (see `src/lib/dom.js` below), and pre-escaping on top of that double-escapes (a real repo name like `Acme & Sons' <repo>` would render on screen as the literal text `Acme &amp; Sons&#39; &lt;repo&gt;`). This exact bug shipped in `shell.js` and was fixed by dropping the `escapeHtml()` calls there, not by touching this module. |
