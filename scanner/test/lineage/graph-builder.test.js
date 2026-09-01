@@ -337,7 +337,7 @@ test('E1/11 (Step 5): transformation entities — a recognized `mask`, an honest
 // this time reading graph-builder.js's OWN source, not a test file's.
 // =========================================================================
 
-test('E1/12 (item g): the reuse boundary — graph-builder.js imports three PURE functions from src/dataflow/ and nothing else from that package', () => {
+test('E1/12 (item g): the reuse boundary — graph-builder.js imports four PURE functions from src/dataflow/ and nothing else from that package', () => {
   const modulePath = fileURLToPath(new URL('../../src/lineage/graph-builder.js', import.meta.url));
   const src = fs.readFileSync(modulePath, 'utf8');
   const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
@@ -348,7 +348,8 @@ test('E1/12 (item g): the reuse boundary — graph-builder.js imports three PURE
     '../dataflow/catalog.js',
     '../dataflow/orm-write-catalog.js',
     '../dataflow/privacy-catalog.js',
-  ], 'exactly three dataflow modules, all pure functions — accessPathOf is not directly used by this module (source-seeding.js already extends the seed path with it); orm-write-catalog.js added by Milestone 2, Sub-project E, increment 1 (ORM-write sink recognition), isolated the same way privacy-catalog.js is');
+    '../dataflow/privacy-sink-policy.js',
+  ], 'exactly four dataflow modules, all pure functions — accessPathOf is not directly used by this module (source-seeding.js already extends the seed path with it); orm-write-catalog.js added by Milestone 2, Sub-project E, increment 1 (ORM-write sink recognition), isolated the same way privacy-catalog.js is; privacy-sink-policy.js added by Milestone 2, Sub-project G, increment 1 (isSinkPermitted/permittingRules — FR-408/AC-09), mirroring dataflow/privacy-taint.js\'s own real usage precedent');
 
   for (const s of specifiers) {
     assert.ok(!/dataflow\/(engine|summaries|index)\.js$/.test(s),

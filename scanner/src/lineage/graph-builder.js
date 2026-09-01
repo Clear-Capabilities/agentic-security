@@ -85,6 +85,13 @@
 import { matchSinkOrSanitizer } from '../dataflow/catalog.js';
 import { matchPrivacySink } from '../dataflow/privacy-catalog.js';
 import { matchOrmWrite } from '../dataflow/orm-write-catalog.js';
+// Milestone 2, Sub-project G, increment 1 (FR-408/AC-09): `isSinkPermitted`/
+// `permittingRules` are pure, vocabulary-agnostic functions (no hardcoded
+// sink-name check anywhere in that module — confirmed by direct read) that
+// this module reuses UNMODIFIED, mirroring dataflow/privacy-taint.js's own
+// real usage precedent exactly. See the flow-construction loop below for
+// the actual `flow.policyVerdict` computation.
+import { isSinkPermitted, permittingRules } from '../dataflow/privacy-sink-policy.js';
 
 import { runFieldIdentityAnalysis } from './driver.js';
 import { PathStore } from './path-store.js';
@@ -436,6 +443,12 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   // Every registry decision that landed on each node id — the raw material
   // for the "no two DIFFERENT decisions collided onto one node" check.
   const decisionsByNodeId = new Map();
+  // Milestone 2, Sub-project G, increment 1 (FR-408/AC-09): the first real
+  // populator of `graph.evidence[]` (`evidenceId` — `ids.js` — was minted
+  // but never called until this increment). One entry per DISTINCT
+  // permitting policy rule actually applied to a flow, deduplicated by
+  // content hash exactly like `transformsById`/`edgesById` above.
+  const evidenceById = new Map();
 
   const mintNode = ({ kind, category, coverageStatus, externality, coverageReason, subtypeKey, lifecycleStages, destination, storeDetail, queueDetail }) => {
     // NOTE (Milestone 2, Sub-project A, increment 1; Sub-project E,
@@ -735,14 +748,77 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       // assume, per this package's own established convention.
       if (edge) edge.protection.atRest = { verdict: 'protected', evidenceGrade: 'code' };
     }
+    // Milestone 2, Sub-project G, increment 1 (FR-408/AC-09):
+    // `flow.policyVerdict` — real computed logic, replacing the
+    // `'not_evaluated'` literal §8 shipped as a Milestone-1 honest default.
+    // `classes`/`sinkKind` reuse fields this loop's own earlier passes
+    // already read for other purposes (`de.dataClasses`, `snk.subtype` —
+    // the FINE-grained SINK_CATEGORIES value; `snk.kind` is the coarser
+    // `'store'`/`'log'`/etc. Sub-project C1's own atRest gate above uses).
+    // `ctx.destination` reuses Sub-project A's `site.destination
+    // ?.literalValue` — never fabricated when unresolved, per
+    // `_matchesDestination`'s own fail-closed contract in
+    // privacy-sink-policy.js.
+    const policyClasses = de.dataClasses ?? [];
+    const policySinkKind = snk.subtype;
+    const policyCtx = {
+      environment: opts.environment || process.env.AGENTIC_SECURITY_ENVIRONMENT || null,
+      destination: site.destination?.literalValue ?? null,
+    };
+    // `policyLoaded` gates on the OPTS FIELD being present (`!= null`),
+    // never on `opts.privacySinkPolicy.allow.length > 0` — a policy that
+    // genuinely exists but permits nothing yet must still read
+    // `'prohibited'` (deny-by-default), while an opt that was never
+    // supplied at all (no policy evaluation attempted) must read
+    // `'not_evaluated'`. `index.js` is what keeps this distinction real —
+    // it only sets `opts.privacySinkPolicy` when a policy file genuinely
+    // exists on disk, never coercing a missing file to the loader's own
+    // `{allow: []}` "no policy configured" default (see that file's own
+    // comment for why `loadPrivacySinkPolicy`'s return value alone cannot
+    // make this distinction).
+    const policyLoaded = opts.privacySinkPolicy != null;
+    let policyVerdict = 'not_evaluated';
+    const policyEvidenceRefs = [];
+    // A flow whose data element carries NO recognized data class has
+    // nothing for a policy engine to have an opinion about — `'prohibited'`
+    // would overstate a judgment that never happened (isSinkPermitted's own
+    // `if (!classes.length) return false` early return exists for a
+    // DIFFERENT reason, precision on the FINDING side, not this field), so
+    // this stays the honest `'not_evaluated'` default rather than calling
+    // into the policy at all.
+    if (policyLoaded && policyClasses.length && policySinkKind) {
+      if (isSinkPermitted(policyClasses, policySinkKind, opts.privacySinkPolicy, policyCtx)) {
+        policyVerdict = 'permitted';
+        const rules = permittingRules(policyClasses, policySinkKind, opts.privacySinkPolicy, policyCtx);
+        for (const r of rules) {
+          const claim = `Privacy policy permits ${r.class ?? 'any data class'} data to reach sink "${r.sink}"`
+            + (r.environment ? ` in environment "${r.environment}"` : '')
+            + (r.destination ? ` for a destination matching /${r.destination}/` : '')
+            + (r.reason ? `: ${r.reason}` : '');
+          const evId = ids.evidenceId(claim, `${site.file}:${site.line}`, [de.id, r.sink, r.class ?? '', r.environment ?? '', r.destination ?? '']);
+          if (!evidenceById.has(evId)) {
+            evidenceById.set(evId, {
+              id: evId, claim, evidenceType: 'policy',
+              location: { file: site.file, line: site.line },
+              producer: 'privacy-sink-policy', confidenceTier: null,
+              snippet: null, timestamp: null, commit: null,
+              limitations: [], conflict: null,
+            });
+          }
+          if (!policyEvidenceRefs.includes(evId)) policyEvidenceRefs.push(evId);
+        }
+      } else {
+        policyVerdict = 'prohibited';
+      }
+    }
     flowsById.set(fId, {
       id: fId, dataElementIds: [de.id], source: src.id, sink: snk.id,
       edgeIds: [edgeIdStr], transformationIds: sortedT,
       alternatePathCount: group.length - 1,
-      // §8's defaults, both honest and both derived, never asserted.
-      policyVerdict: 'not_evaluated',
+      // §8's defaults for the two fields this increment does not touch.
+      policyVerdict,
       protectionSummary: 'not_assessed',
-      evidenceRefs: [],
+      evidenceRefs: policyEvidenceRefs,
       confidence: g.grade === 'explicit' ? { score: 0.8, tier: 'high' } : { score: 0.5, tier: 'medium' },
       coverageStatus: snk.coverageStatus, findingRefs: [], governanceRefs: {},
       limitations,
@@ -802,6 +878,9 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   graph.edges = [...edgesById.values()].sort(byId);
   graph.transformations = [...transformsById.values()].sort(byId);
   graph.flows = [...flowsById.values()].sort(byId);
+  // Milestone 2, Sub-project G, increment 1: the first real populator of
+  // `graph.evidence[]` — every permitting policy rule minted above.
+  graph.evidence = [...evidenceById.values()].sort(byId);
   // §10's SKETCH of the coverage ledger. E4 owns the finished contract.
   graph.coverage = {
     languages: [], parseFailures: [],
