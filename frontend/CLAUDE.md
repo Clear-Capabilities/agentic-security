@@ -222,6 +222,89 @@ for the scoping pass and its full reasoning.
   (always `null` — there is no element registry in this shim, only
   whatever an individual test builds by hand).
 
+**Milestone 3, sub-project I ("exit-gate closure," agent-closable half
+only) — COMPLETE (2026-09-01):** per the PRD's own Milestone 3 exit gate
+(line ~1823): *"representative architect and privacy-officer usability
+tests complete their core questions without source-code assistance, and
+AC-16 through AC-22 pass at every supported desktop viewport."* Two
+genuinely different halves, exactly as `docs/superpowers/plans/
+2026-09-01-data-flow-explorer-m3-scoping.md`'s own §0 named at the start
+of this milestone: the usability-testing clause needs real human
+sessions and **cannot be closed by an agent** — it is named here as
+permanently open, not attempted, not worked around. The AC-16–22 clause
+is code-testable and is closed as follows, re-verified fresh this session
+(`frontend && npm test`: 195 tests, 187 pass, 0 fail, 8 todo, exit 0;
+`scanner && npm test`: 5,917 + 26 JS tests, 0 fail, exit 0):
+
+| AC | Proof | Where |
+|---|---|---|
+| AC-16 (shared shell across views) | selection and filters survive a real, dispatched tab-click view switch; header/coverage-banner DOM content is byte-identical before and after | `test/golden-shell-state.test.js`; underlying mechanism in `test/state.test.js`/`test/shell.test.js` |
+| AC-17 (Architecture reference composition) | all 9 named reference nodes, all 5 named trust zones, flow-selection dimming (present-but-dimmed, never removed), and the raw/masked PCI-in-logs branches' distinct verdicts, against the real flagship fixture | `test/golden-architecture.test.js` |
+| AC-18 (Privacy lifecycle reference composition) | the 3 named data-class fields preserve identity across all 6 lifecycle-stage columns; the real (lowercase, machine-value) `manual_required`/`unknown`/`review`/`not_found` governance-gap signal renders | `test/golden-privacy.test.js` |
+| AC-19 (Trace/evidence reference composition) | the cleartext payment flow's real ordered steps, both field-rename mappings, the external HTTP hop's visibly-flagged unprotected trust-boundary crossing, and each alternate destination's own individual verdict (including two alternates sharing a destination label but rendering different verdicts) | `test/golden-trace.test.js` |
+| AC-20 (verdicts distinguishable without color) | every verdict has a non-empty, structurally-required glyph/label/lineStyle, no two verdicts share a glyph; the real light-theme color tokens meet WCAG AA (a real violation was found and fixed this session, not merely tested) | `test/protection-visual.test.js`, `test/tokens-contrast.test.js` |
+| AC-21 (desktop viewport reflow) | the shell's regions/collapse/overlay behavior verified via REAL Chrome at all 4 named viewports (1280×720/1440×900/1680×945/2560×1440) — a real bug found and fixed (inspector was unreachable via `display:none` below 1280px) and its fix directly observed working, not assumed from the CSS | `test/shell.test.js`'s overlay-toggle test (structural); the real CDP measurement recorded in this file's own A11y section (visual/layout) |
+| AC-22 (non-clean states cannot mimic success) | 3 of 11 named states (Error, Selected, Hovered) have real UI and real tests; the other 8 are named, not invented, as permanent `test.todo` entries | `test/golden-state-matrix.test.js` (real), `test/golden-state-matrix-gaps.test.js` (8 disclosed gaps) |
+
+**What this does NOT mean:**
+
+- **The usability-testing clause is not attempted.** No agent session can
+  recruit or observe a real architect/privacy-officer completing tasks
+  "without source-code assistance." A real usability-test session would
+  need: 2+ representative participants per persona (architect,
+  privacy-officer), a written task script exercising each of AC-17/18/19's
+  own reference compositions plus at least one AC-22 non-clean state (an
+  Error state, since it's the only one with real UI), a real running
+  `agentic-security explore` instance (not a mock), and a facilitator
+  scoring "core questions completed without being shown source code" —
+  none of which this document creates or schedules.
+- **AC-22 itself does not pass** — 8 of its 11 named states have no code
+  to test, honestly disclosed in Golden's own section above, not silently
+  narrowed here.
+- **"At every supported desktop viewport" is only literally true for
+  AC-20/21.** AC-16/17/18/19's own golden-DOM tests run via `dom-shim.js`,
+  which has no CSSOM/layout engine at all — they prove the CONTENT is
+  correct, not that it stays correct at 4 different viewport sizes. Only
+  A11y's own real CDP measurement (this file's A11y section) verified
+  actual layout at all 4 viewports, and that measurement checked
+  SHELL-level structure (regions, overlay, sizing), not AC-17/18/19's own
+  specific reference-composition content at each size. Verifying, say,
+  Architecture View's 9 named nodes render "without overlapping labels"
+  (AC-17's own clause) at all 4 viewports would need a further real-
+  browser pass — real, disclosed, not attempted here.
+- **AC-19's "highlighted code evidence... only when supplied by scanner
+  evidence" clause** is not directly exercised by `golden-trace.test.js`
+  — the closest existing proof is `test/evidence-inspector.test.js`'s
+  pre-existing (Milestone 2) assertion that no conflicting/invented
+  evidence is ever fabricated. A dedicated golden test for evidence
+  highlighting specifically was not written this sub-project.
+- **§7.8/7.9/7.10's richer blueprint claims** (saved views, zoom/focus/
+  layout controls, the `Lifecycle | Data map` toggle, `Escape`
+  interaction, 200% zoom, DPIA/RoPA export, §8.5 presentation/export
+  mode) remain unimplemented, confirmed absent by direct grep during
+  Golden's own scoping pass — real, disclosed, unscoped M3-UX/M4
+  territory, not part of AC-16–22's own text.
+- **M3-Render** (the large-graph rendering-architecture fix Perf's own
+  measurement made necessary) remains unscoped — nothing in this
+  sub-project's own verification touched graph scale beyond the 14-node
+  flagship fixture.
+- **M3-Server's own S2** (`POST /api/v1/query`/`POST /api/v1/export`),
+  C2/C3 (Milestone 2's deferred at-rest detection), F2/F3 (Milestone 2's
+  deferred cross-boundary work), and Milestones 4/5 in their entirety
+  remain exactly as unscoped as every prior sub-project's own CLAUDE.md
+  section already disclosed — restated here only for completeness, not
+  newly found.
+
+**Milestone 3's own exit gate (PRD line ~1823) is therefore NOT fully
+satisfied** — the usability-testing clause is permanently outside an
+agent's reach, and AC-22 itself does not pass. What IS true, and real:
+every agent-closable requirement named in AC-16 through AC-22 has been
+either implemented, tested, or — where genuinely absent — named
+explicitly rather than silently claimed. This is the same "what this
+does NOT mean" disclosure discipline Milestone 2's own Sub-project I
+established (`scanner/src/lineage/CLAUDE.md`'s own "Milestone 2
+exit-gate status" section).
+
 | Module | Responsibility |
 |---|---|
 | `src/lib/escape-html.js` | Escapes text for the rare case of building a raw HTML/attribute STRING outside of `el()` (e.g. a future `document.title` assignment, or serializing to an SVG attribute string). Quote-complete (escapes `&<>"'`) — neither existing in-repo escaper (`scanner/src/posture/fleet.js`, `scanner/src/badge.js`) is. **Never combine with `el()`'s text-child insertion** — `el()` already escapes via `createTextNode` (see `src/lib/dom.js` below), and pre-escaping on top of that double-escapes (a real repo name like `Acme & Sons' <repo>` would render on screen as the literal text `Acme &amp; Sons&#39; &lt;repo&gt;`). This exact bug shipped in `shell.js` and was fixed by dropping the `escapeHtml()` calls there, not by touching this module. |
