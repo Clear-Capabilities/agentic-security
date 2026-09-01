@@ -28,7 +28,7 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 | `dataflow_get_edge` | ✓ | as above, ID-scoped edge lookup (`handleEdge`) |
 | `dataflow_get_flow` | ✓ | as above, ID-scoped flow lookup (`handleFlow`), includes contributing node/edge canonical ids |
 
-**21 tools, not 12** — this table previously stopped at 12 and the count quoted elsewhere (root `CLAUDE.md`, the non-Claude plugin manifests) said "Six." Re-derive with `grep -c "name: '" scanner/src/mcp/tools.js` rather than trusting a hardcoded number here again.
+**21 tools, not 12** — this table previously stopped at 12 and the count quoted elsewhere (root `CLAUDE.md`, the non-Claude plugin manifests) said "Six." Re-derive with `grep -c "name: '" scanner/src/mcp/tools.js scanner/src/mcp/dataflow-tools.js | awk -F: '{s+=$2} END{print s}'` — **not** `tools.js` alone, which now undercounts by 4: the 4 `dataflow_*` tools are defined in `dataflow-tools.js` and only imported into `tools.js`'s `ALL_TOOLS`. If a future tool file follows this same reused-adapter-module pattern, extend the file list rather than trusting a single-file grep again.
 
 **Two write tools, not one.** `apply_fix` and `apply_sca_upgrade` both write; `verify_fix` also writes (see its row above) though not to the target project's own files. `apply_fix` additionally requires `confirm:true` AND the last-scan HMAC to verify AND the target path not on the reserved-write list; `apply_sca_upgrade` requires `confirm:true` and gates on its own test-restore cycle.
 
