@@ -101,7 +101,7 @@ import { reclassifySink, reclassifyPrivacySink, reclassifyOrmWrite } from './sin
 import { recognizeTransformation } from './transform-catalog.js';
 import { classifyHandling } from './handling-analyzer.js';
 import { emptyGraphEnvelope } from './schema.js';
-import { emptyProtection } from './protection.js';
+import { emptyProtection, aggregateVerdicts } from './protection.js';
 import * as ids from './ids.js';
 import { planSeeds, seedEntryStateFactory, exprRoots, walkExpr } from './source-seeding.js';
 
@@ -817,13 +817,59 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
         policyVerdict = 'prohibited';
       }
     }
+    // Milestone 2, Sub-project I, increment 1 (PRD line 909): replaces
+    // the §8 `protectionSummary: 'not_assessed'` literal — that line
+    // stored an "unsupported independent claim", exactly what PRD line
+    // 909 forbids ("must be derived from the individual edge verdicts").
+    // `aggregateVerdicts`'s own `_PRECEDENCE` table (protection.js) is
+    // documented as built for CROSS-BRANCH, same-dimension aggregation
+    // (PRD §8.4's own wording: "one branch protected, one branch
+    // unprotected") — NOT for combining one edge's own three DIFFERENT
+    // dimensions. Reusing it here is safe ONLY because, for every real
+    // edge today, at most ONE of transit/atRest/handling can ever be
+    // non-default: `resolveTransitProtectionForSite` is gated to
+    // `category === 'external-api'` (-> `kind: 'external'` only) and the
+    // atRest block above is gated to `snk.kind === 'store'` only — these
+    // two node kinds are mutually exclusive by construction, and
+    // `edge.protection.handling` is never written by any code at all.
+    // So this reduces, in practice, to "whichever single dimension
+    // actually applies to this edge, use its own real verdict; the
+    // others are honestly not_assessed and never mask it." **If a
+    // future analyzer ever makes TWO of these three dimensions
+    // genuinely co-applicable to the SAME edge, this reasoning breaks**
+    // — a `protected` dimension could then mask a genuinely-unassessed,
+    // RELEVANT other dimension, exactly the false-protected bug class
+    // Sub-project H's own gate exists to catch (PRD line 121: "missing
+    // evidence is displayed as unknown or not assessed, never as
+    // protected"). Revisit this call (a filter-to-evaluated-dimensions
+    // rule, or a dedicated cross-dimension precedence) before that
+    // happens — do not assume this reasoning still holds.
+    //
+    // A second, separate disclosed fragility: `PROTECTION_VERDICTS`
+    // includes `'not_applicable'`, which is NOT a `FLOW_SUMMARY_VALUES`
+    // member (schema.js) — confirmed directly. No producer today ever
+    // sets a dimension's verdict to `'not_applicable'`, so
+    // `aggregateVerdicts` can never actually return it here — but if a
+    // future analyzer ever does, `flow.protectionSummary` could fail
+    // `validateGraph`. See `test/lineage/protection-summary.test.js`'s
+    // `I1/5` for the currently-true, narrower claim this rests on.
+    const flowEdge = edgesById.get(edgeIdStr);
+    // Defensive only, mirroring this loop's own established convention
+    // (see the atRest block above) — `flowEdge` should always be found,
+    // the SAME id this flow's own `edgeIds: [edgeIdStr]` uses below.
+    const protectionSummary = flowEdge
+      ? aggregateVerdicts([
+          flowEdge.protection.transit.verdict,
+          flowEdge.protection.atRest.verdict,
+          flowEdge.protection.handling.verdict,
+        ])
+      : 'not_assessed';
     flowsById.set(fId, {
       id: fId, dataElementIds: [de.id], source: src.id, sink: snk.id,
       edgeIds: [edgeIdStr], transformationIds: sortedT,
       alternatePathCount: group.length - 1,
-      // §8's defaults for the two fields this increment does not touch.
       policyVerdict,
-      protectionSummary: 'not_assessed',
+      protectionSummary,
       evidenceRefs: policyEvidenceRefs,
       confidence: g.grade === 'explicit' ? { score: 0.8, tier: 'high' } : { score: 0.5, tier: 'medium' },
       coverageStatus: snk.coverageStatus, findingRefs: [], governanceRefs: {},

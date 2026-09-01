@@ -18,10 +18,15 @@
 // graph-builder.js's own AC-11 header note) alongside their corpus fixtures.
 //
 // The per-sink "handling/transit/at-rest verdict" half of AC-01's own
-// wording is Milestone 2's job (protection verdicts are unconditionally
-// `not_assessed` in Milestone 1 — graph.limitations discloses this on every
-// built graph) — this file proves the FLOW-MULTIPLICITY half only, which is
-// everything Milestone 1's own exit gate can actually require.
+// wording was Milestone 1's own honest absence (protection verdicts were
+// unconditionally `not_assessed`, disclosed via graph.limitations on every
+// built graph) — this file's original scope proved the FLOW-MULTIPLICITY
+// half only, everything Milestone 1's own exit gate could actually
+// require. Milestone 2, Sub-project I, increment 1 now computes real
+// per-flow protectionSummary values (protection.js's aggregateVerdicts()
+// over each flow's own edge dimensions), so this fixture's own external-api
+// flow (a literal https:// fetch()) correctly reads 'protected' — proven
+// below, not asserted away as still-honest-absence.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -62,11 +67,21 @@ test('AC-01: req.body.card_number (PCI) reaches THREE distinct sinks — log, da
   assert.ok(reachedSinkCategories.has('external-api'), `PCI must reach an 'external-api' sink — reached: ${[...reachedSinkCategories]}`);
   assert.equal(reachedSinkCategories.size, 3, 'exactly 3 distinct sink categories, matching AC-01\'s own worked example — not fewer (a missed sink) and not more (an unintended extra match)');
 
-  // AC-01's own "each sink shows its own... verdict" clause — the Milestone
-  // 2 half. Proven here as an honest ABSENCE, not asserted as a real
-  // verdict: every flow must carry the disclosed not_assessed placeholder,
-  // never a fabricated one.
+  // AC-01's own "each sink shows its own... verdict" clause — now real,
+  // per Sub-project I1. The external-api flow (fetch('https://...')) has
+  // real transit evidence (a literal https:// destination, no nearby
+  // TLS-disable finding) and must read 'protected'; the log/database
+  // flows have no evidence on EITHER applicable dimension (transit only
+  // applies to external-api sinks; atRest only applies to store-kind
+  // sinks with a recognized encrypt call, and this fixture has none) and
+  // must stay the honest 'not_assessed' default — never a fabricated
+  // 'protected'.
   for (const f of pciFlows) {
-    assert.equal(f.protectionSummary, 'not_assessed', 'protection verdicts are honestly not_assessed in Milestone 1 — never a guessed value');
+    const sinkSubtype = sinkNodesById.get(f.sink)?.subtype;
+    if (sinkSubtype === 'external-api') {
+      assert.equal(f.protectionSummary, 'protected', 'a literal https:// destination with no nearby TLS-disable finding is real transit evidence (AC-03)');
+    } else {
+      assert.equal(f.protectionSummary, 'not_assessed', `${sinkSubtype} flow has no evidence on any applicable dimension — must stay honest, never a fabricated verdict`);
+    }
   }
 });

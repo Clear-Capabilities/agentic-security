@@ -29,6 +29,7 @@ import { buildCallGraph } from '../../src/ir/callgraph.js';
 import { buildGraphWithCoverage } from '../../src/lineage/coverage.js';
 import { validateGraph } from '../../src/lineage/validate.js';
 import { HANDLING_VALUES } from '../../src/lineage/schema.js';
+import { aggregateVerdicts } from '../../src/lineage/protection.js';
 
 function irOf(files) {
   const perFile = {};
@@ -229,4 +230,77 @@ test('C1/6: HANDLING_VALUES accounting — every member is either exercised abov
     new Set([...exercisedOrEncrypted, ...documentedUnreachable]),
     'HANDLING_VALUES drifted — update this test\'s accounting (and the comment above) to match',
   );
+});
+
+// ── AC-06 (Milestone 2, Sub-project I, increment 1): "at-rest protection
+// is unknown, not protected" for PHI written unencrypted to a store, with
+// no C2/C3 storage/IaC evidence available. Per the scoping doc's own PRD
+// re-read (line 1495: "the verdict must be unknown OR not_assessed" —
+// either, explicitly sanctioned for missing evidence), this fixture's own
+// honest `not_assessed` IS AC-06's own required property, not a gap —
+// this test exists to name and pin it explicitly, since no prior test in
+// this file cites AC-06 by name. `diagnosis` classifies as PHI
+// (dataflow/privacy-taxonomy.js). ───────────────────────────────────────
+
+test('AC-06: PHI written unencrypted to a store — atRest AND protectionSummary stay honestly not_assessed, never protected', () => {
+  const { graph, edgeFor, nodeFor } = build(`
+    function recordVisit(req, db) {
+      const diagnosis = req.body.diagnosis;
+      db.query('INSERT INTO patients (diagnosis) VALUES (?)', [diagnosis]);
+    }
+  `);
+  const phiDataElements = graph.dataElements.filter((d) => (d.dataClasses ?? []).includes('PHI'));
+  assert.ok(phiDataElements.length > 0, 'sanity: diagnosis must classify as PHI');
+  const phiIds = new Set(phiDataElements.map((d) => d.id));
+  const flow = graph.flows.find((f) => f.dataElementIds.some((id) => phiIds.has(id)));
+  assert.ok(flow, 'a PHI-carrying flow to the store must exist');
+  assert.equal(nodeFor(flow.sink).kind, 'store');
+  assert.deepEqual(edgeFor(flow).protection.atRest, DEFAULT_AT_REST);
+  assert.equal(flow.protectionSummary, 'not_assessed', 'missing at-rest evidence must never render as protected (PRD line 121)');
+});
+
+// ── AC-08 (Milestone 2, Sub-project I, increment 1): "the AI inventory
+// shows the provider, but the system does not claim that PII/PHI/PCI was
+// sent to it" when an AI-provider sink exists but no classified field
+// reaches it. Mirrors js-api-to-log-disconnected/'s own AC-11 mechanism —
+// the sink node stays visible with a coverageReason; the property this
+// test names explicitly is that NOTHING fabricates a PII/PHI/PCI claim
+// for it. ─────────────────────────────────────────────────────────────
+
+test('AC-08: an AI-provider sink with no classified field reaching it stays visible, with no fabricated PII/PHI/PCI flow', () => {
+  const { graph } = build(`
+    function summarize(anthropic) {
+      anthropic.messages.create({ model: 'claude-3', messages: [{ role: 'user', content: 'hello' }] });
+    }
+  `);
+  const aiNode = graph.nodes.find((n) => n.subtype === 'ai-model-provider');
+  assert.ok(aiNode, 'the AI-provider sink node must still be minted and visible');
+  assert.ok(aiNode.coverageReason ?? aiNode.externality, 'the node must carry some visible coverage/externality signal, never a bare silent entry');
+  const flowsToAiNode = graph.flows.filter((f) => f.sink === aiNode.id);
+  assert.equal(flowsToAiNode.length, 0, 'no flow — and therefore no data-class claim — may exist for an AI sink nothing classified reaches');
+});
+
+// ── The mutual-exclusivity regression guard the I1 code comment names as
+// a REQUIRED, not optional, addition. `aggregateVerdicts`'s own
+// _PRECEDENCE table is designed for cross-branch, same-dimension
+// aggregation; reusing it across one edge's own three DIFFERENT
+// dimensions is safe today only because transit/atRest/handling can never
+// all be non-default on the same real edge. This test proves the
+// PRECEDENCE ITSELF still picks the pessimistic answer if that ever stops
+// holding — a hand-built graph (not a real fixture, since no real code
+// path can produce this shape yet) with transit: protected AND atRest:
+// unprotected on the SAME edge. ──────────────────────────────────────────
+
+test('I1 regression guard: if a future edge ever carries two non-default protection dimensions at once, the worse one must win, never the better one', () => {
+  // protected + unprotected on the same edge (a shape no real producer
+  // creates today, per the mutual-exclusivity argument above) must
+  // aggregate to the pessimistic 'unprotected', never 'protected'.
+  assert.equal(aggregateVerdicts(['protected', 'unprotected', 'not_assessed']), 'unprotected');
+  // protected + not_assessed alone (today's REAL shape — exactly one
+  // dimension applies, the others are genuinely n/a) correctly still
+  // aggregates to 'protected' — this is the behavior the mutual-
+  // exclusivity argument depends on staying correct.
+  assert.equal(aggregateVerdicts(['protected', 'not_assessed', 'not_assessed']), 'protected');
+  // all not_assessed (nothing evaluated on this edge at all) stays honest.
+  assert.equal(aggregateVerdicts(['not_assessed', 'not_assessed', 'not_assessed']), 'not_assessed');
 });
