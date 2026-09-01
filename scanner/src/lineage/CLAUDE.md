@@ -418,6 +418,15 @@ declared-variable name the way `dataflow/privacy-taint.js`'s
 boundary, not a bug; see `docs/lineage/PRIVACY_COMPARISON.md` for the full
 measurement and root-cause write-up.
 
+## Milestone 4 (JSON/CSV export)
+
+| Module | Responsibility |
+|---|---|
+| `redact-graph.js` | Shared redaction logic (`_redactGraph`), extracted so both the JSON exporter and any future exporter apply the identical secret-scrubbing pass rather than each carrying its own drifting copy. |
+| `export-json.js` | `exportGraphJSON(graph, opts)` / `computeGraphDigest(graph)` — deterministic JSON export of a `DataFlowGraph v1` document (default-redacted, tamper-evident sha256 digest of the SOURCE graph, `opts.filter`/`opts.redact`). See its own header comment for the full filter-narrowing rule (flows/dataElements narrow by referential soundness, not mere node membership). |
+| `export-csv.js` | `exportFlowsCSV(graph)` — one CSV row per FLOW (not node, not edge). Per-dimension `transitVerdict`/`atRestVerdict`/`handlingVerdict` columns are each `aggregateVerdicts()` over that flow's own `edgeIds[]`' `protection.<dimension>.verdict`s. Multi-value `dataClasses` join with `;` (not `,`, which is CSV's own delimiter) — see the module's own header comment for the full reasoning. |
+
+
 ## Conventions
 
 - Every enum here is a single source of truth for its concept. If you add
