@@ -76,7 +76,7 @@ function edge({ from, to, mappings = [], protocolName = 'in-process', destinatio
     from, to, relationship: 'data_flow',
     fieldMappings: mappings,
     protocol: { name: protocolName, destinationResolution },
-    boundaryCrossings, protection, evidenceRefs: [], coverageStatus: 'modeled',
+    boundaryCrossings, provenance: 'code', protection, evidenceRefs: [], coverageStatus: 'modeled',
   };
 }
 

@@ -466,6 +466,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -506,6 +507,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -546,6 +548,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -586,6 +589,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -628,6 +632,7 @@
       "boundaryCrossings": [
         "trust-zone:external"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "unprotected",
@@ -668,6 +673,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -708,6 +714,7 @@
       "boundaryCrossings": [
         "trust-zone:external"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -746,6 +753,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -786,6 +794,7 @@
       "boundaryCrossings": [
         "trust-zone:external"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -824,6 +833,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -862,6 +872,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -902,6 +913,7 @@
       "boundaryCrossings": [
         "trust-zone:external"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -930,6 +942,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -958,6 +971,7 @@
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -998,6 +1012,7 @@
       "boundaryCrossings": [
         "trust-zone:unknown"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",

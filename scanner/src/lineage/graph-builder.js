@@ -671,6 +671,12 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
             fieldMappings: [{ fromPath, toPath, dataElementIds: [de.id], mappingType, transformationIds: sortedT }],
             protocol: { name: 'in-process', destinationResolution: site.destination?.resolutionStatus ?? 'unknown' },
             boundaryCrossings: [],
+            // Milestone 2, Sub-project F, increment 1 (FR-304): which
+            // mechanism discovered this edge. Every edge minted here today
+            // is genuinely code-derived — this is an unconditional, honest
+            // literal, never a guess (see schema.js's EDGE_PROVENANCE_VALUES
+            // comment for the full rationale).
+            provenance: 'code',
             // Milestone 2, Sub-project B, increment 2 (FR-401):
             // `opts.resolveTransitProtection(site) -> {verdict, evidenceGrade}
             // | undefined`, applied at this exact point — the same block

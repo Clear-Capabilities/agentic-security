@@ -15,7 +15,7 @@
 
 import {
   SCHEMA_VERSION, NODE_KINDS, MAPPING_TYPES, COVERAGE_STATUS_VALUES, EXTERNALITY_VALUES,
-  TRANSFORM_KINDS, REVERSIBILITY_VALUES, DESTINATION_RESOLUTION_VALUES, POLICY_STATES,
+  TRANSFORM_KINDS, REVERSIBILITY_VALUES, DESTINATION_RESOLUTION_VALUES, EDGE_PROVENANCE_VALUES, POLICY_STATES,
   FLOW_SUMMARY_VALUES, EVIDENCE_TYPES, GRAPH_SCOPE_SOURCES, HANDLING_VALUES, STORE_OPERATION_VALUES,
   QUEUE_OPERATION_VALUES,
 } from './schema.js';
@@ -168,6 +168,9 @@ function _validateEdge(edge, idx, errors, nodeIds, dataElementIds) {
     if (!DESTINATION_RESOLUTION_VALUES.includes(edge.protocol.destinationResolution)) {
       _err(errors, path('.protocol.destinationResolution'), `unrecognized destinationResolution "${edge.protocol.destinationResolution}"`);
     }
+  }
+  if (!EDGE_PROVENANCE_VALUES.includes(edge.provenance)) {
+    _err(errors, path('.provenance'), `unrecognized provenance "${edge.provenance}"`);
   }
 }
 

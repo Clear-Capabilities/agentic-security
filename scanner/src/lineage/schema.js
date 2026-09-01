@@ -53,6 +53,17 @@ export const DESTINATION_RESOLUTION_VALUES = Object.freeze([
   'declared_service', 'runtime_corroborated', 'dynamic', 'unknown',
 ]);
 
+// Milestone 2, Sub-project F, increment 1 (FR-304): which mechanism
+// discovered this edge. Deliberately value-aligned with (but a
+// distinct field from) EVIDENCE_TYPES — 'code'/'schema'/'manual'/
+// 'runtime' are FR-304's own four categories, reusing EVIDENCE_TYPES's
+// existing spellings rather than inventing a second vocabulary for the
+// same four concepts. Only 'code' has a real producer today
+// (graph-builder.js sets it unconditionally); 'schema'/'manual'/
+// 'runtime' are reserved for Sub-project F2/F3, not yet implemented —
+// see scanner/src/lineage/CLAUDE.md.
+export const EDGE_PROVENANCE_VALUES = Object.freeze(['code', 'schema', 'manual', 'runtime']);
+
 // Milestone 2, Sub-project E, increment 2 (`node.storeDetail.operation`,
 // DESIGN_STORE_DETAIL.md). `save` deliberately maps to `'upsert'`, never
 // `'create'` — see graph-builder.js's own method-name mapping comment for

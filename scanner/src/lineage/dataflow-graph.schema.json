@@ -85,7 +85,7 @@
     },
     "edge": {
       "type": "object",
-      "required": ["id", "from", "to", "relationship", "fieldMappings", "protocol", "boundaryCrossings", "protection", "evidenceRefs", "coverageStatus"],
+      "required": ["id", "from", "to", "relationship", "fieldMappings", "protocol", "boundaryCrossings", "provenance", "protection", "evidenceRefs", "coverageStatus"],
       "properties": {
         "id": { "type": "string", "pattern": "^edge:" },
         "from": { "type": "string" },
@@ -94,6 +94,7 @@
         "fieldMappings": { "type": "array", "items": { "$ref": "#/$defs/fieldMapping" } },
         "protocol": { "$ref": "#/$defs/protocol" },
         "boundaryCrossings": { "type": "array", "items": { "type": "string" } },
+        "provenance": { "type": "string", "enum": ["code", "schema", "manual", "runtime"] },
         "protection": {
           "type": "object",
           "required": ["transit", "atRest", "handling"],
