@@ -167,14 +167,14 @@ choice (2026-09-01, over starting Milestone 4/5 instead).
 |---|---|---|---|---|
 | Query | **Query language parser + Focus controls + Saved views + basic text search — COMPLETE (2026-09-01)** | Render | Large | Shipped: `lib/query-language.js` (tokenizer/parser/evaluator), `lib/focus-controls.js` (9 real traversals), `components/query-bar.js` (input/error/saved-view chips), wired into Privacy/Inventory filtering and Architecture View's selection via a new optional `computeArchitectureViewModel` 3rd parameter. Two real, disclosed data-vocabulary mismatches found by testing against the real fixture (sink category naming; node.aliases only non-empty in the hand-authored fixture, never in real scan output). Independently re-verified end-to-end in a real browser (query narrowing, malformed-query safety, focus-control dimming) beyond the committed unit-test suite. Full results in `frontend/CLAUDE.md`'s own Query section. |
 | Filters | **Expand filter-rail.js to the real dimensions — COMPLETE (2026-09-01)** | Query | Medium | Shipped: `lib/row-filters.js` (shared, deduplicated matcher, closing a real pre-existing bug where Inventory's own filter logic never checked the AI toggle at all), 7 new chip groups (source/sink category, destination externality, transit/at-rest/handling verdict, policy verdict) wired into Privacy and Inventory's flow-shaped rows. A real surprise finding: the flagship fixture has zero `kind:'sink'` nodes, so that facet is genuinely empty against it. Provider/host, application, environment, and evidence-grade/governance-gap dimensions remain explicitly deferred. Full results in `frontend/CLAUDE.md`'s own Filters section. |
-| SemanticZoom | **Endpoint/function/field-level detail on zoom** | Its own future scoping pass — data availability unconfirmed | Unscoped | Not attempted this session. First step of that future pass: confirm what per-node detail the schema/scan pipeline can actually provide beyond what's already surfaced. |
+| SemanticZoom | **Endpoint/function/field-level detail on zoom — INVESTIGATED, CONFIRMED BLOCKED (2026-09-01)** | Filters | Unscoped (not attempted) | Not buildable this session. Confirmed by direct grep of `scanner/src/lineage/{schema,validate,graph-builder}.js`: `node.location` is unconditionally `null` on every node (nodes are category-granular, not call-site-granular), and no `functionName`/`fieldDetail`/`endpointDetail`/`symbolDetail` field exists anywhere in the schema — `storeDetail`/`queueDetail` are the only per-node detail objects and are already fully surfaced. §21's own "semantic zoom" (large-graph node reveal) is already satisfied by M3-Render's clustering. §7.3/DFG-030's richer "reveal endpoint/function/field on zoom" sense needs a real scanner-side schema change (a new per-node call-site array or per-call-site node minting) — genuinely backend work, not a frontend increment, so nothing was built to fake it. Full writeup: `2026-09-01-data-flow-explorer-m3-ux-semanticzoom-disposition.md`. |
 
 **This document scopes Query only in detail below** — Filters and
-SemanticZoom get their own future scoping passes once Query's own real
-predicate-evaluation engine exists to build on (Filters) or the data
-question is answered (SemanticZoom), matching the parent M3 doc's own
-"don't pre-scope what a prior increment's outcome should determine"
-discipline.
+SemanticZoom got their own follow-on passes once Query's own real
+predicate-evaluation engine existed to build on (Filters, completed) or
+the data question was answered (SemanticZoom, investigated and found
+blocked on backend work), matching the parent M3 doc's own "don't
+pre-scope what a prior increment's outcome should determine" discipline.
 
 ## Query language sub-project: what it delivers, in detail
 

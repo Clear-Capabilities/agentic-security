@@ -560,7 +560,34 @@ companion plan.
   that are usually a single always-selected value) beyond this
   increment's own scope. Architecture View still has no filter-rail
   integration at all (a pre-existing scoping decision, unchanged).
-  SemanticZoom (M3-UX's own 3rd sub-project) remains entirely unscoped.
+  SemanticZoom (M3-UX's own 3rd sub-project) is investigated below —
+  confirmed blocked, not built.
+
+**M3-UX, sub-project SemanticZoom — INVESTIGATED, CONFIRMED BLOCKED
+(2026-09-01):** not a build. Full writeup in `docs/superpowers/plans/
+2026-09-01-data-flow-explorer-m3-ux-semanticzoom-disposition.md`. PRD
+§21's "semantic zoom" (reveal more nodes as a dense area is zoomed) is
+already satisfied by M3-Render's own clustering — a distinct, lesser,
+already-shipped mechanism, as that sub-project's own section above
+already discloses. PRD §7.3/DFG-030's richer sense (reveal endpoint/
+function/field-level detail on zooming into ONE node) is genuinely not
+buildable on the frontend today: direct grep of `scanner/src/lineage/
+{schema,validate,graph-builder}.js` confirms `node.location` is
+unconditionally `null` on every node (nodes are category-granular — one
+"PostgreSQL" node represents an entire store target, not one call site)
+and no `functionName`/`fieldDetail`/`endpointDetail`/`symbolDetail`
+field exists anywhere in the schema; `storeDetail`/`queueDetail` are the
+only per-node detail objects and both are already fully surfaced. Real
+per-call-site detail exists only on `graph.evidence[]`, keyed to
+edges/flows, already surfaced via the Evidence Inspector (a
+select-and-inspect interaction, not a zoom one). Building the richer
+sense would require a real scanner-side schema change (a new per-node
+call-site array, or minting one node per real call site instead of per
+category) — substantial backend work outside `frontend/`'s own scope,
+so no UI was built to gesture at a capability with no real data behind
+it. M3-UX's own 3-sub-project table is closed out: Query and Filters
+shipped; SemanticZoom investigated and honestly deferred to a future
+scanner-side increment.
 
 | Module | Responsibility |
 |---|---|
