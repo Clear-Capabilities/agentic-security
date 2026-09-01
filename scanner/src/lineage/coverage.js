@@ -415,6 +415,22 @@ export function buildCoverageLedger(built, opts = {}) {
  *   function never calls `scanTransitEvidence`/`scanCryptoProtocol` itself
  *   — see `index.js`'s own header for why the computation must happen
  *   exactly once, in exactly one place.
+ * @param {object} [opts.privacySinkPolicy] Milestone 2, Sub-project G,
+ *   increment 1: a pre-loaded `dataflow/privacy-sink-policy.js` policy
+ *   object (`{allow: [...]}`), computed exactly once by the caller
+ *   (`index.js`'s `buildLineageGraph`, mirroring `transitEvidenceByFile`'s
+ *   own single-computation discipline). This function never reads the
+ *   filesystem itself — it is spread straight through to
+ *   `buildDataFlowGraph` via `...opts` below, unchanged, since this
+ *   convenience wrapper has no default of its own to compose it with (only
+ *   `resolveSiteDecision`/`resolveDestination`/`resolveTransitProtection`
+ *   need one). `undefined` (never coerced to `{allow: []}` anywhere in this
+ *   file) means "no policy evaluation was attempted" — see
+ *   `graph-builder.js`'s own `policyLoaded` gate for why that distinction
+ *   is load-bearing.
+ * @param {string} [opts.environment] optional deployment-environment
+ *   override for policy evaluation's environment-scoped rules — also
+ *   spread straight through, unchanged.
  */
 export function buildGraphWithCoverage(callGraph, opts = {}) {
   // NITPICK 4: compose with a caller-supplied `opts.resolveSiteDecision`

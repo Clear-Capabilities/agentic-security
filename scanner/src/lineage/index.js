@@ -20,8 +20,15 @@
 // malformed callGraph is reported as `not_available`, never attempted as a
 // degraded run.
 
+import * as fs from 'node:fs';
 import { buildGraphWithCoverage } from './coverage.js';
 import { scanTransitEvidence } from './transit-protection.js';
+// Milestone 2, Sub-project G, increment 1 (FR-408/AC-09): loaded ONCE, here
+// — mirroring `scanTransitEvidence`'s own single-computation discipline one
+// line above — never re-loaded at a lower layer (`coverage.js`/
+// `graph-builder.js` both only ever consume the already-loaded object).
+import { loadPrivacySinkPolicy } from '../dataflow/privacy-sink-policy.js';
+import { statePath } from '../posture/state-dir.js';
 
 /**
  * @param {{functions: Map}} callGraph a real callGraph — the same shape
@@ -29,6 +36,20 @@ import { scanTransitEvidence } from './transit-protection.js';
  *   in `runFullScan`).
  * @param {object} [opts]
  * @param {string} [opts.repository] threaded straight to `buildGraphWithCoverage`.
+ * @param {string} [opts.scanRoot] the real scan root path — distinct from
+ *   `opts.repository`, which by the time it reaches this function is only a
+ *   basename (see `engine.js`'s own call site). Used ONLY to load the
+ *   operator's privacy sink policy (Milestone 2, Sub-project G, increment
+ *   1, FR-408/AC-09) — never threaded to `buildGraphWithCoverage` itself,
+ *   which never reads the filesystem. See the function body for why
+ *   existence is checked explicitly rather than inferred from
+ *   `loadPrivacySinkPolicy`'s own return value.
+ * @param {string} [opts.environment] optional deployment-environment
+ *   override for policy evaluation's environment-scoped rules; threaded to
+ *   `buildGraphWithCoverage`'s `opts.environment`, which falls back to
+ *   `AGENTIC_SECURITY_ENVIRONMENT` at the point the verdict is computed
+ *   (`graph-builder.js`), mirroring `dataflow/privacy-taint.js`'s own
+ *   precedent.
  * @param {boolean} [opts.deterministic] when true, `generatedAt` is left
  *   `undefined` so `buildDataFlowGraph`'s own fixed-literal default applies
  *   — the literal itself lives in exactly one place, `graph-builder.js`.
@@ -79,12 +100,36 @@ export function buildLineageGraph(callGraph, opts = {}) {
     // `scanCryptoProtocol` itself — it only reads this pre-computed Map —
     // so no file is ever scanned twice.
     const transitEvidence = scanTransitEvidence(opts.fileContents ?? {});
+    // Milestone 2, Sub-project G, increment 1 (FR-408/AC-09): load the
+    // operator's privacy sink policy exactly once, here. Existence is
+    // checked EXPLICITLY (never inferred from `loadPrivacySinkPolicy`'s own
+    // return value alone) because that function deliberately returns the
+    // SAME empty `{allow: []}` shape whether the policy file is missing,
+    // malformed, or genuinely present with an empty `allow` array —
+    // collapsing three states `graph-builder.js`'s own policy-verdict logic
+    // needs to keep apart. A MISSING policy must read
+    // `flow.policyVerdict: 'not_evaluated'` (nothing was actually
+    // evaluated — privacy-sink-policy.js's own header: "nothing changes for
+    // a repo with no policy file"); a PRESENT-but-empty policy (an
+    // operator's deliberate "nothing is permitted yet" `{"allow": []}`)
+    // must read `'prohibited'` — the deny-by-default stance that same
+    // header establishes once a policy is genuinely in play.
+    // `privacySinkPolicy` therefore stays `undefined` (never coerced to
+    // `{allow: []}`) unless the file genuinely exists on disk — this is
+    // what lets `graph-builder.js`'s `opts.privacySinkPolicy != null` gate
+    // make that distinction at all.
+    const _policyFile = opts.scanRoot ? statePath(opts.scanRoot, 'privacy-policy.json') : null;
+    const privacySinkPolicy = _policyFile && fs.existsSync(_policyFile)
+      ? loadPrivacySinkPolicy(opts.scanRoot)
+      : undefined;
     const built = buildGraphWithCoverage(callGraph, {
       repository: opts.repository,
       generatedAt: opts.deterministic ? undefined : new Date().toISOString(),
       perFile: opts.perFile,
       parseFailures: opts.parseFailures,
       transitEvidenceByFile: transitEvidence,
+      privacySinkPolicy,
+      environment: opts.environment,
     });
     return { status: 'complete', graph: built.graph, transitEvidence, failure: null, elapsedMs: Date.now() - t0 };
   } catch (e) {

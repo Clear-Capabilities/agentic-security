@@ -9271,6 +9271,13 @@ function _deterministicFileTimings(timings) {
         // `undefined` lets graph-builder.js's own `opts.repository ?? 'repo'`
         // default apply — the single source of truth for that literal.
         repository: scanRoot ? path.basename(path.resolve(scanRoot)) : undefined,
+        // Milestone 2, Sub-project G, increment 1 (FR-408/AC-09): the real
+        // scan root, threaded straight through — distinct from `repository`
+        // above, which is only a basename. `index.js`'s own `buildLineageGraph`
+        // uses this ONLY to load `.agentic-security/privacy-policy.json`
+        // (never to derive `repository`/node ids), mirroring how `fileContents`
+        // was threaded through for Sub-project B's own transit-evidence scan.
+        scanRoot,
         deterministic: isDeterministic(),
         perFile,
         fileContents,
