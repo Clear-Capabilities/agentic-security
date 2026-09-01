@@ -43,7 +43,7 @@ export function generateSyntheticGraph(nodeCount = 5000, edgeCount = 10000) {
       id: edgeId(from, to, 'data_flow', [String(i)]),
       from, to, relationship: 'data_flow',
       fieldMappings: [], protocol: { name: 'synthetic', destinationResolution: 'literal' },
-      boundaryCrossings: [], protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled',
+      boundaryCrossings: [], provenance: 'code', protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled',
     });
   }
 
