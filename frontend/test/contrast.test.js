@@ -78,7 +78,7 @@ test('coverage banner text (--status-banner-text) meets AA (4.5:1) against --sta
   // per-theme token; both theme's pairing must independently clear 4.5:1.
   const pairs = {
     dark: { bannerText: '#061625', statusUnknown: '#F5B83D' },
-    light: { bannerText: '#FFFFFF', statusUnknown: '#9A6B00' },
+    light: { bannerText: '#FFFFFF', statusUnknown: '#956700' }, // kept in sync with styles/tokens.css's real --status-unknown (Milestone 3, sub-project A11y) — see test/tokens-contrast.test.js, which reads tokens.css directly rather than duplicating literals like this file does
   };
   for (const [theme, { bannerText, statusUnknown }] of Object.entries(pairs)) {
     const ratio = contrastRatio(bannerText, statusUnknown);

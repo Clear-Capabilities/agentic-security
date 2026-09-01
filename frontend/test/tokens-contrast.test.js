@@ -66,7 +66,7 @@ test('dark theme: --status-banner-text against --status-unknown is ~10.27:1 (per
   assert.ok(Math.abs(ratio - 10.27) < 0.1, `expected ~10.27:1, got ${ratio.toFixed(2)}:1`);
 });
 
-test('light theme: --status-banner-text against --status-unknown is ~4.69:1 (per tokens.css\'s own comment)', () => {
+test('light theme: --status-banner-text against --status-unknown is ~4.98:1 (per tokens.css\'s own comment)', () => {
   const ratio = contrastRatio(lightTokens['status-banner-text'], lightTokens['status-unknown']);
-  assert.ok(Math.abs(ratio - 4.69) < 0.1, `expected ~4.69:1, got ${ratio.toFixed(2)}:1`);
+  assert.ok(Math.abs(ratio - 4.98) < 0.1, `expected ~4.98:1, got ${ratio.toFixed(2)}:1`);
 });

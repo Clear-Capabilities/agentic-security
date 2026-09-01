@@ -83,12 +83,23 @@
 
   --accent-selection: #1B6FC2;
 
-  --status-protected: #1E8A4C;
+  /* status-protected and status-unknown darkened slightly from their
+     original values (#1E8A4C, #9A6B00) — Milestone 3, sub-project A11y,
+     found via test/tokens-contrast.test.js that both originals failed
+     WCAG AA (4.5:1) against --surface-panel (#F4F7FA): 4.07:1 and 4.36:1
+     respectively. Verified with lib/contrast.js's contrastRatio() against
+     BOTH backgrounds a status color plausibly renders on: --status-
+     protected (#1C8047) is 4.97:1 on --surface-canvas / 4.62:1 on
+     --surface-panel; --status-unknown (#956700) is 4.98:1 / 4.63:1. Both
+     now clear AA with margin (>=4.6) rather than sitting at the exact
+     4.50 boundary, which is fragile against hex-rounding. --status-
+     unprotected was already compliant (5.26:1 / 4.89:1), unchanged. */
+  --status-protected: #1C8047;
   --status-unprotected: #C7362D;
-  --status-unknown: #9A6B00;
+  --status-unknown: #956700;
 
   /* Verified with lib/contrast.js's contrastRatio(): #FFFFFF on light
-     --status-unknown (#9A6B00) is 4.69:1 (>= 4.5:1 AA). The dark-block
+     --status-unknown (#956700) is 4.98:1 (>= 4.5:1 AA). The dark-block
      value (#061625, --surface-canvas's own dark value) is 3.90:1 here --
      below AA -- which is the bug this token pair fixes: shell.css must
      never hardcode dark theme's value and expect it to also work in
