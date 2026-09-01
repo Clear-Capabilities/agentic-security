@@ -473,6 +473,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -513,6 +514,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -553,6 +555,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -593,6 +596,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -635,6 +639,7 @@ export const FLAGSHIP_GRAPH = {
       "boundaryCrossings": [
         "trust-zone:external"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "unprotected",
@@ -675,6 +680,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -715,6 +721,7 @@ export const FLAGSHIP_GRAPH = {
       "boundaryCrossings": [
         "trust-zone:external"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -753,6 +760,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -793,6 +801,7 @@ export const FLAGSHIP_GRAPH = {
       "boundaryCrossings": [
         "trust-zone:external"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -831,6 +840,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -869,6 +879,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -909,6 +920,7 @@ export const FLAGSHIP_GRAPH = {
       "boundaryCrossings": [
         "trust-zone:external"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -937,6 +949,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -965,6 +978,7 @@ export const FLAGSHIP_GRAPH = {
         "destinationResolution": "literal"
       },
       "boundaryCrossings": [],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
@@ -1005,6 +1019,7 @@ export const FLAGSHIP_GRAPH = {
       "boundaryCrossings": [
         "trust-zone:unknown"
       ],
+      "provenance": "code",
       "protection": {
         "transit": {
           "verdict": "not_assessed",
