@@ -261,3 +261,57 @@ test('computeGraphDigest: array sort uses plain codepoint comparison, not locale
   const g2 = { ...flagship, nodes: [{ id: 'node:b' }, { id: 'node:a' }] };
   assert.equal(computeGraphDigest(g1), computeGraphDigest(g2), 'order alone must not change the digest');
 });
+
+// Regression for the scoped re-review's own finding: node.coverageReason
+// carries the identical secret string as an already-redacted
+// destination.blockingExpression (sink-registry.js's FR-203 branch builds
+// coverageReason as `destination could not be statically resolved: ${blockingExpression}`)
+// — the same bug class as the blockingExpression gap, surviving one
+// review round on a different field.
+test('exportGraphJSON: redacts node.coverageReason carrying the same secret as blockingExpression', () => {
+  const secretUrl = 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX';
+  const graph = {
+    ...flagship,
+    nodes: [
+      ...flagship.nodes,
+      {
+        id: 'node:synthetic-unresolved',
+        kind: 'unresolved',
+        subtype: 'database',
+        destination: {
+          resolutionStatus: 'dynamic',
+          raw: secretUrl,
+          literalValue: null,
+          blockingExpression: secretUrl,
+        },
+        coverageReason: `destination could not be statically resolved: ${secretUrl}`,
+      },
+    ],
+  };
+  const result = exportGraphJSON(graph);
+  const node = result.graph.nodes.find((n) => n.id === 'node:synthetic-unresolved');
+  assert.doesNotMatch(node.destination.blockingExpression, /hooks\.slack\.com\/services\/T00000000/);
+  assert.doesNotMatch(node.coverageReason, /hooks\.slack\.com\/services\/T00000000/);
+  assert.match(node.coverageReason, /\[REDACTED:slack-webhook\]/);
+});
+
+// Regression for the scoped re-review's own latent-issue finding:
+// _redactNode must never inject a `key: undefined` own-property onto a
+// node that never had that key at all (JSON-invisible, but a real
+// hasOwnProperty-based structural check — e.g. validate.js's own
+// storeDetail.columns guard — could see it as "present but wrong shape").
+test('exportGraphJSON: does not inject undefined own-keys for absent destination/queueDetail/storeDetail', () => {
+  const secretUrl = 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX';
+  const graph = {
+    ...flagship,
+    nodes: [
+      ...flagship.nodes,
+      { id: 'node:synthetic-queue-only', kind: 'queue', subtype: 'sqs', queueDetail: { provider: null, topic: secretUrl, operation: 'publish' } },
+    ],
+  };
+  const result = exportGraphJSON(graph);
+  const node = result.graph.nodes.find((n) => n.id === 'node:synthetic-queue-only');
+  assert.ok(!('destination' in node), 'destination must not appear as an own key when the source node never had one');
+  assert.ok(!('storeDetail' in node), 'storeDetail must not appear as an own key when the source node never had one');
+  assert.doesNotMatch(node.queueDetail.topic, /hooks\.slack\.com\/services\/T00000000/);
+});

@@ -17,13 +17,15 @@ import { redactString } from '../mcp/redact.js';
 //
 // Real source-derived surfaces, confirmed by reading the graph pipeline
 // directly (the destination/evidence findings are from the MCP-tools
-// sub-project's own follow-up security review; the blockingExpression and
-// queueDetail/storeDetail findings are from the JSON/CSV export
-// sub-project's own final whole-branch review, which found the two
-// omissions below by tracing resolve-destination.js/graph-builder.js
-// directly rather than trusting this comment's own prior "confirmed
-// exhaustive" claim — do not repeat that mistake; re-verify against the
-// real pipeline before trusting this list again in the future):
+// sub-project's own follow-up security review; the blockingExpression,
+// queueDetail/storeDetail, and coverageReason findings are from the
+// JSON/CSV export sub-project's own final whole-branch review AND its own
+// scoped re-review — the re-review found `coverageReason` carrying the
+// SAME unredacted string as an already-redacted `blockingExpression` on
+// the same object, the identical bug class surviving one review round
+// after the first fix, on a different field — do not repeat that
+// mistake a third time; re-verify against the real pipeline before
+// trusting this list again in the future):
 //   - `node.destination.raw`/`.literalValue`/`.blockingExpression` —
 //     resolve-destination.js's `resolveDestination()` lifts these straight
 //     out of scanned call-site arguments (`renderExpr(arg0)` /
@@ -47,6 +49,15 @@ import { redactString } from '../mcp/redact.js';
 //     but still genuinely scanned-source text — redacted defensively for
 //     the same reason `evidence[].snippet` is, even though no known
 //     producer currently emits a secret-shaped table/column name.
+//   - `node.coverageReason` — `sink-registry.js`'s FR-203 branch builds
+//     this as `` `destination could not be statically resolved: ${blockingExpression}` ``
+//     (confirmed at sink-registry.js's own FR-203 reason-string site,
+//     threaded through coverage.js/graph-builder.js to `node.coverageReason`
+//     at mint time) — the SAME secret content `destination.blockingExpression`
+//     already carries, copied verbatim into a second, unrelated-looking
+//     field on the same node. A caller who trusts `destination` alone is
+//     redacted correctly still gets the identical secret back via this
+//     field. Proven live by the scoped re-review that found this gap.
 //   - `evidence[].claim` — composed from resolved values in
 //     graph-builder.js; can echo the same literal content.
 //   - `evidence[].location.note` / `.snippet` — schema-declared free-text
@@ -82,13 +93,21 @@ function _redactStoreDetail(s) {
 }
 
 export function _redactNode(node) {
-  if (!node?.destination && !node?.queueDetail && !node?.storeDetail) return node;
-  return {
-    ...node,
-    destination: _redactDestination(node.destination),
-    queueDetail: _redactQueueDetail(node.queueDetail),
-    storeDetail: _redactStoreDetail(node.storeDetail),
-  };
+  const hasRedactable = node?.destination || node?.queueDetail || node?.storeDetail || typeof node?.coverageReason === 'string';
+  if (!hasRedactable) return node;
+  const out = { ...node };
+  // Only overwrite a key that was actually present on the input — never
+  // inject a `key: undefined` own-property onto a node that never had it
+  // (found by the scoped re-review: unconditionally writing `destination`/
+  // `queueDetail`/`storeDetail` added an own `undefined` value even when
+  // absent from the source node, which JSON.stringify silently drops but
+  // which could still trip a `hasOwnProperty` structural check elsewhere,
+  // e.g. validate.js's own storeDetail.columns guard).
+  if ('destination' in node) out.destination = _redactDestination(node.destination);
+  if ('queueDetail' in node) out.queueDetail = _redactQueueDetail(node.queueDetail);
+  if ('storeDetail' in node) out.storeDetail = _redactStoreDetail(node.storeDetail);
+  if (typeof node.coverageReason === 'string') out.coverageReason = redactString(node.coverageReason);
+  return out;
 }
 
 export function _redactEvidence(evidence) {
