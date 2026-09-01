@@ -1,12 +1,12 @@
-// Inventory View: compute half only. PRD §7.6's 11 required inventory
-// categories, each with its own per-category compute function producing
-// {columns, rows}. The render half (renderInventoryView, DOM-building via
-// el()/clear()) is Task 3 — this file intentionally ends after
-// computeInventoryViewModel and its helpers.
+// Inventory View: PRD §7.6's 11 required inventory categories. Split into
+// pure computeInventoryViewModel() (each per-category compute function
+// producing {columns, rows}) and thin renderInventoryView() (DOM-building
+// via el()/clear()), mirroring every other view in src/views/.
 
 import { worstVerdict } from '../lib/protection-visual.js';
 import { AI_SUBTYPES } from '../lib/flow-path.js';
 import { INVENTORY_TABLES } from '../lib/state.js';
+import { el, clear } from '../lib/dom.js';
 
 const TABLE_LABELS = {
   sources: 'Sources',
@@ -165,8 +165,6 @@ export function computeInventoryViewModel(graph, state) {
 
   return { tables, activeTable, columns, rows, filterable };
 }
-
-import { el, clear } from '../lib/dom.js';
 
 function renderSubNav(viewModel, onTableChange) {
   const buttons = viewModel.tables.map((t) =>
