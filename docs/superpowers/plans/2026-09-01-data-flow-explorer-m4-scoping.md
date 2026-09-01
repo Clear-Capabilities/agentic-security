@@ -70,7 +70,7 @@ scoping pass once M4 is underway.
 
 | # | Deliverable | Size | Depends on | Why |
 |---|---|---|---|---|
-| 1 | MCP read-only tools | Small **— scoped in detail, see own doc** | none | Follows the exact existing pattern (`query_taint`/`explain_finding`): read-only, ID-scoped, already-hardened MCP server. No new backend capability — just new tools reading the already-built graph. Detailed scoping (`2026-09-01-data-flow-explorer-m4-mcp-tools-scoping.md`) found `scanner/src/server/routes.js` already has the exact query logic needed (`handleGraph`/`handleNode`/`handleEdge`/`handleFlow`) and `graph-loader.js`'s `loadSignedGraph` is directly reusable — this is thinner than originally estimated: 4 new adapter tools wrapping existing functions, audit logging already automatic at the dispatch layer. |
+| 1 | MCP read-only tools | Small **— COMPLETE (2026-09-01)** | none | Shipped: `scanner/src/mcp/dataflow-tools.js` — 4 new tools (`dataflow_get_graph`/`_node`/`_edge`/`_flow`) wrapping `scanner/src/server/`'s already-built `loadSignedGraph`/`handleGraph`/`handleNode`/`handleEdge`/`handleFlow`, unmodified, exactly as scoped. A final whole-branch security review (beyond the two per-task reviews) found the initial redaction covered only a fixture-only field (`evidence[].location.note`, never populated by the real graph-builder emitter) and missed the real source-derived surface (`node.destination.raw`/`.literalValue`, lifted verbatim from scanned call-site arguments) — fixed same day, with regression tests proving real secret shapes (a Slack webhook URL, a hardcoded password) are redacted. Also fixed: `dataflow-tools.js` was missing from the MCP server's `CODE_FINGERPRINT` file list. One requirement knowingly NOT shipped: `dataflow_get_graph` pagination/offload for very large graphs (the plan's own scope item 1) — disclosed as a known gap in the tool description and `mcp/CLAUDE.md` rather than rushed. Full writeup in `2026-09-01-data-flow-explorer-m4-mcp-tools-scoping.md` + `…-plan.md` and `scanner/src/mcp/CLAUDE.md`'s own "Dataflow-tools redaction scope" section. |
 | 2 | JSON/CSV export | Small–Medium | none | The graph is already JSON; CSV is a flat projection of flows/nodes. Deterministic by construction (same graph in → same bytes out) if care is taken with key ordering — the real work is AC-14's reproducibility guarantee and AC-23's "presentation-ready" framing, not data availability. |
 | 3 | Self-contained HTML report | Medium | #2 (JSON export) | Bundles `frontend/`'s existing ES-module prototype + one embedded graph JSON into a single static file, no server, no build step (frontend already has zero build step — a real, confirmed advantage). Follows `scanner/src/report/`'s own "one self-contained HTML file" precedent, different data model. |
 | 4 | PNG/SVG/PDF export | Large | #3's SVG serialization groundwork | The one deliverable with a real, unsolved technical problem: serializing the live SVG DOM `architecture-view.js` builds in a browser into a static file with no browser present. Needs either a headless-DOM/SVG-string-builder path reusing the view's pure layout functions, or a real headless-browser dependency (new, heavier, needs the "no runtime cloud calls / opt-in network deps" convention respected — a local headless renderer, not a cloud rendering API). PDF composites multiple SVG/PNG pages — real but mechanical once SVG export exists. |
@@ -84,8 +84,8 @@ scoping pass once M4 is underway.
 
 ## Recommended sub-project order (this document's own conclusion)
 
-1. **MCP read-only tools** (#1) — smallest, most self-contained, matches
-   an existing pattern exactly. Best next SDD cycle.
+1. **MCP read-only tools** (#1) — COMPLETE. Smallest, most self-contained,
+   matched an existing pattern exactly.
 2. **JSON/CSV export** (#2) — small, foundational for #3/#4/#6/#10.
 3. **Self-contained HTML report** (#3) — medium, high reuse of already-
    shipped `frontend/` work.
