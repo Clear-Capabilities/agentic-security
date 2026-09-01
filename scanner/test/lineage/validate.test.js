@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyGraphEnvelope, HANDLING_VALUES, STORE_OPERATION_VALUES, QUEUE_OPERATION_VALUES } from '../../src/lineage/schema.js';
+import { emptyGraphEnvelope, HANDLING_VALUES, STORE_OPERATION_VALUES, QUEUE_OPERATION_VALUES, EDGE_PROVENANCE_VALUES } from '../../src/lineage/schema.js';
 import { nodeId, dataElementId, edgeId, flowId } from '../../src/lineage/ids.js';
 import { emptyProtection } from '../../src/lineage/protection.js';
 import { validateGraph } from '../../src/lineage/validate.js';
@@ -49,7 +49,7 @@ test('a valid two-node, one-edge, one-flow graph passes', () => {
     { id: sink, kind: 'log', subtype: 'application-logs', label: 'Application Logs', aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: ['storage'], governanceRefs: {}, dataElementIds: [de], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled' },
   );
   graph.dataElements.push({ id: de, name: 'card_number', aliases: [], declaredType: null, dataClasses: ['PCI'], aiContexts: [], sourceLocations: [], dataSubjectCategory: null, classificationEvidence: [], manualOverride: false });
-  const edge = { id: edgeId(src, sink, 'data_flow'), from: src, to: sink, relationship: 'data_flow', fieldMappings: [{ fromPath: 'card_number', toPath: 'maskedPan', dataElementIds: [de], mappingType: 'transformation', transformationIds: [] }], protocol: { name: 'in-process', destinationResolution: 'literal' }, boundaryCrossings: [], protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled' };
+  const edge = { id: edgeId(src, sink, 'data_flow'), from: src, to: sink, relationship: 'data_flow', fieldMappings: [{ fromPath: 'card_number', toPath: 'maskedPan', dataElementIds: [de], mappingType: 'transformation', transformationIds: [] }], protocol: { name: 'in-process', destinationResolution: 'literal' }, boundaryCrossings: [], provenance: 'code', protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled' };
   graph.edges.push(edge);
   graph.flows.push({ id: flowId(src, sink, [de]), dataElementIds: [de], source: src, sink: sink, edgeIds: [edge.id], transformationIds: [], alternatePathCount: 0, policyVerdict: 'not_evaluated', protectionSummary: 'not_assessed', evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled', findingRefs: [], governanceRefs: {}, limitations: [] });
   const result = validateGraph(graph);
@@ -176,6 +176,52 @@ test('an edge with a bogus protocol.destinationResolution is rejected', () => {
   const result = validateGraph(graph);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((e) => e.path === '$.edges[0].protocol.destinationResolution' && e.message.includes('teleportation')));
+});
+
+// ── Milestone 2, Sub-project F, increment 1: edge.provenance (FR-304) ──
+
+function graphWithEdgeProvenance(provenance) {
+  const graph = emptyGraphEnvelope({ graphId: 'dfg:repo:sha:cfg' });
+  const src = nodeId('source', ['prov-x']);
+  const sink = nodeId('log', ['prov-y']);
+  graph.nodes.push(
+    { id: src, kind: 'source', subtype: 'web-app', label: 'Web App', aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: ['collection'], governanceRefs: {}, dataElementIds: [], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled' },
+    { id: sink, kind: 'log', subtype: 'application-logs', label: 'Logs', aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: ['storage'], governanceRefs: {}, dataElementIds: [], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled' },
+  );
+  graph.edges.push({
+    id: edgeId(src, sink, 'data_flow'), from: src, to: sink, relationship: 'data_flow',
+    fieldMappings: [], protocol: { name: 'in-process', destinationResolution: 'unknown' },
+    boundaryCrossings: [], provenance, protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled',
+  });
+  return graph;
+}
+
+test('an edge with an unrecognized provenance value is rejected', () => {
+  const result = validateGraph(graphWithEdgeProvenance('guessed'));
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.edges[0].provenance' && e.message.includes('guessed')));
+});
+
+test('an edge with a missing provenance is rejected', () => {
+  const graph = graphWithEdgeProvenance('code');
+  delete graph.edges[0].provenance;
+  const result = validateGraph(graph);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.path === '$.edges[0].provenance'));
+});
+
+// EDGE_PROVENANCE_VALUES has exactly one real producer today
+// (graph-builder.js sets 'code' unconditionally, proven against real
+// parsed code in graph-builder.test.js). 'schema'/'manual'/'runtime' are
+// each individually VALID — reserved vocabulary for Sub-project F2/F3,
+// not yet implemented — proven here so the validator's own acceptance of
+// them is pinned, not merely asserted by omission.
+test('an edge with any EDGE_PROVENANCE_VALUES member passes, including the three no producer emits yet', () => {
+  for (const provenance of EDGE_PROVENANCE_VALUES) {
+    const result = validateGraph(graphWithEdgeProvenance(provenance));
+    assert.deepEqual(result.errors, [], `provenance "${provenance}" must validate cleanly`);
+    assert.equal(result.valid, true, `provenance "${provenance}" must validate cleanly`);
+  }
 });
 
 // ── Milestone 2, Sub-project A, increment 1: node.destination shape ──
@@ -370,7 +416,7 @@ function graphWithFlowHandling(handling) {
     { id: sink, kind: 'log', subtype: 'application-logs', label: 'Logs', aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: ['storage'], governanceRefs: {}, dataElementIds: [de], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled' },
   );
   graph.dataElements.push({ id: de, name: 'card_number', aliases: [], declaredType: null, dataClasses: ['PCI'], aiContexts: [], sourceLocations: [], dataSubjectCategory: null, classificationEvidence: [], manualOverride: false });
-  const edge = { id: edgeId(src, sink, 'data_flow'), from: src, to: sink, relationship: 'data_flow', fieldMappings: [], protocol: { name: 'in-process', destinationResolution: 'unknown' }, boundaryCrossings: [], protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled' };
+  const edge = { id: edgeId(src, sink, 'data_flow'), from: src, to: sink, relationship: 'data_flow', fieldMappings: [], protocol: { name: 'in-process', destinationResolution: 'unknown' }, boundaryCrossings: [], provenance: 'code', protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled' };
   graph.edges.push(edge);
   graph.flows.push({
     id: flowId(src, sink, [de]), dataElementIds: [de], source: src, sink: sink, edgeIds: [edge.id],
@@ -521,7 +567,7 @@ test('a valid two-node, one-edge, one-flow graph with valid dataClasses and aiCo
     { id: sink, kind: 'log', subtype: 'application-logs', label: 'Application Logs', aliases: [], system: {}, externality: { value: 'internal', evidenceRefs: [] }, lifecycleStages: ['storage'], governanceRefs: {}, dataElementIds: [de], evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled' },
   );
   graph.dataElements.push({ id: de, name: 'card_number', aliases: [], declaredType: null, dataClasses: ['PCI'], aiContexts: ['ai.model_input'], sourceLocations: [], dataSubjectCategory: null, classificationEvidence: [], manualOverride: false });
-  const edge = { id: edgeId(src, sink, 'data_flow'), from: src, to: sink, relationship: 'data_flow', fieldMappings: [{ fromPath: 'card_number', toPath: 'maskedPan', dataElementIds: [de], mappingType: 'transformation', transformationIds: [] }], protocol: { name: 'in-process', destinationResolution: 'literal' }, boundaryCrossings: [], protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled' };
+  const edge = { id: edgeId(src, sink, 'data_flow'), from: src, to: sink, relationship: 'data_flow', fieldMappings: [{ fromPath: 'card_number', toPath: 'maskedPan', dataElementIds: [de], mappingType: 'transformation', transformationIds: [] }], protocol: { name: 'in-process', destinationResolution: 'literal' }, boundaryCrossings: [], provenance: 'code', protection: emptyProtection(), evidenceRefs: [], coverageStatus: 'modeled' };
   graph.edges.push(edge);
   graph.flows.push({ id: flowId(src, sink, [de]), dataElementIds: [de], source: src, sink: sink, edgeIds: [edge.id], transformationIds: [], alternatePathCount: 0, policyVerdict: 'not_evaluated', protectionSummary: 'not_assessed', evidenceRefs: [], confidence: { score: 1, tier: 'high' }, coverageStatus: 'modeled', findingRefs: [], governanceRefs: {}, limitations: [] });
   const result = validateGraph(graph);

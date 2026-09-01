@@ -389,6 +389,15 @@ test('E1/13 (AC-11 coarse half): a sink nothing reaches is still a node with a c
   assert.equal(r.graph.coverage.provenance.hops, 23);
 });
 
+test('F1: every edge produced by buildDataFlowGraph on real code reads provenance === \'code\' (FR-304, first clause)', () => {
+  const r = buildDataFlowGraph(irOf(vulnerableJs()), { repository: 'vulnerable-js' });
+  assert.ok(r.graph.edges.length > 0, 'sanity: this fixture really does produce edges');
+  for (const e of r.graph.edges) {
+    assert.equal(e.provenance, 'code');
+  }
+  assert.deepEqual(validateGraph(r.graph).errors, []);
+});
+
 // =========================================================================
 // E4 (Task 1): the additive `opts.resolveSiteDecision` hook + the two
 // additive site fields (`args`, `connected`). See DESIGN_GRAPH_BUILDER.md

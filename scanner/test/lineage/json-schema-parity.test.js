@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   SCHEMA_VERSION, NODE_KINDS, MAPPING_TYPES, TRANSFORM_KINDS,
-  COVERAGE_STATUS_VALUES, DESTINATION_RESOLUTION_VALUES, POLICY_STATES, EVIDENCE_TYPES,
+  COVERAGE_STATUS_VALUES, DESTINATION_RESOLUTION_VALUES, EDGE_PROVENANCE_VALUES, POLICY_STATES, EVIDENCE_TYPES,
   EXTERNALITY_VALUES, GRAPH_SCOPE_SOURCES,
 } from '../../src/lineage/schema.js';
 import { PROTECTION_VERDICTS, EVIDENCE_GRADES } from '../../src/lineage/protection.js';
@@ -68,6 +68,7 @@ test('coverage status, destination resolution, policy state, evidence type enums
   assert.deepEqual([...schema.$defs.protocol.properties.destinationResolution.enum].sort(), [...DESTINATION_RESOLUTION_VALUES].sort());
   assert.deepEqual([...schema.$defs.flow.properties.policyVerdict.enum].sort(), [...POLICY_STATES].sort());
   assert.deepEqual([...schema.$defs.evidence.properties.evidenceType.enum].sort(), [...EVIDENCE_TYPES].sort());
+  assert.deepEqual([...schema.$defs.edge.properties.provenance.enum].sort(), [...EDGE_PROVENANCE_VALUES].sort());
 });
 
 test('node externality.value enum matches schema.js EXTERNALITY_VALUES', () => {
