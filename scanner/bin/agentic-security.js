@@ -2997,6 +2997,80 @@ Do not suppress anything you are not certain is a false positive. When in doubt,
   return 0;
 }
 
+// `agentic-security explore [path] [--port <n>] [--keep-open]` — Milestone 3,
+// sub-project Server, increment 1. Starts a local, read-only, loopback-only
+// HTTP server over an already-built, signed lineage graph
+// (.agentic-security/lineage-graph.json + .sig, written by a prior scan
+// with AGENTIC_SECURITY_LINEAGE_DEEP=1). Never triggers a scan itself
+// (Decision 2 of the scoping doc) — genuinely read-only end to end.
+//
+// Argument parsing mirrors cmdScan's own shape: scan root from args._[1]
+// (defaulting to cwd), flags parsed via args.flags. On a failed
+// loadSignedGraph, prints ONE of four distinct, clear error messages (see
+// graph-loader.js) and returns a non-zero exit code WITHOUT ever starting
+// the server. On success, starts the server and prints the URL + session
+// token to stdout — the ONLY place the token is ever displayed; it is
+// never written to a file and never logged again after this one print.
+//
+// The returned promise resolves (with exit code 0) only once the server
+// itself closes (idle-timeout auto-stop, or an external kill) — matching
+// every other cmdX(args) function's "resolves to an exit code" contract
+// while keeping the process alive for as long as the server is listening.
+async function cmdExplore(args) {
+  const target = args._[1] || '.';
+  const targetAbs = path.resolve(target);
+
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) {
+    process.stderr.write(`agentic-security explore: ${loaded.message}\n`);
+    return 1;
+  }
+
+  let port = 0;
+  if (args.flags.port !== undefined) {
+    if (typeof args.flags.port !== 'string' || !/^\d+$/.test(args.flags.port)) {
+      process.stderr.write(`agentic-security explore: invalid --port value "${args.flags.port}" — must be a non-negative integer.\n`);
+      return 1;
+    }
+    port = Number(args.flags.port);
+    if (port > 65535) {
+      process.stderr.write(`agentic-security explore: invalid --port value "${args.flags.port}" — must be <= 65535.\n`);
+      return 1;
+    }
+  }
+  const keepOpen = !!args.flags['keep-open'];
+
+  const { createExploreServer, TOKEN_HEADER } = await import('../src/server/http-server.js');
+  const { generateSessionToken } = await import('../src/server/security.js');
+  const sessionToken = generateSessionToken();
+
+  let started;
+  try {
+    started = await createExploreServer({ graph: loaded.graph, port, sessionToken, keepOpen });
+  } catch (e) {
+    process.stderr.write(`agentic-security explore: failed to start server: ${e && e.message ? e.message : e}\n`);
+    return 1;
+  }
+  const { server, port: actualPort } = started;
+
+  // THE ONLY place the session token is ever displayed — never written to
+  // a file, never logged by the server itself after this one print.
+  process.stdout.write(`agentic-security explore: serving ${targetAbs}\n`);
+  process.stdout.write(`  URL:   http://127.0.0.1:${actualPort}/api/v1/scan\n`);
+  process.stdout.write(`  Token: ${sessionToken}\n`);
+  process.stdout.write(`  Pass the token as the "${TOKEN_HEADER}" request header on every request.\n`);
+  if (keepOpen) {
+    process.stdout.write('  --keep-open set: no idle-timeout auto-stop. Ctrl-C to stop.\n');
+  } else {
+    process.stdout.write('  Server auto-stops after a period of inactivity, or Ctrl-C to stop now.\n');
+  }
+
+  return new Promise((resolve) => {
+    server.on('close', () => resolve(0));
+  });
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
@@ -3068,6 +3142,7 @@ async function main() {
         runStdio({ sessionRoot: path.resolve(root) });
         return;
       }
+      case 'explore':  process.exit(await cmdExplore(args));
       case 'cve-watch': {
         // Continuous CVE-watch daemon (one-shot). Polls OSV for the project's
         // dependency tree, fires the configured webhook on each new advisory.

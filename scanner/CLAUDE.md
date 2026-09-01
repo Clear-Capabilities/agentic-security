@@ -21,6 +21,7 @@ Node-only scan engine. ESM throughout, Node ≥ 24. The CLI bundle (`dist/agenti
 | `npm run test:mcp` | MCP server tools + audit log | When editing `src/mcp/` |
 | `npm run test:report` | Report emit (SARIF/JUnit/CI/PoC/verifier) | When editing `src/report/` |
 | `npm run test:lineage` | `src/lineage/` — DataFlowGraph v1 contract, IDs, fixture | When editing `src/lineage/` |
+| `npm run test:server` | `src/server/` — the `explore` loopback HTTP server (graph-loader, security, routes, http-server) + `bin/agentic-security.js`'s `cmdExplore` | When editing `src/server/` or the `explore` CLI command |
 | `npm run test:lifecycle` | Dead-code + dead-module guards | Before committing a remediation that adds new modules |
 | `npm run smoke` | One-shot: run the CLI against the vulnerable-js fixture | Sanity-check the bundle |
 
