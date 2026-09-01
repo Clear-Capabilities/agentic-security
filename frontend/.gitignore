@@ -1,0 +1,4 @@
+# M3-Perf measurement infrastructure — regenerate with
+# scripts/generate-perf-graph-module.mjs, never commit.
+src/data/perf-large-graph.js
+perf-large.html
