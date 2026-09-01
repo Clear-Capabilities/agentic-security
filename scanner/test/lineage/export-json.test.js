@@ -180,3 +180,84 @@ test('exportGraphJSON: default (redact:true) genuinely mutates real secret-shape
   assert.doesNotMatch(ev.snippet, /hunter2hunter2/);
   assert.doesNotMatch(ev.location.note, /hunter2hunter2/);
 });
+
+// Regression for the final whole-branch review's own finding: the first
+// cut of redact-graph.js redacted node.destination.raw/.literalValue but
+// NOT .blockingExpression, even though resolve-destination.js sets
+// blockingExpression to the IDENTICAL string as raw for a 'dynamic'
+// resolution — a live, reproduced bypass (raw redacted, blockingExpression
+// carrying the same secret verbatim on the same object). Also covers
+// node.queueDetail.topic, the same "literal call-site argument" shape.
+const SECRET_NODE_GRAPH = {
+  ...flagship,
+  nodes: [
+    ...flagship.nodes,
+    {
+      id: 'node:synthetic-dynamic-webhook',
+      kind: 'sink',
+      subtype: 'external-webhook',
+      destination: {
+        resolutionStatus: 'dynamic',
+        raw: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
+        literalValue: null,
+        blockingExpression: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
+      },
+    },
+    {
+      id: 'node:synthetic-queue',
+      kind: 'queue',
+      subtype: 'sqs',
+      queueDetail: {
+        provider: null,
+        topic: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
+        operation: 'publish',
+      },
+    },
+  ],
+};
+
+test('exportGraphJSON: redacts node.destination.blockingExpression and node.queueDetail.topic', () => {
+  const result = exportGraphJSON(SECRET_NODE_GRAPH);
+  const webhookNode = result.graph.nodes.find((n) => n.id === 'node:synthetic-dynamic-webhook');
+  const queueNode = result.graph.nodes.find((n) => n.id === 'node:synthetic-queue');
+  assert.doesNotMatch(webhookNode.destination.raw, /hooks\.slack\.com\/services\/T00000000/);
+  assert.doesNotMatch(webhookNode.destination.blockingExpression, /hooks\.slack\.com\/services\/T00000000/);
+  assert.doesNotMatch(queueNode.queueDetail.topic, /hooks\.slack\.com\/services\/T00000000/);
+});
+
+// Regression for the final whole-branch review's own second finding: the
+// digest's original per-field allowlist was measured to be unchanged
+// after mutating node.destination, node.externality, node.label,
+// node.dataElementIds, flow.handling, flow.coverageStatus, flow.edgeIds,
+// flow.dataElementIds, edge.provenance, edge.protocol.destinationResolution,
+// edge.coverageStatus, dataElement.aiContexts, dataElement.name, and after
+// wiping graph.evidence/graph.transformations entirely (only deleting a
+// whole node moved the digest). This proves the widened, EXCLUDE_KEYS-based
+// canonicalization genuinely covers all of them now.
+test('computeGraphDigest: genuinely reflects the fields the original allowlist silently missed', () => {
+  const base = computeGraphDigest(flagship);
+  const mutations = [
+    (g) => ({ ...g, nodes: g.nodes.map((n, i) => (i === 0 ? { ...n, label: n.label + ' (mutated)' } : n)) }),
+    (g) => ({ ...g, nodes: g.nodes.map((n, i) => (i === 0 ? { ...n, externality: { ...n.externality, value: n.externality.value === 'internal' ? 'external' : 'internal' } } : n)) }),
+    (g) => ({ ...g, nodes: g.nodes.map((n, i) => (i === 0 ? { ...n, dataElementIds: [...n.dataElementIds, 'data:synthetic-extra'] } : n)) }),
+    (g) => ({ ...g, flows: g.flows.map((f, i) => (i === 0 ? { ...f, coverageStatus: f.coverageStatus === 'modeled' ? 'partial' : 'modeled' } : f)) }),
+    (g) => ({ ...g, edges: g.edges.map((e, i) => (i === 0 ? { ...e, provenance: e.provenance === 'code' ? 'manual' : 'code' } : e)) }),
+    (g) => ({ ...g, dataElements: g.dataElements.map((d, i) => (i === 0 ? { ...d, name: d.name + '_mutated' } : d)) }),
+    (g) => ({ ...g, evidence: [] }),
+    (g) => ({ ...g, transformations: [] }),
+  ];
+  for (const mutate of mutations) {
+    const mutated = mutate(JSON.parse(JSON.stringify(flagship)));
+    assert.notEqual(computeGraphDigest(mutated), base, `mutation ${mutate} should change the digest but did not`);
+  }
+});
+
+test('computeGraphDigest: array sort uses plain codepoint comparison, not locale collation', () => {
+  // Two ids that a locale-aware comparator can treat as equal (accented
+  // vs. unaccented) but that are genuinely distinct strings — the digest
+  // must never collapse them via a sort that returns 0 for non-identical
+  // values.
+  const g1 = { ...flagship, nodes: [{ id: 'node:a' }, { id: 'node:b' }] };
+  const g2 = { ...flagship, nodes: [{ id: 'node:b' }, { id: 'node:a' }] };
+  assert.equal(computeGraphDigest(g1), computeGraphDigest(g2), 'order alone must not change the digest');
+});

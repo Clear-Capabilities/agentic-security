@@ -17,24 +17,76 @@
 import * as crypto from 'node:crypto';
 import { _redactGraph } from './redact-graph.js';
 
-// Canonicalization allowlist, mirroring posture/attestation.js's own
-// discipline (an explicit allowlist, not a denylist — a new volatile
-// field cannot leak into the digest without being added deliberately).
-// Every array is sorted by id before hashing so emission order never
-// affects the digest.
-function _canonicalizeGraph(graph) {
-  const sortById = (arr) => (Array.isArray(arr) ? [...arr].sort((a, b) => String(a.id).localeCompare(String(b.id))) : []);
-  return {
-    schemaVersion: graph?.schemaVersion ?? null,
-    nodes: sortById(graph?.nodes).map((n) => ({ id: n.id, kind: n.kind, subtype: n.subtype ?? null, coverageStatus: n.coverageStatus ?? null })),
-    edges: sortById(graph?.edges).map((e) => ({ id: e.id, from: e.from, to: e.to, protection: e.protection ?? null })),
-    flows: sortById(graph?.flows).map((f) => ({ id: f.id, source: f.source, sink: f.sink, policyVerdict: f.policyVerdict ?? null, protectionSummary: f.protectionSummary ?? null })),
-    dataElements: sortById(graph?.dataElements).map((d) => ({ id: d.id, dataClasses: [...(d.dataClasses ?? [])].sort() })),
-  };
+// Canonicalization for the content digest.
+//
+// REVISED after the final whole-branch review of this sub-project found
+// the original hand-enumerated per-field allowlist (id/kind/subtype/
+// coverageStatus on a node, etc.) silently EXCLUDED most risk-bearing
+// content: mutating node.destination, node.externality, node.label,
+// flow.handling, edge.provenance, dataElement.aiContexts/.name, and
+// wiping graph.evidence/graph.transformations ENTIRELY all left the
+// digest unchanged — the worse of the two possible failure modes for a
+// "tamper-evident" claim (under-inclusion silently hides real tampering;
+// AC-14's own concern, over-inclusion breaking reproducibility on a
+// genuinely volatile field, is far easier to notice and fix, since it
+// fails the reproducibility test immediately rather than failing
+// silently in production).
+//
+// Rather than hand-list every field of every entity kind (exactly the
+// approach that produced the gap above — dataflow-graph.schema.json
+// alone declares 60+ distinct fields across 6 entity kinds, and a manual
+// list drifts the moment the schema gains a field), this canonicalizes
+// EVERYTHING in the graph via a small, explicit EXCLUDE list of the only
+// genuinely volatile/non-content fields in the schema (confirmed against
+// dataflow-graph.schema.json directly): `generatedAt` (graph-level,
+// explicitly excluded per AC-14's own wording), `scanHealth` (describes
+// the scan PROCESS — timing/duration-shaped, not the data content), and
+// `timestamp` (evidence-level, scan-time-of-observation, not content).
+// Everything else — every node/edge/flow/dataElement/evidence/
+// transformation field, including ones added to the schema after this
+// comment was written — is included by default, which is the safer
+// default for a tamper-evidence digest: a new field must be deliberately
+// ADDED to EXCLUDE_KEYS to be left out, rather than deliberately added to
+// an allowlist to be included.
+const EXCLUDE_KEYS = new Set(['generatedAt', 'scanHealth', 'timestamp']);
+const ENTITY_ARRAY_KEYS = new Set(['nodes', 'edges', 'flows', 'dataElements', 'evidence', 'transformations']);
+
+function _canon(value, keyHint) {
+  if (Array.isArray(value)) {
+    const mapped = value.map((v) => _canon(v));
+    // Only the six top-level entity arrays get sorted by id — they are
+    // graph-builder.js's own emission-sorted arrays (defensively re-sorted
+    // here rather than trusted), and sorting them makes the digest
+    // independent of array order. Nested arrays (edgeIds on a flow,
+    // fieldMappings on an edge, etc.) are NOT re-sorted: several are
+    // semantically ordered (a flow's edgeIds is a real path sequence,
+    // per ids.js's own pathId discriminator precedent) and re-sorting
+    // them would hide a genuine reordering of graph content.
+    if (keyHint && ENTITY_ARRAY_KEYS.has(keyHint)) {
+      mapped.sort((a, b) => {
+        const ai = a && typeof a === 'object' ? String(a.id ?? '') : String(a);
+        const bi = b && typeof b === 'object' ? String(b.id ?? '') : String(b);
+        // Plain codepoint comparison, not localeCompare — ICU-dependent
+        // collation can return 0 for genuinely distinct strings, which a
+        // digest sort must never do.
+        return ai < bi ? -1 : ai > bi ? 1 : 0;
+      });
+    }
+    return mapped;
+  }
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value).sort()) {
+      if (EXCLUDE_KEYS.has(k)) continue;
+      out[k] = _canon(value[k], k);
+    }
+    return out;
+  }
+  return value;
 }
 
 export function computeGraphDigest(graph) {
-  const canon = _canonicalizeGraph(graph);
+  const canon = _canon(graph ?? {});
   return crypto.createHash('sha256').update(JSON.stringify(canon)).digest('hex');
 }
 
