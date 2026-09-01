@@ -702,6 +702,39 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
         ? [`sink category ambiguous at ${site.file}:${site.line}: also matches ${site.ambiguity.alternatives.join(', ')}`]
         : []),
     ])].sort();
+    // Milestone 2, Sub-project D, increment 1 (FR-403): computed once,
+    // here, from this flow's own representative reconstructed path — never
+    // `null` in this increment (DESIGN_HANDLING_ANALYZER.md §4's own
+    // disclosed simplification: every flow gets a real taxonomy label,
+    // including the honest `'raw'` answer, since nothing here yet
+    // distinguishes a sink category with no natural "handling" concept
+    // from one that does).
+    const handlingResult = classifyHandling(p, callGraph).handling;
+    // Milestone 2, Sub-project C, increment 1 (FR-402, application-layer
+    // at-rest evidence): reuses the SAME `classifyHandling` result above
+    // for `flow.handling` — never a second call — to also decide
+    // `edge.protection.atRest`. `'encrypted'` is the only `HANDLING_VALUES`
+    // member that is at-rest PROTECTION evidence per FR-402 (see
+    // DESIGN_HANDLING_ANALYZER.md's new §7); every other value (including
+    // `'masked'`/`'hashed'`/`'tokenized'`) leaves `atRest` at
+    // `emptyProtection()`'s own honest default. Gated to `snk.kind ===
+    // 'store'` (`CATEGORY_NODE_KIND`'s `database`/`file`/`object-storage`/
+    // `cache`/`client-storage`/`backup`/`export` — `queue` has its own
+    // distinct `kind: 'queue'` and is deliberately excluded here). FR-402's
+    // own anti-pattern guard ("a cipher present anywhere in the same file
+    // or repository cannot alone establish protection for an unrelated
+    // store") holds by construction, not by extra code here:
+    // `classifyHandling` walks THIS flow's own reconstructed path only,
+    // never the whole file/repo, so an unrelated `encrypt()` call
+    // elsewhere is structurally invisible to it.
+    if (handlingResult === 'encrypted' && snk.kind === 'store') {
+      const edge = edgesById.get(edgeIdStr);
+      // Defensive only — `edgeIdStr` is the SAME id this flow's own
+      // `edgeIds: [edgeIdStr]` uses below, minted earlier in this same
+      // `buildDataFlowGraph` call, so `edge` should always be found. Never
+      // assume, per this package's own established convention.
+      if (edge) edge.protection.atRest = { verdict: 'protected', evidenceGrade: 'code' };
+    }
     flowsById.set(fId, {
       id: fId, dataElementIds: [de.id], source: src.id, sink: snk.id,
       edgeIds: [edgeIdStr], transformationIds: sortedT,
@@ -714,14 +747,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       coverageStatus: snk.coverageStatus, findingRefs: [], governanceRefs: {},
       limitations,
       evidenceGrade: g.grade,
-      // Milestone 2, Sub-project D, increment 1 (FR-403): computed once,
-      // here, from this flow's own representative reconstructed path —
-      // never `null` in this increment (DESIGN_HANDLING_ANALYZER.md §4's
-      // own disclosed simplification: every flow gets a real taxonomy
-      // label, including the honest `'raw'` answer, since nothing here
-      // yet distinguishes a sink category with no natural "handling"
-      // concept from one that does).
-      handling: classifyHandling(p, callGraph).handling,
+      handling: handlingResult,
     });
   }
 

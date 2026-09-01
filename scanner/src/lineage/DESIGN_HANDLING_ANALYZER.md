@@ -287,3 +287,69 @@ block for the exact code.
   §5's "Conjunction across coarse groups") — handled conservatively (AND
   across groups) but not separately tested with a dedicated collision
   fixture, since no real catalog/parser shape produces it today.
+
+---
+
+## 7. A second consumer: `edge.protection.atRest` (Milestone 2, Sub-project C, increment 1)
+
+**Status:** landed as Milestone 2, Sub-project C, increment **1** (FR-402's
+application-layer at-rest evidence source), per
+`docs/superpowers/plans/2026-08-31-data-flow-explorer-m2-subproject-c1-plan.md`
+and its own scoping doc. This is not a new analyzer module — it is a second,
+additive consumer of the SAME `classifyHandling(p, callGraph)` result §4
+already computes and writes to `flow.handling`, wired inline in
+`graph-builder.js`'s flow-construction loop, right next to it.
+
+FR-402 asks whether application-layer field encryption evidence sits
+directly on the path to a store write. `classifyHandling`'s own
+`KIND_TO_HANDLING` table (§2) already answers exactly that question for the
+`'encrypted'` outcome — a recognized `transform-catalog.js` `encrypt`-kind
+call found ON THE PATH — so this increment needed no new detection, only a
+second write from the one already-computed result:
+
+```js
+const handlingResult = classifyHandling(p, callGraph).handling;
+if (handlingResult === 'encrypted' && snk.kind === 'store') {
+  const edge = edgesById.get(edgeIdStr);
+  if (edge) edge.protection.atRest = { verdict: 'protected', evidenceGrade: 'code' };
+}
+```
+
+`classifyHandling` is called exactly once per flow — the same call whose
+result feeds `flow.handling` (§4) is reused for this check, never invoked a
+second time.
+
+**The gate.** `snk.kind === 'store'` — `sink-registry.js`'s
+`CATEGORY_NODE_KIND` maps `database`/`file`/`object-storage`/`cache`/
+`client-storage`/`backup`/`export` to `kind: 'store'`; `queue` has its own
+distinct `kind: 'queue'` and is deliberately excluded (named as a future
+widening question, not attempted here). Only `'encrypted'` triggers this —
+every other `HANDLING_VALUES` member (`masked`/`hashed`/`tokenized`/`raw`/
+`redacted`/`aggregated`/`unknown`) leaves `edge.protection.atRest` at
+`emptyProtection()`'s own honest `{verdict: 'not_assessed', evidenceGrade:
+'none'}` default. Neither `masking` nor `hashing` nor `tokenization` is
+at-rest PROTECTION evidence in FR-402's own sense — only encryption is.
+
+**The anti-pattern guard holds by construction, not by new code.** FR-402
+explicitly warns that "a cipher present anywhere in the same file or
+repository cannot alone establish protection for an unrelated store."
+`classifyHandling` walks `path.hops` — THIS flow's own reconstructed path,
+never "the whole file" or "the whole repo." An `encrypt()`-shaped call that
+exists elsewhere in the same file or function but is not on this specific
+flow's own path to this specific store sink is structurally invisible to
+`classifyHandling`, and therefore invisible to this check too — the same
+precision property §4's own flow.handling already relies on, now reused for
+a security VERDICT rather than a taxonomy label.
+
+**What this does NOT do**, all deferred to future, separately-scoped
+increments (C2/C3, per the sub-project's own scoping doc): storage/IaC
+encryption configuration detection (an S3/RDS/Terraform-level
+`ServerSideEncryptionConfiguration`/`StorageEncrypted`/`kms_key_id` signal);
+database column or transparent-encryption configuration; widening the
+`store`-kind filter to `queue`/`vector-store`/`model`/`training`; AC-12's
+at-rest half of the aggregate `protectionSummary` verdict (needs a real
+aggregation rule, the same boundary §5's own scope-boundary note already
+drew for the transit/handling case). The ABSENCE case (no recognized
+encryption, or a non-`store` sink) was already correct with zero new code —
+`emptyProtection()`'s own default — before this increment; this increment's
+own job was only to give the PRESENCE case something real to write.
