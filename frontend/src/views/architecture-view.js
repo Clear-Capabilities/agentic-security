@@ -179,6 +179,109 @@ export function renderFlowSummary(flowSummary, contextRailEl) {
   );
 }
 
+/**
+ * Per-zone level-of-detail clustering (PRD §21: "no more than 2,000
+ * visible elements after level-of-detail clustering"). A currently-
+ * SELECTED node always stays individually visible, bypassing `budget`
+ * entirely — clustering must never hide the thing the user is looking
+ * at. `budget` is the max number of individually-visible node SLOTS for
+ * a zone, INCLUDING the cluster glyph's own slot when clustering is
+ * needed (so `budget=4` with 10 nodes shows 3 real nodes + 1 cluster
+ * glyph, never 4 real nodes + a cluster that would then be a 5th
+ * element). Node order (for which unselected nodes stay visible) is
+ * graph order — a defensible, simple tie-break, not sorted by anything
+ * PRD-significant.
+ *
+ * @param {Array<{name: string, nodeIds: string[]}>} zones
+ * @param {Array<{id: string, kind: string, zone: string, selected: boolean}>} nodes
+ * @param {number} budget
+ */
+export function computeClusteredLayout(zones, nodes, budget) {
+  const nodesById = new Map(nodes.map((n) => [n.id, n]));
+
+  return zones.map((zone) => {
+    const selectedIds = zone.nodeIds.filter((id) => nodesById.get(id)?.selected);
+    const unselectedIds = zone.nodeIds.filter((id) => !nodesById.get(id)?.selected);
+
+    if (zone.nodeIds.length <= budget) {
+      return { name: zone.name, visibleNodeIds: [...zone.nodeIds], cluster: null };
+    }
+
+    // Selected nodes never count against the budget or get clustered.
+    // The remaining budget (after reserving 1 slot for the cluster
+    // glyph itself) goes to unselected nodes in graph order.
+    const slotsForUnselected = Math.max(0, budget - 1);
+    const visibleUnselected = unselectedIds.slice(0, slotsForUnselected);
+    const clusteredIds = unselectedIds.slice(slotsForUnselected);
+
+    if (clusteredIds.length === 0) {
+      // Selected nodes alone pushed us over budget, or the unselected
+      // set fit exactly — no real overflow to cluster.
+      return { name: zone.name, visibleNodeIds: [...selectedIds, ...visibleUnselected], cluster: null };
+    }
+
+    const kindSummary = [...new Set(clusteredIds.map((id) => nodesById.get(id)?.kind).filter(Boolean))].sort().join(', ');
+
+    return {
+      name: zone.name,
+      visibleNodeIds: [...selectedIds, ...visibleUnselected],
+      cluster: {
+        id: `cluster:${zone.name}`,
+        count: clusteredIds.length,
+        kindSummary,
+        memberIds: clusteredIds,
+      },
+    };
+  });
+}
+
+/**
+ * Redirects an edge's endpoint to its zone's cluster glyph when that
+ * endpoint's node was clustered away (computeClusteredLayout), then
+ * groups edges sharing the same real (from, to) VISIBLE-endpoint pair
+ * into one aggregate, reusing worstVerdict — the SAME aggregation
+ * primitive edgeVerdict() already uses per-edge, applied here per-group.
+ * An edge whose both endpoints resolve to the SAME cluster (entirely
+ * "inside" one collapsed group) is dropped — it adds no information a
+ * single cluster glyph doesn't already summarize.
+ *
+ * @param {Array<{id,from,to,verdict,selected,dimmed}>} edges
+ * @param {ReturnType<typeof computeClusteredLayout>} clusteredZones
+ */
+export function aggregateEdgesForClusters(edges, clusteredZones) {
+  const visibleIdFor = new Map();
+  for (const zone of clusteredZones) {
+    for (const id of zone.visibleNodeIds) visibleIdFor.set(id, id);
+    if (zone.cluster) {
+      for (const memberId of zone.cluster.memberIds) visibleIdFor.set(memberId, zone.cluster.id);
+    }
+  }
+
+  const groups = new Map(); // key: `${visibleFrom}->${visibleTo}` -> edges[]
+  for (const edge of edges) {
+    const visibleFrom = visibleIdFor.get(edge.from) ?? edge.from;
+    const visibleTo = visibleIdFor.get(edge.to) ?? edge.to;
+    if (visibleFrom === visibleTo) continue; // dropped: collapsed self-loop
+    const key = `${visibleFrom}->${visibleTo}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(edge);
+  }
+
+  return [...groups.entries()].map(([key, group]) => {
+    const [from, to] = key.split('->');
+    if (group.length === 1) return { ...group[0], from, to, constituentCount: 1 };
+    return {
+      id: `agg:${key}`, // deterministic — same (from,to) pair always yields the same id
+      from,
+      to,
+      verdict: worstVerdict(group.map((e) => e.verdict)),
+      selected: group.some((e) => e.selected),
+      dimmed: group.every((e) => e.dimmed),
+      constituentCount: group.length,
+    };
+  });
+}
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ZONE_WIDTH = 220;
 const ZONE_PADDING = 12;

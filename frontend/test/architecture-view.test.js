@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { FLAGSHIP_GRAPH } from '../src/data/flagship-graph.js';
 import {
   ZONE_ORDER, zoneForNode, resolveSelection, computeFlowSummary, computeArchitectureViewModel,
+  computeClusteredLayout, aggregateEdgesForClusters,
 } from '../src/views/architecture-view.js';
 
 const NODE_KEYS = FLAGSHIP_GRAPH.extensions.fixtureNodeKeys;
@@ -166,4 +167,96 @@ test('resolveSelection on an edge ID selects that edge and its two endpoint node
   assert.equal(selection.active, true);
   assert.deepEqual(selection.nodeIds, new Set([edge.from, edge.to]));
   assert.deepEqual(selection.edgeIds, new Set([edgeId]));
+});
+
+function makeNode(id, kind, zone, overrides = {}) {
+  return { id, label: id, kind, subtype: null, zone, selected: false, dimmed: false, ...overrides };
+}
+
+test('computeClusteredLayout: a zone under budget has no cluster', () => {
+  const zones = [{ name: 'Data Layer', nodeIds: ['n1', 'n2', 'n3'] }];
+  const nodes = [makeNode('n1', 'store', 'Data Layer'), makeNode('n2', 'store', 'Data Layer'), makeNode('n3', 'log', 'Data Layer')];
+  const result = computeClusteredLayout(zones, nodes, 10);
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].visibleNodeIds, ['n1', 'n2', 'n3']);
+  assert.equal(result[0].cluster, null);
+});
+
+test('computeClusteredLayout: a zone over budget clusters the overflow, budget-1 stay individually visible', () => {
+  const nodeIds = Array.from({ length: 10 }, (_, i) => `n${i}`);
+  const zones = [{ name: 'Data Layer', nodeIds }];
+  const nodes = nodeIds.map((id, i) => makeNode(id, i % 2 === 0 ? 'store' : 'log', 'Data Layer'));
+  const result = computeClusteredLayout(zones, nodes, 4);
+  assert.equal(result[0].visibleNodeIds.length, 3, 'budget of 4 leaves room for 1 cluster glyph slot: 3 individual + 1 cluster');
+  assert.ok(result[0].cluster, 'expected a cluster for the overflow');
+  assert.equal(result[0].cluster.count, 7, '10 total - 3 individually visible = 7 clustered');
+  assert.ok(result[0].cluster.kindSummary.includes('store'));
+  assert.ok(result[0].cluster.kindSummary.includes('log'));
+});
+
+test('computeClusteredLayout: a SELECTED node is always visible, bypassing the budget, even beyond the cutoff', () => {
+  const nodeIds = Array.from({ length: 10 }, (_, i) => `n${i}`);
+  const zones = [{ name: 'Data Layer', nodeIds }];
+  const nodes = nodeIds.map((id, i) => makeNode(id, 'store', 'Data Layer', { selected: id === 'n9' }));
+  const result = computeClusteredLayout(zones, nodes, 4);
+  assert.ok(result[0].visibleNodeIds.includes('n9'), 'the selected node (last in graph order, would normally be clustered) must stay visible');
+  assert.equal(result[0].cluster.count, 6, '10 total - 3 unselected-individual - 1 selected = 6 clustered (one fewer than the unselected-only case, since n9 no longer competes for a budget slot but also is not counted as clustered)');
+});
+
+test('computeClusteredLayout: cluster kindSummary is deduplicated and sorted (deterministic across renders)', () => {
+  const nodeIds = Array.from({ length: 6 }, (_, i) => `n${i}`);
+  const zones = [{ name: 'Data Layer', nodeIds }];
+  const nodes = nodeIds.map((id) => makeNode(id, 'store', 'Data Layer'));
+  const result = computeClusteredLayout(zones, nodes, 2);
+  assert.equal(result[0].cluster.kindSummary, 'store', 'all-same-kind overflow should not repeat "store, store, store"');
+});
+
+function makeEdge(id, from, to, verdict, overrides = {}) {
+  return { id, from, to, verdict, selected: false, dimmed: false, ...overrides };
+}
+
+test('aggregateEdgesForClusters: an edge between two individually-visible nodes passes through unchanged', () => {
+  const clusteredZones = [{ name: 'Z', visibleNodeIds: ['a', 'b'], cluster: null }];
+  const edges = [makeEdge('e1', 'a', 'b', 'protected')];
+  const result = aggregateEdgesForClusters(edges, clusteredZones);
+  assert.deepEqual(result, [{ ...edges[0], constituentCount: 1 }]);
+});
+
+test('aggregateEdgesForClusters: multiple edges into the same cluster aggregate into one, worst verdict wins', () => {
+  const clusteredZones = [{ name: 'Z', visibleNodeIds: ['a'], cluster: { id: 'cluster:Z', count: 2, kindSummary: 'store', memberIds: ['b', 'c'] } }];
+  const edges = [
+    makeEdge('e1', 'a', 'b', 'protected'),
+    makeEdge('e2', 'a', 'c', 'unprotected'),
+  ];
+  const result = aggregateEdgesForClusters(edges, clusteredZones);
+  assert.equal(result.length, 1, 'both edges target the same cluster, from the same source — must aggregate to 1');
+  assert.equal(result[0].from, 'a');
+  assert.equal(result[0].to, 'cluster:Z');
+  assert.equal(result[0].verdict, 'unprotected', 'worst of protected/unprotected is unprotected');
+  assert.equal(result[0].constituentCount, 2);
+});
+
+test('aggregateEdgesForClusters: an edge selected if ANY constituent is selected', () => {
+  const clusteredZones = [{ name: 'Z', visibleNodeIds: ['a'], cluster: { id: 'cluster:Z', count: 2, kindSummary: 'store', memberIds: ['b', 'c'] } }];
+  const edges = [
+    makeEdge('e1', 'a', 'b', 'protected', { selected: true }),
+    makeEdge('e2', 'a', 'c', 'unprotected', { selected: false }),
+  ];
+  const result = aggregateEdgesForClusters(edges, clusteredZones);
+  assert.equal(result[0].selected, true);
+});
+
+test('aggregateEdgesForClusters: an edge entirely within one cluster (both endpoints clustered into the SAME cluster) is dropped, not rendered as a self-loop', () => {
+  const clusteredZones = [{ name: 'Z', visibleNodeIds: [], cluster: { id: 'cluster:Z', count: 2, kindSummary: 'store', memberIds: ['b', 'c'] } }];
+  const edges = [makeEdge('e1', 'b', 'c', 'protected')];
+  const result = aggregateEdgesForClusters(edges, clusteredZones);
+  assert.equal(result.length, 0);
+});
+
+test('aggregateEdgesForClusters: aggregate edge id is stable/deterministic across two calls with the same input (no re-render churn)', () => {
+  const clusteredZones = [{ name: 'Z', visibleNodeIds: ['a'], cluster: { id: 'cluster:Z', count: 2, kindSummary: 'store', memberIds: ['b', 'c'] } }];
+  const edges = [makeEdge('e1', 'a', 'b', 'protected'), makeEdge('e2', 'a', 'c', 'unprotected')];
+  const result1 = aggregateEdgesForClusters(edges, clusteredZones);
+  const result2 = aggregateEdgesForClusters(edges, clusteredZones);
+  assert.equal(result1[0].id, result2[0].id);
 });
