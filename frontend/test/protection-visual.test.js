@@ -2,6 +2,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { protectionVisual, worstVerdict, VERDICT_PRECEDENCE } from '../src/lib/protection-visual.js';
 
+test('AC-20: every real verdict has a non-empty glyph, label, and lineStyle — text/icon/border redundancy holds structurally, not by convention', () => {
+  for (const verdict of VERDICT_PRECEDENCE) {
+    const visual = protectionVisual(verdict);
+    assert.ok(visual.glyph && visual.glyph.length > 0, `${verdict}: glyph must be non-empty`);
+    assert.ok(visual.label && visual.label.length > 0, `${verdict}: label must be non-empty`);
+    assert.ok(visual.lineStyle && visual.lineStyle.length > 0, `${verdict}: lineStyle must be non-empty`);
+    assert.ok(visual.colorVar && visual.colorVar.length > 0, `${verdict}: colorVar must be non-empty`);
+  }
+});
+
+test('AC-20: no two verdicts share the same glyph (icon alone must be able to distinguish them)', () => {
+  const glyphs = VERDICT_PRECEDENCE.map((v) => protectionVisual(v).glyph);
+  assert.equal(new Set(glyphs).size, glyphs.length, `expected ${glyphs.length} distinct glyphs, got: ${glyphs.join(' ')}`);
+});
+
 test('protectionVisual returns a distinct label, glyph, and line style for every known verdict', () => {
   const verdicts = ['protected', 'unprotected', 'mixed', 'unknown', 'not_applicable', 'not_assessed'];
   const seen = new Set();
