@@ -16,6 +16,8 @@
 // returns a structured `{error: {message, pos}}` instead, so a caller can
 // check `.error` and keep the prior state rather than losing the page.
 
+import { isAiRelevantFlow, flowPathNodeIds } from './flow-path.js';
+
 const KEYWORDS = new Set(['and', 'or']);
 
 export function tokenize(input) {
@@ -150,4 +152,89 @@ export function parseQuery(input) {
     if (e && typeof e.message === 'string') return { error: e };
     throw e; // a genuine bug, not a user-facing parse error — do not swallow
   }
+}
+
+// AST -> predicate. `compileQuery(ast, graph) -> (flow) -> boolean`. The
+// predicate operates on a FLOW (matching how filtering already works
+// throughout this codebase — Privacy/Inventory both filter at the flow
+// level), with field accessors reaching into the flow's own source/sink
+// nodes, data element, and edges as needed.
+
+// Field name -> accessor function: (graph, flow) -> string[] (the set of
+// real values that field name means for THIS flow — a comparison
+// matches if ANY of a COMPARISON's own `values` appears in this set).
+// Grounded in the parent scoping doc's own real-vs-inert audit — every
+// accessor here reads a field CONFIRMED populated by real scan code.
+const FIELD_ACCESSORS = {
+  class: (graph, flow) => {
+    const de = graph.dataElements.find((d) => flow.dataElementIds.includes(d.id));
+    return de?.dataClasses ?? [];
+  },
+  field: (graph, flow) => {
+    const de = graph.dataElements.find((d) => flow.dataElementIds.includes(d.id));
+    return de?.name ? [de.name] : [];
+  },
+  sink: (graph, flow) => {
+    const sinkNode = graph.nodes.find((n) => n.id === flow.sink);
+    return sinkNode?.subtype ? [sinkNode.subtype] : [];
+  },
+  source: (graph, flow) => {
+    const sourceNode = graph.nodes.find((n) => n.id === flow.source);
+    return sourceNode?.subtype ? [sourceNode.subtype] : [];
+  },
+  'transit.verdict': (graph, flow) => edgeVerdicts(graph, flow, 'transit'),
+  'at_rest.verdict': (graph, flow) => edgeVerdicts(graph, flow, 'atRest'),
+  'handling.verdict': (graph, flow) => edgeVerdicts(graph, flow, 'handling'),
+  policy: (graph, flow) => (flow.policyVerdict ? [flow.policyVerdict] : []),
+  coverage: (graph, flow) => {
+    const pathNodeIds = flowPathNodeIds(graph, flow);
+    return graph.nodes.filter((n) => pathNodeIds.has(n.id)).map((n) => n.coverageStatus);
+  },
+  ai: (graph, flow) => [String(isAiRelevantFlow(graph, flow))],
+  'destination.external': (graph, flow) => {
+    const pathNodeIds = flowPathNodeIds(graph, flow);
+    const anyExternal = graph.nodes.some((n) => pathNodeIds.has(n.id) && n.externality?.value === 'external');
+    return [String(anyExternal)];
+  },
+};
+
+function edgeVerdicts(graph, flow, dimension) {
+  return flow.edgeIds
+    .map((id) => graph.edges.find((e) => e.id === id))
+    .filter(Boolean)
+    .map((e) => e.protection[dimension].verdict);
+}
+
+export function compileQuery(ast, graph) {
+  if (ast === null || ast === undefined) return () => true;
+  return (flow) => evaluateNode(ast, graph, flow);
+}
+
+function evaluateNode(node, graph, flow) {
+  if (node.type === 'AND') return evaluateNode(node.left, graph, flow) && evaluateNode(node.right, graph, flow);
+  if (node.type === 'OR') return evaluateNode(node.left, graph, flow) || evaluateNode(node.right, graph, flow);
+  if (node.type === 'TEXT') return matchesText(graph, flow, node.value);
+  if (node.type === 'COMPARISON') {
+    const accessor = FIELD_ACCESSORS[node.field];
+    if (!accessor) {
+      // Real, reported condition (Step 1's own deliberately-open test) —
+      // throwing here, caught by compileQuery's own caller (Task 4's
+      // query bar), is the chosen mechanism: it surfaces as a real error
+      // to the user rather than silently matching nothing. Document
+      // this choice at the call site too.
+      throw new Error(`unrecognized query field "${node.field}"`);
+    }
+    const realValues = accessor(graph, flow).map((v) => String(v).toLowerCase());
+    const matches = node.values.some((v) => realValues.includes(v.toLowerCase()));
+    return node.op === '!=' ? !matches : matches;
+  }
+  throw new Error(`unknown AST node type "${node.type}"`);
+}
+
+function matchesText(graph, flow, term) {
+  const lower = term.toLowerCase();
+  const sourceLabel = graph.nodes.find((n) => n.id === flow.source)?.label ?? '';
+  const sinkLabel = graph.nodes.find((n) => n.id === flow.sink)?.label ?? '';
+  const de = graph.dataElements.find((d) => flow.dataElementIds.includes(d.id));
+  return [sourceLabel, sinkLabel, de?.name ?? ''].some((s) => s.toLowerCase().includes(lower));
 }
