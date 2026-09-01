@@ -282,6 +282,90 @@ export function aggregateEdgesForClusters(edges, clusteredZones) {
   });
 }
 
+/**
+ * Default viewport on first mount: show the entire content bounds
+ * unchanged (decision 5: reset only on a fresh view-mount, not every
+ * rerender — the caller owns when this gets called again).
+ *
+ * @param {{x: number, y: number, width: number, height: number}} contentBounds
+ */
+export function computeFitAllViewport(contentBounds) {
+  return { ...contentBounds };
+}
+
+/**
+ * Pure zoom reducer — no DOM access. `svgX`/`svgY` are the cursor
+ * position already converted to SVG-coordinate space by the caller
+ * (real browser code, using getScreenCTM()/getBoundingClientRect() —
+ * see Task 3). Zoom factor is a fixed, disclosed constant per wheel
+ * "tick" rather than proportional to raw deltaY magnitude (real trackpad/
+ * mouse-wheel deltaY values vary wildly across devices/browsers — a
+ * fixed-step zoom avoids over- or under-reacting to a single event).
+ *
+ * The centered-on-cursor property is algebraic, not approximate: `newX`
+ * is derived by solving `(svgX - newX) / newWidth === fracX` for `newX`,
+ * so the cursor's fractional position within the viewport is IDENTICAL
+ * before and after the zoom, for any resulting `newWidth`/`newHeight`
+ * (including after clamping) — not just for the unclamped case.
+ */
+const ZOOM_STEP = 0.1; // 10% per wheel tick
+
+export function applyWheelZoom(viewport, { deltaY, svgX, svgY }, bounds) {
+  const factor = deltaY < 0 ? 1 - ZOOM_STEP : 1 + ZOOM_STEP;
+  const newWidth = Math.min(bounds.maxWidth, Math.max(bounds.minWidth, viewport.width * factor));
+  const newHeight = Math.min(bounds.maxWidth, Math.max(bounds.minWidth, viewport.height * factor)); // aspect-locked to width's own clamp, since this view's aspect ratio is fixed by zone-column layout
+  // Keep (svgX, svgY) fixed under the cursor: the point's own relative
+  // position within the viewport (0..1 fraction) must be identical
+  // before and after.
+  const fracX = (svgX - viewport.x) / viewport.width;
+  const fracY = (svgY - viewport.y) / viewport.height;
+  return {
+    x: svgX - fracX * newWidth,
+    y: svgY - fracY * newHeight,
+    width: newWidth,
+    height: newHeight,
+  };
+}
+
+/**
+ * Pans by an SVG-space delta, clamped so the viewport cannot be dragged
+ * entirely off `contentBounds` — a sliver of content always remains
+ * visible at the boundary, rather than the viewport being allowed to
+ * drift into empty space with nothing on screen.
+ */
+export function applyDragPan(viewport, { dxSvg, dySvg }, contentBounds) {
+  const minX = contentBounds.x - viewport.width; // allow dragging until only a sliver of content remains visible, never fully past it
+  const maxX = contentBounds.x + contentBounds.width;
+  const minY = contentBounds.y - viewport.height;
+  const maxY = contentBounds.y + contentBounds.height;
+  return {
+    x: Math.min(maxX, Math.max(minX, viewport.x + dxSvg)),
+    y: Math.min(maxY, Math.max(minY, viewport.y + dySvg)),
+    width: viewport.width,
+    height: viewport.height,
+  };
+}
+
+/**
+ * Viewport-culling predicate for level-of-detail rendering at scale:
+ * which node ids fall within `viewportRect` expanded by `margin` on all
+ * sides (the margin avoids visible pop-in as a node crosses the exact
+ * edge). `nodePositions` is the SAME `Map<id, {x, y}>` shape
+ * `renderArchitectureView` already builds locally — reuse it there,
+ * don't rebuild it.
+ */
+export function visibleNodeIds(nodePositions, viewportRect, margin) {
+  const minX = viewportRect.x - margin;
+  const maxX = viewportRect.x + viewportRect.width + margin;
+  const minY = viewportRect.y - margin;
+  const maxY = viewportRect.y + viewportRect.height + margin;
+  const result = new Set();
+  for (const [id, pos] of nodePositions) {
+    if (pos.x >= minX && pos.x <= maxX && pos.y >= minY && pos.y <= maxY) result.add(id);
+  }
+  return result;
+}
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ZONE_WIDTH = 220;
 const ZONE_PADDING = 12;

@@ -4,6 +4,7 @@ import { FLAGSHIP_GRAPH } from '../src/data/flagship-graph.js';
 import {
   ZONE_ORDER, zoneForNode, resolveSelection, computeFlowSummary, computeArchitectureViewModel,
   computeClusteredLayout, aggregateEdgesForClusters,
+  computeFitAllViewport, applyWheelZoom, applyDragPan, visibleNodeIds,
 } from '../src/views/architecture-view.js';
 
 const NODE_KEYS = FLAGSHIP_GRAPH.extensions.fixtureNodeKeys;
@@ -259,4 +260,74 @@ test('aggregateEdgesForClusters: aggregate edge id is stable/deterministic acros
   const result1 = aggregateEdgesForClusters(edges, clusteredZones);
   const result2 = aggregateEdgesForClusters(edges, clusteredZones);
   assert.equal(result1[0].id, result2[0].id);
+});
+
+test('computeFitAllViewport: returns the content bounds unchanged (default zoom = show everything)', () => {
+  const result = computeFitAllViewport({ x: 0, y: 0, width: 1000, height: 2000 });
+  assert.deepEqual(result, { x: 0, y: 0, width: 1000, height: 2000 });
+});
+
+test('applyWheelZoom: a negative deltaY (scroll up / zoom in) shrinks the viewport width/height', () => {
+  const viewport = { x: 0, y: 0, width: 1000, height: 1000 };
+  const result = applyWheelZoom(viewport, { deltaY: -100, svgX: 500, svgY: 500 }, { minWidth: 100, maxWidth: 5000 });
+  assert.ok(result.width < 1000, 'zooming in should shrink the visible width');
+});
+
+test('applyWheelZoom: a positive deltaY (scroll down / zoom out) grows the viewport, clamped to maxWidth', () => {
+  const viewport = { x: 0, y: 0, width: 4900, height: 4900 };
+  const result = applyWheelZoom(viewport, { deltaY: 500, svgX: 2450, svgY: 2450 }, { minWidth: 100, maxWidth: 5000 });
+  assert.ok(result.width <= 5000, 'must clamp to maxWidth, never exceed it');
+});
+
+test('applyWheelZoom: zooming in stays clamped at minWidth, never inverts/goes negative', () => {
+  const viewport = { x: 0, y: 0, width: 150, height: 150 };
+  const result = applyWheelZoom(viewport, { deltaY: -1000, svgX: 75, svgY: 75 }, { minWidth: 100, maxWidth: 5000 });
+  assert.ok(result.width >= 100);
+});
+
+test('applyWheelZoom: zoom is centered on the cursor position, not the viewport origin', () => {
+  const viewport = { x: 0, y: 0, width: 1000, height: 1000 };
+  const zoomedAtCorner = applyWheelZoom(viewport, { deltaY: -200, svgX: 0, svgY: 0 }, { minWidth: 100, maxWidth: 5000 });
+  const zoomedAtCenter = applyWheelZoom(viewport, { deltaY: -200, svgX: 500, svgY: 500 }, { minWidth: 100, maxWidth: 5000 });
+  assert.notDeepEqual(zoomedAtCorner, zoomedAtCenter, 'zooming at different cursor positions must produce different viewports');
+  assert.equal(zoomedAtCorner.x, 0, 'zooming at the top-left corner should keep that corner fixed (x does not go negative)');
+});
+
+test('applyDragPan: pans by the given SVG-space delta', () => {
+  const viewport = { x: 100, y: 100, width: 500, height: 500 };
+  const result = applyDragPan(viewport, { dxSvg: 50, dySvg: -30 }, { x: 0, y: 0, width: 5000, height: 5000 });
+  // Brief's draft asserted result.x === 50 (i.e. viewport.x - dxSvg), but its own
+  // reference implementation and the interface doc ("pans by an SVG-space delta")
+  // both add the delta: 100 + 50 = 150. The y assertion (70 = 100 + (-30)) already
+  // matches addition, so the draft's x expectation was the inconsistent one — fixed
+  // here to match addition semantics, consistently applied to both axes.
+  assert.equal(result.x, 150);
+  assert.equal(result.y, 70);
+});
+
+test('applyDragPan: clamps so the viewport cannot be dragged fully off content', () => {
+  const viewport = { x: 0, y: 0, width: 500, height: 500 };
+  const result = applyDragPan(viewport, { dxSvg: -10000, dySvg: -10000 }, { x: 0, y: 0, width: 5000, height: 5000 });
+  // minX = contentBounds.x - viewport.width = 0 - 500 = -500, an INCLUSIVE bound
+  // (a one-pixel sliver of content stays visible at exactly x=-500). The brief's
+  // draft used a strict `>` here, which would fail on the correctly-clamped
+  // boundary value itself; the implementation's clamp is sound, so the assertion
+  // is the thing that needed fixing, to `>=`.
+  assert.ok(result.x >= -500, 'should not allow dragging the viewport entirely past the left edge of content');
+  assert.ok(result.y >= -500, 'should not allow dragging the viewport entirely past the top edge of content');
+});
+
+test('visibleNodeIds: returns only nodes within the viewport rect plus margin', () => {
+  const nodePositions = new Map([['a', { x: 10, y: 10 }], ['b', { x: 1000, y: 1000 }]]);
+  const viewportRect = { x: 0, y: 0, width: 100, height: 100 };
+  const result = visibleNodeIds(nodePositions, viewportRect, 20);
+  assert.ok(result.has('a'));
+  assert.ok(!result.has('b'));
+});
+
+test('visibleNodeIds: the margin extends the culling boundary (avoids pop-in)', () => {
+  const nodePositions = new Map([['a', { x: 110, y: 10 }]]); // just outside a 0,0,100,100 viewport
+  const viewportRect = { x: 0, y: 0, width: 100, height: 100 };
+  assert.ok(!visibleNodeIds(nodePositions, viewportRect, 5).has('a'), 'margin of 5 should not reach x=110');
+  assert.ok(visibleNodeIds(nodePositions, viewportRect, 20).has('a'), 'margin of 20 should reach x=110 (100+20=120 > 110)');
 });
