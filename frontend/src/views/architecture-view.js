@@ -373,6 +373,98 @@ const NODE_HEIGHT = 44;
 const NODE_GAP = 16;
 const NODE_WIDTH = ZONE_WIDTH - ZONE_PADDING * 2;
 
+// PRD §21: "no more than 2,000 visible elements after level-of-detail
+// clustering." Each node is 3 SVG elements (rect+2 text, see renderNode);
+// each rendered edge is ~2 (path+text, see renderEdge); 5 zones contribute
+// 2 chrome elements each (bg rect + label text) = 10; a cluster glyph
+// itself costs the same 3 elements as a real node. Budget conservatively:
+// reserve 20% of the 2,000 target for edges/chrome, split the rest evenly
+// across 5 zones.
+const VISIBLE_ELEMENT_BUDGET = 2000;
+const ZONE_CHROME_ELEMENTS = ZONE_ORDER.length * 2;
+const EDGE_ELEMENT_RESERVE_FRACTION = 0.2;
+const NODE_ELEMENTS_PER_NODE = 3;
+function computeZoneNodeBudget() {
+  const budgetForNodes = (VISIBLE_ELEMENT_BUDGET - ZONE_CHROME_ELEMENTS) * (1 - EDGE_ELEMENT_RESERVE_FRACTION);
+  return Math.max(3, Math.floor(budgetForNodes / ZONE_ORDER.length / NODE_ELEMENTS_PER_NODE));
+}
+// Sanity-checked (this session, real numbers): with the constants above this
+// evaluates to 106 — well under the ~1,000-per-zone average a 5,000-node
+// graph split across 5 zones would produce (so clustering actually engages
+// at PRD reference scale), and far above the <10 floor that would clutter
+// every modest fixture with a cluster glyph.
+
+// Module-local, NOT persisted to lib/state.js's URL hash — real UI state,
+// not meaningfully shareable (scoping doc decision 5).
+//
+// Simplification of the brief's own Step 3.5 (documented in the task-3
+// context, not just here): `renderArchitectureView`'s caller (app.js) has
+// no "this is a fresh view mount, not a same-view rerender" signal today,
+// and adding one is out of this task's file list (architecture-view.js
+// only). Instead: currentViewport starts null and is set to a fit-all
+// viewport ONLY the very first time this module ever renders. It is never
+// auto-reset again afterward — only via the user's own "0" key, a cluster
+// expansion (see expandedZones' onClick below — re-fitting there is a
+// deliberate, real necessity, not a copy-paste of the mount rule: without
+// it, newly-revealed nodes from an expanded cluster could land outside the
+// still-small pre-expansion viewport and be viewport-culled right back out
+// of the DOM, silently undoing the click), or a page reload. This means
+// pan/zoom position is preserved across ordinary view switches away from
+// and back to Architecture View — simpler, fully local to this file, and
+// does not violate AC-16 (which requires selection/filters/header/coverage
+// state to survive a view switch, and says nothing about pan/zoom).
+let currentViewport = null;
+// Module-local set of zone names whose per-zone budget is lifted to
+// Infinity by a user click on that zone's cluster glyph (see
+// computeEffectiveClusteredLayout below). Kept as a Set, not folded into
+// currentViewport, so it survives independently of pan/zoom resets.
+const expandedZones = new Set();
+// Module-local, keyed the same way `currentViewport` is: drag state must
+// survive a rerender (renderArchitectureView tears down and rebuilds the
+// entire <svg> tree on every pan/zoom-driven rerender, including the ones
+// fired mid-drag from `mousemove`), or a real mouse-drag gesture would
+// silently stop after its first `mousemove` event — the old <svg> (and any
+// per-render-closure-local drag state) is gone, and no second `mousedown`
+// ever fires to restart it.
+let dragState = null;
+
+const CULL_MARGIN = 100; // SVG units; see visibleNodeIds' own margin param
+const KEYBOARD_PAN_STEP = 40; // SVG units per arrow-key press
+const MIN_VIEWPORT_WIDTH = 150; // SVG units; deepest zoom-in via wheel/keyboard
+
+// computeClusteredLayout (Task 1) intentionally takes one `budget` number
+// applied uniformly to every zone — already tested against a plain number,
+// and Task 3 must not change that signature. To let ONE zone's budget be
+// lifted (cluster-glyph click, "show me everything in this zone"), split
+// the zones into "expanded" (budget=Infinity) and "everyone else" (the
+// real zoneNodeBudget), call computeClusteredLayout once per group, and
+// merge back in the original zone order.
+function computeEffectiveClusteredLayout(zones, nodes, budget, expandedZoneNames) {
+  const expanded = zones.filter((z) => expandedZoneNames.has(z.name));
+  const collapsed = zones.filter((z) => !expandedZoneNames.has(z.name));
+  const expandedResult = expanded.length > 0 ? computeClusteredLayout(expanded, nodes, Infinity) : [];
+  const collapsedResult = collapsed.length > 0 ? computeClusteredLayout(collapsed, nodes, budget) : [];
+  const byName = new Map([...expandedResult, ...collapsedResult].map((z) => [z.name, z]));
+  return zones.map((z) => byName.get(z.name));
+}
+
+// Real screen-to-SVG-space coordinate conversion, via the standard
+// getScreenCTM()/createSVGPoint() DOM APIs — NOT available on test/dom-
+// shim.js's FakeElement (it has no CSSOM/layout engine to compute a CTM
+// against), so every call site guards with `supportsPointerConversion`
+// first and skips wiring entirely when it's false. Real interaction is
+// only provable in a real browser regardless (Step 6).
+function screenToSvgPoint(svgElement, clientX, clientY) {
+  const pt = svgElement.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  return pt.matrixTransform(svgElement.getScreenCTM().inverse());
+}
+
+function zoomBoundsFor(contentBounds) {
+  return { minWidth: MIN_VIEWPORT_WIDTH, maxWidth: Math.max(contentBounds.width, MIN_VIEWPORT_WIDTH) };
+}
+
 // Builds an element in the SVG namespace (createElementNS), unlike `el()`
 // (lib/dom.js) which always calls createElement and produces an HTML-
 // namespaced element — a foreign element inside an <svg> tree that neither
@@ -401,43 +493,206 @@ export function svgEl(tag, attrs = {}) {
  * @param {(id: string) => void} onSelect
  */
 export function renderArchitectureView(viewModel, canvasEl, onSelect) {
+  // Real, disclosed finding from this session's own manual browser smoke
+  // check (Step 6): every pan/zoom-driven rerender tears down and rebuilds
+  // the ENTIRE <svg> from scratch. A real browser does NOT transfer focus
+  // to a freshly-inserted replacement element, so without this, a single
+  // keyboard-driven zoom/pan keystroke would work but a SECOND rapid one
+  // (e.g. holding "-") would silently do nothing — the old, focused <svg>
+  // is already gone, and nothing ever refocuses the new one. Recorded here
+  // (not just observed and left alone) because this is exactly the class
+  // of bug a manual-only check without direct focus inspection would miss
+  // (see app.js's own comment on the analogous Task-5/Task-7 lesson).
+  const previouslyFocusedSvg = typeof document !== 'undefined' && document.activeElement === canvasEl.firstChild ? canvasEl.firstChild : null;
   clear(canvasEl);
 
-  const zoneCount = viewModel.zones.length;
-  const maxNodesInAZone = Math.max(1, ...viewModel.zones.map((z) => z.nodeIds.length));
-  const height = Math.max(480, maxNodesInAZone * (NODE_HEIGHT + NODE_GAP) + 80);
+  function rerender() {
+    renderArchitectureView(viewModel, canvasEl, onSelect);
+  }
+
+  const zoneNodeBudget = computeZoneNodeBudget();
+  const clusteredZones = computeEffectiveClusteredLayout(viewModel.zones, viewModel.nodes, zoneNodeBudget, expandedZones);
+  const nodesById = new Map(viewModel.nodes.map((n) => [n.id, n]));
+
+  const zoneCount = clusteredZones.length;
+  const maxRowsInAZone = Math.max(1, ...clusteredZones.map((z) => z.visibleNodeIds.length + (z.cluster ? 1 : 0)));
+  const height = Math.max(480, maxRowsInAZone * (NODE_HEIGHT + NODE_GAP) + 80);
   const width = zoneCount * ZONE_WIDTH;
+  const contentBounds = { x: 0, y: 0, width, height };
 
-  const svg = svgEl('svg', { class: 'arch-view', viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': 'Architecture view: trust zones, nodes, and data-flow edges' });
+  if (currentViewport === null) {
+    currentViewport = computeFitAllViewport(contentBounds);
+  }
 
+  const svg = svgEl('svg', {
+    class: 'arch-view',
+    viewBox: `${currentViewport.x} ${currentViewport.y} ${currentViewport.width} ${currentViewport.height}`,
+    role: 'img',
+    tabindex: '0',
+    'aria-label': 'Architecture view: trust zones, nodes, and data-flow edges. Arrow keys pan, plus/minus zoom, 0 resets.',
+  });
+
+  // Pass 1: lay out every INDIVIDUALLY-VISIBLE node (post-clustering) and
+  // each zone's own cluster glyph, recording positions for all of them —
+  // viewport culling (pass 2 below) needs every position up front, since
+  // an edge's endpoint may resolve to either a node or a cluster glyph.
   const nodePositions = new Map();
-  viewModel.zones.forEach((zone, zoneIndex) => {
+  const pendingNodes = []; // {node, x, y}
+  const pendingClusters = []; // {zone, x, y}
+  clusteredZones.forEach((zone, zoneIndex) => {
     const zoneX = zoneIndex * ZONE_WIDTH;
     svg.appendChild(svgEl('rect', { class: 'arch-zone-bg', x: zoneX, y: 0, width: ZONE_WIDTH, height, rx: 4 }));
     const zoneLabel = svgEl('text', { class: 'arch-zone-label', x: zoneX + ZONE_PADDING, y: 24 });
     zoneLabel.textContent = zone.name;
     svg.appendChild(zoneLabel);
 
-    zone.nodeIds.forEach((nodeId, i) => {
-      const node = viewModel.nodes.find((n) => n.id === nodeId);
-      const y = 48 + i * (NODE_HEIGHT + NODE_GAP);
+    let row = 0;
+    for (const nodeId of zone.visibleNodeIds) {
+      const node = nodesById.get(nodeId);
+      const y = 48 + row * (NODE_HEIGHT + NODE_GAP);
       const x = zoneX + ZONE_PADDING;
       nodePositions.set(nodeId, { x: x + NODE_WIDTH / 2, y: y + NODE_HEIGHT / 2 });
-      svg.appendChild(renderNode(node, x, y, onSelect));
-    });
+      pendingNodes.push({ node, x, y });
+      row += 1;
+    }
+    if (zone.cluster) {
+      const y = 48 + row * (NODE_HEIGHT + NODE_GAP);
+      const x = zoneX + ZONE_PADDING;
+      nodePositions.set(zone.cluster.id, { x: x + NODE_WIDTH / 2, y: y + NODE_HEIGHT / 2 });
+      pendingClusters.push({ zone, x, y });
+    }
   });
 
-  // Edges drawn after nodes so they can reference final positions; dimmed
-  // edges are drawn first so a highlighted edge always renders on top.
-  const sortedEdges = [...viewModel.edges].sort((a, b) => Number(a.selected) - Number(b.selected));
+  // Pass 2: viewport culling. A currently-selected node always renders
+  // regardless of the viewport, same "never hide the thing the user is
+  // looking at" principle clustering already applies to the budget.
+  const visible = visibleNodeIds(nodePositions, currentViewport, CULL_MARGIN);
+  for (const { node, x, y } of pendingNodes) {
+    if (!visible.has(node.id) && !node.selected) continue;
+    svg.appendChild(renderNode(node, x, y, onSelect));
+  }
+  for (const { zone, x, y } of pendingClusters) {
+    if (!visible.has(zone.cluster.id)) continue;
+    svg.appendChild(renderClusterGlyph(zone.cluster, x, y, () => {
+      expandedZones.add(zone.name);
+      // A just-expanded cluster's newly-individual nodes can land outside
+      // the current (pre-expansion) viewport; re-fit so the user actually
+      // sees what they just asked to see, rather than having it culled
+      // straight back out of the DOM. See currentViewport's own comment.
+      currentViewport = null;
+      rerender();
+    }));
+  }
+
+  // Edges: only edges actually touched by clustering (an endpoint that got
+  // folded into a cluster glyph) go through aggregateEdgesForClusters.
+  // Real, disclosed finding this session: aggregateEdgesForClusters groups
+  // PURELY by post-redirect (from, to) pair — with NO clustering involved
+  // at all, feeding it every edge unconditionally would ALSO merge two
+  // genuinely distinct real edges that happen to share the same (from, to)
+  // node pair (the flagship fixture has exactly this: masked_log's and
+  // raw_log's own log-write edges both run process->log with different
+  // verdicts), silently collapsing them to one worst-verdict edge and
+  // regressing AC-17's "raw vs masked render distinct verdicts" golden
+  // test. Splitting the input here (not touching aggregateEdgesForClusters
+  // itself, which Task 1 already shipped and tested) keeps every
+  // untouched edge exactly as before, and only reroutes+aggregates the
+  // ones clustering actually affected.
+  const clusteredMemberIds = new Set();
+  for (const zone of clusteredZones) {
+    if (zone.cluster) for (const memberId of zone.cluster.memberIds) clusteredMemberIds.add(memberId);
+  }
+  const edgesTouchedByClustering = viewModel.edges.filter((e) => clusteredMemberIds.has(e.from) || clusteredMemberIds.has(e.to));
+  const edgesUntouchedByClustering = viewModel.edges.filter((e) => !clusteredMemberIds.has(e.from) && !clusteredMemberIds.has(e.to));
+  const aggregatedEdges = edgesTouchedByClustering.length > 0 ? aggregateEdgesForClusters(edgesTouchedByClustering, clusteredZones) : [];
+  const allRenderableEdges = [...edgesUntouchedByClustering, ...aggregatedEdges];
+
+  // Culled the same way as nodes — an edge with either endpoint visible
+  // (or itself selected) still renders; dimmed edges are drawn first so a
+  // highlighted edge always renders on top.
+  const sortedEdges = [...allRenderableEdges].sort((a, b) => Number(a.selected) - Number(b.selected));
   for (const edge of sortedEdges) {
     const from = nodePositions.get(edge.from);
     const to = nodePositions.get(edge.to);
-    if (!from || !to) continue; // an edge whose endpoint isn't rendered (shouldn't happen with this fixture) is safely skipped, not a crash
+    if (!from || !to) continue; // an edge whose endpoint isn't rendered (shouldn't happen) is safely skipped, not a crash
+    if (!edge.selected && !visible.has(edge.from) && !visible.has(edge.to)) continue;
     svg.appendChild(renderEdge(edge, from, to, onSelect));
   }
 
+  const supportsPointerConversion = typeof svg.getScreenCTM === 'function' && typeof svg.createSVGPoint === 'function';
+  if (supportsPointerConversion) {
+    svg.addEventListener('wheel', (evt) => {
+      evt.preventDefault();
+      const { x: svgX, y: svgY } = screenToSvgPoint(svg, evt.clientX, evt.clientY);
+      currentViewport = applyWheelZoom(currentViewport, { deltaY: evt.deltaY, svgX, svgY }, zoomBoundsFor(contentBounds));
+      rerender();
+    });
+    svg.addEventListener('mousedown', (evt) => {
+      const p = screenToSvgPoint(svg, evt.clientX, evt.clientY);
+      dragState = { lastX: p.x, lastY: p.y };
+    });
+    svg.addEventListener('mousemove', (evt) => {
+      if (!dragState) return;
+      const p = screenToSvgPoint(svg, evt.clientX, evt.clientY);
+      // Content under the cursor should stay under the cursor: shift the
+      // viewport by the NEGATIVE of the cursor's own SVG-space delta.
+      const dxSvg = dragState.lastX - p.x;
+      const dySvg = dragState.lastY - p.y;
+      dragState = { lastX: p.x, lastY: p.y };
+      currentViewport = applyDragPan(currentViewport, { dxSvg, dySvg }, contentBounds);
+      rerender();
+    });
+    svg.addEventListener('mouseup', () => { dragState = null; });
+    svg.addEventListener('mouseleave', () => { dragState = null; });
+  }
+
+  svg.addEventListener('keydown', (evt) => {
+    switch (evt.key) {
+      case 'ArrowUp':
+        evt.preventDefault();
+        currentViewport = applyDragPan(currentViewport, { dxSvg: 0, dySvg: -KEYBOARD_PAN_STEP }, contentBounds);
+        break;
+      case 'ArrowDown':
+        evt.preventDefault();
+        currentViewport = applyDragPan(currentViewport, { dxSvg: 0, dySvg: KEYBOARD_PAN_STEP }, contentBounds);
+        break;
+      case 'ArrowLeft':
+        evt.preventDefault();
+        currentViewport = applyDragPan(currentViewport, { dxSvg: -KEYBOARD_PAN_STEP, dySvg: 0 }, contentBounds);
+        break;
+      case 'ArrowRight':
+        evt.preventDefault();
+        currentViewport = applyDragPan(currentViewport, { dxSvg: KEYBOARD_PAN_STEP, dySvg: 0 }, contentBounds);
+        break;
+      case '+':
+      case '=':
+        evt.preventDefault();
+        currentViewport = applyWheelZoom(
+          currentViewport,
+          { deltaY: -1, svgX: currentViewport.x + currentViewport.width / 2, svgY: currentViewport.y + currentViewport.height / 2 },
+          zoomBoundsFor(contentBounds),
+        );
+        break;
+      case '-':
+        evt.preventDefault();
+        currentViewport = applyWheelZoom(
+          currentViewport,
+          { deltaY: 1, svgX: currentViewport.x + currentViewport.width / 2, svgY: currentViewport.y + currentViewport.height / 2 },
+          zoomBoundsFor(contentBounds),
+        );
+        break;
+      case '0':
+        evt.preventDefault();
+        currentViewport = computeFitAllViewport(contentBounds);
+        break;
+      default:
+        return;
+    }
+    rerender();
+  });
+
   canvasEl.appendChild(svg);
+  if (previouslyFocusedSvg && typeof svg.focus === 'function') svg.focus();
 }
 
 function renderNode(node, x, y, onSelect) {
@@ -494,5 +749,34 @@ function renderEdge(edge, from, to, onSelect) {
   const glyph = svgEl('text', { class: 'arch-edge-glyph', x: midX, y: midY - 4, fill: `var(${visual.colorVar})` });
   glyph.textContent = visual.glyph;
   group.appendChild(glyph);
+  return group;
+}
+
+// The cluster glyph mirrors renderNode()'s own structure/pattern (a
+// clickable <g> with a box + two text children) so it reads as "one more
+// node-shaped thing" rather than a visually distinct control. `onExpand`
+// is renderArchitectureView's own closure — adds this zone to
+// `expandedZones` and re-renders.
+function renderClusterGlyph(cluster, x, y, onExpand) {
+  const group = svgEl('g', {
+    class: 'arch-node-cluster',
+    tabindex: '0',
+    role: 'button',
+    'aria-label': `${cluster.count} more ${cluster.kindSummary || 'nodes'} folded into this cluster. Activate to expand.`,
+    onClick: onExpand,
+    onKeydown: (evt) => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        evt.preventDefault();
+        onExpand();
+      }
+    },
+  });
+  group.appendChild(svgEl('rect', { class: 'arch-node-cluster-box', x, y, width: NODE_WIDTH, height: NODE_HEIGHT }));
+  const count = svgEl('text', { class: 'arch-node-cluster-count', x: x + 8, y: y + 20 });
+  count.textContent = `+${cluster.count}`;
+  group.appendChild(count);
+  const kind = svgEl('text', { class: 'arch-node-cluster-kind', x: x + 8, y: y + 36 });
+  kind.textContent = cluster.kindSummary;
+  group.appendChild(kind);
   return group;
 }
