@@ -305,6 +305,106 @@ does NOT mean" disclosure discipline Milestone 2's own Sub-project I
 established (`scanner/src/lineage/CLAUDE.md`'s own "Milestone 2
 exit-gate status" section).
 
+**Milestone 3, sub-project Render — MEASURED, real result (2026-09-01):**
+per the user's own explicit direction (choosing a "narrow SVG fix" over
+a full React/Cytoscape/ELK migration or a Canvas/WebGL renderer), adds
+level-of-detail clustering, edge aggregation, real pan/zoom, and
+viewport culling to Architecture View — the same hand-rolled SVG
+renderer, zero build step, zero new dependency. Full design rationale in
+`docs/superpowers/plans/2026-09-01-data-flow-explorer-m3-render-scoping.md`
+and its companion plan.
+
+- **Level-of-detail clustering (`computeClusteredLayout`) + edge
+  aggregation (`aggregateEdgesForClusters`)**: per-zone, count-threshold-
+  based (not spatial), with the threshold derived from PRD §21's own
+  literal "no more than 2,000 visible elements" target
+  (`computeZoneNodeBudget()`, currently evaluating to 106 nodes/zone — a
+  real, disclosed, non-guessed formula in `architecture-view.js`, not a
+  hardcoded magic number). **A currently-selected node always stays
+  individually visible, bypassing the budget entirely** — clustering
+  must never hide the thing the user is looking at, a real correctness
+  requirement found during planning, not in the original scoping doc.
+  Edges into a collapsed cluster redirect to the cluster glyph and
+  aggregate via the SAME `worstVerdict` primitive `edgeVerdict()` already
+  used per-edge, per PRD §7.8's own interaction #6 ("aggregated edges
+  display the highest-risk selected verdict"). **A real regression was
+  found and fixed during implementation**: naively aggregating ALL edges
+  (not just clustering-affected ones) would have silently merged two
+  genuinely distinct real edges in the flagship fixture (the masked-log
+  vs. raw-log branches, same `(from,to)` node pair, different verdicts)
+  into one, regressing the already-shipped AC-17 golden test
+  (`golden-architecture.test.js`) — fixed by only routing clustering-
+  touched edges through aggregation; every other edge renders exactly as
+  before.
+- **Real pan/zoom** (previously entirely absent — Perf's own finding):
+  wheel-to-zoom (algebraically centered on the cursor position, verified
+  by hand that the cursor's fractional position in the viewport is
+  identical before and after for any clamped width), click-and-drag pan,
+  and keyboard equivalents (arrow keys pan, `+`/`-` zoom, `0` resets),
+  all via real `viewBox` manipulation — no new dependency. Viewport state
+  is module-local, not persisted to the URL hash (a deliberate,
+  disclosed simplification of the original scoping doc's own "reset on
+  fresh view-mount" idea, which had no real signal to detect a fresh
+  mount without also modifying `app.js` — pan/zoom position is instead
+  preserved across ordinary view switches, which does not violate AC-16).
+  **A real focus-loss bug was found and fixed during a manual browser
+  smoke check**: every pan/zoom rerender tears down and rebuilds the
+  entire `<svg>`, and a real browser does not transfer keyboard focus to
+  the replacement element — a rapid second keystroke would have silently
+  done nothing. Fixed by detecting focus before teardown and restoring it
+  on the new element.
+- **Viewport culling** (`visibleNodeIds`): filters which nodes/edges get
+  real DOM elements to the current viewport rect plus a real margin
+  (avoids pop-in at the edge) — the mechanism that keeps a deliberately-
+  expanded, deliberately-zoomed-in session performant, complementing
+  clustering's own steady-state budget.
+- **Real re-measurement against Perf's own exact methodology** (the
+  same 5,000-node/10,000-edge `validateGraph()`-clean synthetic graph,
+  regenerated via the kept `scripts/generate-perf-graph-module.mjs`, a
+  real Chrome tab, real Performance API entries — never a JS-timer-only
+  claim, matching Perf's own documented false-PASS trap):
+  - **First meaningful paint: PASSES, dramatically.** Real
+    `first-contentful-paint` entry at **148ms** (real `first-paint` at
+    76ms) — well under the 2-second §21 budget, versus Perf's own
+    original measurement of "no paint after 20+ seconds" at this exact
+    scale. Confirmed via the DOM, not just the paint API: of 5,000 real
+    nodes, only **420 individually-rendered node groups + a small number
+    of cluster glyphs** ever reached the DOM — clustering visibly
+    engaged and did the intended work. No console errors.
+  - **Pan/zoom: PASSES.** A real wheel-zoom interaction (dispatched via
+    real `WheelEvent`s at realistic ~16ms intervals, mirroring a fast
+    scroll gesture) shrank the viewport from the full 1100×1100 content
+    bounds to 226×226 across 15 zoom-in ticks — the exact value
+    `1100 × 0.9^15` predicts, confirming the zoom math holds correctly in
+    a real browser, not just in unit tests. Sustained **~53 frames/
+    second** (rAF-counted during the real interaction burst, 34 frames
+    over 637ms) while triggering 15 full rerenders of the clustered
+    graph — above the 45fps §21 target. **Disclosed honestly**: this is
+    a real, script-driven rAF frame count during an actual dispatched
+    interaction, not a DevTools-traced/GPU-compositor-authoritative FPS
+    number — the tooling available for this measurement does not expose
+    Chrome's own internal frame-timing trace, so the number is real but
+    not the most rigorous instrument possible.
+  - The small, 14-node flagship fixture is confirmed unaffected — no
+    clustering engages at that scale (well under the 106-per-zone
+    budget), and the full render-level test suite (including the
+    pre-existing SVG-namespace regression test and every golden-DOM AC-17
+    test) passes unmodified.
+- **What this does NOT mean**: this sub-project touches Architecture
+  View only (Privacy/Trace/Inventory are `el()`-based HTML tables, a
+  different and generally cheaper rendering problem, never measured as
+  failing by Perf in the first place). The "without overlapping labels"
+  clause of AC-17 and any dense-content behavior at all 4 required
+  viewports (A11y's own real CDP measurement used only the tiny flagship
+  fixture) remain real, disclosed, unmeasured territory. No dynamic
+  global rebalancing exists if a user expands many clusters at once (a
+  deliberate, disclosed simplicity choice, not a bug). Full per-edge
+  verdict distribution on an aggregate edge's own selection (vs. just
+  the worst verdict) remains deferred. Semantic zoom in the richer PRD
+  sense (revealing more FIELD-level detail, not just more nodes),
+  server/worker-side projections, and M3-UX's own still-unscoped
+  territory (search, query language, saved views) are all untouched.
+
 | Module | Responsibility |
 |---|---|
 | `src/lib/escape-html.js` | Escapes text for the rare case of building a raw HTML/attribute STRING outside of `el()` (e.g. a future `document.title` assignment, or serializing to an SVG attribute string). Quote-complete (escapes `&<>"'`) — neither existing in-repo escaper (`scanner/src/posture/fleet.js`, `scanner/src/badge.js`) is. **Never combine with `el()`'s text-child insertion** — `el()` already escapes via `createTextNode` (see `src/lib/dom.js` below), and pre-escaping on top of that double-escapes (a real repo name like `Acme & Sons' <repo>` would render on screen as the literal text `Acme &amp; Sons&#39; &lt;repo&gt;`). This exact bug shipped in `shell.js` and was fixed by dropping the `escapeHtml()` calls there, not by touching this module. |
