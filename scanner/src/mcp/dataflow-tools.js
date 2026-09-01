@@ -13,7 +13,7 @@ import { loadSignedGraph } from '../server/graph-loader.js';
 import { handleGraph, handleNode, handleEdge, handleFlow } from '../server/routes.js';
 import { redactString } from './redact.js';
 
-const META = { source: 'agentic-security-mcp', untrusted_excerpts: false };
+const META = { source: 'agentic-security-mcp', untrusted_excerpts: true };
 
 function _loadOrFailure(sessionRoot) {
   const loaded = loadSignedGraph(sessionRoot);
@@ -61,6 +61,7 @@ export const dataflow_get_graph = {
       data: _redactEvidenceNotes(body.data),
       digest: body.digest,
       schemaVersion: body.schemaVersion,
+      extensions: body.extensions,
       scope: body.scope,
       coverage: body.coverage,
       limitations: body.limitations,
