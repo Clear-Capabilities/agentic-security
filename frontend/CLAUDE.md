@@ -3,6 +3,33 @@
 Data Flow Explorer's clickable prototype. See `README.md` for the
 zero-build-step rationale and how to run it.
 
+**Milestone 3, sub-project Perf — MEASURED, real result (2026-09-01):**
+the zero-build-step deferral of PRD §17.2's conditional React/Cytoscape/
+ELK recommendation was sound reasoning at Milestone 0 but untested until
+now. A real Chrome measurement against a real, `validateGraph()`-clean
+5,000-node/10,000-edge synthetic graph (PRD §21's own reference scale)
+found the current renderer **fails first-meaningful-paint badly** — no
+real `first-paint` entry after 20+ seconds, `Page.captureScreenshot`
+timing out reproducibly, while the JS thread stayed fully responsive
+(the harness's own `requestAnimationFrame`-based timer FALSELY reported
+338ms "done" — a real, confirmed gap between "JS thinks it's finished"
+and "the browser has actually painted anything," which is why this had
+to be measured in a real browser with real paint-API verification, never
+a JS-timer-only benchmark). Growth is clearly non-linear (1,000/2,000:
+332ms real first-paint; 2,500/5,000: 920ms — already worse than linear).
+Pan/zoom interaction (the SAME dimension's other P0 metric) does not
+exist as a feature at all yet. See
+`docs/superpowers/plans/2026-09-01-data-flow-explorer-m3-perf-result.md`
+for the full measurement. **This does NOT block work at the current
+flagship-fixture scale** (14 nodes/15 edges, far below where the failure
+manifests) — M3-Server and M3-Wire proceed unaffected — but a dedicated
+rendering-architecture sub-project (M3-Render, its own future scoping
+pass) is now real, necessary, disclosed work that must land before
+Inventory/large-scale interactive features (semantic zoom, search) are
+built on the current unclustered, hand-rolled-SVG-per-element renderer.
+`frontend/scripts/generate-perf-graph-module.mjs` is kept as reusable
+before/after measurement infrastructure for that future sub-project.
+
 | Module | Responsibility |
 |---|---|
 | `src/lib/escape-html.js` | Escapes text for the rare case of building a raw HTML/attribute STRING outside of `el()` (e.g. a future `document.title` assignment, or serializing to an SVG attribute string). Quote-complete (escapes `&<>"'`) — neither existing in-repo escaper (`scanner/src/posture/fleet.js`, `scanner/src/badge.js`) is. **Never combine with `el()`'s text-child insertion** — `el()` already escapes via `createTextNode` (see `src/lib/dom.js` below), and pre-escaping on top of that double-escapes (a real repo name like `Acme & Sons' <repo>` would render on screen as the literal text `Acme &amp; Sons&#39; &lt;repo&gt;`). This exact bug shipped in `shell.js` and was fixed by dropping the `escapeHtml()` calls there, not by touching this module. |
