@@ -114,11 +114,42 @@
   font-size: var(--font-size-body);
 }
 
+.shell__inspector-toggle {
+  display: none;
+  background: transparent;
+  border: var(--border-width) solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-default);
+  padding: 4px var(--space-1);
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+}
+.shell__inspector-toggle:focus-visible {
+  outline: 2px solid var(--accent-selection);
+  outline-offset: 2px;
+}
+
 @media (max-width: 1280px) {
   .shell {
     grid-template-columns: var(--left-rail-collapsed-width) 1fr 0;
   }
+  .shell__inspector-toggle {
+    display: inline-flex;
+    align-items: center;
+  }
   .shell__inspector {
-    display: none;
+    position: fixed;
+    top: calc(var(--header-height) + var(--view-tabs-height));
+    right: 0;
+    bottom: var(--context-rail-height);
+    width: min(360px, 90vw);
+    z-index: 20;
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.4);
+    transform: translateX(100%);
+    transition: transform var(--motion-duration) ease-out;
+  }
+  .shell__inspector[data-overlay-open="true"] {
+    transform: translateX(0);
   }
 }

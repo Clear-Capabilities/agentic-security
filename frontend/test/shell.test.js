@@ -184,6 +184,27 @@ test('the view tab bar includes an Inventory tab', () => {
   shell.destroy();
 });
 
+test('the inspector overlay toggle exists, is aria-controlled, and toggles data-overlay-open on the inspector element', () => {
+  window.location.hash = '';
+  const root = document.createElement('div');
+  const shell = mountShell(root, makeGraph());
+
+  const toggle = root.querySelectorAll('[aria-controls="shell-inspector"]')[0];
+  assert.ok(toggle, 'expected an inspector toggle button controlling #shell-inspector');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+
+  toggle.dispatch('click');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  const inspectorEl = shell.getInspectorEl();
+  assert.equal(inspectorEl.getAttribute('data-overlay-open'), 'true');
+
+  toggle.dispatch('click');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(inspectorEl.getAttribute('data-overlay-open'), 'false');
+
+  shell.destroy();
+});
+
 test('an external hashchange (e.g. back/forward navigation) still updates state and notifies subscribers', () => {
   window.location.hash = '';
   const root = document.createElement('div');

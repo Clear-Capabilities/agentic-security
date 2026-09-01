@@ -28,6 +28,7 @@ const VIEWS = [
 export function mountShell(rootEl, graph) {
   let state = parseStateFromHash(window.location.hash);
   let stateChangeListeners = [];
+  let inspectorOverlayOpen = false;
 
   const shell = el('div', { class: 'shell' });
   const header = buildHeader(graph);
@@ -37,8 +38,24 @@ export function mountShell(rootEl, graph) {
   });
   const leftRail = el('div', { class: 'shell__left-rail' }, 'Filters (wired by the next plan)');
   const canvas = el('div', { class: 'shell__canvas' });
-  const inspector = el('div', { class: 'shell__inspector' }, 'Evidence inspector (wired by the next plan)');
+  const inspector = el('div', { class: 'shell__inspector', id: 'shell-inspector' }, 'Evidence inspector (wired by the next plan)');
   const contextRail = el('div', { class: 'shell__context-rail' }, buildContextRailText(graph));
+
+  const inspectorToggle = el(
+    'button',
+    {
+      class: 'shell__inspector-toggle',
+      'aria-expanded': 'false',
+      'aria-controls': 'shell-inspector',
+      onClick: () => {
+        inspectorOverlayOpen = !inspectorOverlayOpen;
+        inspector.setAttribute('data-overlay-open', String(inspectorOverlayOpen));
+        inspectorToggle.setAttribute('aria-expanded', String(inspectorOverlayOpen));
+      },
+    },
+    'Inspector',
+  );
+  tabs.appendChild(inspectorToggle);
 
   shell.appendChild(header);
   shell.appendChild(coverageBanner);

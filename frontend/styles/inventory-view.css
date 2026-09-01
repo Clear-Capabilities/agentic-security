@@ -1,0 +1,74 @@
+.inventory-view {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.inventory-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1) 0 var(--space-2) 0;
+}
+
+.inventory-subnav-button {
+  background: transparent;
+  border: var(--border-width) solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: var(--radius-default);
+  padding: 4px var(--space-1);
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: var(--font-size-code);
+  white-space: nowrap;
+}
+.inventory-subnav-button[data-active="true"] {
+  color: var(--text-primary);
+  background: var(--surface-elevated);
+  box-shadow: inset 0 0 0 var(--border-width) var(--accent-selection);
+}
+.inventory-subnav-button:focus-visible {
+  outline: 2px solid var(--accent-selection);
+  outline-offset: 2px;
+}
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+}
+
+.inventory-table th {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-panel-title);
+  text-transform: uppercase;
+  border-bottom: var(--border-width) solid var(--border-default);
+  background: var(--surface-panel);
+  position: sticky;
+  top: 0;
+  cursor: pointer;
+}
+
+.inventory-row {
+  cursor: pointer;
+  border-bottom: var(--border-width) solid var(--border-default);
+}
+.inventory-row td {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-primary);
+}
+.inventory-row:hover {
+  background: var(--surface-elevated);
+}
+.inventory-row[data-selected="true"] {
+  box-shadow: inset 3px 0 0 var(--accent-selection);
+  background: var(--surface-elevated);
+}
+.inventory-row[data-visible="false"] {
+  display: none;
+}
+.inventory-row:focus-visible {
+  outline: 2px solid var(--accent-selection);
+  outline-offset: -2px;
+}
