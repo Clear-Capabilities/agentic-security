@@ -1,0 +1,107 @@
+/* Query bar (PRD §15.2) — text input + saved-view chips, living inside the
+   shell's existing view-tabs row (shell.css's shell__view-tabs), and the
+   focus-control menu (PRD §15.3) appended into the context rail when a
+   node/flow is selected on Architecture View. */
+
+.shell__query-bar-slot {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.query-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.query-bar__input {
+  width: 280px;
+  padding: 4px var(--space-1);
+  border-radius: var(--radius-default);
+  border: var(--border-width) solid var(--border-default);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-code);
+}
+
+.query-bar__input[aria-invalid="true"] {
+  border-color: var(--status-unprotected);
+}
+
+.query-bar__input:focus-visible {
+  outline: 2px solid var(--accent-selection);
+  outline-offset: 2px;
+}
+
+.query-bar__error {
+  display: none;
+  color: var(--status-unprotected);
+  font-size: var(--font-size-code);
+  max-width: 260px;
+}
+
+.query-bar__error[data-visible="true"] {
+  display: block;
+}
+
+.query-bar__saved-views {
+  display: flex;
+  gap: 4px;
+}
+
+.query-bar__saved-view-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-default);
+  border: var(--border-width) solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-code);
+  cursor: pointer;
+}
+
+.query-bar__saved-view-chip:hover {
+  border-color: var(--accent-selection);
+  color: var(--text-primary);
+}
+
+.query-bar__saved-view-chip:focus-visible {
+  outline: 2px solid var(--accent-selection);
+  outline-offset: 2px;
+}
+
+.focus-control-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: var(--space-1);
+}
+
+.focus-control-menu__button {
+  padding: 2px 8px;
+  border-radius: var(--radius-default);
+  border: var(--border-width) solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-code);
+  cursor: pointer;
+}
+
+.focus-control-menu__button[data-focus-control="reset"] {
+  color: var(--text-primary);
+  border-color: var(--accent-selection);
+}
+
+.focus-control-menu__button:hover {
+  border-color: var(--accent-selection);
+  color: var(--text-primary);
+}
+
+.focus-control-menu__button:focus-visible {
+  outline: 2px solid var(--accent-selection);
+  outline-offset: 2px;
+}

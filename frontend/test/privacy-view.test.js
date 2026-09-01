@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FLAGSHIP_GRAPH } from '../src/data/flagship-graph.js';
 import { LIFECYCLE_STAGES, stageForNode, computePrivacyRow, computePrivacyViewModel } from '../src/views/privacy-view.js';
+import { parseQuery, compileQuery } from '../src/lib/query-language.js';
 
 const NODE_KEYS = FLAGSHIP_GRAPH.extensions.fixtureNodeKeys;
 const FLOW_KEYS = FLAGSHIP_GRAPH.extensions.fixtureFlowKeys;
@@ -76,6 +77,44 @@ test('computePrivacyViewModel applies a dataClass filter (OR within the dimensio
 });
 
 test('computePrivacyViewModel with no filters marks every row visible', () => {
+  const vm = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: {} });
+  assert.ok(vm.rows.every((r) => r.visible));
+});
+
+// Milestone 3, sub-project M3-UX-Query, Task 4: computePrivacyViewModel's
+// optional 3rd parameter, a compiled query-language predicate — a REAL
+// integration-level proof (against the real flagship fixture, via the real
+// query-language.js parser/compiler, not a hand-built stub predicate) that
+// applying a query genuinely narrows the rendered rows, and does so as an
+// ADDITIONAL condition alongside the existing dataClass/protection/ai
+// filters rather than replacing them.
+test('computePrivacyViewModel: a real compiled query predicate narrows visible rows below the no-query count', () => {
+  const { ast } = parseQuery('class:PCI');
+  const predicate = compileQuery(ast, FLAGSHIP_GRAPH);
+
+  const withoutQuery = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: {} });
+  const withQuery = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: {} }, predicate);
+
+  const visibleWithout = withoutQuery.rows.filter((r) => r.visible).length;
+  const visibleWith = withQuery.rows.filter((r) => r.visible).length;
+  assert.equal(visibleWithout, FLAGSHIP_GRAPH.flows.length, 'sanity: with no query active every row is visible');
+  assert.ok(visibleWith > 0 && visibleWith < visibleWithout, 'a real class:PCI query should narrow, not empty out or leave unchanged, the visible row count');
+  assert.ok(withQuery.rows.filter((r) => r.visible).every((r) => r.dataClasses.includes('PCI')));
+});
+
+test('computePrivacyViewModel: the query predicate is an ADDITIONAL condition, combined with an existing dataClass filter, not a replacement for it', () => {
+  const { ast } = parseQuery('ai:true');
+  const predicate = compileQuery(ast, FLAGSHIP_GRAPH);
+
+  const dataClassOnly = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: { dataClass: ['PCI'] } });
+  const dataClassAndQuery = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: { dataClass: ['PCI'] } }, predicate);
+
+  const visibleDataClassOnly = dataClassOnly.rows.filter((r) => r.visible).length;
+  const visibleBoth = dataClassAndQuery.rows.filter((r) => r.visible).length;
+  assert.ok(visibleBoth <= visibleDataClassOnly, 'adding a query on top of an existing filter must never show MORE rows than the filter alone');
+});
+
+test('computePrivacyViewModel: omitting the query predicate (2-arg call) matches every row, same as before this task', () => {
   const vm = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: {} });
   assert.ok(vm.rows.every((r) => r.visible));
 });

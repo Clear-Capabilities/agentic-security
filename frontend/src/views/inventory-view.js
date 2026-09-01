@@ -148,7 +148,38 @@ function rowMatchesFilters(row, filters) {
   return true;
 }
 
-export function computeInventoryViewModel(graph, state) {
+// Milestone 3, sub-project M3-UX-Query, Task 4. The query language's
+// compileQuery predicate is fundamentally FLOW-scoped (query-language.js's
+// own header comment: "the predicate operates on a FLOW"), but Inventory's
+// 11 categories are a mix of flow/node/edge/dataElement/transformation rows.
+// Rather than special-case each category, this looks up a real flow by the
+// row's own id — which only resolves for rows whose `id` genuinely IS a
+// flow id (policyPermittedFlows' rows, and manualGovernanceGaps' "Flow"-
+// subject rows, both of which use `id: f.id`). A row with no corresponding
+// flow (a source/sink/store/dataElement/transformation/node/edge row) has
+// nothing for the query predicate to test against, so the query has no
+// effect there and the row's visibility is governed only by the existing
+// dataClass/protection filters — an honest, disclosed scope limitation, not
+// a bug: this DSL was never designed to describe a bare node or edge.
+function rowMatchesQuery(graph, row, queryPredicate) {
+  if (!queryPredicate) return true;
+  const flow = graph.flows.find((f) => f.id === row.id);
+  if (!flow) return true;
+  return queryPredicate(flow);
+}
+
+/**
+ * @param {object} graph
+ * @param {object} state
+ * @param {((flow: object) => boolean) | null} [queryPredicate] - see
+ *   rowMatchesQuery's own comment above. Applied as an ADDITIONAL condition
+ *   alongside the existing dataClass/protection filters, independent of
+ *   whether the active table is in FILTERABLE_TABLES (query narrowing is
+ *   orthogonal to the filter-rail's own chip-based facets). Omitted/null
+ *   (every pre-existing caller/test) matches every row, so behavior is
+ *   unchanged for anyone not passing it.
+ */
+export function computeInventoryViewModel(graph, state, queryPredicate = null) {
   const activeTable = INVENTORY_TABLES.includes(state.table) ? state.table : INVENTORY_TABLES[0];
   const tables = INVENTORY_TABLES.map((id) => ({
     id, label: TABLE_LABELS[id],
@@ -160,7 +191,7 @@ export function computeInventoryViewModel(graph, state) {
   const rows = rawRows.map((row) => ({
     ...row,
     selected: row.id === state.selectedId,
-    visible: filterable ? rowMatchesFilters(row, state.filters ?? {}) : true,
+    visible: (filterable ? rowMatchesFilters(row, state.filters ?? {}) : true) && rowMatchesQuery(graph, row, queryPredicate),
   }));
 
   return { tables, activeTable, columns, rows, filterable };

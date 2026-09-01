@@ -114,8 +114,24 @@ export function computeFlowSummary(graph, flow) {
   };
 }
 
-export function computeArchitectureViewModel(graph, state) {
-  const selection = resolveSelection(graph, state.selectedId);
+/**
+ * @param {object} graph
+ * @param {object} state
+ * @param {{nodeIds: Set<string>, edgeIds: Set<string>} | null} [focusSelection] -
+ *   Milestone 3, sub-project M3-UX-Query, Task 4. An optional pre-computed
+ *   selection override — the SAME `{nodeIds, edgeIds}` shape every
+ *   `lib/focus-controls.js` function already returns. When present (non-
+ *   null), it is used AS the `selection` variable directly, bypassing
+ *   `resolveSelection(graph, state.selectedId)` entirely for this render —
+ *   a focus control's own multi-node result has no single canonical
+ *   `selectedId` to look up. When omitted/null (the default, and what every
+ *   pre-existing caller/test already passes), behavior is unchanged:
+ *   `resolveSelection` runs exactly as it always has.
+ */
+export function computeArchitectureViewModel(graph, state, focusSelection = null) {
+  const selection = focusSelection
+    ? { active: true, nodeIds: focusSelection.nodeIds, edgeIds: focusSelection.edgeIds, flow: null }
+    : resolveSelection(graph, state.selectedId);
 
   const zones = ZONE_ORDER.map((name) => ({
     name,

@@ -74,3 +74,11 @@ test('serializeStateToHash round-trips table', () => {
   const parsed = parseStateFromHash(hash);
   assert.equal(parsed.table, INVENTORY_TABLES[5]);
 });
+
+test('serializeStateToHash round-trips a filters.query string, mirroring the existing filters round-trip', () => {
+  const original = { view: 'privacy', selectedId: null, filters: { dataClass: ['PCI'], query: 'class:PCI AND ai:true' }, table: INVENTORY_TABLES[0] };
+  const hash = serializeStateToHash(original);
+  const parsed = parseStateFromHash(hash);
+  assert.deepEqual(parsed, original);
+  assert.equal(parsed.filters.query, 'class:PCI AND ai:true');
+});

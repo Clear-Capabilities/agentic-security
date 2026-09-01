@@ -5,6 +5,18 @@
 // never source snippets, field values, or secret-bearing endpoints" — this
 // module only ever carries canonical IDs and filter keys/values the caller
 // supplies, never arbitrary text.
+//
+// `state.filters` is an opaque, caller-defined object — this module never
+// validates individual keys inside it, only that the blob as a whole is
+// valid JSON. Milestone 3, sub-project M3-UX-Query adds `filters.query`
+// (PRD §15.2's query-language string, a plain string) as one more key
+// alongside the pre-existing `dataClass`/`protection`/`ai` keys — it
+// round-trips through the hash for free via the same generic JSON
+// serialize/parse path below, with no code change needed here beyond this
+// note. Validating/parsing the query text itself is `lib/query-language.js`'s
+// and `components/query-bar.js`'s job, not this module's — exactly like
+// `dataClass`/`protection`/`ai` are validated by their own consumers
+// (filter-rail.js, privacy-view.js, inventory-view.js), never here.
 
 const VALID_VIEWS = new Set(['architecture', 'privacy', 'trace', 'inventory']);
 

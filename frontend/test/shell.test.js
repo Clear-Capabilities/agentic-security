@@ -184,6 +184,21 @@ test('the view tab bar includes an Inventory tab', () => {
   shell.destroy();
 });
 
+test('mountShell exposes getQueryBarEl returning a real slot inside the view-tabs row', () => {
+  window.location.hash = '';
+  const root = document.createElement('div');
+  const shell = mountShell(root, makeGraph());
+
+  const queryBarEl = shell.getQueryBarEl();
+
+  assert.ok(queryBarEl);
+  assert.equal(queryBarEl.className, 'shell__query-bar-slot');
+  const tabs = root.querySelectorAll('[role="tablist"]')[0];
+  assert.ok(tabs.childNodes.includes(queryBarEl), 'the query bar slot should live inside the view-tabs row');
+
+  shell.destroy();
+});
+
 test('the inspector overlay toggle exists, is aria-controlled, and toggles data-overlay-open on the inspector element', () => {
   window.location.hash = '';
   const root = document.createElement('div');

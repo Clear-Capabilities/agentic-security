@@ -71,6 +71,31 @@ test('computeArchitectureViewModel dims every node/edge NOT part of a selected f
   assert.equal(vm.flowSummary.flowId, rawLogFlowId);
 });
 
+// Milestone 3, sub-project M3-UX-Query, Task 4: computeArchitectureViewModel's
+// optional 3rd parameter, focusSelection — a pre-computed {nodeIds, edgeIds}
+// override (the same shape lib/focus-controls.js's 9 functions return) that
+// bypasses resolveSelection(graph, state.selectedId) entirely when present.
+test('computeArchitectureViewModel with a focusSelection uses it directly, ignoring state.selectedId entirely', () => {
+  const webId = NODE_KEYS['node.web'];
+  const postgresId = NODE_KEYS['node.postgres'];
+  const focusSelection = { nodeIds: new Set([webId, postgresId]), edgeIds: new Set() };
+  // state.selectedId deliberately points at something ELSE (a real flow id),
+  // to prove focusSelection wins outright rather than merely supplementing it.
+  const vm = computeArchitectureViewModel(FLAGSHIP_GRAPH, { view: 'architecture', selectedId: FLOW_KEYS['flow.pci.raw_log'], filters: {} }, focusSelection);
+
+  const selectedIds = new Set(vm.nodes.filter((n) => n.selected).map((n) => n.id));
+  assert.deepEqual(selectedIds, new Set([webId, postgresId]));
+  assert.equal(vm.flowSummary, null, 'a focusSelection never carries a flow, so flowSummary must be null even though state.selectedId names a real flow');
+});
+
+test('computeArchitectureViewModel omitting focusSelection (2-arg call) behaves exactly as before — resolveSelection still runs', () => {
+  const rawLogFlowId = FLOW_KEYS['flow.pci.raw_log'];
+  const vmTwoArg = computeArchitectureViewModel(FLAGSHIP_GRAPH, { view: 'architecture', selectedId: rawLogFlowId, filters: {} });
+  const vmExplicitNull = computeArchitectureViewModel(FLAGSHIP_GRAPH, { view: 'architecture', selectedId: rawLogFlowId, filters: {} }, null);
+  assert.deepEqual(vmTwoArg, vmExplicitNull);
+  assert.notEqual(vmTwoArg.flowSummary, null);
+});
+
 test('resolveSelection on a node ID selects just that node plus its incident edges', () => {
   const webId = NODE_KEYS['node.web'];
   const selection = resolveSelection(FLAGSHIP_GRAPH, webId);

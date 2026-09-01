@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeInventoryViewModel } from '../src/views/inventory-view.js';
 import { INVENTORY_TABLES } from '../src/lib/state.js';
+import { parseQuery, compileQuery } from '../src/lib/query-language.js';
 
 function protectedDim(verdict) {
   return { verdict, evidenceGrade: 'direct' };
@@ -74,4 +75,35 @@ test('an empty graph produces zero-count tables without throwing', () => {
 test('an invalid state.table falls back to the first category', () => {
   const vm = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: {}, table: 'not-a-real-table' });
   assert.equal(vm.activeTable, INVENTORY_TABLES[0]);
+});
+
+// Milestone 3, sub-project M3-UX-Query, Task 4: computeInventoryViewModel's
+// optional 3rd parameter, a compiled query-language predicate, applied to
+// FLOW-shaped rows only (policyPermittedFlows' rows use the real flow id as
+// their own row id) — a real, compiled query genuinely narrows the visible
+// row set, as an ADDITIONAL condition on top of any existing dataClass
+// filter.
+test('computeInventoryViewModel: a real compiled query predicate narrows a flow-shaped table (policyPermittedFlows)', () => {
+  const { ast: piiAst } = parseQuery('class:PII');
+  const piiPredicate = compileQuery(piiAst, GRAPH);
+  const { ast: phiAst } = parseQuery('class:PHI');
+  const phiPredicate = compileQuery(phiAst, GRAPH);
+
+  const withPii = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: {}, table: 'policyPermittedFlows' }, piiPredicate);
+  const withPhi = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: {}, table: 'policyPermittedFlows' }, phiPredicate);
+
+  assert.equal(withPii.rows.filter((r) => r.visible).length, 1, 'flow:permitted1\'s own data element (email) is real PII, so class:PII must keep it visible');
+  assert.equal(withPhi.rows.filter((r) => r.visible).length, 0, 'flow:permitted1\'s data element carries no PHI, so class:PHI must narrow it away entirely');
+});
+
+test('computeInventoryViewModel: the query predicate has no effect on a non-flow-shaped table (sources) — an honest, disclosed scope limit', () => {
+  const { ast } = parseQuery('class:PHI'); // matches nothing in this fixture
+  const predicate = compileQuery(ast, GRAPH);
+  const vm = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: {}, table: 'sources' }, predicate);
+  assert.ok(vm.rows.every((r) => r.visible), 'source rows have no corresponding flow id, so the flow-scoped query predicate must not hide them');
+});
+
+test('computeInventoryViewModel: omitting the query predicate (2-arg call) behaves exactly as before this task', () => {
+  const vm = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: {}, table: 'policyPermittedFlows' });
+  assert.ok(vm.rows.every((r) => r.visible));
 });

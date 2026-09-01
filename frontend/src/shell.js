@@ -22,6 +22,7 @@ const VIEWS = [
  *   getInspectorEl: () => HTMLElement,
  *   getContextRailEl: () => HTMLElement,
  *   getLeftRailEl: () => HTMLElement,
+ *   getQueryBarEl: () => HTMLElement,
  *   destroy: () => void,
  * }}
  */
@@ -56,6 +57,14 @@ export function mountShell(rootEl, graph) {
     'Inspector',
   );
   tabs.appendChild(inspectorToggle);
+
+  // Milestone 3, sub-project M3-UX-Query, Task 4: the query bar's own real
+  // slot. Placed into the existing view-tabs row (shell__view-tabs) rather
+  // than a new grid region, matching this session's own A11y precedent of
+  // adding a new control into an existing shell row (inspectorToggle,
+  // directly above) instead of widening shell.css's grid-template-areas.
+  const queryBar = el('div', { class: 'shell__query-bar-slot' });
+  tabs.appendChild(queryBar);
 
   shell.appendChild(header);
   shell.appendChild(coverageBanner);
@@ -116,6 +125,7 @@ export function mountShell(rootEl, graph) {
     getInspectorEl: () => inspector,
     getContextRailEl: () => contextRail,
     getLeftRailEl: () => leftRail,
+    getQueryBarEl: () => queryBar,
     destroy() {
       window.removeEventListener('hashchange', handleHashChange);
       stateChangeListeners = [];

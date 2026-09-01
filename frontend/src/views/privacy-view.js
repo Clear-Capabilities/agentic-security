@@ -37,13 +37,25 @@ function rowMatchesFilters(row, filters) {
   return true;
 }
 
-export function computePrivacyViewModel(graph, state) {
+/**
+ * @param {object} graph
+ * @param {object} state
+ * @param {((flow: object) => boolean) | null} [queryPredicate] - Milestone 3,
+ *   sub-project M3-UX-Query, Task 4: the query language's compiled predicate
+ *   (lib/query-language.js's `compileQuery`), applied here as an ADDITIONAL
+ *   condition alongside the existing dataClass/protection/ai filters — a row
+ *   must pass BOTH to stay visible. Omitted/null (every pre-existing
+ *   caller/test) means "no query active," matching every row, so behavior
+ *   is unchanged for anyone not passing it.
+ */
+export function computePrivacyViewModel(graph, state, queryPredicate = null) {
+  const matchesQuery = queryPredicate ?? (() => true);
   const rows = graph.flows.map((flow) => {
     const row = computePrivacyRow(graph, flow);
     return {
       ...row,
       selected: row.flowId === state.selectedId,
-      visible: rowMatchesFilters(row, state.filters ?? {}),
+      visible: rowMatchesFilters(row, state.filters ?? {}) && matchesQuery(flow),
     };
   });
   return { stages: LIFECYCLE_STAGES, rows };
