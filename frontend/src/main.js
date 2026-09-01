@@ -19,7 +19,22 @@ import { bootstrap } from './app.js';
 import { el, clear } from './lib/dom.js';
 import { extractTokenFromFragment, fetchGraph } from './lib/api-client.js';
 
-function showError(rootEl, message) {
+// Exported for test/golden-state-matrix.test.js (AC-22's "Error" state row)
+// only. This is a disclosed, deliberate choice, not an oversight: Node's
+// stable `node:test` in this repo's Node version (confirmed this session —
+// `node:test`'s `mock` object has no `.module` method here) has no ESM
+// module-mocking primitive, so there is no way to make main.js's real
+// `init()`/fetch-catch path exercise a REAL failing `fetchGraph` without
+// either (a) a network-mocking dependency this repo doesn't otherwise carry,
+// or (b) exporting the real render function and calling it directly with the
+// same message shape `init()`'s own catch block already builds. (b) is the
+// smaller footprint — it adds one keyword to an existing function instead of
+// a parallel test-only reimplementation or a new dependency, and it matches
+// this sub-project's own golden-DOM pattern elsewhere (golden-architecture.
+// test.js / golden-privacy.test.js call the real compute/render functions
+// directly rather than a test double). The exported symbol is the exact
+// function `init()` calls on a fetch failure — no test-only duplicate logic.
+export function showError(rootEl, message) {
   clear(rootEl);
   rootEl.appendChild(
     el('div', { class: 'app-error' }, [
@@ -52,4 +67,17 @@ async function init() {
   bootstrap(rootEl, graph);
 }
 
-init();
+// Guarded on the mount point actually existing before auto-invoking, rather
+// than calling init() unconditionally: this file's ONLY export
+// (`showError`, above) is imported directly by test/golden-state-matrix.
+// test.js, and importing an ES module always runs its top-level statements
+// — including this one — as a side effect. Without this guard, importing
+// main.js under test/dom-shim.js's minimal document (no `#app-root` element
+// exists, since dom-shim builds a bare virtual tree, not a full page)
+// crashed with an unhandled rejection from `document.getElementById`
+// returning something the rest of init() can't use. The guard is also a
+// real, sensible defensive property outside of tests — this script is never
+// meant to run against a page lacking its own mount point.
+if (typeof document !== 'undefined' && typeof document.getElementById === 'function' && document.getElementById('app-root')) {
+  init();
+}

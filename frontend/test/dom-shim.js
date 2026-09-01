@@ -119,6 +119,14 @@ export function createDomShim() {
     createElement: (tag) => new FakeElement(tag, 'http://www.w3.org/1999/xhtml'),
     createElementNS: (ns, tag) => new FakeElement(tag, ns),
     createTextNode: (data) => new FakeTextNode(data),
+    // No real element registry exists in this shim (there's no full page
+    // tree, only whatever an individual test builds by hand) — always null,
+    // matching a real document that has no element with that id. Added for
+    // test/golden-state-matrix.test.js, which imports src/main.js (whose
+    // own init() calls document.getElementById('app-root') at module load
+    // time) and needs that call to resolve without throwing rather than
+    // find a real element.
+    getElementById: () => null,
   };
 
   let hashListeners = [];

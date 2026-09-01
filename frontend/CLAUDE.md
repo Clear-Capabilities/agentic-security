@@ -140,6 +140,88 @@ and its companion plan.
     that remains M3-Render's own, separately-scoped territory once it
     exists.
 
+**Milestone 3, sub-project Golden — COMPLETE (2026-09-01):** golden-DOM
+regression tests proving already-shipped view content still renders the
+flagship fixture's PRD-named reference compositions, plus an honest
+resolution of AC-22's §8.4 11-state visual matrix. Not new feature work —
+see `docs/superpowers/plans/2026-09-01-data-flow-explorer-m3-golden-scoping.md`
+for the scoping pass and its full reasoning.
+
+- **AC-16/17/18/19 (real content, real regressions, `test/golden-*.test.js`,
+  184 assertions in three prior commits under this sub-project plus this
+  increment's 11)**: Architecture View's 9 named reference nodes and 5
+  named trust zones, flow-selection dimming (present-but-dimmed, never
+  removed from the DOM), and the raw/masked PCI-in-logs branches' distinct
+  verdicts (`golden-architecture.test.js`); Privacy View's 3 named
+  data-class fields preserving identity across all 6 lifecycle-stage
+  columns and the real (lowercase, machine-value) `manual_required`/
+  `unknown`/`review`/`not_found` governance signal text, not the PRD
+  prose's `MANUAL REQUIRED` casing (`golden-privacy.test.js`); Trace View's
+  real ordered steps, both field-rename mappings, the external HTTP hop's
+  visibly-flagged unprotected trust-boundary crossing, and each alternate
+  destination's own individual verdict — including two alternates that
+  share a destination label (`Application Logs`) but render different
+  verdicts, proving per-item verdicts rather than one shared verdict per
+  destination (`golden-trace.test.js`); and AC-16's cross-view
+  state-persistence — selection and filters survive a real, dispatched tab
+  click from Architecture to Privacy, with the header/coverage-banner DOM
+  content byte-identical before and after (`golden-shell-state.test.js`).
+  **Real, disclosed finding**: the cleartext payment flow's real computed
+  trace is **4 steps**, not the 5 named in PRD §7.10's own illustrative
+  table — the table's separate SERIALIZATION step is not something the
+  current `computeTraceSteps` output produces as its own step. Every
+  assertion in `golden-trace.test.js` is grounded in the real function
+  output, never the PRD table's own step count.
+- **AC-22 (the §8.4 11-state visual matrix) — honestly split, not silently
+  narrowed**: only 3 of the 11 named states have real, already-shipped UI.
+  Those 3 get real golden-DOM tests in `test/golden-state-matrix.test.js`:
+  **Error** (`main.js`'s real `showError` renders the real error title and
+  message and never also renders a clean/protected summary alongside it —
+  see that file's own disclosed note on why `showError` is now exported,
+  below); **Selected** (the same real `data-selected="true"` mechanism
+  `golden-architecture.test.js` already exercises, confirmed present on
+  both Architecture View's and Privacy View's own selected elements for
+  the same selection, not a new mechanism invented for this test);
+  **Hovered** (a real `:hover` CSS rule confirmed present in
+  `styles/privacy-view.css`, `styles/inventory-view.css`, and
+  `styles/trace-view.css`, read as text — same "read the real stylesheet"
+  pattern `test/tokens-contrast.test.js` already uses, since `:hover`
+  cannot be triggered or observed via `dom-shim`). **The other 8 states
+  have no dedicated visual treatment anywhere in `src/` or `styles/`
+  today** (confirmed by direct grep during scoping) and are named, not
+  invented: Loading/scanning, Partial, Truncated, Unsupported (a
+  graph-level persistent banner, distinct from Inventory's own
+  `unsupportedCandidates` table row), Unresolved destination's specific
+  dashed-edge/question-mark glyph treatment (the node itself already
+  renders — only that specific visual is unconfirmed), Zero filtered
+  results, Error's own phase-2 retry/export-diagnostics action (only the
+  base failed-state UI is real), and Stale artifact. Each is a visible
+  `test.todo(...)` entry in `test/golden-state-matrix-gaps.test.js`, naming
+  exactly what UI would need to exist first — real, permanent entries in
+  `npm test`'s own summary (currently 8 `todo`), not a doc that can go
+  stale silently. **AC-22 does not pass** — 8 of its 11 named states have
+  no code to test, and no placeholder UI was built to force a pass.
+- **One real, minimal, disclosed change to `main.js` rode along**:
+  `showError` (previously module-internal) is now exported, purely so
+  `golden-state-matrix.test.js` can call the exact function `init()`'s own
+  fetch-catch path already calls, rather than a parallel test-only
+  reimplementation. This repo's current Node version has no ESM
+  module-mocking primitive in stable `node:test` (confirmed this session —
+  `mock` has no `.module` method), so exercising the real fetch-failure
+  path end-to-end would have needed either a new test dependency or this
+  export; the export is the smaller footprint. A second, real fix rode
+  along with it: `main.js`'s top-level `init()` call is now guarded on
+  `document.getElementById('app-root')` actually resolving to something,
+  since importing `main.js` for its `showError` export runs the module's
+  own top-level statements (including the unconditional `init()` call) as
+  a side effect — under `dom-shim.js`'s bare virtual document (no
+  `#app-root` element exists), the unguarded call crashed with an
+  unhandled rejection. The guard is also a real defensive property outside
+  of tests: this script was never meant to run against a page lacking its
+  own mount point. `dom-shim.js` gained a matching `getElementById()`
+  (always `null` — there is no element registry in this shim, only
+  whatever an individual test builds by hand).
+
 | Module | Responsibility |
 |---|---|
 | `src/lib/escape-html.js` | Escapes text for the rare case of building a raw HTML/attribute STRING outside of `el()` (e.g. a future `document.title` assignment, or serializing to an SVG attribute string). Quote-complete (escapes `&<>"'`) — neither existing in-repo escaper (`scanner/src/posture/fleet.js`, `scanner/src/badge.js`) is. **Never combine with `el()`'s text-child insertion** — `el()` already escapes via `createTextNode` (see `src/lib/dom.js` below), and pre-escaping on top of that double-escapes (a real repo name like `Acme & Sons' <repo>` would render on screen as the literal text `Acme &amp; Sons&#39; &lt;repo&gt;`). This exact bug shipped in `shell.js` and was fixed by dropping the `escapeHtml()` calls there, not by touching this module. |
