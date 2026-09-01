@@ -8,7 +8,18 @@ const PROTECTION_TIERS = Object.freeze(['protected', 'unprotected', 'mixed', 'un
 
 export function computeFilterFacets(graph) {
   const dataClasses = [...new Set((graph.dataElements ?? []).flatMap((d) => d.dataClasses ?? []))].sort();
-  return { dataClasses, protectionTiers: PROTECTION_TIERS };
+  const sourceCategories = [...new Set(graph.nodes.filter((n) => n.kind === 'source').map((n) => n.subtype).filter(Boolean))].sort();
+  const sinkCategories = [...new Set(graph.nodes.filter((n) => n.kind === 'sink').map((n) => n.subtype).filter(Boolean))].sort();
+  const destinationExternalities = [...new Set(graph.nodes.map((n) => n.externality?.value).filter(Boolean))].sort();
+  const transitVerdicts = [...new Set(graph.edges.map((e) => e.protection.transit.verdict))].sort();
+  const atRestVerdicts = [...new Set(graph.edges.map((e) => e.protection.atRest.verdict))].sort();
+  const handlingVerdicts = [...new Set(graph.edges.map((e) => e.protection.handling.verdict))].sort();
+  const policyVerdicts = [...new Set(graph.flows.map((f) => f.policyVerdict))].sort();
+  return {
+    dataClasses, protectionTiers: PROTECTION_TIERS,
+    sourceCategories, sinkCategories, destinationExternalities,
+    transitVerdicts, atRestVerdicts, handlingVerdicts, policyVerdicts,
+  };
 }
 
 /**

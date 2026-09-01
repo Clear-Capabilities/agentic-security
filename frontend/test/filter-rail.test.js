@@ -20,6 +20,42 @@ test('computeFilterFacets never throws on a graph with zero dataElements', () =>
   assert.deepEqual(computeFilterFacets(emptyGraph).dataClasses, []);
 });
 
+// The 6 new facets added for the filter-rail expansion (dataClass/
+// protection/ai grow to 9 real facets). Every expected value below was
+// computed by reading FLAGSHIP_GRAPH's real committed nodes/edges/flows
+// directly, not guessed or copied from the PRD's illustrative vocabulary.
+test('computeFilterFacets: sourceCategories are the real, distinct node.subtype values among kind===source nodes', () => {
+  const facets = computeFilterFacets(FLAGSHIP_GRAPH);
+  // The real fixture has exactly ONE kind:'source' node (Web App), subtype 'web-app'.
+  assert.deepEqual(facets.sourceCategories, ['web-app']);
+});
+
+// Real, disclosed surprise found while grounding this test against the
+// fixture: FLAGSHIP_GRAPH has ZERO nodes with kind==='sink' (confirmed also
+// by test/xss-adversarial.test.js's own comment, "no node kind is 'sink'",
+// and inventory-view.js's own Sinks table, which filters on the same
+// kind==='sink' predicate and is empty for this fixture too). So
+// sinkCategories is correctly an EMPTY array here, not the non-empty set
+// the brief's own illustrative test comment implied every facet would be.
+test('computeFilterFacets: sinkCategories, destinationExternalities, transitVerdicts, atRestVerdicts, handlingVerdicts, policyVerdicts are all real, deduplicated, sorted arrays grounded in the real fixture', () => {
+  const facets = computeFilterFacets(FLAGSHIP_GRAPH);
+  for (const key of ['sinkCategories', 'destinationExternalities', 'transitVerdicts', 'atRestVerdicts', 'handlingVerdicts', 'policyVerdicts']) {
+    assert.ok(Array.isArray(facets[key]), `expected facets.${key} to be an array`);
+  }
+  // sinkCategories: no kind:'sink' node exists in the real fixture at all.
+  assert.deepEqual(facets.sinkCategories, []);
+  // destinationExternalities: real node.externality.value values present are internal/external/unknown.
+  assert.deepEqual(facets.destinationExternalities, ['external', 'internal', 'unknown']);
+  // transitVerdicts: every edge is 'not_assessed' except the one HTTP hop to Payment API ('unprotected').
+  assert.deepEqual(facets.transitVerdicts, ['not_assessed', 'unprotected']);
+  // atRestVerdicts: every edge is 'not_assessed' except the Payments Service -> PostgreSQL edge ('unknown').
+  assert.deepEqual(facets.atRestVerdicts, ['not_assessed', 'unknown']);
+  // handlingVerdicts: masked-log edge is 'protected', raw-log edge is 'unprotected', every other edge is 'not_assessed'.
+  assert.deepEqual(facets.handlingVerdicts, ['not_assessed', 'protected', 'unprotected']);
+  // policyVerdicts: the two AI-recipient flows are 'manual_review_required'; every other flow is 'not_evaluated'.
+  assert.deepEqual(facets.policyVerdicts, ['manual_review_required', 'not_evaluated']);
+});
+
 // Render-level test, added as part of the final fix wave: toggleListFilter()
 // (the click handler wired to each chip button) had zero coverage since it's
 // unreachable from the pure-function tests above — computeFilterFacets never
