@@ -281,3 +281,111 @@ test('createExploreServer rejects a missing/short sessionToken rather than start
 test('createExploreServer rejects a missing graph', () => {
   assert.throws(() => createExploreServer({ sessionToken: generateSessionToken() }));
 });
+
+// --- Milestone 3, sub-project Wire: static-asset serving ---
+// Real, live HTTP requests against a real running server — same discipline
+// as the rest of this file — proving the deliberate token-exemption AND the
+// allowlist/path-confinement both hold under actual network traffic, not
+// just the pure-function unit tests in static-assets.test.js.
+
+test('GET / with NO session token succeeds — the ONE deliberate unauthenticated exception — and serves the real index.html markup', async () => {
+  const { server, port } = await startTestServer();
+  try {
+    const res = await request(port, { path: '/', headers: { host: `127.0.0.1:${port}` } });
+    assert.equal(res.status, 200);
+    assert.match(String(res.body), /<div id="app-root">/);
+    assert.match(String(res.body), /src="\.\/src\/main\.js"/);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/v1/graph with NO token still returns 401 — unchanged from S1, the exemption is static-asset-only', async () => {
+  const { server, port } = await startTestServer();
+  try {
+    const res = await request(port, { path: '/api/v1/graph', headers: { host: `127.0.0.1:${port}` } });
+    assert.equal(res.status, 401);
+  } finally {
+    server.close();
+  }
+});
+
+test('static routes still carry the SEPARATE static CSP (same-origin-permitting), not the JSON API\'s default-src none', async () => {
+  const { server, port } = await startTestServer();
+  try {
+    const res = await request(port, { path: '/', headers: { host: `127.0.0.1:${port}` } });
+    assert.equal(res.status, 200);
+    assert.match(res.headers['content-security-policy'] || '', /script-src 'self'/);
+    assert.doesNotMatch(res.headers['content-security-policy'] || '', /default-src 'none'/);
+    assert.equal(res.headers['cache-control'], 'no-store');
+    assert.equal(res.headers['access-control-allow-origin'], undefined);
+    assert.match(res.headers['content-type'] || '', /text\/html/);
+  } finally {
+    server.close();
+  }
+});
+
+test('an allowlisted JS asset is served with the right Content-Type', async () => {
+  const { server, port } = await startTestServer();
+  try {
+    const res = await request(port, { path: '/src/app.js', headers: { host: `127.0.0.1:${port}` } });
+    assert.equal(res.status, 200);
+    assert.match(res.headers['content-type'] || '', /text\/javascript/);
+    assert.match(String(res.body), /bootstrap/);
+  } finally {
+    server.close();
+  }
+});
+
+test('T2 regression guard: a forged Host header is STILL rejected on a static route (T2 applies regardless of auth)', async () => {
+  const { server, port } = await startTestServer();
+  try {
+    const res = await request(port, { path: '/', headers: { host: 'evil.example.com' } });
+    assert.equal(res.status, 400);
+    assert.match(res.body.error, /Host/i);
+  } finally {
+    server.close();
+  }
+});
+
+test('T4 regression guard: a `../`-style traversal attempt is rejected with 404 on a REAL running server, no token supplied', async () => {
+  const { server, port } = await startTestServer();
+  try {
+    const attempts = [
+      '/../package.json',
+      '/src/../../package.json',
+      '/%2e%2e/package.json',
+    ];
+    for (const p of attempts) {
+      const res = await request(port, { path: p, headers: { host: `127.0.0.1:${port}` } });
+      assert.equal(res.status, 404, `expected 404 for traversal attempt ${p}, got ${res.status}`);
+      assert.doesNotMatch(String(res.body), /"name"\s*:\s*"@clear-capabilities/, `${p} must never actually serve package.json's contents`);
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test('files that exist on disk but are NOT allowlisted (test/, scripts/, package.json, README.md, CLAUDE.md) are rejected 404 on a REAL running server', async () => {
+  const { server, port } = await startTestServer();
+  try {
+    const rejected = ['/test/dom-shim.js', '/scripts/generate-fixture-module.mjs', '/package.json', '/README.md', '/CLAUDE.md', '/.gitignore'];
+    for (const p of rejected) {
+      const res = await request(port, { path: p, headers: { host: `127.0.0.1:${port}` } });
+      assert.equal(res.status, 404, `expected 404 for ${p}, got ${res.status}`);
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test('a rejected static path returns 404, never 403 (never confirms a path\'s existence to a prober)', async () => {
+  const { server, port } = await startTestServer();
+  try {
+    const res = await request(port, { path: '/README.md', headers: { host: `127.0.0.1:${port}` } });
+    assert.equal(res.status, 404);
+    assert.notEqual(res.status, 403);
+  } finally {
+    server.close();
+  }
+});

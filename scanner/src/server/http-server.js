@@ -10,8 +10,11 @@
 // This is the first node:http usage anywhere in scanner/src/.
 
 import * as http from 'node:http';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { isValidHost, constantTimeEqual, CSP_HEADER_VALUE } from './security.js';
 import { handleScan, handleGraph, handleNode, handleEdge, handleFlow } from './routes.js';
+import { resolveStaticAsset, FRONTEND_ROOT, STATIC_CSP_HEADER_VALUE } from './static-assets.js';
 
 // Idle-timeout default. No PRD-specified duration exists (confirmed by the
 // scoping doc's own search) — 30 minutes is a reasoned, disclosed default:
@@ -61,6 +64,42 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/api\/v1\/edges\/([^/]+)\/?$/, handler: (graph, m) => handleEdge(graph, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/api\/v1\/flows\/([^/]+)\/?$/, handler: (graph, m) => handleFlow(graph, decodeURIComponent(m[1])) },
 ];
+
+/**
+ * Serves one resolved static asset from disk. `resolved` is a real
+ * `{ok:true, relativePath, contentType}` from resolveStaticAsset() —
+ * already vetted against the allowlist, so the only failure mode left here
+ * is the file genuinely missing/unreadable on disk (allowlist/inventory
+ * drift), which degrades to a 404 rather than a 500.
+ *
+ * `relativePath` is built entirely from static-assets.js's own restricted
+ * character class (no backslash, already traversal-checked) before it ever
+ * reaches this function, so joining it onto FRONTEND_ROOT with the platform
+ * path.join is safe.
+ */
+function _serveStaticAsset(res, resolved) {
+  let body;
+  try {
+    body = fs.readFileSync(path.join(FRONTEND_ROOT, resolved.relativePath));
+  } catch {
+    _sendJson(res, 404, { error: 'not found' });
+    return 404;
+  }
+  if (!res.headersSent) {
+    res.writeHead(200, {
+      'Content-Type': resolved.contentType,
+      // The STATIC CSP (same-origin-permitting), NOT the JSON API's
+      // `default-src 'none'` — this response is HTML/JS/CSS, not JSON.
+      'Content-Security-Policy': STATIC_CSP_HEADER_VALUE,
+      'Cache-Control': 'no-store',
+      'Content-Length': body.length,
+      // Access-Control-Allow-Origin is intentionally NEVER set anywhere in
+      // this file, on any response, static or JSON alike.
+    });
+  }
+  res.end(body);
+  return 200;
+}
 
 /**
  * Creates and starts the `explore` HTTP server. Returns a Promise that
@@ -139,6 +178,36 @@ export function createExploreServer({
       _sendJson(res, 400, { error: 'invalid Host header' });
       finish(400);
       req.resume(); // drain and discard any body without processing it
+      return;
+    }
+
+    // 1.5. Static-asset serving (Wire's own new surface) — the ONE
+    // deliberate, disclosed exception to "every request requires a session
+    // token" below. The token travels to the browser via a URL FRAGMENT
+    // (`#token=...`), which is NEVER sent to the server by the browser in
+    // any HTTP request — so the very first page-load request (GET /) is
+    // structurally incapable of carrying it. Every subsequent same-origin
+    // fetch() the page itself makes against /api/v1/* still requires the
+    // token, completely unchanged from S1.
+    //
+    // Namespaced away from /api/v1/* so there is no ambiguity: any GET
+    // request NOT under /api/ is resolved against the static-asset
+    // allowlist and NEVER reaches the token check at all, matching or
+    // rejecting with a 404 (never a 403 — a 403 would confirm to a prober
+    // that a rejected path exists). This still runs strictly AFTER the
+    // Host-header check above (T2 applies uniformly, auth or not — DNS
+    // rebinding does not care whether the resource behind it needs a
+    // token).
+    if (method === 'GET' && !urlPath.startsWith('/api/')) {
+      const staticResult = resolveStaticAsset(urlPath);
+      if (staticResult.ok) {
+        const status = _serveStaticAsset(res, staticResult);
+        finish(status);
+      } else {
+        _sendJson(res, 404, { error: 'not found' });
+        finish(404);
+      }
+      req.resume();
       return;
     }
 
