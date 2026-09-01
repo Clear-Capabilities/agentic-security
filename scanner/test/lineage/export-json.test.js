@@ -152,3 +152,31 @@ test('exportGraphJSON: flow narrowing requires the FULL edgeIds subset, not just
   assert.equal(result.graph.flows.length, 1, 'both candidate flows share source+sink; only the one whose full edgeIds[] survives should remain');
   assert.equal(result.graph.flows[0].id, 'flow:f7273b6e7b61');
 });
+
+// The negative (redact:false) test above proves nothing is redacted when
+// opted out — but the real flagship fixture's own evidence content is
+// benign (no secret-shaped strings), so it cannot prove the DEFAULT
+// (redact:true) path genuinely mutates content: a mutant that flipped
+// `redact !== false` to always-false would still pass every assertion
+// above. This test uses a small synthetic secret-bearing graph (same
+// shape as mcp-dataflow-tools.test.js's own SECRET_GRAPH fixture) to
+// close that gap with a real positive content-mutation proof.
+const SECRET_GRAPH = {
+  ...flagship,
+  evidence: [{
+    id: 'evidence:synthetic-secret',
+    claim: 'destination literal resolves to https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
+    evidenceType: 'destination-resolution',
+    location: { note: 'password="hunter2hunter2" appears near this call' },
+    snippet: 'const password = "hunter2hunter2";',
+  }],
+};
+
+test('exportGraphJSON: default (redact:true) genuinely mutates real secret-shaped content', () => {
+  const result = exportGraphJSON(SECRET_GRAPH);
+  const ev = result.graph.evidence[0];
+  assert.doesNotMatch(ev.claim, /hooks\.slack\.com\/services\/T00000000/);
+  assert.match(ev.claim, /\[REDACTED:slack-webhook\]/);
+  assert.doesNotMatch(ev.snippet, /hunter2hunter2/);
+  assert.doesNotMatch(ev.location.note, /hunter2hunter2/);
+});

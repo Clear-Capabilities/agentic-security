@@ -121,6 +121,14 @@ export function exportGraphJSON(graph, opts = {}) {
   return {
     exportedAt: new Date().toISOString(),
     schemaVersion: graph?.schemaVersion ?? null,
+    // Deliberate: the digest always identifies the SOURCE graph this
+    // export was taken from, never the filtered/redacted `graph:` body
+    // below — two different filters (or redact:true vs redact:false) of
+    // the same scan must report the same digest, since both are views
+    // of one underlying scan result, not independently-verifiable
+    // artifacts of their own. A caller wanting to verify `graph:`'s own
+    // content should re-filter/re-redact the source and compare, not
+    // treat this digest as a hash of the returned body.
     digest: computeGraphDigest(graph),
     scope: graph?.scope ?? null,
     coverage: graph?.coverage ?? null,
