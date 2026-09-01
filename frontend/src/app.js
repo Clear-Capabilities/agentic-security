@@ -3,6 +3,7 @@ import { FLAGSHIP_GRAPH } from './data/flagship-graph.js';
 import { computeArchitectureViewModel, renderArchitectureView, renderFlowSummary } from './views/architecture-view.js';
 import { computePrivacyViewModel, renderPrivacyView } from './views/privacy-view.js';
 import { computeTraceViewModel, renderTraceView } from './views/trace-view.js';
+import { computeInventoryViewModel, renderInventoryView } from './views/inventory-view.js';
 import { computeInspectorViewModel, renderInspector } from './components/evidence-inspector.js';
 import { computeFilterFacets, renderFilterRail } from './components/filter-rail.js';
 
@@ -29,16 +30,20 @@ export function bootstrap(rootEl, graph) {
       const viewModel = computeTraceViewModel(graph, state);
       renderTraceView(viewModel, shellApi.getCanvasEl(), (flowId) => shellApi.setSelection(flowId));
       shellApi.getContextRailEl().textContent = buildContextRailText(graph);
+    } else if (state.view === 'inventory') {
+      const viewModel = computeInventoryViewModel(graph, state);
+      renderInventoryView(viewModel, shellApi.getCanvasEl(), (id) => shellApi.setSelection(id), (tableId) => shellApi.setTable(tableId));
+      shellApi.getContextRailEl().textContent = buildContextRailText(graph);
     }
 
     const inspectorViewModel = computeInspectorViewModel(graph, state.selectedId);
     renderInspector(inspectorViewModel, shellApi.getInspectorEl());
 
-    if (state.view === 'privacy') {
+    if (state.view === 'privacy' || state.view === 'inventory') {
       renderFilterRail(filterFacets, state.filters ?? {}, shellApi.getLeftRailEl(), (nextFilters) => shellApi.setFilters(nextFilters));
     } else {
       const railEl = shellApi.getLeftRailEl();
-      railEl.textContent = 'Filters apply to Privacy View.';
+      railEl.textContent = 'Filters apply to Privacy View and some Inventory tables.';
     }
   }
 

@@ -22,7 +22,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDomShim } from './dom-shim.js';
-import { ADVERSARIAL_GRAPH, SCRIPT_TAG } from './adversarial-fixture.js';
+import { ADVERSARIAL_GRAPH, SCRIPT_TAG, SVG_PAYLOAD } from './adversarial-fixture.js';
 
 const { document } = createDomShim();
 globalThis.document = document;
@@ -30,6 +30,7 @@ globalThis.document = document;
 const { computeArchitectureViewModel, renderArchitectureView } = await import('../src/views/architecture-view.js');
 const { computePrivacyViewModel, renderPrivacyView } = await import('../src/views/privacy-view.js');
 const { computeTraceViewModel, renderTraceView } = await import('../src/views/trace-view.js');
+const { computeInventoryViewModel, renderInventoryView } = await import('../src/views/inventory-view.js');
 
 /**
  * Walks a dom-shim tree (root inclusive) and returns every element node as
@@ -138,6 +139,39 @@ test('T1: Trace View renders the adversarial fixture with no live <script>, no o
   assert.ok(viewModel, 'sanity: the adversarial flow must be selectable and produce a view model');
   renderTraceView(viewModel, canvasEl, () => {});
   assertNoLiveXss(canvasEl, 'Trace View');
+});
+
+// Inventory View: `table: 'fields'` was the brief's assumed default, but
+// checking the real fixture (test/adversarial-fixture.js) shows it does not
+// carry the SCRIPT_TAG payload — dataElements[0].name is CONTROL_CHARS, not
+// SCRIPT_TAG. Tracing every one of the 11 category compute functions
+// (inventory-view.js's TABLE_COMPUTE) against this fixture: `sinks`,
+// `externalDestinations`, `aiSystems`, `transformations`, `unprotectedEdges`
+// (both nodes' externality is 'internal', no node kind is 'sink', no AI
+// subtype, no transformations, and worstVerdict(['not_assessed'] x3) is
+// 'not_assessed' which is outside UNPROTECTED_TIERS), `policyPermittedFlows`
+// and `manualGovernanceGaps` (flow.policyVerdict is 'not_evaluated', not
+// 'permitted'/'manual_review_required'; no node/edge has coverageStatus
+// 'manual'), and `unsupportedCandidates` are all EMPTY for this fixture —
+// and none of the categories that render text ever surface SCRIPT_TAG
+// itself (it only lives in scope.repository, node aliases, edge
+// fieldMappings, flow.governanceRefs/limitations, and evidence.claim, none
+// of which any inventory category renders). `sources` is the table this
+// fixture actually populates with hostile content: node:source:evil1's
+// label is SVG_PAYLOAD. So this test uses `sources` and checks for
+// SVG_PAYLOAD-as-text directly rather than reusing assertPayloadOnlyAsText
+// (which is hardcoded to search for SCRIPT_TAG specifically).
+test('T1: Inventory View renders the adversarial fixture with no live <script>, no on* handler, no javascript: URL anywhere in the DOM', () => {
+  const canvasEl = document.createElement('div');
+  const viewModel = computeInventoryViewModel(ADVERSARIAL_GRAPH, { view: 'inventory', selectedId: null, filters: {}, table: 'sources' });
+  renderInventoryView(viewModel, canvasEl, () => {}, () => {});
+  assertNoLiveXss(canvasEl, 'Inventory View (sources)');
+
+  const elements = allElements(canvasEl);
+  const foundAsText = elements.some((node) =>
+    node.childNodes.some((child) => child.nodeType === 'text' && child.data.includes(SVG_PAYLOAD)),
+  );
+  assert.ok(foundAsText, 'Inventory sources table should surface the hostile node label (SVG_PAYLOAD) as escaped text');
 });
 
 // ── Mutation-proof: confirm this test suite is a genuine mutant-catcher ──

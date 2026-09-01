@@ -16,6 +16,7 @@ const VIEWS = [
  *   getState: () => {view: string, selectedId: string|null, filters: object},
  *   setSelection: (selectedId: string|null) => void,
  *   setFilters: (filters: object) => void,
+ *   setTable: (tableId: string) => void,
  *   onStateChange: (listener: (state: object) => void) => (() => void),
  *   getCanvasEl: () => HTMLElement,
  *   getInspectorEl: () => HTMLElement,
@@ -84,6 +85,9 @@ export function mountShell(rootEl, graph) {
     },
     setFilters(filters) {
       updateState({ ...state, filters });
+    },
+    setTable(tableId) {
+      updateState({ ...state, table: tableId });
     },
     onStateChange(listener) {
       stateChangeListeners.push(listener);

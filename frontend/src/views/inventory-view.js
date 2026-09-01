@@ -165,3 +165,77 @@ export function computeInventoryViewModel(graph, state) {
 
   return { tables, activeTable, columns, rows, filterable };
 }
+
+import { el, clear } from '../lib/dom.js';
+
+function renderSubNav(viewModel, onTableChange) {
+  const buttons = viewModel.tables.map((t) =>
+    el(
+      'button',
+      {
+        class: 'inventory-subnav-button',
+        'data-table-id': t.id,
+        'data-active': String(t.id === viewModel.activeTable),
+        'aria-pressed': String(t.id === viewModel.activeTable),
+        onClick: () => onTableChange(t.id),
+      },
+      `${t.label} (${t.count})`,
+    ),
+  );
+  return el('div', { class: 'inventory-subnav' }, buttons);
+}
+
+function renderRow(row, onSelect) {
+  return el(
+    'tr',
+    {
+      class: 'inventory-row',
+      'data-selected': String(row.selected),
+      'data-visible': String(row.visible),
+      tabindex: '0',
+      role: 'button',
+      'aria-label': `${row.cells[0]}${row.selected ? ', selected' : ''}`,
+      onClick: () => row.selectableId && onSelect(row.selectableId),
+      onKeydown: (evt) => {
+        if ((evt.key === 'Enter' || evt.key === ' ') && row.selectableId) {
+          evt.preventDefault();
+          onSelect(row.selectableId);
+        }
+      },
+    },
+    row.cells.map((cellText) => el('td', {}, cellText)),
+  );
+}
+
+function sortRows(rows, columnIndex, direction) {
+  const sorted = [...rows].sort((a, b) => {
+    const cmp = String(a.cells[columnIndex]).localeCompare(String(b.cells[columnIndex]));
+    return direction === 'asc' ? cmp : -cmp;
+  });
+  return sorted;
+}
+
+/**
+ * @param {ReturnType<typeof computeInventoryViewModel>} viewModel
+ * @param {HTMLElement} canvasEl
+ * @param {(selectableId: string) => void} onSelect
+ * @param {(tableId: string) => void} onTableChange
+ */
+export function renderInventoryView(viewModel, canvasEl, onSelect, onTableChange) {
+  clear(canvasEl);
+
+  const subNav = renderSubNav(viewModel, onTableChange);
+
+  let sortState = { columnIndex: null, direction: 'asc' };
+  const headerRow = el('tr', {}, viewModel.columns.map((col, i) =>
+    el('th', { onClick: () => {
+      sortState = sortState.columnIndex === i ? { columnIndex: i, direction: sortState.direction === 'asc' ? 'desc' : 'asc' } : { columnIndex: i, direction: 'asc' };
+      const sortedRows = sortRows(viewModel.rows, sortState.columnIndex, sortState.direction);
+      renderInventoryView({ ...viewModel, rows: sortedRows }, canvasEl, onSelect, onTableChange);
+    } }, col),
+  ));
+  const bodyRows = viewModel.rows.map((row) => renderRow(row, onSelect));
+  const table = el('table', { class: 'inventory-table' }, [el('thead', {}, headerRow), el('tbody', {}, bodyRows)]);
+
+  canvasEl.appendChild(el('div', { class: 'inventory-view' }, [subNav, table]));
+}
