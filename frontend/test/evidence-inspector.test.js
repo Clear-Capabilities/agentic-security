@@ -55,3 +55,26 @@ test('computeInspectorViewModel never returns a conflicting-evidence item unless
   assert.equal(vm.conflicting.length, 0, 'no evidence in the current fixture is marked conflicting — this must not be invented');
   for (const item of vm.conflicting) assert.equal(item.conflict, true);
 });
+
+test('computeInspectorViewModel resolves a dataElement id', () => {
+  const graph = {
+    nodes: [], edges: [], flows: [], evidence: [],
+    dataElements: [{ id: 'data:email', name: 'email', dataClasses: ['PII'], aiContexts: [] }],
+    transformations: [],
+  };
+  const vm = computeInspectorViewModel(graph, 'data:email');
+  assert.ok(vm);
+  assert.equal(vm.kind, 'dataElement');
+  assert.match(vm.claim, /email/);
+});
+
+test('computeInspectorViewModel resolves a transformation id', () => {
+  const graph = {
+    nodes: [], edges: [], flows: [], evidence: [], dataElements: [],
+    transformations: [{ id: 'transform:mask1', kind: 'mask', reversibility: 'irreversible' }],
+  };
+  const vm = computeInspectorViewModel(graph, 'transform:mask1');
+  assert.ok(vm);
+  assert.equal(vm.kind, 'transformation');
+  assert.match(vm.claim, /mask/);
+});

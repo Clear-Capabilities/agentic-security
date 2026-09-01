@@ -16,7 +16,18 @@ export function flowPathNodeIds(graph, flow) {
   return ids;
 }
 
-const AI_SUBTYPES = new Set(['ai-assistant', 'ai-model-provider', 'vector-store']);
+// Backend AI node-subtype vocabulary (scanner/src/lineage/schema.js's
+// SOURCE_CATEGORIES/SINK_CATEGORIES, AI-flavored entries only). This list
+// must be hand-kept in sync with that schema file — the frontend never
+// imports scanner/src/lineage/ at runtime (see frontend/CLAUDE.md).
+// Corrected this increment: the previous set ('ai-assistant',
+// 'vector-store') matched neither real enum and silently never matched
+// any real node.
+export const AI_SUBTYPES = new Set([
+  'ai-model-provider', 'ai-local-model', 'ai-agent', 'ai-tool',
+  'ai-vector-store', 'ai-memory', 'ai-training', 'ai-evaluation', 'ai-telemetry',
+  'ai-model-output', 'ai-tool-result', 'ai-retrieved-document',
+]);
 
 // AI relevance is computed from flow/node TOPOLOGY (does the path touch an
 // AI-kind node), never from dataElement.aiContexts — that field is never

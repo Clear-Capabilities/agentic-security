@@ -40,3 +40,15 @@ test('isAiRelevantFlow does not rely on dataElement.aiContexts (which is empty f
   // yet an AI-topology flow must still be detected:
   assert.equal(isAiRelevantFlow(FLAGSHIP_GRAPH, flowByKey('flow.pci.ai')), true);
 });
+
+test('isAiRelevantFlow recognizes the real backend AI subtype vocabulary', () => {
+  const graph = {
+    nodes: [
+      { id: 'node:a', kind: 'process', subtype: null },
+      { id: 'node:b', kind: 'sink', subtype: 'ai-model-provider' },
+    ],
+    edges: [],
+  };
+  const flow = { id: 'flow:1', source: 'node:a', sink: 'node:b', edgeIds: [] };
+  assert.equal(isAiRelevantFlow(graph, flow), true);
+});

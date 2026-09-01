@@ -172,6 +172,18 @@ test('mountShell exposes getLeftRailEl returning the left rail element', () => {
   shell.destroy();
 });
 
+test('the view tab bar includes an Inventory tab', () => {
+  window.location.hash = '';
+  const root = document.createElement('div');
+  const shell = mountShell(root, makeGraph());
+
+  const tabs = root.querySelectorAll('[data-view-id]');
+  const inventoryTab = tabs.find((t) => t.getAttribute('data-view-id') === 'inventory');
+  assert.ok(inventoryTab, 'expected a rendered tab button for the inventory view');
+
+  shell.destroy();
+});
+
 test('an external hashchange (e.g. back/forward navigation) still updates state and notifies subscribers', () => {
   window.location.hash = '';
   const root = document.createElement('div');

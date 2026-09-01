@@ -5,6 +5,7 @@ const VIEWS = [
   { id: 'architecture', label: 'Architecture' },
   { id: 'privacy', label: 'Privacy' },
   { id: 'trace', label: 'Trace' },
+  { id: 'inventory', label: 'Inventory' },
 ];
 
 /**

@@ -7,10 +7,12 @@ export function computeInspectorViewModel(graph, selectedId) {
   const flow = graph.flows.find((f) => f.id === selectedId);
   const edge = !flow && graph.edges.find((e) => e.id === selectedId);
   const node = !flow && !edge && graph.nodes.find((n) => n.id === selectedId);
-  const target = flow || edge || node;
+  const dataElement = !flow && !edge && !node && graph.dataElements.find((d) => d.id === selectedId);
+  const transformation = !flow && !edge && !node && !dataElement && graph.transformations.find((t) => t.id === selectedId);
+  const target = flow || edge || node || dataElement || transformation;
   if (!target) return null;
 
-  const kind = flow ? 'flow' : edge ? 'edge' : 'node';
+  const kind = flow ? 'flow' : edge ? 'edge' : node ? 'node' : dataElement ? 'dataElement' : 'transformation';
   const evidenceRefs = target.evidenceRefs ?? [];
   const evidenceItems = evidenceRefs
     .map((id) => graph.evidence.find((ev) => ev.id === id))
@@ -40,6 +42,12 @@ function buildClaimText(graph, kind, target) {
     const from = graph.nodes.find((n) => n.id === target.from);
     const to = graph.nodes.find((n) => n.id === target.to);
     return `${from?.label ?? '?'} → ${to?.label ?? '?'}: handling ${target.protection.handling.verdict}, transit ${target.protection.transit.verdict}, at rest ${target.protection.atRest.verdict}`;
+  }
+  if (kind === 'dataElement') {
+    return `${target.name}: ${(target.dataClasses ?? []).join(', ') || 'no data classes recorded'}`;
+  }
+  if (kind === 'transformation') {
+    return `${target.kind} transformation (${target.reversibility})`;
   }
   return `${target.label} (${target.kind}/${target.subtype})`;
 }

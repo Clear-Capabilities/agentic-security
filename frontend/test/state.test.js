@@ -1,14 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseStateFromHash, serializeStateToHash } from '../src/lib/state.js';
+import { parseStateFromHash, serializeStateToHash, INVENTORY_TABLES } from '../src/lib/state.js';
 
 test('parseStateFromHash returns defaults for an empty hash', () => {
   const state = parseStateFromHash('');
-  assert.deepEqual(state, { view: 'architecture', selectedId: null, filters: {} });
+  assert.deepEqual(state, { view: 'architecture', selectedId: null, filters: {}, table: INVENTORY_TABLES[0] });
 });
 
 test('parseStateFromHash returns defaults for a bare "#"', () => {
-  assert.deepEqual(parseStateFromHash('#'), { view: 'architecture', selectedId: null, filters: {} });
+  assert.deepEqual(parseStateFromHash('#'), { view: 'architecture', selectedId: null, filters: {}, table: INVENTORY_TABLES[0] });
 });
 
 test('parseStateFromHash reads view and selectedId', () => {
@@ -33,7 +33,7 @@ test('parseStateFromHash rejects an unknown view name back to the default', () =
 });
 
 test('serializeStateToHash round-trips through parseStateFromHash', () => {
-  const original = { view: 'privacy', selectedId: 'node:process:abc123', filters: { class: ['PHI'], ai: true } };
+  const original = { view: 'privacy', selectedId: 'node:process:abc123', filters: { class: ['PHI'], ai: true }, table: INVENTORY_TABLES[0] };
   const hash = serializeStateToHash(original);
   const parsed = parseStateFromHash(hash);
   assert.deepEqual(parsed, original);
@@ -51,4 +51,26 @@ test('parseStateFromHash never throws on adversarial input', () => {
   for (const input of adversarialInputs) {
     assert.doesNotThrow(() => parseStateFromHash(input), `input "${input}" should not throw`);
   }
+});
+
+test('DEFAULT_STATE / parseStateFromHash default the table field to the first inventory category', () => {
+  const state = parseStateFromHash('');
+  assert.equal(state.table, INVENTORY_TABLES[0]);
+});
+
+test('parseStateFromHash reads a valid table value', () => {
+  const state = parseStateFromHash(`#view=inventory&table=${INVENTORY_TABLES[3]}`);
+  assert.equal(state.table, INVENTORY_TABLES[3]);
+});
+
+test('parseStateFromHash rejects an unknown table name back to the default', () => {
+  const state = parseStateFromHash('#table=not-a-real-table');
+  assert.equal(state.table, INVENTORY_TABLES[0]);
+});
+
+test('serializeStateToHash round-trips table', () => {
+  const original = { view: 'inventory', selectedId: null, filters: {}, table: INVENTORY_TABLES[5] };
+  const hash = serializeStateToHash(original);
+  const parsed = parseStateFromHash(hash);
+  assert.equal(parsed.table, INVENTORY_TABLES[5]);
 });
