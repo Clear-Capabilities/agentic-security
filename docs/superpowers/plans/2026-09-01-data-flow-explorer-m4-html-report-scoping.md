@@ -1,4 +1,4 @@
-# Milestone 4, sub-project Self-contained HTML report: scoping (open question, not yet plannable)
+# Milestone 4, sub-project Self-contained HTML report: scoping (technical question resolved; architecture decision pending)
 
 Per the M4 top-level scoping doc's own sub-project table: *"Self-contained
 HTML report... Medium. Bundles `frontend/`'s existing ES-module prototype +
@@ -27,38 +27,37 @@ both real HTTP origins.
 
 **A self-contained HTML export is opened via `file://` (double-clicked, no
 server) — a fundamentally different browsing context.** Chromium-family
-browsers (Chrome, Edge — confirmed well-established, widely-documented
-browser behavior, NOT the result of an in-session empirical test; see
-"What I could not verify this session" below) refuse to resolve a
-`type="module"` script's own `import` statements against a `file://`
-origin, failing each one with a CORS error
-(`Access to script at 'file:///.../foo.js' from origin 'null' has been
-blocked by CORS policy`) — this applies whether the top-level module
-script tag is `src`-loaded or inline; the failure is per-`import`
-statement, not per-script-tag. **A naive "concatenate `index.html` +
-21 JS files + embed the graph JSON" export would load blank/broken in
-Chrome the moment a user double-clicks it — the single most likely
-real-world way a self-contained export actually gets opened.**
+browsers (Chrome, Edge) refuse to resolve a `type="module"` script's own
+`import`/dynamic-`import()` statements against a `file://` origin —
+**empirically confirmed this session against a real, installed Chrome
+binary** (below), not merely cited as well-known behavior. A naive
+"concatenate `index.html` + 21 JS files + embed the graph JSON" export
+would load blank/broken in Chrome the moment a user double-clicks it —
+the single most likely real-world way a self-contained export actually
+gets opened.
 
-## What I could not verify this session
+## Empirical confirmation (real Chrome, this session)
 
-`claude-in-chrome`'s `navigate` tool refuses `file://` URLs outright
-(`"Can't interact with browser-internal or unparseable URLs"` — confirmed
-this session, a real tool-level safety restriction, not a bug to route
-around). I could not load a real `file://`-served test page in a real
-browser this session to directly confirm the CORS-on-module-imports
-behavior against the ACTUAL frontend code, or to check Firefox's own
-(historically more permissive, but not something this deliverable should
-depend on) behavior. The claim above is standard, extremely
-well-documented browser behavior (module-script CORS-over-`file://` is one
-of the most common web-development pitfalls), not a guess — but it is
-disclosed here as unverified-in-session rather than claimed as personally
-tested, per this session's own verification discipline. **Before writing
-an implementation plan for this sub-project, either get real-browser
-confirmation another way (a teammate/the user manually double-clicking a
-test HTML file and reporting what happens; a CI job; a headless-browser
-test harness that CAN load `file://`) or treat the constraint below as the
-binding design assumption and build defensively around it regardless.**
+`claude-in-chrome`'s own `navigate` tool refuses `file://` URLs outright
+(`"Can't interact with browser-internal or unparseable URLs"` — a real
+tool-level safety restriction, not routed around). Instead, invoked the
+real, locally-installed Chrome binary directly via its own headless CLI
+mode (`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+--headless=new --dump-dom`) against a minimal two-file reproduction in the
+scratchpad (`index.html` dynamically importing a sibling `mod.js` that
+exports one function) — genuinely the same module-loading engine ordinary
+Chrome uses, headless mode does not special-case module CORS. Result,
+captured verbatim in the dumped DOM:
+
+```
+FAILURE:Failed to fetch dynamically imported module: file:///.../mod.js
+```
+
+This confirms the constraint directly, not by citation: a same-directory,
+purely-relative ES module import genuinely fails to fetch when the parent
+page is loaded via `file://`. Firefox's own (historically more permissive)
+behavior was not tested — not relevant, since this deliverable cannot
+assume the recipient uses a specific browser.
 
 ## What this means for the real architecture (assuming the constraint holds, which is the safe assumption)
 
@@ -154,9 +153,14 @@ new dependency.
 
 ## Recommended next step
 
-Before writing a scoping+plan doc for this sub-project: get a real
-answer to the `file://` module-CORS question (the one thing this document
-could not verify in-session), then decide among the three bundling options
-above. Until then, this sub-project stays correctly unscoped rather than
-built on an unverified architectural assumption — the same discipline
-this session applied to SemanticZoom.
+The `file://` module-CORS question is now empirically confirmed, not
+open. What remains is a real, disclosed architectural decision — which of
+the 3 bundling options above — that this document deliberately does not
+make unilaterally, since option 2 (a bundler devDependency) is exactly
+the kind of choice this codebase's own conventions ("no new npm
+dependency, ever, without re-opening this decision first") treat as
+consequential. This document's own recommendation stands (option 1,
+hand-rolled minimal bundler, no new dependency) as the safer default;
+a scoping+plan doc for this sub-project can be written once that choice
+is confirmed (either by proceeding with the documented recommendation, or
+by an explicit decision to spend the dependency).
