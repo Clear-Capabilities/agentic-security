@@ -167,3 +167,67 @@ test('dataflow_get_graph: inputSchema rejects unknown properties', () => {
 test('dataflow_get_node: inputSchema requires id', () => {
   assert.deepEqual(dataflow_get_node.inputSchema.required, ['id']);
 });
+
+// Real regression coverage for the security-review follow-up: node.destination
+// (raw/literalValue) and evidence[].claim/.snippet/.location.note are all
+// scanned-source-derived strings a secret pattern can appear in.
+const SECRET_GRAPH = {
+  schemaVersion: '1.0.0',
+  graphId: 'dfg:test-secret',
+  extensions: {},
+  scope: { root: '/tmp/fixture' },
+  coverage: null,
+  limitations: [],
+  nodes: [{
+    id: 'node:webhook',
+    kind: 'sink',
+    subtype: 'external-webhook',
+    destination: {
+      resolutionStatus: 'literal',
+      raw: `sendWebhook("https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX")`,
+      literalValue: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
+      blockingExpression: null,
+    },
+  }],
+  edges: [],
+  flows: [],
+  evidence: [{
+    id: 'evidence:1',
+    claim: 'destination literal resolves to https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
+    evidenceType: 'destination-resolution',
+    location: { note: 'password="hunter2hunter2" appears near this call' },
+    snippet: 'const password = "hunter2hunter2";',
+  }],
+};
+
+test('dataflow_get_graph: redacts node.destination and evidence secrets', async () => {
+  const root = _mkTmpProject();
+  try {
+    _writeGraph(root, SECRET_GRAPH);
+    const result = await dataflow_get_graph.handler({}, { sessionRoot: root });
+    assert.equal(result.hasResult, true);
+    const node = result.data.nodes[0];
+    assert.doesNotMatch(node.destination.raw, /hooks\.slack\.com\/services\/T00000000/);
+    assert.doesNotMatch(node.destination.literalValue, /hooks\.slack\.com\/services\/T00000000/);
+    assert.match(node.destination.literalValue, /\[REDACTED:slack-webhook\]/);
+    const ev = result.data.evidence[0];
+    assert.doesNotMatch(ev.claim, /hooks\.slack\.com\/services\/T00000000/);
+    assert.doesNotMatch(ev.snippet, /hunter2hunter2/);
+    assert.doesNotMatch(ev.location.note, /hunter2hunter2/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow_get_node: redacts destination secrets on the single-node response', async () => {
+  const root = _mkTmpProject();
+  try {
+    _writeGraph(root, SECRET_GRAPH);
+    const result = await dataflow_get_node.handler({ id: 'node:webhook' }, { sessionRoot: root });
+    assert.equal(result.hasResult, true);
+    assert.doesNotMatch(result.data.destination.raw, /hooks\.slack\.com\/services\/T00000000/);
+    assert.doesNotMatch(result.data.destination.literalValue, /hooks\.slack\.com\/services\/T00000000/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

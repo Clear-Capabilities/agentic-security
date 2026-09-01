@@ -43,7 +43,7 @@ const TOOLS_BY_NAME = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 function _codeFingerprint() {
   try {
     const here = path.dirname(fileURLToPath(import.meta.url));
-    const files = ['server.js', 'tools.js', 'stdio.js', 'audit.js', 'validate.js', 'redact.js'];
+    const files = ['server.js', 'tools.js', 'dataflow-tools.js', 'stdio.js', 'audit.js', 'validate.js', 'redact.js'];
     const h = crypto.createHash('sha256');
     for (const f of files) {
       try { h.update(f); h.update(fs.readFileSync(path.join(here, f))); } catch {}

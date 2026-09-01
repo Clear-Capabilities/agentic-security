@@ -28,23 +28,81 @@ function _loadOrFailure(sessionRoot) {
   };
 }
 
-// Redacts evidence[].location.note in place on a COPY of the graph slice
+// Redacts every scanned-source-derived string field on a COPY of the data
 // being returned — never mutates the loaded graph object, which may be
 // reused across calls within the same process lifetime by other tools.
-function _redactEvidenceNotes(data) {
-  if (!data || !Array.isArray(data.evidence)) return data;
+//
+// Three real source-derived surfaces, confirmed by reading the graph
+// pipeline directly (findings from Task 1's own follow-up security
+// review, not assumed from the schema alone):
+//   - `node.destination.raw`/`.literalValue` — resolve-destination.js's
+//     `resolveDestination()` lifts these straight out of scanned call-site
+//     arguments (`renderExpr(arg0)` / `String(arg0.value)`); a hardcoded
+//     connection string, webhook URL, or API-key literal used as a
+//     destination argument lands here verbatim.
+//   - `evidence[].claim` — composed from resolved values in
+//     graph-builder.js; can echo the same literal content.
+//   - `evidence[].location.note` / `.snippet` — schema-declared free-text
+//     fields; `.note` is fixture-only today (the real emitter uses
+//     `{file,line}`, never `{note}`) and `.snippet` is always null today,
+//     but both are declared string fields a future evidence producer could
+//     populate with raw source text, so both stay defensively redacted
+//     rather than trusting today's producers to never change.
+function _redactNode(node) {
+  if (!node?.destination) return node;
+  const d = node.destination;
+  if (typeof d.raw !== 'string' && typeof d.literalValue !== 'string') return node;
   return {
-    ...data,
-    evidence: data.evidence.map((e) => {
-      if (!e?.location?.note) return e;
-      return { ...e, location: { ...e.location, note: redactString(e.location.note) } };
-    }),
+    ...node,
+    destination: {
+      ...d,
+      raw: typeof d.raw === 'string' ? redactString(d.raw) : d.raw,
+      literalValue: typeof d.literalValue === 'string' ? redactString(d.literalValue) : d.literalValue,
+    },
   };
 }
 
+function _redactEvidence(evidence) {
+  if (!Array.isArray(evidence)) return evidence;
+  return evidence.map((e) => {
+    if (!e || typeof e !== 'object') return e;
+    return {
+      ...e,
+      claim: typeof e.claim === 'string' ? redactString(e.claim) : e.claim,
+      snippet: typeof e.snippet === 'string' ? redactString(e.snippet) : e.snippet,
+      location: e.location?.note
+        ? { ...e.location, note: redactString(e.location.note) }
+        : e.location,
+    };
+  });
+}
+
+// Full-graph redaction: every node's destination, plus the top-level
+// evidence array. Edges/flows carry only evidenceRefs (id strings into
+// graph.evidence), never embedded evidence objects or destination-shaped
+// fields — confirmed against dataflow-graph.schema.json — so they need no
+// redaction pass of their own here.
+function _redactGraph(data) {
+  if (!data) return data;
+  return {
+    ...data,
+    nodes: Array.isArray(data.nodes) ? data.nodes.map(_redactNode) : data.nodes,
+    evidence: _redactEvidence(data.evidence),
+  };
+}
+
+// KNOWN, DISCLOSED GAP (not fixed in this increment): this plan's own scope
+// item 1 required dataflow_get_graph to paginate/offload per query_taint's
+// precedent (`_maybeOffload` in tools.js) once a graph is large. That
+// precedent offloads a single flat array; a graph has three (nodes/edges/
+// flows) plus a top-level evidence array, so a correct offload design needs
+// its own real scoping pass, not a same-shape reuse. Returning the whole
+// graph inline risks exceeding stdio.js's MAX_LINE_BYTES (4MB) on a large
+// scan. Left for a follow-up increment rather than shipping a rushed,
+// under-designed pagination scheme in a security-fix round.
 export const dataflow_get_graph = {
   name: 'dataflow_get_graph',
-  description: 'Return the full DataFlowGraph v1 artifact from the last signed, verified deep-mode scan: nodes, edges, flows, scope, coverage, and limitations. Requires a prior `AGENTIC_SECURITY_LINEAGE_DEEP=1 agentic-security scan`.',
+  description: 'Return the full DataFlowGraph v1 artifact from the last signed, verified deep-mode scan: nodes, edges, flows, scope, coverage, and limitations. Requires a prior `AGENTIC_SECURITY_LINEAGE_DEEP=1 agentic-security scan`. KNOWN GAP: does not yet paginate/offload for very large graphs (may exceed the stdio transport line cap) — a future increment will add this, matching query_taint\'s own precedent.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -58,7 +116,7 @@ export const dataflow_get_graph = {
       _meta: META,
       hasResult: true,
       status,
-      data: _redactEvidenceNotes(body.data),
+      data: _redactGraph(body.data),
       digest: body.digest,
       schemaVersion: body.schemaVersion,
       extensions: body.extensions,
@@ -86,7 +144,7 @@ export const dataflow_get_node = {
       _meta: META,
       hasResult: true,
       notFound: status === 404,
-      data: body.data,
+      data: _redactNode(body.data),
       canonicalIds: body.canonicalIds,
     };
   },
