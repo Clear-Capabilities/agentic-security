@@ -503,11 +503,65 @@ scoped work).
   before this sub-project either) — its own new orchestration logic was
   verified via a manual smoke script plus this session's own independent
   real-browser check, not a committed automated suite. The Filters
-  sub-project (expanding `filter-rail.js` from 3 to the ~9 real
-  dimensions this scoping pass' own audit found) and SemanticZoom remain
-  entirely unscoped, named but not started.
+  sub-project (expanding `filter-rail.js` from 3 to the real dimensions
+  this scoping pass' own audit found) is now COMPLETE (below);
+  SemanticZoom remains entirely unscoped, named but not started.
 
-| Module | Responsibility |
+**M3-UX, sub-project Filters — COMPLETE (2026-09-01):** expands
+`components/filter-rail.js` from 3 to 10 real facets (data class,
+protection aggregate, source category, sink category, destination
+externality, transit/at-rest/handling verdict, policy verdict, AI),
+reusing Query's own real-vs-inert field audit for which dimensions are
+genuinely populated. Full rationale in `docs/superpowers/plans/
+2026-09-01-data-flow-explorer-m3-ux-filters-scoping.md` and its
+companion plan.
+
+- **`lib/row-filters.js`** (new): `matchesFilters(row, filters)`, a
+  shared, deduplicated replacement for two near-identical private
+  `rowMatchesFilters` copies that used to live separately in
+  `privacy-view.js` and `inventory-view.js`. **Found and fixed a real,
+  pre-existing bug while deduplicating**: Inventory's own private copy
+  never checked the `ai` filter at all — Privacy's did — so the AI-
+  processing chip had literally zero effect anywhere in Inventory View.
+  The shared function checks `ai` for every row that carries
+  `isAiRelevant`. A filter facet whose property a given row shape
+  doesn't carry at all is SKIPPED (the row is unaffected), never treated
+  as a hide — the real design property that lets one shared function
+  safely serve row shapes as different as a Privacy flow-row and an
+  Inventory dataElement-row.
+- **7 new chip groups** in `filter-rail.js` (source/sink category,
+  destination externality, transit/at-rest/handling verdict, policy
+  verdict), computed the same simple `[...new Set(...)].sort()` way
+  `dataClasses` already was. **A real surprise finding, confirmed by
+  reading the actual fixture rather than assumed**: the flagship fixture
+  has ZERO `kind:'sink'` nodes at all — `sinkCategories` is genuinely
+  empty against it, so that chip group correctly renders with no chips
+  until a fixture gains one.
+- **Privacy View and Inventory View both attach the 7 new properties at
+  row-computation time** (never looked up fresh inside the shared
+  matcher) — Privacy for every row (it's exclusively flow-based);
+  Inventory only for `policyPermittedFlows` rows and
+  `manualGovernanceGaps`' "Flow"-subject rows (its own only two flow-
+  shaped categories), via a new shared `computeFlowFilterProperties`
+  helper in `inventory-view.js`. The three verdict properties
+  (`transitVerdict`/`atRestVerdict`/`handlingVerdict`) are always set —
+  `worstVerdict()` never returns `null`/`undefined`, even for an empty
+  edge list, falling back to `'not_assessed'`. `sourceCategory`/
+  `sinkCategory`/`destinationExternality` are only set when a real,
+  non-null value exists (a conditional spread, not `null`), keeping
+  `matchesFilters`'s own "property absent = unaffected" semantics clean
+  rather than introducing a third state.
+- **What this does NOT mean**: provider/host/database/table/topic,
+  application, environment, evidence grade/confidence, and governance
+  gap (5 more of the PRD's own §15.1-named dimensions, all confirmed
+  real and populated during the parent M3-UX scoping pass) remain
+  explicitly deferred — each needs its own real design work (sparse
+  per-key objects, per-claim rather than per-row properties, or facets
+  that are usually a single always-selected value) beyond this
+  increment's own scope. Architecture View still has no filter-rail
+  integration at all (a pre-existing scoping decision, unchanged).
+  SemanticZoom (M3-UX's own 3rd sub-project) remains entirely unscoped.
+
 | Module | Responsibility |
 |---|---|
 | `src/lib/escape-html.js` | Escapes text for the rare case of building a raw HTML/attribute STRING outside of `el()` (e.g. a future `document.title` assignment, or serializing to an SVG attribute string). Quote-complete (escapes `&<>"'`) — neither existing in-repo escaper (`scanner/src/posture/fleet.js`, `scanner/src/badge.js`) is. **Never combine with `el()`'s text-child insertion** — `el()` already escapes via `createTextNode` (see `src/lib/dom.js` below), and pre-escaping on top of that double-escapes (a real repo name like `Acme & Sons' <repo>` would render on screen as the literal text `Acme &amp; Sons&#39; &lt;repo&gt;`). This exact bug shipped in `shell.js` and was fixed by dropping the `escapeHtml()` calls there, not by touching this module. |
