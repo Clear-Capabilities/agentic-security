@@ -106,7 +106,7 @@ test('cmdExplore: a valid signed graph starts a real server, prints the URL + to
       child.on('exit', onExit);
       child.stdout.on('data', (chunk) => {
         stdout += chunk.toString('utf8');
-        if (/Token:\s*[0-9a-f]{64}/.test(stdout) && /URL:\s*http:\/\/127\.0\.0\.1:(\d+)/.test(stdout)) {
+        if (/URL:\s*http:\/\/127\.0\.0\.1:(\d+)\/#token=[0-9a-f]{64}/.test(stdout)) {
           clearTimeout(timer);
           child.removeListener('exit', onExit);
           resolve();
@@ -114,13 +114,17 @@ test('cmdExplore: a valid signed graph starts a real server, prints the URL + to
       });
     });
 
-    const portMatch = stdout.match(/URL:\s*http:\/\/127\.0\.0\.1:(\d+)/);
-    const tokenMatches = stdout.match(/Token:\s*[0-9a-f]{64}/g) || [];
-    assert.ok(portMatch, `must print the bound port; stdout was: ${stdout}`);
-    assert.equal(tokenMatches.length, 1, 'the token must be printed exactly once');
+    // The URL now carries the token as a fragment (#token=...), never a
+    // query string or a separate "Token:" line — see the M3-Wire scoping
+    // doc's Decision 1 (a URL fragment is never sent to the server).
+    const urlMatch = stdout.match(/URL:\s*http:\/\/127\.0\.0\.1:(\d+)\/#token=([0-9a-f]{64})/g);
+    assert.ok(urlMatch, `must print the URL with a fragment token; stdout was: ${stdout}`);
+    assert.equal(urlMatch.length, 1, 'the URL (and its token) must be printed exactly once');
 
-    const port = Number(portMatch[1]);
-    const token = stdout.match(/Token:\s*([0-9a-f]{64})/)[1];
+    const singleMatch = /URL:\s*http:\/\/127\.0\.0\.1:(\d+)\/#token=([0-9a-f]{64})/.exec(stdout);
+    const port = Number(singleMatch[1]);
+    const token = singleMatch[2];
+    assert.ok(!stdout.includes('Token:'), 'must never print a separate "Token:" line now that the token lives in the URL fragment');
 
     const res = await request(port, {
       path: '/api/v1/scan',

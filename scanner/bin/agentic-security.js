@@ -3041,7 +3041,7 @@ async function cmdExplore(args) {
   }
   const keepOpen = !!args.flags['keep-open'];
 
-  const { createExploreServer, TOKEN_HEADER } = await import('../src/server/http-server.js');
+  const { createExploreServer } = await import('../src/server/http-server.js');
   const { generateSessionToken } = await import('../src/server/security.js');
   const sessionToken = generateSessionToken();
 
@@ -3055,11 +3055,15 @@ async function cmdExplore(args) {
   const { server, port: actualPort } = started;
 
   // THE ONLY place the session token is ever displayed — never written to
-  // a file, never logged by the server itself after this one print.
+  // a file, never logged by the server itself after this one print. The
+  // token travels as a URL FRAGMENT (`#token=...`), never a query string:
+  // a fragment is never sent to the server in any HTTP request (so it can
+  // never be captured in an access log), yet the page's own JS can read it
+  // once via location.hash and attach it as a header on every subsequent
+  // /api/v1/* fetch() call (frontend/src/lib/api-client.js).
   process.stdout.write(`agentic-security explore: serving ${targetAbs}\n`);
-  process.stdout.write(`  URL:   http://127.0.0.1:${actualPort}/api/v1/scan\n`);
-  process.stdout.write(`  Token: ${sessionToken}\n`);
-  process.stdout.write(`  Pass the token as the "${TOKEN_HEADER}" request header on every request.\n`);
+  process.stdout.write(`  URL: http://127.0.0.1:${actualPort}/#token=${sessionToken}\n`);
+  process.stdout.write('  Open this URL in a browser — the page authenticates itself automatically.\n');
   if (keepOpen) {
     process.stdout.write('  --keep-open set: no idle-timeout auto-stop. Ctrl-C to stop.\n');
   } else {
