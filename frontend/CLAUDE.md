@@ -69,6 +69,77 @@ was confirmed during implementation, not assumed. Filter-rail integration
 is deliberately category-scoped, not forced onto every table — see
 `FILTERABLE_TABLES` in `inventory-view.js`.
 
+**Milestone 3, sub-project A11y — MEASURED, real result (2026-09-01):**
+proves AC-20 (contrast/redundancy) and AC-21 (viewport reflow) with
+automated tests plus a real CDP-driven measurement pass, and fixes two
+real, disclosed bugs found along the way. Full rationale in
+`docs/superpowers/plans/2026-09-01-data-flow-explorer-m3-a11y-scoping.md`
+and its companion plan.
+
+- **AC-20 (automated, `test/tokens-contrast.test.js` +
+  `test/protection-visual.test.js`)**: found and fixed a real, pre-existing
+  WCAG AA violation — the light theme's `--status-protected` (#1E8A4C) and
+  `--status-unknown` (#9A6B00) both failed 4.5:1 against `--surface-panel`
+  (4.07:1 and 4.36:1). Darkened to `#1C8047`/`#956700` (verified via this
+  repo's own `contrastRatio()`, now >=4.6:1 against both
+  `--surface-canvas` and `--surface-panel`, comfortably above the exact
+  boundary rather than sitting on it). The dark theme was already
+  compliant on every pair. Every verdict's glyph/label/lineStyle
+  redundancy is now a structural test, not a convention — and no two
+  verdicts share a glyph (confirmed, not just asserted).
+- **Keyboard-focus parity (`test/keyboard-focus-parity.test.js`)**: swept
+  all four views' real rendered DOM. No gap found anywhere, including
+  Architecture View's SVG nodes/edges (checked specifically, since they
+  are not native `<button>`s) — every interactive element already had
+  `tabindex`.
+- **AC-21 (real CDP measurement, this session)**: served a real graph via
+  `agentic-security explore` and drove Chrome directly at all four named
+  viewports (1280×720, 1440×900, 1680×945, 2560×1440), confirming
+  `window.innerWidth` matched the target at each size (screenshot pixel
+  dimensions alone are not reliable evidence — they can be scaled for
+  transport — so this was checked via `getComputedStyle`/`window.
+  innerWidth`, not by eyeballing an image). Findings:
+  - **PASS, all four viewports**: no console errors; all four views
+    (Architecture, Privacy, Trace, Inventory) render and are reachable;
+    `.shell`'s grid sizing matches §7.7's token-driven spec exactly at
+    every width (left rail 248px/56px-collapsed, inspector fixed at the
+    360px reference width even at 2560px — it does not stretch, canvas
+    absorbs the extra space, which is correct per §7.7: only the canvas
+    is fluid).
+  - **PASS, the inspector-overlay fix (this sub-project's own CSS/JS
+    change) verified working, not just shipped**: at 1280×720, selecting
+    a node populated the inspector; clicking the new "Inspector" toggle
+    made a REAL overlay slide in with real content (confirmed via
+    `aria-expanded`/`data-overlay-open` both flipping to `"true"` and the
+    Evidence Inspector panel becoming visually present, not just present
+    in the DOM). Above 1280px the toggle is hidden and the inspector
+    renders in-grid automatically, no click needed — confirmed at
+    1440×900. The bug this sub-project set out to fix (inspector
+    permanently unreachable via `display:none` at exactly the smallest
+    required viewport) is closed and directly observed closed, not
+    assumed from reading the CSS alone.
+  - **Real, disclosed, NON-blocking finding**: at the collapsed 56px left
+    rail (≤1280px), both the rail's plain-text fallback ("Filters apply
+    to Privacy View and some Inventory tables.") and Inventory/Privacy's
+    filter-rail chip labels wrap into a very narrow (~24px content-width,
+    after the rail's own padding) column, becoming hard to read at a
+    glance. This is NOT an AC-21 violation as literally written — no
+    character is hidden (real wrapped text, not `overflow:hidden`/
+    ellipsis-truncated), font-size stays at the real 13px `--font-size-
+    body` token (>=12px), and every control remains genuinely clickable
+    (confirmed, not assumed) — but it is a real, pre-existing UX rough
+    edge, not introduced by this sub-project, worth a future increment's
+    attention (the 56px collapsed width likely was designed for icon-only
+    content; nothing currently switches to icons at that width — full
+    sentence/label text renders unconditionally regardless of collapsed
+    state).
+  - Real graph used for this measurement was small (a scan of `frontend/`
+    itself, 3 nodes/0 edges/0 flows) — sufficient to prove the SHELL-level
+    layout property (regions, overlay, sizing) this sub-project exists to
+    verify, but not a stress test of dense content at these viewports;
+    that remains M3-Render's own, separately-scoped territory once it
+    exists.
+
 | Module | Responsibility |
 |---|---|
 | `src/lib/escape-html.js` | Escapes text for the rare case of building a raw HTML/attribute STRING outside of `el()` (e.g. a future `document.title` assignment, or serializing to an SVG attribute string). Quote-complete (escapes `&<>"'`) — neither existing in-repo escaper (`scanner/src/posture/fleet.js`, `scanner/src/badge.js`) is. **Never combine with `el()`'s text-child insertion** — `el()` already escapes via `createTextNode` (see `src/lib/dom.js` below), and pre-escaping on top of that double-escapes (a real repo name like `Acme & Sons' <repo>` would render on screen as the literal text `Acme &amp; Sons&#39; &lt;repo&gt;`). This exact bug shipped in `shell.js` and was fixed by dropping the `escapeHtml()` calls there, not by touching this module. |
