@@ -54,6 +54,88 @@ test('computePrivacyRow reports AI relevance via topology, matching flow-path.js
   assert.equal(computePrivacyRow(FLAGSHIP_GRAPH, flowByKey('flow.pii.analytics')).isAiRelevant, false);
 });
 
+// The 6 new per-row properties this task attaches (transitVerdict/
+// atRestVerdict/handlingVerdict/sourceCategory/sinkCategory/
+// destinationExternality), computed against the real fixture. Values below
+// were computed by reading each flow's real source/sink node subtype and
+// externality plus its own resolved edges' protection verdicts directly,
+// not guessed.
+test('computePrivacyRow attaches transitVerdict/atRestVerdict/handlingVerdict as the worst verdict across this flow\'s own resolved edges', () => {
+  // flow.pci.raw_log's two edges: handling is ['not_assessed', 'unprotected'] -> worst 'unprotected'; transit/atRest are both all-not_assessed.
+  const rawLogRow = computePrivacyRow(FLAGSHIP_GRAPH, flowByKey('flow.pci.raw_log'));
+  assert.equal(rawLogRow.transitVerdict, 'not_assessed');
+  assert.equal(rawLogRow.atRestVerdict, 'not_assessed');
+  assert.equal(rawLogRow.handlingVerdict, 'unprotected');
+
+  // flow.pci.masked_log's handling is ['not_assessed', 'protected'] -> worst 'protected'.
+  const maskedLogRow = computePrivacyRow(FLAGSHIP_GRAPH, flowByKey('flow.pci.masked_log'));
+  assert.equal(maskedLogRow.handlingVerdict, 'protected');
+
+  // flow.pci.payment_api's transit is ['not_assessed', 'unprotected'] (the external HTTP hop) -> worst 'unprotected'.
+  const paymentApiRow = computePrivacyRow(FLAGSHIP_GRAPH, flowByKey('flow.pci.payment_api'));
+  assert.equal(paymentApiRow.transitVerdict, 'unprotected');
+
+  // flow.pci.database's atRest is ['not_assessed', 'unknown'] -> worst 'unknown'.
+  const databaseRow = computePrivacyRow(FLAGSHIP_GRAPH, flowByKey('flow.pci.database'));
+  assert.equal(databaseRow.atRestVerdict, 'unknown');
+});
+
+test('computePrivacyRow attaches sourceCategory/sinkCategory/destinationExternality from the real source/sink node subtype and externality', () => {
+  const row = computePrivacyRow(FLAGSHIP_GRAPH, flowByKey('flow.pci.masked_log'));
+  assert.equal(row.sourceCategory, 'web-app');
+  assert.equal(row.sinkCategory, 'application-logs');
+  assert.equal(row.destinationExternality, 'internal');
+
+  const externalRow = computePrivacyRow(FLAGSHIP_GRAPH, flowByKey('flow.pci.payment_api'));
+  assert.equal(externalRow.sinkCategory, 'payment-api');
+  assert.equal(externalRow.destinationExternality, 'external');
+});
+
+// The real, deliberate design property: a genuinely-absent value must leave
+// the property OFF the row entirely (matchesFilters's own "absent =
+// unaffected, never a hide" semantics), never present-but-null. The three
+// verdict properties, by contrast, are always set — worstVerdict() always
+// returns a real string, even 'not_assessed' for a flow with zero edges.
+test('computePrivacyRow only sets sourceCategory/sinkCategory/destinationExternality when a real, non-null value exists — never a null placeholder', () => {
+  const graph = {
+    nodes: [
+      { id: 'n:src', kind: 'source', subtype: null, label: 'Source', lifecycleStages: ['collection'], externality: { value: null } },
+      { id: 'n:sink', kind: 'sink', subtype: null, label: 'Sink', lifecycleStages: ['storage'], externality: {} },
+    ],
+    edges: [],
+    dataElements: [],
+    flows: [{ id: 'f:1', source: 'n:src', sink: 'n:sink', dataElementIds: [], edgeIds: [], governanceRefs: {}, protectionSummary: 'not_assessed', policyVerdict: 'not_evaluated' }],
+  };
+  const row = computePrivacyRow(graph, graph.flows[0]);
+  assert.ok(!('sourceCategory' in row), 'sourceCategory must be entirely absent, not null');
+  assert.ok(!('sinkCategory' in row), 'sinkCategory must be entirely absent, not null');
+  assert.ok(!('destinationExternality' in row), 'destinationExternality must be entirely absent, not null');
+  // Verdict properties are always set, even for a flow with zero edges.
+  assert.equal(row.transitVerdict, 'not_assessed');
+  assert.equal(row.atRestVerdict, 'not_assessed');
+  assert.equal(row.handlingVerdict, 'not_assessed');
+});
+
+// Integration-level proof (via the real, shared matchesFilters — Step 4)
+// that the new facets genuinely narrow the visible row set, each in
+// isolation.
+test('computePrivacyViewModel applies the new transitVerdict/policyVerdict/destinationExternality filters via the shared matchesFilters', () => {
+  const transitVm = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: { transitVerdict: ['unprotected'] } });
+  const transitVisible = transitVm.rows.filter((r) => r.visible);
+  assert.ok(transitVisible.length > 0);
+  assert.ok(transitVisible.every((r) => r.transitVerdict === 'unprotected'));
+
+  const policyVm = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: { policyVerdict: ['manual_review_required'] } });
+  const policyVisible = policyVm.rows.filter((r) => r.visible);
+  assert.ok(policyVisible.length > 0);
+  assert.ok(policyVisible.every((r) => r.policyVerdict === 'manual_review_required'));
+
+  const externalVm = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: { destinationExternality: ['internal'] } });
+  const externalVisible = externalVm.rows.filter((r) => r.visible);
+  assert.ok(externalVisible.length > 0);
+  assert.ok(externalVisible.every((r) => r.destinationExternality === 'internal'));
+});
+
 test('computePrivacyViewModel produces one row per real flow, in the same order as graph.flows', () => {
   const vm = computePrivacyViewModel(FLAGSHIP_GRAPH, { view: 'privacy', selectedId: null, filters: {} });
   assert.equal(vm.rows.length, FLAGSHIP_GRAPH.flows.length);

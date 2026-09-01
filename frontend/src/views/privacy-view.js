@@ -1,6 +1,7 @@
 import { flowPathNodeIds, isAiRelevantFlow } from '../lib/flow-path.js';
 import { el, clear } from '../lib/dom.js';
-import { protectionVisual } from '../lib/protection-visual.js';
+import { protectionVisual, worstVerdict } from '../lib/protection-visual.js';
+import { matchesFilters } from '../lib/row-filters.js';
 
 export const LIFECYCLE_STAGES = Object.freeze(['collection', 'processing', 'storage', 'sharing', 'retention', 'deletion']);
 
@@ -12,11 +13,19 @@ export function computePrivacyRow(graph, flow) {
   const dataElement = graph.dataElements.find((d) => flow.dataElementIds.includes(d.id));
   const pathNodeIds = flowPathNodeIds(graph, flow);
   const pathNodes = graph.nodes.filter((n) => pathNodeIds.has(n.id));
+  // This flow's own resolved edges — the same per-edgeId lookup
+  // flowPathNodeIds() already performs internally, applied here to keep the
+  // edge objects (rather than just the node ids) so the three protection
+  // dimensions below can be aggregated per-flow via worstVerdict().
+  const pathEdges = flow.edgeIds.map((edgeId) => graph.edges.find((e) => e.id === edgeId)).filter(Boolean);
 
   const stageCells = LIFECYCLE_STAGES.map((stage) => ({
     stage,
     nodeLabels: pathNodes.filter((n) => stageForNode(n) === stage).map((n) => n.label),
   }));
+
+  const sourceNode = graph.nodes.find((n) => n.id === flow.source);
+  const sinkNode = graph.nodes.find((n) => n.id === flow.sink);
 
   return {
     flowId: flow.id,
@@ -27,14 +36,21 @@ export function computePrivacyRow(graph, flow) {
     protectionSummary: flow.protectionSummary,
     policyVerdict: flow.policyVerdict,
     isAiRelevant: isAiRelevantFlow(graph, flow),
+    // worstVerdict() always returns a real verdict string (falling back to
+    // 'not_assessed', never null/undefined) even for an empty edge list, so
+    // these three are always set unconditionally — unlike sourceCategory/
+    // sinkCategory/destinationExternality below, there is no genuinely-absent
+    // case to guard against.
+    transitVerdict: worstVerdict(pathEdges.map((e) => e.protection.transit.verdict)),
+    atRestVerdict: worstVerdict(pathEdges.map((e) => e.protection.atRest.verdict)),
+    handlingVerdict: worstVerdict(pathEdges.map((e) => e.protection.handling.verdict)),
+    // Only set when a real, non-null value exists — keeps matchesFilters's
+    // own "property absent = unaffected, never a hide" semantics clean
+    // rather than introducing a third (present-but-null) state.
+    ...(sourceNode?.subtype ? { sourceCategory: sourceNode.subtype } : {}),
+    ...(sinkNode?.subtype ? { sinkCategory: sinkNode.subtype } : {}),
+    ...(sinkNode?.externality?.value ? { destinationExternality: sinkNode.externality.value } : {}),
   };
-}
-
-function rowMatchesFilters(row, filters) {
-  if (filters.dataClass?.length && !filters.dataClass.some((c) => row.dataClasses.includes(c))) return false;
-  if (filters.protection?.length && !filters.protection.includes(row.protectionSummary)) return false;
-  if (filters.ai && !row.isAiRelevant) return false;
-  return true;
 }
 
 /**
@@ -55,7 +71,7 @@ export function computePrivacyViewModel(graph, state, queryPredicate = null) {
     return {
       ...row,
       selected: row.flowId === state.selectedId,
-      visible: rowMatchesFilters(row, state.filters ?? {}) && matchesQuery(flow),
+      visible: matchesFilters(row, state.filters ?? {}) && matchesQuery(flow),
     };
   });
   return { stages: LIFECYCLE_STAGES, rows };

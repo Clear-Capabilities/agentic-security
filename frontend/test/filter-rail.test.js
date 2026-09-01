@@ -91,3 +91,67 @@ test('renderFilterRail: clicking a chip calls onFiltersChange with the correctly
   assert.equal(calls.length, 1, 'onFiltersChange should have been called exactly once');
   assert.deepEqual(calls[0], { dataClass: ['PCI'] });
 });
+
+// Render-level coverage for the 7 new chip groups this task wires in
+// (sourceCategory/sinkCategory/destinationExternality/transitVerdict/
+// atRestVerdict/handlingVerdict/policyVerdict), mirroring the existing
+// dataClass/protection chip-group tests above.
+test('renderFilterRail renders one chip group per facet, in order, including all 7 newly wired groups', () => {
+  const { document } = createDomShim();
+  globalThis.document = document;
+
+  const facets = computeFilterFacets(FLAGSHIP_GRAPH);
+  const railEl = document.createElement('div');
+  renderFilterRail(facets, {}, railEl, () => {});
+
+  const headings = [];
+  const walk = (node) => {
+    for (const child of node.childNodes) {
+      if (child.nodeType === 'element') {
+        if (child.tagName === 'H4') headings.push(child.textContent);
+        walk(child);
+      }
+    }
+  };
+  walk(railEl);
+
+  assert.deepEqual(headings, [
+    'Data class', 'Protection',
+    'Source category', 'Sink category', 'Destination externality',
+    'Transit', 'At rest', 'Handling',
+    'Policy verdict', 'AI',
+  ]);
+});
+
+// Confirms toggleListFilter() is genuinely generic over the new facet keys
+// (per the brief's own note: it already takes `key` as a parameter, so it
+// needs no change) rather than something that happens to only work for
+// dataClass/protection.
+test('renderFilterRail: clicking a sourceCategory chip toggles the sourceCategory filter key, not dataClass', () => {
+  const { document } = createDomShim();
+  globalThis.document = document;
+
+  const facets = computeFilterFacets(FLAGSHIP_GRAPH);
+  const railEl = document.createElement('div');
+  const calls = [];
+  renderFilterRail(facets, {}, railEl, (next) => calls.push(next));
+
+  // The real fixture's only source-category facet value (per the earlier
+  // sourceCategories test above): 'web-app'.
+  let sourceCategoryChip = null;
+  const walk = (node) => {
+    for (const child of node.childNodes) {
+      if (child.nodeType === 'element') {
+        if (child.tagName === 'BUTTON' && child.textContent === 'web-app') sourceCategoryChip = child;
+        walk(child);
+      }
+    }
+  };
+  walk(railEl);
+  assert.ok(sourceCategoryChip, 'expected to find a rendered chip button labeled "web-app"');
+
+  sourceCategoryChip.dispatch('click');
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], { sourceCategory: ['web-app'] });
+});

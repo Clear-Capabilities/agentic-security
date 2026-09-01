@@ -43,13 +43,60 @@ export function renderFilterRail(facets, currentFilters, railEl, onFiltersChange
     [el('h4', {}, 'Protection'), ...facets.protectionTiers.map((tier) => renderChip(tier, currentFilters.protection?.includes(tier) ?? false, () => toggleListFilter(currentFilters, 'protection', tier, onFiltersChange)))],
   );
 
+  const sourceCategoryChips = el(
+    'div',
+    { class: 'filter-rail-group' },
+    [el('h4', {}, 'Source category'), ...facets.sourceCategories.map((cat) => renderChip(cat, currentFilters.sourceCategory?.includes(cat) ?? false, () => toggleListFilter(currentFilters, 'sourceCategory', cat, onFiltersChange)))],
+  );
+
+  const sinkCategoryChips = el(
+    'div',
+    { class: 'filter-rail-group' },
+    [el('h4', {}, 'Sink category'), ...facets.sinkCategories.map((cat) => renderChip(cat, currentFilters.sinkCategory?.includes(cat) ?? false, () => toggleListFilter(currentFilters, 'sinkCategory', cat, onFiltersChange)))],
+  );
+
+  const destinationExternalityChips = el(
+    'div',
+    { class: 'filter-rail-group' },
+    [el('h4', {}, 'Destination externality'), ...facets.destinationExternalities.map((val) => renderChip(val, currentFilters.destinationExternality?.includes(val) ?? false, () => toggleListFilter(currentFilters, 'destinationExternality', val, onFiltersChange)))],
+  );
+
+  const transitVerdictChips = el(
+    'div',
+    { class: 'filter-rail-group' },
+    [el('h4', {}, 'Transit'), ...facets.transitVerdicts.map((v) => renderChip(v, currentFilters.transitVerdict?.includes(v) ?? false, () => toggleListFilter(currentFilters, 'transitVerdict', v, onFiltersChange)))],
+  );
+
+  const atRestVerdictChips = el(
+    'div',
+    { class: 'filter-rail-group' },
+    [el('h4', {}, 'At rest'), ...facets.atRestVerdicts.map((v) => renderChip(v, currentFilters.atRestVerdict?.includes(v) ?? false, () => toggleListFilter(currentFilters, 'atRestVerdict', v, onFiltersChange)))],
+  );
+
+  const handlingVerdictChips = el(
+    'div',
+    { class: 'filter-rail-group' },
+    [el('h4', {}, 'Handling'), ...facets.handlingVerdicts.map((v) => renderChip(v, currentFilters.handlingVerdict?.includes(v) ?? false, () => toggleListFilter(currentFilters, 'handlingVerdict', v, onFiltersChange)))],
+  );
+
+  const policyVerdictChips = el(
+    'div',
+    { class: 'filter-rail-group' },
+    [el('h4', {}, 'Policy verdict'), ...facets.policyVerdicts.map((v) => renderChip(v, currentFilters.policyVerdict?.includes(v) ?? false, () => toggleListFilter(currentFilters, 'policyVerdict', v, onFiltersChange)))],
+  );
+
   const aiChip = el(
     'div',
     { class: 'filter-rail-group' },
     [el('h4', {}, 'AI'), renderChip('AI processing', currentFilters.ai === true, () => onFiltersChange({ ...currentFilters, ai: !currentFilters.ai }))],
   );
 
-  railEl.appendChild(el('div', { class: 'filter-rail' }, [dataClassChips, protectionChips, aiChip]));
+  railEl.appendChild(el('div', { class: 'filter-rail' }, [
+    dataClassChips, protectionChips,
+    sourceCategoryChips, sinkCategoryChips, destinationExternalityChips,
+    transitVerdictChips, atRestVerdictChips, handlingVerdictChips,
+    policyVerdictChips, aiChip,
+  ]));
 }
 
 function toggleListFilter(currentFilters, key, value, onFiltersChange) {

@@ -7,6 +7,7 @@ import { worstVerdict } from '../lib/protection-visual.js';
 import { AI_SUBTYPES } from '../lib/flow-path.js';
 import { INVENTORY_TABLES } from '../lib/state.js';
 import { el, clear } from '../lib/dom.js';
+import { matchesFilters } from '../lib/row-filters.js';
 
 const TABLE_LABELS = {
   sources: 'Sources',
@@ -30,6 +31,31 @@ function edgeWorstVerdict(edge) {
 
 function nodeLabelFor(graph, nodeId) {
   return graph.nodes.find((n) => n.id === nodeId)?.label ?? 'unknown';
+}
+
+// The same per-flow filter-facet properties privacy-view.js's
+// computePrivacyRow() attaches, computed the same way (this flow's own
+// resolved edges, aggregated per-dimension via worstVerdict()), for
+// Inventory's two flow-shaped categories (policyPermittedFlows,
+// manualGovernanceGaps' "Flow"-subject rows) only. worstVerdict() always
+// returns a real verdict string (never null/undefined, even for an empty
+// edge list), so the three verdict properties are always set
+// unconditionally; sourceCategory/sinkCategory/destinationExternality are
+// only set when a real, non-null value exists, per the same rule
+// computePrivacyRow() follows.
+function computeFlowFilterProperties(graph, flow) {
+  const pathEdges = flow.edgeIds.map((edgeId) => graph.edges.find((e) => e.id === edgeId)).filter(Boolean);
+  const sourceNode = graph.nodes.find((n) => n.id === flow.source);
+  const sinkNode = graph.nodes.find((n) => n.id === flow.sink);
+  return {
+    transitVerdict: worstVerdict(pathEdges.map((e) => e.protection.transit.verdict)),
+    atRestVerdict: worstVerdict(pathEdges.map((e) => e.protection.atRest.verdict)),
+    handlingVerdict: worstVerdict(pathEdges.map((e) => e.protection.handling.verdict)),
+    policyVerdict: flow.policyVerdict,
+    ...(sourceNode?.subtype ? { sourceCategory: sourceNode.subtype } : {}),
+    ...(sinkNode?.subtype ? { sinkCategory: sinkNode.subtype } : {}),
+    ...(sinkNode?.externality?.value ? { destinationExternality: sinkNode.externality.value } : {}),
+  };
 }
 
 const TABLE_COMPUTE = {
@@ -103,6 +129,7 @@ const TABLE_COMPUTE = {
         cells: [dataElement?.name ?? 'unknown field', nodeLabelFor(graph, f.source), nodeLabelFor(graph, f.sink), f.policyVerdict],
         dataClasses: dataElement?.dataClasses ?? [],
         protectionSummary: f.protectionSummary,
+        ...computeFlowFilterProperties(graph, f),
       };
     }),
   }),
@@ -114,6 +141,7 @@ const TABLE_COMPUTE = {
         cells: ['Flow', dataElement?.name ?? 'unknown field', 'policyVerdict: manual_review_required'],
         dataClasses: dataElement?.dataClasses ?? [],
         protectionSummary: f.protectionSummary,
+        ...computeFlowFilterProperties(graph, f),
       };
     });
     const manualNodes = graph.nodes.filter((n) => n.coverageStatus === 'manual').map((n) => ({
@@ -141,12 +169,6 @@ const TABLE_COMPUTE = {
 // decision 4 — deliberately not every category; see that doc before
 // changing this set.
 const FILTERABLE_TABLES = new Set(['fields', 'policyPermittedFlows', 'manualGovernanceGaps']);
-
-function rowMatchesFilters(row, filters) {
-  if (filters.dataClass?.length && !(row.dataClasses ?? []).some((c) => filters.dataClass.includes(c))) return false;
-  if (filters.protection?.length && row.protectionSummary && !filters.protection.includes(row.protectionSummary)) return false;
-  return true;
-}
 
 // Milestone 3, sub-project M3-UX-Query, Task 4. The query language's
 // compileQuery predicate is fundamentally FLOW-scoped (query-language.js's
@@ -191,7 +213,7 @@ export function computeInventoryViewModel(graph, state, queryPredicate = null) {
   const rows = rawRows.map((row) => ({
     ...row,
     selected: row.id === state.selectedId,
-    visible: (filterable ? rowMatchesFilters(row, state.filters ?? {}) : true) && rowMatchesQuery(graph, row, queryPredicate),
+    visible: (filterable ? matchesFilters(row, state.filters ?? {}) : true) && rowMatchesQuery(graph, row, queryPredicate),
   }));
 
   return { tables, activeTable, columns, rows, filterable };

@@ -52,6 +52,69 @@ test('computeInventoryViewModel exposes all 11 tables with correct counts', () =
   assert.equal(countFor('unsupportedCandidates'), 2); // node:unresolved1 + node:candidate1
 });
 
+// The 7 new per-row properties this task attaches (transitVerdict/
+// atRestVerdict/handlingVerdict/sourceCategory/sinkCategory/
+// destinationExternality/policyVerdict), computed the SAME way
+// computePrivacyRow() does (this flow's own resolved edges, aggregated via
+// worstVerdict()), for policyPermittedFlows' and manualGovernanceGaps'
+// flow-shaped rows only. Values below were computed by hand from the real
+// synthetic GRAPH fixture above, not guessed.
+test('policyPermittedFlows rows carry the new filter-facet properties, computed from this flow\'s own real edges/nodes', () => {
+  const vm = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: {}, table: 'policyPermittedFlows' });
+  const row = vm.rows.find((r) => r.id === 'flow:permitted1');
+  assert.ok(row, 'expected flow:permitted1\'s row to exist');
+  // edge:1: transit protected, atRest unprotected, handling not_applicable -- worst of each single-element list is that element itself.
+  assert.equal(row.transitVerdict, 'protected');
+  assert.equal(row.atRestVerdict, 'unprotected');
+  assert.equal(row.handlingVerdict, 'not_applicable');
+  assert.equal(row.sourceCategory, 'http-body'); // node:src1.subtype
+  assert.equal(row.sinkCategory, 'database'); // node:sink1.subtype
+  assert.equal(row.destinationExternality, 'internal'); // node:sink1.externality.value
+  assert.equal(row.policyVerdict, 'permitted');
+});
+
+test('manualGovernanceGaps\' "Flow"-subject rows carry the same new properties; its node/edge-subject rows carry none of them', () => {
+  const vm = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: {}, table: 'manualGovernanceGaps' });
+  const flowRow = vm.rows.find((r) => r.id === 'flow:manualReview1');
+  assert.ok(flowRow, 'expected flow:manualReview1\'s row to exist');
+  // edge:2 is all-protected.
+  assert.equal(flowRow.transitVerdict, 'protected');
+  assert.equal(flowRow.atRestVerdict, 'protected');
+  assert.equal(flowRow.handlingVerdict, 'protected');
+  assert.equal(flowRow.sourceCategory, 'database'); // node:sink1.subtype (flow.source here is node:sink1)
+  assert.equal(flowRow.sinkCategory, 'ai-model-provider'); // node:ai1.subtype
+  assert.equal(flowRow.destinationExternality, 'external'); // node:ai1.externality.value
+  assert.equal(flowRow.policyVerdict, 'manual_review_required');
+
+  const nonFlowRows = vm.rows.filter((r) => r.id !== 'flow:manualReview1');
+  assert.ok(nonFlowRows.length > 0, 'expected at least one node/edge-subject manualGovernanceGaps row');
+  for (const row of nonFlowRows) {
+    for (const key of ['transitVerdict', 'atRestVerdict', 'handlingVerdict', 'sourceCategory', 'sinkCategory', 'destinationExternality', 'policyVerdict']) {
+      assert.ok(!(key in row), `expected node/edge-subject row ${row.id} to carry no ${key}`);
+    }
+  }
+});
+
+test('a non-flow-shaped category (sources) carries none of the 7 new properties', () => {
+  const vm = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: {}, table: 'sources' });
+  assert.ok(vm.rows.length > 0);
+  for (const row of vm.rows) {
+    for (const key of ['transitVerdict', 'atRestVerdict', 'handlingVerdict', 'sourceCategory', 'sinkCategory', 'destinationExternality', 'policyVerdict']) {
+      assert.ok(!(key in row), `expected sources row ${row.id} to carry no ${key}`);
+    }
+  }
+});
+
+// Integration-level proof (via the real, shared matchesFilters — Step 4)
+// that the new facets genuinely narrow policyPermittedFlows' visible rows.
+test('computeInventoryViewModel applies the new transitVerdict filter to policyPermittedFlows via the shared matchesFilters', () => {
+  const matchVm = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: { transitVerdict: ['protected'] }, table: 'policyPermittedFlows' });
+  assert.equal(matchVm.rows.filter((r) => r.visible).length, 1, 'flow:permitted1 has transitVerdict "protected"');
+
+  const noMatchVm = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: { transitVerdict: ['unprotected'] }, table: 'policyPermittedFlows' });
+  assert.equal(noMatchVm.rows.filter((r) => r.visible).length, 0, 'flow:permitted1\'s transitVerdict is "protected", not "unprotected"');
+});
+
 test('fields table rows carry dataClasses and respond to the dataClass filter', () => {
   const vm = computeInventoryViewModel(GRAPH, { view: 'inventory', selectedId: null, filters: { dataClass: ['PII'] }, table: 'fields' });
   assert.ok(vm.rows.every((r) => r.visible), 'both fixture fields are PII, both should stay visible');
