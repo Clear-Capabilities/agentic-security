@@ -273,6 +273,17 @@ test('computeGraphDiff: a removed flow is tagged possible_coverage_regression wh
     assert.ok(regressed.coverageRegressionReasons.length > 0);
     assert.match(regressed.coverageRegressionReasons.join(' '), /sources\.matched/);
     assert.deepEqual(regressed.lastSeen, { commit: before.commit, capturedAt: before.capturedAt });
+
+    // Judgment call (see graph-diff.js's own header, #2): the
+    // coverage-regression signal is scoped to removed FLOW entries only
+    // — a removed node/dataElement (h2's own db.query sink node and the
+    // ssn dataElement, both real in this fixture) always reads
+    // application_change, never possible_coverage_regression, since no
+    // coverage-completeness signal exists at that granularity.
+    assert.ok(diff.removed.nodes.length >= 1, 'fixture assumption: h2 disappearing must also remove its own sink node');
+    for (const n of diff.removed.nodes) assert.equal(n.causeClassification, 'application_change');
+    assert.ok(diff.removed.dataElements.length >= 1, 'fixture assumption: h2 disappearing must also remove its own dataElement');
+    for (const d of diff.removed.dataElements) assert.equal(d.causeClassification, 'application_change');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
