@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
-  validateGraphSnapshot, persistGraphSnapshot, loadSnapshots, loadSnapshot,
+  validateGraphSnapshot, buildGraphSnapshot, persistGraphSnapshot, loadSnapshots, loadSnapshot,
   mostRecentPriorSnapshot, snapshotsComparable,
 } from '../../src/lineage/graph-snapshot.js';
 import { buildGraphWithCoverage } from '../../src/lineage/coverage.js';
@@ -135,6 +135,37 @@ test('snapshotsComparable: a missing snapshot is honestly not comparable, never 
   const a = persistGraphSnapshot(graph, _mkGitRepo(), { capturedAt: '2020-01-01T00:00:00.000Z' });
   assert.deepEqual(snapshotsComparable(a, null), { comparable: false, reasons: ['one or both snapshots are missing'] });
   assert.deepEqual(snapshotsComparable(null, null), { comparable: false, reasons: ['one or both snapshots are missing'] });
+});
+
+test('buildGraphSnapshot: returns the same shape persistGraphSnapshot builds, with ZERO disk writes', () => {
+  const dir = _mkGitRepo();
+  try {
+    const graph = _realGraph(SOURCE_A);
+    const snapshot = buildGraphSnapshot(graph, dir);
+    assert.equal(snapshot.commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim());
+    assert.ok(snapshot.id.startsWith('snapshot:'));
+    assert.deepEqual(snapshot.graph, graph);
+    // The load-bearing assertion: no lineage-snapshots/ directory was created at all.
+    assert.equal(fs.existsSync(path.join(dir, '.agentic-security', 'lineage-snapshots')), false,
+      'buildGraphSnapshot must never touch disk');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('buildGraphSnapshot: two calls on the SAME commit with different capturedAt produce two independent objects, neither colliding on disk (because neither writes)', () => {
+  const dir = _mkGitRepo();
+  try {
+    const graph = _realGraph(SOURCE_A);
+    const a = buildGraphSnapshot(graph, dir, { capturedAt: '2026-01-01T00:00:00.000Z' });
+    const b = buildGraphSnapshot(graph, dir, { capturedAt: '2026-01-01T00:00:01.000Z' });
+    assert.equal(a.commit, b.commit); // same uncommitted HEAD
+    assert.notEqual(a.capturedAt, b.capturedAt);
+    assert.notEqual(a.id, b.id); // snapshotId's own discriminator includes capturedAt
+    assert.equal(fs.existsSync(path.join(dir, '.agentic-security', 'lineage-snapshots')), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('REAL CORPUS: sweeping bench/data-lineage/ fixtures never throws persisting or loading a snapshot', async () => {

@@ -77,15 +77,16 @@ export function validateGraphSnapshot(record) {
 }
 
 /**
- * Persist `graph` as a GraphSnapshot, keyed by the REAL current git
+ * Build `graph` as a GraphSnapshot record, keyed by the REAL current git
  * HEAD of `scanRoot` (never `graph.graphId`'s own commit component —
  * see this file's own header). Falls back to a content hash of the
  * graph when no git repo is present, matching sbom-diff.js's own
  * precedent. opts.capturedAt overrides wall-clock time (deterministic
  * test fixtures, mirroring every other M4 exporter's own opts.generatedAt
- * convention).
+ * convention). Zero disk I/O — validates and returns the snapshot,
+ * never writes it.
  */
-export function persistGraphSnapshot(graph, scanRoot, opts = {}) {
+export function buildGraphSnapshot(graph, scanRoot, opts = {}) {
   const commit = _gitHead(scanRoot) || crypto.createHash('sha256').update(JSON.stringify(graph)).digest('hex').slice(0, 12);
   const capturedAt = opts.capturedAt ?? new Date().toISOString();
   const snapshot = {
@@ -100,12 +101,26 @@ export function persistGraphSnapshot(graph, scanRoot, opts = {}) {
   };
   const { valid, errors } = validateGraphSnapshot(snapshot);
   if (!valid) {
-    throw new Error(`persistGraphSnapshot: internal error — produced an invalid GraphSnapshot: ${JSON.stringify(errors)}`);
+    throw new Error(`buildGraphSnapshot: internal error — produced an invalid GraphSnapshot: ${JSON.stringify(errors)}`);
   }
+  return snapshot;
+}
+
+/**
+ * Persist `graph` as a GraphSnapshot, keyed by the REAL current git
+ * HEAD of `scanRoot` (never `graph.graphId`'s own commit component —
+ * see this file's own header). Falls back to a content hash of the
+ * graph when no git repo is present, matching sbom-diff.js's own
+ * precedent. opts.capturedAt overrides wall-clock time (deterministic
+ * test fixtures, mirroring every other M4 exporter's own opts.generatedAt
+ * convention).
+ */
+export function persistGraphSnapshot(graph, scanRoot, opts = {}) {
+  const snapshot = buildGraphSnapshot(graph, scanRoot, opts);
   if (stateWritesEnabled()) {
     const dir = _historyDir(scanRoot);
     try { fs.mkdirSync(dir, { recursive: true }); } catch {}
-    try { fs.writeFileSync(path.join(dir, `${commit}.json`), JSON.stringify(snapshot, null, 2)); } catch {}
+    try { fs.writeFileSync(path.join(dir, `${snapshot.commit}.json`), JSON.stringify(snapshot, null, 2)); } catch {}
   }
   return snapshot;
 }
