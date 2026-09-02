@@ -165,7 +165,10 @@ specs), recommend three further-scoped pieces, in dependency order:
 1. **6a — `ObligationMapping` extension contract.** Small, mechanical **— COMPLETE (2026-09-01)**: schema additions in `scanner/src/lineage/` (the six PRD-specified
    states: `evidence_supported`/`gap_detected`/`unknown`/
    `manual_required`/`not_applicable`/`accepted_exception`), a stable-ID
-   function, `validate.js` structural checks — following the same
+   function, and a self-contained structural validator (`obligation-mapping.js`'s
+   own `validateObligationMapping` — deliberately OUTSIDE `validate.js`,
+   which stays byte-identical, per this doc's own binding ruling above
+   that records are not `DataFlowGraph v1` entities) — following the same
    design-doc-then-module pattern every prior `src/lineage/` addition
    this session used.
 2. **6b — the predicate/mapping engine.** The real work: a new

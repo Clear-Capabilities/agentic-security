@@ -15,6 +15,44 @@ import {
 // doc as the pattern to follow).
 // =====================================================================
 
+// =====================================================================
+// Enum values pinned against HARDCODED LITERALS, not the module's own
+// exports — found by this sub-project's own final whole-branch review:
+// every other test in this file iterates `OBLIGATION_STATES`/
+// `OBLIGATION_FACT_TYPES`/`APPLICABILITY_INPUT_KEYS` directly, which only
+// proves the validator is self-consistent, never that the values match
+// the PRD (a mutation test confirmed live — misspelling two enum values
+// left all 25 pre-existing tests green). These three are the module's
+// entire external contract (the string vocabulary a future predicate
+// engine matches against), copied verbatim from
+// AGENTIC_SECURITY_DATA_FLOW_EXPLORER_PRD.md lines 503-508 (states),
+// 976-985 (fact types), and 512 (applicability inputs) — the same
+// "hardcoded golden literal, never the shipped implementation" discipline
+// this package's own driver.test.js already established for exactly this
+// failure mode (E1/driver-1's own comment).
+// =====================================================================
+
+test('OBLIGATION_STATES matches the PRD literal exactly (guards against a silent spelling drift the self-referential tests below cannot catch)', () => {
+  assert.deepEqual(OBLIGATION_STATES, [
+    'evidence_supported', 'gap_detected', 'unknown',
+    'manual_required', 'not_applicable', 'accepted_exception',
+  ]);
+});
+
+test('OBLIGATION_FACT_TYPES matches the PRD literal exactly', () => {
+  assert.deepEqual(OBLIGATION_FACT_TYPES, [
+    'code_inferred', 'config_correlated', 'runtime_observed',
+    'declared', 'manual', 'hypothetical',
+  ]);
+});
+
+test('APPLICABILITY_INPUT_KEYS matches the PRD literal exactly', () => {
+  assert.deepEqual(APPLICABILITY_INPUT_KEYS, [
+    'entityRole', 'jurisdiction', 'dataSubject', 'businessProcess',
+    'merchantLevel', 'systemScope', 'aiSystemRole',
+  ]);
+});
+
 test('boundary: obligation-mapping.js imports NOTHING — its specifier list is EXACTLY []', () => {
   const modulePath = fileURLToPath(new URL('../../src/lineage/obligation-mapping.js', import.meta.url));
   const src = fs.readFileSync(modulePath, 'utf8');

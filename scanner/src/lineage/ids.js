@@ -140,15 +140,24 @@ export function evidenceId(claim, location, discriminatorParts = []) {
  * DataFlowGraph v1 entity, so validate.js's id-prefix regexes and
  * json-schema-parity.test.js's $defs audit need zero change, mirroring
  * why provenanceNodeId/provenanceEdgeId are prefixed outside the
- * node:/edge:/flow: family. Discriminated by
- * (framework, frameworkVersion, requirementId, graphId) — the same
- * (framework, requirement) pair evaluated against two different base
- * graphs, or two different snapshots of the same repository, must never
- * collide into one id.
+ * node:/edge:/flow: family. Discriminated by (framework, frameworkVersion,
+ * requirementId, graphId, graphDigest) — graphId ALONE is not enough:
+ * real callers never supply graphId's own configHash component (only
+ * `graph-builder.js` reads it, via `opts.configHash ?? 'default'`, and
+ * nothing calls it with one), so every real scan at one commit produces
+ * the identical graphId regardless of the graph's actual CONTENT — found
+ * by this sub-project's own final whole-branch review, reproduced live:
+ * two records against genuinely different base graphs (same repo/commit,
+ * different analyzer output) collided onto one id without graphDigest in
+ * the material. graphDigest is the field §10.10 already requires every
+ * extension record to carry precisely so it can be distinguished from a
+ * same-graphId, different-content graph — this discriminator is what
+ * makes that requirement actually load-bearing for uniqueness, not just
+ * a payload field alongside an otherwise-collidable id.
  */
 export function obligationId(
-  { framework, frameworkVersion, requirementId, graphId },
+  { framework, frameworkVersion, requirementId, graphId, graphDigest },
   discriminatorParts = [],
 ) {
-  return `obligation:${_hash(_canon([framework, frameworkVersion, requirementId, graphId, ...discriminatorParts]))}`;
+  return `obligation:${_hash(_canon([framework, frameworkVersion, requirementId, graphId, graphDigest, ...discriminatorParts]))}`;
 }

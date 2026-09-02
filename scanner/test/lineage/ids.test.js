@@ -207,7 +207,7 @@ test('C4/5c: pnode:/pedge: are distinct from node:/edge: and never match validat
 });
 
 test('obligationId is deterministic, correctly prefixed, and discriminates on every input field', () => {
-  const base = { framework: 'gdpr', frameworkVersion: '2016/679', requirementId: 'Art.30', graphId: 'dfg:repo:abc:default' };
+  const base = { framework: 'gdpr', frameworkVersion: '2016/679', requirementId: 'Art.30', graphId: 'dfg:repo:abc:default', graphDigest: 'aaaaaaaa' };
   const id = obligationId(base);
   assert.match(id, /^obligation:[0-9a-f]{12}$/);
   assert.equal(obligationId(base), id, 'same inputs must produce the same id');
@@ -218,7 +218,20 @@ test('obligationId is deterministic, correctly prefixed, and discriminates on ev
   assert.notEqual(obligationId({ ...base, graphId: 'dfg:repo:def:default' }), id, 'the same (framework,requirement) pair against a different base graph must not collide');
 });
 
+// Found by this sub-project's own final whole-branch review, reproduced
+// live: graphId ALONE does not distinguish two base graphs at the same
+// commit, since real callers never supply graphId's own configHash
+// component — every real scan produces the identical graphId regardless
+// of graph content. graphDigest is what actually makes two obligation
+// records against different-content graphs collision-free.
+test('obligationId discriminates on graphDigest even when graphId is identical (real-pipeline shape — configHash always "default")', () => {
+  const base = { framework: 'gdpr', frameworkVersion: '2016/679', requirementId: 'Art.30', graphId: 'dfg:payments-platform:abc123:default' };
+  const idA = obligationId({ ...base, graphDigest: 'aaaaaaaa' });
+  const idB = obligationId({ ...base, graphDigest: 'bbbbbbbb' });
+  assert.notEqual(idA, idB, 'two records against genuinely different base-graph content must never collide, even with the same graphId');
+});
+
 test('obligationId honors an extra discriminator (e.g. for a re-evaluated mapping against the same graph)', () => {
-  const base = { framework: 'gdpr', frameworkVersion: '2016/679', requirementId: 'Art.30', graphId: 'dfg:repo:abc:default' };
+  const base = { framework: 'gdpr', frameworkVersion: '2016/679', requirementId: 'Art.30', graphId: 'dfg:repo:abc:default', graphDigest: 'aaaaaaaa' };
   assert.notEqual(obligationId(base, ['re-eval-2']), obligationId(base, ['re-eval-1']));
 });
