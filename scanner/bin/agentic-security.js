@@ -2266,6 +2266,48 @@ async function cmdHunt(args) {
   return 0;
 }
 
+// Data Flow Explorer M4 sub-project 6c's final whole-branch review,
+// findings F2/F3/F5-followup: every caller that discards a
+// loadFreshLineageGraph result for staleness must also disclose WHY,
+// distinguishing "no graph exists at all" from "a graph exists but isn't
+// fresh for this scan" (never letting the latter print the former's
+// "no lineage graph found" message, which would be actively false — a
+// graph DOES exist, it just isn't trusted). Shared by cmdAttest's
+// --obligations branch and cmdCompliance's --walkthrough/--report branch
+// rather than duplicated a third time, since this predicate's own
+// duplication was already flagged once (F3) as unacceptable for a safety
+// disclosure.
+function _lineageStalenessNoteLines(graphIsFresh, loaded, scan, subject) {
+  if (graphIsFresh) return null;
+  const capSubject = subject.charAt(0).toUpperCase() + subject.slice(1);
+  if (!loaded.ok) {
+    if (loaded.reason === 'missing') {
+      return [
+        'NOTE: no lineage graph found (AGENTIC_SECURITY_LINEAGE_DEEP=1 was not set on',
+        `the scan that produced last-scan.json) — ${subject} reads "unknown", by design.`,
+      ];
+    }
+    return [
+      `NOTE: lineage graph could not be loaded (${loaded.reason}: ${loaded.message})`,
+      `— ${subject} reads "unknown", by design.`,
+    ];
+  }
+  if (scan.scanHealth?.lineageAnalysis?.failure) {
+    return [
+      'NOTE: a lineage graph exists on disk, but this scan\'s own lineage build',
+      `failed (${scan.scanHealth.lineageAnalysis.failure}) — ignoring the stale graph`,
+      'rather than asserting a fact about code it may no longer reflect.',
+      `${capSubject} reads "unknown", by design.`,
+    ];
+  }
+  return [
+    'NOTE: a lineage graph exists on disk from an earlier deep scan, but this scan',
+    'did not run one (AGENTIC_SECURITY_LINEAGE_DEEP=1 was not set) — ignoring the',
+    'stale graph rather than asserting a fact about code it may no longer reflect.',
+    `${capSubject} reads "unknown", by design.`,
+  ];
+}
+
 // PRD D2 — emit signed, per-finding evidence bundles, and verify them.
 //
 // `attest` needs our private key. `verify-attestation` needs ONLY a public key,
@@ -2333,7 +2375,7 @@ async function cmdCompliance(args) {
     // -checked loader --obligations uses (loadFreshLineageGraph's own
     // header has the full staleness reasoning).
     const { loadFreshLineageGraph } = await import('../src/server/graph-loader.js');
-    const { graph: wtGraph } = loadFreshLineageGraph(scanRoot, scan);
+    const { graph: wtGraph, fresh: wtGraphIsFresh, loaded: wtLoaded } = loadFreshLineageGraph(scanRoot, scan);
     const evaluation = evaluateFramework(scanRoot, fw, { ...scan, lineageGraph: wtGraph });
     if (fmt === 'oscal') {
       const { toOSCALCompliance, complianceRowsFromEvaluation } = await import('../src/report/oscal.js');
@@ -2344,6 +2386,13 @@ async function cmdCompliance(args) {
     }
     if (fmt === 'json') { writeStdout(JSON.stringify(evaluation, null, 2) + '\n'); return 0; }
     console.log(renderWalkthrough(fw, evaluation, {}));
+    // Scoped re-review finding (non-blocking, fixed): a stale/missing
+    // graph used to be discarded here with no disclosure at all — the
+    // same F2 gap already fixed for `attest --obligations`, unfixed on
+    // this sibling surface. Only the plain narrative gets the NOTE
+    // (never --format json/oscal, which must stay machine-parseable).
+    const wtNote = _lineageStalenessNoteLines(wtGraphIsFresh, wtLoaded, scan, 'every graph: mapping in this walkthrough');
+    if (wtNote) { console.log(''); for (const line of wtNote) console.log(line); }
     return 0;
   }
 
@@ -2536,31 +2585,11 @@ async function cmdAttest(args) {
     // above could silently discard a real graph with NO disclosure at
     // all — an operator saw "unknown: 1" and nothing explaining why, even
     // though a signed graph genuinely existed on disk. Keyed on
-    // `!graphIsFresh` instead, so every path that discards a graph also
-    // explains why.
-    if (!graphIsFresh) {
-      console.log('');
-      if (!loaded.ok) {
-        if (loaded.reason === 'missing') {
-          console.log('NOTE: no lineage graph found (AGENTIC_SECURITY_LINEAGE_DEEP=1 was not set on');
-          console.log('the scan that produced last-scan.json) — every graph: fact in this pack');
-          console.log('reads "unknown", by design.');
-        } else {
-          console.log(`NOTE: lineage graph could not be loaded (${loaded.reason}: ${loaded.message})`);
-          console.log('— every graph: fact in this pack reads "unknown", by design.');
-        }
-      } else if (scan.scanHealth?.lineageAnalysis?.failure) {
-        console.log('NOTE: a lineage graph exists on disk, but this scan\'s own lineage build');
-        console.log(`failed (${scan.scanHealth.lineageAnalysis.failure}) — ignoring the stale graph`);
-        console.log('rather than asserting a fact about code it may no longer reflect. Every');
-        console.log('graph: fact in this pack reads "unknown", by design.');
-      } else {
-        console.log('NOTE: a lineage graph exists on disk from an earlier deep scan, but this scan');
-        console.log('did not run one (AGENTIC_SECURITY_LINEAGE_DEEP=1 was not set) — ignoring the');
-        console.log('stale graph rather than asserting a fact about code it may no longer reflect.');
-        console.log('Every graph: fact in this pack reads "unknown", by design.');
-      }
-    }
+    // `!graphIsFresh` instead (via the shared helper above
+    // cmdCompliance), so every path that discards a graph also explains
+    // why.
+    const obNote = _lineageStalenessNoteLines(graphIsFresh, loaded, scan, 'every graph: fact in this pack');
+    if (obNote) { console.log(''); for (const line of obNote) console.log(line); }
     return 0;
   }
 

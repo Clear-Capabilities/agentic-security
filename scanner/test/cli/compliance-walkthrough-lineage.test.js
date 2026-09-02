@@ -11,6 +11,8 @@
 // regression guard for the --walkthrough half.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
@@ -60,4 +62,34 @@ test('compliance --walkthrough --format json: a real deep scan produces a non-va
   assert.notEqual(mapping.graphId, '(no graph)', 'the real lineage graph must be loaded, not the no-graph placeholder');
   assert.notEqual(mapping.graphDigest, '(no graph)');
   assert.match(mapping.graphDigest, /^[0-9a-f]{64}$/);
+});
+
+test('compliance --walkthrough (plain narrative): a stale graph on disk is discarded, WITH a disclosure NOTE — never silently', async (t) => {
+  // Second scoped re-review finding (non-blocking, now fixed): the R2 fix
+  // above threads a fresh graph through when this scan's own scanHealth
+  // confirms it — but before this fix, a STALE graph (deep-scanned once,
+  // then an ordinary rescan) was discarded with NO explanation at all on
+  // this command's own plain-narrative output, the exact F2 gap already
+  // closed for `attest --obligations`.
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', PHI_SOURCE);
+  fx.commit('add PHI-to-model-provider flow');
+
+  const deepScanR = spawnSync(process.execPath, [CLI, 'scan', '.'], {
+    cwd: fx.root, encoding: 'utf8', timeout: 60000,
+    env: { ...process.env, AGENTIC_SECURITY_LINEAGE_DEEP: '1' },
+  });
+  assert.ok(deepScanR.status <= 3, `deep scan must exit <=3; got ${deepScanR.status}: ${deepScanR.stderr}`);
+
+  const ordinaryScanR = spawnSync(process.execPath, [CLI, 'scan', '.'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
+  assert.ok(ordinaryScanR.status <= 3, `ordinary scan must exit <=3; got ${ordinaryScanR.status}: ${ordinaryScanR.stderr}`);
+  assert.ok(fs.existsSync(path.join(fx.root, '.agentic-security', 'lineage-graph.json')), 'the stale graph must still be on disk');
+
+  const wtR = spawnSync(process.execPath, [CLI, 'compliance', '--walkthrough', 'hipaa-security-rule'], {
+    cwd: fx.root, encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(wtR.status, 0, `compliance --walkthrough failed: ${wtR.stderr}\n${wtR.stdout}`);
+  assert.match(wtR.stdout, /a lineage graph exists on disk from an earlier deep scan, but this scan/, `expected the staleness NOTE, got:\n${wtR.stdout}`);
+  assert.match(wtR.stdout, /Every graph: mapping in this walkthrough reads "unknown"/);
 });

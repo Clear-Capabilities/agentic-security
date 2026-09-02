@@ -129,6 +129,42 @@ test('attest --obligations + verify-attestation: a real gap_detected fact is fla
   assert.match(verifyR.stdout, /⚠️ gaps: 1/, `expected a ⚠️ gaps flag in verify-attestation output, got:\n${verifyR.stdout}`);
 });
 
+test('attest --obligations: a stale graph on disk (deep scan, then an ordinary rescan) is discarded, WITH a disclosure NOTE explaining why', async (t) => {
+  // Second scoped re-review finding (non-blocking, now fixed): the
+  // graphIsFresh/loadFreshLineageGraph staleness predicate itself had
+  // unit coverage, but no CLI-integration test proved the disclosure
+  // MESSAGE actually wires up correctly for this specific "graph exists
+  // but wasn't produced by this scan" case (as opposed to "no graph file
+  // at all").
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', PHI_SOURCE);
+  fx.commit('add PHI-to-model-provider flow');
+
+  const deepScanR = _scanWithLineage(fx);
+  assert.ok(deepScanR.status <= 3, `deep scan must exit <=3; got ${deepScanR.status}: ${deepScanR.stderr}`);
+
+  // Now an ORDINARY scan, with no AGENTIC_SECURITY_LINEAGE_DEEP at all —
+  // the lineage-graph.json file from the deep scan above stays on disk,
+  // untouched, while last-scan.json/scanHealth move on.
+  const ordinaryScanR = spawnSync(process.execPath, [CLI, 'scan', '.'], { cwd: fx.root, encoding: 'utf8', timeout: 60000 });
+  assert.ok(ordinaryScanR.status <= 3, `ordinary scan must exit <=3; got ${ordinaryScanR.status}: ${ordinaryScanR.stderr}`);
+
+  const graphPath = path.join(fx.root, '.agentic-security', 'lineage-graph.json');
+  assert.ok(fs.existsSync(graphPath), 'the stale graph file must still exist on disk after the ordinary rescan');
+
+  const attestR = spawnSync(process.execPath, [CLI, 'attest', '--obligations', 'hipaa-security-rule'], {
+    cwd: fx.root, encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(attestR.status, 0, `attest --obligations failed: ${attestR.stderr}\n${attestR.stdout}`);
+  assert.match(attestR.stdout, /a lineage graph exists on disk from an earlier deep scan, but this scan/, `expected the staleness NOTE, got:\n${attestR.stdout}`);
+  assert.match(attestR.stdout, /did not run one/);
+
+  const outFile = path.join(fx.root, '.agentic-security', 'attestations', 'evidence-pack-hipaa-security-rule.json');
+  const pack = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+  assert.equal(pack.graphDigest, null, 'the stale graph must never be signed as if it described this scan');
+});
+
 test('attest --obligations: with no framework id, exits 2 with a usage message', async (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'as-attest-obligations-'));
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
