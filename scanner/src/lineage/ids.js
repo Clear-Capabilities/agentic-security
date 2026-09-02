@@ -199,3 +199,21 @@ export function snapshotId(
 ) {
   return `snapshot:${_hash(_canon([graphId, commit, capturedAt, ...discriminatorParts]))}`;
 }
+
+/**
+ * A GraphDiff record's id (M4 deliverable #9, FR-503 §14, DFG-022,
+ * sub-project 8b) — NOT a DataFlowGraph v1 entity, mirrors snapshotId's
+ * own precedent exactly (a real, stable-ID'd extension record that is
+ * deliberately not a base-graph entity). Discriminated by
+ * (beforeSnapshotId, afterSnapshotId) — unlike snapshotId, no separate
+ * timestamp component is needed: each snapshot id is itself
+ * content-derived (its own graphId/commit/capturedAt), so the pair alone
+ * already makes a diff between two SPECIFIC snapshots deterministic, and
+ * a diff is not itself a new capture event the way a snapshot is.
+ */
+export function diffId(
+  { beforeSnapshotId, afterSnapshotId },
+  discriminatorParts = [],
+) {
+  return `diff:${_hash(_canon([beforeSnapshotId, afterSnapshotId, ...discriminatorParts]))}`;
+}
