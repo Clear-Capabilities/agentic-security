@@ -37,7 +37,7 @@ test('RANKING_FACTORS lists exactly the 9 PRD-named factors', () => {
   ]);
 });
 
-test('scoreFlow: a real PHI -> AI-model-provider flow scores sensitivity=high, externality=external, aiUse=true', () => {
+test('scoreFlow: a real PHI -> AI-model-provider flow scores sensitivity=high, externality=unknown (FR-203 unresolved receiver), aiUse=true', () => {
   const graph = _buildRealGraph(PHI_TO_AI_SOURCE);
   assert.ok(graph.flows.length >= 1, 'fixture assumption drifted: expected a real PHI->AI flow');
   const nodesById = new Map(graph.nodes.map((n) => [n.id, n]));
