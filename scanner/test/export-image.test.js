@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exportPng, exportPdf, exportSvg } from '../scripts/export-image.mjs';
@@ -56,6 +57,48 @@ itChrome('exportSvg: produces a real, valid SVG containing real flagship content
   // Real content, not an empty shell — ground against the real fixture's
   // own known node label.
   assert.match(svgText, /Payments Service/);
+});
+
+itChrome('exportPng: a temp dir containing "#" does not silently render Chrome\'s own error page', async () => {
+  // Found live by the final whole-branch review: `file://${file}${hash}`
+  // string concatenation truncates at a literal `#` in the temp path
+  // (real on some machines/CI images whose TMPDIR contains one), and
+  // Chrome renders its own internal error page for the broken URL —
+  // exiting 0 and writing a correctly-dimensioned-but-wrong PNG, which
+  // the old code returned as {ok:true}. pathToFileURL percent-encodes
+  // the `#` correctly; _verifyRealRender is the second line of defense
+  // if this ever regresses (it would see no real report DOM and fail
+  // clearly instead of silently succeeding).
+  const hashDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-hash-#-'));
+  const prevTmpdir = process.env.TMPDIR;
+  process.env.TMPDIR = hashDir;
+  try {
+    const r = await exportPng(flagship, { width: 1680, height: 945 });
+    assert.equal(r.ok, true, r.reason);
+    assert.equal(r.data.readUInt32BE(16), 1680);
+    assert.equal(r.data.readUInt32BE(20), 945);
+  } finally {
+    if (prevTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = prevTmpdir;
+    fs.rmSync(hashDir, { recursive: true, force: true });
+  }
+});
+
+itChrome('exportPng: a malformed AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS degrades to the default, never throws', async () => {
+  // Number('oops') is NaN, and NaN as spawnSync's `timeout` option
+  // throws ERR_OUT_OF_RANGE synchronously — a fresh module instance
+  // (cache-busted query string) is required because the timeout is
+  // computed once, at module load.
+  const prev = process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS;
+  process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS = 'oops';
+  try {
+    const mod = await import(`../scripts/export-image.mjs?bustcache=${Date.now()}-${Math.random()}`);
+    const r = await mod.exportPng(flagship, { width: 1680, height: 945 });
+    assert.equal(r.ok, true, r.reason);
+  } finally {
+    if (prev === undefined) delete process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS;
+    else process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS = prev;
+  }
 });
 
 test('exportPng: a clear, non-throwing error when Chrome is genuinely unavailable', async () => {

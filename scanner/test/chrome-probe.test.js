@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { probeChromeAvailable, resetChromeProbe } from '../src/ir/chrome-probe.mjs';
 
 test('probeChromeAvailable: finds a real Chrome on this machine (environment-dependent, skip if absent)', () => {
@@ -53,6 +56,58 @@ test('probeChromeAvailable: a bogus AGENTIC_SECURITY_CHROME_PATH degrades cleanl
   } finally {
     if (prev === undefined) delete process.env.AGENTIC_SECURITY_CHROME_PATH;
     else process.env.AGENTIC_SECURITY_CHROME_PATH = prev;
+    resetChromeProbe();
+  }
+});
+
+test('probeChromeAvailable: a malformed AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS degrades to the default instead of throwing', async () => {
+  // Number('oops') is NaN, and NaN as spawnSync's `timeout` option throws
+  // ERR_OUT_OF_RANGE synchronously — found by the final whole-branch
+  // review. _tryBinary's own try/catch happened to swallow that throw,
+  // but then misreported no-chrome-found even on a machine with a
+  // genuinely working Chrome, since spawnSync throws for EVERY
+  // candidate. A fresh module instance (cache-busted query string) is
+  // required because the timeout is computed once, at module load.
+  const prev = process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS;
+  process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS = 'oops';
+  try {
+    const mod = await import(`../src/ir/chrome-probe.mjs?bustcache=${Date.now()}-${Math.random()}`);
+    mod.resetChromeProbe();
+    const r = mod.probeChromeAvailable();
+    if (r.ok) {
+      assert.equal(typeof r.chrome, 'string');
+    } else {
+      assert.equal(typeof r.reason, 'string');
+    }
+  } finally {
+    if (prev === undefined) delete process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS;
+    else process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS = prev;
+  }
+});
+
+test('probeChromeAvailable: prefers a known absolute install path over a same-named binary earlier on PATH', () => {
+  resetChromeProbe();
+  const real = probeChromeAvailable();
+  if (!real.ok || !(real.chrome.includes('/') || real.chrome.includes('\\'))) {
+    return; // no real absolute-path Chrome on this machine to compare against
+  }
+  resetChromeProbe();
+
+  const fakeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-fake-chrome-'));
+  const fakeBin = path.join(fakeDir, 'google-chrome-stable');
+  fs.writeFileSync(fakeBin, '#!/bin/sh\necho "Chromium 1.0.0 (fake)"\nexit 0\n');
+  fs.chmodSync(fakeBin, 0o755);
+
+  const prevPath = process.env.PATH;
+  process.env.PATH = `${fakeDir}${path.delimiter}${prevPath}`;
+  try {
+    const r = probeChromeAvailable();
+    assert.equal(r.ok, true);
+    assert.notEqual(r.chrome, fakeBin, 'must not select the PATH-planted binary over a known-good absolute path');
+    assert.equal(r.chrome, real.chrome);
+  } finally {
+    process.env.PATH = prevPath;
+    fs.rmSync(fakeDir, { recursive: true, force: true });
     resetChromeProbe();
   }
 });

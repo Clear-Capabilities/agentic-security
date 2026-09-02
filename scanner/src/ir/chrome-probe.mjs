@@ -11,17 +11,37 @@ import * as fs from 'node:fs';
 
 let _capability = null;
 
-const PROBE_TIMEOUT_MS = Number(process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS || 5000);
+// A malformed env var (e.g. AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS=oops)
+// must fall back to the default, never reach spawnSync as NaN — found by
+// the final whole-branch review: `Number('oops')` is NaN, and NaN as a
+// spawnSync `timeout` option throws ERR_OUT_OF_RANGE synchronously.
+// _tryBinary's own try/catch swallows that throw and returns null for
+// EVERY candidate, so probeChromeAvailable would misreport
+// `no-chrome-found` on a machine with a perfectly working Chrome install.
+function _validTimeoutMs(raw, fallback) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+const PROBE_TIMEOUT_MS = _validTimeoutMs(process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS, 5000);
 
-// Real, common install locations, per platform — checked only if the
-// binary isn't already resolvable on PATH (the common case on Linux CI
-// images and most dev machines with Chrome installed via a package
-// manager). macOS's own Chrome.app does NOT put its binary on PATH by
-// default, hence the explicit path search there.
+// Real, common install locations, per platform. Deliberately excludes
+// AGENTIC_SECURITY_CHROME_PATH — that override is handled separately in
+// probeChromeAvailable() as an authoritative, non-fallback choice (see
+// the comment there for why).
 //
-// Deliberately excludes AGENTIC_SECURITY_CHROME_PATH — that override is
-// handled separately in probeChromeAvailable() as an authoritative,
-// non-fallback choice (see the comment there for why).
+// KNOWN-GOOD ABSOLUTE PATHS ARE TRIED FIRST, PATH-resolvable bare names
+// LAST — found by the final whole-branch review, reproduced live: with
+// bare names tried first, a `chrome` shell script anywhere earlier on
+// PATH than the real browser is silently preferred and then executed
+// with this process's own render arguments. The `--version` output
+// check (`_tryBinary` below) is a functional smoke test, not a security
+// gate — it cannot distinguish a real Chrome/Chromium binary from any
+// script that echoes a matching string. Preferring the well-known
+// install locations narrows, though does not eliminate, this exposure
+// (a compromised PATH entry named exactly `chrome`/`google-chrome`/etc.
+// is still tried if no absolute-path candidate exists on this machine —
+// this feature already assumes local machine trust, same as every other
+// "optional local tool" this codebase shells out to).
 function _candidatePaths() {
   const onPath = ['google-chrome-stable', 'google-chrome', 'chromium-browser', 'chromium', 'chrome'];
   const platformPaths = {
@@ -38,7 +58,7 @@ function _candidatePaths() {
     linux: [],
   };
   const platformSpecific = platformPaths[process.platform] || [];
-  return [...onPath, ...platformSpecific];
+  return [...platformSpecific, ...onPath];
 }
 
 // Tries one candidate binary. Returns {ok:true, chrome:bin} on a real,

@@ -12,10 +12,20 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { generateHtmlReport } from './generate-html-report.mjs';
 import { probeChromeAvailable } from '../src/ir/chrome-probe.mjs';
 
-const RENDER_TIMEOUT_MS = Number(process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS || 15000);
+// A malformed env var (e.g. AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS=oops)
+// must fall back to the default, never reach spawnSync as NaN — NaN as a
+// spawnSync `timeout` option throws ERR_OUT_OF_RANGE synchronously, which
+// none of the three export functions below catch (their try/finally only
+// guards cleanup, not this construction-time computation).
+function _validTimeoutMs(raw, fallback) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+const RENDER_TIMEOUT_MS = _validTimeoutMs(process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS, 15000);
 
 function _writeTempHtml(graph, opts) {
   const html = generateHtmlReport(graph, opts);
@@ -32,12 +42,77 @@ function _hashUrl(file, opts) {
   // investigation to select the initial active view with zero new
   // frontend code. No `#` fragment when no view is requested (the shell
   // defaults to 'architecture' on its own).
+  //
+  // pathToFileURL, never hand-built string concatenation: the temp
+  // directory comes from os.tmpdir(), which on some machines/CI images
+  // contains a literal `#` (found live by the final whole-branch
+  // review) — `file://${file}` truncates at that character, and Chrome
+  // silently renders its own internal error page for the broken URL
+  // instead of failing. pathToFileURL percent-encodes it correctly.
+  // Also the only correct way to build a file: URL on Windows, whose
+  // paths are never valid appended directly after `file://`.
   const hash = opts.view ? `#view=${encodeURIComponent(opts.view)}` : '';
-  return `file://${file}${hash}`;
+  return pathToFileURL(file).href + hash;
 }
 
 function _cleanup(dir) {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
+}
+
+// Confirmed this sub-project's own scoping investigation: exactly ONE
+// real `<svg>` element exists in the whole rendered page
+// (architecture-view.js's own root, class="arch-view") — a direct
+// source grep confirms svgEl()/createElementNS is used nowhere else.
+// Only present when the Architecture View is the active view, though
+// (see _verifyRealRender below for the view-agnostic check used for
+// PNG/PDF, which can capture any view).
+function _extractArchSvg(dom) {
+  const start = dom.indexOf('<svg class="arch-view"');
+  if (start === -1) return { ok: false, reason: 'no <svg class="arch-view"> element found in the rendered page' };
+  const end = dom.indexOf('</svg>', start);
+  if (end === -1) return { ok: false, reason: 'found <svg class="arch-view"> but no matching </svg> close tag' };
+  return { ok: true, markup: dom.slice(start, end + '</svg>'.length) };
+}
+
+// role="tablist" — shell.js's own view-switcher tab bar (frontend/src/shell.js),
+// present in EVERY view (unlike the architecture-only <svg class="arch-view">
+// _extractArchSvg looks for), and part of the shell chrome, not
+// view-specific content. Its presence in a --dump-dom capture is this
+// module's positive signal that Chrome actually rendered the real
+// report and not its own internal error page (which exits 0 and still
+// writes a screenshot/PDF file — found live by the final whole-branch
+// review: a `#` in the temp path broke the URL, and the resulting
+// correctly-dimensioned-but-wrong PNG was Chrome's own error page).
+function _hasRealShellChrome(dom) {
+  return dom.includes('role="tablist"');
+}
+
+function _dumpDom(chrome, url, opts) {
+  const r = cp.spawnSync(chrome.chrome, [
+    '--headless=new', '--disable-gpu',
+    `--window-size=${opts.width || 1680},${opts.height || 945}`,
+    '--virtual-time-budget=5000',
+    '--dump-dom',
+    url,
+  ], { timeout: RENDER_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
+  if (r.error || r.status !== 0) {
+    return { ok: false, reason: `chrome dump-dom failed: ${r.error?.message || r.stderr || 'unknown error'}` };
+  }
+  return { ok: true, dom: r.stdout };
+}
+
+// Verifies the page actually rendered the real report (not Chrome's own
+// error page for a broken URL) before PNG/PDF capture is trusted. Costs
+// one extra Chrome invocation per PNG/PDF export — deliberate: a
+// screenshot/PDF file gives no positive signal of its own content, and
+// Chrome exits 0 with a written output file for its own error page too.
+function _verifyRealRender(chrome, url, opts) {
+  const dumped = _dumpDom(chrome, url, opts);
+  if (!dumped.ok) return dumped;
+  if (!_hasRealShellChrome(dumped.dom)) {
+    return { ok: false, reason: 'rendered page has no real report shell (role="tablist") — likely a broken URL or a Chrome error page' };
+  }
+  return { ok: true };
 }
 
 export async function exportPng(graph, opts = {}) {
@@ -48,13 +123,16 @@ export async function exportPng(graph, opts = {}) {
   const height = opts.height || 945;
   const outPng = path.join(dir, 'out.png');
   try {
+    const url = _hashUrl(file, opts);
+    const verified = _verifyRealRender(chrome, url, opts);
+    if (!verified.ok) return verified;
     const r = cp.spawnSync(chrome.chrome, [
       '--headless=new', '--disable-gpu',
       `--window-size=${width},${height}`,
       '--force-device-scale-factor=1',
       '--virtual-time-budget=5000',
       `--screenshot=${outPng}`,
-      _hashUrl(file, opts),
+      url,
     ], { timeout: RENDER_TIMEOUT_MS, encoding: 'utf8' });
     if (r.error || r.status !== 0 || !fs.existsSync(outPng)) {
       return { ok: false, reason: `chrome screenshot failed: ${r.error?.message || r.stderr || 'unknown error'}` };
@@ -71,11 +149,14 @@ export async function exportPdf(graph, opts = {}) {
   const { dir, file } = _writeTempHtml(graph, opts);
   const outPdf = path.join(dir, 'out.pdf');
   try {
+    const url = _hashUrl(file, opts);
+    const verified = _verifyRealRender(chrome, url, opts);
+    if (!verified.ok) return verified;
     const r = cp.spawnSync(chrome.chrome, [
       '--headless=new', '--disable-gpu',
       '--virtual-time-budget=5000',
       `--print-to-pdf=${outPdf}`,
-      _hashUrl(file, opts),
+      url,
     ], { timeout: RENDER_TIMEOUT_MS, encoding: 'utf8' });
     if (r.error || r.status !== 0 || !fs.existsSync(outPdf)) {
       return { ok: false, reason: `chrome print-to-pdf failed: ${r.error?.message || r.stderr || 'unknown error'}` };
@@ -91,35 +172,15 @@ export async function exportSvg(graph, opts = {}) {
   if (!chrome.ok) return { ok: false, reason: `chrome not available: ${chrome.reason}` };
   const { dir, file } = _writeTempHtml(graph, opts);
   try {
-    const r = cp.spawnSync(chrome.chrome, [
-      '--headless=new', '--disable-gpu',
-      `--window-size=${opts.width || 1680},${opts.height || 945}`,
-      '--virtual-time-budget=5000',
-      '--dump-dom',
-      _hashUrl(file, opts),
-    ], { timeout: RENDER_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
-    if (r.error || r.status !== 0) {
-      return { ok: false, reason: `chrome dump-dom failed: ${r.error?.message || r.stderr || 'unknown error'}` };
-    }
-    const dom = r.stdout;
-    // Confirmed this sub-project's own scoping investigation: exactly
-    // ONE real `<svg>` element exists in the whole rendered page
-    // (architecture-view.js's own root, class="arch-view") — a direct
-    // source grep confirms svgEl()/createElementNS is used nowhere
-    // else. Find its start, then its OWN matching close tag (the
-    // element has no nested `<svg>` children, so a plain string search
-    // for the first `</svg>` after the start is correct — re-verify
-    // this assumption is still true before trusting it if
-    // architecture-view.js's own SVG structure ever changes).
-    const start = dom.indexOf('<svg class="arch-view"');
-    if (start === -1) return { ok: false, reason: 'no <svg class="arch-view"> element found in the rendered page' };
-    const end = dom.indexOf('</svg>', start);
-    if (end === -1) return { ok: false, reason: 'found <svg class="arch-view"> but no matching </svg> close tag' };
-    const svgMarkup = dom.slice(start, end + '</svg>'.length);
+    const url = _hashUrl(file, opts);
+    const dumped = _dumpDom(chrome, url, opts);
+    if (!dumped.ok) return dumped;
+    const extracted = _extractArchSvg(dumped.dom);
+    if (!extracted.ok) return extracted;
     // Real, standalone SVG documents need an explicit xmlns — the
     // in-page element inherits it implicitly from its HTML parent
     // document, which a standalone .svg file does not have.
-    const standalone = svgMarkup.replace('<svg class="arch-view"', '<svg xmlns="http://www.w3.org/2000/svg" class="arch-view"');
+    const standalone = extracted.markup.replace('<svg class="arch-view"', '<svg xmlns="http://www.w3.org/2000/svg" class="arch-view"');
     return { ok: true, data: Buffer.from(standalone, 'utf8') };
   } finally {
     _cleanup(dir);
