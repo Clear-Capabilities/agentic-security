@@ -432,7 +432,13 @@ test('Chapter 4: an unconfigured-policy (not_evaluated) flow is honestly labeled
   assert.match(ch5.markdown, /No flows currently require a manual policy decision/);
 });
 
-test('Chapter 4: a real "prohibited" verdict is labeled "policy conflict", a real "manual_review_required" verdict is labeled "requiring manual policy review" — distinctly, never collapsed together', () => {
+// manual_review_required/conditionally_permitted have no real producer in
+// the current pipeline (see export-briefing.js's own comment beside
+// manualReviewNeeded) — this test proves the real, reachable "prohibited"
+// case renders under the correct heading AND that the manual-review
+// section does not spuriously render when nothing needs it; it does NOT
+// exercise a real manual_review_required flow (none exists to build).
+test('Chapter 4: a real "prohibited" verdict is labeled "policy conflict"; the manual-review section stays absent when nothing needs it', () => {
   const perFile = { 'a.js': parseJsFile('a.js', `
     function track(req, analytics) {
       const email = req.body.email;
