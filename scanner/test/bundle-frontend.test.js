@@ -73,3 +73,27 @@ test('bundleFrontendModules: throws a clear error on an unsupported import form 
   const root = _mkTmpTree({ 'a.js': `import foo from './b.js';\nexport function run() {}`, 'b.js': 'export default 1;' });
   assert.throws(() => bundleFrontendModules(path.join(root, 'a.js')), /unsupported import/i);
 });
+
+// Regression for a real bug this task's own review found: `visiting` (the
+// currently-on-the-DFS-stack set) must be checked BEFORE `parsed` (the
+// fully-resolved memo), or a cycle back to an ancestor hits the `parsed`
+// check first and returns silently instead of throwing — verified live
+// pre-fix (the bundle built "successfully" and only failed later, as a
+// confusing ReferenceError, when the broken output was executed).
+test('bundleFrontendModules: a real circular import throws a clear build-time error, never silently succeeds', () => {
+  const root = _mkTmpTree({
+    'entry.js': `import { fromB } from './b.js';\nexport function run() { return fromB(); }`,
+    'b.js': `import { run } from './entry.js';\nexport function fromB() { return 'B' + typeof run; }`,
+  });
+  assert.throws(() => bundleFrontendModules(path.join(root, 'entry.js')), /circular import detected/i);
+});
+
+test('bundleFrontendModules: entry and a non-entry dependency each declaring their own private same-named binding do not collide', () => {
+  const root = _mkTmpTree({
+    'entry.js': `import { fromB } from './b.js';\nfunction helper() { return 'ENTRY'; }\nexport function run() { return helper() + fromB(); }`,
+    'b.js': `function helper() { return 'B'; }\nexport function fromB() { return helper(); }`,
+  });
+  const out = bundleFrontendModules(path.join(root, 'entry.js'));
+  const fn = new Function(`${out}\nreturn run();`);
+  assert.equal(fn(), 'ENTRYB');
+});

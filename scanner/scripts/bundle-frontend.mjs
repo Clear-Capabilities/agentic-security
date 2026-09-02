@@ -89,10 +89,20 @@ export function bundleFrontendModules(entryAbsPath) {
   const visiting = new Set();
 
   function visit(absPath) {
-    if (parsed.has(absPath)) return;
+    // `visiting` (currently-on-the-DFS-stack) must be checked BEFORE
+    // `parsed` (fully-resolved, safe to skip) — found by this task's own
+    // review: the original ordering set `parsed` before recursing into a
+    // module's own imports, so a cycle back to an ancestor hit the
+    // `parsed.has()` check first and returned silently, making the
+    // `visiting`-based throw below unreachable for ANY cycle. Reproduced
+    // live: a real entry<->b.js cycle built successfully at bundle time
+    // and only failed later, as a confusing `ReferenceError` (TDZ) when
+    // the broken output was executed, instead of this function's own
+    // clear build-time error.
     if (visiting.has(absPath)) {
       throw new Error(`bundleFrontendModules: circular import detected at ${absPath} — this bundler does not support cycles`);
     }
+    if (parsed.has(absPath)) return;
     visiting.add(absPath);
     const mod = _parseModule(absPath);
     parsed.set(absPath, mod);
