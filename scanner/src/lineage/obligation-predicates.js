@@ -20,6 +20,16 @@
 // applicabilityInputs stays all-null (ruling 5 — no operator-config
 // source for it exists anywhere in this codebase yet, a deliberately
 // deferred, separate increment).
+//
+// KNOWN LIMITATION (found by this task's own review): evaluateGraphFlowPredicate
+// reads only flow.edgeIds[0] — a flow with multiple edges is evaluated
+// using its first edge only, silently ignoring the rest. Not currently
+// reachable: graph-builder.js (the only real producer of flows) always
+// mints a single-element edgeIds array. This is a latent gap for any
+// future multi-edge-flow producer, or a hand-built graph conforming to
+// the schema (which places no length constraint on flow.edgeIds) — worth
+// revisiting (e.g. worst-verdict-wins across all edges, mirroring
+// aggregateVerdicts()'s own precedent) if that assumption ever changes.
 
 import { computeGraphDigest } from './export-json.js';
 import { obligationId } from './ids.js';
@@ -68,8 +78,18 @@ export function buildObligationMappingFromGraphPredicate({
   const graphId = graph?.graphId ?? null;
   const graphDigest = graph ? computeGraphDigest(graph) : null;
 
+  // Found by this task's own review: a caller-contract violation (a
+  // truthy graph paired with a missing/null evaluation — i.e. forgetting
+  // to call evaluateGraphFlowPredicate first) used to throw here,
+  // inconsistent with this package's "public API never throws on
+  // malformed input" convention (obligation-mapping.js's own JSDoc,
+  // path-query.js, flow-grade.js). Not reachable through this sub-
+  // project's own documented calling convention (Task 2's wiring always
+  // pairs graph/evaluation correctly), but degrading to 'unknown' here
+  // — the same answer a genuinely absent graph gets — is honest and
+  // matches every sibling module's own never-throw contract.
   let state;
-  if (!graph) state = 'unknown';
+  if (!graph || !evaluation) state = 'unknown';
   else if (!evaluation.applicable) state = 'not_applicable';
   else if (evaluation.matched) state = 'evidence_supported';
   else state = 'gap_detected';

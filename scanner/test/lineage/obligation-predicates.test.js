@@ -150,3 +150,15 @@ test('buildObligationMappingFromGraphPredicate: the id is a real obligationId, s
   assert.match(a.id, /^obligation:[0-9a-f]{12}$/);
   assert.equal(a.id, b.id);
 });
+
+test('buildObligationMappingFromGraphPredicate: a truthy graph with a missing/null evaluation degrades to unknown, never throws', () => {
+  // A caller-contract violation (forgetting to call evaluateGraphFlowPredicate
+  // first) must never throw — matches this package's "public API never
+  // throws on malformed input" convention (obligation-mapping.js,
+  // path-query.js, flow-grade.js all hold this).
+  const graph = _minimalGraph({ transitVerdict: 'protected' });
+  assert.doesNotThrow(() => buildObligationMappingFromGraphPredicate(_baseArgs(graph, null)));
+  const record = buildObligationMappingFromGraphPredicate(_baseArgs(graph, null));
+  assert.equal(record.state, 'unknown');
+  assert.equal(validateObligationMapping(record).valid, true);
+});
