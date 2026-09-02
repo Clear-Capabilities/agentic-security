@@ -144,13 +144,13 @@ Commands:
                                Start a local, read-only server over an
                                already-scanned lineage graph (run
                                AGENTIC_SECURITY_LINEAGE_DEEP=1 scan first)
-  dataflow export [path] --format png|pdf|svg|json|csv|html|dpia|ropa|briefing --output <file>
+  dataflow export [path] --format png|pdf|svg|json|csv|html|dpia|ropa|briefing|recipients --output <file>
                                Export the already-scanned lineage graph.
                                --view architecture|privacy|trace|inventory  (default: architecture;
-                                                      png/pdf/svg only — no-op + warning for json/csv/html/dpia/ropa/briefing)
+                                                      png/pdf/svg only — no-op + warning for json/csv/html/dpia/ropa/briefing/recipients)
                                --size standard|2x    AC-23 pinned PNG sizes (default: standard)
                                --width <n> --height <n>   custom PNG size, <= 20000 (mutually exclusive with --size)
-                               --no-redact            include unredacted content (json/html only; no-op + warning for csv/dpia/ropa/briefing)
+                               --no-redact            include unredacted content (json/html only; no-op + warning for csv/dpia/ropa/briefing/recipients)
                                --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv)
                                --audience board|ciso|privacy|compliance|regulator|technical
                                                       (default: technical; briefing only — wording/verbosity, never facts)
@@ -3310,7 +3310,7 @@ async function cmdExplore(args) {
 // rejected BEFORE any Chrome invocation — Chrome's own dump-failure
 // reason for this case is confusing, not a good user-facing error), or
 // a caught throw/{ok:false} from the underlying export function.
-const DATAFLOW_EXPORT_FORMATS = new Set(['png', 'pdf', 'svg', 'json', 'csv', 'html', 'dpia', 'ropa', 'briefing']);
+const DATAFLOW_EXPORT_FORMATS = new Set(['png', 'pdf', 'svg', 'json', 'csv', 'html', 'dpia', 'ropa', 'briefing', 'recipients']);
 const DATAFLOW_EXPORT_VIEWS = new Set(['architecture', 'privacy', 'trace', 'inventory']);
 const DATAFLOW_EXPORT_SIZES = { standard: { width: 1680, height: 945 }, '2x': { width: 3360, height: 1890 } };
 
@@ -3347,7 +3347,9 @@ async function cmdDataflowExport(args) {
   // emitGraphDpiaArtifact/emitGraphRopaArtifact have no --view concept
   // either, mirroring json/csv's own precedent exactly. briefing (FR-501)
   // joins the same set — emitDecisionStory has no --view concept either.
-  if (viewExplicit && (format === 'json' || format === 'csv' || format === 'html' || format === 'dpia' || format === 'ropa' || format === 'briefing')) {
+  // recipients (FR-506) joins the same set — a Markdown table over
+  // graph.recipientProfiles[] has no --view concept either.
+  if (viewExplicit && (format === 'json' || format === 'csv' || format === 'html' || format === 'dpia' || format === 'ropa' || format === 'briefing' || format === 'recipients')) {
     process.stderr.write(`agentic-security dataflow export: --view has no effect on --format ${format} — ${format} exports are not view-scoped.\n`);
   }
 
@@ -3424,8 +3426,13 @@ async function cmdDataflowExport(args) {
   // never call exportGraphJSON's own redaction path either — same
   // precedent as csv above, same guard. briefing (FR-501) joins the same
   // set — emitDecisionStory never calls exportGraphJSON's redaction path
-  // either.
-  if (!redact && (format === 'dpia' || format === 'ropa' || format === 'briefing')) {
+  // either. recipients (FR-506) joins the same set too — a judgment call,
+  // disclosed: `redact-graph.js`'s own field list has nothing to say about
+  // `graph.recipientProfiles` (it redacts `node.destination`/`storeDetail`/
+  // `queueDetail`/`evidence[]`, never this new array), so the renderer
+  // below never calls exportGraphJSON's redaction path either — matching
+  // dpia/ropa/briefing's own precedent exactly, not a new behavior.
+  if (!redact && (format === 'dpia' || format === 'ropa' || format === 'briefing' || format === 'recipients')) {
     process.stderr.write(`agentic-security dataflow export: --no-redact has no effect on --format ${format} — ${format} export does not support redaction yet.\n`);
   }
 
@@ -3519,6 +3526,8 @@ async function cmdDataflowExport(args) {
     } else if (format === 'briefing') {
       const { emitDecisionStory } = await import('../src/lineage/export-briefing.js');
       data = emitDecisionStory(graph, opts).markdown;
+    } else if (format === 'recipients') {
+      data = _renderDataflowRecipientsMarkdown(graph, opts);
     }
   } catch (e) {
     // dpia/ropa reach frontend/src/views/privacy-view.js via a relative
@@ -3561,6 +3570,128 @@ async function cmdDataflowExport(args) {
   }
   process.stdout.write(`agentic-security dataflow export: wrote ${format} to ${outAbs}\n`);
   return 0;
+}
+
+// Local Markdown-escaping helpers for `--format recipients` — byte-identical
+// to export-briefing.js's/export-privacy.js's/`_dfDiffMd*`'s own
+// _mdInline/_mdCell/_mdCode, reimplemented locally per this codebase's
+// established per-module-owns-its-own-escaping-helpers convention (see
+// export-briefing.js's own header comment for why these are never imported
+// across modules). Applied to every graph-derived or operator-recipient-
+// config-derived string (provider/legalEntity/dpaStatus/etc.) interpolated
+// into the Markdown report below.
+function _dfRecipientsMdInline(value) {
+  return String(value).replace(/\r\n|\r|\n/g, ' ');
+}
+function _dfRecipientsMdCell(value) {
+  return _dfRecipientsMdInline(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+}
+function _dfRecipientsMdCode(value) {
+  const s = _dfRecipientsMdInline(value);
+  const runs = s.match(/`+/g);
+  const maxRun = runs ? Math.max(...runs.map((r) => r.length)) : 0;
+  if (maxRun === 0) return `\`${s}\``;
+  const fence = '`'.repeat(maxRun + 1);
+  return `${fence} ${s} ${fence}`;
+}
+
+// `--filter`'s scoping rule for `--format recipients` (a real design
+// decision the task brief left open, disclosed here): a RecipientProfile
+// has no node/edge of its own — it is a §10.10 extension record keyed by
+// `recipientKey`, associated with the graph only via `contributingGraphIds`
+// (the sink NODE ids that resolved to it, per `graph-builder.js`'s own
+// `opts.buildRecipientProfile` hook). So this format narrows
+// `graph.recipientProfiles` by whether ANY of a profile's
+// `contributingGraphIds` survive `filter.nodeIds` — mirroring the same
+// "narrow by referential soundness against the filtered node set" spirit
+// `export-json.js`'s own `_filterGraph` uses for flows, applied to this
+// format's own, different entity shape. `filter.edgeIds` has no effect on
+// this format (a recipient profile carries no edge reference at all) — a
+// filter file supplying only `edgeIds` therefore narrows this format to
+// nothing, an honest (not silently-wrong) consequence of the format having
+// no edge concept, not a bug.
+function _filterRecipientProfiles(recipientProfiles, filter) {
+  if (!filter) return recipientProfiles;
+  const nodeIds = new Set(filter.nodeIds ?? []);
+  return recipientProfiles.filter((p) => (p.contributingGraphIds ?? []).some((id) => nodeIds.has(id)));
+}
+
+// The table columns named by the task brief — a deliberate SUBSET of
+// `RecipientProfile`'s full `RECIPIENT_FACT_FIELDS` (14 fields; see
+// recipient-profile.js), not all of them: technicalEndpoint/servicePurpose/
+// subprocessorChain/dataResidencyCommitment/observedRegion/
+// transferMechanism/transferImpactReviewStatus/retentionCommitment are
+// real fields but not part of the brief's own named column list, so they
+// are omitted from the table (a future format revision could add them).
+// `processingCountries` is rendered under the "Jurisdiction(s)" header per
+// the brief's own wording. `confidence` is record-level metadata (no
+// `fieldEvidence` entry of its own — see recipient-profile.js's own header
+// comment on why), so it is shown in the table but excluded from the
+// per-row evidence-disclosure footer below.
+const _DATAFLOW_RECIPIENTS_FACT_COLUMNS = [
+  ['provider', 'Provider'],
+  ['serviceType', 'Service Type'],
+  ['legalEntity', 'Legal Entity'],
+  ['processorRole', 'Processor Role'],
+  ['processingCountries', 'Jurisdiction(s)'],
+  ['dpaStatus', 'DPA Status'],
+];
+
+function _dataflowRecipientsCellValue(profile, field) {
+  const value = profile[field];
+  if (field === 'processingCountries') {
+    return Array.isArray(value) && value.length > 0 ? value.join(', ') : '—';
+  }
+  return value === null || value === undefined || value === '' ? '—' : String(value);
+}
+
+// `agentic-security dataflow export --format recipients` (Milestone 4,
+// FR-506, Task 3) — one Markdown table row per `graph.recipientProfiles[]`
+// entry, plus a footer disclosing which fields are `code_inferred` vs
+// `declared` vs absent for each row (never fabricated — a field with no
+// `fieldEvidence` entry is disclosed as `absent`, not silently omitted).
+function _renderDataflowRecipientsMarkdown(graph, opts = {}) {
+  const profiles = _filterRecipientProfiles(graph.recipientProfiles ?? [], opts.filter);
+  const lines = [];
+  lines.push('# Third-Party and Cross-Border Recipient Intelligence');
+  lines.push('');
+  lines.push(`**Graph:** ${_dfRecipientsMdCode(graph.graphId ?? '(no graphId)')}`);
+  lines.push(`**Generated:** ${_dfRecipientsMdInline(opts.generatedAt ?? graph.generatedAt ?? '')}`);
+  if (opts.filter) lines.push('**Scope:** filtered to a subset of the graph (`--filter`).');
+  lines.push('');
+
+  if (profiles.length === 0) {
+    lines.push(opts.filter
+      ? 'No recipients survive the given `--filter` scope.'
+      : 'No recipients resolved for this graph — no sink site matched a known technical-provider catalog entry or an operator-declared `recipient-profiles.json` entry.');
+    return `${lines.join('\n')}\n`;
+  }
+
+  lines.push(`| ${_DATAFLOW_RECIPIENTS_FACT_COLUMNS.map(([, header]) => header).join(' | ')} | Confidence |`);
+  lines.push(`|${_DATAFLOW_RECIPIENTS_FACT_COLUMNS.map(() => '---').join('|')}|---|`);
+  for (const p of profiles) {
+    const cells = _DATAFLOW_RECIPIENTS_FACT_COLUMNS.map(([field]) => _dfRecipientsMdCell(_dataflowRecipientsCellValue(p, field)));
+    cells.push(_dfRecipientsMdCell(p.confidence ?? '—'));
+    lines.push(`| ${cells.join(' | ')} |`);
+  }
+
+  lines.push('');
+  lines.push('## Field evidence');
+  lines.push('');
+  lines.push('For each recipient above, whether each shown fact is code-inferred (from a real call site matching this codebase\'s technical-provider catalog), declared (from operator-supplied `recipient-profiles.json`), or absent (no source at all — never fabricated):');
+  lines.push('');
+  for (const p of profiles) {
+    lines.push(`### ${_dfRecipientsMdInline(p.provider ?? p.recipientKey ?? '(unknown recipient)')}`);
+    for (const [field, header] of _DATAFLOW_RECIPIENTS_FACT_COLUMNS) {
+      const ev = p.fieldEvidence ? p.fieldEvidence[field] : undefined;
+      const status = ev ? ev.factType : 'absent';
+      const sourceNote = ev && ev.source ? ` (source: ${_dfRecipientsMdInline(ev.source)})` : '';
+      lines.push(`- ${_dfRecipientsMdInline(header)}: ${_dfRecipientsMdInline(status)}${sourceNote}`);
+    }
+    lines.push('');
+  }
+
+  return `${lines.join('\n')}\n`;
 }
 
 // `agentic-security dataflow diff [path] [--against <commit>]

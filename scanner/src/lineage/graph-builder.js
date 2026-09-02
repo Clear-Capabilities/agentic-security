@@ -449,6 +449,13 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   // permitting policy rule actually applied to a flow, deduplicated by
   // content hash exactly like `transformsById`/`edgesById` above.
   const evidenceById = new Map();
+  // Milestone 4, FR-506 (Third-Party and Cross-Border Intelligence): every
+  // non-null `opts.buildRecipientProfile(site, graph)` result, deduplicated
+  // by the record's own `id` — the same recipient reached by two different
+  // sink sites in one scan must not mint two records; a duplicate
+  // resolution merges its `site.nodeId` into the first record's
+  // `contributingGraphIds` instead of overwriting it.
+  const recipientProfilesById = new Map();
 
   const mintNode = ({ kind, category, coverageStatus, externality, coverageReason, subtypeKey, lifecycleStages, destination, storeDetail, queueDetail }) => {
     // NOTE (Milestone 2, Sub-project A, increment 1; Sub-project E,
@@ -559,6 +566,32 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     for (const site of sites) {
       const destination = opts.resolveDestination(site);
       if (destination) site.destination = destination;
+    }
+  }
+  // Milestone 4, FR-506 (Third-Party and Cross-Border Intelligence): a
+  // THIRD, SEPARATE, additive hook of the identical shape — composes with,
+  // never replaces, `resolveDestination`/`resolveSiteDecision` above.
+  // Applied once `resolveDestination` has run, at the same pipeline point,
+  // so `opts.buildRecipientProfile` sees each site's final `.destination`.
+  // Deliberately NOT gated on `site.destination` being present: unlike a
+  // protection/policy verdict, a recipient's technical-provider match can
+  // resolve from `site.entry.framework` alone (e.g. a receiver-based
+  // `anthropic.messages.create()` SDK call, AC-07's own real fixture shape,
+  // whose destination frequently never resolves past 'unknown'/'dynamic' —
+  // there is no literal URL to resolve) — skipping every site with no
+  // destination would silently drop exactly that real-world case. A no-op
+  // when omitted, mirroring every sibling hook's own proven contract.
+  if (typeof opts.buildRecipientProfile === 'function') {
+    for (const site of sites) {
+      const profile = opts.buildRecipientProfile(site, graph);
+      if (profile) {
+        const existing = recipientProfilesById.get(profile.id);
+        if (existing) {
+          existing.contributingGraphIds = [...new Set([...existing.contributingGraphIds, site.nodeId])];
+        } else {
+          recipientProfilesById.set(profile.id, { ...profile, contributingGraphIds: [site.nodeId] });
+        }
+      }
     }
   }
   const escapesBySite = new Map();
@@ -943,6 +976,13 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   // Milestone 2, Sub-project G, increment 1: the first real populator of
   // `graph.evidence[]` — every permitting policy rule minted above.
   graph.evidence = [...evidenceById.values()].sort(byId);
+  // Milestone 4, FR-506: a real, non-core-schema array on the graph
+  // object — never in `dataflow-graph.schema.json`, never routed through
+  // `validate.js`'s `validateGraph()`, mirroring `graph.evidence[]`'s own
+  // established precedent immediately above (both are §10.10-adjacent
+  // records "associated with, but not required inside" the immutable base
+  // graph).
+  graph.recipientProfiles = [...recipientProfilesById.values()].sort(byId);
   // §10's SKETCH of the coverage ledger. E4 owns the finished contract.
   graph.coverage = {
     languages: [], parseFailures: [],

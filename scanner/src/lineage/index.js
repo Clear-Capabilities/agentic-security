@@ -38,6 +38,16 @@ import { loadPrivacySinkPolicy } from '../dataflow/privacy-sink-policy.js';
 // .agentic-security/privacy-governance.json exists on disk.
 import { loadPrivacyGovernanceConfig } from '../dataflow/privacy-governance.js';
 import { statePath } from '../posture/state-dir.js';
+// Milestone 4, FR-506 (Third-Party and Cross-Border Intelligence): loaded
+// ONCE, here — mirroring `loadPrivacySinkPolicy`'s own single-computation
+// discipline above. `loadRecipientConfig` already has the SAME "never
+// throws, missing file degrades to {recipients: {}}" contract
+// `loadPrivacyGovernanceConfig` has, so — like that config, unlike
+// `privacySinkPolicy` — no existence-gating is needed on the CALL itself;
+// only the PATH resolution mirrors `privacySinkPolicy`'s own precedent,
+// since `loadRecipientConfig` (unlike `loadPrivacyGovernanceConfig`) takes
+// a literal file path, not a scanRoot.
+import { loadRecipientConfig, RECIPIENT_CONFIG_FILENAME } from './recipient-registry.js';
 
 /**
  * @param {{functions: Map}} callGraph a real callGraph — the same shape
@@ -80,6 +90,13 @@ import { statePath } from '../posture/state-dir.js';
  *   byte-identical to omitting `opts.fileContents` anymore — a network
  *   sink's `edge.protection.transit` can now genuinely change with the
  *   evidence supplied.
+ * Milestone 4, FR-506: the operator's recipient config
+ * (`.agentic-security/recipient-profiles.json`, resolved against
+ * `opts.scanRoot`) is loaded exactly once here and threaded to
+ * `buildGraphWithCoverage`'s `opts.recipientConfig`, which drives the
+ * default `opts.buildRecipientProfile` hook — no separate `opts` field
+ * needed, unlike `privacySinkPolicy`, since `loadRecipientConfig` already
+ * degrades a missing/malformed file gracefully on its own.
  * @returns {{status: 'not_available'|'complete'|'failed', graph: object|null, transitEvidence: Map<string,object[]>, failure: string|null, elapsedMs: number}}
  *   `status` is never `'not_requested'` — that decision belongs to the
  *   CALLER (whether to call this function at all), not to this function's
@@ -137,6 +154,16 @@ export function buildLineageGraph(callGraph, opts = {}) {
     // import comment for why no existence-gating is needed here, unlike
     // privacySinkPolicy.
     const privacyGovernanceConfig = loadPrivacyGovernanceConfig(opts.scanRoot);
+    // Milestone 4, FR-506: the operator's recipient config, loaded exactly
+    // once, here — mirroring `privacySinkPolicy`'s own path-resolution step
+    // (gated on `opts.scanRoot`, since `loadRecipientConfig` takes a literal
+    // file path rather than a scanRoot) but, per this file's own import
+    // comment above, calling the loader UNCONDITIONALLY once the path is
+    // resolved — `loadRecipientConfig` already degrades a missing/malformed
+    // file to `{recipients: {}}` on its own, the same honest-empty-default
+    // contract `loadPrivacyGovernanceConfig` has.
+    const recipientConfigPath = opts.scanRoot ? statePath(opts.scanRoot, RECIPIENT_CONFIG_FILENAME) : null;
+    const recipientConfig = loadRecipientConfig(recipientConfigPath);
     const built = buildGraphWithCoverage(callGraph, {
       repository: opts.repository,
       generatedAt: opts.deterministic ? undefined : new Date().toISOString(),
@@ -146,6 +173,7 @@ export function buildLineageGraph(callGraph, opts = {}) {
       privacySinkPolicy,
       privacyGovernanceConfig,
       environment: opts.environment,
+      recipientConfig,
     });
     return { status: 'complete', graph: built.graph, transitEvidence, failure: null, elapsedMs: Date.now() - t0 };
   } catch (e) {

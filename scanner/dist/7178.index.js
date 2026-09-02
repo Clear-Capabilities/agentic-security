@@ -14,7 +14,7 @@ export const modules = {
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
 /* harmony import */ var _util_git_hardening_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(8844);
-/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(9393);
+/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(7850);
 // Time-travel + counterfactual scanning (v0.68).
 //
 // Two new modes that exploit the pure-input shape of runFullScan:

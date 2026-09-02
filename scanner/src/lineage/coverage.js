@@ -75,6 +75,13 @@ import { resolveTransitProtectionForSite } from './transit-protection.js';
 // re-implements governance-field lookup, only composes the default hook
 // `graph-builder.js`'s `opts.resolveGovernanceRefs` expects.
 import { governanceRecordFor, GOVERNANCE_FIELDS } from '../dataflow/privacy-governance.js';
+// Milestone 4, FR-506 (Third-Party and Cross-Border Intelligence):
+// `buildRecipientProfile` composes with `opts.buildRecipientProfile` the
+// same way `resolveDestination`/`resolveTransitProtectionForSite` compose
+// above — see `buildGraphWithCoverage`'s own wiring below. No ES module
+// cycle here — `recipient-registry.js` never imports anything back from
+// this file.
+import { buildRecipientProfile } from './recipient-registry.js';
 
 // =========================================================================
 // FR-203 — the destination-unresolved heuristic.
@@ -436,6 +443,13 @@ export function buildCoverageLedger(built, opts = {}) {
  * @param {string} [opts.environment] optional deployment-environment
  *   override for policy evaluation's environment-scoped rules — also
  *   spread straight through, unchanged.
+ * @param {object} [opts.recipientConfig] Milestone 4, FR-506: a pre-loaded
+ *   `recipient-registry.js`'s `loadRecipientConfig` return shape
+ *   (`{recipients: {...}}`), computed exactly once by the caller
+ *   (`index.js`'s `buildLineageGraph`, mirroring `transitEvidenceByFile`'s/
+ *   `privacySinkPolicy`'s own single-computation discipline). This function
+ *   never reads the filesystem itself — it only closes over this value for
+ *   `opts.buildRecipientProfile`'s own default hook, below.
  */
 export function buildGraphWithCoverage(callGraph, opts = {}) {
   // NITPICK 4: compose with a caller-supplied `opts.resolveSiteDecision`
@@ -457,6 +471,13 @@ export function buildGraphWithCoverage(callGraph, opts = {}) {
     resolveDestination: opts.resolveDestination ?? resolveDestination,
     resolveTransitProtection: opts.resolveTransitProtection
       ?? ((site) => resolveTransitProtectionForSite(site, opts.transitEvidenceByFile ?? new Map())),
+    // Milestone 4, FR-506: identical composition pattern — a caller-supplied
+    // hook always wins over this module's own default, which closes over
+    // `opts.recipientConfig` (honestly `undefined`, via `buildRecipientProfile`'s
+    // own `opts.recipientConfig` fallback, when the caller supplies none —
+    // never re-derived from the filesystem here).
+    buildRecipientProfile: opts.buildRecipientProfile
+      ?? ((site, graph) => buildRecipientProfile(site, graph, { recipientConfig: opts.recipientConfig })),
     // Deliverable #10 (DFG-020): opts.resolveGovernanceRefs, composed the
     // same way every sibling hook is — a caller-supplied hook always wins.
     // The default closes over opts.privacyGovernanceConfig, a PRE-LOADED
