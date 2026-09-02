@@ -96,8 +96,12 @@ Re-runs a deep lineage scan (`AGENTIC_SECURITY_LINEAGE_DEEP=1`, set
 automatically) on every debounced file-system change under `path`, and
 reports the real `GraphDiff` between the previous and current in-memory
 graph on stderr — the live-editing counterpart to `diff` above. Blocks
-until `Ctrl-C` (or the process is otherwise terminated), like the existing
-`/scan --watch`.
+until `Ctrl-C` (or the process is otherwise terminated) — the same UX
+shape `/scan --watch` is documented to have, though this command's own
+dispatch was specifically written to avoid a real, measured defect in
+that other command (it exits in under a second and never actually
+watches — see `scanner/src/lineage/CLAUDE.md`'s "watch-mode graph delta
+updates" section for the full account).
 
 **Two deliberate, disclosed scope boundaries — read before relying on
 this in a workflow:**

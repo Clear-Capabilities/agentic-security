@@ -71,7 +71,7 @@ import { decide as decideNextAction, explain as explainDecision } from '../src/p
 import * as triage from '../src/posture/triage.js';
 import { buildSlackDigest, buildDiscordDigest, postWebhook, buildJiraIssue, buildPrComment, buildSiemEvent, loadIntegrationConfig } from '../src/integrations/index.js';
 
-import { stateDir, statePath } from '../src/posture/state-dir.js';
+import { stateDir, statePath, withStateWritesDisabled } from '../src/posture/state-dir.js';
 import { listGeneratedArtifacts } from '../src/posture/artifact-registry.js';
 // last-scan.json integrity helpers — implementation in posture/integrity.js
 // so the MCP server tools can share verification.
@@ -4031,12 +4031,45 @@ async function cmdDataflowWatch(args) {
 
   const _lineageStatusReason = (ls) => (ls && ls.failure) ? `failure: ${ls.failure}` : (ls && ls.reason) ? `reason: ${ls.reason}` : 'unknown reason';
 
-  const seed = await runScan(targetAbs, {});
+  // withStateWritesDisabled, for the same reason lsp/server.js's on-save scan
+  // and mcp/tools.js's scan_diff (FR-704) wrap their own repeated runScan
+  // calls. This command reruns a full scan on every debounced file edit for
+  // as long as the watch session stays open, against the user's real project
+  // root, with state writes fully enabled by default — without the wrapper,
+  // every single-edit rescan writes ~11 real files into .agentic-security/
+  // (dpia.md, ropa.md, threat-model.*, privacy-framework.*, data-inventory.json,
+  // sbom-history/, ...), appends to scan-history.json, and — the genuinely
+  // dangerous part — feeds posture/provenance/lifecycle.js's introduce/
+  // remediate/reintroduce ledger. A real, transient mid-edit change (e.g. a
+  // cut-and-paste during a refactor) would get recorded as a FABRICATED
+  // `remediated` event (commit: null, authorDate: null), later undone by a
+  // fabricated `reintroduced` event — permanently corrupting the one
+  // artifact that backs finding provenance, MTTR reporting, and signed
+  // evidence bundles, for a "fix" that never happened. exceptCategories:
+  // ['provenance-cache'] mirrors lsp/server.js's own exact precedent: it
+  // keeps ONLY the provenance disk cache live across repeated rescans in one
+  // watch session (so a slowly-changing project doesn't pay the full
+  // uncached provenance-resolution cost on every edit), while every OTHER
+  // state write named above stays fully suppressed. Do not "simplify" this
+  // back to a bare runScan call.
+  const seed = await withStateWritesDisabled(() => runScan(targetAbs, {}), { exceptCategories: ['provenance-cache'] });
   if (!seed.scan.lineageGraph) {
     process.stderr.write(`agentic-security dataflow watch: seed scan produced no data-flow graph (${_lineageStatusReason(seed.scan.lineageStatus)}) — nothing to watch/diff against.\n`);
     return 1;
   }
   let prevSnapshot = buildGraphSnapshot(seed.scan.lineageGraph, targetAbs);
+
+  // watchProject itself checks process.env.AGENTIC_SECURITY_NO_WATCH === '1'
+  // internally and returns immediately without ever subscribing to fs.watch
+  // — so if we printed the "watching..." banner unconditionally below, a
+  // caller with the env var set would see "watching..." immediately followed
+  // by the process exiting, having watched nothing. Check the exact same
+  // condition watchProject checks (do not invent a different one that could
+  // drift from it) and print an honest message instead.
+  if (process.env.AGENTIC_SECURITY_NO_WATCH === '1') {
+    process.stderr.write(`[watch-dataflow] AGENTIC_SECURITY_NO_WATCH=1 — watch mode is disabled; ran the seed scan only, not watching ${targetAbs} for changes.\n`);
+    return 0;
+  }
 
   // Printed AFTER the seed scan succeeds, immediately before `watchProject`
   // subscribes — this is the real "the watcher is live" signal a caller
@@ -4045,9 +4078,23 @@ async function cmdDataflowWatch(args) {
   process.stderr.write(`[watch-dataflow] watching ${targetAbs} for data-flow graph changes on file change — Ctrl-C to stop.\n`);
   process.stderr.write('[watch-dataflow] does NOT refresh .agentic-security/lineage-graph.json on any rescan — an already-running `agentic-security explore` session will not reflect these edits live.\n');
 
-  await watchProject(targetAbs, async () => {
+  // No in-flight-rescan guard: if a debounced batch fires while a previous
+  // rescan is still running, two concurrent invocations of this callback
+  // can race on `prevSnapshot` (the closure variable below), producing a
+  // diff against a stale baseline or clobbering it out of order on a large
+  // enough project. Not fixed here — watchProject's own design has no
+  // such guard, and the pre-existing `scan --watch` (this file's own
+  // args.flags['watch'] branch) has the identical unguarded shape on its
+  // own `prevFindings` variable; adding one here alone would diverge from
+  // that established UX for no consistent reason. A future increment
+  // could add a real mutex/generation-counter to BOTH commands together.
+  await watchProject(targetAbs, async (batch, watchErr) => {
+    if (watchErr) {
+      process.stderr.write(`[watch-dataflow] file watcher error: ${watchErr && watchErr.message ? watchErr.message : watchErr} — no longer watching for changes.\n`);
+      return;
+    }
     try {
-      const { scan } = await runScan(targetAbs, {});
+      const { scan } = await withStateWritesDisabled(() => runScan(targetAbs, {}), { exceptCategories: ['provenance-cache'] });
       if (!scan.lineageGraph) {
         process.stderr.write(`[watch-dataflow] rescan produced no data-flow graph (${_lineageStatusReason(scan.lineageStatus)}) — skipping this change.\n`);
         return;
@@ -4078,7 +4125,13 @@ async function cmdDataflowWatch(args) {
     }
   });
 
-  return 0; // watchProject blocks until aborted (Ctrl-C)
+  return 0; // watchProject itself does not block (see the dispatch site's
+  // own comment, case 'dataflow' -> the `watch` branch, for the full
+  // explanation) — the process stays alive on the live fs.watch handle
+  // watchProject subscribes internally, exiting only via Ctrl-C/SIGTERM.
+  // Do NOT "simplify" the dispatch call around this function back to
+  // `process.exit(await cmdDataflowWatch(args))` — that is the exact
+  // change that makes `scan --watch` exit before it ever watches anything.
 }
 
 async function main() {

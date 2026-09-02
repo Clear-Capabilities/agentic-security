@@ -26,8 +26,21 @@ already exists — and glossed over one real, load-bearing risk.
   runs a seed scan, then on every debounced change batch re-runs
   `runScan`, computes a SAST-finding delta (`computeDelta`), and writes
   `.agentic-security/watch-status.{md,json}` plus a stderr status line.
-  Blocks until `Ctrl-C`, exactly `jest --watch`'s shape. Opt-out via
-  `AGENTIC_SECURITY_NO_WATCH=1`.
+  Documented as blocking until `Ctrl-C`, matching `jest --watch`'s shape
+  — but MEASURED FALSE during this sub-project's own Task 2 (confirmed
+  independently by the coordinator too): `scan --watch` prints its
+  banner and exits in well under 1 second on a real fixture, because its
+  own dispatch (`process.exit(await cmdScan(args))`) kills the process
+  before `watchProject`'s internal `fs.watch` subscription — set up
+  inside an un-awaited async IIFE — ever gets a chance to fire. This is a
+  real, pre-existing defect in the shipped `scan --watch` feature, not
+  something this sub-project caused; fixing it is out of this
+  sub-project's own scope (see this doc's own scope section) but a
+  future reader must not assume `scan --watch` genuinely watches.
+  `dataflow watch`'s own dispatch avoids this exact trap — see
+  `bin/agentic-security.js`'s `case 'dataflow':` `watch` branch for the
+  fix and its own detailed comment. Opt-out via
+  `AGENTIC_SECURITY_NO_WATCH=1` remains real and correctly wired either way.
 - **`watchProject` itself needs ZERO changes for the graph-delta case** —
   it's already generic (`onChange(batch)`, no SAST-specific assumption
   baked into the subscription logic itself). Only `computeDelta`/
