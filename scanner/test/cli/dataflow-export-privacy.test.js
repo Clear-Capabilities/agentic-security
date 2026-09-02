@@ -186,3 +186,42 @@ test('dataflow export --format ropa: --no-redact is a documented no-op with a wa
   assert.match(exportR.stderr, /--no-redact has no effect on --format ropa/);
   assert.ok(fs.existsSync(outFile));
 });
+
+test('dataflow export --format dpia: the "Generated ... on <date>" line reflects the graph\'s own fixed generatedAt, never export-time wall clock', async (t) => {
+  // Task-3 review finding (non-blocking, fixed): cmdDataflowExport's opts
+  // omitted generatedAt entirely, so emitGraphDpiaArtifact fell back to
+  // its own `new Date()` default — the DPIA's "Generated ... on <date>"
+  // line reflected EXPORT time, not the graph's own already-fixed
+  // generatedAt (the same field json/html both embed unconditionally).
+  // Fixed by threading opts.generatedAt: graph.generatedAt through,
+  // matching json/html's own precedent.
+  //
+  // A same-day double-export can't distinguish "reads graph.generatedAt"
+  // from "reads wall clock" (both would show today's date either way),
+  // so this test forces a REAL, unambiguous divergence: scan with
+  // AGENTIC_SECURITY_DETERMINISTIC=1 (engine.js#isDeterministic, threaded
+  // into buildLineageGraph's own `deterministic` option), which freezes
+  // graph.generatedAt to the fixed literal 1970-01-01T00:00:00.000Z —
+  // a date that can never equal "today" on any real machine. If the
+  // export shows 1970-01-01, the fix genuinely reads the graph; if it
+  // shows today's real date, the bug has regressed.
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', PHI_SOURCE);
+  fx.commit('add PHI-to-model-provider flow');
+
+  const scanR = spawnSync(process.execPath, [CLI, 'scan', '.'], {
+    cwd: fx.root, encoding: 'utf8', timeout: 60000,
+    env: { ...process.env, AGENTIC_SECURITY_LINEAGE_DEEP: '1', AGENTIC_SECURITY_DETERMINISTIC: '1' },
+  });
+  assert.ok(scanR.status <= 3, `scan must exit <=3; got ${scanR.status}: ${scanR.stderr}`);
+
+  const graph = JSON.parse(fs.readFileSync(path.join(fx.root, '.agentic-security', 'lineage-graph.json'), 'utf8'));
+  assert.equal(graph.generatedAt, '1970-01-01T00:00:00.000Z', 'deterministic scan must freeze generatedAt to the fixed literal');
+
+  const outFile = path.join(fx.root, 'dpia.md');
+  assert.equal(_exportCli(fx, ['--format', 'dpia', '--output', outFile]).status, 0);
+  const content = fs.readFileSync(outFile, 'utf8');
+  assert.match(content, /on 1970-01-01\./, `expected the frozen graph date, got:\n${content.split('\n').find((l) => l.startsWith('Generated'))}`);
+  assert.doesNotMatch(content, new RegExp(`on ${new Date().toISOString().slice(0, 10)}\\.`), 'must never reflect real export-time wall clock');
+});

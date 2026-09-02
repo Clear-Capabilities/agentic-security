@@ -1,6 +1,6 @@
 ---
-description: Export the Data Flow Explorer graph — PNG/PDF/SVG images, JSON/CSV data, or a self-contained HTML report.
-argument-hint: "[path] --format png|pdf|svg|json|csv|html --output <file> [--view <name>] [--size standard|2x]"
+description: Export the Data Flow Explorer graph — PNG/PDF/SVG images, JSON/CSV/DPIA/RoPA data, or a self-contained HTML report.
+argument-hint: "[path] --format png|pdf|svg|json|csv|html|dpia|ropa --output <file> [--view <name>] [--size standard|2x]"
 ---
 
 ## Data Flow Explorer export
@@ -20,12 +20,14 @@ this command never triggers a scan itself, matching `/dataflow`'s sibling
 | `json` | Data envelope with digest + graph | No Chrome needed. |
 | `csv` | One row per flow | No Chrome needed. **Does not support redaction or scoping** — `--no-redact` and `--filter` are both no-ops for this format (a printed warning explains why for each). |
 | `html` | Self-contained, offline-viewable report | No Chrome needed to generate (only to raster it afterward, if you also want a png/pdf). Not view-scoped — embeds the full interactive report, not one captured view. |
+| `dpia` | Data Protection Impact Assessment (Markdown, GDPR Art. 35 framing) | No Chrome needed. Graph-derived — real flows, real protection verdicts, real governance facts (operator-supplied via `.agentic-security/privacy-governance.json`, or honestly marked `manual_required`). Supports `--filter`; **does not support `--view`/`--no-redact`** (both no-ops with a printed warning, same as `csv`). |
+| `ropa` | Record of Processing Activities (Markdown table, GDPR Art. 30 register) | No Chrome needed. One row per (flow × data class) — real source/sink/protection/governance columns. Supports `--filter`; **does not support `--view`/`--no-redact`** (both no-ops with a printed warning, same as `csv`). |
 
 ## Options
 
-- `--view architecture|privacy|trace|inventory` — which view to capture (default: `architecture`). **Only affects `png`/`pdf`/`svg`** — a no-op (with warning) for `json`/`csv`/`html`, which are not view-scoped.
-- `--no-redact` — include unredacted content. Honored for `json`/`html`; a no-op (with warning) for `csv`.
-- `--filter <path-to-json>` — scope the export to a `{"nodeIds":[...],"edgeIds":[...]}` file. A no-op (with warning) for `csv`.
+- `--view architecture|privacy|trace|inventory` — which view to capture (default: `architecture`). **Only affects `png`/`pdf`/`svg`** — a no-op (with warning) for `json`/`csv`/`html`/`dpia`/`ropa`, which are not view-scoped.
+- `--no-redact` — include unredacted content. Honored for `json`/`html`; a no-op (with warning) for `csv`/`dpia`/`ropa`.
+- `--filter <path-to-json>` — scope the export to a `{"nodeIds":[...],"edgeIds":[...]}` file. A no-op (with warning) for `csv`; **genuinely scopes the graph for `dpia`/`ropa`** (unlike `csv`).
 
 ## Examples
 
@@ -35,6 +37,8 @@ this command never triggers a scan itself, matching `/dataflow`'s sibling
 /dataflow --format svg --output architecture.svg
 /dataflow --format json --output graph.json --no-redact
 /dataflow --format html --output report.html
+/dataflow --format dpia --output dpia.md
+/dataflow --format ropa --output ropa.md --filter selected-scope.json
 ```
 
 ## Implementation

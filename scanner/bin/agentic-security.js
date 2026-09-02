@@ -3444,7 +3444,14 @@ async function cmdDataflowExport(args) {
     return 1;
   }
   const graph = loaded.graph;
-  const opts = { view, width, height, redact, filter };
+  // Task-3 review finding (non-blocking, fixed): emitGraphDpiaArtifact's
+  // own opts.generatedAt fallback is `new Date()` — omitting it here made
+  // dpia/ropa the only two formats whose content reflects EXPORT-time
+  // wall clock rather than the graph's own already-fixed generatedAt (the
+  // same field json/html embed unconditionally), so exporting the
+  // identical persisted graph twice on two different days produced two
+  // different documents.
+  const opts = { view, width, height, redact, filter, generatedAt: graph.generatedAt };
 
   let data;
   try {
