@@ -17,12 +17,12 @@ const FIXTURES_ROOT = path.join(__dirname, '../../../bench/data-lineage/fixtures
 // predicate to walk: one dataElement (PHI), one external sink node, one
 // edge carrying a transit verdict, one flow tying them together. Two
 // variants: PROTECTED (positive) and UNPROTECTED (negative).
-function _minimalGraph({ transitVerdict, dataClass = 'PHI', sinkKind = 'external' }) {
+function _minimalGraph({ transitVerdict, dataClass = 'PHI', sinkKind = 'external', sinkSubtype } = {}) {
   return {
     graphId: 'dfg:test-repo:abc123:default',
     nodes: [
       { id: 'node:src1', kind: 'api' },
-      { id: 'node:sink1', kind: sinkKind },
+      { id: 'node:sink1', kind: sinkKind, ...(sinkSubtype ? { subtype: sinkSubtype } : {}) },
     ],
     edges: [
       {
@@ -222,10 +222,16 @@ test('BLOCKING 1: worst-case-wins — a genuine assessed failure outranks a co-o
   assert.equal(record.state, 'gap_detected', 'a real failure must win over a co-occurring unassessed flow');
 });
 
-test('BLOCKING 2: a sink node whose kind was rewritten to "unresolved" (FR-203, dynamic destination) is still matched, not silently excluded', () => {
-  const graph = _minimalGraph({ transitVerdict: 'protected', sinkKind: 'unresolved' });
+test('BLOCKING 2: a sink node whose kind was rewritten to "unresolved" (FR-203, dynamic destination) is still matched when its real category is external, not silently excluded', () => {
+  // As of the scoped re-review's own fix (see SCOPED RE-REVIEW medium
+  // tests below), a bare kind:'unresolved' is no longer sufficient on its
+  // own — the sink's real category (subtype), recovered via
+  // CATEGORY_NODE_KIND, must also map to spec.sinkKind. An
+  // external-api-shaped unresolved sink is exactly the AC-07 case this
+  // blocking fix targets.
+  const graph = _minimalGraph({ transitVerdict: 'protected', sinkKind: 'unresolved', sinkSubtype: 'external-api' });
   const r = evaluateGraphFlowPredicate(PROTECTED_SPEC, graph);
-  assert.equal(r.applicable, true, '"unresolved" must match a spec.sinkKind of "external" — it is the same category, just dynamically resolved');
+  assert.equal(r.applicable, true, '"unresolved" + a real external-api category must still match a spec.sinkKind of "external"');
 });
 
 // =====================================================================
@@ -310,4 +316,53 @@ test('RECOMMENDED 4: null entries inside array fields are filtered rather than d
   graph.dataElements.push(null);
   graph.flows.push(null);
   assert.doesNotThrow(() => evaluateGraphFlowPredicate(PROTECTED_SPEC, graph));
+});
+
+// =====================================================================
+// Scoped re-review of the fix commit (opus) — 1 medium + 2 low findings.
+// =====================================================================
+
+test('SCOPED RE-REVIEW medium: an unresolved STORE sink (e.g. a local database write) must NOT match an external-scoped predicate', () => {
+  // FR-203 rewrites kind to 'unresolved' for store/queue sinks too, not
+  // just external ones (coverage.js's FR203_ELIGIBLE_KINDS). A bare
+  // kind==='unresolved' OR-match (the first fix round's own version)
+  // let a purely local, in-process database write read as applicable to
+  // an external-scoped compliance requirement — the mirror of the bug
+  // just fixed, one category over.
+  const graph = _minimalGraph({ transitVerdict: 'protected' });
+  graph.nodes[1] = { id: 'node:sink1', kind: 'unresolved', subtype: 'database' };
+  const r = evaluateGraphFlowPredicate(PROTECTED_SPEC, graph);
+  assert.equal(r.applicable, false, 'an unresolved sink whose real category (database -> store) does not match spec.sinkKind (external) must not be applicable');
+});
+
+test('SCOPED RE-REVIEW medium: an unresolved sink whose real category DOES match spec.sinkKind is still applicable (no regression on the original AC-07 fix)', () => {
+  const graph = _minimalGraph({ transitVerdict: 'protected' });
+  graph.nodes[1] = { id: 'node:sink1', kind: 'unresolved', subtype: 'ai-model-provider' };
+  const r = evaluateGraphFlowPredicate(PROTECTED_SPEC, graph);
+  assert.equal(r.applicable, true, 'ai-model-provider maps to kind:external via CATEGORY_NODE_KIND, matching spec.sinkKind:external');
+});
+
+test('SCOPED RE-REVIEW medium: an unresolved sink with no subtype at all degrades to not-applicable, never throws', () => {
+  const graph = _minimalGraph({ transitVerdict: 'protected' });
+  graph.nodes[1] = { id: 'node:sink1', kind: 'unresolved' };
+  assert.doesNotThrow(() => evaluateGraphFlowPredicate(PROTECTED_SPEC, graph));
+  const r = evaluateGraphFlowPredicate(PROTECTED_SPEC, graph);
+  assert.equal(r.applicable, false);
+});
+
+test('SCOPED RE-REVIEW low: a not_applicable transit verdict is treated as unassessed, never as a failure', () => {
+  const graph = _minimalGraph({ transitVerdict: 'not_applicable' });
+  const r = evaluateGraphFlowPredicate(PROTECTED_SPEC, graph);
+  assert.equal(r.hasFailure, false, 'not_applicable is a member of PROTECTION_VERDICTS ranked below protected, not a genuine failure');
+  assert.equal(r.hasUnassessed, true);
+});
+
+test('SCOPED RE-REVIEW low: a non-string entry in edge.evidenceRefs is filtered out of the record\'s evidence, keeping it validateObligationMapping-clean', () => {
+  const graph = _minimalGraph({ transitVerdict: 'protected' });
+  graph.edges[0].evidenceRefs = ['evidence:ev1', null, 42, { not: 'a string' }];
+  const evaluation = evaluateGraphFlowPredicate(PROTECTED_SPEC, graph);
+  assert.deepEqual(evaluation.evidence, ['evidence:ev1']);
+  const record = buildObligationMappingFromGraphPredicate(_baseArgs(graph, evaluation));
+  const { valid, errors } = validateObligationMapping(record);
+  assert.equal(valid, true, JSON.stringify(errors));
 });

@@ -53,11 +53,21 @@
 // shape (a dynamic destination) was therefore silently excluded from
 // this predicate's own sink-kind filter, reporting `not_applicable`
 // ("this requirement does not apply") for exactly the case that most
-// needs it to apply. Fixed by also matching `kind === 'unresolved'` —
-// once matched, the worst-case-wins state derivation above correctly
-// resolves it to `unknown` (an unresolved destination has no real
-// transit verdict either), never a false `not_applicable` or a false
-// `gap_detected`.
+// needs it to apply. Fixed by also matching `kind === 'unresolved'`, but
+// (found by the fix round's own scoped re-review, also reproduced live)
+// NOT unconditionally: FR-203 rewrites `kind: 'unresolved'` for `store`
+// and `queue` sinks too (`coverage.js`'s `FR203_ELIGIBLE_KINDS`), so a
+// bare `kind === 'unresolved'` OR-match let a purely local, in-process
+// database write read as applicable to an `external`-scoped requirement
+// — the exact same false-applicability failure mode as the bug just
+// fixed, just moved one category over. The category is still recoverable
+// via `sinkNode.subtype` (FR-203 retains it) and `CATEGORY_NODE_KIND`
+// (`sink-registry.js`), the same table `graph-builder.js` used to assign
+// the node's kind in the first place — so an unresolved sink now only
+// matches when ITS OWN real category still maps to `spec.sinkKind`. Once
+// matched, the worst-case-wins state derivation above correctly resolves
+// it to `unknown` (an unresolved destination has no real transit verdict
+// either), never a false `not_applicable` or a false `gap_detected`.
 //
 // EVIDENCE GAP, DISCLOSED (found by the same review): `evidence` is
 // sourced from `edge.evidenceRefs`, but `graph-builder.js` hardcodes
@@ -91,6 +101,7 @@
 
 import { computeGraphDigest } from './export-json.js';
 import { obligationId } from './ids.js';
+import { CATEGORY_NODE_KIND } from './sink-registry.js';
 
 function _asArray(v) {
   return Array.isArray(v) ? v : [];
@@ -108,10 +119,13 @@ export function evaluateGraphFlowPredicate(spec, graph) {
     if (!hasClass) return false;
     const sinkNode = nodesById.get(f.sink);
     if (!sinkNode) return false;
-    // Also match 'unresolved' — see the KIND-VS-UNRESOLVED MATCHING note
-    // above; excluding it silently drops the highest-risk (dynamic-
-    // destination) sinks from this predicate's own applicability.
-    return sinkNode.kind === spec.sinkKind || sinkNode.kind === 'unresolved';
+    // Also match 'unresolved', but only when the sink's OWN real category
+    // (subtype) still maps to spec.sinkKind — see the KIND-VS-UNRESOLVED
+    // MATCHING note above. A bare kind==='unresolved' OR-match would also
+    // admit unresolved store/queue sinks, which FR-203 rewrites the same
+    // way.
+    return sinkNode.kind === spec.sinkKind ||
+      (sinkNode.kind === 'unresolved' && CATEGORY_NODE_KIND[sinkNode.subtype] === spec.sinkKind);
   });
 
   if (relevantFlows.length === 0) {
@@ -121,10 +135,17 @@ export function evaluateGraphFlowPredicate(spec, graph) {
     };
   }
 
-  // A verdict of 'not_assessed'/'unknown' means "never checked," never
-  // "checked and failed" — see the WORST-CASE-WINS STATE DERIVATION note
-  // above for why this distinction is load-bearing.
-  const UNASSESSED_VERDICTS = new Set(['not_assessed', 'unknown']);
+  // A verdict of 'not_assessed'/'unknown'/'not_applicable' means "never
+  // checked" (or "this dimension doesn't apply here"), never "checked and
+  // failed" — see the WORST-CASE-WINS STATE DERIVATION note above for why
+  // this distinction is load-bearing. 'not_applicable' is included
+  // defensively (found by the fix round's own scoped re-review): no real
+  // producer emits it on a `protection.<dimension>.verdict` today, but it
+  // IS a member of `protection.js`'s own `PROTECTION_VERDICTS`, and that
+  // module's own `_PRECEDENCE` ranks it below `protected` — treating it as
+  // a failure here would contradict the very precedent this worst-case-
+  // wins ordering is modeled on.
+  const UNASSESSED_VERDICTS = new Set(['not_assessed', 'unknown', 'not_applicable']);
   const results = relevantFlows.map((f) => {
     const edge = edgesById.get(_asArray(f.edgeIds)[0]);
     const verdict = edge?.protection?.[spec.dimension]?.verdict ?? 'not_assessed';
@@ -146,7 +167,12 @@ export function evaluateGraphFlowPredicate(spec, graph) {
     hasFailure,
     hasUnassessed,
     contributingGraphIds: results.map((r) => r.flow.id).filter((id) => typeof id === 'string'),
-    evidence: results.flatMap((r) => _asArray(r.edge?.evidenceRefs)),
+    // Filtered to strings, matching the contributingGraphIds hardening
+    // just above and validateObligationMapping's own "evidence must be an
+    // array of strings" invariant (found by the fix round's own scoped
+    // re-review: a malformed edge.evidenceRefs entry used to reach the
+    // record unfiltered and fail validation downstream instead of here).
+    evidence: results.flatMap((r) => _asArray(r.edge?.evidenceRefs)).filter((e) => typeof e === 'string'),
     resultsCount: results.length,
     failedCount: results.filter((r) => r.assessed && !r.cleared).length,
     notAssessedCount: results.filter((r) => !r.assessed).length,

@@ -86,6 +86,63 @@ test('evaluateFramework: HIPAA §164.312(e) mints unknown when no lineage graph 
   }
 });
 
+test('evaluateFramework: a gap_detected graph mapping\'s observation line is flagged with a ⚠️ prefix (RECOMMENDED 5)', () => {
+  const scanRoot = _mkScanRoot();
+  try {
+    const fw = loadFramework(scanRoot, 'hipaa-security-rule');
+    const graph = _minimalGraph({ transitVerdict: 'unprotected' });
+    const scan = { findings: [], secrets: [], logicVulns: [], supplyChain: [], components: [], lineageGraph: graph };
+    const evaluation = evaluateFramework(scanRoot, fw, scan);
+    const control = evaluation.find((e) => e.control.id === '§164.312(e)');
+    const graphObs = control.observations.find((o) => o.includes('(graph mapping)'));
+    assert.ok(graphObs, 'a graph mapping observation line must be present');
+    assert.ok(graphObs.startsWith('⚠️ '), `expected a gap_detected graph mapping observation to be ⚠️-flagged, got: ${graphObs}`);
+    assert.ok(graphObs.includes('gap_detected'));
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
+  }
+});
+
+test('evaluateFramework: a non-gap_detected graph mapping\'s observation line carries no ⚠️ prefix', () => {
+  const scanRoot = _mkScanRoot();
+  try {
+    const fw = loadFramework(scanRoot, 'hipaa-security-rule');
+    const graph = _minimalGraph({ transitVerdict: 'protected' });
+    const scan = { findings: [], secrets: [], logicVulns: [], supplyChain: [], components: [], lineageGraph: graph };
+    const evaluation = evaluateFramework(scanRoot, fw, scan);
+    const control = evaluation.find((e) => e.control.id === '§164.312(e)');
+    const graphObs = control.observations.find((o) => o.includes('(graph mapping)'));
+    assert.ok(graphObs);
+    assert.ok(!graphObs.startsWith('⚠️'), `expected no ⚠️ prefix on an evidence_supported graph mapping, got: ${graphObs}`);
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
+  }
+});
+
+test('evaluateFramework: a graph: mapping evaluation that throws is caught and skipped, never taking down the rest of evaluateFramework (RECOMMENDED 4)', () => {
+  // A malformed lineageGraph engineered to defeat the module's own
+  // Array.isArray hardening at a point the try/catch must still cover:
+  // graph.dataElements is an object whose own .filter throws (not an
+  // array, and not degradable by _asArray alone once destructured this
+  // way) -- exercised here via a Proxy that throws on any property read,
+  // simulating a future regression in obligation-predicates.js itself.
+  const scanRoot = _mkScanRoot();
+  try {
+    const fw = loadFramework(scanRoot, 'hipaa-security-rule');
+    const poisoned = new Proxy({}, { get() { throw new Error('simulated obligation-predicates.js regression'); } });
+    const scan = { findings: [], secrets: [], logicVulns: [], supplyChain: [], components: [], lineageGraph: poisoned };
+    let evaluation;
+    assert.doesNotThrow(() => { evaluation = evaluateFramework(scanRoot, fw, scan); }, 'a throw inside the graph: branch must never propagate out of evaluateFramework');
+    const control = evaluation.find((e) => e.control.id === '§164.312(e)');
+    assert.ok(control, 'every other control must still be evaluated');
+    assert.deepEqual(control.obligationMappings, [], 'a failed evaluation must not push a partial/garbage mapping');
+    const graphObs = control.observations.find((o) => o.includes('(graph mapping)'));
+    assert.ok(graphObs && graphObs.includes('evaluation failed, skipped'));
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
+  }
+});
+
 test('evaluateFramework: the existing family:crypto-tls-* mappings on §164.312(e) still contribute to the ordinary present/partial/absent/manual status, unchanged', () => {
   // A real, disclosed regression guard: adding the graph: branch must not
   // change how the pre-existing family: mappings drive `status`.
