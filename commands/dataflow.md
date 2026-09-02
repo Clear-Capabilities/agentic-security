@@ -59,11 +59,11 @@ scans (at two different commits) first.
 
 Without `--against`, the comparison is always "the newest scanned commit vs.
 the most recent scan before it" — the same "compare against the last scan"
-default `agentic-security dataflow diff` establishes for this feature (see
-`scanner/src/lineage/graph-snapshot.js`'s own header for why the CLI cannot
-independently resolve "the current commit" any other way). Pass
-`--against <commit>` to compare against a specific, already-scanned commit
-instead.
+default UX `posture/sbom-diff.js` already established for its own diff
+feature (see `scanner/src/lineage/graph-snapshot.js`'s own header for why
+the CLI cannot independently resolve "the current commit" any other way).
+Pass `--against <commit>` to compare against a specific, already-scanned
+commit instead.
 
 ### Options
 

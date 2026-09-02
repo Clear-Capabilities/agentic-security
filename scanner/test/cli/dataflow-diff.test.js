@@ -264,6 +264,53 @@ test('cli/dataflow-diff-9: --format json round-trips through JSON.parse and matc
   }
 });
 
+test('cli/dataflow-diff-11: a --drift-policy file with the wrong top-level shape is a clear exit-2 error, not a silent zero-rules pass', async () => {
+  const dir = mkGitFixture(AI_SINK_NO_PHI_SOURCE);
+  try {
+    runScan(dir);
+    advanceCommit(dir, PHI_TO_AI_SOURCE, 'second');
+    runScan(dir);
+
+    const outFile = path.join(dir, 'diff.json');
+
+    // A bare JSON array — syntactically valid JSON, structurally wrong.
+    const arrayPolicyFile = path.join(dir, 'array-drift-policy.json');
+    fs.writeFileSync(arrayPolicyFile, JSON.stringify([{ trigger: 'new_flow' }]));
+    const arrayRun = runDiff([dir, '--output', outFile, '--format', 'json', '--drift-policy', arrayPolicyFile, '--fail-on-drift']);
+    assert.equal(arrayRun.status, 2, `expected exit 2, not a silent pass: stdout=${arrayRun.stdout} stderr=${arrayRun.stderr}`);
+    assert.match(arrayRun.stderr, /drift-policy/i);
+    assert.ok(!fs.existsSync(outFile), 'must not write an output file on a usage error');
+
+    // {"rules": [...]} instead of {"policies": [...]} — a typo'd key.
+    const rulesPolicyFile = path.join(dir, 'rules-drift-policy.json');
+    fs.writeFileSync(rulesPolicyFile, JSON.stringify({ rules: [{ trigger: 'new_flow' }] }));
+    const rulesRun = runDiff([dir, '--output', outFile, '--format', 'json', '--drift-policy', rulesPolicyFile, '--fail-on-drift']);
+    assert.equal(rulesRun.status, 2, `expected exit 2, not a silent pass: stdout=${rulesRun.stdout} stderr=${rulesRun.stderr}`);
+    assert.match(rulesRun.stderr, /drift-policy/i);
+    assert.ok(!fs.existsSync(outFile));
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('cli/dataflow-diff-12: --against the exact current (AFTER) commit refuses a self-diff, exit 2, even with --fail-on-drift', async () => {
+  const dir = mkGitFixture(AI_SINK_NO_PHI_SOURCE);
+  try {
+    runScan(dir);
+    advanceCommit(dir, PHI_TO_AI_SOURCE, 'second');
+    runScan(dir);
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+
+    const outFile = path.join(dir, 'diff.json');
+    const run = runDiff([dir, '--output', outFile, '--format', 'json', '--against', head, '--fail-on-drift']);
+    assert.equal(run.status, 2, `expected exit 2, not a silent pass: stdout=${run.stdout} stderr=${run.stderr}`);
+    assert.match(run.stderr, /self-diff/i);
+    assert.ok(!fs.existsSync(outFile), 'must not write an output file on a usage error');
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('cli/dataflow-diff-10: --format markdown renders a real human-readable report with a prominent drift-policy violations section', async () => {
   const dir = mkGitFixture(AI_SINK_NO_PHI_SOURCE);
   try {

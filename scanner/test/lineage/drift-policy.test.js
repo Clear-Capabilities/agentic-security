@@ -102,6 +102,52 @@ test('evaluateDriftPolicies: a new PHI -> ai-model-provider policy fires a viola
   }
 });
 
+// ── Fix round 1, Important 1 (drift-policy.js side): a reidentified added
+// flow (same application identity, only evidenceGrade/flowId changed)
+// isn't actually new, so new_flow must not fire on it. See
+// graph-diff.test.js's own reidentification test for the fixture's shape
+// and root-cause explanation.
+
+const PHI_TO_AI_EXPLICIT = `function summarizePatient(anthropic, params) {
+  const patientRecord = params.arguments.patient_record;
+  anthropic.messages.create({
+    model: 'claude-3',
+    messages: [{ role: 'user', content: patientRecord }],
+  });
+}
+`;
+
+const PHI_TO_AI_WIDENED = `function summarizePatient(anthropic, params) {
+  const patientRecord = params.arguments.patient_record;
+  anthropic.messages.create({
+    model: 'claude-3',
+    messages: [{ role: 'user', content: passthrough(patientRecord) }],
+  });
+}
+`;
+
+test('evaluateDriftPolicies: a reidentified added flow does not fire a new_flow rule that would otherwise match it', () => {
+  const dir = _mkGitRepo();
+  try {
+    const graphBefore = _realGraph(PHI_TO_AI_EXPLICIT);
+    const before = persistGraphSnapshot(graphBefore, dir, { capturedAt: '2020-01-01T00:00:00.000Z' });
+    _advanceCommit(dir, 'second');
+    const graphAfter = _realGraph(PHI_TO_AI_WIDENED);
+    const after = persistGraphSnapshot(graphAfter, dir, { capturedAt: '2020-01-02T00:00:00.000Z' });
+
+    const diff = computeGraphDiff(before, after);
+    assert.equal(diff.added.flows.length, 1);
+    assert.equal(diff.added.flows[0].causeClassification, 'reidentified', 'fixture assumption: this must be the reidentification case');
+
+    const policies = { policies: [{ trigger: 'new_flow', dataClass: 'PHI', reason: 'PHI must never reach an AI provider' }] };
+    const { violations } = evaluateDriftPolicies(diff, policies, after.graph);
+
+    assert.deepEqual(violations, [], 'a reidentified flow is not actually new — new_flow must not false-fire on it');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('evaluateDriftPolicies: a new_flow rule with a non-matching dataClass does not fire', () => {
   const dir = _mkGitRepo();
   try {

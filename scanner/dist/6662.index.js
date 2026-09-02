@@ -93,6 +93,15 @@ export const modules = {
 //    — left out rather than guessed at. Judgment call #2's rejected
 //    generic `field`/`from`/`to` form is the natural place to add it
 //    later, against a real governanceRefs.recipient fixture.
+//
+// 6. Fix round 1, Important 1 (see graph-diff.js's own judgment call #4):
+//    a `new_flow` rule must skip an added flow entry whose
+//    `causeClassification === 'reidentified'` — that flow isn't actually
+//    new, it's the SAME real-world (source, sink, dataElementIds) flow as
+//    a flow that existed before, just minted under a new flowId because
+//    the engine's own confidence/shape (evidenceGrade/transformationIds)
+//    changed. Firing `new_flow` on it would false-fire `--fail-on-drift`
+//    on a non-event, exactly what this fix round exists to close.
 
 
 
@@ -126,6 +135,9 @@ function loadDriftPolicies(policyFilePath) {
     return EMPTY;
   }
 
+  if (!Array.isArray(raw?.policies)) {
+    console.error(`agentic-security: drift policy file ${policyFilePath} has no "policies" array — falling back to no policies (expected {"policies":[...]})`);
+  }
   const rawPolicies = Array.isArray(raw?.policies) ? raw.policies : [];
   const policies = rawPolicies.filter(_isValidRuleShape);
   const skipped = rawPolicies.length - policies.length;
@@ -240,6 +252,9 @@ function evaluateDriftPolicies(diff, policies, graphAfter) {
   for (const rule of rules) {
     if (rule.trigger === 'new_flow') {
       for (const addedEntry of diff?.added?.flows ?? []) {
+        // See judgment call #6 above / graph-diff.js's own judgment call
+        // #4: a reidentified added flow is not actually new.
+        if (addedEntry.causeClassification === 'reidentified') continue;
         const ctx = _resolveFlowContext(addedEntry.id, graphAfter);
         if (!ctx) continue;
         if (!_matchesDataClass(rule.dataClass, ctx.dataClasses)) continue;

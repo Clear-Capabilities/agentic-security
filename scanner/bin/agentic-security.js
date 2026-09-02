@@ -3719,7 +3719,16 @@ function _renderDataflowDiffMarkdown(diff, violations, beforeSnapshot, afterSnap
     for (const e of diff.added.flows) {
       const { dataElementNames, sinkLabel } = _dataflowDiffFlowLabel(e.id, graphAfter);
       const de = dataElementNames.length ? dataElementNames.map(_dfDiffMdCode).join(', ') : 'unclassified data';
-      lines.push(`- ${_dfDiffMdCode(e.id)} — ${de} → ${_dfDiffMdCode(sinkLabel ?? 'unknown sink')} (first seen ${_dfDiffMdInline(e.firstSeen?.commit ?? '')})`);
+      // Reidentification (fix round 1, Important 1 — see graph-diff.js's
+      // own judgment call #4): this is the SAME real-world flow as
+      // e.reidentifiedFrom, not a genuinely new code-level flow — only
+      // engine confidence/shape (evidenceGrade/transformationIds) changed.
+      // Must be surfaced here, never hidden, or a Markdown-only reader has
+      // no way to see the distinction the JSON report carries.
+      const flag = e.causeClassification === 'reidentified'
+        ? ` **(reidentified — same flow as ${_dfDiffMdCode(e.reidentifiedFrom)}, not a new code-level flow; only engine confidence/shape changed)**`
+        : '';
+      lines.push(`- ${_dfDiffMdCode(e.id)} — ${de} → ${_dfDiffMdCode(sinkLabel ?? 'unknown sink')} (first seen ${_dfDiffMdInline(e.firstSeen?.commit ?? '')})${flag}`);
     }
   }
   lines.push('');
@@ -3738,7 +3747,17 @@ function _renderDataflowDiffMarkdown(diff, violations, beforeSnapshot, afterSnap
     for (const e of diff.removed.flows) {
       const { dataElementNames, sinkLabel } = _dataflowDiffFlowLabel(e.id, graphBefore);
       const de = dataElementNames.length ? dataElementNames.map(_dfDiffMdCode).join(', ') : 'unclassified data';
-      const flag = e.causeClassification === 'possible_coverage_regression' ? ' **(possible coverage regression — see coverageRegressionReasons)**' : '';
+      // Minor 1: inline the real reasons — the old text pointed at
+      // coverageRegressionReasons without ever rendering it, so a
+      // Markdown-only reader had no way to see the field at all.
+      // Reidentification flag mirrors the ## Added / ### Flows loop above
+      // (fix round 1, Important 1).
+      let flag = '';
+      if (e.causeClassification === 'possible_coverage_regression') {
+        flag = ` **(possible coverage regression: ${_dfDiffMdInline((e.coverageRegressionReasons ?? []).join('; '))})**`;
+      } else if (e.causeClassification === 'reidentified') {
+        flag = ` **(reidentified — same flow as ${_dfDiffMdCode(e.reidentifiedTo)}, not a real removal; only engine confidence/shape changed)**`;
+      }
       lines.push(`- ${_dfDiffMdCode(e.id)} — ${de} → ${_dfDiffMdCode(sinkLabel ?? 'unknown sink')} (last seen ${_dfDiffMdInline(e.lastSeen?.commit ?? '')})${flag}`);
     }
   }
@@ -3756,7 +3775,7 @@ function _renderDataflowDiffMarkdown(diff, violations, beforeSnapshot, afterSnap
     lines.push('_None._');
   } else {
     for (const e of diff.changed.flows) {
-      const changeText = e.changes.map((c) => `${_dfDiffMdInline(c.field)}: ${_dfDiffMdInline(JSON.stringify(c.before))} -> ${_dfDiffMdInline(JSON.stringify(c.after))}`).join('; ');
+      const changeText = e.changes.map((c) => `${_dfDiffMdInline(c.field)}: ${_dfDiffMdCode(JSON.stringify(c.before))} -> ${_dfDiffMdCode(JSON.stringify(c.after))}`).join('; ');
       lines.push(`- ${_dfDiffMdCode(e.id)} — ${changeText}`);
     }
   }
@@ -3821,6 +3840,18 @@ async function cmdDataflowDiff(args) {
     }
   }
 
+  // Fix round 1, Minor 2: --against resolving to the SAME commit as the
+  // current ("AFTER") snapshot is a plausible CI mistake that would
+  // otherwise silently resolve an all-empty diff and pass --fail-on-drift.
+  // The default (--against omitted) path can't hit this on its own —
+  // mostRecentPriorSnapshot explicitly excludes afterSnapshot.commit — but
+  // checking here, after both branches converge, is simpler and correct
+  // either way.
+  if (beforeSnapshot.commit === afterSnapshot.commit) {
+    process.stderr.write(`agentic-security dataflow diff: refusing a self-diff — --against resolved to the same commit as the current snapshot ("${afterSnapshot.commit}"). Pass a different --against, or scan again after a code change.\n`);
+    return 2;
+  }
+
   const { computeGraphDiff } = await import('../src/lineage/graph-diff.js');
   let diff;
   try {
@@ -3846,10 +3877,23 @@ async function cmdDataflowDiff(args) {
     // detected independently, here, before delegating to the real loader
     // for the actual (identically-parsed) policy content.
     if (fs.existsSync(driftPolicyAbs)) {
+      let parsedDriftPolicy;
       try {
-        JSON.parse(fs.readFileSync(driftPolicyAbs, 'utf8'));
+        parsedDriftPolicy = JSON.parse(fs.readFileSync(driftPolicyAbs, 'utf8'));
       } catch (e) {
         process.stderr.write(`agentic-security dataflow diff: could not parse --drift-policy file "${driftPolicyFlag}": ${e.message}\n`);
+        return 2;
+      }
+      // Syntax alone isn't enough — a syntactically valid JSON file with
+      // the WRONG top-level shape (a bare array, or {"rules":...} instead
+      // of {"policies":...}) previously loaded zero rules with zero
+      // warning, silently passing --fail-on-drift on a genuinely
+      // malformed config (fix round 1, Important 2). This is a fast,
+      // CLI-facing "reject the obviously wrong top-level shape" guard —
+      // loadDriftPolicies below still does the real per-entry
+      // _isValidRuleShape filtering.
+      if (!parsedDriftPolicy || typeof parsedDriftPolicy !== 'object' || Array.isArray(parsedDriftPolicy) || !Array.isArray(parsedDriftPolicy.policies)) {
+        process.stderr.write(`agentic-security dataflow diff: --drift-policy file "${driftPolicyFlag}" must be a JSON object of the form {"policies":[...]} (got a different shape).\n`);
         return 2;
       }
     } else {

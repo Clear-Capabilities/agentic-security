@@ -333,6 +333,74 @@ test('computeGraphDiff: a removed flow with NO coverage regression is a clean ap
   }
 });
 
+// ── Reidentification: same application flow, only evidenceGrade changed ──
+//
+// Fix round 1, Important 1: flowId's own discriminator includes
+// evidenceGrade/transformationIds (graph-builder.js:714) — neither is an
+// application-level fact. Wrapping an identical PHI->AI flow's value in an
+// unresolved local call changes evidenceGrade explicit->widened while
+// source/sink/dataElementIds stay identical, which must be reported as a
+// reidentification, never an unrelated remove+add pair.
+
+const PHI_TO_AI_EXPLICIT = `function summarizePatient(anthropic, params) {
+  const patientRecord = params.arguments.patient_record;
+  anthropic.messages.create({
+    model: 'claude-3',
+    messages: [{ role: 'user', content: patientRecord }],
+  });
+}
+`;
+
+const PHI_TO_AI_WIDENED = `function summarizePatient(anthropic, params) {
+  const patientRecord = params.arguments.patient_record;
+  anthropic.messages.create({
+    model: 'claude-3',
+    messages: [{ role: 'user', content: passthrough(patientRecord) }],
+  });
+}
+`;
+
+test('computeGraphDiff: a flow whose evidenceGrade (hence flowId) changed but source/sink/dataElementIds stayed identical is reidentified, not an unrelated remove+add', () => {
+  const dir = _mkGitRepo();
+  try {
+    const graphBefore = _realGraph(PHI_TO_AI_EXPLICIT);
+    const before = persistGraphSnapshot(graphBefore, dir, { capturedAt: '2020-01-01T00:00:00.000Z' });
+    _advanceCommit(dir, 'second');
+    const graphAfter = _realGraph(PHI_TO_AI_WIDENED);
+    const after = persistGraphSnapshot(graphAfter, dir, { capturedAt: '2020-01-02T00:00:00.000Z' });
+
+    // Fixture assumptions, confirmed empirically (see fix-round-1-brief.md):
+    // flowId genuinely differs (evidenceGrade explicit -> widened), but the
+    // real application identity — source, sink, dataElementIds — is
+    // unchanged.
+    assert.equal(graphBefore.flows.length, 1);
+    assert.equal(graphAfter.flows.length, 1);
+    assert.notEqual(graphBefore.flows[0].id, graphAfter.flows[0].id, 'fixture assumption: flowId must genuinely differ');
+    assert.equal(graphBefore.flows[0].source, graphAfter.flows[0].source);
+    assert.equal(graphBefore.flows[0].sink, graphAfter.flows[0].sink);
+    assert.deepEqual(graphBefore.flows[0].dataElementIds, graphAfter.flows[0].dataElementIds);
+    assert.notEqual(graphBefore.flows[0].evidenceGrade, graphAfter.flows[0].evidenceGrade, 'fixture assumption: evidenceGrade must genuinely differ');
+
+    const diff = computeGraphDiff(before, after);
+    assert.equal(validateGraphDiff(diff).valid, true);
+
+    assert.equal(diff.added.flows.length, 1, 'must not fabricate extra add/remove pairs');
+    assert.equal(diff.removed.flows.length, 1);
+    const addedEntry = diff.added.flows[0];
+    const removedEntry = diff.removed.flows[0];
+
+    assert.equal(addedEntry.causeClassification, 'reidentified');
+    assert.equal(addedEntry.reidentifiedFrom, removedEntry.id);
+    assert.ok(addedEntry.firstSeen, 'structural completeness must be unaffected — firstSeen still present');
+
+    assert.equal(removedEntry.causeClassification, 'reidentified');
+    assert.equal(removedEntry.reidentifiedTo, addedEntry.id);
+    assert.ok(removedEntry.lastSeen, 'structural completeness must be unaffected — lastSeen still present');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ── WATCHED_FLOW_FIELDS is a real, disclosed list ───────────────────
 
 test('WATCHED_FLOW_FIELDS names the real flow schema fields plus governanceRefs', () => {

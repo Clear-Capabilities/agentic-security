@@ -55,6 +55,35 @@
 //    coverage regression by definition: coverage regression means the
 //    engine stopped seeing something, and a flow whose id is still
 //    present in both snapshots was, by construction, seen in both.
+//
+// 4. Reidentification (fix round 1, Important 1). flowId's own
+//    discriminator (graph-builder.js's `ids.flowId(src.id, snk.id,
+//    [de.id], [p.shape, g.grade, sortedT.join(',')])` call site) includes
+//    `evidenceGrade`/`transformationIds` — neither is an application-level
+//    fact; `evidenceGrade` in particular is the analyzer's own confidence
+//    in the flow. When either changes between two scans of literally the
+//    same real-world (source, sink, dataElementIds) flow — the commonest
+//    cause is a refactor the analyzer resolves less/more precisely — the
+//    flow mints a NEW flowId, and a naive id-set diff would report it as
+//    an unrelated remove+add pair: a fabricated `firstSeen` on the added
+//    entry, and a `removed` entry reading as "this flow went away" when it
+//    did not. `_flowCorrelationKey` (below) correlates a removed/added
+//    pair by REAL application identity — (source, sink, sorted
+//    dataElementIds) — instead, and computeGraphDiff marks a correlated
+//    pair `causeClassification: 'reidentified'` with a pointer
+//    (`reidentifiedFrom`/`reidentifiedTo`) at its counterpart, rather than
+//    silently treating them as independent. This never substitutes for
+//    flowId identity anywhere else in this file — it exists ONLY to
+//    detect this one reidentification case.
+//
+//    A direct, disclosed consequence: `WATCHED_FLOW_FIELDS`'s `handling`
+//    entry is near-unreachable in the `changed.flows` bucket for the same
+//    root cause — a `handling` change almost always also changes
+//    `transformationIds`, which is itself part of flowId's own
+//    discriminator, so it manifests as a reidentification (remove+add,
+//    correlated) rather than surviving as a same-id `changed.flows` entry.
+//    This is a real, disclosed limitation of the current flowId shape, not
+//    a bug in this file.
 
 import { snapshotsComparable } from './graph-snapshot.js';
 import { diffId } from './ids.js';
@@ -90,6 +119,19 @@ function _idSetDiff(beforeMap, afterMap) {
   added.sort();
   removed.sort();
   return { added, removed };
+}
+
+// Correlates a flow across a commit boundary by APPLICATION identity
+// (source, sink, dataElementIds) — deliberately NOT by flowId, since
+// flowId's own discriminator includes evidenceGrade/transformationIds
+// (engine-confidence/shape signals, not application facts — see
+// graph-builder.js's ids.flowId call site), so the SAME real-world flow
+// can legitimately mint two different ids across two scans. Never a
+// substitute for flowId identity elsewhere in this file — used ONLY to
+// detect this one specific reidentification case.
+function _flowCorrelationKey(flow) {
+  const des = Array.isArray(flow.dataElementIds) ? [...flow.dataElementIds].sort() : [];
+  return `${flow.source}|${flow.sink}|${des.join(',')}`;
 }
 
 function _addedEntry(id, afterSnapshot) {
@@ -296,12 +338,62 @@ export function computeGraphDiff(snapshotBefore, snapshotAfter, opts = {}) {
     }
 
     const { added: addedIds, removed: removedIds } = _idSetDiff(beforeMap, afterMap);
-    added[key] = addedIds.map((id) => _addedEntry(id, snapshotAfter));
+
+    // Reidentification pairing (see judgment call #4 in this file's own
+    // header for the full reasoning): group removed/added flow ids by
+    // _flowCorrelationKey, pair them 1:1 (sorted by id, index-aligned)
+    // within each matching key. A pair is a re-identification, not a real
+    // remove+add. Any surplus on either side (uncommon — would need >1
+    // flow sharing the same correlation key on one side) falls through to
+    // the existing add/remove logic unchanged.
+    const reidentifiedFrom = new Map(); // addedId -> removedId
+    const reidentifiedTo = new Map();   // removedId -> addedId
+    if (key === 'flows') {
+      const removedByKey = new Map();
+      for (const id of removedIds) {
+        const f = beforeMap.get(id);
+        const k = _flowCorrelationKey(f);
+        if (!removedByKey.has(k)) removedByKey.set(k, []);
+        removedByKey.get(k).push(id);
+      }
+      const addedByKey = new Map();
+      for (const id of addedIds) {
+        const f = afterMap.get(id);
+        const k = _flowCorrelationKey(f);
+        if (!addedByKey.has(k)) addedByKey.set(k, []);
+        addedByKey.get(k).push(id);
+      }
+      for (const [k, removedGroup] of removedByKey) {
+        const addedGroup = addedByKey.get(k);
+        if (!addedGroup) continue;
+        removedGroup.sort();
+        addedGroup.sort();
+        const n = Math.min(removedGroup.length, addedGroup.length);
+        for (let i = 0; i < n; i++) {
+          reidentifiedTo.set(removedGroup[i], addedGroup[i]);
+          reidentifiedFrom.set(addedGroup[i], removedGroup[i]);
+        }
+      }
+    }
+
+    added[key] = addedIds.map((id) => {
+      const entry = _addedEntry(id, snapshotAfter);
+      if (key === 'flows' && reidentifiedFrom.has(id)) {
+        entry.causeClassification = 'reidentified';
+        entry.reidentifiedFrom = reidentifiedFrom.get(id);
+      }
+      return entry;
+    });
 
     if (key === 'flows') {
       removed[key] = removedIds.map((id) => {
         const extra = coverageRegressionReasons.length ? { coverageRegressionReasons } : {};
-        return _removedEntry(id, snapshotBefore, flowRemovalCause, extra);
+        const entry = _removedEntry(id, snapshotBefore, flowRemovalCause, extra);
+        if (reidentifiedTo.has(id)) {
+          entry.causeClassification = 'reidentified';
+          entry.reidentifiedTo = reidentifiedTo.get(id);
+        }
+        return entry;
       });
     } else {
       removed[key] = removedIds.map((id) => _removedEntry(id, snapshotBefore, 'application_change'));
