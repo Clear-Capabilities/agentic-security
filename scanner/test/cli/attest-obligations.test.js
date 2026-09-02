@@ -24,6 +24,19 @@ const PHI_SOURCE = `function summarizePatient(anthropic, params) {
 }
 `;
 
+// PHI sent over a literal http:// destination — transit-protection.js's
+// own AC-03 case, reads a real, ASSESSED 'unprotected' verdict (not
+// merely 'not_assessed'), which resolves to a genuine gap_detected
+// HIPAA §164.312(e) fact. Confirmed live by the final whole-branch review.
+const PHI_HTTP_SOURCE = `function submitPatientRecord(req) {
+  const patientRecord = req.body.patient_record;
+  fetch('http://insecure-endpoint.example.com/submit', {
+    method: 'POST',
+    body: JSON.stringify({ record: patientRecord }),
+  });
+}
+`;
+
 function _scanWithLineage(fx) {
   return spawnSync(process.execPath, [CLI, 'scan', '.'], {
     cwd: fx.root, encoding: 'utf8', timeout: 60000,
@@ -70,6 +83,50 @@ test('attest --obligations: signs a real evidence pack from a real scan with a l
   assert.ok(pack.evidenceIndex.length >= 1);
   assert.ok(pack.evidenceIndex[0].evidence.length >= 1, 'expected the evidence index to resolve at least one real contributing flow');
   assert.deepEqual(pack.evidenceIndex[0].evidence[0].dataClasses, ['PHI']);
+
+  // Final whole-branch review finding B1 (blocking, now fixed): these
+  // three fields read scan.engineVersion/.rulesetVersion/.bundleSha
+  // directly, but they actually live under scan.attestation — always
+  // null through the real CLI before the fix.
+  assert.ok(pack.reproducibility.engineVersion, `expected a real engineVersion, got ${pack.reproducibility.engineVersion}`);
+  assert.ok(pack.reproducibility.rulesetVersion, `expected a real rulesetVersion, got ${pack.reproducibility.rulesetVersion}`);
+  // bundleSha legitimately reads 'unavailable' when running from src/
+  // rather than the published bundle — still a real, non-null value,
+  // which is exactly the regression this asserts (pre-fix it was
+  // unconditionally null).
+  assert.notEqual(pack.reproducibility.bundleSha, null);
+});
+
+test('attest --obligations + verify-attestation: a real gap_detected fact is flagged with ⚠️ gaps: N on BOTH surfaces, never hidden among all-zero counts', async (t) => {
+  // Final whole-branch review finding R1 (recommended, now fixed): a
+  // real, assessed HIPAA transit gap used to print
+  // "unknown: 0  manual: 0  accepted exceptions: 0" and nothing else on
+  // both the signing side and verify-attestation — an auditor scanning
+  // for a gap saw all zeros and a green VALID tick.
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', PHI_HTTP_SOURCE);
+  fx.commit('add PHI over a literal http:// destination');
+
+  const scanR = _scanWithLineage(fx);
+  assert.ok(scanR.status <= 3, `scan must exit <=3; got ${scanR.status}: ${scanR.stderr}`);
+
+  const attestR = spawnSync(process.execPath, [CLI, 'attest', '--obligations', 'hipaa-security-rule'], {
+    cwd: fx.root, encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(attestR.status, 0, `attest --obligations failed: ${attestR.stderr}\n${attestR.stdout}`);
+  assert.match(attestR.stdout, /⚠️ gaps: 1/, `expected a ⚠️ gaps flag in attest output, got:\n${attestR.stdout}`);
+
+  const outFile = path.join(fx.root, '.agentic-security', 'attestations', 'evidence-pack-hipaa-security-rule.json');
+  const pack = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+  const gapFact = pack.facts.find((f) => f.state === 'gap_detected');
+  assert.ok(gapFact, `expected a real gap_detected fact in the pack, got states: ${pack.facts.map((f) => f.state).join(', ')}`);
+
+  const verifyR = spawnSync(process.execPath, [CLI, 'verify-attestation', outFile], {
+    cwd: fx.root, encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(verifyR.status, 0, `verify-attestation failed: ${verifyR.stderr}`);
+  assert.match(verifyR.stdout, /⚠️ gaps: 1/, `expected a ⚠️ gaps flag in verify-attestation output, got:\n${verifyR.stdout}`);
 });
 
 test('attest --obligations: with no framework id, exits 2 with a usage message', async (t) => {
