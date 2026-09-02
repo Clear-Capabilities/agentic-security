@@ -70,3 +70,24 @@ test('generateHtmlReport: redact:false is never the default — opts must be exp
   const html = generateHtmlReport(flagship);
   assert.doesNotMatch(html, /"confidential"\s*:\s*false/);
 });
+
+// Regression for the final task review's own finding: a scanned-source-
+// derived label (not covered by _redactGraph, since a label isn't a
+// secret-shaped surface — but can carry arbitrary scanned identifier
+// text) containing a literal `</script>` must not be able to break out
+// of the inline data <script> and inject a second one. Reproduced live
+// by the reviewer before this fix landed; this pins it as a real test.
+test('generateHtmlReport: a label containing </script> cannot break out of the inline data script', () => {
+  const evilGraph = {
+    ...flagship,
+    nodes: flagship.nodes.map((n, i) => (i === 0 ? { ...n, label: 'evil</script><script>window.__PWNED__=1;//' } : n)),
+  };
+  const html = generateHtmlReport(evilGraph);
+  // No literal `<` survives inside the payload — every one became <,
+  // so the HTML parser (which scans for </script> before any JS runs)
+  // can never see a real script-tag boundary inside the embedded data.
+  assert.doesNotMatch(html, /evil<\/script>/);
+  // The escaped form is present verbatim, proving the content survived as
+  // DATA rather than being silently dropped or mangled.
+  assert.match(html, /evil\\u003c\/script>\\u003cscript>window\.__PWNED__=1;\/\//);
+});

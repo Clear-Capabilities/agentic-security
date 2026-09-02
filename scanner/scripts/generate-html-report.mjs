@@ -46,7 +46,16 @@ export function generateHtmlReport(graph, opts = {}) {
   const exported = exportGraphJSON(graph, opts);
   const css = _inlineCss();
   const bundledJs = bundleFrontendModules(ENTRY_PATH);
-  const envelopeJson = JSON.stringify(exported);
+  // Escape `<` so scanned-source-derived content (a node/flow/data-element
+  // label — none of which _redactGraph covers, since labels aren't a
+  // secret-shaped surface, but CAN carry arbitrary scanned identifier
+  // text) can never contain a literal `</script>` that breaks out of this
+  // inline data script and injects a second one. Same mitigation, same
+  // reasoning, as the existing SAST/SCA HTML report's own precedent
+  // (scanner/src/report/index.js's toHTML) — found missing here and
+  // fixed by this sub-project's own final task review, which reproduced
+  // the injection live before this fix landed.
+  const envelopeJson = JSON.stringify(exported).replace(/</g, '\\u003c');
   return `<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
