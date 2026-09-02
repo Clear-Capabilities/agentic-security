@@ -162,8 +162,7 @@ writing-plans skill's own "Scope Check" guidance (a spec covering
 multiple independent subsystems should be broken into sub-project
 specs), recommend three further-scoped pieces, in dependency order:
 
-1. **6a — `ObligationMapping` extension contract.** Small, mechanical:
-   schema additions in `scanner/src/lineage/` (the six PRD-specified
+1. **6a — `ObligationMapping` extension contract.** Small, mechanical **— COMPLETE (2026-09-01)**: schema additions in `scanner/src/lineage/` (the six PRD-specified
    states: `evidence_supported`/`gap_detected`/`unknown`/
    `manual_required`/`not_applicable`/`accepted_exception`), a stable-ID
    function, `validate.js` structural checks — following the same
