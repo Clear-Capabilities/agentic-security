@@ -163,6 +163,28 @@ export function obligationId(
 }
 
 /**
+ * A RecipientProfile record's id (FR-506 §7.12, "Third-Party and
+ * Cross-Border Intelligence", Milestone 4) — NOT a DataFlowGraph v1
+ * entity, mirrors obligationId's own precedent exactly (a real,
+ * stable-ID'd extension record that is deliberately not a base-graph
+ * entity). Discriminated by (graphId, graphDigest, recipientKey) —
+ * graphDigest is required in the discriminator for the identical reason
+ * obligationId's own comment gives (no real caller supplies graphId's own
+ * configHash component, so graphId alone never distinguishes two
+ * same-commit graphs with genuinely different content); recipientKey is
+ * the stable string a later task keys one recipient by (e.g. a
+ * normalized hostname or provider id), so two profiles for the same
+ * recipient across two different graphs never collide, and two DIFFERENT
+ * recipients within the same graph never collide either.
+ */
+export function recipientProfileId(
+  { graphId, graphDigest, recipientKey },
+  discriminatorParts = [],
+) {
+  return `recipient:${_hash(_canon([graphId, graphDigest, recipientKey, ...discriminatorParts]))}`;
+}
+
+/**
  * A DecisionStory record's id (M4 deliverable #7, FR-501 §14, DFG-035) —
  * NOT a DataFlowGraph v1 entity, mirrors obligationId's own precedent
  * exactly (a real, stable-ID'd extension record that is deliberately not
