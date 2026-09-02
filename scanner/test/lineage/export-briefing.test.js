@@ -182,7 +182,7 @@ test('Chapter 3 filters to externality.tier === "external" and reports the real 
   const graph = _buildRealGraph(MULTI_SINK_SOURCE);
   const { record } = emitDecisionStory(graph, { audienceMode: 'technical' });
   const ch3 = record.chapters[2];
-  assert.match(ch3.markdown, /1 flow\(s\) reach an external destination/);
+  assert.match(ch3.markdown, /1 flow\(s\) reach an external or unresolved destination — 1 resolved external, 0 destination not statically resolved\./);
   // Node labels are registry-decision-derived, not per-call-site domain
   // names (DESIGN_GRAPH_BUILDER.md §6.1 — node identity is bounded by the
   // taxonomy, not by repository/call-site content), so the real sink
@@ -192,15 +192,37 @@ test('Chapter 3 filters to externality.tier === "external" and reports the real 
   assert.ok(sinkNode, 'fixture assumption drifted: expected a real external-api node');
   assert.ok(ch3.markdown.includes(sinkNode.label), 'chapter 3 must name the real sink node label');
   // Verbose (technical) mode renders the per-flow table.
-  assert.match(ch3.markdown, /\| Data element \| Destination \| Sensitivity \| Control \|/);
+  assert.match(ch3.markdown, /\| Data element \| Destination \| Externality \| Sensitivity \| Control \|/);
 });
 
 test('Chapter 3: a graph with no external flows reports the honest zero, never a crash', () => {
   const graph = _buildRealGraph('function h(req, logger) { logger.info("x", req.body.name); }');
   const { record } = emitDecisionStory(graph, {});
   const ch3 = record.chapters[2];
-  assert.match(ch3.markdown, /No flows in this graph scope reach an external destination\./);
+  assert.match(ch3.markdown, /No flows in this graph scope reach an external or unresolved destination\./);
   assert.equal(ch3.itemCount, 0);
+});
+
+// Final whole-branch review, BLOCKING-3 (fixed): FR-203's unresolved-
+// destination path sets externality:'unknown' (never 'external') on the
+// same object as kind:'unresolved' — Chapter 3 originally filtered on
+// 'external' alone, silently dropping every unresolved-destination flow,
+// including every real AI-provider flow in this JS catalog (every AI SDK
+// entry is a member-chain receiver that always triggers FR-203).
+test('Chapter 3: an unresolved-destination flow (externality "unknown") is included, not silently dropped, and AI providers among them are named', () => {
+  const graph = _buildRealGraph(PHI_TO_AI_SOURCE);
+  const flow = graph.flows[0];
+  assert.ok(flow, 'fixture assumption drifted: expected a real flow');
+  const sinkNode = graph.nodes.find((n) => n.id === flow.sink);
+  assert.equal(sinkNode.kind, 'unresolved', 'fixture assumption drifted: expected FR-203 to fire on this AI SDK receiver');
+  assert.equal(sinkNode.externality.value, 'unknown', 'fixture assumption drifted: expected externality unknown, not external');
+
+  const { record } = emitDecisionStory(graph, {});
+  const ch3 = record.chapters[2];
+  assert.equal(ch3.itemCount, 1, 'the unresolved flow must be counted in Chapter 3, not dropped');
+  assert.match(ch3.markdown, /destination not statically resolved/i);
+  assert.match(ch3.markdown, /AI providers\/agents\/tools among them/);
+  assert.ok(ch3.markdown.includes(sinkNode.label), 'chapter 3 must name the real unresolved sink node');
 });
 
 test('Chapter 4: raw-logging and at-rest-unknown gap categories fire on the real multi-sink graph, the protected https flow does not appear', () => {
@@ -236,7 +258,7 @@ test('Chapter 4: a real, unconfigured governance gap is disclosed in a table, es
   const { record } = emitDecisionStory(graph, {});
   const ch4 = record.chapters[3];
   assert.match(ch4.markdown, /Flows with governance fields requiring manual input \(\d+\):/);
-  assert.match(ch4.markdown, /\| Data element \| Missing fields \| Provided values \|/);
+  assert.match(ch4.markdown, /\| Data element \| Destination \| Missing fields \| Provided values \|/);
   assert.match(ch4.markdown, /purpose/);
 });
 
@@ -315,7 +337,7 @@ test('an empty graph (no flows) produces an honest "nothing to report" message i
   assert.equal(validateDecisionStory(record).valid, true);
 
   assert.match(record.chapters[1].markdown, /No flows were identified in this graph scope/);
-  assert.match(record.chapters[2].markdown, /No flows in this graph scope reach an external destination/);
+  assert.match(record.chapters[2].markdown, /No flows in this graph scope reach an external or unresolved destination/);
   assert.match(record.chapters[3].markdown, /No control or governance gaps were identified/);
   assert.match(record.chapters[4].markdown, /No flows currently require a manual policy decision/);
   assert.equal(record.evidenceGrade, 'none');
@@ -347,7 +369,7 @@ test('Chapter 4: a governance value containing a literal "|" and an embedded new
     const { record } = emitDecisionStory(graph, {});
     const ch4 = record.chapters[3];
     const lines = ch4.markdown.split('\n');
-    const headerIdx = lines.findIndex((l) => l.startsWith('| Data element | Missing fields | Provided values |'));
+    const headerIdx = lines.findIndex((l) => l.startsWith('| Data element | Destination | Missing fields | Provided values |'));
     assert.ok(headerIdx >= 0, 'the governance-gap table header must be present');
     const headerCellCount = lines[headerIdx].split(' | ').length;
     let i = headerIdx + 2;
@@ -386,6 +408,74 @@ test('emitDecisionStory: opts.filter genuinely narrows the graph (via export-jso
   assert.equal(filtered.record.graphDigest, unfiltered.record.graphDigest);
   assert.equal(filtered.record.graphDigest, computeGraphDigest(graph));
   assert.deepEqual(filtered.record.scopeQuery, { filter });
+});
+
+// Final whole-branch review, BLOCKING-2 (fixed): Chapter 4 used to bucket
+// EVERY non-'permitted' policyVerdict — including 'not_evaluated', the
+// default with no privacy-policy.json on disk — under "policy conflict
+// (not permitted)", an unsupported compliance claim (AC-25), and directly
+// contradicting Chapter 5's own correct "no decision needed" treatment of
+// the SAME not_evaluated flows.
+test('Chapter 4: an unconfigured-policy (not_evaluated) flow is honestly labeled "not yet evaluated", never "policy conflict", and never contradicts Chapter 5', () => {
+  const graph = _buildRealGraph(MULTI_SINK_SOURCE);
+  const flow = graph.flows.find((f) => f.policyVerdict === 'not_evaluated');
+  assert.ok(flow, 'fixture assumption drifted: expected a real not_evaluated flow (no policy configured)');
+
+  const { record } = emitDecisionStory(graph, {});
+  const ch4 = record.chapters[3];
+  const ch5 = record.chapters[4];
+
+  assert.match(ch4.markdown, /Flows not yet evaluated against policy \(no policy configured for this scan\)/);
+  assert.doesNotMatch(ch4.markdown, /policy conflict/i);
+  // Chapter 5 must not claim a decision is needed for this same flow.
+  assert.equal(ch5.markdown.includes('Decisions needed now'), false, 'a not_evaluated-only graph must not claim any decision is needed in Chapter 5');
+  assert.match(ch5.markdown, /No flows currently require a manual policy decision/);
+});
+
+test('Chapter 4: a real "prohibited" verdict is labeled "policy conflict", a real "manual_review_required" verdict is labeled "requiring manual policy review" — distinctly, never collapsed together', () => {
+  const perFile = { 'a.js': parseJsFile('a.js', `
+    function track(req, analytics) {
+      const email = req.body.email;
+      analytics.track('signup', { email });
+    }
+  `) };
+  const callGraph = buildCallGraph(perFile);
+  const { graph } = buildGraphWithCoverage(callGraph, {
+    repository: 'r', generatedAt: '1970-01-01T00:00:00.000Z', privacySinkPolicy: { allow: [] },
+  });
+  const flow = graph.flows.find((f) => f.policyVerdict === 'prohibited');
+  assert.ok(flow, 'fixture assumption drifted: expected a real prohibited flow');
+
+  const { record } = emitDecisionStory(graph, {});
+  const ch4 = record.chapters[3];
+  assert.match(ch4.markdown, /Flows prohibited or conditionally permitted by policy/);
+  assert.doesNotMatch(ch4.markdown, /Flows requiring manual policy review \(\d+\)/, 'no manual_review_required flow in this fixture — that section must not render');
+});
+
+// Final whole-branch review, RECOMMENDED-1 (fixed): --filter narrows every
+// chapter's own flow content, but Chapter 1's coverage block read the
+// UNFILTERED graph.coverage with no disclosure a filter was applied.
+test('Chapter 1 discloses when a filter was applied, and stays silent about it when none was', () => {
+  const graph = _buildRealGraph(MULTI_SINK_SOURCE);
+  const targetFlow = graph.flows[0];
+  const filter = { nodeIds: [targetFlow.source, targetFlow.sink], edgeIds: [...targetFlow.edgeIds] };
+
+  const filtered = emitDecisionStory(graph, { filter });
+  assert.match(filtered.record.chapters[0].markdown, /scoped to a filtered subset of the graph/);
+
+  const unfiltered = emitDecisionStory(graph, {});
+  assert.doesNotMatch(unfiltered.record.chapters[0].markdown, /scoped to a filtered subset of the graph/);
+});
+
+// Final whole-branch review, RECOMMENDED-4 (fixed): the PRD's own
+// "transparent CONFIGURABLE factors" requirement was unreachable —
+// rankFlows accepted opts.factorOrder, but emitDecisionStory never
+// threaded it through, so nothing external could reach it.
+test('emitDecisionStory: opts.factorOrder overrides the default ranking priority and genuinely changes flow order', () => {
+  const graph = _buildRealGraph(MULTI_SINK_SOURCE);
+  const defaultOrder = emitDecisionStory(graph, { audienceMode: 'technical' });
+  const reversedOrder = emitDecisionStory(graph, { audienceMode: 'technical', factorOrder: [...RANKING_FACTORS].reverse() });
+  assert.notEqual(defaultOrder.markdown, reversedOrder.markdown, 'a genuinely different factorOrder must change the rendered document');
 });
 
 test('emitDecisionStory: opts.generatedAt overrides graph.generatedAt; with neither, falls back to graph.generatedAt, never wall-clock', () => {

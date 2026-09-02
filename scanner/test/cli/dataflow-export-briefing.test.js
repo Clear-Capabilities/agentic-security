@@ -155,6 +155,26 @@ test('dataflow export --format briefing: --no-redact is a documented no-op with 
   assert.ok(fs.existsSync(outFile));
 });
 
+// Final whole-branch review finding (NITPICK, fixed): every other
+// format-conditional flag (--view/--no-redact/--filter) warns when given
+// for a format that ignores it; --audience silently no-op'd with no
+// warning at all on a non-briefing format.
+test('dataflow export --format json: --audience is a documented no-op with a warning', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', MULTI_SINK_SOURCE);
+  fx.commit('add PCI-to-three-sinks flow');
+
+  const scanR = _scanWithLineage(fx);
+  assert.ok(scanR.status <= 3, `scan must exit <=3; got ${scanR.status}: ${scanR.stderr}`);
+
+  const outFile = path.join(fx.root, 'graph.json');
+  const exportR = _exportCli(fx, ['--format', 'json', '--audience', 'board', '--output', outFile]);
+  assert.equal(exportR.status, 0, exportR.stderr);
+  assert.match(exportR.stderr, /--audience has no effect on --format json/);
+  assert.ok(fs.existsSync(outFile));
+});
+
 test('dataflow export --format briefing: --filter genuinely narrows the output to the selected flow', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());

@@ -1,5 +1,5 @@
 ---
-description: Export the Data Flow Explorer graph — PNG/PDF/SVG images, JSON/CSV/DPIA/RoPA/briefing data, or a self-contained HTML report.
+description: Export the Data Flow Explorer graph — images, JSON/CSV/DPIA/RoPA/briefing data, or a self-contained HTML report.
 argument-hint: "[path] --format png|pdf|svg|json|csv|html|dpia|ropa|briefing --output <file> [--view <name>] [--size standard|2x] [--audience <mode>]"
 ---
 
@@ -31,7 +31,9 @@ Governance facts in `dpia`/`ropa` reflect `.agentic-security/privacy-governance.
 - `--view architecture|privacy|trace|inventory` — which view to capture (default: `architecture`). **Only affects `png`/`pdf`/`svg`** — a no-op (with warning) for `json`/`csv`/`html`/`dpia`/`ropa`/`briefing`, which are not view-scoped.
 - `--no-redact` — include unredacted content. Honored for `json`/`html`; a no-op (with warning) for `csv`/`dpia`/`ropa`/`briefing`.
 - `--filter <path-to-json>` — scope the export to a `{"nodeIds":[...],"edgeIds":[...]}` file. A no-op (with warning) for `csv`; **genuinely scopes the graph for `dpia`/`ropa`/`briefing`** (unlike `csv`).
-- `--audience board|ciso|privacy|compliance|regulator|technical` — which audience the `briefing` narrative is written for (default: `technical`). Controls prose register and verbosity only — `board` additionally caps Chapter 2 to its seven most important observations; every other value shows the full, uncapped detail. Never changes the underlying facts, evidence, or chapter order. **`briefing`-only** — an unrecognized value is a clear exit-2 error regardless of `--format`.
+- `--audience board|ciso|privacy|compliance|regulator|technical` — which audience the `briefing` narrative is written for (default: `technical`). Controls prose register and verbosity only — `board` additionally caps Chapter 2 to its seven most important observations; every other value shows the full, uncapped detail. Never changes the underlying facts, evidence, or chapter order. An unrecognized value is a clear exit-2 error regardless of `--format`; a no-op (with warning) for every format except `briefing`.
+
+`briefing`'s own ranking-factor PRIORITY order (which of the nine factors breaks a tie first) is not yet exposed as its own CLI flag — only the CLI-unreachable `emitDecisionStory(graph, {factorOrder})` API parameter, for a future programmatic caller (e.g. an MCP tool). The default order matches `decision-story.js`'s own `RANKING_FACTORS` sequence.
 
 ## Examples
 

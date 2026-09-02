@@ -3350,10 +3350,17 @@ async function cmdDataflowExport(args) {
   // emitDecisionStory's own enum — the same single-source-of-truth
   // discipline every other enum in this file follows.
   const { AUDIENCE_MODES } = await import('../src/lineage/export-briefing.js');
+  const audienceExplicit = args.flags.audience !== undefined;
   const audienceMode = args.flags.audience || 'technical';
   if (!AUDIENCE_MODES.includes(audienceMode)) {
     process.stderr.write(`agentic-security dataflow export: --audience must be one of ${AUDIENCE_MODES.join('|')} (got ${JSON.stringify(audienceMode)}).\n`);
     return 2;
+  }
+  // Final whole-branch review finding (NITPICK, fixed): --view/--no-redact/
+  // --filter each warn when given for a format that ignores them; --audience
+  // silently no-op'd on every non-briefing format with no such warning.
+  if (audienceExplicit && format !== 'briefing') {
+    process.stderr.write(`agentic-security dataflow export: --audience has no effect on --format ${format} — only --format briefing is audience-aware.\n`);
   }
 
   // A bare flag (no following value, e.g. "--width --height 500") is

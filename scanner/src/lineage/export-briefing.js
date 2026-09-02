@@ -112,7 +112,12 @@ const _AUDIENCE_WORDING = Object.freeze({
   },
   technical: {
     label: 'Technical Briefing',
-    registerNote: 'Full technical detail: every factor tier shown, no observation cap.',
+    // Review finding (RECOMMENDED, fixed): the previous wording ("every
+    // factor tier shown") was false — only sensitivity/externality/
+    // controlVerdict are ever rendered per-flow; aiUse/breadth/
+    // evidenceConfidence affect ranking ORDER only and are never shown
+    // per item in any mode. Reworded to describe what is actually true.
+    registerNote: 'Full technical detail: no observation cap, verbose tables shown. Sensitivity, externality, and control-verdict tiers are shown per flow; all nine ranking factors (see the list at the end of this report) are considered when ordering flows, whether or not each is individually displayed.',
     chapter2Cap: null,
     verbose: true,
   },
@@ -151,7 +156,7 @@ function _flowHasAtRestUnknown(flow, edgesById) {
 // --- Chapter 1: Scope & Confidence — direct reads off the graph's own
 // required top-level envelope fields (scope/scanHealth/coverage/
 // limitations; dataflow-graph.schema.json's own top-level `required` list).
-function _chapter1ScopeConfidence(graph, wording) {
+function _chapter1ScopeConfidence(graph, wording, hasFilter) {
   const lines = [];
   lines.push('## Chapter 1: Scope & Confidence');
   lines.push('');
@@ -164,6 +169,21 @@ function _chapter1ScopeConfidence(graph, wording) {
   lines.push('');
   lines.push(`Scan health: **${_mdInline(scanHealth.status ?? 'unknown')}**${scanHealth.reason ? ` (${_mdInline(scanHealth.reason)})` : ''}.`);
   lines.push('');
+  if (graph.graphId) { lines.push(`Graph identity: \`${_mdInline(graph.graphId)}\`.`); lines.push(''); }
+
+  // Review finding (RECOMMENDED, fixed): --filter narrows every chapter's
+  // own flow content (via _filterGraph), but the coverage NUMBERS below
+  // still come from the SOURCE graph's own coverage ledger, which
+  // _filterGraph never touches (narrowing coverage counts to "how much of
+  // a filtered subgraph was covered" is not a well-defined question — the
+  // ledger is a whole-scan artifact). Left unlabeled, this read as an
+  // unscoped whole-scan ledger sitting beside a scoped, filtered chapter
+  // set with no indication either way — AC-25's own "coverage limitations
+  // remain prominent" requirement.
+  if (hasFilter) {
+    lines.push('**This report is scoped to a filtered subset of the graph** (`--filter`). The coverage figures below describe the WHOLE underlying scan, not just this filtered scope — Chapters 2 through 5 report only the filtered flows.');
+    lines.push('');
+  }
 
   const sources = coverage.sources ?? {};
   const sinks = coverage.sinks ?? {};
@@ -269,23 +289,47 @@ function _chapter2SensitiveFootprint(ranked, graph, nodesById, wording) {
   return { id: 'sensitive-footprint', number: 2, title: 'Sensitive-Data Footprint', itemCount: shown, markdown: lines.join('\n') };
 }
 
-// --- Chapter 3: External Exposure — externality.tier === 'external' flows
-// only. Lists destinations, AI providers/agents/tools among them, and
-// unresolved destinations (node.kind === 'unresolved').
+// --- Chapter 3: External Exposure — externality.tier === 'external' flows,
+// PLUS any flow whose sink node is genuinely FR-203-unresolved
+// (node.kind === 'unresolved'). Final whole-branch review finding
+// (BLOCKING, fixed): this chapter originally filtered on 'external' alone,
+// but FR-203's unresolved-destination path (sink-registry.js) sets
+// externality:'unknown' on the SAME return object as kind:'unresolved' —
+// never 'external' — so EVERY unresolved-destination flow (including
+// every real AI-provider flow in this JS catalog, since every AI SDK entry
+// is a member-chain receiver that always triggers FR-203) was silently
+// dropped from the whole chapter, and the chapter's own "unresolved
+// destinations"/"AI providers" bullets were unreachable dead code.
+//
+// Deliberately narrower than "any externality:'unknown' flow": a plain
+// resolved store-kind sink (a local database write) ALSO carries
+// externality:'unknown' by category design (sink-registry.js's
+// CATEGORY_EXTERNALITY — "could be local or third-party-managed, the
+// registry can't tell"), which is a genuinely different, non-security
+// concept from FR-203's "the destination itself could not be statically
+// determined." Gating on node.kind === 'unresolved' targets the real
+// FR-203 gap the review found without also pulling in every ordinary
+// database/file/object-storage write in the graph.
 function _chapter3ExternalExposure(ranked, graph, nodesById, wording) {
   const lines = [];
   lines.push('## Chapter 3: External Exposure');
   lines.push('');
-  const external = ranked.filter((rf) => rf.factors.externality.tier === 'external');
-  if (external.length === 0) {
-    lines.push('No flows in this graph scope reach an external destination.');
+  const exposureFlows = ranked.filter((rf) => {
+    if (rf.factors.externality.tier === 'external') return true;
+    return nodesById.get(rf.flow.sink)?.kind === 'unresolved';
+  });
+  if (exposureFlows.length === 0) {
+    lines.push('No flows in this graph scope reach an external or unresolved destination.');
     return { id: 'external-exposure', number: 3, title: 'External Exposure', itemCount: 0, markdown: lines.join('\n') };
   }
+
+  const resolvedExternal = exposureFlows.filter((rf) => rf.factors.externality.tier === 'external');
+  const unresolvedTier = exposureFlows.filter((rf) => nodesById.get(rf.flow.sink)?.kind === 'unresolved');
 
   const destinations = new Set();
   const aiProviders = new Set();
   const unresolved = new Set();
-  for (const rf of external) {
+  for (const rf of exposureFlows) {
     const snk = nodesById.get(rf.flow.sink);
     if (!snk) continue;
     destinations.add(snk.label || snk.id);
@@ -293,25 +337,25 @@ function _chapter3ExternalExposure(ranked, graph, nodesById, wording) {
     if (snk.kind === 'unresolved') unresolved.add(snk.label || snk.id);
   }
 
-  lines.push(`${external.length} flow(s) reach an external destination.`);
+  lines.push(`${exposureFlows.length} flow(s) reach an external or unresolved destination — ${resolvedExternal.length} resolved external, ${unresolvedTier.length} destination not statically resolved.`);
   lines.push('');
   if (destinations.size) { lines.push(`**Destinations:** ${[...destinations].sort().map(_mdCode).join(', ')}`); lines.push(''); }
   if (aiProviders.size) { lines.push(`**AI providers/agents/tools among them:** ${[...aiProviders].sort().map(_mdCode).join(', ')}`); lines.push(''); }
-  if (unresolved.size) { lines.push(`**Unresolved destinations (could not be statically determined):** ${[...unresolved].sort().map(_mdCode).join(', ')}`); lines.push(''); }
+  if (unresolved.size) { lines.push(`**Destination not statically resolved (could not be determined by analysis):** ${[...unresolved].sort().map(_mdCode).join(', ')}`); lines.push(''); }
 
   if (wording.verbose) {
-    lines.push('| Data element | Destination | Sensitivity | Control |');
-    lines.push('|---|---|---|---|');
-    for (const rf of external) {
+    lines.push('| Data element | Destination | Externality | Sensitivity | Control |');
+    lines.push('|---|---|---|---|---|');
+    for (const rf of exposureFlows) {
       const de = _primaryDataElement(rf.flow, graph);
       const snk = nodesById.get(rf.flow.sink);
-      const cells = [de?.name ?? '(unnamed field)', snk?.label ?? snk?.id ?? 'unknown', rf.factors.sensitivity.tier, rf.factors.controlVerdict.tier];
+      const cells = [de?.name ?? '(unnamed field)', snk?.label ?? snk?.id ?? 'unknown', rf.factors.externality.tier, rf.factors.sensitivity.tier, rf.factors.controlVerdict.tier];
       lines.push(`| ${cells.map(_mdCell).join(' | ')} |`);
     }
     lines.push('');
   }
 
-  return { id: 'external-exposure', number: 3, title: 'External Exposure', itemCount: external.length, markdown: lines.join('\n') };
+  return { id: 'external-exposure', number: 3, title: 'External Exposure', itemCount: exposureFlows.length, markdown: lines.join('\n') };
 }
 
 // --- Chapter 4: Control & Governance Gaps — controlVerdict.tier !==
@@ -331,7 +375,21 @@ function _chapter4ControlGovernanceGaps(ranked, graph, nodesById, edgesById, wor
   const unencryptedTransit = [];
   const atRestUnknown = [];
   const governanceGapFlows = [];
+  // Final whole-branch review finding (BLOCKING, fixed): this used to be
+  // ONE bucket, `flow.policyVerdict !== 'permitted'`, rendered under
+  // "policy conflict (not permitted)". With no
+  // .agentic-security/privacy-policy.json on disk — the default for
+  // essentially every user — every flow reads `not_evaluated`, so every
+  // flow was reported as being in policy conflict: an unsupported
+  // compliance claim (AC-25's own "no unsupported ... compliance claim
+  // appears") about a flow no policy was ever applied to, AND a direct
+  // contradiction of Chapter 5, which correctly treats not_evaluated as
+  // "no decision needed" (decision-story.js's own _TIER_RANK already
+  // distinguishes these 4 states; this chapter was the one place that
+  // collapsed them). Split into three honestly-labeled buckets.
   const policyConflicts = [];
+  const manualReviewNeeded = [];
+  const notEvaluated = [];
 
   for (const rf of gaps) {
     const { flow } = rf;
@@ -341,7 +399,9 @@ function _chapter4ControlGovernanceGaps(ranked, graph, nodesById, edgesById, wor
     if (_flowHasAtRestUnknown(flow, edgesById)) atRestUnknown.push(rf);
     const gapFields = GOVERNANCE_FIELDS.filter((f) => (flow.governanceRefs?.[f]?.source ?? 'manual_required') === 'manual_required');
     if (gapFields.length) governanceGapFlows.push({ rf, gapFields });
-    if (flow.policyVerdict !== 'permitted') policyConflicts.push(rf);
+    if (flow.policyVerdict === 'prohibited' || flow.policyVerdict === 'conditionally_permitted') policyConflicts.push(rf);
+    else if (flow.policyVerdict === 'manual_review_required') manualReviewNeeded.push(rf);
+    else if (flow.policyVerdict === 'not_evaluated') notEvaluated.push(rf);
   }
 
   lines.push(`${gaps.length} flow(s) do not carry a fully protected control verdict.`);
@@ -355,13 +415,19 @@ function _chapter4ControlGovernanceGaps(ranked, graph, nodesById, edgesById, wor
     lines.push('');
   };
 
-  section('Raw data reaching a log sink', rawLogging, (rf) => {
+  // Every bullet includes its destination (N-3, review finding): the same
+  // field reaching two different sinks previously rendered two
+  // byte-identical bullets in a list, indistinguishable from a
+  // duplication bug.
+  const withDestination = (rf) => {
     const de = _primaryDataElement(rf.flow, graph);
     const snk = nodesById.get(rf.flow.sink);
-    return `${_mdCode(de?.name ?? '(unnamed field)')} -> ${_mdCode(snk?.label ?? 'log')}`;
-  });
-  section('Flows with unencrypted transit', unencryptedTransit, (rf) => _mdCode(_primaryDataElement(rf.flow, graph)?.name ?? '(unnamed field)'));
-  section('Flows with at-rest protection unknown', atRestUnknown, (rf) => _mdCode(_primaryDataElement(rf.flow, graph)?.name ?? '(unnamed field)'));
+    return `${_mdCode(de?.name ?? '(unnamed field)')} -> ${_mdCode(snk?.label ?? snk?.id ?? 'unknown destination')}`;
+  };
+
+  section('Raw data reaching a log sink', rawLogging, withDestination);
+  section('Flows with unencrypted transit', unencryptedTransit, withDestination);
+  section('Flows with at-rest protection unknown', atRestUnknown, withDestination);
 
   // A real Markdown TABLE (not a bullet list), deliberately — this is the
   // one place in this chapter that interpolates the operator-supplied
@@ -372,25 +438,26 @@ function _chapter4ControlGovernanceGaps(ranked, graph, nodesById, edgesById, wor
   if (governanceGapFlows.length) {
     lines.push(`**Flows with governance fields requiring manual input (${governanceGapFlows.length}):**`);
     lines.push('');
-    const header = ['Data element', 'Missing fields', 'Provided values'];
+    const header = ['Data element', 'Destination', 'Missing fields', 'Provided values'];
     lines.push(`| ${header.join(' | ')} |`);
     lines.push(`|${header.map(() => '---').join('|')}|`);
     for (const { rf, gapFields } of governanceGapFlows) {
       const de = _primaryDataElement(rf.flow, graph);
+      const snk = nodesById.get(rf.flow.sink);
       const provided = GOVERNANCE_FIELDS
         .filter((f) => rf.flow.governanceRefs?.[f]?.source === 'operator_provided')
         .map((f) => `${f}: ${rf.flow.governanceRefs[f].value}`)
         .join('; ');
-      const cells = [de?.name ?? '(unnamed field)', gapFields.join(', '), provided || '(none)'];
+      const cells = [de?.name ?? '(unnamed field)', snk?.label ?? snk?.id ?? 'unknown destination', gapFields.join(', '), provided || '(none)'];
       lines.push(`| ${cells.map(_mdCell).join(' | ')} |`);
     }
     lines.push('');
   }
 
-  section('Flows in policy conflict (not permitted)', policyConflicts, (rf) => {
-    const de = _primaryDataElement(rf.flow, graph);
-    return `${_mdCode(de?.name ?? '(unnamed field)')} — ${_mdInline(_policyLabel(rf.flow.policyVerdict, wording))}`;
-  });
+  const withPolicyLabel = (rf) => `${withDestination(rf)} — ${_mdInline(_policyLabel(rf.flow.policyVerdict, wording))}`;
+  section('Flows prohibited or conditionally permitted by policy', policyConflicts, withPolicyLabel);
+  section('Flows requiring manual policy review', manualReviewNeeded, withPolicyLabel);
+  section('Flows not yet evaluated against policy (no policy configured for this scan)', notEvaluated, withPolicyLabel);
 
   return { id: 'control-governance-gaps', number: 4, title: 'Control & Governance Gaps', itemCount: gaps.length, markdown: lines.join('\n') };
 }
@@ -431,7 +498,11 @@ function _renderMarkdown(record, wording, chapters) {
   const lines = [];
   lines.push(`# Executive Risk Story — ${wording.label}`);
   lines.push('');
-  lines.push(`Generated ${_mdInline(record.generatedAt)} · graph digest \`${String(record.graphDigest).slice(0, 16)}\` · audience mode \`${record.audienceMode}\`.`);
+  // Full digest, never truncated (review finding, RECOMMENDED, fixed) —
+  // AC-25's own "preserves graph digest and reproducibility metadata"
+  // requirement; a truncated digest is a weaker reproducibility claim
+  // than the graph itself makes.
+  lines.push(`Generated ${_mdInline(record.generatedAt)} · graph digest \`${_mdInline(record.graphDigest)}\` · audience mode \`${record.audienceMode}\`.`);
   lines.push('');
   lines.push(wording.registerNote);
   lines.push('');
@@ -471,6 +542,14 @@ function _renderMarkdown(record, wording, chapters) {
  * @param {string} [opts.audienceMode] one of AUDIENCE_MODES, default
  *   'technical'. Controls prose register/verbosity only — see this file's
  *   own header for the binding "never change facts" constraint.
+ * @param {string[]} [opts.factorOrder] overrides decision-story.js's own
+ *   default RANKING_FACTORS priority sequence for THIS story — threaded
+ *   straight through to rankFlows, satisfying the PRD's own "transparent
+ *   CONFIGURABLE factors" requirement at the API level (review finding,
+ *   RECOMMENDED, fixed — this was previously never threaded, so nothing
+ *   external could reach rankFlows's own opts.factorOrder at all). Not yet
+ *   exposed as its own `dataflow export` CLI flag — see commands/
+ *   dataflow.md's own disclosure of that narrower, still-open gap.
  */
 export function emitDecisionStory(graph, opts = {}) {
   const audienceMode = opts.audienceMode ?? 'technical';
@@ -483,9 +562,9 @@ export function emitDecisionStory(graph, opts = {}) {
   const generatedAt = opts.generatedAt ?? graph.generatedAt;
   const nodesById = new Map((scopedGraph.nodes ?? []).map((n) => [n.id, n]));
   const edgesById = new Map((scopedGraph.edges ?? []).map((e) => [e.id, e]));
-  const ranked = rankFlows(scopedGraph);
+  const ranked = rankFlows(scopedGraph, opts.factorOrder ? { factorOrder: opts.factorOrder } : undefined);
 
-  const ch1 = _chapter1ScopeConfidence(scopedGraph, wording);
+  const ch1 = _chapter1ScopeConfidence(scopedGraph, wording, Boolean(opts.filter));
   const ch2 = _chapter2SensitiveFootprint(ranked, scopedGraph, nodesById, wording);
   const ch3 = _chapter3ExternalExposure(ranked, scopedGraph, nodesById, wording);
   const ch4 = _chapter4ControlGovernanceGaps(ranked, scopedGraph, nodesById, edgesById, wording);
