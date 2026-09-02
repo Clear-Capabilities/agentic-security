@@ -465,8 +465,30 @@ export function buildGraphWithCoverage(callGraph, opts = {}) {
     // read the filesystem itself here).
     resolveGovernanceRefs: opts.resolveGovernanceRefs
       ?? ((dataClasses) => {
+        // Task-1 review finding (non-blocking, fixed): a flow whose
+        // dataElement classified into NO named class (dataClasses: [])
+        // used to fall straight through this loop and return {} — no
+        // per-field MANUAL_REQUIRED at all. Privacy View's own rendering
+        // (`if (key in row.governanceRefs)`) then shows ZERO governance
+        // badges for such a flow, indistinguishable from a genuine
+        // nothing-to-disclose case — in tension with this codebase's own "missing
+        // evidence renders as unknown, never as not-applicable"
+        // convention (e.g. OSCAL's "an unassessed control gets no
+        // finding" is the SAME direction, never the reverse: absence of
+        // assessment must never read as absence of obligation). An
+        // unclassified data element still deserves the same governance
+        // scrutiny an operator-classified one does — its purpose/lawful
+        // basis/etc. are still real open questions, not inapplicable
+        // ones — so the honest answer is the full field set, all
+        // MANUAL_REQUIRED (or whatever the operator's scan-wide
+        // `config.default` supplies), never an empty object.
+        // `governanceRecordFor('(unclassified)', ...)` achieves this for
+        // free: an unmatched class key already falls through to
+        // `config.default`/MANUAL_REQUIRED in governanceRecordFor's own
+        // logic — no special-casing needed here.
+        const classesToResolve = dataClasses.length ? dataClasses : ['(unclassified)'];
         const record = {};
-        for (const cls of dataClasses) {
+        for (const cls of classesToResolve) {
           const clsRecord = governanceRecordFor(cls, opts.privacyGovernanceConfig ?? null);
           for (const field of GOVERNANCE_FIELDS) {
             // Worst-case-wins across multiple data classes on one flow,

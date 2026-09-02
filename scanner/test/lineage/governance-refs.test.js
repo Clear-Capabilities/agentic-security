@@ -156,11 +156,40 @@ test('governanceRefs: multi-data-class tie-break — an operator-provided value 
   }
 });
 
-test('REAL CORPUS: sweeping bench/data-lineage/ fixtures never throws building governanceRefs, with and without operator config', async () => {
+test('governanceRefs: a flow whose dataElement classifies into NO named data class still gets the full field set, all MANUAL_REQUIRED — never the empty {} a naive "no classes to iterate" implementation would produce', async () => {
+  // Task-1 review finding (non-blocking, fixed): reproduced on a REAL
+  // corpus fixture (bench/data-lineage/fixtures/js-http-query-to-log-unclassified-clean),
+  // not a hand-built one — its own real dataElement classifies to
+  // dataClasses: [] (an http-query field the taxonomy has no class for).
+  // Privacy View's own rendering (`if (key in row.governanceRefs)`) would
+  // silently show ZERO governance badges for this flow pre-fix,
+  // indistinguishable from "governance doesn't apply here" — the wrong
+  // answer for a field nobody has actually reviewed. Mutation-verified:
+  // temporarily reverting resolveGovernanceRefs's classesToResolve
+  // fallback (`dataClasses.length ? dataClasses : ['(unclassified)']`)
+  // back to bare `dataClasses` reproduces the pre-fix {} here.
+  const { buildFixtureGraph } = await import('../../../bench/data-lineage/runner.mjs');
+  const FIXTURES_ROOT = path.join(__dirname, '../../../bench/data-lineage/fixtures');
+  const fixtureId = 'js-http-query-to-log-unclassified-clean';
+  const source = fs.readFileSync(path.join(FIXTURES_ROOT, fixtureId, 'source.js'), 'utf8');
+  const graph = buildFixtureGraph(fixtureId, source);
+  assert.ok(graph.flows.length >= 1, 'fixture assumption drifted: expected at least one real flow');
+  const flow = graph.flows[0];
+  const de = graph.dataElements.find((d) => d.id === flow.dataElementIds[0]);
+  assert.deepEqual(de?.dataClasses, [], 'fixture assumption drifted: expected an unclassified dataElement (dataClasses: [])');
+  assert.equal(Object.keys(flow.governanceRefs).length, GOVERNANCE_FIELDS.length, 'expected the full governance field set, not the pre-fix empty {}');
+  for (const field of GOVERNANCE_FIELDS) {
+    assert.equal(flow.governanceRefs[field].value, MANUAL_REQUIRED);
+    assert.equal(flow.governanceRefs[field].source, 'manual_required');
+  }
+});
+
+test('REAL CORPUS: sweeping bench/data-lineage/ fixtures produces a genuinely well-shaped governanceRefs record on every flow (full field set, valid source enum) — not merely "truthy"', async () => {
   const { buildFixtureGraph } = await import('../../../bench/data-lineage/runner.mjs');
   const FIXTURES_ROOT = path.join(__dirname, '../../../bench/data-lineage/fixtures');
   const fixtureIds = fs.readdirSync(FIXTURES_ROOT).filter((f) => fs.statSync(path.join(FIXTURES_ROOT, f)).isDirectory());
   assert.ok(fixtureIds.length > 0);
+  let flowsChecked = 0;
   for (const fixtureId of fixtureIds) {
     const srcPath = path.join(FIXTURES_ROOT, fixtureId, 'source.js');
     if (!fs.existsSync(srcPath)) continue;
@@ -168,6 +197,20 @@ test('REAL CORPUS: sweeping bench/data-lineage/ fixtures never throws building g
     const graph = buildFixtureGraph(fixtureId, source);
     for (const flow of graph.flows) {
       assert.ok(flow.governanceRefs, `${fixtureId}: flow ${flow.id} missing governanceRefs`);
+      // Task-1 review finding (non-blocking, fixed): the prior version of
+      // this sweep only checked truthiness, which would pass even on a
+      // malformed/partial record. Now checks real shape: every one of
+      // GOVERNANCE_FIELDS present, and every entry's `source` a real,
+      // recognized value (never fabricated).
+      const keys = Object.keys(flow.governanceRefs);
+      assert.deepEqual(keys.sort(), [...GOVERNANCE_FIELDS].sort(), `${fixtureId}: flow ${flow.id} has the wrong governance field set`);
+      for (const field of GOVERNANCE_FIELDS) {
+        const entry = flow.governanceRefs[field];
+        assert.ok(entry && typeof entry.value === 'string', `${fixtureId}: flow ${flow.id} field ${field} missing a string value`);
+        assert.ok(entry.source === 'operator_provided' || entry.source === 'manual_required', `${fixtureId}: flow ${flow.id} field ${field} has an invalid source "${entry.source}"`);
+      }
+      flowsChecked++;
     }
   }
+  assert.ok(flowsChecked > 0, 'the sweep must exercise at least one real flow, or this test is vacuous');
 });
