@@ -278,3 +278,136 @@ test('dataflow export: a well-formed --filter is honored (positive control for t
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('dataflow export: --filter with no value is a clear exit-2 error, not a raw TypeError', () => {
+  // Found by the final whole-branch review, reproduced live: parseArgs
+  // parses a bare "--filter" (no following value) as boolean true, and
+  // path.resolve(true) threw a raw, uncaught TypeError that escaped to
+  // exit 4 — the same defect class Task 1's own review found and fixed
+  // at the write stage, surviving here on a different flag.
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const outFile = path.join(root, 'out.json');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'json', '--filter', '--output', outFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--filter requires a file path/);
+    assert.ok(!/at async|at Object|node:internal/.test(r.stderr), 'must not leak a raw Node stack trace');
+    assert.ok(!fs.existsSync(outFile));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow export: --filter= (empty value) is a clear exit-2 error, not a silently-dropped filter', () => {
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const outFile = path.join(root, 'out.json');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'json', '--filter=', '--output', outFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--filter requires a file path/);
+    assert.ok(!fs.existsSync(outFile), 'must not silently export the unfiltered graph');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow export: --filter with --format csv prints a warning and still writes the UNFILTERED csv (documented no-op)', () => {
+  // Found by the final whole-branch review: exportFlowsCSV(graph) takes
+  // no opts at all, so --filter silently did nothing for csv — an
+  // operator scoping a CSV export to a safe subset silently got
+  // everything instead, with no warning.
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const filterFile = path.join(root, 'empty-filter.json');
+  fs.writeFileSync(filterFile, JSON.stringify({ nodeIds: [], edgeIds: [] }));
+  const outFile = path.join(root, 'out.csv');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'csv', '--filter', filterFile, '--output', outFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /--filter has no effect on --format csv/);
+    assert.ok(fs.existsSync(outFile));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow export: an explicit --view with --format json/csv/html prints a warning (documented no-op)', () => {
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const outFile = path.join(root, 'out.json');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'json', '--view', 'privacy', '--output', outFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /--view has no effect on --format json/);
+    assert.ok(fs.existsSync(outFile));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow export: no explicit --view prints no warning even for view-agnostic formats', () => {
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const outFile = path.join(root, 'out.json');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'json', '--output', outFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stderr, /--view has no effect/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+itChrome('dataflow export: --width with no value is a clear exit-2 error, not a silent 1-pixel image', () => {
+  // Found by the final whole-branch review, reproduced live: parseArgs
+  // parses a bare "--width" (followed by another flag) as boolean true,
+  // and Number(true) === 1, which passed the old Number.isSafeInteger
+  // guard unchanged — producing a real, silently-wrong 1x500 PNG at
+  // exit 0.
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const outFile = path.join(root, 'out.png');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'png', '--width', '--height', '500', '--output', outFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--width\/--height must both be positive integers/);
+    assert.ok(!fs.existsSync(outFile));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow export: an absurdly large --width is a clear exit-2 error, not a silently-wrong image', () => {
+  // Found by the final whole-branch review, reproduced live: a safe
+  // integer width far beyond any real display made Chrome silently
+  // fall back to its own default window size instead of erroring —
+  // wrong output at exit 0, with the caller having no way to know their
+  // requested dimensions were ignored.
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const outFile = path.join(root, 'out.png');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'png', '--width', '9007199254740991', '--height', '10', '--output', outFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--width\/--height must both be <= 20000/);
+    assert.ok(!fs.existsSync(outFile));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow export: a hex-like --width string is rejected, not silently coerced by Number()', () => {
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const outFile = path.join(root, 'out.png');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'png', '--width', '0x10', '--height', '500', '--output', outFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--width\/--height must both be positive integers/);
+    assert.ok(!fs.existsSync(outFile));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

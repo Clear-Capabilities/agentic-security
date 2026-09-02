@@ -18,14 +18,14 @@ this command never triggers a scan itself, matching `/dataflow`'s sibling
 | `pdf` | PDF document | Requires Chrome. |
 | `svg` | Vector image | Requires Chrome. Only supports `--view architecture` (the default) — other views have no real `<svg>` element to extract. |
 | `json` | Data envelope with digest + graph | No Chrome needed. |
-| `csv` | One row per flow | No Chrome needed. **Does not support redaction** — `--no-redact` is a no-op for this format (a printed warning explains why). |
-| `html` | Self-contained, offline-viewable report | No Chrome needed to generate (only to raster it afterward, if you also want a png/pdf). |
+| `csv` | One row per flow | No Chrome needed. **Does not support redaction or scoping** — `--no-redact` and `--filter` are both no-ops for this format (a printed warning explains why for each). |
+| `html` | Self-contained, offline-viewable report | No Chrome needed to generate (only to raster it afterward, if you also want a png/pdf). Not view-scoped — embeds the full interactive report, not one captured view. |
 
 ## Options
 
-- `--view architecture|privacy|trace|inventory` — which view to capture (default: `architecture`).
+- `--view architecture|privacy|trace|inventory` — which view to capture (default: `architecture`). **Only affects `png`/`pdf`/`svg`** — a no-op (with warning) for `json`/`csv`/`html`, which are not view-scoped.
 - `--no-redact` — include unredacted content. Honored for `json`/`html`; a no-op (with warning) for `csv`.
-- `--filter <path-to-json>` — scope the export to a `{"nodeIds":[...],"edgeIds":[...]}` file.
+- `--filter <path-to-json>` — scope the export to a `{"nodeIds":[...],"edgeIds":[...]}` file. A no-op (with warning) for `csv`.
 
 ## Examples
 

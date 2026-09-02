@@ -145,11 +145,12 @@ Commands:
                                AGENTIC_SECURITY_LINEAGE_DEEP=1 scan first)
   dataflow export [path] --format png|pdf|svg|json|csv|html --output <file>
                                Export the already-scanned lineage graph.
-                               --view architecture|privacy|trace|inventory  (default: architecture)
+                               --view architecture|privacy|trace|inventory  (default: architecture;
+                                                      png/pdf/svg only — no-op + warning for json/csv/html)
                                --size standard|2x    AC-23 pinned PNG sizes (default: standard)
-                               --width <n> --height <n>   custom PNG size (mutually exclusive with --size)
+                               --width <n> --height <n>   custom PNG size, <= 20000 (mutually exclusive with --size)
                                --no-redact            include unredacted content (json/html only; no-op + warning for csv)
-                               --filter <path.json>   {nodeIds,edgeIds} to scope the export
+                               --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv)
 
 Options:
   --profile vibecoder|pro      Override profile for this run
@@ -3127,6 +3128,7 @@ async function cmdDataflowExport(args) {
     process.stderr.write('agentic-security dataflow export: --output <file> is required.\n');
     return 2;
   }
+  const viewExplicit = args.flags.view !== undefined;
   const view = args.flags.view || 'architecture';
   if (!DATAFLOW_EXPORT_VIEWS.has(view)) {
     process.stderr.write(`agentic-security dataflow export: --view must be one of ${[...DATAFLOW_EXPORT_VIEWS].join('|')} (got ${JSON.stringify(view)}).\n`);
@@ -3135,6 +3137,29 @@ async function cmdDataflowExport(args) {
   if (format === 'svg' && view !== 'architecture') {
     process.stderr.write('agentic-security dataflow export: --format svg only supports --view architecture — only the Architecture View renders a real <svg> element.\n');
     return 2;
+  }
+  // json/csv/html are not view-scoped (exportGraphJSON/exportFlowsCSV have
+  // no view concept; generateHtmlReport embeds the full interactive report,
+  // not one captured view) — found by the final whole-branch review: an
+  // explicit --view silently did nothing for these three formats, with no
+  // warning, while the docs presented --view as a universal option.
+  if (viewExplicit && (format === 'json' || format === 'csv' || format === 'html')) {
+    process.stderr.write(`agentic-security dataflow export: --view has no effect on --format ${format} — ${format} exports are not view-scoped.\n`);
+  }
+
+  // A bare flag (no following value, e.g. "--width --height 500") is
+  // parsed as boolean `true` by parseArgs — found by the final
+  // whole-branch review: `Number(true) === 1` passed the old
+  // Number.isSafeInteger guard unchanged, silently producing a 1-pixel
+  // image at exit 0. Require a plain, unsigned, non-hex/non-exponential
+  // digit string (rejects "true", "0x10", "1e3", leading zeros) AND cap
+  // the value — an absurd-but-safe-integer width/height (e.g.
+  // Number.MAX_SAFE_INTEGER) silently made Chrome fall back to its own
+  // default size instead of erroring; a sane ceiling turns that into a
+  // clean argument error instead of a silently-wrong image.
+  const MAX_DATAFLOW_EXPORT_DIMENSION = 20000;
+  function _isPlainPositiveIntString(s) {
+    return typeof s === 'string' && /^[1-9]\d*$/.test(s);
   }
 
   const sizeFlag = args.flags.size;
@@ -3151,10 +3176,14 @@ async function cmdDataflowExport(args) {
     }
     ({ width, height } = DATAFLOW_EXPORT_SIZES[sizeFlag]);
   } else if (hasWidthHeight) {
+    if (!_isPlainPositiveIntString(args.flags.width) || !_isPlainPositiveIntString(args.flags.height)) {
+      process.stderr.write('agentic-security dataflow export: --width/--height must both be positive integers.\n');
+      return 2;
+    }
     width = Number(args.flags.width);
     height = Number(args.flags.height);
-    if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
-      process.stderr.write('agentic-security dataflow export: --width/--height must both be positive integers.\n');
+    if (width > MAX_DATAFLOW_EXPORT_DIMENSION || height > MAX_DATAFLOW_EXPORT_DIMENSION) {
+      process.stderr.write(`agentic-security dataflow export: --width/--height must both be <= ${MAX_DATAFLOW_EXPORT_DIMENSION}.\n`);
       return 2;
     }
   } else {
@@ -3167,7 +3196,18 @@ async function cmdDataflowExport(args) {
   }
 
   let filter;
-  if (args.flags.filter) {
+  if (args.flags.filter !== undefined) {
+    // A bare "--filter" (no value) or "--filter=" (empty string) must be
+    // rejected up front, not passed to path.resolve() — found by the
+    // final whole-branch review: path.resolve(true) throws a raw
+    // TypeError that escapes uncaught to exit 4 (the same defect class
+    // Task 1's own review found and fixed at the write stage, surviving
+    // here on a different flag); an empty string was falsy and silently
+    // dropped the whole filter instead of erroring.
+    if (typeof args.flags.filter !== 'string' || !args.flags.filter) {
+      process.stderr.write('agentic-security dataflow export: --filter requires a file path.\n');
+      return 2;
+    }
     const filterPath = path.resolve(args.flags.filter);
     try {
       filter = JSON.parse(fs.readFileSync(filterPath, 'utf8'));
@@ -3188,6 +3228,15 @@ async function cmdDataflowExport(args) {
       || (filter.edgeIds !== undefined && !Array.isArray(filter.edgeIds))) {
       process.stderr.write(`agentic-security dataflow export: --filter file "${args.flags.filter}" must be a JSON object of the form {"nodeIds":[...],"edgeIds":[...]} (both optional, but if present must be arrays).\n`);
       return 2;
+    }
+    // exportFlowsCSV(graph) takes no opts at all — found by the final
+    // whole-branch review: --filter silently did nothing for --format
+    // csv (an operator scoping a CSV export to a safe subset silently
+    // got everything instead), with no warning, while both this file's
+    // own USAGE text and commands/dataflow.md presented --filter as a
+    // universal option.
+    if (format === 'csv') {
+      process.stderr.write('agentic-security dataflow export: --filter has no effect on --format csv — CSV export does not support scoping yet.\n');
     }
   }
 
