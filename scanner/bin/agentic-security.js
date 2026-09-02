@@ -3175,6 +3175,20 @@ async function cmdDataflowExport(args) {
       process.stderr.write(`agentic-security dataflow export: could not read/parse --filter file "${args.flags.filter}": ${e.message}\n`);
       return 2;
     }
+    // Shape-validate rather than pass through whatever JSON.parse returned —
+    // found by Task 1's own review: exportGraphJSON's _filterGraph does
+    // `new Set(filter.nodeIds ?? [])`, and `new Set("not-an-array")`
+    // iterates a string as characters instead of throwing (a real JS
+    // foot-gun, reproduced live by the reviewer), so a malformed-but-valid
+    // --filter file silently produced an empty graph instead of a clear
+    // error. Only nodeIds/edgeIds are ever read by any consumer of this
+    // opts.filter — reject anything else here, before it reaches them.
+    if (typeof filter !== 'object' || filter === null || Array.isArray(filter)
+      || (filter.nodeIds !== undefined && !Array.isArray(filter.nodeIds))
+      || (filter.edgeIds !== undefined && !Array.isArray(filter.edgeIds))) {
+      process.stderr.write(`agentic-security dataflow export: --filter file "${args.flags.filter}" must be a JSON object of the form {"nodeIds":[...],"edgeIds":[...]} (both optional, but if present must be arrays).\n`);
+      return 2;
+    }
   }
 
   const { loadSignedGraph } = await import('../src/server/graph-loader.js');
@@ -3213,8 +3227,17 @@ async function cmdDataflowExport(args) {
   }
 
   const outAbs = path.resolve(outputPath);
-  await fsp.mkdir(path.dirname(outAbs), { recursive: true });
-  await fsp.writeFile(outAbs, data);
+  try {
+    await fsp.mkdir(path.dirname(outAbs), { recursive: true });
+    await fsp.writeFile(outAbs, data);
+  } catch (e) {
+    // Found by Task 1's own review, reproduced live (--output pointing at
+    // an existing directory: EISDIR): left unguarded, this escaped to
+    // main()'s generic top-level catch, printing a raw stack trace and
+    // exiting 4 instead of the documented clean 0/1/2 contract.
+    process.stderr.write(`agentic-security dataflow export: could not write --output "${outputPath}": ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
   process.stdout.write(`agentic-security dataflow export: wrote ${format} to ${outAbs}\n`);
   return 0;
 }

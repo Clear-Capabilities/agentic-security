@@ -223,3 +223,58 @@ test('dataflow export: --output with a non-existent parent directory creates it'
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('dataflow export: --output pointing at an existing directory is a clean exit-2 error, not a raw stack trace', () => {
+  // Found by Task 1's own review, reproduced live: the write-stage
+  // mkdir/writeFile originally sat outside the function's try/catch, so
+  // this escaped to main()'s generic top-level handler — a raw stack
+  // trace and exit 4, breaking the documented 0/1/2 contract.
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const outDir = path.join(root, 'already-a-directory');
+  fs.mkdirSync(outDir);
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'json', '--output', outDir], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /could not write --output/);
+    assert.ok(!/at async|at Object|node:internal/.test(r.stderr), 'must not leak a raw Node stack trace to the user');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow export: a malformed --filter shape (nodeIds not an array) is a clear exit-2 error, not silent data loss', () => {
+  // Found by Task 1's own review, reproduced live: exportGraphJSON's own
+  // _filterGraph does `new Set(filter.nodeIds ?? [])`, and
+  // `new Set("not-an-array")` iterates the string as characters instead
+  // of throwing — a malformed-but-valid-JSON --filter file silently
+  // produced an empty graph (exit 0) instead of a clear error.
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const filterFile = path.join(root, 'bad-filter.json');
+  fs.writeFileSync(filterFile, JSON.stringify({ nodeIds: 'not-an-array' }));
+  const outFile = path.join(root, 'out.json');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'json', '--output', outFile, '--filter', filterFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--filter file/);
+    assert.ok(!fs.existsSync(outFile), 'must not silently write a data-lossy export');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow export: a well-formed --filter is honored (positive control for the shape-validation guard)', () => {
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const filterFile = path.join(root, 'good-filter.json');
+  fs.writeFileSync(filterFile, JSON.stringify({ nodeIds: [] }));
+  const outFile = path.join(root, 'out.json');
+  try {
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'json', '--output', outFile, '--filter', filterFile], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(fs.existsSync(outFile));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
