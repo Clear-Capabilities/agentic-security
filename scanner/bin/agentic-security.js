@@ -139,6 +139,17 @@ Commands:
   scan-baseline --current <f> --previous <f>
                                Finding-level diff between two scan JSON outputs.
                                Reports added / removed / changed findings.
+  explore [path] [--port <n>] [--keep-open]
+                               Start a local, read-only server over an
+                               already-scanned lineage graph (run
+                               AGENTIC_SECURITY_LINEAGE_DEEP=1 scan first)
+  dataflow export [path] --format png|pdf|svg|json|csv|html --output <file>
+                               Export the already-scanned lineage graph.
+                               --view architecture|privacy|trace|inventory  (default: architecture)
+                               --size standard|2x    AC-23 pinned PNG sizes (default: standard)
+                               --width <n> --height <n>   custom PNG size (mutually exclusive with --size)
+                               --no-redact            include unredacted content (json/html only; no-op + warning for csv)
+                               --filter <path.json>   {nodeIds,edgeIds} to scope the export
 
 Options:
   --profile vibecoder|pro      Override profile for this run
@@ -3075,6 +3086,139 @@ async function cmdExplore(args) {
   });
 }
 
+// `agentic-security dataflow export [path] --format <fmt> --output <file>
+// [--view <name>] [--size standard|2x] [--width <n>] [--height <n>]
+// [--no-redact] [--filter <path>]` — Milestone 4, sub-project 5 (CLI +
+// slash commands). Wires the six already-shipped M4 export/report
+// functions (scanner/scripts/export-image.mjs's exportPng/exportPdf/
+// exportSvg, scanner/src/lineage/export-json.js's exportGraphJSON,
+// scanner/src/lineage/export-csv.js's exportFlowsCSV, and
+// scanner/scripts/generate-html-report.mjs's generateHtmlReport) into
+// one consistent CLI surface.
+//
+// Argument shape mirrors cmdExplore's own: scan root from args._[2]
+// (args._[0]='dataflow', args._[1]='export', so the path — if given —
+// is the THIRD positional), defaulting to cwd. Uses the identical
+// loadSignedGraph contract and error-message pass-through as cmdExplore
+// (scoping doc's own binding decision: never proceed past a graph-load
+// failure).
+//
+// Exit codes: 0 success. 1 graph-load failure (loadSignedGraph's own
+// four reasons). 2 export-stage failure — bad/missing flags, an
+// unsupported format+view combination (svg + non-architecture view,
+// rejected BEFORE any Chrome invocation — Chrome's own dump-failure
+// reason for this case is confusing, not a good user-facing error), or
+// a caught throw/{ok:false} from the underlying export function.
+const DATAFLOW_EXPORT_FORMATS = new Set(['png', 'pdf', 'svg', 'json', 'csv', 'html']);
+const DATAFLOW_EXPORT_VIEWS = new Set(['architecture', 'privacy', 'trace', 'inventory']);
+const DATAFLOW_EXPORT_SIZES = { standard: { width: 1680, height: 945 }, '2x': { width: 3360, height: 1890 } };
+
+async function cmdDataflowExport(args) {
+  const target = args._[2] || '.';
+  const targetAbs = path.resolve(target);
+
+  const format = args.flags.format;
+  if (!format || !DATAFLOW_EXPORT_FORMATS.has(format)) {
+    process.stderr.write(`agentic-security dataflow export: --format must be one of ${[...DATAFLOW_EXPORT_FORMATS].join('|')} (got ${JSON.stringify(format)}).\n`);
+    return 2;
+  }
+  const outputPath = args.flags.output;
+  if (!outputPath || typeof outputPath !== 'string') {
+    process.stderr.write('agentic-security dataflow export: --output <file> is required.\n');
+    return 2;
+  }
+  const view = args.flags.view || 'architecture';
+  if (!DATAFLOW_EXPORT_VIEWS.has(view)) {
+    process.stderr.write(`agentic-security dataflow export: --view must be one of ${[...DATAFLOW_EXPORT_VIEWS].join('|')} (got ${JSON.stringify(view)}).\n`);
+    return 2;
+  }
+  if (format === 'svg' && view !== 'architecture') {
+    process.stderr.write('agentic-security dataflow export: --format svg only supports --view architecture — only the Architecture View renders a real <svg> element.\n');
+    return 2;
+  }
+
+  const sizeFlag = args.flags.size;
+  const hasWidthHeight = args.flags.width !== undefined || args.flags.height !== undefined;
+  if (sizeFlag !== undefined && hasWidthHeight) {
+    process.stderr.write('agentic-security dataflow export: --size and --width/--height are mutually exclusive — pick one.\n');
+    return 2;
+  }
+  let width, height;
+  if (sizeFlag !== undefined) {
+    if (!Object.prototype.hasOwnProperty.call(DATAFLOW_EXPORT_SIZES, sizeFlag)) {
+      process.stderr.write(`agentic-security dataflow export: --size must be one of ${Object.keys(DATAFLOW_EXPORT_SIZES).join('|')} (got ${JSON.stringify(sizeFlag)}).\n`);
+      return 2;
+    }
+    ({ width, height } = DATAFLOW_EXPORT_SIZES[sizeFlag]);
+  } else if (hasWidthHeight) {
+    width = Number(args.flags.width);
+    height = Number(args.flags.height);
+    if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
+      process.stderr.write('agentic-security dataflow export: --width/--height must both be positive integers.\n');
+      return 2;
+    }
+  } else {
+    ({ width, height } = DATAFLOW_EXPORT_SIZES.standard);
+  }
+
+  const redact = args.flags['no-redact'] ? false : true;
+  if (!redact && format === 'csv') {
+    process.stderr.write('agentic-security dataflow export: --no-redact has no effect on --format csv — CSV export does not support redaction yet.\n');
+  }
+
+  let filter;
+  if (args.flags.filter) {
+    const filterPath = path.resolve(args.flags.filter);
+    try {
+      filter = JSON.parse(fs.readFileSync(filterPath, 'utf8'));
+    } catch (e) {
+      process.stderr.write(`agentic-security dataflow export: could not read/parse --filter file "${args.flags.filter}": ${e.message}\n`);
+      return 2;
+    }
+  }
+
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) {
+    process.stderr.write(`agentic-security dataflow export: ${loaded.message}\n`);
+    return 1;
+  }
+  const graph = loaded.graph;
+  const opts = { view, width, height, redact, filter };
+
+  let data;
+  try {
+    if (format === 'png' || format === 'pdf' || format === 'svg') {
+      const { exportPng, exportPdf, exportSvg } = await import('../scripts/export-image.mjs');
+      const fn = { png: exportPng, pdf: exportPdf, svg: exportSvg }[format];
+      const result = await fn(graph, opts);
+      if (!result.ok) {
+        process.stderr.write(`agentic-security dataflow export: ${result.reason}\n`);
+        return 2;
+      }
+      data = result.data;
+    } else if (format === 'json') {
+      const { exportGraphJSON } = await import('../src/lineage/export-json.js');
+      data = JSON.stringify(exportGraphJSON(graph, opts), null, 2);
+    } else if (format === 'csv') {
+      const { exportFlowsCSV } = await import('../src/lineage/export-csv.js');
+      data = exportFlowsCSV(graph);
+    } else if (format === 'html') {
+      const { generateHtmlReport } = await import('../scripts/generate-html-report.mjs');
+      data = generateHtmlReport(graph, opts);
+    }
+  } catch (e) {
+    process.stderr.write(`agentic-security dataflow export: export failed: ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
+
+  const outAbs = path.resolve(outputPath);
+  await fsp.mkdir(path.dirname(outAbs), { recursive: true });
+  await fsp.writeFile(outAbs, data);
+  process.stdout.write(`agentic-security dataflow export: wrote ${format} to ${outAbs}\n`);
+  return 0;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
@@ -3147,6 +3291,12 @@ async function main() {
         return;
       }
       case 'explore':  process.exit(await cmdExplore(args));
+      case 'dataflow': {
+        const sub = args._[1];
+        if (sub === 'export') { process.exit(await cmdDataflowExport(args)); }
+        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export" is supported.\n`);
+        process.exit(2);
+      }
       case 'cve-watch': {
         // Continuous CVE-watch daemon (one-shot). Polls OSV for the project's
         // dependency tree, fires the configured webhook on each new advisory.

@@ -866,7 +866,7 @@ function makeTaintProbe(perFileIR, callGraph) {
 
 async function runDeepAnalysisSafe(perFileIR, callGraph) {
   try {
-    const { runDeepAnalysis } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 7165));
+    const { runDeepAnalysis } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 2555));
     return runDeepAnalysis(perFileIR, callGraph, {});
   } catch {
     return null;
