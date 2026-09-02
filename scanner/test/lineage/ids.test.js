@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   graphId, nodeId, dataElementId, edgeId, flowId, transformationId, evidenceId,
-  provenanceNodeId, provenanceEdgeId, pathId,
+  provenanceNodeId, provenanceEdgeId, pathId, obligationId,
 } from '../../src/lineage/ids.js';
 
 test('graphId follows the dfg:<repo>:<commit>:<configHash> shape from PRD 10.2', () => {
@@ -204,4 +204,21 @@ test('C4/5c: pnode:/pedge: are distinct from node:/edge: and never match validat
   assert.ok(!/^edge:/.test(pe), 'a provenance edge id must never match the DataFlowGraph v1 edge: prefix regex');
   assert.match(pn, /^pnode:/);
   assert.match(pe, /^pedge:/);
+});
+
+test('obligationId is deterministic, correctly prefixed, and discriminates on every input field', () => {
+  const base = { framework: 'gdpr', frameworkVersion: '2016/679', requirementId: 'Art.30', graphId: 'dfg:repo:abc:default' };
+  const id = obligationId(base);
+  assert.match(id, /^obligation:[0-9a-f]{12}$/);
+  assert.equal(obligationId(base), id, 'same inputs must produce the same id');
+
+  assert.notEqual(obligationId({ ...base, framework: 'hipaa' }), id);
+  assert.notEqual(obligationId({ ...base, frameworkVersion: '2013' }), id);
+  assert.notEqual(obligationId({ ...base, requirementId: 'Art.32' }), id);
+  assert.notEqual(obligationId({ ...base, graphId: 'dfg:repo:def:default' }), id, 'the same (framework,requirement) pair against a different base graph must not collide');
+});
+
+test('obligationId honors an extra discriminator (e.g. for a re-evaluated mapping against the same graph)', () => {
+  const base = { framework: 'gdpr', frameworkVersion: '2016/679', requirementId: 'Art.30', graphId: 'dfg:repo:abc:default' };
+  assert.notEqual(obligationId(base, ['re-eval-2']), obligationId(base, ['re-eval-1']));
 });

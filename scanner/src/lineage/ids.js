@@ -134,3 +134,21 @@ export function transformationId(anchorId, calleeName, discriminatorParts = []) 
 export function evidenceId(claim, location, discriminatorParts = []) {
   return `evidence:${_hash(_canon([claim, location, ...discriminatorParts]))}`;
 }
+
+/**
+ * An ObligationMapping record's id (FR-504 §7.12, sub-project 6a) — NOT a
+ * DataFlowGraph v1 entity, so validate.js's id-prefix regexes and
+ * json-schema-parity.test.js's $defs audit need zero change, mirroring
+ * why provenanceNodeId/provenanceEdgeId are prefixed outside the
+ * node:/edge:/flow: family. Discriminated by
+ * (framework, frameworkVersion, requirementId, graphId) — the same
+ * (framework, requirement) pair evaluated against two different base
+ * graphs, or two different snapshots of the same repository, must never
+ * collide into one id.
+ */
+export function obligationId(
+  { framework, frameworkVersion, requirementId, graphId },
+  discriminatorParts = [],
+) {
+  return `obligation:${_hash(_canon([framework, frameworkVersion, requirementId, graphId, ...discriminatorParts]))}`;
+}
