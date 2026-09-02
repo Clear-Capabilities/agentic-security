@@ -66,6 +66,10 @@ function _resolveEvidenceForFact(fact, joins) {
     if (!flow) continue;
     const sourceNode = nodesById.get(flow.source);
     const sinkNode = nodesById.get(flow.sink);
+    // Reads only edgeIds[0] — mirrors obligation-predicates.js's own
+    // disclosed, currently-unreachable limitation (graph-builder.js always
+    // mints single-edge flows; see that module's own header) rather than
+    // inventing a different convention for the same case here.
     const edge = edgesById.get(_asArray(flow.edgeIds)[0]);
     const dataClasses = _asArray(flow.dataElementIds)
       .map((id) => dataElementsById.get(id))
