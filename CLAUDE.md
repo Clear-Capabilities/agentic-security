@@ -85,6 +85,7 @@ After any change to `scanner/src/` or `scanner/bin/`, run `npm run build` before
 Run attestation (posture/attestation.js) is a per-install SYMMETRIC HMAC — tamper-evidence for the operator, not third-party non-repudiation. posture/evidence-bundle.js is the other half: an Ed25519-signed bundle per FINDING, verifiable by someone who has only the public key.
 
 - agentic-security attest [--id <finding>] — writes signed bundles to .agentic-security/attestations/
+- agentic-security attest --obligations <framework-id> — signs a Data Flow Explorer Regulatory Obligation Overlay evidence pack (FR-504, `posture/obligation-evidence-pack.js`) for one bundled compliance framework's `graph:` facts, also written to .agentic-security/attestations/
 - agentic-security verify-attestation <bundle.json> --public-key <path> — exits 0 valid, 1 invalid
 
 A bundle PROVES its contents are unmodified since signing. It does NOT prove the finding is real — both statements are carried inside the bundle and are covered by the signature, so neither can be dropped or softened in transit. The attack it defeats is silently promoting an unproven finding to execution-proven.

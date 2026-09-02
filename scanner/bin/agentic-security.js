@@ -2430,6 +2430,67 @@ async function cmdAttest(args) {
     return 0;
   }
 
+  // Data Flow Explorer M4 sub-project 6c: a signed evidence pack for a
+  // Regulatory Obligation Overlay framework evaluation (FR-504). Unlike
+  // `--provenance` (a broad "attest everything" toggle with an optional
+  // narrowing id), `--obligations` genuinely REQUIRES a framework id — an
+  // evidence pack only exists per framework, and no "attest every
+  // framework" loop exists anywhere in this codebase.
+  if (args.flags.obligations) {
+    const frameworkId = args.flags.obligations === true ? null : args.flags.obligations;
+    if (!frameworkId) {
+      const { listFrameworks } = await import('../src/posture/auditor-walkthrough.js');
+      console.error('Usage: agentic-security attest --obligations <framework-id>');
+      console.error(`Bundled frameworks: ${listFrameworks(scanRoot).map((f) => f.id).join(', ')}`);
+      return 2;
+    }
+    const { loadFramework, evaluateFramework } = await import('../src/posture/auditor-walkthrough.js');
+    const {
+      buildObligationEvidencePack, signObligationEvidencePack, ensureKeyPair,
+    } = await import('../src/posture/obligation-evidence-pack.js');
+
+    let scan;
+    try { scan = JSON.parse(fs.readFileSync(statePath(scanRoot, 'last-scan.json'), 'utf8')); }
+    catch { console.error('No .agentic-security/last-scan.json — run a scan first.'); return 2; }
+
+    const fw = loadFramework(scanRoot, frameworkId);
+    if (!fw) { console.error(`Unknown framework: ${frameworkId}`); return 2; }
+
+    const evaluation = evaluateFramework(scanRoot, fw, scan);
+    const pack = buildObligationEvidencePack({
+      graph: scan.lineageGraph ?? null,
+      framework: fw,
+      evaluation,
+      scanHealth: scan.scanHealth ?? null,
+      engineVersion: scan.engineVersion || null,
+      rulesetVersion: scan.rulesetVersion || null,
+      bundleSha: scan.bundleSha || null,
+    });
+
+    const kp = ensureKeyPair();
+    if (kp.created) console.error(`Generated a new signing key at ${kp.privateKey} (public: ${kp.publicKey}).`);
+
+    const outDir = statePath(scanRoot, 'attestations');
+    fs.mkdirSync(outDir, { recursive: true });
+    const signed = signObligationEvidencePack(pack, kp.privateKeyPem);
+    const name = `evidence-pack-${frameworkId}.json`.replace(/[^\w.-]/g, '_');
+    fs.writeFileSync(path.join(outDir, name), JSON.stringify(signed, null, 2) + '\n');
+
+    console.log(`Signed evidence pack for ${frameworkId} → ${path.relative(scanRoot, path.join(outDir, name))}`);
+    console.log(`Public key (share this with whoever verifies): ${kp.publicKey}`);
+    console.log('');
+    console.log(`  facts: ${pack.facts.length}  unknown: ${pack.unknownItems.length}  manual: ${pack.manualItems.length}  accepted exceptions: ${pack.acceptedExceptions.length}`);
+    console.log('');
+    console.log('A pack proves its contents are unmodified since signing. It does NOT');
+    console.log('certify compliance — read the pack\'s own `disclaimer` field.');
+    if (!scan.lineageGraph) {
+      console.log('');
+      console.log('NOTE: this scan has no lineageGraph (AGENTIC_SECURITY_LINEAGE_DEEP=1 was');
+      console.log('not set) — every graph: fact in this pack reads "unknown", by design.');
+    }
+    return 0;
+  }
+
   const {
     ensureKeyPair, buildEvidenceBundle, signEvidenceBundle,
   } = await import('../src/posture/evidence-bundle.js');
@@ -2598,6 +2659,27 @@ async function cmdVerifyAttestation(args) {
     console.log('');
     console.log(`  proves:        ${bundle.proves}`);
     console.log(`  does NOT prove: ${bundle.doesNotProve}`);
+    return 0;
+  }
+
+  // Data Flow Explorer M4 sub-project 6c: an obligation evidence pack
+  // (schema: agentic-security/obligation-evidence-pack@1) is a fifth
+  // distinct shape this same command can be handed — same auto-detection
+  // chain as the ComplianceEvidence/provenance branches above, dispatched
+  // by schema marker. Must be checked BEFORE the fallback
+  // verifyEvidenceBundle() call below, which assumes evidence-bundle.js's
+  // own shape and would misinterpret an evidence pack.
+  const { verifyObligationEvidencePack, OBLIGATION_EVIDENCE_PACK_SCHEMA } = await import('../src/posture/obligation-evidence-pack.js');
+  if (bundle.schema === OBLIGATION_EVIDENCE_PACK_SCHEMA) {
+    const or = verifyObligationEvidencePack(bundle, publicKeyPem);
+    if (!or.ok) { console.error(`✗ INVALID — ${or.reason}`); return 1; }
+    console.log('✓ VALID — the evidence pack is exactly what the signer produced.');
+    console.log('');
+    console.log(`  framework: ${bundle.framework?.id}  version: ${bundle.framework?.version}`);
+    console.log(`  facts: ${bundle.facts?.length ?? 0}  unknown: ${bundle.unknownItems?.length ?? 0}  manual: ${bundle.manualItems?.length ?? 0}  accepted exceptions: ${bundle.acceptedExceptions?.length ?? 0}`);
+    if (bundle.graphDigest) console.log(`  graph digest: ${bundle.graphDigest}`);
+    console.log('');
+    console.log(`  ${bundle.disclaimer}`);
     return 0;
   }
 
