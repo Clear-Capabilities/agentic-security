@@ -3492,8 +3492,14 @@ async function cmdDataflowExport(args) {
     // install into a fresh consumer project. Give that one narrow case an
     // actionable message instead of a bare "Cannot find package
     // '@clear-capabilities/frontend'" that names a package the user has
-    // never heard of.
-    if ((format === 'dpia' || format === 'ropa') && e && e.code === 'ERR_MODULE_NOT_FOUND') {
+    // never heard of. Scoped re-review finding (fixed): checking only
+    // e.code === 'ERR_MODULE_NOT_FOUND' is too broad — it would also
+    // catch and mislabel an UNRELATED module-resolution failure (a real
+    // future bug, a genuinely broken install) with this same "you ran
+    // the raw bin file" message, masking it. Requiring the message to
+    // actually name the frontend import keeps this narrow to the one
+    // real case it was written for.
+    if ((format === 'dpia' || format === 'ropa') && e && e.code === 'ERR_MODULE_NOT_FOUND' && /privacy-view\.js/.test(e.message)) {
       process.stderr.write(`agentic-security dataflow export: export failed: --format ${format} could not load its frontend module (${e.message}). This usually means you ran the raw bin/agentic-security.js file directly out of an installed package instead of using the published \`agentic-security\`/\`as\` command (which is fully self-contained). Use the published command, or run from a full source checkout with frontend/ present alongside scanner/.\n`);
       return 2;
     }

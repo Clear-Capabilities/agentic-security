@@ -316,6 +316,79 @@ test('emitGraphDpiaArtifact: a governance value with a backtick and an embedded 
   }
 });
 
+// Scoped re-review of the BLOCKING-1 fix round (fixed): the fixed-length
+// double-backtick fence is not safe against a value containing its OWN
+// 2+ consecutive backticks — the value's own run closes the span early,
+// leaking the rest of the value (and anything after it) as raw Markdown
+// outside the code span. CommonMark's real rule is a fence one backtick
+// LONGER than the longest run anywhere in the content.
+test('emitGraphDpiaArtifact: a governance value containing two consecutive backticks does not prematurely close its code span', () => {
+  const scanRoot = _mkScanRoot();
+  try {
+    _writeGovernanceConfig(scanRoot, {
+      byClass: {
+        PHI: {
+          purpose: 'weird ``double backtick`` value',
+        },
+      },
+    });
+    const graph = _buildRealGraphViaScan(PHI_SOURCE, { scanRoot });
+    assert.ok(graph.flows.length >= 1, 'fixture assumption drifted: expected at least one real PHI flow');
+
+    const dpia = emitGraphDpiaArtifact(graph, {});
+    // A 3-backtick fence (one longer than the value's own longest
+    // 2-backtick run) keeps the whole value inside a single span.
+    assert.match(dpia, /``` weird ``double backtick`` value ```/);
+    // The pre-fix double-backtick fence would have closed at the
+    // value's own first `` and left the rest as unfenced raw text —
+    // assert that never happens (no `` `` `` appearing right after
+    // "weird " unpaired with the rest of the value in one fence).
+    assert.doesNotMatch(dpia, /`` weird ``\n/);
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
+  }
+});
+
+// Scoped re-review of the BLOCKING-1 fix round (fixed): _mdCell escaped
+// `|` but not a pre-existing `\` — a value already containing a literal
+// `\|` (e.g. a Windows path fragment) became `\\|` in the emitted
+// Markdown, which reads as an escaped backslash followed by a STILL-LIVE
+// `|` column delimiter, still corrupting the table.
+test('emitGraphRopaArtifact: a governance value containing a literal backslash immediately before a "|" does not corrupt the table', () => {
+  const scanRoot = _mkScanRoot();
+  try {
+    _writeGovernanceConfig(scanRoot, {
+      byClass: {
+        PHI: {
+          recipient: 'C:\\Payments|Ltd',
+        },
+      },
+    });
+    const graph = _buildRealGraphViaScan(PHI_SOURCE, { scanRoot });
+    assert.ok(graph.flows.length >= 1, 'fixture assumption drifted: expected at least one real PHI flow');
+
+    const ropa = emitGraphRopaArtifact(graph, {});
+    const lines = ropa.split('\n');
+    const headerIdx = lines.findIndex((l) => l.startsWith('| Data class |'));
+    assert.ok(headerIdx >= 0, 'RoPA table header must be present');
+    const headerCellCount = lines[headerIdx].split(' | ').length;
+    let i = headerIdx + 2;
+    let dataRowsChecked = 0;
+    while (i < lines.length && lines[i].startsWith('|')) {
+      const cellCount = lines[i].split(' | ').length;
+      assert.equal(cellCount, headerCellCount, `row ${i} column count drifted — a "\\|"-containing value broke the table: ${JSON.stringify(lines[i])}`);
+      dataRowsChecked++;
+      i++;
+    }
+    assert.ok(dataRowsChecked > 0, 'test setup must produce at least one real data row');
+    // The backslash itself is doubled (the standard Markdown escape),
+    // and the pipe stays escaped behind it — both survive as literal text.
+    assert.match(ropa, /C:\\\\Payments\\\|Ltd/);
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
+  }
+});
+
 // Final whole-branch review, RECOMMENDED 2 (fixed via disclosure): a flow
 // spanning more than one data class carries a SINGLE governanceRefs record
 // already merged (worst-case-wins) across ALL of its own classes back at

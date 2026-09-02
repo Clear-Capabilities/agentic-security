@@ -377,17 +377,29 @@ function _mdInline(value) {
 }
 
 /** _mdInline, plus pipe-escaping for a Markdown table cell — an
- * unescaped `|` in a cell value shifts every later column in that row. */
+ * unescaped `|` in a cell value shifts every later column in that row.
+ * Backslashes are escaped FIRST: a value already containing a literal
+ * `\|` (e.g. a Windows path fragment, a regex snippet) would otherwise
+ * become `\\|` — in Markdown that reads as an escaped backslash followed
+ * by a still-live, still-unescaped `|` column delimiter. */
 function _mdCell(value) {
-  return _mdInline(value).replace(/\|/g, '\\|');
+  return _mdInline(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 }
 
 /** Wrap a value in a Markdown inline-code span, safe even when the value
- * itself contains a backtick (falls back to a padded double-backtick
- * fence, the standard Markdown escape for that case). */
+ * itself contains backticks. CommonMark's own general rule: the fence
+ * must be one backtick longer than the longest run of consecutive
+ * backticks anywhere in the content, padded with a space on each side —
+ * a fixed double-backtick fence (this function's own earlier version)
+ * is not safe against a value containing 2+ CONSECUTIVE backticks, since
+ * the value's own run would then close the span early. */
 function _mdCode(value) {
   const s = _mdInline(value);
-  return s.includes('`') ? `\`\` ${s} \`\`` : `\`${s}\``;
+  const runs = s.match(/`+/g);
+  const maxRun = runs ? Math.max(...runs.map((r) => r.length)) : 0;
+  if (maxRun === 0) return `\`${s}\``;
+  const fence = '`'.repeat(maxRun + 1);
+  return `${fence} ${s} ${fence}`;
 }
 
 function _scopedViewModel(graph, filter) {
