@@ -175,6 +175,49 @@ test('opts.filter genuinely narrows the DPIA/RoPA output to the selected flow on
   }
 });
 
+// A real PII field (req.body.email -> classifies as PII) alongside a
+// real, genuinely UNCLASSIFIED field (req.query.page -> classifies to
+// [], the same real shape as
+// bench/data-lineage/fixtures/js-http-query-to-log-unclassified-clean),
+// both reaching the same log sink as two distinct flows. Verified live.
+const MIXED_CLASS_SOURCE = `
+  function handleList(req, logger) {
+    const email = req.body.email;
+    logger.info('collected', email);
+    const page = req.query.page;
+    logger.info('listing page', page);
+  }
+`;
+
+test('emitGraphDpiaArtifact: a flow with NO classified data class is still disclosed, never silently dropped from the whole document', () => {
+  // Task-2 review finding (non-blocking, fixed): _groupRowsByClass's bare
+  // `for (const cls of row.dataClasses)` never iterated for an empty
+  // array, so an unclassified flow contributed NOTHING to the DPIA —
+  // not merely ungrouped, genuinely invisible, no count, no mention —
+  // for a document whose entire purpose is a complete inventory. Fixed
+  // to fall back to the same '(unclassified)' bucket RoPA's own sibling
+  // loop already used. Mutation-verified: reverting the fallback
+  // reproduces the flow vanishing from BOTH the DPIA's text and its own
+  // flow count here.
+  const graph = _buildRealGraph(MIXED_CLASS_SOURCE);
+  assert.equal(graph.flows.length, 2, 'fixture assumption drifted: expected one PII flow + one unclassified flow');
+  const unclassifiedFlow = graph.flows.find((f) => {
+    const de = graph.dataElements.find((d) => d.id === f.dataElementIds[0]);
+    return (de?.dataClasses ?? []).length === 0;
+  });
+  assert.ok(unclassifiedFlow, 'fixture assumption drifted: expected a real unclassified flow');
+
+  const dpia = emitGraphDpiaArtifact(graph, {});
+  assert.match(dpia, /PII/);
+  assert.match(dpia, /\(unclassified\)/, 'the unclassified flow must be disclosed somewhere in the DPIA, not silently dropped');
+
+  const ropa = emitGraphRopaArtifact(graph, {});
+  // Both documents must agree on how many real flows exist in scope —
+  // the review's own repro found the DPIA and RoPA disagreeing here
+  // pre-fix (RoPA already counted 2, the DPIA counted/mentioned only 1).
+  assert.match(ropa, /2 flow\(s\)/);
+});
+
 test('an empty graph (no flows) produces the honest "no regulated data" message for both functions, never a crash', () => {
   const graph = _emptyGraph();
   assert.equal(graph.flows.length, 0, 'test setup must genuinely produce zero flows');

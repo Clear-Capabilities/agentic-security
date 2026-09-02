@@ -41,11 +41,29 @@ function _scopedViewModel(graph, filter) {
   return computePrivacyViewModel(scopedGraph, _emptyState(), null);
 }
 
-/** Group computePrivacyViewModel's rows by data class, mirroring emitDpiaArtifact's own grouping. */
+/**
+ * Group computePrivacyViewModel's rows by data class, mirroring
+ * emitDpiaArtifact's own grouping.
+ *
+ * Task-2 review finding (non-blocking, fixed): the old taint-engine
+ * emitDpiaArtifact's identical grouping code was safe only because its
+ * input (piiFields) was pre-filtered to classified fields by
+ * construction — it never saw an unclassified field at all. This
+ * function draws from EVERY graph flow via computePrivacyViewModel, so a
+ * bare `for (const cls of row.dataClasses)` silently drops any flow
+ * whose dataClasses is [] from the whole document — not merely
+ * ungrouped, genuinely INVISIBLE, with no count, no mention, nothing —
+ * for a document whose entire purpose is a complete inventory. RoPA's
+ * own sibling loop already falls back to a '(unclassified)' bucket
+ * (mirroring the same sentinel resolveGovernanceRefs's default hook
+ * uses in coverage.js, Task 1's own fix round); mirrored here so the two
+ * artifacts never disagree about how many real flows exist in scope.
+ */
 function _groupRowsByClass(rows) {
   const grouped = new Map();
   for (const row of rows) {
-    for (const cls of row.dataClasses) {
+    const classes = row.dataClasses.length ? row.dataClasses : ['(unclassified)'];
+    for (const cls of classes) {
       let g = grouped.get(cls);
       if (!g) { g = []; grouped.set(cls, g); }
       g.push(row);
