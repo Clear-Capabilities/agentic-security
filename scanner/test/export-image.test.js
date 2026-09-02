@@ -98,13 +98,12 @@ itChrome('exportPng: a temp dir containing "#" does not silently render Chrome\'
   }
 });
 
-itChrome('exportPng: a malformed AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS degrades to the default, never throws', async () => {
-  // Number('oops') is NaN, and NaN as spawnSync's `timeout` option
-  // throws ERR_OUT_OF_RANGE synchronously — a fresh module instance
-  // (cache-busted query string) is required because the timeout is
-  // computed once, at module load.
+// Shared by every malformed-timeout-env-var case below. A fresh module
+// instance (cache-busted query string) is required because the timeout
+// is computed once, at module load.
+async function _assertMalformedRenderTimeoutDegradesToDefault(envValue) {
   const prev = process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS;
-  process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS = 'oops';
+  process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS = envValue;
   try {
     const mod = await import(`../scripts/export-image.mjs?bustcache=${Date.now()}-${Math.random()}`);
     const r = await mod.exportPng(flagship, { width: 1680, height: 945 });
@@ -113,6 +112,30 @@ itChrome('exportPng: a malformed AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS degra
     if (prev === undefined) delete process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS;
     else process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS = prev;
   }
+}
+
+itChrome('exportPng: a malformed (non-numeric) AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS degrades to the default, never throws', async () => {
+  // Number('oops') is NaN, and NaN as spawnSync's `timeout` option
+  // throws ERR_OUT_OF_RANGE synchronously.
+  await _assertMalformedRenderTimeoutDegradesToDefault('oops');
+});
+
+itChrome('exportPng: a blank AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS degrades to the default, not to a real 0 (no timeout)', async () => {
+  // Number('') is 0, and a naive `n >= 0` guard let an empty-but-exported
+  // env var through as a real `timeout: 0` — which spawnSync treats as
+  // NO timeout at all, an unbounded-hang risk — found by a scoped
+  // re-review of this file's first attempt at this guard.
+  await _assertMalformedRenderTimeoutDegradesToDefault('');
+});
+
+itChrome('exportPng: a fractional AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS degrades to the default, never throws', async () => {
+  // Number.isFinite(1.5) is true, so a naive finite-number guard passed
+  // a fractional value straight through to spawnSync's `timeout` option,
+  // which requires a safe INTEGER and throws ERR_OUT_OF_RANGE for any
+  // non-integer — found live by a second scoped re-review, reproducing
+  // the exact original NaN-throw symptom for a different malformed
+  // input.
+  await _assertMalformedRenderTimeoutDegradesToDefault('1.5');
 });
 
 test('exportPng: a clear, non-throwing error when Chrome is genuinely unavailable', async () => {

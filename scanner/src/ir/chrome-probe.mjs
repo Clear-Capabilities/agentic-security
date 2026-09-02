@@ -28,11 +28,23 @@ let _capability = null;
 // parser-py-cst.js's own probePythonAvailable() is already careful
 // about. An explicit `"0"` is still honored (matches this file's
 // pre-fix behavior for that literal value).
+//
+// Must be a safe INTEGER, not merely finite — found by a second scoped
+// re-review, reproduced live: `Number.isFinite(1.5)` is true, so a
+// fractional env var (e.g. "1.5") passed this guard unchanged and then
+// hit spawnSync's own `timeout` option, which throws ERR_OUT_OF_RANGE
+// for any non-integer — the exact class of uncaught throw this whole
+// function exists to prevent, just for a different malformed input
+// than the original NaN case. `-0` is rejected too (Object.is check):
+// it is a safe integer and `-0 >= 0`, so without the explicit check it
+// would silently mean "no timeout", one character away from the "0"
+// this function deliberately allows.
 function _validTimeoutMs(raw, fallback) {
   const s = String(raw ?? '').trim();
   if (!s) return fallback;
   const n = Number(s);
-  return Number.isFinite(n) && n >= 0 ? n : fallback;
+  if (!Number.isSafeInteger(n) || n < 0 || Object.is(n, -0)) return fallback;
+  return n;
 }
 const PROBE_TIMEOUT_MS = _validTimeoutMs(process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS, 5000);
 

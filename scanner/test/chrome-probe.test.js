@@ -60,26 +60,26 @@ test('probeChromeAvailable: a bogus AGENTIC_SECURITY_CHROME_PATH degrades cleanl
   }
 });
 
-test('probeChromeAvailable: a malformed AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS degrades to the default instead of throwing', async () => {
-  // Number('oops') is NaN, and NaN as spawnSync's `timeout` option throws
-  // ERR_OUT_OF_RANGE synchronously — found by the final whole-branch
-  // review. _tryBinary's own try/catch happened to swallow that throw,
-  // but then misreported no-chrome-found even on a machine with a
-  // genuinely working Chrome, since spawnSync throws for EVERY
-  // candidate. A fresh module instance (cache-busted query string) is
-  // required because the timeout is computed once, at module load.
-  //
-  // Compared against a real baseline probe (env unset), not merely
-  // asserting "any well-shaped {ok:false}" — found by this fix's own
-  // scoped re-review: the bug's own wrong answer (no-chrome-found on a
-  // machine with working Chrome) IS a well-shaped {ok:false, reason:
-  // string}, so the weaker assertion passed with the bug fully present.
+// Shared by every malformed-timeout-env-var case below. Compared
+// against a real baseline probe (env unset), not merely asserting "any
+// well-shaped {ok:false}" — found by this fix's own scoped re-review:
+// a bug that makes the probe wrongly report no-chrome-found on a
+// machine with working Chrome IS a well-shaped {ok:false, reason:
+// string}, so the weaker assertion passed with that exact bug present.
+// A fresh module instance (cache-busted query string) is required
+// because the timeout is computed once, at module load. Only
+// meaningful when this machine actually has Chrome — with none, the
+// baseline is itself {ok:false} and the comparison passes vacuously
+// (mirrors the honest early-return the PATH-ordering test above uses
+// for its own no-real-Chrome case).
+async function _assertMalformedTimeoutDegradesToDefault(envValue) {
   resetChromeProbe();
   const baseline = probeChromeAvailable();
   resetChromeProbe();
+  if (!baseline.ok) return;
 
   const prev = process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS;
-  process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS = 'oops';
+  process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS = envValue;
   try {
     const mod = await import(`../src/ir/chrome-probe.mjs?bustcache=${Date.now()}-${Math.random()}`);
     mod.resetChromeProbe();
@@ -90,6 +90,33 @@ test('probeChromeAvailable: a malformed AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS
     else process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS = prev;
     resetChromeProbe();
   }
+}
+
+test('probeChromeAvailable: a malformed (non-numeric) AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS degrades to the default instead of throwing', async () => {
+  // Number('oops') is NaN, and NaN as spawnSync's `timeout` option throws
+  // ERR_OUT_OF_RANGE synchronously — found by the final whole-branch
+  // review. _tryBinary's own try/catch happened to swallow that throw,
+  // but then misreported no-chrome-found even on a machine with a
+  // genuinely working Chrome, since spawnSync throws for EVERY candidate.
+  await _assertMalformedTimeoutDegradesToDefault('oops');
+});
+
+test('probeChromeAvailable: a blank AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS degrades to the default, not to a real 0 (no timeout)', async () => {
+  // Number('') is 0, and a naive `n >= 0` guard let an empty-but-exported
+  // env var through as a real `timeout: 0` — which spawnSync treats as
+  // NO timeout at all, an unbounded-hang risk — found by a scoped
+  // re-review of this file's first attempt at this guard.
+  await _assertMalformedTimeoutDegradesToDefault('');
+});
+
+test('probeChromeAvailable: a fractional AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS degrades to the default instead of throwing', async () => {
+  // Number.isFinite(1.5) is true, so a naive finite-number guard passed
+  // a fractional value straight through to spawnSync's `timeout` option,
+  // which requires a safe INTEGER and throws ERR_OUT_OF_RANGE for any
+  // non-integer — found live by a second scoped re-review, reproducing
+  // the exact original NaN-throw symptom for a different malformed
+  // input.
+  await _assertMalformedTimeoutDegradesToDefault('1.5');
 });
 
 test('probeChromeAvailable: prefers a known absolute install path over a same-named binary earlier on PATH', () => {

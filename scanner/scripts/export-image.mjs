@@ -28,14 +28,24 @@ import { probeChromeAvailable } from '../src/ir/chrome-probe.mjs';
 // real `timeout: 0`, which spawnSync treats as NO timeout at all — an
 // unbounded-hang risk on a wedged Chrome. An explicit `"0"` is still
 // honored (matches this file's pre-fix behavior for that literal
-// value). Kept identical to chrome-probe.mjs's own copy of this
-// function rather than factored into a shared module — two three-line
+// value).
+//
+// Must be a safe INTEGER, not merely finite — found by a second scoped
+// re-review, reproduced live: `Number.isFinite(1.5)` is true, so a
+// fractional env var (e.g. "1.5") passed this guard unchanged and then
+// hit spawnSync's own `timeout` option, which throws ERR_OUT_OF_RANGE
+// for any non-integer. `-0` is rejected too (Object.is check): it is a
+// safe integer and `-0 >= 0`, so it would otherwise silently mean "no
+// timeout", one character away from the "0" this function deliberately
+// allows. Kept identical to chrome-probe.mjs's own copy of this
+// function rather than factored into a shared module — two small
 // functions, not worth a new shared file for.
 function _validTimeoutMs(raw, fallback) {
   const s = String(raw ?? '').trim();
   if (!s) return fallback;
   const n = Number(s);
-  return Number.isFinite(n) && n >= 0 ? n : fallback;
+  if (!Number.isSafeInteger(n) || n < 0 || Object.is(n, -0)) return fallback;
+  return n;
 }
 const RENDER_TIMEOUT_MS = _validTimeoutMs(process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS, 15000);
 
