@@ -327,7 +327,7 @@ test('M2A1/wire-4: the resulting graph is validateGraph()-clean with real, non-n
 
 // ── isolation / reuse boundary ──
 
-test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, path-query.js, graph-builder.js, resolve-destination.js (Milestone 2, Sub-project A, increment 1), and transit-protection.js (Milestone 2, Sub-project B, increment 2)', async () => {
+test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, path-query.js, graph-builder.js, resolve-destination.js (Milestone 2, Sub-project A, increment 1), transit-protection.js (Milestone 2, Sub-project B, increment 2), and dataflow/privacy-governance.js (M4 deliverable #10, DFG-020 — reused UNMODIFIED, never re-implemented)', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../../src/lineage/coverage.js', import.meta.url), 'utf8');
   // MUST-FIX 2: the sibling boundary-test pattern (path-store.test.js,
@@ -336,5 +336,5 @@ test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, pat
   // that weaker pattern let 4 of 5 mutants adding '../dataflow/engine.js'
   // (the exact import this boundary exists to forbid) slip past undetected.
   const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
-  assert.deepEqual(specifiers.sort(), ['./graph-builder.js', './path-query.js', './resolve-destination.js', './sink-registry.js', './transit-protection.js']);
+  assert.deepEqual(specifiers.sort(), ['../dataflow/privacy-governance.js', './graph-builder.js', './path-query.js', './resolve-destination.js', './sink-registry.js', './transit-protection.js']);
 });

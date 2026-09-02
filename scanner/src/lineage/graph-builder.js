@@ -872,7 +872,17 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       protectionSummary,
       evidenceRefs: policyEvidenceRefs,
       confidence: g.grade === 'explicit' ? { score: 0.8, tier: 'high' } : { score: 0.5, tier: 'medium' },
-      coverageStatus: snk.coverageStatus, findingRefs: [], governanceRefs: {},
+      // Deliverable #10 (DFG-020, graph-derived DPIA/RoPA migration):
+      // opts.resolveGovernanceRefs(dataClasses) -> governance-field record,
+      // applied at this exact mint point — same additive-hook shape every
+      // sibling hook in this file uses (resolveSiteDecision/resolveDestination/
+      // resolveTransitProtection), byte-identical graph when omitted. Never
+      // fabricates a governance fact — the hook itself (composed by
+      // coverage.js's default) only ever attaches operator-supplied config or
+      // the MANUAL_REQUIRED sentinel dataflow/privacy-governance.js already
+      // establishes; this mint site has no opinion of its own.
+      coverageStatus: snk.coverageStatus, findingRefs: [],
+      governanceRefs: opts.resolveGovernanceRefs?.(de.dataClasses ?? []) ?? {},
       limitations,
       evidenceGrade: g.grade,
       handling: handlingResult,

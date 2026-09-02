@@ -70,6 +70,11 @@ import { resolveDestination } from './resolve-destination.js';
 // module cycle here (unlike `resolve-destination.js`) — `transit-protection.js`
 // never imports anything back from this file.
 import { resolveTransitProtectionForSite } from './transit-protection.js';
+// Deliverable #10 (DFG-020, graph-derived DPIA/RoPA migration): reused
+// UNMODIFIED, per the plan's own Global Constraints — this module never
+// re-implements governance-field lookup, only composes the default hook
+// `graph-builder.js`'s `opts.resolveGovernanceRefs` expects.
+import { governanceRecordFor, GOVERNANCE_FIELDS } from '../dataflow/privacy-governance.js';
 
 // =========================================================================
 // FR-203 — the destination-unresolved heuristic.
@@ -452,6 +457,33 @@ export function buildGraphWithCoverage(callGraph, opts = {}) {
     resolveDestination: opts.resolveDestination ?? resolveDestination,
     resolveTransitProtection: opts.resolveTransitProtection
       ?? ((site) => resolveTransitProtectionForSite(site, opts.transitEvidenceByFile ?? new Map())),
+    // Deliverable #10 (DFG-020): opts.resolveGovernanceRefs, composed the
+    // same way every sibling hook is — a caller-supplied hook always wins.
+    // The default closes over opts.privacyGovernanceConfig, a PRE-LOADED
+    // config object (mirroring opts.transitEvidenceByFile's own
+    // single-computation-per-buildLineageGraph-call discipline — never
+    // read the filesystem itself here).
+    resolveGovernanceRefs: opts.resolveGovernanceRefs
+      ?? ((dataClasses) => {
+        const record = {};
+        for (const cls of dataClasses) {
+          const clsRecord = governanceRecordFor(cls, opts.privacyGovernanceConfig ?? null);
+          for (const field of GOVERNANCE_FIELDS) {
+            // Worst-case-wins across multiple data classes on one flow,
+            // mirroring this package's own established
+            // aggregateVerdicts()-style precedent (protection.js) rather
+            // than silently picking whichever data class happened to be
+            // iterated last: an operator-provided value only wins over an
+            // already-recorded operator-provided value for the SAME field
+            // if this is the first class seen; MANUAL_REQUIRED never
+            // overwrites an already-resolved operator-provided value.
+            if (!record[field] || record[field].source === 'manual_required') {
+              record[field] = clsRecord[field];
+            }
+          }
+        }
+        return record;
+      }),
   });
   built.graph.coverage = buildCoverageLedger(built, opts);
   return built;

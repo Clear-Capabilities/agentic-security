@@ -28,6 +28,15 @@ import { scanTransitEvidence } from './transit-protection.js';
 // line above — never re-loaded at a lower layer (`coverage.js`/
 // `graph-builder.js` both only ever consume the already-loaded object).
 import { loadPrivacySinkPolicy } from '../dataflow/privacy-sink-policy.js';
+// Deliverable #10 (DFG-020, graph-derived DPIA/RoPA migration): loaded
+// ONCE, here — mirroring `loadPrivacySinkPolicy`'s own single-computation
+// discipline one block below. Unlike that policy load, no existence-gating
+// is needed: `loadPrivacyGovernanceConfig` already has its own honest empty
+// default ({byClass: {}, default: {}} — never throws), and
+// `governanceRecordFor` already resolves an empty config to MANUAL_REQUIRED
+// for every field, which is the correct, honest answer when no
+// .agentic-security/privacy-governance.json exists on disk.
+import { loadPrivacyGovernanceConfig } from '../dataflow/privacy-governance.js';
 import { statePath } from '../posture/state-dir.js';
 
 /**
@@ -122,6 +131,12 @@ export function buildLineageGraph(callGraph, opts = {}) {
     const privacySinkPolicy = _policyFile && fs.existsSync(_policyFile)
       ? loadPrivacySinkPolicy(opts.scanRoot)
       : undefined;
+    // Deliverable #10 (DFG-020): the operator's privacy governance config,
+    // loaded exactly once, here — mirroring privacySinkPolicy's own
+    // single-load precedent immediately above it. See this file's own
+    // import comment for why no existence-gating is needed here, unlike
+    // privacySinkPolicy.
+    const privacyGovernanceConfig = loadPrivacyGovernanceConfig(opts.scanRoot);
     const built = buildGraphWithCoverage(callGraph, {
       repository: opts.repository,
       generatedAt: opts.deterministic ? undefined : new Date().toISOString(),
@@ -129,6 +144,7 @@ export function buildLineageGraph(callGraph, opts = {}) {
       parseFailures: opts.parseFailures,
       transitEvidenceByFile: transitEvidence,
       privacySinkPolicy,
+      privacyGovernanceConfig,
       environment: opts.environment,
     });
     return { status: 'complete', graph: built.graph, transitEvidence, failure: null, elapsedMs: Date.now() - t0 };
