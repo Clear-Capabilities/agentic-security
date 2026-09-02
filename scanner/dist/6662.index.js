@@ -5,6 +5,7 @@ export const modules = {
 /***/ 6662:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
+__webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   evaluateDriftPolicies: () => (/* binding */ evaluateDriftPolicies),
 /* harmony export */   loadDriftPolicies: () => (/* binding */ loadDriftPolicies)

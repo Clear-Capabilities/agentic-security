@@ -1,6 +1,6 @@
 ---
-description: Export the Data Flow Explorer graph, or diff two scanned snapshots and evaluate drift policies.
-argument-hint: "export|diff [path] [options] --output <file> --format <fmt>"
+description: Export the Data Flow Explorer graph, diff two scanned snapshots, or watch for live drift while you edit.
+argument-hint: "export|diff|watch [path] [options] --output <file> --format <fmt>"
 ---
 
 ## Data Flow Explorer export
@@ -88,6 +88,57 @@ incomparable snapshot pair, a malformed `--drift-policy` file); `1` when
 /dataflow diff --output diff.md --format markdown
 /dataflow diff --output diff.json --format json --against a1b2c3d
 /dataflow diff --output diff.json --format json --drift-policy drift-policy.json --fail-on-drift
+```
+
+## Data Flow Explorer watch
+
+Re-runs a deep lineage scan (`AGENTIC_SECURITY_LINEAGE_DEEP=1`, set
+automatically) on every debounced file-system change under `path`, and
+reports the real `GraphDiff` between the previous and current in-memory
+graph on stderr — the live-editing counterpart to `diff` above. Blocks
+until `Ctrl-C` (or the process is otherwise terminated), like the existing
+`/scan --watch`.
+
+**Two deliberate, disclosed scope boundaries — read before relying on
+this in a workflow:**
+
+- **Never persists a `GraphSnapshot`.** The "before" state for each
+  comparison lives purely in memory for the life of the watch process —
+  it never calls `persistGraphSnapshot`, and it never writes to
+  `.agentic-security/lineage-snapshots/`. Every rescan before an actual
+  `git commit` resolves to the same commit-keyed history slot, so
+  persisting on every debounced edit would silently overwrite real,
+  committed snapshot history with transient, mid-edit graph state.
+  Nothing this command does is visible to a later `dataflow diff` run.
+- **Never refreshes `.agentic-security/lineage-graph.json`.** An
+  already-running `agentic-security explore` session has no live-reload
+  mechanism at all (it loads the graph once, before the server starts),
+  so this command intentionally does not chase a target that would not
+  be visible anyway. To pick up edits in `explore`, stop the watch, run a
+  normal scan (`AGENTIC_SECURITY_LINEAGE_DEEP=1`), and restart `explore`.
+
+### Options
+
+| Flag | Required | Notes |
+|---|---|---|
+| `--drift-policy <path-to-json>` | No | Same `{"policies":[...]}` rule file `diff` accepts. On each rescan, any triggering rule is printed as a louder, clearly-marked block in the live stderr stream (never a separate file). Omitting this flag skips policy evaluation entirely. A malformed policy file is a clear exit-2 error, before the watcher ever starts. |
+| `--fail-on-drift` | No | **Only affects print volume, never the exit code** — there is no single exit code to gate for a process that runs indefinitely. A detected violation prints with a louder marker; the process keeps watching either way. |
+
+No `--output`/`--format` — unlike `export`/`diff`, this command's whole
+output IS its live stderr stream.
+
+Exit codes: `2` on a usage/argument error (a malformed `--drift-policy`
+file), before the watcher ever starts; `1` when the seed scan cannot
+produce a data-flow graph at all (nothing to watch/diff against) — also
+before the watcher starts; otherwise the process does not exit on its own
+and has no "success" exit code — it runs until stopped.
+
+### Examples
+
+```
+/dataflow watch
+/dataflow watch ./my-service
+/dataflow watch . --drift-policy drift-policy.json --fail-on-drift
 ```
 
 ## Implementation

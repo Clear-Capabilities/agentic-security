@@ -3784,6 +3784,36 @@ function _renderDataflowDiffMarkdown(diff, violations, beforeSnapshot, afterSnap
   return lines.join('\n');
 }
 
+// Shared between `dataflow diff` and `dataflow watch` — parse-then-shape-
+// check a --drift-policy file BEFORE ever calling loadDriftPolicies.
+// loadDriftPolicies (src/lineage/drift-policy.js) never throws — a
+// malformed file degrades to {policies: []} with only a console.error
+// warning, matching loadPrivacySinkPolicy's own precedent. That is the
+// right default for a LOADER with no caller-facing error channel, but both
+// CLI commands' own exit-code contracts explicitly promise exit 2 for "a
+// malformed --drift-policy file" — so the malformed-JSON case, AND the
+// wrong-top-level-shape case (syntactically valid JSON, wrong shape, which
+// previously loaded zero rules with zero warning — sub-project 8b's own fix
+// round, Important 2), are both detected independently, here, before
+// delegating to the real loader for the actual (identically-parsed) policy
+// content. `cmdLabel` names the subcommand ("diff"/"watch") in the error
+// text. Returns `{ok:true}` or `{ok:false, message}` — never throws.
+function _validateDriftPolicyFile(driftPolicyAbs, driftPolicyFlag, cmdLabel) {
+  if (!fs.existsSync(driftPolicyAbs)) {
+    return { ok: false, message: `agentic-security dataflow ${cmdLabel}: --drift-policy file "${driftPolicyFlag}" does not exist.\n` };
+  }
+  let parsedDriftPolicy;
+  try {
+    parsedDriftPolicy = JSON.parse(fs.readFileSync(driftPolicyAbs, 'utf8'));
+  } catch (e) {
+    return { ok: false, message: `agentic-security dataflow ${cmdLabel}: could not parse --drift-policy file "${driftPolicyFlag}": ${e.message}\n` };
+  }
+  if (!parsedDriftPolicy || typeof parsedDriftPolicy !== 'object' || Array.isArray(parsedDriftPolicy) || !Array.isArray(parsedDriftPolicy.policies)) {
+    return { ok: false, message: `agentic-security dataflow ${cmdLabel}: --drift-policy file "${driftPolicyFlag}" must be a JSON object of the form {"policies":[...]} (got a different shape).\n` };
+  }
+  return { ok: true };
+}
+
 async function cmdDataflowDiff(args) {
   const target = args._[2] || '.';
   const targetAbs = path.resolve(target);
@@ -3868,36 +3898,9 @@ async function cmdDataflowDiff(args) {
   const driftPolicyProvided = driftPolicyFlag !== undefined;
   if (driftPolicyProvided) {
     const driftPolicyAbs = path.resolve(driftPolicyFlag);
-    // loadDriftPolicies (src/lineage/drift-policy.js) never throws — a
-    // malformed file degrades to {policies: []} with only a console.error
-    // warning, matching loadPrivacySinkPolicy's own precedent. That is the
-    // right default for a LOADER with no caller-facing error channel, but
-    // this CLI's own exit-code contract explicitly promises exit 2 for "a
-    // malformed --drift-policy file" — so the malformed-JSON case is
-    // detected independently, here, before delegating to the real loader
-    // for the actual (identically-parsed) policy content.
-    if (fs.existsSync(driftPolicyAbs)) {
-      let parsedDriftPolicy;
-      try {
-        parsedDriftPolicy = JSON.parse(fs.readFileSync(driftPolicyAbs, 'utf8'));
-      } catch (e) {
-        process.stderr.write(`agentic-security dataflow diff: could not parse --drift-policy file "${driftPolicyFlag}": ${e.message}\n`);
-        return 2;
-      }
-      // Syntax alone isn't enough — a syntactically valid JSON file with
-      // the WRONG top-level shape (a bare array, or {"rules":...} instead
-      // of {"policies":...}) previously loaded zero rules with zero
-      // warning, silently passing --fail-on-drift on a genuinely
-      // malformed config (fix round 1, Important 2). This is a fast,
-      // CLI-facing "reject the obviously wrong top-level shape" guard —
-      // loadDriftPolicies below still does the real per-entry
-      // _isValidRuleShape filtering.
-      if (!parsedDriftPolicy || typeof parsedDriftPolicy !== 'object' || Array.isArray(parsedDriftPolicy) || !Array.isArray(parsedDriftPolicy.policies)) {
-        process.stderr.write(`agentic-security dataflow diff: --drift-policy file "${driftPolicyFlag}" must be a JSON object of the form {"policies":[...]} (got a different shape).\n`);
-        return 2;
-      }
-    } else {
-      process.stderr.write(`agentic-security dataflow diff: --drift-policy file "${driftPolicyFlag}" does not exist.\n`);
+    const check = _validateDriftPolicyFile(driftPolicyAbs, driftPolicyFlag, 'diff');
+    if (!check.ok) {
+      process.stderr.write(check.message);
       return 2;
     }
 
@@ -3926,6 +3929,156 @@ async function cmdDataflowDiff(args) {
 
   if (failOnDrift && violations.length > 0) return 1;
   return 0;
+}
+
+// Terse [watch-dataflow] status line — mirrors watch-mode.js's own
+// renderStatusLine terse style, adapted to a GraphDiff's own
+// added/removed/changed shape (computeGraphDiff's `changed` bucket is
+// flows-only, per graph-diff.js's own header).
+function _renderDataflowWatchStatusLine(diff) {
+  const n = diff.added.nodes.length, N = diff.removed.nodes.length;
+  const e = diff.added.edges.length, E = diff.removed.edges.length;
+  const d = diff.added.dataElements.length, D = diff.removed.dataElements.length;
+  const f = diff.added.flows.length, F = diff.removed.flows.length, C = diff.changed.flows.length;
+  if (n + N + e + E + d + D + f + F + C === 0) return 'no data-flow graph changes';
+  return `+${f}/-${F} flows (~${C} changed), +${n}/-${N} nodes, +${e}/-${E} edges, +${d}/-${D} data elements`;
+}
+
+// A louder, clearly-marked, Markdown-free plain-text block naming each
+// drift-policy violation — a model of _renderDataflowDiffMarkdown's own
+// violation-table CONTENT (trigger/flow/data-elements/sink/reason), never
+// its literal Markdown-table code (this command's whole output is a live
+// stderr stream, not a file). --fail-on-drift has no exit-code effect in a
+// long-running watch process (there is no single exit code to gate — see
+// this command's own startup banner / commands/dataflow.md) — it only
+// changes how loud this block reads.
+function _renderDataflowWatchViolations(violations, failOnDrift) {
+  const marker = failOnDrift
+    ? '[watch-dataflow] !!! DRIFT POLICY VIOLATION !!!'
+    : '[watch-dataflow] *** drift policy violation ***';
+  const lines = [];
+  for (const v of violations) {
+    lines.push(marker);
+    lines.push(`[watch-dataflow]   ${v.trigger}: flow ${v.flowId} — ${(v.dataElementNames ?? []).join(', ') || '(unclassified data)'} -> ${v.sinkCategory ?? v.sinkNodeId ?? 'unknown sink'}`);
+    lines.push(`[watch-dataflow]   ${v.reason}`);
+  }
+  return lines.length ? lines.join('\n') + '\n' : '';
+}
+
+// #9 (M4 deliverable #9, watch-mode graph delta updates) — re-runs a deep
+// lineage scan on every debounced file-system change and reports the real
+// GraphDiff, reusing already-shipped Task 1 (buildGraphSnapshot)/8b
+// (computeGraphDiff/drift-policy) primitives. Mirrors cmdScan's own
+// `--watch` blocking/Ctrl-C/stderr-status-line UX (bin/agentic-security.js,
+// `args.flags['watch']`) — see that block's own header comment for the
+// shared "blocks until Ctrl-C" contract.
+//
+// Two disclosed, deliberate scope boundaries (docs/superpowers/plans/
+// 2026-09-02-data-flow-explorer-m4-watch-mode-scoping.md §2/§3), both named
+// in this command's own startup banner, not just here:
+//   - NEVER calls persistGraphSnapshot — only buildGraphSnapshot (Task 1's
+//     own pure, zero-disk-I/O builder). Every rescan before a real `git
+//     commit` resolves to the same HEAD, so persisting on every debounced
+//     rescan would silently overwrite real, commit-keyed snapshot history
+//     with transient, mid-edit graph state. The "before" snapshot lives
+//     purely in the closure variable `prevSnapshot` below, exactly like
+//     the existing SAST `--watch`'s own `prevFindings` closure variable.
+//   - Does NOT refresh .agentic-security/lineage-graph.json on any
+//     rescan — an already-running `explore` session has no live-reload
+//     (confirmed directly against src/server/*.js) and would not reflect
+//     these edits regardless; disclosed rather than implied away.
+async function cmdDataflowWatch(args) {
+  const target = args._[2] || '.';
+  const targetAbs = path.resolve(target);
+
+  const driftPolicyFlag = args.flags['drift-policy'];
+  if (driftPolicyFlag !== undefined && (typeof driftPolicyFlag !== 'string' || !driftPolicyFlag)) {
+    process.stderr.write('agentic-security dataflow watch: --drift-policy requires a file path.\n');
+    return 2;
+  }
+  const failOnDrift = !!args.flags['fail-on-drift'];
+  const driftPolicyProvided = driftPolicyFlag !== undefined;
+
+  let policies = null;
+  let evaluateDriftPolicies = null;
+  if (driftPolicyProvided) {
+    const driftPolicyAbs = path.resolve(driftPolicyFlag);
+    const check = _validateDriftPolicyFile(driftPolicyAbs, driftPolicyFlag, 'watch');
+    if (!check.ok) {
+      process.stderr.write(check.message);
+      return 2;
+    }
+    const driftPolicyModule = await import('../src/lineage/drift-policy.js');
+    policies = driftPolicyModule.loadDriftPolicies(driftPolicyAbs);
+    evaluateDriftPolicies = driftPolicyModule.evaluateDriftPolicies;
+  }
+
+  const { watchProject } = await import('../src/posture/watch-mode.js');
+  const { buildGraphSnapshot } = await import('../src/lineage/graph-snapshot.js');
+  const { computeGraphDiff } = await import('../src/lineage/graph-diff.js');
+
+  // This is what makes runScan attach scan.lineageGraph at all — without
+  // it, every rescan (including the seed) produces no graph and this
+  // command has nothing to diff. Mirrors cmdScan's own `--watch` branch
+  // setting AGENTIC_SECURITY_INCREMENTAL before its own seed scan.
+  process.env.AGENTIC_SECURITY_LINEAGE_DEEP = '1';
+
+  // Deliberately printed BEFORE the (possibly multi-second) seed scan —
+  // real-time feedback that the command is alive, not stuck — but this is
+  // NOT the "the watcher is live" signal; see the banner printed below,
+  // right before `watchProject` is called, for that.
+  process.stderr.write(`[watch-dataflow] running seed scan for ${targetAbs}...\n`);
+
+  const _lineageStatusReason = (ls) => (ls && ls.failure) ? `failure: ${ls.failure}` : (ls && ls.reason) ? `reason: ${ls.reason}` : 'unknown reason';
+
+  const seed = await runScan(targetAbs, {});
+  if (!seed.scan.lineageGraph) {
+    process.stderr.write(`agentic-security dataflow watch: seed scan produced no data-flow graph (${_lineageStatusReason(seed.scan.lineageStatus)}) — nothing to watch/diff against.\n`);
+    return 1;
+  }
+  let prevSnapshot = buildGraphSnapshot(seed.scan.lineageGraph, targetAbs);
+
+  // Printed AFTER the seed scan succeeds, immediately before `watchProject`
+  // subscribes — this is the real "the watcher is live" signal a caller
+  // (this command's own CLI test included) can poll stderr for, unlike the
+  // pre-seed-scan message above.
+  process.stderr.write(`[watch-dataflow] watching ${targetAbs} for data-flow graph changes on file change — Ctrl-C to stop.\n`);
+  process.stderr.write('[watch-dataflow] does NOT refresh .agentic-security/lineage-graph.json on any rescan — an already-running `agentic-security explore` session will not reflect these edits live.\n');
+
+  await watchProject(targetAbs, async () => {
+    try {
+      const { scan } = await runScan(targetAbs, {});
+      if (!scan.lineageGraph) {
+        process.stderr.write(`[watch-dataflow] rescan produced no data-flow graph (${_lineageStatusReason(scan.lineageStatus)}) — skipping this change.\n`);
+        return;
+      }
+      const currSnapshot = buildGraphSnapshot(scan.lineageGraph, targetAbs);
+
+      let diff;
+      try {
+        diff = computeGraphDiff(prevSnapshot, currSnapshot);
+      } catch (e) {
+        process.stderr.write(`[watch-dataflow] could not diff: ${e && e.message ? e.message : e}\n`);
+        return;
+      }
+
+      let violations = [];
+      if (driftPolicyProvided) {
+        violations = evaluateDriftPolicies(diff, policies, currSnapshot.graph).violations;
+      }
+
+      process.stderr.write('[watch-dataflow] ' + _renderDataflowWatchStatusLine(diff) + '\n');
+      if (violations.length) {
+        process.stderr.write(_renderDataflowWatchViolations(violations, failOnDrift));
+      }
+
+      prevSnapshot = currSnapshot;
+    } catch (e) {
+      process.stderr.write(`[watch-dataflow] rescan failed: ${e && e.message ? e.message : e}\n`);
+    }
+  });
+
+  return 0; // watchProject blocks until aborted (Ctrl-C)
 }
 
 async function main() {
@@ -4004,7 +4157,34 @@ async function main() {
         const sub = args._[1];
         if (sub === 'export') { process.exit(await cmdDataflowExport(args)); }
         else if (sub === 'diff') { process.exit(await cmdDataflowDiff(args)); }
-        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export" and "diff" are supported.\n`);
+        else if (sub === 'watch') {
+          // NOT `process.exit(await cmdDataflowWatch(args))` — deliberately.
+          // process.exit() terminates immediately, ignoring any pending
+          // handles/timers; cmdDataflowWatch's own success path (return 0)
+          // resolves almost immediately once watchProject's internal
+          // subscription is set up (watchProject itself doesn't block —
+          // see that function's own header), so wrapping it in
+          // process.exit() here would tear the process down before the
+          // live fs.watch async iterator inside watchProject ever gets a
+          // chance to fire — confirmed empirically (measured exit in
+          // <1s, no rescan ever observed) against the pre-existing SAST
+          // `scan --watch` (bin/agentic-security.js's `args.flags['watch']`
+          // branch), which has this exact same latent bug via its own
+          // identical `process.exit(await cmdScan(args))` dispatch — out
+          // of scope to fix here (watch-mode.js/scan --watch are
+          // deliberately unmodified by this sub-project), but the fix for
+          // THIS new subcommand is to only exit explicitly on a non-zero
+          // (validation-failure / no-lineage-graph) return, which happens
+          // before watchProject is ever called and has nothing keeping
+          // the process alive on its own. On the success path the process
+          // is left to Node's default "still has an active handle" event
+          // loop keep-alive, exiting only via Ctrl-C (SIGINT)'s own
+          // Node-default termination.
+          const code = await cmdDataflowWatch(args);
+          if (code !== 0) process.exit(code);
+          break;
+        }
+        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", and "watch" are supported.\n`);
         process.exit(2);
       }
       case 'cve-watch': {
