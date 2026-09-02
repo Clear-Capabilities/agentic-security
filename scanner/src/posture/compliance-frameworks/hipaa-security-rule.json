@@ -5,7 +5,7 @@
   "license": "US Federal regulation (public)",
   "url": "https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-C/part-164",
   "scope": "SELECTIVE SUBSET. 8 of the Security Rule technical safeguards. Administrative and physical safeguards are outside what a code scanner can observe and are NOT represented here.",
-  "controlsDigest": "a99f9c4015ffbf72",
+  "controlsDigest": "7e94038dd9a64d3d",
   "controlCount": 8,
   "controls": [
     {
@@ -102,7 +102,8 @@
       ],
       "mapsTo": [
         "family:crypto-tls-no-verify",
-        "family:crypto-tls-version"
+        "family:crypto-tls-version",
+        "graph:transit-protection:PHI:external:transit:protected"
       ]
     }
   ]

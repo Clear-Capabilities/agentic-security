@@ -53,6 +53,7 @@ import { strengthOfControl as _strengthOfControl } from './coverage-strength.js'
 // as `Jean\-Luc Picard` and `dependabot[bot]` as `dependabot\[bot\]` is a
 // visible regression on common real-world author names, not a fix.
 import { sanitizeForTerminal, pseudonymizeAuthor, PROVENANCE_COMPLIANCE_DISCLAIMER } from './provenance/schema.js';
+import { evaluateGraphFlowPredicate, buildObligationMappingFromGraphPredicate } from '../lineage/obligation-predicates.js';
 
 // Fix-round item 4b: this renderer had `sanitizeForTerminal` (injection
 // safety) but never honoured `--pseudonymize-authors` at all — an operator
@@ -369,6 +370,7 @@ export function evaluateFramework(scanRoot, fw, scan) {
         observations: obs,
         controlRefs: [],
         derivedProvenance: deriveComplianceProvenance([]),
+        obligationMappings: [],
         ...(evidence ? { evidence, partiallyEvidenced: evidence.tier === 'weak' || evidence.tier === 'unmeasured' } : {}),
       });
       continue;
@@ -391,6 +393,15 @@ export function evaluateFramework(scanRoot, fw, scan) {
     // control at 'partial' — never 'present' — regardless of what the
     // family:/module: mappings in the same control found.
     let hasUnverifiableMapping = false;
+    // Sub-project 6b: real ObligationMapping records minted by graph:
+    // predicates on this control, collected separately from the
+    // present/partial/absent/manual status machinery above — a graph:
+    // mapping never touches anySignal/allCleared/anyCleared/
+    // hasUnverifiableMapping (purely additive, per the plan's own Global
+    // Constraints). Always an array, never undefined, so a caller can
+    // safely read `.length` regardless of whether this control has any
+    // graph: mappings at all.
+    const obligationMappings = [];
     for (const m of maps) {
       if (m.startsWith('family:')) {
         // `family:X` and the subfamily-qualified `family:X:Y` (used by
@@ -492,6 +503,37 @@ export function evaluateFramework(scanRoot, fw, scan) {
         obs.push(`(rule mapping) ${m} — verify manually that the bodyguard rule is enabled.`);
         anySignal = true;
         hasUnverifiableMapping = true;
+      } else if (m.startsWith('graph:')) {
+        // A graph: mapping never contributes to anySignal/allCleared/
+        // anyCleared/hasUnverifiableMapping — the existing
+        // present/partial/absent/manual status stays driven entirely by
+        // the family:/module:/rule: mappings a control already has (this
+        // task's own Global Constraint: purely additive). It instead
+        // mints a real ObligationMapping record, collected separately.
+        //
+        // First real predicate (scoping doc ruling 6): PHI/PII flowing to
+        // an external sink must cross a protected transit edge. The
+        // predicate STRING itself is currently a fixed label (not yet a
+        // parsed mini-language) — the first real graph: mapping this
+        // sub-project ships is HIPAA §164.312(e)'s
+        // "graph:transit-protection:PHI:external:transit:protected",
+        // hardcoded to this one spec until a second real case proves the
+        // parsing is worth generalizing (YAGNI — do not invent a parser
+        // for one caller).
+        const spec = { type: 'graph-flow', dataClass: 'PHI', sinkKind: 'external', dimension: 'transit', requiredVerdict: 'protected' };
+        const graph = scan.lineageGraph ?? null;
+        const evaluation = graph ? evaluateGraphFlowPredicate(spec, graph) : null;
+        const mapping = buildObligationMappingFromGraphPredicate({
+          framework: fw.id,
+          frameworkVersion: fw.controlsDigest,
+          requirementId: c.id,
+          requirementSource: fw.url ?? null,
+          predicateLabel: m,
+          graph,
+          evaluation,
+        });
+        obligationMappings.push(mapping);
+        obs.push(`(graph mapping) ${m} -> ${mapping.state}.`);
       }
     }
 
@@ -547,6 +589,7 @@ export function evaluateFramework(scanRoot, fw, scan) {
       observations: obs,
       controlRefs: dedupedRefs,
       derivedProvenance: deriveComplianceProvenance(contributingFindings),
+      obligationMappings,
       ...(evidence ? { evidence, partiallyEvidenced: evidence.tier === 'weak' || evidence.tier === 'unmeasured' } : {}),
     });
   }
